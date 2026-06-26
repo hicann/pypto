@@ -186,6 +186,11 @@ def your_op_kernel_npu(
 #   ❌ Python `for ... in range(...)` calling the kernel per chunk (OL45)
 #   ❌ pypto.loop(...) — that is Layer I's job
 #   ❌ Any pypto.* call — Layer K stays torch-only
+#   ❌ Any torch ARITHMETIC / operator math (torch.matmul / .exp / .sum /
+#      `@` / softmax / ...) — Layer K's torch is for LAYOUT / ALLOC / CAST
+#      ONLY. The operator's numeric computation MUST live inside the
+#      @pypto.frontend.jit graph (Layer H/I, via pypto.* ops). Doing the
+#      math in host torch = dummy-JIT cheat and is rejected by OL62 (S0).
 #   ❌ pypto.from_torch(...) — not used in operator development.
 #      The @pypto.frontend.jit entry takes RAW torch.Tensor; conversion happens INSIDE
 #      the kernel (LaunchKernelTorch → TorchTensorConverter). Pass torch

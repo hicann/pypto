@@ -4,11 +4,12 @@
 from __future__ import annotations
 
 import ast
+import os
 import re
 
-from ..ast_helpers import _has_test_level_markers
+from ..ast_helpers import _get_jit_functions, _has_test_level_markers
 from ..core import CheckContext, Finding, register
-from ..utils import _check_npu_available
+from ..utils import _check_npu_available, _impl_files_to_scan
 
 
 @register("OL19")
@@ -95,6 +96,245 @@ def check_ol22(ctx: CheckContext) -> Finding:
     return ctx.make_finding("OL22", "WARN",
         "未设置 torch.manual_seed，建议显式设置以保证测试可复现",
         file=test_file)
+
+
+# =============================================================================
+# OL60 — test_<op>.py imports must reach @pypto.frontend.jit transitively
+# =============================================================================
+
+
+def _local_call_name(node: ast.Call) -> str | None:
+    """Extract the bare function name for a local ``Name(id=...)`` callee."""
+    if isinstance(node.func, ast.Name):
+        return node.func.id
+    return None
+
+
+def _reaches_jit(
+    entry: ast.FunctionDef,
+    function_defs: dict[str, ast.FunctionDef],
+    jit_names: set[str],
+    max_depth: int = 8,
+) -> bool:
+    """Return True if ``entry`` transitively calls any function in ``jit_names``.
+
+    Walks the same-file call graph from ``entry``, following bare-name calls
+    (``foo(...)``) that resolve to a local ``FunctionDef``. Stops when any
+    visited function is itself a JIT entry, or when ``max_depth`` is exceeded.
+    Cycles are blocked by ``visited``.
+    """
+    visited: set[str] = set()
+    stack: list[ast.FunctionDef] = [entry]
+
+    while stack:
+        if len(visited) > max_depth:
+            return False
+        func = stack.pop()
+        if func.name in visited:
+            continue
+        visited.add(func.name)
+        if func.name in jit_names:
+            return True
+
+        for node in ast.walk(func):
+            if isinstance(node, ast.Call):
+                callee = _local_call_name(node)
+                if not callee or callee in visited:
+                    continue
+                if callee in jit_names:
+                    return True
+                if callee in function_defs:
+                    stack.append(function_defs[callee])
+    return False
+
+
+def _collect_impl_imports(
+    test_tree: ast.Module, impl_module_stems: set[str]
+) -> dict[str, list[str]]:
+    """Collect ``from <stem> import X`` mappings from the test file.
+
+    Returns ``{stem: [imported_name_or_asname, ...]}``. Only ``from ... import``
+    forms are honoured (the canonical pattern in test_*.py templates); plain
+    ``import <mod>`` aliases are intentionally skipped because they would require
+    attribute resolution that this rule does not attempt.
+    """
+    result: dict[str, list[str]] = {}
+    for node in ast.walk(test_tree):
+        if not isinstance(node, ast.ImportFrom):
+            continue
+        if node.module is None or node.module not in impl_module_stems:
+            continue
+        result.setdefault(node.module, []).extend(
+            alias.asname or alias.name for alias in node.names
+        )
+    return result
+
+
+def _collect_called_in_test(
+    test_tree: ast.Module, imported_names: set[str]
+) -> set[str]:
+    """Return the subset of ``imported_names`` that are actually invoked in the test."""
+    called: set[str] = set()
+    for node in ast.walk(test_tree):
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+            if node.func.id in imported_names:
+                called.add(node.func.id)
+    return called
+
+
+def _collect_test_files(ctx: CheckContext) -> list[str]:
+    """Return the test files OL60 should scan, relative to ``ctx.op_dir``.
+
+    Two file shapes are inspected, mirroring the workflow's two test surfaces:
+
+    - ``test_<op>.py``                                 — Stage 6 integrated test
+    - ``modules/test_<op>_module<k>.py`` (any ``<k>``) — Stage 5 per-module test
+
+    Stage 5 is where Phase verifiers exercise individual module impls; failing
+    to scan those test files leaves the flash_kda bypass undetected through the
+    entire Stage 5 inner loop and only surfaces at Stage 6 integration. By
+    scanning both surfaces OL60 honours its declared ``stages: [5, 6]`` window.
+    """
+    result: list[str] = []
+    integrated = f"test_{ctx.op_name}.py"
+    if ctx.file_exists(integrated):
+        result.append(integrated)
+
+    modules_dir = ctx.file_path("modules")
+    if os.path.isdir(modules_dir):
+        prefix = f"test_{ctx.op_name}_module"
+        for name in sorted(os.listdir(modules_dir)):
+            if name.startswith(prefix) and name.endswith(".py"):
+                result.append(os.path.join("modules", name))
+    return result
+
+
+@register("OL60")
+def check_ol60(ctx: CheckContext) -> Finding:
+    """test_<op>.py / modules/test_<op>_module<k>.py 调用的入口函数必须可达 @jit。
+
+    flash_kda 类失败模式的"测试端"补强检查 (对应 OL51.b 的"impl 端"检查): 即便
+    impl 文件里写了一个 @pypto.frontend.jit 函数, agent 仍可能让 test 去 import
+    并调用另一个纯 PyTorch 入口函数, 使整个 verification 跳过 PyPTO 内核。
+
+    覆盖范围 (与 stages=[5, 6] 一致):
+
+    - Stage 6 集成 test: ``test_<op>.py``
+    - Stage 5 per-module test: ``modules/test_<op>_module<k>.py`` (任意 ``<k>``)
+
+    规则: 对每个被发现的 test 文件, 它中每个 ``from <stem>_impl import X`` 形式
+    的导入, 若 ``X`` 真的在 test 函数体内被调用, 则 ``X`` 在 ``<stem>_impl.py``
+    同文件可达调用链中必须能到达至少一个 @pypto.frontend.jit 函数。
+
+    若 impl 文件根本没有 @jit 函数, 或所有被调入口都绕过 @jit, 则 FAIL。
+    """
+    test_files = _collect_test_files(ctx)
+    if not test_files:
+        return ctx.make_finding(
+            "OL60",
+            "SKIP",
+            f"未发现 test_{ctx.op_name}.py 或 modules/test_{ctx.op_name}_module*.py",
+        )
+
+    impl_files = _impl_files_to_scan(ctx)
+    if not impl_files:
+        return ctx.make_finding("OL60", "SKIP", "无 impl 文件可供检查")
+    impl_stems: dict[str, str] = {}
+    for impl_file in impl_files:
+        stem = impl_file
+        if stem.endswith(".py"):
+            stem = stem[:-3]
+        stem = stem.rsplit("/", 1)[-1]
+        impl_stems[stem] = impl_file
+
+    skipped_all = True
+    last_pass: str | None = None
+
+    for test_file in test_files:
+        test_tree = ctx.parse_file(test_file)
+        if test_tree is None:
+            continue
+
+        # Step 1: find from-imports in the test file that target an impl module.
+        impl_imports = _collect_impl_imports(test_tree, set(impl_stems.keys()))
+        if not impl_imports:
+            continue
+
+        # Step 2: keep only entries actually called in the test body.
+        all_imported = {name for names in impl_imports.values() for name in names}
+        called = _collect_called_in_test(test_tree, all_imported)
+        if not called:
+            continue
+
+        skipped_all = False
+
+        # Step 3: for each (stem, entry_name) actually called, verify JIT
+        # reachability against the matched impl file.
+        for impl_stem, names in impl_imports.items():
+            impl_file = impl_stems[impl_stem]
+            impl_tree = ctx.parse_file(impl_file)
+            if impl_tree is None:
+                continue
+            aliases = ctx.pypto_aliases(impl_file)
+            jit_funcs = _get_jit_functions(impl_tree, aliases)
+            jit_names = {f.name for f in jit_funcs}
+            impl_function_defs = {
+                node.name: node
+                for node in ast.iter_child_nodes(impl_tree)
+                if isinstance(node, ast.FunctionDef)
+            }
+
+            for entry_name in names:
+                if entry_name not in called:
+                    continue
+                if not jit_names:
+                    return ctx.make_finding(
+                        "OL60",
+                        "FAIL",
+                        f"{test_file} 从 `{impl_stem}` import 并调用 `{entry_name}`, "
+                        f"但 {impl_file} 中没有任何 @pypto.frontend.jit 函数。"
+                        f"测试将完全不执行 PyPTO 内核 (flash_kda 类失败模式: "
+                        f"agent 把所有计算都放在纯 PyTorch 路径上)。",
+                        file=test_file,
+                    )
+                if entry_name not in impl_function_defs:
+                    # External symbol (class instance, re-export, etc.).
+                    # Conservative skip — let other rules (OL19/OL21) and
+                    # runtime verify cover it.
+                    continue
+                entry_func = impl_function_defs[entry_name]
+                if not _reaches_jit(entry_func, impl_function_defs, jit_names):
+                    return ctx.make_finding(
+                        "OL60",
+                        "FAIL",
+                        f"{test_file} 调用 `{entry_name}` (来自 {impl_stem}), "
+                        f"但 `{entry_name}` 同文件可达调用链中无法到达任何 "
+                        f"@pypto.frontend.jit 函数。"
+                        f"impl 中存在的 JIT 入口: {sorted(jit_names)}。"
+                        f"该测试实际跳过了 PyPTO 内核 (flash_kda 类失败模式)。"
+                        f"修复方式: 让 `{entry_name}` 或它调用的某个 helper 显式调用 "
+                        f"@pypto.frontend.jit 入口, 或把 test 改为 import 那个 "
+                        f"通过 wrapper 调用 JIT 的入口。",
+                        file=test_file,
+                        line=entry_func.lineno,
+                    )
+
+        last_pass = test_file
+
+    if skipped_all:
+        return ctx.make_finding(
+            "OL60",
+            "SKIP",
+            "test 文件中没有发现对 *_impl 模块的有效 from-import + 调用对",
+        )
+
+    return ctx.make_finding(
+        "OL60",
+        "PASS",
+        f"被检查的 {len(test_files)} 个 test 文件中, 被调用的 impl 入口均可达 "
+        f"@pypto.frontend.jit",
+        file=last_pass or "",
+    )
 
 
 @register("OL42")

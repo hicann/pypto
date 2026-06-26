@@ -236,7 +236,7 @@ def demo_module15_wrapper(x, y):
     assert "standalone" in finding.message
 
 
-def test_ol51_counts_only_real_assemble_targets(tmp_path: Path):
+def test_ol51_bounts_only_real_assemble_targets(tmp_path: Path):
     mod = load_lint_module()
     op_dir = build_stateless_op_dir(tmp_path, "demo")
     _write_module_interfaces(op_dir)
@@ -286,10 +286,13 @@ def demo_wrapper(x, y):
     assert "只检测到 0 个写回点" in finding.message
 
 
-def test_ol51_counts_tensor_method_move_writeback(tmp_path: Path):
+def test_ol51_bounts_tensor_method_move_writeback(tmp_path: Path):
     mod = load_lint_module()
     op_dir = build_stateless_op_dir(tmp_path, "demo")
     _write_module_interfaces(op_dir)
+    # Source values are wrapped in compute ops so the writes are non-trivial
+    # (OL51.b) while still exercising the `.move()` / `[:] =` recognition
+    # path (OL51.a writeback API coverage).
     impl = """import pypto
 @pypto.frontend.jit
 def demo_kernel(x: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16),
@@ -297,8 +300,8 @@ def demo_kernel(x: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16),
                 out_a: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16),
                 out_b: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16)):
     pypto.set_vec_tile_shapes(32, 128)
-    out_a.move(x)
-    out_b[:] = y
+    out_a.move(pypto.exp(x))
+    out_b[:] = pypto.add(x, y)
 
 def demo_wrapper(x, y):
     demo_kernel(x, y, y, y)
@@ -401,4 +404,210 @@ def demo_wrapper(x, y):
     write_file(op_dir / "demo_impl.py", impl)
 
     finding = run_rule(mod, op_dir, "OL51")
+    assert finding.status == "PASS"
+
+
+# ───────────────────────────────────────────────────────────────────────────
+# OL51.b — 非平凡写入层 (覆盖 ds_v4 / Issue #2083 placeholder 模式)
+# ───────────────────────────────────────────────────────────────────────────
+
+
+def test_ol51_b_fail_on_direct_input_copy(tmp_path: Path):
+    """ds_v4_placeholder 模式: `out_a[:] = x` 直接复制输入 → FAIL."""
+    mod = load_lint_module()
+    op_dir = build_stateless_op_dir(tmp_path, "demo")
+    _write_module_interfaces(op_dir)
+    impl = """import pypto
+@pypto.frontend.jit
+def demo_kernel(x: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16),
+                y: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16),
+                out_a: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16),
+                out_b: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16)):
+    pypto.set_vec_tile_shapes(32, 128)
+    out_a[:] = x
+    out_b[:] = y
+
+def demo_wrapper(x, y):
+    demo_kernel(x, y, y, y)
+"""
+    write_file(op_dir / "demo_impl.py", impl)
+
+    finding = run_rule(mod, op_dir, "OL51")
+    assert finding.status == "FAIL"
+    assert "trivial" in finding.message.lower() or "OL51.b" in finding.message
+
+
+def test_ol51_b_fail_on_direct_zeros_write(tmp_path: Path):
+    """`out_a[:] = pypto.zeros(...)` 等未初始化值 → FAIL."""
+    mod = load_lint_module()
+    op_dir = build_stateless_op_dir(tmp_path, "demo")
+    _write_module_interfaces(op_dir)
+    impl = """import pypto
+@pypto.frontend.jit
+def demo_kernel(x: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16),
+                y: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16),
+                out_a: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16),
+                out_b: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16)):
+    pypto.set_vec_tile_shapes(32, 128)
+    out_a[:] = pypto.zeros([1, 128], pypto.DT_BF16)
+    out_b[:] = pypto.tensor([1, 128], pypto.DT_BF16)
+
+def demo_wrapper(x, y):
+    demo_kernel(x, y, y, y)
+"""
+    write_file(op_dir / "demo_impl.py", impl)
+
+    finding = run_rule(mod, op_dir, "OL51")
+    assert finding.status == "FAIL"
+
+
+def test_ol51_b_fail_on_indirect_zeros_via_local_var(tmp_path: Path):
+    """`z = pypto.zeros(...); pypto.assemble(z, ..., out)` 间接零值经回溯 → FAIL."""
+    mod = load_lint_module()
+    op_dir = build_stateless_op_dir(tmp_path, "demo")
+    _write_module_interfaces(op_dir)
+    impl = """import pypto
+@pypto.frontend.jit
+def demo_kernel(x: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16),
+                y: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16),
+                out_a: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16),
+                out_b: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16)):
+    pypto.set_vec_tile_shapes(32, 128)
+    z = pypto.zeros([1, 128], pypto.DT_BF16)
+    pypto.assemble(z, [0, 0], out_a)
+    pypto.assemble(z, [0, 0], out_b)
+
+def demo_wrapper(x, y):
+    demo_kernel(x, y, y, y)
+"""
+    write_file(op_dir / "demo_impl.py", impl)
+
+    finding = run_rule(mod, op_dir, "OL51")
+    assert finding.status == "FAIL"
+
+
+def test_ol51_b_pass_when_local_var_subsequently_modified(tmp_path: Path):
+    """Task_0527 acc 模式: subscript 修改使 acc 视为非平凡 → PASS."""
+    mod = load_lint_module()
+    op_dir = build_stateless_op_dir(tmp_path, "demo")
+    _write_module_interfaces(op_dir)
+    impl = """import pypto
+@pypto.frontend.jit
+def demo_kernel(x: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16),
+                y: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16),
+                out_a: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16),
+                out_b: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16)):
+    pypto.set_vec_tile_shapes(32, 128)
+    acc_a = pypto.tensor([1, 128], pypto.DT_BF16)
+    acc_b = pypto.tensor([1, 128], pypto.DT_BF16)
+    acc_a[:] = pypto.exp(x)
+    acc_b[:] = pypto.add(x, y)
+    pypto.assemble(acc_a, [0, 0], out_a)
+    pypto.assemble(acc_b, [0, 0], out_b)
+
+def demo_wrapper(x, y):
+    demo_kernel(x, y, y, y)
+"""
+    write_file(op_dir / "demo_impl.py", impl)
+
+    finding = run_rule(mod, op_dir, "OL51")
+    assert finding.status == "PASS"
+
+
+def test_ol51_b_pass_when_writes_are_real_compute(tmp_path: Path):
+    """直接写 compute op 的返回值 → 非平凡 → PASS."""
+    mod = load_lint_module()
+    op_dir = build_stateless_op_dir(tmp_path, "demo")
+    _write_module_interfaces(op_dir)
+    impl = """import pypto
+@pypto.frontend.jit
+def demo_kernel(x: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16),
+                y: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16),
+                out_a: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16),
+                out_b: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16)):
+    pypto.set_vec_tile_shapes(32, 128)
+    out_a[:] = pypto.exp(x)
+    pypto.assemble(pypto.add(x, y), [0, 0], out_b)
+
+def demo_wrapper(x, y):
+    demo_kernel(x, y, y, y)
+"""
+    write_file(op_dir / "demo_impl.py", impl)
+
+    finding = run_rule(mod, op_dir, "OL51")
+    assert finding.status == "PASS"
+
+
+# ───────────────────────────────────────────────────────────────────────────
+# OL62 — impl 内 torch 仅限 layout/alloc/cast; 数值计算必须在 @jit 图内
+# ───────────────────────────────────────────────────────────────────────────
+
+
+def test_ol62_fail_on_host_torch_arithmetic(tmp_path: Path):
+    """host wrapper 用 torch.matmul 做主计算 (dummy-JIT 作弊) → FAIL."""
+    mod = load_lint_module()
+    op_dir = build_stateless_op_dir(tmp_path, "demo")
+    _write_module_interfaces(op_dir)
+    impl = """import torch, pypto
+@pypto.frontend.jit
+def demo_kernel(x: pypto.Tensor([1, 1], pypto.DT_FP32),
+                out: pypto.Tensor([1, 1], pypto.DT_FP32)):
+    pypto.assemble(pypto.matmul(x, x, pypto.DT_FP32), [0, 0], out)
+
+def demo_wrapper(x, w):
+    a = torch.matmul(x.float(), w.float())   # host torch compute = cheat
+    return torch.softmax(a, dim=-1)
+"""
+    write_file(op_dir / "demo_impl.py", impl)
+    finding = run_rule(mod, op_dir, "OL62")
+    assert finding.status == "FAIL"
+    assert "torch" in finding.message
+
+
+def test_ol62_pass_on_clean_pypto_kernel(tmp_path: Path):
+    """计算全在 JIT (pypto.*); host 只做 torch layout/alloc → PASS."""
+    mod = load_lint_module()
+    op_dir = build_stateless_op_dir(tmp_path, "demo")
+    _write_module_interfaces(op_dir)
+    impl = """import torch, pypto
+@pypto.frontend.jit
+def demo_kernel(x: pypto.Tensor([1, 1], pypto.DT_FP32),
+                out: pypto.Tensor([1, 1], pypto.DT_FP32)):
+    pypto.assemble(pypto.matmul(x, x, pypto.DT_FP32), [0, 0], out)
+
+def demo_wrapper(x):
+    out = torch.empty_like(x).reshape(1, 1).contiguous()   # layout/alloc only
+    demo_kernel(x, out)
+    return out.to(torch.float32)
+"""
+    write_file(op_dir / "demo_impl.py", impl)
+    finding = run_rule(mod, op_dir, "OL62")
+    assert finding.status == "PASS"
+
+
+def test_ol62_ignores_main_and_symbolic_min(tmp_path: Path):
+    """`__main__` 内 torch 算术与 pypto SymbolicScalar `.min()` 不误判 → PASS."""
+    mod = load_lint_module()
+    op_dir = build_stateless_op_dir(tmp_path, "demo")
+    _write_module_interfaces(op_dir)
+    impl = """import torch, pypto
+@pypto.frontend.jit
+def demo_kernel(x: pypto.Tensor([pypto.DYNAMIC, 1], pypto.DT_FP32),
+                out: pypto.Tensor([pypto.DYNAMIC, 1], pypto.DT_FP32)):
+    M = x.shape[0]
+    for m in pypto.loop(M, name="m"):
+        rem = (M - m).min(1)                 # SymbolicScalar.min — not torch
+        pypto.assemble(pypto.exp(x), [m, 0], out)
+
+def demo_wrapper(x):
+    out = torch.empty_like(x)
+    demo_kernel(x, out)
+    return out
+
+if __name__ == "__main__":
+    a = torch.randn(4, 4)
+    print(torch.matmul(a, a).sum())          # self-test torch — must be ignored
+"""
+    write_file(op_dir / "demo_impl.py", impl)
+    finding = run_rule(mod, op_dir, "OL62")
     assert finding.status == "PASS"

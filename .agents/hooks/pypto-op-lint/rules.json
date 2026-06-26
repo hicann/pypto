@@ -701,11 +701,26 @@
       "fix_effort": "E2",
       "stages": [
         5,
-        6
+        6,
+        7
       ],
       "target": "impl",
-      "rule": "对于 eval/module_interfaces.yaml 声明的输出数 N，impl 内必须至少存在 N 个真实写出点 (pypto.assemble(..., out) / out.move(...) / out[:] = ...)（不要求缓冲区名一致；用于尽早检测漏写输出）",
+      "rule": "OL51.a 数量层: 对 eval/module_interfaces.yaml 声明的输出数 N，impl 内至少存在 N 个真实写出点 (pypto.assemble / out.move / out[:]=)。OL51.b 非平凡写入层: JIT 写出的 output 不得是平凡 pass-through (直接复制输入 / pypto.zeros / 浅层 reshape)，须由真实 pypto compute op 产生。",
       "check_function": "check_ol51"
+    },
+    {
+      "id": "OL62",
+      "severity": "S0",
+      "dimension": "D5",
+      "fix_effort": "E3",
+      "stages": [
+        5,
+        6,
+        7
+      ],
+      "target": "impl",
+      "rule": "<op>_impl.py 内 torch 仅可用于 layout/alloc/cast/reshape；任何 torch 张量算术 (torch.matmul / .exp / .sum / `@` / F.* 等) 即 FAIL。算子数值计算必须在 @pypto.frontend.jit 图内用 pypto.* op 实现，host (wrapper / 非 JIT helper) 只允许打包/分配/布局/dtype 转换。封堵 dummy-JIT 全谱 (dead JIT+host torch / 小 JIT+torch 主计算 / torch 旁路再计算)。AST 检测，忽略注释与 __main__/_validate 等自测块",
+      "check_function": "check_ol62"
     },
     {
       "id": "OL53",
@@ -757,6 +772,19 @@
       "target": "gate",
       "rule": "Stage 2 完成时 GOLDEN_PERF_REPORT.md 必须存在且包含 Op Performance section（由 pypto-golden-generate/scripts/profile_golden.py §15 生成）",
       "check_function": "check_ol59"
+    },
+    {
+      "id": "OL60",
+      "severity": "S0",
+      "dimension": "D4",
+      "stages": [
+        5,
+        6,
+        7
+      ],
+      "target": "test",
+      "rule": "test_<op>.py 从 *_impl 模块 import 并实际调用的入口函数, 必须在同文件可达调用链中能到达至少一个 @pypto.frontend.jit 函数。否则测试跳过 PyPTO 内核 (flash_kda 类失败模式: test 调用纯 PyTorch 入口, 绕过 @jit)。",
+      "check_function": "check_ol60"
     },
     {
       "id": "OL61",

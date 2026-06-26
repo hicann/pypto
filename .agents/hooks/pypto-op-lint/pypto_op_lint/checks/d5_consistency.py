@@ -873,14 +873,280 @@ def _collected_writeback_targets(tree: ast.Module) -> set[str]:
     return out
 
 
+def _is_pypto_assemble_call(node: ast.AST) -> bool:
+    """识别 `pypto.assemble(...)` 调用 (字面三段属性, OL01 风格)。"""
+    if not isinstance(node, ast.Call):
+        return False
+    f = node.func
+    if not isinstance(f, ast.Attribute) or f.attr != "assemble":
+        return False
+    return isinstance(f.value, ast.Name) and f.value.id == "pypto"
+
+
+def _local_call_name(node: ast.Call) -> str | None:
+    """For `foo(...)` 形式调用, 返回 `foo`; 否则 None。"""
+    if isinstance(node.func, ast.Name):
+        return node.func.id
+    return None
+
+
+_INPLACE_PYPTO_OPS = (
+    "index_add_", "index_add__ub", "index_put_",
+    "scatter_", "axpy_",
+)
+
+
+def _collect_jit_writeback_pairs(
+    entry: ast.FunctionDef,
+    function_defs: dict[str, ast.FunctionDef],
+    max_depth: int = 8,
+) -> list[tuple[str, ast.AST | None]]:
+    """从 @pypto.frontend.jit 入口出发, 沿同文件可达 call chain 收集
+    所有写回操作的 (target_name, source_expr) 二元组。
+
+    识别模式 (与 `_collected_writeback_targets` 一致, 但只在 JIT 调用图
+    内部统计, 且额外保留 RHS 源表达式以便 OL51.b 检测平凡写入):
+
+    - `pypto.assemble(src, [offsets], target)` → (target, src)
+    - `pypto.assemble([(src, offsets), ...], target, ...)` → 每段一对
+    - `target[:] = expr` / `target[idx] = expr` → (target, expr)
+    - `target += expr` (AugAssign 形式) → (target, expr)
+    - `target.move(src)` / `target.assemble(src, ...)` → (target, src)
+    - `pypto.index_add_(target, ...)` / `pypto.scatter_(target, ...)` /
+      `pypto.axpy_(target, ...)` 等就地累积 → (target, None)
+    - `target.index_add_(...)` / `target.scatter_(...)` / `target.axpy_(...)`
+      就地累积 → (target, None)
+
+    source_expr 为 None 表示就地累积语义 (output = f(target_before, ...)),
+    按 API 契约本质上不可能是 trivial pass-through, 故 OL51.b 不再检查。
+
+    `max_depth` 限制 transitive 递归深度, 防止异常调用图导致代价爆炸。
+    """
+    pairs: list[tuple[str, ast.AST | None]] = []
+    visited: set[str] = set()
+    stack: list[ast.FunctionDef] = [entry]
+
+    while stack:
+        if len(visited) > max_depth:
+            break
+        func = stack.pop()
+        if func.name in visited:
+            continue
+        visited.add(func.name)
+
+        for node in ast.walk(func):
+            if isinstance(node, ast.Call):
+                # pypto.assemble(src, [offsets], target) — 单段调用
+                if _is_pypto_assemble_call(node):
+                    if len(node.args) >= 3 and isinstance(node.args[2], ast.Name):
+                        pairs.append((node.args[2].id, node.args[0]))
+                    # 多段批量调用：第一个参数为段列表，第二个参数为目标
+                    elif (
+                        len(node.args) >= 2
+                        and isinstance(node.args[0], (ast.List, ast.Tuple))
+                        and isinstance(node.args[1], ast.Name)
+                    ):
+                        target_id = node.args[1].id
+                        for seg in node.args[0].elts:
+                            if isinstance(seg, (ast.Tuple, ast.List)) and len(seg.elts) >= 1:
+                                pairs.append((target_id, seg.elts[0]))
+                func_node = node.func
+                if isinstance(func_node, ast.Attribute) and isinstance(func_node.value, ast.Name):
+                    receiver_id = func_node.value.id
+                    is_pypto_ns = receiver_id == "pypto"
+                    is_inplace_op = func_node.attr in _INPLACE_PYPTO_OPS
+                    first_arg_is_name = (
+                        bool(node.args) and isinstance(node.args[0], ast.Name)
+                    )
+                    # 张量方法形式的写回：receiver 不是 pypto 时的 move 或 assemble
+                    if (
+                        not is_pypto_ns
+                        and func_node.attr in ("move", "assemble")
+                        and node.args
+                    ):
+                        pairs.append((receiver_id, node.args[0]))
+                    # pypto 命名空间 inplace op：累积写回, source 视为 None
+                    elif is_pypto_ns and is_inplace_op and first_arg_is_name:
+                        pairs.append((node.args[0].id, None))
+                    # 张量方法形式 inplace op：累积写回, source 视为 None
+                    elif not is_pypto_ns and is_inplace_op:
+                        pairs.append((receiver_id, None))
+                # transitively follow local function calls
+                callee = _local_call_name(node)
+                if callee and callee in function_defs and callee not in visited:
+                    stack.append(function_defs[callee])
+            elif isinstance(node, ast.Assign):
+                if len(node.targets) == 1:
+                    t = node.targets[0]
+                    if isinstance(t, ast.Subscript) and isinstance(t.value, ast.Name):
+                        pairs.append((t.value.id, node.value))
+            elif isinstance(node, ast.AugAssign):
+                t = node.target
+                if isinstance(t, ast.Subscript) and isinstance(t.value, ast.Name):
+                    pairs.append((t.value.id, node.value))
+    return pairs
+
+
+def _map_outputs_to_jit_params(
+    expected_outputs: list[str],
+    jit_func: ast.FunctionDef,
+) -> dict[str, str]:
+    """把 YAML 声明的 output 名映射到 JIT 函数引数。
+
+    映射策略 (按优先级):
+      1. 全员精确名匹配 — YAML 声明的所有 output 名都出现在 JIT 引数列表里 →
+         直接同名映射 (推荐做法, agent prompt 也建议此风格)。
+      2. 位置 fallback — 否则取 JIT 引数列表的末尾 N 个作为 output slot
+         (与 OL50 wrapper 参数顺序规约保持一致)。
+      3. JIT 引数数量不足 — 返回空 dict, 由调用方报错。
+    """
+    jit_params = [arg.arg for arg in jit_func.args.args]
+    if len(jit_params) < len(expected_outputs):
+        return {}
+    name_matched = {o: o for o in expected_outputs if o in jit_params}
+    if len(name_matched) == len(expected_outputs):
+        return name_matched
+    n = len(expected_outputs)
+    last_params = jit_params[-n:]
+    return dict(zip(expected_outputs, last_params))
+
+
+def _collect_function_local_assigns(
+    func: ast.FunctionDef,
+) -> dict[str, ast.AST]:
+    """收集函数体内 `name = expr` 形式的直接赋值, 返回 name → expr 映射。
+
+    用于 OL51.b 跟踪经过中间局部变量的平凡写入 (例如
+    `z = pypto.zeros(...); pypto.assemble(z, ..., out)` 的 `z` 经回溯
+    可识别为零值源)。
+
+    保守排除规则: 如果某个 name 后续被 `name[:] = expr` (subscript-slice
+    再赋值) 或 `name.move(...)` / `name[idx] = expr` 等方式修改, 则不能
+    简单地用最初的 `name = expr` 判断其语义内容 (经典 Task_0527 风格:
+    `acc = pypto.tensor(...); acc[:] = partial; pypto.assemble(acc, ..., out)`
+    的 acc 实际承载的是 matmul 结果, 不是初始空 tensor)。这种被覆写过的
+    name 从 map 中剔除, OL51.b 对其判定回退为"非平凡"。
+
+    限制: 仅识别简单单目标赋值; 不展开元组解包; 不跨函数边界跟踪。
+    如果同一 name 被多次直接赋值且未被 subscript 修改, 保留最后一次。
+    """
+    direct_assigns: dict[str, ast.AST] = {}
+    subscript_modified: set[str] = set()
+    for node in ast.walk(func):
+        if isinstance(node, ast.Assign) and len(node.targets) == 1:
+            t = node.targets[0]
+            if isinstance(t, ast.Name):
+                direct_assigns[t.id] = node.value
+            elif isinstance(t, ast.Subscript) and isinstance(t.value, ast.Name):
+                subscript_modified.add(t.value.id)
+        elif isinstance(node, ast.AugAssign):
+            t = node.target
+            if isinstance(t, ast.Name):
+                subscript_modified.add(t.id)
+            elif isinstance(t, ast.Subscript) and isinstance(t.value, ast.Name):
+                subscript_modified.add(t.value.id)
+        elif isinstance(node, ast.Call):
+            f = node.func
+            is_attr_on_name = (
+                isinstance(f, ast.Attribute) and isinstance(f.value, ast.Name)
+            )
+            if (
+                is_attr_on_name
+                and f.attr in ("move", "assemble", "index_add_", "scatter_", "axpy_")
+                and f.value.id != "pypto"
+            ):
+                subscript_modified.add(f.value.id)
+    return {
+        k: v for k, v in direct_assigns.items()
+        if k not in subscript_modified
+    }
+
+
+def _is_trivial_write_source(
+    source: ast.AST,
+    jit_input_params: set[str],
+    local_assigns: dict[str, ast.AST] | None = None,
+    _depth: int = 0,
+) -> bool:
+    """识别"无实质计算"的写入源表达式 (OL51.b 用途)。
+
+    平凡写入模式 (返回 True):
+      - 直接引用一个 JIT 输入参数: `out[:] = x`
+      - 中间变量经过赋值最终来自上述 (local_assigns 回溯): 例如
+        `z = pypto.zeros(...); pypto.assemble(z, ..., out)`
+      - JIT 上下文未初始化分配: `pypto.zeros/ones/empty/full/tensor(...)`
+      - 输入参数的浅层 view / reshape: `x.reshape(...)` /
+        `pypto.view(x, ...)` / `pypto.reshape(x, ...)`
+      - 输入参数的下标取值: `x[idx]`
+
+    非平凡写入 (返回 False): 任何 compute op (`pypto.matmul` / `pypto.exp` /
+    `pypto.add` 等) 的返回值; 来自未被本规则识别的局部变量 (保守假设是计算
+    结果, 避免误报)。
+
+    `_depth` 限制 local_assigns 链上的递归深度, 避免病态赋值循环导致栈溢出。
+    """
+    if _depth > 4:
+        return False
+    # 直接 Name 引用 → 是 input param 才算平凡; 否则尝试 local_assigns 回溯
+    if isinstance(source, ast.Name):
+        if source.id in jit_input_params:
+            return True
+        if local_assigns is not None and source.id in local_assigns:
+            return _is_trivial_write_source(
+                local_assigns[source.id], jit_input_params, local_assigns, _depth + 1,
+            )
+        return False
+    # 输入参数的下标访问形式
+    if isinstance(source, ast.Subscript) and isinstance(source.value, ast.Name):
+        return source.value.id in jit_input_params
+    if isinstance(source, ast.Call):
+        f = source.func
+        if isinstance(f, ast.Attribute) and isinstance(f.value, ast.Name):
+            # pypto.zeros / ones / empty / full / tensor — 未初始化或零值
+            if f.value.id == "pypto" and f.attr in (
+                "zeros", "ones", "empty", "full", "tensor", "zeros_like",
+                "empty_like", "ones_like",
+            ):
+                return True
+            # 输入参数的浅层视图：pypto 命名空间的 view 或 reshape
+            first_arg_is_name = (
+                bool(source.args) and isinstance(source.args[0], ast.Name)
+            )
+            if (
+                f.value.id == "pypto"
+                and f.attr in ("view", "reshape")
+                and first_arg_is_name
+            ):
+                return source.args[0].id in jit_input_params
+            # 张量方法形式的浅层视图：输入参数的 reshape、view、contiguous、clone、detach
+            if (
+                f.attr in ("reshape", "view", "contiguous", "clone", "detach")
+                and isinstance(f.value, ast.Name)
+            ):
+                return f.value.id in jit_input_params
+    return False
+
+
 @register("OL51")
 def check_ol51(ctx: CheckContext) -> Finding:
-    """对 `eval/module_interfaces.yaml` 声明的 N 个输出, impl 内必须至少有
-    N 个写回点 (`pypto.assemble(..., t)` / `t[:] = ...` / `pypto.move(..., t)`)。
+    """对 `eval/module_interfaces.yaml` 声明的 N 个输出, impl 必须同时满足:
+
+    OL51.a — 数量层:
+        impl 文件全体至少存在 N 个写回点
+        (`pypto.assemble(..., t)` / `t[:] = ...` / `pypto.move(..., t)` 等)。
+        及早捕获"完全漏写 assemble → 全零输出 → Verify FAIL"型 bug。
+
+    OL51.b — 非平凡写入层:
+        JIT 内每个 output 的写入源不得是平凡 pass-through:
+          - 直接复制输入参数 (`out[:] = x` 且 x 是 JIT 输入)
+          - `pypto.zeros / empty / tensor(...)` 等未初始化值
+          - 仅 reshape / view 的浅层变换
+        实际计算必须由 `pypto.matmul / pypto.exp / ...` 等 compute op 产生。
+        此层封堵 Issue #2083 描述的 _layout_check_placeholder 类占位实现。
 
     背景: 代码中 output buffer 不必沿用 YAML 同名 identifier, 经常使用
-    `y0`, `out`, `C_npu` 等本地名。本规则不强制名称一致, 只检查"写回点的数量"。
-    可以及早捕获"完全漏写 assemble → 全零输出 → Verify FAIL"这类典型 bug。
+    `y0`, `out`, `C_npu` 等本地名。OL51.a 不强制名称一致, 只检查"写回点的数量";
+    OL51.b 借助 output→JIT-param 映射定位写入源, 仅判定其是否平凡。
 
     适用对象:
       - `modules/<op>_module<suffix>_impl.py`: 当前 module 的 outputs[*]
@@ -912,11 +1178,13 @@ def check_ol51(ctx: CheckContext) -> Finding:
             expected_outputs = _outputs_for_modules(interfaces, module_ids)
         if not expected_outputs:
             continue
+
+        # ── OL51.a — 数量层: 写回点总数 ≥ N (file scope) ──────────────────
         writebacks = _collected_writeback_targets(tree)
         if len(writebacks) < len(expected_outputs):
             return ctx.make_finding(
                 "OL51", "FAIL",
-                f"[S1] {impl_file}: YAML 声明了 {len(expected_outputs)} 个输出 "
+                f"[OL51.a] {impl_file}: YAML 声明了 {len(expected_outputs)} 个输出 "
                 f"{expected_outputs}, 但 impl 中只检测到 "
                 f"{len(writebacks)} 个写回点 (writebacks={sorted(writebacks)})。\n"
                 f"修正方针: 对每个输出, 在 JIT 函数内 / 任意 Layer I-J 中执行 "
@@ -925,9 +1193,172 @@ def check_ol51(ctx: CheckContext) -> Finding:
                 f"漏写回 = Verify 阶段「全零输出」型精度 FAIL 的典型原因。",
                 file=impl_file,
             )
+
+        # ── OL51.b — 非平凡写入层: JIT 写出的 output 不得是平凡 pass-through ──
+        aliases = ctx.pypto_aliases(impl_file)
+        jit_funcs = _get_jit_functions(tree, aliases)
+        # 无 JIT 函数 → 跳过 .c (纯 host 实现由 OL60/OL62 把关)。
+        if not jit_funcs:
+            continue
+        function_defs = {
+            node.name: node
+            for node in ast.iter_child_nodes(tree)
+            if isinstance(node, ast.FunctionDef)
+        }
+        # 对每个 @jit, 仅检查它实际写出的 declared output 是否平凡 pass-through。
+        # 不再要求 "某个 JIT 完整生产所有 output" (原 .b, 已删除); 该职责移交
+        # OL62 (impl 内禁止 torch 算术) + OL60 (test 可达 @jit)。
+        trivial_hits: list[str] = []
+        for jit_func in jit_funcs:
+            mapping = _map_outputs_to_jit_params(expected_outputs, jit_func)
+            if not mapping:
+                continue
+            jit_params_list = [arg.arg for arg in jit_func.args.args]
+            jit_pairs = _collect_jit_writeback_pairs(jit_func, function_defs)
+            mapped_params = set(mapping.values())
+            jit_input_params = {
+                p for p in jit_params_list if p not in mapped_params
+            }
+            # JIT 入口本体的局部赋值也收集, 以识别
+            # `z = pypto.zeros(...); pypto.assemble(z, ..., out)` 的间接平凡写入。
+            local_assigns = _collect_function_local_assigns(jit_func)
+            for output, param in mapping.items():
+                sources_for_param = [
+                    src for name, src in jit_pairs if name == param
+                ]
+                if not sources_for_param:
+                    continue
+                # Inplace 累积 op 的 source 为 None, 按 API 契约视为非平凡;
+                # 仅当所有 source 都是非 None 且都是平凡 pass-through 时才计入。
+                if all(
+                    src is not None
+                    and _is_trivial_write_source(src, jit_input_params, local_assigns)
+                    for src in sources_for_param
+                ):
+                    trivial_hits.append(f"{jit_func.name}:{output}")
+        if trivial_hits:
+            return ctx.make_finding(
+                "OL51", "FAIL",
+                f"[OL51.b] {impl_file}: JIT 仅以平凡 pass-through "
+                f"(直接复制输入 / pypto.zeros / 浅层 reshape) 写出 {trivial_hits}。\n"
+                f"修正方针: 输出值必须由真实 PyPTO compute op (pypto.matmul / "
+                f"pypto.exp / pypto.add / ...) 产生 "
+                f"(Issue #2083 _layout_check_placeholder 类占位实现 = 此处 FAIL)。",
+                file=impl_file,
+            )
     return ctx.make_finding(
         "OL51", "PASS",
-        "impl 写回点数 ≥ YAML 输出数",
+        "impl 写回点数 ≥ YAML 输出数, 且 (有 JIT 时) 写出非平凡 (OL51.a + OL51.b)",
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# OL62 — impl 内 torch 仅限 layout/alloc/cast; 数值计算必须在 @jit 图内
+# ─────────────────────────────────────────────────────────────────────────────
+
+# torch.<X>(...) 允许的非算术调用 (alloc / 构造 / layout / 随机初始化 / 设备)
+_OL62_TORCH_OK = frozenset({
+    "empty", "zeros", "ones", "full", "empty_like", "zeros_like", "ones_like",
+    "full_like", "tensor", "as_tensor", "from_numpy", "arange", "eye",
+    "randn", "rand", "randint", "normal", "randn_like", "rand_like",
+    "reshape", "cat", "stack", "chunk", "split", "unbind", "movedim",
+    "swapaxes", "swapdims", "broadcast_to", "flatten", "squeeze", "unsqueeze",
+    "permute", "transpose", "pad", "tril", "triu", "tril_indices",
+    "triu_indices", "meshgrid", "repeat", "tile",
+    "set_device", "manual_seed", "device", "get_default_dtype",
+    "set_default_dtype", "no_grad", "set_grad_enabled", "is_available",
+    "device_count", "current_device",
+})
+# 张量算术方法 (recv.<X>(...)) —— 命中即 FAIL (recv 非 pypto/np/math 时)
+_OL62_METHOD_ARITH = frozenset({
+    "matmul", "mm", "bmm", "dot", "mv", "einsum", "exp", "expm1", "log",
+    "log1p", "log2", "log10", "softmax", "log_softmax", "sum", "mean",
+    "median", "std", "var", "prod", "cumsum", "cumprod", "rsqrt", "sqrt",
+    "sigmoid", "tanh", "relu", "gelu", "silu", "pow", "neg", "abs", "maximum",
+    "minimum", "amax", "amin", "argmax", "argmin", "where", "clamp",
+    "clamp_min", "clamp_max", "erf", "sin", "cos", "tan", "sign", "floor",
+    "ceil", "round", "reciprocal", "addmm", "baddbmm", "addbmm", "scatter",
+    "scatter_add", "gather", "index_select", "index_add", "norm", "dist",
+    "cross", "outer", "masked_fill", "add", "sub", "mul", "div",
+})
+# 这些 receiver 上的 .<arith>() 不是 torch 张量算术 (pypto op / scalar / 模块)
+_OL62_SKIP_ROOTS = frozenset({"np", "numpy", "math", "os", "sys", "self", "kwargs"})
+# 非生产函数 (self-test / demo) —— 不参与 OL62 检查
+_OL62_NONPROD = frozenset({"_validate", "_make_inputs", "main", "_self_test",
+                           "_demo", "_test"})
+
+
+def _ol62_root_name(node: ast.AST) -> str | None:
+    while isinstance(node, ast.Attribute):
+        node = node.value
+    return node.id if isinstance(node, ast.Name) else None
+
+
+def _ol62_production_nodes(tree: ast.Module):
+    """生产路径节点: 跳过 `if __name__ == '__main__'` 块与 self-test / demo 函数。"""
+    for top in tree.body:
+        if isinstance(top, ast.If):
+            t = top.test
+            if (isinstance(t, ast.Compare) and isinstance(t.left, ast.Name)
+                    and t.left.id == "__name__"):
+                continue
+        if isinstance(top, (ast.FunctionDef, ast.AsyncFunctionDef)) \
+                and top.name in _OL62_NONPROD:
+            continue
+        yield from ast.walk(top)
+
+
+@register("OL62")
+def check_ol62(ctx: CheckContext) -> Finding:
+    """`<op>_impl.py` 内 torch 仅可用于 layout / alloc / cast / reshape;
+    任何 torch 张量算术 (torch.matmul / .exp / .sum / `@` / ...) 即 FAIL。
+
+    算子的数值计算必须落在 @pypto.frontend.jit 图内 (用 `pypto.*` op)。host
+    侧 (wrapper / 非 JIT helper) 只允许打包、分配、布局、dtype 转换。
+
+    封堵 dummy-JIT 作弊全谱: dead JIT + host 全 torch / 小 JIT + torch 主计算 /
+    torch 旁路再计算。AST 检测, 自动忽略注释与字符串; 跳过 `__main__` 块与
+    `_validate` / `_make_inputs` 等自测函数。`pypto.* / np.* / math.*` 接收者的
+    同名方法 (如 pypto.matmul) 不误判。
+
+    YAML 无关; 只看 impl 源码。无 impl 文件时 SKIP。
+    """
+    impl_files = _impl_files_to_scan(ctx)
+    if not impl_files:
+        return ctx.make_finding("OL62", "SKIP", "无 impl 文件可供检查")
+    for impl_file in impl_files:
+        tree = ctx.parse_file(impl_file)
+        if tree is None:
+            continue
+        skip_roots = _OL62_SKIP_ROOTS | ctx.pypto_aliases(impl_file)
+        hits: list[str] = []
+        for n in _ol62_production_nodes(tree):
+            if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute):
+                attr = n.func.attr
+                root = _ol62_root_name(n.func.value)
+                if root == "torch" and attr not in _OL62_TORCH_OK:
+                    hits.append((n.lineno, f"torch.{attr}(...)"))
+                elif root in ("F", "functional"):
+                    hits.append((n.lineno, f"F.{attr}(...)"))
+                elif attr in _OL62_METHOD_ARITH and root not in skip_roots \
+                        and root != "torch":
+                    hits.append((n.lineno, f"{root or ''}.{attr}(...)"))
+            elif isinstance(n, ast.BinOp) and isinstance(n.op, ast.MatMult):
+                hits.append((n.lineno, "@ (matmul)"))
+        if hits:
+            uniq = sorted(set(hits))[:8]
+            detail = "; ".join(f"L{ln}:{m}" for ln, m in uniq)
+            return ctx.make_finding(
+                "OL62", "FAIL",
+                f"{impl_file}: 检测到 host 侧 torch 张量算术 ({detail})。\n"
+                f"修正方针: 算子的数值计算必须在 @pypto.frontend.jit 图内用 "
+                f"`pypto.*` op 实现; host (wrapper / 非 JIT helper) 仅允许 "
+                f"layout / alloc / cast / reshape。torch 主计算 = dummy-JIT 作弊。",
+                file=impl_file,
+            )
+    return ctx.make_finding(
+        "OL62", "PASS",
+        "impl 内 torch 仅用于 layout/alloc/cast; 数值计算在 JIT 图内",
     )
 
 

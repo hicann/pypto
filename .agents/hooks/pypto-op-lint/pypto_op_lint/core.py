@@ -39,6 +39,7 @@ IMPL_RULE_IDS = [
     "OL57",  # JIT 图代码内允许 pypto.loop / pypto.loop_unroll / range 循环 (禁止 while 和非 range 的 for)
     "OL58",  # Layer K wrapper output buffer 必须 torch.* 预分配 (禁止 host pypto.zeros)
     "OL61",  # Preflight code scan: cast path / Element wrap / scalar arg / zeros dtype
+    "OL62",  # impl 内 torch 仅限 layout/alloc/cast; 数值计算必须在 @jit 图内 (dummy-JIT 防护)
 ]
 
 # DESIGN.md post-edit 适用规则 (在 Stage 4 Designer 编辑 DESIGN.md 时即时校验)。
@@ -49,7 +50,7 @@ DESIGN_RULE_IDS = ["OL55", "OL56"]
 
 GOLDEN_RULE_IDS = ["OL15"]
 
-TEST_RULE_IDS = ["OL17", "OL18", "OL19", "OL20", "OL21", "OL22", "OL42"]
+TEST_RULE_IDS = ["OL17", "OL18", "OL19", "OL20", "OL21", "OL22", "OL42", "OL60"]
 
 CONSISTENCY_RULE_IDS = ["OL30", "OL31", "OL32", "OL33", "OL34", "OL39", "OL40", "OL41", "OL43"]
 
