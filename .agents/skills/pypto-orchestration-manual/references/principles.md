@@ -1,34 +1,12 @@
 # Behavioral Principles
 
 Foundational guidelines for all skill execution in this library.
-Derived from [Karpathy-inspired coding guidelines](https://github.com/forrestchang/andrej-karpathy-skills).
 
 **These principles apply to every skill. rules.md adds PyPTO-specific enforcement on top.**
 
 ---
 
-## 1. Think Before pypto-op-coder
-
-**Do not assume. Do not hide confusion. Surface tradeoffs.**
-
-Before implementing:
-
-- State your assumptions explicitly. If uncertain about an API, tiling strategy, or op semantic, stop and ask.
-- If multiple interpretations exist (e.g., transpose convention, reduction axis, broadcast shape), present them. Do not pick silently.
-- If a simpler approach exists, say so. Push back on unnecessary complexity.
-- If something is unclear, stop. Name what is confusing. Ask for clarification.
-
-**PyPTO application:** Before writing any kernel code, verify API signatures. Docs follow a strict 1:1 file convention — `pypto.amax` lives at `docs/zh/api/operation/pypto-amax.md`:
-
-- **Known op name** → `Read docs/zh/api/operation/pypto-<op>.md` (e.g., `pypto-amax.md`, `pypto-view.md`, `pypto-matmul.md`)
-- **Keyword / constraint search** → `Grep -rn "<keyword>" docs/zh/api/operation/` (e.g., `Grep -rn "32-byte alignment" docs/zh/api/operation/`)
-- **All ops overview (117 files)** → `Read docs/zh/api/operation/index.md` or `Glob docs/zh/api/operation/pypto-*.md`
-
-If the op index does not cover a constraint, state the gap. Do not guess dtype or alignment rules.
-
----
-
-## 2. Simplicity First
+## 1. Simplicity First
 
 **Minimum code that solves the problem. Nothing speculative.**
 
@@ -44,7 +22,7 @@ If the op index does not cover a constraint, state the gap. Do not guess dtype o
 
 ---
 
-## 3. Surgical Changes
+## 2. Surgical Changes
 
 **Touch only what you must. Clean up only your own mess.**
 
@@ -66,7 +44,7 @@ When your changes create orphans:
 
 ---
 
-## 4. Goal-Driven Execution
+## 3. Goal-Driven Execution
 
 **Define success criteria. Loop until verified.**
 
