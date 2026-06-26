@@ -204,42 +204,52 @@ void CoreScheduler::EFTWithInsertSchedule(TaskGraph& taskGraph, std::vector<int>
     availTime[TargetCoreType::AIC] = {{0, INT32_MAX}};
     availTime[TargetCoreType::AIV0] = {{0, INT32_MAX}};
     availTime[TargetCoreType::AIV1] = {{0, INT32_MAX}};
+    std::unordered_map<int, TargetCoreType> vecBranchToCore;
     int currentIdx = -1;
     std::pair<int, int> currentInterval{-1, -1};
     for (int taskId : topoSeq) {
+        auto& task = taskGraph.tasks[taskId];
         int evalDepTimeStart = 0;
-        for (int prevTaskId : taskGraph.tasks[taskId].inTasks) {
+        for (int prevTaskId : task.inTasks) {
             evalDepTimeStart = std::max(evalDepTimeStart, taskGraph.tasks[prevTaskId].endTimeCandidate);
         }
         TargetCoreType evalCore = TargetCoreType::UNKNOWN;
-        if (taskGraph.tasks[taskId].coreType == ScheduleCoreType::AIC) {
+        if (task.coreType == ScheduleCoreType::AIC) {
             evalCore = TargetCoreType::AIC;
-            FindEarliestSlot(
-                availTime[evalCore], evalDepTimeStart, taskGraph.tasks[taskId].latency, currentIdx, currentInterval);
+            FindEarliestSlot(availTime[evalCore], evalDepTimeStart, task.latency, currentIdx, currentInterval);
         } else {
-            int currentIdxAIV0 = -1;
-            std::pair<int, int> currentIntervalAIV0{-1, -1};
-            int currentIdxAIV1 = -1;
-            std::pair<int, int> currentIntervalAIV1{-1, -1};
-            FindEarliestSlot(
-                availTime[TargetCoreType::AIV0], evalDepTimeStart, taskGraph.tasks[taskId].latency, currentIdxAIV0,
-                currentIntervalAIV0);
-            FindEarliestSlot(
-                availTime[TargetCoreType::AIV1], evalDepTimeStart, taskGraph.tasks[taskId].latency, currentIdxAIV1,
-                currentIntervalAIV1);
-            if (currentIntervalAIV0.first <= currentIntervalAIV1.first) {
-                evalCore = TargetCoreType::AIV0;
-                currentIdx = currentIdxAIV0;
-                currentInterval = currentIntervalAIV0;
+            TargetCoreType pinnedCore = LookupPinnedAIVCore(task, vecBranchToCore);
+            if (pinnedCore != TargetCoreType::UNKNOWN) {
+                evalCore = pinnedCore;
+                FindEarliestSlot(availTime[evalCore], evalDepTimeStart, task.latency, currentIdx, currentInterval);
             } else {
-                evalCore = TargetCoreType::AIV1;
-                currentIdx = currentIdxAIV1;
-                currentInterval = currentIntervalAIV1;
+                int currentIdxAIV0 = -1;
+                std::pair<int, int> currentIntervalAIV0{-1, -1};
+                int currentIdxAIV1 = -1;
+                std::pair<int, int> currentIntervalAIV1{-1, -1};
+                FindEarliestSlot(
+                    availTime[TargetCoreType::AIV0], evalDepTimeStart, task.latency, currentIdxAIV0,
+                    currentIntervalAIV0);
+                FindEarliestSlot(
+                    availTime[TargetCoreType::AIV1], evalDepTimeStart, task.latency, currentIdxAIV1,
+                    currentIntervalAIV1);
+                if (currentIntervalAIV0.first <= currentIntervalAIV1.first) {
+                    evalCore = TargetCoreType::AIV0;
+                    currentIdx = currentIdxAIV0;
+                    currentInterval = currentIntervalAIV0;
+                } else {
+                    evalCore = TargetCoreType::AIV1;
+                    currentIdx = currentIdxAIV1;
+                    currentInterval = currentIntervalAIV1;
+                }
+            }
+            if (task.vecBranchId >= 0) {
+                vecBranchToCore[task.vecBranchId] = evalCore;
             }
         }
-        taskGraph.tasks[taskId].targetCoreTypeCandidate = evalCore;
-        taskGraph.tasks[taskId].startTimeCandidate = currentInterval.first;
-        taskGraph.tasks[taskId].endTimeCandidate = currentInterval.second;
+        task.targetCoreTypeCandidate = evalCore;
+        task.startTimeCandidate = currentInterval.first;
+        task.endTimeCandidate = currentInterval.second;
         UpdateInterval(availTime[evalCore], currentIdx, currentInterval);
     }
     taskGraph.ApplyCandidate();
@@ -378,8 +388,7 @@ int CoreScheduler::FindDepAIVLastEnd(const TaskGraph& taskGraph, int taskId) con
 // 紧耦合调度单个任务
 void CoreScheduler::ScheduleOneTask(
     TaskGraph& taskGraph, int taskId, std::unordered_map<TargetCoreType, std::vector<std::pair<int, int>>>& availTime,
-    std::function<bool(TargetCoreType)> /* isAicCore */,
-    std::unordered_map<int, TargetCoreType>& vecBranchToCore)
+    std::function<bool(TargetCoreType)> /* isAicCore */, std::unordered_map<int, TargetCoreType>& vecBranchToCore)
 {
     auto& task = taskGraph.tasks[taskId];
     int evalDepTimeStart = 0;
@@ -595,8 +604,12 @@ void CoreScheduler::NormalizeSingleAIVBranches(TaskGraph& taskGraph)
     bool hasAIV1 = false;
     std::vector<int> aiv1TaskIds;
     for (const auto& task : taskGraph.tasks) {
-        if (task.coreType != ScheduleCoreType::AIV) { continue; }
-        if (task.targetCoreType == TargetCoreType::AIV0) { hasAIV0 = true; }
+        if (task.coreType != ScheduleCoreType::AIV) {
+            continue;
+        }
+        if (task.targetCoreType == TargetCoreType::AIV0) {
+            hasAIV0 = true;
+        }
         if (task.targetCoreType == TargetCoreType::AIV1) {
             hasAIV1 = true;
             aiv1TaskIds.push_back(task.idx);
@@ -607,8 +620,9 @@ void CoreScheduler::NormalizeSingleAIVBranches(TaskGraph& taskGraph)
             taskGraph.tasks[taskId].targetCoreType = TargetCoreType::AIV0;
             taskGraph.tasks[taskId].targetCoreTypeCandidate = TargetCoreType::AIV0;
         }
-        APASS_LOG_INFO_F(Elements::Operation,
-            "Normalize single-AIV: all %d AIV1 tasks changed to AIV0.", static_cast<int>(aiv1TaskIds.size()));
+        APASS_LOG_INFO_F(
+            Elements::Operation, "Normalize single-AIV: all %d AIV1 tasks changed to AIV0.",
+            static_cast<int>(aiv1TaskIds.size()));
     }
 }
 
@@ -703,8 +717,7 @@ void CoreScheduler::HLFSchedule(TaskGraph& taskGraph)
 
     for (int i = 0; i < n; i++) {
         APASS_LOG_INFO_F(
-            Elements::Operation, "HLF order[%d] = task %d, revDepth=%d, coreType=%s.",
-            i, order[i], revDepth[order[i]],
+            Elements::Operation, "HLF order[%d] = task %d, revDepth=%d, coreType=%s.", i, order[i], revDepth[order[i]],
             taskGraph.tasks[order[i]].coreType == ScheduleCoreType::AIC ? "AIC" : "AIV");
     }
 
