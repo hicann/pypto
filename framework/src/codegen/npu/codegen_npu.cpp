@@ -584,7 +584,6 @@ void CodeGenNPU::AppendVFOptions(std::ostringstream& oss, NPUArch platform, bool
         << "-mllvm --tile-fusion-skip-shape-inference=true "
         << "-mllvm --tile-fusion-skip-reduceop-fusion=false "
         << "-mllvm --tile-fusion-skip-legality-check=false "
-        << "-mllvm -enable-vexpdif-fusion=false "
         << "-mllvm -cce-vf-fusion-max-candidate-set-threshold=32 ";
 
     auto vf_opts = config::GetCodeGenOption<std::string>(VF_OPTIONS);
