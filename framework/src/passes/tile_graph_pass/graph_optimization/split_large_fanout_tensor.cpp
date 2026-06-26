@@ -870,10 +870,9 @@ void SplitLargeFanoutTensor::UpdateForRedundantView(Operation& op, Operation& co
     auto viewAttr = dynamic_cast<ViewOpAttribute*>(op.GetOpAttribute().get());
     auto newOffset = viewAttr->GetFromOffset();
     auto nextViewAttr = dynamic_cast<ViewOpAttribute*>(consumer.GetOpAttribute().get());
-    auto viewDynShape = GetViewValidShape(
-        viewAttr->GetToDynValidShape(), nextViewAttr->GetFromOffset(), nextViewAttr->GetFromDynOffset(),
-        consumer.oOperand.front()->GetShape());
-    nextViewAttr->SetToDynValidShape(viewDynShape);
+    // Preserve consumer's explicit toDynValidShape: it may encode tighter constraints
+    // (e.g. Min(cur_seq, remaining)) not recoverable from parent view's toDynValidShape alone.
+    const auto consumerToDynValidShape = nextViewAttr->GetToDynValidShape();
     auto nextViewOffset = nextViewAttr->GetFromOffset();
     auto nextViewDynOffset = nextViewAttr->GetFromDynOffset();
     auto newDynOffset = viewAttr->GetFromDynOffset();
@@ -883,6 +882,12 @@ void SplitLargeFanoutTensor::UpdateForRedundantView(Operation& op, Operation& co
         newDynOffset = ret.second;
     }
     nextViewAttr->SetFromOffset(newOffset, newDynOffset);
+    if (consumerToDynValidShape.empty()) {
+        auto viewDynShape = GetViewValidShape(
+            viewAttr->GetToDynValidShape(), nextViewOffset, nextViewDynOffset,
+            consumer.oOperand.front()->GetShape());
+        nextViewAttr->SetToDynValidShape(viewDynShape);
+    }
     if (newDynOffset.size() == 0) {
         return;
     }

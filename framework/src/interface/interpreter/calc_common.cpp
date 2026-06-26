@@ -167,6 +167,7 @@ void ExecuteOpView(ExecuteOperationContext* ctx)
 
     auto opAttr = std::static_pointer_cast<ViewOpAttribute>(ctx->op->GetOpAttribute());
     auto offset = ctx->opInter->EvaluateOffset(opAttr->GetFromOffset(), opAttr->GetFromDynOffset());
+    auto validShape = ctx->opInter->EvaluateValidShape(opAttr->GetToDynValidShape());
     if (oop->GetData() == iop->GetData()) {
         return;
     }
@@ -190,7 +191,7 @@ void ExecuteOpView(ExecuteOperationContext* ctx)
         calc::Copy(oop, ret, trans, isMx);
         shmOffset = ret->GetStorageOffset() * ret->GetData()->GetElementSize();
     } else {
-        auto ret = iop->View(oop->GetShape(), offset);
+        auto ret = iop->View(validShape, offset);
         calc::Copy(oop, ret);
         shmOffset = ret->GetStorageOffset() * ret->GetData()->GetElementSize();
     }
