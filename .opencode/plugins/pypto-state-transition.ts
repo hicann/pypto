@@ -106,11 +106,6 @@ function buildInitialState(opDir: string, maxStage: number): OrchestratorState {
     stage_retry_count: stageRetry,
     artifact_hashes: {},
     rollback_history: [],
-    stage8_iteration: {
-      count: 0,
-      last_improvement: 0,
-      consecutive_no_improvement: 0,
-    },
     last_updated: new Date().toISOString(),
   };
 }
