@@ -152,21 +152,6 @@ bool IsSameDevice(const TensorDeviceInfo& lhs, const TensorDeviceInfo& rhs)
     return lhs.type == rhs.type && lhs.index == rhs.index;
 }
 
-void ValidateTorchTensorType(const py::object& torchTensor, const py::object& torchTensorType, size_t index)
-{
-    if (py::isinstance(torchTensor, torchTensorType)) {
-        return;
-    }
-    throw std::runtime_error(
-        "Input " + std::to_string(index + 1) + " (index " + std::to_string(index) + ") is not a torch.Tensor");
-}
-
-const py::object& GetTorchTensorType()
-{
-    static py::object torchTensorType = py::module::import("torch").attr("Tensor");
-    return torchTensorType;
-}
-
 TensorDeviceInfo ConvertSingleTensor(
     const py::object& torchTensor, const py::object& tensorDef, py::module_& torch_npu,
     npu::tile_fwk::dynamic::DeviceTensorData& out)
@@ -210,15 +195,12 @@ int TorchTensorConverter::Convert(
     tensors_data.reserve(n);
 
     py::module torch_npu;
-    const py::object& torchTensorType = GetTorchTensorType();
     std::optional<TensorDeviceInfo> commonDeviceInfo;
 
     for (size_t i = 0; i < n; i++) {
         py::int_ index(i);
         py::object torchTensor = tensors[index];
         py::object tensorDef = tensor_defs[index];
-
-        ValidateTorchTensorType(torchTensor, torchTensorType, i);
 
         tensors_data.emplace_back();
 

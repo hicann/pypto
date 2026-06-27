@@ -31,7 +31,7 @@ from pypto.frontend.parser.diagnostics import Source
 from pypto.frontend.parser.parser import NestedFunctionMarker, Parser
 from pypto.runtime import _pto_verify_datas
 from pypto._build_online import BuildOnlineCalculatorManager
-from pypto._utils import get_torch_npu, get_npu_tensor_format
+from pypto._utils import get_torch_npu, get_npu_tensor_format, get_dtensor_type
 from pypto.error import FeError, _catch_and_wrap_error
 
 
@@ -324,6 +324,7 @@ class JitCallableWrapper:
         in_tensors, non_tensor_values, input_tensor_defs = self._parse_call_args(
             args, kwargs
         )
+        self._validate_exact_torch_tensors(in_tensors)
         self._get_or_create_kmodule(non_tensor_values)
         self._execute_kernel(in_tensors, input_tensor_defs)
 
@@ -357,6 +358,21 @@ class JitCallableWrapper:
     def alloc(size):
         """Allocate NPU int8 memory and return its data pointer"""
         return torch.empty(size, dtype=torch.int8, device='npu').data_ptr()
+
+
+    @staticmethod
+    def _validate_exact_torch_tensors(tensors: list) -> None:
+        dtensor_type = get_dtensor_type()
+
+        for idx, tensor in enumerate(tensors):
+            if not isinstance(tensor, torch.Tensor):
+                raise FeError(RuntimeError(
+                    f"Input {idx + 1} (index {idx}) must be a torch.Tensor, got {tensor.__class__}"
+                ))
+            if dtensor_type is not None and isinstance(tensor, dtensor_type):
+                raise FeError(RuntimeError(
+                    f"Input {idx + 1} (index {idx}) must not be a DTensor, got {tensor.__class__}"
+                ))
 
 
     @staticmethod

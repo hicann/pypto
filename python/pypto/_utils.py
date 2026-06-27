@@ -26,6 +26,8 @@ from .error import FeError
 
 _torch_npu = None
 _torch_npu_checked = False
+_dtensor_type = None
+_dtensor_type_checked = False
 
 
 def get_torch_npu():
@@ -39,6 +41,19 @@ def get_torch_npu():
             pass
         _torch_npu_checked = True
     return _torch_npu
+
+
+def get_dtensor_type():
+    """Return torch.distributed._tensor.DTensor type if available, otherwise None."""
+    global _dtensor_type, _dtensor_type_checked
+    if not _dtensor_type_checked:
+        try:
+            from torch.distributed._tensor import DTensor
+            _dtensor_type = DTensor
+        except ImportError:
+            pass
+        _dtensor_type_checked = True
+    return _dtensor_type
 
 
 def get_npu_tensor_format(tensor):
