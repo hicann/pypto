@@ -21,8 +21,28 @@
 namespace npu::tile_fwk {
 MainBlockCondBulider::MainBlockCondBulider() = default;
 
+void MainBlockCondBulider::DisableMainBlock()
+{
+    mainBlockDisabled_ = true;
+    mainBlockCondGroup_.clear();
+    mainBlockStrSet_.clear();
+    exprConstMap_.clear();
+}
+
 void MainBlockCondBulider::AddUniqueCondition(const SymbolicScalar& newCond)
 {
+    if (mainBlockDisabled_) {
+        return;
+    }
+
+    if (newCond.Raw() != nullptr && newCond.Raw()->IsImmediate()) {
+        auto imm = std::dynamic_pointer_cast<RawSymbolicImmediate>(newCond.Raw());
+        if (imm != nullptr && imm->Immediate() == 0) {
+            DisableMainBlock();
+            return;
+        }
+    }
+
     SymbolicScalar cond = SymbolicScalar(false);
     std::string condStr = newCond.Dump();
     if ((mainBlockStrSet_.find(condStr) != mainBlockStrSet_.end()) ||
@@ -46,9 +66,23 @@ bool MainBlockCondBulider::CheckShapeEquality(const Shape& shape, const std::vec
         if (shape[i] == -1) { // -1: copy_in, copy_out and callop dynamic axis shape
             continue;
         }
+        if (mainBlockDisabled_) {
+            return false;
+        }
+        std::string exprKey = dynShape[i].Dump();
+        auto it = exprConstMap_.find(exprKey);
+        if (it != exprConstMap_.end() && it->second != shape[i]) {
+            MACHINE_LOGW(
+                "mainBlock condition contradiction: same expression %s requires "
+                "shape to be both %ld and %ld, disabling mainblock",
+                exprKey.c_str(), it->second, static_cast<int64_t>(shape[i]));
+            DisableMainBlock();
+            return false;
+        }
+        exprConstMap_[exprKey] = shape[i];
         cond = (shape[i] == dynShape[i]);
         AddUniqueCondition(cond);
-        if (cond.IsImmediate() && (cond == 0)) {
+        if (mainBlockDisabled_) {
             return false;
         }
     }
@@ -158,7 +192,7 @@ SymbolicScalar MainBlockCondBulider::BuildMainBlockExpression()
     SymbolicScalar runtimeSelect("RUNTIME_Select");
     SymbolicScalar runtimeAnd("RUNTIME_And");
     SymbolicScalar cond = false;
-    if (mainBlockCondGroup_.empty()) {
+    if (mainBlockDisabled_ || mainBlockCondGroup_.empty()) {
         return runtimeSelect(cond, 1, 0);
     }
 
