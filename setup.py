@@ -36,11 +36,13 @@ import dataclasses
 from pathlib import Path
 from typing import Optional, List, Tuple, Dict
 from importlib import metadata
+from datetime import datetime, timedelta, timezone
 
 from setuptools import setup, Extension
 from setuptools.command.editable_wheel import editable_wheel
 from setuptools.command.build_ext import build_ext
 from setuptools.command.develop import develop
+from setuptools.command.egg_info import egg_info
 
 
 class CMakeExtension(Extension):
@@ -672,6 +674,73 @@ class CMakeBuild(build_ext, CMakeUserOption, EditModeHelper):
         logging.info("Written build dir marker: %s -> %s", marker_file, build_dir)
 
 
+class CustomEggInfo(egg_info):
+    """自定义 egg_info 命令, 注入自定义 metadata 字段到 METADATA 文件
+
+    setuptools 的 setup() 不支持自定义 metadata keyword 参数,
+    通过重写 egg_info 命令在 METADATA 生成后追加自定义字段.
+    """
+
+    @classmethod
+    def _get_run_version(cls) -> str:
+        version_file = Path(__file__).parent / "version.cmake"
+        if not version_file.exists():
+            raise RuntimeError(f"Can't find version.cmake at {version_file}")
+        content = version_file.read_text(encoding="utf-8")
+        m = re.search(r'set_cann_package\([^)]*VERSION\s+"([^"]+)"\)', content)
+        if not m:
+            raise RuntimeError(f"Can't parse VERSION from {version_file}")
+        version = m.group(1)
+        if not version:
+            raise RuntimeError(f"Empty VERSION in {version_file}")
+        return version
+
+    @classmethod
+    def _get_build_timestamp(cls) -> str:
+        tag_info = os.environ.get('tagInfo')
+        if tag_info:
+            parts = tag_info.split('_')
+            timestamp = '_'.join(parts[-3:-1])
+        else:
+            # 1. 当前 CI/CD 流水线构建, build_ci.py 入口构建均会设置 tagInfo 环境变量.
+            # 2. 仅通过 pip install . 方式直接触发 whl 包构建不含 tagInfo 环境变量,
+            #    此时不会触发 run 构建, 不需补充 tagInfo 环境变量.
+            timestamp = datetime.now(timezone(timedelta(hours=8))).strftime('%Y%m%d_%H%M%S%f')[:-3]
+        if not timestamp:
+            raise RuntimeError(f"Failed to extract timestamp from {tag_info!r}, "
+                               "expected format: prefix_date_time_suffix")
+        return timestamp
+
+    def run(self):
+        super().run()
+        self._inject_custom_metadata()
+
+    def _inject_custom_metadata(self):
+        egg_info_dir = Path(self.egg_info)
+        # egg_info 生成 PKG-INFO, bdist_wheel 从 PKG-INFO 拷贝为 dist-info/METADATA
+        metadata_file = egg_info_dir / "PKG-INFO"
+        if not metadata_file.exists():
+            # 兼容部分 setuptools 版本使用 METADATA 文件名
+            metadata_file = egg_info_dir / "METADATA"
+        if not metadata_file.exists():
+            # -e 模式下没有 METADATA/PKG-INFO 文件
+            logging.warning("Can't get METADATA in %s", egg_info_dir)
+            return
+        run_version = self._get_run_version()
+        build_timestamp = self._get_build_timestamp()
+        custom_fields = f"X-Run-Version: {run_version}\nX-Build-Timestamp: {build_timestamp}\n"
+        # METADATA/PKG-INFO 遵循 RFC 5322: 头部字段在前, 空行分隔, 之后为 body(README).
+        # 自定义字段必须插入到空行之前(header 区域), 否则 importlib.metadata 无法解析.
+        content = metadata_file.read_text(encoding="utf-8")
+        separator = "\n\n"
+        idx = content.find(separator)
+        if idx == -1:
+            # 无空行分隔符(异常情况), 追加到末尾
+            metadata_file.write_text(content + custom_fields, encoding="utf-8")
+        else:
+            metadata_file.write_text(content[:idx] + "\n" + custom_fields + content[idx + 1:], encoding="utf-8")
+
+
 class SetupCtrl:
     """Setuptools 配置流程控制器
 
@@ -706,6 +775,7 @@ class SetupCtrl:
                 'editable_wheel': CustomEditableWheel,  # setuptools>=58.0.0, pip>=21.3 会触发 editable_wheel
                 'develop': CustomDevelop,  # pip<21.3 会触发 develop, 需同样设置 editable 标记
                 'build_ext': CMakeBuild,
+                'egg_info': CustomEggInfo,  # 写入自定义参数
             },
         )
 

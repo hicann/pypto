@@ -59,7 +59,7 @@ import shutil
 import signal
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional, List, Dict, Tuple, Any
 from importlib import metadata
@@ -1240,6 +1240,13 @@ class BuildCtrl(CMakeParam):
         env = {}
         if self.third_party_path:
             env.update({"PYPTO_THIRD_PARTY_PATH": self.third_party_path})
+        # 通过 tag_info 环境变量统一 run 和 whl 内的 build_timestamp
+        tag_info = os.environ.get('tagInfo')
+        if not tag_info:
+            # tagInfo 格式须为 prefix_date_time_suffix (至少 4 段), 与 cmake 公共仓中 generate_version_info.py
+            # 和 setup.py 均使用 split('_')[-3:-1] 提取 date_time 保持一致
+            timestamp = datetime.now(timezone(timedelta(hours=8))).strftime('%Y%m%d_%H%M%S%f')[:-3]
+            env.update({"tagInfo": f"pypto_{timestamp}_build"})
         return env
 
     def get_cmake_build_update_env(self) -> Dict[str, str]:
