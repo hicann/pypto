@@ -303,6 +303,8 @@ enum class Opcode {
     OP_SYNC_DST,
     OP_CV_SYNC_SRC,
     OP_CV_SYNC_DST,
+    OP_FFTS_CROSS_CORE_SYNC,
+    OP_WAIT_FLAG_DEV,
     OP_PHASE1,
     OP_PHASE2,
     OP_BAR_V,

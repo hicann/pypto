@@ -104,4 +104,23 @@ std::string CodeGenOpNPU::GenAicpuCallOp() const
     return oss.str();
 }
 
+std::string CodeGenOpNPU::GenFFTSCrossCoreSyncOp() const
+{
+    auto pipeId = GetPipeId(syncQueue.pipeId_);
+    std::ostringstream oss;
+    InsertSetSysCnt(oss);
+    oss << "ffts_cross_core_sync(" << pipeId << ", getFFTSMsg(0x2, " << std::to_string(syncQueue.eventId_) << "))"
+        << STMT_END;
+    return oss.str();
+}
+
+std::string CodeGenOpNPU::GenWaitFlagDevOp() const
+{
+    auto pipeId = GetPipeId(syncQueue.pipeId_);
+    std::ostringstream oss;
+    InsertWaitSysCnt(oss);
+    oss << "wait_flag_dev(" << pipeId << ", " << std::to_string(syncQueue.eventId_) << ")" << STMT_END;
+    return oss.str();
+}
+
 } // namespace npu::tile_fwk

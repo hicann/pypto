@@ -55,6 +55,9 @@ public:
     std::string GenSyncWaitOp() const;
     std::string GenCVSyncSetOp() const;
     std::string GenCVSyncWaitOp() const;
+    std::string GenFFTSCrossCoreSyncOp() const;
+    std::string GenWaitFlagDevOp() const;
+
     std::string GenMemL1ToBt() const;
     std::string GenMemL1CopyIn() const;
     std::string GenMemL1CopyOut() const;

@@ -337,9 +337,9 @@ TEST_F(MixInternalComponentsAnalyzerTest, TestSyncOpMerge_BarAll_Forward)
 
     // 3. 结果校验
     ASSERT_EQ(status, SUCCESS) << "OP_BAR_ALL merge failed";
-    test_utils::VerifyScopeBasicInfo(components, MS_NUM1, {MS_NUM2}, {ComponentType::V_SCOPE});
-    test_utils::VerifyScopeOperands(components[0], MS_NUM2, false, AIVCore::AIV1);
-    test_utils::VerifyOpInternalId(barAllOp, MS_NUM2);
+    test_utils::VerifyScopeBasicInfo(components, MS_NUM2, {MS_NUM2, MS_NUM3}, {ComponentType::V_SCOPE, ComponentType::C_SCOPE});
+    test_utils::VerifyScopeOperands(components[0], MS_NUM1, false, AIVCore::AIV1);
+    test_utils::VerifyOpInternalId(barAllOp, MS_NUM3);
 }
 
 // 用例6：同步算子OP_PHASE2合并（向前找COPY_IN算子）
@@ -423,27 +423,50 @@ TEST_F(MixInternalComponentsAnalyzerTest, TestException_InconsistentAIVCore)
     ASSERT_EQ(status, FAILED) << "Should return FAILED when AIVCore inconsistent";
 }
 
-// 用例10：Scope仅含同步算子（ComponentType判定失败，返回FAILED）
-TEST_F(MixInternalComponentsAnalyzerTest, TestException_OnlySyncOpInComponent)
+// 用例10：Scope仅含同步算子（AIVCore=UNSPECIFIED，推断为C_SCOPE）
+TEST_F(MixInternalComponentsAnalyzerTest, TestOnlySyncOpInComponent_CubeScope)
 {
-    // 1. 构建场景：仅OP_BAR_ALL算子，手动设置ID=0，无任何非同步算子
+    // 1. 构建场景：仅OP_BAR_ALL算子，手动设置ID=0，AIVCore默认UNSPECIFIED
     auto t1 = test_utils::CreateBasicTensor();
     auto t2 = test_utils::CreateBasicTensor();
     auto& barAllOp = test_utils::CreateSyncOp(*mixFuncPtr_, Opcode::OP_BAR_ALL, t1, t2);
-    barAllOp.UpdateInternalSubgraphID(MS_NUM0); // 制造全同步算子Scope
+    barAllOp.UpdateInternalSubgraphID(MS_NUM0);
 
     // 2. 执行分析
     std::vector<InternalComponentInfo> components;
     Status status = analyzer_->AnalyzeInternalComponents(*mixFuncPtr_, components);
 
-    // 3. 结果校验
-    ASSERT_EQ(status, FAILED) << "Should return FAILED when component has only sync ops";
+    // 3. 结果校验：全同步算子+AIVCore=UNSPECIFIED → C_SCOPE
+    ASSERT_EQ(status, SUCCESS) << "All-sync component with UNSPECIFIED AIVCore should succeed as C_SCOPE";
+    test_utils::VerifyScopeBasicInfo(components, MS_NUM1, {MS_NUM0}, {ComponentType::C_SCOPE});
+    ASSERT_EQ(components[0].operations.size(), MS_NUM1);
+    EXPECT_EQ(components[0].aivCore, AIVCore::UNSPECIFIED);
 }
 
-// 用例11：同步算子无合并目标（后置校验失败，返回FAILED）
-TEST_F(MixInternalComponentsAnalyzerTest, TestException_SyncOpMergeFail_NoTarget)
+// 用例10b：Scope仅含同步算子（AIVCore=AIV1，推断为V_SCOPE）
+TEST_F(MixInternalComponentsAnalyzerTest, TestOnlySyncOpInComponent_VectorScope)
 {
-    // 1. 构建场景：仅OP_SYNC_SRC算子，无任何非同步算子可合并
+    // 1. 构建场景：仅OP_BAR_ALL算子，手动设置ID=0和AIVCore=AIV1
+    auto t1 = test_utils::CreateBasicTensor();
+    auto t2 = test_utils::CreateBasicTensor();
+    auto& barAllOp = test_utils::CreateSyncOp(*mixFuncPtr_, Opcode::OP_BAR_ALL, t1, t2);
+    barAllOp.UpdateInternalSubgraphID(MS_NUM0);
+    barAllOp.SetAIVCore(AIVCore::AIV1);
+
+    // 2. 执行分析
+    std::vector<InternalComponentInfo> components;
+    Status status = analyzer_->AnalyzeInternalComponents(*mixFuncPtr_, components);
+
+    // 3. 结果校验：全同步算子+AIVCore=AIV1 → V_SCOPE
+    ASSERT_EQ(status, SUCCESS) << "All-sync component with AIV1 should succeed as V_SCOPE";
+    test_utils::VerifyScopeBasicInfo(components, MS_NUM1, {MS_NUM0}, {ComponentType::V_SCOPE});
+    EXPECT_EQ(components[0].aivCore, AIVCore::AIV1);
+}
+
+// 用例11：同步算子无合并目标（通过AIVCore创建新component，返回SUCCESS）
+TEST_F(MixInternalComponentsAnalyzerTest, TestSyncOpMergeFail_CreateNewComponent)
+{
+    // 1. 构建场景：仅OP_SYNC_SRC算子，无任何非同步算子可合并，AIVCore默认UNSPECIFIED
     auto t1 = test_utils::CreateBasicTensor();
     auto t2 = test_utils::CreateBasicTensor();
     auto& syncSrcOp = test_utils::CreateSyncOp(*mixFuncPtr_, Opcode::OP_SYNC_SRC, t1, t2);
@@ -452,9 +475,10 @@ TEST_F(MixInternalComponentsAnalyzerTest, TestException_SyncOpMergeFail_NoTarget
     std::vector<InternalComponentInfo> components;
     Status status = analyzer_->AnalyzeInternalComponents(*mixFuncPtr_, components);
 
-    // 3. 结果校验
-    ASSERT_EQ(status, FAILED) << "Should return FAILED when sync op no merge target";
-    test_utils::VerifyOpInternalId(syncSrcOp, MS_NEG1);
+    // 3. 结果校验：无匹配component时按AIVCore创建新component（UNSPECIFIED→C_SCOPE）
+    ASSERT_EQ(status, SUCCESS) << "Sync op with no merge target should create new component by AIVCore";
+    test_utils::VerifyScopeBasicInfo(components, MS_NUM1, {MS_NUM0}, {ComponentType::C_SCOPE});
+    test_utils::VerifyOpInternalId(syncSrcOp, MS_NUM0);
 }
 
 // 用例12：同步算子无合并目标（前校验失败, 未标记subgraphID, 返回FAILED）

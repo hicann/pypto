@@ -439,12 +439,12 @@ TEST_F(InsertSyncTest, TestUpdateDep)
                 auto setPipeIdx2 = ps.latestPipeDep_[pcCurr].setPipes[pcSet2];
                 ps.latestPipeDep_[pcCurr].DumpPipeDepInfo();
                 if (i == IS_NUM4 && k == IS_NUM3) {
-                    EXPECT_EQ(setPipeIdx1, IS_NUM3);
-                    EXPECT_EQ(setPipeIdx2, IS_NUM1);
+                    EXPECT_EQ(setPipeIdx1, static_cast<size_t>(IS_NUM3));
+                    EXPECT_EQ(setPipeIdx2, static_cast<size_t>(IS_NUM1));
                 }
                 if (i == IS_NUM4 && k == 0) {
-                    EXPECT_EQ(setPipeIdx1, IS_NUM3);
-                    EXPECT_EQ(setPipeIdx2, IS_NUM1);
+                    EXPECT_EQ(setPipeIdx1, static_cast<size_t>(IS_NUM3));
+                    EXPECT_EQ(setPipeIdx2, static_cast<size_t>(IS_NUM1));
                 }
             }
         }
@@ -503,8 +503,8 @@ TEST_F(InsertSyncTest, TestHandleEventID)
     std::vector<IndexOp> synced;
     BuildDeps(ps, dataDependencySearcher, opLogPtr, synced);
     // After reorder: copyin1(0), copyin2(1), cast(2)
-    EXPECT_EQ(ps.depOps_[0].setPipe[0], IS_NUM2);  // copyin1 sets for cast
-    EXPECT_EQ(ps.depOps_[IS_NUM2].waitPipe[0], 0);  // cast waits for copyin1
+    EXPECT_EQ(ps.depOps_[0].setPipe[0], static_cast<size_t>(IS_NUM2));  // copyin1 sets for cast
+    EXPECT_EQ(ps.depOps_[IS_NUM2].waitPipe[0], static_cast<size_t>(0));  // cast waits for copyin1
 
     // HandleEventID - Test AdjustOpDep path
     // Set up conditions to trigger AdjustOpDep:
@@ -527,8 +527,8 @@ TEST_F(InsertSyncTest, TestHandleEventID)
     issuenum.currIssueNum[pp] = IS_NUM8;
 
     // Verify initial state before HandleEventID
-    EXPECT_EQ(ps.depOps_[IS_NUM2].waitPipe[0], 0);  // cast waits for copyin1
-    EXPECT_EQ(ps.depOps_[0].setPipe[0], IS_NUM2);   // copyin1 sets for cast
+    EXPECT_EQ(ps.depOps_[IS_NUM2].waitPipe[0], static_cast<size_t>(0));  // cast waits for copyin1
+    EXPECT_EQ(ps.depOps_[0].setPipe[0], static_cast<size_t>(IS_NUM2));   // copyin1 sets for cast
 
     ps.HandleEventID(handleOp, issueQ, issuenum, eventIdDeadlock, res, synced);
     issueQ.DumpIssueQueue(ps.oriOpList_);
@@ -537,18 +537,16 @@ TEST_F(InsertSyncTest, TestHandleEventID)
     // After HandleEventID with AdjustOpDep:
     // RemoveOpDep: copyin1's setPipe removes cast, cast's waitPipe removes copyin1
     // AddOpDep: copyin2's setPipe adds cast, cast's waitPipe adds copyin2
-    EXPECT_EQ(ps.depOps_[IS_NUM2].waitPipe[0], IS_NUM1);  // cast now waits for copyin2
-    EXPECT_EQ(ps.depOps_[IS_NUM1].setPipe[0], IS_NUM2);   // copyin2 sets for cast
-    EXPECT_EQ(ps.depOps_[0].setPipe.size(), 0);           // copyin1 has no setPipe
+    EXPECT_EQ(ps.depOps_[IS_NUM2].waitPipe[0], static_cast<size_t>(IS_NUM1));  // cast now waits for copyin2
+    EXPECT_EQ(ps.depOps_[IS_NUM1].setPipe[0], static_cast<size_t>(IS_NUM2));   // copyin2 sets for cast
+    EXPECT_EQ(ps.depOps_[0].setPipe.size(), static_cast<size_t>(0));           // copyin1 has no setPipe
 
     // InitCVEventIdQ
-    PipeSync::CoreTypeDetail setCore = {CoreType::AIC, AIVCore::UNSPECIFIED};
-    PipeSync::CoreTypeDetail waitCore = {CoreType::AIV, AIVCore::AIV1};
-    PipeSync::CorePair corePair = {setCore, waitCore};
-    PipeSync::CorePair corePairReverse = {waitCore, setCore};
-    ps.InitCVEventIdQ(corePair);
-    EXPECT_EQ(ps.crossCoreFreeEventId_[corePair].size(), IS_NUM16);
-    EXPECT_EQ(ps.crossCoreFreeEventId_[corePairReverse].size(), IS_NUM16);
+    ps.InitCVEventIdQ();
+    PipeSync::PipeCoreRealEx pcAIC(PIPE_S, CoreType::AIC, AIVCore::UNSPECIFIED);
+    PipeSync::PipeCoreRealEx pcAIV1(PIPE_V, CoreType::AIV, AIVCore::AIV1);
+    EXPECT_EQ(ps.crossCoreFreeEventId_[pcAIC][0].size(), static_cast<size_t>(IS_NUM16));
+    EXPECT_EQ(ps.crossCoreFreeEventId_[pcAIV1][0].size(), static_cast<size_t>(IS_NUM16));
 }
 
 TEST_F(InsertSyncTest, TestRelaxFakeDataDep)
@@ -773,10 +771,10 @@ TEST_F(InsertSyncTest, TestRelaxFakeDataDep)
         totalIssued += issued;
         // eventIdDeadlockEnterTimes eventIdDeadlock syncedOpLog
         if (issuedTest == static_cast<size_t>(0)) {
-            EXPECT_EQ(ps.depOps_[0].setPipe[0], IS_NUM18);
-            EXPECT_EQ(ps.depOps_[IS_NUM1].setPipe[0], IS_NUM19);
+            EXPECT_EQ(ps.depOps_[0].setPipe[0], static_cast<size_t>(IS_NUM18));
+            EXPECT_EQ(ps.depOps_[IS_NUM1].setPipe[0], static_cast<size_t>(IS_NUM19));
             ps.ProcessDeadLock(eventIdDeadlockEnterTimes, eventIdDeadlock, synced);
-            EXPECT_EQ(ps.depOps_[IS_NUM1].setPipe[0], IS_NUM18);
+            EXPECT_EQ(ps.depOps_[IS_NUM1].setPipe[0], static_cast<size_t>(IS_NUM18));
             continue;
         }
         eventIdDeadlock = false;
