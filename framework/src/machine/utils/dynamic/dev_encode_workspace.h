@@ -22,7 +22,8 @@ namespace npu::tile_fwk::dynamic {
 
 uint32_t EffectiveUnrollTimes(const DevAscendFunction* devFunc);
 uint32_t ParseUnrollTimesFromName(const std::string& rawName);
-uint32_t ComputeMaxUnrollTimesFromDevRoots(const DyndevFunctionAttribute& dynAttr);
+uint32_t ComputeMaxUnrollTimesFromDevEncodeList(const std::vector<std::vector<uint8_t>>& devEncodeListInput);
+uint32_t ComputeMaxUnrollTimesFromDevProg(const DevAscendProgram& devProg);
 uint32_t ConfiguredStitchFunctionMaxNum();
 int32_t GetPlatformMaxAicoreNum();
 

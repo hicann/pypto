@@ -64,11 +64,25 @@ uint32_t ParseUnrollTimesFromName(const std::string& rawName)
     return std::max(unrollTimes, 1u);
 }
 
-uint32_t ComputeMaxUnrollTimesFromDevRoots(const DyndevFunctionAttribute& dynAttr)
+uint32_t ComputeMaxUnrollTimesFromDevEncodeList(const std::vector<std::vector<uint8_t>>& devEncodeListInput)
 {
     uint32_t maxUnroll = 1;
-    for (auto& devRoot : dynAttr.funcGroup.devRootList) {
-        maxUnroll = std::max(maxUnroll, ParseUnrollTimesFromName(devRoot->GetRawName()));
+    for (const auto& devEncodeBin : devEncodeListInput) {
+        if (devEncodeBin.empty()) {
+            continue;
+        }
+        const auto* devFunc = reinterpret_cast<const DevAscendFunction*>(devEncodeBin.data());
+        maxUnroll = std::max(maxUnroll, EffectiveUnrollTimes(devFunc));
+    }
+    return maxUnroll;
+}
+
+uint32_t ComputeMaxUnrollTimesFromDevProg(const DevAscendProgram& devProg)
+{
+    uint32_t maxUnroll = 1;
+    for (size_t i = 0; i < devProg.devEncodeList.size(); ++i) {
+        const auto* devFunc = reinterpret_cast<const DevAscendFunction*>(devProg.devEncodeList[i].Data());
+        maxUnroll = std::max(maxUnroll, EffectiveUnrollTimes(devFunc));
     }
     return maxUnroll;
 }
@@ -384,7 +398,7 @@ static void ProcessDevFunctionOutcasts(
 {
     rootMem.func = func;
     rootMem.devFuncName = devFunc->GetRawName();
-    rootMem.unroll = ParseUnrollTimesFromName(devFunc->GetRawName());
+    rootMem.unroll = EffectiveUnrollTimes(devFunc);
     uint64_t maxStaticMemReq = 0;
     int64_t maxStaticMemReqIdx = -1;
     for (size_t i = 0; i < devFunc->GetOutcastSize(); i++) {
@@ -537,7 +551,7 @@ WorkspaceDesc CollectWorkspaceDesc(
 {
     auto dynAttr = func->GetDyndevAttribute();
     WorkspaceDesc desc;
-    desc.maxUnrollTimes = ComputeMaxUnrollTimesFromDevRoots(*dynAttr);
+    desc.maxUnrollTimes = ComputeMaxUnrollTimesFromDevProg(devProg);
     CalcWorkspaceConfig(desc);
     CalcWorkspacePlatform(desc);
 
