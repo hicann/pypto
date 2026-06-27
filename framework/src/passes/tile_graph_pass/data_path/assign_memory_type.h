@@ -163,6 +163,12 @@ private:
     Status InferViewTypeInput(
         Operation& operation, const LogicalTensorPtr& input, const LogicalTensorPtr& output, MemoryType targetType);
 
+    // 当 tensor 的 toBeMap 未知时，沿后续未推导的视图链向前查找有效内存类型
+    MemoryType InferTargetTypeThroughForwardViews(const LogicalTensorPtr& tensor) const;
+
+    MemoryType InferTargetTypeThroughForwardViews(
+        const LogicalTensorPtr& tensor, std::unordered_set<LogicalTensorPtr>& visitedTensors) const;
+
     bool KeepSplitReshapeUb(Operation& operation, const LogicalTensorPtr& input, const LogicalTensorPtr& output);
 
     bool IsDynamicReshape(Operation& operation, const LogicalTensorPtr& output) const;

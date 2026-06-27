@@ -1032,6 +1032,16 @@ Status AssignMemoryType::InferViewTypeMemoryType(Operation& operation)
     MemoryType outputOriginal = output->GetMemoryTypeOriginal();
     MemoryType outputRequirement =
         output == nullptr ? MemoryType::MEM_UNKNOWN : inserter.TryGetUniqueKnownRequiredType(output);
+    // 输出 toBeMap 未知时，沿后续未推导的视图链向前查找有效内存类型
+    if (outputRequirement == MemoryType::MEM_UNKNOWN) {
+        MemoryType forwarded = InferTargetTypeThroughForwardViews(output);
+        if (forwarded != MemoryType::MEM_UNKNOWN) {
+            APASS_LOG_DEBUG_F(Elements::Operation,
+                "Infer OP_VIEW_TYPE[%d] memory type reused from forward view requirement %s for output tensor[%d].",
+                operation.GetOpMagic(), BriefMemoryTypeToString(forwarded).c_str(), output->GetMagic());
+            outputRequirement = forwarded;
+        }
+    }
     MemoryType targetType = outputRequirement != MemoryType::MEM_UNKNOWN ? outputRequirement : outputOriginal;
     bool handled = false;
     RETURN_IF_NOT_SUCCESS(TryInferViewTypeFromProducerView(operation, input, output, targetType, handled));
@@ -1090,6 +1100,41 @@ Status AssignMemoryType::InferViewTypeInput(
     ForceSetRequirement(input, operation, MemoryType::MEM_DEVICE_DDR, "InferViewTypeFallbackDdr");
     ForceSetOriginal(output, MemoryType::MEM_DEVICE_DDR, "InferViewTypeFallbackDdr");
     return SUCCESS;
+}
+
+MemoryType AssignMemoryType::InferTargetTypeThroughForwardViews(const LogicalTensorPtr& tensor) const
+{
+    std::unordered_set<LogicalTensorPtr> visitedTensors;
+    return InferTargetTypeThroughForwardViews(tensor, visitedTensors);
+}
+
+MemoryType AssignMemoryType::InferTargetTypeThroughForwardViews(
+    const LogicalTensorPtr& tensor, std::unordered_set<LogicalTensorPtr>& visitedTensors) const
+{
+    if (tensor == nullptr || !visitedTensors.insert(tensor).second) {
+        return MemoryType::MEM_UNKNOWN;
+    }
+    // 仅当唯一 consumer 为 OP_VIEW 时沿视图链前向推导，规避多分支分歧
+    const auto& consumers = tensor->GetConsumers();
+    if (consumers.size() != 1) {
+        return MemoryType::MEM_UNKNOWN;
+    }
+    auto consumerOp = *consumers.begin();
+    if (consumerOp == nullptr || consumerOp->GetOpcode() != Opcode::OP_VIEW) {
+        return MemoryType::MEM_UNKNOWN;
+    }
+    if (consumerOp->oOperand.empty() || consumerOp->oOperand.front() == nullptr) {
+        return MemoryType::MEM_UNKNOWN;
+    }
+    auto viewOutput = consumerOp->oOperand.front();
+    if (viewOutput->GetMemoryTypeOriginal() != MemoryType::MEM_UNKNOWN) {
+        return viewOutput->GetMemoryTypeOriginal();
+    }
+    MemoryType viewOutputRequirement = inserter.TryGetUniqueKnownRequiredType(viewOutput);
+    if (viewOutputRequirement != MemoryType::MEM_UNKNOWN) {
+        return viewOutputRequirement;
+    }
+    return InferTargetTypeThroughForwardViews(viewOutput, visitedTensors);
 }
 
 bool AssignMemoryType::KeepSplitReshapeUb(
