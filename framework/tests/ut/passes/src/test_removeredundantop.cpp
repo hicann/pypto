@@ -1622,5 +1622,211 @@ TEST_F(TestRemoveRedundantOpPass, TestNewViewDynValidShapeInference)
     EXPECT_EQ(newViewOutput->GetDynValidShape()[0].Dump(), "view_output_dim0");
     EXPECT_EQ(newViewOutput->GetDynValidShape()[1].Dump(), "view_output_dim1");
 }
+
+/*
+TestGenerateViewWithNonViewProducer
+inCast{8,16}->view->Tensor1{4,16}->assemble->outCast{16,16}
+inCast2{8,16}->exp->Tensor2{8,16}->assemble->outCast{16,16}
+
+endTensor(outCast) has a producer chain (inCast2->exp->Tensor2->assemble) whose producer
+is NOT a VIEW op. IsNotSameViewInput should detect this and return true, so
+GenerateNewView is skipped to avoid breaking the graph.
+
+Expected: no new view generated, all original ops preserved.
+*/
+TEST_F(TestRemoveRedundantOpPass, TestGenerateViewWithNonViewProducer)
+{
+    auto currFunctionPtr =
+        std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantOp", "TestRemoveRedundantOp", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    // Prepare the graph
+    std::vector<int64_t> shape = {kNumEight, kNumExpFour};
+    std::vector<int64_t> shape1 = {kNumExpFour, kNumExpFour};
+    std::vector<int64_t> shape2 = {kNumFour, kNumExpFour};
+    std::vector<int64_t> offset1 = {kNumZero, kNumZero};
+    std::vector<int64_t> offset2 = {kNumFour, kNumZero};
+    std::vector<int64_t> offset3 = {kNumEight, kNumZero};
+    auto inCast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto inCast2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1), TileOpFormat::TILEOP_ND, "outCast");
+    outCast->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
+    auto ubTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
+    ubTensor1->SetMemoryTypeOriginal(MemoryType::MEM_UB, false);
+    auto ubTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    ubTensor2->SetMemoryTypeOriginal(MemoryType::MEM_UB, false);
+
+    // inCast1->view->ubTensor1->assemble->outCast (view-assemble chain from startTensor=inCast1)
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {inCast1}, {ubTensor1},
+        [&offset1](Operation& op) {
+            op.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset1));
+        });
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {ubTensor1}, {outCast},
+        [&offset1](Operation& op) {
+            op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset1));
+        });
+    // inCast2->exp->ubTensor2->assemble->outCast (non-view producer chain)
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {inCast2}, {ubTensor2});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {ubTensor2}, {outCast},
+        [&offset3](Operation& op) {
+            op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset3));
+        });
+
+    currFunctionPtr->inCasts_.push_back(inCast1);
+    currFunctionPtr->inCasts_.push_back(inCast2);
+    currFunctionPtr->outCasts_.push_back(outCast);
+
+    RemoveRedundantOp RemoveRedundantOpPass;
+    EXPECT_EQ(RemoveRedundantOpPass.RunOnFunction(*currFunctionPtr), SUCCESS);
+
+    // GenerateNewView should NOT be triggered because endTensor has a non-view producer (exp).
+    // All original view and assemble ops should be preserved.
+    uint32_t viewNum = kNumZero;
+    uint32_t assembleNum = kNumZero;
+    for (const auto& op : currFunctionPtr->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_VIEW) {
+            ++viewNum;
+        }
+        if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
+            ++assembleNum;
+        }
+    }
+    EXPECT_EQ(viewNum, kNumOne);
+    EXPECT_EQ(assembleNum, kNumTwo);
+}
+
+/*
+TestGenerateViewEndTensorLargerThanStartTensor
+inCast{8,16}->view->Tensor1{4,16}->assemble->outCast{128,16}
+
+endTensor(outCast) shape (128,16) has dim0 > startTensor shape dim0 (8), so endTensor is NOT
+a part of startTensor. The shape check in IsValidViewAssemble should reject this case.
+
+Expected: no new view generated, all original ops preserved.
+*/
+TEST_F(TestRemoveRedundantOpPass, TestGenerateViewEndTensorLargerThanStartTensor)
+{
+    auto currFunctionPtr =
+        std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantOp", "TestRemoveRedundantOp", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    // Prepare the graph
+    std::vector<int64_t> shape = {kNumEight, kNumExpFour};
+    std::vector<int64_t> shape1 = {kNumExpSeven, kNumExpFour};
+    std::vector<int64_t> shape2 = {kNumFour, kNumExpFour};
+    std::vector<int64_t> offset1 = {kNumZero, kNumZero};
+    auto inCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1), TileOpFormat::TILEOP_ND, "outCast");
+    outCast->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
+    auto ubTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
+    ubTensor1->SetMemoryTypeOriginal(MemoryType::MEM_UB, false);
+
+    // inCast{8,16}->view->ubTensor1{4,16}->assemble->outCast{128,16}
+    // endTensor=outCast{128,16}, startTensor=inCast{8,16}, dim0: 128 > 8 => not a part of startTensor
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {inCast}, {ubTensor1},
+        [&offset1](Operation& op) {
+            op.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset1));
+        });
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {ubTensor1}, {outCast},
+        [&offset1](Operation& op) {
+            op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset1));
+        });
+
+    currFunctionPtr->inCasts_.push_back(inCast);
+    currFunctionPtr->outCasts_.push_back(outCast);
+
+    RemoveRedundantOp RemoveRedundantOpPass;
+    EXPECT_EQ(RemoveRedundantOpPass.RunOnFunction(*currFunctionPtr), SUCCESS);
+
+    // GenerateNewView should NOT be triggered because endTensor shape (128,16) exceeds
+    // startTensor shape (8,16) in dim0.
+    uint32_t viewNum = kNumZero;
+    uint32_t assembleNum = kNumZero;
+    for (const auto& op : currFunctionPtr->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_VIEW) {
+            ++viewNum;
+        }
+        if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
+            ++assembleNum;
+        }
+    }
+    EXPECT_EQ(viewNum, kNumOne);
+    EXPECT_EQ(assembleNum, kNumOne);
+}
+
+/*
+TestGenerateViewOutcastWithNonViewProducer
+inCast1{8,16}->view->Tensor1{4,16}->assemble->outCast{16,16}
+inCast2{8,16}->exp->Tensor2{8,16}->assemble->outCast{16,16}
+
+endTensor(outCast) has no consumers (is outcast) and has a non-view-assemble producer
+(inCast2->exp->Tensor2->assemble). GenerateNewView should create a new tensor for the
+view-assemble chain instead of reusing endTensor directly, to avoid breaking the graph.
+
+Expected: a new view op is created, non-view-assemble producer chain preserved on endTensor.
+*/
+TEST_F(TestRemoveRedundantOpPass, TestGenerateViewOutcastWithNonViewProducer)
+{
+    auto currFunctionPtr =
+        std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantOp", "TestRemoveRedundantOp", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    // Prepare the graph: endTensor shape must be <= startTensor shape in every dim
+    std::vector<int64_t> shape = {kNumExpSix, kNumExpSix};
+    std::vector<int64_t> shape1 = {kNumExpFive, kNumExpSix};
+    std::vector<int64_t> shape2 = {kNumExpFive, kNumExpSix};
+    std::vector<int64_t> offset1 = {kNumZero, kNumZero};
+    std::vector<int64_t> offset3 = {kNumExpFive, kNumZero};
+    auto inCast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto inCast2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1), TileOpFormat::TILEOP_ND, "outCast");
+    outCast->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
+    auto ubTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
+    ubTensor1->SetMemoryTypeOriginal(MemoryType::MEM_UB, false);
+    auto ubTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
+    ubTensor2->SetMemoryTypeOriginal(MemoryType::MEM_UB, false);
+
+    // inCast1{64,64}->view->ubTensor1{32,64}->assemble->outCast{32,64} (view-assemble chain from inCast1)
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {inCast1}, {ubTensor1},
+        [&offset1](Operation& op) {
+            op.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset1));
+        });
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {ubTensor1}, {outCast},
+        [&offset1](Operation& op) {
+            op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset1));
+        });
+    // inCast2{64,64}->exp->ubTensor2{32,64}->assemble->outCast{32,64} (non-view producer chain)
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {inCast2}, {ubTensor2});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {ubTensor2}, {outCast},
+        [&offset3](Operation& op) {
+            op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset3));
+        });
+
+    currFunctionPtr->inCasts_.push_back(inCast1);
+    currFunctionPtr->inCasts_.push_back(inCast2);
+    currFunctionPtr->outCasts_.push_back(outCast);
+
+    RemoveRedundantOp RemoveRedundantOpPass;
+    EXPECT_EQ(RemoveRedundantOpPass.RunOnFunction(*currFunctionPtr), SUCCESS);
+
+    // endTensor 是 outcast（无消费者），GenerateNewView 直接跳过，所有原始操作保留
+    uint32_t viewNum = kNumZero;
+    uint32_t assembleNum = kNumZero;
+    uint32_t expNum = kNumZero;
+    for (const auto& op : currFunctionPtr->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_VIEW) {
+            ++viewNum;
+        }
+        if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
+            ++assembleNum;
+        }
+        if (op.GetOpcode() == Opcode::OP_EXP) {
+            ++expNum;
+        }
+    }
+    EXPECT_EQ(viewNum, kNumOne);
+    EXPECT_EQ(assembleNum, kNumTwo);
+    EXPECT_EQ(expNum, kNumOne);
+}
 }
 }

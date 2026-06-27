@@ -306,20 +306,19 @@ bool RemoveRedundantOp::IsNotSameViewInput(LogicalTensorPtr& startTensor, Logica
         auto producers = tempTensor->GetProducers();
         if (producers.empty()) {
             return true;
-        } else {
-            auto& producerOps = tempTensor->GetProducers();
-            for (auto& producerOp : producerOps) {
-                if (producerOp->GetIOperands().empty()) {
-                    continue;
-                }
-                auto& inTensor = producerOp->GetIOperands().front();
-                if (inTensor != startTensor) {
-                    return true;
-                }
-                if (producerOp->GetOpcode() != Opcode::OP_VIEW) {
-                    continue;
-                }
+        }
+        for (auto& producerOp : tempTensor->GetProducers()) {
+            if (producerOp->GetOpcode() != Opcode::OP_VIEW) {
+                return true;
             }
+            if (producerOp->GetIOperands().empty()) {
+                continue;
+            }
+            auto& inTensor = producerOp->GetIOperands().front();
+            if (inTensor != startTensor) {
+                return true;
+            }
+
         }
     }
     return false;
@@ -368,7 +367,16 @@ bool RemoveRedundantOp::IsValidViewAssemble(LogicalTensorPtr& startTensor, Logic
             startTensor->magic, endTensor->magic);
         return false;
     }
-    // step2:排除assemble数据重排场景
+    // step2：排除endTensor不是startTensor一部分的场景，每个维度的shape应小于等于startTensor
+    if (endTensor->shape.size() > startTensor->shape.size()) {
+        return false;
+    }
+    for (size_t i = 0; i < endTensor->shape.size(); ++i) {
+        if (endTensor->shape[i] > startTensor->shape[i]) {
+            return false;
+        }
+    }
+    // step3:排除assemble数据重排场景
     bool isDataRepalce = IsDataReplace(endTensor); // true表示assemble后数据重排布
     if (isDataRepalce) {
         APASS_LOG_DEBUG_F(
@@ -427,25 +435,24 @@ void RemoveRedundantOp::GenerateNewView(
         APASS_LOG_DEBUG_F(Elements::Tensor, "Not valid view-assemble case.");
         return;
     }
+    // endTensor 是 outcast（无消费者）时不处理，避免图断裂
+    if (endTensor->GetConsumers().empty()) {
+        return;
+    }
     std::vector<long> newoffset(op.iOperand[0]->offset.size(), INT_MAX);
     std::vector<SymbolicScalar> newDynoffset(op.iOperand[0]->offset.size(), INT_MAX);
     CalculateViewOffset(op, startTensor, endTensor, newoffset, newDynoffset);
     // 新建一个logical tensor并更新图链接关系:清除endTensor的消费者，清除endTensor，将assemble的消费者连接到newView
     LogicalTensorPtr newViewTensor;
-    if (endTensor->GetConsumers().empty()) {
-        newViewTensor = endTensor;
-        RemoveViewAssembleForOutcast(function, startTensor, endTensor);
-    } else {
-        std::vector<long> curOffset(endTensor->shape.size(), 0);
-        newViewTensor = irBuilder_.CreateTensorVar(
-            endTensor->GetRawTensor(), curOffset, endTensor->shape, std::vector<SymbolicScalar>{});
-        newViewTensor->SetMemoryTypeBoth(endTensor->GetMemoryTypeOriginal());
-        for (auto& assembleConsumer : endTensor->GetConsumers()) {
-            assembleConsumer->iOperand = {newViewTensor};
-            newViewTensor->AddConsumer(assembleConsumer);
-        }
-        endTensor->GetConsumers().clear();
+    std::vector<long> curOffset(endTensor->shape.size(), 0);
+    newViewTensor = irBuilder_.CreateTensorVar(
+        endTensor->GetRawTensor(), curOffset, endTensor->shape, std::vector<SymbolicScalar>{});
+    newViewTensor->SetMemoryTypeBoth(endTensor->GetMemoryTypeOriginal());
+    for (auto& assembleConsumer : endTensor->GetConsumers()) {
+        assembleConsumer->iOperand = {newViewTensor};
+        newViewTensor->AddConsumer(assembleConsumer);
     }
+    endTensor->GetConsumers().clear();
     // 新建一个view op
     std::shared_ptr<ViewOpAttribute> viewAttribute =
         std::make_shared<ViewOpAttribute>(newoffset, newDynoffset, newViewTensor->GetDynValidShape());
