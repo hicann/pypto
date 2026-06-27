@@ -373,7 +373,6 @@ bool NodeGraphInfo::CheckUbToUbWithDynOffset(Operation& op)
 
     bool isUbToUb =
         input->GetMemoryTypeOriginal() == MemoryType::MEM_UB && output->GetMemoryTypeOriginal() == MemoryType::MEM_UB;
-
     if (!isUbToUb) {
         return false;
     }
