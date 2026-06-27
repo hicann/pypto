@@ -2278,6 +2278,86 @@ TEST_F(AssignMemoryTypeTest, DdrViewMatmulNoAssemble)
     EXPECT_EQ(viewOutput->GetMemoryTypeOriginal(), MemoryType::MEM_DEVICE_DDR);
 }
 
+// VIEW_TYPE 输出 toBeMap 未知、后继 VIEW 无 toAttr 时，验证 InferTargetTypeThroughForwardViews
+// 沿未推导视图链向前查得有效内存类型。
+// 链路：inA/inB/inC(DDR) -> VIEW -> GATHER_IN_UB -> VIEW -> VIEW_TYPE -> VIEW -> ADDS -> ASSEMBLE -> outcast
+TEST_F(AssignMemoryTypeTest, ViewTypeReusesForwardViewRequirement)
+{
+    ComputationalGraphBuilder G;
+    // 头部输入（DDR incast）：nope_cache / topk_indices / block_table
+    G.AddTensor(DataType::DT_INT8, {NUM_16, NUM_32}, MemoryType::MEM_DEVICE_DDR, "inA");
+    G.AddTensor(DataType::DT_INT32, {1, NUM_16}, MemoryType::MEM_DEVICE_DDR, "inB");
+    G.AddTensor(DataType::DT_INT32, {1, NUM_16}, MemoryType::MEM_DEVICE_DDR, "inC");
+    // 视图输出（均无 toAttr）
+    G.AddTensor(DataType::DT_INT8, {NUM_16, NUM_32}, MemoryType::MEM_UNKNOWN, "t1792");
+    G.AddTensor(DataType::DT_INT32, {1, NUM_16}, MemoryType::MEM_UNKNOWN, "t1793");
+    G.AddTensor(DataType::DT_INT32, {1, NUM_16}, MemoryType::MEM_UNKNOWN, "t1794");
+    G.AddTensor(DataType::DT_INT8, {NUM_16, NUM_32}, MemoryType::MEM_UNKNOWN, "t1795");
+    G.AddTensor(DataType::DT_INT8, {NUM_16, NUM_32}, MemoryType::MEM_UNKNOWN, "t3280");
+    // VIEW_TYPE 做字节等价重解释：INT8[16,32]=512B -> FP32[16,8]=512B
+    G.AddTensor(DataType::DT_FP32, {NUM_16, NUM_8}, MemoryType::MEM_UNKNOWN, "t3281");
+    G.AddTensor(DataType::DT_FP32, {NUM_16, NUM_8}, MemoryType::MEM_UNKNOWN, "t3536");
+    G.AddTensor(DataType::DT_FP32, {NUM_16, NUM_8}, MemoryType::MEM_UNKNOWN, "t3537");
+    G.AddTensor(DataType::DT_FP32, {NUM_16, NUM_8}, MemoryType::MEM_UNKNOWN, "t8307");
+
+    // inA/inB/inC -> VIEW[16138/16010/15881]
+    G.AddOp(Opcode::OP_VIEW, {"inA"}, {"t1792"}, "view16138");
+    G.GetOp("view16138")->SetOpAttribute(
+        std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}, MemoryType::MEM_UNKNOWN));
+    G.AddOp(Opcode::OP_VIEW, {"inB"}, {"t1793"}, "view16010");
+    G.GetOp("view16010")->SetOpAttribute(
+        std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}, MemoryType::MEM_UNKNOWN));
+    G.AddOp(Opcode::OP_VIEW, {"inC"}, {"t1794"}, "view15881");
+    G.GetOp("view15881")->SetOpAttribute(
+        std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}, MemoryType::MEM_UNKNOWN));
+    // VIEW* -> GATHER_IN_UB[10211] -> t1795
+    G.AddOp(Opcode::OP_GATHER_IN_UB, {"t1792", "t1793", "t1794"}, {"t1795"}, "gather10211");
+    // t1795 -> VIEW[16394] -> t3280
+    G.AddOp(Opcode::OP_VIEW, {"t1795"}, {"t3280"}, "view16394");
+    G.GetOp("view16394")->SetOpAttribute(
+        std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}, MemoryType::MEM_UNKNOWN));
+    // t3280 -> VIEW_TYPE[12343] -> t3281
+    G.AddOp(Opcode::OP_VIEW_TYPE, {"t3280"}, {"t3281"}, "viewtype12343");
+    // t3281 -> VIEW[12726] -> t3536
+    G.AddOp(Opcode::OP_VIEW, {"t3281"}, {"t3536"}, "view12726");
+    G.GetOp("view12726")->SetOpAttribute(
+        std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}, MemoryType::MEM_UNKNOWN));
+    // t3536 -> ADDS[12727] -> t3537
+    G.AddOp(Opcode::OP_ADDS, {"t3536"}, {"t3537"}, "adds12727");
+    // t3537 -> ASSEMBLE[19009] -> t8307（后接 outcast）
+    G.AddOp(Opcode::OP_ASSEMBLE, {"t3537"}, {"t8307"}, "assemble19009");
+    G.GetOp("assemble19009")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
+
+    G.SetInCast({"inA", "inB", "inC"});
+    G.SetOutCast({"t8307"});
+
+    Function* function = G.GetFunction();
+    AssignMemoryType assignMemoryType;
+    EXPECT_EQ(assignMemoryType.RunOnFunction(*function), SUCCESS);
+    EXPECT_EQ(assignMemoryType.PostCheck(*function), SUCCESS);
+
+    // 核心：VIEW_TYPE[12343] 输出由后继视图链前推得到 UB（改动前会回退 DDR）
+    auto viewTypeOut = G.GetTensor("t3281");
+    ASSERT_NE(viewTypeOut, nullptr);
+    EXPECT_EQ(viewTypeOut->GetMemoryTypeOriginal(), MemoryType::MEM_UB);
+    EXPECT_EQ(viewTypeOut->GetMemoryTypeToBe(), MemoryType::MEM_UB);
+
+    // 后继 VIEW[12726] 的 toAttr 同步为 UB
+    auto view12726Attr = std::dynamic_pointer_cast<ViewOpAttribute>(G.GetOp("view12726")->GetOpAttribute());
+    ASSERT_NE(view12726Attr, nullptr);
+    EXPECT_EQ(view12726Attr->GetTo(), MemoryType::MEM_UB);
+
+    // 生产者 VIEW[16394] 的 toAttr 同步为 UB
+    auto view16394Attr = std::dynamic_pointer_cast<ViewOpAttribute>(G.GetOp("view16394")->GetOpAttribute());
+    ASSERT_NE(view16394Attr, nullptr);
+    EXPECT_EQ(view16394Attr->GetTo(), MemoryType::MEM_UB);
+
+    // ASSEMBLE[19009] 的 fromAttr 推导为 UB
+    auto assembleAttr = std::dynamic_pointer_cast<AssembleOpAttribute>(G.GetOp("assemble19009")->GetOpAttribute());
+    ASSERT_NE(assembleAttr, nullptr);
+    EXPECT_EQ(assembleAttr->GetFrom(), MemoryType::MEM_UB);
+}
+
 TEST_F(AssignMemoryTypeTest, TestL0C2UBAssembleDirectPathNotDdrFallback)
 {
     auto shapes = PrepareA5Platform();
