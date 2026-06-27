@@ -42,7 +42,7 @@ std::string CodeGenOpNPU::PrintMatmulTileTensor(
     oss << tileOpName;
     if (hasBias) {
         paramList.emplace_back(tensorWithMemType[OperandType::BUF_BT]);
-        oss << WrapParamByAngleBrackets({transModeStr});
+        oss << WrapParamByAngleBrackets({transModeStr, std::to_string(kAlignFlag)});
         oss << WrapParamByParentheses(paramList) << ";\n";
         return oss.str();
     }
