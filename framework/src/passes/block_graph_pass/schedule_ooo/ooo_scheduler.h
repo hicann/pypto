@@ -358,7 +358,7 @@ private:
     const std::vector<int64_t>& GetLargerShape(const std::vector<int64_t> &shape1, const std::vector<int64_t> &shape2);
 
     bool IsSmallShapeSpill(Operation* op);
-    bool HasUnexecutedProducer(Operation* spillOp);
+    bool IsUnusedTensor(Operation* spillOp);
     void UpdateSuccessorDependencies(Operation* succOp, Operation* spillOp,
         Operation* reloadCopyin, int spillMemId, int reloadMemId);
     void UpdatePredecessorAllocDependencies(Operation* succOp, Operation* reloadAlloc, int spillMemId);

@@ -404,7 +404,7 @@ Status OoOScheduler::SpillMultiProducerBufferFor3510(int spillMemid, Operation* 
         {copyinOp, {l1Tensor->memoryrange.memId}}
     };
 
-    if (!HasUnexecutedProducer(spillOp)) {
+    if (!IsUnusedTensor(spillOp)) {
         if (UpdateScheduleStatus(opMemidMap, spillMemid, spillAllocOp, l1Tensor, spillOp) != SUCCESS) {
             APASS_LOG_ERROR_F(Elements::Operation, "UpdateScheduleStatus failed.");
             return FAILED;
@@ -1450,7 +1450,7 @@ Status OoOScheduler::GetPartialWriteReplayAttr(Operation* producerOp, std::vecto
     return FAILED;
 }
 
-bool OoOScheduler::HasUnexecutedProducer(Operation* spillOp)
+bool OoOScheduler::IsUnusedTensor(Operation* spillOp)
 {
     if (spillOp == nullptr) {
         return false;
@@ -1728,7 +1728,7 @@ Status OoOScheduler::RemoveSmallShapeSpillResources(int spillMemId, LogicalTenso
     EraseOrphanedTensors(tensorsToDelete, opsToDelete);
 
     // 6. 更新统计信息
-    ctx.deleteRetiredOpSize = deleteNum;
+    ctx.deleteRetiredOpSize += deleteNum;
     ctx.deleteNotRetiredOpSize = static_cast<int>(opsToDelete.size() - deleteNum);
     APASS_LOG_DEBUG_F(
         Elements::Operation, "Deleted spill tensor[%d] and %zu ops (%zu tensors).", spillMemId, opsToDelete.size(),
