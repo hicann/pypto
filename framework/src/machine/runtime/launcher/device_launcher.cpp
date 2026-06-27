@@ -421,6 +421,11 @@ int DeviceLauncher::LaunchAicpuKernel(
     int ret = 0;
     auto args = (AiCpuArgs*)rtArgs.args;
     const int nrAicpu = static_cast<int>(DeviceLauncher::GetDevProg(function)->devArgs.nrAicpu);
+    const bool launchSchedSameCluster = static_cast<int>(DeviceLauncher::GetDevProg(function)->devArgs.launchSchedSameCluster);
+    if (launchSchedSameCluster) {
+        MACHINE_LOGW("When available AICPUs are insufficient, execute export LAUNCH_SCHED_SAME_CLUSTER=false"
+            "to disable the constraint that forces scheduling threads onto the same cluster.");
+    }
     args->kArgs.parameter.ctrlBlockNum = static_cast<int>(DeviceLauncher::GetDevProg(function)->ctrlBlockDim);
     auto startTime = MspfSysCycleTime();
     args->kArgs.parameter.runMode = RUN_SPLITTED_STREAM_CTRL;
