@@ -200,6 +200,12 @@ int DeviceLauncher::DeviceRunOnce(
     if (HasInplaceArgs(function) || outputDataList.size() == 0) {
         CopyFromDev(DeviceMemoryUtils(), inputDataList);
     }
+    for (const auto& data : inputDeviceDataList) {
+        devMemoryUtilis.Free(static_cast<uint8_t*>(data.GetAddr()));
+    }
+    for (const auto& data : outputDeviceDataList) {
+        devMemoryUtilis.Free(static_cast<uint8_t*>(data.GetAddr()));
+    }
     devMemory.Free(devCtrlCache);
     return rc;
 }
