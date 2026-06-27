@@ -1293,7 +1293,6 @@ LogicalTensorPtr TransDataNDC1HWC02NCDHW(Function& function, const LogicalTensor
 
     VecTile oriVectile = TileShape::Current().GetVecTile();
     CHECK(VectorErrorCode::ERR_PARAM_INVALID, C0 > 0) << "The C0 is not valid !";
-    CHECK(VectorErrorCode::ERR_PARAM_INVALID, oriVectile.tile[4] % C0 == 0) << "The tileShape w should be 32B aligned!";
     CHECK(VectorErrorCode::ERR_PARAM_INVALID, oriVectile.tile[5] == C0) << "The tileShape c0 should be equal to C0!";
 
     auto result = std::make_shared<LogicalTensor>(
@@ -1336,7 +1335,6 @@ LogicalTensorPtr TransDataNC1HWC02NCHW(
 
     VecTile oriVectile = TileShape::Current().GetVecTile();
     CHECK(VectorErrorCode::ERR_PARAM_INVALID, C0 > 0) << "The C0 is not valid !";
-    CHECK(VectorErrorCode::ERR_PARAM_INVALID, oriVectile.tile[3] % C0 == 0) << "The tileShape w should be 32B aligned!";
     CHECK(VectorErrorCode::ERR_PARAM_INVALID, oriVectile.tile[4] == C0) << "The tileShape c0 should be equal to C0!";
 
     auto result = std::make_shared<LogicalTensor>(
@@ -1389,6 +1387,20 @@ LogicalTensorPtr TransData(
     std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_FP32, DT_INT32};
     CheckTensorDataType(self, supportedTypes, "TRANSDATA");
     CheckTensorShapeSize(self, "TRANSDATA");
+    const auto& shape = self->GetShape();
+    VecTile oriVectile = TileShape::Current().GetVecTile();
+    const int64_t MAX_TILE_NUM = 5000;
+    int64_t tileNum = 1;
+    for (size_t i = 0; i < shape.size() && i < oriVectile.tile.size() && tileNum < MAX_TILE_NUM; i++) {
+        if (oriVectile.tile[i] <= 0) {
+            tileNum = MAX_TILE_NUM;
+            break;
+        }
+        tileNum *= (shape[i] + oriVectile.tile[i] - 1) / oriVectile.tile[i];
+    }
+    if (tileNum >= MAX_TILE_NUM) {
+        VECTOR_LOGW("TransData tileNum=%ld exceeds limit, shape may be too large. Adjust `view_shape` or `tile_shape`.", tileNum);
+    }
     switch (transDataType) {
         case TileOpFormat::TILEOP_NC1HWC0:
             CheckTensorDimRange(self, SHAPE_DIM4, SHAPE_DIM4, "TRANSDATA NC1HWC0");
