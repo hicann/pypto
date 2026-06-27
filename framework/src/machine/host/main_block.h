@@ -36,6 +36,7 @@ public:
 private:
     void AddUniqueCondition(const SymbolicScalar& newCond);
     bool CheckShapeEquality(const Shape& shape, const std::vector<SymbolicScalar>& dynShape);
+    void DisableMainBlock();
 
     bool GetValidShapeFromCoa(
         const std::vector<SymbolicScalar>& argList, Shape& shape, std::vector<SymbolicScalar>& dynValidShape);
@@ -43,5 +44,7 @@ private:
 private:
     std::vector<SymbolicScalar> mainBlockCondGroup_;
     std::unordered_set<std::string> mainBlockStrSet_;
+    std::unordered_map<std::string, int64_t> exprConstMap_;
+    bool mainBlockDisabled_{false};
 };
 } // namespace npu::tile_fwk
