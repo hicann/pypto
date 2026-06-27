@@ -228,6 +228,11 @@ CodeGenOpNPU::CodeGenOpNPU(const CodeGenOpNPUCtx& ctx)
           {Opcode::OP_S_DIVS, [this]() { return GenVectorScalarOpScalarMode(); }},
           {Opcode::OP_S_MAXS, [this]() { return GenVectorScalarOpScalarMode(); }},
           {Opcode::OP_S_MINS, [this]() { return GenVectorScalarOpScalarMode(); }},
+
+          // binary op: multi input, multi output
+          {Opcode::OP_INTERLEAVE, [this]() { return GenInterleaveLikeOp(); }},
+          {Opcode::OP_DEINTERLEAVE, [this]() { return GenInterleaveLikeOp(); }},
+          {Opcode::OP_DEINTERLEAVE_SINGLE, [this]() { return GenInterleaveLikeOp(); }},
       }),
       compositeOps_({
           {Opcode::OP_ONLINE_SOFTMAX, [this]() { return GenOnlineSoftmaxOp(); }},

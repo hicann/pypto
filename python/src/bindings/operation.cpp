@@ -488,6 +488,27 @@ void BindOperation(py::module_& m)
         "Cat", [](const std::vector<Tensor>& tensors, int axis) { return npu::tile_fwk::Cat(tensors, axis); },
         "Tensor concat.");
     m.def(
+        "Interleave",
+        [](const Tensor& self, const Tensor& other) {
+            auto result = npu::tile_fwk::Interleave(self, other);
+            return py::make_tuple(std::get<0>(result), std::get<1>(result));
+        },
+        py::arg("self"), py::arg("other"), "Tensor interleave.");
+    m.def(
+        "DeInterleave",
+        [](const Tensor& self, const Tensor& other) {
+            auto result = npu::tile_fwk::DeInterleave(self, other);
+            return py::make_tuple(std::get<0>(result), std::get<1>(result));
+        },
+        py::arg("self"), py::arg("other"), "Tensor deinterleave.");
+    m.def(
+        "DeInterleave",
+        [](const Tensor& self) {
+            auto result = npu::tile_fwk::DeInterleave(self);
+            return py::make_tuple(std::get<0>(result), std::get<1>(result));
+        },
+        py::arg("self"), "Tensor deinterleave.");
+    m.def(
         "cumsum", [](const Tensor& input, int axis) { return npu::tile_fwk::CumSum(input, axis); }, "Tensor cumsum.");
     m.def(
         "cumprod", [](const Tensor& input, int axis) { return npu::tile_fwk::CumProd(input, axis); },

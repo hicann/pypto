@@ -527,11 +527,11 @@ TILEOP void TFloorDiv(T0 dst, T1 src0, T2 src1, T3 tmp)
                     pto::TASSIGN(tmp1MaskTile, (uint64_t)(tmp.GetAddr() + tileW * dstTypeSize));
                     
                     // Deal dividend is zero
-                    pto::TCMPS(tmp0MaskTile, src0Tile, 0, CmpMode::LT);
+                    pto::TCMPS(tmp0MaskTile, src0Tile, 0, pto::CmpMode::LT);
                     pto::TSELS(tmp1DataTile, tmp0MaskTile, tmp1DataTile, tmp1DataTile, pos);
-                    pto::TCMPS(tmp0MaskTile, src0Tile, 0, CmpMode::GE);
+                    pto::TCMPS(tmp0MaskTile, src0Tile, 0, pto::CmpMode::GE);
                     pto::TSELS(tmp1DataTile, tmp0MaskTile, tmp1DataTile, tmp1DataTile, neg);
-                    pto::TCMPS(tmp0MaskTile, src1Tile, 0, CmpMode::NE);
+                    pto::TCMPS(tmp0MaskTile, src1Tile, 0, pto::CmpMode::NE);
                     pto::TSEL(tmp2DataTile, tmp0MaskTile, src0Tile, tmp1DataTile, tmp1DataTile);
                     pto::TSELS(tmp3DataTile, tmp0MaskTile, src1Tile, tmp1DataTile, 1);
                     
@@ -542,14 +542,14 @@ TILEOP void TFloorDiv(T0 dst, T1 src0, T2 src1, T3 tmp)
                      * rem = src0 - quot * src1
                      * dst = (sign_differ && rem != 0) ? quot - 1 : quot
                      */
-                    pto::TCMPS(tmp0MaskTile, tmp2DataTile, 0, CmpMode::LT);
-                    pto::TCMPS(tmp1MaskTile, tmp3DataTile, 0, CmpMode::LT);
+                    pto::TCMPS(tmp0MaskTile, tmp2DataTile, 0, pto::CmpMode::LT);
+                    pto::TCMPS(tmp1MaskTile, tmp3DataTile, 0, pto::CmpMode::LT);
                     pto::TXOR(tmp0MaskTile, tmp0MaskTile, tmp1MaskTile, dstTile); // packed mask of sign_differ
                     pto::TDIV(dstTile, tmp2DataTile, tmp3DataTile);                       // quot
                     pto::TMUL(tmp1DataTile, tmp3DataTile, dstTile);
                     pto::TSUB(tmp2DataTile, tmp2DataTile, tmp1DataTile); // rem
 
-                    pto::TCMPS(tmp1MaskTile, tmp2DataTile, 0, CmpMode::NE);
+                    pto::TCMPS(tmp1MaskTile, tmp2DataTile, 0, pto::CmpMode::NE);
                     pto::TAND(tmp0MaskTile, tmp0MaskTile, tmp1MaskTile);
                     pto::TADDS(tmp2DataTile, dstTile, -1);
                     pto::TSEL(dstTile, tmp0MaskTile, tmp2DataTile, dstTile, tmp1DataTile);

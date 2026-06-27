@@ -279,6 +279,37 @@ void PadInferShapeFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& 
 }
 REGISTER_INFER_SHAPE_FUNC(OP_PAD, Opcode::OP_PAD, PadInferShapeFunc);
 
+void InterleaveInferShapeFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
+{
+    std::vector<SymbolicScalar> outValidShape = op->GetIOperands()[0]->GetDynValidShape();
+    for (auto output : op->GetOOperands()) {
+        outValidShapes.push_back(outValidShape);
+    }
+}
+REGISTER_INFER_SHAPE_FUNC(OP_INTERLEAVE, Opcode::OP_INTERLEAVE, InterleaveInferShapeFunc);
+
+void DeInterleaveInferShapeFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
+{
+    std::vector<SymbolicScalar> outValidShape = op->GetIOperands()[0]->GetDynValidShape();
+    for (auto output : op->GetOOperands()) {
+        outValidShapes.push_back(outValidShape);
+    }
+}
+REGISTER_INFER_SHAPE_FUNC(OP_DEINTERLEAVE, Opcode::OP_DEINTERLEAVE, DeInterleaveInferShapeFunc);
+
+void DeInterleaveSingleInferShapeFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
+{
+    std::vector<SymbolicScalar> outValidShape = op->GetIOperands()[0]->GetDynValidShape();
+    if (!outValidShape.empty()) {
+        outValidShape[outValidShape.size() - 1] = outValidShape[outValidShape.size() - 1] / 2;
+    }
+    for (auto output : op->GetOOperands()) {
+        outValidShapes.push_back(outValidShape);
+    }
+}
+REGISTER_INFER_SHAPE_FUNC(
+    OP_DEINTERLEAVE_SINGLE, Opcode::OP_DEINTERLEAVE_SINGLE, DeInterleaveSingleInferShapeFunc);
+
 void FillPadInferShapeFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
 {
     std::vector<SymbolicScalar> outValidShape;

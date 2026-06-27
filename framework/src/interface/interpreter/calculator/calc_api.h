@@ -215,6 +215,9 @@ struct CalcOps {
     void (*TopK)(const TensorData&, const TensorData&, const TensorData&, int, int, bool);
     void (*QuantMX)(
         const TensorData&, const TensorData&, const TensorData&, const TensorData&, const TensorData&, bool, int64_t);
+    void (*Interleave)(const TensorData&, const TensorData&, const TensorData&, const TensorData&);
+    void (*DeInterleave)(const TensorData&, const TensorData&, const TensorData&, const TensorData&);
+    void (*DeInterleaveSingle)(const TensorData&, const TensorData&, const TensorData&);
     void (*TopkSort)(const TensorData&, const TensorData&, const TensorData&, int);
     void (*TopkMerge)(const TensorData&, const TensorData&, int);
     void (*TopkExtract)(const TensorData&, const TensorData&, int, bool);

@@ -874,6 +874,42 @@ void ExecuteOpQuantMX(ExecuteOperationContext* ctx)
     calc::QuantMX(out, exp, max, scaling, src, performanceMode != 0, mode);
 }
 REGISTER_CALC_OP(OP_QUANT_MX, Opcode::OP_QUANT_MX, ExecuteOpQuantMX);
+
+void ExecuteOpInterleave(ExecuteOperationContext* ctx)
+{
+    ASSERT(ExecuteOperationScene::CTX_OUTPUT_COUNT_MISMATCH, ctx->ooperandInplaceDataViewList->size() == SIZE_TWO);
+    ASSERT(ExecuteOperationScene::CTX_INPUT_COUNT_MISMATCH, ctx->ioperandDataViewList->size() == SIZE_TWO);
+    auto out0 = ctx->ooperandInplaceDataViewList->at(0);
+    auto out1 = ctx->ooperandInplaceDataViewList->at(1);
+    auto src0 = ctx->ioperandDataViewList->at(0);
+    auto src1 = ctx->ioperandDataViewList->at(1);
+    calc::Interleave(out0, out1, src0, src1);
+}
+REGISTER_CALC_OP(OP_INTERLEAVE, Opcode::OP_INTERLEAVE, ExecuteOpInterleave);
+
+void ExecuteOpDeInterleave(ExecuteOperationContext* ctx)
+{
+    ASSERT(ExecuteOperationScene::CTX_OUTPUT_COUNT_MISMATCH, ctx->ooperandInplaceDataViewList->size() == SIZE_TWO);
+    ASSERT(ExecuteOperationScene::CTX_INPUT_COUNT_MISMATCH, ctx->ioperandDataViewList->size() == SIZE_TWO);
+    auto out0 = ctx->ooperandInplaceDataViewList->at(0);
+    auto out1 = ctx->ooperandInplaceDataViewList->at(1);
+    auto src0 = ctx->ioperandDataViewList->at(0);
+    auto src1 = ctx->ioperandDataViewList->at(1);
+    calc::DeInterleave(out0, out1, src0, src1);
+}
+REGISTER_CALC_OP(OP_DEINTERLEAVE, Opcode::OP_DEINTERLEAVE, ExecuteOpDeInterleave);
+
+void ExecuteOpDeInterleaveSingle(ExecuteOperationContext* ctx)
+{
+    ASSERT(ExecuteOperationScene::CTX_OUTPUT_COUNT_MISMATCH, ctx->ooperandInplaceDataViewList->size() == SIZE_TWO);
+    ASSERT(ExecuteOperationScene::CTX_INPUT_COUNT_MISMATCH, ctx->ioperandDataViewList->size() == 1);
+    auto out0 = ctx->ooperandInplaceDataViewList->at(0);
+    auto out1 = ctx->ooperandInplaceDataViewList->at(1);
+    auto src = ctx->ioperandDataViewList->at(0);
+    calc::DeInterleaveSingle(out0, out1, src);
+}
+REGISTER_CALC_OP(OP_DEINTERLEAVE_SINGLE, Opcode::OP_DEINTERLEAVE_SINGLE, ExecuteOpDeInterleaveSingle);
+
 void ExecuteOpLog1p(ExecuteOperationContext* ctx)
 {
     ASSERT(ExecuteOperationScene::CTX_OUTPUT_COUNT_MISMATCH, ctx->ooperandInplaceDataViewList->size() == 1);

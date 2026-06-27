@@ -725,4 +725,10 @@ std::string CodeGenOpNPU::GenVectorScalarOpByMode(VecScalMode mode) const
     return buffer;
 }
 
+std::string CodeGenOpNPU::GenInterleaveLikeOp() const
+{
+    ASSERT(GenCodeErr::PRINT_MODE_ERROR, isSupportTileTensor) << opCodeStr << " only support tile tensor";
+    return PrintTileOpWithFullParamsInOrder();
+}
+
 } // namespace npu::tile_fwk

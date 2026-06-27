@@ -318,6 +318,21 @@ void OpcodeManager::RegisterVectorBinary()
         {"TileOp::TAXPY", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::BROADCAST,
         {OpAttributeKey::scalar, OpAttributeKey::inplaceInfo, OpAttributeKey::inputCombineAxis},
         TileShapeVerifier::Verify);
+    RegisterInfo(
+        Opcode::OP_INTERLEAVE, OpCoreType::AIV, "INTERLEAVE", {MemoryType::MEM_UB, MemoryType::MEM_UB},
+        {MemoryType::MEM_UB, MemoryType::MEM_UB}, {"TileOp::TInterleave", PIPE_V, PIPE_V, CoreType::AIV},
+        OpCalcType::ELMWISE, {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis,
+         OpAttributeKey::excludeBufferReuse}, TileShapeVerifier::Verify);
+    RegisterInfo(
+        Opcode::OP_DEINTERLEAVE, OpCoreType::AIV, "DEINTERLEAVE", {MemoryType::MEM_UB, MemoryType::MEM_UB},
+        {MemoryType::MEM_UB, MemoryType::MEM_UB}, {"TileOp::TDeInterleave", PIPE_V, PIPE_V, CoreType::AIV},
+        OpCalcType::ELMWISE, {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis,
+         OpAttributeKey::excludeBufferReuse}, TileShapeVerifier::Verify);
+    RegisterInfo(
+        Opcode::OP_DEINTERLEAVE_SINGLE, OpCoreType::AIV, "DEINTERLEAVE_SINGLE", {MemoryType::MEM_UB},
+        {MemoryType::MEM_UB, MemoryType::MEM_UB}, {"TileOp::TDeInterleave", PIPE_V, PIPE_V, CoreType::AIV},
+        OpCalcType::ELMWISE, {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis,
+         OpAttributeKey::excludeBufferReuse}, TileShapeVerifier::Verify);
 }
 
 void OpcodeManager::RegisterVectorUnary()
@@ -1382,6 +1397,9 @@ std::unordered_map<Opcode, std::string> SUPPORT_TILETENSOR_OPS{
     {Opcode::OP_POW, "TPow"},
     {Opcode::OP_POWS, "TPowS"},
     {Opcode::OP_MUL, "TMul"},
+    {Opcode::OP_INTERLEAVE, "TInterleave"},
+    {Opcode::OP_DEINTERLEAVE, "TDeInterleave"},
+    {Opcode::OP_DEINTERLEAVE_SINGLE, "TDeInterleave"},
     {Opcode::OP_REM, "TRemainder"},
     {Opcode::OP_REMS, "TRemainderS"},
     {Opcode::OP_REMRS, "TRemainderRS"},
@@ -1559,6 +1577,9 @@ std::unordered_set<Opcode> SUPPORT_VF_FUSE_OPS{
     Opcode::OP_EXPAND,
     Opcode::OP_GCD,
     Opcode::OP_GCDS,
+    Opcode::OP_INTERLEAVE,
+    Opcode::OP_DEINTERLEAVE,
+    Opcode::OP_DEINTERLEAVE_SINGLE,
 };
 
 std::unordered_set<Opcode> SKIP_OPCODE_FOR_CODEGEN = {

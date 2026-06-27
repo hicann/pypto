@@ -195,6 +195,9 @@ enum class Opcode {
     OP_FLOORDIVS,
     OP_QUANT_MX,
     OP_AXPY,
+    OP_INTERLEAVE,
+    OP_DEINTERLEAVE,
+    OP_DEINTERLEAVE_SINGLE,
 
     // Cube
     OP_A_MUL_B,
