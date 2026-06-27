@@ -105,6 +105,22 @@ custom_install() {
 
     comm_log "INFO" "The ${LOG_PKG_NAME} extension module installed successfully!"
 
+    # 预编译 pypto_impl.so (静默, 失败不影响安装, 留给运行时缓存回退)
+    # 直接 import pypto 端到端触发在线编译, 用 exit code 判断结果
+    # pylocal 模式下包安装在自定义路径, 需临时设置 PYTHONPATH 使子进程能找到 pypto
+    if [ "${ARG_PY_LOCAL}" = "y" ]; then
+        if PYTHONPATH="${PKG_WHL_INSTALL_PATH}" python3 -c "import pypto" 2>/dev/null; then
+            comm_log "INFO" "pypto_impl.so pre-compiled successfully."
+        else
+            comm_log "INFO" "pypto_impl.so pre-compilation skipped, will compile on first import."
+        fi
+    else
+        if python3 -c "import pypto" 2>/dev/null; then
+            comm_log "INFO" "pypto_impl.so pre-compiled successfully."
+        else
+            comm_log "INFO" "pypto_impl.so pre-compilation skipped, will compile on first import."
+        fi
+    fi
 
     if [ "${ARG_PY_LOCAL}" = "y" ]; then
         comm_log "INFO" "please make sure PYTHONPATH include ${PKG_WHL_INSTALL_PATH}."

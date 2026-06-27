@@ -131,7 +131,6 @@ _pkg_install_path_check_install_for_all() {
 }
 
 # 功能: 卸载时用户权限校验
-#   参考 ge-compiler uninstall.sh:149-157
 #   逻辑: root 用户可以卸载任何包; 非 root 用户必须和安装目录 owner 一致才能卸载
 _user_auth() {
     if [ ! -d "${PKG_SHARE_INFO_INSTALL_PATH}" ]; then
@@ -157,7 +156,6 @@ chmod_start() {
 }
 
 # 功能: 安装后精细化锁定权限
-#   参考 runtime install.sh:91-106, 按 pypto 的目录结构适配
 chmod_end() {
     chmod_recur "${PKG_SHARE_INFO_INSTALL_PATH}/script" 550 dir 2> /dev/null
     chmod_recur "${PKG_SHARE_INFO_INSTALL_PATH}/script" 550 file 2> /dev/null
@@ -209,7 +207,6 @@ _get_install_param() {
 }
 
 # 功能: 创建 install_info 元数据文件并写入安装信息
-#   参考 runtime install.sh:619-632, 按 pypto 的字段适配
 _update_install_info() {
     chmod_start
     if [ ! -f "${PKG_INSTALL_INFO_FILE}" ]; then
@@ -224,7 +221,6 @@ _update_install_info() {
 }
 
 # 功能: 复制包内 version.info 到安装路径
-#   参考 runtime install.sh:525-535
 _update_version_info() {
     if [ -f "${PKG_SHARE_INFO_INSTALL_PATH}/version.info" ]; then
         rm -f "${PKG_SHARE_INFO_INSTALL_PATH}/version.info"
@@ -242,7 +238,6 @@ _update_version_info() {
 ########################################################################################################################
 
 # 功能: 拼接 docker_root + install_path
-#   参考 ge-compiler install.sh:653-662
 #   逻辑: 去除 docker_path 行尾 '/', 空则置 '/', 返回 docker_path + install_path
 concat_docker_install_path() {
     local docker_path="$1"
@@ -255,7 +250,6 @@ concat_docker_install_path() {
 }
 
 # 功能: 校验 --docker-root 参数
-#   参考 ge-compiler install.sh:640-651
 #   逻辑: 必须是绝对路径 (以 '/' 开头), 且目录必须存在
 check_docker_path() {
     local docker_path="$1"
@@ -275,7 +269,6 @@ check_docker_path() {
 ########################################################################################################################
 
 # 功能: 安装/升级前检查 driver 和 firmware 是否已安装
-#   参考 ge-compiler install.sh:1160-1182
 #   逻辑: 从 /etc/ascend_install.info 检查 Driver/Firmware 记录;
 #         缺失时 WARNING + _confirm_action (非静默) 或 WARNING + continue (静默)
 #   注意: docker 场景下不检查 firmware (driver 在宿主机, firmware 可能不在容器内)
@@ -310,7 +303,6 @@ _driver_firmware_check() {
 ########################################################################################################################
 
 # 功能: root 用户安装时递归检查父目录权限
-#   参考 ge-compiler install.sh:424-459, runtime install.sh:400-435
 #   逻辑: 递归检查安装路径的每一层父目录是否属于 root 且权限 >= 755
 #   返回: 0=通过, 1=owner非root, 2=权限过低, 3=权限过高(非静默时)
 _parent_dirs_permission_check() {
@@ -360,7 +352,6 @@ _parent_dirs_permission_check() {
 ########################################################################################################################
 
 # 功能: driver 版本兼容性检查
-#   参考 ge-compiler install.sh:138-176, runtime install.sh:108-147
 #   逻辑: 从 /etc/ascend_install.info 读 Driver_Install_Path_Param 定位 driver version.info,
 #         调用 ver_check.sh 做版本范围比较.
 #   参数: check_mode — "strict" (--check 模式, 失败直接阻断) 或 "interactive" (安装模式, 失败交互确认)
@@ -376,7 +367,7 @@ _ver_check() {
     local driver_ver_file="${driver_install_path}/driver/version.info"
     local version_info_file="${TMP_PKG_VERSION_FILE}"
     local ret
-    sh "${TMP_PKG_SCRIPTS_PATH}/ver_check.sh" "${version_info_file}" "${driver_ver_file}"
+    bash "${TMP_PKG_SCRIPTS_PATH}/ver_check.sh" "${version_info_file}" "${driver_ver_file}"
     ret=$?
     if [ "${ret}" -eq 1 ]; then
         if [ "${check_mode}" = "strict" ]; then
@@ -393,7 +384,6 @@ _ver_check() {
 }
 
 # 功能: 安装前预检查汇总
-#   参考 ge-compiler install.sh:1137-1182
 #   流程 (strict 模式): 仅 driver 版本兼容性检查
 #   流程 (interactive 模式): driver 版本检查 → parent_dirs 权限检查 → driver/firmware 存在性检查
 #   参数: check_mode — "strict" (--check 模式) 或 "interactive" (安装模式)
@@ -449,7 +439,6 @@ _unchattr_files() {
 }
 
 # 功能: 安装执行框架
-#   参考 runtime install_run (install.sh:669-702)
 #   流程: update_install_path -> update_install_info -> 实际文件拷贝(占位) -> update_version_info -> chmod_end
 _do_install() {
     _pkg_install_path_check_install_for_all
@@ -459,7 +448,7 @@ _do_install() {
     # 文件拷贝委托给子进程 run_pypto_install.sh
     #   三层分工: 本函数管框架, 子进程管拷贝+后处理, install_common_parser.sh 管通用引擎
     #   参数: 所依赖的参数均已通过 环境变量导出的方式向子进程传递
-    if sh "${TMP_PKG_SCRIPTS_PATH}/run_pypto_install.sh"; then
+    if bash "${TMP_PKG_SCRIPTS_PATH}/run_pypto_install.sh"; then
         _update_version_info
         comm_log "INFO" "PyPTO package installed successfully! The new version takes effect immediately."
         chmod_end
@@ -471,7 +460,6 @@ _do_install() {
 }
 
 # 功能: 卸载执行框架
-#   参考 runtime uninstall_run (install.sh:747-802)
 #   参数: remove_info_files ("y"/"n"), remove_version_info ("y"/"n")
 #   流程: user_auth -> unchattr_files -> chmod_start -> 实际文件删除(占位) -> 条件删除 info/version -> 递归清理空目录
 _do_uninstall() {
@@ -481,7 +469,7 @@ _do_uninstall() {
     _unchattr_files
     chmod_start
     comm_log "INFO" "uninstall ${ARG_INSTALL_PATH} ${ARG_MODE}"
-    if sh "${PKG_SHARE_INFO_INSTALL_PATH}/script/run_pypto_uninstall.sh"; then
+    if bash "${PKG_SHARE_INFO_INSTALL_PATH}/script/run_pypto_uninstall.sh"; then
         if [[ "$remove_info_files" = "y" ]]; then
             [[ -f "${PKG_INSTALL_INFO_FILE}" ]] && rm -f "${PKG_INSTALL_INFO_FILE}"
         fi
@@ -507,7 +495,6 @@ _get_dir_mod() {
 }
 
 # 功能: 递归删除空父目录 (从 dir_end 向上回溯到 dir_start)
-#   参考 runtime runtime_func.sh:190-212
 _remove_dir_recursive() {
     local dir_start="$1"
     local dir_end="$2"
@@ -543,7 +530,6 @@ _remove_dir_recursive() {
 }
 
 # 功能: 交互确认 (y/n)
-#   参考 runtime install.sh:127-139 的 while-read-yn 模式
 _confirm_action() {
     local prompt_msg="$1"
     while true; do
@@ -558,7 +544,6 @@ _confirm_action() {
 }
 
 # 功能: 保存残留用户文件列表到日志 (卸载后检查)
-#   参考 runtime install.sh:804-833
 _save_user_files_to_log() {
     local target_dir="$1"
     if [ "$target_dir" = "${PKG_SHARE_INFO_INSTALL_PATH}" ] && [ -s "$target_dir" ]; then
