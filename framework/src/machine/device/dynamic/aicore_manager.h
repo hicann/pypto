@@ -1107,8 +1107,13 @@ private:
 
     inline void RemoveRunReadyCoreIdx(int coreIdx, int type)
     {
-        uint32_t tail = --context_->coreRunReadyCnt_[type];
         uint8_t pos = context_->coreIdxPosition_[coreIdx];
+        if (pos == INVALID_COREIDX_POSITION) {
+            DEV_WARN("RemoveRunReadyCoreIdx: coreIdx %d not in runReady list (pos=INVALID)", coreIdx);
+            return;
+        }
+        
+        uint32_t tail = --context_->coreRunReadyCnt_[type];        
         // when control core more than one devtask, pos maybe not equal tail
         if (pos != tail) {
             context_->runReadyCoreIdx_[type][pos] = context_->runReadyCoreIdx_[type][tail];
@@ -1119,6 +1124,10 @@ private:
 
     inline void RemoveReadyCoreIdxTail(int coreIdx, int type)
     {
+        if (context_->coreIdxPosition_[coreIdx] == INVALID_COREIDX_POSITION) {
+            DEV_WARN("RemoveReadyCoreIdxTail: coreIdx %d not in runReady list (pos=INVALID)", coreIdx);
+            return;
+        }
         context_->coreRunReadyCnt_[type]--;
         context_->coreIdxPosition_[coreIdx] = INVALID_COREIDX_POSITION;
     }
@@ -1806,7 +1815,7 @@ private:
         hasAicpuTask_ = deviceArgs->hasAicpuTask;
         isMixPending_ = deviceArgs->all1c2vMixTask;
         enableEslModel_ = deviceArgs->enableEslModel;
-        disableControlCore_ = true;
+        disableControlCore_ = (startArgs->devProg->GetParallelism() > 1);
         aicoreHal_.Init(deviceArgs, &aicoreProf_);
         validGetPgMask_ = deviceArgs->validGetPgMask;
         runningIds_.fill(AICORE_STATUS_INIT);
@@ -1970,6 +1979,17 @@ private:
         aivAllSuccess = curIterAllAivSuccess;
     }
 
+    inline void HandShakeCorrectReadyCore(CoreType coreType) {
+        uint8_t adjAicoreEnd = coreType == CoreType::AIV ? adjAivEnd_ : adjAicEnd_;
+        uint8_t preAdjAicoreEnd = coreType == CoreType::AIV ? aivEnd_ : aicEnd_;
+        for (int i = preAdjAicoreEnd - 1; i >= adjAicoreEnd; i--) {
+            if (context_->coreIdxPosition_[i] != INVALID_COREIDX_POSITION) {
+                context_->corePendReadyCnt_[static_cast<int>(coreType)]--;
+            }
+            RemoveRunReadyCoreIdx(i, static_cast<int>(coreType));
+        }
+    }
+
     inline int HandShakeByGmWithPreSendTask(DevStartArgs* devStartArgs)
     {
         int handShakeNum = 0;
@@ -2002,6 +2022,7 @@ private:
 
             if (needSendAic && aicSucessCnt >= aicTreshold) {
                 __sync_synchronize();
+                HandShakeCorrectReadyCore(CoreType::AIC);
                 TryBatchSendTask(deviceCtx, CoreType::AIC, deviceCtx->readyAicCoreFunctionQue, aicStart_, adjAicEnd_);
                 aicSucessCnt = 0;
             }
@@ -2009,6 +2030,7 @@ private:
             HandShakeByGmForAiv(aivAllSuccess, handFlag, handShakeNum, aivSucessCnt);
             if (needSendAiv && aivSucessCnt >= aivThreshold) {
                 __sync_synchronize();
+                HandShakeCorrectReadyCore(CoreType::AIV);
                 TryBatchSendTask(deviceCtx, CoreType::AIV, deviceCtx->readyAivCoreFunctionQue, aivStart_, adjAivEnd_);
                 aivSucessCnt = 0;
             }
@@ -2018,7 +2040,8 @@ private:
                 "#sche.handshake: HandShakeByGmWithPreSendTask, notHandshakeNum=%d.",
                 mngAicoreNum - handShakeNum);
         }
-
+        HandShakeCorrectReadyCore(CoreType::AIV);
+        HandShakeCorrectReadyCore(CoreType::AIC);
         HandShakePostProc(deviceCtx, needSendAic, needSendAiv);
         return DEVICE_MACHINE_OK;
     }

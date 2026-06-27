@@ -220,7 +220,7 @@ struct SchduleContext {
     uint8_t runReadyCoreIdx_[AICORE_TYPE_NUM][MAX_MANAGER_AIV_NUM];
     uint8_t lastPendReadyCoreIdx_[AICORE_TYPE_NUM]{0,0};
 
-    uint8_t coreIdxPosition_[MAX_AICORE_NUM]{0}; // used to record core's position in runReadyCoreIdx_
+    uint8_t coreIdxPosition_[MAX_AICORE_NUM]{INVALID_COREIDX_POSITION}; // used to record core's position in runReadyCoreIdx_
     bool wrapCoreAvail_[MAX_AICORE_NUM]{true};   // used to check coreIdx is used by wrap_manager
 
     SchDeviceTaskContext* curSchDevTaskCtx;
@@ -228,10 +228,15 @@ struct SchduleContext {
 
     SchduleContext()
     {
-        auto size = sizeof(coreIdxPosition_);
+        auto size = sizeof(wrapCoreAvail_);
         auto ret = memset_s(wrapCoreAvail_, size, 1, size);
         if (ret != 0) {
             DEV_ERROR(DevCommonErr::MEMCPY_FAILED, "#sche.init: wrapCoreAvail_ init failed: %d", ret);
+        }
+        size_t positionSize = sizeof(coreIdxPosition_);
+        ret = memset_s(coreIdxPosition_, positionSize, INVALID_COREIDX_POSITION, positionSize);
+        if (ret != 0) {
+            DEV_ERROR(DevCommonErr::MEMCPY_FAILED, "#sche.init: coreIdxPosition_ init failed: %d", ret);
         }
     }
 
