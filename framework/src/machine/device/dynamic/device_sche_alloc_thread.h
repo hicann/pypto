@@ -59,9 +59,9 @@ struct DieMaskInfo {
     }
 };
 
-inline uint64_t GetArbitTimeOutVal()
+inline uint64_t GetArbitTimeOutVal(bool isLastArbitration)
 {
-    uint64_t arbitTimeout = TIMEOUT_A5_50US;
+    uint64_t arbitTimeout = isLastArbitration ? TIMEOUT_A5_1SEC : TIMEOUT_A5_50US;
     DEV_IF_DEBUG {
         arbitTimeout = TIMEOUT_A5_20MIN;
     }
@@ -72,9 +72,9 @@ inline uint64_t GetArbitTimeOutVal()
     return arbitTimeout;
 }
 
-inline int WaitForCpuMaskReadyForArbitration(DeviceArgs* devArgs, int targetVal, std::atomic<uint64_t>& mask)
+inline int WaitForCpuMaskReadyForArbitration(DeviceArgs* devArgs, int targetVal, std::atomic<uint64_t>& mask, bool isLastArbitration = false)
 {
-    uint64_t arbitTimeout = GetArbitTimeOutVal();
+    uint64_t arbitTimeout = GetArbitTimeOutVal(isLastArbitration);
     TIMEOUT_CHECK_INIT(devArgs->archInfo, arbitTimeout);
     (void) timeout_map;
 
@@ -104,7 +104,7 @@ inline int ComputeArbitrationLevel(DeviceArgs* devArgs, std::atomic<uint64_t>& c
     }
 
     // 只要满足最小调度需求即可，不考虑拓扑优化
-    ret = WaitForCpuMaskReadyForArbitration(devArgs, devArgs->scheCpuNum, cpumask);
+    ret = WaitForCpuMaskReadyForArbitration(devArgs, devArgs->scheCpuNum, cpumask, true);
     if (ret == DEVICE_MACHINE_OK) {
         return LEVEL_CROSS_DIE;
     }
@@ -114,7 +114,7 @@ inline int ComputeArbitrationLevel(DeviceArgs* devArgs, std::atomic<uint64_t>& c
 
 inline int WaitForArbitrationLevel(DeviceArgs* devArgs, std::atomic<int>& globalArbitrationLevel)
 {
-    uint64_t arbitTimeout = GetArbitTimeOutVal();
+    uint64_t arbitTimeout = GetArbitTimeOutVal(true);
     TIMEOUT_CHECK_INIT(devArgs->archInfo, arbitTimeout);
     (void) timeout_map;
 

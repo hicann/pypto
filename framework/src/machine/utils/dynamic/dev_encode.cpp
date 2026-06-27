@@ -2718,7 +2718,7 @@ void DevControlFlowCache::Init(
     outputTensorDataList.HostInitDataSizeOffset(initOffset, dyndevAttr->startArgsOutputTensorList.size());
 
     const uint32_t estimatedStitchingCount =
-        ConfiguredStitchFunctionMaxNum() * ComputeMaxUnrollTimesFromDevRoots(*dyndevAttr);
+        ConfiguredStitchFunctionMaxNum() * ComputeMaxUnrollTimesFromDevEncodeList(dyndevAttr->devEncodeList);
     const uint64_t slottedCount = dyndevAttr->inoutLink.totalSlot *
         (std::min(estimatedStitchingCount, stitchMaxFunctionNum) + SLOTS_NEED_ALLOC_SIZE);
     for (uint32_t i = 0; i < SCH_DEVTASK_MAX_PARALLELISM; i++) {

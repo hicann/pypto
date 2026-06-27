@@ -94,7 +94,12 @@ struct DeviceMemoryUtils {
 
     void Free(uint8_t* mem)
     {
-        if (mem && (!isUseHugePage_)) {
+        if (mem == nullptr) {
+            return;
+        }
+        if (isUseHugePage_) {
+            DevMemoryPool::Instance().FreeDevAddr(mem);
+        } else {
             RuntimeFree(mem);
         }
     }
