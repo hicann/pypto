@@ -796,9 +796,9 @@ std::string CodeGenOpNPU::PrintCoord(size_t dim, const std::string& coord) const
 std::pair<std::string, std::string> CodeGenOpNPU::PrintDstSrcCoordFromAttr(int dstIdx, int srcIdx) const
 {
     std::vector<std::string> dstOffset;
-    FillParamWithFullInput(dstOffset, offsetFromAttr[dstIdx]);
+    FillParamWithFullInput(dstOffset, GetOffsetFromAttr(dstIdx));
     std::vector<std::string> srcOffset;
-    FillParamWithFullInput(srcOffset, offsetFromAttr[srcIdx]);
+    FillParamWithFullInput(srcOffset, GetOffsetFromAttr(srcIdx));
     std::string coordCpDst = WrapParamByParentheses(dstOffset);
     std::string coordDst = PrintCoord(rawShape[dstIdx].size(), coordCpDst);
     std::string coordCpSrc = WrapParamByParentheses(srcOffset);
@@ -833,6 +833,8 @@ TileTensor CodeGenOpNPU::QueryTileTensorByIdx(int paramIdx) const
     static TileTensor emptyTileTensor;
     return emptyTileTensor;
 }
+
+std::vector<SymbolicScalar> CodeGenOpNPU::GetOffsetFromAttr(int idx) const { return offsetFromAttr[idx]; }
 
 std::string CodeGenOpNPU::InsertOpComment(std::string& tileOpSourceCode) const
 {

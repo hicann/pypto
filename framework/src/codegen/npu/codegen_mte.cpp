@@ -46,8 +46,8 @@ DynamicParamPackMTE CodeGenOpNPU::PrepareDynamicShapeInfoForMTE(int dynShapeIdx,
     FillVecWithDummyInHead<std::string>(pack.gmShapeExpr, shapeDim - dim, "1");
     CODEGEN_LOGI("dynamic gmShape param: %s", IntVecToStr(pack.gmShapeExpr).c_str());
 
-    if (offsetFromAttr[dynShapeIdx][ID0].IsValid()) {
-        pack.gmOffsetExpr = GenSymbolicArgument(offsetFromAttr[dynShapeIdx]);
+    if (GetOffsetFromAttr(dynShapeIdx)[ID0].IsValid()) {
+        pack.gmOffsetExpr = GenSymbolicArgument(GetOffsetFromAttr(dynShapeIdx));
     } else {
         pack.gmOffsetExpr = GenGetParamMacroPacked(dynShapeIdx, dim, PREFIX_STR_OFFSET);
     }
@@ -205,7 +205,7 @@ std::string CodeGenOpNPU::PrintMemL1ToL0TileTensor() const
     if ((opCode == Opcode::OP_L1_TO_L0_BT) || (opCode == Opcode::OP_L1_TO_L0_AT)) {
         isTrans = true;
     }
-    auto dynOffset = offsetFromAttr[ToUnderlying(MISOIdx::SRC0_IDX)];
+    auto dynOffset = GetOffsetFromAttr(ToUnderlying(MISOIdx::SRC0_IDX));
     size_t coordSize = rawShape[ToUnderlying(MISOIdx::SRC0_IDX)].size();
     std::vector<std::string> l0Offset;
     if (!dynOffset.empty()) {
@@ -251,7 +251,7 @@ std::string CodeGenOpNPU::GenMemL1ToL0() const
 
     SymbolicScalar srcOffset0 = 0;
     SymbolicScalar srcOffset1 = 0;
-    auto dynoffset = offsetFromAttr[ID1];
+    auto dynoffset = GetOffsetFromAttr(ID1);
     if (!dynoffset.empty()) {
         ASSERT(GenCodeErr::TENSOR_DIM_UNSUPPORTED, dynoffset.size() == SHAPE_DIM2)
             << "GenMemL1ToL0 only support 2-dim!";
@@ -313,7 +313,7 @@ std::string CodeGenOpNPU::GenMemL1ToBt() const
     std::string dstDtypeStr = DataType2CCEStr(operandDtype[ID0]);
 
     auto dynValidShape = dynamicValidShape[ID0];
-    auto dynoffset = offsetFromAttr[ID1];
+    auto dynoffset = GetOffsetFromAttr(ID1);
     // only support 2-dim shape
     ASSERT(GenCodeErr::TENSOR_DIM_UNSUPPORTED, dynoffset.size() == SHAPE_DIM2) << "GenMemL1ToBt only support 2-dim!";
 
@@ -415,10 +415,10 @@ std::string CodeGenOpNPU::GenMemL0CToL1() const
 
     FillParamWithFullInput(paramList, dynValidShapeFromAttr);
     FillParamWithFullInput(paramList, dstValidShape);
-    auto l1Offset = offsetFromAttr[ID0];
+    auto l1Offset = GetOffsetFromAttr(ID0);
     FillParamWithFullInput(paramList, l1Offset);
     FillParamWithFullInput(paramList, srcValidShape);
-    auto l0COffset = offsetFromAttr[ID1];
+    auto l0COffset = GetOffsetFromAttr(ID1);
     FillParamWithFullInput(paramList, l0COffset);
 
     Element scaleValue = Element(DataType::DT_UINT64, 0);
@@ -595,7 +595,7 @@ std::string CodeGenOpNPU::PrintMemCopyWithL0CStatic(const PrintMemCopyWithL0CPar
     const std::vector<std::string>& addrExpr = param.addrExpr;
     const std::vector<int64_t>& gmShape = param.gmShape;
     const std::vector<int64_t>& localRawShape = param.localRawShape;
-    const std::vector<SymbolicScalar>& outputOffset = offsetFromAttr[gmIdx];
+    const std::vector<SymbolicScalar>& outputOffset = GetOffsetFromAttr(gmIdx);
     const std::vector<std::string>& dataTypeExpr = param.dataTypeExpr;
 
     int oriTileShape0 = std::min(shape[localIdx][ID0], localRawShape[ID0]);
@@ -862,7 +862,7 @@ std::string CodeGenOpNPU::PrintMemCopyWithL1Static(const PrintMemCopyWithL1Param
         ASSERT(GenCodeErr::PRINT_FAILED, printRet >= 0)
             << "sprintf_s failed in genMemCopyVar, return value:" << printRet;
     } else {
-        std::vector<SymbolicScalar> gmOffset = offsetFromAttr[gmIdx];
+        std::vector<SymbolicScalar> gmOffset = GetOffsetFromAttr(gmIdx);
         printRet = sprintf_s(addrBuffer, BUFFER_SIZE_1024, "%s", addrExpr[ID1].c_str());
         ASSERT(GenCodeErr::PRINT_FAILED, printRet >= 0)
             << "sprintf_s failed in PrintMemCopyWithL1Static, return value:" << printRet;
@@ -1102,8 +1102,8 @@ std::vector<std::string> CodeGenOpNPU::GetGmOffsetForTileTensor(unsigned gmIdx) 
         return std::vector<std::string>(dim, "0");
     }
 
-    if (offsetFromAttr[gmIdx][ID0].IsValid()) {
-        return GenSymbolicArgument(offsetFromAttr[gmIdx]);
+    if (GetOffsetFromAttr(gmIdx)[ID0].IsValid()) {
+        return GenSymbolicArgument(GetOffsetFromAttr(gmIdx));
     }
 
     return GenGetParamMacroPacked(gmIdx, dim, PREFIX_STR_OFFSET);
@@ -1137,7 +1137,7 @@ std::string CodeGenOpNPU::GenMemL1ToFB() const
 
     std::string srcDtypeStr = DataType2CCEStr(operandDtype[ID1]);
     auto dynValidShape = dynamicValidShape[ID0];
-    auto dynoffset = offsetFromAttr[ID1];
+    auto dynoffset = GetOffsetFromAttr(ID1);
     ASSERT(GenCodeErr::TENSOR_DIM_UNSUPPORTED, dynoffset.size() == SHAPE_DIM2) << "GenMemL1ToFB only support 2-dim!";
 
     std::ostringstream os;

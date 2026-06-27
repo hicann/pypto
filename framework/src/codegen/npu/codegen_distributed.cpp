@@ -27,12 +27,8 @@ using AtomicType = Distributed::AtomicType;
 std::string CodeGenOpNPU::GetTemplateDType() const
 {
     static const std::unordered_map<Opcode, int32_t> dTypeOperandIndexMap = {
-        {Opcode::OP_SHMEM_PUT, 1},
-        {Opcode::OP_SHMEM_STORE, 1},
-        {Opcode::OP_SHMEM_SIGNAL, 1},
-        {Opcode::OP_SHMEM_WAIT_UNTIL, 1},
-        {Opcode::OP_SHMEM_GET, 1},
-        {Opcode::OP_SHMEM_LOAD, 0},
+        {Opcode::OP_SHMEM_PUT, 1},        {Opcode::OP_SHMEM_STORE, 1}, {Opcode::OP_SHMEM_SIGNAL, 1},
+        {Opcode::OP_SHMEM_WAIT_UNTIL, 1}, {Opcode::OP_SHMEM_GET, 1},   {Opcode::OP_SHMEM_LOAD, 0},
         {Opcode::OP_SHMEM_SET, 3},
     };
     auto it = dTypeOperandIndexMap.find(opCode);
@@ -213,9 +209,10 @@ std::string CodeGenOpNPU::GenDynOffCoord(int32_t operandIndex) const
     size_t dim = shape[operandIndex].size();
     // 如果 offset 有 GetTensorData 类型，则从 copyOpAttribute 获取
     std::ostringstream oss;
+    auto offsetVal = GetOffsetFromAttr(operandIndex);
     for (size_t index = 0; index < dim; ++index) {
-        if (offsetFromAttr[operandIndex][index].IsValid()) {
-            oss << SymbolicExpressionTable::BuildExpression(offsetFromAttr[operandIndex][index]);
+        if (offsetVal[index].IsValid()) {
+            oss << SymbolicExpressionTable::BuildExpression(offsetVal[index]);
         } else {
             oss << GenParamIdxExprByIndex(operandIndex, dim, PREFIX_STR_OFFSET)[index];
         }

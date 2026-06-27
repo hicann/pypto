@@ -18,8 +18,11 @@
 
 namespace npu::tile_fwk {
 
+const int RUNTIME_COA_BASE = 2;
+const int RUNTIME_COA_IDX = 3;
+
 // ensure funcType is static, and isUnderDynamicFunc is false
-CodeGenOpLiteNPU::CodeGenOpLiteNPU(const CodeGenOpNPUCtx& ctx) : CodeGenOpNPU(ctx)
+CodeGenOpLiteNPU::CodeGenOpLiteNPU(const CodeGenOpNPUCtx& ctx) : CodeGenOpNPU(ctx), subFunc(ctx.subFunc)
 {
     InitOpsGenMap();
     forBlkMgr_ = ctx.forBlockManager;
@@ -110,8 +113,8 @@ std::vector<std::string> CodeGenOpLiteNPU::GetGmOffsetForTileTensor(unsigned gmI
 {
     int dim = static_cast<int>(rawShape[gmIdx].size());
 
-    if (offsetFromAttr[gmIdx][ID0].IsValid()) {
-        return GenSymbolicArgument(offsetFromAttr[gmIdx]);
+    if (GetOffsetFromAttr(gmIdx)[ID0].IsValid()) {
+        return GenSymbolicArgument(GetOffsetFromAttr(gmIdx));
     }
 
     return GenGetParamMacroPacked(gmIdx, dim, PREFIX_STR_OFFSET);
@@ -134,6 +137,85 @@ void CodeGenOpLiteNPU::UpdateGmParamIdx(const Operation& oper)
 
     std::copy(oper.outParamLocation_.begin(), oper.outParamLocation_.end(), paramLocation);
     std::copy(oper.inParamLocation_.begin(), oper.inParamLocation_.end(), paramLocation + oper.oOperand.size());
+}
+
+bool CodeGenOpLiteNPU::ContainsRuntimeCoaGetParmOffset(const std::vector<SymbolicScalar>& offsets) const
+{
+    for (const auto& oset : offsets) {
+        auto raw = oset.Raw();
+        if (raw != nullptr && raw->IsExpressionCall("RUNTIME_COA_GET_PARAM_OFFSET")) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void CodeGenOpLiteNPU::ExtractCoaGetParamOffset(const SymbolicScalar& expr, int& base, int& idx) const
+{
+    auto raw = expr.Raw();
+    auto exprRaw = std::dynamic_pointer_cast<RawSymbolicExpression>(raw);
+    if (exprRaw == nullptr) {
+        return;
+    }
+    const auto& operands = exprRaw->OperandList();
+    if (operands.size() < RUNTIME_COA_IDX + 1) {
+        return;
+    }
+    if (operands[RUNTIME_COA_BASE]->IsImmediate()) {
+        base =
+            static_cast<int>(std::static_pointer_cast<RawSymbolicImmediate>(operands[RUNTIME_COA_BASE])->Immediate());
+    }
+    if (operands[RUNTIME_COA_IDX]->IsImmediate()) {
+        idx = static_cast<int>(std::static_pointer_cast<RawSymbolicImmediate>(operands[RUNTIME_COA_IDX])->Immediate());
+    }
+}
+std::vector<SymbolicScalar> CodeGenOpLiteNPU::GetStaticOffsetFromLinearArgList(
+    const std::vector<SymbolicScalar>& dynOffset) const
+{
+    std::vector<SymbolicScalar> result;
+    std::vector<int> offsetFromDynOffset;
+
+    for (size_t i = 0; i < dynOffset.size(); ++i) {
+        int base = -1;
+        int idx = -1;
+        ExtractCoaGetParamOffset(dynOffset[i], base, idx);
+        if (base < 0 || idx < 0) {
+            continue;
+        }
+        int tmpOffset = base + idx;
+        if (tmpOffset < 0) {
+            continue;
+        }
+        offsetFromDynOffset.push_back(tmpOffset);
+    }
+
+    Function& subFunction = subFunc;
+    if (subFunction.HasParent()) {
+        Function* parentFunction = &subFunction.Parent();
+        std::vector<std::shared_ptr<CallOpAttribute>> parentCallopAttrList = parentFunction->GetCallopAttrList();
+        for (size_t i = 0; i < parentCallopAttrList.size(); ++i) {
+            auto& callopAttr = parentCallopAttrList[i];
+            std::vector<SymbolicScalar>& linearArgList = callopAttr->GetLinearArgList();
+            for (size_t j = 0; j < offsetFromDynOffset.size(); ++j) {
+                int linearIdx = offsetFromDynOffset[j] + 1;
+                if (linearIdx < 0 || linearIdx >= static_cast<int>(linearArgList.size())) {
+                    continue;
+                }
+                result.push_back(linearArgList[linearIdx]);
+            }
+        }
+    }
+
+    return result;
+}
+
+std::vector<SymbolicScalar> CodeGenOpLiteNPU::GetOffsetFromAttr(int idx) const
+{
+    auto dynOffset = CodeGenOpNPU::GetOffsetFromAttr(idx);
+    if (!ContainsRuntimeCoaGetParmOffset(dynOffset)) {
+        return dynOffset;
+    }
+    return GetStaticOffsetFromLinearArgList(dynOffset);
 }
 
 } // namespace npu::tile_fwk

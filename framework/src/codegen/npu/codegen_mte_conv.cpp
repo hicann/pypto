@@ -172,7 +172,7 @@ std::string CodeGenOpNPU::GenMemL1CopyInConv() const
         FillParamWithFullInput(srcShape, srcShapeVec);
     }
 
-    auto dynOffset = offsetFromAttr[ToUnderlying(MISOIdx::SRC0_IDX)];
+    auto dynOffset = GetOffsetFromAttr(ToUnderlying(MISOIdx::SRC0_IDX));
     ASSERT(ConvCodenGenError::CODEGEN_CHECK_DIM_INVALID, dynOffset.size() == expectedDim)
         << "GenMemL1CopyInConv offset should be " << expectedDim << "-dim!";
 
@@ -196,7 +196,7 @@ std::string CodeGenOpNPU::GenMemL1CopyInConvNZ2NZ(
     bool isFmap = true, isConv3D = false;
     GetOpAttr(Conv::LoadStoreConvOpAttributeKey::isFmap, isFmap);
     GetOpAttr(Conv::LoadStoreConvOpAttributeKey::isConv3D, isConv3D);
-    auto dynOffset = offsetFromAttr[ToUnderlying(MISOIdx::SRC0_IDX)];
+    auto dynOffset = GetOffsetFromAttr(ToUnderlying(MISOIdx::SRC0_IDX));
 
     // [n, c1, h, w, c0]/[n, d, c1, h, w], [c1hw, cout1, n0, c0, 0]/[dc1hw, cout1, n0, c0, 0]
     std::vector<std::string> srcShape;
@@ -273,7 +273,7 @@ std::string CodeGenOpNPU::GenMemL0CCopyOutConv() const
     std::string realN = SymbolicExpressionTable::BuildExpression(srcShapeVec[ID1]);
     std::string realCutW = SymbolicExpressionTable::BuildExpression(cutWValidShape);
 
-    auto dynOffset = offsetFromAttr[ToUnderlying(MISOIdx::DST_IDX)];
+    auto dynOffset = GetOffsetFromAttr(ToUnderlying(MISOIdx::DST_IDX));
     size_t expectedDim = isConv3D ? SHAPE_DIM5 : SHAPE_DIM4;
     ASSERT(ConvCodenGenError::CODEGEN_CHECK_DIM_INVALID, dynOffset.size() >= expectedDim)
         << "GenMemL0CCopyOutConv offset should be at least " << expectedDim << "-dim!";

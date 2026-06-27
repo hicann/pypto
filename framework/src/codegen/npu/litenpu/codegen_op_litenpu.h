@@ -27,6 +27,7 @@ public:
 
 private:
     TileTensor QueryTileTensorByIdx(int paramIdx) const override;
+    std::vector<SymbolicScalar> GetOffsetFromAttr(int idx) const override;
 
     std::string GenGmParamVar(unsigned gmParamIdx) const override;
 
@@ -39,6 +40,10 @@ private:
     std::vector<std::string> GetGmOffsetForTileTensor(unsigned gmIdx) const override;
 
     void UpdateGmParamIdx(const Operation& oper);
+    bool ContainsRuntimeCoaGetParmOffset(const std::vector<SymbolicScalar>& offsets) const;
+    void ExtractCoaGetParamOffset(const SymbolicScalar& expr, int& base, int& idx) const;
+    std::vector<SymbolicScalar> GetStaticOffsetFromLinearArgList(const std::vector<SymbolicScalar>& dynOffset) const;
+    Function& subFunc;
 };
 
 } // namespace npu::tile_fwk

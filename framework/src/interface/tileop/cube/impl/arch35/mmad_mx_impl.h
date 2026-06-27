@@ -64,11 +64,13 @@ INLINE void MatmulMXImpl(TileRes& c, TileLeft& a, TileLeftScale& aScale, TileRig
     pto::TASSIGN(l0b, static_cast<uint64_t>(b.GetAddr()));
     pto::TASSIGN(l0bScale, static_cast<uint64_t>(bScale.GetAddr()));
     pto::TASSIGN(l0c, static_cast<uint64_t>(c.GetAddr()));
+#ifndef __LITE_NPU
     if constexpr (!isZeroC) {
         pto::TMATMUL_MX(l0c, l0a, l0aScale, l0b, l0bScale);
     } else {
         pto::TMATMUL_MX(l0c, l0c, l0a, l0aScale, l0b, l0bScale);
     }
+#endif
 }
 
 template <
@@ -122,7 +124,9 @@ INLINE void MatmulMXImpl(
     pto::TASSIGN(l0bScale, static_cast<uint64_t>(bScale.GetAddr()));
     pto::TASSIGN(l0c, static_cast<uint64_t>(c.GetAddr()));
     pto::TASSIGN(biasT, static_cast<uint64_t>(bias.GetAddr()));
+#ifndef __LITE_NPU
     pto::TMATMUL_MX(l0c, l0a, l0aScale, l0b, l0bScale, biasT);
+#endif
 }
 
 #endif // TILEOP_TILE_OPERATOR_ARCH35_MMAD_MX_IMPL__H

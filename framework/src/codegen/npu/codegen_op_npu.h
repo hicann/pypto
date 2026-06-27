@@ -192,6 +192,7 @@ public:
 
 protected:
     virtual TileTensor QueryTileTensorByIdx(int paramIdx) const;
+    virtual std::vector<SymbolicScalar> GetOffsetFromAttr(int idx) const;
     std::vector<std::string> GetTileOpParamsByOrder(int paramCnt = 0) const;
     std::vector<std::string> GetTileOpParamsWithTmpBuf(const std::vector<unsigned>& tmpBufIdx) const;
     std::string PrintTileOpWithFullParamsInOrder() const;

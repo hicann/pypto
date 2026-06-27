@@ -27,7 +27,7 @@
 #include "impl/mmad_impl.h"
 
 // Operator Header File for Ascend 950PR/Ascend 950DT Architectures, Enabled Only When PTO_NPU_ARCH_A5 Macro is Defined.
-#if defined PTO_NPU_ARCH_A5
+ #if defined(PTO_NPU_ARCH_A5) || defined(__LITE_NPU)
 #include "impl/arch35/copy_gm_to_l1_mx_impl.h"
 #include "impl/arch35/copy_l0c_to_ub_impl.h"
 #include "impl/arch35/copy_l1_to_l0_mx_impl.h"
@@ -37,7 +37,7 @@
 #endif
 
 // TileOp Definitions for Matrix Multiplication & Data Movement on Ascend 950PR/Ascend 950DT Architectures
-#if defined PTO_NPU_ARCH_A5
+ #if defined(PTO_NPU_ARCH_A5) || defined(__LITE_NPU)
 // Copy Scale A data from DDR to L1 for MX matmul
 template <CopyInMode mode, typename Coord, typename TileData, typename GlobalData>
 TILEOP void TLoadAMX(TileData& dst, GlobalData& src, const Coord& coord)
