@@ -296,7 +296,7 @@ TILEOP void TMatmul(TileAcc& c, TileLeft& a, TileRight& b)
     TMatmulImpl<isZeroC, transMode, kAlignFlag>(c, a, b);
 }
 
-template <TransMode transMode, typename TileAcc, typename TileLeft, typename TileRight, typename TileBias>
+template <TransMode transMode, bool kAlignFlag, typename TileAcc, typename TileLeft, typename TileRight, typename TileBias>
 TILEOP void TMatmul(TileAcc& c, TileLeft& a, TileRight& b, TileBias& bias)
 {
     constexpr uint64_t shapeSizeA = Std::tuple_size<typename TileLeft::Shape>::value;
@@ -305,7 +305,7 @@ TILEOP void TMatmul(TileAcc& c, TileLeft& a, TileRight& b, TileBias& bias)
     static_assert(
         shapeSizeA == SHAPE_DIM2 && shapeSizeB == SHAPE_DIM2 && shapeSizeC == SHAPE_DIM2,
         "[Matmul ERROR]: Shape dim size should be 2");
-    TMatmulImpl<transMode>(c, a, b, bias);
+    TMatmulImpl<transMode, kAlignFlag>(c, a, b, bias);
 }
 
 // Copy data from L0C to DDR with quantization ability

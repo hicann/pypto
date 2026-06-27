@@ -63,7 +63,7 @@ INLINE void TMatmulImpl(TileAcc& c, TileLeft& a, TileRight& b)
     }
 }
 
-template <TransMode transMode, typename TileAcc, typename TileLeft, typename TileRight, typename TileBias>
+template <TransMode transMode, bool kAlignFlag, typename TileAcc, typename TileLeft, typename TileRight, typename TileBias>
 INLINE void TMatmulImpl(TileAcc& c, TileLeft& a, TileRight& b, TileBias& bias)
 {
     int64_t validM = GetShape<0>(a);
@@ -92,8 +92,8 @@ INLINE void TMatmulImpl(TileAcc& c, TileLeft& a, TileRight& b, TileBias& bias)
     tileL0CTensor l0c(validM, validN);
     tileBiasTensor biasT(1, validN);
     if constexpr (std::is_same<typename tileL0ATensor::DType, float>::value) {
+        l0a.SetKAligned(kAlignFlag);
         l0a.ResetMadMode();
-        l0a.SetKAligned(true);
     }
     if constexpr (transMode != TransMode::CAST_NONE) {
         l0a.SetMadTF32Mode(static_cast<pto::RoundMode>(transMode));
