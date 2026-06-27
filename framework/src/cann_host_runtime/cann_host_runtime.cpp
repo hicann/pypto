@@ -16,7 +16,6 @@
 #include "tilefwk/cann_host_runtime.h"
 #include "utils/file_utils.h"
 #include "tilefwk/pypto_fwk_log.h"
-#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <dlfcn.h>
@@ -119,67 +118,16 @@ bool CannHostRuntime::GetSocSpec(const std::string& column, const std::string& k
     return false;
 }
 
-static void ValidateAICPUCntFromSys(uint32_t aiCpuCnt, int& cached)
-{
-#ifdef BUILD_WITH_CANN
-    const char* cmd = "asys info -r=status -d=0";
-    FILE* fp = popen(cmd, "r");
-    if (fp == nullptr) {
-        FE_LOGW("Failed to run command: %s", cmd);
-        return;
-    }
-    char buf[256];
-    int sysAiCpuCount = -1;
-    while (fgets(buf, sizeof(buf), fp) != nullptr) {
-        const char* pos = strstr(buf, "AI CPU Count");
-        if (pos != nullptr) {
-            pos = strchr(pos, '|');
-            if (pos != nullptr) {
-                pos++;
-                while (*pos == ' ') {
-                    pos++;
-                }
-                sysAiCpuCount = atoi(pos);
-            }
-            break;
-        }
-    }
-    int pcloseRet = pclose(fp);
-    if (pcloseRet != 0) {
-        FE_LOGW("Command '%s' exited with non-zero status: %d", cmd, pcloseRet);
-    }
-    if (sysAiCpuCount < 0) {
-        FE_LOGW("Failed to parse AI CPU Count from asys output, skip validation.");
-        return;
-    }
-    if (static_cast<int>(aiCpuCnt) != sysAiCpuCount) {
-        FE_LOGW("AI CPU count mismatch: rtGetAiCpuCount=%u, asys reports=%d. Using asys value.",
-            aiCpuCnt, sysAiCpuCount);
-        FE_LOGW("Driver package needs to be updated.");
-        cached = sysAiCpuCount;
-        return;
-    }
-#endif
-    (void)aiCpuCnt;
-    (void)cached;
-}
-
 bool CannHostRuntime::GetAICPUCnt(size_t& aiCpuCnt)
 {
 #ifdef BUILD_WITH_CANN
-    if (aiCpuCntCached_ >= 0) {
-        aiCpuCnt = static_cast<size_t>(aiCpuCntCached_);
-        return true;
-    }
     int ret = 1;
     uint32_t cpuNum = 0;
     if (aiCpuCntFunc_ != nullptr) {
         ret = aiCpuCntFunc_(&cpuNum);
     }
     if (ret == 0) {
-        aiCpuCntCached_ = static_cast<int>(cpuNum);
-        ValidateAICPUCntFromSys(cpuNum, aiCpuCntCached_);
-        aiCpuCnt = static_cast<size_t>(aiCpuCntCached_);
+        aiCpuCnt = static_cast<size_t>(cpuNum);
         return true;
     }
 #endif

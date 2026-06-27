@@ -61,7 +61,7 @@ void RebuildableAttributeManager::InitAttrsForFunc(Function *func)
         tensorRootInnerSpill + tensorDevTaskInnerExclusiveOutcast + tensorPerOutcast; \
     uint64_t tensorTotalAlloc = AlignUp(tensorTotal, ALIGNMENT_32K) * desc.config.parallelism; \
     uint64_t leafSpill = desc.platform.aicoreCount * desc.maxLeafPerCoreSpilledMem; \
-    uint64_t name = tensorTotalAlloc + leafSpill + debugSize;
+    uint64_t name = tensorTotalAlloc + leafSpill + debugSize
 
 uint64_t RebuildableWorkspaceDesc::GetSizeForCheckOnly(
     uint64_t maxDynamicAssembleOutcastMem, uint64_t debugSize) const

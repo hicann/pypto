@@ -42,7 +42,6 @@ private:
     GetSocVerFunc socVerFunc_ = nullptr;
     GetSocSpecFunc socSpecFunc_ = nullptr;
     GetAiCpuCntFunc aiCpuCntFunc_ = nullptr;
-    int aiCpuCntCached_ = -1;
     void* handleDep_ = nullptr;
     void* handle_ = nullptr;
 };

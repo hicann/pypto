@@ -14,7 +14,6 @@
  */
 
 #pragma once
-#include <algorithm>
 #include <atomic>
 #include <cstdint>
 #include <cstdlib>
@@ -27,14 +26,11 @@
 
 namespace npu::tile_fwk::dynamic {
 const uint32_t MAX_DAV_2210_SCHEDULE_AICPU_NUM = 3;
-const uint32_t MAX_DAV_3510_SCHEDULE_AICPU_NUM = 4;
 inline uint32_t CalcSchAicpuNumByBlockDim(uint32_t blockDim, uint32_t aiCpuNum, ArchInfo archInfo)
 {
     uint32_t maxScheCore = aiCpuNum - dynamic::MAX_CONTROL_FLOW_AICPU_NUM;
     if (archInfo == ArchInfo::DAV_2201) {
-        maxScheCore = std::min(maxScheCore, MAX_DAV_2210_SCHEDULE_AICPU_NUM);
-    } else if (archInfo == ArchInfo::DAV_3510) {
-        maxScheCore = std::min(maxScheCore, MAX_DAV_3510_SCHEDULE_AICPU_NUM);
+        maxScheCore = maxScheCore >= MAX_DAV_2210_SCHEDULE_AICPU_NUM ? MAX_DAV_2210_SCHEDULE_AICPU_NUM : maxScheCore;
     }
 
     if (blockDim > (maxScheCore - 1) * dynamic::MAX_MNG_AICORE_AVG_NUM) {
