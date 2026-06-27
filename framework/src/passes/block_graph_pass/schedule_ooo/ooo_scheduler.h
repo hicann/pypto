@@ -345,7 +345,8 @@ private:
     Status FillSpillAssembleBuffer(int spillMemid, LogicalTensorPtr spillTensor, LogicalTensorPtr assembleTensor,
         Operation* copyoutOp, LogicalTensorPtr gmTensor, Operation* spillAllocOp, Operation*& wholeCopyinOut);
     LogicalTensorPtr CreateLocalTensor(LogicalTensorPtr spillTensor);
-    LogicalTensorPtr CreateGMTensor(LogicalTensorPtr spillTensor, LogicalTensorPtr actualSpillTensor, int spillMemId);
+    LogicalTensorPtr CreateGMTensor(LogicalTensorPtr spillTensor, LogicalTensorPtr actualSpillTensor, int spillMemId,
+        DataType gmDtype = DT_BOTTOM);
     LogicalTensorPtr CreateParticalTensor(LogicalTensorPtr iOperand, LogicalTensorPtr oriOperand, LogicalTensorPtr spillTensor, std::vector<int64_t> toOffset);
     Operation* CreateAllocOp(LogicalTensorPtr oOperand);
     Operation* CloneCopyinOp(Operation* spillOp, LogicalTensorPtr iOperand, LogicalTensorPtr oOperand);
