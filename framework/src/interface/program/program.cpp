@@ -707,8 +707,8 @@ void Program::VerifyPass(Function* func, int passIndex, const std::string& passI
     // SubgraphToFunction阶段还未进行validShape推导，会导致非尾块的计算会按照尾块大小进行计算，导致部分数据的拷贝或者计算丢失，
     // 该Pass需要与InferParamIndexPass进行“合并”后才会完成VaildShape推导，才可以完成完整功能；
     FE_LOGI("VerifyPass start.");
-    if (passIdentifier == "SubgraphToFunction") {
-        FE_LOGI("Skip verify pass [SubgraphToFunction] for interpreter!");
+    if (passIdentifier == "SubgraphToFunction" || passIdentifier == "ReplaceTensor") {
+        FE_LOGI("Skip verify pass [%s] for interpreter!", passIdentifier.c_str());
         return;
     }
     auto& flowVerifier = FlowVerifier::GetInstance();
