@@ -131,7 +131,7 @@ uint64_t WorkspaceTotalFromDesc(
     const uint64_t boundaryAndInnerTemporal = desc.devTaskBoundaryOutcastNum + desc.devTaskInnerTemporalOutcastNum;
     ASSERT(DevCommonErr::PARAM_CHECK_FAILED,
         !Uint64MulWouldOverflow(desc.maxStaticOutcastMem, boundaryAndInnerTemporal))
-        << "maxStaticOutcastMem * devTaskBoundaryAndInnerTemporalOutcastNum would overflow";
+        << "maxStaticOutcastMem * boundaryAndInnerTemporalOutcastNum would overflow";
     const uint64_t staticOutcast = desc.maxStaticOutcastMem * boundaryAndInnerTemporal;
     ASSERT(DevCommonErr::PARAM_CHECK_FAILED,
         desc.maxRootInnerSpilledMem <= UINT64_MAX - desc.maxRootTotalExclusiveOutcastMem)

@@ -544,29 +544,37 @@ void DevControlFlowCache::RuntimeAddrBackup(
         {
             ptr = reinterpret_cast<WsSlotAllocator::BlockHeader*>(static_cast<uintptr_t>(ptr - base));
         }
+        static void BackupPool(
+            WsSlotAllocator& backupAllocator, WsSlotAllocator& runtimePool,
+            WsSlotAllocator::BlockHeader* checkpointList, uint64_t checkpointOffset)
+        {
+            backupAllocator = runtimePool;
+            uint64_t slotNum = runtimePool.slotNum_;
+            uint64_t backupBytes = sizeof(WsSlotAllocator::BlockHeader) * slotNum;
+            WsSlotAllocator::BlockHeader* runtimeBase = runtimePool.GetBlockHeaderBase();
+            DevMemcpyS(checkpointList + checkpointOffset, backupBytes, runtimeBase, backupBytes);
+            BackupBlockHeader(backupAllocator.freeListHeader_, runtimeBase);
+            BackupBlockHeader(backupAllocator.notInUseHeaders_, runtimeBase);
+            for (uint64_t k = 0; k < slotNum; k++) {
+                BackupBlockHeader(checkpointList[checkpointOffset + k].listNext, runtimeBase);
+            }
+        }
     };
 
     for (uint32_t i = 0; i < parallelism; i++) {
         runtimeBackup.workspace.tensorAllocators[i].rootInner = allocator[i].rootInner;
         runtimeBackup.workspace.tensorAllocators[i].devTaskInnerExclusiveOutcasts =
             allocator[i].devTaskInnerExclusiveOutcasts;
-        runtimeBackup.workspace.tensorAllocators[i].devTaskBoundaryOutcasts = allocator[i].devTaskBoundaryOutcasts;
 
-        uint64_t backupSize = sizeof(WsSlotAllocator::BlockHeader) * allocator[i].devTaskBoundaryOutcasts.slotNum_;
-        DevMemcpyS(
-            runtimeBackup.workspace.tensorAllocators[i].slottedOutcastsBlockList.Data(), backupSize,
-            allocator[i].devTaskBoundaryOutcasts.GetBlockHeaderBase(), backupSize);
-
-        WsSlotAllocator::BlockHeader* base = allocator[i].devTaskBoundaryOutcasts.GetBlockHeaderBase();
-        Backup::BackupBlockHeader(
-            runtimeBackup.workspace.tensorAllocators[i].devTaskBoundaryOutcasts.freeListHeader_, base);
-        Backup::BackupBlockHeader(
-            runtimeBackup.workspace.tensorAllocators[i].devTaskBoundaryOutcasts.notInUseHeaders_, base);
-        WsSlotAllocator::BlockHeader* checkpointBase =
-            runtimeBackup.workspace.tensorAllocators[i].slottedOutcastsBlockList.Data();
-        for (uint64_t k = 0; k < allocator[i].devTaskBoundaryOutcasts.slotNum_; k++) {
-            Backup::BackupBlockHeader(checkpointBase[k].listNext, base);
-        }
+        auto& checkpointList = runtimeBackup.workspace.tensorAllocators[i].slottedOutcastsBlockList;
+        uint64_t boundaryOffset = 0;
+        uint64_t innerTemporalOffset = allocator[i].devTaskBoundaryOutcasts.slotNum_;
+        Backup::BackupPool(
+            runtimeBackup.workspace.tensorAllocators[i].devTaskBoundaryOutcasts,
+            allocator[i].devTaskBoundaryOutcasts, checkpointList.Data(), boundaryOffset);
+        Backup::BackupPool(
+            runtimeBackup.workspace.tensorAllocators[i].devTaskInnerTemporalOutcasts,
+            allocator[i].devTaskInnerTemporalOutcasts, checkpointList.Data(), innerTemporalOffset);
     }
 }
 
@@ -593,6 +601,18 @@ void DevControlFlowCache::RuntimeAddrRestore(
             dst.allocated_ = src.allocated_;
             dst.resetTimes_ = src.resetTimes_;
         }
+        static void RestorePool(
+            WsSlotAllocator& runtimePool, WsSlotAllocator& backupAllocator,
+            WsSlotAllocator::BlockHeader* checkpointList, uint64_t checkpointOffset)
+        {
+            runtimePool.availableSlots_ = backupAllocator.availableSlots_;
+            WsSlotAllocator::BlockHeader* runtimeBase = runtimePool.GetBlockHeaderBase();
+            RestoreBlockHeader(runtimePool.freeListHeader_, runtimeBase, backupAllocator.freeListHeader_);
+            RestoreBlockHeader(runtimePool.notInUseHeaders_, runtimeBase, backupAllocator.notInUseHeaders_);
+            for (uint64_t k = 0; k < runtimePool.slotNum_; k++) {
+                RestoreBlockHeader(runtimeBase[k].listNext, runtimeBase, checkpointList[checkpointOffset + k].listNext);
+            }
+        }
     };
 
     for (uint32_t i = 0; i < parallelism; i++) {
@@ -600,21 +620,17 @@ void DevControlFlowCache::RuntimeAddrRestore(
         Restore::RestoreSeqAllocator(
             allocator[i].devTaskInnerExclusiveOutcasts,
             runtimeBackup.workspace.tensorAllocators[i].devTaskInnerExclusiveOutcasts);
-        allocator[i].devTaskBoundaryOutcasts.availableSlots_ =
-            runtimeBackup.workspace.tensorAllocators[i].devTaskBoundaryOutcasts.availableSlots_;
 
-        WsSlotAllocator::BlockHeader* base = allocator[i].devTaskBoundaryOutcasts.GetBlockHeaderBase();
-        Restore::RestoreBlockHeader(
-            allocator[i].devTaskBoundaryOutcasts.freeListHeader_, base,
-            runtimeBackup.workspace.tensorAllocators[i].devTaskBoundaryOutcasts.freeListHeader_);
-        Restore::RestoreBlockHeader(
-            allocator[i].devTaskBoundaryOutcasts.notInUseHeaders_, base,
-            runtimeBackup.workspace.tensorAllocators[i].devTaskBoundaryOutcasts.notInUseHeaders_);
-        WsSlotAllocator::BlockHeader* checkpointBase =
-            runtimeBackup.workspace.tensorAllocators[i].slottedOutcastsBlockList.Data();
-        for (uint64_t k = 0; k < allocator[i].devTaskBoundaryOutcasts.slotNum_; k++) {
-            Restore::RestoreBlockHeader(base[k].listNext, base, checkpointBase[k].listNext);
-        }
+        auto& checkpointList = runtimeBackup.workspace.tensorAllocators[i].slottedOutcastsBlockList;
+        uint64_t innerTemporalOffset = allocator[i].devTaskBoundaryOutcasts.slotNum_;
+        Restore::RestorePool(
+            allocator[i].devTaskBoundaryOutcasts,
+            runtimeBackup.workspace.tensorAllocators[i].devTaskBoundaryOutcasts, checkpointList.Data(),
+            0);
+        Restore::RestorePool(
+            allocator[i].devTaskInnerTemporalOutcasts,
+            runtimeBackup.workspace.tensorAllocators[i].devTaskInnerTemporalOutcasts, checkpointList.Data(),
+            innerTemporalOffset);
     }
 }
 

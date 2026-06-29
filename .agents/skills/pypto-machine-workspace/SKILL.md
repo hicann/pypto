@@ -68,9 +68,9 @@ Workspace 内存分配由以下阶段组成：
 workspaceSize = memBudget.Total()
              = tensor.Total() + aicoreSpilled.Total() + debug.dumpTensor + debug.leafDump + metadata.Total()
 
-tensor.Total() = rootInner                              -- Root Function Inner Tensor 内存
+tensor.Total() = rootInnerSpilledMem                    -- Root Function Inner Tensor 内存
                + devTaskInnerExclusiveOutcasts           -- DeviceTask 内部 Exclusive Outcast 内存
-               + MaxOutcastMem() * devTaskBoundaryOutcastNum  -- Boundary Outcast 总内存
+               + MaxOutcastMem() * (devTaskBoundaryOutcastNum + devTaskInnerTemporalOutcastNum)
 
 MaxOutcastMem() = max(maxStaticOutcastMem, maxDynamicAssembleOutcastMem)
 
@@ -84,7 +84,8 @@ metadata.Total() = general + stitchPool
 | 日志内容 | 说明 |
 |---------|------|
 | `Metadata=..., workspaceSize=..., tensor=..., aicoreSpillen=...` | 总量与各大类拆分 |
-| `Tensor:rootInner=A, devTaskInnerOutCasts=B, slotted=CxD(slots)` | Tensor 子项拆分：A=rootInner, B=devTaskInnerExclusiveOutcasts, C=MaxOutcastMem(), D=devTaskBoundaryOutcastNum |
+| `Tensor:rootInnerSpilledMem=A, devTaskInnerOutCasts=B, slotted=CxD(slots)` | A=rootInnerSpilledMem, B=devTaskInnerExclusiveOutcasts, C=MaxOutcastMem(), D=boundary+innerTemporal slot 数 |
+| `OutcastSlots: boundary=X, innerTemporal=Y` | Boundary / Inner Temporal slot 数分项 |
 | `MaxRootInnerMem is ..., maxDevTaskInnerExclusiveOutcastMem is ...` | 滚动取 max 的中间值（经过 unroll/stitch 膨胀后） |
 | `Rootfunction: <name> ->MaxRootInnerMem is ..., maxDevTaskInnerExclusiveOutcastMem is ...` | 每个 Root Function 级别的内存贡献 |
 | `Root=[<name>], symbol=[<sym>],rawmagic=[<id>]: staticMemReq=[<size>] is too larger` | shape 超过 512×512 的超大 Tensor 告警 |
@@ -158,14 +159,15 @@ cd <run_path> && <test_cmd>
 在日志目录 `<log_path>/debug/` 下搜索 `[workspaceSize]` 关键字，提取以下两行核心日志：
 
 ```bash
-grep -r "\[workspaceSize\]" <log_path>/debug/ | grep -E "workspaceSize=|Tensor:rootInner="
+grep -r "\[workspaceSize\]" <log_path>/debug/ | grep -E "workspaceSize=|Tensor:rootInnerSpilledMem="
 ```
 
 **期望获取到的日志格式**：
 
 ```
 [workspaceSize] Metadata=<M>, workspaceSize=<TOTAL>, tensor=<T>, aicoreSpillen=<S>, debug.DumpTensor=<DD>, leafDumpWorkspace=<LD>.
-[workspaceSize] Tensor:rootInner=<A>, devTaskInnerOutCasts=<B>, slotted=<C>x<D>(slots).
+[workspaceSize] Tensor:rootInnerSpilledMem=<A>, devTaskInnerOutCasts=<B>, slotted=<C>x<D>(slots).
+[workspaceSize] OutcastSlots: boundary=<X>, innerTemporal=<Y>.
 ```
 
 **解析日志值**：
@@ -178,14 +180,15 @@ grep -r "\[workspaceSize\]" <log_path>/debug/ | grep -E "workspaceSize=|Tensor:r
 | S | AICore 栈溢出内存 | `memBudget.aicoreSpilled.Total()` |
 | A | rootInnerSpilledMem | `memBudget.tensor.rootInnerSpilledMem` |
 | B | devTaskInnerExclusiveOutcasts | `memBudget.tensor.devTaskInnerExclusiveOutcasts` |
-| C | MaxOutcastMem() | 单个 Boundary Outcast 最大大小 |
-| D | devTaskBoundaryOutcastNum | Boundary Outcast slot 数量 |
+| C | MaxOutcastMem() | 单个 slotted Outcast 最大大小 |
+| D | devTaskBoundaryOutcastNum + devTaskInnerTemporalOutcastNum | slotted 总 slot 数 |
+| X/Y | boundary / innerTemporal slot 数 | 见 `OutcastSlots:` 日志 |
 
 **⚠️ 重要**：如果搜索不到 `[workspaceSize]` 前缀的日志，说明 whl 包版本不包含此日志。此时改为搜索以下已有日志（位于 `device_launcher.h`）：
 
 ```bash
 grep -r "workspaceSize=" <log_path>/debug/ | grep "tensor="
-grep -r "Tensor:rootInner=" <log_path>/debug/
+grep -r "Tensor:rootInnerSpilledMem=" <log_path>/debug/
 ```
 
 ---
@@ -222,14 +225,14 @@ workspaceSize = TOTAL
 ```
 Tensor 总量 T = A + B + C × D
 
-rootInner 占比      = A / T
+rootInnerSpilledMem 占比      = A / T
 devTaskInnerOutCasts 占比 = B / T
 BoundaryOutcast 占比 = (C × D) / T
 ```
 
 根据占比判断进入不同分支：
 
-#### 情况一：rootInner (A) 或 devTaskInnerOutCasts (B) 为主要贡献者
+#### 情况一：rootInnerSpilledMem (A) 或 devTaskInnerOutCasts (B) 为主要贡献者
 
 提取 Root Function 级别日志：
 
@@ -248,7 +251,7 @@ grep -r "maxRootInnerMem is\|MaxRootInnerMem is" <log_path>/debug/
 2. 检查该 Root Function 名称中是否包含 `Unroll` 标记（如 `_Unroll8`），判断 unroll 次数
 3. 内存膨胀关系（近似公式）：
    ```
-   rootInner ≈ rootInnerTensorWsMemoryRequirement / unroll × WorkspaceRecyclePeriod
+   rootInnerSpilledMem ≈ rootInnerTensorWsMemoryRequirement / unroll × WorkspaceRecyclePeriod
    devTaskInnerOutCasts ≈ exclusiveOutcastWsMemoryRequirement / unroll × EstimatedStitchingCount
    WorkspaceRecyclePeriod ≈ stitch_function_max_num × MAX_UNROLL_TIMES
    ```
@@ -259,8 +262,8 @@ grep -r "maxRootInnerMem is\|MaxRootInnerMem is" <log_path>/debug/
 
 | 配置项 | 影响范围 | 调优方向 |
 |--------|----------|----------|
-| `stitch_function_max_num` | rootInner、devTaskInnerOutCasts、Boundary slot 数 | 降低此值以减少并行度换取内存 |
-| `unroll_list` / max_unroll | rootInner、devTaskInnerOutCasts | 减小 unroll 数 |
+| `stitch_function_max_num` | rootInnerSpilledMem、devTaskInnerOutCasts、Boundary slot 数 | 降低此值以减少并行度换取内存 |
+| `unroll_list` / max_unroll | rootInnerSpilledMem、devTaskInnerOutCasts | 减小 unroll 数 |
 
 #### 情况二：Boundary Outcast 内存 (C × D) 为主要贡献者
 
@@ -354,15 +357,15 @@ grep -r "\[workspaceSize\].*staticMemReq=\|staticMemReq=.*too larger" <log_path>
 
 | 子项 | 大小 (bytes) | 占比 |
 |------|-------------|------|
-| rootInner | <A> | <A/T %> |
+| rootInnerSpilledMem | <A> | <A/T %> |
 | devTaskInnerOutCasts | <B> | <B/T %> |
 | BoundaryOutcast (C×D) | <C×D> | <C×D/T %> |
 
 - MaxOutcastMem (单体大小): <C>
-- devTaskBoundaryOutcastNum (slot 数): <D>
+- devTaskBoundaryOutcastNum: <X>, devTaskInnerTemporalOutcastNum: <Y>
 
 ### 问题定位结果
-- 异常子项：<rootInner / devTaskInnerOutCasts / BoundaryOutcast / 其他>
+- 异常子项：<rootInnerSpilledMem / devTaskInnerOutCasts / BoundaryOutcast / 其他>
 - 问题 Root Function：<ROOT_FUNC_NAME>
 - 问题 Tensor：symbol=<TENSOR_SYMBOL>, rawmagic=<RAWMAGIC>, staticMemReq=<SIZE>
 - 原因分析：<具体分析>
@@ -383,7 +386,7 @@ grep -r "\[workspaceSize\].*staticMemReq=\|staticMemReq=.*too larger" <log_path>
 若报错信息为运行时分配失败（而非编译期预算过大），搜索以下关键错误信息：
 
 ```bash
-# 运行时 rootInner 分配失败
+# 运行时 rootInnerSpilledMem 分配失败
 grep -r "cannot allocate root inner workspace" <log_path>/debug/
 
 # 通用分配失败

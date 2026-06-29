@@ -46,7 +46,8 @@ void DeviceWorkspaceAllocator::Init(DevStartArgs* devStartArgs)
     *dumpTensorWsAllocatorCounter_ = dumpTensorWsAllocator_.AllocatedSize();
 #endif
     SetupVector(rtBoundaryOutcastToBeFree_);
-    rtBoundaryOutcastToBeFree_.reserve(devProg->memBudget.tensor.devTaskBoundaryAndInnerTemporalOutcastNum);
+    rtBoundaryOutcastToBeFree_.reserve(
+        devProg->memBudget.tensor.BoundaryAndInnerTemporalOutcastSlotNum());
 
     SetupItemPool(
         runtimeOutcastTensorPool_, devProg->runtimeOutcastPoolSize, WsMemCategory::ITEMPOOL_RUNTIME_OUTCAST);
@@ -236,7 +237,7 @@ void DeviceWorkspaceAllocator::ResolveOutcastAddress(
         if (slotList[assembleSlotIndex].isAssembleSlotNeedAlloc) {
             RuntimeOutcastTensorDerefSafe(slotList[assembleSlotIndex].rtOutcastIter);
             slotList[assembleSlotIndex].rtOutcastIter = MakeRuntimeOutcastTensor(
-                AllocateSlot(devRootSrc->GetRawName()), RuntimeTensorMemProperty::BOUNDARY_OUTCAST);
+                AllocateInnerTemporalOutcastSlot(devRootSrc->GetRawName()), RuntimeTensorMemProperty::BOUNDARY_OUTCAST);
             slotList[assembleSlotIndex].isAssembleSlotNeedAlloc = false;
             TryAllocateDynamicCellMatchForAssembleSlot(slotList[assembleSlotIndex]);
             slotList[assembleSlotIndex].ChangeSlotAllocIterId(); // mark tensor memory changed for stitch dependency cell match
@@ -327,7 +328,9 @@ void DeviceWorkspaceAllocator::TryAllocateDynamicCellMatchForAssembleSlot(Device
 
 bool DeviceWorkspaceAllocator::IsValidSlotMemRequirement(uint64_t memReq) const
 {
-    return tensorAllocators_[curParallelWsId].devTaskBoundaryOutcasts.IsValidSlotMemRequirement(memReq);
+    auto& boundaryPool = tensorAllocators_[curParallelWsId].devTaskBoundaryOutcasts;
+    auto& innerTemporalPool = tensorAllocators_[curParallelWsId].devTaskInnerTemporalOutcasts;
+    return boundaryPool.IsValidSlotMemRequirement(memReq) || innerTemporalPool.IsValidSlotMemRequirement(memReq);
 }
 
 
@@ -339,7 +342,16 @@ bool DeviceWorkspaceAllocator::IsValidSlotMemRequirement(uint64_t memReq) const
 void DeviceWorkspaceAllocator::TriggerDelayedRecycle()
 {
     for (auto&& outcast : rtBoundaryOutcastToBeFree_) {
-        tensorAllocators_[outcast.allocation.parallelWsId].devTaskBoundaryOutcasts.Deallocate(outcast.allocation.ptr);
+        auto& boundaryPool = tensorAllocators_[outcast.allocation.parallelWsId].devTaskBoundaryOutcasts;
+        auto& innerTemporalPool = tensorAllocators_[outcast.allocation.parallelWsId].devTaskInnerTemporalOutcasts;
+        if (innerTemporalPool.ContainsPtr(outcast.allocation.ptr)) {
+            innerTemporalPool.Deallocate(outcast.allocation.ptr);
+        } else {
+            DEV_ASSERT_MSG(
+                WsErr::WS_TENSOR_ADDRESS_OUT_OF_RANGE, boundaryPool.ContainsPtr(outcast.allocation.ptr),
+                "Boundary outcast pointer is not in boundary or inner temporal pool, ptr=0x%lx", outcast.allocation.ptr);
+            boundaryPool.Deallocate(outcast.allocation.ptr);
+        }
         if (outcast.dynamicCellMatchAllocation.ptr != 0) {
             metadataAllocators_.dynamicCellMatch.Deallocate(outcast.dynamicCellMatchAllocation.ptr);
         }
@@ -445,6 +457,7 @@ void DeviceWorkspaceAllocator::DumpMemoryUsage(const char* hint) const
         tensorAllocators_[i].devTaskInnerExclusiveOutcasts.DumpMemoryUsage(hint,
             "Tensor (DeviceTask inner outcasts) workspace");
         tensorAllocators_[i].devTaskBoundaryOutcasts.DumpMemoryUsage(hint);
+        tensorAllocators_[i].devTaskInnerTemporalOutcasts.DumpMemoryUsage(hint);
     }
 
     // Dump stack memory
@@ -493,7 +506,7 @@ uint64_t DeviceWorkspaceAllocator::CalcMetadataVectorMemSize(const DevAscendProg
     DEV_DEBUG("slotListMemory=%lu.", slotListMemory);
     // 3. rtBoundaryOutcastToBeFree_
     uint64_t boundaryOutcastToFreeListSize =
-        CalculateVectorCapacity(devProg->memBudget.tensor.devTaskBoundaryAndInnerTemporalOutcastNum);
+        CalculateVectorCapacity(devProg->memBudget.tensor.BoundaryAndInnerTemporalOutcastSlotNum());
     uint64_t boundaryOutcastToFreeMemory = boundaryOutcastToFreeListSize * sizeof(RuntimeOutcastTensor);
     DEV_DEBUG("boundaryOutcastToFreeMemory=%lu.", boundaryOutcastToFreeMemory);
     // total
@@ -505,7 +518,7 @@ uint64_t DeviceWorkspaceAllocator::CalcMetadataVectorMemSize(const DevAscendProg
 uint64_t DeviceWorkspaceAllocator::CalcMetadataSlotAllocatorMemSize(const DevAscendProgram* devProg)
 {
     size_t blockHeaderSize = sizeof(WsSlotAllocator::BlockHeader);
-    uint64_t boundaryOutcastSlotNum = devProg->memBudget.tensor.devTaskBoundaryAndInnerTemporalOutcastNum;
+    uint64_t boundaryOutcastSlotNum = devProg->memBudget.tensor.BoundaryAndInnerTemporalOutcastSlotNum();
     uint64_t dynamicCellMatchSlotNum = devProg->memBudget.metadata.dynamicCellMatchSlotNum;
     DEV_DEBUG(
         "boundaryOutcastSlotNum=%lu, dynamicCellMatchSlotNum=%lu", boundaryOutcastSlotNum, dynamicCellMatchSlotNum);
@@ -709,17 +722,27 @@ void DeviceWorkspaceAllocator::InitTensorAllocators(uintdevptr_t workspaceAddr, 
 
     uint32_t paallelism = devProg->GetParallelism();
 
-    // Initialize root function slotted outcast tensor memory
-    auto devTaskBoundaryOutcastsBudget =
-        devProg->memBudget.tensor.devTaskBoundaryAndInnerTemporalOutcastNum * devProg->memBudget.tensor.MaxOutcastMem();
-    slotVerifier_.Init(baseAddr, paallelism * devTaskBoundaryOutcastsBudget);
+    // Initialize root function slotted outcast tensor memory (boundary pool then inner temporal pool)
+    uint64_t boundarySlotNum = devProg->memBudget.tensor.devTaskBoundaryOutcastNum;
+    uint64_t innerTemporalSlotNum = devProg->memBudget.tensor.devTaskInnerTemporalOutcastNum;
+    uint64_t slotMem = devProg->memBudget.tensor.MaxOutcastMem();
+    uint64_t boundaryOutcastBudgetPerParallel = boundarySlotNum * slotMem;
+    uint64_t innerTemporalOutcastBudgetPerParallel = innerTemporalSlotNum * slotMem;
+    slotVerifier_.Init(
+        baseAddr, paallelism * (boundaryOutcastBudgetPerParallel + innerTemporalOutcastBudgetPerParallel));
     for (uint32_t parallelIdx = 0; parallelIdx < paallelism; parallelIdx++) {
-        tensorAllocators_[parallelIdx].devTaskBoundaryOutcasts.InitTensorAllocator(
-            baseAddr, devProg->memBudget.tensor.devTaskBoundaryAndInnerTemporalOutcastNum, devProg->memBudget.tensor.MaxOutcastMem(),
-            metadataAllocators_.general);
+        auto& boundaryPool = tensorAllocators_[parallelIdx].devTaskBoundaryOutcasts;
+        auto& innerTemporalPool = tensorAllocators_[parallelIdx].devTaskInnerTemporalOutcasts;
+        boundaryPool.InitTensorAllocator(baseAddr, boundarySlotNum, slotMem, metadataAllocators_.general);
         DEV_TRACE_DEBUG(CtrlEvent(
-            none(), WorkspaceCrossDeviceTaskOutcast(Range(baseAddr, baseAddr + devTaskBoundaryOutcastsBudget))));
-        baseAddr += devTaskBoundaryOutcastsBudget;
+            none(), WorkspaceCrossDeviceTaskOutcast(Range(baseAddr, baseAddr + boundaryOutcastBudgetPerParallel))));
+        baseAddr += boundaryOutcastBudgetPerParallel;
+        innerTemporalPool.InitTensorAllocator(baseAddr, innerTemporalSlotNum, slotMem, metadataAllocators_.general);
+        DEV_TRACE_DEBUG(CtrlEvent(
+            none(),
+            WorkspaceCrossDeviceTaskOutcast(
+                Range(baseAddr, baseAddr + innerTemporalOutcastBudgetPerParallel))));
+        baseAddr += innerTemporalOutcastBudgetPerParallel;
     }
 
     // Initialize root function non-outcast tensor memory

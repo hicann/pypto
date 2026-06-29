@@ -106,7 +106,8 @@ TEST_F(RuntimeOutcastTensorTest, DeviceWorkspaceAllocatorBasicOps)
     devProg.memBudget.tensor.devTaskInnerExclusiveOutcasts = 0;
     devProg.memBudget.tensor.maxStaticOutcastMem = 0;
     devProg.memBudget.tensor.maxDynamicAssembleOutcastMem = 0;
-    devProg.memBudget.tensor.devTaskBoundaryAndInnerTemporalOutcastNum = 0;
+    devProg.memBudget.tensor.devTaskBoundaryOutcastNum = 0;
+    devProg.memBudget.tensor.devTaskInnerTemporalOutcastNum = 0;
 
     InitDeviceWorkspaceAllocatorForTest(d, devProg, workspace);
 
@@ -242,7 +243,8 @@ TEST_F(RuntimeOutcastTensorTest, BoundaryOutcastDelayedRecycle)
     DevAscendProgram devProg{};
     devProg.runtimeOutcastPoolSize = 4;
     // Set boundary outcast budget to allow allocation
-    devProg.memBudget.tensor.devTaskBoundaryAndInnerTemporalOutcastNum = 1;
+    devProg.memBudget.tensor.devTaskBoundaryOutcastNum = 1;
+    devProg.memBudget.tensor.devTaskInnerTemporalOutcastNum = 0;
     devProg.memBudget.tensor.maxStaticOutcastMem = 1024;
 
     InitDeviceWorkspaceAllocatorForTest(d, devProg, workspace);
@@ -641,4 +643,56 @@ TEST_F(RuntimeOutcastTensorTest, DelayedRecycleListBehavior)
     EXPECT_EQ(d.rtBoundaryOutcastToBeFree_.size(), 3u);
     EXPECT_EQ(d.rtBoundaryOutcastToBeFree_[2].Addr(), static_cast<uintdevptr_t>(0x6000ull));
     EXPECT_EQ(d.rtBoundaryOutcastToBeFree_[2].property, RuntimeTensorMemProperty::BOUNDARY_OUTCAST);
+}
+
+TEST_F(RuntimeOutcastTensorTest, DualOutcastPoolAllocateAndRecycle)
+{
+    constexpr uint64_t kSlotMem = 1024;
+    std::vector<uint8_t> workspace(1u << 20);
+
+    DeviceWorkspaceAllocator d;
+    DevAscendProgram devProg{};
+    devProg.runtimeOutcastPoolSize = 4;
+    devProg.memBudget.tensor.devTaskBoundaryOutcastNum = 1;
+    devProg.memBudget.tensor.devTaskInnerTemporalOutcastNum = 1;
+    devProg.memBudget.tensor.maxStaticOutcastMem = kSlotMem;
+
+    InitDeviceWorkspaceAllocatorForTest(d, devProg, workspace);
+
+    auto& boundaryPool = d.tensorAllocators_[0].devTaskBoundaryOutcasts;
+    auto& innerTemporalPool = d.tensorAllocators_[0].devTaskInnerTemporalOutcasts;
+    EXPECT_EQ(boundaryPool.AvailableSlots(), 1u);
+    EXPECT_EQ(innerTemporalPool.AvailableSlots(), 1u);
+
+    WsAllocation boundaryAlloc = d.AllocateBoundaryOutcastSlot("test_root");
+    WsAllocation innerTemporalAlloc = d.AllocateInnerTemporalOutcastSlot("test_root");
+    EXPECT_NE(boundaryAlloc.ptr, 0u);
+    EXPECT_NE(innerTemporalAlloc.ptr, 0u);
+    EXPECT_TRUE(boundaryPool.ContainsPtr(boundaryAlloc.ptr));
+    EXPECT_TRUE(innerTemporalPool.ContainsPtr(innerTemporalAlloc.ptr));
+    EXPECT_EQ(boundaryPool.AvailableSlots(), 0u);
+    EXPECT_EQ(innerTemporalPool.AvailableSlots(), 0u);
+
+    RuntimeOutcastTensor boundaryTensor(boundaryAlloc, RuntimeTensorMemProperty::BOUNDARY_OUTCAST, 1u);
+    RuntimeOutcastTensor innerTemporalTensor(innerTemporalAlloc, RuntimeTensorMemProperty::BOUNDARY_OUTCAST, 1u);
+    d.rtBoundaryOutcastToBeFree_.push_back(boundaryTensor);
+    d.rtBoundaryOutcastToBeFree_.push_back(innerTemporalTensor);
+    d.TriggerDelayedRecycle();
+
+    EXPECT_EQ(d.rtBoundaryOutcastToBeFree_.size(), 0u);
+    EXPECT_EQ(boundaryPool.AvailableSlots(), 1u);
+    EXPECT_EQ(innerTemporalPool.AvailableSlots(), 1u);
+}
+
+TEST_F(RuntimeOutcastTensorTest, BoundaryAndInnerTemporalOutcastBudget)
+{
+    DevAscendProgram devProg{};
+    auto& budget = devProg.memBudget.tensor;
+    budget.devTaskBoundaryOutcastNum = 4;
+    budget.devTaskInnerTemporalOutcastNum = 8;
+    budget.maxStaticOutcastMem = 1024;
+    budget.maxDynamicAssembleOutcastMem = 0;
+    EXPECT_EQ(budget.MaxOutcastMem(), 1024u);
+    EXPECT_EQ(budget.BoundaryAndInnerTemporalOutcastSlotNum(), 12u);
+    EXPECT_EQ(budget.MaxOutcastMem() * budget.BoundaryAndInnerTemporalOutcastSlotNum(), 12u * 1024);
 }

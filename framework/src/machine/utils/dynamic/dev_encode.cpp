@@ -2664,6 +2664,17 @@ void EncodeDevAscendProgramFull(
 
     StitchDepthConfig depthConfig = ResolveStitchDepthConfig(wsDesc, runtimeCfg);
     ApplyStitchDepthConfig(base, wsDesc, depthConfig, encodeInfo.dyndevAttr->inoutLink.totalSlot);
+
+    const uint32_t estimatedStitching = ConfiguredStitchFunctionMaxNum() * wsDesc.maxUnrollTimes;
+    const uint64_t ctrlFlowSlotBackupCount = EstimateCtrlFlowCacheSlottedBlockCount(
+        encodeInfo.dyndevAttr->inoutLink.totalSlot,
+        std::min(estimatedStitching, depthConfig.stitchMaxFunctionNum));
+    ASSERT(DevCommonErr::PARAM_CHECK_FAILED,
+        ctrlFlowSlotBackupCount >= wsDesc.devTaskBoundaryOutcastNum + wsDesc.devTaskInnerTemporalOutcastNum)
+        << "Control flow cache slot backup capacity is smaller than boundary outcast slot budget, backup="
+        << ctrlFlowSlotBackupCount << ", boundary=" << wsDesc.devTaskBoundaryOutcastNum
+        << ", innerTemporal=" << wsDesc.devTaskInnerTemporalOutcastNum;
+
     RebuildableAttributeManager::GetInstance().ResetAttr<RebuildableWorkspaceDesc>(func, &wsDesc);
 
     base->devArgs.machineConfig = func->paramConfigs_.machineConfig_;

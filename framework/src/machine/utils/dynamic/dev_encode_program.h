@@ -59,19 +59,22 @@ struct DevAscendProgram {
             //      MaxOutcastMem() * devTaskBoundaryOutcastNum
             uint64_t maxStaticOutcastMem{0};
             uint64_t maxDynamicAssembleOutcastMem{0};
-            uint64_t devTaskBoundaryAndInnerTemporalOutcastNum{0};
+            uint64_t devTaskBoundaryOutcastNum{0};
+            uint64_t devTaskInnerTemporalOutcastNum{0};
 
             uint32_t parallelism{1};
 
             uint64_t MaxOutcastMem() const { return std::max(maxStaticOutcastMem, maxDynamicAssembleOutcastMem); }
 
+            uint64_t BoundaryAndInnerTemporalOutcastSlotNum() const
+            {
+                return devTaskBoundaryOutcastNum + devTaskInnerTemporalOutcastNum;
+            }
+
             uint64_t Total() const
             {
-                uint64_t total =
-                    rootInnerSpilledMem +           // root func inner tensors
-                    devTaskInnerExclusiveOutcasts + // root func outcasts & non-dassemble-dst & DeviceTask inner tensors
-                    MaxOutcastMem() * devTaskBoundaryAndInnerTemporalOutcastNum; // root func outcasts & non-dassemble-dst & DeviceTask
-                                                                 // boundary outcasts
+                uint64_t total = rootInnerSpilledMem + devTaskInnerExclusiveOutcasts +
+                                 MaxOutcastMem() * BoundaryAndInnerTemporalOutcastSlotNum();
                 return AlignUp(total, ALIGNMENT_32K) * parallelism;
             }
         } tensor;

@@ -169,6 +169,7 @@ struct DevControlFlowCacheRuntime {
             SeqWsAllocator rootInner;
             SeqWsAllocator devTaskInnerExclusiveOutcasts;
             WsSlotAllocator devTaskBoundaryOutcasts;
+            WsSlotAllocator devTaskInnerTemporalOutcasts;
             DevRelocVector<WsSlotAllocator::BlockHeader> slottedOutcastsBlockList;
         } tensorAllocators[SCH_DEVTASK_MAX_PARALLELISM];
         DevRelocVector<ItemPool<RuntimeOutcastTensor>::ItemBlock> runtimeOutcastTensorPool;

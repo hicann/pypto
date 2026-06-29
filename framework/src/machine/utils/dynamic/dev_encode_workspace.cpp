@@ -52,12 +52,11 @@ uint32_t ParseUnrollTimesFromName(const std::string& rawName)
         }
         std::string suffix = rawName.substr(unrollPos + unrollMask.length());
         if (!suffix.empty() && std::isdigit(static_cast<unsigned char>(suffix.front()))) {
-            try {
-                unrollTimes *= static_cast<uint32_t>(std::stoi(suffix));
-            } catch (const std::invalid_argument&) {
-                MACHINE_LOGE(DevCommonErr::PARAM_INVALID, "Invalid unroll times: %s", suffix.c_str());
-            } catch (const std::out_of_range&) {
-                MACHINE_LOGE(DevCommonErr::PARAM_INVALID, "Unroll times: %s exceeds int range", suffix.c_str());
+            int value = 0;
+            char* endPtr = nullptr;
+            value = static_cast<int>(strtol(suffix.c_str(), &endPtr, 10));
+            if (endPtr != suffix.c_str() && value > 0) {
+                unrollTimes *= static_cast<uint32_t>(value);
             }
         }
     }
@@ -121,8 +120,8 @@ void ApplyTensorWorkspaceResult(DevAscendProgram* devProg, const WorkspaceDesc& 
     devProg->memBudget.tensor.rootInnerSpilledMem = wsDesc.maxRootInnerSpilledMem;
     devProg->memBudget.tensor.devTaskInnerExclusiveOutcasts = wsDesc.maxRootTotalExclusiveOutcastMem;
     devProg->memBudget.tensor.maxStaticOutcastMem = wsDesc.maxStaticOutcastMem;
-    devProg->memBudget.tensor.devTaskBoundaryAndInnerTemporalOutcastNum =
-        wsDesc.devTaskBoundaryOutcastNum + wsDesc.devTaskInnerTemporalOutcastNum;
+    devProg->memBudget.tensor.devTaskBoundaryOutcastNum = wsDesc.devTaskBoundaryOutcastNum;
+    devProg->memBudget.tensor.devTaskInnerTemporalOutcastNum = wsDesc.devTaskInnerTemporalOutcastNum;
     devProg->memBudget.aicoreSpilled.perCoreSpilledMem = wsDesc.maxLeafPerCoreSpilledMem;
     devProg->memBudget.metadata.dynamicCellMatchSlotNum = wsDesc.cellMatch.dynamicCellMatchSlotNum;
 }

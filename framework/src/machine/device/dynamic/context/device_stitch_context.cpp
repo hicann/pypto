@@ -193,7 +193,7 @@ void DeviceStitchContext::DecideSlotAddress(DeviceExecuteSlot* slotList, size_t 
             workspace_->GetRuntimeOutcastTensor(slot.rtOutcastIter).property ==
                 RuntimeTensorMemProperty::DEVTASK_INNER_OUTCAST) {
             workspace_->RuntimeOutcastTensorReplaceAddrWithoutRecycle(
-                slot.rtOutcastIter, workspace_->AllocateSlot(), RuntimeTensorMemProperty::BOUNDARY_OUTCAST);
+                slot.rtOutcastIter, workspace_->AllocateBoundaryOutcastSlot(), RuntimeTensorMemProperty::BOUNDARY_OUTCAST);
         }
     }
 #endif // !DEBUG_INFINITE_LIFETIME
@@ -437,7 +437,7 @@ uint64_t DeviceStitchContext::FullCoverDefaultUpdateStitch(
     auto expressionList = &nextDup.GetExpression(0);
     auto& cellMatchTableDesc = outcast.cellMatchTableDesc;
     size_t tableSize = outcast.cellMatchRuntimeFullUpdateTable.size();
-    if(tableSize == 0) {
+    if (tableSize == 0) {
         return 0;
     }
     auto fullUpdateTableData = &prevSrc->At(outcast.cellMatchRuntimeFullUpdateTable, 0);

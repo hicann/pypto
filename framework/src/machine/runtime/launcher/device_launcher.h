@@ -239,7 +239,10 @@ public:
         MACHINE_LOGI(
             "[workspaceSize] Tensor:rootInnerSpilledMem=%lu, devTaskInnerOutCasts=%lu, slotted=%lux%lu(slots).",
             devProg->memBudget.tensor.rootInnerSpilledMem, devProg->memBudget.tensor.devTaskInnerExclusiveOutcasts,
-            devProg->memBudget.tensor.MaxOutcastMem(), devProg->memBudget.tensor.devTaskBoundaryAndInnerTemporalOutcastNum);
+            devProg->memBudget.tensor.MaxOutcastMem(), devProg->memBudget.tensor.BoundaryAndInnerTemporalOutcastSlotNum());
+        MACHINE_LOGI(
+            "[workspaceSize] OutcastSlots: boundary=%lu, innerTemporal=%lu.",
+            devProg->memBudget.tensor.devTaskBoundaryOutcastNum, devProg->memBudget.tensor.devTaskInnerTemporalOutcastNum);
     }
 
     static void FillSwimLaneEnableInfo(ToSubMachineConfig &toSubMachineConfig) {

@@ -122,6 +122,11 @@ public:
 
     uint64_t SlotByteSize() const { return slotStandardMemReq_; }
 
+    bool ContainsPtr(uintdevptr_t ptr) const
+    {
+        return workspaceAddr_ <= ptr && ptr < workspaceAddr_ + slotNum_ * slotStandardMemReq_;
+    }
+
     void DumpMemoryUsage(const char* hint) const
     {
 #if DEBUG_MEM_DUMP_LEVEL >= DEBUG_MEM_DUMP_LIGHT

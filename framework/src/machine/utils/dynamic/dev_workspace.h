@@ -137,7 +137,10 @@ private:
         // allocation of inner workspace will never fail
 
         // check if reallocated-assemble-slots and the stitch-ending slotMem (secondary allocation) can be allocated
-        if (devProg_->slottableOutcastSlotSize > tensorAllocators_[curParallelWsId].devTaskBoundaryOutcasts.AvailableSlots()) {
+        auto& boundaryPool = tensorAllocators_[curParallelWsId].devTaskBoundaryOutcasts;
+        auto& innerTemporalPool = tensorAllocators_[curParallelWsId].devTaskInnerTemporalOutcasts;
+        if (devProg_->slottableOutcastSlotSize >
+            boundaryPool.AvailableSlots() + innerTemporalPool.AvailableSlots()) {
             return false;
         }
 
@@ -197,20 +200,16 @@ public:
     uint64_t DynamicCellMatchSlotByteSize() const { return devProg_->memBudget.metadata.maxDynamicCellMatchTableMem; }
     uint64_t DynamicCellMatchSlotCellCapacity() const { return DynamicCellMatchSlotByteSize() / sizeof(uint64_t); }
 
-    WsAllocation AllocateSlot([[maybe_unused]] const char* rootFuncName = nullptr)
+    WsAllocation AllocateBoundaryOutcastSlot([[maybe_unused]] const char* rootFuncName = nullptr)
     {
-        WsAllocation allocation;
-#if !DEBUG_INFINITE_LIFETIME
-        allocation = tensorAllocators_[curParallelWsId].devTaskBoundaryOutcasts.Allocate();
-        allocation.parallelWsId = curParallelWsId;
-#else
-        allocation = DebugDumpTensorAllocate(
-            tensorAllocators_[curParallelWsId].devTaskBoundaryOutcasts.SlotByteSize(), WsMemCategory::TENSOR_ROOTFUNC_OUTCAST_SLOT);
-#endif
-#if DEBUG_MEM_DUMP_LEVEL >= DEBUG_MEM_DUMP_FULL
-        wsMemDelayedDumper_.LogTensorMalloc(rootFuncName == nullptr ? "unspecified_root" : rootFuncName, allocation);
-#endif // DEBUG_MEM_DUMP_LEVEL >= DEBUG_MEM_DUMP_FULL
-        return allocation;
+        return AllocateFromOutcastSlotPool(
+            tensorAllocators_[curParallelWsId].devTaskBoundaryOutcasts, rootFuncName);
+    }
+
+    WsAllocation AllocateInnerTemporalOutcastSlot([[maybe_unused]] const char* rootFuncName = nullptr)
+    {
+        return AllocateFromOutcastSlotPool(
+            tensorAllocators_[curParallelWsId].devTaskInnerTemporalOutcasts, rootFuncName);
     }
 
     ItemPoolIter MakeRuntimeOutcastTensor(WsAllocation allocation, RuntimeTensorMemProperty property)
@@ -420,6 +419,23 @@ private:
     bool DeviceTaskMemTryRecycle();
 
 private:
+    WsAllocation AllocateFromOutcastSlotPool(
+        WsSlotAllocator& pool, [[maybe_unused]] const char* rootFuncName = nullptr)
+    {
+        WsAllocation allocation;
+#if !DEBUG_INFINITE_LIFETIME
+        allocation = pool.Allocate();
+        allocation.parallelWsId = curParallelWsId;
+#else
+        allocation = DebugDumpTensorAllocate(
+            devProg_->memBudget.tensor.MaxOutcastMem(), WsMemCategory::TENSOR_ROOTFUNC_OUTCAST_SLOT);
+#endif
+#if DEBUG_MEM_DUMP_LEVEL >= DEBUG_MEM_DUMP_FULL
+        wsMemDelayedDumper_.LogTensorMalloc(rootFuncName == nullptr ? "unspecified_root" : rootFuncName, allocation);
+#endif // DEBUG_MEM_DUMP_LEVEL >= DEBUG_MEM_DUMP_FULL
+        return allocation;
+    }
+
     uint32_t curParallelWsId{0};
 #if DEBUG_MEM_DUMP_LEVEL >= DEBUG_MEM_DUMP_FULL
     DelayedDumper wsMemDelayedDumper_;
