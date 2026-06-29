@@ -62,11 +62,16 @@ bool HasNegativeDimAfterFirst(const LogicalTensorPtr& tensor)
     return shape.size() > 1 && std::any_of(shape.begin() + 1, shape.end(), [](int dim) { return dim < 0; });
 }
 
-// BMM场景只支持incast的最高轴为动轴
-bool HasNegativeDimAfterFirstIncast(const Function& function)
+// BMM场景只支持incast和outcast的最高轴为动轴，否则会插入registercopy
+bool HasNegativeDimAfterFirstCast(const Function& function)
 {
     for (const auto& incast : function.GetIncast()) {
         if (HasNegativeDimAfterFirst(incast)) {
+            return true;
+        }
+    }
+    for (const auto& outcast : function.GetOutcast()) {
+        if (HasNegativeDimAfterFirst(outcast)) {
             return true;
         }
     }
@@ -383,7 +388,7 @@ Status InferMemoryConflict::MatchReshapePattern(
             formatStr.c_str());
         return FAILED;
     }
-    if (!reshapeIn || !reshapeOut || HasNegativeDimAfterFirstIncast(function)) {
+    if (!reshapeIn || !reshapeOut || HasNegativeDimAfterFirstCast(function)) {
         return SUCCESS;
     }
     Shape inRawShape = reshapeIn->GetRawTensor()->GetRawShape();

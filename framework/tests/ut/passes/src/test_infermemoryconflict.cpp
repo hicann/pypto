@@ -1291,5 +1291,135 @@ TEST_F(InferMemoryConflictTest, STest6)
     EXPECT_EQ(status, FAILED);
 }
 
+/*
+BMM_OnlyIncastContainsMoreThanOneDyn
+incast 为多维动态 shape {-1, -1, 128}，View->Reshape->MatMul 场景
+HasNegativeDimAfterFirstCast 返回 true，应插入 register copy
+incast 与 outcast 同 shape size (均为 3D)，outcast 仅第0轴为-1
+
+t1(incast{-1,-1,128}) -> VIEW -> t2{1,64,128} -> RESHAPE(R1) -> t3{64,128}
+t4{64,64} -----------+-> A_MUL_B(t3,t4) -> t6{64,64} -> RESHAPE(R2) -> t7{1,64,64} -> ASSEMBLE -> o1{-1,64,64}
+t5{64,64} -----------+-> A_MUL_B(t3,t5) -> t8{64,64} -> RESHAPE(R3) -> t9{1,64,64} -> ASSEMBLE -> o2{-1,64,64}
+*/
+TEST_F(InferMemoryConflictTest, BMM_OnlyIncastContainsMoreThanOneDyn)
+{
+    ComputationalGraphBuilder G;
+    G.AddTensor(DataType::DT_FP32, {-1, -1, 128}, "t1");
+    G.AddTensor(DataType::DT_FP32, {1, 64, 128}, "t2");
+    G.AddTensor(DataType::DT_FP32, {64, 128}, "t3");
+    G.AddTensor(DataType::DT_FP32, {64, 64}, "t4");
+    G.AddTensor(DataType::DT_FP32, {64, 64}, "t5");
+    G.AddTensor(DataType::DT_FP32, {64, 64}, "t6");
+    G.AddTensor(DataType::DT_FP32, {1, 64, 64}, "t7");
+    G.AddTensor(DataType::DT_FP32, {64, 64}, "t8");
+    G.AddTensor(DataType::DT_FP32, {1, 64, 64}, "t9");
+    G.AddTensor(DataType::DT_FP32, {-1, 64, 64}, "o1");
+    G.AddTensor(DataType::DT_FP32, {-1, 64, 64}, "o2");
+
+    G.AddOp(Opcode::OP_VIEW, {"t1"}, {"t2"}, "V1");
+    G.AddOp(Opcode::OP_RESHAPE, {"t2"}, {"t3"}, "R1");
+    G.AddOp(Opcode::OP_A_MUL_B, {"t3", "t4"}, {"t6"}, "MUL1");
+    G.AddOp(Opcode::OP_RESHAPE, {"t6"}, {"t7"}, "R2");
+    G.AddOp(Opcode::OP_ASSEMBLE, {"t7"}, {"o1"}, "ASM1");
+    G.AddOp(Opcode::OP_A_MUL_B, {"t3", "t5"}, {"t8"}, "MUL2");
+    G.AddOp(Opcode::OP_RESHAPE, {"t8"}, {"t9"}, "R3");
+    G.AddOp(Opcode::OP_ASSEMBLE, {"t9"}, {"o2"}, "ASM2");
+
+    G.SetInCast({"t1", "t4", "t5"});
+    G.SetOutCast({"o1", "o2"});
+
+    auto currFunctionPtr = G.GetFunction();
+    InferMemoryConflict pass;
+    auto status = pass.RunOnFunction(*currFunctionPtr);
+    EXPECT_EQ(status, SUCCESS);
+
+    EXPECT_EQ(CountRegisterCopy(currFunctionPtr), NUM_3);
+}
+
+/*
+BMM_OnlyOutcastContainsMoreThanOneDyn
+outcast 为多维动态 shape {-1, -1, 64}，MatMul->Reshape->Assemble->outcast 场景
+HasNegativeDimAfterFirstCast 返回 true，应插入 register copy
+incast 与 outcast 同 shape size (均为 3D)，incast 仅第0轴为-1
+
+t1(incast{-1,64,64}) -> RESHAPE -> t2{64,64}
+                                          +-> A_MUL_B -> t5{64,64} -> RESHAPE(R3) -> t6{1,64,64} -> ASSEMBLE ->
+o1{-1,-1,64} t3(incast{-1,64,64}) -> RESHAPE -> t4{64,64}
+*/
+TEST_F(InferMemoryConflictTest, BMM_OnlyOutcastContainsMoreThanOneDyn)
+{
+    ComputationalGraphBuilder G;
+    G.AddTensor(DataType::DT_FP32, {-1, 64, 64}, "t1");
+    G.AddTensor(DataType::DT_FP32, {64, 64}, "t2");
+    G.AddTensor(DataType::DT_FP32, {-1, 64, 64}, "t3");
+    G.AddTensor(DataType::DT_FP32, {64, 64}, "t4");
+    G.AddTensor(DataType::DT_FP32, {64, 64}, "t5");
+    G.AddTensor(DataType::DT_FP32, {1, 64, 64}, "t6");
+    G.AddTensor(DataType::DT_FP32, {-1, -1, 64}, "o1");
+
+    G.AddOp(Opcode::OP_RESHAPE, {"t1"}, {"t2"}, "R1");
+    G.AddOp(Opcode::OP_RESHAPE, {"t3"}, {"t4"}, "R2");
+    G.AddOp(Opcode::OP_A_MUL_B, {"t2", "t4"}, {"t5"}, "MUL1");
+    G.AddOp(Opcode::OP_RESHAPE, {"t5"}, {"t6"}, "R3");
+    G.AddOp(Opcode::OP_ASSEMBLE, {"t6"}, {"o1"}, "ASM1");
+
+    G.SetInCast({"t1", "t3"});
+    G.SetOutCast({"o1"});
+
+    auto currFunctionPtr = G.GetFunction();
+    InferMemoryConflict pass;
+    auto status = pass.RunOnFunction(*currFunctionPtr);
+    EXPECT_EQ(status, SUCCESS);
+
+    EXPECT_EQ(CountRegisterCopy(currFunctionPtr), NUM_3);
+}
+
+/*
+BMM_IncastAndOutcastOnlyOneDyn
+incast 与 outcast 均为 4D shape，仅最高轴为动轴，raw shape 为具体值，
+View->Reshape(4D->2D)->MatMul->Reshape(2D->4D)->Assemble 场景。
+HasNegativeDimAfterFirstCast 返回 false，4D->2D 和 2D->4D pattern 均匹配，不插入 register copy
+incast 与 outcast 同 shape size (均为 4D)
+
+t1(incast{-1,1,64,128}) -> VIEW -> t2{1,1,64,128} -> RESHAPE(R1) -> t3{64,128}
+t4{128,64} -------+-> A_MUL_B(t3,t4) -> t6{64,64} -> RESHAPE(R2) -> t7{1,1,64,64} -> ASSEMBLE -> o1{-1,1,64,64}
+t5{128,64} -------+-> A_MUL_B(t3,t5) -> t8{64,64} -> RESHAPE(R3) -> t9{1,1,64,64} -> ASSEMBLE -> o2{-1,1,64,64}
+*/
+TEST_F(InferMemoryConflictTest, BMM_IncastAndOutcastOnlyOneDyn)
+{
+    ComputationalGraphBuilder G;
+    G.AddTensor(DataType::DT_FP32, {-1, 1, 64, 128}, "t1");
+    G.AddTensor(DataType::DT_FP32, {1, 1, 64, 128}, "t2");
+    G.AddTensor(DataType::DT_FP32, {64, 128}, "t3");
+    G.AddTensor(DataType::DT_FP32, {128, 64}, "t4");
+    G.AddTensor(DataType::DT_FP32, {128, 64}, "t5");
+    G.AddTensor(DataType::DT_FP32, {64, 64}, "t6");
+    G.AddTensor(DataType::DT_FP32, {1, 1, 64, 64}, "t7");
+    G.AddTensor(DataType::DT_FP32, {64, 64}, "t8");
+    G.AddTensor(DataType::DT_FP32, {1, 1, 64, 64}, "t9");
+    G.AddTensor(DataType::DT_FP32, {-1, 1, 64, 64}, "o1");
+    G.AddTensor(DataType::DT_FP32, {-1, 1, 64, 64}, "o2");
+
+    G.GetTensor("t1")->tensor->UpdateRawShape({8, 1, 64, 128});
+
+    G.AddOp(Opcode::OP_VIEW, {"t1"}, {"t2"}, "V1");
+    G.AddOp(Opcode::OP_RESHAPE, {"t2"}, {"t3"}, "R1");
+    G.AddOp(Opcode::OP_A_MUL_B, {"t3", "t4"}, {"t6"}, "MUL1");
+    G.AddOp(Opcode::OP_RESHAPE, {"t6"}, {"t7"}, "R2");
+    G.AddOp(Opcode::OP_ASSEMBLE, {"t7"}, {"o1"}, "ASM1");
+    G.AddOp(Opcode::OP_A_MUL_B, {"t3", "t5"}, {"t8"}, "MUL2");
+    G.AddOp(Opcode::OP_RESHAPE, {"t8"}, {"t9"}, "R3");
+    G.AddOp(Opcode::OP_ASSEMBLE, {"t9"}, {"o2"}, "ASM2");
+
+    G.SetInCast({"t1", "t4", "t5"});
+    G.SetOutCast({"o1", "o2"});
+
+    auto currFunctionPtr = G.GetFunction();
+    InferMemoryConflict pass;
+    auto status = pass.RunOnFunction(*currFunctionPtr);
+    EXPECT_EQ(status, SUCCESS);
+
+    EXPECT_EQ(CountRegisterCopy(currFunctionPtr), NUM_ZERO);
+}
 } // namespace tile_fwk
 } // namespace npu
