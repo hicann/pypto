@@ -37,6 +37,14 @@ static std::string FileName(const std::string& path)
     }
 }
 
+uint64_t GetBinSize(std::string path)
+{
+    std::ifstream file(path, std::ios::binary | std::ios::ate);
+    uint64_t fileSize = file.tellg();
+    file.close();
+    return fileSize;
+}
+
 void DynPvModelImpl::Run(DynFuncData* funcDataList, int coreId, int funcId, int taskId)
 {
     SIMULATION_LOGI("[AICORE] core  %d, func %d, task %d", coreId, funcId, taskId);
@@ -59,10 +67,11 @@ void DynPvModelImpl::RunModel(PvModelCceBin* cce, DynFuncData* funcdata, uint64_
 {
     auto binName = FileName(cce->binPath);
     this->subcoreId_ = binName.find("aiv") != std::string::npos ? static_cast<uint64_t>(1) : static_cast<uint64_t>(0);
-    uint32_t binAddr = 0xffffc000;
-    pv_launch_sub_core_(binAddr, cce->binPath.c_str(), subcoreId_, coreId_);
+    pv_launch_sub_core_(binAddr_, cce->binPath.c_str(), subcoreId_, coreId_);
     pv_reg_write_(
-        static_cast<uint32_t>(PV_REG_SPR), PV_REG_PC, reinterpret_cast<uint8_t*>(&binAddr), subcoreId_, coreId_);
+        static_cast<uint32_t>(PV_REG_SPR), PV_REG_PC, reinterpret_cast<uint8_t*>(&binAddr_), subcoreId_, coreId_);
+    uint64_t binSize = GetBinSize(cce->binPath);
+    binAddr_ += binSize;
 
     pv_mem_write_(
         PV_MEM_GM, reinterpret_cast<uint64_t>(funcdata), sizeof(DynFuncData), reinterpret_cast<uint8_t*>(funcdata),

@@ -189,7 +189,9 @@ private:
 
     void RunDynamic(const std::vector<RawTensorDataPtr>& inputs, const std::vector<RawTensorDataPtr>& outputs)
     {
-        if (function_ == nullptr || function_->GetDyndevAttribute() == nullptr) {
+        if (function_ == nullptr || function_->GetDyndevAttribute() == nullptr ||
+            config::GetRuntimeOption<int64_t>(CFG_RUN_MODE) != CFG_RUN_MODE_SIM) {
+            SIMULATION_LOGI("function is invalid or run mode is not simulation");
             return;
         }
         RunModel(inputs, outputs);
@@ -248,9 +250,6 @@ private:
 
     void RunDynCostModel()
     {
-        if (config::GetRuntimeOption<int64_t>(CFG_RUN_MODE) != CFG_RUN_MODE_SIM) {
-            return;
-        }
         config::SetSimConfig(KEY_SIM_MODE, CostModel::SimMode::NORMAL);
         CostModelAgent costModelAgent;
 
@@ -264,21 +263,24 @@ private:
     void RunPvModel(DeviceKernelArgs& kArgs, const std::vector<RawTensorDataPtr>& inputs,
         const std::vector<RawTensorDataPtr>& outputs)
     {
-        if (config::GetRuntimeOption<int64_t>(CFG_RUN_MODE) != CFG_RUN_MODE_SIM ||
-            std::getenv("ASCEND_HOME_PATH") == nullptr) {
+        if (std::getenv("ASCEND_HOME_PATH") == nullptr) {
+            SIMULATION_LOGE(CostModel::PrecisionSimErrorScene::CANN_LOAD_FAILED, "ASCEND_HOME_PATH is not set, precision simulation unavailable.");
             return;
         }
         
         auto archType = npu::tile_fwk::Platform::Instance().GetSoc().GetNPUArch();
-        if (archType != NPUArch::DAV_2201) {
-            return;
+        if (archType == NPUArch::DAV_3510) {
+            if (std::getenv("CAMODEL_LOG_PATH") == nullptr) {
+                SIMULATION_LOGE(CostModel::PrecisionSimErrorScene::CANNSIM_FAILED,
+                    "cannsim not used to start, precision simulation unavailable.");
+                return;
+            }
         }
         
         try {
             pv_ = CostModel::PvModelFactory::CreateDyn();
             pv_->InitPv();
         } catch (const std::runtime_error& e) {
-            SIMULATION_LOGE(CostModel::PrecisionSimErrorScene::NO_SO_EXISTS, "pv init fail.");
             return;
         }
         model_ = std::make_shared<AiCorePvModelImpl>(pv_);
