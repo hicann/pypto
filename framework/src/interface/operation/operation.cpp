@@ -412,6 +412,17 @@ void Operation::DumpOperandsJson(Json& opDump, bool dumpTensor) const
     }
     opDump["ioperands"] = ioperandsDump;
     opDump["ooperands"] = ooperandsDump;
+    
+    Json itokensDump = Json::array();
+    for (const auto& token : tokens_) {
+        itokensDump.push_back(token->name_);
+    }
+    Json otokensDump = Json::array();
+    if (result_token_ != nullptr) {
+        otokensDump.push_back(result_token_->name_);
+    }
+    opDump["itokens"] = itokensDump;
+    opDump["otokens"] = otokensDump;
 }
 
 void Operation::DumpCalleeHashJson(Json& opDump) const
