@@ -23,7 +23,7 @@ description: 当需要设计 PyPTO 算子实现方案时使用。通过迭代式
 | API 探索报告 | 否 | API 可用性（缺失时在第 1 轮自行查 `docs/`） |
 | Golden 参考实现 | 否 | 辅助理解计算逻辑 |
 
-**输出**：`DESIGN.md`，以 [templates/design-template.md](templates/design-template.md) 为结构参考，**直接 Write 到新路径一次成文**；禁止 `cp` 模板再编辑——`cp` 在工具层外预先建文件，会触发 Read-before-Write 拒绝并导致整篇文档重复生成。
+**输出**：`DESIGN.md`，以 [templates/design-template.md](templates/design-template.md) 为结构参考，**直接 Write 到新路径一次成文**（保留模板原标题）；禁止 `cp` 模板再编辑——`cp` 在工具层外预先建文件，会触发 Read-before-Write 拒绝并导致整篇文档重复生成。
 
 ---
 

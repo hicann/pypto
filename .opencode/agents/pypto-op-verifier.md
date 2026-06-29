@@ -136,6 +136,8 @@ The active phase `M_k` is passed in the dispatch prompt for
 phase-scoped modes. Scaffolding and Composition verification do
 not take a phase argument.
 
+**Stage 6 final E2E mode:** if dispatched with **"kernel unchanged"** (`<op>_impl.py` hash unchanged since its Stage 5 verify), run **structure-only** — the layout/structure lint (OL44 trio, OL45/OL57, OL48, OL52, OL19) + structure confirmation, **NO `detailed_tensor_compare`**; the Stage 5 all_close evidence stands. Otherwise run the full E2E precision verify as today (L1 E2E-on-change unchanged).
+
 **Strict dispatch-mode invariants:**
 - If you are in **Scaffolding mode** and the dispatch prompt asks
   you to create any `modules/<op>_module*_golden.py` or
@@ -393,9 +395,9 @@ verification (see "Verdict format" below):
 
 **Phase scaffolding step C acceptance criterion:** the per-module test file exists, parses, binds correctly, and **the run produces a clear PASS/FAIL verdict** to feed into the per-Phase loop.
 
-## L0 single-shot gate (`module_count == 1`)
+## L0 Stage 5 verification (`module_count == 1`)
 
-When MEMORY.md says `module_count == 1`, you run the E2E gate **once** on `<op>_impl.py` — there are no per-Phase gates, no prefix evaluation, no module boundaries.
+When MEMORY.md says `module_count == 1`, Stage 5 is a single E2E precision verify on the coder's `<op>_impl.py` — there are no per-Phase gates, no prefix evaluation, no module boundaries, and no cleanup. PASS → Stage 5 done.
 
 1. Golden function inventory — every op marked ✅
 2. Write `custom/<op>/test_<op>.py` (imports `<op>_impl` and `<op>_golden`; compares all leaf outputs via `detailed_tensor_compare`, run on the NPU)

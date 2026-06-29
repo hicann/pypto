@@ -16,7 +16,7 @@ Before doing any module decomposition work, **read `module_count` from DESIGN.md
     - `module_count: 1`
     - Module decomposition table: 1 row (`M1`) covering the entire kernel; boundary tensor = final output(s); CU estimate from DESIGN.md §0.2
   - Skip the staged file chain (no `_module1.py → _module12.py → …`).
-  - Proceed directly to Stage 5 (skill `pypto-op-develop`) — produce one `custom/<op>/<op>_impl.py` directly. Verification (Stage 6) uses the L0 path in skill `pypto-op-verify`.
+  - Proceed directly to Stage 5 (skill `pypto-op-develop`) — produce one `custom/<op>/<op>_impl.py` directly. Verification (Stage 5) uses the L0 path in skill `pypto-op-verify`.
 
 - **If `module_count ≥ 2` (L1 path)**:
   - Continue with "Module Boundary Rules" and "Module Construction" below.

@@ -341,6 +341,23 @@ def check_ol13(ctx: CheckContext) -> Finding:
     return ctx.make_finding("OL13", "PASS", "Stage 5 cleanup 三件套完整")
 
 
+# module_count 来源: MEMORY.md (`module_count: 1`, construct skill 写) 为主,
+# DESIGN.md §0.3 Decision (`module_count = 1`) 为后备。两源都用 1 表示 L0 单模块。
+_MEMORY_MODULE_COUNT_RE = re.compile(r"module_count\s*:\s*(\d+)")
+_DESIGN_MODULE_COUNT_RE = re.compile(r"Decision\D+module_count\s*=\s*(\d+)")
+
+
+def _detect_module_count(ctx: CheckContext) -> int | None:
+    """检测 module_count（L0=1 / L1≥2）。无法判定时返回 None，调用方维持 L1 行为。"""
+    mem = _MEMORY_MODULE_COUNT_RE.search(ctx.read_file("MEMORY.md"))
+    if mem:
+        return int(mem.group(1))
+    design = _DESIGN_MODULE_COUNT_RE.search(ctx.read_file(DESIGN_FILE))
+    if design:
+        return int(design.group(1))
+    return None
+
+
 @register("OL44")
 def check_ol44(ctx: CheckContext) -> Finding:
     """Stage 5 当前 Phase 三件套：modules/<op>_module<k>_impl.py +
@@ -348,6 +365,9 @@ def check_ol44(ctx: CheckContext) -> Finding:
 
     从 .orchestrator_state.json 读取当前活跃 Phase
     （stage5_phases.active_phase），解析后缀后验证三件套是否存在。
+
+    L0 单模块（module_count == 1）：Stage 5 直接产出 <op>_impl.py，无
+    modules/ 目录，故跳过本规则。module_count 无法判定时维持 L1 行为。
     """
     state_path = ctx.file_path(".orchestrator_state.json")
     if not os.path.isfile(state_path):
@@ -371,6 +391,14 @@ def check_ol44(ctx: CheckContext) -> Finding:
         active_phase = s5.get("active_phase")
     if not active_phase:
         return ctx.make_finding("OL44", "SKIP", "stage5_phases 中未记录活跃 Phase M_k")
+
+    # L0 单模块: module_count == 1 时 Stage 5 直接产出 <op>_impl.py, 无 modules/
+    # 目录, 强制三件套会误伤 L0 算子。仅当确定为 L0 时跳过, 否则维持 L1 行为。
+    if _detect_module_count(ctx) == 1:
+        return ctx.make_finding(
+            "OL44", "SKIP",
+            "L0 single-module: modules/ not expected (module_count == 1)",
+        )
 
     # active_phase 是 phase 标识符 (M1 / M2 / M3 / …)。impl/golden/test
     # 文件命名遵循累积后缀约定 (M1→"1", M2→"12", M3→"123", …)；用

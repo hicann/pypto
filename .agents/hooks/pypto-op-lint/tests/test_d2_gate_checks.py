@@ -183,6 +183,52 @@ def test_ol14_fail_when_no_state_file(tmp_path: Path):
     assert finding.status == "FAIL"
 
 
+# ── OL44: Stage 5 活跃 Phase 三件套（L0 跳过，L1 强制） ──
+
+
+def _write_stage5_state(op_dir: Path, active_phase: str = "M1"):
+    state = {
+        "operator_name": "demo",
+        "max_stage": 7,
+        "current_stage": 5,
+        "stage_status": {"5": "in_progress"},
+        "stage5_phases": {
+            "active_phase": active_phase,
+            "phase_status": {active_phase: {"status": "in_progress", "cycles": 0}},
+        },
+    }
+    write_file(op_dir / ".orchestrator_state.json", json.dumps(state))
+
+
+def test_ol44_skip_for_l0_single_module(tmp_path: Path):
+    """L0 op (MEMORY.md module_count:1, active M1, no modules/) → SKIP, not FAIL."""
+    mod = load_lint_module()
+    op_dir = build_stateless_op_dir(tmp_path, "demo")
+    _write_stage5_state(op_dir)
+    write_file(op_dir / "MEMORY.md", "decomposition_level: L0\nmodule_count: 1\n")
+    finding = run_rule(mod, op_dir, "OL44", stage=5)
+    assert finding.status == "SKIP"
+
+
+def test_ol44_fail_for_l1_without_modules_dir(tmp_path: Path):
+    """L1 op (module_count:2, active M1, no modules/) keeps failing."""
+    mod = load_lint_module()
+    op_dir = build_stateless_op_dir(tmp_path, "demo")
+    _write_stage5_state(op_dir)
+    write_file(op_dir / "MEMORY.md", "decomposition_level: L1\nmodule_count: 2\n")
+    finding = run_rule(mod, op_dir, "OL44", stage=5)
+    assert finding.status == "FAIL"
+
+
+def test_ol44_fail_for_l1_when_module_count_unknown(tmp_path: Path):
+    """No MEMORY/DESIGN module_count → keep default L1 behavior (FAIL, no modules/)."""
+    mod = load_lint_module()
+    op_dir = build_stateless_op_dir(tmp_path, "demo")
+    _write_stage5_state(op_dir)
+    finding = run_rule(mod, op_dir, "OL44", stage=5)
+    assert finding.status == "FAIL"
+
+
 # ── OL24: 状态文件结构合法 ──
 
 def test_ol24_pass_when_state_valid(tmp_path: Path):

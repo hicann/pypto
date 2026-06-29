@@ -84,7 +84,9 @@ kernel code. The orchestrator does not edit kernel code in Stage 1–6.
 ### 5. pypto-op-coder — Stage 5
 
 Stage 5 is a per-module loop. The coder is dispatched once per phase
-M_k, and once more for the cleanup step after the last phase.
+M_k, and once more for the cleanup step after the last phase. **L0
+(`module_count == 1`):** dispatched once to write `<op>_impl.py` +
+README directly — no per-module loop, no cleanup.
 
 - **Inputs:** `DESIGN.md`, `module_interfaces.yaml`, `MEMORY.md`, current phase `M_k`.
 - **Per-phase deliverable (M_k):**
@@ -104,7 +106,9 @@ loading any debug sub-skill, calling `pypto_op_lint.py` manually.
 ### 6. pypto-op-verifier — Stages 4, 5, 6, 7 (judge-only)
 
 Verifier is dispatched in distinct **modes**, never as a general "review
-everything" agent. The orchestrator chooses the mode per dispatch.
+everything" agent. The orchestrator chooses the mode per dispatch. **L0
+(`module_count == 1`):** one single E2E precision verify at Stage 5 (no
+composition, no cleanup); the modes below are L1.
 
 - **Scaffolding mode (Step B):**
   Produce `custom/<op>/eval/test_inputs.py`,
@@ -123,6 +127,8 @@ everything" agent. The orchestrator chooses the mode per dispatch.
   shapes / tolerances.
 - **Stage 6 final E2E mode:** Run `detailed_tensor_compare` on every
   output of `<op>_impl.py` plus the final layout / structure lint gate.
+  If dispatched "kernel unchanged" (impl hash unchanged since Stage 5),
+  structure-only — skip `detailed_tensor_compare`; Stage 5 all_close stands.
 - **Stage 7 regression mode:** Re-run E2E + layout + perf-analyzer delta
   for each tuning change applied by the orchestrator. Reports adopt / regression / no-gain.
 
