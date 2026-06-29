@@ -218,6 +218,14 @@ void DynAttrToStatic::FilterSpecifiedValue(
     }
 }
 
+bool IsCopyFromL1(Opcode opcode)
+{
+    return opcode == Opcode::OP_L1_TO_L0A || opcode == Opcode::OP_L1_TO_L0B || opcode == Opcode::OP_L1_TO_L0_AT ||
+           opcode == Opcode::OP_L1_TO_L0_BT || opcode == Opcode::OP_L1_TO_FIX_QUANT_PRE ||
+           opcode == Opcode::OP_L1_TO_L0A_SCALE || opcode == Opcode::OP_L1_TO_L0B_SCALE ||
+           opcode == Opcode::OP_L1_TO_BT;
+}
+
 std::vector<std::reference_wrapper<SymbolicScalar>> DynAttrToStatic::GetOpDynamicAttributeList(Operation& op)
 {
     std::vector<std::reference_wrapper<SymbolicScalar>> dynamicAttributeList;
@@ -261,7 +269,7 @@ std::vector<std::reference_wrapper<SymbolicScalar>> DynAttrToStatic::GetOpDynami
         return dynamicAttributeList;
     }
 
-    if (OpcodeManager::Inst().IsCopyInOrOut(opcode)) {
+    if (OpcodeManager::Inst().IsCopyInOrOut(opcode) || IsCopyFromL1(opcode)) {
         auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(op.GetOpAttribute());
         if (copyAttr != nullptr) {
             FilterSpecifiedValue(copyAttr->GetToOffset(), dynamicAttributeList);
