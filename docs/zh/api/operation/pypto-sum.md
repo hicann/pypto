@@ -44,9 +44,7 @@ sum(input: Tensor, dim: int, keepdim: bool = False) -> Tensor
 
 1. TileShape大小不超过64KB；
 
-2. 尾轴要32bytes对齐；
-
-3. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
+2. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
 
 
 ## 调用示例
