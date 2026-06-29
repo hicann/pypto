@@ -2211,7 +2211,7 @@ static torch::Tensor InterleaveTensor(const torch::Tensor& src0, const torch::Te
 {
     std::vector<torch::Tensor> inputs = {src0, src1};
     auto interleavedShape = src0.sizes().vec();
-    interleavedShape.back() *= 2;
+    interleavedShape.back() *= 0x2;
     return torch::stack(inputs, -1).reshape(interleavedShape);
 }
 
@@ -2234,8 +2234,8 @@ static void DeInterleaveTensor(
     const std::pair<torch::Tensor, torch::Tensor>& out1, DataType out0Dtype, DataType out1Dtype)
 {
     auto lastDim = interleaved.size(-1);
-    ToOperand(interleaved.slice(-1, 0, lastDim, 2), out0.first, out0Dtype);
-    ToOperand(interleaved.slice(-1, 1, lastDim, 2), out1.first, out1Dtype);
+    ToOperand(interleaved.slice(-1, 0, lastDim, 0x2), out0.first, out0Dtype);
+    ToOperand(interleaved.slice(-1, 1, lastDim, 0x2), out1.first, out1Dtype);
 }
 
 static void DeInterleave(
@@ -3123,7 +3123,7 @@ static void StoreQuantMXScaling(float* scalingPtr, int64_t row, int64_t groupCol
 {
     const int64_t offset = row * groupCols * ctx.scalingFactor + group * ctx.scalingFactor;
     scalingPtr[offset] = scaling;
-    if (ctx.scalingFactor == 2) {
+    if (ctx.scalingFactor == 0x2) {
         scalingPtr[offset + 1] = scaling;
     }
 }
@@ -3226,7 +3226,7 @@ static QuantMXShapes BuildQuantMXShapes(
     ASSERT(CalculatorErrorScene::QUANTMX_RANK_INVALID, shapes.cols != 0)
         << "QuantMX input last dimension must not be zero.";
     if (!performanceMode) {
-        ASSERT(CalculatorErrorScene::QUANTMX_RANK_INVALID, shapes.cols % 64 == 0)
+        ASSERT(CalculatorErrorScene::QUANTMX_RANK_INVALID, shapes.cols % 0x40 == 0)
             << "QuantMX non-performance mode requires input last dimension to be a multiple of 64. Current last dim: "
             << shapes.cols;
     }
