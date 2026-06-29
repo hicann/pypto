@@ -38,6 +38,8 @@ pad(input: Tensor, pad: Sequence[int], mode: str = "constant", value: Union[floa
 3. mode当前**仅支持`'constant'`（常量填充）模式**，其他模式暂不支持。
 4. **整型类型不支持浮点值**：对于整型dtype（DT_INT8、DT_INT16、DT_INT32、DT_UINT8、DT_UINT16、DT_UINT32），`value`参数不支持传入float类型的值，PyPTO会抛出`ValueError`。如需填充整型的最小/最大值，请显式传入对应dtype的实际值（如`int32`填`-2147483648`，`int16`填`-32768`）。
 5. 如果`input`不是Tensor类型，或`pad`不是整数序列，将抛出`TypeError`。
+6. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
+
 
 
 ## 调用示例

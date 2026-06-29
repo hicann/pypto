@@ -29,6 +29,8 @@ exp2(input: Tensor) -> Tensor
 ## 约束说明
 
 1. input中的值域范围需要在\[-2^24, 2^24\]范围内，以确保在计算过程中能精确转换为float32。
+2. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
+
 
 
 ## 调用示例

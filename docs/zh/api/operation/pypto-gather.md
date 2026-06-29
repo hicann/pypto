@@ -46,6 +46,8 @@ gather(input: Tensor, dim: int, index: Tensor) -> Tensor
 
 4. TileShape的维度与index相同，用于切分input和index，input的dim轴不可切，且所有输入和输出的TileShape大小总和不能超过UB内存的大小。
 
+5. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
+
 
 ## 调用示例
 

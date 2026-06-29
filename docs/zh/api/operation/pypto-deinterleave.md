@@ -75,6 +75,8 @@ deinterleave(input: Tensor, other: Optional[Tensor] = None) -> Tuple[Tensor, Ten
 5. 当 TileShape 有效配置时，TileShape 维度应与输入 Tensor 维度一致。
 6. 双输入形式下，TileShape 最后一维必须与输入 Tensor 的 Shape 最后一维相等，即最后一维不能切分；其他维可按切分需求设置。
 7. 单输入形式下，TileShape 最后一维可以切分，但必须为偶数，以保证每个 Tile 内的偶数位置和奇数位置元素成对；其他维可按切分需求设置。
+8. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
+
 
 ## 调用示例
 

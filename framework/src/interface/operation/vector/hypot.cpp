@@ -117,6 +117,9 @@ LogicalTensorPtr TensorHypotOperation(Function& function, const Tensor& self, co
 Tensor Hypot(const Tensor& self, const Tensor& other)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Hypot");
+    CheckTensorFormat(other.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Hypot");
+
     CheckTensorsDataTypeConsistency(self.GetStorage(), other.GetStorage(), "HYPOT");
     std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_FP32};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "HYPOT");

@@ -38,6 +38,8 @@ sign(input: Tensor) -> Tensor
 
 1. TileShape与input维度保持一致；
 2. 由于存在临时内存使用，当输入数据类型为DT\_INT8，TileShape大小有额外约束，假设TileShape为\[a,b,c,d\]，那么a\*b\*c\*d\*sizeof\(self\) + c\*d\*sizeof\(INT8\) <UB。
+3. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
+
 
 
 ## 调用示例

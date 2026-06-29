@@ -53,6 +53,8 @@ $$
 1. min / max的类型必须一致，同时为Element或同时为Tensor。
 2. min / max为Tensor类型时，其Shape大小必须满足可以广播到输入的Shape。
 3. min和max支持同时缺省，返回原值。
+4. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
+
 
 
 ## 调用示例

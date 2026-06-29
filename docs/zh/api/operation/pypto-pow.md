@@ -38,6 +38,8 @@ pow(input: Tensor, other: Union[Tensor, int, float], precision_type: PrecisionTy
 
 1. 高精度模式当前仅在Ascend 950PR上有效，其他产品底层默认使用指令模式 `INTRINSIC`。
 2. 两个输入均为Tensor且输入类型为int8/uint8/int16时，两个输入参数数据类型需相同。
+3. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
+
 
 ## 数据类型提升说明
 

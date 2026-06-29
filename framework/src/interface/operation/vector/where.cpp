@@ -471,6 +471,10 @@ LogicalTensorPtr TensorWhereOperation(
 Tensor Where(const Tensor& condition, const Tensor& input, const Tensor& other)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(condition.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Where");
+    CheckTensorFormat(input.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Where");
+    CheckTensorFormat(other.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Where");
+
     static const std::unordered_set<DataType> conditionTypes = {DT_BOOL, DT_UINT8};
     CheckTensorDataType(condition.GetStorage(), conditionTypes, "WHERE");
     static const std::unordered_set<DataType> a2a3InputTypes = {DT_INT32, DT_INT16, DT_FP16, DT_FP32, DT_BF16};
@@ -492,6 +496,9 @@ Tensor Where(const Tensor& condition, const Tensor& input, const Tensor& other)
 Tensor Where(const Tensor& condition, const Tensor& input, const Element& otherValue)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(condition.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Where");
+    CheckTensorFormat(input.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Where");
+
     static const std::unordered_set<DataType> conditionTypes = {DT_BOOL, DT_UINT8};
     CheckTensorDataType(condition.GetStorage(), conditionTypes, "WHERE");
     static const std::unordered_set<DataType> a2a3InputTypes = {DT_INT32, DT_INT16, DT_FP16, DT_FP32, DT_BF16};
@@ -510,6 +517,9 @@ Tensor Where(const Tensor& condition, const Tensor& input, const Element& otherV
 Tensor Where(const Tensor& condition, const Element& inputValue, const Tensor& other)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(condition.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Where");
+    CheckTensorFormat(other.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Where");
+
     static const std::unordered_set<DataType> conditionTypes = {DT_BOOL, DT_UINT8};
     CheckTensorDataType(condition.GetStorage(), conditionTypes, "WHERE");
     static const std::unordered_set<DataType> a2a3InputTypes = {DT_INT32, DT_INT16, DT_FP16, DT_FP32, DT_BF16};
@@ -528,6 +538,8 @@ Tensor Where(const Tensor& condition, const Element& inputValue, const Tensor& o
 Tensor Where(const Tensor& condition, const Element& inputValue, const Element& otherValue)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(condition.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Where");
+
     static const std::unordered_set<DataType> conditionTypes = {DT_BOOL, DT_UINT8};
     CheckTensorDataType(condition.GetStorage(), conditionTypes, "WHERE");
     CheckTensorDimRange(condition.GetStorage(), 1, 4, "WHERE");

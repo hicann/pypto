@@ -37,6 +37,8 @@ cosh(input: Tensor) -> Tensor
     $$ 
     3*a*b*c*CeilAlign(d, 8)*sizeof(DT\_FP32) <= UB 
     $$。
+2. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
+
 
 
 ## 调用示例

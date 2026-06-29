@@ -212,6 +212,9 @@ static void CheckInterleaveTileShape(const Tensor& self, const char* opName, boo
 std::tuple<Tensor, Tensor> Interleave(const Tensor& self, const Tensor& other)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Interleave");
+    CheckTensorFormat(other.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Interleave");
+
     CheckSupportedNPUArch(INTERLEAVE_SUPPORTED_ARCHITECTURES, "Interleave");
     CheckInterleaveTileShape(self, "Interleave", true);
     auto shape = self.GetShape();
@@ -230,6 +233,9 @@ std::tuple<Tensor, Tensor> Interleave(const Tensor& self, const Tensor& other)
 std::tuple<Tensor, Tensor> DeInterleave(const Tensor& self, const Tensor& other)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "DeInterleave");
+    CheckTensorFormat(other.GetStorage(), {TileOpFormat::TILEOP_NZ}, "DeInterleave");
+
     CheckSupportedNPUArch(INTERLEAVE_SUPPORTED_ARCHITECTURES, "DeInterleave");
     CheckInterleaveTileShape(self, "DeInterleave", true);
     auto shape = self.GetShape();
@@ -247,6 +253,8 @@ std::tuple<Tensor, Tensor> DeInterleave(const Tensor& self, const Tensor& other)
 std::tuple<Tensor, Tensor> DeInterleave(const Tensor& self)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "DeInterleave");
+
     CheckSupportedNPUArch(INTERLEAVE_SUPPORTED_ARCHITECTURES, "DeInterleave");
     CheckInterleaveTileShape(self, "DeInterleave", false);
     auto shape = self.GetShape();

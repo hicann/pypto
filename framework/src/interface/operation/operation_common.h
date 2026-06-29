@@ -89,6 +89,8 @@ void CheckTensorsShapeConsistencyOrBroadcast(const std::vector<LogicalTensorPtr>
 void CheckTensorDataType(
     const LogicalTensorPtr& tensor, const std::unordered_set<DataType>& supportedTypes, const std::string& opName);
 void CheckTensorDataType(DataType dtype, const std::unordered_set<DataType>& supportedTypes, const std::string& opName);
+void CheckTensorFormat(
+    const LogicalTensorPtr& tensor, const std::unordered_set<TileOpFormat>& unsupportedFormats, const std::string& opName);
 void CheckSupportedNPUArch(const std::vector<NPUArch>& supportedArches, const std::string& opName);
 void CheckTensorsDataTypeConsistency(
     const LogicalTensorPtr& tensor1, const LogicalTensorPtr& tensor2, const std::string& opName);

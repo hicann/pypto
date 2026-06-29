@@ -434,6 +434,8 @@ static Tensor ProcessResultShape(const Tensor& result, const Tensor& self, int a
 Tensor Amax(const Tensor& self, int axis, bool keepDim)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Amax");
+
     std::unordered_set<DataType> supportedTypes;
     if (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510) {
         supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32, DT_INT8, DT_UINT8};
@@ -458,6 +460,8 @@ Tensor Amax(const Tensor& self, int axis, bool keepDim)
 Tensor ArgMax(const Tensor& self, int axis, bool keepDim)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "ArgMax");
+
     std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_FP32};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "ARGMAX");
     CheckTensorDimRange(self.GetStorage(), 1, 4, "ARGMAX");
@@ -484,6 +488,8 @@ Tensor ArgMax(const Tensor& self, int axis, bool keepDim)
 Tensor ArgMin(const Tensor& self, int axis, bool keepDim)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "ArgMin");
+
     std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_FP32};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "ARGMIN");
     CheckTensorDimRange(self.GetStorage(), 1, 4, "ARGMIN");
@@ -510,6 +516,8 @@ Tensor ArgMin(const Tensor& self, int axis, bool keepDim)
 Tensor Amin(const Tensor& self, int axis, bool keepDim)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Amin");
+
     std::unordered_set<DataType> supportedTypes;
     if (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510) {
         supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32, DT_INT8, DT_UINT8};
@@ -534,6 +542,8 @@ Tensor Amin(const Tensor& self, int axis, bool keepDim)
 Tensor Sum(const Tensor& self, int axis, bool keepDim)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Sum");
+
     std::unordered_set<DataType> supportedTypes = {DT_FP32, DT_BF16, DT_INT32, DT_INT16};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "SUM");
     CheckTensorDimRange(self.GetStorage(), 1, 4, "SUM");
@@ -553,6 +563,8 @@ Tensor Sum(const Tensor& self, int axis, bool keepDim)
 Tensor Prod(const Tensor& self, int axis, bool keepDim)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Prod");
+
     std::unordered_set<DataType> supportedTypes = {DT_FP32, DT_INT32, DT_INT16};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "PROD");
     CheckTensorDimRange(self.GetStorage(), 1, 4, "PROD");
@@ -639,6 +651,8 @@ void TiledReduceExpandNew(
 Tensor RowSumExpand(const Tensor& operand)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(operand.GetStorage(), {TileOpFormat::TILEOP_NZ}, "RowSumExpand");
+
     Tensor result(operand.GetStorage()->Datatype(), operand.GetShape());
     CALL(ReduceExpand, *Program::GetInstance().GetCurrentFunction(), "SUM", operand, result);
     return result;
@@ -647,6 +661,8 @@ Tensor RowSumExpand(const Tensor& operand)
 Tensor RowMaxExpand(const Tensor& operand)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(operand.GetStorage(), {TileOpFormat::TILEOP_NZ}, "RowMaxExpand");
+
     Tensor result(operand.GetStorage()->Datatype(), operand.GetShape());
     CALL(ReduceExpand, *Program::GetInstance().GetCurrentFunction(), "MAX", operand, result);
     return result;

@@ -50,6 +50,8 @@ amin(input: Tensor, dim: int, keepdim: bool = False) -> Tensor:
    - Ascend 950PR：DT_FP16，DT_BF16，DT_FP32，DT_INT32，DT_INT16，DT_UINT8，DT_INT8。
    - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_FP16，DT_BF16，DT_FP32，DT_INT32，DT_INT16
    - Atlas A2 训练系列产品/Atlas A2 推理系列产品：DT_FP16，DT_BF16，DT_FP32，DT_INT32，DT_INT16
+4. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
+
 
 ## 调用示例
 

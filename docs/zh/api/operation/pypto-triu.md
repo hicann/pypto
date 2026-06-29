@@ -27,6 +27,10 @@ triu(input: Tensor, diagonal: SymInt = 0) -> Tensor:
 
 输出Shape、数据类型与输入input一致的Tensor。
 
+## 约束说明
+
+1. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
+
 ## 调用示例
 
 ### TileShape设置示例

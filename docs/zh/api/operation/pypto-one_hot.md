@@ -31,6 +31,8 @@ one_hot(input: Tensor, num_classes: int) -> Tensor
 
 TileShape对输出切分，TileShape的维度与输出一致，TileShape的尾轴需等于num\_classes 。
 
+Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
+
 
 ## 调用示例
 

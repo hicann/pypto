@@ -191,6 +191,8 @@ LogicalTensorPtr TensorPadOperation(
 Tensor Pad(const Tensor& self, const std::vector<int64_t>& padding, std::string mode, const Element& value)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Pad");
+
     CheckTensorDimRange(self.GetStorage(), 1, 4, "PAD");
     CheckTensorShapeSize(self.GetStorage(), "PAD");
     std::unordered_set<DataType> supportedTypes = {DT_FP32,  DT_FP16,  DT_BF16,   DT_INT8,  DT_INT16,
@@ -216,6 +218,8 @@ LogicalTensorPtr TensorFillPadOperation(Function& function, const Tensor& self, 
 Tensor FillPad(const Tensor& self, std::string mode, const Element& value)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "FillPad");
+
     CheckTensorDimRange(self.GetStorage(), 1, 2, "FILLPAD");
     CheckTensorShapeSize(self.GetStorage(), "FILLPAD");
     std::unordered_set<DataType> supportedTypes = {DT_FP32,  DT_FP16,  DT_BF16,   DT_INT8,  DT_INT16,

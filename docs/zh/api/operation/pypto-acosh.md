@@ -37,6 +37,8 @@ acosh(input: Tensor) -> Tensor
    $$
    5*a*b*c*d_{align}*sizeof(DT\_FP32) <= UB
    $$
+2. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
+
 
 
 ## 调用示例

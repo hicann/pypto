@@ -31,6 +31,8 @@ atan2(y: Tensor, x: Tensor) -> Tensor
 
 1. y和x的数据类型应相同。
 2. 由于存在临时内存使用，TileShape大小需满足：若TileShape为\[a,b,c,d\]，那么7\*a\*b\*c\*d\*sizeof\(DT_FP32\) < UB。
+3. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
+
 
 
 ## 调用示例

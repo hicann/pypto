@@ -47,6 +47,8 @@ interleave(input: Tensor, other: Tensor) -> Tuple[Tensor, Tensor]
 3. 当前支持 1 到 4 维 Tensor。
 4. 最后一个维度的 Shape 必须为偶数。
 5. 当 TileShape 有效配置时，TileShape 维度应与输入 Tensor 维度一致，且最后一维必须与输入 Tensor 的 Shape 最后一维相等；其他维可按切分需求设置。
+6. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
+
 
 ## 调用示例
 

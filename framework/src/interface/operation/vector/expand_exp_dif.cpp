@@ -75,6 +75,9 @@ void TiledExpandExpDifOperation(
 Tensor ExpandExpDif(const Tensor& input, const Tensor& other)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(input.GetStorage(), {TileOpFormat::TILEOP_NZ}, "ExpandExpDif");
+    CheckTensorFormat(other.GetStorage(), {TileOpFormat::TILEOP_NZ}, "ExpandExpDif");
+
     CheckTensorsDataTypeConsistency(input.GetStorage(), other.GetStorage(), "EXPANDEXPDIF");
     std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_FP32};
     CheckTensorDataType(input.GetStorage(), supportedTypes, "EXPANDEXPDIF");

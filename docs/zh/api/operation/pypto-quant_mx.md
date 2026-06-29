@@ -50,6 +50,10 @@ quant_mx(
 - `quantized`：量化后的Tensor，数据类型由`quant_dtype`指定，Shape与`input`相同。
 - `scale`：共享指数Tensor，数据类型固定为DT_FP8E8M0，Shape为`[*input.shape[:-1], ceil(input.shape[-1] / 64), 2]`。
 
+## 约束说明
+
+1. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
+
 ## 调用示例
 
 ### TileShape设置示例

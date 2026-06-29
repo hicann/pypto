@@ -43,6 +43,8 @@ topk(input: Tensor, k: int, dim: Optional[int] = None, largest: bool = True, alg
 5. 选用RADIX_SELECT算法时，尾轴不可切分，TileShape\[-1\]必须大于等于input.shape\[-1\]；
 6. k <= TileShape\[-1\] && k <= input.shape\[-1\]；
 7. RADIX_SELECT算法仅支持Ascend 950PR；
+8. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
+
 
 ## 调用示例
 
