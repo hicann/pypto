@@ -1927,7 +1927,7 @@ def clip(
     if not isinstance(min, pypto_impl.Element) and isinstance(min, element_types):
         min = pypto_impl.Element(input.GetDataType(), min)
 
-    if not isinstance(max, pypto_impl.Element) and isinstance(min, element_types):
+    if not isinstance(max, pypto_impl.Element) and isinstance(max, element_types):
         max = pypto_impl.Element(input.GetDataType(), max)
 
     return pypto_impl.Clip(input, min, max)
