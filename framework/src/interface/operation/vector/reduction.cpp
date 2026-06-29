@@ -400,16 +400,9 @@ void TiledReduceSingle(
 static void ValidateReductionAxis(const Tensor& self, int axis)
 {
     CheckAxisRange(self, axis);
-
-    const int lastDim = self.GetShape().size() - 1;
-    const int alignNum = BLOCK_SIZE / BytesOf(self.GetStorage()->tensor->datatype);
     auto vecTile = TileShape::Current().GetVecTile();
     CHECK(VectorErrorCode::ERR_CONFIG_TILE, vecTile.valid())
             << "TileShape is no set for reduce op";
-    if (axis == lastDim) {
-        CHECK(VectorErrorCode::ERR_CONFIG_ALIGNMENT, vecTile[lastDim] % alignNum == 0)
-            << "Reduce op: the tileShape of last axis need to 32Byte align!";
-    }
 }
 
 static Tensor ProcessResultShape(const Tensor& result, const Tensor& self, int axis, bool keepDim)
