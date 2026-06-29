@@ -39,6 +39,8 @@ const int64_t BRCB_SECOND_LAST_BASE = 8;
 const size_t LAST_SECOND_AXIS = 2;
 const std::unordered_set<OpCalcType> ELEMENTWISE_LIKE_TYPES{
     OpCalcType::CAST, OpCalcType::ELMWISE, OpCalcType::MOVE_IN, OpCalcType::MOVE_OUT};
+// OP_VIEW_TYPE 当前不在白名单内，所在通路不支持合轴，合轴模式下不会对其进行倒数第二轴 pad
+const std::unordered_set<Opcode> shapeTransformOps{Opcode::OP_VIEW, Opcode::OP_ASSEMBLE, Opcode::OP_RESHAPE};
 // 设置原始 rawshape（替代 RawTensor::oriRawshape = rawshape）
 // 原始代码中 oriRawshape 是每次进入函数时都设置为当前 rawshape 值
 Shape& PadLocalBuffer::SetOriRawshape(LogicalTensorPtr& in)
@@ -503,12 +505,9 @@ void PadLocalBuffer::ProcessReduceForAxisCombine(Operation& op, LogicalTensorPtr
     }
 }
 
-bool PadLocalBuffer::IsElementwiseLikeOp(OpCalcType calcType, const Operation& op, Operation* producerOp) const
+bool PadLocalBuffer::IsElementwiseLikeOp(OpCalcType calcType, Operation* producerOp) const
 {
     if (ELEMENTWISE_LIKE_TYPES.find(calcType) != ELEMENTWISE_LIKE_TYPES.end()) {
-        return true;
-    }
-    if (op.GetOpcode() == Opcode::OP_VIEW) {
         return true;
     }
     if (producerOp != nullptr &&
@@ -580,11 +579,11 @@ void PadLocalBuffer::PadVectorForAxisCombine(
         AlignedRawTensorIfNeed(in, lastIdx - 1, paddingValue);
         return;
     }
-    if (op.GetOpcode() == Opcode::OP_RESHAPE) {
+    if (shapeTransformOps.count(op.GetOpcode()) != 0) {
         AlignedRawTensorIfNeed(in, lastIdx - 1, paddingValue);
         return;
     }
-    if (IsElementwiseLikeOp(calcType, op, producerOp)) {
+    if (IsElementwiseLikeOp(calcType, producerOp)) {
         DoElementwiseLikePadding(op, in, lastIdx, paddingValue);
         return;
     }
