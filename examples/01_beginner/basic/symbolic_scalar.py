@@ -12,7 +12,6 @@
 SymbolicScalar Example for PyPTO
 
 This example demonstrates how to use SymbolicScalar in PyPTO, including:
-- Immediate (concrete) SymbolicScalar usage
 - SymbolicScalar as loop index inside kernel
 - Difference between concrete and non-concrete symbolic values
 
@@ -78,16 +77,6 @@ def get_device_id():
 # ----------------------------------------------------------------------------
 
 @pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
-def symbolic_immediate_kernel(
-    x: pypto.Tensor([], pypto.DT_FP32),
-    out: pypto.Tensor([], pypto.DT_FP32)):
-    pypto.set_vec_tile_shapes(2, 8)
-    s = pypto.symbolic_scalar(128)
-    s = s + 1
-    out.move(pypto.add(x, x))
-
-
-@pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
 def symbolicscalar_in_loop_kernel(
     x: pypto.Tensor([], pypto.DT_FP32),
     out: pypto.Tensor([], pypto.DT_FP32)):
@@ -104,27 +93,6 @@ def symbolicscalar_in_loop_kernel(
 # ----------------------------------------------------------------------------
 # Python Wrappers
 # ----------------------------------------------------------------------------
-
-
-def test_symbolicscalar_immediate(device_id: int = None) -> None:
-    """Immediate (concrete) SymbolicScalar usage"""
-    device = f'npu:{device_id}' if global_run_mode == pypto.RunMode.NPU and device_id is not None else 'cpu'
-    x = torch.tensor(
-        [1, 2, 3],
-        dtype=torch.float32,
-        device=device
-    )
-
-    y = torch.empty_like(x)
-    symbolic_immediate_kernel(x, y)
-    golden = (x + x).cpu()
-
-    print(f"Input shape: {x.shape}")
-    print(f"Output shape: {y.shape}")
-    if global_run_mode == pypto.RunMode.NPU:
-        assert_allclose(y.cpu().numpy(), golden.numpy(), rtol=1e-3, atol=1e-3)
-    print("✓ SymbolicScalar immediate test passed")
-    print()
 
 
 def test_symbolicscalar_in_loop(device_id: int = None):
@@ -223,7 +191,7 @@ def main():
 Examples:
   %(prog)s              Run all examples
   %(prog)s --list       List available examples
-  %(prog)s symbolicscalar_immediate::test_symbolicscalar_immediate     Run immediate SymbolicScalar example
+  %(prog)s symbolicscalar_in_loop::test_symbolicscalar_in_loop     Run SymbolicScalar loop example
         """
     )
     parser.add_argument(
@@ -247,14 +215,6 @@ Examples:
 
 
     examples = {
-        'symbolicscalar_immediate::test_symbolicscalar_immediate': {
-            "name": "SymbolicScalar Immediate in kernel",
-            "description": (
-                "Demonstrate immediate (concrete) SymbolicScalar usage, including "
-                "creation from concrete values and direct evaluation."
-            ),
-            "function": test_symbolicscalar_immediate
-        },
         'symbolicscalar_in_loop::test_symbolicscalar_in_loop': {
             "name": "SymbolicScalar in Loop",
             "description": (
