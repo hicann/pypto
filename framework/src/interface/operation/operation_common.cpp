@@ -221,7 +221,7 @@ void CheckTensorFormat(
     CHECK(VectorErrorCode::ERR_RUNTIME_NULLPTR, tensor != nullptr) << opName << ": tensor is nullptr.";
     auto format = tensor->Format();
     CHECK(VectorErrorCode::ERR_PARAM_INVALID, unsupportedFormats.find(format) == unsupportedFormats.end())
-        << "Tensor format " << std::to_string(static_cast<int>(format)) << " is not supported for op: " << opName;
+        << "Tensor format " << std::to_string(format) << " is not supported for op: " << opName;
 }
 
 void CheckSupportedNPUArch(const std::vector<NPUArch>& supportedArches, const std::string& opName)

@@ -37,11 +37,6 @@ dequantize(input: Tensor, scale: Tensor, otype: DataType, axis: int, zero_points
 
 ## 约束说明
 
-1. axis参数支持-1、-2或input.shape.size()-1、input.shape.size()-2，当input为1D时，仅支持-1。
-2. scale和zero_points的Shape必须比input少一位维。
-
-## 约束说明
-
 1. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
 
 ## 调用示例
