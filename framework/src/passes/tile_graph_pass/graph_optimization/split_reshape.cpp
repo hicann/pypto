@@ -344,6 +344,32 @@ std::vector<int64_t> SplitReshape::ObtainMapOffset(const LogicalTensorPtr& input
     return it->second;
 }
 
+bool SplitReshape::HasAssembleInputProducedByReduceAcc(const LogicalTensorPtr& reshapeSource, int& assembleOpMagic) const
+{
+    if (reshapeSource == nullptr || reshapeSource->GetRawTensor() == nullptr) {
+        return false;
+    }
+    auto it = assembleOutToInput_.find(reshapeSource->GetRawTensor()->GetRawMagic());
+    if (it == assembleOutToInput_.end()) {
+        return false;
+    }
+    for (const auto& input : it->second) {
+        if (input == nullptr) {
+            continue;
+        }
+        const bool hasReduceAccProducer = std::any_of(
+            input->GetProducers().begin(), input->GetProducers().end(), [](const auto* producer) {
+                return producer != nullptr && producer->GetOpcode() == Opcode::OP_REDUCE_ACC;
+            });
+        if (hasReduceAccProducer) {
+            auto assembleIt = assembleOpPtrs_.find({input->GetMagic(), reshapeSource->GetMagic()});
+            assembleOpMagic = assembleIt == assembleOpPtrs_.end() ? -1 : assembleIt->second->GetOpMagic();
+            return true;
+        }
+    }
+    return false;
+}
+
 Status SplitReshape::CollectReshapeInfo(const Operation& op)
 {
     auto input = op.GetIOperands().front();
@@ -1177,6 +1203,14 @@ Status SplitReshape::CheckReshapeSkip(
         return WARNING;
     }
     checkOutputParam.reshapeSource = reshapeSourceIter->second;
+    int assembleOpMagic = -1;
+    if (HasAssembleInputProducedByReduceAcc(checkOutputParam.reshapeSource, assembleOpMagic)) {
+        APASS_LOG_DEBUG_F(
+            Elements::Tensor,
+            "Skip splitreshape because one assemble input is produced by ReduceAcc, assemble op magic is %d.",
+            assembleOpMagic);
+        return WARNING;
+    }
     const auto& reshapeInputShape = checkOutputParam.reshapeSource->GetRawTensor()->GetRawShape();
     const auto& reshapeOutputShape = input->GetRawTensor()->GetRawShape();
     if (CommonUtils::ContainsNegativeOne(reshapeInputShape) ||

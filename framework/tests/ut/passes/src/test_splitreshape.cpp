@@ -2284,6 +2284,70 @@ void BuildMultipleParallelCopyOutAssembleGraph(
     func->outCasts_ = outputs;
 }
 
+std::vector<std::shared_ptr<LogicalTensor>> BuildReduceAccAssembleDdrTensors(
+    std::shared_ptr<Function>& func, const MultipleParallelCopyOutAssembleShapes& shapes,
+    std::vector<std::shared_ptr<LogicalTensor>>& inputs)
+{
+    auto sharedDdrRawTensor = std::make_shared<RawTensor>(DT_FP32, shapes.ddrBigShape);
+    std::vector<std::shared_ptr<LogicalTensor>> ddrTensors;
+    for (size_t i = 0; i < kNumThree; i++) {
+        auto ddrTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(
+            sharedDdrRawTensor, shapes.assembleOffsets[i], shapes.ubShape, CreateTestConstIntVector(shapes.ubShape));
+        ddrTensor->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
+        ddrTensors.push_back(ddrTensor);
+        if (i == 0) {
+            auto reduceInput0 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+                DT_FP32, shapes.ubShape, CreateTestConstIntVector(shapes.ubShape));
+            auto reduceInput1 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+                DT_FP32, shapes.ubShape, CreateTestConstIntVector(shapes.ubShape));
+            reduceInput0->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
+            reduceInput1->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
+            inputs.push_back(reduceInput0);
+            inputs.push_back(reduceInput1);
+            PassOperationUtils::AddOperation(*func, Opcode::OP_REDUCE_ACC, {reduceInput0, reduceInput1}, {ddrTensor});
+            continue;
+        }
+        auto input = npu::tile_fwk::IRBuilder().CreateTensorVar(
+            DT_FP32, shapes.ubShape, CreateTestConstIntVector(shapes.ubShape));
+        input->SetMemoryTypeOriginal(MemoryType::MEM_UB, false);
+        inputs.push_back(input);
+        PassOperationUtils::AddOperation(*func, Opcode::OP_COPY_OUT, {input}, {ddrTensor});
+    }
+    return ddrTensors;
+}
+
+void BuildReduceAccAssembleInputGraph(
+    std::shared_ptr<Function>& func, const MultipleParallelCopyOutAssembleShapes& shapes,
+    std::vector<std::shared_ptr<LogicalTensor>>& inputs, std::vector<std::shared_ptr<LogicalTensor>>& outputs)
+{
+    auto ddrTensors = BuildReduceAccAssembleDdrTensors(func, shapes, inputs);
+    auto ddrBigTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, shapes.ddrBigShape, CreateTestConstIntVector(shapes.ddrBigShape));
+    ddrBigTensor->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
+    for (size_t i = 0; i < kNumThree; i++) {
+        auto& assembleOp = PassOperationUtils::AddOperation(*func, Opcode::OP_ASSEMBLE, {ddrTensors[i]}, {ddrBigTensor});
+        assembleOp.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, shapes.assembleOffsets[i]));
+    }
+    auto ddrReshape = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, shapes.reshapeShape, CreateTestConstIntVector(shapes.reshapeShape));
+    ddrReshape->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
+    auto& reshapeOp = PassOperationUtils::AddOperation(*func, Opcode::OP_RESHAPE, {ddrBigTensor}, {ddrReshape});
+    reshapeOp.SetAttribute(OP_ATTR_PREFIX + "validShape", std::vector<SymbolicScalar>{kNumThree, kNumEight});
+    for (size_t i = 0; i < kNumThree; i++) {
+        auto ubOut = npu::tile_fwk::IRBuilder().CreateTensorVar(
+            DT_FP32, shapes.viewOutShape, CreateTestConstIntVector(shapes.viewOutShape));
+        ubOut->SetMemoryTypeOriginal(MemoryType::MEM_UB, false);
+        auto& viewOp = PassOperationUtils::AddOperation(*func, Opcode::OP_VIEW, {ddrReshape}, {ubOut});
+        viewOp.SetOpAttribute(std::make_shared<ViewOpAttribute>(shapes.viewOffsets[i]));
+        auto output = npu::tile_fwk::IRBuilder().CreateTensorVar(
+            DT_FP32, shapes.viewOutShape, CreateTestConstIntVector(shapes.viewOutShape));
+        PassOperationUtils::AddOperation(*func, Opcode::OP_ADDS, {ubOut}, {output});
+        outputs.push_back(output);
+    }
+    func->inCasts_ = inputs;
+    func->outCasts_ = outputs;
+}
+
 std::vector<int64_t> GetLargeScaleAssembleOffset(size_t pathIndex, const std::vector<int64_t>& ubShape)
 {
     return {static_cast<int64_t>(pathIndex) * ubShape.front(), 0};
@@ -2405,6 +2469,52 @@ TEST_F(TestSplitReshapePass, TestSplitReshapeWithMultipleParallelCopyOutAssemble
     pass.Init();
     EXPECT_EQ(pass.RunOnFunction(*func), SUCCESS);
     VerifyMultipleParallelCopyOutAssembleSplit(func, shapes.ubShape, shapes.viewOutShape, kNumThree);
+}
+
+TEST_F(TestSplitReshapePass, TestSkipSplitReshapeWhenAssembleInputProducedByReduceAcc)
+{
+    auto func = std::make_shared<Function>(
+        Program::GetInstance(), "TestReduceAccReshapeSplit", "TestReduceAccReshapeSplit", nullptr);
+    ASSERT_TRUE(func != nullptr);
+
+    MultipleParallelCopyOutAssembleShapes shapes;
+    std::vector<std::shared_ptr<LogicalTensor>> inputs;
+    std::vector<std::shared_ptr<LogicalTensor>> outputs;
+    BuildReduceAccAssembleInputGraph(func, shapes, inputs, outputs);
+
+    SplitReshape pass;
+    pass.Init();
+    EXPECT_EQ(pass.RunOnFunction(*func), SUCCESS);
+    EXPECT_EQ(pass.reshapes_.size(), kSizeZero);
+    EXPECT_EQ(pass.assembles_.size(), kSizeZero);
+
+    int reshapeOpCount = 0;
+    bool hasReduceAccAssembleInput = false;
+    for (auto& op : func->Operations()) {
+        if (op.GetOpcode() != Opcode::OP_RESHAPE) {
+            continue;
+        }
+        reshapeOpCount++;
+        auto reshapeInput = op.GetInputOperand(kSizeZero);
+        ASSERT_NE(reshapeInput, nullptr);
+        EXPECT_EQ(reshapeInput->shape, shapes.ddrBigShape);
+        EXPECT_EQ(reshapeInput->GetProducers().size(), kSizeThree);
+        for (const auto& producer : reshapeInput->GetProducers()) {
+            ASSERT_NE(producer, nullptr);
+            EXPECT_EQ(producer->GetOpcode(), Opcode::OP_ASSEMBLE);
+            auto assembleInput = producer->GetInputOperand(kSizeZero);
+            ASSERT_NE(assembleInput, nullptr);
+            for (const auto& assembleInputProducer : assembleInput->GetProducers()) {
+                ASSERT_NE(assembleInputProducer, nullptr);
+                hasReduceAccAssembleInput |= assembleInputProducer->GetOpcode() == Opcode::OP_REDUCE_ACC;
+            }
+        }
+        auto reshapeOutput = op.GetOutputOperand(kSizeZero);
+        ASSERT_NE(reshapeOutput, nullptr);
+        EXPECT_EQ(reshapeOutput->shape, shapes.reshapeShape);
+    }
+    EXPECT_TRUE(hasReduceAccAssembleInput);
+    EXPECT_EQ(reshapeOpCount, kNumOne);
 }
 
 TEST_F(TestSplitReshapePass, TestSplitReshapeLargeScaleRunTimeLimit)
