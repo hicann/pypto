@@ -2919,6 +2919,59 @@ def gen_concat_op_golden(case_name: str, output: Path, case_index: int = None) -
     return gen_op_golden("Concat", golden_func, output, case_index)
 
 
+def _to_interleave_torch_tensor(array: np.ndarray) -> torch.Tensor:
+    if array.dtype == bfloat16:
+        return torch.as_tensor(array.astype(np.float32)).to(torch.bfloat16)
+    return torch.as_tensor(array)
+
+
+def _torch_interleave(src0: torch.Tensor, src1: torch.Tensor):
+    interleaved = torch.stack((src0, src1), dim=-1).flatten(-2)
+    last_dim = src0.shape[-1]
+    return interleaved[..., :last_dim], interleaved[..., last_dim:]
+
+
+def _torch_deinterleave(inputs: list):
+    if len(inputs) == 1:
+        interleaved = inputs[0]
+    else:
+        interleaved = torch.cat((inputs[0], inputs[1]), dim=-1)
+    return interleaved[..., 0::2], interleaved[..., 1::2]
+
+
+@GoldenRegister.reg_golden_func(
+    case_names=[
+        "TestInterleave/InterleaveOperationTest.TestInterleave",
+    ]
+)
+def gen_interleave_op_golden(case_name: str, output: Path, case_index: int = None) -> bool:
+
+    def golden_func(inputs: list, _config: dict):
+        src0 = _to_interleave_torch_tensor(inputs[0])
+        src1 = _to_interleave_torch_tensor(inputs[1])
+        out0, out1 = _torch_interleave(src0, src1)
+        return [to_numpy(out0), to_numpy(out1)]
+
+    logging.debug("Case(%s), Golden creating...", case_name)
+    return gen_op_golden("Interleave", golden_func, output, case_index)
+
+
+@GoldenRegister.reg_golden_func(
+    case_names=[
+        "TestDeInterleave/DeInterleaveOperationTest.TestDeInterleave",
+    ]
+)
+def gen_deinterleave_op_golden(case_name: str, output: Path, case_index: int = None) -> bool:
+
+    def golden_func(inputs: list, _config: dict):
+        torch_inputs = [_to_interleave_torch_tensor(input_data) for input_data in inputs]
+        out0, out1 = _torch_deinterleave(torch_inputs)
+        return [to_numpy(out0), to_numpy(out1)]
+
+    logging.debug("Case(%s), Golden creating...", case_name)
+    return gen_op_golden("DeInterleave", golden_func, output, case_index)
+
+
 @GoldenRegister.reg_golden_func(
     case_names=[
         "TestCompare/CompareOperationTest.TestCompare",

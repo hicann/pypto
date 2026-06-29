@@ -64,6 +64,7 @@
 #include "vector/where.h"
 #include "vector/pad.h"
 #include "vector/fillpad.h"
+#include "vector/interleave.h"
 #ifndef __LITE_NPU
 #include "vector/sort.h"
 #include "vector/quantize.h"

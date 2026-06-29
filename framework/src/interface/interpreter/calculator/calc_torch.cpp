@@ -2207,6 +2207,58 @@ static void Copy(const TensorData& out, const TensorData& self, bool trans, bool
     }
 }
 
+static torch::Tensor InterleaveTensor(const torch::Tensor& src0, const torch::Tensor& src1)
+{
+    std::vector<torch::Tensor> inputs = {src0, src1};
+    auto interleavedShape = src0.sizes().vec();
+    interleavedShape.back() *= 2;
+    return torch::stack(inputs, -1).reshape(interleavedShape);
+}
+
+static void Interleave(
+    const TensorData& out0, const TensorData& out1, const TensorData& self, const TensorData& other)
+{
+    auto tout0 = From(out0);
+    auto tout1 = From(out1);
+    auto tself = From(self);
+    auto tother = From(other);
+
+    auto interleaved = InterleaveTensor(tself.second, tother.second);
+    auto lastDim = tself.second.size(-1);
+    ToOperand(interleaved.slice(-1, 0, lastDim), tout0.first, out0.dtype);
+    ToOperand(interleaved.slice(-1, lastDim, interleaved.size(-1)), tout1.first, out1.dtype);
+}
+
+static void DeInterleaveTensor(
+    const torch::Tensor& interleaved, const std::pair<torch::Tensor, torch::Tensor>& out0,
+    const std::pair<torch::Tensor, torch::Tensor>& out1, DataType out0Dtype, DataType out1Dtype)
+{
+    auto lastDim = interleaved.size(-1);
+    ToOperand(interleaved.slice(-1, 0, lastDim, 2), out0.first, out0Dtype);
+    ToOperand(interleaved.slice(-1, 1, lastDim, 2), out1.first, out1Dtype);
+}
+
+static void DeInterleave(
+    const TensorData& out0, const TensorData& out1, const TensorData& self, const TensorData& other)
+{
+    auto tout0 = From(out0);
+    auto tout1 = From(out1);
+    auto tself = From(self);
+    auto tother = From(other);
+
+    std::vector<torch::Tensor> inputs = {tself.second, tother.second};
+    DeInterleaveTensor(torch::cat(inputs, -1), tout0, tout1, out0.dtype, out1.dtype);
+}
+
+static void DeInterleaveSingle(const TensorData& out0, const TensorData& out1, const TensorData& self)
+{
+    auto tout0 = From(out0);
+    auto tout1 = From(out1);
+    auto tself = From(self);
+
+    DeInterleaveTensor(tself.second, tout0, tout1, out0.dtype, out1.dtype);
+}
+
 static void RowSumExpand(const TensorData& out, const TensorData& self, int dim)
 {
     auto tout = From(out);
@@ -3398,6 +3450,9 @@ static struct CalcOps calcOps = {
     .MrgSort = MrgSort,
     .TopK = TopK,
     .QuantMX = QuantMX,
+    .Interleave = Interleave,
+    .DeInterleave = DeInterleave,
+    .DeInterleaveSingle = DeInterleaveSingle,
     .TopkSort = TopkSort,
     .TopkMerge = TopkMerge,
     .TopkExtract = TopkExtract,

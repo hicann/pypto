@@ -101,6 +101,8 @@ public:
     std::string GenVectorScalarOpWithTmp() const;
     std::string GenPairArgReduce() const;
 
+    std::string GenInterleaveLikeOp() const;
+
     std::string GenCubeOpMatmul() const;
     std::string GenCubeOpMatmulAcc() const;
 

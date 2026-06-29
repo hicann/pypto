@@ -206,6 +206,23 @@ inline void QuantMX(
     GetCalcOps()->QuantMX(Trans(out), Trans(exp), Trans(max), Trans(scaling), Trans(self), performanceMode, mode);
 }
 
+inline void Interleave(
+    LogicalTensorDataPtr out0, LogicalTensorDataPtr out1, LogicalTensorDataPtr self, LogicalTensorDataPtr other)
+{
+    GetCalcOps()->Interleave(Trans(out0), Trans(out1), Trans(self), Trans(other));
+}
+
+inline void DeInterleave(
+    LogicalTensorDataPtr out0, LogicalTensorDataPtr out1, LogicalTensorDataPtr self, LogicalTensorDataPtr other)
+{
+    GetCalcOps()->DeInterleave(Trans(out0), Trans(out1), Trans(self), Trans(other));
+}
+
+inline void DeInterleaveSingle(LogicalTensorDataPtr out0, LogicalTensorDataPtr out1, LogicalTensorDataPtr self)
+{
+    GetCalcOps()->DeInterleaveSingle(Trans(out0), Trans(out1), Trans(self));
+}
+
 inline void AddS(LogicalTensorDataPtr out, LogicalTensorDataPtr self, const Element& scalar, bool reverse = false)
 {
     GetCalcOps()->AddS(Trans(out), Trans(self), scalar, reverse);

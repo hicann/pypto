@@ -389,6 +389,14 @@ inline std::string to_string(npu::tile_fwk::TileOpFormat format)
             return "TILEOP_ND";
         case npu::tile_fwk::TileOpFormat::TILEOP_NZ:
             return "TILEOP_NZ";
+        case npu::tile_fwk::TileOpFormat::TILEOP_NC1HWC0:
+            return "TILEOP_NC1HWC0";
+        case npu::tile_fwk::TileOpFormat::TILEOP_NDC1HWC0:
+            return "TILEOP_NDC1HWC0";
+        case npu::tile_fwk::TileOpFormat::TILEOP_FRACTAL_Z:
+            return "TILEOP_FRACTAL_Z";
+        case npu::tile_fwk::TileOpFormat::TILEOP_FRACTAL_Z_3D:
+            return "TILEOP_FRACTAL_Z_3D";
         default:
             return "UNKNOWN";
     }

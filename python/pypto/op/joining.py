@@ -9,7 +9,7 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 """PyPTO"""
-from typing import List
+from typing import List, Optional, Tuple
 
 from .. import pypto_impl
 from .._op_wrapper import op_wrapper
@@ -49,3 +49,45 @@ def concat(tensors: List[Tensor], dim: int = 0) -> Tensor:
                 [0.0 0.0]]
     """
     return pypto_impl.Cat(tensors, dim)
+
+
+@op_wrapper
+def interleave(input: Tensor, other: Tensor) -> Tuple[Tensor, Tensor]:
+    """
+    Interleave two tensors into two output tensors.
+
+    Parameters
+    ---------
+    input: Tensor
+        The first input tensor.
+    other: Tensor
+        The second input tensor. It must have the same shape as input.
+
+    Returns
+    -------
+    tuple
+        A tuple of two tensors.
+    """
+    return pypto_impl.Interleave(input, other)
+
+
+@op_wrapper
+def deinterleave(input: Tensor, other: Optional[Tensor] = None) -> Tuple[Tensor, Tensor]:
+    """
+    Deinterleave one or two input tensors into two output tensors.
+
+    Parameters
+    ---------
+    input: Tensor
+        The input tensor. In single-input mode, its last dimension is twice the output last dimension.
+    other: Tensor, optional
+        The second input tensor. If provided, it must have the same shape as input and the outputs.
+
+    Returns
+    -------
+    tuple
+        A tuple of two tensors.
+    """
+    if other is None:
+        return pypto_impl.DeInterleave(input)
+    return pypto_impl.DeInterleave(input, other)

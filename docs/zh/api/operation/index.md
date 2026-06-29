@@ -39,6 +39,7 @@ pypto-cos
 pypto-cosh
 pypto-cumprod
 pypto-cumsum
+pypto-deinterleave
 pypto-dequantize
 pypto-div
 pypto-eq
@@ -73,6 +74,7 @@ pypto-index_add__ub
 pypto-index_add_ub
 pypto-index_put_
 pypto-index_select
+pypto-interleave
 pypto-isfinite
 pypto-le
 pypto-log

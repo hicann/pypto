@@ -295,6 +295,11 @@ Tensor PReLU(const Tensor& self, const Tensor& weight);
 Tensor Atan2(const Tensor& y, const Tensor& x);
 Tensor Axpy(const Tensor& self, const Tensor& other, float alpha);
 
+std::tuple<Tensor, Tensor> Interleave(const Tensor& self, const Tensor& other);
+std::tuple<Tensor, Tensor> DeInterleave(const Tensor& self, const Tensor& other);
+std::tuple<Tensor, Tensor> DeInterleave(const Tensor& self);
+
+
 Tensor BitwiseRightShift(const Tensor& self, const Tensor& other);
 Tensor BitwiseRightShift(const Tensor& self, const Element& other);
 Tensor BitwiseRightShift(const Element& self, const Tensor& other);
