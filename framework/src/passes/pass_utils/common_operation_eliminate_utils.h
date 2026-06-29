@@ -26,6 +26,7 @@
 
 #include "interface/function/function.h"
 #include "interface/operation/attribute.h"
+#include "interface/operation/opcode.h"
 #include "interface/tensor/logical_tensor.h"
 
 namespace npu::tile_fwk {
@@ -39,6 +40,7 @@ public:
     Status Process(Function& function);
 
 private:
+    static const std::unordered_set<Opcode>& GetSkipEliminateOpcodes();
     void SortedProducer(std::vector<Operation*>& sortedProducers) const;
     void CollectProducerInfo(
         const std::vector<Operation*>& sortedProducers, const LogicalTensorPtr& curTensor,

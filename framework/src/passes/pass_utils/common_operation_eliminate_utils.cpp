@@ -27,6 +27,18 @@
 #define MODULE_NAME "CommonOperationEliminateUtils"
 
 namespace npu::tile_fwk {
+const std::unordered_set<Opcode>& CommonOperationEliminateUtils::GetSkipEliminateOpcodes()
+{
+    // Opcodes in this set are excluded from common operation elimination on purpose:
+    //   - OP_VIEW: works with GraphPartition processing logic.
+    //   - OP_VEC_DUP: avoid eliminating duplicate vector ops.
+    static const std::unordered_set<Opcode> skipOpcodes = {
+        Opcode::OP_VIEW,
+        Opcode::OP_VEC_DUP,
+    };
+    return skipOpcodes;
+}
+
 void CommonOperationEliminateUtils::SortedProducer(std::vector<Operation*>& sortedProducers) const
 {
     // Keep the original producer order for ties so hash generation stays deterministic.
@@ -207,7 +219,7 @@ std::pair<LogicalTensorPtr, std::vector<Operation*>> CommonOperationEliminateUti
         if (inputCheck && calcTypeCheck && outputCheck) { // copy from L1 to L0
             return {nullptr, {}};
         }
-        if (operation->GetOpcode() == Opcode::OP_VIEW) { // work with GraphPartition processing logic
+        if (GetSkipEliminateOpcodes().count(operation->GetOpcode()) != 0) {
             return {nullptr, {}};
         }
         if (operation->GetBoolAttribute(OpAttributeKey::dontTouch)) {
