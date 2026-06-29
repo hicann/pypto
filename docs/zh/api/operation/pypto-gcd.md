@@ -13,7 +13,7 @@
 ## 函数原型
 
 ```python
-gcd(input: Tensor, other: Union[Tensor, int]) -> Tensor:
+gcd(input: Tensor, other: Union[Tensor, int]) -> Tensor
 ```
 
 ## 参数说明

@@ -32,6 +32,12 @@ cast(input: Tensor, dtype: DataType, mode: CastMode = CastMode.CAST_NONE,
 | CastMode   | 输入      | 源操作数枚举类型，用以控制精度转换处理模式，具体定义为：[CastMode](../datatype/CastMode.md)。<br> 默认为CAST_NONE，常见类型之间的转换，框架会自动转换，与torch对齐，详见约束说明。 |
 | SaturationMode    | 输入      | 饱和模式枚举类型，用以控制浮点数转整数时的溢出处理方式，具体定义为：[SaturationMode](../datatype/SaturationMode.md)。<br> 默认为OFF（截断模式），当设置为ON时，超出目标类型范围的数值会被截断到最大值或最小值（饱和截断），详见约束说明。 |
 
+## 返回值说明
+
+| 类型 | 说明 |
+|:-----|:-----|
+| Tensor | 数据类型为dtype的新Tensor，其值与input相同。 |
+
 ## 约束说明
 
 > **CastMode舍入模式详细说明请参考**：[CastMode](../datatype/CastMode.md)

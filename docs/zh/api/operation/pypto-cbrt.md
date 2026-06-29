@@ -29,6 +29,11 @@ cbrt(input: Tensor) -> Tensor
 ## 返回值说明
 
 返回输出Tensor，Tensor的数据类型和input相同，Shape与input相同。
+
+## 约束说明
+
+1. 输入Tensor和输出Tensor类型应该相同。
+
 ## 调用示例
 
 ### TileShape设置示例

@@ -10,7 +10,7 @@
 
 对输入Tensor进行填充（Padding）。
 
-和pad不同，此接口不会改变张量的形状，他将填充区域(即超过validshape的区域)用指令的值进行填充。当前实现支持输入1-2维tensor，进行常量（Constant）模式的右侧（Right）和底部（Bottom）填充。
+和pad不同，此接口不会改变张量的形状，他将填充区域（即超过validshape的区域）用指令的值进行填充。当前实现支持输入1-2维tensor，进行常量（Constant）模式的右侧（Right）和底部（Bottom）填充。
 
 ## 函数原型
 

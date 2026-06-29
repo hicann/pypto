@@ -21,7 +21,7 @@
 ## 函数原型
 
 ```python
-amin(input: Tensor, dim: int, keepdim: bool = False) -> Tensor:
+amin(input: Tensor, dim: int, keepdim: bool = False) -> Tensor
 ```
 
 ## 参数说明
@@ -29,8 +29,8 @@ amin(input: Tensor, dim: int, keepdim: bool = False) -> Tensor:
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
 | input   | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 不同型号支持的数据类型有所差异，详细请参见[约束说明](#约束说明)。 <br> 不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
-| dim     | 输入      | 源操作数。 <br> 支持任意单轴。                                       |
-| keepdim | 输入      | 源操作数 <br> 控制在进行归约后，是否保持被压缩的维度。 <br> 默认值为False。 |
+| dim     | 输入      | 指定进行归约的维度。 <br> 支持任意单轴。                                       |
+| keepdim | 输入      | 归约后是否保留被归约的维度。 <br> 默认值为False。 |
 
 ## 返回值说明
 

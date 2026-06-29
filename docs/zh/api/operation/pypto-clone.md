@@ -13,7 +13,7 @@
 ## 函数原型
 
 ```python
-clone(input: Tensor) -> Tensor:
+clone(input: Tensor) -> Tensor
 ```
 
 ## 参数说明
@@ -25,6 +25,11 @@ clone(input: Tensor) -> Tensor:
 ## 返回值说明
 
 返回一个Shape、数据类型与输入一样的Tensor。
+
+## 约束说明
+
+1. 输入Tensor和输出Tensor类型应该相同。
+
 ## 调用示例
 
 ```python

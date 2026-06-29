@@ -10,7 +10,7 @@
 
 计算输入Tensor中每个元素的平方根，逐元素运算。输入为负数时返回NaN。
 
-## 接口原型
+## 函数原型
 
 ```python
 pypto.sqrt(input, precision_type=pypto.PrecisionType.INTRINSIC) -> Tensor

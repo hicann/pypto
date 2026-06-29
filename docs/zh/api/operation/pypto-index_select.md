@@ -25,7 +25,7 @@ $$
 ## 函数原型
 
 ```python
-index_select(input: Tensor, dim: int, index: Tensor) -> Tensor:
+index_select(input: Tensor, dim: int, index: Tensor) -> Tensor
 ```
 
 ## 参数说明

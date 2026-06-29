@@ -33,6 +33,12 @@ gather_in_ub(param: Tensor, indices: Tensor, block_table: Tensor,
 
 返回输出Tensor，Tensor的数据类型和param相同，Shape为\[k, hidden\_dim\]，即选中token kv cache。
 
+## 约束说明
+
+1. 该接口为定制接口，不保证稳定性。
+2. param、indices、block_table 均不支持空Tensor，仅支持两维。
+3. indices Shape 必须为 [1, k]。
+4. axis 参数仅支持 -2。
 
 ## 调用示例
 

@@ -15,7 +15,19 @@ scatter(input: Tensor, dim: int, index: Tensor, src: Union[float, Element, Tenso
 scatter\_的non-inplace版本，可参考  [pypto.scatter\_](pypto-scatter_.md)
 
 
+## 参数说明
+
+请参考[pypto.scatter_](pypto-scatter_.md)的参数说明。
+
+## 返回值说明
+
+请参考[pypto.scatter_](pypto-scatter_.md)的返回值说明。
+
 ## 约束说明
 
 1. 请参考[pypto.scatter_](pypto-scatter_.md)的约束说明。
 2. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
+
+## 调用示例
+
+请参考[pypto.scatter_](pypto-scatter_.md)的调用示例。

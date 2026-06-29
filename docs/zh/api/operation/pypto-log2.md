@@ -10,7 +10,7 @@
 
 对input做以2为底的对数运算
 
-## 接口原型
+## 函数原型
 
 ```python
 pypto.log2(input, precision_type=pypto.PrecisionType.INTRINSIC) -> Tensor
@@ -26,6 +26,12 @@ pypto.log2(input, precision_type=pypto.PrecisionType.INTRINSIC) -> Tensor
 ## 返回值说明
 
 返回输出Tensor，Tensor的数据类型和input相同，Shape为input大小。
+
+## 约束说明
+
+1. 输入Tensor和输出Tensor类型应该相同。
+2. 输入元素需大于0，否则输出为NaN。
+
 ## TileShape设置示例
 
 TileShape维度应和输出一致。

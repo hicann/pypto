@@ -10,7 +10,7 @@
 
 对input做以e为底的对数运算
 
-## 接口原型
+## 函数原型
 
 ```python
 pypto.log(input, precision_type=pypto.PrecisionType.INTRINSIC) -> Tensor

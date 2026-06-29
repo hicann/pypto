@@ -24,9 +24,9 @@ var(input: Tensor, dim: Union[int, List[int], Tuple[int]] = None, *, correction:
 | 参数名      | 输入/输出 | 说明                                                                 |
 |------------|---------- |----------------------------------------------------------------------|
 | input      | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_FP32, DT_FP16, DT_BF16。 <br> 不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
-| dim        | 输入      | 源操作数。 <br> 支持任意单轴或多轴。 <br> 默认为None，即全轴。 |
+| dim        | 输入      | 指定进行归约的维度。 <br> 支持任意单轴或多轴。 <br> 默认为None，即全轴。 |
 | correction | 输入      | 源操作数。 <br> 样本大小与样本自由度之间的差值。 <br> 默认为贝塞尔校正，即correction=1。 |
-| keepdim    | 输入      | 源操作数。 <br> 控制在进行归约后，是否保持被压缩的维度。 <br> 默认值为False。 |
+| keepdim    | 输入      | 归约后是否保留被归约的维度，默认False。 |
 
 ## 返回值说明
 

@@ -35,6 +35,13 @@ online_softmax(scores: Tensor, scale: float) -> Tuple[Tensor, Tensor, Tensor]
 | column_max | 每一列的局部最大值，数据类型为DT_FP32，Shape为[1, q_len]。 |
 | column_sum | 每一列的局部指数和，数据类型为DT_FP32，Shape为[1, q_len]。 |
 
+## 约束说明
+
+1. 该接口为定制接口，不保证稳定性。
+2. 该接口仅支持A5架构（Ascend 950PR/Ascend 950DT）。
+3. scores 数据类型仅支持 DT_FP32。
+4. 当前版本不切分第0维，要求 scores.shape[0] <= vec_tile[0]。
+
 ## 调用示例
 
 ### TileShape设置示例
