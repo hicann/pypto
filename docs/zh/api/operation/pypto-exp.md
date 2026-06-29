@@ -10,7 +10,7 @@
 
 计算输入Tensor中每个元素的e的指数，逐元素运算，返回与输入形状相同的Tensor。
 
-## 接口原型
+## 函数原型
 
 ```python
 pypto.exp(input, precision_type=pypto.PrecisionType.INTRINSIC) -> Tensor

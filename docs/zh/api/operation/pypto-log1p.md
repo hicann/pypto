@@ -13,7 +13,7 @@
 ## 函数原型
 
 ```python
-log1p(input: Tensor) -> Tensor:
+log1p(input: Tensor) -> Tensor
 ```
 
 ## 参数说明
@@ -25,6 +25,11 @@ log1p(input: Tensor) -> Tensor:
 ## 返回值说明
 
 返回输出Tensor，Tensor的数据类型和input相同，Shape为input大小。
+
+## 约束说明
+
+1. 输入Tensor和输出Tensor类型应该相同。
+
 ## TileShape设置示例
 
 TileShape维度应和输出一致。

@@ -10,7 +10,7 @@
 
 计算输入Tensor中每个元素的平方根倒数，逐元素运算。当输入为负数时返回NaN，输入为零时返回Inf。
 
-## 接口原型
+## 函数原型
 
 ```python
 pypto.rsqrt(input, precision_type=pypto.PrecisionType.INTRINSIC) -> Tensor

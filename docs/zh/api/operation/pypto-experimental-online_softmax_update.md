@@ -48,6 +48,14 @@ online_softmax_update(
 | updated_sum | 合并后的列指数和，数据类型为DT_FP32，Shape为[1, q_len]。 |
 | updated_output | 合并后的未归一化输出，数据类型为DT_FP32，Shape为[head_dim, q_len]。 |
 
+## 约束说明
+
+1. 该接口为定制接口，不保证稳定性。
+2. 该接口仅支持A5架构（Ascend 950PR/Ascend 950DT）。
+3. 所有输入Tensor数据类型仅支持 DT_FP32。
+4. current_output 需要与 previous_output 形状一致。
+5. 当前版本不切分第0维，要求 previous_output.shape[0] <= vec_tile[0]。
+
 ## 调用示例
 
 ### TileShape设置示例

@@ -19,7 +19,7 @@ gather_in_l1(src: Tensor, indices: Tensor, block_table: Tensor, block_size: int,
                  size: int, is_b_matrix: bool, is_trans: bool) -> Tensor
 ```
 
-参数说明
+## 参数说明
 
 | 参数名       | 输入/输出 | 说明                                                                 |
 |--------------|-----------|----------------------------------------------------------------------|
