@@ -582,4 +582,17 @@ enum class PaddingMode : int64_t { NORMAL_PADDING_MODE = 0, MX_PADDING_MODE = 1}
 std::string SafeExecCommandWithOutput(const std::vector<std::string>& args);
 
 int SafeExecCommand(const std::vector<std::string>& args);
+
+struct TensorAddrKey {
+    int funcMagic;
+    int opMagic;
+    bool operator==(const TensorAddrKey& other) const
+    {
+        return funcMagic == other.funcMagic && opMagic == other.opMagic;
+    }
+    bool operator<(const TensorAddrKey& other) const
+    {
+        return funcMagic == other.funcMagic ? opMagic < other.opMagic : funcMagic < other.funcMagic;
+    }
+};
 } // namespace npu::tile_fwk

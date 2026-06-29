@@ -474,16 +474,21 @@ SymbolicScalar CodeGenOpNPU::GetOperandStartOffset(int operandIdx) const
 
 std::string CodeGenOpNPU::GetGmTensorAddrByAttr(unsigned gmParamIdx) const
 {
-    std::map<int, SymbolicScalar> addrs;
+    std::map<TensorAddrKey, SymbolicScalar> addrs;
     bool ret = GetTensorAttr(gmParamIdx, TensorAttributeKey::tensorAddr, addrs);
     if (!ret || addrs.empty()) {
         CODEGEN_LOGW(
             "gmParamIdx: %u, tensorAddr is not found in attr !! op: %s", gmParamIdx, originalOp.Dump().c_str());
         return "";
     }
-    auto iter = addrs.find(originalOp.GetOpMagic());
+    ASSERT(OperErr::ATTRIBUTE_INVALID, originalOp.BelongTo() != nullptr)
+        << "originalOp.BelongTo() is nullptr, op: " << originalOp.Dump();
+    int funcMagic = originalOp.BelongTo()->GetFuncMagic();
+    TensorAddrKey key{funcMagic, originalOp.GetOpMagic()};
+    auto iter = addrs.find(key);
     ASSERT(OperErr::ATTRIBUTE_INVALID, iter != addrs.end())
-        << "add is not found by opMagic: " << originalOp.GetOpMagic() << ", gmParamIdx: " << gmParamIdx
+        << "addr is not found by TensorAddrKey{funcMagic: " << funcMagic
+        << ", opMagic: " << originalOp.GetOpMagic() << "}, gmParamIdx: " << gmParamIdx
         << ", op: " << originalOp.Dump();
     std::string gmParamVar = SymbolicExpressionTable::BuildExpression(iter->second);
     CODEGEN_LOGI("gmParamVar from attr is : %s", gmParamVar.c_str());

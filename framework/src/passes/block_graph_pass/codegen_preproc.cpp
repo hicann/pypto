@@ -157,15 +157,16 @@ bool CodegenPreproc::IsCopyNeedSave(const Operation& op) const
 }
 
 void CodegenPreproc::SetTensorParamAddr(
-    LogicalTensor& tensor, int64_t tensorParamIdx, const SymbolicScalar& attrOffsetScalar, int opMagic) const
+    LogicalTensor& tensor, int64_t tensorParamIdx, const SymbolicScalar& attrOffsetScalar,
+    const TensorAddrKey& key) const
 {
     IRBuilder builder;
     SymbolicScalar paramAddr =
         GetParamAddrSymbol()(GetRuntimeParamSymbol(), builder.CreateConstInt(tensorParamIdx), attrOffsetScalar);
-    std::map<int, SymbolicScalar> opParamAddrs;
-    tensor.GetAttr<std::map<int, SymbolicScalar>>(TensorAttributeKey::tensorAddr, opParamAddrs);
-    opParamAddrs[opMagic] = paramAddr;
-    tensor.SetAttr<std::map<int, SymbolicScalar>>(TensorAttributeKey::tensorAddr, opParamAddrs);
+    std::map<TensorAddrKey, SymbolicScalar> opParamAddrs;
+    tensor.GetAttr<std::map<TensorAddrKey, SymbolicScalar>>(TensorAttributeKey::tensorAddr, opParamAddrs);
+    opParamAddrs[key] = paramAddr;
+    tensor.SetAttr<std::map<TensorAddrKey, SymbolicScalar>>(TensorAttributeKey::tensorAddr, opParamAddrs);
 }
 
 // only used in DYNAMIC_LOOP_PATH scene
@@ -216,6 +217,7 @@ Status CodegenPreproc::SaveGmTensorParamIdxToOp(Function& func) const
             if (op.HasAttribute(OpAttributeKey::gmTensorParamIdxInCall)) {
                 op.GetAttr(OpAttributeKey::gmTensorParamIdxInCall, gmTensorParamIdx);
             }
+            TensorAddrKey addrKey{subProgram.second->GetFuncMagic(), op.GetOpMagic()};
             int attrOffset{0};
             for (size_t i = 0; i < op.GetIOperands().size(); ++i) {
                 auto& tensor = op.GetIOperands()[i];
@@ -226,7 +228,7 @@ Status CodegenPreproc::SaveGmTensorParamIdxToOp(Function& func) const
                 if (tensor->GetMemoryTypeToBe() == MEM_DEVICE_DDR) {
                     SetTensorParamAddr(
                         *tensor, gmTensorParamIdx, builder.CreateConstInt(op.GetIOpAttrOffset(attrOffset++)),
-                        op.GetOpMagic());
+                        addrKey);
                 }
             }
             attrOffset = 0;
@@ -239,7 +241,7 @@ Status CodegenPreproc::SaveGmTensorParamIdxToOp(Function& func) const
                 if (tensor->GetMemoryTypeToBe() == MEM_DEVICE_DDR) {
                     SetTensorParamAddr(
                         *tensor, gmTensorParamIdx, builder.CreateConstInt(op.GetOOpAttrOffset(attrOffset++)),
-                        op.GetOpMagic());
+                        addrKey);
                 }
             }
         }
