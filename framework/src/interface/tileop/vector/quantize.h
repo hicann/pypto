@@ -444,19 +444,26 @@ TILEOP void TQuantMXPerformance(T0 dst, T1 exp, T2 maxScratch, T3 scalingScratch
     auto dstTile = PtoTile<T0>(dst);
     auto scalingTile = PtoTile<T3>(scalingScratch);
     auto srcTile = PtoTile<T4>(src);
-    constexpr auto expTileH = TileOp::GetTensorTileShapeDim<T1, DIM_4TH, MAX_DIMS>();
-    constexpr auto expTileW = TileOp::GetTensorTileShapeDim<T1, DIM_5TH, MAX_DIMS>();
+    constexpr int kMxQuantGroupSize = 32;
+    constexpr int kExpTileAlignElems = 32;
+    constexpr auto srcTileH = TileOp::GetTensorTileShapeDim<T4, DIM_4TH, MAX_DIMS>();
+    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T4, DIM_5TH, MAX_DIMS>();
+    constexpr auto expFlatTileW = srcTileH * ((srcTileW + kMxQuantGroupSize - 1) / kMxQuantGroupSize);
+    constexpr auto expFlatTileWAligned =
+        ((expFlatTileW + kExpTileAlignElems - 1) / kExpTileAlignElems) * kExpTileAlignElems;
     constexpr auto maxTileH = TileOp::GetTensorTileShapeDim<T2, DIM_4TH, MAX_DIMS>();
     constexpr auto maxTileW = TileOp::GetTensorTileShapeDim<T2, DIM_5TH, MAX_DIMS>();
-    using ExpByteTile = pto::Tile<pto::TileType::Vec, uint8_t, expTileH, expTileW, pto::BLayout::RowMajor, -1, -1>;
+    using ExpByteTile =
+        pto::Tile<pto::TileType::Vec, uint8_t, 1, expFlatTileWAligned, pto::BLayout::RowMajor, -1, -1>;
     using MaxDtype = std::conditional_t<std::is_same_v<typename T2::Type, bool>, uint8_t, typename T2::Type>;
     using MaxTile = pto::Tile<pto::TileType::Vec, MaxDtype, maxTileH, maxTileW, pto::BLayout::RowMajor, -1, -1>;
     ExpByteTile expByteTile(
-        expLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>(), expLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>());
+        1,
+        srcLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>() *
+            ((srcLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>() + kMxQuantGroupSize - 1) / kMxQuantGroupSize));
     MaxTile maxTile(
         maxLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>(), maxLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>());
 
-    (void)srcLayout;
     for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
         for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
             for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
