@@ -42,7 +42,8 @@ private:
     Status ForceCombineAxisForAxisCombine(Function& func) const;
     bool IsCopyNeedSave(const Operation& op) const;
     void SetTensorParamAddr(
-        LogicalTensor& tensor, int64_t tensorParamIdx, const SymbolicScalar& attrOffsetScalar, int opMagic) const;
+        LogicalTensor& tensor, int64_t tensorParamIdx, const SymbolicScalar& attrOffsetScalar,
+        const TensorAddrKey& key) const;
     void SetNeedAllocAttr(Function& function);
     void FixExpandDimForAxisCombine(Operation& op, int dimSize) const;
     std::string DumpOpList(Function& function);

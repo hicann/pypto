@@ -14,6 +14,7 @@
  */
 
 #include "passes/block_graph_pass/dyn_attr_to_static.h"
+#include "interface/utils/common.h"
 #include "interface/tensor/irbuilder.h"
 #include "passes/pass_utils/dump_function_utils.h"
 
@@ -541,8 +542,8 @@ std::pair<int, int> ParseRuntimeGetParamAddr(const std::string& input)
 void UpdateTensorParamAddr(std::shared_ptr<LogicalTensor>& tensor, const std::set<int>& inOutCast)
 {
     IRBuilder builder;
-    std::map<int, SymbolicScalar> paramAddrMap;
-    tensor->GetAttr<std::map<int, SymbolicScalar>>(TensorAttributeKey::tensorAddr, paramAddrMap);
+    std::map<TensorAddrKey, SymbolicScalar> paramAddrMap;
+    tensor->GetAttr<std::map<TensorAddrKey, SymbolicScalar>>(TensorAttributeKey::tensorAddr, paramAddrMap);
     for (auto& paramAddr : paramAddrMap) {
         auto paramArgs = ParseRuntimeGetParamAddr(paramAddr.second.Dump());
         int aiCpuFlag = inOutCast.count(tensor->GetRawMagic()) ? 3 : 2;
@@ -554,7 +555,7 @@ void UpdateTensorParamAddr(std::shared_ptr<LogicalTensor>& tensor, const std::se
                 builder.CreateConstInt(static_cast<int64_t>(paramArgs.second)));
         }
     }
-    tensor->SetAttr<std::map<int, SymbolicScalar>>(TensorAttributeKey::tensorAddr, paramAddrMap);
+    tensor->SetAttr<std::map<TensorAddrKey, SymbolicScalar>>(TensorAttributeKey::tensorAddr, paramAddrMap);
 }
 
 void DynAttrToStatic::BuildParamAddr(Operation& op)
