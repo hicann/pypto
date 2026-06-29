@@ -17,20 +17,20 @@ $$
 ## 函数原型
 
 ```python
-div(input: Tensor, other: Union[Tensor, float], precision_type: PrecisionType = PrecisionType.HIGH_PRECISION) -> Tensor
+div(input: Tensor, other: Union[Tensor, float, int], precision_type: PrecisionType = PrecisionType.HIGH_PRECISION) -> Tensor
 ```
 
 ## 参数说明
 
 | 参数名 | 输入/输出 | 说明                                                                 |
 |--------|-----------|----------------------------------------------------------------------|
-| input  | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_FP16，DT_FP32，DT_BF16。 <br> 不支持空Tensor；支持的维度：1-4维；支持多维度广播到相同形状；Shape Size不大于2147483647（即INT32_MAX）。 |
-| other  | 输入      | 源操作数。 <br> 支持的类型为float以及Tensor类型。 <br> Tensor支持的数据类型为：DT_FP16，DT_FP32，DT_BF16。 <br> 不支持空Tensor；支持的维度：1-4维；支持多维度广播到相同形状；Shape Size不大于2147483647（即INT32_MAX）。 |
+| input  | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_FP16，DT_FP32，DT_BF16，DT_INT16，DT_INT32。 <br> 不支持空Tensor；支持的维度：1-4维；支持多维度广播到相同形状；Shape Size不大于2147483647（即INT32_MAX）。 |
+| other  | 输入      | 源操作数。 <br> 支持的类型为float以及Tensor类型。 <br> Tensor支持的数据类型为：DT_FP16，DT_FP32，DT_BF16，DT_INT16，DT_INT32。 <br> 不支持空Tensor；支持的维度：1-4维；支持多维度广播到相同形状；Shape Size不大于2147483647（即INT32_MAX）。 |
 | precision_type | 输入 | 精度模式枚举类型，用以控制除法计算的精度模式，具体定义为：[PrecisionType](../datatype/PrecisionType.md)。<br> 默认为HIGH_PRECISION（高精度模式）。 |
 
 ## 返回值说明
 
-返回输出Tensor，Tensor的数据类型和input、other相同，Shape为input和other广播后大小。
+返回输出Tensor，Shape为input和other广播后大小。当输入为浮点类型时，输出数据类型与输入相同；当输入为整型（DT_INT16/DT_INT32）时，输出数据类型为DT_FP32。
 
 ## 约束说明
 
@@ -40,7 +40,7 @@ div(input: Tensor, other: Union[Tensor, float], precision_type: PrecisionType = 
     - **HIGH_PRECISION（高精度模式）**：默认模式，在底层实现中会使用更高精度的计算方式，当前仅在Ascend 950PR上有效。
     - **INTRINSIC（指令模式）**：直接使用芯片指令进行计算。
 4. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
-
+5. 整型输入约束：当输入为DT_INT16或DT_INT32时，内部会将输入转换为DT_FP32进行计算（float32尾数为24位）。在 $[-2^{24},\ 2^{24}]$ 范围内的整数可精确转换，超出范围的整数在转换时可能丢失低位精度。
 
 ## 调用示例
 

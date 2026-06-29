@@ -414,10 +414,21 @@ Tensor Div(const Tensor& self, const Tensor& other, PrecisionType precisionType)
 
     CheckTensorsDataTypeConsistency(self.GetStorage(), other.GetStorage(), "DIV");
 
-    static const std::unordered_set<DataType> DIV_A2A3_TYPES = {DT_FP16, DT_FP32, DT_BF16};
-    static const std::unordered_set<DataType> DIV_A5_TYPES = {DT_FP16, DT_FP32, DT_BF16};
+    static const std::unordered_set<DataType> DIV_A2A3_TYPES = {DT_FP16, DT_FP32, DT_BF16, DT_INT16, DT_INT32};
+    static const std::unordered_set<DataType> DIV_A5_TYPES = {DT_FP16, DT_FP32, DT_BF16, DT_INT16, DT_INT32};
     const auto& supportedTypes = GetSupportedDataTypesByArch(DIV_A2A3_TYPES, DIV_A5_TYPES);
+    auto isDivSupportedInt = [](DataType dt) { return dt == DT_INT16 || dt == DT_INT32; };
     CheckTensorDataType(self.GetStorage(), supportedTypes, "DIV");
+
+    if (isDivSupportedInt(self.GetDataType())) {
+        Tensor castSelf = Cast(self, DT_FP32, CastMode::CAST_NONE, SaturationMode::ON);
+        Tensor castOther = Cast(other, DT_FP32, CastMode::CAST_NONE, SaturationMode::ON);
+        auto [castResult, op] = TensorBinaryOperationWithOp<BinaryOpType::DIV>(
+            *Program::GetInstance().GetCurrentFunction(), castSelf, castOther);
+        op->SetAttribute(OpAttributeKey::precisionType, static_cast<int64_t>(precisionType));
+        return Tensor(castResult);
+    }
+
     auto [result, op] =
         TensorBinaryOperationWithOp<BinaryOpType::DIV>(*Program::GetInstance().GetCurrentFunction(), self, other);
     op->SetAttribute(OpAttributeKey::precisionType, static_cast<int64_t>(precisionType));
@@ -938,10 +949,50 @@ Tensor Div(const Tensor& self, const Element& other, PrecisionType precisionType
     CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Div");
 
 
-    static const std::unordered_set<DataType> DIV_A2A3_TYPES = {DT_FP16, DT_FP32, DT_BF16};
-    static const std::unordered_set<DataType> DIV_A5_TYPES = {DT_FP16, DT_FP32, DT_BF16};
+    static const std::unordered_set<DataType> DIV_A2A3_TYPES = {DT_FP16, DT_FP32, DT_BF16, DT_INT16, DT_INT32};
+    static const std::unordered_set<DataType> DIV_A5_TYPES = {DT_FP16, DT_FP32, DT_BF16, DT_INT16, DT_INT32};
     const auto& supportedTypes = GetSupportedDataTypesByArch(DIV_A2A3_TYPES, DIV_A5_TYPES);
+    auto isDivSupportedInt = [](DataType dt) { return dt == DT_INT16 || dt == DT_INT32; };
+    auto isDivSupportedFloat = [](DataType dt) { return dt == DT_FP16 || dt == DT_FP32 || dt == DT_BF16; };
+    auto isDivSupportedScalar = [&](DataType dt) { return isDivSupportedFloat(dt) || isDivSupportedInt(dt); };
     CheckTensorDataType(self.GetStorage(), supportedTypes, "DIV");
+
+    if (isDivSupportedInt(self.GetDataType())) {
+        CHECK(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED, isDivSupportedInt(other.GetDataType()))
+            << "Scalar dtype incorrect. When self dtype is integer (DT_INT16/DT_INT32), "
+            << "scalar must be DT_INT16 or DT_INT32, actual is: " << DataType2String(other.GetDataType());
+        Tensor castSelf = Cast(self, DT_FP32, CastMode::CAST_NONE, SaturationMode::ON);
+        Element castOther(DT_FP32, other.Cast<float>());
+        auto [castResult, op] = TensorBinaryOperationScalarWithOp<BinaryOpType::DIV>(
+            *Program::GetInstance().GetCurrentFunction(), castSelf.GetStorage(), castOther);
+        op->SetAttribute(OpAttributeKey::precisionType, static_cast<int64_t>(precisionType));
+        return Tensor(castResult);
+    }
+
+    CHECK(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED, isDivSupportedScalar(other.GetDataType()))
+        << "Scalar dtype incorrect. When self dtype is float, "
+        << "scalar must be float (DT_FP16/DT_FP32/DT_BF16) or integer (DT_INT16/DT_INT32), "
+        << "actual is: " << DataType2String(other.GetDataType());
+
+    if (isDivSupportedInt(other.GetDataType())) {
+        // 当 self 是 fp16/bf16 且 other 是 int32 时，cast 到 fp32 避免溢出
+        bool needPromoteToFp32 = (self.GetDataType() != DT_FP32) && (other.GetDataType() == DT_INT32);
+        if (needPromoteToFp32) {
+            Tensor castSelf = Cast(self, DT_FP32, CastMode::CAST_NONE, SaturationMode::ON);
+            Element castOther(DT_FP32, other.Cast<float>());
+            auto [result, op] = TensorBinaryOperationScalarWithOp<BinaryOpType::DIV>(
+                *Program::GetInstance().GetCurrentFunction(), castSelf.GetStorage(), castOther);
+            op->SetAttribute(OpAttributeKey::precisionType, static_cast<int64_t>(precisionType));
+            return Tensor(result);
+        }
+        // 其他情况：other cast 到 self.dtype
+        Element castOther(self.GetDataType(), other.Cast<float>());
+        auto [result, op] = TensorBinaryOperationScalarWithOp<BinaryOpType::DIV>(
+            *Program::GetInstance().GetCurrentFunction(), self.GetStorage(), castOther);
+        op->SetAttribute(OpAttributeKey::precisionType, static_cast<int64_t>(precisionType));
+        return Tensor(result);
+    }
+
     auto [result, op] = TensorBinaryOperationScalarWithOp<BinaryOpType::DIV>(
         *Program::GetInstance().GetCurrentFunction(), self.GetStorage(), other);
     op->SetAttribute(OpAttributeKey::precisionType, static_cast<int64_t>(precisionType));
