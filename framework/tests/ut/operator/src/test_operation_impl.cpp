@@ -1514,6 +1514,7 @@ TEST_F(OperationImplTest, Test_Conv2d_FP16)
     Conv::TileL1Info l1TileShape(2, 2, 64, 64, 16, 16, 16, 1);
     Conv::TileL0Info l0TileShape(2, 64, 16, 16);
     TileShape::Current().SetConvTile(l1TileShape, l0TileShape, true);
+    TileShape::Current().SetVecTile({16, 16, 2, 16});
     Tensor fmap(DT_FP16, {1, 16, 2, 64}, "fmap");
     Tensor weight(DT_FP16, {32, 16, 3, 3}, "weight");
     Tensor result;
@@ -1529,6 +1530,7 @@ TEST_F(OperationImplTest, Test_Conv2d_FP32)
     Conv::TileL1Info l1TileShape(2, 2, 64, 64, 8, 8, 16, 1);
     Conv::TileL0Info l0TileShape(2, 64, 8, 16);
     TileShape::Current().SetConvTile(l1TileShape, l0TileShape, true);
+    TileShape::Current().SetVecTile({16, 16, 2, 16});
     Tensor fmap(DT_FP32, {1, 8, 2, 64}, "fmap");
     Tensor weight(DT_FP32, {32, 8, 3, 3}, "weight");
     Tensor result;
@@ -1544,6 +1546,7 @@ TEST_F(OperationImplTest, Test_Conv2d_BF16_Groups)
     Conv::TileL1Info l1TileShape(2, 2, 64, 64, 16, 16, 16, 1);
     Conv::TileL0Info l0TileShape(2, 64, 16, 16);
     TileShape::Current().SetConvTile(l1TileShape, l0TileShape, true);
+    TileShape::Current().SetVecTile({16, 16, 2, 16});
     Tensor fmap(DT_BF16, {1, 32, 2, 64}, "fmap");
     Tensor weight(DT_BF16, {32, 16, 3, 3}, "weight");
     Tensor result;
@@ -1559,7 +1562,7 @@ TEST_F(OperationImplTest, Test_Conv1d_FP16_Bias)
     Conv::TileL1Info l1TileShape(1, 1, 64, 64, 16, 16, 16, 1);
     Conv::TileL0Info l0TileShape(1, 64, 16, 16);
     TileShape::Current().SetConvTile(l1TileShape, l0TileShape, true);
-    TileShape::Current().SetVecTile({1, 16, 16});
+    TileShape::Current().SetVecTile({16, 16, 16});
     Tensor fmap(DT_FP16, {1, 32, 64}, "fmap");
     Tensor weight(DT_FP16, {32, 32, 3}, "weight");
     Tensor bias(
@@ -1582,6 +1585,7 @@ TEST_F(OperationImplTest, Test_Conv3d_FP16_Bias)
     Conv::TileL1Info l1TileShape(2, 2, 64, 64, 16, 16, 16, 1);
     Conv::TileL0Info l0TileShape(2, 64, 16, 16);
     TileShape::Current().SetConvTile(l1TileShape, l0TileShape, true);
+    TileShape::Current().SetVecTile({16, 16, 2, 4, 16});
     Tensor fmap(DT_FP16, {1, 32, 2, 2, 64}, "fmap");
     Tensor weight(DT_FP16, {32, 32, 2, 3, 3}, "weight");
     Tensor bias(

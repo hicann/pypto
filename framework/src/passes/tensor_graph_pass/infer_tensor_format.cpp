@@ -152,18 +152,23 @@ void InferTensorFormat::ApplyTransDataVecTile(const std::shared_ptr<LogicalTenso
 {
     int64_t c0 = srcTensor->Datatype() == DataType::DT_FP32 ? 8 : 16;
     TileOpFormat srcFormat = srcTensor->GetRawTensor()->format;
-    if (targetFormat == TileOpFormat::TILEOP_NC1HWC0) {
-        TileShape::Current().SetVecTile({1, c0, 1, 16});
-    } else if (targetFormat == TileOpFormat::TILEOP_FRACTAL_Z) {
-        TileShape::Current().SetVecTile({16, c0, 1, 16});
-    } else if (srcFormat == TileOpFormat::TILEOP_NC1HWC0 && targetFormat == TileOpFormat::TILEOP_ND) {
-        TileShape::Current().SetVecTile({1, 1, 1, 16, c0});
-    } else if (targetFormat == TileOpFormat::TILEOP_NDC1HWC0) {
-        TileShape::Current().SetVecTile({1, c0, 1, 1, 16});
-    } else if (targetFormat == TileOpFormat::TILEOP_FRACTAL_Z_3D) {
-        TileShape::Current().SetVecTile({16, c0, 1, 1, 16});
+    VecTile oriVectile = TileShape::Current().GetVecTile();
+    ASSERT(DistributedErrorCode::INVALID_TILE_SHAPE, oriVectile.tile.back() % c0 == 0) << "The last dimension of `tile_shape` should be 32-byte aligned.";
+    if (oriVectile.tile.size() == 3) {
+        oriVectile.tile.insert(oriVectile.tile.begin() + 2, 1);
+        TileShape::Current().SetVecTile(oriVectile);
+    }
+    if (srcFormat == TileOpFormat::TILEOP_NC1HWC0 && targetFormat == TileOpFormat::TILEOP_ND) {
+        VecTile tmpVectile = TileShape::Current().GetVecTile();
+        tmpVectile.tile[1] = tmpVectile.tile[1] / c0;
+        tmpVectile.tile.emplace_back(c0);
+        TileShape::Current().SetVecTile(tmpVectile);
     } else if (srcFormat == TileOpFormat::TILEOP_NDC1HWC0 && targetFormat == TileOpFormat::TILEOP_ND) {
-        TileShape::Current().SetVecTile({1, 1, 1, 1, 16, c0});
+        VecTile tmpVectile = TileShape::Current().GetVecTile();
+        std::swap(tmpVectile.tile[1], tmpVectile.tile[2]);
+        tmpVectile.tile[2] = tmpVectile.tile[2] / c0;
+        tmpVectile.tile.emplace_back(c0);
+        TileShape::Current().SetVecTile(tmpVectile);
     }
 }
 
