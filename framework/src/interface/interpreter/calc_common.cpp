@@ -167,7 +167,13 @@ void ExecuteOpView(ExecuteOperationContext* ctx)
 
     auto opAttr = std::static_pointer_cast<ViewOpAttribute>(ctx->op->GetOpAttribute());
     auto offset = ctx->opInter->EvaluateOffset(opAttr->GetFromOffset(), opAttr->GetFromDynOffset());
-    auto validShape = ctx->opInter->EvaluateValidShape(opAttr->GetToDynValidShape());
+    std::vector<int64_t> validShape;
+    if (ctx->frame->callopAttr != nullptr) {
+        auto& linearArgList = ctx->frame->callopAttr->GetLinearArgList();
+        validShape = ctx->opInter->EvaluateValidShape(opAttr->GetToDynValidShape(), linearArgList);
+    } else {
+        validShape = ctx->opInter->EvaluateValidShape(opAttr->GetToDynValidShape());
+    }
     if (oop->GetData() == iop->GetData()) {
         return;
     }
