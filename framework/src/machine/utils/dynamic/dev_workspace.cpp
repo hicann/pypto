@@ -863,7 +863,7 @@ uint32_t DeviceWorkspaceAllocator::WrapQueForThreadSlabMemObjSize()
 {
     if (devProg_->devArgs.archInfo == ArchInfo::DAV_3510) {
         uint32_t size = sizeof(StaticReadyCoreFunctionQueue) + devProg_->stitchFunctionsize * sizeof(uint64_t);
-        return MAX_SCHEDULE_AICPU_NUM * size;
+        return size;
     } else {
         return 0;
     }
@@ -873,11 +873,11 @@ uint32_t DeviceWorkspaceAllocator::WrapQueForThreadSlabMemObjSize()
 uint32_t DeviceWorkspaceAllocator::WrapOffsetListSlabMemObjSize()
 {
     if (devProg_->devArgs.archInfo == ArchInfo::DAV_3510) {
-        uint32_t totalWrapIdNum = 0;
+        uint32_t maxWrapIdNum = 0;
         for (uint32_t i = 0; i < devProg_->GetFunctionSize(); i++) {
-            totalWrapIdNum += devProg_->GetFunction(i)->wrapIdNum_;
+            maxWrapIdNum = std::max<uint32_t>(maxWrapIdNum, static_cast<uint32_t>(devProg_->GetFunction(i)->wrapIdNum_));
         }
-        return totalWrapIdNum * sizeof(uint16_t);
+        return maxWrapIdNum * sizeof(uint16_t);
     } else {
         return 0;
     }
