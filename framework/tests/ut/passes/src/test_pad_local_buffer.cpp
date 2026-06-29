@@ -1218,6 +1218,77 @@ TEST_F(TestPadLocalBuffer, UB2L1)
     EXPECT_EQ(t3a->tensor->GetRawShape(), expectShape);
 }
 
+TEST_F(TestPadLocalBuffer, axiscombineAssemblePadSecondLast)
+{
+    ComputationalGraphBuilder graph;
+    EXPECT_EQ(graph.AddTensor(DataType::DT_BF16, {22, 16}, MemoryType::MEM_DEVICE_DDR, "gm_in0"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_BF16, {22, 16}, MemoryType::MEM_UB, "t79"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"gm_in0"}, {"t79"}, "copyin_10133", true), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {22, 16}, MemoryType::MEM_UB, "t372"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_CAST, {"t79"}, {"t372"}, "cast_10041", true), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {22, 16}, MemoryType::MEM_DEVICE_DDR, "t80"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_OUT, {"t372"}, {"t80"}, "copyout_10169", true), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {22, 16}, MemoryType::MEM_UB, "t373"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"t80"}, {"t373"}, "copyin_10170", true), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {22, 7}, MemoryType::MEM_DEVICE_DDR, "gm_in1"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {22, 7}, MemoryType::MEM_UB, "t371"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"gm_in1"}, {"t371"}, "copyin_10168", true), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {22, 16}, MemoryType::MEM_UB, "t145"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_PAIRSUM, {"t373", "t371"}, {"t145"}, "pairsum_10083", true), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {22, 1}, MemoryType::MEM_UB, "t139"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 8}, MemoryType::MEM_UB, "t148"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_ROWSUM_SINGLE, {"t145"}, {"t139", "t148"}, "rowsum_10086", true), true);
+    graph.GetOp("rowsum_10086")->SetAttribute(OP_ATTR_PREFIX + "AXIS", 1);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_BF16, {22, 1}, MemoryType::MEM_UB, "t160"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_CAST, {"t139"}, {"t160"}, "cast_10104", true), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_BF16, {22, 1}, MemoryType::MEM_UB, "t224"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_ASSEMBLE, {"t160"}, {"t224"}, "assemble_10140", true), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_BF16, {137, 1}, MemoryType::MEM_DEVICE_DDR, "t7"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_OUT, {"t160"}, {"t7"}, "copyout_10105", true), true);
+    EXPECT_EQ(graph.SetOutCast({"t224", "t7"}), true);
+
+    auto* currFunctionPtr = graph.GetFunction();
+    config::SetOperationOption(KEY_COMBINE_AXIS, true);
+    currFunctionPtr->paramConfigs_.combineAxis = true;
+    PadLocalBuffer padLocalBufferTest;
+    EXPECT_EQ(padLocalBufferTest.RunOnFunction(*currFunctionPtr), SUCCESS);
+
+    auto t160 = graph.GetTensor("t160");
+    std::vector<int64_t> expectShape{32, 1};
+    EXPECT_EQ(t160->GetRawTensor()->GetRawShape(), expectShape);
+}
+
+TEST_F(TestPadLocalBuffer, axiscombineViewPadSecondLast)
+{
+    ComputationalGraphBuilder graph;
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {16, 1}, MemoryType::MEM_DEVICE_DDR, "gm_in0"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {16, 1}, MemoryType::MEM_UB, "t48"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"gm_in0"}, {"t48"}, "copyin_10022", true), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {16, 1}, MemoryType::MEM_DEVICE_DDR, "gm_in1"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {16, 1}, MemoryType::MEM_UB, "t49"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"gm_in1"}, {"t49"}, "copyin_10021", true), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {16, 1}, MemoryType::MEM_UB, "t50"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_ADD, {"t48", "t49"}, {"t50"}, "add_10012", true), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 1}, MemoryType::MEM_UB, "t51"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_VIEW, {"t50"}, {"t51"}, "view_10023", true), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 1}, MemoryType::MEM_UB, "t12"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_VIEW, {"t50"}, {"t12"}, "view_10018", true), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 1}, MemoryType::MEM_UB, "t52"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_ADDS, {"t51"}, {"t52"}, "adds_10016", true), true);
+    graph.GetOp("adds_10016")->SetAttribute(OpAttributeKey::scalar, Element(DataType::DT_FP32, 0.0));
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {16, 1}, MemoryType::MEM_DEVICE_DDR, "t20"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_OUT, {"t12"}, {"t20"}, "copyout_10020", true), true);
+
+    auto* currFunctionPtr = graph.GetFunction();
+    config::SetOperationOption(KEY_COMBINE_AXIS, true);
+    currFunctionPtr->paramConfigs_.combineAxis = true;
+    PadLocalBuffer padLocalBufferTest;
+    EXPECT_EQ(padLocalBufferTest.RunOnFunction(*currFunctionPtr), SUCCESS);
+
+    auto t50 = graph.GetTensor("t50");
+    EXPECT_EQ(t50->GetRawTensor()->GetRawShape(), (std::vector<int64_t>{16, 1}));
+}
+
 TEST_F(TestPadLocalBuffer, UB2L1_WithAxisCombine)
 {
     ComputationalGraphBuilder graph;

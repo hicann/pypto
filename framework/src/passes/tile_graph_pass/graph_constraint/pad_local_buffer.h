@@ -54,7 +54,7 @@ private:
     bool IsUb2L1CopyOp(const Operation& op);
     bool HandleUb2L1CopyOp(Operation& op, LogicalTensorPtr& in);
     bool ShouldSkipVectorPad(Operation& op, LogicalTensorPtr& in);
-    bool IsElementwiseLikeOp(OpCalcType calcType, const Operation& op, Operation* producerOp) const;
+    bool IsElementwiseLikeOp(OpCalcType calcType, Operation* producerOp) const;
     void DoBrcbOpPadding(
         Operation& op, LogicalTensorPtr& in, size_t lastIdx, int64_t paddingValue,
         std::unordered_set<std::shared_ptr<RawTensor>>& visitedRaw);
