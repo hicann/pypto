@@ -55,8 +55,6 @@ private:
     Status SortAndLatencyEstimate(std::vector<Operation*>& opList, std::vector<Operation*>& taskOpList, int& latency);
     void CollectStatistic(
         OoOScheduleStatistic& oooHealthCheck, Function& function, std::pair<uint64_t, Function*>& program);
-    Status CollectLastUseInfo(Function& function);
-    void SetLastUseAttributes();
     Status NonMixSchedule(
         std::vector<Operation*>& opList, Function& function, std::pair<uint64_t, Function*>& program,
         int64_t& maxWorkeSpaceSize);
@@ -84,7 +82,6 @@ private:
     std::map<uint64_t, MemoryTracer> tracerMap_;
     void CollectMemoryTrace(MemoryTracer& tracer, Function& function, std::pair<uint64_t, Function*>& program);
     void FlushMemoryTraceOnFailure(MemoryTracer& tracer, Function& function, std::pair<uint64_t, Function*>& program);
-    std::unordered_map<LogicalTensorPtr, Operation*> lastUseMap_;
     OoOScheduleChecker checker;
 };
 } // namespace npu::tile_fwk
