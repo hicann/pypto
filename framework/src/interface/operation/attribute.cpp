@@ -684,9 +684,5 @@ std::shared_ptr<CopyOpAttribute> CopyOpAttribute::DeserializeFrom(
 
 std::shared_ptr<OpAttribute> CopyOpAttribute::Clone() const
 {
-    if (isCopyOut_) {
-        return std::make_shared<CopyOpAttribute>(from_, toOffset_, tensorShape_, rawShape_, fromDynValidShape_);
-    } else {
-        return std::make_shared<CopyOpAttribute>(fromOffset_, to_, tensorShape_, rawShape_, toDynValidShape_);
-    }
+    return std::make_shared<CopyOpAttribute>(*this);
 }
