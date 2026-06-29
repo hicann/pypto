@@ -80,6 +80,7 @@ TEST_F(TestCodegenForLoop, TestForLoop)
                                         {"RemoveAlloc", PassName::REMOVE_ALLOC},
                                         {"CopyOutResolve", PassName::COPY_OUT_RESOLVE},
                                         {"InsertSync", PassName::INSERT_SYNC},
+                                        {"LastUseMark", PassName::LAST_USE_MARK},
                                     });
     Tensor input_a(DT_FP32, shape, "A");
     Tensor input_b(DT_FP32, shape, "B");

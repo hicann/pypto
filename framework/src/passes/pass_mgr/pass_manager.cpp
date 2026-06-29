@@ -51,6 +51,7 @@
 #include "passes/block_graph_pass/copy_out_resolve.h"
 #include "passes/block_graph_pass/dyn_attr_to_static.h"
 #include "passes/block_graph_pass/mix_subgraph_split.h"
+#include "passes/block_graph_pass/last_use_mark.h"
 #include "passes/block_graph_pass/loopaxes_proc.h"
 #include "passes/block_graph_pass/tune_tileopseq_for_vf.h"
 #include "passes/block_graph_pass/tune_sync_for_vf.h"
@@ -117,6 +118,7 @@ std::vector<PassEntry> BuildPvc2OooPassEntries()
         PassName::INSERT_SYNC,
         PassName::TUNE_SYNC_FOR_VF,
         PassName::MIX_SUBGRAPH_SPLIT,
+        PassName::LAST_USE_MARK,
         PassName::GLOBAL_MEMORY_REUSE,
         PassName::CODEGEN_PREPROC,
     });
@@ -170,6 +172,7 @@ void RegPass()
     REG_PASS(DynAttrToStatic);
     REG_PASS(InferDiscontinuousInput);
     REG_PASS(MixSubgraphSplit);
+    REG_PASS(LastUseMark);
     REG_PASS(DuplicateOp);
     REG_PASS(AxisCombine);
     REG_PASS(InsertOpForViewAssemble);
