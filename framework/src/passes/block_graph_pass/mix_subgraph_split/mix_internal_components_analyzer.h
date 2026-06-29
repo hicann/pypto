@@ -45,6 +45,16 @@ private:
     void ProcessUnassignedOperations(
         std::vector<Operation*>& unassignedOps, std::map<int, std::vector<Operation*>>& componentsByInternalID,
         Function& mixSubgraphFunc) const;
+    void AssignSyncOpByAIVCore(
+        Operation* syncOp, std::map<int, std::vector<Operation*>>& componentsByInternalID,
+        std::unordered_map<Operation*, int>& opToComponentMap,
+        std::map<AIVCore, std::vector<Operation*>>& unmatchedSyncOpsByAIVCore) const;
+    void CreateComponentsForUnmatchedSyncOps(
+        std::map<int, std::vector<Operation*>>& componentsByInternalID,
+        std::unordered_map<Operation*, int>& opToComponentMap,
+        const std::map<AIVCore, std::vector<Operation*>>& unmatchedSyncOpsByAIVCore) const;
+    // 获取组件的有效AIVCore（基于组内非同步op的AIVCore）
+    AIVCore GetComponentAIVCore(const std::vector<Operation*>& operations) const;
     // 合并同步op
     bool MergeSyncOperation(
         Operation* op, std::map<int, std::vector<Operation*>>& componentsByInternalID,
@@ -68,6 +78,7 @@ private:
 
     // 处理 componentType 属性
     Status DetermineComponentType(const InternalComponentInfo& component, ComponentType& componentType) const;
+    Status DetermineAllSyncComponentType(const InternalComponentInfo& component, ComponentType& componentType) const;
     // 校验当前component内部的iscube属性是否一致
     bool CheckAllCubeAttrConsistent(const InternalComponentInfo& component) const;
 
@@ -84,6 +95,8 @@ private:
     AIVCore FindConsumerVectorAIVCore(Operation* copyOp) const;
     // 辅助函数：收集L0C_COPY_UB的所有下游V_SCOPE的AivCore到输出容器consumerAivCores
     void CollectConsumerAivCores(Operation* copyOp, std::vector<AIVCore>& consumerAivCores) const;
+    // 辅助函数：从所有op（含同步）中查找第一个非UNSPECIFIED的AIVCore
+    AIVCore FindFirstAIVCore(const std::vector<Operation*>& operations) const;
 };
 } // namespace tile_fwk
 } // namespace npu

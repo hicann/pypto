@@ -308,6 +308,8 @@ CodeGenOpNPU::CodeGenOpNPU(const CodeGenOpNPUCtx& ctx)
           {Opcode::OP_BAR_ALL, [this]() { return GenBarrier(); }},
           {Opcode::OP_CV_SYNC_SRC, [this]() { return GenCVSyncSetOp(); }},
           {Opcode::OP_CV_SYNC_DST, [this]() { return GenCVSyncWaitOp(); }},
+          {Opcode::OP_FFTS_CROSS_CORE_SYNC, [this]() { return GenFFTSCrossCoreSyncOp(); }},
+          {Opcode::OP_WAIT_FLAG_DEV, [this]() { return GenWaitFlagDevOp(); }},
       }),
       distributeOps_({
           // distribute op

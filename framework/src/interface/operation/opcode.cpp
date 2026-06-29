@@ -1317,6 +1317,12 @@ void OpcodeManager::RegisterCommon()
         Opcode::OP_CV_SYNC_DST, OpCoreType::ANY, "CV_SYNC_DST", {}, {}, {"CV_SYNC_DST", PIPE_S, PIPE_S, CoreType::AIC},
         OpCalcType::SYNC);
     RegisterInfo(
+        Opcode::OP_FFTS_CROSS_CORE_SYNC, OpCoreType::ANY, "FFTS_CROSS_CORE_SYNC", {}, {}, {"FFTS_CROSS_CORE_SYNC", PIPE_S, PIPE_S, CoreType::AIC},
+        OpCalcType::SYNC);
+    RegisterInfo(
+        Opcode::OP_WAIT_FLAG_DEV, OpCoreType::ANY, "WAIT_FLAG_DEV", {}, {}, {"WAIT_FLAG_DEV", PIPE_S, PIPE_S, CoreType::AIC},
+        OpCalcType::SYNC);
+    RegisterInfo(
         Opcode::OP_PHASE1, OpCoreType::ANY, "PHASE1", {}, {}, {"PHASE1", PIPE_S, PIPE_S, CoreType::AIC},
         OpCalcType::SYNC);
     RegisterInfo(

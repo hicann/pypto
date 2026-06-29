@@ -174,6 +174,60 @@ std::map<int, std::vector<Operation*>> MixInternalComponentsAnalyzer::GroupOpera
     return internalIDToOperations;
 }
 
+void MixInternalComponentsAnalyzer::AssignSyncOpByAIVCore(
+    Operation* syncOp, std::map<int, std::vector<Operation*>>& componentsByInternalID,
+    std::unordered_map<Operation*, int>& opToComponentMap,
+    std::map<AIVCore, std::vector<Operation*>>& unmatchedSyncOpsByAIVCore) const
+{
+    AIVCore opAIVCore = syncOp->GetAIVCore();
+    bool assignedByAIVCore = false;
+    for (const auto& [compID, ops] : componentsByInternalID) {
+        if (GetComponentAIVCore(ops) == opAIVCore) {
+            syncOp->UpdateInternalSubgraphID(compID);
+            componentsByInternalID[compID].push_back(syncOp);
+            opToComponentMap[syncOp] = compID;
+            assignedByAIVCore = true;
+            APASS_LOG_DEBUG_F(
+                Elements::Operation,
+                "Sync op %s %d assigned to component %d by AIVCore (AIVCore=%d)",
+                syncOp->GetOpcodeStr().c_str(), syncOp->GetOpMagic(), compID, static_cast<int>(opAIVCore));
+            break;
+        }
+    }
+    if (!assignedByAIVCore) {
+        unmatchedSyncOpsByAIVCore[opAIVCore].push_back(syncOp);
+    }
+}
+
+void MixInternalComponentsAnalyzer::CreateComponentsForUnmatchedSyncOps(
+    std::map<int, std::vector<Operation*>>& componentsByInternalID,
+    std::unordered_map<Operation*, int>& opToComponentMap,
+    const std::map<AIVCore, std::vector<Operation*>>& unmatchedSyncOpsByAIVCore) const
+{
+    if (unmatchedSyncOpsByAIVCore.empty()) {
+        return;
+    }
+    int maxID = -1;
+    for (const auto& [id, ops] : componentsByInternalID) {
+        (void)ops;
+        if (id > maxID) {
+            maxID = id;
+        }
+    }
+    for (auto& [aivCore, ops] : unmatchedSyncOpsByAIVCore) {
+        int newID = ++maxID;
+        for (auto* op : ops) {
+            op->UpdateInternalSubgraphID(newID);
+            opToComponentMap[op] = newID;
+        }
+        componentsByInternalID[newID] = ops;
+        APASS_LOG_INFO_F(
+            Elements::Operation,
+            "Created new component %d for %zu sync ops with AIVCore=%d",
+            newID, ops.size(), static_cast<int>(aivCore));
+    }
+}
+
 void MixInternalComponentsAnalyzer::ProcessUnassignedOperations(
     std::vector<Operation*>& unassignedOps, std::map<int, std::vector<Operation*>>& componentsByInternalID,
     Function& mixSubgraphFunc) const
@@ -196,15 +250,15 @@ void MixInternalComponentsAnalyzer::ProcessUnassignedOperations(
         }
     }
     // 处理同步op
+    std::map<AIVCore, std::vector<Operation*>> unmatchedSyncOpsByAIVCore;
     for (auto* syncOp : syncOps) {
         bool merged = MergeSyncOperation(syncOp, componentsByInternalID, opToComponentMap, mixSubgraphFunc);
         if (!merged) {
-            remainingOps.push_back(syncOp);
-            APASS_LOG_DEBUG_F(
-                Elements::Operation, "Sync operation %s %d not merged", syncOp->GetOpcodeStr().c_str(),
-                syncOp->GetOpMagic());
+            AssignSyncOpByAIVCore(syncOp, componentsByInternalID, opToComponentMap, unmatchedSyncOpsByAIVCore);
         }
     }
+    // 为无匹配component的sync op按AIVCore创建新component
+    CreateComponentsForUnmatchedSyncOps(componentsByInternalID, opToComponentMap, unmatchedSyncOpsByAIVCore);
     // 报告未分配的op
     if (!remainingOps.empty()) {
         APASS_LOG_ERROR_F(
@@ -213,6 +267,26 @@ void MixInternalComponentsAnalyzer::ProcessUnassignedOperations(
             APASS_LOG_DEBUG_F(Elements::Operation, "  Unassigned: %s %d", op->GetOpcodeStr().c_str(), op->GetOpMagic());
         }
     }
+}
+
+AIVCore MixInternalComponentsAnalyzer::GetComponentAIVCore(const std::vector<Operation*>& operations) const
+{
+    for (auto* op : operations) {
+        if (!IsSyncOperation(op) && op->GetAIVCore() != AIVCore::UNSPECIFIED) {
+            return op->GetAIVCore();
+        }
+    }
+    return AIVCore::UNSPECIFIED;
+}
+
+AIVCore MixInternalComponentsAnalyzer::FindFirstAIVCore(const std::vector<Operation*>& operations) const
+{
+    for (auto* op : operations) {
+        if (op->GetAIVCore() != AIVCore::UNSPECIFIED) {
+            return op->GetAIVCore();
+        }
+    }
+    return AIVCore::UNSPECIFIED;
 }
 
 bool MixInternalComponentsAnalyzer::IsSyncOperation(Operation* op) const
@@ -226,7 +300,8 @@ bool MixInternalComponentsAnalyzer::IsSyncOperation(Operation* op) const
     // 同步操作类型列表
     return opcode == Opcode::OP_SYNC_SRC || opcode == Opcode::OP_SYNC_DST || opcode == Opcode::OP_CV_SYNC_SRC ||
            opcode == Opcode::OP_CV_SYNC_DST || opcode == Opcode::OP_PHASE1 || opcode == Opcode::OP_PHASE2 ||
-           opcode == Opcode::OP_BAR_V || opcode == Opcode::OP_BAR_M || opcode == Opcode::OP_BAR_ALL;
+           opcode == Opcode::OP_BAR_V || opcode == Opcode::OP_BAR_M || opcode == Opcode::OP_BAR_ALL ||
+           opcode == Opcode::OP_FFTS_CROSS_CORE_SYNC || opcode == Opcode::OP_WAIT_FLAG_DEV;
 }
 
 bool MixInternalComponentsAnalyzer::MergeSyncOperation(
@@ -252,14 +327,14 @@ bool MixInternalComponentsAnalyzer::MergeSyncOperation(
     }
 
     // BAR类、OP_SYNC_DST、OP_CV_SYNC_DST: 往后找到第一个非同步op放到该op所在分组
-    if (opcode == Opcode::OP_BAR_V || opcode == Opcode::OP_BAR_M || opcode == Opcode::OP_BAR_ALL ||
+    if (opcode == Opcode::OP_BAR_V || opcode == Opcode::OP_BAR_M ||
         opcode == Opcode::OP_SYNC_DST || opcode == Opcode::OP_CV_SYNC_DST) {
         Operation* targetDstOp = FindFirstOpForward(
             op, mixSubgraphFunc, [this](Operation* candidate) { return !IsSyncOperation(candidate); });
         return MergeSyncSrcDst(op, targetDstOp, componentsByInternalID, opToComponentMap);
     }
 
-    APASS_LOG_ERROR_F(
+    APASS_LOG_WARN_F(
         Elements::Operation, "Unhandled sync operation type: %s %d", op->GetOpcodeStr().c_str(), op->GetOpMagic());
     return false;
 }
@@ -406,6 +481,7 @@ Status MixInternalComponentsAnalyzer::DetermineComponentType(
         return FAILED;
     }
     // 遍历所有非同步op，查找isCube属性
+    bool isAllSyncOp{true};
     for (auto* op : component.operations) {
         // 跳过同步op
         if (IsSyncOperation(op)) {
@@ -413,6 +489,7 @@ Status MixInternalComponentsAnalyzer::DetermineComponentType(
                 Elements::Operation, "Skipping sync op %d (opcode=%s)", op->GetOpMagic(), op->GetOpcodeStr().c_str());
             continue;
         }
+        isAllSyncOp = false;
         // 检查isCube属性
         if (op->HasAttribute(OpAttributeKey::isCube)) {
             bool isCube = op->GetBoolAttribute(OpAttributeKey::isCube);
@@ -431,11 +508,28 @@ Status MixInternalComponentsAnalyzer::DetermineComponentType(
         componentType = ComponentType::V_SCOPE;
         return SUCCESS;
     }
-    // 如果所有操作都是同步操作
-    APASS_LOG_DEBUG_F(
-        Elements::Operation, "Component %s has only sync operations (%zu ops)", component.suffix.c_str(),
-        component.operations.size());
+    if (isAllSyncOp) {
+        return DetermineAllSyncComponentType(component, componentType);
+    }
     return FAILED;
+}
+
+Status MixInternalComponentsAnalyzer::DetermineAllSyncComponentType(
+    const InternalComponentInfo& component, ComponentType& componentType) const
+{
+    AIVCore aivCore = FindFirstAIVCore(component.operations);
+    if (aivCore == AIVCore::UNSPECIFIED) {
+        componentType = ComponentType::C_SCOPE;
+    } else {
+        componentType = ComponentType::V_SCOPE;
+    }
+    APASS_LOG_DEBUG_F(
+        Elements::Operation,
+        "Component %s has only sync operations, determined as %s by AIVCore=%d",
+        component.suffix.c_str(),
+        componentType == ComponentType::C_SCOPE ? "C_SCOPE" : "V_SCOPE",
+        static_cast<int>(aivCore));
+    return SUCCESS;
 }
 
 // 校验当前component内部的iscube属性是否一致
@@ -536,6 +630,14 @@ Status MixInternalComponentsAnalyzer::ProcessVecScope(
             outAivCore = refAIVCore;
             return SUCCESS;
         }
+    }
+    // 无非同步op时，从同步op的AIVCore推断
+    AIVCore syncAIVCore = FindFirstAIVCore(operations);
+    if (syncAIVCore != AIVCore::UNSPECIFIED) {
+        outAivCore = syncAIVCore;
+        APASS_LOG_DEBUG_F(
+            Elements::Operation, "Component %d AIVCore determined by sync op: AIV%d", componentID,
+            (syncAIVCore == AIVCore::AIV0 ? 0 : 1));
     }
     return SUCCESS;
 }

@@ -148,9 +148,9 @@ TEST_F(TestCodegenScalar, TestAicpuCallOp)
     EXPECT_EQ(res, expect);
 }
 
-void TestCVSyncBody(Opcode syncOpcode)
+void TestCrossCoreSyncBody(std::string funcName, Opcode syncOpcode)
 {
-    auto function = GenMockFuncStatic("TestCVSyncBody");
+    auto function = GenMockFuncStatic(funcName);
     std::vector<int64_t> shape = {64, 64};
     const std::vector<SymbolicScalar> dynValidShape = {64, 64};
     auto localTensor = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_L0C, shape, dynValidShape});
@@ -159,18 +159,26 @@ void TestCVSyncBody(Opcode syncOpcode)
     auto& op = function->AddOperation(syncOpcode, {localTensor}, {localOutTensor});
 
     std::string res = GenOpCodeFromOp(*function, op);
-    std::string expect;
-    if (syncOpcode == Opcode::OP_CV_SYNC_SRC) {
-        expect = R"!!!(set_intra_block(PIPE_S, 0);
-)!!!";
-    } else {
-        expect = R"!!!(wait_intra_block(PIPE_S, 0);
-)!!!";
-    }
+    static const std::map<Opcode, std::string> expectList = {
+        {Opcode::OP_CV_SYNC_SRC, R"!!!(set_intra_block(PIPE_S, 0);)!!!"},
+        {Opcode::OP_CV_SYNC_DST, R"!!!(wait_intra_block(PIPE_S, 0);)!!!"},
+        {Opcode::OP_FFTS_CROSS_CORE_SYNC, R"!!!(ffts_cross_core_sync(PIPE_S, getFFTSMsg(0x2, 0));)!!!"},
+        {Opcode::OP_WAIT_FLAG_DEV, R"!!!(wait_flag_dev(PIPE_S, 0);)!!!"},
+    };
+
+    std::string expect = expectList.at(syncOpcode);
     CheckStringExist(expect, res);
 }
 
-TEST_F(TestCodegenScalar, InjectSyncSet) { TestCVSyncBody(Opcode::OP_CV_SYNC_SRC); }
+TEST_F(TestCodegenScalar, InjectSyncSet) { TestCrossCoreSyncBody("InjectSyncSet", Opcode::OP_CV_SYNC_SRC); }
 
-TEST_F(TestCodegenScalar, InjectSyncWait) { TestCVSyncBody(Opcode::OP_CV_SYNC_DST); }
+TEST_F(TestCodegenScalar, InjectSyncWait) { TestCrossCoreSyncBody("InjectSyncWait", Opcode::OP_CV_SYNC_DST); }
+
+TEST_F(TestCodegenScalar, InjectFFTSCrossCoreSync)
+{
+    TestCrossCoreSyncBody("InjectFFTSCrossCoreSync", Opcode::OP_FFTS_CROSS_CORE_SYNC);
+}
+
+TEST_F(TestCodegenScalar, InjectWaitFlagDev) { TestCrossCoreSyncBody("InjectWaitFlagDev", Opcode::OP_WAIT_FLAG_DEV); }
+
 } // namespace npu::tile_fwk
