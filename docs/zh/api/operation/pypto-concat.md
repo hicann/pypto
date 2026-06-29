@@ -39,6 +39,9 @@ concat(tensors: List[Tensor], dim: int = 0) -> Tensor
 
 5.输出Tensor的validShape需由用户在调用concat前确保正确，该接口不会自动推导。
 
+6.Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
+
+
 
 ## 调用示例
 

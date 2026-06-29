@@ -304,6 +304,9 @@ void TiledCmpsOperation(
 Tensor Compare(const Tensor& self, const Tensor& other, OpType op, OutType mode)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Compare");
+    CheckTensorFormat(other.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Compare");
+
     CheckTensorsDataTypeConsistency(self.GetStorage(), other.GetStorage(), "COMPARE");
     static const std::unordered_set<DataType> CMP_A2A3_TYPES = {DT_FP16, DT_FP32};
     static const std::unordered_set<DataType> CMP_A5_TYPES = {DT_FP16, DT_FP32, DT_INT16};
@@ -316,6 +319,8 @@ Tensor Compare(const Tensor& self, const Tensor& other, OpType op, OutType mode)
 Tensor Compare(const Tensor& self, const Element& other, OpType op, OutType mode)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Compare");
+
     static const std::unordered_set<DataType> CMP_A2A3_TYPES = {DT_FP16, DT_FP32};
     static const std::unordered_set<DataType> CMP_A5_TYPES = {DT_FP16, DT_FP32, DT_INT16};
     const auto& supportedTypes = GetSupportedDataTypesByArch(CMP_A2A3_TYPES, CMP_A5_TYPES);
@@ -328,6 +333,8 @@ Tensor Compare(const Tensor& self, const Element& other, OpType op, OutType mode
 Tensor Compare(const Element& self, const Tensor& other, OpType op, OutType mode)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(other.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Compare");
+
     static const std::unordered_set<DataType> CMP_A2A3_TYPES = {DT_FP16, DT_FP32};
     static const std::unordered_set<DataType> CMP_A5_TYPES = {DT_FP16, DT_FP32, DT_INT16};
     const auto& supportedTypes = GetSupportedDataTypesByArch(CMP_A2A3_TYPES, CMP_A5_TYPES);

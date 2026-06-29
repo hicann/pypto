@@ -38,6 +38,8 @@ fmod(input: Tensor, other: Union[Tensor, float], precision_type: PrecisionType =
 2. other为数字的时候，不支持隐式转化。
 3. other不支持nan、inf等特殊值
 4. 高精度模式当前仅在Ascend 950PR上有效，其他产品底层默认使用指令模式 `INTRINSIC`。
+5. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
+
 
 ## 调用示例
 

@@ -43,6 +43,8 @@ lrelu(input: Tensor, negative_slope: Union[float, Element] = 0.01) -> Tensor
 2. negative_slope必须为非负浮点数（≥ 0），且不能为`nan`或`inf`。
 3. negative_slope建议优先使用Element，传入float标量，对于fp16场景，不保证正确性。
 4. 不支持in-place操作（即输出不能与输入共享内存）。
+5. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
+
 
 
 ## 调用示例

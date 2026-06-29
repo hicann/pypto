@@ -34,6 +34,8 @@ atanh(input: Tensor) -> Tensor
 
 输入超出±1时输出为NaN，输入为±1时输出为±inf。
 
+Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
+
 
 ## 调用示例
 

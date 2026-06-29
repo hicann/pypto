@@ -39,6 +39,8 @@ div(input: Tensor, other: Union[Tensor, float], precision_type: PrecisionType = 
 3. **精度模式说明**：
     - **HIGH_PRECISION（高精度模式）**：默认模式，在底层实现中会使用更高精度的计算方式，当前仅在Ascend 950PR上有效。
     - **INTRINSIC（指令模式）**：直接使用芯片指令进行计算。
+4. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
+
 
 ## 调用示例
 

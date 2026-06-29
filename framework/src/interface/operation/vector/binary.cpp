@@ -349,6 +349,9 @@ LogicalTensorPtr TensorPReLUOperation(Function& function, const Tensor& self, co
 Tensor PReLU(const Tensor& self, const Tensor& weight)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "PReLU");
+    CheckTensorFormat(weight.GetStorage(), {TileOpFormat::TILEOP_NZ}, "PReLU");
+
     CheckTensorsDataTypeConsistency(self.GetStorage(), weight.GetStorage(), "PReLU");
     std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_FP32};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "PReLU");
@@ -359,6 +362,9 @@ Tensor PReLU(const Tensor& self, const Tensor& weight)
 Tensor Add(const Tensor& self, const Tensor& other)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Add");
+    CheckTensorFormat(other.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Add");
+
     CheckTensorsDataTypeConsistency(self.GetStorage(), other.GetStorage(), "ADD");
 
     static const std::unordered_set<DataType> ADD_A2A3_TYPES = {DT_INT32, DT_INT16, DT_FP16, DT_FP32, DT_BF16};
@@ -372,6 +378,9 @@ Tensor Add(const Tensor& self, const Tensor& other)
 Tensor Sub(const Tensor& self, const Tensor& other)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Sub");
+    CheckTensorFormat(other.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Sub");
+
     CheckTensorsDataTypeConsistency(self.GetStorage(), other.GetStorage(), "SUB");
 
     static const std::unordered_set<DataType> SUB_A2A3_TYPES = {DT_INT32, DT_INT16, DT_FP16, DT_FP32, DT_BF16};
@@ -385,6 +394,9 @@ Tensor Sub(const Tensor& self, const Tensor& other)
 Tensor Mul(const Tensor& self, const Tensor& other)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Mul");
+    CheckTensorFormat(other.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Mul");
+
     CheckTensorsDataTypeConsistency(self.GetStorage(), other.GetStorage(), "MUL");
 
     static const std::unordered_set<DataType> MUL_A2A3_TYPES = {DT_INT32, DT_INT16, DT_FP16, DT_FP32, DT_BF16};
@@ -397,6 +409,9 @@ Tensor Mul(const Tensor& self, const Tensor& other)
 Tensor Div(const Tensor& self, const Tensor& other, PrecisionType precisionType)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Div");
+    CheckTensorFormat(other.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Div");
+
     CheckTensorsDataTypeConsistency(self.GetStorage(), other.GetStorage(), "DIV");
 
     static const std::unordered_set<DataType> DIV_A2A3_TYPES = {DT_FP16, DT_FP32, DT_BF16};
@@ -412,6 +427,9 @@ Tensor Div(const Tensor& self, const Tensor& other, PrecisionType precisionType)
 Tensor Fmod(const Tensor& self, const Tensor& other, PrecisionType precisionType)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Fmod");
+    CheckTensorFormat(other.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Fmod");
+
     CheckTensorsDataTypeConsistency(self.GetStorage(), other.GetStorage(), "MOD");
     std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_FP32};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "MOD");
@@ -433,6 +451,9 @@ Tensor Fmod(const Tensor& self, const Tensor& other, PrecisionType precisionType
 Tensor Remainder(const Tensor& self, const Tensor& other, PrecisionType precisionType)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Remainder");
+    CheckTensorFormat(other.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Remainder");
+
     CheckTensorsDataTypeConsistency(self.GetStorage(), other.GetStorage(), "REM");
     std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "REM");
@@ -456,6 +477,9 @@ Tensor Remainder(const Tensor& self, const Tensor& other, PrecisionType precisio
 Tensor Maximum(const Tensor& operand1, const Tensor& operand2)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(operand1.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Maximum");
+    CheckTensorFormat(operand2.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Maximum");
+
     CheckTensorsDataTypeConsistency(operand1.GetStorage(), operand2.GetStorage(), "MAXIMUM");
 
     static const std::unordered_set<DataType> MAX_A2A3_TYPES = {DT_INT32, DT_INT16, DT_FP16, DT_FP32, DT_BF16};
@@ -470,6 +494,9 @@ Tensor Maximum(const Tensor& operand1, const Tensor& operand2)
 Tensor Minimum(const Tensor& operand1, const Tensor& operand2)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(operand1.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Minimum");
+    CheckTensorFormat(operand2.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Minimum");
+
     CheckTensorsDataTypeConsistency(operand1.GetStorage(), operand2.GetStorage(), "MINIMUM");
 
     static const std::unordered_set<DataType> MIN_A2A3_TYPES = {DT_INT32, DT_INT16, DT_FP16, DT_FP32, DT_BF16};
@@ -484,6 +511,9 @@ Tensor Minimum(const Tensor& operand1, const Tensor& operand2)
 Tensor BitwiseAnd(const Tensor& self, const Tensor& other)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "BitwiseAnd");
+    CheckTensorFormat(other.GetStorage(), {TileOpFormat::TILEOP_NZ}, "BitwiseAnd");
+
     CheckTensorsDataTypeConsistency(self.GetStorage(), other.GetStorage(), "BITWISEAND");
     static const std::unordered_set<DataType> BITWISE_A2A3_TYPES = {DT_INT16, DT_UINT16, DT_INT8, DT_UINT8};
     static const std::unordered_set<DataType> BITWISE_A5_TYPES = {DT_INT16, DT_UINT16, DT_INT8, DT_UINT8, DT_INT32};
@@ -495,6 +525,9 @@ Tensor BitwiseAnd(const Tensor& self, const Tensor& other)
 Tensor BitwiseOr(const Tensor& self, const Tensor& other)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "BitwiseOr");
+    CheckTensorFormat(other.GetStorage(), {TileOpFormat::TILEOP_NZ}, "BitwiseOr");
+
     CheckTensorsDataTypeConsistency(self.GetStorage(), other.GetStorage(), "BITWISEOR");
     static const std::unordered_set<DataType> BITWISE_A2A3_TYPES = {DT_INT16, DT_UINT16, DT_INT8, DT_UINT8};
     static const std::unordered_set<DataType> BITWISE_A5_TYPES = {DT_INT16, DT_UINT16, DT_INT8, DT_UINT8, DT_INT32};
@@ -506,6 +539,9 @@ Tensor BitwiseOr(const Tensor& self, const Tensor& other)
 Tensor BitwiseXor(const Tensor& self, const Tensor& other)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "BitwiseXor");
+    CheckTensorFormat(other.GetStorage(), {TileOpFormat::TILEOP_NZ}, "BitwiseXor");
+
     CheckTensorsDataTypeConsistency(self.GetStorage(), other.GetStorage(), "BITWISEXOR");
     static const std::unordered_set<DataType> BITWISE_A2A3_TYPES = {DT_INT16, DT_UINT16, DT_INT8, DT_UINT8};
     static const std::unordered_set<DataType> BITWISE_A5_TYPES = {DT_INT16, DT_UINT16, DT_INT8, DT_UINT8, DT_INT32};
@@ -517,6 +553,9 @@ Tensor BitwiseXor(const Tensor& self, const Tensor& other)
 Tensor Gcd(const Tensor& self, const Tensor& other)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Gcd");
+    CheckTensorFormat(other.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Gcd");
+
     CheckTensorsDataTypeConsistency(self.GetStorage(), other.GetStorage(), "GCD");
     CheckTensorDimRange(self.GetStorage(), 1, 4, "GCD");
     std::unordered_set<DataType> supportedTypes = {DT_INT8, DT_INT16, DT_INT32, DT_UINT8};
@@ -527,6 +566,8 @@ Tensor Gcd(const Tensor& self, const Tensor& other)
 Tensor Gcd(const Tensor& self, const Element& other)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Gcd");
+
     CheckTensorDimRange(self.GetStorage(), 1, 4, "GCD");
     std::unordered_set<DataType> supportedTypes = {DT_INT8, DT_INT16, DT_INT32, DT_UINT8};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "GCD");
@@ -598,6 +639,9 @@ void PowCheck(const Tensor& self, const Tensor& other)
 Tensor Pow(const Tensor& self, const Tensor& other, PrecisionType precisionType)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Pow");
+    CheckTensorFormat(other.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Pow");
+
     PowCheck(self, other);
     DataType selfType = self.GetDataType();
     DataType otherType = other.GetDataType();
@@ -682,6 +726,8 @@ void PowSCheck(const Tensor& self)
 Tensor Pow(const Tensor& self, const Element& other, PrecisionType precisionType)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Pow");
+
     PowSCheck(self);
     LogicalTensorPtr castSelf = self.GetStorage();
     if (self.GetDataType() == DT_INT32 && !IsInteger(other.GetDataType())) {
@@ -720,6 +766,9 @@ Tensor Pow(const Tensor& self, const Element& other, PrecisionType precisionType
 Tensor FloorDiv(const Tensor& self, const Tensor& other)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "FloorDiv");
+    CheckTensorFormat(other.GetStorage(), {TileOpFormat::TILEOP_NZ}, "FloorDiv");
+
     CheckTensorsDataTypeConsistency(self.GetStorage(), other.GetStorage(), "FLOORDIV");
     std::unordered_set<DataType> supportedTypes = {DT_INT32};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "FLOORDIV");
@@ -839,6 +888,8 @@ void TiledRemainderSOperation(
 Tensor Add(const Tensor& self, const Element& other)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Add");
+
 
     static const std::unordered_set<DataType> ADD_A2A3_TYPES = {DT_INT32, DT_INT16, DT_FP16, DT_FP32, DT_BF16};
     static const std::unordered_set<DataType> ADD_A5_TYPES = {DT_INT32, DT_FP32, DT_INT16, DT_FP16, DT_BF16,
@@ -853,6 +904,8 @@ Tensor Add(const Tensor& self, const Element& other)
 Tensor Sub(const Tensor& self, const Element& other)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Sub");
+
 
     static const std::unordered_set<DataType> SUB_A2A3_TYPES = {DT_INT32, DT_INT16, DT_FP16, DT_FP32, DT_BF16};
     static const std::unordered_set<DataType> SUB_A5_TYPES = {DT_INT32, DT_FP32, DT_INT16, DT_FP16, DT_BF16,
@@ -867,6 +920,8 @@ Tensor Sub(const Tensor& self, const Element& other)
 Tensor Mul(const Tensor& self, const Element& other)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Mul");
+
 
     static const std::unordered_set<DataType> MUL_A2A3_TYPES = {DT_INT32, DT_INT16, DT_FP16, DT_FP32, DT_BF16};
     static const std::unordered_set<DataType> MUL_A5_TYPES = {DT_INT32, DT_FP32, DT_INT16, DT_FP16, DT_BF16};
@@ -880,6 +935,8 @@ Tensor Mul(const Tensor& self, const Element& other)
 Tensor Div(const Tensor& self, const Element& other, PrecisionType precisionType)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Div");
+
 
     static const std::unordered_set<DataType> DIV_A2A3_TYPES = {DT_FP16, DT_FP32, DT_BF16};
     static const std::unordered_set<DataType> DIV_A5_TYPES = {DT_FP16, DT_FP32, DT_BF16};
@@ -894,6 +951,8 @@ Tensor Div(const Tensor& self, const Element& other, PrecisionType precisionType
 Tensor Fmod(const Tensor& self, const Element& other, PrecisionType precisionType)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Fmod");
+
     std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_FP32};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "MOD");
     auto [result, op] = TensorBinaryOperationScalarWithOp<BinaryOpType::MOD>(
@@ -905,6 +964,8 @@ Tensor Fmod(const Tensor& self, const Element& other, PrecisionType precisionTyp
 Tensor Remainder(const Tensor& self, const Element& other, PrecisionType precisionType)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Remainder");
+
     std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "REM");
     auto selfDtype = self.GetDataType();
@@ -927,6 +988,8 @@ Tensor Remainder(const Tensor& self, const Element& other, PrecisionType precisi
 Tensor Remainder(const Element& self, const Tensor& other, PrecisionType precisionType)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(other.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Remainder");
+
     std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
     CheckTensorDataType(other.GetStorage(), supportedTypes, "REM");
     auto otherDtype = other.GetDataType();
@@ -951,6 +1014,8 @@ Tensor Remainder(const Element& self, const Tensor& other, PrecisionType precisi
 Tensor BitwiseAnd(const Tensor& self, const Element& other)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "BitwiseAnd");
+
     static const std::unordered_set<DataType> BITWISE_A2A3_TYPES = {DT_INT16, DT_UINT16, DT_INT8, DT_UINT8};
     static const std::unordered_set<DataType> BITWISE_A5_TYPES = {DT_INT16, DT_UINT16, DT_INT8, DT_UINT8, DT_INT32};
     const auto& supportedTypes = GetSupportedDataTypesByArch(BITWISE_A2A3_TYPES, BITWISE_A5_TYPES);
@@ -963,6 +1028,8 @@ Tensor BitwiseAnd(const Tensor& self, const Element& other)
 Tensor BitwiseOr(const Tensor& self, const Element& other)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "BitwiseOr");
+
     static const std::unordered_set<DataType> BITWISE_A2A3_TYPES = {DT_INT16, DT_UINT16, DT_INT8, DT_UINT8};
     static const std::unordered_set<DataType> BITWISE_A5_TYPES = {DT_INT16, DT_UINT16, DT_INT8, DT_UINT8, DT_INT32};
     const auto& supportedTypes = GetSupportedDataTypesByArch(BITWISE_A2A3_TYPES, BITWISE_A5_TYPES);
@@ -975,6 +1042,8 @@ Tensor BitwiseOr(const Tensor& self, const Element& other)
 Tensor BitwiseXor(const Tensor& self, const Element& other)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "BitwiseXor");
+
     static const std::unordered_set<DataType> BITWISE_A2A3_TYPES = {DT_INT16, DT_UINT16, DT_INT8, DT_UINT8};
     static const std::unordered_set<DataType> BITWISE_A5_TYPES = {DT_INT16, DT_UINT16, DT_INT8, DT_UINT8, DT_INT32};
     const auto& supportedTypes = GetSupportedDataTypesByArch(BITWISE_A2A3_TYPES, BITWISE_A5_TYPES);
@@ -987,6 +1056,8 @@ Tensor BitwiseXor(const Tensor& self, const Element& other)
 Tensor Maximum(const Tensor& operand1, const Element& operand2)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(operand1.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Maximum");
+
     std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
     CheckTensorDataType(operand1.GetStorage(), supportedTypes, "MAX");
     RETURN_CALL(
@@ -997,6 +1068,8 @@ Tensor Maximum(const Tensor& operand1, const Element& operand2)
 Tensor Minimum(const Tensor& operand1, const Element& operand2)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(operand1.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Minimum");
+
     std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
     CheckTensorDataType(operand1.GetStorage(), supportedTypes, "MIN");
     RETURN_CALL(
@@ -1007,6 +1080,8 @@ Tensor Minimum(const Tensor& operand1, const Element& operand2)
 Tensor LReLU(const Tensor& self, const Element& other)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "LReLU");
+
     std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_FP32};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "LRELU");
     RETURN_CALL(
@@ -1017,6 +1092,9 @@ Tensor LReLU(const Tensor& self, const Element& other)
 Tensor Atan2(const Tensor& y, const Tensor& x)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(y.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Atan2");
+    CheckTensorFormat(x.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Atan2");
+
     CheckTensorsDataTypeConsistency(y.GetStorage(), x.GetStorage(), "ATAN2");
     std::unordered_set<DataType> supportedTypes = {DT_FP32, DT_FP16, DT_BF16};
     CheckTensorDataType(y.GetStorage(), supportedTypes, "ATAN2");
@@ -1040,6 +1118,9 @@ Tensor Atan2(const Tensor& y, const Tensor& x)
 Tensor CeilDiv(const Tensor& self, const Tensor& other)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "CeilDiv");
+    CheckTensorFormat(other.GetStorage(), {TileOpFormat::TILEOP_NZ}, "CeilDiv");
+
     CheckTensorsDataTypeConsistency(self.GetStorage(), other.GetStorage(), "CEILDIV");
     std::unordered_set<DataType> supportedTypes = {DT_INT32};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "CEILDIV");
@@ -1062,6 +1143,8 @@ Tensor CeilDiv(const Tensor& self, const Tensor& other)
 Tensor CeilDiv(const Tensor& self, const Element& other)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "CeilDiv");
+
     std::unordered_set<DataType> supportedTypes = {DT_INT32};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "CEILDIV");
 
@@ -1088,6 +1171,8 @@ Tensor CeilDiv(const Tensor& self, const Element& other)
 Tensor FloorDiv(const Tensor& self, const Element& other)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "FloorDiv");
+
     std::unordered_set<DataType> supportedTypes = {DT_INT32};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "FLOORDIV");
     RETURN_CALL(
@@ -1136,6 +1221,8 @@ void TiledBinaryOperationAllScalar(
 Tensor ScalarAddS(const Tensor& operand, const Element& value, bool reverseOperand)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(operand.GetStorage(), {TileOpFormat::TILEOP_NZ}, "ScalarAddS");
+
     std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
     CheckTensorDataType(operand.GetStorage(), supportedTypes, "S_ADD");
 
@@ -1147,6 +1234,8 @@ Tensor ScalarAddS(const Tensor& operand, const Element& value, bool reverseOpera
 Tensor ScalarSubS(const Tensor& operand, const Element& value, bool reverseOperand)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(operand.GetStorage(), {TileOpFormat::TILEOP_NZ}, "ScalarSubS");
+
     std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
     CheckTensorDataType(operand.GetStorage(), supportedTypes, "S_SUB");
 
@@ -1158,6 +1247,8 @@ Tensor ScalarSubS(const Tensor& operand, const Element& value, bool reverseOpera
 Tensor ScalarMulS(const Tensor& operand, const Element& value, bool reverseOperand)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(operand.GetStorage(), {TileOpFormat::TILEOP_NZ}, "ScalarMulS");
+
     std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
     CheckTensorDataType(operand.GetStorage(), supportedTypes, "S_MUL");
 
@@ -1169,6 +1260,8 @@ Tensor ScalarMulS(const Tensor& operand, const Element& value, bool reverseOpera
 Tensor ScalarDivS(const Tensor& operand, const Element& value, bool reverseOperand)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(operand.GetStorage(), {TileOpFormat::TILEOP_NZ}, "ScalarDivS");
+
     std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_FP32};
     CheckTensorDataType(operand.GetStorage(), supportedTypes, "S_DIV");
 
@@ -1180,6 +1273,8 @@ Tensor ScalarDivS(const Tensor& operand, const Element& value, bool reverseOpera
 Tensor ScalarMaxS(const Tensor& operand, const Element& value, bool reverseOperand)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(operand.GetStorage(), {TileOpFormat::TILEOP_NZ}, "ScalarMaxS");
+
     std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
     CheckTensorDataType(operand.GetStorage(), supportedTypes, "S_MAX");
 
@@ -1246,6 +1341,9 @@ void TiledBinaryOperationAllScalar(
 Tensor ScalarAdd(const Tensor& operand1, const Tensor& operand2)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(operand1.GetStorage(), {TileOpFormat::TILEOP_NZ}, "ScalarAdd");
+    CheckTensorFormat(operand2.GetStorage(), {TileOpFormat::TILEOP_NZ}, "ScalarAdd");
+
     CheckTensorsDataTypeConsistency(operand1.GetStorage(), operand2.GetStorage(), "S_ADD");
     std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
     CheckTensorDataType(operand1.GetStorage(), supportedTypes, "S_ADD");
@@ -1257,6 +1355,9 @@ Tensor ScalarAdd(const Tensor& operand1, const Tensor& operand2)
 Tensor ScalarSub(const Tensor& operand1, const Tensor& operand2)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(operand1.GetStorage(), {TileOpFormat::TILEOP_NZ}, "ScalarSub");
+    CheckTensorFormat(operand2.GetStorage(), {TileOpFormat::TILEOP_NZ}, "ScalarSub");
+
     CheckTensorsDataTypeConsistency(operand1.GetStorage(), operand2.GetStorage(), "S_SUB");
     std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
     CheckTensorDataType(operand1.GetStorage(), supportedTypes, "S_SUB");
@@ -1269,6 +1370,9 @@ Tensor ScalarSub(const Tensor& operand1, const Tensor& operand2)
 Tensor ScalarMul(const Tensor& operand1, const Tensor& operand2)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(operand1.GetStorage(), {TileOpFormat::TILEOP_NZ}, "ScalarMul");
+    CheckTensorFormat(operand2.GetStorage(), {TileOpFormat::TILEOP_NZ}, "ScalarMul");
+
     CheckTensorsDataTypeConsistency(operand1.GetStorage(), operand2.GetStorage(), "S_MUL");
     std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
     CheckTensorDataType(operand1.GetStorage(), supportedTypes, "S_MUL");
@@ -1281,6 +1385,9 @@ Tensor ScalarMul(const Tensor& operand1, const Tensor& operand2)
 Tensor ScalarDiv(const Tensor& operand1, const Tensor& operand2)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(operand1.GetStorage(), {TileOpFormat::TILEOP_NZ}, "ScalarDiv");
+    CheckTensorFormat(operand2.GetStorage(), {TileOpFormat::TILEOP_NZ}, "ScalarDiv");
+
     CheckTensorsDataTypeConsistency(operand1.GetStorage(), operand2.GetStorage(), "S_DIV");
     std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_FP32};
     CheckTensorDataType(operand1.GetStorage(), supportedTypes, "S_DIV");
@@ -1293,6 +1400,9 @@ Tensor ScalarDiv(const Tensor& operand1, const Tensor& operand2)
 Tensor ScalarMax(const Tensor& operand1, const Tensor& operand2)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(operand1.GetStorage(), {TileOpFormat::TILEOP_NZ}, "ScalarMax");
+    CheckTensorFormat(operand2.GetStorage(), {TileOpFormat::TILEOP_NZ}, "ScalarMax");
+
     CheckTensorsDataTypeConsistency(operand1.GetStorage(), operand2.GetStorage(), "S_MAX");
     std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
     CheckTensorDataType(operand1.GetStorage(), supportedTypes, "S_MAX");
@@ -1305,6 +1415,9 @@ Tensor ScalarMax(const Tensor& operand1, const Tensor& operand2)
 Tensor CopySign(const Tensor& self, const Tensor& other)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "CopySign");
+    CheckTensorFormat(other.GetStorage(), {TileOpFormat::TILEOP_NZ}, "CopySign");
+
     CheckTensorsDataTypeConsistency(self.GetStorage(), other.GetStorage(), "COPYSIGN");
     std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "COPYSIGN");
@@ -1533,6 +1646,9 @@ LogicalTensorPtr TensorAxpyOperation(Function& function, const Tensor& self, con
 Tensor Axpy(const Tensor& self, const Tensor& other, float alpha)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Axpy");
+    CheckTensorFormat(other.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Axpy");
+
     auto selfDtype = self.GetDataType();
     auto otherDtype = other.GetDataType();
     if (selfDtype == otherDtype) {

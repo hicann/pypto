@@ -43,6 +43,8 @@ tanh(input: Tensor) -> Tensor
     对于DT_FP16/DT_BF16输入，需要满足：
     `input_size + output_size + 4 * (W_align8) * H * sizeof(float) + (W_align8 / 8) * H + 32 bytes < UB`
     （FP16/BF16：input + output + 4个float temp tile + 1个compare mask tile + 32 bytes对齐）
+3. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
+
 
 ## 调用示例
 

@@ -35,6 +35,8 @@ hypot(input: Tensor, other: Tensor) -> Tensor
 
 1. input和other都为Tensor时，数据类型应该相同。
 2. 对于BF16和FP16类型，内部计算可能会提升精度以避免中间溢出。
+3. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
+
 
 
 ## 调用示例

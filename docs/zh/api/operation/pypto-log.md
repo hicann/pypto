@@ -26,6 +26,11 @@ pypto.log(input, precision_type=pypto.PrecisionType.INTRINSIC) -> Tensor
 ## 返回值说明
 
 返回输出Tensor，Tensor的数据类型和input相同，Shape为input大小。
+
+## 约束说明
+
+1. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
+
 ## 调用示例
 
 ### TileShape设置示例

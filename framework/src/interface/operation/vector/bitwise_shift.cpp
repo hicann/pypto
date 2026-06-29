@@ -272,6 +272,9 @@ const std::unordered_set<DataType> BITWISESHIFT_A5_TYPES = {
 Tensor BitwiseRightShift(const Tensor& self, const Tensor& other)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "BitwiseRightShift");
+    CheckTensorFormat(other.GetStorage(), {TileOpFormat::TILEOP_NZ}, "BitwiseRightShift");
+
     const auto& supportedTypes = GetSupportedDataTypesByArch(BITWISESHIFT_A2A3_TYPES, BITWISESHIFT_A5_TYPES);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "BitwiseRightShift");
     RETURN_CALL(
@@ -282,6 +285,8 @@ Tensor BitwiseRightShift(const Tensor& self, const Tensor& other)
 Tensor BitwiseRightShift(const Tensor& self, const Element& other)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "BitwiseRightShift");
+
     const auto& supportedTypes = GetSupportedDataTypesByArch(BITWISESHIFT_A2A3_TYPES, BITWISESHIFT_A5_TYPES);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "BitwiseRightShift");
     Element newOther = other;
@@ -296,6 +301,8 @@ Tensor BitwiseRightShift(const Tensor& self, const Element& other)
 Tensor BitwiseRightShift(const Element& self, const Tensor& other)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(other.GetStorage(), {TileOpFormat::TILEOP_NZ}, "BitwiseRightShift");
+
     const auto& supportedTypes = GetSupportedDataTypesByArch(BITWISESHIFT_A2A3_TYPES, BITWISESHIFT_A5_TYPES);
     CheckTensorDataType(other.GetStorage(), supportedTypes, "BitwiseRightShift");
     Element newSelf = self;
@@ -309,6 +316,9 @@ Tensor BitwiseRightShift(const Element& self, const Tensor& other)
 Tensor BitwiseLeftShift(const Tensor& self, const Tensor& other)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "BitwiseLeftShift");
+    CheckTensorFormat(other.GetStorage(), {TileOpFormat::TILEOP_NZ}, "BitwiseLeftShift");
+
     const auto& supportedTypes = GetSupportedDataTypesByArch(BITWISESHIFT_A2A3_TYPES, BITWISESHIFT_A5_TYPES);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "BitwiseLeftShift");
     RETURN_CALL(
@@ -319,6 +329,8 @@ Tensor BitwiseLeftShift(const Tensor& self, const Tensor& other)
 Tensor BitwiseLeftShift(const Tensor& self, const Element& other)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "BitwiseLeftShift");
+
     const auto& supportedTypes = GetSupportedDataTypesByArch(BITWISESHIFT_A2A3_TYPES, BITWISESHIFT_A5_TYPES);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "BitwiseLeftShift");
     Element newOther = other;
@@ -333,6 +345,8 @@ Tensor BitwiseLeftShift(const Tensor& self, const Element& other)
 Tensor BitwiseLeftShift(const Element& self, const Tensor& other)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(other.GetStorage(), {TileOpFormat::TILEOP_NZ}, "BitwiseLeftShift");
+
     const auto& supportedTypes = GetSupportedDataTypesByArch(BITWISESHIFT_A2A3_TYPES, BITWISESHIFT_A5_TYPES);
     CheckTensorDataType(other.GetStorage(), supportedTypes, "BitwiseLeftShift");
     Element newSelf = self;

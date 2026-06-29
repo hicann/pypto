@@ -53,6 +53,8 @@ y_backup = pypto.clone(y)  # 备份原始y值
 y.axpy_(x, alpha=2.0)      # y被原地更新
 # 此时y_backup仍保留原始值，可用于后续计算
 ```
+6. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
+
 
 
 ## 调用示例

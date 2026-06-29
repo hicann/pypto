@@ -148,6 +148,8 @@ Ascend 950PR使用不同的CastMode体系，内部实现基于 `RoundRType`/`Rou
       - 其他场景：采用CAST_RINT
 
 5. **deq模式说明**：INT32→FP16转换使用deq模式，需要通过`set_deqscale`设置缩放因子，默认值为1.0。
+6. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
+
 
 ## 调用示例
 

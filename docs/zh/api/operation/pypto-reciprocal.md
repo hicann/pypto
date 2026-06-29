@@ -28,6 +28,7 @@ pypto.reciprocal(input, precision_type=pypto.PrecisionType.HIGH_PRECISION) -> Te
 | 类型 | 说明 |
 |:-----|:-----|
 | Tensor | 包含输入张量元素级倒数的新张量。 |
+
 ## 代码示例
 
 ### 示例1：基本使用
@@ -72,3 +73,7 @@ y = pypto.reciprocal(x, pypto.PrecisionType.INTRINSIC)
 
 - [pypto.rsqrt](pypto-rsqrt.md)：计算输入张量的元素级平方根的倒数。
 - [pypto.div](pypto-div.md)：计算两个张量的元素级除法。
+
+## 约束说明
+
+1. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。

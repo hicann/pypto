@@ -44,6 +44,8 @@ index_add_(input: Tensor, dim: int, index: Tensor, source: Tensor, *, alpha: Uni
 4. input.shape和source.shape的非dim轴ViewShape不可切，即 $ViewShape[i] \geq input.shape[i]=source.shape[i], i \ne dim$；
 
 5. TileShape的维度与source相同，只用来切分source和index，所有输入和输出的TileShape大小总和不能超过UB内存的大小。
+6. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
+
 
 
 ## 调用示例

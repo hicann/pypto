@@ -38,6 +38,8 @@ prod(input: Tensor,  dim: int, keepdim: bool = False) -> Tensor:
 
 2. 尾轴要32bytes对齐;
 
+3. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
+
 
 ## TileShape设置示例
 

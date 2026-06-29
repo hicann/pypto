@@ -602,6 +602,12 @@ LogicalTensorPtr TensorQuantizeAsymmetricOperation(Function &function,
 
 Tensor Quantize(const Tensor &input, const Tensor &scale, DataType dtype, int axis, const Tensor &zeroPoints) {
     DECLARE_TRACER();
+    CheckTensorFormat(input.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Quantize");
+    CheckTensorFormat(scale.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Quantize");
+    if (zeroPoints.GetStorage() != nullptr) {
+        CheckTensorFormat(zeroPoints.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Quantize");
+    }
+
 
     // Validate input dimensions
     CHECK(VectorErrorCode::ERR_PARAM_SHAPE_DIM_UNSUPPORTED, input.GetShape().size() >= SHAPE_DIM1 && input.GetShape().size() <= SHAPE_DIM5)
@@ -892,6 +898,12 @@ static LogicalTensorPtr CreateZeroOffsetTensor(Function &function, const Logical
 // Public Dequantize API
 Tensor Dequantize(const Tensor &input, const Tensor &scale, DataType otype, int axis, const Tensor &zeroPoints) {
     DECLARE_TRACER();
+    CheckTensorFormat(input.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Dequantize");
+    CheckTensorFormat(scale.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Dequantize");
+    if (zeroPoints.GetStorage() != nullptr) {
+        CheckTensorFormat(zeroPoints.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Dequantize");
+    }
+
 
     // Validate input dimensions
     CHECK(VectorErrorCode::ERR_PARAM_SHAPE_DIM_UNSUPPORTED, input.GetShape().size() >= SHAPE_DIM1 && input.GetShape().size() <= SHAPE_DIM5)
@@ -1047,10 +1059,17 @@ Tensor Dequantize(const Tensor &input, const Tensor &scale, DataType otype, int 
 }
 
 Tensor DequantizeSymmetric(const Tensor &src, const Tensor &scale, int64_t axis) {
+    CheckTensorFormat(src.GetStorage(), {TileOpFormat::TILEOP_NZ}, "DequantizeSymmetric");
+    CheckTensorFormat(scale.GetStorage(), {TileOpFormat::TILEOP_NZ}, "DequantizeSymmetric");
+
     return Dequantize(src, scale, DataType::DT_FP32, axis, Tensor());
 }
 
 Tensor DequantizeAsymmetric(const Tensor &src, const Tensor &scale, const Tensor &zeroPoints, int64_t axis) {
+    CheckTensorFormat(src.GetStorage(), {TileOpFormat::TILEOP_NZ}, "DequantizeAsymmetric");
+    CheckTensorFormat(scale.GetStorage(), {TileOpFormat::TILEOP_NZ}, "DequantizeAsymmetric");
+    CheckTensorFormat(zeroPoints.GetStorage(), {TileOpFormat::TILEOP_NZ}, "DequantizeAsymmetric");
+
     return Dequantize(src, scale, DataType::DT_FP32, axis, zeroPoints);
 }
 
@@ -1058,6 +1077,8 @@ std::tuple<Tensor, Tensor> QuantMX(
     const Tensor& input, DataType quantDtype, DequantScaleRoundingMode mode, int64_t axis, bool performanceMode)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(input.GetStorage(), {TileOpFormat::TILEOP_NZ}, "QuantMX");
+
     CheckSupportedNPUArch(QUANT_MX_SUPPORTED_ARCHITECTURES, "QuantMX");
     CheckQuantMXPerformanceMode(static_cast<int64_t>(performanceMode));
     CheckQuantMXInput(input, quantDtype, mode, axis, performanceMode);

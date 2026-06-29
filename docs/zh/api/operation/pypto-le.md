@@ -35,6 +35,8 @@ le(input: Tensor, other: Union[Tensor, float, Element]) -> Tensor
    - Ascend 950PR：DT_FP16, DT_FP32, DT_INT16。
    - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_FP16, DT_FP32。
    - Atlas A2 训练系列产品/Atlas A2 推理系列产品：DT_FP16, DT_FP32。
+4. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
+
 
 ## 调用示例
 

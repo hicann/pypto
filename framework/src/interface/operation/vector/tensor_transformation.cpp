@@ -203,6 +203,8 @@ Tensor TensorJustNeedCopyOperation(
 Tensor Expand(const Tensor& self, const std::vector<int64_t>& dstShape, std::vector<SymbolicScalar> validShape)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Expand");
+
 
     std::unordered_set<DataType> supportedTypes = {DT_BF16,  DT_FP32,  DT_FP16,   DT_INT8,   DT_INT16,
                                                    DT_INT32, DT_UINT8, DT_UINT16, DT_UINT32, DT_BOOL};
@@ -478,6 +480,8 @@ bool MergeTransposeAxis(
 Tensor Transpose(const Tensor& self, std::vector<int> perm)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Transpose");
+
     
     static const std::unordered_set<DataType> TRANSPOSE_A2A3_TYPES = 
         {DT_FP16, DT_BF16, DT_UINT8, DT_INT8, DT_INT16, DT_UINT16, DT_FP32, DT_INT32, DT_UINT32};
@@ -1415,6 +1419,8 @@ Tensor TransData(const Tensor& self, TileOpFormat transDataType, const std::vect
     const std::vector<SymbolicScalar>& validShape, int group)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "TransData");
+
     auto& function = *Program::GetInstance().GetCurrentFunction();
     auto output = std::make_shared<LogicalTensor>(
         function, self.GetDataType(), outputShape, validShape, self.Format());
@@ -1621,6 +1627,8 @@ void CheckCastTypeSupport(DataType srcType, DataType dstType, const std::string&
 Tensor Cast(const Tensor& self, DataType dstDataType, CastMode mode, SaturationMode satmode)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Cast");
+
     CheckCastTypeSupport(self.GetDataType(), dstDataType, "CAST");
     CheckTensorDimRange(self.GetStorage(), 1, 4, "CAST");
     CheckTensorShapeSize(self.GetStorage(), "CAST");
@@ -1675,6 +1683,10 @@ void CheckCat(const std::vector<Tensor>& tensors, int axis)
 Tensor Cat(const std::vector<Tensor>& tensors, int axis)
 {
     DECLARE_TRACER();
+    for (const auto& tensor : tensors) {
+        CheckTensorFormat(tensor.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Cat");
+    }
+
     CheckCat(tensors, axis);
 
     auto resultShape = tensors[0].GetShape();

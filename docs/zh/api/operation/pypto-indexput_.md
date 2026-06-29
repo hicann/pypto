@@ -45,6 +45,8 @@ index_put_(input: Tensor, indices: tuple, values: Tensor, accumulate: bool = Fal
 
 7. accumulate为True时，input和values的数据类型仅支持DT_BF16、DT_FP16、DT_FP32、DT_INT8、DT_INT16、DT_INT32。
 
+8. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
+
 
 ## 调用示例
 

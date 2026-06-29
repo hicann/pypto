@@ -26,6 +26,11 @@ pypto.sqrt(input, precision_type=pypto.PrecisionType.INTRINSIC) -> Tensor
 ## 返回值说明
 
 返回Tensor类型。其Shape、数据类型与输入Tensor一致，其元素为输入Tensor对应元素的平方根。
+
+## 约束说明
+
+1. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
+
 ## 调用示例
 
 ### TileShape设置示例

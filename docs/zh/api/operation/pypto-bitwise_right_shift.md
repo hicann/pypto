@@ -38,6 +38,8 @@ bitwise_right_shift(input: Union[Tensor, int], other: Union[Tensor, int]) -> Ten
    - Ascend 950PR：DT_INT16，DT_UINT16，DT_INT32，DT_UINT32，DT_INT8, DT_UINT8。
    - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_INT16，DT_UINT16。
    - Atlas A2 训练系列产品/Atlas A2 推理系列产品：DT_INT16，DT_UINT16。
+3. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
+
 
 ## 调用示例
 

@@ -262,6 +262,10 @@ void CheckIndexAddParamsInvalid(
 Tensor IndexAddUB(const Tensor& self, const Tensor& src, const Tensor& indices, int axis, const Element& alpha)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "IndexAddUB");
+    CheckTensorFormat(src.GetStorage(), {TileOpFormat::TILEOP_NZ}, "IndexAddUB");
+    CheckTensorFormat(indices.GetStorage(), {TileOpFormat::TILEOP_NZ}, "IndexAddUB");
+
     CheckAxisRange(self, axis);
     CheckIndexAddParamsInvalid(self, src, indices, axis, alpha, Opcode::OP_INDEX_ADD_UB);
     DataType selfDataType = self.GetDataType();
@@ -400,6 +404,10 @@ void TensorIndexAdd(Function& function, const IndexAddPara& indexaddPara)
 void IndexAdd_(Tensor& self, const Tensor& src, const Tensor& indices, int axis, const Element& alpha)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "IndexAdd_");
+    CheckTensorFormat(src.GetStorage(), {TileOpFormat::TILEOP_NZ}, "IndexAdd_");
+    CheckTensorFormat(indices.GetStorage(), {TileOpFormat::TILEOP_NZ}, "IndexAdd_");
+
     CheckAxisRange(self, axis);
     CheckIndexAddParamsInvalid(self, src, indices, axis, alpha, Opcode::OP_INDEX_ADD);
     DataType selfDataType = self.GetDataType();
@@ -572,6 +580,9 @@ void CheckGatherParamsInvalid(const Tensor& params, const Tensor& indices, int a
 Tensor Gather(const Tensor& params, const Tensor& indices, int axis)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(params.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Gather");
+    CheckTensorFormat(indices.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Gather");
+
     CheckGatherParamsInvalid(params, indices, axis, "GATHER");
     RETURN_CALL(
         GatherOperation, *Program::GetInstance().GetCurrentFunction(), params.GetStorage(), indices.GetStorage(), axis);
@@ -670,6 +681,9 @@ LogicalTensorPtr TensorGatherElementOperation(
 Tensor GatherElements(const Tensor& params, const Tensor& indices, int axis)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(params.GetStorage(), {TileOpFormat::TILEOP_NZ}, "GatherElements");
+    CheckTensorFormat(indices.GetStorage(), {TileOpFormat::TILEOP_NZ}, "GatherElements");
+
     std::vector<LogicalTensorPtr> tensors = {params.GetStorage(), indices.GetStorage()};
     CheckTensorsDimConsistency(tensors, "GATHERELEMENTS");
     CheckAxisRange(params, axis); // 支持负轴
@@ -825,6 +839,9 @@ static void CheckScatterElementSParamsInvalid(
 Tensor Scatter(const Tensor& self, const Tensor& indices, const Element& src, int axis, ScatterMode reduce)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Scatter");
+    CheckTensorFormat(indices.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Scatter");
+
     CheckScatterElementSParamsInvalid(self, indices, axis < 0 ? self.GetShape().size() + axis : axis, reduce);
     DataType orgDtype = self.GetDataType();
     auto operandCast = Tensor(DataType::DT_FP32, self.GetShape());
@@ -1000,6 +1017,10 @@ static void CheckScatterParamsInvalid(
 Tensor Scatter(const Tensor& self, const Tensor& indices, const Tensor& src, int axis, ScatterMode reduce)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Scatter");
+    CheckTensorFormat(indices.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Scatter");
+    CheckTensorFormat(src.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Scatter");
+
     CheckScatterParamsInvalid(self, indices, src, axis < 0 ? self.GetShape().size() + axis : axis, reduce);
     DataType orgDtype = self.GetDataType();
     auto operandSelfCast = Tensor(DataType::DT_FP32, self.GetShape());
@@ -1305,6 +1326,10 @@ Tensor ScatterUpdate(
     const Tensor& dst, const Tensor& index, const Tensor& src, int axis, std::string cacheMode, int chunkSize)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(dst.GetStorage(), {TileOpFormat::TILEOP_NZ}, "ScatterUpdate");
+    CheckTensorFormat(index.GetStorage(), {TileOpFormat::TILEOP_NZ}, "ScatterUpdate");
+    CheckTensorFormat(src.GetStorage(), {TileOpFormat::TILEOP_NZ}, "ScatterUpdate");
+
     CheckScatterUpdateInvalid(dst, index, src);
     CheckAxisRange(dst, axis);
 
@@ -1466,6 +1491,12 @@ static void CheckIndexPutParamsInvalid(const Tensor& self, const std::vector<Ten
 void IndexPut_(Tensor& self, const std::vector<Tensor>& indices, const Tensor& values, bool accumulate)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "IndexPut_");
+    CheckTensorFormat(values.GetStorage(), {TileOpFormat::TILEOP_NZ}, "IndexPut_");
+    for (const auto& tensor : indices) {
+        CheckTensorFormat(tensor.GetStorage(), {TileOpFormat::TILEOP_NZ}, "IndexPut_");
+    }
+
     CheckIndexPutParamsInvalid(self, indices, values);
 
     std::vector<LogicalTensorPtr> indicesLogical;
@@ -1683,6 +1714,8 @@ Tensor Range(const Element& start, const Element& end, const Element& step)
 Tensor GatherMask(const Tensor& self, const uint8_t patternMode)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "GatherMask");
+
     std::unordered_set<DataType> supportedTypes = {DT_FP32, DT_FP16, DT_BF16, DT_INT32, DT_INT16, DT_UINT16, DT_UINT32};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "GATHERMASK");
     CheckTensorDimRange(self.GetStorage(), 1, 4, "GATHERMASK");

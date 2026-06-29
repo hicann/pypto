@@ -42,6 +42,8 @@ remainder(
 2. 输入Tenosr为整型数据类型时， other不支持0特殊值；
 3. 若输入Tensor的数据类型为DT_INT32，数据范围超过\[-2^24, 2^24\]范围时不保证精度；
 4. 高精度模式当前仅在Ascend 950PR上有效，其他产品底层默认使用指令模式 `INTRINSIC`。
+5. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
+
 
 ## 调用示例
 

@@ -113,6 +113,8 @@ void TensorBitsortOperation(
 Tensor Sort32(const Tensor& self, int idxStart)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Sort32");
+
     std::unordered_set<DataType> supportedTypes = {DT_FP32};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "SORT32");
     CheckTensorDimRange(self.GetStorage(), 1, 4, "SORT32");
@@ -190,6 +192,8 @@ void TensorMrgSortOperation(
 Tensor MrgSort(const Tensor& self, int mergeSize)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "MrgSort");
+
     std::unordered_set<DataType> supportedTypes = {DT_FP32};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "MRGSORT");
     CheckTensorDimRange(self.GetStorage(), 1, 4, "MRGSORT");
@@ -262,6 +266,8 @@ void TensorExtractOperation(
 Tensor TopKExtract(const Tensor& self, int k, bool isIndex)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "TopKExtract");
+
     std::unordered_set<DataType> supportedTypes = {DT_FP32};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "TOPKEXTRACT");
     CheckTensorDimRange(self.GetStorage(), 1, 4, "TOPKEXTRACT");
@@ -589,6 +595,8 @@ void TensorTopK(
 std::tuple<Tensor, Tensor> TopK(const Tensor& self, int k, int axis, bool isLargest, TopKAlgo algo)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "TopK");
+
     if (algo == TopKAlgo::MERGE_SORT) {
         std::unordered_set<DataType> supportedTypes = {DT_FP32};
         CheckTensorDataType(self.GetStorage(), supportedTypes, "TOPK(Merge Sort)");
@@ -905,6 +913,8 @@ void TensorSort(
 std::tuple<Tensor, Tensor> sort(const Tensor& self, int axis = -1, bool descending = false)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "sort");
+
     std::unordered_set<DataType> supportedTypes = {DT_FP32, DT_FP16};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "SORT");
     CheckTensorDimRange(self.GetStorage(), 1, 4, "SORT");

@@ -40,6 +40,10 @@ quantize(input: Tensor, scale: Tensor, otype: DataType, axis: int, zero_points: 
 返回输出Tensor，Tensor的数据类型由otype指定，Shape与input相同。
 
 
+## 约束说明
+
+1. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
+
 ## 调用示例
 
 ### TileShape设置示例

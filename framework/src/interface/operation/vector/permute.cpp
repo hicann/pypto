@@ -275,6 +275,8 @@ Tensor Permute(Function& function, const Tensor& self, std::vector<int> perm)
 Tensor Permute(const Tensor& self, std::vector<int> perm)
 {
     DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Permute");
+
     auto& function = *Program::GetInstance().GetCurrentFunction();
     return Permute(function, self, perm);
 }
