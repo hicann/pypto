@@ -41,6 +41,12 @@ file(GLOB _Interface_Srcs
         machine/host/*.cpp
         registry/*.cpp
 )
+# pypto_pro 含嵌套子目录, 需 GLOB_RECURSE 递归收集
+file(GLOB_RECURSE _PyptoPro_Srcs
+        pypto_pro/backend/*.cpp
+        pypto_pro/codegen/*.cpp
+)
+list(APPEND _Interface_Srcs ${_PyptoPro_Srcs})
 #PTO_Fwk_Debug_Source_List(NAME "_Interface_Srcs" LIST ${_Interface_Srcs} DETAIL OFF)
 
 add_library(tile_fwk_interface SHARED)
@@ -52,6 +58,8 @@ target_compile_definitions(tile_fwk_interface
 target_include_directories(tile_fwk_interface
         PUBLIC
             $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+        PRIVATE
+            $<BUILD_INTERFACE:${PTO_FWK_SRC_ROOT}/framework/include/pypto_pro>
 )
 target_link_libraries(tile_fwk_interface
         PUBLIC

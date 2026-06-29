@@ -51,11 +51,10 @@ if (NOT DEFINED PTO_FWK_SRC_ROOT)  # 在线编译
     include("${_WhlLibFwkDir}/cmake/intf.cmake")
 
     option(BUILD_WITH_CANN "Build with CANN." ON)  # 在线编译场景仅会出现在内置 CANN 包场景
+
+    # 构建依赖
+    find_package(Threads REQUIRED)
 endif ()
-file(GLOB_RECURSE PYPTO_PRO_COMPAT_SOURCES CONFIGURE_DEPENDS
-        ${PTO_FWK_SRC_ROOT}/framework/src/interface/pypto_pro/backend/*.cpp
-        ${PTO_FWK_SRC_ROOT}/framework/src/interface/pypto_pro/codegen/*.cpp
-)
 
 pybind11_add_module(pypto_impl
         MODULE
@@ -80,12 +79,12 @@ pybind11_add_module(pypto_impl
             bindings/ir/pass.cpp
             bindings/pypto_pro/codegen.cpp
             bindings/pypto_pro/backend.cpp
-            ${PYPTO_PRO_COMPAT_SOURCES}
 )
 target_include_directories(pypto_impl
         PRIVATE
             $<$<NOT:$<BOOL:${PTO_FWK_SRC_ROOT}>>:${_WhlLibFwkDir}/3rd/include>
             $<$<NOT:$<BOOL:${PTO_FWK_SRC_ROOT}>>:${_WhlLibFwkDir}/include>
+            $<$<NOT:$<BOOL:${PTO_FWK_SRC_ROOT}>>:${_WhlLibFwkDir}/include/pypto_pro>
             $<$<NOT:$<BOOL:${PTO_FWK_SRC_ROOT}>>:${_WhlLibFwkDir}/src>
             $<$<NOT:$<BOOL:${PTO_FWK_SRC_ROOT}>>:${_WhlLibFwkDir}/src/interface>
             $<$<NOT:$<BOOL:${PTO_FWK_SRC_ROOT}>>:${_WhlLibFwkDir}/src/interface/machine/device>

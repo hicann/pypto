@@ -298,17 +298,18 @@ class BuildOnlinePyptoImplManager(_BuildOnlineManager):
         if self._target_compiled:
             return
 
-        src_dir = Path(self.pkg_lib_dir, "pypto_impl/src")
-        if not src_dir.exists():
-            # 当需要在线编译 pypto_impl 但是 whl 包内没有相关源码时, 不做在线编译.
-            # 靠外部 import pypto_impl 的报错来暴露原始问题. 此处不截取该异常, 避免对原始问题的掩盖.
-            return
-
         # 搜索已有产物 (pkg_dir 优先, cache_dir 次之)
         found, so_path = self._find_pypto_impl_so(cache_dir=self._cache_dir())
         if found:
             self._load_from_cache(so_path=so_path)
             self._target_compiled = True
+            return
+
+        src_dir = Path(self.pkg_lib_dir, "pypto_impl/src")
+        if not src_dir.exists():
+            # 当需要在线编译 pypto_impl 但是 whl 包内没有相关源码时, 不做在线编译.
+            # 靠外部 import pypto_impl 的报错来暴露原始问题. 此处不截取该异常, 避免对原始问题的掩盖.
+            _log.warning("Can't get pypto_impl, but it's src empty.")
             return
 
         # 跨用户协同: 检查是否有人正在往 pkg_dir 编译, 若有则等待共享结果
