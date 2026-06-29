@@ -250,7 +250,7 @@ bool DevMemoryPool::CheckAllSentinels()
     if (!allGood) {
         MACHINE_LOGE(HostLauncherErr::MEM_POOL_CHECK_ALL_SENTINELS_FAILED, "CheckAllSentinels failed.");
     }
-    sentinelValMap_.clear();
+
     return allGood;
 }
 
