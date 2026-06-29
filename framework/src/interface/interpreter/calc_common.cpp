@@ -29,6 +29,11 @@ void ExecuteOpAssemble(ExecuteOperationContext* ctx)
     ASSERT(ExecuteOperationScene::CTX_OUTPUT_COUNT_MISMATCH, ctx->ooperandInplaceDataViewList->size() == 1);
     ASSERT(ExecuteOperationScene::CTX_INPUT_COUNT_MISMATCH, ctx->ioperandDataViewList->size() <= NUM_VALUE_2);
     ASSERT(ExecuteOperationScene::CTX_OP_NULL, ctx->op != nullptr);
+    // InplaceProcess 优化后，Assemble 的输入输出可能已共享同一底层 RawTensor（RawMagic 相同），该op也不会被翻译成任何硬件指令；
+    // 此时无需再执行 View/Copy，直接跳过即可。
+    if (ctx->op->GetIOperands()[0]->tensor->GetRawMagic() == ctx->op->GetOOperands()[0]->tensor->GetRawMagic()) {
+        return;
+    }
     auto& oop = ctx->ooperandInplaceDataViewList->at(0);
     auto& iop = ctx->ioperandDataViewList->at(0);
 
