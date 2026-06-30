@@ -162,6 +162,9 @@ std::vector<StmtPtr> FilterDeadCodeImpl(
                         break;
                     }
                 }
+                if (tensor_op->result_token_ && live.count(tensor_op->result_token_.get())) {
+                    any_live = true;
+                }
                 if (!any_live)
                     continue;
             }
@@ -330,10 +333,14 @@ std::vector<StmtPtr> EliminateDeadCode(const std::vector<StmtPtr>& stmts, const 
                                std::dynamic_pointer_cast<const TensorOpStmt>(s)) {
                     std::vector<const Var*> defs;
                     for (const auto& r : tensor_op->result_) defs.push_back(r.get());
+                    if (tensor_op->result_token_) defs.push_back(tensor_op->result_token_.get());
                     std::unordered_set<const Var*> uses;
                     for (const auto& arg : tensor_op->args_) {
                         auto arg_uses = CollectVarUses(arg);
                         uses.insert(arg_uses.begin(), arg_uses.end());
+                    }
+                    for (const auto& r : tensor_op->tokens_) {
+                        uses.insert(r.get());
                     }
                     def_sites.push_back({std::move(defs), std::move(uses)});
                 } else if (auto scalar_op =

@@ -16,6 +16,8 @@ def _run_token_pass(func, *args):
     b = ir.IRBuilder()
     prog = b.create_program([func], "main", ir.Span.unknown())
     prog = ir.Pass.token_pass()(prog)
+    prog = ir.Pass.aggressive_dce()(prog)
+    prog = ir.Pass.canonicalize()(prog)
     return prog.functions[func.name]
 
 

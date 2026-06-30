@@ -1007,6 +1007,19 @@ void BindStmt(py::module_& ir)
             return self->stmts_[index];
         },
         py::arg("index"), "Get statement by index, supports negative indexing");
+    // Expose the sequence protocol directly. Without __iter__ Python falls back to
+    // calling __getitem__ with increasing indices and stops on IndexError; the
+    // out-of-range throw here is a backtrace-capturing pypto::ir::IndexError, which
+    // forces a full CaptureStackTrace() (one addr2line per frame) on every loop end.
+    seq_stmts_class.def(
+        "__iter__",
+        [](SeqStmtsPtr& self) {
+            auto& stmts = self->stmts_;
+            return py::make_iterator(stmts.begin(), stmts.end());
+        },
+        py::keep_alive<0, 1>());
+    seq_stmts_class.def(
+        "__len__", [](SeqStmtsPtr& self) { return self->stmts_.size(); }, "Number of statements");
     BindFields<SeqStmts>(seq_stmts_class);
 
     // EvalStmt - const shared_ptr
