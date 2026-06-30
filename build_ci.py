@@ -1006,6 +1006,13 @@ class BuildCtrl(CMakeParam):
         self.pip_dependence_desc: Dict[str, str] = {"pip": ">=22.1"}
         self.pip_support_config_setting = self.check_pip_dependencies(deps=self.pip_dependence_desc,
                                                                       raise_err=False, log_err=False)
+        # 用于统一 run 和 whl 的构建时间戳
+        self.tag_info: str = os.environ.get('tagInfo')
+        if not self.tag_info:
+            # tagInfo 格式须为 prefix_date_time_suffix (至少 4 段), 与 cmake 公共仓中 generate_version_info.py
+            # 和 setup.py 均使用 split('_')[-3:-1] 提取 date_time 保持一致
+            timestamp = datetime.now(timezone(timedelta(hours=8))).strftime('%Y%m%d_%H%M%S%f')[:-3]
+            self.tag_info = f"pypto_{timestamp}_build"
 
     def __str__(self) -> str:
         """返回构建控制参数的字符串表示
@@ -1029,6 +1036,7 @@ class BuildCtrl(CMakeParam):
         desc += f"\n    Verbose                 : {self.verbose}"
         desc += f"\nOthers"
         desc += f"\n    Timeout                 : {self.origin_timeout}"
+        desc += f"\n    TagInfo                 : {self.tag_info}"
         desc += f"{self.feature}"
         desc += f"{self.build}"
         desc += f"{self.tests}"
@@ -1241,12 +1249,7 @@ class BuildCtrl(CMakeParam):
         if self.third_party_path:
             env.update({"PYPTO_THIRD_PARTY_PATH": self.third_party_path})
         # 通过 tag_info 环境变量统一 run 和 whl 内的 build_timestamp
-        tag_info = os.environ.get('tagInfo')
-        if not tag_info:
-            # tagInfo 格式须为 prefix_date_time_suffix (至少 4 段), 与 cmake 公共仓中 generate_version_info.py
-            # 和 setup.py 均使用 split('_')[-3:-1] 提取 date_time 保持一致
-            timestamp = datetime.now(timezone(timedelta(hours=8))).strftime('%Y%m%d_%H%M%S%f')[:-3]
-            env.update({"tagInfo": f"pypto_{timestamp}_build"})
+        env.update({"tagInfo": self.tag_info})
         return env
 
     def get_cmake_build_update_env(self) -> Dict[str, str]:
