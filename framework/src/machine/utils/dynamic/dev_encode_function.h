@@ -18,10 +18,10 @@
 #include "machine/utils/dynamic/dev_encode_types.h"
 #include "machine/utils/dynamic/dev_encode_tensor.h"
 #include "machine/utils/dynamic/dev_encode_operation.h"
+#include "machine/utils/dynamic/dev_encode_function_param.h"
 
 namespace npu::tile_fwk {
 struct L2Info;
-struct CceCodeInfo;
 class RawTensor;
 class LogicalTensor;
 class Operation;
@@ -34,29 +34,6 @@ class SymbolicExpressionTable;
 
 namespace npu::tile_fwk::dynamic {
 constexpr int INVALID_INDEX = -1;
-
-struct DevAscendFunctionPredInfo {
-    uint64_t totalZeroPred;
-    uint64_t totalZeroPredAIV;
-    uint64_t totalZeroPredAIC;
-    uint64_t totalZeroPredHub;
-    uint64_t totalZeroPredAicpu;
-};
-
-struct EncodeDevAscendFunctionParam {
-    /* The following are common parameter */
-    std::unordered_map<uint64_t, int> calleeHashIndexDict;
-    std::vector<CceCodeInfo> cceCodeInfoList;
-    const SymbolicSymbolTable* symbolTable;
-    const IncastOutcastLink* inoutLink;
-
-    /* The following are per function parameter */
-    const SymbolicExpressionTable* expressionTable;
-    const IncastOutcastSlot* slot;
-    Function* devRoot;
-    std::vector<RuntimeSlotDesc> outcastDescList;
-    std::vector<int> assembleSlotList;
-};
 
 struct DevAscendFunctionDuppedData;
 struct DevAscendFunction {
