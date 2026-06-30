@@ -16,7 +16,7 @@
 #ifndef PASS_OPTIMIZE_SORT_H
 #define PASS_OPTIMIZE_SORT_H
 
-#include "schedule_base.h"
+#include "passes/block_graph_pass/schedule_ooo/common/schedule_base.h"
 #include <functional>
 #include <vector>
 #include <set>

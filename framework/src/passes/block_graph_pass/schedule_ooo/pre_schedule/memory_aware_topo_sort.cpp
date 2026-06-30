@@ -9,7 +9,7 @@
  */
 
 #include "memory_aware_topo_sort.h"
-#include "schedule_base.h"
+#include "passes/block_graph_pass/schedule_ooo/common/schedule_base.h"
 #include "passes/pass_log/pass_log.h"
 #include "interface/function/function.h"
 #include <cmath>

@@ -26,9 +26,9 @@
 #include "interface/tensor/irbuilder.h"
 #define private public
 #include "passes/block_graph_pass/schedule_ooo/schedule_ooo.h"
-#include "passes/block_graph_pass/schedule_ooo/core_assign.h"
-#include "passes/block_graph_pass/schedule_ooo/buffer_rearrange.h"
-#include "passes/block_graph_pass/schedule_ooo/memory_aware_topo_sort.h"
+#include "passes/block_graph_pass/schedule_ooo/pre_schedule/core_assign.h"
+#include "passes/block_graph_pass/schedule_ooo/post_schedule/buffer_rearrange.h"
+#include "passes/block_graph_pass/schedule_ooo/pre_schedule/memory_aware_topo_sort.h"
 #include "passes/tile_graph_pass/graph_constraint/infer_dyn_shape.h"
 #include "operator/models/deepseek/deepseek_mla.h"
 #include "computational_graph_builder.h"

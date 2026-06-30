@@ -13,7 +13,7 @@
  * \brief
  */
 
-#include "passes/block_graph_pass/schedule_ooo/schedule_main_loop_base.h"
+#include "passes/block_graph_pass/schedule_ooo/common/schedule_main_loop_base.h"
 #include "passes/pass_log/pass_log.h"
 
 #ifdef MODULE_NAME

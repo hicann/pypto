@@ -596,9 +596,8 @@ void OptimizeSort::GetStackTop(
     curMemoryMap = recordBufferAllocate_[topNode.first];
 }
 
-Status OptimizeSort::BacktraceOnMemoryExceeded(
-    size_t& startIndex, std::shared_ptr<std::vector<Operation*>>& curOpList,
-    std::map<MemoryType, int64_t>& curMemoryMap)
+Status OptimizeSort::BacktraceOnMemoryExceeded(size_t& startIndex, 
+    std::shared_ptr<std::vector<Operation*>>& curOpList, std::map<MemoryType, int64_t>& curMemoryMap)
 {
     APASS_LOG_DEBUG_F(Elements::Tensor, "=====> Start Backtrace.");
     MemoryType memType = (*curOpList)[startIndex]->GetOutputOperand(0)->GetMemoryTypeOriginal();
@@ -607,16 +606,14 @@ Status OptimizeSort::BacktraceOnMemoryExceeded(
         startIndex--;
         auto op = (*curOpList)[startIndex];
         if (!needFreeOpStack_.empty() && needFreeOpStack_.top().first == (*curOpList)[startIndex]) {
-            APASS_LOG_DEBUG_F(
-                Elements::Operation, "Having traversed %s, the stack needs to be popped",
+            APASS_LOG_DEBUG_F(Elements::Operation, "Having traversed %s, the stack needs to be popped",
                 GetOpInfo((*curOpList)[startIndex]).c_str());
             break;
         }
         if (recordOpBuffer_[op] != memType || IsOpAlloc(op)) {
             continue;
         }
-        APASS_LOG_DEBUG_F(Elements::Operation, "===>start to find unvisited consumer");
-        APASS_LOG_DEBUG_F(Elements::Operation, "current index： %zu", startIndex);
+        APASS_LOG_DEBUG_F(Elements::Operation, "===>start to find unvisited consumer, current index: %zu", startIndex);
         consumersGroup.clear();
         GetConsumerGroup(depManager_.GetSuccessors(op), consumersGroup);
         if (consumersGroup.empty()) {

@@ -27,8 +27,8 @@
 #include "passes/pass_log/pass_log.h"
 #include "passes/pass_interface/pass.h"
 #include "tilefwk/error_code.h"
-#include "passes/block_graph_pass/schedule_ooo/buffer_pool.h"
-#include "passes/block_graph_pass/schedule_ooo/dep_manager.h"
+#include "passes/block_graph_pass/schedule_ooo/common/buffer_pool.h"
+#include "passes/block_graph_pass/schedule_ooo/common/dep_manager.h"
 #include "passes/pass_utils/reschedule_utils.h"
 #include "passes/pass_utils/pass_utils.h"
 

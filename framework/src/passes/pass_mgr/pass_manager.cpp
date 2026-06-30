@@ -45,7 +45,7 @@
 // execute graph pass
 #include "passes/block_graph_pass/memory_reuse/memory_reuse.h"
 #include "passes/block_graph_pass/insert_sync.h"
-#include "passes/block_graph_pass/schedule_ooo/schedule.h"
+#include "passes/block_graph_pass/schedule_ooo/schedule_ooo.h"
 #include "passes/block_graph_pass/codegen_preproc.h"
 #include "passes/block_graph_pass/infer_param_index.h"
 #include "passes/block_graph_pass/copy_out_resolve.h"

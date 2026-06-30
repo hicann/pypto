@@ -16,15 +16,17 @@
 #ifndef PASS_SCHEDULE_OOO_H
 #define PASS_SCHEDULE_OOO_H
 
-#include "passes/block_graph_pass/schedule_ooo/buffer_pool.h"
-#include "passes/block_graph_pass/schedule_ooo/ooo_scheduler.h"
+#include "passes/block_graph_pass/schedule_ooo/pre_schedule/add_alloc.h"
+#include "passes/block_graph_pass/schedule_ooo/post_schedule/remove_alloc.h"
+#include "passes/block_graph_pass/schedule_ooo/common/buffer_pool.h"
+#include "passes/block_graph_pass/schedule_ooo/post_schedule/ooo_scheduler.h"
 #include "passes/statistics/ooo_schedule_statistic.h"
 #include "passes/statistics/memory_tracer.h"
 #include "passes/pass_utils/pass_utils.h"
-#include "passes/block_graph_pass/schedule_ooo/optimize_sort.h"
-#include "passes/block_graph_pass/schedule_ooo/latency_estimator.h"
-#include "passes/block_graph_pass/schedule_ooo/core_assign.h"
-#include "passes/block_graph_pass/schedule_ooo/task_splitter.h"
+#include "passes/block_graph_pass/schedule_ooo/pre_schedule/optimize_sort.h"
+#include "passes/block_graph_pass/schedule_ooo/pre_schedule/latency_estimator.h"
+#include "passes/block_graph_pass/schedule_ooo/pre_schedule/core_assign.h"
+#include "passes/block_graph_pass/schedule_ooo/pre_schedule/task_splitter.h"
 
 namespace npu::tile_fwk {
 struct ScheduleUnit {

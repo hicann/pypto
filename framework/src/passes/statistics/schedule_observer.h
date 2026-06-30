@@ -23,7 +23,7 @@
 #include <vector>
 #include "interface/utils/common.h"
 #include "tilefwk/data_type.h"   // MemoryType
-#include "passes/block_graph_pass/schedule_ooo/buffer_pool.h"   // BufferAddrChange
+#include "passes/block_graph_pass/schedule_ooo/common/buffer_pool.h"   // BufferAddrChange
 
 namespace npu::tile_fwk {
 

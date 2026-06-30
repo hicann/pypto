@@ -13,7 +13,7 @@
  * \brief Observer notification helpers split from ooo_scheduler.cpp.
  */
 
-#include "ooo_scheduler.h"
+#include "passes/block_graph_pass/schedule_ooo/post_schedule/ooo_scheduler.h"
 #include "tilefwk/symbolic_scalar.h"
 
 namespace npu::tile_fwk {

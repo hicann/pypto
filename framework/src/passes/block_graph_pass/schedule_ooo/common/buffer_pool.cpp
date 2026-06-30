@@ -13,7 +13,7 @@
  * \brief
  */
 
-#include "passes/block_graph_pass/schedule_ooo/buffer_pool.h"
+#include "passes/block_graph_pass/schedule_ooo/common/buffer_pool.h"
 #include "passes/pass_log/pass_log.h"
 
 #define MODULE_NAME "OoOSchedule"

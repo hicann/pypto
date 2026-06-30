@@ -24,7 +24,7 @@
 #include "passes/pass_mgr/pass_manager.h"
 #include "interface/configs/config_manager.h"
 #include "ut_json/ut_json_tool.h"
-#include "passes/block_graph_pass/schedule_ooo/remove_alloc.h"
+#include "passes/block_graph_pass/schedule_ooo/post_schedule/remove_alloc.h"
 #include "computational_graph_builder.h"
 
 using namespace npu::tile_fwk;

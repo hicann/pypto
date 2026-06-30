@@ -22,11 +22,11 @@
 #include "passes/pass_utils/pass_utils.h"
 #include "passes/pass_utils/reschedule_utils.h"
 #include "passes/pass_check/schedule_ooo_checker.h"
-#include "passes/block_graph_pass/schedule_ooo/buffer_pool.h"
-#include "passes/block_graph_pass/schedule_ooo/dep_manager.h"
-#include "passes/block_graph_pass/schedule_ooo/schedule_base.h"
+#include "passes/block_graph_pass/schedule_ooo/common/buffer_pool.h"
+#include "passes/block_graph_pass/schedule_ooo/common/dep_manager.h"
+#include "passes/block_graph_pass/schedule_ooo/common/schedule_base.h"
 #include "passes/statistics/schedule_observer.h"
-#include "schedule_main_loop_base.h"
+#include "passes/block_graph_pass/schedule_ooo/common/schedule_main_loop_base.h"
 
 namespace npu::tile_fwk {
 

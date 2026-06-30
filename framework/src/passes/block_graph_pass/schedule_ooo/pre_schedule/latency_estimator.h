@@ -16,8 +16,8 @@
 #ifndef PASS_ESTIMATE_LATENCY_H
 #define PASS_ESTIMATE_LATENCY_H
 
-#include "schedule_base.h"
-#include "schedule_main_loop_base.h"
+#include "passes/block_graph_pass/schedule_ooo/common/schedule_base.h"
+#include "passes/block_graph_pass/schedule_ooo/common/schedule_main_loop_base.h"
 #include <vector>
 
 namespace npu::tile_fwk {

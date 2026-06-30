@@ -13,7 +13,7 @@
  * \brief Dependency manager implementation
  */
 
-#include "passes/block_graph_pass/schedule_ooo/dep_manager.h"
+#include "passes/block_graph_pass/schedule_ooo/common/dep_manager.h"
 #include "passes/pass_log/pass_log.h"
 
 #ifndef MODULE_NAME

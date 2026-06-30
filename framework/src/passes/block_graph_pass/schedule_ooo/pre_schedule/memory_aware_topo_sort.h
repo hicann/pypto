@@ -11,8 +11,8 @@
 #ifndef NPU_TILE_FWK_MEMORY_AWARE_TOPO_SORT_H
 #define NPU_TILE_FWK_MEMORY_AWARE_TOPO_SORT_H
 
-#include "schedule_base.h"
-#include "dep_manager.h"
+#include "passes/block_graph_pass/schedule_ooo/common/schedule_base.h"
+#include "passes/block_graph_pass/schedule_ooo/common/dep_manager.h"
 #include <unordered_map>
 #include <vector>
 #include <cstdint>

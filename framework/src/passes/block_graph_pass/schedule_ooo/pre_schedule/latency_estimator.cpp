@@ -13,7 +13,7 @@
  * \brief
  */
 
-#include "passes/block_graph_pass/schedule_ooo/latency_estimator.h"
+#include "passes/block_graph_pass/schedule_ooo/pre_schedule/latency_estimator.h"
 
 namespace npu::tile_fwk {
 
