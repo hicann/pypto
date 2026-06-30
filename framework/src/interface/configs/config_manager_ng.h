@@ -88,6 +88,7 @@ constexpr const char* CFG_COMPILE_DBEUG_MODE = "compile_debug_mode";
 constexpr const char* CFG_RUNTIME_DBEUG_MODE = "runtime_debug_mode";
 constexpr int64_t CFG_DEBUG_NONE = 0;
 constexpr int64_t CFG_DEBUG_ALL = 1;
+constexpr int64_t CFG_COMPILE_FIXED_CCE = 2;
 constexpr int64_t CFG_RUINTIME_DEBUG_AICORE_MODEL = 2;
 constexpr int64_t CFG_RUNTIME_DEBUG_VERIFY = 3;
 constexpr int64_t CFG_RUNTIME_DEBUG_GM_OUT_OF_BOUNDS = 4;

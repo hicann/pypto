@@ -43,6 +43,8 @@ public:
 
         // Reset codegen config to default
         ConfigManager::Instance().SetCodeGenConfig(KEY_FIXED_OUTPUT_PATH, false);
+        // Reset compile debug mode to default (in case fixed-CCE mode was enabled)
+        config::SetDebugOption(CFG_COMPILE_DBEUG_MODE, CFG_DEBUG_NONE);
     }
 
     static std::string GetEnvOrEmpty(const char* name)
@@ -192,6 +194,37 @@ TEST_F(TestOutputDir, GetEmitPath_RepeatedCallsConsistent)
 
     // Different mode produces different path
     EXPECT_NE(path1, path3);
+}
+
+// ---------------------------------------------------------------------------
+// Fixed CCE mode — compile_debug_mode=2 (CFG_COMPILE_FIXED_CCE) forces fixed path
+// even when KEY_FIXED_OUTPUT_PATH is false
+// ---------------------------------------------------------------------------
+TEST_F(TestOutputDir, GetEmitPath_FixedCceModeForcesFixedPath)
+{
+    // compile_debug_mode=2 forces fixed output path regardless of KEY_FIXED_OUTPUT_PATH
+    const char* workPath = "/tmp/test_ut_fixed_cce_mode";
+    SetEnv("ASCEND_WORK_PATH", workPath);
+    ConfigManager::Instance().SetCodeGenConfig(KEY_FIXED_OUTPUT_PATH, false);
+    config::SetDebugOption(CFG_COMPILE_DBEUG_MODE, CFG_COMPILE_FIXED_CCE);
+
+    std::string path = config::GetEmitPath("kernel_aicore");
+    // Fixed CCE mode -> fixed path (ASCEND_WORK_PATH/pypto/<name>), not LogTopFolder
+    EXPECT_NE(path.find(workPath), std::string::npos);
+    EXPECT_NE(path.find("pypto"), std::string::npos);
+    EXPECT_NE(path.find("kernel_aicore"), std::string::npos);
+}
+
+TEST_F(TestOutputDir, GetEmitPath_FixedCceModeOverridesExplicitConfig)
+{
+    // Even with KEY_FIXED_OUTPUT_PATH explicitly false, compile_debug_mode=2 wins
+    UnsetEnv("ASCEND_WORK_PATH");
+    ConfigManager::Instance().SetCodeGenConfig(KEY_FIXED_OUTPUT_PATH, false);
+    config::SetDebugOption(CFG_COMPILE_DBEUG_MODE, CFG_COMPILE_FIXED_CCE);
+
+    std::string path = config::GetEmitPath("kernel_aicore");
+    // No ASCEND_WORK_PATH -> bare name (fixed-path behavior), not LogTopFolder
+    EXPECT_EQ(path, "kernel_aicore");
 }
 
 // ---------------------------------------------------------------------------
