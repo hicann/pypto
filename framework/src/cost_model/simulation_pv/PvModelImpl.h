@@ -191,6 +191,7 @@ private:
     std::vector<PvModelCceBin> cceBin;
     uint64_t subcoreId_ = 0;
     uint64_t coreId_ = 0;
+    uint64_t binAddr_ = 0xffffc000;
 
 public:
     using PvInitFunc = void (*)(int pv_mode, int hj_switch, int pv_wrap, const char* out_dir, uint32_t core_id);
@@ -221,10 +222,11 @@ public:
         }
         std::string archTypeStr = NPUArchToString(archType);
         std::transform(archTypeStr.begin(), archTypeStr.end(), archTypeStr.begin(), ::tolower);
-        std::string soPath =
-            std::string(ascendHome) + "/toolkit/tools/simulator/" + archTypeStr + "/lib/libpem_davinci.so";
+        std::string soPath = std::string(ascendHome) + "/toolkit/tools/simulator/" + archTypeStr +
+            (archType == NPUArch::DAV_3510 ? "/camodel/libpem_davinci.so" : "/lib/libpem_davinci.so");
         void* handle = dlopen((soPath.c_str()), RTLD_LAZY);
         if (!handle) {
+            SIMULATION_LOGE(CostModel::PrecisionSimErrorScene::NO_SO_EXISTS, "can not load library: %s", soPath.c_str());
             throw std::runtime_error("can not load library: " + soPath);
         }
         // Load function symbols
@@ -285,6 +287,11 @@ public:
             if (leaf->IsDummyFunction()) {
                 cceBin.emplace_back(PvModelCceBin(
                     leaf->GetProgramId(), leaf->GetFunctionHash().GetHash(), npu::tile_fwk::CoreType::HUB));
+                auto leafFuncAttr = leaf->GetLeafFuncAttribute();
+                if (leafFuncAttr != nullptr && !leafFuncAttr->binPathMainBlock.empty()) {
+                    cceBin.emplace_back(PvModelCceBin(
+                        leaf->GetProgramId(), leaf->GetFunctionHash().GetHash(), npu::tile_fwk::CoreType::HUB));
+                }
             } else {
                 auto leafFuncAttr = leaf->GetLeafFuncAttribute();
                 ASSERT(PrecisionSimErrorScene::LEAF_CALLEE_ATTR_NULL, leafFuncAttr != nullptr)
