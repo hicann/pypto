@@ -440,6 +440,12 @@ void LogicalNotInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>
     DataType select_dtype;
     if (data_type == DT_FP32 || data_type == DT_BF16) {
         select_dtype = DT_FP32;
+    } else if (data_type == DT_INT16 || data_type == DT_UINT16) {
+        select_dtype = DT_INT16;
+    } else if (data_type == DT_INT32 || data_type == DT_UINT32) {
+        select_dtype = DT_INT32;
+    } else if (data_type == DT_INT64 || data_type == DT_UINT64) {
+        select_dtype = DT_INT64;
     } else {
         select_dtype = DT_FP16;
     }
@@ -447,7 +453,12 @@ void LogicalNotInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>
     constexpr int64_t vcmp_bit_size = COUNT_SIZE / 8;
     constexpr size_t ALIGN_SIZE = 32;
 
-    int64_t total_size = COUNT_SIZE * 2 + COUNT_SIZE * BytesOf(select_dtype) * 2 + vcmp_bit_size + 8;
+    int64_t total_size;
+    if (data_type == DT_INT16 || data_type == DT_UINT16 || data_type == DT_INT32 || data_type == DT_UINT32) {
+        total_size = COUNT_SIZE * BytesOf(select_dtype);
+    } else {
+        total_size = COUNT_SIZE * 2 + COUNT_SIZE * BytesOf(select_dtype) * 2 + vcmp_bit_size + 8;
+    }
     total_size = (total_size + ALIGN_SIZE - 1) / ALIGN_SIZE * ALIGN_SIZE;
     int64_t shape = total_size / BytesOf(select_dtype);
     outValidShapes.push_back({shape});

@@ -36,11 +36,27 @@ void TiledLogicalNotOperation(
         DataType select_dtype;
         if (input.tensor.GetDataType() == DT_FP32 || input.tensor.GetDataType() == DT_BF16) {
             select_dtype = DT_FP32;
+        } else if (input.tensor.GetDataType() == DT_INT16 || input.tensor.GetDataType() == DT_UINT16) {
+            select_dtype = DT_INT16;
+        } else if (input.tensor.GetDataType() == DT_INT32 || input.tensor.GetDataType() == DT_UINT32) {
+            select_dtype = DT_INT32;
+        } else if (input.tensor.GetDataType() == DT_INT64 || input.tensor.GetDataType() == DT_UINT64) {
+            select_dtype = DT_INT64;
         } else {
             select_dtype = DT_FP16;
         }
 
-        int64_t total_size = COUNT_NUM * 2 + COUNT_NUM * BytesOf(select_dtype) * 2 + vcmp_bit_size + 8;
+        int64_t total_size;
+        if (input.tensor.GetDataType() == DT_INT16 || input.tensor.GetDataType() == DT_UINT16 ||
+            input.tensor.GetDataType() == DT_INT32 || input.tensor.GetDataType() == DT_UINT32 ||
+            input.tensor.GetDataType() == DT_INT64 || input.tensor.GetDataType() == DT_UINT64) {
+            // New integer path: one buffer of 2048 elements at compute width
+            // For int64, two-step gather reuses the same buffer
+            total_size = COUNT_NUM * BytesOf(select_dtype);
+        } else {
+            // Existing path: vcmpBitResult + compareCondition + oneCondition + castCondition + startAddrUB
+            total_size = COUNT_NUM * 2 + COUNT_NUM * BytesOf(select_dtype) * 2 + vcmp_bit_size + 8;
+        }
         total_size = (total_size + ALIGN_SIZE - 1) / ALIGN_SIZE * ALIGN_SIZE;
         std::vector<int64_t> tmpShape({total_size});
 
@@ -85,7 +101,8 @@ Tensor LogicalNot(const Tensor& self)
     DECLARE_TRACER();
     CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "LogicalNot");
 
-    std::unordered_set<DataType> supportedTypes = {DT_FP32, DT_FP16, DT_UINT8, DT_INT8, DT_BOOL, DT_BF16};
+    std::unordered_set<DataType> supportedTypes = {DT_FP32, DT_FP16, DT_UINT8, DT_INT8, DT_BOOL, DT_BF16,
+                                                    DT_INT16, DT_INT32, DT_UINT16, DT_UINT32};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "LOGICALNOT");
     CheckTensorDimRange(self.GetStorage(), 1, 4, "LOGICALNOT");
     CheckTensorShapeSize(self.GetStorage(), "LOGICALNOT");

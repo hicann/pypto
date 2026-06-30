@@ -35,6 +35,28 @@ struct LogicalNotOpMetaData {
     nlohmann::json test_data_;
 };
 
+static void LogicalNotOperationExeFunc1Dims(
+    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+{
+    FUNCTION("main", {inputs[0]}, {outputs[0]})
+    {
+        SymbolicScalar firstDim = inputs[0].GetShape()[0];
+        const struct LogicalNotOpFuncArgs* args = static_cast<const LogicalNotOpFuncArgs*>(opArgs);
+        const int firstViewShape = args->viewShape_[0];
+        const int bloop = CeilDiv(firstDim, firstViewShape);
+
+        LOOP("LOOP_L0_bIdx", FunctionType::DYNAMIC_LOOP, bIdx, LoopRange(0, bloop, 1))
+        {
+            auto tileTensor = View(
+                inputs[0], {firstViewShape}, {std::min(firstDim - bIdx * firstViewShape, firstViewShape)},
+                {bIdx * firstViewShape});
+            TileShape::Current().SetVecTile(args->tileShape_);
+            auto res = LogicalNot(tileTensor);
+            Assemble(res, {bIdx * firstViewShape}, outputs[0]);
+        }
+    }
+}
+
 static void LogicalNotOperationExeFunc2Dims(
     const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
 {
@@ -156,8 +178,9 @@ class LogicalNotOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops
 
 INSTANTIATE_TEST_SUITE_P(
     TestLogicalNot, LogicalNotOperationTest,
-    ::testing::ValuesIn(GetOpMetaData<LogicalNotOpMetaData>(
-        {LogicalNotOperationExeFunc2Dims, LogicalNotOperationExeFunc3Dims, LogicalNotOperationExeFunc4Dims},
+    ::testing::ValuesIn(GetOpMetaData<LogicalNotOpMetaData, 1>(
+        {LogicalNotOperationExeFunc1Dims, LogicalNotOperationExeFunc2Dims, LogicalNotOperationExeFunc3Dims,
+         LogicalNotOperationExeFunc4Dims},
         "LogicalNot")));
 
 TEST_P(LogicalNotOperationTest, TestLogicalNot)
