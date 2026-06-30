@@ -51,9 +51,6 @@ if (NOT DEFINED PTO_FWK_SRC_ROOT)  # 在线编译
     include("${_WhlLibFwkDir}/cmake/intf.cmake")
 
     option(BUILD_WITH_CANN "Build with CANN." ON)  # 在线编译场景仅会出现在内置 CANN 包场景
-
-    # 构建依赖
-    find_package(Threads REQUIRED)
 endif ()
 
 pybind11_add_module(pypto_impl
@@ -103,8 +100,6 @@ target_link_libraries(pypto_impl
             c_sec
             intf_pub_cxx17
             tile_fwk_intf_pub
-            dl
-            Threads::Threads
 )
 target_link_directories(pypto_impl
         PRIVATE
