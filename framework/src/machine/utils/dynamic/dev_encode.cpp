@@ -785,7 +785,64 @@ void DevAscendFunction::VerifyOperationEncodedContent(
     }
 }
 
-void DevAscendFunction::InitWrapInfo(uintdevptr_t& initOffset, const OrderedSet<Operation*>& callList, bool fillContent)
+static void ValidateWrapGroupConsistency(int32_t wrapId, const std::vector<Operation*>& ops,
+    const std::unordered_map<uint64_t, int>& calleeHashIndexDict, const std::vector<CceCodeInfo>& cceCodeInfoList)
+{
+    auto firstCallop = std::static_pointer_cast<CallOpAttribute>(ops[0]->GetOpAttribute());
+    int cceIndex = calleeHashIndexDict.at(firstCallop->GetCalleeHash().GetHash());
+    uint32_t mixResourceType = cceCodeInfoList[cceIndex].mixResourceType;
+    for (size_t j = 1; j < ops.size(); j++) {
+        auto callopJ = std::static_pointer_cast<CallOpAttribute>(ops[j]->GetOpAttribute());
+        int leafIndexJ = calleeHashIndexDict.at(callopJ->GetCalleeHash().GetHash());
+        ASSERT(DevCommonErr::PARAM_CHECK_FAILED, cceCodeInfoList[leafIndexJ].mixResourceType == mixResourceType)
+            << "wrapId " << wrapId << ": callops have different mixResourceType";
+    }
+
+    int aicCount = 0;
+    int aivCount = 0;
+    for (auto* op : ops) {
+        auto callop = std::static_pointer_cast<CallOpAttribute>(op->GetOpAttribute());
+        int leafIndex = calleeHashIndexDict.at(callop->GetCalleeHash().GetHash());
+        uint32_t coreType = cceCodeInfoList[leafIndex].coreType;
+        if (coreType == static_cast<uint32_t>(CoreType::AIC)) {
+            aicCount++;
+        } else if (coreType == static_cast<uint32_t>(CoreType::AIV)) {
+            aivCount++;
+        }
+    }
+
+    if (mixResourceType == static_cast<uint32_t>(MixResourceType::ONE_CUBE_ONE_VECTOR)) {
+        ASSERT(DevCommonErr::PARAM_CHECK_FAILED, aicCount == 1 && aivCount == 1)
+            << "wrapId " << wrapId << ": MIX_1C1V requires 1 CUBE and 1 VECTOR, got " << aicCount << " and " << aivCount;
+    } else if (mixResourceType == static_cast<uint32_t>(MixResourceType::ONE_CUBE_TWO_VECTOR)) {
+        ASSERT(DevCommonErr::PARAM_CHECK_FAILED, aicCount == 1 && aivCount == 2)
+            << "wrapId " << wrapId << ": MIX_1C2V requires 1 CUBE and 2 VECTOR, got " << aicCount << " and " << aivCount;
+    }
+}
+
+static void ValidateWrapInfo(
+    const std::unordered_map<int32_t, std::vector<Operation*>>& wrapIdToCallops,
+    const std::unordered_map<uint64_t, int>& calleeHashIndexDict, const std::vector<CceCodeInfo>& cceCodeInfoList)
+{
+    for (const auto& [wrapId, ops] : wrapIdToCallops) {
+        for (auto* op : ops) {
+            auto callop = std::static_pointer_cast<CallOpAttribute>(op->GetOpAttribute());
+            int leafIndex = calleeHashIndexDict.at(callop->GetCalleeHash().GetHash());
+            uint32_t mixResourceType = cceCodeInfoList[leafIndex].mixResourceType;
+            int wrapVecId = cceCodeInfoList[leafIndex].wrapVecId;
+            MACHINE_LOGI("MixCallopInfo: opmagic=%d, wrapid=%d, coreType=%u, mixResourceType=%u, wrapVecId=%d",
+                op->opmagic, wrapId, cceCodeInfoList[leafIndex].coreType, mixResourceType, wrapVecId);
+            ASSERT(DevCommonErr::PARAM_CHECK_FAILED, mixResourceType != 1 || wrapVecId != 1)
+                << "Invalid mixResourceType and wrapVecId combination: opmagic = " << op->opmagic
+                << ", wrapid = " << wrapId << ", mixResourceType = " << mixResourceType << ", wrapVecId = " << wrapVecId;
+        }
+        ValidateWrapGroupConsistency(wrapId, ops, calleeHashIndexDict, cceCodeInfoList);
+    }
+}
+
+void DevAscendFunction::InitWrapInfo(
+    uintdevptr_t& initOffset, const OrderedSet<Operation*>& callList, bool fillContent,
+    const std::unordered_map<uint64_t, int>& calleeHashIndexDict, const std::vector<CceCodeInfo>& cceCodeInfoList)
 {
     if (Platform::Instance().GetSoc().GetNPUArch() != NPUArch::DAV_3510) {
         return;
@@ -795,17 +852,17 @@ void DevAscendFunction::InitWrapInfo(uintdevptr_t& initOffset, const OrderedSet<
     ONFILLCONTENT
     {
         std::unordered_set<uint32_t> wrapTaskNumSet;
-        for (size_t i = 0; i < callList.size(); i++) {
-            auto callop = std::static_pointer_cast<CallOpAttribute>(callList[i]->GetOpAttribute());
-            if (callop->wrapId != -1) {
-                wrapTaskNumSet.insert(callop->wrapId);
-            }
-        }
-        wrapIdNum_ = wrapTaskNumSet.size();
+        std::unordered_map<int32_t, std::vector<Operation*>> wrapIdToCallops;
         for (size_t i = 0; i < callList.size(); i++) {
             auto callop = std::static_pointer_cast<CallOpAttribute>(callList[i]->GetOpAttribute());
             At(opWrapList_, i) = callop->wrapId;
+            if (callop->wrapId != -1) {
+                wrapTaskNumSet.insert(callop->wrapId);
+                wrapIdToCallops[callop->wrapId].push_back(callList[i]);
+            }
         }
+        wrapIdNum_ = wrapTaskNumSet.size();
+        ValidateWrapInfo(wrapIdToCallops, calleeHashIndexDict, cceCodeInfoList);
     }
 }
 
@@ -2064,7 +2121,7 @@ struct EncodeDevAscendFunctionInfo {
             initOffset, expressionTable, callList, tensorList, rawTensorList, callOpPredDict, callOpSuccDict,
             calleeHashIndexDict, stitchIndexList, noPredOpList, noSuccOpList, copyOutResolveSuccIndexListDict,
             fillContent);
-        devFunc->InitWrapInfo(initOffset, callList, fillContent);
+        devFunc->InitWrapInfo(initOffset, callList, fillContent, calleeHashIndexDict, cceCodeInfoList);
 
         MarkResolveBitmaps(devFunc, initOffset, fillContent);
 

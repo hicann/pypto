@@ -611,7 +611,10 @@ private:
     void VerifyOperationEncodedContent(
         const OrderedSet<Operation*>& callList, const std::unordered_map<Operation*, uint64_t>& callOpPredDict,
         DevAscendFunctionDuppedData* dupData);
-    void InitWrapInfo(uintdevptr_t& initOffset, const OrderedSet<Operation*>& callList, bool fillContent);
+    void InitWrapInfo(
+        uintdevptr_t& initOffset, const OrderedSet<Operation*>& callList, bool fillContent,
+        const std::unordered_map<uint64_t, int>& calleeHashIndexDict,
+        const std::vector<CceCodeInfo>& cceCodeInfoList);
     void InitIncastOutcast(
         uintdevptr_t& initOffset, const std::vector<std::shared_ptr<LogicalTensor>>& incastTensorList,
         const std::vector<std::shared_ptr<LogicalTensor>>& outcastTensorList,
