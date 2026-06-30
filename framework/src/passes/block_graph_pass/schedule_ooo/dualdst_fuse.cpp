@@ -139,8 +139,8 @@ bool OoOScheduler::IsDualDstAlloc(Operation* allocOp)
     // 解引用就是 heap-use-after-free。
     if (!enableDualDst_) return false;
     if (allocOp == nullptr) return false;
-    auto it = opIsAllocMap.find(allocOp);
-    if (it == opIsAllocMap.end() || !it->second) return false;
+    auto it = schedInfoMap_.find(allocOp);
+    if (it == schedInfoMap_.end() || !it->second.isAlloc) return false;
     for (auto* succ : depManager_.GetSuccessors(allocOp)) {
         if (succ != nullptr && succ->GetOpcode() == Opcode::OP_L0C_COPY_UB_DUAL_DST) {
             return true;
@@ -183,12 +183,7 @@ void OoOScheduler::EraseFromOrderedOps(Operation* op)
     if (it != orderedOps.end()) {
         orderedOps.erase(it);
     }
-    opExecOrderMap.erase(op);
-    opPipeTypeMap.erase(op);
-    opIsAllocMap.erase(op);
-    opIsRetiredMap.erase(op);
-    opViewOpsMap.erase(op);
-    opCoreLocationMap.erase(op);
+    schedInfoMap_.erase(op);
     opReqMemIdsMap.erase(op);
     inOutOperandsCache_.erase(op);
     // 还有两处 DepManager 内部 map 的残留无法在此清理:
@@ -229,7 +224,7 @@ constexpr int kMaxConsumerSearchDepth = 16;
 // 限制: 单链 (每个中间 op 只 1 个 consumer) + 最多向下走 kMaxConsumerSearchDepth 步,
 // 避免环 / 分叉。
 CoreLocationType ConsumerCore(Operation* copyUbOp,
-                              const std::unordered_map<Operation*, CoreLocationType>& coreMap)
+                              const std::unordered_map<Operation*, OpSchedInfo>& schedInfoMap)
 {
     auto out = copyUbOp->GetOutputOperand(0);
     if (out == nullptr) return CoreLocationType::UNKNOWN;
@@ -237,10 +232,10 @@ CoreLocationType ConsumerCore(Operation* copyUbOp,
     if (cons.empty()) return CoreLocationType::UNKNOWN;
     Operation* cur = *cons.begin();
     for (int hop = 0; hop < kMaxConsumerSearchDepth && cur != nullptr; ++hop) {
-        auto it = coreMap.find(cur);
-        if (it != coreMap.end() &&
-            (it->second == CoreLocationType::AIV0 || it->second == CoreLocationType::AIV1)) {
-            return it->second;
+        auto it = schedInfoMap.find(cur);
+        if (it != schedInfoMap.end() &&
+            (it->second.coreLocation == CoreLocationType::AIV0 || it->second.coreLocation == CoreLocationType::AIV1)) {
+            return it->second.coreLocation;
         }
         // 沿 cur 的唯一输出 -> 唯一下游 consumer 继续找
         if (cur->GetOOperands().empty()) break;
@@ -251,8 +246,8 @@ CoreLocationType ConsumerCore(Operation* copyUbOp,
         cur = *nextCons.begin();
     }
     // 全链都没找到 AIV0/AIV1 -> 退回原行为: 取 first consumer 的核 (可能是 UNKNOWN)
-    auto it = coreMap.find(*cons.begin());
-    return (it == coreMap.end()) ? CoreLocationType::UNKNOWN : it->second;
+    auto it = schedInfoMap.find(*cons.begin());
+    return (it == schedInfoMap.end()) ? CoreLocationType::UNKNOWN : it->second.coreLocation;
 }
 
 void GreedyNonOverlapPick(std::vector<CandidatePair>& cands, std::vector<CandidatePair>& picked)
@@ -273,12 +268,12 @@ void GreedyNonOverlapPick(std::vector<CandidatePair>& cands, std::vector<Candida
 // 在 op 的依赖前驱中找其输出 tensor 的 ALLOC op
 Operation* FindAllocPred(Operation* op,
                          DependencyManager& depManager,
-                         const std::unordered_map<Operation*, bool>& isAllocMap)
+                         const std::unordered_map<Operation*, OpSchedInfo>& schedInfoMap)
 {
     for (auto* pre : depManager.GetPredecessors(op)) {
         if (pre == nullptr) continue;
-        auto it = isAllocMap.find(pre);
-        if (it != isAllocMap.end() && it->second) {
+        auto it = schedInfoMap.find(pre);
+        if (it != schedInfoMap.end() && it->second.isAlloc) {
             return pre;
         }
     }
@@ -302,13 +297,13 @@ bool LoadGeometries(const std::vector<Operation*>& copyUbs, std::vector<CopyUbGe
 // O(n²) 两两判定:per-pair 校验 (ubShape / ubValidShape / tile 尺寸一致) + M/N 相邻 + consumer 核校验。
 void BuildAdjacencyCandidates(const std::vector<Operation*>& copyUbs,
                               const std::vector<CopyUbGeometry>& geos,
-                              const std::unordered_map<Operation*, CoreLocationType>& coreMap,
+                              const std::unordered_map<Operation*, OpSchedInfo>& schedInfoMap,
                               std::vector<CandidatePair>& candM,
                               std::vector<CandidatePair>& candN)
 {
-    auto consumerSplit = [&coreMap](Operation* early, Operation* late) {
-        return ConsumerCore(early, coreMap) == CoreLocationType::AIV0 &&
-               ConsumerCore(late,  coreMap) == CoreLocationType::AIV1;
+    auto consumerSplit = [&schedInfoMap](Operation* early, Operation* late) {
+        return ConsumerCore(early, schedInfoMap) == CoreLocationType::AIV0 &&
+               ConsumerCore(late,  schedInfoMap) == CoreLocationType::AIV1;
     };
     for (size_t i = 0; i < copyUbs.size(); i++) {
         if (geos[i].tileM <= 0) continue;   // ReadGeometry 失败,跳过
@@ -358,7 +353,7 @@ void OoOScheduler::IdentifyPairsForOneL0C(LogicalTensorPtr l0cTensor,
 
     std::vector<CandidatePair> candM;
     std::vector<CandidatePair> candN;
-    BuildAdjacencyCandidates(copyUbs, geos, opCoreLocationMap, candM, candN);
+    BuildAdjacencyCandidates(copyUbs, geos, schedInfoMap_, candM, candN);
 
     std::vector<CandidatePair> pickedM;
     std::vector<CandidatePair> pickedN;
@@ -381,8 +376,8 @@ void OoOScheduler::IdentifyPairsForOneL0C(LogicalTensorPtr l0cTensor,
         pair.opLate  = cp.opLate;
         pair.tensorEarly = cp.opEarly->GetOutputOperand(0);
         pair.tensorLate  = cp.opLate->GetOutputOperand(0);
-        pair.allocEarly = FindAllocPred(cp.opEarly, depManager_, opIsAllocMap);
-        pair.allocLate  = FindAllocPred(cp.opLate,  depManager_, opIsAllocMap);
+        pair.allocEarly = FindAllocPred(cp.opEarly, depManager_, schedInfoMap_);
+        pair.allocLate  = FindAllocPred(cp.opLate,  depManager_, schedInfoMap_);
         if (pair.allocEarly == nullptr || pair.allocLate == nullptr) {
             APASS_LOG_WARN_F(Elements::Operation,
                 "DualDst skip pair: cannot find alloc preds for op[%d]/op[%d]",
@@ -420,20 +415,20 @@ namespace {
 // 直接传入未注册到 opExecOrderMap 的 op, 我们用 INT_MAX 回退避免崩溃; 同时打 WARN
 // 提醒, 避免两者都缺失时排序退化为依赖传入参数顺序的静默非确定性行为。
 void PickAllocOrder(Operation* a1, Operation* a2,
-                    const std::unordered_map<Operation*, int>& orderMap,
+                    const std::unordered_map<Operation*, OpSchedInfo>& schedInfoMap,
                     Operation*& early, Operation*& late)
 {
-    const bool has1 = orderMap.count(a1) > 0;
-    const bool has2 = orderMap.count(a2) > 0;
+    const bool has1 = schedInfoMap.count(a1) > 0;
+    const bool has2 = schedInfoMap.count(a2) > 0;
     if (!has1 || !has2) {
         APASS_LOG_WARN_F(Elements::Operation,
-            "PickAllocOrder: alloc op missing in opExecOrderMap (a1 has=%d magic=%d; a2 has=%d magic=%d). "
+            "PickAllocOrder: alloc op missing in schedInfoMap_ (a1 has=%d magic=%d; a2 has=%d magic=%d). "
             "Falling back to INT_MAX; order may be non-deterministic when both missing.",
             static_cast<int>(has1), a1 != nullptr ? a1->GetOpMagic() : -1,
             static_cast<int>(has2), a2 != nullptr ? a2->GetOpMagic() : -1);
     }
-    const int o1 = has1 ? orderMap.at(a1) : INT_MAX;
-    const int o2 = has2 ? orderMap.at(a2) : INT_MAX;
+    const int o1 = has1 ? schedInfoMap.at(a1).execOrder : INT_MAX;
+    const int o2 = has2 ? schedInfoMap.at(a2).execOrder : INT_MAX;
     if (o1 <= o2) {
         early = a1;
         late = a2;
@@ -576,12 +571,12 @@ void OoOScheduler::DetachOldOpsFromTensors(const DualDstPair& p, LogicalTensorPt
 
 void OoOScheduler::RegisterFusedOpInMaps(Operation* C, int execOrder)
 {
-    opExecOrderMap[C] = execOrder;
-    opPipeTypeMap[C] = RescheduleUtils::GetOpPipeType(C);
-    opIsAllocMap[C] = false;
-    opIsRetiredMap[C] = false;
-    opCoreLocationMap[C] = CoreLocationType::AIC;   // OP_L0C_COPY_UB_DUAL_DST 是 cube 侧
-    opViewOpsMap[C] = {};
+    schedInfoMap_[C].execOrder = execOrder;
+    schedInfoMap_[C].pipeType = RescheduleUtils::GetOpPipeType(C);
+    schedInfoMap_[C].isAlloc = false;
+    schedInfoMap_[C].isRetired = false;
+    schedInfoMap_[C].coreLocation = CoreLocationType::AIC;
+    schedInfoMap_[C].viewOps = {};
     // opReqMemIdsMap[C] 由 SyncBufRefCountForFuse 设置;此处不再清空,以免覆盖 sync 写入。
     InsertOrdered(C);
 }
@@ -640,13 +635,13 @@ Status OoOScheduler::FuseOnePair(const DualDstPair& p)
 
     Operation* A = nullptr;
     Operation* B = nullptr;
-    PickAllocOrder(p.allocEarly, p.allocLate, opExecOrderMap, A, B);
+    PickAllocOrder(p.allocEarly, p.allocLate, schedInfoMap_, A, B);
     depManager_.AddAllocDependency(A, C);
 
     RewireEdgesForFusedOp(p.opEarly, p.opLate, A, B, C);
     DetachOldOpsFromTensors(p, l0cIn, B);
 
-    int earlyOrder = opExecOrderMap.count(p.opEarly) ? opExecOrderMap[p.opEarly] : 0;
+    int earlyOrder = schedInfoMap_.count(p.opEarly) ? schedInfoMap_[p.opEarly].execOrder : 0;
     SyncBufRefCountForFuse(p, B, C);    // 必须在 EraseFromOrderedOps 之前
     p.opEarly->SetAsDeleted();
     p.opLate->SetAsDeleted();
@@ -709,8 +704,8 @@ Status OoOScheduler::ResolveDualDstCores(Operation* allocOp, DualDstAllocCtx& ct
         if (ub == nullptr) return CoreLocationType::UNKNOWN;
         const auto& cons = ub->GetConsumers();
         if (cons.empty()) return CoreLocationType::UNKNOWN;
-        auto it = opCoreLocationMap.find(*cons.begin());
-        return (it == opCoreLocationMap.end()) ? CoreLocationType::UNKNOWN : it->second;
+        auto it = schedInfoMap_.find(*cons.begin());
+        return (it == schedInfoMap_.end()) ? CoreLocationType::UNKNOWN : it->second.coreLocation;
     };
     ctx.coreA = coreOf(ubA);
     ctx.coreB = coreOf(ubB);

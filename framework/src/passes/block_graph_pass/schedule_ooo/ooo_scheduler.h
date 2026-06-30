@@ -160,6 +160,15 @@ struct SingleSpillCreatedOps {
     }
 };
 
+struct OpSchedInfo {
+    int execOrder{-1};
+    PipeType pipeType{PipeType::PIPE_FIX};
+    bool isAlloc{false};
+    bool isRetired{false};
+    std::vector<Operation*> viewOps;
+    CoreLocationType coreLocation{CoreLocationType::UNKNOWN};
+};
+
 class OoOScheduler : public ScheduleBase, public ScheduleMainLoopBase {
 public:
     Status Schedule(
@@ -185,13 +194,8 @@ public:
 private:
     // 存储排好顺序的Operation指针
     std::vector<Operation*> orderedOps;
-    // Operation属性管理
-    std::unordered_map<Operation*, int> opExecOrderMap;
-    std::unordered_map<Operation*, PipeType> opPipeTypeMap;
-    std::unordered_map<Operation*, bool> opIsAllocMap;
-    std::unordered_map<Operation*, bool> opIsRetiredMap;
-    std::unordered_map<Operation*, std::vector<Operation*>> opViewOpsMap;
-    std::unordered_map<Operation*, CoreLocationType> opCoreLocationMap;
+
+    std::unordered_map<Operation*, OpSchedInfo> schedInfoMap_;
 
     std::unordered_set<CoreLocationType> CORE_INIT_CONFIGS;
 
@@ -487,24 +491,9 @@ private:
     Status GetPartialWriteReplayAttr(Operation* producerOp, std::vector<int64_t> &toOffset,
  	    std::vector<SymbolicScalar> &toDynOffset, std::vector<SymbolicScalar> &fromDynValidShape) const;
 
-    // ============ 辅助函数：获取Operation属性 ============
-    int GetExecOrder(Operation* op) const { return opExecOrderMap.at(op); }
-    PipeType GetPipeType(Operation* op) const { return opPipeTypeMap.at(op); }
-    bool IsAlloc(Operation* op) const { return opIsAllocMap.at(op); }
-    bool IsRetired(Operation* op) const { return opIsRetiredMap.at(op); }
-    CoreLocationType& GetCoreLocation(Operation* op) { return opCoreLocationMap[op]; }
-    const CoreLocationType& GetCoreLocation(Operation* op) const { return opCoreLocationMap.at(op); }
-    std::vector<Operation*>& GetViewOps(Operation* op) { return opViewOpsMap[op]; }
-
-    // 辅助函数：设置Operation属性
-    void SetExecOrder(Operation* op, int order) { opExecOrderMap[op] = order; }
-    void SetPipeType(Operation* op, PipeType type) { opPipeTypeMap[op] = type; }
-    void SetIsAlloc(Operation* op, bool isAlloc) { opIsAllocMap[op] = isAlloc; }
-    void SetIsRetired(Operation* op, bool isRetired) { opIsRetiredMap[op] = isRetired; }
-    void SetCoreLocation(Operation* op, CoreLocationType loc) { opCoreLocationMap[op] = loc; }
-
-    // 辅助函数：检查Operation是否在调度中
-    bool IsOpInSchedule(Operation* op) const { return opExecOrderMap.find(op) != opExecOrderMap.end(); }
+    std::vector<Operation*>& GetViewOps(Operation* op) { return schedInfoMap_[op].viewOps; }
+    void SetIsRetired(Operation* op, bool isRetired) { schedInfoMap_[op].isRetired = isRetired; }
+    void SetCoreLocation(Operation* op, CoreLocationType loc) { schedInfoMap_[op].coreLocation = loc; }
 
     void UpdateL0MXMap(const std::vector<Operation*> &opList);
 };

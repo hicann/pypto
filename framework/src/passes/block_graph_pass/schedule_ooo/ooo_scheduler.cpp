@@ -137,19 +137,19 @@ void OoOScheduler::PrintOpList(std::vector<Operation*> opList)
 void OoOScheduler::UpdateIssueExecOrder()
 {
     for (size_t idx = 0; idx < orderedOps.size(); idx++) {
-        opExecOrderMap[orderedOps[idx]] = idx;
+        schedInfoMap_[orderedOps[idx]].execOrder = idx;
     }
 }
 
 Status OoOScheduler::CheckAndUpdateLifecycle()
 {
     for (const auto &op : orderedOps) {
-        if (!opIsRetiredMap[op]) {
+        if (!schedInfoMap_[op].isRetired) {
             APASS_LOG_ERROR_F(Elements::Operation, "Unexecuted op: %s. %s", GetOpInfo(op).c_str(),
                 GetFormatBacktrace(*op).c_str());
             return FAILED;
         }
-        if (opIsAllocMap[op]) {
+        if (schedInfoMap_[op].isAlloc) {
             op->GetOutputOperand(0)->memoryrange.lifeStart =
                 localBufferMap_[GetOpMemIds(op)[0]]->startCycle;
             op->GetOutputOperand(0)->memoryrange.lifeEnd =
@@ -224,7 +224,7 @@ Status OoOScheduler::ApplySpillContext(SpillContext& ctx, Operation* allocOp) {
         allocIssueQueue[get<2>(deleteOp)][get<1>(deleteOp)].DeleteOp(get<0>(deleteOp));
     }
     for (auto &newAllocOp : ctx.newAllocOps) {
-        allocIssueQueue[opCoreLocationMap[allocOp]][memType].Insert(newAllocOp);
+        allocIssueQueue[schedInfoMap_[allocOp].coreLocation][memType].Insert(newAllocOp);
     }
 
     for (auto memId : ctx.spillMemIds) {
@@ -251,7 +251,7 @@ Status OoOScheduler::FindFirstOrder(std::pair<CoreLocationType, MemoryType> &ord
         return FAILED;
     }
     std::sort(coreVec.begin(), coreVec.end(), [&spillMemTypeMap, this](const CoreLocationType& a, const CoreLocationType& b) {
-        return opExecOrderMap[allocIssueQueue[a][spillMemTypeMap[a]].Front()] < opExecOrderMap[allocIssueQueue[b][spillMemTypeMap[b]].Front()];
+        return schedInfoMap_[allocIssueQueue[a][spillMemTypeMap[a]].Front()].execOrder < schedInfoMap_[allocIssueQueue[b][spillMemTypeMap[b]].Front()].execOrder;
     });
     orderFirstPair = std::make_pair(coreVec[0], spillMemTypeMap[coreVec[0]]);
     return SUCCESS;
@@ -286,7 +286,7 @@ Status OoOScheduler::AllocViewTensorMemRange(Operation& operation)
 
 Status OoOScheduler::AllocTensorMemRange(Operation* op)
 {
-    auto& viewOps = opViewOpsMap[op];
+    auto& viewOps = schedInfoMap_[op].viewOps;
     for (auto& viewOp : viewOps) {
         if (!IsViewOp(*viewOp)) {
             APASS_LOG_ERROR_F(Elements::Operation, "op[%d] is not OP_VIEW.", viewOp->GetOpMagic());
@@ -322,7 +322,7 @@ Status OoOScheduler::AllocTensorMemRange(Operation* op)
 
 void OoOScheduler::HandleViewOp(Operation* op)
 {
-    auto& viewOps = opViewOpsMap[op];
+    auto& viewOps = schedInfoMap_[op].viewOps;
     for (auto& viewOp : viewOps) {
         if (std::find(newOperations_.begin(), newOperations_.end(), viewOp) != newOperations_.end()) {
             continue;
@@ -415,7 +415,7 @@ Status OoOScheduler::ExecuteAllocIssue(uint64_t& commitCnt, MemoryType memType, 
 {
     while (!pipe.Empty()) {
         Operation* op = pipe.Front();
-        auto& coreLocation = opCoreLocationMap[op];
+        auto& coreLocation = schedInfoMap_[op].coreLocation;
         auto& reqMemIds = GetOpMemIds(op);
         bool allocated = false;
         Status st = (memType == MemoryType::MEM_UB && IsDualDstAlloc(op))
@@ -453,7 +453,7 @@ CoreLocationType OoOScheduler::ResolveCoreForFree(int memId)
     if (overrideIt != dualDstMemIdCoreOverride_.end()) {
         return overrideIt->second;
     }
-    return opCoreLocationMap[tensorAllocMap[memId]];
+    return schedInfoMap_[tensorAllocMap[memId]].coreLocation;
 }
 
 Status OoOScheduler::FreeBuffer(Operation* op, std::vector<int>& freedMemIds)
@@ -473,12 +473,11 @@ Status OoOScheduler::FreeBuffer(Operation* op, std::vector<int>& freedMemIds)
                 return FAILED;
             }
             freedMemIds.push_back(memId);
-            localBufferMap_[memId]->retireCycle = clock;
             if (tensorOccupyMap.erase(memId) == 0) {
                 APASS_LOG_ERROR_F(Elements::Tensor, "Erase tensor[%d] failed.", memId);
                 return FAILED;
             }
-            dualDstMemIdCoreOverride_.erase(memId);   // free 后清理, 避免后续 spill 重 alloc 复用旧映射
+            dualDstMemIdCoreOverride_.erase(memId);
         }
     }
     return SUCCESS;
@@ -506,47 +505,34 @@ std::vector<Operation*> OoOScheduler::GetNewOperations()
 Status OoOScheduler::RetireOpAndAwakeSucc(Operation* op, uint64_t& commitCnt)
 {
     commitCnt++;
-    opIsRetiredMap[op] = true;
+    schedInfoMap_[op].isRetired = true;
     std::vector<int> freedMemIds;
     if (FreeBuffer(op, freedMemIds) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "FreeBufferOp failed. %s", GetFormatBacktrace(*op).c_str());
         return FAILED;
     }
+    for (auto memId : freedMemIds) {
+        localBufferMap_[memId]->retireCycle = clock;
+    }
     NotifyOpRetire(op, freedMemIds);
 
     auto& successors = depManager_.GetSuccessors(op);
     for (auto succOp : successors) {
-        if (opIsRetiredMap[succOp]) {
+        if (schedInfoMap_[succOp].isRetired) {
             continue;
         }
         bool ready = true;
         auto &preds = depManager_.GetPredecessors(succOp);
         for (auto predOp : preds) {
-            if (!opIsRetiredMap[predOp]) {
+            if (!schedInfoMap_[predOp].isRetired) {
                 ready = false;
                 break;
             }
         }
         if (ready) {
-            // 路由到 succOp 自己所在 core 的队列 (而非前驱的 core)。
-            // 对单核前驱场景行为不变;对 dualdst (跨核前驱) 的场景避免 succOp 同时进入多个核的队列。
-            auto& q = issueQueues[opCoreLocationMap[succOp]][opPipeTypeMap[succOp]];
-            bool alreadyIssued =
-                std::find(newOperations_.begin(), newOperations_.end(), succOp) != newOperations_.end();
-            bool alreadyInQueue = std::find(q.queue.begin(), q.queue.end(), succOp) != q.queue.end();
-            bool currentlyRunning = false;
-            for (auto& [pipeType, pipe] : issueQueues[opCoreLocationMap[succOp]]) {
-                (void)pipeType;
-                if (pipe.busy && pipe.curIssue == succOp) {
-                    currentlyRunning = true;
-                    break;
-                }
-            }
-            if (!alreadyIssued && !alreadyInQueue && !currentlyRunning) {
-                q.Insert(succOp);
-            }
+            issueQueues[schedInfoMap_[succOp].coreLocation][schedInfoMap_[succOp].pipeType].Insert(succOp);
             APASS_LOG_DEBUG_F(Elements::Operation, "    Wakeup: %s, execOrder: %d",
-                GetOpInfo(succOp).c_str(), opExecOrderMap[succOp]);
+                GetOpInfo(succOp).c_str(), schedInfoMap_[succOp].execOrder);
         }
     }
     return SUCCESS;
@@ -600,11 +586,11 @@ void OoOScheduler::LaunchReadyIssue()
 {
     // 初始化 Queue
     for (auto &op : orderedOps) {
-        auto& coreLocation = opCoreLocationMap[op];
+        auto& coreLocation = schedInfoMap_[op].coreLocation;
         if (USE_LESS_OPS.find(op->GetOpcode()) != USE_LESS_OPS.end() && depManager_.GetPredecessors(op).empty()) {
-            issueQueues[coreLocation][opPipeTypeMap[op]].Insert(op);
+            issueQueues[coreLocation][schedInfoMap_[op].pipeType].Insert(op);
         }
-        if (opIsAllocMap[op]) {
+        if (schedInfoMap_[op].isAlloc) {
             auto& reqMemIds = GetOpMemIds(op);
             if (!reqMemIds.empty()) {
                 auto memType = localBufferMap_[reqMemIds[0]]->memType;
@@ -642,24 +628,9 @@ Status OoOScheduler::PostMainLoop()
 
 Status OoOScheduler::RetireIssue(Operation* op)
 {
-    opIsRetiredMap[op] = true;
-    for (auto memId : GetOpMemIds(op)) {
-        if (DelBufRefCount(memId) != SUCCESS) {
-            APASS_LOG_ERROR_F(Elements::Tensor, "DelBufRefCount tensor[%d] failed.", memId);
-            return FAILED;
-        }
-        if (bufRefCount_[memId] == 0) {
-            CoreLocationType coreLocation = ResolveCoreForFree(memId);
-            auto memType = localBufferMap_[memId]->memType;
-            if (bufferManagerMap[coreLocation][memType].Free(localBufferMap_[memId]->id) != SUCCESS) {
-                APASS_LOG_ERROR_F(Elements::Tensor, "Free tensor[%d] failed.", memId);
-                return FAILED;
-            }
-            tensorOccupyMap.erase(memId);
-            dualDstMemIdCoreOverride_.erase(memId);   // 同 FreeBuffer: free 后清理映射
-        }
-    }
-    return SUCCESS;
+    schedInfoMap_[op].isRetired = true;
+    std::vector<int> freedMemIds;
+    return FreeBuffer(op, freedMemIds);
 }
 
 Status OoOScheduler::ExecuteAllocIssue(Operation* op, size_t &pcIdx)
@@ -669,16 +640,15 @@ Status OoOScheduler::ExecuteAllocIssue(Operation* op, size_t &pcIdx)
         return FAILED;
     }
     LocalBufferPtr allocBuffer = localBufferMap_[GetOpMemIds(op)[0]];
-    auto coreLocation = opCoreLocationMap[op];
+    auto coreLocation = schedInfoMap_[op].coreLocation;
     const bool isDualDst = (allocBuffer->memType == MemoryType::MEM_UB) && IsDualDstAlloc(op);
 
-    // === Alloc 试一发 (dualdst 双池同址 / 单池常规) ===
     bool needSpill = false;
     if (isDualDst) {
         bool allocated = false;
         if (AllocateDualDstAtCurrent(op, allocated) != SUCCESS) return FAILED;
         if (allocated) return SUCCESS;
-        needSpill = true;   // dualdst 同址失败,落到共用 spill 流程
+        needSpill = true;
     } else {
         needSpill = bufferManagerMap[coreLocation][allocBuffer->memType].IsFull(allocBuffer, false);
     }
@@ -720,7 +690,7 @@ Status OoOScheduler::SeqSchedule()
     while (pcIdx < orderedOps.size()) {
         auto op = orderedOps[pcIdx];
         APASS_LOG_DEBUG_F(Elements::Operation, "Launch %s", GetOpInfo(op).c_str());
-        if (opIsAllocMap[op]) {
+        if (schedInfoMap_[op].isAlloc) {
             if (ExecuteAllocIssue(op, pcIdx) != SUCCESS) {
                 APASS_LOG_ERROR_F(Elements::Operation, "ExecuteAllocIssue failed! %s", GetFormatBacktrace(*op).c_str());
                 return FAILED;
@@ -752,7 +722,7 @@ Status OoOScheduler::SeqSchedule()
         return FAILED;
     }
     for (const auto &op : orderedOps) {
-        opIsRetiredMap[op] = false;
+        schedInfoMap_[op].isRetired = false;
     }
     // 更新依赖关系
     if (depManager_.InitDependencies(orderedOps, false) != SUCCESS) {
@@ -767,7 +737,7 @@ void OoOScheduler::InitIssueQueuesAndBufferManager()
 {
     // 设置比较函数用于IssueQueue排序
     auto compareFunc = [this](Operation* a, Operation* b) {
-        return opExecOrderMap[a] > opExecOrderMap[b];
+        return schedInfoMap_[a].execOrder > schedInfoMap_[b].execOrder;
     };
 
     // 初始化
@@ -806,7 +776,7 @@ void OoOScheduler::InitTensorCoreMap()
 {
     // 不存在 no producer情况
     for (auto op : orderedOps) {
-        if (opIsAllocMap[op]) {
+        if (schedInfoMap_[op].isAlloc) {
             auto memId = op->GetOutputOperand(0)->memoryrange.memId;
             tensorAllocMap[memId] = op;
         }
@@ -840,7 +810,7 @@ void OoOScheduler::InitOpViewOps(Operation* op)
             }
         }
     }
-    opViewOpsMap[op] = viewOps;
+    schedInfoMap_[op].viewOps = viewOps;
 }
 
 Status OoOScheduler::InitOpCoreType(Operation* op, const std::unordered_map<Operation*, CoreLocationType>& opCoreMap)
@@ -879,7 +849,7 @@ Status OoOScheduler::InitOpCoreType(Operation* op, const std::unordered_map<Oper
             return FAILED;
         }
     }
-    opCoreLocationMap[op] = coreLocation;
+    schedInfoMap_[op].coreLocation = coreLocation;
     return SUCCESS;
 }
 
@@ -903,10 +873,10 @@ Status OoOScheduler::InitOpEntry(Operation* op, const std::unordered_map<Operati
     // 初始化Operation属性到map
     int order = static_cast<int>(orderedOps.size());
     orderedOps.push_back(op);
-    opExecOrderMap[op] = order;
-    opPipeTypeMap[op] = RescheduleUtils::GetOpPipeType(op);
-    opIsAllocMap[op] = (op->GetOpcodeStr().find("ALLOC") != std::string::npos);
-    opIsRetiredMap[op] = false;
+    schedInfoMap_[op].execOrder = order;
+    schedInfoMap_[op].pipeType = RescheduleUtils::GetOpPipeType(op);
+    schedInfoMap_[op].isAlloc = (op->GetOpcodeStr().find("ALLOC") != std::string::npos);
+    schedInfoMap_[op].isRetired = false;
     SetOpMemIds(op, {});
 
     // 初始化viewOps
@@ -919,7 +889,7 @@ Status OoOScheduler::InitOpEntry(Operation* op, const std::unordered_map<Operati
     }
 
     APASS_LOG_DEBUG_F(Elements::Operation, "issue: %s, coreType: %s",
-        GetOpInfo(op).c_str(), coreTypeToString(opCoreLocationMap[op]).c_str());
+        GetOpInfo(op).c_str(), coreTypeToString(schedInfoMap_[op].coreLocation).c_str());
     return SUCCESS;
 }
 
@@ -927,13 +897,8 @@ Status OoOScheduler::Init(const std::vector<Operation*>& opList, const std::unor
     CoreLocationType>& opCoreMap, const std::unordered_set<CoreLocationType> fixCoreConfig)
 {
     orderedOps.clear();
-    opExecOrderMap.clear();
-    opPipeTypeMap.clear();
-    opIsAllocMap.clear();
-    opIsRetiredMap.clear();
+    schedInfoMap_.clear();
     ClearAllOpMemIds();
-    opViewOpsMap.clear();
-    opCoreLocationMap.clear();
     localBufferMap_.clear();
     LOG_SCOPE_BEGIN(tInit, Elements::Function, "Init");
     // 初始化芯片各buffer大小

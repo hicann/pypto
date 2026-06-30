@@ -55,8 +55,8 @@ void OoOScheduler::NotifyOpLaunch(Operation* op, int cycleEnd)
     event.clock = clock;
     event.cycleEnd = cycleEnd;
     event.opMagic = op->GetOpMagic();
-    event.pipeType = opPipeTypeMap[op];
-    event.coreLocation = ToCoreLocation(opCoreLocationMap[op]);
+    event.pipeType = schedInfoMap_[op].pipeType;
+    event.coreLocation = ToCoreLocation(schedInfoMap_[op].coreLocation);
     for (size_t i = 0; i < op->GetIOperands().size(); ++i) {
         event.inputMemIds.push_back(op->GetInputOperand(i)->memoryrange.memId);
     }
@@ -72,7 +72,7 @@ void OoOScheduler::NotifyOpLaunch(Operation* op, int cycleEnd)
 void OoOScheduler::NotifyOpRetire(Operation* op, const std::vector<int>& freedMemIds)
 {
     if (observers_.empty()) return;
-    if (opIsAllocMap[op]) return;   // alloc retire only awakens successors, no OP_RETIRE event
+    if (schedInfoMap_[op].isAlloc) return;   // alloc retire only awakens successors, no OP_RETIRE event
     OpRetireEvent event{clock, op->GetOpMagic(), freedMemIds};
     for (auto* obs : observers_) {
         obs->OnOpRetire(event);
@@ -87,7 +87,7 @@ void OoOScheduler::NotifyAllocExec(Operation* op, int memId)
     event.clock = clock;
     event.memId = memId;
     event.memType = buf->memType;
-    event.coreLocation = ToCoreLocation(opCoreLocationMap[op]);
+    event.coreLocation = ToCoreLocation(schedInfoMap_[op].coreLocation);
     event.addrStart = buf->start;
     event.addrEnd = buf->end;
     uint64_t validSize = buf->size;
@@ -115,7 +115,7 @@ void OoOScheduler::NotifySpill(LogicalTensorPtr spillTensor, int spillMemId,
         ? clock + created.copyoutOp->GetLatency() : clock;
     event.spillMemId = spillMemId;
     event.memType = spillTensor->GetMemoryTypeOriginal();
-    event.coreLocation = ToCoreLocation(opCoreLocationMap[spillAllocOp]);
+    event.coreLocation = ToCoreLocation(schedInfoMap_[spillAllocOp].coreLocation);
     event.addrStart = buf->start;
     event.addrEnd = buf->end;
     event.triggerOpMagic = spillAllocOp->GetOpMagic();
@@ -127,11 +127,11 @@ void OoOScheduler::NotifySpill(LogicalTensorPtr spillTensor, int spillMemId,
     event.spillCopyoutSize = (created.copyoutOp != nullptr)
         ? spillTensor->tensor->GetRawDataSize() : 0;
     for (const auto& [memId, ownerOp] : tensorOccupyMap) {
-        if (opIsAllocMap[ownerOp]) {
+        if (schedInfoMap_[ownerOp].isAlloc) {
             event.allocOccupiedSize += localBufferMap_.at(memId)->size;
         }
     }
-    auto& pool = bufferManagerMap[opCoreLocationMap[spillAllocOp]][buf->memType];
+    auto& pool = bufferManagerMap[schedInfoMap_[spillAllocOp].coreLocation][buf->memType];
     event.bufferCurrentUsage = pool.GetAllocatedSize();
     event.bufferCapacity = pool.GetMemSize();
     if (created.gmTensor != nullptr) {
@@ -154,7 +154,7 @@ void OoOScheduler::NotifyBufferRearrange(Operation* triggerOp, MemoryType memTyp
     BufferRearrangeEvent event;
     event.clock = clock;
     event.memType = memType;
-    event.coreLocation = ToCoreLocation(opCoreLocationMap[triggerOp]);
+    event.coreLocation = ToCoreLocation(schedInfoMap_[triggerOp].coreLocation);
     event.triggerOpMagic = triggerOp->GetOpMagic();
     event.changes = std::move(changes);
     for (auto* obs : observers_) {
@@ -165,7 +165,7 @@ void OoOScheduler::NotifyBufferRearrange(Operation* triggerOp, MemoryType memTyp
 void OoOScheduler::NotifyAllocFail(Operation* triggerOp, MemoryType memType, uint64_t requestSize)
 {
     if (observers_.empty()) return;
-    auto coreLocation = opCoreLocationMap[triggerOp];
+    auto coreLocation = schedInfoMap_[triggerOp].coreLocation;
     auto& pool = bufferManagerMap[coreLocation][memType];
 
     AllocFailEvent event;

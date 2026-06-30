@@ -1203,7 +1203,7 @@ TEST_F(ScheduleOoOTest, TestSpillL0CMultiConsumer)
         subGraph.GetOp("Matmul1"), copyOutOp, subGraph.GetOp("L0CAlloc2"), subGraph.GetOp("Matmul2"),
         subGraph.GetOp("UBAlloc"), subGraph.GetOp("L0CCopyUB"), subGraph.GetOp("L1Alloc"), subGraph.GetOp("L0CToL1")};
     for (size_t i = 0; i < ooOScheduler.orderedOps.size(); i++) {
-        ooOScheduler.opExecOrderMap[ooOScheduler.orderedOps[i]] = static_cast<int>(i);
+        ooOScheduler.schedInfoMap_[ooOScheduler.orderedOps[i]].execOrder = static_cast<int>(i);
     }
 
     EXPECT_EQ(ooOScheduler.SeqSchedule(), SUCCESS);
@@ -1692,7 +1692,7 @@ TEST_F(ScheduleOoOTest, TestHasEnoughBuffer)
 
     OoOScheduler ooOScheduler(*function);
     ooOScheduler.orderedOps.push_back(op);
-    ooOScheduler.opIsAllocMap[op] = true;
+    ooOScheduler.schedInfoMap_[op].isAlloc = true;
     ooOScheduler.depManager_.GetSuccessors(op).clear();
     ooOScheduler.opReqMemIdsMap[op] = {memId};
     ooOScheduler.SetCoreLocation(op, CoreLocationType::AIV0);
@@ -1725,7 +1725,7 @@ TEST_F(ScheduleOoOTest, TestHasEnoughBufferAddMemId)
     OoOScheduler ooOScheduler(*function);
     ooOScheduler.orderedOps.push_back(op);
     ooOScheduler.orderedOps.push_back(opCopyIn);
-    ooOScheduler.opIsAllocMap[op] = true;
+    ooOScheduler.schedInfoMap_[op].isAlloc = true;
     ooOScheduler.depManager_.InsertSuccessor(op, opCopyIn);
     ooOScheduler.opReqMemIdsMap[opCopyIn] = {1};
     ooOScheduler.opReqMemIdsMap[op] = {memId1};
@@ -1916,7 +1916,7 @@ TEST_F(ScheduleOoOTest, TestBufferPollRearrange)
     // 验证重排，排序依据为size从大到小
     OoOScheduler oooSchedule(*function);
     auto corePair = CoreLocationType::AIV0;
-    oooSchedule.opCoreLocationMap[alloc3] = corePair;
+    oooSchedule.schedInfoMap_[alloc3].coreLocation = corePair;
     oooSchedule.bufferManagerMap[corePair][MemoryType::MEM_UB] = pool;
     oooSchedule.tensorOccupyMap[1] = alloc1;
     oooSchedule.tensorOccupyMap[2] = alloc2;
@@ -3614,23 +3614,23 @@ DualDstGraph BuildDualDstGraph(const std::vector<int64_t>& l0cShape,
     return g;
 }
 
-// 给 OoOScheduler 预填 opCoreLocationMap:
+// 给 OoOScheduler 预填 schedInfoMap_:
 //   - add0->AIV0 / add1->AIV1, 让 dualdst identify 阶段的 ConsumerCore 校验过
 //     split (AIV0 + AIV1)。
 //   - dualdst ResolveDualDstAllocCtx 现已改用 "从 dual_dst op 的 ub output tensor 的
 //     consumer (add op) 反推 core", 不再依赖 tensorAllocCoreMap (该成员已随主线移除),
-//     所以只要 add0/add1 的 opCoreLocationMap 正确就足够。
+//     所以只要 add0/add1 的 schedInfoMap_ 正确就足够。
 void InjectCoreMap(OoOScheduler& s, const DualDstGraph& g, bool sameCoreForAdds = false)
 {
-    s.opCoreLocationMap[g.copy0]  = CoreLocationType::AIC;
-    s.opCoreLocationMap[g.copy1]  = CoreLocationType::AIC;
-    s.opCoreLocationMap[g.add0]   = CoreLocationType::AIV0;
-    s.opCoreLocationMap[g.add1]   = sameCoreForAdds ? CoreLocationType::AIV0 : CoreLocationType::AIV1;
-    s.opCoreLocationMap[g.allocL0c]  = CoreLocationType::AIC;
-    s.opCoreLocationMap[g.allocUb0]  = CoreLocationType::AIV0;
-    s.opCoreLocationMap[g.allocUb1]  = CoreLocationType::AIV1;
-    s.opCoreLocationMap[g.allocOut0] = CoreLocationType::AIV0;
-    s.opCoreLocationMap[g.allocOut1] = CoreLocationType::AIV1;
+    s.schedInfoMap_[g.copy0].coreLocation  = CoreLocationType::AIC;
+    s.schedInfoMap_[g.copy1].coreLocation  = CoreLocationType::AIC;
+    s.schedInfoMap_[g.add0].coreLocation   = CoreLocationType::AIV0;
+    s.schedInfoMap_[g.add1].coreLocation   = sameCoreForAdds ? CoreLocationType::AIV0 : CoreLocationType::AIV1;
+    s.schedInfoMap_[g.allocL0c].coreLocation  = CoreLocationType::AIC;
+    s.schedInfoMap_[g.allocUb0].coreLocation  = CoreLocationType::AIV0;
+    s.schedInfoMap_[g.allocUb1].coreLocation  = CoreLocationType::AIV1;
+    s.schedInfoMap_[g.allocOut0].coreLocation = CoreLocationType::AIV0;
+    s.schedInfoMap_[g.allocOut1].coreLocation = CoreLocationType::AIV1;
 }
 
 } // namespace dualdst_ut
