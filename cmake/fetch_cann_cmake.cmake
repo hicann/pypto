@@ -9,8 +9,8 @@
 # -----------------------------------------------------------------------------------------------------------
 
 if (ENABLE_FEATURE_PACKING_WHL_INTO_RUN)
-    set(CANN_CMAKE_TAG "master-026")            # tag 名
-    set(CANN_CMAKE_DIR_NAME "cmake-master")     # 压缩包解压后的目录名
+    set(CANN_CMAKE_TAG "master-026")          # tag 名
+    set(CANN_CMAKE_DIR_NAME "cann-cmake")     # 压缩包解压后的目录名
 
     if (PYPTO_THIRD_PARTY_PATH AND IS_DIRECTORY "${PYPTO_THIRD_PARTY_PATH}/${CANN_CMAKE_DIR_NAME}")
         include("${PYPTO_THIRD_PARTY_PATH}/${CANN_CMAKE_DIR_NAME}/function/prepare.cmake")

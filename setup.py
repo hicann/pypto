@@ -752,6 +752,9 @@ class SetupCtrl:
         - 过滤 setuptools 的警告信息
     """
 
+    _LICENSE_EXPR: str = "LicenseRef-CANN-Open-Software-License-Agreement-Version-2.0"
+    _LICENSE_FILES: List[str] = ["LICENSE"]
+
     @classmethod
     def main(cls):
         """主处理流程
@@ -767,6 +770,10 @@ class SetupCtrl:
         warnings.filterwarnings("ignore", category=UserWarning, module="setuptools.command.build_py")
         # Setuptools 配置
         setup(
+            # 1. SPDX表达式，高版本setuptools自动映射为License-Expression
+            # 2. 全版本兼容打包LICENSE到dist-info/licenses
+            license=cls._LICENSE_EXPR,
+            license_files=cls._LICENSE_FILES,
             # 扩展模块配置
             ext_modules=[
                 CMakeExtension(),
