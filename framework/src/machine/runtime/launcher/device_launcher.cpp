@@ -423,7 +423,7 @@ int DeviceLauncher::LaunchAicpuKernel(
     const int nrAicpu = static_cast<int>(DeviceLauncher::GetDevProg(function)->devArgs.nrAicpu);
     const bool launchSchedSameCluster = static_cast<int>(DeviceLauncher::GetDevProg(function)->devArgs.launchSchedSameCluster);
     if (launchSchedSameCluster) {
-        MACHINE_LOGW("When available AICPUs are insufficient, execute export LAUNCH_SCHED_SAME_CLUSTER=false"
+        MACHINE_LOGW("When available AICPUs are insufficient, execute export PYPTO_LAUNCH_SCHED_SAME_CLUSTER=false"
             "to disable the constraint that forces scheduling threads onto the same cluster.");
     }
     args->kArgs.parameter.ctrlBlockNum = static_cast<int>(DeviceLauncher::GetDevProg(function)->ctrlBlockDim);
