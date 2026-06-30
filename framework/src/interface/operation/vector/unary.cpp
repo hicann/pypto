@@ -186,7 +186,7 @@ Tensor Relu(const Tensor& self)
     DECLARE_TRACER();
     CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Relu");
 
-    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_FP32, DT_INT32};
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_FP32, DT_INT32, DT_INT16};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "Relu");
     RETURN_CALL(UnaryOperation<UnaryOpType::RELU>, *Program::GetInstance().GetCurrentFunction(), self.GetStorage());
 }
