@@ -784,7 +784,14 @@ void MatmulInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& ou
     for (auto inputTensor : op->GetIOperands()) {
         auto inputValidShape = inputTensor->GetDynValidShape();
         if (inputTensor->GetMemoryTypeOriginal() == MemoryType::MEM_L0A) {
-            outValidShape.push_back(inputValidShape[0]);
+            // 取kValidShape用于判断当前K轴分块是否为有效块
+            // 在K轴手动切分场景下，尾部块可能存在viewShape > validShape的情况
+            // 当kValidShape <= 0时，表示该块无有效数据，需要将mValidShape置为0
+            // 这样可以避免在无效块上执行不必要的计算
+            auto kValidShape = inputValidShape[1];
+            auto isValid = kValidShape > 0;
+            auto mValidShape = inputValidShape[0] * isValid;
+            outValidShape.push_back(mValidShape);
         } else if (inputTensor->GetMemoryTypeOriginal() == MemoryType::MEM_L0B) {
             outValidShape.push_back(inputValidShape[1]);
         }
