@@ -269,7 +269,7 @@ std::vector<std::reference_wrapper<SymbolicScalar>> DynAttrToStatic::GetOpDynami
         return dynamicAttributeList;
     }
 
-    if (OpcodeManager::Inst().IsCopyInOrOut(opcode) || IsCopyFromL1(opcode)) {
+    if (OpcodeManager::Inst().IsCopyInOrOut(opcode) || OpcodeManager::Inst().IsCopyFromL1(opcode)) {
         auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(op.GetOpAttribute());
         if (copyAttr != nullptr) {
             FilterSpecifiedValue(copyAttr->GetToOffset(), dynamicAttributeList);
