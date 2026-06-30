@@ -20,8 +20,12 @@ import numpy as np
 import pytest
 import pypto
 
-from sparse_attention_antiquant_impl \
-    import sparse_attention_antiquant_d, sparse_attention_antiquant_p, SaTileShapeConfig
+from sparse_attention_antiquant_impl import (
+    sparse_attention_antiquant_d,
+    sparse_attention_antiquant_d_large_batch,
+    sparse_attention_antiquant_p,
+    SaTileShapeConfig,
+)
 from utils.compare import compare
 
 
@@ -346,9 +350,16 @@ def do_test_sparse_attention_func_aq(bn1n2s1, actual_seq, input_params, input_da
     if is_p:
         sparse_attention_antiquant_p(*pto_inputs, *pto_outputs, n_q, n_kv, softmax_scale, topk, block_size, \
             max_blocknum_perbatch, tile_config)
+    elif b < 64:
+        sparse_attention_antiquant_d(
+            *pto_inputs, *pto_outputs, n_q, n_kv, softmax_scale, topk, block_size,
+            max_blocknum_perbatch, tile_config,
+        )
     else:
-        sparse_attention_antiquant_d(*pto_inputs, *pto_outputs, n_q, n_kv, softmax_scale, topk, block_size, \
-            max_blocknum_perbatch, tile_config)
+        sparse_attention_antiquant_d_large_batch(
+            *pto_inputs, *pto_outputs, n_q, n_kv, softmax_scale, topk, block_size,
+            max_blocknum_perbatch, tile_config,
+        )
     calc_attention_out_npu = calc_attention_out_npu.reshape(b, s1, n_q, kv_lora_rank)
     torch_npu.npu.synchronize()
     compare(calc_attention_out_npu.cpu(), atten_out, "atten_out", atol=0.0001, rtol=0.005, max_error_count=100)
@@ -362,6 +373,9 @@ def get_case_config(case_name: str):
         ),
         "sfa_bf16_b4_s2_seq64K_per_int8_d": (
             (4, 128, 1, 2), 1, [65536] * 4
+        ),
+        "sfa_bf16_b64_s2_seq64K_per_int8_d": (
+            (64, 128, 1, 2), 1, [65536] * 64
         ),
         "sfa_bf16_b1_s256_seq64K_int8_p": (
             (1, 128, 1, 256), 1, [65536]
@@ -393,6 +407,15 @@ def test_sfa_bf16_b4_s2_seq64k_total_int8_d():
     sfa decode测试函数
     '''
     do_test_sfa_entry("sfa_bf16_b4_s2_seq64K_total_int8_d", is_p=False)
+
+
+@pytest.mark.soc("950", "910")
+@pytest.mark.skip(reason="perf")
+def test_sfa_bf16_b64_s2_seq64k_per_int8_d():
+    '''
+    sfa decode测试函数
+    '''
+    do_test_sfa_entry("sfa_bf16_b64_s2_seq64K_per_int8_d", is_p=False)
 
 
 @pytest.mark.soc("950", "910")
