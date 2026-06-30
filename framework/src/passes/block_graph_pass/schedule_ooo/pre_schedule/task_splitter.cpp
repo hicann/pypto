@@ -558,35 +558,6 @@ void TaskSplitter::UnionSameCoreOps(DSUWithOrder& dsu)
     }
 }
 
-// 构建 vector op 的连通分支信息（用于 ScheduleOneTask 中约束同一分支必须在同一 AIV 核上）
-void TaskSplitter::BuildVecConnectedComponents(DSUWithOrder& vecDsu)
-{
-    for (size_t idx = 0; idx < opOutGraph_.size(); idx++) {
-        if (opCoreTypes_[idx] != ScheduleCoreType::AIV) {
-            continue;
-        }
-        for (int nextOpIdx : opOutGraph_[idx]) {
-            if (opCoreTypes_[nextOpIdx] == ScheduleCoreType::AIV) {
-                vecDsu.Union(idx, nextOpIdx);
-            }
-        }
-    }
-    vecBranchId_.resize(opList_.size(), -1);
-    int branchIdx = 0;
-    std::unordered_map<int, int> rootToBranch;
-    for (size_t idx = 0; idx < opList_.size(); idx++) {
-        if (opCoreTypes_[idx] != ScheduleCoreType::AIV) {
-            continue;
-        }
-        int root = vecDsu.Find(idx);
-        if (rootToBranch.count(root) == 0) {
-            rootToBranch[root] = branchIdx++;
-        }
-        vecBranchId_[idx] = rootToBranch[root];
-    }
-    APASS_LOG_INFO_F(Elements::Operation, "Built %d vector connected components.", branchIdx);
-}
-
 // Union 同层连接：仅 union 同核类型的 alloc 关联
 void TaskSplitter::UnionSameLayerConnections(DSUWithOrder& dsu)
 {
@@ -1284,9 +1255,6 @@ std::unordered_set<int> TaskSplitter::CollectProtectedClusterIds(const std::vect
 int TaskSplitter::BuildCluster(std::vector<int>& clusterIds, std::vector<ScheduleCoreType>& clusterCoreTypes)
 {
     DSUWithOrder dsu(opList_.size());
-    // Step 0: 构建 vector op 连通分支信息（仅用于 ScheduleOneTask 核选择约束，不影响切图）
-    DSUWithOrder vecDsu(opList_.size());
-    BuildVecConnectedComponents(vecDsu);
     // Step 1: 仅 union cube op
     UnionSameCoreOps(dsu);
     // Step 2: union 同层 alloc 连接

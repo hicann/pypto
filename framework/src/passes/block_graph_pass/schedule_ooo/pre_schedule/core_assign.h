@@ -118,7 +118,7 @@ public:
     void BruteForceScheduleRecursiveStep(
         std::vector<bool>& visited, int recursiveLevel, TaskGraph& taskGraph, std::vector<int>& topoList);
     void Schedule(TaskGraph& taskGraph, const std::string& schedMode = "");
-    void OptimalScheduleWithSearch(TaskGraph& taskGraph);
+    void OptimalScheduleWithSearch(TaskGraph& taskGraph, bool enableSearch = true);
     double CalcBaselineCost(const TaskGraph& taskGraph, int n);
 
     void GapMinSchedule(TaskGraph& taskGraph, std::vector<int>& topoSeq);

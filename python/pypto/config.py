@@ -272,9 +272,9 @@ def set_pass_options(*,
         else:
             pass_options['sg_set_ooo_scope'] = [-1]
     if ooo_sched_mode is not None:
-        if ooo_sched_mode not in ("", "HLF"):
+        if ooo_sched_mode not in ("", "GAPMIN", "HLF"):
             raise ValueError(f"Invalid ooo_sched_mode: '{ooo_sched_mode}'. "
-                            f"Expected '' or 'HLF'.") 
+                            f"Expected '', 'GAPMIN' or 'HLF'.") 
         pass_options['ooo_sched_mode'] = ooo_sched_mode
 
     if pass_options:

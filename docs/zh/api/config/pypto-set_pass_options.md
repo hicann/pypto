@@ -34,7 +34,7 @@ set_pass_options(*,
 | sg_set_scope            | 输入      | 含义：手动控制子图切分参数。<br> 说明：通过为Operation分配scope，使得相同scope_id（非-1）的相邻Operation强制合并归入同一子图，从而覆盖切分算法的自动划分结果。 <br> 类型：`Tuple[int, bool, bool]`或`int` <br> **tuple格式**：`(scope_id, allow_parallel_merge, allow_cross_scope_merge)`，各字段含义如下： <br> - `scope_id`（int）：scope标识，取值范围 -1~2147483647。相同scope_id的相邻Operation归入同一子图；-1表示不参与scope合并，由切分算法决定子图划分。 <br> - `allow_parallel_merge`（bool）：控制同一scope_id下Operation的合并方式。取值True/False。<br>&emsp;&emsp;False（默认）：仅允许存在上下游连接通路的Operation合并，即Operation A的输出作为Operation B的输入时才可合并到同一子图。<br>&emsp;&emsp;True：允许位于并行分支（无数据依赖）的相同scope_id的Operation也合并到同一子图。 <br> - `allow_cross_scope_merge`（bool）：控制带有scope的子图是否可与无scope（scope_id=-1）的子图合并，扩大scope子图。取值True/False。<br>&emsp;&emsp;False（默认）：带有scope的子图保持独立，不与其他子图合并。<br>&emsp;&emsp;True：允许带有scope的子图与scope_id=-1的子图合并。不同scope_id的子图之间不可合并。 <br> **int格式**：传入单个int时等价于`(scope_id, False, False)`，即仅设置scope_id，不允许并行分支合并和跨scope合并。 <br> 默认值：(-1, False, False) <br> 影响Pass范围：GraphPartition <br> 配置建议：1）视图类Operation与其对应的计算类Operation应配置相同的scope_id。2）Reshape Operation较为特殊，部分场景会单独成子图，手动控制合图行为可能失效。|
 | auto_mix_partition      | 输入      | 含义：控制ReduceCopyMerge Pass中的自动混合子图切分行为。<br> 说明：该参数用于控制CV混合场景下子图的自动合并策略，值为1时编译器会评估相邻子图，若合并预估能带来性能收益且不会形成环，则会合并成MIX子图，否则不会进行合并。<br> 类型：int <br> 取值：0：不进行自动CV Mix合图；1：进行自动CV Mix合图。<br> 默认值：0 <br> 影响Pass范围：ReduceCopyMerge |
 | sg_set_ooo_scope            | 输入      | 含义：控制MIX子图内的OoO调度。<br> 说明：通过为 Operation分配ooo_scope，使得相同ooo_scope_id（非-1）的相邻 Operation 强制合并归入同一ooo_task，从而让相同ooo_scope_id（非-1）的相邻Operation在OoO调度生成的流水上尽可能相邻。不允许并行分支合并和跨ooo_scope合并, 不允许不同loop循环次数下的Operation的合并。 <br> 类型：`int`，即设置ooo_scope_id <br> 默认值：-1 <br> 取值范围：-1或1~100000 <br> `ooo_scope_id`：ooo_scope标识。相同ooo_scope_id的相邻Operation归入同一ooo_task；-1表示不参与ooo_scope合并，由切分算法决定ooo_task划分。 <br> 影响Pass范围：OoOSchedule <br> 配置要求：该功能仅对MIX子图生效。同时使用该功能和loop unroll时，unroll设置不得大于10000。|
-| ooo_sched_mode            | 输入      | 含义：控制MIX子图内的OoO调度。<br> 说明：设置MIX子图内ooo_task的流水调度模式。 <br> 类型：`str` <br> 默认值："" <br> 取值范围：{"", "HLF"} <br> 影响Pass范围：OoOSchedule <br> 配置说明：取值为""（默认）时使用基于拓扑序遍历和局部搜索的调度；取值为"HLF"时使用Highest Level First调度（按任务到汇点最长路径降序排列后做EFT插入调度）。|
+| ooo_sched_mode            | 输入      | 含义：控制MIX子图内的OoO调度。<br> 说明：设置MIX子图内ooo_task的流水调度模式。 <br> 类型：`str` <br> 默认值："" <br> 取值范围：{"", "GAPMIN", "HLF"} <br> 影响Pass范围：OoOSchedule <br> 配置说明：取值为""（默认）时使用基于拓扑序遍历和局部搜索的调度（GapMin调度 + local-search）；取值为"GAPMIN"时仅执行GapMin调度，跳过local-search; 取值为"HLF"时使用Highest Level First调度（按任务到汇点最长路径降序排列后做EFT插入调度）。|
 
 
 ## 返回值说明
@@ -58,6 +58,14 @@ set_pass_options(*,
    - Ascend 950PR：支持纯Vector、纯Cube以及CV混合场景的scope配置。
    - Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持纯Vector或纯Cube的scope配置，不支持CV混合场景的scope配置。
    - Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持纯Vector或纯Cube的scope配置，不支持CV混合场景的scope配置。
+- sg_set_ooo_scope使用说明：
+   - Ascend 950PR：支持。
+   - Atlas A3 训练系列产品/Atlas A3 推理系列产品：不支持，因为不支持cv mix合图。
+   - Atlas A2 训练系列产品/Atlas A2 推理系列产品：不支持，因为不支持cv mix合图。
+- ooo_sched_mode使用说明：
+   - Ascend 950PR：支持。
+   - Atlas A3 训练系列产品/Atlas A3 推理系列产品：不支持，因为不支持cv mix合图。
+   - Atlas A2 训练系列产品/Atlas A2 推理系列产品：不支持，因为不支持cv mix合图。
 
 ## 调用示例
 
