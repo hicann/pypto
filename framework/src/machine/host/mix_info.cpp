@@ -25,6 +25,18 @@ namespace mix_info {
 constexpr uint32_t AVG_EVENTS_PER_TASK = 16;
 constexpr int MAX_DFX_TASK_NUM_PER_CORE = 10000;
 constexpr uint32_t MAX_TOTAL_EVENT_NUMS = AVG_EVENTS_PER_TASK * MAX_DFX_TASK_NUM_PER_CORE;
+
+int GetMixInfoEventId(const Operation& op)
+{
+    switch (op.GetOpcode()) {
+        case Opcode::OP_FFTS_CROSS_CORE_SYNC:
+        case Opcode::OP_WAIT_FLAG_DEV:
+            return MIX_INFO_FORCE_SYNC_EVENT_ID;
+        default:
+            return op.GetSyncQueue().eventId_;
+    }
+}
+
 void GetExecuteFunc(Function* func, std::map<int, std::set<Function*>>& leafFunctions)
 {
     auto funcType = func->GetGraphType();
@@ -107,16 +119,16 @@ int DumpMixInfo(Function* topFunc)
             leafFuncSyncInfo.hashValue = leafFunc->GetFunctionHash().GetHash();
             for (auto& op : leafFunc->Operations(false).DuplicatedOpList()) {
                 SyncInfo syncInfo;
-                if (op->GetOpcode() == Opcode::OP_CV_SYNC_SRC) {
+                if (op->GetOpcode() == Opcode::OP_CV_SYNC_SRC || op->GetOpcode() == Opcode::OP_FFTS_CROSS_CORE_SYNC) {
                     syncInfo.isSet = true;
                     totalSetEventCount++;
-                } else if (op->GetOpcode() == Opcode::OP_CV_SYNC_DST) {
+                } else if (op->GetOpcode() == Opcode::OP_CV_SYNC_DST || op->GetOpcode() == Opcode::OP_WAIT_FLAG_DEV) {
                     syncInfo.isSet = false;
                     totalWaitEventCount++;
                 } else {
                     continue;
                 }
-                syncInfo.eventID = op->GetSyncQueue().eventId_;
+                syncInfo.eventID = GetMixInfoEventId(*op);
                 leafFuncSyncInfo.syncMsg.push_back(syncInfo);
             }
             wrapInfos[mixId][wrapID].coreTask.push_back(leafFuncSyncInfo);
