@@ -717,7 +717,7 @@ objdump -d -C -l /path/to/libtile_fwk_interface.so | grep -A 20 "npu::tile_fwk::
 ---
 
 ### 整网环境中出现AICPU执行超时
-PYPTO可以通过LAUNCH_SCHED_SAME_CLUSTER环境变量设置是否强制在同一Cluster分配调度线程。在同一Cluster分配调度线程能够获得更好的性能，但是在整网场景中，除了Pypto，还有其他组件使用aicpu，强制在同一个Cluster分配线程可能因为aicpu资源不够导致aicpu执行超时，这种情况下，需要将该环境变量设置为false，并通过launch_sched_aicpu_num配置可用的aicpu数量。
+PYPTO可以通过PYPTO_LAUNCH_SCHED_SAME_CLUSTER环境变量设置是否强制在同一Cluster分配调度线程。在同一Cluster分配调度线程能够获得更好的性能，但是在整网场景中，除了Pypto，还有其他组件使用aicpu，强制在同一个Cluster分配线程可能因为aicpu资源不够导致aicpu执行超时，这种情况下，需要将该环境变量设置为false，并通过launch_sched_aicpu_num配置可用的aicpu数量。
 需要特别说明的是，当开启同Cluster分配时, launch_sched_aicpu_num配置会不生效。
 
 ### AiCore Print使用方法
