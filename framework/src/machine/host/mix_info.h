@@ -22,6 +22,12 @@ namespace tile_fwk {
 namespace mix_info {
 int DumpMixInfo(Function* topFunc);
 
+// Profiling-only event ID for force-sync ops in mix_event_info.json.
+// Hardware still uses EVENT_ID7 in generated CCE; 256 is outside the normal
+// cross-core event id range (0-15) so mix swimlane metadata can distinguish them.
+constexpr int MIX_INFO_FORCE_SYNC_EVENT_ID = 256;
+
+int GetMixInfoEventId(const Operation& op);
 struct SyncInfo {
     bool isSet;
     int eventID;
