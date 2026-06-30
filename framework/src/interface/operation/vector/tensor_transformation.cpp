@@ -1099,7 +1099,7 @@ LogicalTensorPtr TransDataNCHW2NC1HWC0(Function& function, const LogicalTensorPt
     resultShape.push_back(C0);
 
     VecTile oriVectile = TileShape::Current().GetVecTile();
-    CHECK(VectorErrorCode::ERR_PARAM_INVALID, oriVectile.tile[1] % C0 == 0) << "The tileShape C  is not valid!";
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, oriVectile.tile[1] % C0 == 0) << "The tileShape C should be an integer multiple of C0!";
 
     std::vector<SymbolicScalar> resultValidShape(self->GetDynValidShape());
     SymbolicScalar validShapeC = resultValidShape[1];
@@ -1150,7 +1150,7 @@ LogicalTensorPtr TransDataNCHW2Fractal_Z(Function& function, const LogicalTensor
         group * validShapeC1 * validShapeH * validShapeW, vSPerGroupN1, N0, C0};
 
     VecTile oriVectile = TileShape::Current().GetVecTile();
-    CHECK(VectorErrorCode::ERR_PARAM_INVALID, oriVectile.tile[0] % N0 == 0) << "The tileShape N should be an integer multiple of N0!";
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, oriVectile.tile[0] % N0 == 0) << "The tileShape N should be an integer multiple of N0(16)!";
     CHECK(VectorErrorCode::ERR_PARAM_INVALID, oriVectile.tile[1] % C0 == 0) << "The tileShape C should be an integer multiple of C0!";
 
     auto result = std::make_shared<LogicalTensor>(
@@ -1206,7 +1206,7 @@ LogicalTensorPtr TransDataNCDHW2NDC1HWC0(Function& function, const LogicalTensor
     auto tmpInput = Permute(function, Tensor(self), {0, 2, 1, 3, 4});
 
     VecTile oriVectile = TileShape::Current().GetVecTile();
-    CHECK(VectorErrorCode::ERR_PARAM_INVALID, oriVectile.tile[1] % C0 == 0) << "The tileShape C  is not valid!";
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, oriVectile.tile[1] % C0 == 0) << "The tileShape C should be an integer multiple of C0!";
     VecTile tmpVectile = TileShape::Current().GetVecTile();
     std::swap(tmpVectile.tile[1], tmpVectile.tile[2]);
     TileShape::Current().SetVecTile(tmpVectile);
@@ -1255,7 +1255,7 @@ LogicalTensorPtr TransDataFRACTAL_Z_3D(Function& function, const LogicalTensorPt
         group * validShapeD * validShapeC1 * validShapeH * validShapeW, validShapePerGroupN1, N0, C0};
 
     VecTile oriVectile = TileShape::Current().GetVecTile();
-    CHECK(VectorErrorCode::ERR_PARAM_INVALID, oriVectile.tile[0] % N0 == 0) << "The tileShape N should be an integer multiple of N0!";
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, oriVectile.tile[0] % N0 == 0) << "The tileShape N should be an integer multiple of N0(16)!";
     CHECK(VectorErrorCode::ERR_PARAM_INVALID, oriVectile.tile[1] % C0 == 0) << "The tileShape C should be an integer multiple of C0!";
 
     auto result = std::make_shared<LogicalTensor>(
@@ -1284,7 +1284,7 @@ LogicalTensorPtr TransDataNDC1HWC02NCDHW(Function& function, const LogicalTensor
 {
     int64_t dstC = output->GetShape()[1];
     int64_t inputC1 = self->GetShape()[2];
-    int64_t C0 = self->GetShape().back();
+    int64_t C0 = BLOCK_SIZE / BytesOf(self->Datatype());
     CHECK(VectorErrorCode::ERR_PARAM_INVALID, group > 0) << "The group is not valid !";
     int64_t padSize = (inputC1 * C0 - dstC) / group;
 
@@ -1333,7 +1333,7 @@ LogicalTensorPtr TransDataNC1HWC02NCHW(
     }
     int64_t dstC = output->GetShape()[1];
     int64_t inputC1 = self->GetShape()[1];
-    int64_t C0 = self->GetShape().back();
+    int64_t C0 = BLOCK_SIZE / BytesOf(self->Datatype());
     CHECK(VectorErrorCode::ERR_PARAM_INVALID, group > 0) << "The group is not valid !";
     int64_t padSize = (inputC1 * C0 - dstC) / group;
 
