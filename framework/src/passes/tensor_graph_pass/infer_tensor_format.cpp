@@ -169,6 +169,8 @@ void InferTensorFormat::ApplyTransDataVecTile(const std::shared_ptr<LogicalTenso
         std::swap(tmpVectile.tile[1], tmpVectile.tile[2]);
         tmpVectile.tile[2] = tmpVectile.tile[2] / c0;
         tmpVectile.tile.emplace_back(c0);
+        tmpVectile.tile[1] *= 4;
+        tmpVectile.tile[3] *= 4;
         TileShape::Current().SetVecTile(tmpVectile);
     }
 }
