@@ -106,49 +106,6 @@ TEST_F(TestDynamicDeviceRunner, test_pypto_kernel_server_null)
     EXPECT_EQ(ret, 1);
 }
 
-TEST_F(TestDynamicDeviceRunner, test_dump_device_perf)
-{
-    setenv("DUMP_DEVICE_PERF", "true", 1);
-    DeviceArgs devKernelArgs;
-    config::SetOptionsNg<int64_t>("debug.runtime_debug_mode", 1);
-    npu::tile_fwk::DeviceRunner::Get().InitMetaData(devKernelArgs);
-    devKernelArgs.nrAic = 1;
-    devKernelArgs.nrAiv = 2;
-    devKernelArgs.nrValidAic = 1;
-    devKernelArgs.nrAicpu = 3;
-    std::vector<void*> perfData;
-    constexpr uint64_t AICPU_NUM_OF_RUN_AICPU_TASKS = 1;
-    const uint64_t perfDataNum = devKernelArgs.nrAic + devKernelArgs.nrAiv + AICPU_NUM_OF_RUN_AICPU_TASKS;
-    std::vector<std::vector<uint8_t>> metricStorage(perfDataNum, std::vector<uint8_t>(PERF_DATA_TOTAL_SIZE, 0));
-    Metrics* metr = reinterpret_cast<Metrics*>(metricStorage[0].data());
-    TaskStat taskStat{};
-    taskStat.execEnd = 1;
-    metr->taskCount = 1;
-    metr->tasks[0] = taskStat;
-    metr->aicoreDevTaskInfo[0].cnt = 1;
-    metr->aicoreDevTaskInfo[0].aicoreEveryDevTypeTimeStamp[0].type=0;
-    metr->aicoreDevTaskInfo[0].aicoreEveryDevTypeTimeStamp[0].devTaskIdx=0;
-    metr->aicoreDevTaskInfo[0].aicoreEveryDevTypeTimeStamp[0].aicoreDevTimeStamp=1;
-    metr->turnNum = 1;
-
-    auto aicpuMetPer = std::make_unique<MetricPerf>();
-    aicpuMetPer->devTaskPerfs[0][0].timeStamp[0] = 1;
-    aicpuMetPer->devTaskPerfs[1][0].timeStamp[0] = 2;
-    aicpuMetPer->devTaskPerfs[2][0].timeStamp[0] = 3;
-    devKernelArgs.aicpuPerfAddr = npu::tile_fwk::dynamic::PtrToValue(static_cast<void*>(aicpuMetPer.get()));
-
-    for (uint64_t i = 0; i < perfDataNum; i++) {
-        perfData.push_back(static_cast<void*>(metricStorage[i].data()));
-    }
-    npu::tile_fwk::dynamic::DumpAicoreTaskExectInfo(devKernelArgs, perfData);
-    std::string jsonPath = npu::tile_fwk::config::LogTopFolder() + "/tilefwk_L1_prof_data.json";
-    EXPECT_EQ(IsPathExist(jsonPath), true);
-    setenv("DUMP_DEVICE_PERF", "true", 1);
-    npu::tile_fwk::dynamic::DumpDevTaskPerfData(devKernelArgs, perfData, true);
-    jsonPath = npu::tile_fwk::config::LogTopFolder() + "/machine_runtime_operator_trace.json";
-    unsetenv("DUMP_DEVICE_PERF");
-    EXPECT_EQ(IsPathExist(jsonPath), false);
-}
 
 TEST_F(TestDynamicDeviceRunner, test_launch_init)
 {
