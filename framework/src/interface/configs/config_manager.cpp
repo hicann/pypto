@@ -431,7 +431,7 @@ const std::string& OutputBaseDir()
 std::string GetEmitPath(const std::string& name)
 {
     std::string dirPath;
-    if (ConfigManager::Instance().GetCodeGenConfig(KEY_FIXED_OUTPUT_PATH, false)) {
+    if (ConfigManager::Instance().GetCodeGenConfig(KEY_FIXED_OUTPUT_PATH, false) || IsFixedCceMode()) {
         std::string rootDir;
         const char* ascendWorkPath = std::getenv("ASCEND_WORK_PATH");
         if (ascendWorkPath != nullptr && strlen(ascendWorkPath) > 0) {

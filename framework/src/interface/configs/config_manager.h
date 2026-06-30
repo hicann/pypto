@@ -412,6 +412,19 @@ const std::string& OutputBaseDir();
 
 std::string GetEmitPath(const std::string& name);
 
+inline bool IsFixedCceMode()
+{
+    auto scope = ConfigManagerNg::CurrentScope();
+    if (scope == nullptr) {
+        return false;
+    }
+    std::string fullKey = std::string("debug.") + CFG_COMPILE_DBEUG_MODE;
+    if (!scope->HasConfig(fullKey)) {
+        return false;
+    }
+    return GetDebugOption<int64_t>(CFG_COMPILE_DBEUG_MODE) == CFG_COMPILE_FIXED_CCE;
+}
+
 inline Status SetPassStrategy(const std::string s)
 {
     SetHostConfig(KEY_STRATEGY, s);

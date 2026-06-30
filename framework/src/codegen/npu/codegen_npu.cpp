@@ -345,7 +345,9 @@ void CodeGenNPU::GenCodeToBinaryTask(
 
 bool CodeGenNPU::IsNeedDumpCode(const std::string& inputFile) const
 {
-    if (ConfigManager::Instance().GetCodeGenConfig(KEY_FORCE_OVERWRITE, true)) {
+    bool forceOverwrite =
+        ConfigManager::Instance().GetCodeGenConfig(KEY_FORCE_OVERWRITE, true) && !config::IsFixedCceMode();
+    if (forceOverwrite) {
         // force dump, default is true
         return true;
     }
