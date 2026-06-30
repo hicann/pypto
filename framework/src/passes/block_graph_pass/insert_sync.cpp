@@ -1717,7 +1717,7 @@ void PipeSync::InitCVEventIdQ()
             for (int i = 0; i < CROSS_CORE_EVENT_NUM; i++) {
                 crossCoreFreeEventId_[pipecore][0].push_back(i);
             }
-            for (int i = CROSS_CORE_EVENT_NUM; i < CROSS_CORE_EVENT_NUM * 2; i++) {
+            for (int i = CROSS_CORE_EVENT_NUM; i < CROSS_CORE_EVENT_NUM * NUM2; i++) {
                 crossCoreFreeEventId_[pipecore][1].push_back(i);
             }
         } else {

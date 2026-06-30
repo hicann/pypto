@@ -439,7 +439,7 @@ private:
     std::unordered_map<PipePairEx, std::deque<int>, PipePairExHash> freeEventId_;
 
     // set pipe可用的eventid
-    std::unordered_map<PipeCoreRealEx, std::array<std::deque<int>, 2>, PipeCoreRealExHash> crossCoreFreeEventId_;
+    std::unordered_map<PipeCoreRealEx, std::array<std::deque<int>, NUM2>, PipeCoreRealExHash> crossCoreFreeEventId_;
     std::unordered_map<PipeCoreRealEx, std::unordered_set<EventResource, EventResourceHash>, PipeCoreRealExHash> syncArriveStatus;
     std::vector<std::pair<std::pair<size_t, size_t>, Operation*>> NoWaitCVPairs_;
 

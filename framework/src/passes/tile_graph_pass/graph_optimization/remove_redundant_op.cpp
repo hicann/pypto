@@ -318,7 +318,6 @@ bool RemoveRedundantOp::IsNotSameViewInput(LogicalTensorPtr& startTensor, Logica
             if (inTensor != startTensor) {
                 return true;
             }
-
         }
     }
     return false;
