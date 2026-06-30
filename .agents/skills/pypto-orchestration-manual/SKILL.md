@@ -15,7 +15,7 @@ the team as a set of progressive-disclosure references.
 > documents (`principles.md`, `agents.md`, `rules.md`)
 > — is loaded **only by `pypto-op-orchestrator`**. No
 > sub-agent (planner / mathematician / architect / designer / coder /
-> verifier / debugger) reads this skill, and no sub-agent
+> verifier / debugger / optimizer) reads this skill, and no sub-agent
 > Mandatory-reads list references any file under this directory.
 >
 > **Stage vocabulary is intentional here.** This skill is the

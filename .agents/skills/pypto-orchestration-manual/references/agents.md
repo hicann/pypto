@@ -27,11 +27,12 @@ not inspect what skills each agent loads.
 | 5 | `pypto-op-coder` | Stage 5 (per-module + cleanup) |
 | 6 | `pypto-op-verifier` | Stage 4 scaffolding (Step B) + Stage 5 phase scaffolding + Stage 5 composition + Stage 6 E2E + Stage 7 regression |
 | 7 | `pypto-op-debugger` | Stage 5 failure investigation |
+| 8 | `pypto-op-optimizer` | Stage 7 performance tuning (S1_SETUP / S2_COLLECT / S3_ANALYZE / S4_FRONTEND / S4_SWIMLANE / S4_INCORE / S5_REPORT). Loads `pypto-op-perf-tune` + `tune-orchestrator` per dispatch; self-manages ITER loops within each PHASE. |
 
 **Separation of concerns in Stage 5 phase failure:** verifier = judge
 (pass / fail with `failure_category`); debugger = investigator (proposes a
 patch in `MEMORY.md`); coder = the only agent that writes production
-kernel code. The orchestrator does not edit kernel code in Stage 1–6.
+kernel code. The orchestrator does not edit kernel code in Stage 1–7.
 
 ---
 
@@ -66,7 +67,7 @@ kernel code. The orchestrator does not edit kernel code in Stage 1–6.
   `module_count - 1` data-flow breakpoints; Layers A–L populated; vec
   tile axes ∈ [16, 64] (or rationale for going below 16); cube tile by
   the M-based recommendation table. **Performance target sheet is NOT
-  produced here** — it is produced at Stage 7 entry by the orchestrator (via skill `pypto-op-perf-tune`).
+  produced here** — it is produced at Stage 7 entry by pypto-op-optimizer.
 - **Handoff:** Returns to orchestrator → dispatch `pypto-op-designer`.
 
 ### 4. pypto-op-designer — Stage 4
@@ -129,8 +130,10 @@ composition, no cleanup); the modes below are L1.
   output of `<op>_impl.py` plus the final layout / structure lint gate.
   If dispatched "kernel unchanged" (impl hash unchanged since Stage 5),
   structure-only — skip `detailed_tensor_compare`; Stage 5 all_close stands.
-- **Stage 7 regression mode:** Re-run E2E + layout + perf-analyzer delta
-  for each tuning change applied by the orchestrator. Reports adopt / regression / no-gain.
+- **Stage 7 regression mode:** Re-run E2E + layout on the optimized
+  `<op>_impl.py` to confirm tuning preserves correctness. Reports
+  adopt / regression. Orchestrator dispatches this once after
+  S5_REPORT, before `complete_stage(7)`.
 
 **Verdict format — always one of:**
 
@@ -165,5 +168,54 @@ retrying checks without a prior debugger → coder cycle.
 - **Iteration cap:** 10 fix / re-verify cycles per module. On the 11th
   failure of the same module, stop and surface the blocker to the
   orchestrator with all collected evidence.
+
+### 8. pypto-op-optimizer — Stage 7 performance tuning
+
+Optimizer reads and executes the relevant steps from skill `pypto-op-perf-tune`
+per dispatch (not the full skill). Each dispatch carries a `stage` parameter
+(`S1_SETUP` / `S2_COLLECT` / `S3_ANALYZE` / `S4_FRONTEND` /
+`S4_SWIMLANE` / `S4_INCORE` / `S5_REPORT`); optimizer executes only the named
+stage and returns structured results. S4 is split into per-PHASE
+dispatches; the orchestrator handles routing decisions between
+phases (target met → S5, not met → next PHASE).
+
+**Dispatch contract per stage:**
+
+| stage | Inputs (from orchestrator) | Outputs (to orchestrator) | Orchestrator validation |
+|-------|---------------------------|--------------------------|------------------------|
+| `S1_SETUP` | `op_file`, `test_command`, `TILE_FWK_DEVICE_ID`, `perf_target_us` | S1a env checklist (6 items, each ✅/❌) + S1b precision record (timestamp, command, result, key output) + overall PASS/FAIL | All 6 env items ✅ + precision PASS |
+| `S2_COLLECT` | `op_impl_file`, `test_command`, `work_dir` | `output_dir` path + 3 file existence confirmations (`merged_swimlane.json`, `machine_runtime_operator_trace.json`, `bubble_analysis.log`) + overall PASS/FAIL | All 3 data files exist |
+| `S3_ANALYZE` | `output_dir`, `work_dir` | `report_path` + baseline metrics (exec_time us, core_util %, bubble_rate %, load_balance %) + overall PASS/FAIL | Report file exists + 4 metrics in valid ranges |
+| `S4_FRONTEND` | `op_impl_file`, `test_command`, `work_dir`, `perf_baseline_us`, `perf_target_us`, `perf_report_path`, `output_dir` | Phase perf (entry→exit us), `target_met` (✅/❌), adopted/failed optimizations, constraints, self-核查 declaration, code config, exit reason + overall PASS/FAIL | Perf numeric valid + `target_met` explicit + exit reason filled + self-核查 declaration non-empty with conclusion |
+| `S4_SWIMLANE` | `op_impl_file`, `test_command`, `work_dir`, `perf_baseline_us`, `perf_target_us`, `round` (1/2/3), `accumulated_context` | Same as S4_FRONTEND | Same as S4_FRONTEND |
+| `S4_INCORE` | `op_impl_file`, `test_command`, `work_dir`, `perf_baseline_us`, `perf_target_us`, `round` (1/2/3), `accumulated_context` | Same as S4_FRONTEND | Same as S4_FRONTEND |
+| `S5_REPORT` | `op_impl_file`, `tuning_report_path` (INIT determined: `custom/<op>/<op_name>_tuning_report.md`), `accumulated_context` | debug_options removal confirmation + current decorator config + tuning report generated & saved + overall PASS/FAIL | debug_options removed (verified) + report file exists |
+
+**S4 routing logic (orchestrator controls):**
+
+```
+dispatch S4_FRONTEND → target_met=✅ → S5
+                     → target_met=❌ → continue
+for round in [1, 2, 3]:
+    dispatch S4_SWIMLANE(round) → target_met=✅ → S5
+                                → target_met=❌ → continue
+    dispatch S4_INCORE(round)   → target_met=✅ → S5
+                                → target_met=❌ → continue
+all rounds exhausted → S5
+```
+
+After each S4 dispatch, orchestrator appends the returned
+adopted/failed optimizations, constraints, and code config to
+`accumulated_context` for the next dispatch.
+
+- **Gate:** activation check (E2E `all_close: true` + layout exit 0)
+  confirmed in `MEMORY.md` before first dispatch.
+- **Handoff:** Returns to orchestrator after each stage. Orchestrator
+  validates output, records to `MEMORY.md`, then dispatches next stage.
+  On any stage FAIL: orchestrator stops, does not dispatch next stage,
+  reports to user.
+- **Forbidden:** calling `state_transition`; loading debug sub-skills;
+  executing stages not specified in the dispatch prompt; modifying
+  `.orchestrator_state.json`.
 
 

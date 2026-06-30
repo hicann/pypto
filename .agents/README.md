@@ -68,7 +68,7 @@ Stage 1 规划 → 2 算法 → 3 架构 → 4 设计
 
 | Agent | Mode | Stage | 职责 |
 |:---|:---:|:---:|:---|
-| [`pypto-op-orchestrator`](../.opencode/agents/pypto-op-orchestrator.md) | primary | 1–8 | 入口。推进 stage、强制门禁、调度 sub-agent。本身不直接做领域工作。 |
+| [`pypto-op-orchestrator`](../.opencode/agents/pypto-op-orchestrator.md) | primary | 1–7 | 入口。推进 stage、强制门禁、调度 sub-agent。本身不直接做领域工作。 |
 | [`pypto-op-planner`](../.opencode/agents/pypto-op-planner.md) | subagent | 1 | 将用户需求翻译为 `SPEC.md` + `API_REPORT.md`；初始化 `MEMORY.md`。 |
 | [`pypto-op-mathematician`](../.opencode/agents/pypto-op-mathematician.md) | subagent | 2 | 产出 PyPTO 友好的 `<op>_golden.py` 参考实现与 Golden 函数清单。 |
 | [`pypto-op-architect`](../.opencode/agents/pypto-op-architect.md) | subagent | 3 | 产出 `DESIGN.md`：tiling 策略、loop 结构、性能目标表。 |
@@ -76,6 +76,7 @@ Stage 1 规划 → 2 算法 → 3 架构 → 4 设计
 | [`pypto-op-coder`](../.opencode/agents/pypto-op-coder.md) | subagent | 5 | 每次调度只写一个 impl 文件。先 per-module 累计构建 (`modules/<op>_module<k>_impl.py`)，最后一个模块通过 verify 后做 cleanup 把累计 impl 整理成 `<op>_impl.py` 并写 `README.md`。从不写测试，从不调试。 |
 | [`pypto-op-verifier`](../.opencode/agents/pypto-op-verifier.md) | subagent | 4–7 | 仅评判。运行 `detailed_tensor_compare`、布局检查、prefix-eval、回归检查。分类失败原因。从不调查、从不修复。 |
 | [`pypto-op-debugger`](../.opencode/agents/pypto-op-debugger.md) | subagent | 5（按需） | 一次加载一个调试子技能，定位根因，给出补丁建议。补丁由 coder 应用。 |
+| [`pypto-op-optimizer`](../.opencode/agents/pypto-op-optimizer.md) | subagent | 7 | Stage 7 性能调优执行者。按编排器的 stage 参数加载 skill `pypto-op-perf-tune` 分步执行（S1 环境检查 / S2 数据采集 / S3 性能分析 / S4_FRONTEND 开箱调优 / S4_SWIMLANE 深度调优 / S4_INCORE 核内调优），返回结构化结果供编排者验证 |
 
 Agent 之间通过两个产物交换信息：
 - `custom/<op>/MEMORY.md` — 共享叙事（所有 agent 读写）

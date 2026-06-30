@@ -12,9 +12,9 @@
 
 ---
 
-## 8-Agent 多智能体团队（入口）
+## 9-Agent 多智能体团队（入口）
 
-本仓库通过 **8 个职责分明的子智能体** 协同完成算子开发。所有调度由 `pypto-op-orchestrator` 统一负责，子智能体之间通过 `custom/<op>/MEMORY.md`（共享叙事）和 `custom/<op>/.orchestrator_state.json`（机器可读状态）交换信息。
+本仓库通过 **9 个职责分明的子智能体** 协同完成算子开发。所有调度由 `pypto-op-orchestrator` 统一负责，子智能体之间通过 `custom/<op>/MEMORY.md`（共享叙事）和 `custom/<op>/.orchestrator_state.json`（机器可读状态）交换信息。
 
 | 智能体 | 职责 | 阶段 |
 |---|---|---|
@@ -24,8 +24,9 @@
 | `pypto-op-architect` | 设计方案 (`DESIGN.md`)、tiling、性能目标 | Stage 3 |
 | `pypto-op-designer` | 模块分解 (`module_interfaces.yaml`) | Stage 4 |
 | `pypto-op-coder` | 算子实现（per-module impl + 集成 impl + README） | Stage 5 |
-| `pypto-op-verifier` | 评判 / 测试生成 / 精度校验 | Stage 4 scaffolding + 5 + 6 |
+| `pypto-op-verifier` | 评判 / 测试生成 / 精度校验 | Stage 4 scaffolding + 5 + 6 + 7 回归 |
 | `pypto-op-debugger` | Stage 5 失败时的根因调查与补丁建议 | Stage 5 (按需) |
+| `pypto-op-optimizer` | Stage 7 性能调优执行者，按 stage 参数读取 skill `pypto-op-perf-tune` 对应步骤并执行 | Stage 7 |
 
 > **完整操作手册**：参见 [skill `pypto-orchestration-manual` (SKILL.md auto-loads)](.agents/skills/pypto-orchestration-manual/SKILL.md) 及其 `references/` 子目录（principles / agents / rules / catalog）。
 
@@ -39,7 +40,7 @@
 | **4** Design | 模块分解、契约、scaffolding (per-module golden + test + adversarial harness) | designer + verifier | `module_interfaces.yaml`, `modules/<op>_module<k>_golden.py`, `modules/test_<op>_module<k>.py` |
 | **5** Construction | per-Phase M_k 实现循环（coder → verifier → debugger 按需 → coder → verifier）。最后一个 M_k 通过后：cleanup 把 `modules/<op>_module1...N_impl.py` 拷贝到 `<op>_impl.py`（保持算法、整理函数名 / imports / 调试码），verifier 写 `test_<op>.py`，coder 写 `README.md` | coder + verifier | `modules/<op>_module<k>_impl.py`, `<op>_impl.py`, `test_<op>.py`, `README.md` |
 | **6** Verification | 布局检查、结构性规则验证 | verifier | layout 通过 |
-| **7** Optimization | 性能调优（≤ 2 倍加速等目标达成） | orchestrator（直接加载 skill） | 优化后的 `<op>_impl.py` |
+| **7** Optimization | 性能调优（≤ 2 倍加速等目标达成） | orchestrator（调度 optimizer 执行子步骤） | 优化后的 `<op>_impl.py` |
 
 ### Stage 5 内部 Phase 循环
 
