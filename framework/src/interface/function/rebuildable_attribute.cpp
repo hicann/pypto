@@ -24,13 +24,13 @@ namespace npu::tile_fwk {
 void RebuildableAttributeBase::Rebuild(Function *func)
 {
     (void)func;
-    FE_LOGE(FeError::EINTERNAL, "Rebuild is not implemented!");
+    FE_LOGE(InternalError::FE_INNER_ERROR, "Rebuild is not implemented!");
 }
 
 void RebuildableAttributeBase::Reset(void *data)
 {
     (void)data;
-    FE_LOGE(FeError::EINTERNAL, "Reset is not implemented!");
+    FE_LOGE(InternalError::FE_INNER_ERROR, "Reset is not implemented!");
 }
 
 EntryRegistrarGroup &RebuildableAttributeManager::GetRegistrarGroup() {

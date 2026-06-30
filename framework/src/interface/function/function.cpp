@@ -1055,8 +1055,8 @@ void Function::OperationLoopCheck(const std::string& errorMsg)
 
             if (states[magic] == DfsState::IN_STACK) {
                 dupOpMagic = magic;
-                FE_LOGE(FeError::EINTERNAL, "[OperationLoopCheck] Cycle detected: ");
-                FE_LOGE(FeError::EINTERNAL, "[OperationLoopCheck]     Operation: %s", curr->Dump().c_str());
+                FE_LOGE(InternalError::FE_INNER_ERROR, "[OperationLoopCheck] Cycle detected: ");
+                FE_LOGE(InternalError::FE_INNER_ERROR, "[OperationLoopCheck]     Operation: %s", curr->Dump().c_str());
                 return true;
             }
 
@@ -1066,8 +1066,8 @@ void Function::OperationLoopCheck(const std::string& errorMsg)
                 for (auto* consumer : consumers[oop.get()]) {
                     if (self(consumer, self)) {
                         if (dupOpMagic != -1) {
-                            FE_LOGE(FeError::EINTERNAL, "[OperationLoopCheck]     Tensor:    %s", oop->Dump().c_str());
-                            FE_LOGE(FeError::EINTERNAL, "[OperationLoopCheck]     Operation: %s", curr->Dump().c_str());
+                            FE_LOGE(InternalError::FE_INNER_ERROR, "[OperationLoopCheck]     Tensor:    %s", oop->Dump().c_str());
+                            FE_LOGE(InternalError::FE_INNER_ERROR, "[OperationLoopCheck]     Operation: %s", curr->Dump().c_str());
                             if (magic == dupOpMagic) {
                                 dupOpMagic = -1; // stop dumpping
                             }
@@ -1107,13 +1107,13 @@ bool Function::OperationLoopCheck()
                 visitStack.push_back(nextOp);
             }
             if (inLinkNum[nextOp] < 0) {
-                FE_LOGE(FeError::EINTERNAL, "[OperationLoopCheck]     Operation:%s", nextOp->Dump().c_str());
+                FE_LOGE(InternalError::FE_INNER_ERROR, "[OperationLoopCheck]     Operation:%s", nextOp->Dump().c_str());
                 return false;
             }
         }
     }
     if (visitedOp.size() != operations_.size()) {
-        FE_LOGE(FeError::EINTERNAL, "[OperationLoopCheck]     Loop Detected.");
+        FE_LOGE(InternalError::FE_INNER_ERROR, "[OperationLoopCheck]     Loop Detected.");
         return false;
     }
     return true;
@@ -1253,8 +1253,8 @@ std::unordered_set<int> Function::LoopCheck()
 
             if (states[currSubgraph] == DfsState::IN_STACK) {
                 duplicatedSubgraphID = currSubgraph;
-                FE_LOGE(FeError::EINTERNAL, "[Cycle Detection] Cycle detected: ");
-                FE_LOGE(FeError::EINTERNAL, "[Cycle Detection]     subgraph id: %d", currSubgraph);
+                FE_LOGE(InternalError::FE_INNER_ERROR, "[Cycle Detection] Cycle detected: ");
+                FE_LOGE(InternalError::FE_INNER_ERROR, "[Cycle Detection]     subgraph id: %d", currSubgraph);
                 subGraphInCycle.emplace(currSubgraph);
                 return true;
             }
@@ -1265,12 +1265,12 @@ std::unordered_set<int> Function::LoopCheck()
                 for (int consumer : consumers[oop.get()]) {
                     if (self(consumer, self)) {
                         if (duplicatedSubgraphID != -2) {
-                            FE_LOGE(FeError::EINTERNAL, "[Cycle Detection]     tensor:      %s", oop->Dump().c_str());
-                            FE_LOGE(FeError::EINTERNAL, "[producer]=");
+                            FE_LOGE(InternalError::FE_INNER_ERROR, "[Cycle Detection]     tensor:      %s", oop->Dump().c_str());
+                            FE_LOGE(InternalError::FE_INNER_ERROR, "[producer]=");
                             for (const auto& producer : oop->GetProducers()) {
-                                FE_LOGE(FeError::EINTERNAL, "%d", producer->GetOpMagic());
+                                FE_LOGE(InternalError::FE_INNER_ERROR, "%d", producer->GetOpMagic());
                             }
-                            FE_LOGE(FeError::EINTERNAL, "[Cycle Detection]     subgraph id: %d", currSubgraph);
+                            FE_LOGE(InternalError::FE_INNER_ERROR, "[Cycle Detection]     subgraph id: %d", currSubgraph);
                             subGraphInCycle.emplace(currSubgraph);
                             if (currSubgraph == duplicatedSubgraphID) {
                                 duplicatedSubgraphID = -2; // stop dumpping

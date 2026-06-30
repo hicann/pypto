@@ -106,7 +106,7 @@ public:
             auto hash = callopAttr->GetCalleeHash();
             Function* calleeFunction = GetCacheFunction(hash);
             if (calleeFunction == nullptr) {
-                FE_LOGE(FeError::EINTERNAL, "calleeFunction is nullptr, hash: %lu", hash.GetHash());
+                FE_LOGE(InternalError::FE_INNER_ERROR, "calleeFunction is nullptr, hash: %lu", hash.GetHash());
                 continue;
             }
             hashDict[hash] = calleeFunction;
