@@ -282,6 +282,7 @@ public:
         }
 
         cceBin.emplace_back(PvModelCceBin(0, 0, npu::tile_fwk::CoreType::HUB));
+        cceBin.emplace_back(PvModelCceBin(0, HUB_MIX_DUMMY_HASH, npu::tile_fwk::CoreType::HUB_MIX));
         for (auto& [hash, leaf] : leafDict) {
             (void)hash;
             if (leaf->IsDummyFunction()) {

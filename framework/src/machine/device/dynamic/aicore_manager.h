@@ -1593,6 +1593,9 @@ private:
                         return ret;
                     }
                     deviceTaskCtx->resolveHubCnt++;
+                } else if (unlikely(coreType == static_cast<int>(CoreType::HUB_MIX))) {
+                    ResolveHubMixDepDyn(deviceTaskCtx, id, coreIdx);
+                    deviceTaskCtx->resolveHubCnt++;
                 } else if (coreType == static_cast<int>(MachineType::AICPU)) {
                     PushAicpuTaskQueue(deviceTaskCtx, id);
                 } else if (wrapManager.IsBindedWrapId(id, wrapId)) {
@@ -1632,6 +1635,58 @@ private:
         return dyntask->dynFuncDataCacheList[funcId].duppedData;
     }
 
+
+    inline void ResolveHubMixDepDynStitched(
+    SchDeviceTaskContext* deviceTaskCtx, DynDeviceTask* dyntask, int origfunc, int origop, int coreIdx = 0)
+    {
+        auto& wrapManager = deviceTaskCtx->GetWrapManager();
+        auto cceBinary = dyntask->cceBinary;
+        auto& duppedData = dyntask->GetDynFuncDataCacheList()[origfunc].duppedData;
+        auto& stitchList = duppedData->GetOperationStitch(origop);
+        for (auto* node = stitchList.Head(); node != nullptr; node = node->Next()) {
+            uint32_t listSize = node->Size();
+            uint32_t taskIds[MAX_WRAP_TASK_NUM];
+            uint8_t mixResoruceType = 0;
+            for (uint32_t i = 0; i < listSize; i++) {
+                uint32_t id = node->At(i);
+                auto funcId = FuncID(id);
+                auto opIndex = TaskID(id);
+                auto callList = dyntask->dynFuncDataCacheList[funcId].calleeList;
+                auto curBinary = cceBinary[callList[opIndex]];
+                int32_t wrapAicoreIdx = WrapManager::GetWrapAicoreIdx(curBinary.coreType, curBinary.wrapVecId);
+                taskIds[wrapAicoreIdx] = id;
+                mixResoruceType = curBinary.mixResourceType;
+            }
+            wrapManager.ResolveDepForOneMix(taskIds, mixResoruceType, coreIdx);
+        }
+    }
+
+    inline void ResolveHubMixDepDyn(SchDeviceTaskContext* deviceTaskCtx, uint64_t hubMixId, int coreIdx = 0)
+    {
+        auto dyntask = reinterpret_cast<DynDeviceTask*>(deviceTaskCtx->GetDeviceTask());
+        auto funcId = FuncID(hubMixId);
+        auto opIndex = TaskID(hubMixId);
+        auto& wrapManager = deviceTaskCtx->GetWrapManager();
+        auto cceBinary = dyntask->cceBinary;
+        auto func = dyntask->dynFuncDataCacheList[funcId].devFunc;
+        auto callList = dyntask->dynFuncDataCacheList[funcId].calleeList;
+        size_t succSize;
+        auto succList = func->GetOperationDepGraphSuccAddr(opIndex, succSize);
+        if (succSize != 0) {
+            uint32_t taskIds[MAX_WRAP_TASK_NUM];
+            uint8_t mixResoruceType = 0;
+            for (size_t i = 0; i < succSize; i++) {
+                auto succIdx = succList[i];
+                auto curBinary = cceBinary[callList[succIdx]];
+                int32_t wrapAicoreIdx = WrapManager::GetWrapAicoreIdx(curBinary.coreType, curBinary.wrapVecId);
+                taskIds[wrapAicoreIdx] = MakeTaskID(funcId, succIdx);
+                mixResoruceType = curBinary.mixResourceType;
+            }
+            wrapManager.ResolveDepForOneMix(taskIds, mixResoruceType, coreIdx);
+        }
+        ResolveHubMixDepDynStitched(deviceTaskCtx, dyntask, funcId, opIndex, coreIdx);
+    }
+
     inline int32_t ResolveDepDyn(
         SchDeviceTaskContext* deviceTaskCtx, uint64_t finishId, size_t resolveIndexBase = 0, int coreIdx = 0)
     {
@@ -1666,6 +1721,9 @@ private:
                     if (unlikely(ret != DEVICE_MACHINE_OK)) {
                         return ret;
                     }
+                    deviceTaskCtx->resolveHubCnt++;
+                } else if (unlikely(coreType == static_cast<int>(CoreType::HUB_MIX))) {
+                    ResolveHubMixDepDyn(deviceTaskCtx, id, coreIdx);
                     deviceTaskCtx->resolveHubCnt++;
                 } else if (unlikely(coreType == static_cast<int>(MachineType::AICPU))) {
                     PushAicpuTaskQueue(deviceTaskCtx, id);
@@ -1719,6 +1777,9 @@ private:
                     if (unlikely(ret != DEVICE_MACHINE_OK)) {
                         return ret;
                     }
+                    deviceTaskCtx->resolveHubCnt++;
+                } else if (unlikely(coreType == static_cast<int>(CoreType::HUB_MIX))) {
+                    ResolveHubMixDepDyn(deviceTaskCtx, id);
                     deviceTaskCtx->resolveHubCnt++;
                 } else if (wrapManager.IsBindedWrapId(id, wrapId)) {
                     wrapManager.ResolveDepForMixCore(id, wrapId, &cceBinary[callList[succIdx]]);

@@ -910,14 +910,20 @@ static void ConstructCodeInfo(
     struct EncodeDevAscendFunctionParam& encodeDevAscendFunctionParam, std::map<uint64_t, Function*>& leafDict,
     std::shared_ptr<DyndevFunctionAttribute> attr)
 {
-    attr->cceCodeInfo.resize(leafDict.size() + 1);
+    attr->cceCodeInfo.resize(leafDict.size() + 2);
     /* cceIdx 0 for dummy callop */
     attr->cceCodeInfo[0].coreType = static_cast<uint32_t>(CoreType::HUB);
     attr->cceCodeInfo[0].psgId = 0;
     attr->cceCodeInfo[0].funcHash = 0;
     encodeDevAscendFunctionParam.calleeHashIndexDict[0] = 0;
 
-    int leafIndex = 1;
+    /* cceIdx 1 for HUB_MIX dummy callop */
+    attr->cceCodeInfo[1].coreType = static_cast<uint32_t>(CoreType::HUB_MIX);
+    attr->cceCodeInfo[1].psgId = 0;
+    attr->cceCodeInfo[1].funcHash = HUB_MIX_DUMMY_HASH;
+    encodeDevAscendFunctionParam.calleeHashIndexDict[HUB_MIX_DUMMY_HASH] = 1;
+
+    int leafIndex = 2;
     for (auto& [hash, leaf] : leafDict) {
         auto leafFuncAttr = leaf->GetLeafFuncAttribute();
         ASSERT(DevCommonErr::PARAM_CHECK_FAILED, leafFuncAttr != nullptr) << "leafFuncAttr is null\n";
@@ -934,6 +940,7 @@ static void ConstructCodeInfo(
         attr->cceCodeInfo[leafIndex].mixResourceType = static_cast<uint32_t>(leafFuncAttr->mixResourceType);
         leafIndex++;
     }
+
     encodeDevAscendFunctionParam.cceCodeInfoList = attr->cceCodeInfo;
     return;
 }

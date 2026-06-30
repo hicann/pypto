@@ -598,12 +598,14 @@ private:
         const OrderedSet<std::shared_ptr<LogicalTensor>>& tlist,
         const std::unordered_map<std::shared_ptr<LogicalTensor>, InoutOperationAttr>& incastOpAttrDict,
         const std::unordered_map<std::shared_ptr<LogicalTensor>, InoutOperationAttr>& outcastOpAttrDict,
-        const EncodeDevAscendFunctionParam& param, const std::string& initRawName, bool fillContent);
+        const EncodeDevAscendFunctionParam& param, const std::string& initRawName, bool fillContent,
+        const std::unordered_map<int, int>& opIdxToHubOpIdx = {});
 
     void FillIncastUseList(
         DevLocalVector<DevAscendFunctionCallOperandUse>& useList, uint64_t& useSize,
         const std::vector<std::shared_ptr<LogicalTensor>>& tensorList,
-        const std::unordered_map<std::shared_ptr<LogicalTensor>, InoutOperationAttr>& attrDict, bool fillContent);
+        const std::unordered_map<std::shared_ptr<LogicalTensor>, InoutOperationAttr>& attrDict, bool fillContent,
+        const std::unordered_map<int, int>& opIdxToHubOpIdx);
 
     void FillOutcastUseList(
         DevLocalVector<DevAscendFunctionCallOperandUse>& useList, uint64_t& useSize,

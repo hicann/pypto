@@ -255,6 +255,7 @@ json ExecutionGraphStatistic::AnalyzeExecutionGraph(
         {"aicpuSubgraphCount", coreTypeCounts[CoreType::AICPU]},
         {"gmatomicSubgraphCount", coreTypeCounts[CoreType::GMATOMIC]},
         {"hubSubgraphCount", coreTypeCounts[CoreType::HUB]},
+        {"hubMixSubgraphCount", coreTypeCounts[CoreType::HUB_MIX]},
         {"invalidSubgraphCount", coreTypeCounts[CoreType::INVALID]},
         {"mixSubgraphCount", coreTypeCounts[CoreType::MIX]}};
 

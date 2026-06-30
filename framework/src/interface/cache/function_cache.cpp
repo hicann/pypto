@@ -37,6 +37,17 @@ std::optional<CacheValue> FunctionCache::Get(HashKey key)
     }
 }
 
+static void AssertValidCoreType(uint64_t coreType)
+{
+    FE_ASSERT(FeError::INVALID_TYPE,
+        (coreType == static_cast<uint64_t>(CoreType::AIV)) ||
+        (coreType == static_cast<uint64_t>(CoreType::AIC)) ||
+        (coreType == static_cast<uint64_t>(CoreType::HUB)) ||
+        (coreType == static_cast<uint64_t>(CoreType::HUB_MIX)) ||
+        (coreType == static_cast<uint64_t>(CoreType::AICPU)))
+        << "Invalid core type: " << coreType;
+}
+
 void FunctionCache::UpdateTopoCache(const Function& func, CacheValue& value)
 {
     uint64_t totalSize = 0;
@@ -59,12 +70,7 @@ void FunctionCache::UpdateTopoCache(const Function& func, CacheValue& value)
         offsetPtr[i] = curCoreFuncOffset;
         CoreFunctionTopo* tempPtr = reinterpret_cast<CoreFunctionTopo*>(topoPtr);
         tempPtr->coreType = static_cast<uint64_t>(func.GetSubFuncInvokeInfo(i).GetGraphType());
-        FE_ASSERT(FeError::INVALID_TYPE,
-            (tempPtr->coreType == static_cast<uint64_t>(CoreType::AIV)) ||
-            (tempPtr->coreType == static_cast<uint64_t>(CoreType::AIC)) ||
-            (tempPtr->coreType == static_cast<uint64_t>(CoreType::HUB)) ||
-            (tempPtr->coreType == static_cast<uint64_t>(CoreType::AICPU)))
-            << "Invalid core type: " << tempPtr->coreType;
+        AssertValidCoreType(tempPtr->coreType);
         tempPtr->psgId = func.GetSubFuncInvokeInfo(i).GetProgramId();
         tempPtr->readyCount = func.topoInfo_.topology_[i].readyState;
         tempPtr->depNum = func.topoInfo_.topology_[i].outGraph.size();

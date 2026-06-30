@@ -191,7 +191,14 @@ enum PipeType {
     PIPE_FIX = 10, // {L0C} ->{L1,UB,L1UB}
 };
 
-enum class CoreType { AIV = 0, AIC = 1, MIX = 2, AICPU = 3, HUB = 4, GMATOMIC = 5, INVALID = 20 };
+enum class CoreType { AIV = 0, AIC = 1, MIX = 2, AICPU = 3, HUB = 4, GMATOMIC = 5, HUB_MIX = 6, INVALID = 20 };
+
+constexpr uint64_t HUB_MIX_DUMMY_HASH = 0xFFFFFFFFFFFFFFFEULL;
+
+inline bool IsHubType(int coreType)
+{
+    return coreType == static_cast<int>(CoreType::HUB) || coreType == static_cast<int>(CoreType::HUB_MIX);
+}
 
 template <typename T>
 inline std::string IntVecToStr(const std::vector<T>& shape)
@@ -282,6 +289,7 @@ inline const BiMap<CoreType>& GetCoreTypeDict()
         {CoreType::AICPU, "AICPU"},
         {CoreType::HUB, "HUB"},
         {CoreType::GMATOMIC, "GMATOMIC"},
+        {CoreType::HUB_MIX, "HUB_MIX"},
     }};
     return dict;
 };
