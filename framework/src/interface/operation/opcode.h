@@ -559,6 +559,14 @@ public:
                opCode == Opcode::OP_L0C_RESHAPE_COPY_OUT;
     }
 
+    inline bool IsCopyFromL1(Opcode opcode) const
+    {
+        return opcode == Opcode::OP_L1_TO_L0A || opcode == Opcode::OP_L1_TO_L0B || opcode == Opcode::OP_L1_TO_L0_AT ||
+               opcode == Opcode::OP_L1_TO_L0_BT || opcode == Opcode::OP_L1_TO_FIX_QUANT_PRE ||
+               opcode == Opcode::OP_L1_TO_L0A_SCALE || opcode == Opcode::OP_L1_TO_L0B_SCALE ||
+               opcode == Opcode::OP_L1_TO_BT;
+    }
+
     inline bool IsCopyInOrOut(Opcode opCode) const { return IsCopyIn(opCode) || IsCopyOut(opCode); }
 
     inline bool IsSync(Opcode opcode) const { return opcode == Opcode::OP_SYNC_SRC || opcode == Opcode::OP_SYNC_DST; }
