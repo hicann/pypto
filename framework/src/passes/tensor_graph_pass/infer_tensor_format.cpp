@@ -165,6 +165,7 @@ void InferTensorFormat::ApplyTransDataVecTile(const std::shared_ptr<LogicalTenso
         TileShape::Current().SetVecTile(tmpVectile);
     } else if (srcFormat == TileOpFormat::TILEOP_NDC1HWC0 && targetFormat == TileOpFormat::TILEOP_ND) {
         VecTile tmpVectile = TileShape::Current().GetVecTile();
+        tmpVectile.tile[0] = 1;
         std::swap(tmpVectile.tile[1], tmpVectile.tile[2]);
         tmpVectile.tile[2] = tmpVectile.tile[2] / c0;
         tmpVectile.tile.emplace_back(c0);
