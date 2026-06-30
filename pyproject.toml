@@ -9,8 +9,8 @@
 
 [build-system]
 requires = [
-    "setuptools>=77.0.3",
-    "pybind11>=3.0.1",
+    "setuptools>=70.3.0",
+    "pybind11>=2.13.6",
 ]
 build-backend = "setuptools.build_meta"
 
@@ -22,8 +22,10 @@ authors = [
 ]
 description = "A high-performance programming framework for tile-centric computing"
 readme = { file = "README.md", content-type = "text/markdown" }
-license = "LicenseRef-CANN-Open-Software-License-Agreement-Version-2.0"
-license-files = ["LICENSE"]
+
+# 兼容 setuptools 70.3.0 写法，由setup.py填充 license/license-files, 此处不静态写 license/license-files
+dynamic = ["license"]
+
 requires-python = ">=3.9"
 dependencies = [
 ]
@@ -37,6 +39,7 @@ classifiers = [  # 分类器，PyPI 用于分类筛选 (必填多个合理分类
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
 ]
 
 [project.urls]
@@ -47,8 +50,8 @@ Repository = "https://gitcode.com/cann/pypto"
 
 [project.optional-dependencies]
 dev = [
-    "setuptools>=77.0.3",
-    "pybind11>=3.0.1",
+    "setuptools>=70.3.0",
+    "pybind11>=2.13.6",
     "pip",
     "build",
     "packaging",
