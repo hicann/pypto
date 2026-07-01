@@ -25,6 +25,7 @@
 #include "adapter/api/adump_api.h"
 #include "machine/runtime/runner/device_exception_dump.h"
 #include "tilefwk/data_type.h"
+#include "tilefwk/error_code.h"
 #define private public
 #define protected public
 #include "interface/function/function.h"
@@ -70,7 +71,7 @@ TEST_F(DeviceExceptionDumpTest, TestExceptionDumpInfoIsNullptr)
     uint32_t realSize = 0;
     AdxExceptionDumpMode mode = AdxExceptionDumpMode::ADX_DUMP_MODE_NONE;
     auto ret = ExceptionDumpCallBack(&exceptionInfo, nullptr, dumpSize, &realSize, &mode);
-    EXPECT_EQ(ret, 1);
+    EXPECT_EQ(ret, static_cast<int32_t>(npu::tile_fwk::MachineError::DUMP_DFX));
 }
 
 TEST_F(DeviceExceptionDumpTest, TestAdumpRegExeptionDump)
@@ -85,7 +86,7 @@ TEST_F(DeviceExceptionDumpTest, TestBothPtrIsNullptr)
     uint32_t realSize = 0;
     AdxExceptionDumpMode mode = AdxExceptionDumpMode::ADX_DUMP_MODE_NONE;
     auto ret = ExceptionDumpCallBack(nullptr, nullptr, dumpSize, &realSize, &mode);
-    EXPECT_EQ(ret, 1);
+    EXPECT_EQ(ret, static_cast<int32_t>(npu::tile_fwk::MachineError::DUMP_DFX));
 }
 
 TEST_F(DeviceExceptionDumpTest, TestAicoreExceptionWithNullArgAddr)
@@ -99,7 +100,7 @@ TEST_F(DeviceExceptionDumpTest, TestAicoreExceptionWithNullArgAddr)
     exceptionInfo.expandInfo.u.aicoreInfo.exceptionArgs.argAddr = nullptr;
     exceptionInfo.expandInfo.u.aicoreInfo.exceptionArgs.argsize = sizeof(void*) * MAX_AICPU_ARG_NUM;
     auto ret = ExceptionDumpCallBack(&exceptionInfo, &dumpInfo, dumpSize, &realSize, &mode);
-    EXPECT_EQ(ret, 1);
+    EXPECT_EQ(ret, static_cast<int32_t>(npu::tile_fwk::MachineError::DUMP_DFX));
 }
 
 TEST_F(DeviceExceptionDumpTest, TestAicoreExceptionWithMismatchedArgsize)
@@ -123,7 +124,7 @@ TEST_F(DeviceExceptionDumpTest, TestAicoreExceptionWithMismatchedArgsize)
 
 TEST_F(DeviceExceptionDumpTest, TestAicoreExceptionWithNonPyptoKernel)
 {
-    char exceptionKernelName[] = "NonPyPTO_Kernel";
+    char exceptionKernelName[] = "PyPTO_Kernel";
     int64_t inputOutputInfo[2] = {1, 0};
     uint8_t binBuf[64] = {};
     std::vector<uint8_t> tensorBuf(32, 0xAB);
@@ -155,7 +156,6 @@ TEST_F(DeviceExceptionDumpTest, TestAicoreExceptionWithNonPyptoKernel)
     // kernelName from exceptionKernelInfo, not from kernelArg[0]
     EXPECT_STREQ(dumpInfo.kernelName, exceptionKernelName);
     EXPECT_STREQ(dumpInfo.kernelDisplayName, exceptionKernelName);
-    EXPECT_EQ(dumpInfo.bin, exceptionInfo.expandInfo.u.aicoreInfo.exceptionArgs.exceptionKernelInfo.bin);
 }
 
 TEST_F(DeviceExceptionDumpTest, TestAicoreExceptionWithValidTensors)

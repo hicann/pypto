@@ -373,12 +373,17 @@ RtError RuntimeGeExceptionRegInfo(RtExceptionInfo* exceptionInfo, RtExceptionReg
     if (func != nullptr) {
         rtError_t(*runtimeFunc)(RtExceptionInfo*, RtExceptionErrRegInfo**, uint32_t*) =
             reinterpret_cast<rtError_t(*)(RtExceptionInfo*, RtExceptionErrRegInfo**, uint32_t*)>(func);
-        runtimeFunc(exceptionInfo, &(execptionReg->errRegInfo), &execptionReg->coreNum);
+        return runtimeFunc(exceptionInfo, &(execptionReg->errRegInfo), &execptionReg->coreNum);
+    }
+#else
+    (void)exceptionInfo;
+    if (execptionReg != nullptr) {
+        static RtExceptionErrRegInfo errRegInfo = {1U, RtCoreType::RT_CORE_TYPE_AIC, 0U, 0U, {}};
+        execptionReg->coreNum = 1U;
+        execptionReg->errRegInfo = &errRegInfo;
     }
 #endif
-    (void)exceptionInfo;
-    (void)execptionReg;
-    return 0;
+    return RT_SUCCESS;
 }
 
 #ifdef BUILD_WITH_CANN
