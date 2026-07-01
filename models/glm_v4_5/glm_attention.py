@@ -478,9 +478,10 @@ def ifa_func_kernel(
 
 @pypto.frontend.jit(
     runtime_options={
-        "stitch_function_max_num": 256,
+        "stitch_function_max_num": 900,
         "device_sched_mode": 1,
-        "ready_on_host_tensors": ["block_table", "kv_act_seqs"]
+        "ready_on_host_tensors": ["block_table", "kv_act_seqs"],
+        "max_workspace_kb": 2000000
     },
     pass_options={
         "cube_l1_reuse_setting": {0: 16, 1: 8},
@@ -488,7 +489,7 @@ def ifa_func_kernel(
         "vec_nbuffer_setting": {-2: 1, 0: 1, 1: 1},
     },
     host_options={
-        "compile_monitor_enable": 1
+        "compile_monitor_enable": 0
     },
 )
 def ifa_func_kernel_for_910_high_performance(
@@ -797,7 +798,7 @@ def ifa_func_kernel_for_950(
         "vec_nbuffer_setting": {-2: 1, 0: 1, 1: 1},
     },
     host_options={
-        "compile_monitor_enable": 1,
+        "compile_monitor_enable": 0,
     },
 )
 def ifa_func_kernel_for_950_high_through(
