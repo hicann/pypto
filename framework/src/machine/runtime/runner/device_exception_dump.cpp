@@ -22,6 +22,7 @@
 #include "interface/utils/common.h"
 #include "interface/program/program.h"
 #include "runtime_utils.h"
+#include "tilefwk/error_code.h"
 
 using namespace npu::tile_fwk;
 namespace npu::tile_fwk::dynamic {
@@ -83,7 +84,7 @@ int32_t GetDeviceExceptionDumpInfo(RtAicoreExDetailInfo& aicoreExceptionInfo, Ad
 
     if (kernelArgAddr == nullptr) {
         MACHINE_LOGW("GetDeviceExceptionDumpInfo failed: kernelArgAddr is nullptr");
-        return 1;
+        return static_cast<int32_t>(npu::tile_fwk::MachineError::DUMP_DFX);
     }
 
     auto aicoreArgsize = sizeof(void*) * MAX_AICPU_ARG_NUM;
@@ -101,44 +102,68 @@ int32_t GetDeviceExceptionDumpInfo(RtAicoreExDetailInfo& aicoreExceptionInfo, Ad
         return rc;
     }
     // kernel launch kernalArg 0: kernelName; 4 inputSize; 6 tensorData
+    char* kernelName = static_cast<char*>(kernelArg[0]); 
+    // only support handle pto exception info 
+    if (kernelName != nullptr && strncmp(kernelName, "PyPTO", 5) != 0) { 
+        MACHINE_LOGI("Current exception info not PyPTO, which kernelName is[%s]", kernelName); 
+        return 0; 
+    }
     exceptionDumpInfo->argAddr = kernelArgAddr;
     exceptionDumpInfo->argssize = argsSize;
-
-    auto& exceptionKernelInfo = aicoreExceptionInfo.exceptionArgs.exceptionKernelInfo;
-    exceptionDumpInfo->bin = exceptionKernelInfo.bin;
-
-    if (exceptionKernelInfo.kernelName != nullptr) {
-        auto ret = strcpy_s(exceptionDumpInfo->kernelName, MAX_KERNEL_BUF_LEN, exceptionKernelInfo.kernelName);
-        if (ret != 0) {
-            MACHINE_LOGW("Mem cpy KernelName from exceptionKernelInfo failed");
-        }
-        ret = strcpy_s(exceptionDumpInfo->kernelDisplayName, MAX_KERNEL_BUF_LEN, exceptionKernelInfo.kernelName);
-        if (ret != 0) {
-            MACHINE_LOGW("Mem cpy kernelDisplayName from exceptionKernelInfo failed");
-        }
-    }
+    auto exceptionKernelInfo = aicoreExceptionInfo.exceptionArgs.exceptionKernelInfo;
     MACHINE_LOGD("GetDeviceExceptionDumpInfo: kernelArgAddr=%p, argsSize=%u, binSize=%u, kernelName=%s",
         kernelArgAddr, argsSize, exceptionKernelInfo.binSize,
         exceptionKernelInfo.kernelName ? exceptionKernelInfo.kernelName : "(null)");
     return GetAicoreExceptionDumpInfo(kernelArg, exceptionDumpInfo);
 }
 
-int32_t DeviceExceptionDumpCallBack(RtExceptionInfo* exceptionInfo, AdxExceptionDumpInfo* exceptionDumpInfo)
-{
+void FillExceptionKernelName(RtExceptionKernelInfo &exceptionKernelInfo, AdxExceptionDumpInfo* exceptionDumpInfo) {
+    if (exceptionKernelInfo.kernelName != nullptr) {
+        auto ret = strcpy_s(exceptionDumpInfo->kernelName, MAX_KERNEL_BUF_LEN, exceptionKernelInfo.kernelName);
+        if (ret != 0) {
+            MACHINE_LOGW("Mem cpy KernelName from exceptionKernelInfo failed");
+        }
+        ret = strcpy_s(exceptionDumpInfo->kernelDisplayName,
+                MAX_KERNEL_BUF_LEN, exceptionKernelInfo.kernelName);
+        if (ret != 0) {
+            MACHINE_LOGW("Mem cpy kernelDisplayName from exceptionKernelInfo failed");
+        }
+    }
+}
+
+int32_t FillCoreExceptionInfo(RtExceptionInfo* exceptionInfo, AdxExceptionDumpInfo* exceptionDumpInfo,
+                           uint32_t exceptionDumpSize) {
     RtExceptionRegInfo exceptionRegInfo = {0, nullptr};
     auto ret = RuntimeGeExceptionRegInfo(exceptionInfo, &exceptionRegInfo);
-    if (ret == 0 && exceptionRegInfo.errRegInfo != nullptr) {
-        exceptionDumpInfo->coreId = exceptionRegInfo.errRegInfo->coreId;
-        exceptionDumpInfo->coreType = exceptionRegInfo.errRegInfo->coreType;
-        MACHINE_LOGD(
-            "Current exception from %s coreId: %u",
-            exceptionDumpInfo->coreType == RtCoreType::RT_CORE_TYPE_AIC ? "AIC" : "AIV", exceptionDumpInfo->coreId);
-    } else {
-        MACHINE_LOGW("Cannot Get ExceptionRegInfo, which CoreType coreId would not support");
+    if (ret == 0 && exceptionRegInfo.errRegInfo != nullptr && (exceptionDumpSize == exceptionRegInfo.coreNum)) {
+        auto aicoreExceptionInfo = exceptionInfo->expandInfo.u.aicoreInfo;
+        auto exceptionKernelInfo = aicoreExceptionInfo.exceptionArgs.exceptionKernelInfo;
+        auto aicoreBin = exceptionKernelInfo.bin;
+        for (uint32_t i = 0; i < exceptionDumpSize; i++) {
+            exceptionDumpInfo[i].coreId = exceptionRegInfo.errRegInfo[i].coreId;
+            exceptionDumpInfo[i].coreType = exceptionRegInfo.errRegInfo[i].coreType;
+            exceptionDumpInfo[i].bin = aicoreBin;
+            FillExceptionKernelName(exceptionKernelInfo, &exceptionDumpInfo[i]);
+            MACHINE_LOGD(
+                "Current No[%u] exception from %s coreId: %u", i,
+                exceptionDumpInfo->coreType == RtCoreType::RT_CORE_TYPE_AIC ? "AIC" : "AIV", exceptionDumpInfo->coreId);
+        }
+        return 0;
     }
+    MACHINE_LOGW("Cannot Get ExceptionRegInfo, which CoreType coreId would not support");
+    return static_cast<int32_t>(npu::tile_fwk::MachineError::DUMP_DFX);
+}
+
+int32_t DeviceExceptionDumpCallBack(RtExceptionInfo* exceptionInfo, AdxExceptionDumpInfo* exceptionDumpInfo,
+                                    uint32_t exceptionDumpSize)
+{ 
     auto expandInfo = exceptionInfo->expandInfo;
     MACHINE_LOGD("DeviceExceptionDumpCallBack: expandInfo.type=%d", static_cast<int>(expandInfo.type));
     if (expandInfo.type == RtExceptionExpandType::AICORE) {
+        auto ret = FillCoreExceptionInfo(exceptionInfo, exceptionDumpInfo, exceptionDumpSize);
+        if ( ret != 0) {
+            return ret;
+        }
         return GetDeviceExceptionDumpInfo(expandInfo.u.aicoreInfo, &exceptionDumpInfo[0]);
     }
     return 0;
@@ -154,12 +179,11 @@ int32_t ExceptionDumpCallBack(
         MACHINE_LOGW(
             "DeviceExceptionDumpCallBack failed: the input params is invalid [%p, %p, %p, %p]", (void*)exceptionInfo,
             (void*)exceptionDumpInfo, (void*)exceptionDumpRealSize, (void*)(mode));
-        return 1;
+        return static_cast<int32_t>(npu::tile_fwk::MachineError::DUMP_DFX);
     }
     *mode = AdxExceptionDumpMode::ADX_DUMP_MODE_OVERWRITE;
-    *exceptionDumpRealSize = 1;
-    (void)exceptionDumpSize;
-    return DeviceExceptionDumpCallBack(exceptionInfo, exceptionDumpInfo);
+    *exceptionDumpRealSize = exceptionDumpSize;
+    return DeviceExceptionDumpCallBack(exceptionInfo, exceptionDumpInfo, exceptionDumpSize);
 }
 
 int32_t AdumpRegExceptionDump() { return AdumpRegExceptionDumpCallBack(ExceptionDumpCallBack); }
