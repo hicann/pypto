@@ -8,8 +8,8 @@ E2E method: noise-injection profiling loop + kernel_details.csv extraction.
 Each iteration injects ``torch.randn(480MB).npu()`` + ``torch.max(a)`` before
 the golden call, creating inter-iteration boundaries.  Performance is
 extracted from ``kernel_details.csv`` by grouping kernels by ``Type``,
-filtering noise (``ReduceMax``), and computing ``mean(Duration(us))`` per
-op type.
+filtering noise (all ``TensorMove`` + first ``ReduceMax`` by Start Time),
+and computing ``mean(Duration(us))`` per op type.
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ DEFAULT_SHAPE = (8, 1024, 4096)
 DEFAULT_DTYPE = "float32"
 DEFAULT_ITERS = 1
 NOISE_SIZE = int(192 * 1024 * 1024 * 2.5)
-NOISE_OPS = {"ReduceMax"}
+NOISE_OPS = {"ReduceMax", "TensorMove"}
 
 _REQUIRED_KINDS = {
     inspect.Parameter.POSITIONAL_ONLY,
@@ -322,23 +322,30 @@ def _find_ascend_output(prof_dir: Path) -> Path | None:
     return max(candidates, key=lambda p: p.stat().st_mtime)
 
 
-def _read_kernel_details(path: Path) -> dict[str, list[float]]:
-    results: dict[str, list[float]] = {}
+def _read_kernel_details(path: Path) -> list[tuple[str, float, float]]:
+    """Read kernel_details.csv and return list of (type, duration, start_time)."""
+    kernels = []
     with open(path, newline="", encoding="utf-8") as f:
         for row in csv.DictReader(f):
             try:
-                results.setdefault(row["Type"].strip(), []).append(
-                    float(row["Duration(us)"]))
+                op_type = row["Type"].strip()
+                dur = float(row["Duration(us)"])
+                start_time = float(row["Start Time(us)"])
+                kernels.append((op_type, dur, start_time))
             except (KeyError, ValueError):
                 continue
-    return results
+    return kernels
 
 
-def _extract_e2e(op_durs: dict[str, list[float]]) -> tuple[dict[str, dict[str, Any]], float, float]:
+def _extract_e2e(kernels: list[tuple[str, float, float]]) -> tuple[dict[str, dict[str, Any]], float, float]:
     """Extract per-op stats and E2E via two independent paths.
     
-    Path A (subtraction): E2E = total_all - total_noise
-    Path B (summation):   E2E = sum of each non-noise kernel duration
+    Noise filtering:
+    - TensorMove: all instances filtered (from noise injection's .npu() and golden's .to(device))
+    - ReduceMax: only the first one (by Start Time) filtered (noise marker)
+    
+    Path A (subtraction): E2E = total_all - noise_total
+    Path B (summation):   E2E = sum of non-noise kernel durations
     
     Returns:
         (per_op, e2e_a, e2e_b)
@@ -346,20 +353,42 @@ def _extract_e2e(op_durs: dict[str, list[float]]) -> tuple[dict[str, dict[str, A
         - e2e_a: total - noise (subtraction path)
         - e2e_b: direct sum of non-noise kernels (summation path)
     """
-    total_all = sum(sum(d) for d in op_durs.values())
-    total_noise = sum(
-        sum(d) for t, d in op_durs.items() if t in NOISE_OPS)
-
+    total_all = sum(dur for _, dur, _ in kernels)
+    
+    # Find the first ReduceMax by Start Time (noise marker)
+    first_reducemax_idx = None
+    for i, (op_type, _, start_time) in enumerate(kernels):
+        if op_type == "ReduceMax":
+            if first_reducemax_idx is None or start_time < kernels[first_reducemax_idx][2]:
+                first_reducemax_idx = i
+    
+    # Filter noise kernels and group by type
+    noise_total = 0.0
+    op_durs: dict[str, list[float]] = {}
+    for i, (op_type, dur, _) in enumerate(kernels):
+        is_noise = False
+        if op_type in NOISE_OPS:
+            if op_type == "ReduceMax":
+                if i == first_reducemax_idx:
+                    is_noise = True
+            else:
+                is_noise = True
+        
+        if is_noise:
+            noise_total += dur
+        else:
+            op_durs.setdefault(op_type, []).append(dur)
+    
     per_op = {}
     e2e_b = 0.0
     for t, d in op_durs.items():
-        if t in NOISE_OPS or not d:
+        if not d:
             continue
         t_sum = sum(d)
         per_op[t] = {"mean": t_sum / len(d), "count": len(d), "total": t_sum}
         e2e_b += t_sum
-
-    e2e_a = total_all - total_noise
+    
+    e2e_a = total_all - noise_total
     return per_op, e2e_a, e2e_b
 
 
@@ -460,7 +489,7 @@ def _write_report(cfg: ReportConfig) -> Path:
         "## Notes",
         "",
         "- Data source: `ASCEND_PROFILER_OUTPUT/kernel_details.csv`",
-        "- Noise ops (ReduceMax) filtered out",
+        "- Noise filtered: TensorMove (all) + first ReduceMax (by Start Time)",
         "- Each iteration: noise injection (480MB randn + max) → golden call → sync",
     ]
     path.write_text("\n".join(lines) + "\n")
@@ -516,12 +545,11 @@ def _profile_one_case(torch, torch_npu, call, prof_dir: Path,
     e2e_b: float = 0.0
 
     if kd and kd.exists():
-        op_durs = _read_kernel_details(kd)
-        per_op, e2e_a, e2e_b = _extract_e2e(op_durs)
-        n_kernels = sum(len(v) for v in op_durs.values())
+        kernels = _read_kernel_details(kd)
+        per_op, e2e_a, e2e_b = _extract_e2e(kernels)
+        n_kernels = len(kernels)
         logger.info(
-            f"{n_kernels} kernels, {len(op_durs)} op types, "
-            f"{len(per_op)} after noise filter, "
+            f"{n_kernels} kernels, {len(per_op)} op types after noise filter, "
             f"E2E_A={_fmt(e2e_a)}, E2E_B={_fmt(e2e_b)}"
         )
         if abs(e2e_a - e2e_b) > 0.01:
@@ -640,19 +668,40 @@ def _self_test():
             "0,aclnnAdd,Add,3000.0,3.0\n"
             "0,aclnnAdd,Add,3100.0,3.5\n")
 
-        op_durs = _read_kernel_details(kd)
-        _ok(len(op_durs) == 3, f"expected 3 types, got {len(op_durs)}")
+        kernels = _read_kernel_details(kd)
+        _ok(len(kernels) == 6, f"expected 6 kernels, got {len(kernels)}")
 
-        per_op, e2e_a, e2e_b = _extract_e2e(op_durs)
-        _ok("ReduceMax" not in per_op, "ReduceMax not filtered")
+        per_op, e2e_a, e2e_b = _extract_e2e(kernels)
+        _ok("ReduceMax" in per_op, "golden's ReduceMax should be preserved")
+        _ok(per_op["ReduceMax"]["count"] == 1, f"ReduceMax count: {per_op['ReduceMax']['count']}")
+        _ok(abs(per_op["ReduceMax"]["mean"] - 95.0) < 0.01, f"ReduceMax mean: {per_op['ReduceMax']['mean']}")
         _ok(abs(per_op["Mul"]["mean"] - 4.5) < 0.01, f"Mul: {per_op['Mul']}")
         _ok(per_op["Mul"]["count"] == 2, f"Mul count: {per_op['Mul']['count']}")
         _ok(abs(per_op["Add"]["mean"] - 3.25) < 0.01, f"Add: {per_op['Add']}")
         _ok(per_op["Add"]["count"] == 2, f"Add count: {per_op['Add']['count']}")
-        # E2E = 5.0 + 4.0 + 3.0 + 3.5 = 15.5 (ReduceMax filtered)
-        _ok(abs(e2e_a - 15.5) < 0.01, f"E2E_A: {e2e_a}")
-        _ok(abs(e2e_b - 15.5) < 0.01, f"E2E_B: {e2e_b}")
+        # E2E = 5.0 + 4.0 + 95.0 + 3.0 + 3.5 = 110.5 (first ReduceMax 100.0us filtered)
+        _ok(abs(e2e_a - 110.5) < 0.01, f"E2E_A: {e2e_a}")
+        _ok(abs(e2e_b - 110.5) < 0.01, f"E2E_B: {e2e_b}")
         _ok(abs(e2e_a - e2e_b) < 0.01, f"E2E mismatch: A={e2e_a}, B={e2e_b}")
+
+        # Test TensorMove filtering (noise from .npu() and golden's .to(device))
+        kd2 = base / "kernel_details2.csv"
+        kd2.write_text(
+            "Device_id,Name,Type,Start Time(us),Duration(us)\n"
+            "0,aclnnTensorMove,TensorMove,1000.0,30.0\n"
+            "0,aclnnReduceMax,ReduceMax,1050.0,1400.0\n"
+            "0,aclnnTensorMove,TensorMove,1100.0,20.0\n"
+            "0,aclnnMul,Mul,2000.0,5.0\n"
+            "0,aclnnAdd,Add,3000.0,3.0\n")
+
+        kernels2 = _read_kernel_details(kd2)
+        per_op2, e2e_a2, e2e_b2 = _extract_e2e(kernels2)
+        _ok("TensorMove" not in per_op2, "TensorMove should be filtered")
+        _ok("ReduceMax" not in per_op2, "first ReduceMax should be filtered")
+        _ok("Mul" in per_op2 and "Add" in per_op2, "golden ops should be preserved")
+        # E2E = 5.0 + 3.0 = 8.0 (TensorMove 30+20 + ReduceMax 1400 filtered)
+        _ok(abs(e2e_a2 - 8.0) < 0.01, f"E2E_A with TensorMove: {e2e_a2}")
+        _ok(abs(e2e_b2 - 8.0) < 0.01, f"E2E_B with TensorMove: {e2e_b2}")
 
         s = _parse_tensor_spec("x:2x3:float32")
         _ok(s == TensorSpec("x", (2, 3), "float32"), f"spec: {s}")
