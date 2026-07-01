@@ -23,7 +23,16 @@ def _cleanup_npu_device():
     synchronized_ok = False
     cache_emptied_ok = False
     try:
+        import torch
         import torch_npu
+        # Only meaningful if this process actually used the device (reserved memory).
+        # The main pytest process / xdist worker merely query the soc version during
+        # collection, which flips torch.npu.is_initialized() True WITHOUT establishing a
+        # device context (no set_device). synchronize() would then fail with
+        # "context is empty" (error 107002). memory_reserved()==0 detects this case and is
+        # safe to call without a context.
+        if not torch.npu.is_initialized() or torch.npu.memory_reserved() == 0:
+            return
         torch_npu.npu.synchronize()
         synchronized_ok = True
     except Exception as e:

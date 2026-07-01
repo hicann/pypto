@@ -21,6 +21,7 @@ Main Functions:
 """
 
 import dataclasses
+import os
 import random
 from typing import Callable, Optional, Union
 
@@ -709,6 +710,8 @@ def moe_distributed_dispatch(
 @pytest.mark.skip(reason="CI 上仅看护 test_moe_distributed_dispatch_combine")
 @pytest.mark.world_size(2)
 def test_moe_distributed_dispatch() -> None:
+    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
+    torch.npu.set_device(device_id)
     config = DistributedConfig(world_size=2)
     mp.set_start_method('spawn', force=True)
     processes = []
@@ -878,6 +881,8 @@ def moe_distributed_combine(
 
 @pytest.mark.world_size(16)
 def test_moe_distributed_combine() -> None:
+    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
+    torch.npu.set_device(device_id)
     config = DistributedConfig(world_size=16)
     mp.set_start_method('spawn', force=True)
     processes = []
@@ -937,6 +942,8 @@ def moe_distributed_dispatch_combine(
 
 @pytest.mark.world_size(4)
 def test_moe_distributed_dispatch_combine() -> None:
+    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
+    torch.npu.set_device(device_id)
     config = DistributedConfig(world_size=4)
     mp.set_start_method('spawn', force=True)
     processes = []
