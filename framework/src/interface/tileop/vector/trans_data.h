@@ -109,7 +109,7 @@ __aicore__ inline void TTransDataNCHW2NC1HWC0(
     auto inputC = inputLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
     auto inputH = inputLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
     auto inputW = inputLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
-    auto inputC1 = inputC / C0;
+    auto inputC1 = (inputC + C0 - 1) / C0;
     using TileDefine = pto::Tile<pto::TileType::Vec, typename INPUT::Type, tileW, C0, pto::BLayout::RowMajor, -1, -1>;
     using GlobalData =
         pto::GlobalTensor<typename DST::Type, pto::Shape<-1, -1, -1, -1, -1>, pto::Stride<-1, -1, -1, -1, -1>>;
@@ -199,8 +199,8 @@ __aicore__ inline void TTransDataNCHW2Fractal_Z(
     auto inputC = inputLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
     auto inputH = inputLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
     auto inputW = inputLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
-    auto inputC1 = inputC / C0;
-    auto inputN1 = inputN / N0;
+    auto inputC1 = (inputC + C0 - 1) / C0;
+    auto inputN1 = (inputN + N0 - 1) / N0;
     using TileDefine = pto::Tile<pto::TileType::Vec, typename INPUT::Type, N0, C0, pto::BLayout::RowMajor, -1, -1>;
     using GlobalData =
         pto::GlobalTensor<typename DST::Type, pto::Shape<-1, -1, -1, -1, -1>, pto::Stride<-1, -1, -1, -1, -1>>;
@@ -390,7 +390,7 @@ __aicore__ inline void TTransDataNCDHW2NDC1HWC0(
     auto inputC = inputLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
     auto inputH = inputLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
     auto inputW = inputLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
-    auto inputC1 = inputC / C0;
+    auto inputC1 = (inputC + C0 - 1) / C0;
 
     using TileDefine = pto::Tile<pto::TileType::Vec, typename INPUT::Type, tileW, C0, pto::BLayout::RowMajor, -1, -1>;
     using GlobalData =
@@ -594,8 +594,8 @@ __aicore__ inline void TTransDataNCDHW2FRACTAL_Z_3D(
     auto inputD = inputLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
     auto inputH = inputLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
     auto inputW = inputLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
-    auto inputC1 = inputC / C0;
-    auto inputN1 = inputN / N0;
+    auto inputC1 = (inputC + C0 - 1) / C0;
+    auto inputN1 = (inputN + N0 - 1) / N0;
     using TileDefine = pto::Tile<pto::TileType::Vec, typename INPUT::Type, N0, C0, pto::BLayout::RowMajor, -1, -1>;
     using GlobalData =
         pto::GlobalTensor<typename DST::Type, pto::Shape<-1, -1, -1, -1, -1>, pto::Stride<-1, -1, -1, -1, -1>>;
