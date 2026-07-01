@@ -89,6 +89,7 @@ private:
 
     OperandAttribute GetOperandAttr(int opMagic, int operandIdx, Function& leafFunc, bool isOutput) const;
     OperandAttribute FindOriginalAttrInMixFunction(LogicalTensorPtr tensor, Function* originalMixFunc) const;
+    OperandAttribute FindOriginalAttrInMixFunctionByRawMagic(LogicalTensorPtr tensor, Function* originalMixFunc) const;
     void SetCallOpAttribute(
         Function& leafFunc, Operation& callOp, Operation* originalCallOp, CallOpAttribute* originalCallAttr,
         uint64_t newProgramID, uint64_t componentIndex, SubgraphToFunction& subgraphToFunction,

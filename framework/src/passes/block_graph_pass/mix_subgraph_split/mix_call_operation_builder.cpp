@@ -451,6 +451,38 @@ bool MixCallOperationBuilder::FindOOpAttrOffsetFromActualOutcasts(
     return true;
 }
 
+OperandAttribute MixCallOperationBuilder::FindOriginalAttrInMixFunctionByRawMagic(
+    LogicalTensorPtr tensor, Function* originalMixFunc) const
+{
+    auto operations = originalMixFunc->Operations(false);
+    int rawMagic = tensor->GetRawMagic();
+    for (auto& op : operations) {
+        if (op.IsNOP())
+            continue;
+        auto iOperands = op.GetIOperands();
+        for (size_t i = 0; i < iOperands.size(); i++) {
+            auto inputTensor = iOperands[i];
+            if (inputTensor->GetRawMagic() == rawMagic) {
+                auto attr = op.GetIOpAttr(i);
+                if (attr.offset != -1) {
+                    return attr;
+                }
+            }
+        }
+        auto oOperands = op.GetOOperands();
+        for (size_t k = 0; k < oOperands.size(); k++) {
+            auto outputTensor = oOperands[k];
+            if (outputTensor->GetRawMagic() == rawMagic) {
+                auto attr = op.GetOOpAttr(k);
+                if (attr.offset != -1) {
+                    return attr;
+                }
+            }
+        }
+    }
+    return -1;
+}
+
 OperandAttribute MixCallOperationBuilder::FindOriginalAttrInMixFunction(
     LogicalTensorPtr tensor, Function* originalMixFunc) const
 {
@@ -459,8 +491,7 @@ OperandAttribute MixCallOperationBuilder::FindOriginalAttrInMixFunction(
         return -1;
     }
     int rawMagic = tensor->GetRawMagic();
-    APASS_LOG_DEBUG_F(
-        Elements::Tensor, "Finding original offset for tensor raw magic=%d in function %s", rawMagic,
+    APASS_LOG_DEBUG_F(Elements::Tensor, "Finding original offset for tensor raw magic=%d in function %s", rawMagic,
         originalMixFunc->GetRawName().c_str());
     auto operations = originalMixFunc->Operations(false);
     for (auto& op : operations) {
@@ -487,8 +518,11 @@ OperandAttribute MixCallOperationBuilder::FindOriginalAttrInMixFunction(
             }
         }
     }
-    APASS_LOG_ERROR_F(
-        Elements::Tensor, "Tensor raw magic=%d not found in function %s operations", rawMagic,
+    OperandAttribute attrByMagic = FindOriginalAttrInMixFunctionByRawMagic(tensor, originalMixFunc);
+    if (attrByMagic.offset != -1) {
+        return attrByMagic;
+    }
+    APASS_LOG_ERROR_F(Elements::Tensor, "Tensor raw magic=%d not found in function %s operations", rawMagic,
         originalMixFunc->GetRawName().c_str());
     return -1;
 }
