@@ -1,9 +1,9 @@
 # 经验库预检 — 流程指南
 
-> **何时**：写 DESIGN.md 之前。
+> **何时**：Stage 5 写 impl 之前（由 Coder 执行，不属 Stage 1-4）。
 > **做什么**：从经验库提取与该算子相关的已知陷阱，生成 checklist 写入 `MEMORY.md` → `## Experience Preflight`。
-> **谁消费**：Architect（写 DESIGN.md 时参照）、Coder（只关注无自动兜底的规则）、OL61 lint（机器解析格式 + AST 扫描代码）。
-> **OL61 独立运行**：检查 section 存在性和格式（design 阶段）；检查 `[-]` 消除 + AST scan（impl 阶段）。
+> **谁消费**：Coder（只关注无自动兜底的规则）、OL61 lint（机器解析格式 + AST 扫描代码）。
+> **OL61 独立运行**：检查 `[-]` 消除 + AST scan（impl 阶段，stage 5/6）。
 
 ---
 

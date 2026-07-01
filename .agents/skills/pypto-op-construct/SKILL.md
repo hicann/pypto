@@ -11,7 +11,7 @@ Before doing any module decomposition work, **read `module_count` from DESIGN.md
 
 - **If `module_count == 1` (L0 path)**:
   - **Skip** the rest of "Module Boundary Rules" and "Module Construction" below.
-  - Record a single-module declaration in `custom/<operator_name>/MEMORY.md`:
+  - Record a single-module declaration in DESIGN.md §0:
     - `decomposition_level: L0`
     - `module_count: 1`
     - Module decomposition table: 1 row (`M1`) covering the entire kernel; boundary tensor = final output(s); CU estimate from DESIGN.md §0.2
@@ -23,7 +23,7 @@ Before doing any module decomposition work, **read `module_count` from DESIGN.md
   - The `module_count - 1` data-flow breakpoints are already chosen by architect in DESIGN.md §0.5 — **do not invent new boundaries**.
   - Honor the staged file chain (rule 14 in `pypto-orchestration-manual`'s `references/rules.md`).
 
-This gate is the **only** place where the L0/L1 decision is consumed by Stage 4. All downstream agents (coder / verifier / debugger) read the same `module_count` from MEMORY.md.
+This gate is the **only** place where the L0/L1 decision is consumed by Stage 4. All downstream agents (coder / verifier / debugger) read the same `module_count` from DESIGN.md §0.3.
 
 ---
 
@@ -118,9 +118,9 @@ module_count = min(round(total_complexity), ceil(effective_lines / 12))
 
 so per-module thickness is approximately uniform by construction. If during implementation a module ends up much thinner (< 0.5 CU, no heavy op) or much thicker (> 1.5 CU, integration too hard), return to the orchestrator and request the architect to revise DESIGN.md §0.5 breakpoints.
 
-### Write decomposition into the memory (mandatory)
+### Write decomposition into the contract (mandatory)
 
-Once R1-R6 are satisfied, write Module decomposition in `custom/<operator_name>/MEMORY.md`: named modules, boundary tensors, heavy ops per module, light ops merged, CU estimate, and rationale (why these breakpoints). See skill `pypto-memory-template`'s `templates/MEMORY.template.md` for log format.
+Once R1-R6 are satisfied, record the Module decomposition in `custom/<operator_name>/eval/module_interfaces.yaml`: named modules, boundary tensors, heavy ops per module, light ops merged, CU estimate, and rationale (why these breakpoints).
 
 ### For each module, define a contract
 
@@ -154,7 +154,7 @@ Once a module is verified, mark it frozen. Do not edit frozen modules because a 
 
 ### Subskill delegation: DESIGN.md generation (optional)
 
-To produce a standalone design document with API mapping, tiling strategy, loop structure, and verification plan, read skill `pypto-op-design` (SKILL.md auto-loads) and generate `DESIGN.md`. The design document supplements (does not replace) the memory file's module decomposition and contracts.
+To produce a standalone design document with API mapping, tiling strategy, loop structure, and verification plan, read skill `pypto-op-design` (SKILL.md auto-loads) and generate `DESIGN.md`. Module decomposition and contracts live in `DESIGN.md §0.5` and `custom/<op>/eval/module_interfaces.yaml` (single source) — Stage 1-4 do **not** write them to `MEMORY.md`.
 
 ---
 

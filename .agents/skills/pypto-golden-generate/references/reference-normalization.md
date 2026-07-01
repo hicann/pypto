@@ -120,17 +120,17 @@ def attention_golden_tiled(q, k, v, window_size=None):
 
 ## 构建 Golden function inventory（强制）
 
-规范化 golden 写完后，在 `custom/<op>/MEMORY.md` → **Golden function inventory**
-中列出每个数学操作：
+规范化 golden 写完后，在 `custom/<op>/<op>_golden.py` **头部注释**中列出每个数学操作（Stage 2 只填 operation 与 shape transformation 两列；PyPTO implementation / Line / Status 留给 Stage 5 Coder 转录到 `MEMORY.md` 时填）。**Stage 1-4 不写 `MEMORY.md`。**
 
 ```
-| # | Golden operation          | Shape transformation              | PyPTO implementation | Line | Status |
-|---|---------------------------|-----------------------------------|----------------------|------|--------|
-| 1 | matmul(q, k^T)            | [B,H,T,K]@[B,H,K,T]->[B,H,T,T]    | pypto.matmul(...)    | L.42 | ✅     |
-| 2 | softmax(scores, dim=-1)   | [B,H,T,T]->[B,H,T,T]              |                      |      | ❌     |
+# Golden function inventory
+# | # | Golden operation        | Shape transformation           |
+# |---|-------------------------|--------------------------------|
+# | 1 | matmul(q, k^T)          | [B,H,T,K]@[B,H,K,T]->[B,H,T,T] |
+# | 2 | softmax(scores, dim=-1) | [B,H,T,T]->[B,H,T,T]           |
 ```
 
-**门禁**：inventory 不存在不得进入 module 设计阶段。
+Stage 5 Coder 据此在 `MEMORY.md` → **Golden function inventory** 补全 PyPTO 实现并逐行 ✅/❌ 交叉核对（OL53 在 stage 5/6 校验，不属 Stage 1-4）。
 
 ## 用原始 golden 验证规范化 golden
 
@@ -150,6 +150,6 @@ def attention_golden_tiled(q, k, v, window_size=None):
 
 规范化 golden 匹配后：
 
-- 在 memory 中标记 frozen
+- 在 `<op>_golden.py` 头部注释标记 frozen（Stage 1-4 不写 `MEMORY.md`）
 - 作为后续单一参考
 - 除非有证据表明规范化本身错误，否则**不**改动

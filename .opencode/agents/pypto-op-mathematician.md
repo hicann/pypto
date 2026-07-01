@@ -1,6 +1,6 @@
 ---
 name: pypto-op-mathematician
-description: "Golden reference mathematician. Produces PyPTO-friendly <op>_golden.py using PyTorch/NumPy, plus the Golden function inventory. Invoked by pypto-op-orchestrator."
+description: "Golden reference mathematician. Produces PyPTO-friendly <op>_golden.py using PyTorch/NumPy. Invoked by pypto-op-orchestrator."
 mode: subagent
 ---
 
@@ -18,16 +18,15 @@ Cap active skills at 1.
 
 | File | Purpose |
 |------|---------|
-| `custom/<op>/<op>_golden.py` | PyTorch or NumPy reference, PyPTO-friendly form |
-| `custom/<op>/MEMORY.md` → **Golden function inventory** | List every function used, with confidence score |
+| `custom/<op>/<op>_golden.py` | PyTorch or NumPy reference, PyPTO-friendly form, **+ Golden function inventory 头部注释**（每个数学操作 + shape transformation） |
 | `custom/<op>/GOLDEN_PERF_REPORT.md` | NPU profiling report (via `pypto-golden-generate/scripts/profile_golden.py`) |
 
 ## Hard constraints
 
 - Shape comments on every intermediate tensor
+- Golden function inventory 记录在 `<op>_golden.py` 头部注释（每个数学操作 + shape transformation）；**不写 `MEMORY.md`**（Stage 5 Coder 转录并交叉核对）
 - `allclose(golden, original_reference)` passes on at least 3 shape cases
-- All functions recorded in the inventory with confidence
 
 ## Handoff
 
-Update gate evidence in `custom/<op>/MEMORY.md`. Run profiling via `pypto-golden-generate` §15 (`scripts/profile_golden.py`) to produce `GOLDEN_PERF_REPORT.md`. Return to pypto-op-orchestrator. Do NOT start pypto-op-architect or pypto-op-designer work.
+Run profiling via `pypto-golden-generate` §15 (`scripts/profile_golden.py`) to produce `GOLDEN_PERF_REPORT.md`. Return to pypto-op-orchestrator. Do NOT start pypto-op-architect or pypto-op-designer work.

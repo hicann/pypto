@@ -574,11 +574,9 @@ _PREFLIGHT_ACCEPTED_ANNOTATION_RE = re.compile(
 def check_ol61(ctx: CheckContext) -> Finding:
     """Experience Preflight 门禁检查。
 
-    Design 阶段 (complete_stage(3)):
-      1. MEMORY.md preflight section 存在性（非占位符）
+    仅 Stage 5/6 运行（Stage 1-4 不触碰 MEMORY.md）：
+      1. MEMORY.md preflight section 存在性（非占位符，Coder 创建）
       2. Preflight checklist 格式合规（markdown checklist，非表格；[-] 项有 ⚠️ 待验证）
-
-    Impl 阶段 (coder dispatch 前):
       3. 所有 [-] 项已消除（改为 [x] 或标注 > ✅ 已知风险，接受）
       4. AST code scan (F1/F2/F4/F8)
     """
@@ -602,14 +600,14 @@ def check_ol61(ctx: CheckContext) -> Finding:
             file=DESIGN_FILE,
         )
 
-    # ── Check 1 + 2: Preflight section (design 阶段) ──
+    # ── Check 1 + 2: Preflight section format (Stage 5/6 only; Stage 1-4 不触碰 MEMORY) ──
     memory_file = "MEMORY.md"
     section = ""
     if ctx.file_exists(memory_file):
         memory_text = ctx.read_file(memory_file)
         section = _extract_section_text(memory_text, "Experience Preflight")
 
-        if ctx.stage == 3 or ctx.stage is None:
+        if ctx.stage in (5, 6):
             placeholders = (
                 "This section is created by the preflight process",
                 "no placeholder content needed here",
@@ -619,9 +617,9 @@ def check_ol61(ctx: CheckContext) -> Finding:
                 failures.append(
                     "[R5 Experience Preflight 未执行]: MEMORY.md → "
                     "'## Experience Preflight' 仍为占位符或不存在。\n"
-                    "修正方针: Orchestrator 必须先 dispatch preflight scan subagent "
+                    "修正方针: Coder 必须在 Stage 5 写 impl 前执行 preflight scan "
                     "(pypto-op-knowledge → references/experience_preflight.md)，"
-                    "将 checklist 写入 MEMORY.md 后才能 complete_stage(3)。"
+                    "将 checklist 写入 MEMORY.md。"
                 )
             elif section:
                 # Check 3a: 禁止表格格式
@@ -668,7 +666,7 @@ def check_ol61(ctx: CheckContext) -> Finding:
             failures.append(
                 "[OL61 Impl 阶段]: MEMORY.md → "
                 "'## Experience Preflight' 不存在。\n"
-                "修正方针: Preflight checklist 必须在 design 阶段生成。"
+                "修正方针: Preflight checklist 必须在 Stage 5 写 impl 前生成。"
             )
         else:
             pending_items = _PREFLIGHT_PENDING_RE.findall(section)
@@ -710,26 +708,19 @@ def check_ol61(ctx: CheckContext) -> Finding:
         _ol61_code_scan(ctx, failures)
 
     if failures:
-        stage_label = f"Stage {ctx.stage}" if ctx.stage else "Design"
         return ctx.make_finding(
             "OL61",
             "FAIL",
-            f"{stage_label} OL61 检查失败 ({len(failures)} 项):\n"
+            f"Stage {ctx.stage} OL61 检查失败 ({len(failures)} 项):\n"
             + "\n".join(failures),
             file=DESIGN_FILE,
         )
 
-    if ctx.stage in (5, 6):
-        return ctx.make_finding(
-            "OL61",
-            "PASS",
-            "Stage 5 Preflight [-] 消除 + AST code scan 通过",
-            file=DESIGN_FILE,
-        )
+    # OL61 仅在 stage 5/6 调度（rules.json stages=[5,6]）；Stage 1-4 不触碰 MEMORY.md
     return ctx.make_finding(
         "OL61",
         "PASS",
-        "Experience Preflight 已执行且格式合规",
+        f"Stage {ctx.stage} Experience Preflight 校验通过（存在性 + 格式 + [-] 消除 + AST scan）",
         file=DESIGN_FILE,
     )
 

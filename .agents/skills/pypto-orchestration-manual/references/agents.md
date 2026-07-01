@@ -41,8 +41,7 @@ kernel code. The orchestrator does not edit kernel code in Stage 1–7.
 ### 1. pypto-op-planner — Stage 1
 
 - **Inputs:** the user's natural-language operator request.
-- **Deliverables:** `custom/<op>/SPEC.md`, `custom/<op>/API_REPORT.md`,
-  `custom/<op>/MEMORY.md` seeded with the API map.
+- **Deliverables:** `custom/<op>/SPEC.md`, `custom/<op>/API_REPORT.md`.
 - **Gate:** API map has zero `unsupported` rows (or each has a documented
   workaround in the row).
 - **Handoff:** Returns to orchestrator → dispatch `pypto-op-mathematician`.
@@ -51,15 +50,14 @@ kernel code. The orchestrator does not edit kernel code in Stage 1–7.
 
 - **Inputs:** `SPEC.md`, `API_REPORT.md`.
 - **Deliverables:** `custom/<op>/<op>_golden.py` (PyPTO-friendly form),
-  `MEMORY.md` → **Golden function inventory**,
   `custom/<op>/GOLDEN_PERF_REPORT.md` (NPU profiling report).
-- **Gate:** shape comments on all intermediates; inventory recorded;
+- **Gate:** shape comments on all intermediates; inventory recorded in the `<op>_golden.py` header (**not** MEMORY.md);
   `allclose(original, normalized)` passes; **`GOLDEN_PERF_REPORT.md` exists with Op Performance section** (mandatory — generated via `pypto-golden-generate/scripts/profile_golden.py` §15; do NOT defer to orchestrator).
 - **Handoff:** Returns to orchestrator → dispatch `pypto-op-architect`.
 
 ### 3. pypto-op-architect — Stage 3
 
-- **Inputs:** `SPEC.md`, `<op>_golden.py`, golden inventory.
+- **Inputs:** `SPEC.md`, `<op>_golden.py` (含 golden inventory 头部注释；从该文件读取，不读 MEMORY.md).
 - **Deliverables:** `custom/<op>/DESIGN.md` (§0 decomposition decision,
   §1 API mapping + precision routing, §3 tiling, §4 loop / data flow, §5
   cross-validation).
@@ -73,8 +71,7 @@ kernel code. The orchestrator does not edit kernel code in Stage 1–7.
 ### 4. pypto-op-designer — Stage 4
 
 - **Inputs:** `DESIGN.md` (§0 decomposition decision + breakpoints).
-- **Deliverables:** `custom/<op>/module_interfaces.yaml`, `MEMORY.md` →
-  **Module decomposition**, **Module contracts**, **Staged module files**.
+- **Deliverables:** `custom/<op>/module_interfaces.yaml`.
 - **Gate (Step 1, designer handoff):** `state_transition(submit_design)`
   runs the DESIGN-side lint gate (OL12 structural sections; OL55
   `pypto.<attr>` existence in fenced code blocks). FAIL throws →

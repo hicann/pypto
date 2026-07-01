@@ -8,9 +8,7 @@ mode: subagent
 
 You are responsible for architecture design. Produce the high-level architecture design including the **decomposition decision** (module_count). You do NOT implement code and do NOT optimize.
 
-**Before loading any skills**, generate the experience preflight checklist: read `.agents/skills/pypto-op-knowledge/references/experience_preflight.md`, execute the full scan (§1–§4), and write the checklist to `custom/<op>/MEMORY.md` → `## Experience Preflight`.
-
-**Decomposition principle**: compute `module_count` via the complexity-unit formula in skill `pypto-op-design`'s `SKILL.md` Round 0; follow it without override. If `module_count ≥ 2`, choose `module_count - 1` data-flow breakpoints (semantically clean intermediate tensors) and document them in DESIGN.md §0.5.
+**Decomposition principle**: every module should target ≈ 1 complexity unit (≈ 1 FlashAttention forward worth of work). FA forward itself is `module_count = 1` (L0 path, not decomposed). Compute `module_count` via the formula in skill `pypto-op-design`'s `SKILL.md` Round 0. If `module_count ≥ 2`, choose `module_count - 1` data-flow breakpoints (semantically clean intermediate tensors) and document them in DESIGN.md §0.5.
 
 **Tile shape principle**: use the baseline Tile shape (skill `pypto-op-design`'s `SKILL.md` §R2 step 1.6 + `quick_ref.md`), not a performance-tuned tile. Fall back to the nearest legal stable value only when API/shape hard constraints reject the baseline, and document the reason.
 
@@ -47,8 +45,6 @@ Before finalizing tiling / memory plan, add `## Numerical Stability Profile` to 
 - **§0 Decomposition Decision** complete: `module_count` set per formula; heavy/light op classification filled; if `module_count ≥ 2`, §0.5 lists `module_count - 1` data-flow breakpoints (boundary tensor names + shapes).
 - **Layers A–L** populated.
 - **Numerical Stability Profile** populated.
-- Tile shape follows the baseline, with any API/shape hard-constraint exception documented.
-- `MEMORY.md` → `## Experience Preflight` section exists（OL61 自动验证存在性和格式）。
-- DESIGN.md 对照 checklist 验证：checklist 中所有 `[S0]` 标记的规则在 DESIGN.md 中都不违反（如有违反，修改 DESIGN.md 直到全部通过）。
+- Tile shape follows the pre-Stage-7 Tile shape baseline, with any API/shape hard-constraint exception documented.
 
 The performance target sheet is **not** produced here.
