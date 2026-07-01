@@ -48,9 +48,11 @@ In the [examples](https://gitcode.com/cann/pypto/blob/master/examples) directory
 - [intermediate/](https://gitcode.com/cann/pypto/blob/master/examples/02_intermediate): Intermediate samples including custom operations, neural network modules, and more.
 - [advanced/](https://gitcode.com/cann/pypto/blob/master/examples/03_advanced): Advanced samples including complex patterns and multi-function composition.
 
-In the [models/](https://gitcode.com/cann/pypto/blob/master/models) directory, large model implementation samples are provided for quick porting and deployment.
+### pypto-gym Sample Repository
 
-These samples help developers learn how to write PyPTO operators, from simple Tensor operations to complex model network implementations.
+In the [pypto-gym](https://gitcode.com/cann/pypto-gym) sample repository, fused operator development samples and large model adaptation samples are provided for developers to learn, reuse, and compare.
+
+These samples help developers learn how to write PyPTO operators, from simple Tensor operations to complex model network implementations, enabling rapid porting and deployment.
 
 ## Quick Start
 

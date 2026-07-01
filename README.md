@@ -48,9 +48,11 @@ PyPTO提供了丰富的示例代码，涵盖从基础操作到复杂模型实现
 - [intermediate/](https://gitcode.com/cann/pypto/blob/master/examples/02_intermediate)：中级示例，包括自定义操作、神经网络模块等
 - [advanced/](https://gitcode.com/cann/pypto/blob/master/examples/03_advanced)：高级示例，包括复杂模式和多函数组合
 
-在 [models/](https://gitcode.com/cann/pypto/blob/master/models)目录下，我们提供了部分大模型实现样例，供快速移植和部署
+### pypto-gym 样例仓
 
-这些示例可以帮助开发者学习如何编写PyPTO算子，从简单的Tensor操作到复杂的模型网络实现。
+在 [pypto-gym](https://gitcode.com/cann/pypto-gym)样例仓，我们提供了融合算子开发样例和大模型适配样例，供开发者学习、复用与对比
+
+这些示例可以帮助开发者学习如何编写PyPTO算子，从简单的Tensor操作到复杂的模型网络实现，以便快速实现移植和部署
 
 ## ⚡️快速入门
 
