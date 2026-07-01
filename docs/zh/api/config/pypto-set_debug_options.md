@@ -31,7 +31,7 @@ void：Set方法无返回值。设置操作成功即生效。
 
 ## 约束说明
 
-无。
+- 当 compile_debug_mode=2（固定CCE）时，设备侧代码输出路径由环境变量 ASCEND_WORK_PATH 决定（`$ASCEND_WORK_PATH/pypto/<name>`）；若未设置 ASCEND_WORK_PATH，则输出到当前工作目录。此模式下 TILE_FWK_OUTPUT_DIR 不参与设备侧代码路径计算。
 
 ## 调用示例
 
