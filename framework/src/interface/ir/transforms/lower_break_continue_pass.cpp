@@ -219,7 +219,6 @@ StmtPtr LowerContinueInStmt(const StmtPtr& stmt, const std::vector<IterArgPtr>& 
         if (if_stmt->elseBody_.has_value()) {
             auto else_stmts = FlattenToStmtList(*if_stmt->elseBody_);
             bool else_is_continue = (else_stmts.size() == 1 && As<ContinueStmt>(else_stmts[0]) != nullptr);
-
             if (else_is_continue) {
                 // `if (cond) { body } else { continue }` → `if (cond) { body }`
                 // The remaining statements after this if will need to be guarded by cond

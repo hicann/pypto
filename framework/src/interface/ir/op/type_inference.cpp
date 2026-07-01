@@ -114,7 +114,6 @@ std::optional<DataType> PromoteDataTypes(DataType dtype1, DataType dtype2)
     // Return the larger type
     size_t bits1 = dtype1.GetBit();
     size_t bits2 = dtype2.GetBit();
-
     if (bits1 > bits2) {
         return dtype1;
     }
