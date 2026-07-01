@@ -812,8 +812,8 @@ void DevAscendFunction::InitWrapInfo(uintdevptr_t& initOffset, const OrderedSet<
 void DevAscendFunction::FillIncastUseList(
     DevLocalVector<DevAscendFunctionCallOperandUse>& fillUseList, uint64_t& useSize,
     const std::vector<std::shared_ptr<LogicalTensor>>& tensorList,
-    const std::unordered_map<std::shared_ptr<LogicalTensor>, InoutOperationAttr>& attrDict,
-    bool fillContent)
+    const std::unordered_map<std::shared_ptr<LogicalTensor>, InoutOperationAttr>& attrDict, bool fillContent,
+    const std::unordered_map<int, int>& opIdxToHubOpIdx)
 {
     for (size_t index = 0; index < tensorList.size(); index++) {
         auto& attr = attrDict.at(tensorList[index]);
@@ -823,6 +823,10 @@ void DevAscendFunction::FillIncastUseList(
             incast.consumerList.AssignRangeOffsetSize(fillUseList, useSize, attr.useList.size());
             for (size_t k = 0; k < attr.useList.size(); k++) {
                 At(incast.consumerList, k) = attr.useList[k];
+                auto it = opIdxToHubOpIdx.find(attr.useList[k].operationIdx);
+                if (it != opIdxToHubOpIdx.end()) {
+                    At(incast.consumerList, k).wrapTaskHubOpIdx = it->second;
+                }
             }
         }
         useSize += attr.useList.size();
@@ -855,7 +859,8 @@ void DevAscendFunction::InitIncastOutcast(
     const OrderedSet<std::shared_ptr<LogicalTensor>>& tlist,
     const std::unordered_map<std::shared_ptr<LogicalTensor>, InoutOperationAttr>& incastOpAttrDict,
     const std::unordered_map<std::shared_ptr<LogicalTensor>, InoutOperationAttr>& outcastOpAttrDict,
-    const EncodeDevAscendFunctionParam& param, const std::string& initRawName, bool fillContent)
+    const EncodeDevAscendFunctionParam& param, const std::string& initRawName, bool fillContent,
+    const std::unordered_map<int, int>& opIdxToHubOpIdx)
 {
     {
         // Fill metadata
@@ -926,7 +931,7 @@ void DevAscendFunction::InitIncastOutcast(
         // Fill use list
         useList.HostInitDataSizeOffset(initOffset, 0);
         uint64_t useSize = 0;
-        FillIncastUseList(useList, useSize, incastTensorList, incastOpAttrDict, fillContent);
+        FillIncastUseList(useList, useSize, incastTensorList, incastOpAttrDict, fillContent, opIdxToHubOpIdx);
         FillOutcastUseList(useList, useSize, outcastTensorList, outcastOpAttrDict, fillContent);
         useList.HostInitDataSizeOffset(initOffset, useSize);
     }
@@ -977,15 +982,26 @@ void DevAscendFunction::InitIncastOutcast(
         for (size_t index = 0; index < incastTensorList.size(); index++) {
             auto& inAttr = incastOpAttrDict.at(incastTensorList[index]);
             auto& incast = At(incastList, index);
+            std::vector<uint32_t> opIdxList;
+            for (size_t k = 0; k < inAttr.useOpList.size(); k++) {
+                uint32_t opIdx = inAttr.useOpList[k];
+                auto it = opIdxToHubOpIdx.find(static_cast<int>(opIdx));
+                if (it != opIdxToHubOpIdx.end()) {
+                    opIdx = static_cast<uint32_t>(it->second);
+                }
+                if (opIdxList.empty() || std::find(opIdxList.begin(), opIdxList.end(), opIdx) == opIdxList.end()) {
+                    opIdxList.push_back(opIdx);
+                }
+            }
             ONFILLCONTENT
             {
                 incast.stitchPolicyFullCoverConsumerAllOpIdxList.AssignRangeOffsetSize(
-                    stitchPolicyFullCoverOpList_, fullCoverOpTotal, inAttr.useOpList.size());
-                for (size_t k = 0; k < inAttr.useOpList.size(); k++) {
-                    At(incast.stitchPolicyFullCoverConsumerAllOpIdxList, k) = inAttr.useOpList[k];
+                    stitchPolicyFullCoverOpList_, fullCoverOpTotal, opIdxList.size());
+                for (size_t k = 0; k < opIdxList.size(); k++) {
+                    At(incast.stitchPolicyFullCoverConsumerAllOpIdxList, k) = opIdxList[k];
                 }
             }
-            fullCoverOpTotal += inAttr.useOpList.size();
+            fullCoverOpTotal += opIdxList.size();
         }
         for (size_t index = 0; index < outcastTensorList.size(); index++) {
             auto& outAttr = outcastOpAttrDict.at(outcastTensorList[index]);
@@ -1063,6 +1079,8 @@ struct EncodeDevAscendFunctionInfo {
     std::unordered_map<Operation*, std::vector<int>> copyOutResolveSuccIndexListDict;
 
     DyndevFunctionAttribute::ValueDependDesc valueDependDesc;
+
+    std::unordered_map<int, int> opIdxToHubOpIdx_;
 
     static DevShape InitShape(const std::vector<int64_t>& shape)
     {
@@ -1301,6 +1319,8 @@ struct EncodeDevAscendFunctionInfo {
 
         // Add edge from all stitchPolicyFullCoverProducerList's node to the single node
         size_t hubEntryLeast = 2;
+
+        // Create 普通 HUB for stitchPolicyFullCover producers
         for (auto& i : outcastList) {
             auto& outcastOpAttr = outcastOpAttrDict[i];
             std::vector<DevAscendFunctionCallOperandUse> producers;
@@ -1414,6 +1434,19 @@ struct EncodeDevAscendFunctionInfo {
         return dummyOp.get();
     }
 
+    Operation* MakeDummyCallHubMix()
+    {
+        auto opAttr = std::make_shared<CallOpAttribute>();
+        opAttr->SetCalleeHash(FunctionHash(HUB_MIX_DUMMY_HASH));
+        auto dummyOp = std::make_shared<Operation>(*devRoot, Opcode::OP_CALL);
+        dummyOp->SetOpAttribute(opAttr);
+        dummyOpList.push_back(dummyOp);
+        ASSERT(DevCommonErr::PARAM_INVALID, GetCoreType(dummyOp.get()) == static_cast<int>(CoreType::HUB_MIX))
+            << "GetCoreType return unexpected value: " << GetCoreType(dummyOp.get())
+            << ", expected:  " << static_cast<int>(CoreType::HUB_MIX);
+        return dummyOp.get();
+    }
+
     int GetCoreType(Operation* callop)
     {
         int leafIndex = calleeHashIndexDict.at(callop->GetCalleeHash().GetHash());
@@ -1424,7 +1457,7 @@ struct EncodeDevAscendFunctionInfo {
     {
         std::vector<Operation*> deadCallOps;
         for (auto& [callOp, succOps] : callOpSuccDict) {
-            if (GetCoreType(callOp) != static_cast<int>(CoreType::HUB) || (succOps.size() != 0)) {
+            if (!IsHubType(GetCoreType(callOp)) || (succOps.size() != 0)) {
                 continue;
             }
             /* When HUB's oOperands have rootFunc outcast, do not remove it. (eg. Reshape as rootFunc output) */
@@ -1576,6 +1609,51 @@ struct EncodeDevAscendFunctionInfo {
         }
     }
 
+    std::map<int, std::set<int>> ComputeWrapIdToConsumerOpIdxSetMap(std::vector<Operation*>& callopList) const
+    {
+        std::unordered_set<int> incastRawmagics;
+        for (auto& incast : incastList) {
+            incastRawmagics.insert(incast->tensor->rawmagic);
+        }
+        std::map<int, std::set<int>> result;
+        for (int j = 0; j < static_cast<int>(callopList.size()); j++) {
+            auto& op = *callopList[j];
+            auto callAttr = dynamic_cast<CallOpAttribute*>(op.GetOpAttribute().get());
+            if (!callAttr) { continue; }
+            for (size_t k = 0; k < op.GetIOperands().size(); ++k) {
+                auto& iOperand = op.GetIOperands()[k];
+                if (incastRawmagics.count(iOperand->tensor->rawmagic) == 0) {
+                    continue;
+                }
+                if (callAttr->wrapId != -1) {
+                    result[callAttr->wrapId].insert(j);
+                }
+                break;
+            }
+        }
+        return result;
+    }
+
+    std::unordered_map<Operation*, Operation*> AddHubMixForWrapTask(std::vector<Operation*>& callopList)
+    {
+        std::unordered_map<Operation*, Operation*> opToHubOp;
+        auto wrapIdToConsumerSet = ComputeWrapIdToConsumerOpIdxSetMap(callopList);
+        for (auto& [wrapId, consumerIdxSet] : wrapIdToConsumerSet) {
+            (void)wrapId;
+            if (consumerIdxSet.empty()) { continue; }
+            auto* hubMixOp = MakeDummyCallHubMix();
+            callopList.push_back(hubMixOp);
+            callOpPredDict[hubMixOp] = 0;
+            for (auto opIdx : consumerIdxSet) {
+                auto* callOp = callopList[opIdx];
+                callOpSuccDict[hubMixOp].Insert(callOp);
+                callOpPredDict[callOp]++;
+                opToHubOp[callOp] = hubMixOp;
+            }
+        }
+        return opToHubOp;
+    }
+
     void AddDummyCallsAtBeginningAndEnding(std::vector<Operation*>& callopList)
     {
         static constexpr size_t OPTIMIZATION_THRESHOLD = 3;
@@ -1663,7 +1741,8 @@ struct EncodeDevAscendFunctionInfo {
             uint32_t coreType = cceCodeInfoList[cceIndex].coreType;
             ASSERT(DevCommonErr::PARAM_INVALID,
                 coreType == static_cast<uint32_t>(CoreType::AIV) || coreType == static_cast<uint32_t>(CoreType::AIC) ||
-                coreType == static_cast<uint32_t>(CoreType::HUB) || coreType == static_cast<uint32_t>(CoreType::AICPU))
+                coreType == static_cast<uint32_t>(CoreType::HUB) || coreType == static_cast<uint32_t>(CoreType::HUB_MIX) ||
+                coreType == static_cast<uint32_t>(CoreType::AICPU))
                 << "invalid coreType " << coreType << " for op " << op;
             callopCoreTypeDict[op] = coreType;
         }
@@ -1688,7 +1767,8 @@ struct EncodeDevAscendFunctionInfo {
                 totalZeroPredAIV++;
             } else if (callopCoreTypeDict[callopList[index]] == static_cast<uint32_t>(CoreType::AIC)) {
                 totalZeroPredAIC++;
-            } else if (callopCoreTypeDict[callopList[index]] == static_cast<uint32_t>(CoreType::HUB)) {
+            } else if (callopCoreTypeDict[callopList[index]] == static_cast<uint32_t>(CoreType::HUB) ||
+                       callopCoreTypeDict[callopList[index]] == static_cast<uint32_t>(CoreType::HUB_MIX)) {
                 totalZeroPredHub++;
             } else if (callopCoreTypeDict[callopList[index]] == static_cast<uint32_t>(CoreType::AICPU)) {
                 totalZeroPredAicpu++;
@@ -1706,7 +1786,7 @@ struct EncodeDevAscendFunctionInfo {
         for (auto& [callop, succSet] : callOpSuccDict) {
             Function* devLeafFunc = cache.GetCacheFunction(callop->GetCalleeHash());
             if (devLeafFunc == nullptr) {
-                ASSERT(DevCommonErr::PARAM_CHECK_FAILED, GetCoreType(callop) == static_cast<int>(CoreType::HUB))
+                ASSERT(DevCommonErr::PARAM_CHECK_FAILED, IsHubType(GetCoreType(callop)))
                     << "GetCoreType return unexpected value: " << GetCoreType(callop)
                     << ", expectedBlockFunction: " << static_cast<int>(CoreType::HUB) << " for callop: " << callop;
                 copyOutResolveSuccIndexListDict[callop] = std::vector<int>({0});
@@ -1920,12 +2000,17 @@ struct EncodeDevAscendFunctionInfo {
         ReplaceSuccessorWithHub(callopList, 10); // add dummp op at least 10 depends can be reduced
 
         AddDummyCallsAtBeginningAndEnding(callopList);
+        auto opToHubOp = AddHubMixForWrapTask(callopList);
 
         EncodeCopyOutReslove(producerConsumerOOperandIndexDict);
         EncodeZeroPredCount(callopList);
 
         for (auto& op : callopList) {
             callList.Insert(op);
+        }
+        for (auto& [consumerOp, hubMixOp] : opToHubOp) {
+            opIdxToHubOpIdx_[static_cast<int>(callList.GetIndex(consumerOp))] =
+                static_cast<int>(callList.GetIndex(hubMixOp));
         }
 
         EncodeInOutCast();
@@ -1936,7 +2021,7 @@ struct EncodeDevAscendFunctionInfo {
                 copyOutResolveSuccIndexListDict[op] = std::vector<int>({0});
             }
 
-            if (GetCoreType(op) == static_cast<int>(CoreType::HUB)) {
+            if (IsHubType(GetCoreType(op))) {
                 hubOpCount++;
             }
         }
@@ -1960,13 +2045,13 @@ struct EncodeDevAscendFunctionInfo {
         std::unordered_map<Operation*, std::vector<Operation*>> hubPreds;
         // 1. 标记 succ 为空的叶子 HUB，同时构建 HUB->HUB 前驱映射
         for (auto& [op, succs] : callOpSuccDict) {
-            if (GetCoreType(op) != static_cast<int>(CoreType::HUB)) continue;
+            if (!IsHubType(GetCoreType(op))) continue;
             hubNodes.push_back(op);
             if (succs.empty()) {
                 SetBitmapBit(deadEndBits, callList.GetIndex(op));
             }
             for (auto* succ : succs) {
-                if (GetCoreType(succ) == static_cast<int>(CoreType::HUB)) {
+                if (IsHubType(GetCoreType(succ))) {
                     hubPreds[succ].push_back(op);
                 }
             }
@@ -2007,7 +2092,7 @@ struct EncodeDevAscendFunctionInfo {
     void MarkTailTasks(const std::vector<uint64_t>& deadEndBits, std::vector<uint64_t>& tailBits)
     {
         for (auto& [op, succs] : callOpSuccDict) {
-            if (GetCoreType(op) == static_cast<int>(CoreType::HUB)) continue;
+            if (IsHubType(GetCoreType(op))) continue;
             bool allDeadEnd = true;
             for (auto* succ : succs) {
                 if (!IsBitmapBitSet(deadEndBits, callList.GetIndex(succ))) {
@@ -2070,7 +2155,7 @@ struct EncodeDevAscendFunctionInfo {
 
         devFunc->InitIncastOutcast(
             initOffset, incastList, outcastList, tensorList, incastOpAttrDict, outcastOpAttrDict, param, rawName,
-            fillContent);
+            fillContent, opIdxToHubOpIdx_);
     }
 };
 

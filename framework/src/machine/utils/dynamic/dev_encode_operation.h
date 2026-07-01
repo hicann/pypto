@@ -53,6 +53,7 @@ struct DevAscendFunctionCallOperandUse {
     int offsetAttrIdx{-1};
     int shapeAttrIdx{-1};
     CellMatchOpType opType{CellMatchOpType::READ};
+    int wrapTaskHubOpIdx{-1};
 
     DevAscendFunctionCallOperandUse() = default;
     DevAscendFunctionCallOperandUse(int operationIdx_, int offsetAttrIdx_, int shapeAttrIdx_,

@@ -81,7 +81,7 @@ private:
         if (predList[succIdx] != 0)
             return;
 
-        if (coreType == static_cast<int>(CoreType::HUB)) {
+        if (IsHubType(coreType)) {
             DEV_VERBOSE_DEBUG(
                 "doResolve hub func %d succindex %d", static_cast<int>(funcIdx), static_cast<int>(succIdx));
             ResolveEarlyDepends(dyntask, funcIdx, succIdx);
