@@ -875,7 +875,7 @@ uint32_t DeviceWorkspaceAllocator::DieReadyQueSlabMemObjSize()
 uint32_t DeviceWorkspaceAllocator::WrapQueSlabMemObjSize()
 {
     if (devProg_->devArgs.archInfo == ArchInfo::DAV_3510) {
-        return sizeof(WrapInfoQueue) + devProg_->stitchFunctionsize * sizeof(uint64_t);
+        return sizeof(WrapInfoQueue) + devProg_->stitchFunctionsize * sizeof(WrapInfo);
     } else {
         return 0;
     }

@@ -206,7 +206,7 @@ uint64_t CalcStitchWorkspace(DevAscendProgram& devProg)
     uint32_t slabCapacity[CALC_STITCH_NUM] = {0};
     uint32_t objUsedNum[CALC_STITCH_NUM] = {READY_QUEUE_SIZE, DIE_READY_QUEUE_SIZE * DIE_NUM, 1, MAX_SCHEDULE_AICPU_NUM, MAX_STITCH_FUNC_NUM};
     uint32_t slabSize = workspace.CalcStitchSlabMemObjmaxSize(slabCapacity);
-    uint64_t stitchPoolSize = slabSize << 1;
+    uint64_t stitchPoolSize = slabSize << 3;
 
     for (size_t i = 0; i < CALC_STITCH_NUM; ++i) {
         if (slabCapacity[i] == 0) {
