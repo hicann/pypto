@@ -139,7 +139,7 @@ private:
         // check if reallocated-assemble-slots and the stitch-ending slotMem (secondary allocation) can be allocated
         auto& boundaryPool = tensorAllocators_[curParallelWsId].devTaskBoundaryOutcasts;
         auto& innerTemporalPool = tensorAllocators_[curParallelWsId].devTaskInnerTemporalOutcasts;
-        if (devProg_->slottableOutcastSlotSize >
+        if (devProg_->memBudget.tensor.slottableOutcastSlotSize >
             boundaryPool.AvailableSlots() + innerTemporalPool.AvailableSlots()) {
             return false;
         }

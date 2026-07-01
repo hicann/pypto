@@ -625,14 +625,19 @@ struct {
 
    **情况一：rootInnerSpilledMem / devTaskInnerOutCasts均匀偏大**
 
-   先确认是否为`stitch_function_max_num`或`unroll_list`配置过大导致。内存膨胀关系大致为（近似，非精确公式）：
+   先确认是否为 `stitch_function_max_num` 或 `max_workspace_kb` 配置导致。内存膨胀关系（encode 按 root function 个数计量 k_eff，与 unrollTimes 无关）：
 
    ```txt
-   rootInnerSpilledMem ≈ per_root_budget / unroll × WorkspaceRecyclePeriod
-   devTaskInnerOutCasts ≈ per_root_budget / unroll × EstimatedStitchingCount
+   rootInnerSpilledMem ≈ max_root(AlignUp(rootInnerTensorWsMemoryRequirement) × k_eff)
+   devTaskInnerOutCasts ≈ max_root(AlignUp(exclusiveOutcastWsMemoryRequirement) × k_eff)
+   k_eff = stitch_function_max_num（默认）或由 max_workspace_kb 反推后 cap 至 stitch_function_max_num
+   devTaskBoundaryOutcastNum = E×2 + A×2（boundary 池，不随 k_eff 缩放）
+   devTaskInnerTemporalOutcastNum = A × k_eff（innerTemporal 池）
+   # pool depth = min(k_eff, MAX_STITCH_FUNC_NUM)
+   runtimeOutcastPoolDepth = k_pool
+   runtimeOutcastPoolSize = totalSlot × (runtimeOutcastPoolDepth + 1) × parallelism
+   ctrlflow backup 容量 ≥ devTaskBoundaryOutcastNum + devTaskInnerTemporalOutcastNum
    ```
-
-   其中`WorkspaceRecyclePeriod ≈ stitch_function_max_num × MAX_UNROLL_TIMES`。可通过降低`stitch_function_max_num`或`unroll_list`在牺牲并行度的前提下降低内存。若单个loop的内存需求已经偏高（原始`rootInnerTensorWsMemoryRequirement`超过20MB），则需分析pass的内存复用策略及算子本身写法。
 
    **情况二：Boundary Outcast 内存偏大（slotted 项中单体大小 C 异常大）**
 
@@ -662,15 +667,17 @@ struct {
 
    | 配置项 | 影响范围 | 说明 |
    |--------|----------|------|
-   | `stitch_function_max_num` | rootInnerSpilledMem、devTaskInnerOutCasts、innerTemporal slot 数 | 控制stitch并行数，直接影响 WorkspaceRecyclePeriod 和 assemble temporal slot 数 |
-   | `unroll_list` / max_unroll | rootInnerSpilledMem、devTaskInnerOutCasts | 控制loop展开次数，影响CalcUnrolledRootBudget |
+   | `stitch_function_max_num` | rootInnerSpilledMem、devTaskInnerOutCasts、innerTemporal slot 数、runtime submit 累计 unroll | encode 容量见 StitchUnitCapacity；runtime 按 unrollTimes 累加达到该配置后 submit |
+   | `max_workspace_kb` | k_eff、innerTemporal slot 数、runtimeOutcastCacheDepth | 内存驱动模式下二分反推 k_eff，boundary 池不变，innerTemporal 随 k_eff 缩减 |
+   | `unroll_list` / max_unroll | rootInnerSpilledMem、devTaskInnerOutCasts | 控制 loop 展开次数；encode 时按 unrollTimes 归一化为 per-stitch-unit 预算再乘 k_eff |
 
 注：
 
-- 动态shape场景下`maxStaticMemReq`为0（无法从符号shape推算静态大小），此类Tensor不会出现在超大Tensor的警告中
-- `aicoreSpilled`为AICore栈溢出到workspace的内存，若该项异常偏大，需检查算子的`stackWorkSpaceSize`
-- `debug.DumpTensor`和`leafDumpWorkspace`为调试模式下的额外内存开销，正常模式下为0
-**关联Skill**：[pypto-environment-setup](../../../.agents/skills/pypto-machine-workspace/SKILL.md)
+- 动态 shape 场景下 `maxStaticMemReq` 为 0（无法从符号 shape 推算静态大小），此类 Tensor 不会出现在超大 Tensor 的警告中
+- `aicoreSpilled` 为 AICore 栈溢出到 workspace 的内存，若该项异常偏大，需检查算子的 `stackWorkSpaceSize`
+- `debug.DumpTensor` 和 `leafDumpWorkspace` 为调试模式下的额外内存开销，正常模式下为 0
+
+**关联 Skill**：[pypto-environment-setup](../../../.agents/skills/pypto-machine-workspace/SKILL.md)
 
 ---
 

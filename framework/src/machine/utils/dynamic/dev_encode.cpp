@@ -2693,12 +2693,15 @@ void DevAscendProgram::InitPartialUpdateSlot(
 }
 
 void DevAscendProgram::InitControlFlowCache(
-    uintdevptr_t& initOffset, const std::shared_ptr<DyndevFunctionAttribute>& dyndevAttr, bool fillContent)
+    uintdevptr_t& initOffset, const std::shared_ptr<DyndevFunctionAttribute>& dyndevAttr, bool fillContent,
+    uint32_t outcastCacheDepthFallback)
 {
     (void)fillContent;
     ctrlFlowCacheSize = DEFAULT_STITCH_CFGCACHE_SIZE;
+    const uint64_t slottedOutcastBlockCount = GetCtrlFlowCacheSlottedOutcastBlockCount(
+        dyndevAttr->inoutLink.totalSlot, outcastCacheDepthFallback);
     controlFlowCache.Init(
-        dyndevAttr.get(), ctrlFlowCacheSize, runtimeOutcastPoolSize, initOffset, stitchMaxFunctionNum);
+        dyndevAttr.get(), ctrlFlowCacheSize, memBudget.tensor.runtimeOutcastPoolSize, initOffset, slottedOutcastBlockCount);
 }
 struct EncodeDevAscendProgramInfo {
     Function* func;
@@ -2765,9 +2768,10 @@ struct EncodeDevAscendProgramInfo {
     }
 };
 
-static WorkspaceDesc CollectWorkspaceDescForEncode(Function* func, DevAscendProgram* base)
+static WorkspaceDesc CollectWorkspaceDescForSizeOnlyEncode(Function* func, EncodeDevAscendProgramInfo& encodeInfo)
 {
-    return CollectWorkspaceDesc(func, *base, func->GetDyndevAttribute()->constructAssembleNeedAllocRuntimeSlots);
+    return CollectWorkspaceDescFromHostEncodeList(
+        func, *encodeInfo.dyndevAttr, encodeInfo.dyndevAttr->constructAssembleNeedAllocRuntimeSlots);
 }
 
 void EncodeDevAscendProgramSizeOnly(uint64_t& offset, EncodeDevAscendProgramInfo& encodeInfo)
@@ -2775,17 +2779,87 @@ void EncodeDevAscendProgramSizeOnly(uint64_t& offset, EncodeDevAscendProgramInfo
     DevAscendProgram devfunc;
     devfunc.SetParallelism(config::GetRuntimeOption<uint32_t>(DEVICE_SCHED_PARALLELISM));
     encodeInfo.Init(&devfunc, false);
-    const uint32_t stitchNumMax = ConfiguredStitchFunctionMaxNum();
-    devfunc.stitchMaxFunctionNum = StitchUnitCapacityForRuntime(stitchNumMax);
-    devfunc.runtimeOutcastPoolSize = encodeInfo.dyndevAttr->inoutLink.totalSlot * (stitchNumMax + 1) *
-                                     devfunc.GetParallelism();
+
+    WorkspaceDesc wsDesc = CollectWorkspaceDescForSizeOnlyEncode(encodeInfo.func, encodeInfo);
+    RuntimeWorkspaceConfig runtimeCfg = LoadRuntimeWorkspaceConfig(wsDesc.maxUnrollTimes);
+    runtimeCfg.aicoreSpilled = wsDesc.maxLeafPerCoreSpilledMem * wsDesc.platform.aicoreCount;
+    runtimeCfg.debugTotal = DumpTensorWorkspace() + LeafDumpWorkspace();
+    runtimeCfg.parallelism = devfunc.GetParallelism();
+    runtimeCfg.workspaceStitchMin = TensorWorkspaceBytesAtMinimumStitchDepth(
+        wsDesc, runtimeCfg.parallelism, runtimeCfg.aicoreSpilled, runtimeCfg.debugTotal);
+
+    StitchDepthConfig depthConfig = ResolveStitchDepthConfig(wsDesc, runtimeCfg);
+    ApplyStitchDepthConfig(&devfunc, wsDesc, depthConfig, encodeInfo.dyndevAttr->inoutLink.totalSlot);
+
     uintdevptr_t cacheInitOffset = reinterpret_cast<uintdevptr_t>(devfunc.data) + devfunc.dataSize;
-    devfunc.InitControlFlowCache(cacheInitOffset, encodeInfo.dyndevAttr, false);
+    devfunc.InitControlFlowCache(cacheInitOffset, encodeInfo.dyndevAttr, false, depthConfig.outcastCacheDepth);
     devfunc.dataSize = cacheInitOffset - reinterpret_cast<uintdevptr_t>(devfunc.data);
     ASSERT(DevCommonErr::PARAM_CHECK_FAILED, devfunc.GetSize() == sizeof(devfunc) + devfunc.dataSize)
         << "devProg->GetSize() does not match expected size, expected: "
         << sizeof(devfunc) + devfunc.dataSize << ", got: " << devfunc.GetSize();
     offset = devfunc.GetSize();
+}
+
+static WorkspaceDesc CollectWorkspaceDescForEncode(Function* func, DevAscendProgram* base)
+{
+    return CollectWorkspaceDesc(func, *base, func->GetDyndevAttribute()->constructAssembleNeedAllocRuntimeSlots);
+}
+
+static RuntimeWorkspaceConfig BuildFullEncodeRuntimeWorkspaceConfig(
+    DevAscendProgram* base, const WorkspaceDesc& wsDesc)
+{
+    RuntimeWorkspaceConfig runtimeCfg = LoadRuntimeWorkspaceConfig(wsDesc.maxUnrollTimes);
+    runtimeCfg.aicoreSpilled = wsDesc.maxLeafPerCoreSpilledMem * wsDesc.platform.aicoreCount;
+    runtimeCfg.debugTotal = base->memBudget.debug.dumpTensor + base->memBudget.debug.leafDump;
+    runtimeCfg.parallelism = base->GetParallelism();
+    runtimeCfg.workspaceStitchMin = TensorWorkspaceBytesAtMinimumStitchDepth(
+        wsDesc, runtimeCfg.parallelism, runtimeCfg.aicoreSpilled, runtimeCfg.debugTotal);
+    return runtimeCfg;
+}
+
+static void ValidateCtrlFlowCacheBackupCapacity(
+    const EncodeDevAscendProgramInfo& encodeInfo, const WorkspaceDesc& wsDesc, const StitchDepthConfig& depthConfig)
+{
+    const uint64_t requiredSlotBlocks = wsDesc.devTaskBoundaryOutcastNum + wsDesc.devTaskInnerTemporalOutcastNum;
+    const uint64_t ctrlFlowSlotBackupCount = requiredSlotBlocks != 0
+        ? requiredSlotBlocks
+        : EstimateCtrlFlowCacheSlottedBlockCount(
+              encodeInfo.dyndevAttr->inoutLink.totalSlot,
+              depthConfig.outcastCacheDepth > 0
+                  ? depthConfig.outcastCacheDepth
+                  : (depthConfig.stitchMaxFunctionNum > 0 ? depthConfig.stitchMaxFunctionNum
+                                                           : static_cast<uint32_t>(MAX_STITCH_FUNC_NUM)));
+    ASSERT(DevCommonErr::PARAM_CHECK_FAILED, ctrlFlowSlotBackupCount >= requiredSlotBlocks)
+        << "Control flow cache slot backup capacity is smaller than boundary outcast slot budget, backup="
+        << ctrlFlowSlotBackupCount << ", boundary=" << wsDesc.devTaskBoundaryOutcastNum
+        << ", innerTemporal=" << wsDesc.devTaskInnerTemporalOutcastNum;
+}
+
+static void EncodeProgramMetadataWorkspace(DevAscendProgram* base)
+{
+    base->stitchFunctionsize = MAX_STITCH_LEAFFUNC_NUM;
+    base->memBudget.metadata.dynamicCellMatch = 0;
+    base->memBudget.metadata.general = CalcGeneralMetadataSlotWorkspace(base);
+    base->memBudget.metadata.general += CalcGeneralMetadataSlabWorkspace(base);
+    base->memBudget.metadata.stitchCacheSize = CalcStitchCacheSize(base);
+    base->memBudget.metadata.general += base->memBudget.metadata.stitchCacheSize;
+    base->memBudget.metadata.stitchPool = CalcStitchWorkspace(*base);
+}
+
+static void FinalizeEncodedDevAscendProgram(
+    Function* func, DevAscendProgram* base, uint64_t& offset, const WorkspaceDesc& wsDesc,
+    const RuntimeWorkspaceConfig& runtimeCfg, const StitchDepthConfig& depthConfig)
+{
+    base->workspaceSize = base->memBudget.Total();
+    offset = base->GetSize();
+    LogWorkspaceEncodeSummary(
+        1, runtimeCfg.stitchNumMax, *base, depthConfig, runtimeCfg.maxWorkspaceBytes,
+        runtimeCfg.workspaceStitchMin);
+    MACHINE_LOGD(
+        "StitchPool:%lu, aicoreSpilled:%lu.", base->memBudget.metadata.stitchPool, base->memBudget.aicoreSpilled.Total());
+    func->GetDyndevAttribute()->maxDynamicAssembleOutcastMem = wsDesc.maxDynamicAssembleOutcastMem;
+    func->GetDyndevAttribute()->maxDynamicCellMatchTableMem = wsDesc.cellMatch.maxDynamicCellMatchTableMem;
+    BuildDynamicCellMatchLaunchMeta(func, *base);
 }
 
 void EncodeDevAscendProgramFull(
@@ -2798,40 +2872,21 @@ void EncodeDevAscendProgramFull(
     base->memBudget.debug.dumpTensor = DumpTensorWorkspace();
     base->memBudget.debug.leafDump = LeafDumpWorkspace();
 
-    RuntimeWorkspaceConfig runtimeCfg = LoadRuntimeWorkspaceConfig();
     WorkspaceDesc wsDesc = CollectWorkspaceDescForEncode(func, base);
-    runtimeCfg.aicoreSpilled = wsDesc.maxLeafPerCoreSpilledMem * wsDesc.platform.aicoreCount;
-    runtimeCfg.debugTotal = base->memBudget.debug.dumpTensor + base->memBudget.debug.leafDump;
-    runtimeCfg.parallelism = base->GetParallelism();
+    RuntimeWorkspaceConfig runtimeCfg = BuildFullEncodeRuntimeWorkspaceConfig(base, wsDesc);
+    ValidateMaxWorkspaceOrThrow(runtimeCfg.maxWorkspaceBytes, runtimeCfg.workspaceStitchMin);
 
     StitchDepthConfig depthConfig = ResolveStitchDepthConfig(wsDesc, runtimeCfg);
     ApplyStitchDepthConfig(base, wsDesc, depthConfig, encodeInfo.dyndevAttr->inoutLink.totalSlot);
-
-    const uint32_t estimatedStitching = ConfiguredStitchFunctionMaxNum() * wsDesc.maxUnrollTimes;
-    const uint64_t ctrlFlowSlotBackupCount = EstimateCtrlFlowCacheSlottedBlockCount(
-        encodeInfo.dyndevAttr->inoutLink.totalSlot,
-        std::min(estimatedStitching, depthConfig.stitchMaxFunctionNum));
-    ASSERT(DevCommonErr::PARAM_CHECK_FAILED,
-        ctrlFlowSlotBackupCount >= wsDesc.devTaskBoundaryOutcastNum + wsDesc.devTaskInnerTemporalOutcastNum)
-        << "Control flow cache slot backup capacity is smaller than boundary outcast slot budget, backup="
-        << ctrlFlowSlotBackupCount << ", boundary=" << wsDesc.devTaskBoundaryOutcastNum
-        << ", innerTemporal=" << wsDesc.devTaskInnerTemporalOutcastNum;
+    ValidateCtrlFlowCacheBackupCapacity(encodeInfo, wsDesc, depthConfig);
 
     RebuildableAttributeManager::GetInstance().ResetAttr<RebuildableWorkspaceDesc>(func, &wsDesc);
-
     base->devArgs.machineConfig = func->paramConfigs_.machineConfig_;
-    base->stitchFunctionsize = MAX_STITCH_LEAFFUNC_NUM;
-    base->memBudget.metadata.dynamicCellMatch = 0;
 
-    // Match mainline: tensor/outcast budgets and stitchFunctionsize must be set before metadata/stitch pool sizing.
-    base->memBudget.metadata.general = CalcGeneralMetadataSlotWorkspace(base);
-    base->memBudget.metadata.general += CalcGeneralMetadataSlabWorkspace(base);
-    base->memBudget.metadata.stitchCacheSize = CalcStitchCacheSize(base);
-    base->memBudget.metadata.general += base->memBudget.metadata.stitchCacheSize;
-    base->memBudget.metadata.stitchPool = CalcStitchWorkspace(*base);
+    EncodeProgramMetadataWorkspace(base);
 
     uintdevptr_t cacheInitOffset = reinterpret_cast<uintdevptr_t>(base->data) + base->dataSize;
-    base->InitControlFlowCache(cacheInitOffset, encodeInfo.dyndevAttr, true);
+    base->InitControlFlowCache(cacheInitOffset, encodeInfo.dyndevAttr, true, depthConfig.outcastCacheDepth);
     base->dataSize = cacheInitOffset - reinterpret_cast<uintdevptr_t>(base->data);
     ASSERT(DevCommonErr::PARAM_CHECK_FAILED,
         reinterpret_cast<uint8_t*>(base->controlFlowCache.cacheData.end()) ==
@@ -2841,14 +2896,7 @@ void EncodeDevAscendProgramFull(
         << "devProg->GetSize() does not match expected size, expected: " << sizeof(*base) + base->dataSize
         << ", got: " << base->GetSize();
 
-    base->workspaceSize = base->memBudget.Total();
-    offset = base->GetSize();
-
-    MACHINE_LOGD(
-        "StitchPool:%lu, aicoreSpilled:%lu.", base->memBudget.metadata.stitchPool, base->memBudget.aicoreSpilled.Total());
-    func->GetDyndevAttribute()->maxDynamicAssembleOutcastMem = wsDesc.maxDynamicAssembleOutcastMem;
-    func->GetDyndevAttribute()->maxDynamicCellMatchTableMem = wsDesc.cellMatch.maxDynamicCellMatchTableMem;
-    BuildDynamicCellMatchLaunchMeta(func, *base);
+    FinalizeEncodedDevAscendProgram(func, base, offset, wsDesc, runtimeCfg, depthConfig);
 }
 
 void EncodeDevAscendProgram(Function* func, uint64_t& offset, DevAscendProgram* base)
@@ -2863,20 +2911,15 @@ void EncodeDevAscendProgram(Function* func, uint64_t& offset, DevAscendProgram* 
 
 void DevControlFlowCache::Init(
     void* dyndevAttrPtr, uint64_t cacheSize, uint64_t runtimeOutcastPoolSize, uint64_t& initOffset,
-    uint32_t stitchMaxFunctionNum)
+    uint64_t slottedOutcastBlockCount)
 {
     DyndevFunctionAttribute* dyndevAttr = reinterpret_cast<DyndevFunctionAttribute*>(dyndevAttrPtr);
     initOffset = AlignUp(initOffset, alignof(DevTensorData));
     inputTensorDataList.HostInitDataSizeOffset(initOffset, dyndevAttr->startArgsInputTensorList.size());
     outputTensorDataList.HostInitDataSizeOffset(initOffset, dyndevAttr->startArgsOutputTensorList.size());
-
-    const uint32_t estimatedStitchingCount =
-        ConfiguredStitchFunctionMaxNum() * ComputeMaxUnrollTimesFromDevEncodeList(dyndevAttr->devEncodeList);
-    const uint64_t slottedCount = dyndevAttr->inoutLink.totalSlot *
-        (std::min(estimatedStitchingCount, stitchMaxFunctionNum) + SLOTS_NEED_ALLOC_SIZE);
     for (uint32_t i = 0; i < SCH_DEVTASK_MAX_PARALLELISM; i++) {
         runtimeBackup.workspace.tensorAllocators[i].slottedOutcastsBlockList.HostInitDataSizeOffset(
-            initOffset, slottedCount);
+            initOffset, slottedOutcastBlockCount);
     }
 
     runtimeBackup.slotContext.slotList.HostInitDataSizeOffset(initOffset, dyndevAttr->inoutLink.totalSlot);

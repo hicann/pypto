@@ -91,6 +91,7 @@ def hc_split_sinkhorn_trans(comb_flag: pypto.Tensor, hc_split_sinkhorn_iters, hc
     runtime_options={
         "stitch_function_max_num": 128,
         "device_sched_mode": 0,
+        "max_workspace_kb": 65536,
     },
 )
 def hc_pre_kernel(
@@ -206,6 +207,7 @@ def hc_pre_kernel(
     runtime_options={
         "stitch_function_max_num": 128,
         "device_sched_mode": 0,
+        "max_workspace_kb": 65536,
     },
 )
 def hc_pre_kernel_prefill(

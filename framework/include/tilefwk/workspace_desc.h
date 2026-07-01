@@ -27,9 +27,6 @@ class Function;
 
 struct WorkspaceDesc {
     struct WorkspaceConfig {
-        uint64_t innerSpilledRecyclePeriod{0};
-        uint64_t unrollStitchCount{0};
-        uint64_t actualStitchCount{0};
         uint64_t parallelism{0};
     } config;
 
@@ -45,9 +42,6 @@ struct WorkspaceDesc {
         uint64_t rootInnerSpilledRawMem{0};
         uint64_t leafPerCoreSpilledMem{0};
         uint64_t rootTotalExclusiveOutcastRawMem{0};
-
-        uint64_t rootInnerSpilledMem{0};
-        uint64_t rootTotalExclusiveOutcastMem{0};
 
         uint64_t rootMaxExclusiveOutcastMem{0};
         int64_t rootMaxExclusiveOutcastIdx{-1};
@@ -72,11 +66,7 @@ struct WorkspaceDesc {
         SymbolicScalar maxDynamicCellMatchTableMem;
     } cellMatch;
 
-    // Per-stitch-unit peak used by calculator fast path (collector-maintained).
-    uint64_t maxPerUnitRootInnerSpilledMem{0};
-    uint64_t maxPerUnitRootTotalExclusiveOutcastMem{0};
-
-    // Max unroll across encoded dev roots; drives innerSpilledRecyclePeriod and ctrlflow backup sizing.
+    // Max unroll across encoded dev roots (runtime StitchUnits accounting).
     uint32_t maxUnrollTimes{1};
 };
 

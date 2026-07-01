@@ -50,7 +50,7 @@ void DeviceWorkspaceAllocator::Init(DevStartArgs* devStartArgs)
         devProg->memBudget.tensor.BoundaryAndInnerTemporalOutcastSlotNum());
 
     SetupItemPool(
-        runtimeOutcastTensorPool_, devProg->runtimeOutcastPoolSize, WsMemCategory::ITEMPOOL_RUNTIME_OUTCAST);
+        runtimeOutcastTensorPool_, devProg->memBudget.tensor.runtimeOutcastPoolSize, WsMemCategory::ITEMPOOL_RUNTIME_OUTCAST);
 }
 
 
@@ -488,8 +488,8 @@ void DeviceWorkspaceAllocator::InitMetadataSlabAllocator()
 uint64_t DeviceWorkspaceAllocator::CalcMetadataItemPoolMemSize(const DevAscendProgram* devProg)
 {
     size_t itemBlockSize = sizeof(ItemPool<RuntimeOutcastTensor>::ItemBlock);
-    DEV_DEBUG("itemBlockSize=%zu, OutcastPoolSize=%u", itemBlockSize, devProg->runtimeOutcastPoolSize);
-    uint64_t itemPoolMemSize = itemBlockSize * devProg->runtimeOutcastPoolSize;
+    DEV_DEBUG("itemBlockSize=%zu, OutcastPoolSize=%u", itemBlockSize, devProg->memBudget.tensor.runtimeOutcastPoolSize);
+    uint64_t itemPoolMemSize = itemBlockSize * devProg->memBudget.tensor.runtimeOutcastPoolSize;
     return itemPoolMemSize;
 }
 

@@ -123,14 +123,21 @@ int EmulationLauncher::EmulationRunOnce(
     return rc;
 }
 
+static void InitHostCtrlFlowCacheLayout(
+    DevControlFlowCache& cache, DevAscendProgram* devProg, DyndevFunctionAttribute* dyndevAttr, uintdevptr_t& initOffset)
+{
+    cache.Init(
+        dyndevAttr, devProg->ctrlFlowCacheSize, devProg->memBudget.tensor.runtimeOutcastPoolSize, initOffset,
+        devProg->GetCtrlFlowCacheSlottedOutcastBlockCount(dyndevAttr->inoutLink.totalSlot));
+}
+
 DevControlFlowCache* EmulationLauncher::CreateHostCtrlFlowCache(
     DevAscendProgram* devProg, Function* function, EmulationMemoryUtils& memUtils)
 {
+    auto* dyndevAttr = function->GetDyndevAttribute().get();
     DevControlFlowCache encodeCtrlCache;
     uintdevptr_t initOffset = reinterpret_cast<uintdevptr_t>(encodeCtrlCache.data);
-    encodeCtrlCache.Init(
-        function->GetDyndevAttribute().get(), devProg->ctrlFlowCacheSize, devProg->runtimeOutcastPoolSize, initOffset,
-        devProg->stitchMaxFunctionNum);
+    InitHostCtrlFlowCacheLayout(encodeCtrlCache, devProg, dyndevAttr, initOffset);
     uint32_t ctrlCacheAllocSize = encodeCtrlCache.GetSize();
     DevControlFlowCache* hostCtrlFlowCache =
         reinterpret_cast<DevControlFlowCache*>(memUtils.AllocZero(ctrlCacheAllocSize, nullptr));
@@ -139,9 +146,7 @@ DevControlFlowCache* EmulationLauncher::CreateHostCtrlFlowCache(
     }
     hostCtrlFlowCache->allCacheSize = ctrlCacheAllocSize;
     initOffset = reinterpret_cast<uintdevptr_t>(hostCtrlFlowCache->data);
-    hostCtrlFlowCache->Init(
-        function->GetDyndevAttribute().get(), devProg->ctrlFlowCacheSize, devProg->runtimeOutcastPoolSize, initOffset,
-        devProg->stitchMaxFunctionNum);
+    InitHostCtrlFlowCacheLayout(*hostCtrlFlowCache, devProg, dyndevAttr, initOffset);
     return hostCtrlFlowCache;
 }
 

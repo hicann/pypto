@@ -22,28 +22,22 @@ struct RuntimeWorkspaceConfig {
     uint32_t parallelism{1};
     uint64_t aicoreSpilled{0};
     uint64_t debugTotal{0};
+    uint64_t maxWorkspaceBytes{0};
+    uint64_t workspaceStitchMin{0};
 };
 
 struct StitchDepthConfig {
     uint32_t kEff{0};
     uint32_t outcastCacheDepth{0};
+    uint32_t runtimeOutcastPoolDepth{0};
     uint32_t stitchMaxFunctionNum{0};
     uint64_t encodedWorkspaceSize{0};
+    uint32_t memoryDrivenWorkspace{0};
 };
-
-uint32_t EffectiveUnrollTimes(uint32_t unrollTimes);
-
-uint32_t StitchUnitCapacityForRuntime(uint32_t stitchNumMax);
-
-uint32_t DeriveOutcastCacheDepth(
-    const WorkspaceDesc& desc, uint32_t tensorStitchDepthK, uint32_t configuredStitchNumMax);
 
 uint64_t EstimateCtrlFlowCacheSlottedBlockCount(uint64_t totalSlot, uint32_t outcastCacheDepth);
 
-void BuildTensorWorkspaceFromDescriptor(
-    WorkspaceDesc& desc, uint32_t stitchDepthK, uint32_t boundaryOutcastDepthOverride = 0);
-
-uint64_t WorkspaceTotalFromDesc(
+uint64_t TensorWorkspaceBytesAtMinimumStitchDepth(
     const WorkspaceDesc& desc, uint32_t parallelism, uint64_t aicoreSpilled, uint64_t debugTotal);
 
 StitchDepthConfig ResolveStitchDepthConfig(WorkspaceDesc& desc, const RuntimeWorkspaceConfig& runtimeCfg);

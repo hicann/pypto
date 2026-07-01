@@ -461,7 +461,8 @@ def mla_prolog_v4_compute(x, wq_a, wq_b, wkv, rmsnorm_gamma_cq, rmsnorm_gamma_ck
 
 @pypto.frontend.jit(runtime_options={
     "stitch_function_max_num": 128,
-    "device_sched_mode": 1
+    "device_sched_mode": 1,
+    "max_workspace_kb": 262144,
     },
     pass_options={
         "vec_nbuffer_setting": {-1: 2}

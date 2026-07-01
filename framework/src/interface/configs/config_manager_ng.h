@@ -47,6 +47,7 @@ constexpr const char* AUTO_MIX_PARTITION = "auto_mix_partition";
 // runtime
 constexpr const char* DEVICE_SCHED_MODE = "device_sched_mode";
 constexpr const char* STITCH_FUNCTION_MAX_NUM = "stitch_function_max_num";
+constexpr const char* MAX_WORKSPACE_KB = "max_workspace_kb";
 
 constexpr const char* CFG_RUN_MODE = "run_mode";
 constexpr const char* CFG_VALID_SHAPE_OPTIMIZE = "valid_shape_optimize";

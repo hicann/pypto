@@ -283,7 +283,7 @@ void DeviceExecuteContext::ProcessControlFlowCacheRecord(DynDeviceTask* dynTask)
             devProg->ctrlFlowCacheAnchor->TaskAddrBackupWorkspace(dynTask);
             devProg->ctrlFlowCacheAnchor->RuntimeAddrBackup(
                 slotContext.GetSlotList(), workspace.GetRuntimeOutcastTensorPool(), devProg->slotSize,
-                devProg->runtimeOutcastPoolSize, workspace.GetTensorAllocator(), devProg->GetParallelism());
+                devProg->memBudget.tensor.runtimeOutcastPoolSize, workspace.GetTensorAllocator(), devProg->GetParallelism());
         }
         devProg->ctrlFlowCacheAnchor->AppendDeviceTask(dynTask);
     }
@@ -484,15 +484,23 @@ void* DeviceExecuteContext::CallRootFunctionAlloc(uint64_t rootKey)
     int ret = DEVICE_MACHINE_OK;
     DevAscendFunction* devRoot = devProg->GetFunction(rootKey);
     DEV_DEBUG("Slloc one func %lu %p %s.", rootKey, devRoot, devRoot->GetRawName());
-    uint16_t realStitchNumThreshold =
+    const uint32_t unroll = devRoot->unrollTimes;
+    const bool stitchByMemoryOnly = devProg->memBudget.tensor.memoryDrivenWorkspace != 0;
+    const uint16_t realStitchNumThreshold =
         parallelCtx.isInParallelForScope ? MAX_STITCH_FUNC_NUM : stitchTaskLoopNumThreshold;
-    if ((stitchContext.Size() == realStitchNumThreshold) ||
-        stitchContext.stitchedCallOpSize() + devRoot->GetOperationSize() > devProg->stitchFunctionsize) {
+    const bool stitchUnitsExceeded =
+        !stitchByMemoryOnly && (stitchContext.StitchUnits() + unroll > realStitchNumThreshold);
+    const bool callOpExceeded =
+        stitchContext.stitchedCallOpSize() + devRoot->GetOperationSize() > devProg->stitchFunctionsize;
+    const bool rootFuncCountExceeded = stitchContext.Size() >= MAX_STITCH_FUNC_NUM;
+    if (stitchUnitsExceeded || callOpExceeded || rootFuncCountExceeded) {
         DEV_INFO(
-            "[Stitch Finish] Stitch Limit Exceeded. numThreshold=%u rootKey=%lu, func=%s, "
-            "#task=%zu+1 (limit=%u), #callop=%u+%zu (limit=%u).",
-            realStitchNumThreshold, rootKey, devRoot->GetRawName(), stitchContext.Size(), stitchTaskLoopNumThreshold,
-            stitchContext.stitchedCallOpSize(), devRoot->GetOperationSize(), devProg->stitchFunctionsize);
+            "[Stitch Finish] Stitch Limit Exceeded. memoryOnly=%d unrollUnits=%u+%u (limit=%u) rootCount=%zu "
+            "(limit=%zu) rootKey=%lu, func=%s, #task=%zu, #callop=%u+%zu (limit=%u).",
+            static_cast<int>(stitchByMemoryOnly), stitchContext.StitchUnits(), unroll, realStitchNumThreshold,
+            stitchContext.Size(), MAX_STITCH_FUNC_NUM, rootKey, devRoot->GetRawName(),
+            stitchContext.Size(), stitchContext.stitchedCallOpSize(), devRoot->GetOperationSize(),
+            devProg->stitchFunctionsize);
         ret = SubmitToAicoreAndRecycleMemory(false);
         if (unlikely(ret != DEVICE_MACHINE_OK)) {
             return RUNTIME_FUNCKEY_ERROR;
@@ -688,7 +696,7 @@ void* DeviceExecuteContext::DeviceExecuteRuntimeCallRootStitch(void* ctx_, uint6
         auto ctrlFlowCacheAnchor = ctx->devProg->ctrlFlowCacheAnchor;
         ctrlFlowCacheAnchor->RuntimeAddrRestore(
             ctx->slotContext.GetSlotList(), ctx->workspace.GetRuntimeOutcastTensorPool(), ctx->devProg->slotSize,
-            ctx->devProg->runtimeOutcastPoolSize, ctx->workspace.GetTensorAllocator(), ctx->devProg->GetParallelism());
+            ctx->devProg->memBudget.tensor.runtimeOutcastPoolSize, ctx->workspace.GetTensorAllocator(), ctx->devProg->GetParallelism());
         ctrlFlowCacheAnchor->RuntimeAddrRelocWorkspace(
             0, ctx->args->contextWorkspaceAddr, ctx->args, ctx->slotContext.GetSlotList(),
             ctx->workspace.GetRuntimeOutcastTensorPoolBase(), ctx->devProg->GetParallelism());

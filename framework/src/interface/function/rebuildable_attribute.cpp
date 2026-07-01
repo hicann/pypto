@@ -75,23 +75,15 @@ std::string RebuildableWorkspaceDesc::PrettyDumpSize(
 {
     std::ostringstream oss;
     oss << "Config:\n"
-        << "  " << std::setw(30) << std::left << "innerSpilledRecyclePeriod:"
-                << std::setw(10) << std::right << desc.config.innerSpilledRecyclePeriod << "\n"
-        << "  " << std::setw(30) << std::left << "unrollStitchCount:"
-                << std::setw(10) << std::right << desc.config.unrollStitchCount << "\n"
-        << "  " << std::setw(30) << std::left << "actualStitchCount:"
-                << std::setw(10) << std::right << desc.config.actualStitchCount << "\n"
         << "  " << std::setw(30) << std::left << "parallelism:"
-                << std::setw(10) << std::right << desc.config.parallelism << "\n";
+        << std::setw(10) << std::right << desc.config.parallelism << "\n";
     oss << "Root:\n";
     for (auto &rootFuncDesc : desc.rootFuncDescList) {
         oss << "  " << "name: " << rootFuncDesc.devFuncName << "\n";
         oss << "    " << "unroll:" << std::setw(3) << rootFuncDesc.unroll
             << " innerSpilledRaw:" << std::setw(10) << rootFuncDesc.rootInnerSpilledRawMem
-            << " innerSpilled:" << std::setw(10) << rootFuncDesc.rootInnerSpilledMem
             << " leafSpilled:" << std::setw(7) << rootFuncDesc.leafPerCoreSpilledMem
             << " totalOutcastRaw:" << std::setw(10) << rootFuncDesc.rootTotalExclusiveOutcastRawMem
-            << " totalOutcast:" << std::setw(10) << rootFuncDesc.rootTotalExclusiveOutcastMem
             << " staticOutcast:" << std::setw(10) << rootFuncDesc.rootMaxExclusiveOutcastMem << "\n";
     }
 

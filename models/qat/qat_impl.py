@@ -33,6 +33,7 @@ import torch
 @pypto.frontend.jit(
     runtime_options={
         "stitch_function_max_num": 64,
+        "max_workspace_kb": 20000
     },
     pass_options={"vec_nbuffer_setting": {-1: 2, -2: 1}},
 )

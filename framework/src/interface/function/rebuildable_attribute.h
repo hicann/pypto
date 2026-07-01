@@ -95,7 +95,7 @@ struct RebuildableAttrInitContext {
         const std::string name = typeid(TyAttr).name(); \
         ctx->manager->InitAttr(ctx->func, name, base); \
     } \
-    static EntryRegistrarNode node(RebuildableAttributeManager::GetRegistrarGroup(), Entry##TyAttr, #TyAttr)
+    static EntryRegistrarNode node(RebuildableAttributeManager::GetRegistrarGroup(), Entry##TyAttr, #TyAttr);
 
 struct RebuildableWorkspaceDesc : RebuildableAttributeBase {
     void Reset(void *data) override

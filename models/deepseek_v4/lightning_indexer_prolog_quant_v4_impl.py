@@ -154,7 +154,8 @@ def npu_quant_lightning_indexer_prolog(
     },
     runtime_options={
         "stitch_function_max_num": 128,
-        "device_sched_mode": 1
+        "device_sched_mode": 1,
+        "max_workspace_kb": 65536,
     },
 )
 def quant_lightning_indexer_prolog_kernel(

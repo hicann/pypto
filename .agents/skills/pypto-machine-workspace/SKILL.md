@@ -249,20 +249,27 @@ grep -r "maxRootInnerMem is\|MaxRootInnerMem is" <log_path>/debug/
 **分析要点**：
 1. 对比各 Root Function 的 `MaxRootInnerMem` 和 `maxDevTaskInnerExclusiveOutcastMem`，找到贡献最大的 Root Function
 2. 检查该 Root Function 名称中是否包含 `Unroll` 标记（如 `_Unroll8`），判断 unroll 次数
-3. 内存膨胀关系（近似公式）：
+3. 内存膨胀关系（近似公式，runtime 以 unrollTimes 计 stitch 单元）：
    ```
-   rootInnerSpilledMem ≈ rootInnerTensorWsMemoryRequirement / unroll × WorkspaceRecyclePeriod
-   devTaskInnerOutCasts ≈ exclusiveOutcastWsMemoryRequirement / unroll × EstimatedStitchingCount
-   WorkspaceRecyclePeriod ≈ stitch_function_max_num × MAX_UNROLL_TIMES
+   rootInnerSpilledMem ≈ max_root(AlignUp(rootInnerTensorWsMemoryRequirement / unrollTimes)) × k_eff
+   devTaskInnerOutCasts ≈ max_root(AlignUp(exclusiveOutcastWsMemoryRequirement / unrollTimes)) × k_eff
+   当 unrollTimes >= k_eff 时，取 max(..., 原始 rootInnerTensorWsMemoryRequirement)
+   k_eff = stitch_function_max_num（默认）或由 max_workspace_kb 反推
+   devTaskBoundaryOutcastNum = E×2 + A×2（boundary 池）
+   devTaskInnerTemporalOutcastNum = A × k_eff（innerTemporal 池）
+   runtimeOutcastCacheDepth = min(max_root(ceil(k_eff / unrollTimes)), stitch_function_max_num)  # 内存驱动
+   runtimeOutcastPoolSize = totalSlot × (runtimeOutcastCacheDepth + 1) × parallelism
+   ctrlflow backup 容量 ≥ devTaskBoundaryOutcastNum + devTaskInnerTemporalOutcastNum
    ```
-4. 若多个 Root Function 的值均匀偏大 → 可能是 `stitch_function_max_num` 或 `unroll_list` 配置过大
+4. 若多个 Root Function 的值均匀偏大 → 可能是 `stitch_function_max_num` 或 `max_workspace_kb` 配置过大
 5. 若单个 Root Function 的值远超其他 → 该 Root Function 内存需求本身偏高，需分析 pass 内存复用
 
 **配置调优建议**（作为临时缓解手段）：
 
 | 配置项 | 影响范围 | 调优方向 |
 |--------|----------|----------|
-| `stitch_function_max_num` | rootInnerSpilledMem、devTaskInnerOutCasts、Boundary slot 数 | 降低此值以减少并行度换取内存 |
+| `stitch_function_max_num` | rootInnerSpilledMem、devTaskInnerOutCasts、innerTemporal slot 数、Boundary slot 数 | 降低此值以减少并行度换取内存 |
+| `max_workspace_kb` | k_eff、innerTemporal slot 数、runtimeOutcastCacheDepth | 内存驱动模式下二分反推 k_eff |
 | `unroll_list` / max_unroll | rootInnerSpilledMem、devTaskInnerOutCasts | 减小 unroll 数 |
 
 #### 情况二：Boundary Outcast 内存 (C × D) 为主要贡献者

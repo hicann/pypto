@@ -100,7 +100,7 @@ TEST_F(RuntimeOutcastTensorTest, DeviceWorkspaceAllocatorBasicOps)
 
     DeviceWorkspaceAllocator d;
     DevAscendProgram devProg{};
-    devProg.runtimeOutcastPoolSize = 8;
+    devProg.memBudget.tensor.runtimeOutcastPoolSize = 8;
     // Keep tensor budgets small/zero but valid
     devProg.memBudget.tensor.rootInnerSpilledMem = 0;
     devProg.memBudget.tensor.devTaskInnerExclusiveOutcasts = 0;
@@ -142,7 +142,7 @@ TEST_F(RuntimeOutcastTensorTest, DeviceWorkspaceAllocatorSafeRefDerefNoCrash)
 
     DeviceWorkspaceAllocator d;
     DevAscendProgram devProg{};
-    devProg.runtimeOutcastPoolSize = 4;
+    devProg.memBudget.tensor.runtimeOutcastPoolSize = 4;
 
     InitDeviceWorkspaceAllocatorForTest(d, devProg, workspace);
 
@@ -158,20 +158,20 @@ TEST_F(RuntimeOutcastTensorTest, DerefToZeroReturnsItemToPool)
 
     DeviceWorkspaceAllocator d;
     DevAscendProgram devProg{};
-    devProg.runtimeOutcastPoolSize = 4;
+    devProg.memBudget.tensor.runtimeOutcastPoolSize = 4;
 
     InitDeviceWorkspaceAllocatorForTest(d, devProg, workspace);
 
     // initial free items should equal pool size
     size_t freeBefore = d.runtimeOutcastTensorPool_.FreeItemNum();
-    EXPECT_EQ(freeBefore, devProg.runtimeOutcastPoolSize);
+    EXPECT_EQ(freeBefore, devProg.memBudget.tensor.runtimeOutcastPoolSize);
 
     ItemPoolIter a = d.MakeRuntimeOutcastTensor(WsAllocation(0xAAAull, 0), RuntimeTensorMemProperty::EXTERNAL);
-    EXPECT_EQ(d.runtimeOutcastTensorPool_.FreeItemNum(), devProg.runtimeOutcastPoolSize - 1);
+    EXPECT_EQ(d.runtimeOutcastTensorPool_.FreeItemNum(), devProg.memBudget.tensor.runtimeOutcastPoolSize - 1);
 
     // deref once (refCnt -> 0) should destroy and return to pool
     d.RuntimeOutcastTensorDeref(a);
-    EXPECT_EQ(d.runtimeOutcastTensorPool_.FreeItemNum(), devProg.runtimeOutcastPoolSize);
+    EXPECT_EQ(d.runtimeOutcastTensorPool_.FreeItemNum(), devProg.memBudget.tensor.runtimeOutcastPoolSize);
 }
 
 TEST_F(RuntimeOutcastTensorTest, AssignReleasesPreviousDestination)
@@ -180,20 +180,20 @@ TEST_F(RuntimeOutcastTensorTest, AssignReleasesPreviousDestination)
 
     DeviceWorkspaceAllocator d;
     DevAscendProgram devProg{};
-    devProg.runtimeOutcastPoolSize = 4;
+    devProg.memBudget.tensor.runtimeOutcastPoolSize = 4;
 
     InitDeviceWorkspaceAllocatorForTest(d, devProg, workspace);
 
     // allocate two items A and B
     ItemPoolIter A = d.MakeRuntimeOutcastTensor(WsAllocation(0xA1ull, 0), RuntimeTensorMemProperty::EXTERNAL);
     ItemPoolIter B = d.MakeRuntimeOutcastTensor(WsAllocation(0xB2ull, 0), RuntimeTensorMemProperty::EXTERNAL);
-    EXPECT_EQ(d.runtimeOutcastTensorPool_.FreeItemNum(), devProg.runtimeOutcastPoolSize - 2);
+    EXPECT_EQ(d.runtimeOutcastTensorPool_.FreeItemNum(), devProg.memBudget.tensor.runtimeOutcastPoolSize - 2);
 
     // assign B = A; this should deref old B (destroy it and return to pool) and ref A
     d.RuntimeOutcastTensorAssign(B, A);
 
     // After assign: one item returned to pool
-    EXPECT_EQ(d.runtimeOutcastTensorPool_.FreeItemNum(), devProg.runtimeOutcastPoolSize - 1);
+    EXPECT_EQ(d.runtimeOutcastTensorPool_.FreeItemNum(), devProg.memBudget.tensor.runtimeOutcastPoolSize - 1);
 
     // The target iterator B now refers to A, so address equals A's address and refCnt is 2
     EXPECT_EQ(d.GetRuntimeOutcastTensor(B).Addr(), static_cast<uintdevptr_t>(0xA1ull));
@@ -206,7 +206,7 @@ TEST_F(RuntimeOutcastTensorTest, SelfAssignDoesNotChangeRefCount)
 
     DeviceWorkspaceAllocator d;
     DevAscendProgram devProg{};
-    devProg.runtimeOutcastPoolSize = 4;
+    devProg.memBudget.tensor.runtimeOutcastPoolSize = 4;
 
     InitDeviceWorkspaceAllocatorForTest(d, devProg, workspace);
 
@@ -220,7 +220,7 @@ TEST_F(RuntimeOutcastTensorTest, SelfAssignDoesNotChangeRefCount)
     EXPECT_EQ(t.Addr(), static_cast<uintdevptr_t>(0xAAull));
 
     // Verify pool state unchanged
-    EXPECT_EQ(d.runtimeOutcastTensorPool_.FreeItemNum(), devProg.runtimeOutcastPoolSize - 1);
+    EXPECT_EQ(d.runtimeOutcastTensorPool_.FreeItemNum(), devProg.memBudget.tensor.runtimeOutcastPoolSize - 1);
 }
 
 TEST_F(RuntimeOutcastTensorTest, DumpAllPropertyTypes)
@@ -241,7 +241,7 @@ TEST_F(RuntimeOutcastTensorTest, BoundaryOutcastDelayedRecycle)
 
     DeviceWorkspaceAllocator d;
     DevAscendProgram devProg{};
-    devProg.runtimeOutcastPoolSize = 4;
+    devProg.memBudget.tensor.runtimeOutcastPoolSize = 4;
     // Set boundary outcast budget to allow allocation
     devProg.memBudget.tensor.devTaskBoundaryOutcastNum = 1;
     devProg.memBudget.tensor.devTaskInnerTemporalOutcastNum = 0;
@@ -260,7 +260,7 @@ TEST_F(RuntimeOutcastTensorTest, BoundaryOutcastDelayedRecycle)
     // Deref to 0 should add to delayed recycle list (for BOUNDARY_OUTCAST)
     // The item should be returned to pool
     d.RuntimeOutcastTensorDeref(a);
-    EXPECT_EQ(d.runtimeOutcastTensorPool_.FreeItemNum(), devProg.runtimeOutcastPoolSize);
+    EXPECT_EQ(d.runtimeOutcastTensorPool_.FreeItemNum(), devProg.memBudget.tensor.runtimeOutcastPoolSize);
 
     // Verify BOUNDARY_OUTCAST tensor was added to delayed recycle list
     EXPECT_EQ(d.rtBoundaryOutcastToBeFree_.size(), 1u);
@@ -283,7 +283,7 @@ TEST_F(RuntimeOutcastTensorTest, AllPropertyTypesUsage)
 
     DeviceWorkspaceAllocator d;
     DevAscendProgram devProg{};
-    devProg.runtimeOutcastPoolSize = 8;
+    devProg.memBudget.tensor.runtimeOutcastPoolSize = 8;
 
     InitDeviceWorkspaceAllocatorForTest(d, devProg, workspace);
 
@@ -303,7 +303,7 @@ TEST_F(RuntimeOutcastTensorTest, AllPropertyTypesUsage)
     EXPECT_EQ(d.GetRuntimeOutcastTensor(boundary).property, RuntimeTensorMemProperty::BOUNDARY_OUTCAST);
 
     // Verify all are tracked correctly
-    EXPECT_EQ(d.runtimeOutcastTensorPool_.FreeItemNum(), devProg.runtimeOutcastPoolSize - 3);
+    EXPECT_EQ(d.runtimeOutcastTensorPool_.FreeItemNum(), devProg.memBudget.tensor.runtimeOutcastPoolSize - 3);
 
     // Deref EXTERNAL - should NOT be added to delayed recycle list
     d.RuntimeOutcastTensorDeref(ext);
@@ -326,7 +326,7 @@ TEST_F(RuntimeOutcastTensorTest, AssignWithInvalidIndex)
 
     DeviceWorkspaceAllocator d;
     DevAscendProgram devProg{};
-    devProg.runtimeOutcastPoolSize = 4;
+    devProg.memBudget.tensor.runtimeOutcastPoolSize = 4;
 
     InitDeviceWorkspaceAllocatorForTest(d, devProg, workspace);
 
@@ -358,7 +358,7 @@ TEST_F(RuntimeOutcastTensorTest, MultipleReplaceAddrWithoutRecycle)
 
     DeviceWorkspaceAllocator d;
     DevAscendProgram devProg{};
-    devProg.runtimeOutcastPoolSize = 4;
+    devProg.memBudget.tensor.runtimeOutcastPoolSize = 4;
 
     InitDeviceWorkspaceAllocatorForTest(d, devProg, workspace);
 
@@ -397,7 +397,7 @@ TEST_F(RuntimeOutcastTensorTest, GetRuntimeOutcastTensorPoolBase)
 
     DeviceWorkspaceAllocator d;
     DevAscendProgram devProg{};
-    devProg.runtimeOutcastPoolSize = 4;
+    devProg.memBudget.tensor.runtimeOutcastPoolSize = 4;
 
     InitDeviceWorkspaceAllocatorForTest(d, devProg, workspace);
 
@@ -427,7 +427,7 @@ TEST_F(RuntimeOutcastTensorTest, ComplexUsageSequence)
 
     DeviceWorkspaceAllocator d;
     DevAscendProgram devProg{};
-    devProg.runtimeOutcastPoolSize = 8;
+    devProg.memBudget.tensor.runtimeOutcastPoolSize = 8;
 
     InitDeviceWorkspaceAllocatorForTest(d, devProg, workspace);
 
@@ -468,7 +468,7 @@ TEST_F(RuntimeOutcastTensorTest, ComplexUsageSequence)
     d.RuntimeOutcastTensorDeref(c);
 
     // Verify all returned to pool
-    EXPECT_EQ(d.runtimeOutcastTensorPool_.FreeItemNum(), devProg.runtimeOutcastPoolSize);
+    EXPECT_EQ(d.runtimeOutcastTensorPool_.FreeItemNum(), devProg.memBudget.tensor.runtimeOutcastPoolSize);
 
     // List should still have the one BOUNDARY_OUTCAST from earlier
     EXPECT_EQ(d.rtBoundaryOutcastToBeFree_.size(), 1u);
@@ -480,7 +480,7 @@ TEST_F(RuntimeOutcastTensorTest, PoolExhaustionEdgeCase)
 
     DeviceWorkspaceAllocator d;
     DevAscendProgram devProg{};
-    devProg.runtimeOutcastPoolSize = 2; // Small pool
+    devProg.memBudget.tensor.runtimeOutcastPoolSize = 2; // Small pool
 
     InitDeviceWorkspaceAllocatorForTest(d, devProg, workspace);
 
@@ -509,7 +509,7 @@ TEST_F(RuntimeOutcastTensorTest, RefCountMultipleRefsAndDerefs)
 
     DeviceWorkspaceAllocator d;
     DevAscendProgram devProg{};
-    devProg.runtimeOutcastPoolSize = 4;
+    devProg.memBudget.tensor.runtimeOutcastPoolSize = 4;
 
     InitDeviceWorkspaceAllocatorForTest(d, devProg, workspace);
 
@@ -530,7 +530,7 @@ TEST_F(RuntimeOutcastTensorTest, RefCountMultipleRefsAndDerefs)
 
     // Final deref should return to pool
     d.RuntimeOutcastTensorDeref(a);
-    EXPECT_EQ(d.runtimeOutcastTensorPool_.FreeItemNum(), devProg.runtimeOutcastPoolSize);
+    EXPECT_EQ(d.runtimeOutcastTensorPool_.FreeItemNum(), devProg.memBudget.tensor.runtimeOutcastPoolSize);
 }
 
 TEST_F(RuntimeOutcastTensorTest, AssignToSelfWithMultipleRefs)
@@ -539,7 +539,7 @@ TEST_F(RuntimeOutcastTensorTest, AssignToSelfWithMultipleRefs)
 
     DeviceWorkspaceAllocator d;
     DevAscendProgram devProg{};
-    devProg.runtimeOutcastPoolSize = 4;
+    devProg.memBudget.tensor.runtimeOutcastPoolSize = 4;
 
     InitDeviceWorkspaceAllocatorForTest(d, devProg, workspace);
 
@@ -566,7 +566,7 @@ TEST_F(RuntimeOutcastTensorTest, MixedSafeAndUnsafeOperations)
 
     DeviceWorkspaceAllocator d;
     DevAscendProgram devProg{};
-    devProg.runtimeOutcastPoolSize = 4;
+    devProg.memBudget.tensor.runtimeOutcastPoolSize = 4;
 
     InitDeviceWorkspaceAllocatorForTest(d, devProg, workspace);
 
@@ -592,7 +592,7 @@ TEST_F(RuntimeOutcastTensorTest, DelayedRecycleListBehavior)
 
     DeviceWorkspaceAllocator d;
     DevAscendProgram devProg{};
-    devProg.runtimeOutcastPoolSize = 8;
+    devProg.memBudget.tensor.runtimeOutcastPoolSize = 8;
 
     InitDeviceWorkspaceAllocatorForTest(d, devProg, workspace);
 
@@ -652,7 +652,7 @@ TEST_F(RuntimeOutcastTensorTest, DualOutcastPoolAllocateAndRecycle)
 
     DeviceWorkspaceAllocator d;
     DevAscendProgram devProg{};
-    devProg.runtimeOutcastPoolSize = 4;
+    devProg.memBudget.tensor.runtimeOutcastPoolSize = 4;
     devProg.memBudget.tensor.devTaskBoundaryOutcastNum = 1;
     devProg.memBudget.tensor.devTaskInnerTemporalOutcastNum = 1;
     devProg.memBudget.tensor.maxStaticOutcastMem = kSlotMem;

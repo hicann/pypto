@@ -108,7 +108,8 @@ def cfa_attention(
 
 @pypto.frontend.jit(
     runtime_options={"stitch_function_max_num": 128,
-                        "device_sched_mode": 1},
+                        "device_sched_mode": 1,
+                        "max_workspace_kb": 65536},
 
     # 当子图大小达到上界不允许与其他子图合并
     pass_options={"cube_l1_reuse_setting": {-1: 3},

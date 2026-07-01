@@ -264,6 +264,15 @@
                     "minimum": 1,
                     "maximum": 1024
                 },
+                "max_workspace_kb": {
+                    "type": "integer",
+                    "label": {
+                        "zh": "DeviceTask workspace 总内存上限(KB), 按当前内存预算进行stitch构建, 不再受stitch_function_max_num限制, 0表示不使能",
+                        "en": "Total memory limit (KB) for DeviceTask workspace. Stitch construction is performed based on the current memory budget and is no longer constrained by stitch_function_max_num; a value of 0 disables this feature."
+                    },
+                    "minimum": 0,
+                    "maximum": 2147483647
+                },
 
                 "run_mode": {
                     "type": "integer",

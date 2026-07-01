@@ -43,9 +43,7 @@ struct DevAscendProgram {
     uint64_t configKey;
     uint64_t hashKey;
     uint32_t slotSize;
-    uint32_t runtimeOutcastPoolSize;
     uint32_t assembleSlotSize;
-    uint32_t slottableOutcastSlotSize;
     uint32_t ctrlBlockDim{0};
     struct {
         struct {
@@ -63,6 +61,9 @@ struct DevAscendProgram {
             uint64_t devTaskInnerTemporalOutcastNum{0};
 
             uint32_t parallelism{1};
+            uint32_t runtimeOutcastPoolSize{0};
+            uint32_t slottableOutcastSlotSize{0};
+            uint32_t memoryDrivenWorkspace{0};
 
             uint64_t MaxOutcastMem() const { return std::max(maxStaticOutcastMem, maxDynamicAssembleOutcastMem); }
 
@@ -523,6 +524,10 @@ struct DevAscendProgram {
     void SetParallelism(uint32_t parallelism) { memBudget.tensor.parallelism = parallelism; }
     uint32_t GetParallelism() { return memBudget.tensor.parallelism; }
 
+    // Live boundary-outcast block count for ctrl-flow cache backup; falls back to outcastCacheDepthFallback.
+    uint64_t GetCtrlFlowCacheSlottedOutcastBlockCount(
+        uint64_t totalSlot, uint32_t outcastCacheDepthFallback = 0) const;
+
 private:
     friend struct EncodeDevAscendProgramInfo;
     friend void EncodeDevAscendProgram(Function* func, uint64_t& offset, DevAscendProgram* base);
@@ -555,6 +560,7 @@ private:
         const std::vector<int>& tInputSlotIndexList, const std::vector<int>& tAssembleSlotIndexList,
         const std::vector<int>& tPartialUpdateSlotIndexList, bool fillContent);
     void InitControlFlowCache(
-        uintdevptr_t& initOffset, const std::shared_ptr<DyndevFunctionAttribute>& dyndevAttr, bool fillContent);
+        uintdevptr_t& initOffset, const std::shared_ptr<DyndevFunctionAttribute>& dyndevAttr, bool fillContent,
+        uint32_t outcastCacheDepthFallback = 0);
 };
 } // namespace npu::tile_fwk::dynamic

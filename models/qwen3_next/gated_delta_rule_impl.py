@@ -351,7 +351,8 @@ def chunk_gated_delta_rule(b, nqk, nv, d, l):
     @pypto.frontend.jit(
         runtime_options={
             "stitch_function_max_num": 2,
-            "device_sched_parallelism": 8
+            "device_sched_parallelism": 8,
+            "max_workspace_kb": 600000
         },
         pass_options={
             "vec_nbuffer_setting": {8: 16, 1: 16, 28: 32, 6: 4, 25: 32, 26: 8,
@@ -480,7 +481,8 @@ def chunk_gated_delta_rule_unaligned(b, nqk, nv, d, l):
     @pypto.frontend.jit(
         runtime_options={
             "stitch_function_max_num": 2,
-            "device_sched_parallelism": 8
+            "device_sched_parallelism": 8,
+            "max_workspace_kb": 600000
         },
         pass_options={
             "vec_nbuffer_setting": {9: 16, 1: 16, 28: 32, 6: 4, 25: 32, 26: 8,

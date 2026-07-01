@@ -131,7 +131,11 @@ def ai_infra_block_attn_res_forward_kernel(
 
 
 @pypto.frontend.jit(
-    runtime_options={"stitch_function_max_num": 64, "device_sched_mode": 0},
+    runtime_options={
+        "stitch_function_max_num": 64,
+        "device_sched_mode": 0,
+        "max_workspace_kb": 300000
+    },
 )
 def ai_infra_block_attn_res_forward_kernel_l_max_32(
     v_flat: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC, pypto.STATIC]),
@@ -343,7 +347,8 @@ def ai_infra_block_attn_res(
 @pypto.frontend.jit(
     runtime_options={
         "stitch_function_max_num": 32,
-        "device_sched_mode": 1
+        "device_sched_mode": 1,
+        "max_workspace_kb": 300000
     }
 )
 def ai_infra_block_attn_res_backward_kernel_l_max_32(

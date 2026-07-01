@@ -257,9 +257,10 @@ struct DevControlFlowCache {
             reinterpret_cast<uintptr_t>(cacheData.Data()) + cacheDataOffset - reinterpret_cast<uintptr_t>(this);
     }
 
+    // slottedOutcastBlockCount: live devTask boundary-outcast block headers backed up for ctrl-flow cache.
     void Init(
         void* dyndevAttrPtr, uint64_t cacheSize, uint64_t runtimeOutcastPoolSize, uint64_t& initOffset,
-        uint32_t stitchMaxFunctionNum);
+        uint64_t slottedOutcastBlockCount);
     uint64_t GetSize() const
     {
         return reinterpret_cast<uintptr_t>(ctrlFlowLastField.End()) - reinterpret_cast<uintptr_t>(this);
