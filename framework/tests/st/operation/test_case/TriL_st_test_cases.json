@@ -1011,6 +1011,100 @@
                 "func_id": -1
             },
             "index": 19
+        },
+        {
+            "case_index": 20,
+            "case_name": "TriL_test_20",
+            "operation": "TriL",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
+                        20,
+                        32
+                    ],
+                    "dtype": "uint16",
+                    "format": "ND",
+                    "need_trans": false,
+                    "data_range": {
+                        "min": 0,
+                        "max": 100
+                    }
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        20,
+                        32
+                    ],
+                    "dtype": "uint16",
+                    "format": "ND",
+                    "need_trans": false
+                }
+            ],
+            "view_shape": [
+                8,
+                20
+            ],
+            "tile_shape": [
+                3,
+                16
+            ],
+            "params": {
+                "diagonal": 0,
+                "on_board": true,
+                "func_id": -1
+            },
+            "index": 20
+        },
+        {
+            "case_index": 21,
+            "case_name": "TriL_test_21",
+            "operation": "TriL",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
+                        20,
+                        32
+                    ],
+                    "dtype": "uint32",
+                    "format": "ND",
+                    "need_trans": false,
+                    "data_range": {
+                        "min": 0,
+                        "max": 100
+                    }
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        20,
+                        32
+                    ],
+                    "dtype": "uint32",
+                    "format": "ND",
+                    "need_trans": false
+                }
+            ],
+            "view_shape": [
+                8,
+                20
+            ],
+            "tile_shape": [
+                3,
+                16
+            ],
+            "params": {
+                "diagonal": 0,
+                "on_board": true,
+                "func_id": -1
+            },
+            "index": 21
         }
     ]
 }

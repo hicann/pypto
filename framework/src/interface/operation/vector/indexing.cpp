@@ -694,11 +694,15 @@ Tensor GatherElements(const Tensor& params, const Tensor& indices, int axis)
         CHECK(VectorErrorCode::ERR_PARAM_INVALID, indices.GetShape()[i] <= params.GetShape()[i])
             << "The shape of params and indices should be equal";
     }
-    std::unordered_set<DataType> supportedTypes = {DT_FP32, DT_FP16, DT_BF16, DT_INT32, DT_INT16};
+    static const std::unordered_set<DataType> a2a3Types = {DT_FP32,   DT_FP16,  DT_BF16,  DT_INT32,
+                                                           DT_UINT32, DT_INT16, DT_UINT16};
+    static const std::unordered_set<DataType> a5Types = {DT_FP32,  DT_FP16,   DT_BF16, DT_INT32, DT_UINT32,
+                                                         DT_INT16, DT_UINT16};
+    const auto& supportedTypes = GetSupportedDataTypesByArch(a2a3Types, a5Types);
     CheckTensorDataType(params.GetStorage(), supportedTypes, "GATHERELEMENTS");
     std::unordered_set<DataType> indexSupportedTypes = {DT_INT32, DT_INT64};
     CheckTensorDataType(indices.GetStorage(), indexSupportedTypes, "GATHERELEMENTS");
-    CheckTensorDimRange(params.GetStorage(), 1, 4, "GATHERELEMENTS");
+    CheckTensorDimRange(params.GetStorage(), 1, 5, "GATHERELEMENTS");
     CheckTensorShapeSize(params.GetStorage(), "GATHERELEMENTS");
     CheckTensorShapeSize(indices.GetStorage(), "GATHERELEMENTS");
     CheckTensorsFormatConsistency(params.GetStorage(), indices.GetStorage(), "GATHERELEMENTS");
@@ -782,11 +786,9 @@ void InnerTiledScatterElementS(
 void TiledScatterElementS(Function& function, const TileShape& tileShape, const ScatterElementSPara& scatterPara)
 {
     // Check Operands Valid
-    CHECK(
-        VectorErrorCode::ERR_PARAM_INVALID, scatterPara.srcInput->shape.size() == scatterPara.srcInput->offset.size())
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, scatterPara.srcInput->shape.size() == scatterPara.srcInput->offset.size())
         << "The size of srcInput shape and offset should be equal";
-    CHECK(
-        VectorErrorCode::ERR_PARAM_INVALID, scatterPara.idxInput->shape.size() == scatterPara.idxInput->offset.size())
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, scatterPara.idxInput->shape.size() == scatterPara.idxInput->offset.size())
         << "The size of idxInput shape and offset should be equal";
     CHECK(
         VectorErrorCode::ERR_PARAM_INVALID, scatterPara.dstTensor->shape.size() == scatterPara.dstTensor->offset.size())
@@ -950,11 +952,9 @@ void InnerTiledScatter(
 void TiledScatter(Function& function, const TileShape& tileShape, const ScatterPara& scatterPara)
 {
     // Check Operands Valid
-    CHECK(
-        VectorErrorCode::ERR_PARAM_INVALID, scatterPara.srcInput->shape.size() == scatterPara.srcInput->offset.size())
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, scatterPara.srcInput->shape.size() == scatterPara.srcInput->offset.size())
         << "The shape size of srcInput and offset should be equal";
-    CHECK(
-        VectorErrorCode::ERR_PARAM_INVALID, scatterPara.idxInput->shape.size() == scatterPara.idxInput->offset.size())
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, scatterPara.idxInput->shape.size() == scatterPara.idxInput->offset.size())
         << "The shape size of idxInput and offset should be equal";
     CHECK(
         VectorErrorCode::ERR_PARAM_INVALID, scatterPara.dstTensor->shape.size() == scatterPara.dstTensor->offset.size())

@@ -28,7 +28,7 @@ gather(input: Tensor, dim: int, index: Tensor) -> Tensor
 
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
-| input   | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_FP32、DT_FP16、DT_BF16、DT_INT32、DT_INT16。 <br> 不支持空Tensor，Shape支持1-4维，且shape size不大于2147483647（即INT32_MAX）。 |
+| input   | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 不同型号支持的数据类型有所差异，详细请参见[约束说明](#约束说明)。<br> 不支持空Tensor，Shape支持1-5维，且shape size不大于2147483647（即INT32_MAX）。 |
 | dim     | 输入      | 指定索引的维度。 <br> 支持任意合法的维度索引，范围为：-input.dim到input.dim - 1。 |
 | index   | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_INT32，DT_INT64。 <br> 不支持空Tensor，Shape支持1-4维，需保证index所有轴上的Shape大小不超过input的对应Shape大小，且值为合法索引，即不超过input在dim轴上的Shape大小。 |
 
@@ -44,9 +44,14 @@ gather(input: Tensor, dim: int, index: Tensor) -> Tensor
 
 3. input.shape的dim轴不可切，要求viewshape\[dim\] \>= max\( input.shape\[dim\], index.shape\[dim\] \)，其余维度的Shape大小不做限制；
 
-4. TileShape的维度与index相同，用于切分input和index，input的dim轴不可切，且所有输入和输出的TileShape大小总和不能超过UB内存的大小。
+4. TileShape的维度与index相同，用于切分input和index，input的dim轴不可切，且所有输入和输出的TileShape大小总和不能超过UB内存的大小；
 
-5. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
+5. Tensor数据类型说明：
+   - Ascend 950PR：DT_INT16, DT_INT32, DT_UINT16, DT_UINT32, DT_FP16, DT_FP32, DT_BF16。
+   - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_INT16, DT_INT32, DT_UINT16, DT_UINT32, DT_FP16, DT_FP32, DT_BF16。
+   - Atlas A2 训练系列产品/Atlas A2 推理系列产品：DT_INT16, DT_INT32, DT_UINT16, DT_UINT32, DT_FP16, DT_FP32, DT_BF16。
+
+6. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
 
 
 ## 调用示例

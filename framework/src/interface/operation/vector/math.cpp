@@ -110,7 +110,8 @@ Tensor LogicalNot(const Tensor& self)
 }
 
 template <typename T>
-int64_t MultiplyLastTwoDims(const std::vector<int64_t>& vec) {
+int64_t MultiplyLastTwoDims(const std::vector<int64_t>& vec)
+{
     constexpr size_t ALIGN_SIZE = 32;
     constexpr size_t ELEMENT_SIZE = sizeof(T);
     constexpr size_t ALIGN_ELEMENTS = ALIGN_SIZE / ELEMENT_SIZE;
@@ -228,7 +229,8 @@ Tensor Signbit(const Tensor& self)
     RETURN_CALL(SignbitOperation, *Program::GetInstance().GetCurrentFunction(), self.GetStorage());
 }
 
-int64_t CmpResAlign(const std::vector<int64_t>& vec) {
+int64_t CmpResAlign(const std::vector<int64_t>& vec)
+{
     constexpr size_t ALIGN_SIZE = 32;
     constexpr size_t ALIGN_BIT = 8;
     int64_t axis2 = (vec[vec.size() - 1] + ALIGN_BIT - 1) / ALIGN_BIT * ALIGN_BIT;
@@ -237,11 +239,12 @@ int64_t CmpResAlign(const std::vector<int64_t>& vec) {
 }
 
 void TiledTanhOperation(
-    Function &function, const TileShape &tileShape, size_t cur, Input &input, const LogicalTensorPtr &result) {
+    Function& function, const TileShape& tileShape, size_t cur, Input& input, const LogicalTensorPtr& result)
+{
     if (cur == input.tensor.GetShape().size()) {
         auto tile = input.tensor.GetStorage()->View(function, input.tileInfo.shape, input.tileInfo.offset);
         auto resultTile = result->View(function, input.tileInfo.shape, input.tileInfo.offset);
-        
+
         constexpr size_t ALIGN_SIZE = 32;
         int64_t tmpSize = MultiplyLastTwoDims<float>(input.tileInfo.shape);
         int64_t cmpsize = CmpResAlign(input.tileInfo.shape);
@@ -258,7 +261,7 @@ void TiledTanhOperation(
 
         return;
     }
-    auto &vecTile = tileShape.GetVecTile();
+    auto& vecTile = tileShape.GetVecTile();
     for (int i = 0; i < input.tensor.GetShape()[cur]; i += vecTile[cur]) {
         input.tileInfo.shape[cur] = std::min(input.tensor.GetShape()[cur] - i, vecTile[cur]);
         input.tileInfo.offset[cur] = i;
@@ -267,7 +270,8 @@ void TiledTanhOperation(
 }
 
 void TiledTanhOperation(
-    Function& function, const TileShape& tileShape, const LogicalTensorPtr& self, const LogicalTensorPtr& result) {
+    Function& function, const TileShape& tileShape, const LogicalTensorPtr& self, const LogicalTensorPtr& result)
+{
     CHECK(VectorErrorCode::ERR_PARAM_INVALID, self->shape.size() == self->offset.size())
         << "Shape size and offset size should be equal";
 
@@ -276,13 +280,16 @@ void TiledTanhOperation(
     TiledTanhOperation(function, tileShape, 0, input, result);
 }
 
-LogicalTensorPtr TensorTanhOperation(Function &function, LogicalTensorPtr self) {
-    auto result = std::make_shared<LogicalTensor>(function, self->tensor->datatype, self->shape, self->GetDynValidShape());
+LogicalTensorPtr TensorTanhOperation(Function& function, LogicalTensorPtr self)
+{
+    auto result =
+        std::make_shared<LogicalTensor>(function, self->tensor->datatype, self->shape, self->GetDynValidShape());
     function.AddOperation(Opcode::OP_TANH, {self}, {result});
     return result;
 }
 
-Tensor Tanh(const Tensor &self) {
+Tensor Tanh(const Tensor& self)
+{
     DECLARE_TRACER();
     CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Tanh");
 
@@ -294,7 +301,8 @@ Tensor Tanh(const Tensor &self) {
     RETURN_CALL(TanhOperation, *Program::GetInstance().GetCurrentFunction(), self.GetStorage());
 }
 
-Tensor Neg(const Tensor &self) {
+Tensor Neg(const Tensor& self)
+{
     DECLARE_TRACER();
     CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Neg");
 
@@ -537,7 +545,6 @@ Tensor Pow(const Tensor& self, const Element& other)
     DECLARE_TRACER();
     CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Pow");
 
-
     LogicalTensorPtr castSelf = self.GetStorage();
     if ((self.GetDataType() == DT_INT32 || self.GetDataType() == DT_INT16) && other.GetDataType() != DT_INT32) {
         castSelf = CALL(
@@ -731,7 +738,7 @@ Tensor LogicalAnd(const Tensor& self, const Tensor& other)
     CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "LogicalAnd");
     CheckTensorFormat(other.GetStorage(), {TileOpFormat::TILEOP_NZ}, "LogicalAnd");
 
-    std::unordered_set<DataType> supportedTypes = {DT_FP32,  DT_FP16, DT_BF16,  DT_INT8, DT_UINT8,
+    std::unordered_set<DataType> supportedTypes = {DT_FP32, DT_FP16,  DT_BF16,  DT_INT8, DT_UINT8,
                                                    DT_BOOL, DT_INT16, DT_INT32, DT_INT64};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "LOGICALAND");
     CheckTensorDataType(other.GetStorage(), supportedTypes, "LOGICALAND");
@@ -761,15 +768,17 @@ void SignbitOperationTileFunc(
     TiledSignbitOperation(function, tileShape, iOperand[0], oOperand[0]);
 }
 
-void TanhOperationTileFunc(Function &function, const TileShape &tileShape,
-    const std::vector<LogicalTensorPtr> &iOperand, const std::vector<LogicalTensorPtr> &oOperand,
-    [[maybe_unused]] const Operation &op) {
+void TanhOperationTileFunc(
+    Function& function, const TileShape& tileShape, const std::vector<LogicalTensorPtr>& iOperand,
+    const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
+{
     TiledTanhOperation(function, tileShape, iOperand[0], oOperand[0]);
 }
 
-void OneHotOperationTileFunc(Function &function, const TileShape &tileShape,
-    const std::vector<LogicalTensorPtr> &iOperand, const std::vector<LogicalTensorPtr> &oOperand,
-    [[maybe_unused]] const Operation &op) {
+void OneHotOperationTileFunc(
+    Function& function, const TileShape& tileShape, const std::vector<LogicalTensorPtr>& iOperand,
+    const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
+{
     UnaryOperationOperandCheck(iOperand, oOperand);
     int numClasses = op.GetIntAttribute(OP_ATTR_PREFIX + "numClasses");
     TiledOneHot(function, tileShape, iOperand[0], oOperand[0], numClasses);
@@ -915,8 +924,9 @@ void TiledCumOperation(Function& function, const TileShape& tileShape, const Cum
         << "Shape size and offset size should be equal";
 
     const int rank = static_cast<int>(cumOperationPara.input->GetShape().size());
-    CHECK(VectorErrorCode::ERR_PARAM_INVALID, rank >= static_cast<int>(MIN_TENSOR_DIM) &&
-        rank <= static_cast<int>(MAX_TENSOR_DIM))
+    CHECK(
+        VectorErrorCode::ERR_PARAM_INVALID,
+        rank >= static_cast<int>(MIN_TENSOR_DIM) && rank <= static_cast<int>(MAX_TENSOR_DIM))
         << "CumSum/CumProd tiling supports rank 1-4";
 
     CumOperationTileInfoPara tileInfo{
@@ -1007,8 +1017,7 @@ void CheckCumOperation(const Tensor& input, const int& axis, const bool& is_sum)
     int tmpAxis0 = axis;
     CheckAxisRange(input, tmpAxis0);
     if (input.GetShape().size() == 1) {
-        CHECK(VectorErrorCode::ERR_PARAM_INVALID, tmpAxis0 == 0)
-            << "when input.GetShape().size() is 1, axis must be 0";
+        CHECK(VectorErrorCode::ERR_PARAM_INVALID, tmpAxis0 == 0) << "when input.GetShape().size() is 1, axis must be 0";
     }
     CHECK(VectorErrorCode::ERR_PARAM_INVALID, tmpAxis0 == 0 || static_cast<size_t>(tmpAxis0) < input.GetShape().size())
         << "The tmpAxis0 should be 0 and less than shape size";
@@ -1143,7 +1152,10 @@ void TiledTriUL(Function& function, const TileShape& tileShape, const TriULPara&
 
 void CheckTriULOperationParams(const Tensor& input, const std::string& opName)
 {
-    std::unordered_set<DataType> supportedTypes = {DT_FP32, DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_INT8};
+    static const std::unordered_set<DataType> a2a3Types = {DT_FP32, DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_INT8};
+    static const std::unordered_set<DataType> a5Types = {DT_FP32,  DT_FP16, DT_BF16,   DT_INT16,
+                                                         DT_INT32, DT_INT8, DT_UINT16, DT_UINT32};
+    const auto& supportedTypes = GetSupportedDataTypesByArch(a2a3Types, a5Types);
     CheckTensorDataType(input.GetStorage(), supportedTypes, opName);
     CheckTensorDimRange(input.GetStorage(), 2, 5, opName);
     CheckTensorShapeSize(input.GetStorage(), opName);
