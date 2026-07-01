@@ -689,7 +689,7 @@ std::string CodeGenOpNPU::PrintIndexAddUBDynamicUnaligned(const PrintIndexAddPar
     std::string src = "(" + addrType + " " + dataTypeExpr[ID1] + "*)" + srcVar;
     std::string indices = "(" + addrType + " " + dataTypeExpr[ID2] + "*)" + indicesVar;
     paramList.insert(paramList.end(), {dst, src, indices});
-    std::string scalarTmpBuffer = FormatFloat(alpha.Cast<float>());
+    std::string scalarTmpBuffer = FormatScalarLiteral(alpha);
     paramList.emplace_back("(" + std::string(DataType2CCEStr(alpha.GetDataType())) + ")" + scalarTmpBuffer);
     auto validShape = dynamicValidShape[ID3]; // srcvalidshape
     FillVecWithDummyInHead<SymbolicScalar>(validShape, SHAPE_DIM4 - validShape.size(), 1);
@@ -713,7 +713,7 @@ std::string CodeGenOpNPU::PrintIndexAddUBTileTensor(const PrintIndexAddParam& pa
 
     paramList = GetTileOpParamsWithTmpBuf({ToUnderlying(MIMOIdx::TMP_IDX)});
     const Element& alpha = extOperandVal;
-    std::string scalarTmpBuffer = FormatFloat(alpha.Cast<float>());
+    std::string scalarTmpBuffer = FormatScalarLiteral(alpha);
     paramList.emplace_back("(" + std::string(DataType2CCEStr(alpha.GetDataType())) + ")" + scalarTmpBuffer);
     std::string tiloOpCallParam = JoinString(paramList, CONN_COMMA);
     std::ostringstream oss;
@@ -760,7 +760,7 @@ std::string CodeGenOpNPU::GenIndexAddOp() const
     std::vector<std::string> tileOpParamList = GetTileOpParamsWithTmpBuf({ToUnderlying(MIMOIdx::TMP_IDX)});
     tileOpParamList.emplace_back(coord);
     const Element& alpha = extOperandVal;
-    std::string scalarTmpBuffer = FormatFloat(alpha.Cast<float>());
+    std::string scalarTmpBuffer = FormatScalarLiteral(alpha);
     tileOpParamList.emplace_back("(" + std::string(DataType2CCEStr(alpha.GetDataType())) + ")" + scalarTmpBuffer);
     std::ostringstream oss;
     oss << tileOpName << WrapParamByAngleBrackets(templateParamList) << WrapParamByParentheses(tileOpParamList)
@@ -979,8 +979,8 @@ std::string CodeGenOpNPU::PrintWhereOp(const WhereParam& param) const
 
     std::ostringstream os;
     if (opCode == Opcode::OP_WHERE_SS) {
-        std::string src0Var = FormatFloat(extScalarVec[0].GetVariantData());
-        std::string src1Var = FormatFloat(extScalarVec[1].GetVariantData());
+        std::string src0Var = FormatScalarLiteral(extScalarVec[0]);
+        std::string src1Var = FormatScalarLiteral(extScalarVec[1]);
         extList.emplace_back(dataTypeExpr[0] + "(" + src0Var + ")");
         extList.emplace_back(dataTypeExpr[0] + "(" + src1Var + ")");
         auto extParam = JoinString(extList, ", ");
@@ -988,7 +988,7 @@ std::string CodeGenOpNPU::PrintWhereOp(const WhereParam& param) const
            << "(" << funcParam << ", " << extParam << ", " << dynFuncParam << ");\n";
         return os.str();
     } else if (opCode == Opcode::OP_WHERE_ST) {
-        std::string scalarVar = FormatFloat(extOperandVal.GetVariantData());
+        std::string scalarVar = FormatScalarLiteral(extOperandVal);
         std::string src0Var = varExpr[ToUnderlying(WhereOpIdx::src0Idx)];
         std::string src1DtypeStr = DataType2CCEStr(operandDtype[ToUnderlying(WhereOpIdx::src0Idx)]);
         extList.emplace_back(dataTypeExpr[0] + "(" + scalarVar + ")");
@@ -998,7 +998,7 @@ std::string CodeGenOpNPU::PrintWhereOp(const WhereParam& param) const
            << "(" << funcParam << ", " << extParam << ", " << dynFuncParam << ");\n";
         return os.str();
     } else if (opCode == Opcode::OP_WHERE_TS) {
-        std::string scalarVar = FormatFloat(extOperandVal.GetVariantData());
+        std::string scalarVar = FormatScalarLiteral(extOperandVal);
         std::string src0Var = varExpr[ToUnderlying(WhereOpIdx::src0Idx)];
         std::string src0DtypeStr = DataType2CCEStr(operandDtype[ToUnderlying(WhereOpIdx::src0Idx)]);
         extList.emplace_back("(__ubuf__ " + src0DtypeStr + "*)" + src0Var);
@@ -1037,19 +1037,19 @@ std::string CodeGenOpNPU::PrintWhereOpTileTensor(const WhereParam& param) const
     }
     if (opCode == Opcode::OP_WHERE_TS) {
         std::string src0Tensor = QueryTileTensorNameByIdx(ToUnderlying(WhereOpIdx::src0Idx));
-        std::string scalarVar = FormatFloat(extOperandVal.GetVariantData());
+        std::string scalarVar = FormatScalarLiteral(extOperandVal);
         oss << src0Tensor << ", " << dataTypeExpr[0] + "(" + scalarVar + ")"
             << ");\n";
     }
     if (opCode == Opcode::OP_WHERE_ST) {
         std::string src0Tensor = QueryTileTensorNameByIdx(ToUnderlying(WhereOpIdx::src0Idx));
-        std::string scalarVar = FormatFloat(extOperandVal.GetVariantData());
+        std::string scalarVar = FormatScalarLiteral(extOperandVal);
         oss << dataTypeExpr[0] + "(" + scalarVar + ")"
             << ", " << src0Tensor << ");\n";
     }
     if (opCode == Opcode::OP_WHERE_SS) {
-        std::string src0Var = FormatFloat(extScalarVec[0].GetVariantData());
-        std::string src1Var = FormatFloat(extScalarVec[1].GetVariantData());
+        std::string src0Var = FormatScalarLiteral(extScalarVec[0]);
+        std::string src1Var = FormatScalarLiteral(extScalarVec[1]);
         std::vector<std::string> extList;
         extList.emplace_back(dataTypeExpr[0] + "(" + src0Var + ")");
         extList.emplace_back(dataTypeExpr[0] + "(" + src1Var + ")");
@@ -1133,14 +1133,8 @@ std::string CodeGenOpNPU::PrintCmpTileTensor() const
         auto scalarAttr = opAttrs.at(OpAttributeKey::scalar);
         auto scalarElement = AnyCast<Element>(scalarAttr);
         auto scalarType = scalarElement.GetDataType();
-        if (scalarType == DataType::DT_FP16) {
-            templateParamList.emplace_back("half");
-        } else if (scalarType == DataType::DT_BF16) {
-            templateParamList.emplace_back("bfloat16_t");
-        } else {
-            templateParamList.emplace_back("float");
-        }
-        tileOpParamList.emplace_back(FormatFloat(scalarElement.Cast<float>(), scalarType));
+        templateParamList.emplace_back(DataType2CCEStr(scalarType));
+        tileOpParamList.emplace_back(FormatScalarLiteral(scalarElement));
     }
     std::ostringstream oss;
     oss << tileOpName;
@@ -1232,7 +1226,7 @@ std::string CodeGenOpNPU::GenCmpOp() const
     if (isScalarMode) {
         auto scalarAttr = opAttrs.at(OpAttributeKey::scalar);
         auto scalarElement = AnyCast<Element>(scalarAttr);
-        paramList.emplace_back(FormatFloat(scalarElement.Cast<float>(), scalarElement.GetDataType()));
+        paramList.emplace_back(FormatScalarLiteral(scalarElement));
     }
 
     std::string tiloOpCallParam = JoinString(paramList, ", ");

@@ -93,7 +93,7 @@ void TestWhereBody(
 TEST_F(TestCodegenWhere, TestOpWhereSS)
 {
     std::string expect =
-        R"!!!(TileOp::Where_SS<float, float, /*DstRawShape*/ 1, 64, 64, /*ConditionRawShape*/ 1, 64, 64, /*Src0RawShape*/ 1, 1, 1>((__ubuf__ float*)UB_S0_E0, (__ubuf__ float*)UB_S0_E0, (__ubuf__ float*)UB_S0_E0, float(1), float(2), 1, 1, 1, 1);
+        R"!!!(TileOp::Where_SS<float, float, /*DstRawShape*/ 1, 64, 64, /*ConditionRawShape*/ 1, 64, 64, /*Src0RawShape*/ 1, 1, 1>((__ubuf__ float*)UB_S0_E0, (__ubuf__ float*)UB_S0_E0, (__ubuf__ float*)UB_S0_E0, float(1.f), float(2.f), 1, 1, 1, 1);
 )!!!";
     TestWhereBody(Opcode::OP_WHERE_SS, "TestOpWhereSS", expect);
 }
@@ -101,7 +101,7 @@ TEST_F(TestCodegenWhere, TestOpWhereSS)
 TEST_F(TestCodegenWhere, TestOpWhereST)
 {
     std::string expect =
-        R"!!!(TileOp::Where_ST<float, float, /*DstRawShape*/ 1, 64, 64, /*ConditionRawShape*/ 1, 64, 64, /*Src0RawShape*/ 1, 64, 64>((__ubuf__ float*)UB_S0_E0, (__ubuf__ float*)UB_S0_E0, (__ubuf__ float*)UB_S0_E0, float(1), (__ubuf__ float*)UB_S0_E0, 1, 1, 1, 1);
+        R"!!!(TileOp::Where_ST<float, float, /*DstRawShape*/ 1, 64, 64, /*ConditionRawShape*/ 1, 64, 64, /*Src0RawShape*/ 1, 64, 64>((__ubuf__ float*)UB_S0_E0, (__ubuf__ float*)UB_S0_E0, (__ubuf__ float*)UB_S0_E0, float(1.f), (__ubuf__ float*)UB_S0_E0, 1, 1, 1, 1);
 )!!!";
     TestWhereBody(Opcode::OP_WHERE_ST, "TestOpWhereST", expect);
 }
@@ -109,7 +109,7 @@ TEST_F(TestCodegenWhere, TestOpWhereST)
 TEST_F(TestCodegenWhere, TestOpWhereTS)
 {
     std::string expect =
-        R"!!!(TileOp::Where_TS<float, float, /*DstRawShape*/ 1, 64, 64, /*ConditionRawShape*/ 1, 64, 64, /*Src0RawShape*/ 1, 64, 64>((__ubuf__ float*)UB_S0_E0, (__ubuf__ float*)UB_S0_E0, (__ubuf__ float*)UB_S0_E0, (__ubuf__ float*)UB_S0_E0, float(1), 1, 1, 1, 1);
+        R"!!!(TileOp::Where_TS<float, float, /*DstRawShape*/ 1, 64, 64, /*ConditionRawShape*/ 1, 64, 64, /*Src0RawShape*/ 1, 64, 64>((__ubuf__ float*)UB_S0_E0, (__ubuf__ float*)UB_S0_E0, (__ubuf__ float*)UB_S0_E0, (__ubuf__ float*)UB_S0_E0, float(1.f), 1, 1, 1, 1);
 )!!!";
     TestWhereBody(Opcode::OP_WHERE_TS, "TestOpWhereTS", expect);
 }
@@ -125,7 +125,7 @@ TEST_F(TestCodegenWhere, TestOpWhereTT)
 TEST_F(TestCodegenWhere, TestOpWhereSS_TileTensor)
 {
     std::string expect =
-        R"!!!(TWhereSS(ubTensor_0, ubTensor_0, ubTensor_0, float(1), float(2));
+        R"!!!(TWhereSS(ubTensor_0, ubTensor_0, ubTensor_0, float(1.f), float(2.f));
 )!!!";
     TestWhereBody(Opcode::OP_WHERE_SS, "TestOpWhereSS", expect, true);
 }
@@ -133,7 +133,7 @@ TEST_F(TestCodegenWhere, TestOpWhereSS_TileTensor)
 TEST_F(TestCodegenWhere, TestOpWhereST_TileTensor)
 {
     std::string expect =
-        R"!!!(TWhereST(ubTensor_0, ubTensor_0, ubTensor_0, float(1), ubTensor_0);
+        R"!!!(TWhereST(ubTensor_0, ubTensor_0, ubTensor_0, float(1.f), ubTensor_0);
 )!!!";
     TestWhereBody(Opcode::OP_WHERE_ST, "TestOpWhereST", expect, true);
 }
@@ -141,7 +141,7 @@ TEST_F(TestCodegenWhere, TestOpWhereST_TileTensor)
 TEST_F(TestCodegenWhere, TestOpWhereTS_TileTensor)
 {
     std::string expect =
-        R"!!!(TWhereTS(ubTensor_0, ubTensor_0, ubTensor_0, ubTensor_0, float(1));
+        R"!!!(TWhereTS(ubTensor_0, ubTensor_0, ubTensor_0, ubTensor_0, float(1.f));
 )!!!";
     TestWhereBody(Opcode::OP_WHERE_TS, "TestOpWhereTS", expect, true);
 }

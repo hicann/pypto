@@ -145,11 +145,13 @@ void TiledBinaryOperation(
             op = &function.AddOperation(
                 GetBinaryOpNameCode<T, false, false>(), {inputTile1, inputTile2}, {resultTile, workspace});
         } else if (opName == "FLOORDIV") {
-            std::vector<int64_t> tmpShape;
+            std::vector<int64_t> tmpShape(resultTileInfo.shape);
             auto alignSize = BLOCK_SIZE / BytesOf(result->Datatype());
-            tmpShape.push_back(AlignUp(resultTileInfo.shape.back(), alignSize) * 4);
-            auto tempTensor = std::make_shared<LogicalTensor>(function, result->Datatype(), tmpShape);
-            function.AddOperation(
+            tmpShape[resultTileInfo.shape.size() - 1] = AlignUp(resultTileInfo.shape.back(), alignSize) * 4;
+            int64_t intermediateBytes =
+                std::accumulate(tmpShape.begin(), tmpShape.end(), 1LL, std::multiplies<int64_t>()) * BytesOf(DT_FP32);
+            auto tempTensor = std::make_shared<LogicalTensor>(function, DT_UINT8, std::vector<int64_t>{intermediateBytes});
+            op = &function.AddOperation(
                 GetBinaryOpNameCode<T, false, false>(), {inputTile1, inputTile2}, {resultTile, tempTensor});
         } else {
             op = &function.AddOperation(
@@ -777,12 +779,14 @@ Tensor Pow(const Tensor& self, const Element& other, PrecisionType precisionType
 Tensor FloorDiv(const Tensor& self, const Tensor& other)
 {
     DECLARE_TRACER();
-    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "FloorDiv");
-    CheckTensorFormat(other.GetStorage(), {TileOpFormat::TILEOP_NZ}, "FloorDiv");
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "FLOORDIV");
+    CheckTensorFormat(other.GetStorage(), {TileOpFormat::TILEOP_NZ}, "FLOORDIV");
+
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_FP32, DT_INT32, DT_INT8, DT_UINT8};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "FLOORDIV");
+    CheckTensorDataType(other.GetStorage(), supportedTypes, "FLOORDIV");
 
     CheckTensorsDataTypeConsistency(self.GetStorage(), other.GetStorage(), "FLOORDIV");
-    std::unordered_set<DataType> supportedTypes = {DT_INT32};
-    CheckTensorDataType(self.GetStorage(), supportedTypes, "FLOORDIV");
     RETURN_CALL(BinaryOperation<BinaryOpType::FLOORDIV>, *Program::GetInstance().GetCurrentFunction(), self, other);
 }
 
@@ -805,10 +809,12 @@ void TiledBinaryOperationScalar(
             tmpOp.SetAttribute(OP_ATTR_PREFIX + "reverseOperand", reverseOperand);
             return;
         } else if (opNameCode == Opcode::OP_FLOORDIVS) {
-            std::vector<int64_t> tmpShape;
             auto alignSize = BLOCK_SIZE / BytesOf(input1.tensor->Datatype());
-            tmpShape.push_back(AlignUp(resultTileInfo.shape.back(), alignSize) * 3);
-            auto tempTensor = std::make_shared<LogicalTensor>(function, input1.tensor->Datatype(), tmpShape);
+            std::vector<int64_t> tmpShape(resultTileInfo.shape);
+            tmpShape[resultTileInfo.shape.size() - 1] = AlignUp(resultTileInfo.shape.back(), alignSize) * 3;
+            int64_t intermediateBytes =
+                std::accumulate(tmpShape.begin(), tmpShape.end(), 1LL, std::multiplies<int64_t>()) * BytesOf(DT_FP32);
+            auto tempTensor = std::make_shared<LogicalTensor>(function, DT_UINT8, std::vector<int64_t>{intermediateBytes});
             auto& tmpOp = function.AddOperation(opNameCode, {inputTile1}, {resultTile, tempTensor});
             tmpOp.SetAttribute(OpAttributeKey::scalar, value);
             tmpOp.SetAttribute(OP_ATTR_PREFIX + "reverseOperand", reverseOperand);
@@ -1222,10 +1228,13 @@ Tensor CeilDiv(const Tensor& self, const Element& other)
 Tensor FloorDiv(const Tensor& self, const Element& other)
 {
     DECLARE_TRACER();
-    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "FloorDiv");
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "FLOORDIV");
 
-    std::unordered_set<DataType> supportedTypes = {DT_INT32};
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_FP32, DT_INT32, DT_INT8, DT_UINT8};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "FLOORDIV");
+    CHECK(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED, other.GetDataType() == self.GetDataType())
+        << "Scalar dtype incorrect. Scalar dtype should be same as self dtype, self dtype is: "
+        << DataType2String(self.GetDataType()) << ", actual scalar dtype is: " << DataType2String(other.GetDataType());
     RETURN_CALL(
         BinaryOperationScalar<BinaryOpType::FLOORDIV>, *Program::GetInstance().GetCurrentFunction(), self.GetStorage(),
         other);

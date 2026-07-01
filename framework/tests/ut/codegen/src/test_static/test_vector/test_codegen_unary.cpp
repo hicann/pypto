@@ -148,7 +148,7 @@ TEST_F(TestCodegenUnary, FullDim2TileTensor)
 {
     Function& func = TestFullBody({32, 32}, {16, 16}, "FULL_DIM2_TILETENSOR", true);
     std::string res = GetResultFromCpp(func);
-    std::string expect = R"!!!(TVecDup<float>(ubTensor_0, 2);)!!!";
+    std::string expect = R"!!!(TVecDup<float>(ubTensor_0, 2.f);)!!!";
     CheckStringExist(expect, res);
 }
 

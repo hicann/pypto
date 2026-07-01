@@ -55,7 +55,7 @@ TEST_F(TestCodegenDynRange, TestDynOpRange)
 
     std::string res = GenOpCodeFromOp(*function, op);
     std::string expect =
-        R"!!!(TileOp::DynRange<float, 64>((__ubuf__ float*)UB_S0_E0, 64, 1, 2, ((int64_t)(0)));
+        R"!!!(TileOp::DynRange<float, 64>((__ubuf__ float*)UB_S0_E0, 64, 1.f, 2.f, ((int64_t)(0)));
 )!!!";
     EXPECT_EQ(res, expect);
 }

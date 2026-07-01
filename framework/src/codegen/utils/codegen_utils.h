@@ -26,6 +26,7 @@
 #include "tilefwk/error_code.h"
 #include "tilefwk/data_type.h"
 #include "interface/tensor/symbolic_scalar.h"
+#include "interface/inner/pre_def.h"
 #include "interface/utils/common.h"
 #include "interface/operation/opcode.h"
 
@@ -113,6 +114,8 @@ std::vector<int> NormalizeExpandAxes(
 
 std::string FormatFloat(
     const std::variant<int64_t, uint64_t, double>& v, DataType dtype = DataType::DT_FP32, int precision = 9);
+
+std::string FormatScalarLiteral(const Element& scalar);
 
 std::string GetTypeForB16B32(const DataType& dtype);
 

@@ -48,7 +48,7 @@ TEST_F(TestCodegenDynRound, TestDynOpRound)
         GenMockFuncDynUnary("TestDynOpRound", {shape}, [](Tensor& input, Tensor& output) { output = Round(input, 1); });
     std::string res = GenCodeByFunction(*function);
     std::string expect =
-        R"!!!(TRound<float>(ubTensor_2, ubTensor_3, ubTensor_0, 10);
+        R"!!!(TRound<float>(ubTensor_2, ubTensor_3, ubTensor_0, 10.f);
 )!!!";
     CheckStringExist(expect, res);
 }

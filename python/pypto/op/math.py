@@ -2463,7 +2463,7 @@ def ceil_div(
 @op_wrapper
 def floor_div(
     input: Tensor,
-    other: Union[Tensor, int],
+    other: Union[Tensor, int, float],
 ) -> Tensor:
     """
     Calculate the floor division of two tensors.
@@ -2471,7 +2471,8 @@ def floor_div(
     ---------
     input: Tensor
         The dividend tensor.
-    other: Tensor or int
+        Supported dtypes: DT_FP16, DT_BF16, DT_FP32, DT_INT32, DT_INT8, DT_UINT8.
+    other: Tensor or int or float
         The divisor tensor or scalar.
     out: Tensor
         The tensor containing the floor division results of the corresponding elements in `input` and `other`.
@@ -2490,6 +2491,8 @@ def floor_div(
     if isinstance(other, pypto_impl.Tensor):
         return pypto_impl.FloorDiv(input, other)
     else:
+        _check_scalar_type("floor_div", input.dtype, other)
+        other = _clip_scalar_to_dtype(input.dtype, other)
         return pypto_impl.FloorDiv(input, pypto_impl.Element(input.dtype, other))
 
 

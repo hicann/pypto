@@ -62,7 +62,7 @@ TEST_F(TestCodegenDynScalar, TestScalarAdds)
 
     std::string res = GenCodeByFunction(*function);
     std::string expect =
-        R"!!!(TileOp::DynTSadds<float, /*DstRawShape*/ 2, 40, /*Src0RawShape*/ 2, 40, 1>((__ubuf__ float*)UB_S0_E320, (__ubuf__ float*)UB_S0_E320, 127,)!!!";
+        R"!!!(TileOp::DynTSadds<float, /*DstRawShape*/ 2, 40, /*Src0RawShape*/ 2, 40, 1>((__ubuf__ float*)UB_S0_E320, (__ubuf__ float*)UB_S0_E320, 127.f,)!!!";
     CheckStringExist(expect, res);
 }
 
@@ -92,7 +92,7 @@ TEST_F(TestCodegenDynScalar, TestScalarDivs)
 
     std::string res = GenCodeByFunction(*function);
     std::string expect =
-        R"!!!(TileOp::DynTSdivs<float, /*DstRawShape*/ 1, 2, 40, /*Src0RawShape*/ 1, 2, 40, 1>((__ubuf__ float*)UB_S0_E320, (__ubuf__ float*)UB_S0_E320, 127,)!!!";
+        R"!!!(TileOp::DynTSdivs<float, /*DstRawShape*/ 1, 2, 40, /*Src0RawShape*/ 1, 2, 40, 1>((__ubuf__ float*)UB_S0_E320, (__ubuf__ float*)UB_S0_E320, 127.f,)!!!";
     CheckStringExist(expect, res);
 }
 
@@ -123,7 +123,7 @@ TEST_F(TestCodegenDynScalar, TestAddsTileTensor)
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX);
 #endif
     std::string res = GenCodeByFunction(*function);
-    std::string expect = R"!!!(TAddS<LastUse2Dim<0, 0>, float>(ubTensor_0, ubTensor_0, 3);
+    std::string expect = R"!!!(TAddS<LastUse2Dim<0, 0>, float>(ubTensor_0, ubTensor_0, 3.f);
 )!!!";
     CheckStringExist(expect, res);
 }

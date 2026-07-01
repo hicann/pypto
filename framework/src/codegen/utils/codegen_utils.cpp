@@ -21,6 +21,7 @@
 #include <unistd.h>
 
 #include "interface/configs/config_manager.h"
+#include "interface/inner/element.h"
 #include "codegen/codegen_common.h"
 
 namespace npu::tile_fwk {
@@ -64,10 +65,29 @@ std::string FormatFloat(const std::variant<int64_t, uint64_t, double>& v, DataTy
             }
         }
         oss << std::setprecision(precision) << val;
-        return oss.str();
+        std::string s = oss.str();
+        // A C/C++ float literal with f suffix needs a decimal point or exponent.
+        if (s.find('.') == std::string::npos && s.find_first_of("eE") == std::string::npos) {
+            s += ".f";
+        } else {
+            s += "f";
+        }
+        return s;
     };
 
     return std::visit(apply, v);
+}
+
+std::string FormatScalarLiteral(const Element& scalar)
+{
+    if (scalar.IsFloat()) {
+        return FormatFloat(scalar.Cast<float>(), scalar.GetDataType());
+    }
+    if (scalar.IsUnsigned() || scalar.IsSigned()) {
+        return std::visit(
+            [](const auto& val) -> std::string { return std::to_string(val); }, scalar.GetVariantData());
+    }
+    return "";
 }
 
 std::string GetTypeForB16B32(const DataType& dtype)

@@ -65,6 +65,37 @@ std::vector<int64_t> GetBroadCastOffsetRatio(const Tensor& self, const Tensor& o
     return result;
 }
 
+void FloorDivOperationExeFunc1Dim(
+    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+{
+    FUNCTION("main", {inputs[0], inputs[1]}, {outputs[0]})
+    {
+        SymbolicScalar firstDim = std::max(inputs[0].GetShape()[0], inputs[1].GetShape()[0]);
+        auto args = static_cast<const FloorDivOpFuncArgs*>(opArgs);
+        const int firstViewShape = args->viewShape_[0];
+
+        const int bloop = CeilDiv(firstDim, firstViewShape);
+        LOOP("LOOP_L0_bIdx", FunctionType::DYNAMIC_LOOP, bIdx, LoopRange(0, bloop, 1))
+        {
+            const Shape& tile0ViewShape = GetBroadCastViewShape(inputs[0], inputs[1], args->viewShape_);
+            const std::vector<int64_t>& tile0OffsetRatio =
+                GetBroadCastOffsetRatio(inputs[0], inputs[1], args->viewShape_);
+            const Shape& tile1ViewShape = GetBroadCastViewShape(inputs[1], inputs[0], args->viewShape_);
+            const std::vector<int64_t>& tile1OffsetRatio =
+                GetBroadCastOffsetRatio(inputs[1], inputs[0], args->viewShape_);
+            Tensor tileTensor0 = View(
+                inputs[0], {tile0ViewShape[0]}, {std::min(firstDim - bIdx * tile0ViewShape[0], tile0ViewShape[0])},
+                {bIdx * tile0ViewShape[0] * tile0OffsetRatio[0]});
+            Tensor tileTensor1 = View(
+                inputs[1], {tile1ViewShape[0]}, {std::min(firstDim - bIdx * tile1ViewShape[0], tile1ViewShape[0])},
+                {bIdx * tile1ViewShape[0] * tile1OffsetRatio[0]});
+            TileShape::Current().SetVecTile(args->tileShape_);
+            auto res = FloorDiv(tileTensor0, tileTensor1);
+            Assemble(res, {bIdx * firstViewShape}, outputs[0]);
+        }
+    }
+}
+
 void FloorDivOperationExeFunc2Dims(
     const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
 {
@@ -230,8 +261,8 @@ class FloorDivOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_A
 
 INSTANTIATE_TEST_SUITE_P(
     TestFloorDiv, FloorDivOperationTest,
-    ::testing::ValuesIn(GetOpMetaData<FloorDivOpMetaData>(
-        {FloorDivOperationExeFunc2Dims, FloorDivOperationExeFunc3Dims, FloorDivOperationExeFunc4Dims}, "FloorDiv")));
+    ::testing::ValuesIn(GetOpMetaData<FloorDivOpMetaData, 1>(
+        {FloorDivOperationExeFunc1Dim, FloorDivOperationExeFunc2Dims, FloorDivOperationExeFunc3Dims, FloorDivOperationExeFunc4Dims}, "FloorDiv")));
 
 TEST_P(FloorDivOperationTest, TestFloorDiv)
 {

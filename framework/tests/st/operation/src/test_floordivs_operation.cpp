@@ -36,6 +36,28 @@ struct FloorDivsOpMetaData {
     nlohmann::json test_data_;
 };
 
+static void FloorDivsOperationExeFuncOneCut(
+    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+{
+    FUNCTION("main", {inputs[0]}, {outputs[0]})
+    {
+        SymbolicScalar firstDim = inputs[0].GetShape()[0];
+        auto args = static_cast<const FloorDivsOpFuncArgs*>(opArgs);
+        const int firstViewShape = args->viewShape_[0];
+        int bloop = CeilDiv(firstDim, firstViewShape);
+
+        LOOP("LOOP_L0_bIdx", FunctionType::DYNAMIC_LOOP, bIdx, LoopRange(0, bloop, 1))
+        {
+            auto tileTensor0 = View(
+                inputs[0], {firstViewShape}, {std::min(firstDim - bIdx * firstViewShape, firstViewShape)},
+                {bIdx * firstViewShape});
+            TileShape::Current().SetVecTile(args->tileShape_);
+            auto res = FloorDiv(tileTensor0, args->value_);
+            Assemble(res, {bIdx * firstViewShape}, outputs[0]);
+        }
+    }
+}
+
 static void FloorDivsOperationExeFuncDoubleCut(
     const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
 {
@@ -156,9 +178,8 @@ class FloorDivsOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_
 
 INSTANTIATE_TEST_SUITE_P(
     TestFloorDivs, FloorDivsOperationTest,
-    ::testing::ValuesIn(GetOpMetaData<FloorDivsOpMetaData>(
-        {FloorDivsOperationExeFuncDoubleCut, FloorDivsOperationExeFuncTripleCut, FloorDivsOperationExeFuncQuadrupleCut},
-        "FloorDivs")));
+    ::testing::ValuesIn(GetOpMetaData<FloorDivsOpMetaData, 1>(
+        {FloorDivsOperationExeFuncOneCut, FloorDivsOperationExeFuncDoubleCut, FloorDivsOperationExeFuncTripleCut,FloorDivsOperationExeFuncQuadrupleCut}, "FloorDivs")));
 
 TEST_P(FloorDivsOperationTest, TestFloorDivs)
 {

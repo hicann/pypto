@@ -86,7 +86,7 @@ TEST_F(TestCodegenDynRemainderS, TestRemainderRS)
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
     std::string res = GenCodeByFunction(*function);
     std::string expect =
-        R"!!!(TRemainderRS<float, pto::RemAlgorithm::DEFAULT>(ubTensor_2, ubTensor_0, 10, ubTensor_3);)!!!";
+        R"!!!(TRemainderRS<float, pto::RemAlgorithm::DEFAULT>(ubTensor_2, ubTensor_0, 10.f, ubTensor_3);)!!!";
     CheckStringExist(expect, res);
 }
 } // namespace npu::tile_fwk

@@ -322,7 +322,7 @@ std::string CodeGenOpNPU::PrintScatterElementSOpStatic(const PrintScatterElemPar
     callParams.emplace_back("(__ubuf__ " + dataTypeExpr[ToUnderlying(MISOIdx::DST_IDX)] + "*)" + dstVar);
     callParams.emplace_back("(__ubuf__ " + dataTypeExpr[ToUnderlying(MISOIdx::SRC0_IDX)] + "*)" + src0Var);
     callParams.emplace_back("(__ubuf__ " + dataTypeExpr[ToUnderlying(MISOIdx::SRC1_IDX)] + "*)" + src1Var);
-    std::string scalarTmpBuffer = FormatFloat(scala.Cast<float>());
+    std::string scalarTmpBuffer = FormatScalarLiteral(scala);
     callParams.emplace_back("(" + dataTypeExpr[ToUnderlying(MISOIdx::DST_IDX)] + ")" + scalarTmpBuffer);
 
     std::string callParamStr = JoinString(callParams, ", ");
@@ -365,7 +365,7 @@ std::string CodeGenOpNPU::PrintScatterElementSOpDynamicUnaligned(const PrintScat
     callParams.emplace_back("(__ubuf__ " + dataTypeExpr[ToUnderlying(MISOIdx::DST_IDX)] + "*)" + dstVar);
     callParams.emplace_back("(__ubuf__ " + dataTypeExpr[ToUnderlying(MISOIdx::SRC0_IDX)] + "*)" + src0Var);
     callParams.emplace_back("(__ubuf__ " + dataTypeExpr[ToUnderlying(MISOIdx::SRC1_IDX)] + "*)" + src1Var);
-    std::string scalarTmpBuffer = FormatFloat(scala.Cast<float>());
+    std::string scalarTmpBuffer = FormatScalarLiteral(scala);
     callParams.emplace_back("(" + scalarDtypeBuffer + ")" + scalarTmpBuffer);
     FillParamWithInput(callParams, dynSrc1Shape, 0, SHAPE_DIM4);
     std::string callParamStr = JoinString(callParams, ", ");
@@ -384,7 +384,7 @@ std::string CodeGenOpNPU::PrintScatterElementSTileTensor(const PrintScatterElemP
     int axis = param.axis + SHAPE_DIM5 - param.src1RawShape.size();
     paramList.emplace_back(std::to_string(axis));
     paramList.emplace_back(std::to_string(param.scatterMode));
-    std::string scalarTmpBuffer = FormatFloat(extOperandVal.Cast<float>());
+    std::string scalarTmpBuffer = FormatScalarLiteral(extOperandVal);
     std::ostringstream oss;
     oss << tileOpName << WrapParamByAngleBrackets(paramList) << "(" << dstTensor << ", " << src1Tensor << ", ("
         << scalarDtypeBuffer << ")" << scalarTmpBuffer << ");\n";

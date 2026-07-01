@@ -438,123 +438,253 @@ TILEOP void TAxpy(T0 dst, T1 src0, Scalar alpha)
     }
 }
 
+template <auto pos, auto neg, typename T0, typename T1, typename T2, typename T3, typename T4, typename T5,
+    typename T6, typename T7>
+TILEOP void IntFloorDiv(T0 dst, T1 src0, T2 src1, T3 tmp0, T4 tmp1, T5 tmp2, T6 tmp3, T7 tmp4) {
+    // MaskTile: tmp3, tmp4
+    // DataTile: tmp0-tmp2
+    // reuse tmp address: tmp2=tmp4
+
+    // Deal dividend is zero
+    pto::TCMPS(tmp3, src0, 0, pto::CmpMode::LT);
+    pto::TSELS(tmp2, tmp3, tmp2, tmp2, pos);
+    pto::TCMPS(tmp3, src0, 0, pto::CmpMode::GE);
+    pto::TSELS(tmp2, tmp3, tmp2, tmp2, neg);
+    pto::TCMPS(tmp3, src1, 0, pto::CmpMode::NE);
+    pto::TSEL(tmp0, tmp3, src0, tmp2, tmp2);
+    pto::TSELS(tmp1, tmp3, src1, tmp2, 1);
+
+    /*
+    * After zero-divisor handling:
+    * sign_differ = (src0 < 0) != (src1 < 0)
+    * quot = src0 / src1
+    * rem = src0 - quot * src1
+    * dst = (sign_differ && rem != 0) ? quot - 1 : quot
+    */
+    pto::TCMPS(tmp3, tmp0, 0, pto::CmpMode::LT);
+    pto::TCMPS(tmp4, tmp1, 0, pto::CmpMode::LT);
+    pto::TXOR(tmp3, tmp3, tmp4, tmp4);
+
+    pto::TDIV<pto::DivAlgorithm::HIGH_PRECISION>(dst, tmp0, tmp1);
+
+    // A5 TREM does not use the tmp argument.
+    pto::TREM(tmp0, tmp0, tmp1, tmp0);
+
+    pto::TCMPS(tmp4, tmp0, 0, pto::CmpMode::NE);
+    pto::TAND(tmp3, tmp3, tmp4);
+    pto::TADDS(tmp0, dst, -1);
+    pto::TSEL(dst, tmp3, tmp0, dst, tmp2);
+}
+
+template <typename TmpTensor>
+TILEOP uint64_t FloorDivTmpAddr(
+    TmpTensor tmp, size_t tileOffset, size_t tileShapeSize, size_t tileIndex, size_t elementSize)
+{
+    return (uint64_t)(tmp.GetAddr() + (tileOffset + tileIndex * tileShapeSize) * elementSize);
+}
+
+template <typename T0, typename T3, auto tileH, auto tileW, typename SrcTile, typename DstTile>
+TILEOP void FloorDivFp32TmpCompute(
+    DstTile dstTile, SrcTile src0Tile, SrcTile src1Tile, T3 tmp, size_t offset, size_t dstShape3,
+    size_t dstShape4, size_t tileShapeSize)
+{
+    using Fp32TileDefine = pto::Tile<pto::TileType::Vec, float, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
+    Fp32TileDefine tmp0Tile(dstShape3, dstShape4);
+    Fp32TileDefine tmp1Tile(dstShape3, dstShape4);
+    pto::TASSIGN(tmp0Tile, FloorDivTmpAddr(tmp, offset, tileShapeSize, 0, sizeof(float)));
+    pto::TASSIGN(tmp1Tile, FloorDivTmpAddr(tmp, offset, tileShapeSize, 1, sizeof(float)));
+
+    pto::TCVT(tmp0Tile, src0Tile, pto::RoundMode::CAST_NONE);
+    SyncV();
+    pto::TCVT(tmp1Tile, src1Tile, pto::RoundMode::CAST_NONE);
+    SyncV();
+    pto::TDIV<pto::DivAlgorithm::HIGH_PRECISION>(tmp0Tile, tmp0Tile, tmp1Tile);
+    SyncV();
+    if constexpr (std::is_same_v<typename T0::Type, int32_t>) {
+        pto::TCVT(dstTile, tmp0Tile, pto::RoundMode::CAST_FLOOR);
+        SyncV();
+    } else {
+        pto::TCVT(tmp0Tile, tmp0Tile, pto::RoundMode::CAST_FLOOR);
+        SyncV();
+        pto::TCVT(dstTile, tmp0Tile, pto::RoundMode::CAST_RINT);
+        SyncV();
+    }
+}
+
+template <typename SrcTile, typename DstTile>
+TILEOP void FloorDivFloatCompute(DstTile dstTile, SrcTile src0Tile, SrcTile src1Tile)
+{
+    pto::TDIV<pto::DivAlgorithm::HIGH_PRECISION>(dstTile, src0Tile, src1Tile);
+    SyncV();
+    pto::TCVT(dstTile, dstTile, pto::RoundMode::CAST_FLOOR);
+    SyncV();
+}
+
+#ifdef __DAV_V220
+template <typename T0, typename T3, auto tileH, auto tileW, typename SrcTile, typename DstTile>
+TILEOP void FloorDivV220Int8Compute(
+    DstTile dstTile, SrcTile src0Tile, SrcTile src1Tile, T3 tmp, size_t offset, size_t dstShape3,
+    size_t dstShape4, size_t tileShapeSize)
+{
+    using HalfTileDefine = pto::Tile<pto::TileType::Vec, half, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
+    using Fp32TileDefine = pto::Tile<pto::TileType::Vec, float, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
+    HalfTileDefine tmp0Tile(dstShape3, dstShape4);
+    HalfTileDefine tmp1Tile(dstShape3, dstShape4);
+    Fp32TileDefine tmp2Tile(dstShape3, dstShape4);
+    Fp32TileDefine tmp3Tile(dstShape3, dstShape4);
+    pto::TASSIGN(tmp0Tile, FloorDivTmpAddr(tmp, offset, tileShapeSize, 0, sizeof(float)));
+    pto::TASSIGN(tmp1Tile, FloorDivTmpAddr(tmp, offset, tileShapeSize, 1, sizeof(float)));
+    pto::TASSIGN(tmp2Tile, FloorDivTmpAddr(tmp, offset, tileShapeSize, 2, sizeof(float)));
+    pto::TASSIGN(tmp3Tile, FloorDivTmpAddr(tmp, offset, tileShapeSize, 3, sizeof(float)));
+
+    pto::TCVT(tmp0Tile, src0Tile, pto::RoundMode::CAST_NONE);
+    SyncV();
+    pto::TCVT(tmp1Tile, src1Tile, pto::RoundMode::CAST_NONE);
+    SyncV();
+    pto::TCVT(tmp2Tile, tmp0Tile, pto::RoundMode::CAST_NONE);
+    SyncV();
+    pto::TCVT(tmp3Tile, tmp1Tile, pto::RoundMode::CAST_NONE);
+    SyncV();
+    pto::TDIV<pto::DivAlgorithm::HIGH_PRECISION>(tmp2Tile, tmp2Tile, tmp3Tile);
+    SyncV();
+    pto::TCVT(tmp0Tile, tmp2Tile, pto::RoundMode::CAST_FLOOR);
+    SyncV();
+    pto::TCVT(dstTile, tmp0Tile, pto::RoundMode::CAST_FLOOR, pto::SaturationMode::ON);
+    SyncV();
+}
+#else
+template <typename T0, typename T3, auto tileH, auto tileW, typename SrcTile, typename DstTile>
+TILEOP void FloorDivNonV220Uint8Compute(
+    DstTile dstTile, SrcTile src0Tile, SrcTile src1Tile, T3 tmp, size_t offset, size_t dstShape3,
+    size_t dstShape4, size_t tileShapeSize)
+{
+    using HalfTileDefine = pto::Tile<pto::TileType::Vec, half, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
+    using Int16TileDefine = pto::Tile<pto::TileType::Vec, int16_t, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
+
+    HalfTileDefine tmp0Tile(dstShape3, dstShape4);
+    HalfTileDefine tmp1Tile(dstShape3, dstShape4);
+    Int16TileDefine tmp2Tile(dstShape3, dstShape4);
+    Int16TileDefine tmp3Tile(dstShape3, dstShape4);
+    pto::TASSIGN(tmp0Tile, FloorDivTmpAddr(tmp, offset, tileShapeSize, 0, sizeof(float)));
+    pto::TASSIGN(tmp1Tile, FloorDivTmpAddr(tmp, offset, tileShapeSize, 1, sizeof(float)));
+    pto::TASSIGN(tmp2Tile, FloorDivTmpAddr(tmp, offset, tileShapeSize, 2, sizeof(float)));
+    pto::TASSIGN(tmp3Tile, FloorDivTmpAddr(tmp, offset, tileShapeSize, 3, sizeof(float)));
+
+    pto::TCVT(tmp0Tile, src0Tile, pto::RoundMode::CAST_NONE);
+    pto::TCVT(tmp1Tile, src1Tile, pto::RoundMode::CAST_NONE);
+    pto::TCVT(tmp2Tile, tmp0Tile, pto::RoundMode::CAST_NONE);
+    pto::TCVT(tmp3Tile, tmp1Tile, pto::RoundMode::CAST_NONE);
+    pto::TDIV<pto::DivAlgorithm::HIGH_PRECISION>(tmp2Tile, tmp2Tile, tmp3Tile);
+    pto::TCVT(dstTile, tmp2Tile, pto::RoundMode::CAST_NONE, pto::SaturationMode::ON);
+}
+
+template <typename T0, typename T3, auto tileH, auto tileW, typename SrcTile, typename DstTile>
+TILEOP void FloorDivNonV220Int8Compute(
+    DstTile dstTile, SrcTile src0Tile, SrcTile src1Tile, T3 tmp, size_t offset, size_t dstShape3,
+    size_t dstShape4, size_t tileShapeSize)
+{
+    using HalfTileDefine = pto::Tile<pto::TileType::Vec, half, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
+    using Uint8TileDefine = pto::Tile<pto::TileType::Vec, uint8_t, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
+
+    HalfTileDefine tmp0DataTile(dstShape3, dstShape4);
+    HalfTileDefine tmp1DataTile(dstShape3, dstShape4);
+    Uint8TileDefine tmp2MaskTile(dstShape3, dstShape4);
+    pto::TASSIGN(tmp0DataTile, FloorDivTmpAddr(tmp, offset, tileShapeSize, 0, sizeof(int32_t)));
+    pto::TASSIGN(tmp1DataTile, FloorDivTmpAddr(tmp, offset, tileShapeSize, 1, sizeof(int32_t)));
+    pto::TASSIGN(tmp2MaskTile, FloorDivTmpAddr(tmp, offset, tileShapeSize, 2, sizeof(int32_t)));
+
+    pto::TCVT(tmp0DataTile, src0Tile, pto::RoundMode::CAST_NONE);
+    pto::TCVT(tmp1DataTile, src1Tile, pto::RoundMode::CAST_NONE);
+    pto::TCMPS(tmp2MaskTile, tmp1DataTile, 0, pto::CmpMode::NE);
+    pto::TSELS(tmp0DataTile, tmp2MaskTile, tmp0DataTile, tmp0DataTile, 0);
+    pto::TDIV<pto::DivAlgorithm::HIGH_PRECISION>(tmp0DataTile, tmp0DataTile, tmp1DataTile);
+    pto::TCVT(dstTile, tmp0DataTile, pto::RoundMode::CAST_FLOOR);
+}
+
+template <typename T0, typename T3, auto tileH, auto tileW, typename SrcTile, typename DstTile>
+TILEOP void FloorDivNonV220Int32Compute(
+    DstTile dstTile, SrcTile src0Tile, SrcTile src1Tile, T3 tmp, size_t offset, size_t dstShape3,
+    size_t dstShape4, size_t tileShapeSize)
+{
+    using Int32TileDefine = pto::Tile<pto::TileType::Vec, int32_t, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
+    using Uint8TileDefine = pto::Tile<pto::TileType::Vec, uint8_t, tileH, 4 * tileW, pto::BLayout::RowMajor, -1, -1>;
+    Int32TileDefine tmp0DataTile(dstShape3, dstShape4);
+    Int32TileDefine tmp1DataTile(dstShape3, dstShape4);
+    Int32TileDefine tmp2DataTile(dstShape3, dstShape4);
+    Uint8TileDefine tmp3MaskTile(dstShape3, dstShape4);
+    Uint8TileDefine tmp4MaskTile(dstShape3, dstShape4);
+    pto::TASSIGN(tmp0DataTile, FloorDivTmpAddr(tmp, offset, tileShapeSize, 0, sizeof(int32_t)));
+    pto::TASSIGN(tmp1DataTile, FloorDivTmpAddr(tmp, offset, tileShapeSize, 1, sizeof(int32_t)));
+    pto::TASSIGN(tmp2DataTile, FloorDivTmpAddr(tmp, offset, tileShapeSize, 3, sizeof(int32_t)));
+    pto::TASSIGN(tmp3MaskTile, FloorDivTmpAddr(tmp, offset, tileShapeSize, 2, sizeof(int32_t)));
+    pto::TASSIGN(tmp4MaskTile, FloorDivTmpAddr(tmp, offset, tileShapeSize, 3, sizeof(int32_t)));
+
+    IntFloorDiv<(int32_t)0x7FFF7F7F, (int32_t)0x80008080>(
+        dstTile, src0Tile, src1Tile, tmp0DataTile, tmp1DataTile, tmp2DataTile, tmp3MaskTile, tmp4MaskTile);
+}
+#endif
+
 #define OP_TILE_OP_FLOORDIV TFloorDiv
 template <typename T0, typename T1, typename T2, typename T3>
 TILEOP void TFloorDiv(T0 dst, T1 src0, T2 src1, T3 tmp)
 {
-    static_assert(std::is_same_v<typename T1::Type, int32_t>);
-
     const auto dstLayout = dst.GetLayout();
     auto dstShape0 = dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
     auto dstShape1 = dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
     auto dstShape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
     auto dstShape3 = dstLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
     auto dstShape4 = dstLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
-    auto dstStride0 = dstLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
-    auto dstStride1 = dstLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
-    auto dstStride2 = dstLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
-    auto dstStride3 = dstLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>();
-
-    if (dstShape0 == 0 || dstShape1 == 0 || dstShape2 == 0 || dstShape3 == 0 || dstShape4 == 0) {
-        return;
-    }
 
     constexpr auto tileH = TileOp::GetTensorTileShapeDim<T0, DIM_4TH, MAX_DIMS>();
     constexpr auto tileW = TileOp::GetTensorTileShapeDim<T0, DIM_5TH, MAX_DIMS>();
     constexpr auto dstTypeSize = sizeof(typename T0::Type);
 
+    constexpr auto tileShapeSize =
+        TileOp::GetAnyAxisMergeResult<DIM_1ST, Std::tuple_size<typename T0::TileShape>::value, typename T0::TileShape>();
+
+    using DataTileDefine =
+        pto::Tile<pto::TileType::Vec, typename T0::Type, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
+    DataTileDefine src0Tile(dstShape3, dstShape4);
+    DataTileDefine src1Tile(dstShape3, dstShape4);
+    DataTileDefine dstTile(dstShape3, dstShape4);
+
     for (LoopVar n0Index = 0; n0Index < dstShape0; n0Index++) {
         for (LoopVar n1Index = 0; n1Index < dstShape1; n1Index++) {
             for (LoopVar n2Index = 0; n2Index < dstShape2; n2Index++) {
-                for (LoopVar n3Index = 0; n3Index < dstShape3; n3Index++) {
-                    auto offset =
-                        n0Index * dstStride0 + n1Index * dstStride1 + n2Index * dstStride2 + n3Index * dstStride3;
-#ifdef __DAV_V220
-                    using FloatTileDefine =
-                        pto::Tile<pto::TileType::Vec, float, 1, tileW, pto::BLayout::RowMajor, -1, -1>;
-                    using IntTileDefine =
-                        pto::Tile<pto::TileType::Vec, typename T0::Type, 1, tileW, pto::BLayout::RowMajor, -1, -1>;
+                auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
+                auto srcOffset = GenTileOffset(src0, tileOffsets);
+                auto dstOffset = GenTileOffset(dst, tileOffsets);
+                pto::TASSIGN(src0Tile, (uint64_t)(src0.GetAddr() + srcOffset * dstTypeSize));
+                pto::TASSIGN(src1Tile, (uint64_t)(src1.GetAddr() + srcOffset * dstTypeSize));
+                pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + dstOffset * dstTypeSize));
 
-                    FloatTileDefine tmp0Tile(1, dstShape4);
-                    FloatTileDefine tmp1Tile(1, dstShape4);
-                    IntTileDefine src0Tile(1, dstShape4);
-                    IntTileDefine src1Tile(1, dstShape4);
-                    IntTileDefine dstTile(1, dstShape4);
-
-                    pto::TASSIGN(tmp0Tile, (uint64_t)(tmp.GetAddr()));
-                    pto::TASSIGN(tmp1Tile, (uint64_t)(tmp.GetAddr() + tileW * dstTypeSize));
-                    pto::TASSIGN(src0Tile, (uint64_t)(src0.GetAddr() + offset * dstTypeSize));
-                    pto::TASSIGN(src1Tile, (uint64_t)(src1.GetAddr() + offset * dstTypeSize));
-                    pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + offset * dstTypeSize));
-
-                    pto::TCVT(tmp0Tile, src0Tile, pto::RoundMode::CAST_NONE, pto::SaturationMode::OFF);
-                    pipe_barrier(PIPE_V);
-                    pto::TCVT(tmp1Tile, src1Tile, pto::RoundMode::CAST_NONE, pto::SaturationMode::OFF);
-                    pipe_barrier(PIPE_V);
-                    pto::TDIV(tmp0Tile, tmp0Tile, tmp1Tile);
-                    pipe_barrier(PIPE_V);
-                    pto::TCVT(dstTile, tmp0Tile, pto::RoundMode::CAST_FLOOR);
-                    pipe_barrier(PIPE_V);
-#else
-                    using DataTileDefine =
-                        pto::Tile<pto::TileType::Vec, typename T0::Type, 1, tileW, pto::BLayout::RowMajor, -1, -1>;
-                    using MaskTileDefine =
-                        pto::Tile<pto::TileType::Vec, uint8_t, 1, tileW * 4, pto::BLayout::RowMajor, -1, -1>;
-
-                    DataTileDefine src0Tile(1, dstShape4);
-                    DataTileDefine src1Tile(1, dstShape4);
-                    DataTileDefine dstTile(1, dstShape4);
-                    DataTileDefine tmp0DataTile(1, dstShape4);
-                    DataTileDefine tmp1DataTile(1, dstShape4);
-                    DataTileDefine tmp2DataTile(1, dstShape4);
-                    DataTileDefine tmp3DataTile(1, dstShape4);
-
-                    MaskTileDefine tmp0MaskTile(1, dstShape4);
-                    MaskTileDefine tmp1MaskTile(1, dstShape4);
-
-                    constexpr int32_t pos = 0x7FFF7F7F, neg = 0x80008080;
-
-                    pto::TASSIGN(tmp0DataTile, (uint64_t)(tmp.GetAddr()));
-                    pto::TASSIGN(tmp1DataTile, (uint64_t)(tmp.GetAddr() + tileW * dstTypeSize));
-                    pto::TASSIGN(tmp2DataTile, (uint64_t)(tmp.GetAddr() + 2 * tileW * dstTypeSize));
-                    pto::TASSIGN(tmp3DataTile, (uint64_t)(tmp.GetAddr() + 3 * tileW * dstTypeSize));
-                    pto::TASSIGN(src0Tile, (uint64_t)(src0.GetAddr() + offset * dstTypeSize));
-                    pto::TASSIGN(src1Tile, (uint64_t)(src1.GetAddr() + offset * dstTypeSize));
-                    pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + offset * dstTypeSize));
-
-                    // Reuse the same tmp as packed mask storage
-                    pto::TASSIGN(tmp0MaskTile, (uint64_t)(tmp.GetAddr()));
-                    pto::TASSIGN(tmp1MaskTile, (uint64_t)(tmp.GetAddr() + tileW * dstTypeSize));
-                    
-                    // Deal dividend is zero
-                    pto::TCMPS(tmp0MaskTile, src0Tile, 0, pto::CmpMode::LT);
-                    pto::TSELS(tmp1DataTile, tmp0MaskTile, tmp1DataTile, tmp1DataTile, pos);
-                    pto::TCMPS(tmp0MaskTile, src0Tile, 0, pto::CmpMode::GE);
-                    pto::TSELS(tmp1DataTile, tmp0MaskTile, tmp1DataTile, tmp1DataTile, neg);
-                    pto::TCMPS(tmp0MaskTile, src1Tile, 0, pto::CmpMode::NE);
-                    pto::TSEL(tmp2DataTile, tmp0MaskTile, src0Tile, tmp1DataTile, tmp1DataTile);
-                    pto::TSELS(tmp3DataTile, tmp0MaskTile, src1Tile, tmp1DataTile, 1);
-                    
-                    /*
-                     * After zero-divisor handling:
-                     * sign_differ = (src0 < 0) != (src1 < 0)
-                     * quot = src0 / src1
-                     * rem = src0 - quot * src1
-                     * dst = (sign_differ && rem != 0) ? quot - 1 : quot
-                     */
-                    pto::TCMPS(tmp0MaskTile, tmp2DataTile, 0, pto::CmpMode::LT);
-                    pto::TCMPS(tmp1MaskTile, tmp3DataTile, 0, pto::CmpMode::LT);
-                    pto::TXOR(tmp0MaskTile, tmp0MaskTile, tmp1MaskTile, dstTile); // packed mask of sign_differ
-                    pto::TDIV(dstTile, tmp2DataTile, tmp3DataTile);                       // quot
-                    pto::TMUL(tmp1DataTile, tmp3DataTile, dstTile);
-                    pto::TSUB(tmp2DataTile, tmp2DataTile, tmp1DataTile); // rem
-
-                    pto::TCMPS(tmp1MaskTile, tmp2DataTile, 0, pto::CmpMode::NE);
-                    pto::TAND(tmp0MaskTile, tmp0MaskTile, tmp1MaskTile);
-                    pto::TADDS(tmp2DataTile, dstTile, -1);
-                    pto::TSEL(dstTile, tmp0MaskTile, tmp2DataTile, dstTile, tmp1DataTile);
-#endif
+                if constexpr (std::is_same_v<typename T0::Type, half> || std::is_same_v<typename T0::Type, bfloat16_t>) {
+                    FloorDivFp32TmpCompute<T0, T3, tileH, tileW>(
+                        dstTile, src0Tile, src1Tile, tmp, dstOffset, dstShape3, dstShape4, tileShapeSize);
+                } else if constexpr (std::is_same_v<typename T0::Type, float>) {
+                    FloorDivFloatCompute(dstTile, src0Tile, src1Tile);
                 }
+
+                #ifdef __DAV_V220
+                    if constexpr (std::is_same_v<typename T0::Type, int32_t>) {
+                        FloorDivFp32TmpCompute<T0, T3, tileH, tileW>(
+                            dstTile, src0Tile, src1Tile, tmp, dstOffset, dstShape3, dstShape4, tileShapeSize);
+                    } else if constexpr (std::is_same_v<typename T0::Type, int8_t> || std::is_same_v<typename T0::Type, uint8_t>) {
+                        FloorDivV220Int8Compute<T0, T3, tileH, tileW>(
+                            dstTile, src0Tile, src1Tile, tmp, dstOffset, dstShape3, dstShape4, tileShapeSize);
+                    }
+                #else
+                    if constexpr (std::is_same_v<typename T0::Type, uint8_t>) {
+                        FloorDivNonV220Uint8Compute<T0, T3, tileH, tileW>(
+                            dstTile, src0Tile, src1Tile, tmp, dstOffset, dstShape3, dstShape4, tileShapeSize);
+                    } else if constexpr (std::is_same_v<typename T0::Type, int8_t>) {
+                        FloorDivNonV220Int8Compute<T0, T3, tileH, tileW>(
+                            dstTile, src0Tile, src1Tile, tmp, dstOffset, dstShape3, dstShape4, tileShapeSize);
+                    } else if constexpr (std::is_same_v<typename T0::Type, int32_t>) {
+                        FloorDivNonV220Int32Compute<T0, T3, tileH, tileW>(
+                            dstTile, src0Tile, src1Tile, tmp, dstOffset, dstShape3, dstShape4, tileShapeSize);
+                    }
+                #endif
             }
         }
     }

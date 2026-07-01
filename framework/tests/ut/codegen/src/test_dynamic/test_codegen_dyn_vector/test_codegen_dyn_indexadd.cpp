@@ -132,7 +132,7 @@ TEST_F(TestCodegenDynIndexAdd, TestIndexAddLayout)
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
     std::string res = GenCodeByFunction(*function);
     std::string expect =
-        R"!!!(TIndexAdd<3>(gmTensor_4, gmTensor_6, ubTensor_0, ubTensor_2, ubTensor_5, Coord2Dim(0, 0), (float)1);)!!!";
+        R"!!!(TIndexAdd<3>(gmTensor_4, gmTensor_6, ubTensor_0, ubTensor_2, ubTensor_5, Coord2Dim(0, 0), (float)1.f);)!!!";
     CheckStringExist(expect, res);
 }
 } // namespace npu::tile_fwk

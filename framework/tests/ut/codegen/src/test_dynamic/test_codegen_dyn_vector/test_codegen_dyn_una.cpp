@@ -147,7 +147,7 @@ TEST_F(TestCodegenDynUna, TestPadDynamic)
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
 
     const std::string res = GenCodeByFunction(*function);
-    std::string expect = R"!!!(TPad<pto::PadValueCustom((float)2)>(ubTensor_2, ubTensor_0);)!!!";
+    std::string expect = R"!!!(TPad<pto::PadValueCustom((float)2.f)>(ubTensor_2, ubTensor_0);)!!!";
     CheckStringExist(expect, res);
 }
 
@@ -209,7 +209,7 @@ TEST_F(TestCodegenDynUna, TestFillPadDynamicBF16)
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
 
     const std::string res = GenCodeByFunction(*function);
-    std::string expect = R"!!!(TFillPad<pto::PadValueCustom((bfloat16_t)0)>(ubTensor_2, ubTensor_0);)!!!";
+    std::string expect = R"!!!(TFillPad<pto::PadValueCustom((bfloat16_t)0.f)>(ubTensor_2, ubTensor_0);)!!!";
     CheckStringExist(expect, res);
 }
 
@@ -240,7 +240,7 @@ TEST_F(TestCodegenDynUna, TestFillPadDynamic)
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
 
     const std::string res = GenCodeByFunction(*function);
-    std::string expect = R"!!!(TFillPad<pto::PadValueCustom((float)0)>(ubTensor_2, ubTensor_0);)!!!";
+    std::string expect = R"!!!(TFillPad<pto::PadValueCustom((float)0.f)>(ubTensor_2, ubTensor_0);)!!!";
     CheckStringExist(expect, res);
 }
 

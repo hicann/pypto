@@ -295,13 +295,7 @@ std::string CodeGenOpNPU::GenVectorScalarOpWithTmp() const
     std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::DST_IDX));
     std::string tmpTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::TMP_IDX));
     std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::SRC0_IDX));
-    std::string srcScalar;
-    if (extOperandVal.IsFloat()) {
-        srcScalar = FormatFloat(extOperandVal.Cast<float>());
-    } else if (extOperandVal.IsUnsigned() || extOperandVal.IsSigned()) {
-        srcScalar = std::visit(
-            [](const auto& val) -> std::string { return std::to_string(val); }, extOperandVal.GetVariantData());
-    }
+    std::string srcScalar = FormatScalarLiteral(extOperandVal);
     std::vector<std::string> tileOpParamList = {dstTensor, srcTensor, srcScalar, tmpTensor};
     std::vector<std::string> templateParamList;
     AddBinaryPrecisionTypeParm(templateParamList);
@@ -319,7 +313,7 @@ std::string CodeGenOpNPU::GenRemainderSOp() const
     std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::DST_IDX));
     std::string tmpTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::TMP_IDX));
     std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::SRC0_IDX));
-    std::string srcScalar = FormatFloat(extOperandVal.Cast<float>());
+    std::string srcScalar = FormatScalarLiteral(extOperandVal);
     std::vector<std::string> tileOpParamList = {dstTensor, srcTensor, srcScalar, tmpTensor};
     std::string scalarDtypeStr = DataType2CCEStr(extOperandVal.GetDataType());
     std::vector<std::string> templateParamList = {scalarDtypeStr};
@@ -544,7 +538,7 @@ std::string CodeGenOpNPU::PrintBinaryScalarStatic(const PrintBinaryScalarParam& 
     binScalParmList.clear();
     std::string dst = "(__ubuf__ " + dstDtypeStr + "*)" + dVar;
     std::string src0 = "(__ubuf__ " + src0DtypeStr + "*)" + s0Var;
-    std::string scalarTmpBuffer = FormatFloat(extOperandVal.Cast<float>());
+    std::string scalarTmpBuffer = FormatScalarLiteral(extOperandVal);
     binScalParmList.emplace_back(dst);
     binScalParmList.emplace_back(src0);
     binScalParmList.emplace_back(scalarTmpBuffer);
@@ -588,7 +582,7 @@ std::string CodeGenOpNPU::PrintBinaryScalarDynamicUnaligned(const PrintBinarySca
     paramList.clear();
     std::string dst = "(__ubuf__ " + dstDtypeStr + "*)" + dVar;
     std::string src0 = "(__ubuf__ " + src0DtypeStr + "*)" + s0Var;
-    std::string scalarTmpBuffer = FormatFloat(extOperandVal.Cast<float>());
+    std::string scalarTmpBuffer = FormatScalarLiteral(extOperandVal);
     paramList.emplace_back(dst);
     paramList.emplace_back(src0);
     paramList.emplace_back(scalarTmpBuffer);
@@ -604,7 +598,7 @@ std::string CodeGenOpNPU::PrintBinaryScalarDynamicUnaligned(const PrintBinarySca
 std::string CodeGenOpNPU::PrintVectorScalarTileTensor(const PrintUnaryParam& param) const
 {
     const std::string& dstDtypeStr = param.dstDtypeStr;
-    std::string scalarTmpBuffer = FormatFloat(extOperandVal.Cast<float>());
+    std::string scalarTmpBuffer = FormatScalarLiteral(extOperandVal);
     std::vector<std::string> tileOpParamList = GetTileOpParamsByOrder();
     tileOpParamList.emplace_back(scalarTmpBuffer);
 
@@ -644,7 +638,7 @@ std::string CodeGenOpNPU::PrintVectorScalarOpDynamicUnalign(const PrintUnaryPara
     std::vector<int64_t> s0 = NormalizeShape(rawShape[1], SHAPE_DIM4);
     std::vector<int64_t> ds = NormalizeShape(rawShape[0], SHAPE_DIM4);
     char scalarTmp[BUFFER_SIZE_256] = "CG_ERROR";
-    int ret = sprintf_s(scalarTmp, sizeof(scalarTmp), "%s", FormatFloat(extOperandVal.Cast<float>()).c_str());
+    int ret = sprintf_s(scalarTmp, sizeof(scalarTmp), "%s", FormatScalarLiteral(extOperandVal).c_str());
     ASSERT(GenCodeErr::PRINT_FAILED, ret >= 0) << "GenVectorScalarOpByMode sprintf_s failed ";
 
     std::ostringstream oss;
@@ -713,7 +707,7 @@ std::string CodeGenOpNPU::GenVectorScalarOpByMode(VecScalMode mode) const
         return PrintVectorScalarOpDynamicUnalign({s0Var, dVar, dstDtypeStr, dstDtypeStr});
     }
 
-    std::string scalarTmpBuffer = FormatFloat(extOperandVal.Cast<float>());
+    std::string scalarTmpBuffer = FormatScalarLiteral(extOperandVal);
     int ret = sprintf_s(
         buffer, sizeof(buffer),
         "%s_<%s, %d, %d, %d, %d, /*DS*/ %d, %d, %d, /*S0S*/ %d, %d, %d>"

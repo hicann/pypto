@@ -99,7 +99,7 @@ void TestAddSDynBody(
 TEST_F(TestCodegenDynBinary, TestAddSDynamic)
 {
     std::vector<std::string> expect = {
-        R"!!!(TileOp::DynTadds_<float, /*DS*/ 1, 64, 64, /*S0S*/ 1, 64, 64>((__ubuf__ float*)UB_S0_E16384, (__ubuf__ float*)UB_S0_E16384, (float)1.5, 1, 1, sym_39_dim_0, sym_39_dim_1);
+        R"!!!(TileOp::DynTadds_<float, /*DS*/ 1, 64, 64, /*S0S*/ 1, 64, 64>((__ubuf__ float*)UB_S0_E16384, (__ubuf__ float*)UB_S0_E16384, (float)1.5f, 1, 1, sym_39_dim_0, sym_39_dim_1);
 )!!!"};
     TestAddSDynBody("TestAddsDynamic", 1.5, false, expect);
 }
@@ -497,7 +497,7 @@ TEST_F(TestCodegenDynBinary, TestAxpyTileTensor)
     op.SetAttribute(OpAttributeKey::scalar, Element(DataType::DT_FP32, 2.0));
     std::string res = GenOpCodeFromOp(*function, op);
     std::string expect =
-        R"!!!(TAxpy(ubTensor_0, ubTensor_0, (float)2);
+        R"!!!(TAxpy(ubTensor_0, ubTensor_0, (float)2.f);
 )!!!";
     EXPECT_EQ(res, expect);
 }
