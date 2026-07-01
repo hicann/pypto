@@ -127,6 +127,13 @@ def where(
     _check_where_scalar_dtype("input", input, other, "other")
     _check_where_scalar_dtype("other", other, input, "input")
 
+    if condition.dtype == DataType.DT_UINT8:
+        raise PyptoError(0xF00002, TypeError(
+            f"where() does not support DT_UINT8 condition from Python API. "
+            f"condition dtype must be DT_BOOL. DT_UINT8 is only supported in the C++ API "
+            f"for packed boolean masks (1 uint8 = 8 bools)."
+        ))
+
     if isinstance(input, pypto_impl.Tensor) or isinstance(input, pypto_impl.Element):
         input_base = input
     else:
