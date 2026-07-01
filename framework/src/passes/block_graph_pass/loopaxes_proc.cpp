@@ -284,7 +284,9 @@ void LoopaxesProc::IsOverLap(std::vector<size_t>& addrRange, bool& isAdd, int& c
                              std::set<std::pair<int, int>>& addrConflictIdx, int& idx)
 {
     for (auto& entry : addrRecordMap) {
-        if (addrRange[0] >= entry.second[1][1] || addrRange[1] <= entry.second[0][0]) {
+        bool noOverlapWithInput = addrRange[0] >= entry.second[0][1] || addrRange[1] <= entry.second[0][0];
+        bool noOverlapWithOutput = addrRange[0] >= entry.second[1][1] || addrRange[1] <= entry.second[1][0];
+        if (noOverlapWithInput && noOverlapWithOutput) {
             isAdd = true;
             conflictIdx = INVALID_LOOP_GROUPID;
         } else {
