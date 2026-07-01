@@ -615,12 +615,12 @@ download_single_cann_package() {
 
     local download_success=false
     if command_exists wget; then
-        if wget --no-check-certificate --progress=bar:force -O "$target_file" "$resource_url"; then
+        if wget --progress=bar:force -O "$target_file" "$resource_url"; then
             log_print "info" "$resource_name download completed"
             download_success=true
         fi
     elif command_exists curl; then
-        if curl --insecure -L -# -o "$target_file" "$resource_url"; then
+        if curl -L -# -o "$target_file" "$resource_url"; then
             log_print "info" "$resource_name download completed"
             download_success=true
         fi
@@ -731,12 +731,12 @@ download_third_party_packages() {
         local dep_url="${dep_upper}_URL"
         var_value="${!dep_url}"
         if command_exists wget; then
-            if wget --no-check-certificate "$var_value"; then
+            if wget "$var_value"; then
                 log_print "info" "$dep download completed"
                 download_success=true
             fi
         elif command_exists curl; then
-            if curl --insecure -L -O "$var_value"; then
+            if curl -L -O "$var_value"; then
                 log_print "info" "$dep download completed"
                 download_success=true
             fi
