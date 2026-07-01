@@ -39,6 +39,11 @@ import urllib.error
 from typing import Optional, List, Dict, Tuple
 from dataclasses import dataclass, field
 
+try:
+    from common_utils import safe_extractall
+except ImportError:
+    from scripts.common_utils import safe_extractall
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(levelname)s: %(message)s",
@@ -247,7 +252,7 @@ def download_coverage_report(url: str, output_dir: Optional[str] = None) -> Tupl
         os.makedirs(extract_dir, exist_ok=True)
 
         with tarfile.open(tmp_path, 'r:gz') as tar:
-            tar.extractall(extract_dir)
+            safe_extractall(tar, extract_dir)
 
         logger.info("覆盖率报告解压到: {extract_dir}")
 

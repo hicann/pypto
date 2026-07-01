@@ -221,6 +221,80 @@ def download_file(
         return False, "下载失败"
 
 
+def _is_within_directory(directory: str, target: str) -> bool:
+    """
+    判断 target 规整后的真实路径是否严格位于 directory 之内
+
+    用于防止 Zip Slip / 路径穿越（CWE-22）。补 os.sep 防止
+    /foo/bar-evil 绕过 /foo/bar 这类前缀误判。
+    """
+    abs_directory = os.path.realpath(directory)
+    abs_target = os.path.realpath(target)
+    prefix = abs_directory.rstrip(os.sep) + os.sep
+    return abs_target == abs_directory or abs_target.startswith(prefix)
+
+
+def safe_extractall(tar: tarfile.TarFile, extract_dir: str) -> None:
+    """
+    安全解压 tar：逐个成员校验后再解压，防止 Zip Slip / 路径穿越（CWE-22）
+
+    校验规则：
+    - 拒绝绝对路径成员
+    - 拒绝解析后越出 extract_dir 的成员（含 .. 穿越）
+    - 拒绝指向目录外的 symlink/hardlink 成员
+
+    命中违规时抛出 ValueError（信息含成员名）。
+
+    Args:
+        tar: 已打开的 tarfile.TarFile 对象
+        extract_dir: 解压目标目录
+    """
+    extract_dir = os.path.realpath(extract_dir)
+
+    for member in tar.getmembers():
+        # 拒绝绝对路径成员
+        if os.path.isabs(member.name):
+            raise ValueError(f"检测到不安全的 tar 成员（绝对路径）: {member.name}")
+
+        member_path = os.path.join(extract_dir, member.name)
+        # 校验成员目标路径必须位于 extract_dir 之内（拦截 .. 穿越）
+        if not _is_within_directory(extract_dir, member_path):
+            raise ValueError(f"检测到不安全的 tar 成员（路径穿越）: {member.name}")
+
+        # 校验 symlink / hardlink 目标也必须位于 extract_dir 之内
+        if member.issym() or member.islnk():
+            if os.path.isabs(member.linkname):
+                raise ValueError(
+                    f"检测到不安全的 tar 成员（链接指向绝对路径）: {member.name} -> {member.linkname}"
+                )
+            # symlink 目标相对于成员所在目录；hardlink 目标相对于归档根目录
+            if member.issym():
+                link_target = os.path.join(os.path.dirname(member_path), member.linkname)
+            else:
+                link_target = os.path.join(extract_dir, member.linkname)
+            if not _is_within_directory(extract_dir, link_target):
+                raise ValueError(
+                    f"检测到不安全的 tar 成员（链接越界）: {member.name} -> {member.linkname}"
+                )
+
+    # 只要运行时提供解压过滤器（Python 3.8.17+/3.9.17+/3.10.12+/3.11.4+/3.12+，
+    # 以 tarfile.data_filter 是否存在做特性探测，而非版本号判断），就用 'data' 过滤器：
+    # 它在解压时对每个成员重新校验，能拦下静态预校验无法发现的逃逸——例如归档内先出现
+    # 的 symlink，使后续成员经其解析而越界。
+    if hasattr(tarfile, "data_filter"):
+        tar.extractall(extract_dir, filter="data")
+        return
+
+    # 旧运行时无解压过滤器：上面的静态预校验无法防"经归档内 symlink 解析越界"，
+    # 故在该回退路径直接拒绝任何链接成员，仅解压普通条目（路径已逐一校验在 extract_dir 内）。
+    for member in tar.getmembers():
+        if member.issym() or member.islnk():
+            raise ValueError(
+                f"检测到不安全的 tar 成员（当前 Python 不支持解压过滤器，禁止链接成员）: {member.name}"
+            )
+    tar.extractall(extract_dir)
+
+
 def extract_tarball(tar_path: str, output_dir: Optional[str] = None) -> Tuple[bool, str]:
     """
     解压 tarball
@@ -241,7 +315,7 @@ def extract_tarball(tar_path: str, output_dir: Optional[str] = None) -> Tuple[bo
         os.makedirs(output_dir, exist_ok=True)
 
         with tarfile.open(tar_path, 'r:gz') as tar:
-            tar.extractall(output_dir)
+            safe_extractall(tar, output_dir)
 
         return True, output_dir
 

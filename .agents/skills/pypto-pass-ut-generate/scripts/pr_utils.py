@@ -36,6 +36,11 @@ from typing import Optional, List, Dict, Tuple
 from datetime import datetime
 from dataclasses import dataclass
 
+try:
+    from common_utils import safe_extractall
+except ImportError:
+    from scripts.common_utils import safe_extractall
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(levelname)s: %(message)s",
@@ -501,7 +506,7 @@ def download_and_parse_coverage_report(coverage_url: str, pr_number: int) -> Dic
         extract_dir = tempfile.mkdtemp(prefix=f'cov_pr{pr_number}_')
 
         with tarfile.open(tmp_path, 'r:gz') as tar:
-            tar.extractall(extract_dir)
+            safe_extractall(tar, extract_dir)
 
         logger.info(f"覆盖率报告解压到: {extract_dir}")
 
