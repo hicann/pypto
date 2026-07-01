@@ -230,7 +230,7 @@ class BuildOnlinePyptoImplManager(_BuildOnlineManager):
 
     class _PythonContext:
 
-        _PYBIND11_MIN_VERSION = (3, 0, 1)
+        _PYBIND11_MIN_VERSION = (2, 13, 6)
 
         def __init__(self):
             self.minor: int = 0
@@ -263,25 +263,25 @@ class BuildOnlinePyptoImplManager(_BuildOnlineManager):
             except ImportError as e:
                 raise RuntimeError(
                     "pybind11 pip package not found.\n"
-                    "Hint: install it with `pip install pybind11>=3.0.1`."
+                    "Hint: install it with `pip install pybind11>=2.13.6`."
                 ) from e
             _ver_match = re.match(r'(\d+)\.(\d+)\.(\d+)', pybind11.__version__)
             if not _ver_match:
                 raise RuntimeError(
                     f"Can't parse pybind11 version: {pybind11.__version__}.\n"
-                    "Hint: install it with `pip install pybind11>=3.0.1`."
+                    "Hint: install it with `pip install pybind11>=2.13.6`."
                 )
             current_ver = tuple(int(x) for x in _ver_match.groups())
             if current_ver < self._PYBIND11_MIN_VERSION:
                 raise RuntimeError(
-                    f"pybind11 version {pybind11.__version__} is too old, require >= 3.0.1.\n"
-                    "Hint: upgrade it with `pip install pybind11>=3.0.1`."
+                    f"pybind11 version {pybind11.__version__} is too old, require >= 2.13.6.\n"
+                    "Hint: upgrade it with `pip install pybind11>=2.13.6`."
                 )
             pybind11_dir = Path(pybind11.get_cmake_dir()).resolve()
             if not pybind11_dir or not pybind11_dir.exists():
                 raise RuntimeError(
                     "pybind11 cmake dir empty.\n"
-                    "Hint: install it with `pip install pybind11>=3.0.1`."
+                    "Hint: install it with `pip install pybind11>=2.13.6`."
                 )
             self.pybind11_cmake_dir = pybind11_dir
 

@@ -14,7 +14,6 @@
  */
 
 #include "pybind_common.h"
-#include "pybind11/native_enum.h"
 #include "tilefwk/error_code.h"
 
 using namespace npu::tile_fwk;
@@ -23,23 +22,22 @@ namespace pypto {
 void BindEnum(py::module_& m)
 {
     // clang-format off
-    py::native_enum<DataType>(m, "DataType", "enum.IntEnum")
+    py::enum_<DataType>(m, "DataType")
 #define DTYPE_DESC(name, byte, bit, is_float, type, cann_value) \
         .value(#name, DataType::name)
         DATA_TYPE_ALL
 #undef DTYPE_DESC
         .value("DT_BOTTOM", DataType::DT_BOTTOM)
-        .export_values()
-        .finalize();
+        .export_values();
     // clang-format on
 
-    py::native_enum<NodeType>(m, "NodeType", "enum.IntEnum")
+    py::enum_<NodeType>(m, "NodeType")
         .value("LOCAL", NodeType::LOCAL)
         .value("INCAST", NodeType::INCAST)
         .value("OUTCAST", NodeType::OUTCAST)
-        .finalize();
+        .export_values();
 
-    py::native_enum<ExternalError>(m, "ExternalError", "enum.IntEnum")
+    py::enum_<ExternalError>(m, "ExternalError")
         .value("COMMON_EXTERNAL_ERROR", ExternalError::COMMON_EXTERNAL_ERROR)
         .value("RUNTIME_ERROR", ExternalError::RUNTIME_ERROR)
         .value("NAME_ERROR", ExternalError::NAME_ERROR)
@@ -52,36 +50,36 @@ void BindEnum(py::module_& m)
         .value("BAD_FD", ExternalError::BAD_FD)
         .value("DYNAMIC_SHAPE_COMPUTE_UNSUPPORTED", ExternalError::DYNAMIC_SHAPE_COMPUTE_UNSUPPORTED)
         .value("UNKNOWN", ExternalError::UNKNOWN)
-        .finalize();
+        .export_values();
 
-    py::native_enum<TileOpFormat>(m, "TileOpFormat", "enum.IntEnum")
+    py::enum_<TileOpFormat>(m, "TileOpFormat")
         .value("TILEOP_ND", TileOpFormat::TILEOP_ND)
         .value("TILEOP_NZ", TileOpFormat::TILEOP_NZ)
-        .finalize();
+        .export_values();
 
-    py::native_enum<CachePolicy>(m, "CachePolicy", "enum.IntEnum")
+    py::enum_<CachePolicy>(m, "CachePolicy")
         .value("NONE_CACHEABLE", CachePolicy::NONE_CACHEABLE)
-        .finalize();
+        .export_values();
 
-    py::native_enum<ReduceMode>(m, "ReduceMode", "enum.IntEnum").value("ATOMIC_ADD", ReduceMode::ATOMIC_ADD).finalize();
+    py::enum_<ReduceMode>(m, "ReduceMode").value("ATOMIC_ADD", ReduceMode::ATOMIC_ADD).export_values();
 
-    py::native_enum<ScatterMode>(m, "ScatterMode", "enum.IntEnum")
+    py::enum_<ScatterMode>(m, "ScatterMode")
         .value("NONE", ScatterMode::NONE)
         .value("ADD", ScatterMode::ADD)
         .value("MULTIPLY", ScatterMode::MULTIPLY)
-        .finalize();
+        .export_values();
 
-    py::native_enum<FunctionType>(m, "FunctionType", "enum.IntEnum")
+    py::enum_<FunctionType>(m, "FunctionType")
         .value("STATIC", FunctionType::STATIC)
         .value("DYNAMIC", FunctionType::DYNAMIC)
         .value("DYNAMIC_LOOP", FunctionType::DYNAMIC_LOOP)
-        .finalize();
+        .export_values();
 
-    py::native_enum<GraphType>(m, "GraphType", "enum.IntEnum")
+    py::enum_<GraphType>(m, "GraphType")
         .value("TENSOR_GRAPH", GraphType::TENSOR_GRAPH)
-        .finalize();
+        .export_values();
 
-    py::native_enum<CastMode>(m, "CastMode", "enum.IntEnum")
+    py::enum_<CastMode>(m, "CastMode")
         .value("CAST_NONE", CastMode::CAST_NONE)
         .value("CAST_RINT", CastMode::CAST_RINT)
         .value("CAST_ROUND", CastMode::CAST_ROUND)
@@ -89,80 +87,80 @@ void BindEnum(py::module_& m)
         .value("CAST_CEIL", CastMode::CAST_CEIL)
         .value("CAST_TRUNC", CastMode::CAST_TRUNC)
         .value("CAST_ODD", CastMode::CAST_ODD)
-        .finalize();
+        .export_values();
 
-    py::native_enum<SaturationMode>(m, "SaturationMode", "enum.IntEnum")
+    py::enum_<SaturationMode>(m, "SaturationMode")
         .value("OFF", SaturationMode::OFF)
         .value("ON", SaturationMode::ON)
-        .finalize();
+        .export_values();
 
-    py::native_enum<AtomicRMWMode>(m, "AtomicRMWMode", "enum.IntEnum")
+    py::enum_<AtomicRMWMode>(m, "AtomicRMWMode")
         .value("ADD", AtomicRMWMode::ADD)
         .value("MIN", AtomicRMWMode::MIN)
         .value("MAX", AtomicRMWMode::MAX)
-        .finalize();
+        .export_values();
 
-    py::native_enum<PrecisionType>(m, "PrecisionType", "enum.IntEnum")
+    py::enum_<PrecisionType>(m, "PrecisionType")
         .value("INTRINSIC", PrecisionType::INTRINSIC)
         .value("HIGH_PRECISION", PrecisionType::HIGH_PRECISION)
-        .finalize();
+        .export_values();
 
     py::enum_<DequantScaleRoundingMode>(m, "DequantScaleRoundingMode")
         .value("ROUND_UP", DequantScaleRoundingMode::ROUND_UP)
         .value("ROUND_DOWN", DequantScaleRoundingMode::ROUND_DOWN)
         .export_values();
 
-    py::native_enum<TileType>(m, "TileType", "enum.IntEnum")
+    py::enum_<TileType>(m, "TileType")
         .value("VEC", TileType::VEC)
         .value("CUBE", TileType::CUBE)
         .value("DIST", TileType::DIST)
         .value("MAX", TileType::MAX)
-        .finalize();
+        .export_values();
 
-    py::native_enum<OpType>(m, "OpType", "enum.IntEnum")
+    py::enum_<OpType>(m, "OpType")
         .value("EQ", OpType::EQ)
         .value("NE", OpType::NE)
         .value("LT", OpType::LT)
         .value("LE", OpType::LE)
         .value("GT", OpType::GT)
         .value("GE", OpType::GE)
-        .finalize();
+        .export_values();
 
-    py::native_enum<OutType>(m, "OutType", "enum.IntEnum")
+    py::enum_<OutType>(m, "OutType")
         .value("BOOL", OutType::BOOL)
         .value("BIT", OutType::BIT)
-        .finalize();
+        .export_values();
 
-    py::native_enum<TopKAlgo>(m, "TopKAlgo", "enum.IntEnum")
+    py::enum_<TopKAlgo>(m, "TopKAlgo")
         .value("MERGE_SORT", TopKAlgo::MERGE_SORT)
         .value("RADIX_SELECT", TopKAlgo::RADIX_SELECT)
-        .finalize();
+        .export_values();
 
-    py::native_enum<Matrix::ReLuType>(m, "ReLuType", "enum.IntEnum")
+    py::enum_<Matrix::ReLuType>(m, "ReLuType")
         .value("NO_RELU", Matrix::ReLuType::NoReLu)
         .value("RELU", Matrix::ReLuType::ReLu)
-        .finalize();
+        .export_values();
 
-    py::native_enum<Conv::ReLuType>(m, "ConvReLuType", "enum.IntEnum")
+    py::enum_<Conv::ReLuType>(m, "ConvReLuType")
         .value("NO_RELU", Conv::ReLuType::NoReLu)
         .value("RELU", Conv::ReLuType::ReLu)
-        .finalize();
+        .export_values();
 
-    py::native_enum<Matrix::TransMode>(m, "TransMode", "enum.IntEnum")
+    py::enum_<Matrix::TransMode>(m, "TransMode")
         .value("CAST_NONE", Matrix::TransMode::CAST_NONE)
         .value("CAST_RINT", Matrix::TransMode::CAST_RINT)
         .value("CAST_ROUND", Matrix::TransMode::CAST_ROUND)
-        .finalize();
+        .export_values();
 
-    py::native_enum<LogBaseType>(m, "LogBaseType", "enum.IntEnum")
+    py::enum_<LogBaseType>(m, "LogBaseType")
         .value("LOG_E", LogBaseType::LOG_E)
         .value("LOG_2", LogBaseType::LOG_2)
         .value("LOG_10", LogBaseType::LOG_10)
-        .finalize();
+        .export_values();
 
-    py::native_enum<Distributed::AtomicType>(m, "AtomicType", "enum.IntEnum")
+    py::enum_<Distributed::AtomicType>(m, "AtomicType")
         .value("SET", Distributed::AtomicType::SET)
         .value("ADD", Distributed::AtomicType::ADD)
-        .finalize();
+        .export_values();
 }
 } // namespace pypto

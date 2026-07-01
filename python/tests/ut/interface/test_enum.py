@@ -36,45 +36,70 @@ def test_dtype():
     assert pypto.bytes_of(pypto.DT_BOOL) == 1
     assert pypto.bytes_of(pypto.DT_DOUBLE) == 8
 
-    assert repr(pypto.DT_INT4) == "DataType.DT_INT4"
+    assert str(pypto.DT_INT4) == "DataType.DT_INT4"
 
 
 def test_tile_op_format():
-    assert repr(pypto.TileOpFormat.TILEOP_ND) == "TileOpFormat.TILEOP_ND"
-    assert repr(pypto.TileOpFormat.TILEOP_NZ) == "TileOpFormat.TILEOP_NZ"
+    assert str(pypto.TileOpFormat.TILEOP_ND) == "TileOpFormat.TILEOP_ND"
+    assert str(pypto.TileOpFormat.TILEOP_NZ) == "TileOpFormat.TILEOP_NZ"
 
 
 def test_cache_policy():
-    assert repr(pypto.CachePolicy.NONE_CACHEABLE) == "CachePolicy.NONE_CACHEABLE"
+    assert str(pypto.CachePolicy.NONE_CACHEABLE) == "CachePolicy.NONE_CACHEABLE"
 
 
 def test_reduce_mode():
-    assert repr(pypto.ReduceMode.ATOMIC_ADD) == "ReduceMode.ATOMIC_ADD"
+    assert str(pypto.ReduceMode.ATOMIC_ADD) == "ReduceMode.ATOMIC_ADD"
 
 
 def test_cast_mode():
-    assert repr(pypto.CastMode.CAST_RINT) == "CastMode.CAST_RINT"
-    assert repr(pypto.CastMode.CAST_ROUND) == "CastMode.CAST_ROUND"
-    assert repr(pypto.CastMode.CAST_FLOOR) == "CastMode.CAST_FLOOR"
-    assert repr(pypto.CastMode.CAST_CEIL) == "CastMode.CAST_CEIL"
-    assert repr(pypto.CastMode.CAST_TRUNC) == "CastMode.CAST_TRUNC"
-    assert repr(pypto.CastMode.CAST_ODD) == "CastMode.CAST_ODD"
+    assert str(pypto.CastMode.CAST_RINT) == "CastMode.CAST_RINT"
+    assert str(pypto.CastMode.CAST_ROUND) == "CastMode.CAST_ROUND"
+    assert str(pypto.CastMode.CAST_FLOOR) == "CastMode.CAST_FLOOR"
+    assert str(pypto.CastMode.CAST_CEIL) == "CastMode.CAST_CEIL"
+    assert str(pypto.CastMode.CAST_TRUNC) == "CastMode.CAST_TRUNC"
+    assert str(pypto.CastMode.CAST_ODD) == "CastMode.CAST_ODD"
 
 
 def test_op_type():
-    assert repr(pypto.OpType.EQ) == "OpType.EQ"
-    assert repr(pypto.OpType.NE) == "OpType.NE"
-    assert repr(pypto.OpType.LT) == "OpType.LT"
-    assert repr(pypto.OpType.LE) == "OpType.LE"
-    assert repr(pypto.OpType.GT) == "OpType.GT"
-    assert repr(pypto.OpType.GE) == "OpType.GE"
+    assert str(pypto.OpType.EQ) == "OpType.EQ"
+    assert str(pypto.OpType.NE) == "OpType.NE"
+    assert str(pypto.OpType.LT) == "OpType.LT"
+    assert str(pypto.OpType.LE) == "OpType.LE"
+    assert str(pypto.OpType.GT) == "OpType.GT"
+    assert str(pypto.OpType.GE) == "OpType.GE"
 
 
 def test_out_type():
-    assert repr(pypto.OutType.BOOL) == "OutType.BOOL"
-    assert repr(pypto.OutType.BIT) == "OutType.BIT"
+    assert str(pypto.OutType.BOOL) == "OutType.BOOL"
+    assert str(pypto.OutType.BIT) == "OutType.BIT"
 
 
 def test_topk_algo():
-    assert repr(pypto.TopKAlgo.MERGE_SORT) == "TopKAlgo.MERGE_SORT"
-    assert repr(pypto.TopKAlgo.RADIX_SELECT) == "TopKAlgo.RADIX_SELECT"
+    assert str(pypto.TopKAlgo.MERGE_SORT) == "TopKAlgo.MERGE_SORT"
+    assert str(pypto.TopKAlgo.RADIX_SELECT) == "TopKAlgo.RADIX_SELECT"
+
+
+def test_atomic_rmw_mode():
+    assert int(pypto.AtomicRMWMode.ADD) == 0
+    assert int(pypto.AtomicRMWMode.MAX) == 1
+    assert int(pypto.AtomicRMWMode.MIN) == 2
+    assert pypto.AtomicRMWMode.ADD.name == "ADD"
+    assert pypto.AtomicRMWMode.ADD.value == 0
+    assert pypto.AtomicRMWMode.ADD == pypto.AtomicRMWMode.ADD
+
+
+def test_precision_type():
+    assert int(pypto.PrecisionType.INTRINSIC) == 0
+    assert int(pypto.PrecisionType.HIGH_PRECISION) == 1
+    assert pypto.PrecisionType.INTRINSIC.name == "INTRINSIC"
+    assert pypto.PrecisionType.HIGH_PRECISION.value == 1
+
+
+def test_external_error():
+    assert int(pypto.pypto_impl.ExternalError.COMMON_EXTERNAL_ERROR) == 0x0FFFF
+    assert int(pypto.pypto_impl.ExternalError.BAD_FD) == 0x00009
+    assert int(pypto.pypto_impl.ExternalError.DYNAMIC_SHAPE_COMPUTE_UNSUPPORTED) == 0x0000A
+    assert pypto.pypto_impl.ExternalError.UNKNOWN == pypto.pypto_impl.ExternalError.COMMON_EXTERNAL_ERROR
+    assert pypto.pypto_impl.ExternalError.UNKNOWN.value == pypto.pypto_impl.ExternalError.COMMON_EXTERNAL_ERROR.value
+    assert pypto.pypto_impl.ExternalError.INVALID_TYPE.value == 1

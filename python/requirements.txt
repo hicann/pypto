@@ -1,6 +1,6 @@
 # 基础编译, 如 pip install . / -e .
-setuptools>=77.0.3
-pybind11>=3.0.1
+setuptools>=70.3.0
+pybind11>=2.13.6
 
 # build_ci.py
 pip>=22.1
