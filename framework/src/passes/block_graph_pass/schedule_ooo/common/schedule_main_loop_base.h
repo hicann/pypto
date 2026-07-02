@@ -21,26 +21,23 @@
 
 namespace npu::tile_fwk {
 
-// 抽离自 OoOScheduler::ScheduleMainLoop 与 LatencyEstimator::LatencyEstimatorMainLoop。
-// 该基类只承载循环骨架与共享的两个状态字段(clock / numTotalIssues),
-// 各派生类通过重写下述纯虚钩子来提供具体的 stage 实现。
+// Template-method base for the OoO schedule main loop.
+// clock / numTotalIssues are now accessed via virtual getters GetClock()/GetNumTotalIssues(),
+// allowing derived classes to source them from ScheduleState or local fields.
 class ScheduleMainLoopBase {
 public:
     ScheduleMainLoopBase() = default;
     virtual ~ScheduleMainLoopBase() = default;
 
-    // 统一入口: 派生类调用此方法运行完整的主循环。
     Status RunMainLoop();
 
-    // 共享状态(派生类与外部均可访问,保持与原 OoOScheduler/LatencyEstimator 行为一致)
-    int clock{0};
-    uint64_t numTotalIssues{0};
+    // clock / numTotalIssues are no longer owned by this base class.
+    // Derived classes provide access via virtual getters (typically from ScheduleState).
+    virtual int& GetClock() = 0;
+    virtual uint64_t& GetNumTotalIssues() = 0;
 
 protected:
-    // ===== 模板方法钩子 =====
-    // 进入主循环之前的初始化(例如更新执行序、激活就绪 issue、设置 numTotalIssues)。
     virtual Status PreMainLoop() = 0;
-    // 主循环正常退出后的收尾(例如打印 latency)。
     virtual Status PostMainLoop() = 0;
 
     virtual Status RetireIssueStage(uint64_t& commitCnt, int& nextCycle) = 0;

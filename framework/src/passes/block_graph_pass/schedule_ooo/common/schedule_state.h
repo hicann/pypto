@@ -1,0 +1,250 @@
+/**
+ * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
+
+/*!
+ * \file schedule_state.h
+ * \brief Shared mutable state container for OoOScheduler, SpillEngine, and DualDstEngine.
+ *        Step 1: absorbs ScheduleBase fields and state-operation methods.
+ *        Steps 4-6 will add OoO-specific fields (schedInfoMap, tensorOccupyMap, etc.).
+ */
+
+#ifndef PASS_SCHEDULE_STATE_H
+#define PASS_SCHEDULE_STATE_H
+
+#include <vector>
+#include <map>
+#include <unordered_map>
+#include <unordered_set>
+#include <set>
+#include <cstdint>
+#include <algorithm>
+#include <climits>
+#include <sstream>
+#include "interface/operation/operation.h"
+#include "interface/tensor/irbuilder.h"
+#include "interface/tensor/logical_tensor.h"
+#include "interface/utils/common.h"
+#include "passes/pass_log/pass_log.h"
+#include "passes/pass_interface/pass.h"
+#include "tilefwk/error_code.h"
+#include "passes/block_graph_pass/schedule_ooo/common/buffer_pool.h"
+#include "passes/block_graph_pass/schedule_ooo/common/dep_manager.h"
+#include "passes/block_graph_pass/schedule_ooo/common/schedule_notifier.h"
+#include "passes/pass_utils/reschedule_utils.h"
+#include "passes/pass_utils/pass_utils.h"
+
+#ifdef MODULE_NAME
+#undef MODULE_NAME
+#endif
+#define MODULE_NAME "OoOScheduleState"
+
+namespace npu::tile_fwk {
+
+constexpr int32_t DIM_FIVE = 5;
+constexpr int32_t LAST_TWO_DIM = 2;
+constexpr int32_t UB_BLOCK_SIZE = 32;
+
+const std::unordered_set<Opcode> USE_LESS_OPS = {
+    Opcode::OP_NOP,         Opcode::OP_RESHAPE,      Opcode::OP_SHMEM_WAIT_UNTIL, Opcode::OP_VIEW,
+    Opcode::OP_ASSEMBLE,    Opcode::OP_BIND_TENSOR,  Opcode::OP_VIEW_TYPE,        Opcode::OP_HUB,
+    Opcode::OP_SHMEM_STORE};
+
+inline int BytesPerElement(DataType dataType) { return BytesOf(dataType); }
+
+inline uint64_t CeilAlign(uint64_t a, int b) { return ((a + b - 1) / b) * b; }
+
+// === Shared types used by OoOScheduler, SpillEngine, DualDstEngine ===
+
+enum class CoreLocationType { AIC = 0, AIV0 = 1, AIV1 = 2, UNKNOWN = 3 };
+
+const std::unordered_set<Opcode> COPY_IN_OPS = {
+    Opcode::OP_COPY_IN,        Opcode::OP_UB_COPY_IN, Opcode::OP_L1_COPY_IN,  Opcode::OP_L1_COPY_IN_FRACTAL_Z,
+    Opcode::OP_L1_COPY_IN_DMA, Opcode::OP_L1_COPY_UB, Opcode::OP_L0C_COPY_UB, Opcode::OP_UB_COPY_L1,
+    Opcode::OP_UB_COPY_L1_ND};
+
+const std::unordered_set<CoreLocationType> CORE_INIT_CONFIGS_HARDWARE_ONE = {
+    CoreLocationType::AIC, CoreLocationType::AIV0};
+
+const std::unordered_set<CoreLocationType> CORE_INIT_CONFIGS_HARDWARE_TWO = {
+    CoreLocationType::AIC, CoreLocationType::AIV0, CoreLocationType::AIV1};
+
+struct OpSchedInfo {
+    int execOrder{-1};
+    PipeType pipeType{PipeType::PIPE_FIX};
+    bool isAlloc{false};
+    bool isRetired{false};
+    std::vector<Operation*> viewOps;
+    CoreLocationType coreLocation{CoreLocationType::UNKNOWN};
+};
+
+struct SpillContext {
+    std::vector<Operation*> newCopyoutOps;
+    std::vector<Operation*> newAllocOps;
+    std::vector<int> spillMemIds;
+    int newNotRetiredCopyOutSize{0};
+    int deleteRetiredOpSize{0};
+    int deleteNotRetiredOpSize{0};
+    std::vector<std::tuple<Operation*, MemoryType, CoreLocationType>> deleteAllocOps;
+};
+
+struct SingleSpillCreatedOps {
+    Operation* copyoutOp{nullptr};
+    Operation* allocOp{nullptr};
+    Operation* copyinOp{nullptr};
+    LogicalTensorPtr gmTensor{nullptr};
+
+    void Record(Operation* copyout = nullptr,
+                Operation* alloc = nullptr,
+                Operation* copyin = nullptr,
+                LogicalTensorPtr gm = nullptr) {
+        if (copyout) copyoutOp = copyout;
+        if (alloc)   allocOp   = alloc;
+        if (copyin)  copyinOp  = copyin;
+        if (gm)      gmTensor  = gm;
+    }
+};
+
+struct DualDstPair {
+    Operation* opEarly{nullptr};
+    Operation* opLate{nullptr};
+    Operation* allocEarly{nullptr};
+    Operation* allocLate{nullptr};
+    LogicalTensorPtr tensorEarly;
+    LogicalTensorPtr tensorLate;
+};
+
+struct DualDstAllocCtx {
+    int memIdA{-1};
+    int memIdB{-1};
+    LocalBufferPtr bufA;
+    LocalBufferPtr bufB;
+    CoreLocationType coreA{CoreLocationType::UNKNOWN};
+    CoreLocationType coreB{CoreLocationType::UNKNOWN};
+};
+
+struct OpQueue {
+    bool busy{false};
+    Operation* curOp = nullptr;
+    int curOpRetireCycle{-1};
+    std::vector<Operation*> queue;
+    std::function<bool(Operation*, Operation*)> compareFunc;
+
+    OpQueue() {}
+    ~OpQueue() {}
+
+    void SetCompareFunc(std::function<bool(Operation*, Operation*)> func)
+    {
+        compareFunc = func;
+    }
+
+    void Insert(Operation* op) {
+        queue.push_back(op);
+        if (compareFunc) {
+            std::push_heap(queue.begin(), queue.end(), compareFunc);
+        }
+    }
+
+    bool Empty() { return queue.empty(); }
+
+    Operation* Front() { return queue[0]; }
+
+    Operation* PopFront()
+    {
+        if (compareFunc) {
+            std::pop_heap(queue.begin(), queue.end(), compareFunc);
+            Operation* op = queue.back();
+            queue.pop_back();
+            return op;
+        }
+        Operation* op = queue.front();
+        queue.erase(queue.begin());
+        return op;
+    }
+
+    void DeleteOp(Operation* op) {
+        auto it = std::find(queue.begin(), queue.end(), op);
+        if (it != queue.end()) {
+            queue.erase(it);
+            if (compareFunc) {
+                std::make_heap(queue.begin(), queue.end(), compareFunc);
+            }
+        }
+    }
+};
+
+class ScheduleState {
+public:
+    ScheduleState() {}
+    ~ScheduleState() {}
+
+    // === Fields migrated from ScheduleBase ===
+    std::unordered_map<int, int> bufRefCount;
+    std::unordered_map<MemoryType, int64_t> localMemSize;
+    std::unordered_map<MemoryType, int64_t> localMemoryCurrentSize;
+    std::unordered_map<int, LocalBufferPtr> localBufferMap;
+    std::unordered_map<Operation*, LogicalTensors> inOutOperandsCache;
+    std::unordered_map<Operation*, std::vector<int>> opReqMemIdsMap;
+    std::vector<Operation*> operations;
+    DependencyManager depManager;
+
+    // === OoO-specific fields (Step 4b: moved from OoOScheduler) ===
+    std::unordered_map<Operation*, OpSchedInfo> schedInfoMap;
+    std::unordered_map<int, Operation*> tensorOccupyMap;
+    std::unordered_map<int, Operation*> tensorAllocMap;
+    std::unordered_map<CoreLocationType, std::map<MemoryType, BufferPool>> bufferManagerMap;
+    std::vector<Operation*> newOperations;
+    std::unordered_set<CoreLocationType> coreInitConfigs;
+    std::unordered_map<int, CoreLocationType> dualDstMemIdCoreOverride;
+    int64_t workspaceOffset{0};
+    std::unordered_map<PipeType, int> pipeEndTime;
+    int workspaceMemId{SYMBOL_STACK_BASE};
+
+    // === OoO scheduling state (Step 4B: moved from OoOScheduler / ScheduleMainLoopBase) ===
+    std::vector<Operation*> orderedOps;
+    int clock{0};
+    uint64_t numTotalIssues{0};
+    std::unordered_map<CoreLocationType, std::map<MemoryType, OpQueue>> allocIssueQueue;
+
+    // === Methods migrated from ScheduleBase ===
+
+    std::vector<int>& GetOpMemIds(Operation* op);
+    void SetOpMemIds(Operation* op, const std::vector<int>& memIds) { opReqMemIdsMap[op] = memIds; }
+    void ClearOpMemIds(Operation* op) { opReqMemIdsMap[op].clear(); }
+    void AddOpMemId(Operation* op, int memId) { opReqMemIdsMap[op].push_back(memId); }
+    void ClearAllOpMemIds() { opReqMemIdsMap.clear(); }
+    bool ReplaceOpMemId(Operation* op, int oldMemId, int newMemId);
+
+    Status InitLocalBuffer(LogicalTensorPtr oOperand, int memId);
+    std::string GetOpInfo(Operation* op) const;
+    Status DelBufRefCount(const int memId);
+    uint64_t ShapeCeilAlign(std::vector<int64_t> shape, DataType dtype);
+    const LogicalTensors& GetInOutOperandCached(Operation* op);
+    void UpdateBufRefCount(Operation* op, LogicalTensorPtr tensor);
+    Status InitBufRefCount(std::vector<Operation*> &list);
+    bool IsOpAlloc(Operation *op);
+    Status CalcBufferSize(LogicalTensors tensors, std::map<MemoryType, int64_t>& bufferSize, std::set<int>& memIdMap);
+    std::string DumpOpInfo(Operation& op);
+    Status CheckOpBufferSize(Operation* op);
+    void UpdateAllocMap(Operation* op, std::map<int, Operation*> &allocMap);
+    Status CheckAllocOp(std::vector<Operation*> list);
+    Status Init(std::vector<Operation*> &opList);
+
+    std::vector<Operation*>& GetViewOps(Operation* op) { return schedInfoMap[op].viewOps; }
+    void SetIsRetired(Operation* op, bool isRetired) { schedInfoMap[op].isRetired = isRetired; }
+    void SetCoreLocation(Operation* op, CoreLocationType loc) { schedInfoMap[op].coreLocation = loc; }
+    CoreLocationType GetCoreLocation(Operation* op) const;
+    int GetExecOrder(Operation* op) const;
+    bool IsOpAllocInSchedInfo(Operation* op) const;
+    bool IsOpRetired(Operation* op) const;
+    void InsertOrdered(Operation* insertOp);
+};
+
+} // namespace npu::tile_fwk
+#endif // PASS_SCHEDULE_STATE_H

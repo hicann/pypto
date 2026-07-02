@@ -52,6 +52,9 @@ public:
     Status SpillOnBlock() override;
     void initLatencyEstimatorOpQueues();
     void InitMemWithoutAlloc();
+    // ScheduleMainLoopBase virtual getters — redirect to ScheduleState via ScheduleBase proxy
+    int& GetClock() override { return clock; }
+    uint64_t& GetNumTotalIssues() override { return numTotalIssues; }
     // 保留原入口名称,内部直接转发到 ScheduleMainLoopBase::RunMainLoop。
     Status LatencyEstimatorMainLoop();
 

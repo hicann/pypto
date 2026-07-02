@@ -10,27 +10,13 @@
 
 /*!
  * \file schedule_base.h
- * \brief
+ * \brief Proxy layer over ScheduleState. Public interface unchanged for backward compatibility.
  */
 
 #ifndef PASS_SCHEDULE_BASE_H
 #define PASS_SCHEDULE_BASE_H
 
-#include <vector>
-#include <map>
-#include <unordered_map>
-#include <cstdint>
-#include <climits>
-#include "interface/operation/operation.h"
-#include "interface/tensor/logical_tensor.h"
-#include "interface/utils/common.h"
-#include "passes/pass_log/pass_log.h"
-#include "passes/pass_interface/pass.h"
-#include "tilefwk/error_code.h"
-#include "passes/block_graph_pass/schedule_ooo/common/buffer_pool.h"
-#include "passes/block_graph_pass/schedule_ooo/common/dep_manager.h"
-#include "passes/pass_utils/reschedule_utils.h"
-#include "passes/pass_utils/pass_utils.h"
+#include "passes/block_graph_pass/schedule_ooo/common/schedule_state.h"
 
 #ifdef MODULE_NAME
 #undef MODULE_NAME
@@ -39,404 +25,144 @@
 
 namespace npu::tile_fwk {
 
-constexpr int32_t DIM_FIVE = 5;
-constexpr int32_t LAST_TWO_DIM = 2;
-constexpr int32_t UB_BLOCK_SIZE = 32;
-
-const std::unordered_set<Opcode> USE_LESS_OPS2 = {
-    Opcode::OP_NOP,      Opcode::OP_RESHAPE,     Opcode::OP_SHMEM_WAIT_UNTIL, Opcode::OP_VIEW,
-    Opcode::OP_ASSEMBLE, Opcode::OP_BIND_TENSOR, Opcode::OP_VIEW_TYPE,        Opcode::OP_HUB,
-    Opcode::OP_SHMEM_STORE, Opcode::OP_COPY_OUT};
-
-inline int BytesPerElement2(DataType dataType) { return BytesOf(dataType); }
-
-inline uint64_t CeilAlign2(uint64_t a, int b) { return ((a + b - 1) / b) * b; }
-
 class ScheduleBase {
 public:
     ScheduleBase() {}
     ~ScheduleBase() {}
 
-    std::unordered_map<int, int> bufRefCount_;
-    std::unordered_map<MemoryType, int64_t> localMemSize; //内存剩余情况
-    std::unordered_map<MemoryType, int64_t> localMemoryCurrentSize;
-    std::unordered_map<int, LocalBufferPtr> localBufferMap_; //memid:local
-    std::unordered_map<Operation*, LogicalTensors> inOutOperandsCache_;
-    std::unordered_map<Operation*, std::vector<int>> opReqMemIdsMap;
+    ScheduleState state_;
 
-    //  初始依赖的list序列
-    std::vector<Operation*> operations;
+    // === Proxy fields: redirect to ScheduleState ===
+    std::unordered_map<int, int>& bufRefCount_ = state_.bufRefCount;
+    std::unordered_map<MemoryType, int64_t>& localMemSize = state_.localMemSize;
+    std::unordered_map<MemoryType, int64_t>& localMemoryCurrentSize = state_.localMemoryCurrentSize;
+    std::unordered_map<int, LocalBufferPtr>& localBufferMap_ = state_.localBufferMap;
+    std::unordered_map<Operation*, LogicalTensors>& inOutOperandsCache_ = state_.inOutOperandsCache;
+    std::unordered_map<Operation*, std::vector<int>>& opReqMemIdsMap = state_.opReqMemIdsMap;
+    std::vector<Operation*>& operations = state_.operations;
+
+    // === Proxy fields: OoO-specific (redirect to ScheduleState) ===
+    std::unordered_map<Operation*, OpSchedInfo>& schedInfoMap_ = state_.schedInfoMap;
+    std::unordered_map<int, Operation*>& tensorOccupyMap = state_.tensorOccupyMap;
+    std::unordered_map<int, Operation*>& tensorAllocMap = state_.tensorAllocMap;
+    std::unordered_map<CoreLocationType, std::map<MemoryType, BufferPool>>& bufferManagerMap = state_.bufferManagerMap;
+    std::vector<Operation*>& newOperations_ = state_.newOperations;
+    std::unordered_set<CoreLocationType>& CORE_INIT_CONFIGS = state_.coreInitConfigs;
+    std::unordered_map<int, CoreLocationType>& dualDstMemIdCoreOverride_ = state_.dualDstMemIdCoreOverride;
+    int64_t& workspaceOffset = state_.workspaceOffset;
+    std::unordered_map<PipeType, int>& pipeEndTime = state_.pipeEndTime;
+    int& workspaceMemId = state_.workspaceMemId;
+
+    // === Proxy fields: OoO scheduling state (redirect to ScheduleState) ===
+    std::vector<Operation*>& orderedOps = state_.orderedOps;
+    int& clock = state_.clock;
+    uint64_t& numTotalIssues = state_.numTotalIssues;
+    std::unordered_map<CoreLocationType, std::map<MemoryType, OpQueue>>& allocIssueQueue = state_.allocIssueQueue;
 
 protected:
-    DependencyManager depManager_;
+    DependencyManager& depManager_ = state_.depManager;
 
 public:
+    // === Proxy methods: redirect to ScheduleState ===
+
     std::vector<int>& GetOpMemIds(Operation* op)
     {
-        auto it = opReqMemIdsMap.find(op);
-        if (it != opReqMemIdsMap.end()) {
-            return it->second;
-        }
-        std::vector<int> memIds;
-        for (auto tensor : GetInOutOperandCached(op)) {
-            memIds.push_back(tensor->memoryrange.memId);
-        }
-        auto inserted = opReqMemIdsMap.emplace(op, std::move(memIds));
-        return inserted.first->second;
+        return state_.GetOpMemIds(op);
     }
 
     void SetOpMemIds(Operation* op, const std::vector<int>& memIds)
     {
-        opReqMemIdsMap[op] = memIds;
+        state_.SetOpMemIds(op, memIds);
     }
 
     void ClearOpMemIds(Operation* op)
     {
-        opReqMemIdsMap[op].clear();
+        state_.ClearOpMemIds(op);
     }
 
     void AddOpMemId(Operation* op, int memId)
     {
-        opReqMemIdsMap[op].push_back(memId);
+        state_.AddOpMemId(op, memId);
     }
 
     void ClearAllOpMemIds()
     {
-        opReqMemIdsMap.clear();
+        state_.ClearAllOpMemIds();
     }
 
     bool ReplaceOpMemId(Operation* op, int oldMemId, int newMemId)
     {
-        auto& memIds = opReqMemIdsMap[op];
-        bool replaced = false;
-        for (auto& memId : memIds) {
-            if (memId == oldMemId) {
-                memId = newMemId;
-                replaced = true;
-            }
-        }
-        return replaced;
+        return state_.ReplaceOpMemId(op, oldMemId, newMemId);
     }
 
     Status InitLocalBuffer(LogicalTensorPtr oOperand, int memId) {
-        if (oOperand->GetMemoryTypeOriginal() >= MemoryType::MEM_DEVICE_DDR) {
-            return SUCCESS;
-        }
-        if (static_cast<uint64_t>(oOperand->tensor->GetRawDataSize()) !=
-            ShapeCeilAlign(oOperand->tensor->rawshape, oOperand->tensor->datatype)) {
-            APASS_LOG_WARN_F(
-                Elements::Tensor,
-                "InitLocalBuffer Failed at ShapeCeilAlign! "
-                "Please ensure that the rawTensor[%d] shapes are aligned.",
-                oOperand->GetRawMagic());
-        }
-        if (localBufferMap_.find(memId) == localBufferMap_.end()) {
-            localBufferMap_[memId] = std::make_shared<LocalBuffer>(
-                memId, oOperand->tensor->GetRawDataSize(), oOperand->GetMemoryTypeOriginal());
-        } else {
-            localBufferMap_[memId]->size =
-                std::max(localBufferMap_[memId]->size, static_cast<uint64_t>(oOperand->tensor->GetRawDataSize()));
-        }
-        return SUCCESS;
+        return state_.InitLocalBuffer(oOperand, memId);
     }
 
-    std::string GetOpInfo(Operation* op) { return op->GetOpcodeStr() + "[" + std::to_string(op->GetOpMagic()) + "]"; }
+    std::string GetOpInfo(Operation* op) const {
+        return state_.GetOpInfo(op);
+    }
 
     Status DelBufRefCount(const int memId)
     {
-        if (bufRefCount_.find(memId) == bufRefCount_.end()) {
-            APASS_LOG_ERROR_F(Elements::Tensor, "bufRefCount cannot find Tensor[%d].", memId);
-            return FAILED;
-        }
-        bufRefCount_[memId]--;
-        APASS_LOG_DEBUG_F(Elements::Tensor, "DelBufRefCount: memId [%d], refcount [%d].", memId, bufRefCount_[memId]);
-        if (bufRefCount_[memId] < 0) {
-            APASS_LOG_ERROR_F(Elements::Tensor, "Tensor[%d] bufRefCount cannot less than 0.", memId);
-            return FAILED;
-        }
-        return SUCCESS;
+        return state_.DelBufRefCount(memId);
     }
 
     uint64_t ShapeCeilAlign(std::vector<int64_t> shape, DataType dtype)
     {
-        uint64_t bytes = 0;
-        if (shape.size() == DIM_FIVE) {
-            bytes = BytesPerElement2(dtype) * std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<int>());
-            bytes = CeilAlign2(bytes, UB_BLOCK_SIZE);
-        } else {
-            uint64_t preDimSize = 1;
-            uint64_t lastTwoDimSize = 1;
-            for (size_t i = 0; i < shape.size(); i++) {
-                if ((shape.size() != 1) && (i < (shape.size() - LAST_TWO_DIM))) {
-                    preDimSize *= shape[i];
-                } else {
-                    lastTwoDimSize *= shape[i];
-                }
-            }
-            bytes = preDimSize * CeilAlign2(lastTwoDimSize * BytesPerElement2(dtype), UB_BLOCK_SIZE);
-        }
-        return bytes;
+        return state_.ShapeCeilAlign(shape, dtype);
     }
 
     const LogicalTensors& GetInOutOperandCached(Operation* op) {
-        auto it = inOutOperandsCache_.find(op);
-        if (it != inOutOperandsCache_.end())
-            return it->second;
-        LogicalTensors inOutOperand;
-        inOutOperand.reserve(op->GetOOperands().size() + op->GetIOperands().size());
-        for (auto o : op->GetOOperands()) {
-            if (o->GetMemoryTypeOriginal() < MemoryType::MEM_DEVICE_DDR) {
-                inOutOperand.push_back(o);
-            }
-        }
-        for (auto i : op->GetIOperands()) {
-            if (i->GetMemoryTypeOriginal() < MemoryType::MEM_DEVICE_DDR) {
-                inOutOperand.push_back(i);
-            }
-        }
-        auto cacheIt = inOutOperandsCache_.emplace(op, std::move(inOutOperand)).first;
-        return cacheIt->second;
+        return state_.GetInOutOperandCached(op);
     }
 
     void UpdateBufRefCount(Operation* op, LogicalTensorPtr tensor)
     {
-        int memId = tensor->memoryrange.memId;
-        if (tensor->GetMemoryTypeOriginal() < MemoryType::MEM_DEVICE_DDR) {
-            bufRefCount_[memId]++;
-            opReqMemIdsMap[op].push_back(memId);
-        }
+        state_.UpdateBufRefCount(op, tensor);
     }
 
     Status InitBufRefCount(std::vector<Operation*> &list)
     {
-        bufRefCount_.clear();
-        depManager_.ClearDependencies();
-        localBufferMap_.clear();
-        inOutOperandsCache_.clear();
-        opReqMemIdsMap.clear();
-        for (const auto &op : list) {
-            for (auto &tensor : op->GetIOperands()) {
-                UpdateBufRefCount(op, tensor);
-                int memId = tensor->memoryrange.memId;
-                if (InitLocalBuffer(tensor, memId) == FAILED) {
-                    APASS_LOG_ERROR_F(Elements::Operation, "InitLocalBuffer failed at InitBufRefCount!");
-                    return FAILED;
-                }
-            }
-            for (auto& tensor : op->GetOOperands()) {
-                UpdateBufRefCount(op, tensor);
-                int memId = tensor->memoryrange.memId;
-                if (InitLocalBuffer(tensor, memId) == FAILED) {
-                    APASS_LOG_ERROR_F(Elements::Operation, "InitLocalBuffer failed at InitBufRefCount!");
-                    return FAILED;
-                }
-            }
-        }
-        return SUCCESS;
+        return state_.InitBufRefCount(list);
     }
 
     bool IsOpAlloc(Operation *op) {
-        if (op == nullptr) {
-            return false;
-        }
-        return op->GetOpcodeStr().find("ALLOC") != std::string::npos;
+        return state_.IsOpAlloc(op);
     }
 
     Status CalcBufferSize(LogicalTensors tensors, std::map<MemoryType, int64_t>& bufferSize, std::set<int>& memIdMap)
     {
-        for (auto tensor : tensors) {
-            if (tensor->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR) {
-                continue;
-            }
-            const auto& shape = tensor->tensor->GetRawShape();
-            if (std::any_of(shape.begin(), shape.end(), [](int64_t d) { return d <= 0; })) {
-                APASS_LOG_ERROR_F(
-                    Elements::Tensor,
-                    "Dynamic axis detected in %s, "
-                    "OoOSchedule requires static rawShape!",
-                    tensor->Dump().c_str());
-                return FAILED;
-            }
-            if (memIdMap.find(tensor->memoryrange.memId) == memIdMap.end()) {
-                bufferSize[tensor->GetMemoryTypeOriginal()] += tensor->tensor->GetRawDataSize();
-                memIdMap.insert(tensor->memoryrange.memId);
-            }
-        }
-        return SUCCESS;
+        return state_.CalcBufferSize(tensors, bufferSize, memIdMap);
     }
 
     std::string DumpOpInfo(Operation& op)
     {
-        std::ostringstream os;
-        os << "op: " << op.GetOpcodeStr().c_str() << "[" << op.GetOpMagic() << "] | ";
-        os << "inputs: { ";
-        for (size_t i = 0; i < op.iOperand.size(); i++) {
-            os << "RawTensor [" << op.GetInputOperand(i)->tensor->GetRawMagic() << "] ";
-            os << op.iOperand[i]->tensor->DumpSSA(true, true);
-            if (i != op.iOperand.size() - 1) {
-                os << ", ";
-            }
-        }
-        os << " }"
-           << " | ";
-        os << "outputs: { ";
-        for (size_t i = 0; i < op.oOperand.size(); i++) {
-            os << "RawTensor [" << op.GetOutputOperand(i)->tensor->GetRawMagic() << "] ";
-            os << op.oOperand[i]->tensor->DumpSSA(true, true);
-            if (i != op.oOperand.size() - 1) {
-                os << ", ";
-            }
-        }
-        os << "} ";
-        return os.str();
+        return state_.DumpOpInfo(op);
     }
 
     Status CheckOpBufferSize(Operation* op)
     {
-        std::map<MemoryType, int64_t> bufferSizeMap;
-        std::set<int> memIdMap;
-        if (CalcBufferSize(op->GetIOperands(), bufferSizeMap, memIdMap) != SUCCESS ||
-            CalcBufferSize(op->GetOOperands(), bufferSizeMap, memIdMap) != SUCCESS) {
-            return FAILED;
-        }
-        for (auto& bufferPair : bufferSizeMap) {
-            if (localMemSize.find(bufferPair.first) == localMemSize.end()) {
-                continue;
-            }
-            if (bufferPair.second <= localMemSize[bufferPair.first]) {
-                continue;
-            }
-            if (op->GetOpcodeStr().find("ALLOC") != std::string::npos) {
-                APASS_LOG_ERROR_C(
-                    TensorErr::TENSOR_MEMORY_ALLOCATION, Elements::Operation,
-                    "Alloc tensor [%d] size [%ld] exceeds %s size [%ld]! %s",
-                    op->GetOutputOperand(0)->GetMagic(), bufferPair.second,
-                    MemoryTypeToString(bufferPair.first).c_str(), localMemSize[bufferPair.first],
-                    GetFormatBacktrace(*op).c_str());
-                APASS_LOG_ERROR_F(
-                    Elements::Operation, "Tensor [%d] producer info:", op->GetOutputOperand(0)->GetMagic());
-                for (auto producer : op->GetOutputOperand(0)->GetProducers()) {
-                    if (producer == op) {
-                        continue;
-                    }
-                    APASS_LOG_ERROR_F(Elements::Operation, "      %s.", DumpOpInfo(*producer).c_str());
-                }
-            } else {
-                APASS_LOG_ERROR_C(
-                    TensorErr::TENSOR_MEMORY_ALLOCATION, Elements::Operation,
-                    "OP %s[%d] in/output total size [%ld] exceeds %s size [%ld]!",
-                    op->GetOpcodeStr().c_str(), op->GetOpMagic(), bufferPair.second,
-                    MemoryTypeToString(bufferPair.first).c_str(), localMemSize[bufferPair.first]);
-                APASS_LOG_ERROR_F(Elements::Operation, " %s.", DumpOpInfo(*op).c_str());
-            }
-            return FAILED;
-        }
-        return SUCCESS;
+        return state_.CheckOpBufferSize(op);
     }
 
-    void UpdateAllocMap(Operation* op, std::map<int, Operation*> &tensorAllocMap) {
-        for (auto outTensor : op->GetOOperands()) {
-            if (outTensor->GetMemoryTypeOriginal() >= MemoryType::MEM_DEVICE_DDR) {
-                continue;
-            }
-            int memId = outTensor->memoryrange.memId;
-            if (tensorAllocMap.find(memId) == tensorAllocMap.end()) {
-                tensorAllocMap[memId] = op;
-            }
-        }
-        for (auto inTensor : op->GetIOperands()) {
-            if (inTensor->GetMemoryTypeOriginal() >= MemoryType::MEM_DEVICE_DDR) {
-                continue;
-            }
-            int memId = inTensor->memoryrange.memId;
-            if (tensorAllocMap.find(memId) == tensorAllocMap.end()) {
-                tensorAllocMap[memId] = op;
-            }
-        }
+    void UpdateAllocMap(Operation* op, std::map<int, Operation*> &allocMap) {
+        state_.UpdateAllocMap(op, allocMap);
     }
 
     Status CheckAllocOp(std::vector<Operation*> list)
     {
-        std::map<int, Operation*> tensorAllocMap;
-        for (const auto& op : list) {
-            if (IsOpAlloc(op)) {
-                if (GetInOutOperandCached(op).size() != 1) {
-                    APASS_LOG_ERROR_F(
-                        Elements::Operation, "%s InOutOperand size not equal to 1.", GetOpInfo(op).c_str());
-                    return FAILED;
-                }
-                UpdateAllocMap(op, tensorAllocMap);
-            }
-        }
-        for (const auto& op : list) {
-            if (!IsOpAlloc(op)) {
-                UpdateAllocMap(op, tensorAllocMap);
-            }
-        }
-        for (auto tensorAlloc : tensorAllocMap) {
-            if (!IsOpAlloc(tensorAlloc.second)) {
-                APASS_LOG_ERROR_F(
-                    Elements::Tensor, "%s Tensor[%d] is missing Alloc.", GetOpInfo(tensorAlloc.second).c_str(),
-                    tensorAlloc.first);
-                return FAILED;
-            }
-        }
-        return SUCCESS;
+        return state_.CheckAllocOp(list);
     }
 
     Status Init(std::vector<Operation*> &opList) {
-        // 初始化芯片各buffer大小
-        localMemSize = CommonUtils::GetLocalMemorySize();
- 	    localMemoryCurrentSize = localMemSize;
-        operations = opList;
-        for (auto& op : operations) {
-            if (CheckOpBufferSize(op) != SUCCESS) {
-                APASS_LOG_ERROR_F(
-                    Elements::Operation, "%s[%d] checkOpBufferSize failed! %s", op->GetOpcodeStr().c_str(),
-                    op->GetOpMagic(), GetFormatBacktrace(*op).c_str());
-                return FAILED;
-            }
-        }
-        InitBufRefCount(operations);
-        // 构建依赖关系
-        if (depManager_.InitDependencies(operations, true) != SUCCESS) {
-            APASS_LOG_ERROR_F(Elements::Operation, "InitDependencies failed!");
-            return FAILED;
-        }
-        depManager_.PrintDependencies(operations);
+        return state_.Init(opList);
+    }
 
-        opList = operations;
-        return SUCCESS;
+    void InsertOrdered(Operation* insertOp) {
+        state_.InsertOrdered(insertOp);
     }
 };
 
-struct OpQueue {
-    bool busy{false};
-    Operation* curOp = nullptr;
-    int curOpRetireCycle{-1};
-    std::deque<Operation*> queue;
-
-    OpQueue() {}
-    ~OpQueue() {}
-
-    void Insert(Operation* op) {
-        queue.push_back(op);
-    }
-
-    bool Empty() {
-        return queue.empty();
-    }
-
-    Operation* Front() {
-        return queue[0];
-    }
-
-    Operation* PopFront()
-    {
-        Operation* op = queue.front();
-        queue.pop_front();
-        return op;
-    }
-};
 } // namespace npu::tile_fwk
 #endif // PASS_SCHEDULE_BASE_H

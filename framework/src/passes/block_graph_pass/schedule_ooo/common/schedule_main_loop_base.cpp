@@ -34,7 +34,7 @@ Status ScheduleMainLoopBase::RunMainLoop()
     bool isAllRetired = false;
     while (!isAllRetired) {
         int nextCycle = -1;
-        APASS_LOG_DEBUG_F(Elements::Operation, "     clock: %d", clock);
+        APASS_LOG_DEBUG_F(Elements::Operation, "     clock: %d", GetClock());
         // Retire Stage :
         // 检查现有pipe中的op是否执行完。如果op执行完，则将op标记为retired状态，将可以被释放的buffer释放掉，并唤醒后续已经就绪的op。
         // 完毕后更新整个pipe的状态。
@@ -53,7 +53,7 @@ Status ScheduleMainLoopBase::RunMainLoop()
             APASS_LOG_ERROR_F(Elements::Operation, "LaunchIssueStage failed.");
             return FAILED;
         }
-        if (numTotalIssues == commitCnt && nextCycle == -1) {
+        if (GetNumTotalIssues() == commitCnt && nextCycle == -1) {
             isAllRetired = true;
             break;
         }
@@ -64,7 +64,7 @@ Status ScheduleMainLoopBase::RunMainLoop()
                 return FAILED;
             }
         } else {
-            clock = nextCycle;
+            GetClock() = nextCycle;
         }
     }
 
