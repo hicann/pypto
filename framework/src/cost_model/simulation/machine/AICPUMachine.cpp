@@ -276,7 +276,7 @@ void AICPUMachine::ResolveDependence(
     }
     task = taskIt->second;
     successors = task->successors; // 复制successors以减少持锁时间
-    ASSERT(CostModel::ForwardSimErrorScene::SCHEDULE_TASK_ERROR, task->status == true) << "[SIMULATION]: "
+    ASSERT(npu::tile_fwk::InternalError::SIM_INNER_ERROR, task->status == true) << "[SIMULATION]: "
                                  << "task status is false. taskId=" << task->taskId;
     RecordDependency(task);
 

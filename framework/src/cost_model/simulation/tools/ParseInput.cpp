@@ -377,7 +377,7 @@ void ParseInput::BuildFunction(
         func->tileOps.emplace_back(tileOp);
         func->tileOpMap[tileOp->magic] = tileOp;
     }
-    ASSERT(CostModel::ForwardSimErrorScene::BUILD_FUNCTION_ERROR,
+    ASSERT(npu::tile_fwk::InternalError::SIM_INNER_ERROR,
         hasCall || func->opSequenceAfterOOO_.size() == 0 || (func->tileOps.size() == func->opSequenceAfterOOO_.size()))
         << "[SIMULATION]: "
         << "hasCall=" << hasCall << " func->opSequenceAfterOOO_.size=" << func->opSequenceAfterOOO_.size()
@@ -486,7 +486,7 @@ void ParseInput::ParseFunction(
 {
     if (topoFromRootFunc) {
         sim->enableExpectValue = true;
-        ASSERT(CostModel::ForwardSimErrorScene::BUILD_FUNCTION_ERROR, inputFuncs.size() == 1) 
+        ASSERT(npu::tile_fwk::InternalError::SIM_INNER_ERROR, inputFuncs.size() == 1) 
             << "[SIMULATION]: inputFuncs.size is not equals to 1."
             << "inputFuncs.size=" << inputFuncs.size();
         for (const auto& rootFunction : inputFuncs) {
@@ -642,7 +642,7 @@ void ParseInput::ParseCalendarJson(std::shared_ptr<CostModel::SimSys> sim, const
                     {task["taskId"].get<int>(), std::stoull(task["functionHash"].get<std::string>())});
                 taskId = task["taskId"].get<int>();
                 if (sim->config.calendarMode == static_cast<uint64_t>(CalendarMode::GLOBAL_COUNTER)) {
-                    ASSERT(CostModel::ForwardSimErrorScene::CALENDAR_ERROR, waitVector.size() == 1) 
+                    ASSERT(npu::tile_fwk::InternalError::SIM_INNER_ERROR, waitVector.size() == 1) 
                         << "[SIMULATION]: task has two wait in calendar global counter."
                         << "waitVector.size=" << waitVector.size();
                     sim->taskFirstSetMap[taskId] = waitVector[0].second + 1;

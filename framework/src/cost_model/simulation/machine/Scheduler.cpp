@@ -97,7 +97,7 @@ void Scheduler::SortTile(
     SIMULATION_LOGI(
         "[Cycle: %lu][Scheduler][SortTile] output nodes queue size: %zu", GetSim()->GetCycles(), queue.size());
 
-    ASSERT(CostModel::ForwardSimErrorScene::RESOLVE_DEPENDENCY_ERROR, !queue.empty()) 
+    ASSERT(npu::tile_fwk::InternalError::SIM_INNER_ERROR, !queue.empty()) 
         << "[SIMULATION]: Sort Tile Alloc not find output nodes";
 
     // Merge And Sort outcast

@@ -33,7 +33,6 @@
 #include "cost_model/simulation/base/Reporter.h"
 #include "cost_model/simulation/statistics/TraceLogger.h"
 #include "cost_model/simulation/common/CommonTools.h"
-
 using namespace npu::tile_fwk;
 
 class CostModelTest : public testing::Test {

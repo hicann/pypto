@@ -292,7 +292,7 @@ void SimSys::CalendarDispatchTasksToCore(int key, std::shared_ptr<CoreMachine> c
         TaskPack packet;
         packet.taskId = task.first;
         packet.task.taskPtr = calendarTaskMap[task.first];
-        ASSERT(CostModel::ForwardSimErrorScene::SCHEDULE_TASK_ERROR, packet.task.taskPtr != nullptr)
+        ASSERT(npu::tile_fwk::InternalError::SIM_INNER_ERROR, packet.task.taskPtr != nullptr)
             << "[SIMULATION]: "
             << "task does not exist. taskId=" << packet.taskId;
         packet.task.functionHash = task.second;
@@ -1077,7 +1077,7 @@ uint64_t SimSys::GetCycles() const { return globalCycles; }
 
 void SimSys::UpdateNextCycles(uint64_t nextCycle)
 {
-    ASSERT(CostModel::ForwardSimErrorScene::CYCLES_ERROR, nextCycle > globalCycles)
+    ASSERT(npu::tile_fwk::InternalError::SIM_INNER_ERROR, nextCycle > globalCycles)
         << "[SIMULATION]: "
         << "nextCycle is less than or equels to globalCycles. nextCycles=" << nextCycle
         << ", globalCycles=" << globalCycles;

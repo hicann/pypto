@@ -72,7 +72,7 @@ void Machine::SetQueueCounter()
     GetSim()->GetLogger()->SetThreadName("FunctionCache", machineId, (queueSeq + coreTid));
     functionCacheTid = (queueSeq++) + coreTid;
 
-    ASSERT(CostModel::ForwardSimErrorScene::SIMULATION_INIT_ERROR, queueSeq <= reversedTidNum) 
+    ASSERT(npu::tile_fwk::InternalError::SIM_INNER_ERROR, queueSeq <= reversedTidNum) 
         << "[SIMULATION]: Queue Counter thread id is conflict with reversedTidNum."
         << " queueSeq=" << queueSeq << ", reversedTidNum=" << reversedTidNum;
 }

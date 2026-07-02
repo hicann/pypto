@@ -982,7 +982,7 @@ bool ReadyQueue::Empty() const { return readyQueue.empty(); }
 
 int ReadyQueue::Front()
 {
-    ASSERT(CostModel::ForwardSimErrorScene::SCHEDULE_TASK_ERROR, !readyQueue.empty())
+    ASSERT(npu::tile_fwk::InternalError::SIM_INNER_ERROR, !readyQueue.empty())
         << "[SIMULATION]: "
         << "readyQueue is empty";
     int idx = readyQueue.front();
@@ -991,7 +991,7 @@ int ReadyQueue::Front()
 
 int ReadyQueue::Pop()
 {
-    ASSERT(CostModel::ForwardSimErrorScene::SCHEDULE_TASK_ERROR, !readyQueue.empty())
+    ASSERT(npu::tile_fwk::InternalError::SIM_INNER_ERROR, !readyQueue.empty())
         << "[SIMULATION]: "
         << "readyQueue is empty";
     int idx = readyQueue.front();

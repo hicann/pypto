@@ -45,7 +45,7 @@ public:
     uint8_t* AllocHostAddr(uint64_t size)
     {
         auto hostPtr = (uint8_t*)malloc(size);
-        CHECK(static_cast<unsigned>(CostModel::InternelErrorScene::NULL_POINTER), hostPtr != nullptr)
+        CHECK(npu::tile_fwk::InternalError::SIM_INNER_ERROR, hostPtr != nullptr)
             << "alloc host addr failed.";
         allocatedHostAddr.emplace_back(hostPtr);
         return hostPtr;

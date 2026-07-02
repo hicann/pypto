@@ -190,7 +190,7 @@ void EslModelLauncher::LiteRegisterKernel(Function *function, void *&hdl, int &s
         .length = kernelBinary.size(),
     };
     int ret = RuntimeDevBinaryRegister(&binary, &hdl);
-    ASSERT(CostModel::ForwardSimErrorScene::SIMULATION_INIT_ERROR, ret == RT_SUCCESS)
+    ASSERT(npu::tile_fwk::InternalError::SIM_INNER_ERROR, ret == RT_SUCCESS)
         << "register kernel failed: " << ret;
 
     stubFunc = 1;
@@ -225,12 +225,12 @@ int EslModelLauncher::EslModelLiteRunOnce(Function *function, std::vector<Device
     rtArgs.args = deviceAddrs.data();
     rtArgs.argsSize = deviceAddrs.size() * sizeof(void *);
     int ret = RuntimeKernelLaunch(&stubFunc, 1, rtArgs.args, rtArgs.argsSize, nullptr, stream);
-    ASSERT(CostModel::ForwardSimErrorScene::SIMULATION_RUN_ERROR, ret == RT_SUCCESS)
+    ASSERT(npu::tile_fwk::InternalError::SIM_INNER_ERROR, ret == RT_SUCCESS)
         << "LiteKernelLaunch failed: " << ret;
 
     // Synchronize and copy back
     ret = AclRtSynchronizeStream(stream);
-    ASSERT(CostModel::ForwardSimErrorScene::SIMULATION_RUN_ERROR, ret == RT_SUCCESS)
+    ASSERT(npu::tile_fwk::InternalError::SIM_INNER_ERROR, ret == RT_SUCCESS)
         << "Stream sync failed: " << ret;
     for (size_t i = 0; i < tensors.size(); i++) {
         AclRtMemcpy((uint8_t *)tensors[i].GetAddr(), tensors[i].GetDataSize(), deviceAddrs[i],

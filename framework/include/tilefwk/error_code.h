@@ -534,8 +534,6 @@ enum class SimulationErrorCategory {
     UNKNOWN = 99000U,
 };
 
-enum class InternelErrorScene : uint32_t { NULL_POINTER = 90001U, UNKNOWN = 90099U };
-
 enum class ExternalErrorScene : uint32_t {
     INVALID_CONFIG = 91001U,
     INVALID_CONFIG_NAME = 91002U,
@@ -543,32 +541,19 @@ enum class ExternalErrorScene : uint32_t {
     FILE_CONTENT_ERROR = 91004U,
     INVALID_PATH = 91005U,
     FILE_OPEN_FAILED = 91006U,
-    PYTHON_CMD_ERROR = 91007U,
-    UNKNOWN = 91099U
+    PYTHON_CMD_ERROR = 91007U
 };
 
 enum class ForwardSimErrorScene : uint32_t {
-    BUILD_FUNCTION_ERROR = 92001U,
-    SIMULATION_INIT_ERROR = 92002U,
-    SCHEDULE_TASK_ERROR = 92003U,
-    RESOLVE_DEPENDENCY_ERROR = 92004U,
-    SIMULATION_RUN_ERROR = 92005U,
     INVALID_PIPE_TYPE = 92006U,
     SHAPE_INVALID = 92007U,
-    CYCLES_ERROR = 92008U,
-    CALENDAR_ERROR = 92009U,
-    DEAD_LOCK = 92010U,
-    UNKNOWN = 92099U
+    DEAD_LOCK = 92010U
 };
-
-enum class PostSimErrorScene : uint32_t { UNKNOWN = 93099U };
 
 enum class PrecisionSimErrorScene : uint32_t {
     NO_SO_EXISTS = 94001U,
     CANN_LOAD_FAILED = 94002U,
     CMD_ERROR = 94003U,
-    LEAF_CALLEE_ATTR_NULL = 94004U,
-    CANNSIM_FAILED = 94005U,
-    UNKNOWN = 94099U
+    CANNSIM_FAILED = 94005U
 };
 } // namespace CostModel

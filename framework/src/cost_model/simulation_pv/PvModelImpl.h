@@ -295,7 +295,7 @@ public:
                 }
             } else {
                 auto leafFuncAttr = leaf->GetLeafFuncAttribute();
-                ASSERT(PrecisionSimErrorScene::LEAF_CALLEE_ATTR_NULL, leafFuncAttr != nullptr)
+                ASSERT(npu::tile_fwk::InternalError::SIM_INNER_ERROR, leafFuncAttr != nullptr)
                     << "LeafFuncAttr is null for " << leaf;
                 CompileCode(func, leaf, leafFuncAttr->binPath);
                 if (!leafFuncAttr->binPathMainBlock.empty()) {
