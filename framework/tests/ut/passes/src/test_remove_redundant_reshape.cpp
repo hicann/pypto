@@ -260,7 +260,7 @@ TEST_F(RemoveRedundantReshapeTest, TestReshapeAssembleReorderWithMatmul)
     int reshapeMagic = reshapeOp.GetOpMagic();
 
     auto& assembleOp = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_ASSEMBLE, {middle}, {output});
-    assembleOp.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
+    assembleOp.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0}));
     int assembleMagic = assembleOp.GetOpMagic();
 
     IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_A_MUL_B, {matmulA, matmulB}, {matmulC});
@@ -433,4 +433,104 @@ TEST_F(RemoveRedundantReshapeTest, TestViewReshapeFanoutWithMatmul)
     EXPECT_EQ(viewCount, 3) << "Original 3 Views (1 main + 2 fanout) should be preserved";
     EXPECT_EQ(reshapeCount, 1) << "Original Reshape should be preserved";
     EXPECT_EQ(matmulCount, 1) << "MatMul should be preserved";
+}
+
+struct ReshapeAssembleGraphInfo {
+    std::shared_ptr<Function> func;
+    LogicalTensorPtr middle;
+    int reshapeMagic;
+    int assembleMagic;
+};
+
+static ReshapeAssembleGraphInfo BuildReshapeAssembleGraph(const std::string& name)
+{
+    ReshapeAssembleGraphInfo info;
+    info.func = std::make_shared<Function>(
+        Program::GetInstance(), name, name, nullptr);
+
+    std::vector<int64_t> inputShape = {32, 64};
+    std::vector<int64_t> middleShape = {2048};
+    std::vector<int64_t> outputShape = {2048};
+    std::vector<int64_t> matmulShape = {16, 16};
+
+    auto input = IRBuilder().CreateTensorVar(DT_FP32, inputShape, CreateTestConstIntVector(inputShape));
+    auto middle = IRBuilder().CreateTensorVar(DT_FP32, middleShape, CreateTestConstIntVector(middleShape));
+    auto output = IRBuilder().CreateTensorVar(DT_FP32, outputShape, CreateTestConstIntVector(outputShape));
+    auto matmulA = IRBuilder().CreateTensorVar(DT_FP32, matmulShape, CreateTestConstIntVector(matmulShape));
+    auto matmulB = IRBuilder().CreateTensorVar(DT_FP32, matmulShape, CreateTestConstIntVector(matmulShape));
+    auto matmulC = IRBuilder().CreateTensorVar(DT_FP32, matmulShape, CreateTestConstIntVector(matmulShape));
+    info.middle = middle;
+
+    auto& reshapeOp = IRBuilder().CreateTensorOpStmt(*info.func, Opcode::OP_RESHAPE, {input}, {middle});
+    info.reshapeMagic = reshapeOp.GetOpMagic();
+
+    auto& assembleOp = IRBuilder().CreateTensorOpStmt(*info.func, Opcode::OP_ASSEMBLE, {middle}, {output});
+    assembleOp.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0}));
+    info.assembleMagic = assembleOp.GetOpMagic();
+
+    IRBuilder().CreateTensorOpStmt(*info.func, Opcode::OP_A_MUL_B, {matmulA, matmulB}, {matmulC});
+
+    info.func->inCasts_.push_back(input);
+    info.func->inCasts_.push_back(matmulA);
+    info.func->inCasts_.push_back(matmulB);
+    info.func->outCasts_.push_back(output);
+    info.func->outCasts_.push_back(matmulC);
+    return info;
+}
+
+/*
+ * Reshape->Assemble with A_MUL_B present, middle tensor has symbolic DynValidShape.
+ * The DynValidShape contains a non-concrete scalar (e.g., runtime variable),
+ * which causes BuildAssembledValidShape to produce incorrect results.
+ * The reorder should be skipped.
+ */
+TEST_F(RemoveRedundantReshapeTest, TestReshapeAssembleSkipReorderWithSymbolicDynValidShape)
+{
+    auto info = BuildReshapeAssembleGraph("TestReshapeAssembleSymbolic");
+    ASSERT_NE(info.func, nullptr);
+
+    auto symL = CreateTestScalarVar("sym_L");
+    ASSERT_FALSE(symL.ConcreteValid()) << "sym_L should be non-concrete";
+    info.middle->UpdateDynValidShape({symL});
+
+    RemoveRedundantReshape pass;
+    EXPECT_EQ(pass.RunOnFunction(*info.func), SUCCESS);
+
+    auto ops = info.func->Operations();
+    EXPECT_FALSE(IsOpRemoved(ops, info.reshapeMagic))
+        << "Reshape should be kept (symbolic DynValidShape → reorder skipped)";
+    EXPECT_FALSE(IsOpRemoved(ops, info.assembleMagic))
+        << "Assemble should be kept (symbolic DynValidShape → reorder skipped)";
+
+    int assembleCount = 0, reshapeCount = 0, matmulCount = 0;
+    for (auto& op : ops) {
+        if (op.GetOpcode() == Opcode::OP_ASSEMBLE) { assembleCount++; }
+        else if (op.GetOpcode() == Opcode::OP_RESHAPE) { reshapeCount++; }
+        else if (op.GetOpcode() == Opcode::OP_A_MUL_B) { matmulCount++; }
+    }
+    EXPECT_EQ(assembleCount, 1);
+    EXPECT_EQ(reshapeCount, 1);
+    EXPECT_EQ(matmulCount, 1);
+}
+
+/*
+ * Reshape->Assemble with A_MUL_B present, middle tensor has concrete DynValidShape
+ * that matches the static shape. The reorder should proceed normally.
+ */
+TEST_F(RemoveRedundantReshapeTest, TestReshapeAssembleReorderWithConcreteDynValidShape)
+{
+    auto info = BuildReshapeAssembleGraph("TestReshapeAssembleConcrete");
+    ASSERT_NE(info.func, nullptr);
+
+    info.middle->UpdateDynValidShape(CreateTestConstIntVector({2048}));
+
+    RemoveRedundantReshape pass;
+    EXPECT_EQ(pass.RunOnFunction(*info.func), SUCCESS);
+
+    auto ops = info.func->Operations();
+    int matmulCount = 0;
+    for (auto& op : ops) {
+        if (op.GetOpcode() == Opcode::OP_A_MUL_B) { matmulCount++; }
+    }
+    EXPECT_EQ(matmulCount, 1);
 }

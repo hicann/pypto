@@ -73,16 +73,6 @@ bool HasConcreteShape(const std::vector<int64_t>& shape)
     return std::all_of(shape.begin(), shape.end(), [](int64_t dim) { return dim > 0; });
 }
 
-bool HasReshapeConsumer(const LogicalTensorPtr& tensor)
-{
-    if (tensor == nullptr) {
-        return false;
-    }
-    return std::any_of(tensor->GetConsumers().begin(), tensor->GetConsumers().end(), [](const Operation* consumer) {
-        return consumer != nullptr && consumer->GetOpcode() == Opcode::OP_RESHAPE;
-    });
-}
-
 bool HasTargetMatmulOp(Function& function)
 {
     for (const auto& op : function.Operations()) {
@@ -605,13 +595,15 @@ Status ViewReshapeAssembleReorderUtils::TryRecordDirectReshapeAssemble(
     const std::vector<SymbolicScalar>& assembleDynShape, const std::vector<SymbolicScalar>& middleDynShape,
     const std::vector<SymbolicScalar>& outputDynShape)
 {
-    if (HasReshapeConsumer(match.output)) {
-        return SUCCESS;
-    }
     RemapResult remap;
     if (!RemapOffset(assembleAttr.GetToOffset(), assembleAttr.GetToDynOffset(), match.output->GetShape(),
                      outputDynShape, assembleOutputShape, assembleDynShape, remap)) {
         return SUCCESS;
+    }
+    for (size_t i = 0; i < middleDynShape.size(); ++i) {
+        if (!middleDynShape[i].ConcreteValid()) {
+            return SUCCESS;
+        }
     }
     std::vector<SymbolicScalar> finalOutputDynShape;
     if (!BuildAssembledValidShape(
