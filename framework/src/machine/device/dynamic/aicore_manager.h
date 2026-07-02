@@ -356,7 +356,7 @@ public:
                     "#sche.task.loop: ProcessTaskLoop.");
             }
             DEV_IF_NONDEVICE {
-                if (aicoreHal_.IsHostSimMode()) {
+                if (aicoreHal_.IsHostSimMode() && !enableEslModel_) {
                     __PYPTO_TIMEOUT_CHECK_EXIT_ONLY(SchedErr::TASK_WAIT_TIMEOUT,
                         return DEVICE_MACHINE_TIMEOUT_CORETASK,
                         "#sche.task.loop: ProcessTaskLoop.");
@@ -514,7 +514,7 @@ public:
                     taskCtrlDequeFinish);
             }
             DEV_IF_NONDEVICE {
-                if (aicoreHal_.IsHostSimMode()) {
+                if (aicoreHal_.IsHostSimMode() && !enableEslModel_) {
                     __PYPTO_TIMEOUT_CHECK_EXIT_ONLY(SchedErr::SCH_PARALLEL_DEVTASK_TIMEOUT,
                         { ret = ToUnderlying(SchedErr::SCH_PARALLEL_DEVTASK_TIMEOUT); break; },
                         "#sche.parallel.devtask: Schedule parallel devtask, dequeueFinish=%d.",
@@ -801,7 +801,7 @@ private:
             }
             DEV_IF_NONDEVICE
             {
-                if (aicoreHal_.IsHostSimMode()) {
+                if (aicoreHal_.IsHostSimMode() && !enableEslModel_) {
                     __PYPTO_TIMEOUT_CHECK_EXIT_ONLY(SchedErr::TASK_WAIT_TIMEOUT,
                         { DumpDfxWhenCoreNotStop(devTaskCtx); return DEVICE_MACHINE_TIMEOUT_SYNC_CORE_FINISH; },
                         "#sche.task.end.sync: SyncAicoreDevTaskFinish, notstopNum=%u.",
