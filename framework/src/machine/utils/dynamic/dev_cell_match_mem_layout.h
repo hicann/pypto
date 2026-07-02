@@ -52,11 +52,12 @@ enum CellMatchOpType : uint32_t {
 
 /*
  * Operation count limits.
- * Metadata stores op count in 8 bits (bit 8-15 / 16-23): max storable value is 255, not 256.
+ * Metadata stores op count in 8 bits (bit 8-15 / 16-23): storable range is 0..255.
+ * Atomic-write batch cap is 254 so 255 (0xFF) remains available as prev-mutex invalid sentinel.
  */
 #define CELL_MATCH_METADATA_OP_COUNT_MAX 255
 #define CELL_MATCH_MAX_NORMAL_WRITE_COUNT 1
-#define CELL_MATCH_MAX_ATOMIC_WRITE_COUNT CELL_MATCH_METADATA_OP_COUNT_MAX
+#define CELL_MATCH_MAX_ATOMIC_WRITE_COUNT 254
 #define CELL_MATCH_MAX_READ_COUNT 128
 #define CELL_MATCH_INVALID_OP_COUNT 0xFF
 

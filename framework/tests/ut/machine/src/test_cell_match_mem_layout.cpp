@@ -176,9 +176,24 @@ TEST_F(CellMatchDynamicTest, OpIdManagement)
 TEST_F(CellMatchDynamicTest, CapacityConfiguration)
 {
     EXPECT_EQ(CELL_MATCH_METADATA_OP_COUNT_MAX, 255);
-    EXPECT_EQ(CELL_MATCH_MAX_ATOMIC_WRITE_COUNT, 255);
+    EXPECT_EQ(CELL_MATCH_MAX_ATOMIC_WRITE_COUNT, 254);
     EXPECT_EQ(CELL_MATCH_MAX_READ_COUNT, 128);
     EXPECT_EQ(CELL_MATCH_MAX_NORMAL_WRITE_COUNT, 1);
+    EXPECT_EQ(CELL_MATCH_INVALID_OP_COUNT, 0xFF);
+    EXPECT_LT(CELL_MATCH_MAX_ATOMIC_WRITE_COUNT, CELL_MATCH_INVALID_OP_COUNT);
+}
+
+TEST_F(CellMatchDynamicTest, PrevMutexCountMaxNotTreatedAsInvalid)
+{
+    uint64_t meta = 0;
+    CellMatchSetPrevMutexOpType(meta, CELL_MATCH_OP_TYPE_ATOMIC_WRITE);
+    CellMatchSetPrevMutexOpCount(meta, CELL_MATCH_MAX_ATOMIC_WRITE_COUNT);
+    EXPECT_EQ(CellMatchGetPrevMutexOpCount(meta), CELL_MATCH_MAX_ATOMIC_WRITE_COUNT);
+    EXPECT_NE(CellMatchGetPrevMutexOpCount(meta), CELL_MATCH_INVALID_OP_COUNT);
+
+    CellMatchSetPrevMutexOpType(meta, CELL_MATCH_OP_TYPE_NONE);
+    CellMatchSetPrevMutexOpCount(meta, CELL_MATCH_INVALID_OP_COUNT);
+    EXPECT_EQ(CellMatchGetPrevMutexOpCount(meta), CELL_MATCH_INVALID_OP_COUNT);
 }
 
 TEST_F(CellMatchDynamicTest, OpIdBoundaryCheck)
