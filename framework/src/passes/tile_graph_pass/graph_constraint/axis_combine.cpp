@@ -149,7 +149,7 @@ Status AxisCombine::AlignBroadCastOpInputs([[maybe_unused]] Function& function, 
             UpdateOperand(op, idx, srcTensor, alignedTensor, inputTensor);
             UpdateBrcOperandAfterExpand(op);
             continue;
-        } else if (!isDAV3510) {
+        } else if (!isDAV3510 && !IsLiteNPU(Platform::Instance().GetSoc().GetNPUArch())) {
             if (AlignedIfNeed(alignedShape.back(), padValue) != SUCCESS) {
                 return FAILED;
             }

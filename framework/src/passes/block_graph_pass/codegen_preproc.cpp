@@ -345,12 +345,13 @@ inline bool SkipInputCombineOps(Operation& op, int dimSize)
 
 Status CodegenPreproc::ForceCombineAxisForAxisCombine(Function& func) const
 {
+    const bool isDAV3510 = Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510;    
     for (auto& subProgram : func.rootFunc_->programs_) {
         for (auto& op : subProgram.second->Operations(false)) {
             if (OpcodeManager::Inst().GetCoreType(op.GetOpcode()) != OpCoreType::AIV && !IsUBCopy(op)) {
                 continue;
             }
-            if (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510 && SkipInputCombineOps3510(op)) {
+            if ((isDAV3510 || IsLiteNPU(Platform::Instance().GetSoc().GetNPUArch())) && SkipInputCombineOps3510(op)) {
                 continue;
             }
             std::vector<bool> inputCombineAxis;

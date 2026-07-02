@@ -223,6 +223,103 @@ Status AssignMemoryType::EnsureAllConsumerRequirementsExist(Function& function)
     return SUCCESS;
 }
 
+// l0c2ub pattern: batchmatmul case: cube op -> assemble(s) -> reshape op -> view(s)/assemble(s) -> vector
+bool AssignMemoryType::IsReshapeCubeToVecL0C2UBPattern(Operation& op)
+{
+    if (op.GetOpcode() != npu::tile_fwk::Opcode::OP_RESHAPE) {
+        return false;
+    }
+
+    auto& input = op.iOperand.front();
+    auto& output = op.oOperand.front();
+    auto& producers = input->GetProducers();
+    auto& consumers = output->GetConsumers();
+
+    bool isL0C2UBPattern = true;
+    if (producers.empty() || consumers.empty()) {
+        return false;
+    }
+
+    for (auto& producer : producers) {
+        bool isProducerAssemble = producer->GetOpcode() == npu::tile_fwk::Opcode::OP_ASSEMBLE;
+        bool isProducerProducerAllCube = false;
+
+        std::vector<bool> isProducerProducerCube;
+        for (auto& producerIOperand : producer->iOperand) {
+            for (auto& producerProducer : producerIOperand->GetProducers()) {
+                isProducerProducerCube.push_back(producerProducer->GetCoreType() == CoreType::AIC);
+            }
+        }
+
+        isProducerProducerAllCube =
+            !isProducerProducerCube.empty() &&
+            std::all_of(
+                isProducerProducerCube.begin(), isProducerProducerCube.end(), [](bool val) { return val == true; });
+
+        if (!isProducerAssemble || !isProducerProducerAllCube) {
+            isL0C2UBPattern = false;
+        }
+    }
+    for (auto& consumer : consumers) {
+        bool isConsumerViewAssemble = consumer->GetOpcode() == npu::tile_fwk::Opcode::OP_VIEW ||
+                                      consumer->GetOpcode() == npu::tile_fwk::Opcode::OP_ASSEMBLE;
+        bool isConsumerConsumerAllVector = false;
+
+        std::vector<bool> isConsumerConsumerVector;
+        for (auto& consumerOOperand : consumer->oOperand) {
+            for (auto& consumerConsumer : consumerOOperand->GetConsumers()) {
+                isConsumerConsumerVector.push_back(consumerConsumer->GetCoreType() == CoreType::AIV);
+            }
+        }
+        isConsumerConsumerAllVector =
+            !isConsumerConsumerVector.empty() &&
+            std::all_of(
+                isConsumerConsumerVector.begin(), isConsumerConsumerVector.end(), [](bool val) { return val == true; });
+
+        if (!isConsumerViewAssemble || !isConsumerConsumerAllVector) {
+            isL0C2UBPattern = false;
+        }
+    }
+    return isL0C2UBPattern;
+}
+
+Status AssignMemoryType::InferReshapeL0C2UBPatternLiteNPU(Operation& op)
+{
+    if (!IsLiteNPU(Platform::Instance().GetSoc().GetNPUArch())) {
+        return SUCCESS;
+    }
+
+    auto& input = op.iOperand.front();
+    auto& output = op.oOperand.front();
+    auto& producers = input->GetProducers();
+    auto& consumers = output->GetConsumers();
+
+    // l0c2ub pattern: batchmatmul case: cube op -> assemble(s) -> reshape op -> view(s)/assemble(s) -> vector
+    if (IsReshapeCubeToVecL0C2UBPattern(op) && FitsTensorInUb(input)) {
+        for (auto& producer : producers) {
+            auto& producerInput = producer->iOperand.front();
+            auto& producerOutput = producer->oOperand.front();
+
+            // set producer assemble input to L0C
+            producerInput->SetMemoryTypeOriginal(MemoryType::MEM_L0C, true);
+            inserter.UpdateTensorTobeMap(producerInput, *producer, MemoryType::MEM_L0C);
+
+            // set producer output to be UB
+            producerOutput->SetMemoryTypeOriginal(MemoryType::MEM_UB, true);
+            inserter.UpdateTensorTobeMap(producerOutput, op, MemoryType::MEM_UB);
+        }
+        // set reshape output to UB
+        output->SetMemoryTypeOriginal(MemoryType::MEM_UB, true);
+
+        // set all consumer view/assembles input to UB
+        for (auto& consumer : consumers) {
+            inserter.UpdateTensorTobeMap(output, *consumer, MemoryType::MEM_UB);
+        }
+    }
+
+    return SUCCESS;
+}
+
 Status AssignMemoryType::InferUncertainMemoryTypes(Function& function)
 {
     std::unordered_set<LogicalTensorPtr> inferredAssembleOutputs;
@@ -239,6 +336,7 @@ Status AssignMemoryType::InferUncertainMemoryTypes(Function& function)
                 break;
             case Opcode::OP_RESHAPE:
                 RETURN_IF_NOT_SUCCESS(InferReshapeMemoryType(op));
+                RETURN_IF_NOT_SUCCESS(InferReshapeL0C2UBPatternLiteNPU(op));
                 break;
             default:
                 break;

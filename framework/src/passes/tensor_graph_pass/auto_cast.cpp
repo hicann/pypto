@@ -90,7 +90,7 @@ Status AutoCast::RunOnFunction(Function& function)
         APASS_LOG_ERROR_F(Elements::Function, "Failed to insert CAST for BF16 unsupported Operations.");
         return FAILED;
     }
-    if (InsertFP16Cast(function) != SUCCESS) {
+    if (!IsLiteNPU(Platform::Instance().GetSoc().GetNPUArch()) && InsertFP16Cast(function) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Function, "Failed to insert CAST for FP16 unsupported Operations.");
         return FAILED;
     }

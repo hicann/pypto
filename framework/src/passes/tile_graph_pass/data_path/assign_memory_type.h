@@ -154,6 +154,10 @@ private:
         Operation& operation, const LogicalTensorPtr& input, const LogicalTensorPtr& output, bool isDynamic,
         bool canUseUb);
 
+    Status InferReshapeL0C2UBPatternLiteNPU(Operation& op);
+
+    bool IsReshapeCubeToVecL0C2UBPattern(Operation& op);
+
     Status InferViewTypeMemoryType(Operation& operation);
 
     Status TryInferViewTypeFromProducerView(
