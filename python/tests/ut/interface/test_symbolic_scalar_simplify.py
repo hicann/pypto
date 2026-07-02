@@ -274,6 +274,30 @@ def test_max_absorption():
 
 
 # ============================================================================
+# Clamp composition rules
+# ============================================================================
+
+def test_clamp_composition_relu():
+    # f(x, y, z) = min(max(x - y, 0), z); nested clamp collapses the inner upper bound.
+    a = _sym("a")
+    b = _sym("b")
+
+    def foo(x, y, z):
+        return pypto.min(pypto.max(x - y, 0), z)
+    inner = foo(a, b, 512)
+    result = foo(inner, 16, 16).simplify()
+    assert str(result) == str(pypto.min(pypto.max(a - b - 16, 0), 16))
+
+
+def test_clamp_composition_preserves_inner_bound():
+    # When the inner upper bound is NOT redundant (C < M + c), it must be kept.
+    x = _sym("x")
+    inner = pypto.min(pypto.max(x, 0), 8)  # C = 8
+    expr = pypto.min(pypto.max(inner - 4, 0), 16).simplify()  # M=16, c=4 -> 8 < 20, no collapse
+    assert "RUNTIME_Min" in str(expr) and "8" in str(expr)
+
+
+# ============================================================================
 # Comparison rules
 # ============================================================================
 

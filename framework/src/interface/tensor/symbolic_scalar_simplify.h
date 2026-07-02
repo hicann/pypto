@@ -614,6 +614,8 @@ private:
 
         // Self-subtraction
         SYM_TRY_REWRITE(x - x, MakeConst(0));
+        SYM_TRY_REWRITE(x - 0, x);
+        SYM_TRY_REWRITE(0 - x, sym_neg(x));
 
         // Cancellation
         SYM_TRY_REWRITE((x + y) - y, x);
@@ -626,6 +628,8 @@ private:
         // Constant reassociation
         SYM_TRY_REWRITE((x + c1) - c2, x + (c1.Val() - c2.Val()));
         SYM_TRY_REWRITE((c1 + x) - c2, x + (c1.Val() - c2.Val()));
+        SYM_TRY_REWRITE((c1 - x) - c2, (c1.Val() - c2.Val()) - x);
+        SYM_TRY_REWRITE((x - c1) - c2, x - (c1.Val() + c2.Val()));
         SYM_TRY_REWRITE(c1 - (c2 - x), x + (c1.Val() - c2.Val()));
         SYM_TRY_REWRITE(c1 - (x + c2), (c1.Val() - c2.Val()) - x);
         SYM_TRY_REWRITE(c1 - (c2 + x), (c1.Val() - c2.Val()) - x);
@@ -784,7 +788,7 @@ private:
     {
         RawPtr ret = Expr::Create(SymbolicOpcode::T_MOP_MIN, {a, b});
         PVarRaw x, y, z;
-        PVarImm c1, c2;
+        PVarImm c1, c2, c3, c4, c5;
 
         // min(x, x) => x
         SYM_TRY_REWRITE(sym_min(x, x), x);
@@ -823,6 +827,18 @@ private:
         SYM_TRY_REWRITE(sym_min(sym_max(x, y), sym_max(z, x)), sym_max(sym_min(y, z), x));
         SYM_TRY_REWRITE(sym_min(sym_max(y, x), sym_max(x, z)), sym_max(sym_min(y, z), x));
         SYM_TRY_REWRITE(sym_min(sym_max(y, x), sym_max(z, x)), sym_max(sym_min(y, z), x));
+
+        // Clamp composition: clamp(clamp(x, L1, H1) - c, L2, H2) => clamp(x - c, L2, H2)
+        // i.e. min(max(min(max(x, c1), c2) - c3, c4), c5) => min(max(x - c3, c4), c5).
+        // The inner clamp bounds become redundant when its achievable range [L1, H1] shifted
+        // by -c still covers the outer range [L2, H2]: L1 <= L2 + c and H1 >= H2 + c.
+        SYM_TRY_REWRITE_IF(
+            sym_min(sym_max(sym_min(sym_max(x, c1), c2) - c3, c4), c5), sym_min(sym_max(x - c3, c4), c5),
+            c1.Val() <= c4.Val() + c3.Val() && c2.Val() >= c5.Val() + c3.Val());
+
+        SYM_TRY_REWRITE_IF(
+            sym_min(sym_max(sym_min(sym_max(x, c1), c2), c4), c5), sym_min(sym_max(x, c4), c5),
+            c1.Val() <= c4.Val() && c2.Val() >= c5.Val());
 
         SYM_TRY_REWRITE(sym_min(sym_min(x, y), sym_min(x, z)), sym_min(sym_min(y, z), x));
         SYM_TRY_REWRITE(sym_min(sym_min(x, y), sym_min(z, x)), sym_min(sym_min(y, z), x));
