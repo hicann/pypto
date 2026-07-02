@@ -20,6 +20,7 @@
 #include "machine/utils/dynamic/dev_cell_match_mem_layout.h"
 
 namespace npu::tile_fwk::dynamic {
+constexpr int INVALID_WRAP_TASK_HUB_OP_IDX = -1;
 struct DevAscendOperationOperandInfo {
     int tensorIndex{0};
     int staticOffsetAttrBeginIndex{0};
@@ -53,7 +54,7 @@ struct DevAscendFunctionCallOperandUse {
     int offsetAttrIdx{-1};
     int shapeAttrIdx{-1};
     CellMatchOpType opType{CellMatchOpType::READ};
-    int wrapTaskHubOpIdx{-1};
+    int wrapTaskHubOpIdx{INVALID_WRAP_TASK_HUB_OP_IDX};
 
     DevAscendFunctionCallOperandUse() = default;
     DevAscendFunctionCallOperandUse(int operationIdx_, int offsetAttrIdx_, int shapeAttrIdx_,

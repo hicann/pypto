@@ -383,7 +383,7 @@ uint64_t DeviceStitchContext::PartialUpdateStitchConsumer(
             cellMatchTableDesc, expressionList);
 
         int consumerOpIdx = consumer.operationIdx;
-        if (consumer.wrapTaskHubOpIdx != -1) {
+        if (consumer.wrapTaskHubOpIdx != INVALID_WRAP_TASK_HUB_OP_IDX) {
             DEV_VERBOSE_DEBUG("[PartialUpdateStitch] devTaskId=%lu devNextIdx=%lu, replace consumerOpIdx[%d] witch wrapHubOpIdx[%d]",
             (uint64_t)devTaskId, (uint64_t)devNextIdx, consumerOpIdx, consumer.wrapTaskHubOpIdx);
 
@@ -433,7 +433,7 @@ uint64_t DeviceStitchContext::FullCoverDefaultUpdateStitch(
             static_cast<uint32_t>(devTaskId), slotIdx, static_cast<uint32_t>(devNextIdx), *nextSrc, consumer,
             cellMatchTableDesc, expressionList);
         int consumerOpIdx = consumer.operationIdx;
-        if (consumer.wrapTaskHubOpIdx != -1) {
+        if (consumer.wrapTaskHubOpIdx != INVALID_WRAP_TASK_HUB_OP_IDX) {
             DEV_VERBOSE_DEBUG("[FullCoverDefaultStitch] devTaskId=%lu devNextIdx=%lu, replace consumerOpIdx[%d] witch wrapHubOpIdx[%d]",
             (uint64_t)devTaskId, (uint64_t)devNextIdx, consumerOpIdx, consumer.wrapTaskHubOpIdx);
 

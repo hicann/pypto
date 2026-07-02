@@ -687,6 +687,12 @@ public:
         auto opWrapId = GetOpWrapID(wrapId);
         auto dyntask = reinterpret_cast<DynDeviceTask*>(curDevTask_);
         auto opWrapOffsetList = dyntask->devTask.mixTaskData.opWrapOffsetList[funcId];
+        if (unlikely(opWrapOffsetList == nullptr)) {
+            DEV_ERROR(
+                DevCommonErr::NULLPTR, "#sche.resolve.wrap: the funcIndex:%u have wrapId but not found: %u!", funcId,
+                wrapId);
+            return;
+        }
         WrapInfoQueueLock(readyWrapCoreFunctionQue_);
         opWrapOffsetList[opWrapId] = readyWrapCoreFunctionQue_->tail;
         WrapInfo* wrapInfo = &readyWrapCoreFunctionQue_->elem[readyWrapCoreFunctionQue_->tail++];
