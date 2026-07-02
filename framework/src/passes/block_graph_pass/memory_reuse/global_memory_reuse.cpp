@@ -13,7 +13,11 @@
  * \brief
  */
 #include "global_memory_reuse.h"
+#include <algorithm>
 #include <deque>
+#include <limits>
+#include <numeric>
+#include <utility>
 #include "tilefwk/tilefwk.h"
 #include "interface/inner/tilefwk.h"
 #include "interface/program/program.h"
@@ -345,61 +349,123 @@ void Allocator::ProcessLeafGlobalMemoryReuse(Function& leafFunc)
     }
 }
 
-// 检查两个消费者在空间上是否有重叠
-bool DoConsumersOverlap(
-    size_t firstIdx, size_t secondIdx, const std::vector<std::vector<int>>& allOffsets,
-    const std::vector<std::vector<int>>& allShapes)
+bool Allocator::CheckNoOverlapForTwoConsumers(
+    const std::vector<std::vector<int>>& allOffsets, const std::vector<std::vector<int>>& allShapes, size_t dimCount)
 {
-    const auto& firstOffset = allOffsets[firstIdx];
-    const auto& secondOffset = allOffsets[secondIdx];
-    const auto& firstShape = allShapes[firstIdx];
-    const auto& secondShape = allShapes[secondIdx];
-
-    // 检查每个维度上的重叠情况
-    for (size_t dim = 0; dim < firstOffset.size(); dim++) {
-        // 计算第一个消费者在当前维度的起始和结束位置
-        int firstStart = firstOffset[dim];
-        int firstEnd = firstStart + firstShape[dim] - 1;
-
-        // 计算第二个消费者在当前维度的起始和结束位置
-        int secondStart = secondOffset[dim];
-        int secondEnd = secondStart + secondShape[dim] - 1;
-
-        // 检查当前维度上是否有重叠
-        if (firstEnd < secondStart || secondEnd < firstStart) {
-            // 当前维度无重叠，即两个消费者空间上无重叠
-            APASS_LOG_DEBUG_F(
-                Elements::Operation, "No overlap in dimension %zu (range [%d,%d] vs [%d,%d]).", dim, firstStart,
-                firstEnd, secondStart, secondEnd);
-            return false;
+    for (size_t d = 0; d < dimCount; ++d) {
+        int firstEnd = allOffsets[0][d] + allShapes[0][d] - 1;
+        int secondEnd = allOffsets[1][d] + allShapes[1][d] - 1;
+        if (firstEnd < allOffsets[1][d] || secondEnd < allOffsets[0][d]) {
+            return true;
         }
     }
-    APASS_LOG_DEBUG_F(Elements::Operation, "Overlap between consumer %zu and %zu.", firstIdx, secondIdx);
-
-    // 所有维度都有重叠，两个消费者在空间上有重叠
-    return true;
+    return false;
 }
 
-bool CheckAllConsumerAccessNoOverlap(
-    const std::vector<std::vector<int>>& allOffsets, const std::vector<std::vector<int>>& allShapes)
+size_t Allocator::SelectSweepAxis(
+    const std::vector<std::pair<int64_t, int64_t>>& ranges, size_t consumerCount, size_t dimCount)
 {
-    // 只有一个消费者时，直接返回无重叠
-    if (allOffsets.size() <= 1) {
-        return true;
+    size_t sweepAxis = 0;
+    int64_t maxSpan = std::numeric_limits<int64_t>::min();
+    for (size_t d = 0; d < dimCount; ++d) {
+        int64_t minStart = std::numeric_limits<int64_t>::max();
+        int64_t maxStart = std::numeric_limits<int64_t>::min();
+        for (size_t i = 0; i < consumerCount; ++i) {
+            minStart = std::min(minStart, ranges[i * dimCount + d].first);
+            maxStart = std::max(maxStart, ranges[i * dimCount + d].first);
+        }
+        int64_t span = maxStart - minStart;
+        if (span > maxSpan) {
+            maxSpan = span;
+            sweepAxis = d;
+        }
     }
+    return sweepAxis;
+}
 
-    // 检查所有消费者对之间的重叠情况
-    for (size_t firstIdx = 0; firstIdx < allOffsets.size(); ++firstIdx) {
-        for (size_t secondIdx = firstIdx + 1; secondIdx < allOffsets.size(); ++secondIdx) {
-            if (DoConsumersOverlap(firstIdx, secondIdx, allOffsets, allShapes)) {
+// active-set 扫描线：仅与 sweep axis 上尚未结束的消费者做全维度重叠判断。
+// 活跃集自动收缩，稀疏场景下候选对数远小于 n²；
+bool Allocator::CheckNoOverlapByActiveSet(
+    const std::vector<std::pair<int64_t, int64_t>>& ranges, size_t consumerCount, size_t dimCount, size_t sweepAxis)
+{
+    // 按 sweep axis 的 start 排序（end 作 tiebreaker，保证同 start 时短区间在前）
+    std::vector<size_t> order(consumerCount);
+    std::iota(order.begin(), order.end(), 0);
+    std::sort(order.begin(), order.end(), [&](size_t lhs, size_t rhs) {
+        const auto& l = ranges[lhs * dimCount + sweepAxis];
+        const auto& r = ranges[rhs * dimCount + sweepAxis];
+        return l.first == r.first ? l.second < r.second : l.first < r.first;
+    });
+
+    std::vector<size_t> active;
+    active.reserve(consumerCount);
+    for (size_t idx : order) {
+        const auto& curStart = ranges[idx * dimCount + sweepAxis].first;
+        size_t writeIdx = 0;
+        for (size_t actIdx : active) {
+            if (ranges[actIdx * dimCount + sweepAxis].second >= curStart) {
+                active[writeIdx++] = actIdx;
+            }
+        }
+        active.resize(writeIdx);
+
+        const auto* curRanges = &ranges[idx * dimCount];
+        for (size_t actIdx : active) {
+            const auto* actRanges = &ranges[actIdx * dimCount];
+            bool overlap = true;
+            for (size_t d = 0; d < dimCount; ++d) {
+                if (actRanges[d].second < curRanges[d].first || curRanges[d].second < actRanges[d].first) {
+                    overlap = false;
+                    break;
+                }
+            }
+            if (overlap) {
                 return false;
             }
         }
+        active.emplace_back(idx);
     }
     return true;
 }
 
-bool ExtractImmediateArguments(
+bool Allocator::CheckAllConsumerAccessNoOverlap(
+    const std::vector<std::vector<int>>& allOffsets, const std::vector<std::vector<int>>& allShapes)
+{
+    size_t consumerCount = allOffsets.size();
+    if (consumerCount <= 1) {
+        return true;
+    }
+    if (allShapes.size() != consumerCount) {
+        return false;
+    }
+
+    size_t dimCount = allOffsets[0].size();
+    PASS_ASSERT(dimCount > 0) << "allOffsets[0] is empty";
+    for (size_t i = 0; i < consumerCount; ++i) {
+        PASS_ASSERT(allOffsets[i].size() == dimCount && allShapes[i].size() == dimCount)
+            << "dim mismatch at consumer " << i << ": allOffsets[i].size=" << allOffsets[i].size()
+            << " allShapes[i].size=" << allShapes[i].size() << " dimCount=" << dimCount;
+    }
+
+    APASS_LOG_DEBUG_F(Elements::Tensor, "CheckAllConsumerAccessNoOverlap consumerCount=%zu dimCount=%zu.",
+                      consumerCount, dimCount);
+
+    if (consumerCount == 2) {
+        return CheckNoOverlapForTwoConsumers(allOffsets, allShapes, dimCount);
+    }
+
+    std::vector<std::pair<int64_t, int64_t>> ranges(consumerCount * dimCount);
+    for (size_t i = 0; i < consumerCount; ++i) {
+        for (size_t d = 0; d < dimCount; ++d) {
+            ranges[i * dimCount + d] = {allOffsets[i][d], allOffsets[i][d] + allShapes[i][d] - 1};
+        }
+    }
+
+    size_t sweepAxis = SelectSweepAxis(ranges, consumerCount, dimCount);
+    return CheckNoOverlapByActiveSet(ranges, consumerCount, dimCount, sweepAxis);
+}
+
+bool Allocator::ExtractImmediateArguments(
     const std::vector<SymbolicScalar>& argList, size_t startIndex, size_t count, std::vector<int>& result)
 {
     for (size_t argIdx = startIndex; argIdx < startIndex + count; argIdx++) {
@@ -411,7 +477,7 @@ bool ExtractImmediateArguments(
     return true;
 }
 
-void RecordAllConsumerShapeAndOffset(
+void Allocator::RecordAllConsumerShapeAndOffset(
     LogicalTensorPtr& out, std::vector<std::vector<int>>& allOffsets, std::vector<std::vector<int>>& allShapes,
     bool& canReuse)
 {

@@ -14,6 +14,7 @@
  */
 
 #pragma once
+#include <utility>
 #include "interface/function/function.h"
 #include "interface/tensor/logical_tensor.h"
 #include "passes/pass_interface/pass.h"
@@ -80,6 +81,21 @@ private:
     void StorageNeedToAllocatePreProcess(TensorsDesc& tensorsDesc);
     Status UpdateStorageId(TensorsDesc& tensorsDesc, std::unordered_map<int64_t, int>& idMap, int& storageId);
     void MarkNonOverlappingConsumerTensors();
+    void RecordAllConsumerShapeAndOffset(
+        LogicalTensorPtr& out, std::vector<std::vector<int>>& allOffsets, std::vector<std::vector<int>>& allShapes,
+        bool& canReuse);
+    bool ExtractImmediateArguments(
+        const std::vector<SymbolicScalar>& argList, size_t startIndex, size_t count, std::vector<int>& result);
+    bool CheckAllConsumerAccessNoOverlap(
+        const std::vector<std::vector<int>>& allOffsets, const std::vector<std::vector<int>>& allShapes);
+    bool CheckNoOverlapForTwoConsumers(
+        const std::vector<std::vector<int>>& allOffsets, const std::vector<std::vector<int>>& allShapes,
+        size_t dimCount);
+    size_t SelectSweepAxis(
+        const std::vector<std::pair<int64_t, int64_t>>& ranges, size_t consumerCount, size_t dimCount);
+    bool CheckNoOverlapByActiveSet(
+        const std::vector<std::pair<int64_t, int64_t>>& ranges, size_t consumerCount, size_t dimCount,
+        size_t sweepAxis);
     void InitializeLeafGlobalMemoryReuse();
     void CollectOutputTensor(
         Function& leafFunc, std::unordered_map<LogicalTensorPtr, size_t>& tensorToInfo,
