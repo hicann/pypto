@@ -343,8 +343,21 @@ public:
                     CheckAndSendTask(wrapInfo, WRAP_IDX_AIC, CoreType::AIC, aicIdx);
                     CheckAndSendTask(wrapInfo, WRAP_IDX_AIV0, CoreType::AIV, aivIdx0);
                     CheckAndSendTask(wrapInfo, WRAP_IDX_AIV1, CoreType::AIV, aivIdx1);
-                    corePendReadyCnt_[CORE_IDX_AIC]--;
-                    corePendReadyCnt_[CORE_IDX_AIV] -= 2;
+                    if (coreIdxPosition_[aicIdx] != INVALID_COREIDX_POSITION) {
+                        RemoveMixReadyCoreIdx(aicIdx, CORE_IDX_AIC);
+                    } else {
+                        corePendReadyCnt_[CORE_IDX_AIC]--;
+                    }
+                    if (coreIdxPosition_[aivIdx0] != INVALID_COREIDX_POSITION) {
+                        RemoveMixReadyCoreIdx(aivIdx0, CORE_IDX_AIV);
+                    } else {
+                        corePendReadyCnt_[CORE_IDX_AIV]--;
+                    }
+                    if (coreIdxPosition_[aivIdx1] != INVALID_COREIDX_POSITION) {
+                        RemoveMixReadyCoreIdx(aivIdx1, CORE_IDX_AIV);
+                    } else {
+                        corePendReadyCnt_[CORE_IDX_AIV]--;
+                    }
                     wrapCoreAvail_[aicIdx] = false;
                     wrapCoreAvail_[aivIdx0] = false;
                     wrapCoreAvail_[aivIdx1] = false;
