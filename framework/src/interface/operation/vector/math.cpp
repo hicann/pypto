@@ -715,7 +715,7 @@ Tensor LogicalAnd(const Tensor& self, const Tensor& other)
     CheckTensorFormat(other.GetStorage(), {TileOpFormat::TILEOP_NZ}, "LogicalAnd");
 
     std::unordered_set<DataType> supportedTypes = {DT_FP32,  DT_FP16, DT_BF16,  DT_INT8, DT_UINT8,
-                                                   DT_BOOL, DT_INT16, DT_INT32, DT_INT64};
+                                                   DT_BOOL, DT_INT16, DT_INT32};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "LOGICALAND");
     CheckTensorDataType(other.GetStorage(), supportedTypes, "LOGICALAND");
     CheckBinaryInputTensors(self.GetStorage(), other.GetStorage(), "LOGICALAND");
