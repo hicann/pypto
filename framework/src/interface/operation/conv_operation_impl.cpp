@@ -56,7 +56,7 @@ void CheckValueRange(int64_t value, const std::string& name, int64_t min, int64_
     if (!formula.empty()) {
         oss << "Formula: " << formula;
     }
-    ASSERT(ConvOperationError::INPUT_INVALID, value >= min && value <= max) << oss.str();
+    CHECK(ExternalError::OUT_OF_RANGE, value >= min && value <= max) << oss.str();
 }
 
 int64_t ConvComputeHo(const Tensor& inputTensor, const Tensor& weightTensor, const ConvAttrParam& attrParam)
@@ -201,8 +201,8 @@ void CheckOutputShape(const Tensor& inputTensor, const Tensor& weightTensor, con
 
 void CheckAlignment(int64_t value, int64_t alignment, const std::string& valueName)
 {
-    ASSERT(ConvOperationError::INPUT_INVALID, alignment != 0) << "Error in alignment check for " << valueName << ".";
-    ASSERT(ConvOperationError::INPUT_INVALID, value % alignment == 0)
+    CHECK(ExternalError::INVALID_VAL, alignment != 0) << "Error in alignment check for " << valueName << ".";
+    CHECK(ExternalError::INVALID_VAL, value % alignment == 0)
         << "Invalid " << valueName << ":" << value << ", requires " << alignment << "-element alignment.";
 }
 
@@ -222,7 +222,7 @@ void CheckHowoTile(const Tensor& inputTensor, const Tensor& weightTensor, const 
     int64_t hOut = ConvComputeHo(inputTensor, weightTensor, attrParam);
     int64_t wOut = ConvComputeWo(inputTensor, weightTensor, attrParam);
     if (wOut % NUM16 != 0) {
-        ASSERT(ConvOperationError::INPUT_INVALID, tileHout == 1)
+        CHECK(ExternalError::INVALID_VAL, tileHout == 1)
             << "When wOut is not a multiple of 16, tileHout should be 1.";
     }
     CheckValueRange(tileHout, "tileHout", NUM1, hOut);
@@ -281,7 +281,7 @@ void CheckL0TileTiling(
     CheckAlignment(tileN, MKN_N_VALUE, "tileL0Info.tileN");
     CheckAlignment(tileW, MKN_N_VALUE, "tileW");
     CheckValueRange(tileN, "tileL0Info.tileN", NUM1, ConvAlignB(tileCout, MKN_N_VALUE));
-    ASSERT(ConvOperationError::INPUT_INVALID, kAL1 % tileK == 0 && kBL1 % tileK == 0)
+    CHECK(ExternalError::INVALID_VAL, kAL1 % tileK == 0 && kBL1 % tileK == 0)
         << "Invalid tileK: " << tileK << ", must be a factor of both kAL1:" << kAL1 << " and kBL1:" << kBL1;
     Platform& platform = Platform::Instance();
     size_t l0aSize = platform.GetAICCore().GetMemorySize(MemoryType::MEM_L0A);
@@ -294,8 +294,8 @@ void CheckL0TileTiling(
 
 void CheckDivisible(int64_t value, int64_t divisor, const std::string& valueName, const std::string& divisorName)
 {
-    ASSERT(ConvOperationError::INPUT_INVALID, divisor != 0) << divisorName << " cannot be zero.";
-    ASSERT(ConvOperationError::INPUT_INVALID, value % divisor == 0)
+    CHECK(ExternalError::INVALID_VAL, divisor != 0) << divisorName << " cannot be zero.";
+    CHECK(ExternalError::INVALID_VAL, value % divisor == 0)
         << "The value of " << divisorName << " (" << divisor << ") does not divide " << valueName << "(" << value
         << "). Adjusting " << divisorName << " to the nearest value such that " << valueName << " % " << divisorName
         << " == 0.";
@@ -399,20 +399,20 @@ void CheckGroupsShape(const int64_t cinFmap, const int64_t cinWeight, const int6
     CheckDivisible(cinFmap, groups, "Cin", "groups");
     CheckDivisible(cOut, groups, "Cout", "groups");
 
-    ASSERT(ConvOperationError::INPUT_INVALID, cinFmap == cinWeight * groups)
+    CHECK(ExternalError::INVALID_VAL, cinFmap == cinWeight * groups)
         << "Fmap Cin (" << cinFmap << ") != weight Cin (" << cinWeight << ") * groups (" << groups << ").";
 }
 
 void CheckDimParam(const std::vector<int64_t>& vec, const std::string& name, int expectedDim)
 {
-    ASSERT(ConvOperationError::INPUT_INVALID, vec.size() == static_cast<size_t>(expectedDim))
+    CHECK(ExternalError::INVALID_VAL, vec.size() == static_cast<size_t>(expectedDim))
         << "Input attr " << name << " dim: " << vec.size() << " != " << expectedDim << ".";
 }
 
 void CheckDimensionRange(const std::vector<int64_t>& vec, const std::string& name, int minVal, int maxVal)
 {
     for (size_t i = 0; i < vec.size(); ++i) {
-        ASSERT(ConvOperationError::INPUT_INVALID, vec[i] >= minVal && vec[i] <= maxVal)
+        CHECK(ExternalError::OUT_OF_RANGE, vec[i] >= minVal && vec[i] <= maxVal)
             << "The value of the " << i << "-th dimension of " << name << " must be in the range [" << minVal << ","
             << maxVal << "].Current value:" << vec[i] << ".";
     }
@@ -436,13 +436,13 @@ void CheckLoad3dShape(DataType outType, const Tensor& weightTensor, const ConvAt
     uint32_t indexW = attrParam.isConv3D ? NCDHW_W_IDX : (attrParam.isConv1D ? NCHW_H_IDX : NCHW_W_IDX);
     int64_t kw = weightTensor.GetShape()[indexW];
     int64_t kh = attrParam.isConv1D ? 1 : weightTensor.GetShape()[indexH];
-    ASSERT(ConvOperationError::INPUT_INVALID, kh <= MAX_PAD_KERNEL && kw <= MAX_PAD_KERNEL)
+    CHECK(ExternalError::OUT_OF_RANGE, kh <= MAX_PAD_KERNEL && kw <= MAX_PAD_KERNEL)
         << "Weight shapes do not satisfy Load3D's" << (attrParam.isConv1D ? " limit: kw=" : " limits: kh=")
         << (attrParam.isConv1D ? kw : kh) << (attrParam.isConv1D ? "" : ", kw=" + std::to_string(kw))
         << ", which must <= " << MAX_PAD_KERNEL << ".";
 
     int64_t k0 = ALIGN_SIZE_32 / BytesOf(outType);
-    ASSERT(ConvOperationError::INPUT_INVALID, kh * kw * k0 <= SHAPE_INNER_AXIS_MAX_SIZE)
+    CHECK(ExternalError::OUT_OF_RANGE, kh * kw * k0 <= SHAPE_INNER_AXIS_MAX_SIZE)
         << "Weight shapes do not satisfy Load3D's limits: kh*kw*k0=" << kh * kw * k0
         << "(k0 = 32 bytes / dtypesize), which must <=" << SHAPE_INNER_AXIS_MAX_SIZE << ".";
 }
@@ -470,7 +470,7 @@ void CheckAttrShape(
         int weightVal = weightTensor.GetShape()[i + NUM2];
         int paddingLeft = paddings[i * NUM2];
         int paddingRight = paddings[i * NUM2 + 1];
-        ASSERT(ConvOperationError::INPUT_INVALID, paddingLeft < weightVal && paddingRight < weightVal)
+        CHECK(ExternalError::INVALID_VAL, paddingLeft < weightVal && paddingRight < weightVal)
             << "The value of the " << dimNames[i]
             << " dimension of weight must be > padding.Current weight value:" << weightVal
             << ",padding value:" << paddingLeft << " and " << paddingRight << ".";
@@ -481,7 +481,7 @@ void CheckAttrShape(
         // 由于transdata对于output的转换没有实现消除多余pad，所以当前cout只支持coutPerGroup % c0 = 0
         int64_t c0 = ALIGN_SIZE_32 / BytesOf(weightTensor.GetStorage()->Datatype());
         int64_t coutPerGroup = weightTensor.GetShape()[NCHW_N_IDX] / groups;
-        ASSERT(ConvOperationError::INPUT_INVALID, coutPerGroup % c0 == 0)
+        CHECK(ExternalError::INVALID_VAL, coutPerGroup % c0 == 0)
             << "The tiled Cout per group (" << coutPerGroup << ") must be a multiple of "
             << c0 << " (c0 = 32 / sizeof(dtype)). "
             << "Current tiled Cout(" << weightTensor.GetShape()[NCHW_N_IDX] << ") / groups(" << groups
@@ -498,7 +498,7 @@ void CheckOriginShape(const Tensor& inputTensor, const Tensor& weightTensor, con
         return;
     }
     int64_t cOut = weightTensor.GetShape()[NCHW_N_IDX];
-    ASSERT(ConvOperationError::INPUT_INVALID, biasTensor.GetShape()[0] == cOut)
+    CHECK(ExternalError::INVALID_VAL, biasTensor.GetShape()[0] == cOut)
         << "Input illegal bias shape:" << biasTensor.GetShape()[0] << ", which must equal to Cout:" << cOut << ".";
 }
 
@@ -506,8 +506,8 @@ void CheckConvOperands(
     DataType outType, const Tensor& inputTensor, const Tensor& weightTensor, const Tensor& biasTensor,
     ConvAttrParam& attrParam)
 {
-    ASSERT(
-        ConvOperationError::INPUT_INVALID,
+    CHECK(
+        ExternalError::INVALID_TYPE,
         outType == DataType::DT_FP32 || outType == DataType::DT_FP16 || outType == DataType::DT_BF16)
         << "Unsupported output data type. Only DT_FP32, DT_FP16, DT_BF16 are supported.";
     if (inputTensor.Dim() == CONV1D_INPUT_DIM && weightTensor.Dim() == CONV1D_INPUT_DIM) {
