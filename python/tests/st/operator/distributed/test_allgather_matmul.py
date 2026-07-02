@@ -20,6 +20,7 @@ Main Functions:
 """
 
 import multiprocessing as mp
+import os
 import traceback
 
 import numpy as np
@@ -204,9 +205,10 @@ def allgather_matmul(
     return out_tensor
 
 
-@pytest.mark.skip(reason="temporarily skipped")
 @pytest.mark.world_size(2)
 def test_allgather_matmul():
+    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
+    torch.npu.set_device(device_id)
     mp.set_start_method('spawn', force=True)
     config = DistributedConfig(world_size=2)
     input_datas, output_datas, attn_dim_per_tp = generate_golden_data(config)

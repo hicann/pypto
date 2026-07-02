@@ -309,9 +309,10 @@ def _get_soc_version():
         return None
 
 
-@pytest.mark.skip(reason="temporarily skipped")
 @pytest.mark.world_size(4)
 def test_matmul_allreduce_add_rmsnorm():
+    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
+    torch.npu.set_device(device_id)
     mp.set_start_method('spawn', force=True)
     config = DistributedConfig(world_size=4)
     input_datas, output_datas = generate_golden_data(config)
@@ -336,6 +337,8 @@ def test_matmul_allreduce_add_rmsnorm():
 @pytest.mark.skip(reason="Performance test case")
 @pytest.mark.world_size(4)
 def test_matmul_allreduce_add_rmsnorm_performance():
+    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
+    torch.npu.set_device(device_id)
     logger.info("=" * 60)
     logger.info("Starting matmul_allreduce_add_rmsnorm performance test")
     logger.info("=" * 60)
