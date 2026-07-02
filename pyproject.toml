@@ -26,7 +26,7 @@ readme = { file = "README.md", content-type = "text/markdown" }
 # 兼容 setuptools 70.3.0 写法，由setup.py填充 license/license-files, 此处不静态写 license/license-files
 dynamic = ["license"]
 
-requires-python = ">=3.9"
+requires-python = ">=3.7"
 dependencies = [
 ]
 keywords = ["python", "pto", "tile", "tile-centric"]
