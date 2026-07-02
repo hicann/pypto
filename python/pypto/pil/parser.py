@@ -99,9 +99,9 @@ class _Context:
         old, self._current_block = self._current_block, new_block
         try:
             yield new_block
-        finally:
             if self.current_block.jump is None:
                 raise ValueError("Block statement must have a jump")
+        finally:
             self._current_block = old
             if old is not None:
                 old.store_names.update(new_block.store_names)
@@ -171,6 +171,17 @@ _builtin_ops = {
 }
 
 
+def _is_pypto_loop(node: ast.AST) -> bool:
+    """True if node is a ``pypto.loop(...)`` call, the iterable of a dynamic for."""
+    return (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "loop"
+        and isinstance(node.func.value, ast.Name)
+        and node.func.value.id == "pypto"
+    )
+
+
 class Parser:
 
     @staticmethod
@@ -185,10 +196,14 @@ class Parser:
 
     @staticmethod
     def visit_Continue(stmt: ast.Continue, ctx: _Context):
+        if ctx.loop_kinds[-1] is LoopKind.DYNAMIC_FOR:
+            ctx.raise_error(stmt, "continue is not supported in pypto.loop")
         ctx.set_jump(Jump.CONTINUE)
 
     @staticmethod
     def visit_Break(stmt: ast.Break, ctx: _Context):
+        if ctx.loop_kinds[-1] is LoopKind.DYNAMIC_FOR:
+            ctx.raise_error(stmt, "break is not supported in pypto.loop")
         ctx.set_jump(Jump.BREAK)
 
     # expressions
@@ -346,7 +361,8 @@ class Parser:
             ctx.raise_error(node, "for-else not supported")
 
         iter = self.visit(node.iter, ctx)
-        ctx.loop_kinds.append(LoopKind.FOR)
+        kind = LoopKind.DYNAMIC_FOR if _is_pypto_loop(node.iter) else LoopKind.FOR
+        ctx.loop_kinds.append(kind)
         loop_var = ctx.make_temp()
         with ctx.new_block(args=(loop_var,)) as body:
             self._do_assign(node.target, loop_var, ctx)
@@ -370,6 +386,10 @@ class Parser:
         return ctx.call("pil.if_else", (cond, then_block, else_block))
 
     def visit_Return(self, stmt: ast.Return, ctx: _Context):
+        for kind in ctx.loop_kinds:
+            if kind is LoopKind.DYNAMIC_FOR:
+                ctx.raise_error(stmt, "return is not supported in pypto.loop")
+
         value = self.visit(stmt.value, ctx) if stmt.value else None
         if ctx.entry_point:
             ctx.set_jump(Jump.RETURN, value)

@@ -36,7 +36,7 @@ def _run_dce(func, *args):
     b = ir.IRBuilder()
     func = pil.compile(func, *args)
     prog = b.create_program([func], "main", ir.Span.unknown())
-    dce = ir.Pass.aggressive_dce();
+    dce = ir.Pass.aggressive_dce()
     canonical = ir.Pass.canonicalize()
     logging.info("\norigin: %s\n", prog)
     prog = canonical(prog)
@@ -142,7 +142,7 @@ def test_dce_branching_tensor_chain():
 # ---------- ContinueStmt / BreakStmt live-root ----------
 
 
-def test_dce_continue_keeps_tensor_op():
+def test_dce_keeps_tensor_op():
     """A TensorOpStmt whose result is used by ContinueStmt must survive."""
     def foo(x, y):
         for i in pypto.loop(x.shape[0] // 32):
@@ -150,9 +150,6 @@ def test_dce_continue_keeps_tensor_op():
             ta = x[i:i + 32, :]
             tb = ta + 1
             y[i:, :] = tb
-            # continue carries ta -- VIEW must be preserved
-            if i > 0:
-                continue
 
     x = pypto.Tensor((-1, 32), pypto.DT_FP32, 'x')
     y = pypto.Tensor((-1, 32), pypto.DT_FP32, 'y')
@@ -161,27 +158,6 @@ def test_dce_continue_keeps_tensor_op():
     tensor_ops = _collect_stmts(func.body, ir.TensorOpStmt)
     opcodes = [op.opcode for op in tensor_ops]
     assert 'VIEW' in opcodes, f"VIEW eliminated but used by continue: {opcodes}"
-
-
-def test_dce_break_keeps_tensor_op():
-    """A TensorOpStmt whose result is used by BreakStmt must survive."""
-    def foo(x, y):
-        for i in pypto.loop(x.shape[0] // 32):
-            pypto.set_vec_tile_shapes(32, 32)
-            ta = x[i:i + 32, :]
-            tb = ta + 1
-            y[i:, :] = tb
-            if i > 2:
-                break
-
-    x = pypto.Tensor((-1, 32), pypto.DT_FP32, 'x')
-    y = pypto.Tensor((-1, 32), pypto.DT_FP32, 'y')
-    func = _run_dce(foo, x, y)
-
-    tensor_ops = _collect_stmts(func.body, ir.TensorOpStmt)
-    opcodes = [op.opcode for op in tensor_ops]
-    assert 'VIEW' in opcodes, f"VIEW eliminated but used by break: {opcodes}"
-
 
 # ---------- Nested control flow ----------
 
@@ -292,8 +268,6 @@ def test_dce_nested_loop_if_else():
     adds_count = sum(1 for c in opcodes if c == 'ADDS')
     assert adds_count == 2, f"Expected 2 ADDS, got {adds_count} in {opcodes}"
 
-
-def test_dce_if_else_with_break():
     """Dead code in if/else branch containing break should be eliminated."""
     def foo(x, y):
         for i in pypto.loop(x.shape[0] // 32):
@@ -303,33 +277,6 @@ def test_dce_if_else_with_break():
                 _ = ta + 99   # dead
                 tb = ta + 1
                 y[i:, :] = tb
-            else:
-                _ = ta + 88   # dead
-                tb = ta + 2
-                y[i:, :] = tb
-                break
-
-    x = pypto.Tensor((-1, 32), pypto.DT_FP32, 'x')
-    y = pypto.Tensor((-1, 32), pypto.DT_FP32, 'y')
-    func = _run_dce(foo, x, y)
-
-    tensor_ops = _collect_stmts(func.body, ir.TensorOpStmt)
-    opcodes = [op.opcode for op in tensor_ops]
-    adds_count = sum(1 for c in opcodes if c == 'ADDS')
-    assert adds_count == 2, f"Expected 2 ADDS, got {adds_count} in {opcodes}"
-
-
-def test_dce_if_else_with_continue():
-    """Dead code in if/else branch containing continue should be eliminated."""
-    def foo(x, y):
-        for i in pypto.loop(x.shape[0] // 32):
-            pypto.set_vec_tile_shapes(32, 32)
-            ta = x[i:i + 32, :]
-            if i < 2:
-                _ = ta + 99   # dead
-                tb = ta + 1
-                y[i:, :] = tb
-                continue
             else:
                 _ = ta + 88   # dead
                 tb = ta + 2

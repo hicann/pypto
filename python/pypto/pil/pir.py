@@ -19,9 +19,10 @@ from .op_registry import dispatch
 
 @dataclass
 class LoopRange:
-    start: ir.Expr
-    stop: ir.Expr
-    step: ir.Expr
+    start: Any
+    stop: Any
+    step: Any
+    unroll_list: list[int]
 
 
 @dataclass(frozen=True)
@@ -65,6 +66,7 @@ class Jump(enum.Enum):
 class LoopKind(enum.Enum):
     FOR = 0
     WHILE = 1
+    DYNAMIC_FOR = 2  # pypto.loop, compiled to a hardware for; break/continue unsupported
 
 
 @dataclass

@@ -157,7 +157,7 @@ def _resolve(val, scope):
 
 
 @impl(pypto.loop)
-def pypto_loop_impl(ctx, *args, name: str = ""):
+def pypto_loop_impl(ctx: BuildContext, *args, name: str = "", unroll_list: Optional[list] = None):
     nargs = len(args)
     if nargs == 1:
         start, stop, step = 0, args[0], 1
@@ -168,11 +168,13 @@ def pypto_loop_impl(ctx, *args, name: str = ""):
     else:
         raise TypeError(
             f"loop() takes 1 to 3 positional arguments but {nargs} were given")
-    return LoopRange(
-        start=_to_ir_type(start, ctx),
-        stop=_to_ir_type(stop, ctx),
-        step=_to_ir_type(step, ctx),
-    )
+
+    unroll_list = sorted(set(unroll_list or []) | {1}, reverse=True)
+    for u in unroll_list:
+        if not isinstance(u, int) or u <= 0:
+            raise ValueError(f"unroll factor {u} must be a positive integer")
+
+    return LoopRange(start, stop, step, unroll_list)
 
 
 def _add_jump_stmt(ctx: BuildContext, jump, operands: Optional[list[ir.Expr]] = None):
@@ -228,7 +230,7 @@ def _static_while(body: Block):
                 raise ReturnSignal
 
 
-def _for_stmt(body: Block, iterator: LoopRange, ctx: BuildContext):
+def _loop_unroll(body: Block, start, end, step, unroll, ctx: BuildContext):
     scope = Scope.current()
     loop_val = body.args[0]
 
@@ -251,7 +253,9 @@ def _for_stmt(body: Block, iterator: LoopRange, ctx: BuildContext):
     body_stmt = ir.SeqStmts(body.span)
     loop_status = LoopStatus(False, return_var_names)
     with InsertPoint(body_stmt), ctx.change_span(body.span), loop_status.make_current():
-        dispatch_block(body)
+        for i in range(unroll):
+            scope.varmap[loop_val.id] = loop_var + i * step
+            dispatch_block(body)
         _add_jump_stmt(ctx, body.jump)
 
     return_vars = []
@@ -261,15 +265,27 @@ def _for_stmt(body: Block, iterator: LoopRange, ctx: BuildContext):
         scope.store(name, _from_ir_type(var))
 
     for_stmt = ctx.create_for_stmt(
-        loop_var.as_var(), iterator.start, iterator.stop, iterator.step, iter_args, body_stmt, return_vars, ctx.span,
+        loop_var.as_var(), _to_ir_type(start, ctx), _to_ir_type(end, ctx), _to_ir_type(
+            unroll * step, ctx), iter_args, body_stmt, return_vars, ctx.span,
     )
     ctx.emit(for_stmt)
+
+
+def _dyn_for(body: Block, loop: LoopRange, ctx: BuildContext):
+    start, stop, step = loop.start, loop.stop, loop.step
+    for unroll in loop.unroll_list:
+        if unroll == 1:
+            end = stop
+        else:
+            end = stop - (stop - start) % (unroll * step)
+        _loop_unroll(body, start, end, step, unroll, ctx)
+        start = end
 
 
 @impl("pil.loop")
 def loop_impl(ctx, body: Block, iterator):
     if isinstance(iterator, LoopRange):
-        _for_stmt(body, iterator, ctx)
+        _dyn_for(body, iterator, ctx)
     elif iterator is not None:
         _static_for(body, iterator)
     else:

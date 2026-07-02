@@ -63,7 +63,6 @@ def test_tensor_matmul_op():
     assert 'A_MUL_B' in opcodes
 
 
-@pytest.mark.skip()
 def test_create_func():
     def f(a, b, out):
         pypto.set_vec_tile_shapes(16, 16)
@@ -75,7 +74,7 @@ def test_create_func():
                 e = d * 2
             else:
                 e = d + b
-            out = e
+            out[:] = e
 
     shape = [32, 32]
     a = pypto.Tensor(shape=shape, dtype=pypto.DT_FP32, name="a")
@@ -85,7 +84,7 @@ def test_create_func():
     func = pil.compile(f, a, b, out)
     ts = _tensor_ops_of(func.body)
     opcodes = {s.opcode for s in ts}
-    assert 'CALL' in opcodes
+    assert 'ADD' in opcodes
 
 
 def test_tensor_unary_ops():
@@ -291,7 +290,8 @@ def test_ir_loop_nested1():
                 else:
                     ans += i - j
             ans += n
-    pil.compile(foo, 4, 5)
+    with pytest.raises(SyntaxError):
+        pil.compile(foo, 4, 5)
 
 
 def test_ir_loop_carry_used_after():
@@ -331,7 +331,8 @@ def test_ir_deadcode():
             break
             return x
 
-    pil.compile(foo, 10)
+    with pytest.raises(SyntaxError):
+        pil.compile(foo, 10)
 
 # ---------- Loop control flow IR tests ----------
 
@@ -350,85 +351,6 @@ def _collect_stmts(stmt, cls):
     if isinstance(stmt, ir.ForStmt):
         result.extend(_collect_stmts(stmt.body, cls))
     return result
-
-
-def test_ir_loop_break():
-    """break inside loop body generates BreakStmt."""
-    def foo(n):
-        ans = 0
-        for i in pypto.loop(n):
-            ans += i
-            break
-    func = pil.compile(foo, 10)
-    for_stmts = _for_ops_of(func.body)
-    assert len(for_stmts) == 1
-    breaks = _collect_stmts(for_stmts[0].body, ir.BreakStmt)
-    assert len(breaks) == 1
-
-
-def test_ir_loop_continue():
-    """continue inside loop body generates ContinueStmt."""
-    def foo(n):
-        ans = 0
-        for i in pypto.loop(n):
-            continue
-            ans += i
-    func = pil.compile(foo, 10)
-    for_stmts = _for_ops_of(func.body)
-    assert len(for_stmts) == 1
-    continues = _collect_stmts(for_stmts[0].body, ir.ContinueStmt)
-    assert len(continues) == 1
-
-
-def test_ir_loop_return():
-    """return inside loop body generates ReturnStmt."""
-    def foo(n):
-        ans = 0
-        for i in pypto.loop(n):
-            ans += i
-            return
-    func = pil.compile(foo, 10)
-    for_stmts = _for_ops_of(func.body)
-    assert len(for_stmts) == 1
-    returns = _collect_stmts(for_stmts[0].body, ir.ReturnStmt)
-    assert len(returns) == 1
-
-
-def test_ir_loop_break_in_if():
-    """break inside if_else generates IfStmt with BreakStmt in then branch."""
-    def foo(n):
-        ans = 0
-        for i in pypto.loop(n):
-            if i:
-                break
-            ans += i
-    func = pil.compile(foo, 10)
-    for_stmts = _for_ops_of(func.body)
-    assert len(for_stmts) == 1
-    body = for_stmts[0].body
-    # Body should contain IfStmt
-    if_stmts = _collect_stmts(body, ir.IfStmt)
-    assert len(if_stmts) >= 1
-    # Then branch should have BreakStmt
-    then_breaks = _collect_stmts(if_stmts[0].then_body, ir.BreakStmt)
-    assert len(then_breaks) == 1
-
-
-def test_ir_loop_continue_in_if():
-    """continue inside if_else generates IfStmt with ContinueStmt."""
-    def foo(n):
-        ans = 0
-        for i in pypto.loop(n):
-            if i:
-                continue
-            ans += i
-    func = pil.compile(foo, 10)
-    for_stmts = _for_ops_of(func.body)
-    assert len(for_stmts) == 1
-    if_stmts = _collect_stmts(for_stmts[0].body, ir.IfStmt)
-    assert len(if_stmts) >= 1
-    then_conts = _collect_stmts(if_stmts[0].then_body, ir.ContinueStmt)
-    assert len(then_conts) == 1
 
 
 def test_ir_loop_if_else_both_branches():
@@ -482,3 +404,20 @@ def test_fstring():
         # conversion specifiers
         assert f"{x!r}, {y!s}" == "10, 20"
     pil.compile(foo, 10, 20)
+
+
+def test_tensor_loop_unroll():
+    """Add dynamic tensor should be supported."""
+    def foo(x, y):
+        for i in pypto.loop(x.shape[0] // 32, unroll_list=[4]):
+            pypto.set_vec_tile_shapes(32, 32)
+            ta = x[i:i + 32, :]
+            y[i:, :] = ta + 1
+
+    x = pypto.Tensor((-1, 32), pypto.DT_FP32, 'x')
+    y = pypto.Tensor((-1, 32), pypto.DT_FP32, 'y')
+    func = pil.compile(foo, x, y)
+    b = ir.IRBuilder()
+    prog = b.create_program([func], "main", ir.Span.unknown())
+    prog = ir.Pass.canonicalize()(prog)
+    logging.log_info(f"\ncanonical: {prog}")

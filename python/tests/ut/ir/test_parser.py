@@ -320,6 +320,52 @@ def test_pypto_loop2():
     _parse_func(f)
 
 
+def test_pypto_loop_break_error():
+    def f():
+        for _ in pypto.loop(10):
+            break
+
+    with pytest.raises(SyntaxError, match=r"break is not supported in pypto\.loop"):
+        _parse_func(f)
+
+
+def test_pypto_loop_continue_error():
+    def f():
+        for _ in pypto.loop(10):
+            continue
+
+    with pytest.raises(SyntaxError, match=r"continue is not supported in pypto\.loop"):
+        _parse_func(f)
+
+
+def test_pypto_loop_return_error():
+    def f():
+        for i in pypto.loop(10):
+            for _ in range(4):
+                return i
+
+    with pytest.raises(SyntaxError, match=r"return is not supported in pypto\.loop"):
+        _parse_func(f)
+
+
+def test_pypto_loop_nested_loop_break_continue():
+    # break/continue bind to the *innermost* loop: a nested static loop inside a
+    # pypto.loop may still use them.
+    def f():
+        for i in pypto.loop(10):
+            for j in range(4):
+                if i + j == 1:
+                    break
+            k = 0
+            while k < 3:
+                if k == 1:
+                    continue
+                k = k + 1
+
+    blk = _parse_func(f)
+    assert _has(blk, "pil.loop")
+
+
 def test_op_registry():
     registry = OpRegistry()
 
