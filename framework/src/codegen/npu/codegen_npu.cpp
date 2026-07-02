@@ -604,7 +604,9 @@ void CodeGenNPU::BuildExtraOptions(
         << "-mllvm -cce-aicore-record-overflow=false "
         << "-mllvm -cce-aicore-addr-transform "
         << "-mllvm -cce-aicore-dcci-insert-for-scalar=false ";
-    AppendVFOptions(oss, platform_, compileInfo.IsCube());
+    if (config::GetCodeGenOption<bool>(VF_COMPILER)) {
+        AppendVFOptions(oss, platform_, compileInfo.IsCube());
+    }
     oss << compileOptions << " ";
 }
 

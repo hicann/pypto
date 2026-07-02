@@ -42,7 +42,8 @@
         "support_dynamic_aligned": false,
         "soc_version": "",
         "enable_pmu_trace": false,
-        "vf_options": ""
+        "vf_options": "",
+        "vf_compiler": true
     },
     "verify": {
         "enable_pass_verify": false,
