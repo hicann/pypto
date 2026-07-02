@@ -1,101 +1,87 @@
-# MATMUL组件错误码
+# FC3XXX-FC5XXX
 
-- **范围**：FC3XXX - FC5XXX
-- 本文档说明MATMUL子类OP的错误码定义、场景说明与排查建议。
+## FC3000 ERR_PARAM_INVALID
 
-## 错误码定义与使用说明
+**错误描述**
 
-Matmul相关错误码的枚举与码值统一定义在`framework/include/tilefwk/error_code.h`（见`MatmulErrorCode`）。
+Matmul内部入参非法：框架内部Shape、Format等参数取值不满足约束。
 
-## 排查建议
+**可能原因**
 
-根据日志中不同ErrorCode关联到下述排查建议：
+NA
 
-### FC3000 ERR_PARAM_INVALID
+**处理方式**
 
-1. **检查张量基础信息**：确认输入输出张量的维度、数据类型、格式均为合法有效值。
-2. **检查维度合法性**：确认矩阵维度为正整数，无零维、负维度等非法情况。
-3. **检查参数完整性**：确认Matmul接口必填参数均已传入，无缺失、无越界。
-4. **查日志上下文**：通过MATMUL_LOGE日志查看参数详情，定位非法字段。
+1. 查阅[pypto.matmul](../api/operation/pypto-matmul.md)、[pypto.scaled_mm](../api/operation/pypto-scaled_mm.md)文档确认输入输出满足要求。
+2. 若问题仍未解决，请访问社区提交[Issue](https://gitcode.com/cann/pypto/issues)。
 
-### FC3001 ERR_PARAM_MISMATCH
 
-1. **检查输入矩阵维度**：确认A矩阵K维度与B矩阵K维度长度一致。
-2. **检查数据类型**：A、B、C矩阵数据类型与算力核要求类型匹配。
-3. **检查转置配置**：确认transposeA / transposeB配置与实际内存排布一致。
-4. **查日志上下文**：通过MATMUL_LOGE日志打印shape信息，定位不匹配项。
+## FC3001 ERR_PARAM_MISMATCH
 
-### FC3002 ERR_PARAM_UNSUPPORTED
+**错误描述**
 
-1. **检查数据格式**：确认使用NPU支持的数据格式（如ND、FRACTAL_Z等）。
-2. **检查数据类型**：确认不包含当前硬件不支持的低精度/高精度类型。
-3. **检查维度组合**：确认batch、M/N/K维度未超出硬件支持上限。
-4. **查日志上下文**：查看不支持的参数类型，切换为兼容配置重试。
+Matmul内部入参不匹配：框架内部参数之间维度等不一致。
 
-### FC4000 ERR_CONFIG_TILE
+**可能原因**
 
-1. **检查Tile分块参数**：确认M/N/K分块大小在硬件支持范围内。
-2. **检查分块合理性**：确认分块大小可整除对应维度，无非法零值。
-3. **检查分块策略**：确认使用官方推荐的分块组合，无自定义非法分块。
-4. **查日志上下文**：通过日志获取非法tile参数，修正分块配置。
+NA
 
-### FC4001 ERR_CONFIG_ALIGNMENT
+**处理方式**
 
-1. **检查张量地址**：确认设备地址按16B/32B/64B对齐。
-2. **检查分块大小**：确认tile大小满足硬件对齐约束。
-3. **检查workspace内存**：确认工作区内存由统一内存管理器分配。
-4. **查日志上下文**：查看未对齐地址/大小，使用内存分配接口重新申请。
+1. 查阅[pypto.matmul](../api/operation/pypto-matmul.md)、[pypto.scaled_mm](../api/operation/pypto-scaled_mm.md)文档确认输入输出满足要求。
+2. 若问题仍未解决，请访问社区提交[Issue](https://gitcode.com/cann/pypto/issues)。
 
-### FC4002 ERR_CONFIG_UNSUPPORTED
 
-1. **检查配置组合**：确认Tile配置、数据类型、格式为支持的组合。
-2. **检查算子模式**：确认不混用不兼容的计算模式、精度模式。
-3. **检查硬件适配**：确认当前配置与运行的NPU硬件型号匹配。
-4. **查日志上下文**：根据日志提示，替换为支持的配置组合。
+## FC3002 ERR_PARAM_UNSUPPORTED
 
-### FC5000 ERR_RUNTIME_NULLPTR
+**错误描述**
 
-1. **检查输入输出张量**：确认传入的Tensor非空且已完成地址分配。
-2. **检查上下文初始化**：确认matmul上下文、配置句柄已正常创建。
-3. **检查函数入参**：确认调用层未传入空指针到matmul接口。
-4. **查日志上下文**：定位空指针变量，检查上层初始化与赋值流程。
+Matmul内部入参不支持：框架内部使用了不支持的参数组合。
 
-### FC5001 ERR_RUNTIME_STATE
+**可能原因**
 
-1. **检查初始化流程**：确认Matmul上下文已完成初始化再执行计算。
-2. **检查状态机流转**：确认按初始化->配置->执行->释放顺序调用。
-3. **检查资源状态**：确认依赖的NPU资源、工作区未被提前释放。
-4. **查日志上下文**：查看异常状态码，回溯流程调用顺序。
+- 不满足scale_tensor数据类型约束：scale_tensor非DT_UINT64/DT_INT64；或量化/反量化场景输入输出数据类型不满足（DT_INT8输入输出DT_FP16，或任意输入输出DT_INT8）。
 
-### FC5002 ERR_RUNTIME_LOGIC
+**处理方式**
 
-1. **检查执行分支**：确认计算流程未进入未定义/异常分支。
-2. **检查中间结果**：确认计算过程中临时数据、索引值符合预期。
-3. **检查不变量约束**：确认核心计算逻辑的前置条件均满足。
-4. **查日志上下文**：通过日志定位异常路径，核对计算逻辑。
+1. 查阅[pypto.matmul](../api/operation/pypto-matmul.md)、[pypto.scaled_mm](../api/operation/pypto-scaled_mm.md)文档确认输入输出满足要求。
+2. 若问题仍未解决，请访问社区提交[Issue](https://gitcode.com/cann/pypto/issues)。
 
-## 排查手段
 
-### 排查步骤
+## FC5000 ERR_RUNTIME_NULLPTR
 
-1. **日志落盘**：打开DEBUG日志，指定日志落盘路径：
+**错误描述**
 
-   ```bash
-   export ASCEND_GLOBAL_LOG_LEVEL=0
-   export ASCEND_PROCESS_LOG_PATH=./my_log
+Matmul运行时错误：Matmul在运行时出现了空Tensor。
+
+**可能原因**
+
+NA
+
+**处理方式**
+
+1. 确认传入matmul接口的输入输出Tensor均非空且已完成地址分配，确认是否存在nullptr。
+   ```python
+   # 正确示例-输入Tensor均已分配数据
+   a = pypto.tensor([16, 32], pypto.DT_FP16, "a")
+   b = pypto.tensor([32, 64], pypto.DT_FP16, "b")
+   out = pypto.matmul(a, b, pypto.DT_FP16)
    ```
+2. 若问题仍未解决，请访问社区提交[Issue](https://gitcode.com/cann/pypto/issues)。
 
-2. **检查入参**：查阅对应算子或API文档（如[pypto.matmul](../api/operation/pypto-matmul.md)、[pypto.scaled_mm](../api/operation/pypto-scaled_mm.md)、算子说明），确认输入及输出Tensor是否符合Matmul约束规格，包括Shape，Dtype，Format等。
 
-3. **检查切分设置**：调用pypto-matmul/pypto-scaled_mm接口前，会执行`set_cube_tile_shapes()`设置切分大小，检查设置的TileShape大小是否符合Tiling的切分约束，可通过以下方式查看：
+## FC5002 ERR_RUNTIME_LOGIC
 
-```py
-pypto.set_cube_tile_shapes([32, 32], [16, 16], [32, 32])   #[mL0, mL1], [kL0, kL1], [nL0, nL1]
-tile_shape_info = pypto.get_cube_tile_shapes()
-print(tile_shape_info)
-#输出：[32, 32], [16, 16], [32, 32]
-```
+**错误描述**
 
-## 典型场景
+Matmul运行时逻辑异常：前置校验未通过或计算流程进入异常分支。
 
-以ERR_CONFIG_ALIGNMENT为例，表示输入Tensor未满足对齐约束，可以关注reshape/view、交换维度（转置场景）、是否改变对应的维度对齐要求，例如，当Format为TILEOP_NZ（NZ格式）时，其Shape维度需满足内轴32字节对齐，当输入矩阵input非转置时，对应数据排布为[M, K]，此时外轴为M，内轴为K，当输入矩阵input转置时，对应数据排布为[K, M]，此时外轴为K，内轴为M。
+**可能原因**
+
+- 用户输入未通过合法校验。
+- Matmul内部运行出现了空Tensor。
+
+**处理方式**
+
+1. 查阅[pypto.matmul](../api/operation/pypto-matmul.md)、[pypto.scaled_mm](../api/operation/pypto-scaled_mm.md)文档确认输入输出满足要求。
+2. 若问题仍未解决，请访问社区提交[Issue](https://gitcode.com/cann/pypto/issues)。

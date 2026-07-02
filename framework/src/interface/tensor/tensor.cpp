@@ -81,13 +81,13 @@ void CheckShapeValid(DataType& dataType, const Shape& shape, TileOpFormat& forma
     if (format == TileOpFormat::TILEOP_NZ) {
         size_t alignSize = isB4 ? ALIGN_SIZE_64 : ALIGN_SIZE_32;
         const bool dataBytesAlign = ((shape.back() * BytesOf(dataType)) % alignSize == 0);
-        ASSERT(MatmulErrorCode::ERR_CONFIG_ALIGNMENT, dataBytesAlign)
+        CHECK(ExternalError::INVALID_SHAPE, dataBytesAlign)
             << "Current inner axis: " << (size_t)shape.back()
             << ", when input is NZ format, inner axis shape must be 32-byte aligned(4bit dtype must be aligned to 64)";
     }
     if (format == TileOpFormat::TILEOP_ND && isB4) {
         const bool inputIsEven = ((shape.back() & 1) == 0);
-        ASSERT(MatmulErrorCode::ERR_PARAM_INVALID, inputIsEven)
+        CHECK(ExternalError::INVALID_SHAPE, inputIsEven)
             << "Current inner axis: " << (size_t)shape.back()
             << ", when input is ND format and 4bit dtype, inner axis must be even number";
     }
