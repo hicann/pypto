@@ -76,7 +76,10 @@ const uint32_t AIV_NUM_PER_AI_CORE = 2;
 const int INVALID_CORE_IDX = 0xFF;
 
 // A2/A3 架构超时常量 (基于 50MHz aicpu 频率，周期数直接定义，避免运行时乘法)
+constexpr uint64_t TIMEOUT_A2A3_20US   = 1000ULL;           // 1000 cycles
+constexpr uint64_t TIMEOUT_A2A3_50US   = 2500ULL;           // 2500 cycles
 constexpr uint64_t TIMEOUT_A2A3_1SEC   = 50000000ULL;       // 50M cycles
+constexpr uint64_t TIMEOUT_A2A3_2SEC   = 100000000ULL;       // 50M cycles
 constexpr uint64_t TIMEOUT_A2A3_10SEC  = 500000000ULL;      // 500M cycles
 constexpr uint64_t TIMEOUT_A2A3_1MIN   = 3000000000ULL;     // 3G cycles
 constexpr uint64_t TIMEOUT_A2A3_20MIN  = 60000000000ULL;    // 60G cycles
@@ -300,25 +303,32 @@ inline int CheckTimeOut(const std::string& operation, TimeCheck& timeCheck)
     const uint64_t* timeout_map = (arch == ArchInfo::DAV_3510) ? TIMEOUT_MAP_A5 : TIMEOUT_MAP_A2A3; \
     uint64_t start = GetCycles(); \
     uint64_t timeout_cycles = timeout_cycles_val; \
-    uint64_t warn_interval = timeout_cycles / 10
+    uint64_t warn_interval = timeout_cycles / 10; \
+    (void) timeout_map;
 
 #define TIMEOUT_CHECK_INIT_WARN_ONLY(arch) \
     uint64_t start = GetCycles(); \
     uint64_t warn_interval = (arch == ArchInfo::DAV_3510) ? TIMEOUT_A5_1MIN : TIMEOUT_A2A3_1MIN
 
-constexpr uint64_t TIMEOUT_INDEX_10SEC  = 0;
-constexpr uint64_t TIMEOUT_INDEX_1MIN   = 1;
-constexpr uint64_t TIMEOUT_INDEX_20MIN  = 2;
-constexpr uint64_t TIMEOUT_INDEX_HAND_SHAKE = 3;
+constexpr uint64_t TIMEOUT_INDEX_50US  = 0;
+constexpr uint64_t TIMEOUT_INDEX_1SEC   = 1;
+constexpr uint64_t TIMEOUT_INDEX_10SEC  = 2;
+constexpr uint64_t TIMEOUT_INDEX_1MIN   = 3;
+constexpr uint64_t TIMEOUT_INDEX_20MIN  = 4;
+constexpr uint64_t TIMEOUT_INDEX_HAND_SHAKE = 5;
 
-static constexpr uint64_t TIMEOUT_MAP_A2A3[5] = {
+static constexpr uint64_t TIMEOUT_MAP_A2A3[7] = {
+    TIMEOUT_A2A3_50US,
+    TIMEOUT_A2A3_1SEC,
     TIMEOUT_A2A3_10SEC,
     TIMEOUT_A2A3_1MIN,
     TIMEOUT_A2A3_20MIN,
     HAND_SHAKE_TIMEOUT_A2A3_CYCLES
 };
 
-static constexpr uint64_t TIMEOUT_MAP_A5[5] = {
+static constexpr uint64_t TIMEOUT_MAP_A5[7] = {
+    TIMEOUT_A5_50US,
+    TIMEOUT_A5_1SEC,
     TIMEOUT_A5_10SEC,
     TIMEOUT_A5_1MIN,
     TIMEOUT_A5_20MIN,

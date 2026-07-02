@@ -427,7 +427,7 @@ int DeviceLauncher::LaunchAicpuKernel(
             "to disable the constraint that forces scheduling threads onto the same cluster.");
     }
     args->kArgs.parameter.ctrlBlockNum = static_cast<int>(DeviceLauncher::GetDevProg(function)->ctrlBlockDim);
-    auto startTime = MspfSysCycleTime();
+    auto startTime = MspfSysCycleTime();    
     args->kArgs.parameter.runMode = RUN_SPLITTED_STREAM_CTRL;
     ret = RuntimeAicpuKernelLaunchExWithArgs(
         static_cast<uint32_t>(npu::tile_fwk::RtKernelType::AICPU_KFC), "AST_DYN_AICPU", 1, &rtArgs, nullptr, ctrlStream,
@@ -442,7 +442,7 @@ int DeviceLauncher::LaunchAicpuKernel(
     ret = RuntimeAicpuKernelLaunchExWithArgs(
         static_cast<uint32_t>(npu::tile_fwk::RtKernelType::AICPU_KFC), "AST_DYN_AICPU", nrAicpu, &rtArgs, nullptr,
         schedStream, RT_KERNEL_USE_SPECIAL_TIMEOUT);
-    devRunner.ReportHostProfInfo(schedStream, startTime, scheCpuNum, MSPF_GE_TASK_TYPE_AI_CPU, false);
+    devRunner.ReportHostProfInfo(schedStream, startTime, scheCpuNum, MSPF_GE_TASK_TYPE_AI_CPU, false);    
     return ret;
 }
 

@@ -61,10 +61,10 @@ struct SchDeviceTaskContext {
     void EntryStage(DevTaskExecStage stage) { curStage = stage; }
     bool IsParallel() {  return taskCtrl->ParallelForId() != 0; }
     bool IsRunFinish() { return curStage == DevTaskExecStage::FINISH; }
-    void Free()
+    void Free(int scheNum)
     {
         isFree = 1;
-        taskCtrl->Free();
+        taskCtrl->Free(scheNum);
     }
     bool IsFree() { return static_cast<bool>(isFree); }
 

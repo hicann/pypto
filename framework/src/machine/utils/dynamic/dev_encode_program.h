@@ -167,6 +167,11 @@ struct DevAscendProgram {
         return reinterpret_cast<RuntimeDataRingBufferHead*>(devArgs.runtimeDataRingBufferAddr);
     }
 
+    const RuntimeDataRingBufferHead* GetRuntimeDataList() const
+    {
+        return reinterpret_cast<const RuntimeDataRingBufferHead*>(devArgs.runtimeDataRingBufferAddr);
+    }
+
     template <typename T>
     const T& At(const DevRelocVector<T>& localvec, int index) const
     {
