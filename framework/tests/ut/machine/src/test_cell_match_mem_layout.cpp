@@ -47,15 +47,15 @@ protected:
 TEST_F(CellMatchDynamicTest, CellMemLayOutCalculation)
 {
     DevCellMatchTableDesc testDesc;
-    testDesc.cacheOpMaxCount[CELL_MATCH_OP_TYPE_ATOMIC_WRITE] = 128;
+    testDesc.cacheOpMaxCount[CELL_MATCH_OP_TYPE_ATOMIC_WRITE] = CELL_MATCH_MAX_ATOMIC_WRITE_COUNT;
     testDesc.cacheOpMaxCount[CELL_MATCH_OP_TYPE_NORMAL_WRITE] = 1;
-    testDesc.cacheOpMaxCount[CELL_MATCH_OP_TYPE_READ] = 128;
+    testDesc.cacheOpMaxCount[CELL_MATCH_OP_TYPE_READ] = CELL_MATCH_MAX_READ_COUNT;
     testDesc.UpdateCellMemLayOut();
 
-    EXPECT_EQ(testDesc.cellUint64Size, 1 + 1 + 128 + 128);
+    EXPECT_EQ(testDesc.cellUint64Size, 1 + 1 + CELL_MATCH_MAX_ATOMIC_WRITE_COUNT + CELL_MATCH_MAX_READ_COUNT);
     EXPECT_EQ(testDesc.opMemLayOutIndex[CELL_MATCH_OP_TYPE_NORMAL_WRITE], 1);
     EXPECT_EQ(testDesc.opMemLayOutIndex[CELL_MATCH_OP_TYPE_ATOMIC_WRITE], 2);
-    EXPECT_EQ(testDesc.opMemLayOutIndex[CELL_MATCH_OP_TYPE_READ], 2 + 128);
+    EXPECT_EQ(testDesc.opMemLayOutIndex[CELL_MATCH_OP_TYPE_READ], 2 + CELL_MATCH_MAX_ATOMIC_WRITE_COUNT);
 
     testDesc.cacheOpMaxCount[CELL_MATCH_OP_TYPE_ATOMIC_WRITE] = 0;
     testDesc.cacheOpMaxCount[CELL_MATCH_OP_TYPE_READ] = 0;
@@ -94,6 +94,9 @@ TEST_F(CellMatchDynamicTest, MetadataBitManipulation)
 
     CellMatchSetCurrentOpCount(meta, 127);
     EXPECT_EQ(CellMatchGetCurrentOpCount(meta), 127);
+
+    CellMatchSetCurrentOpCount(meta, CELL_MATCH_METADATA_OP_COUNT_MAX);
+    EXPECT_EQ(CellMatchGetCurrentOpCount(meta), CELL_MATCH_METADATA_OP_COUNT_MAX);
 
     CellMatchSetPrevMutexOpCount(meta, 10);
     EXPECT_EQ(CellMatchGetPrevMutexOpCount(meta), 10);
@@ -172,9 +175,25 @@ TEST_F(CellMatchDynamicTest, OpIdManagement)
 
 TEST_F(CellMatchDynamicTest, CapacityConfiguration)
 {
-    EXPECT_EQ(CELL_MATCH_MAX_ATOMIC_WRITE_COUNT, 128);
+    EXPECT_EQ(CELL_MATCH_METADATA_OP_COUNT_MAX, 255);
+    EXPECT_EQ(CELL_MATCH_MAX_ATOMIC_WRITE_COUNT, 254);
     EXPECT_EQ(CELL_MATCH_MAX_READ_COUNT, 128);
     EXPECT_EQ(CELL_MATCH_MAX_NORMAL_WRITE_COUNT, 1);
+    EXPECT_EQ(CELL_MATCH_INVALID_OP_COUNT, 0xFF);
+    EXPECT_LT(CELL_MATCH_MAX_ATOMIC_WRITE_COUNT, CELL_MATCH_INVALID_OP_COUNT);
+}
+
+TEST_F(CellMatchDynamicTest, PrevMutexCountMaxNotTreatedAsInvalid)
+{
+    uint64_t meta = 0;
+    CellMatchSetPrevMutexOpType(meta, CELL_MATCH_OP_TYPE_ATOMIC_WRITE);
+    CellMatchSetPrevMutexOpCount(meta, CELL_MATCH_MAX_ATOMIC_WRITE_COUNT);
+    EXPECT_EQ(CellMatchGetPrevMutexOpCount(meta), CELL_MATCH_MAX_ATOMIC_WRITE_COUNT);
+    EXPECT_NE(CellMatchGetPrevMutexOpCount(meta), CELL_MATCH_INVALID_OP_COUNT);
+
+    CellMatchSetPrevMutexOpType(meta, CELL_MATCH_OP_TYPE_NONE);
+    CellMatchSetPrevMutexOpCount(meta, CELL_MATCH_INVALID_OP_COUNT);
+    EXPECT_EQ(CellMatchGetPrevMutexOpCount(meta), CELL_MATCH_INVALID_OP_COUNT);
 }
 
 TEST_F(CellMatchDynamicTest, OpIdBoundaryCheck)

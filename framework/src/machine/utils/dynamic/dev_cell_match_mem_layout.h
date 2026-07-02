@@ -12,18 +12,18 @@
  * \file dev_cell_match_mem_layout.h
  * \brief Cell Match memory layout definitions for enhanced stitch mechanism
  *
- * Memory Layout Per Cell (256 uint64_t):
+ * Memory Layout Per Cell (dynamic, see DevCellMatchTableDesc::cellUint64Size):
  * - uint64[0]: Metadata control word
  *   - bit 0-3:   Current active operation type (0xFF=NONE, 1=NORMAL_WRITE, 2=ATOMIC_WRITE, 3=READ)
  *   - bit 4-7:   Previous mutex operation type (for dependency tracking)
- *   - bit 8-15:  Current active operation count (max 128 for atomic-write/read, 1 for normal-write)
- *   - bit 16-23: Previous mutex operation count
+ *   - bit 8-15:  Current active operation count (8-bit field, max storable value 255)
+ *   - bit 16-23: Previous mutex operation count (8-bit field, max storable value 255)
  *   - bit 32-63: Tag id bit (for dependency validation)
  *      - bit 32-41: slot alloc iter id, When the slot tensor memory is reallocated, the iter id changes accordingly
  *      - bit 42-63: Stitch devtask id
- * - uint64[1]:       Normal-write op-id (single op)
- * - uint64[2-128]:   Atomic-write op-id list (max 128 ops)
- * - uint64[129-255]: Read op-id list (max 128 ops)
+ * - uint64[1]:              Normal-write op-id (single op)
+ * - uint64[2..]:            Atomic-write op-id list (max CELL_MATCH_MAX_ATOMIC_WRITE_COUNT ops)
+ * - uint64[2+atomicMax..]:  Read op-id list (max CELL_MATCH_MAX_READ_COUNT ops)
  */
 
 #pragma once
@@ -50,9 +50,14 @@ enum CellMatchOpType : uint32_t {
     READ = CELL_MATCH_OP_TYPE_READ
 };
 
-/* Operation Count Limits (hardware maximum capacity) */
+/*
+ * Operation count limits.
+ * Metadata stores op count in 8 bits (bit 8-15 / 16-23): storable range is 0..255.
+ * Atomic-write batch cap is 254 so 255 (0xFF) remains available as prev-mutex invalid sentinel.
+ */
+#define CELL_MATCH_METADATA_OP_COUNT_MAX 255
 #define CELL_MATCH_MAX_NORMAL_WRITE_COUNT 1
-#define CELL_MATCH_MAX_ATOMIC_WRITE_COUNT 128
+#define CELL_MATCH_MAX_ATOMIC_WRITE_COUNT 254
 #define CELL_MATCH_MAX_READ_COUNT 128
 #define CELL_MATCH_INVALID_OP_COUNT 0xFF
 
