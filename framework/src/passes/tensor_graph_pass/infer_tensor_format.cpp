@@ -154,8 +154,8 @@ void InferTensorFormat::ApplyTransDataVecTile(const std::shared_ptr<LogicalTenso
     TileOpFormat srcFormat = srcTensor->GetRawTensor()->format;
     VecTile oriVectile = TileShape::Current().GetVecTile();
     ASSERT(DistributedErrorCode::INVALID_TILE_SHAPE, oriVectile.tile.back() % c0 == 0) << "The last dimension of `tile_shape` should be 32-byte aligned.";
-    if (oriVectile.tile.size() == 3) {
-        oriVectile.tile.insert(oriVectile.tile.begin() + 2, 1);
+    if (oriVectile.tile.size() == NUM3) {
+        oriVectile.tile.insert(oriVectile.tile.begin() + NUM2, 1);
         TileShape::Current().SetVecTile(oriVectile);
     }
     if (srcFormat == TileOpFormat::TILEOP_NC1HWC0 && targetFormat == TileOpFormat::TILEOP_ND) {
@@ -169,8 +169,8 @@ void InferTensorFormat::ApplyTransDataVecTile(const std::shared_ptr<LogicalTenso
         std::swap(tmpVectile.tile[1], tmpVectile.tile[2]);
         tmpVectile.tile[2] = tmpVectile.tile[2] / c0;
         tmpVectile.tile.emplace_back(c0);
-        tmpVectile.tile[1] *= 4;
-        tmpVectile.tile[3] *= 4;
+        tmpVectile.tile[1] *= NUM4;
+        tmpVectile.tile[3] *= NUM4;
         TileShape::Current().SetVecTile(tmpVectile);
     }
 }
