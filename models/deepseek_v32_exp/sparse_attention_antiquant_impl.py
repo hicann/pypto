@@ -255,7 +255,7 @@ def options_list():
             },
             "runtime_options": {
                 "stitch_function_max_num": 256,
-                "device_sched_mode": 2,
+                "device_sched_mode": 1,
                 "ready_on_host_tensors": ["block_table", "kv_act_seqs"]
             },
             }
