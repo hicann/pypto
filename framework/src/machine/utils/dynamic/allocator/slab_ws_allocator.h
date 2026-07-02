@@ -83,8 +83,8 @@ private:
 
     struct SlabHeader {
         SlabCache* cache; // extend
-        uint16_t allocatedCount;
-        uint16_t totalCount;
+        uint32_t allocatedCount;
+        uint32_t totalCount;
     };
 
 public:
