@@ -295,6 +295,9 @@ bool TuneSyncForVF::IsMergeable(
     if (hasNonSetWaitOp) {
         return false;
     }
+    if (!setFlagList.empty()) {
+        return false;
+    }
     return true;
 }
 

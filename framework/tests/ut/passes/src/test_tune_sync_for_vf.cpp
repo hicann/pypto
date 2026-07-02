@@ -133,8 +133,8 @@ TEST_F(TuneSyncForVFTest, TestTuneSyncForVF)
     }
     tuneSync.GenPipeOpMap(currFunctionPtr.get());
     tuneSync.ChangeOpSeq(currFunctionPtr.get(), false);
-    EXPECT_EQ(tuneSync.opList_[TS_NUM3]->GetOpcode(), Opcode::OP_SQRT);
-    EXPECT_EQ(tuneSync.opList_[TS_NUM4]->GetOpcode(), Opcode::OP_RECIPROCAL);
+    EXPECT_EQ(tuneSync.opList_[TS_NUM3]->GetOpcode(), Opcode::OP_SYNC_SRC);
+    EXPECT_EQ(tuneSync.opList_[TS_NUM4]->GetOpcode(), Opcode::OP_SYNC_DST);
 }
 
 TEST_F(TuneSyncForVFTest, TestMainProcess)
