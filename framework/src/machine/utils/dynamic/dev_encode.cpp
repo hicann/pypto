@@ -61,6 +61,7 @@ constexpr int32_t MINI_TILE_LIST_SIZE_THRESHOLD = 16;
 constexpr int64_t MAX_SHAPE_WARN_THRESHOLE = 512 * 512;
 constexpr int64_t DEFAULT_CACHE_DEVICE_TASK_NUM = 10000;
 constexpr uint32_t FRIENDLY_CACHE_ALIGN_U64_SIZE = 2; // 友好的cache对齐是2个u64
+constexpr int INVALID_WRAPID = -1;
 
 void DevAscendFunction::InitIncastOutcastAttr(
     uintdevptr_t& initOffset, const std::vector<std::shared_ptr<LogicalTensor>>& iList,
@@ -856,7 +857,7 @@ void DevAscendFunction::InitWrapInfo(
         for (size_t i = 0; i < callList.size(); i++) {
             auto callop = std::static_pointer_cast<CallOpAttribute>(callList[i]->GetOpAttribute());
             At(opWrapList_, i) = callop->wrapId;
-            if (callop->wrapId != -1) {
+            if (callop->wrapId != INVALID_WRAPID) {
                 wrapTaskNumSet.insert(callop->wrapId);
                 wrapIdToCallops[callop->wrapId].push_back(callList[i]);
             }
@@ -1676,38 +1677,143 @@ struct EncodeDevAscendFunctionInfo {
         for (int j = 0; j < static_cast<int>(callopList.size()); j++) {
             auto& op = *callopList[j];
             auto callAttr = dynamic_cast<CallOpAttribute*>(op.GetOpAttribute().get());
-            if (!callAttr) { continue; }
+            if (!callAttr || callAttr->wrapId == INVALID_WRAPID) { continue; }
             for (size_t k = 0; k < op.GetIOperands().size(); ++k) {
                 auto& iOperand = op.GetIOperands()[k];
                 if (incastRawmagics.count(iOperand->tensor->rawmagic) == 0) {
                     continue;
                 }
-                if (callAttr->wrapId != -1) {
-                    result[callAttr->wrapId].insert(j);
-                }
+                result[callAttr->wrapId].insert(j);
                 break;
             }
+        }
+        for (int j = 0; j < static_cast<int>(callopList.size()); j++) {
+            auto& op = *callopList[j];
+            auto callAttr = dynamic_cast<CallOpAttribute*>(op.GetOpAttribute().get());
+            if (!callAttr || callAttr->wrapId == INVALID_WRAPID) { continue; }
+            auto it = result.find(callAttr->wrapId);
+            if (it == result.end() || it->second.empty()) { continue; }
+            it->second.insert(j);
         }
         return result;
     }
 
-    std::unordered_map<Operation*, Operation*> AddHubMixForWrapTask(std::vector<Operation*>& callopList)
+    std::unordered_map<Operation*, Operation*> AddHubMixForIncastMixOp(
+        std::vector<Operation*>& callopList,
+        const std::map<int, std::set<int>>& wrapIdToConsumerSet,
+        std::unordered_map<Operation*, std::vector<Operation*>>& predListDict)
     {
         std::unordered_map<Operation*, Operation*> opToHubOp;
-        auto wrapIdToConsumerSet = ComputeWrapIdToConsumerOpIdxSetMap(callopList);
         for (auto& [wrapId, consumerIdxSet] : wrapIdToConsumerSet) {
             (void)wrapId;
-            if (consumerIdxSet.empty()) { continue; }
+            std::vector<Operation*> callops;
+            for (auto opIdx : consumerIdxSet) {
+                callops.push_back(callopList[opIdx]);
+            }
+            std::unordered_set<Operation*> predSet;
+            for (auto* callOp : callops) {
+                auto it = predListDict.find(callOp);
+                if (it != predListDict.end()) {
+                    for (auto* pred : it->second) {
+                        predSet.insert(pred);
+                    }
+                }
+            }
+
             auto* hubMixOp = MakeDummyCallHubMix();
             callopList.push_back(hubMixOp);
-            callOpPredDict[hubMixOp] = 0;
-            for (auto opIdx : consumerIdxSet) {
-                auto* callOp = callopList[opIdx];
+
+            for (auto* pred : predSet) {
+                callOpSuccDict[pred].Remove(callops);
+                callOpSuccDict[pred].Insert(hubMixOp);
+            }
+            callOpPredDict[hubMixOp] = static_cast<uint64_t>(predSet.size());
+
+            for (auto* callOp : callops) {
                 callOpSuccDict[hubMixOp].Insert(callOp);
-                callOpPredDict[callOp]++;
+                callOpPredDict[callOp] = 1;
                 opToHubOp[callOp] = hubMixOp;
             }
         }
+        return opToHubOp;
+    }
+
+    void AddHubMixForInnerMixOp(
+        std::vector<Operation*>& callopList,
+        const std::unordered_set<int>& incastWrapIds,
+        std::unordered_map<Operation*, std::vector<Operation*>>& predListDict)
+    {
+        size_t originalSize = callopList.size();
+        std::map<int, std::vector<Operation*>> wrapIdToCallops;
+        for (size_t i = 0; i < originalSize; i++) {
+            Operation* op = callopList[i];
+            auto callAttr = dynamic_cast<CallOpAttribute*>(op->GetOpAttribute().get());
+            if (callAttr == nullptr || callAttr->wrapId == INVALID_WRAPID) {
+                continue;
+            }
+            if (incastWrapIds.count(callAttr->wrapId) != 0) {
+                continue;
+            }
+            auto it = predListDict.find(op);
+            if (it == predListDict.end() || it->second.empty()) {
+                continue;
+            }
+            wrapIdToCallops[callAttr->wrapId].push_back(op);
+        }
+
+        for (auto& [wrapId, callops] : wrapIdToCallops) {
+            (void)wrapId;
+            std::unordered_set<Operation*> predSet;
+            for (auto* op : callops) {
+                auto it = predListDict.find(op);
+                if (it != predListDict.end()) {
+                    for (auto* pred : it->second) {
+                        predSet.insert(pred);
+                    }
+                }
+            }
+            if (predSet.empty()) {
+                continue;
+            }
+
+            Operation* hubMixOp = MakeDummyCallHubMix();
+            callopList.push_back(hubMixOp);
+
+            for (auto* pred : predSet) {
+                callOpSuccDict[pred].Remove(callops);
+                callOpSuccDict[pred].Insert(hubMixOp);
+            }
+            callOpPredDict[hubMixOp] = static_cast<uint64_t>(predSet.size());
+
+            for (auto* op : callops) {
+                callOpSuccDict[hubMixOp].Insert(op);
+                callOpPredDict[op] = 1;
+            }
+        }
+    }
+
+    std::unordered_map<Operation*, Operation*> AddHubMixForWrapTask(std::vector<Operation*>& callopList)
+    {
+        auto wrapIdToConsumerSet = ComputeWrapIdToConsumerOpIdxSetMap(callopList);
+
+        std::unordered_map<Operation*, std::vector<Operation*>> predListDict;
+        for (auto& [producer, succSet] : callOpSuccDict) {
+            for (auto& succ : succSet) {
+                predListDict[succ].push_back(producer);
+            }
+        }
+
+        std::unordered_set<int> incastWrapIds;
+        for (auto& [wrapId, consumerSet] : wrapIdToConsumerSet) {
+            (void)consumerSet;
+            incastWrapIds.insert(wrapId);
+        }
+
+        // 为没有跨RootFunction的有依赖的mix任务插入HUB_MIX节点
+        AddHubMixForInnerMixOp(callopList, incastWrapIds, predListDict);
+
+        // 为跨RootFunction的有依赖的mix任务插入HUB_MIX节点
+        auto opToHubOp = AddHubMixForIncastMixOp(callopList, wrapIdToConsumerSet, predListDict);
         return opToHubOp;
     }
 

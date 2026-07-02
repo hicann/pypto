@@ -1657,6 +1657,7 @@ private:
                 taskIds[wrapAicoreIdx] = id;
                 mixResoruceType = curBinary.mixResourceType;
             }
+            DEV_VERBOSE_DEBUG("ResolveHubMixDepDynStitched listSize = %u, should equal mixTaskNum: %u", listSize, GetTaskNumByMixResType(mixResoruceType));
             wrapManager.ResolveDepForOneMix(taskIds, mixResoruceType, coreIdx);
         }
     }
@@ -1682,6 +1683,7 @@ private:
                 taskIds[wrapAicoreIdx] = MakeTaskID(funcId, succIdx);
                 mixResoruceType = curBinary.mixResourceType;
             }
+            DEV_VERBOSE_DEBUG("ResolveHubMixDepDyn succSize = %lu, should equal mixTaskNum: %u", succSize, GetTaskNumByMixResType(mixResoruceType));
             wrapManager.ResolveDepForOneMix(taskIds, mixResoruceType, coreIdx);
         }
         ResolveHubMixDepDynStitched(deviceTaskCtx, dyntask, funcId, opIndex, coreIdx);
