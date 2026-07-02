@@ -384,7 +384,7 @@ int CoreScheduler::FindDepAIVLastEnd(const TaskGraph& taskGraph, int taskId) con
     return result;
 }
 
-// --------- GapMin: 启发式最小化跨核相邻依赖边的等待间隔 ---------
+// --------- GapMin: 启发式最小化相邻依赖边的等待间隔 ---------
 // 紧耦合调度单个任务
 void CoreScheduler::ScheduleOneTask(
     TaskGraph& taskGraph, int taskId, std::unordered_map<TargetCoreType, std::vector<std::pair<int, int>>>& availTime,
@@ -440,7 +440,7 @@ TargetCoreType CoreScheduler::LookupPinnedAIVCore(
     return TargetCoreType::UNKNOWN;
 }
 
-// 尝试调度跨核后继
+// 尝试调度后继
 void CoreScheduler::TryScheduleSuccessors(
     TaskGraph& taskGraph, int taskId, std::unordered_map<TargetCoreType, std::vector<std::pair<int, int>>>& availTime,
     std::set<int>& scheduledTasks, std::function<bool(TargetCoreType)> isAicCore,
@@ -470,7 +470,7 @@ void CoreScheduler::TryScheduleSuccessors(
     }
 }
 
-// 轮 1：gap-aware 前向排布，紧耦合调度：C完成后立即调度跨核V后继
+// 轮 1：gap-aware 前向排布，紧耦合调度：任务完成后立即调度后继
 void CoreScheduler::GapMinForwardPass(TaskGraph& taskGraph, std::vector<int>& topoSeq)
 {
     std::unordered_map<TargetCoreType, std::vector<std::pair<int, int>>> availTime;
@@ -626,7 +626,7 @@ void CoreScheduler::NormalizeSingleAIVBranches(TaskGraph& taskGraph)
     }
 }
 
-void CoreScheduler::OptimalScheduleWithSearch(TaskGraph& taskGraph)
+void CoreScheduler::OptimalScheduleWithSearch(TaskGraph& taskGraph, bool enableSearch)
 {
     taskGraph.ClearSchedule();
     APASS_LOG_INFO_F(Elements::Operation, "Start hybrid schedule: GapMin baseline + local-search refinement.");
@@ -645,7 +645,9 @@ void CoreScheduler::OptimalScheduleWithSearch(TaskGraph& taskGraph)
         Elements::Operation, "GapMin baseline: makespan=%d, total_cost=%.4f.", baselineMakespan, baselineTotalCost);
 
     // Step 2: in-process local-search refinement (deterministic, no external solver)
-    RunLocalSearch(taskGraph, baselineTotalCost);
+    if (enableSearch) {
+        RunLocalSearch(taskGraph, baselineTotalCost);
+    }
 }
 
 bool CoreScheduler::HasOooScopeTasks(const TaskGraph& taskGraph)
@@ -731,6 +733,8 @@ void CoreScheduler::Schedule(TaskGraph& taskGraph, const std::string& schedMode)
     APASS_LOG_INFO_F(Elements::Operation, "Start schedule, mode=%s.", schedMode.c_str());
     if (schedMode == "HLF") {
         HLFSchedule(taskGraph);
+    } else if (schedMode == "GAPMIN") {
+        OptimalScheduleWithSearch(taskGraph, /*enableSearch=*/false);
     } else {
         OptimalScheduleWithSearch(taskGraph);
     }

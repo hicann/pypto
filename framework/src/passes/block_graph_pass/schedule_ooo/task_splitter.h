@@ -57,7 +57,6 @@ public:
     void PropagateOooScopeToReshape();
     std::unordered_set<int> CollectOooScopeProtectedClusters(DSUWithOrder& dsu);
     std::unordered_set<int> CollectProtectedClusterIds(const std::vector<int>& opCluster) const;
-    void BuildVecConnectedComponents(DSUWithOrder& vecDsu);
     int BuildCluster(std::vector<int>& clusterIds, std::vector<ScheduleCoreType>& clusterCoreTypes);
     void ReverseDFSFindByOutputMemType(
         int opIdx, MemoryType targetMemType, std::vector<int>& result, std::vector<bool>& visited);
@@ -129,7 +128,6 @@ public:
     std::vector<std::set<int>> inGraph_;
     std::vector<std::set<int>> outGraph_;
     std::unordered_map<int, int> opMagicToIdx_;
-    std::vector<int> vecBranchId_;
     TaskGraph taskGraph_;
     std::unordered_set<int> oooScopeProtectedClusters_;
     std::vector<std::vector<int>> cycledSCCClusters_;

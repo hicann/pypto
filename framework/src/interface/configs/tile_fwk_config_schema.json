@@ -203,8 +203,8 @@
                 "ooo_sched_mode": {
                     "type": "string",
                     "label": {
-                        "zh": "OoO调度模式。取值为空字符串时使用基于拓扑序遍历与局部搜索的调度；取值为HLF时使用最高层级优先调度，按任务到汇点的最长路径降序排列后做EFT插入调度。",
-                        "en": "OoO schedule mode. Empty string uses topology-order traversal with local search; HLF uses Highest Level First scheduling: tasks are ordered by descending longest path to sink, then scheduled via EFT insertion."
+                        "zh": "OoO调度模式。取值为空字符串时使用基于拓扑序遍历与局部搜索的调度（GapMin基线调度+local-search）；取值为HLF时使用最高层级优先调度，按任务到汇点的最长路径降序排列后做EFT插入调度；取值为GAPMIN时仅执行GapMin基线调度，跳过local-search。",
+                        "en": "OoO schedule mode. Empty string uses topology-order traversal with local search (GapMin baseline + local-search); HLF uses Highest Level First scheduling: tasks are ordered by descending longest path to sink, then scheduled via EFT insertion; GAPMIN runs only the GapMin baseline scheduling, skipping local-search."
                     }
                 }
             }
