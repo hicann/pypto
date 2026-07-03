@@ -196,10 +196,10 @@ public:
     ir::VarPtr CreateTokenVar(ir::Span span);
 
     void AddDependToken(SymbolicScalar scalar, ir::VarPtr token) { irContext_.AddDependToken(scalar.AsExpr(), token); }
-    std::vector<ir::VarPtr> & GetDependToken(SymbolicScalar scalar) { return irContext_.GetDependToken(scalar.AsExpr()); }
+    std::vector<ir::VarPtr>& GetDependToken(SymbolicScalar scalar) { return irContext_.GetDependToken(scalar.AsExpr()); }
 
     void AddDependToken(ir::ExprPtr expr, ir::VarPtr token) { irContext_.AddDependToken(expr, token); }
-    std::vector<ir::VarPtr> & GetDependToken(ir::ExprPtr expr) { return irContext_.GetDependToken(expr); }
+    std::vector<ir::VarPtr>& GetDependToken(ir::ExprPtr expr) { return irContext_.GetDependToken(expr); }
 
     void EmitTensorStmts();
 

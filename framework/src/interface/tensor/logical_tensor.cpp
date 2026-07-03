@@ -38,12 +38,10 @@ using namespace npu::tile_fwk;
 namespace {
 
 // View 后 dynValidShape 推导辅助函数（GVS = RUNTIME_GetViewValidShapeDim）。
-//
 // 单维语义（viewShape >= 0）：
 //   GVS(valid, offset, viewShape) = min(max(valid - offset, 0), viewShape)
 // viewShape == -1 表示不设上限：max(valid - offset, 0)。
 // runtime GVS 不支持 viewShape=-1，故含符号时展开为 Max(valid-offset, 0)，不生成 GVS(..., -1)。
-//
 // 连续 View 合并为单层 GVS，不嵌套：
 //   GVS(base, o1, s1) 再 view(o2, s2) -> GVS(base, o1+o2, min(s2, s1-o2))
 
