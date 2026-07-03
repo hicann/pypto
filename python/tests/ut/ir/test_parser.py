@@ -202,14 +202,8 @@ def test_visit_return():
     def f(x):
         return x
 
-    blk = _parse_func(f)
-    assert blk.jump == pir.Jump.RETURN and blk.result is not None
-
-    def g():
-        return
-
-    blk2 = _parse_func(g)
-    assert blk2.jump == pir.Jump.RETURN and blk2.result is None
+    with pytest.raises(SyntaxError):
+        _parse_func(f)
 
 
 def test_visit_pass_functiondef_expr():
@@ -279,7 +273,7 @@ def test_visit_while_else_error():
         else:
             pass
 
-    with pytest.raises(Exception):
+    with pytest.raises(SyntaxError):
         _parse_func(f)
 
 
@@ -290,7 +284,7 @@ def test_visit_for_else_error():
         else:
             pass
 
-    with pytest.raises(Exception):
+    with pytest.raises(SyntaxError):
         _parse_func(f)
 
 
@@ -388,3 +382,50 @@ def test_op_registry():
 
     assert "Bar helper" in str(bar.__doc__)
     assert registry.dispatch('pil.bar', None, 2) == 3
+
+
+def test_visit_nested_function_def():
+    """A nested `def` lowers to pil.store(name, pir.Function)."""
+    def f(x):
+        def g(a):
+            return a + 1
+        g(x)
+
+    body = _parse_func(f)
+    stores = [c for c in body.calls if isinstance(c, pir.Call) and c.callee == 'pil.store']
+    assert any(
+        len(c.args) == 2 and c.args[0] == 'g' and isinstance(c.args[1], pir.Function)
+        for c in stores
+    ), "nested def must store a pir.Function under its name"
+
+    # the stored Function carries its parameter and body
+    g_fn = next(c.args[1] for c in stores if c.args[0] == 'g')
+    assert g_fn.params == ('a',)
+    assert g_fn.body is not None
+
+
+def test_visit_nested_function_def_all_arg_kinds():
+    """posonlyargs + args + kwonlyargs populate params and aligned defaults."""
+    def f():
+        def g(a, b=2, /, c=3, d=4, *, e, k=9):
+            return a + b + c + d + e + k
+        g(1, 2, 3, 4, e=5)
+
+    body = _parse_func(f)
+    g_fn = next(c.args[1] for c in body.calls
+                if isinstance(c, pir.Call) and c.callee == 'pil.store' and c.args[0] == 'g')
+    # positional-only + positional-or-keyword + keyword-only, in source order
+    assert g_fn.params == ('a', 'b', 'c', 'd', 'e', 'k')
+    # innermost function defaults is replaced by the actual values
+    assert g_fn.param_defaults == (None, pir.Value(1), pir.Value(2), pir.Value(3), None, pir.Value(4))
+
+
+def test_visit_pil_function():
+    """posonlyargs + args + kwonlyargs populate params and aligned defaults."""
+    @pil.function
+    def g(a, b=2, /, c=3, d=4, *, e, k=9):
+        return a + b + c + d + e + k
+    assert g.params == ('a', 'b', 'c', 'd', 'e', 'k')
+    assert g.body is not None
+    # outermost function defaults is not replaced
+    assert g.param_defaults == (None, 2, 3, 4, None, 9)

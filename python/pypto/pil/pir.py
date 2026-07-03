@@ -9,12 +9,12 @@ import threading
 import enum
 import textwrap
 import inspect
-from typing import Optional, Any, Union, Optional
+from typing import Optional, Any, Union
 from dataclasses import dataclass, field
 from contextlib import contextmanager
 
+import pypto
 from pypto import ir
-from .op_registry import dispatch
 
 
 @dataclass
@@ -141,8 +141,37 @@ class Function:
     # Global values
     global_values: tuple[Any, ...]
 
+    # Parameter names (positional), used to bind call arguments for nested calls
+    params: tuple[str, ...] = ()
+
+    # Default values aligned with `params` (None where no default); applied when
+    # a nested call omits the argument.
+    param_defaults: tuple = ()
+
+    def __str__(self):
+        param_str = []
+        for k, v in zip(self.params, self.param_defaults):
+            if v is None:
+                param_str.append(f"{k}")
+            else:
+                param_str.append(f"{k}={v}")
+        return f"lambda {', '.join(param_str)}:\n" + str(self.body)
+
+    def __call__(self, *args, **kwargs):
+        raise NotImplementedError("Function should not be called directly")
+
 
 class ReturnSignal(Exception):
+    def __init__(self, value=None):
+        super().__init__()
+        self.value = value
+
+
+class BreakSignal(Exception):
+    pass
+
+
+class ContinueSignal(Exception):
     pass
 
 
@@ -151,6 +180,7 @@ class BuildContext(ir.IRBuilder):
         super().__init__()
         self.parent = None
         self.span = span
+        self.return_var_names = []
 
     def __enter__(self):
         self.parent = _current.build_context
@@ -174,11 +204,49 @@ class BuildContext(ir.IRBuilder):
         finally:
             self.span = old_span
 
+    @contextmanager
+    def change_return_vars(self, names: list[str]):
+        old_names, self.return_var_names = self.return_var_names, names
+        try:
+            yield
+        finally:
+            self.return_var_names = old_names
+
     def create_var(self, name: str, type_: Optional[ir.Type], span: ir.Span):
         return ir.Var(name, type_, span=span)
 
     def create_none(self, span: ir.Span):
         return ir.Var("None", ir.UnknownType.get(), span=span)
+
+    def unwrap(self, val: Any) -> ir.Expr:
+        if val is None:
+            return self.none()
+        if isinstance(val, int):
+            return self.create_const_int(val).as_expr()
+        elif isinstance(val, pypto.SymbolicScalar):
+            return val.as_expr()
+        elif isinstance(val, pypto.Tensor):
+            if (val.is_empty()):
+                return self.none()
+            return val.logical_tensor()
+        elif isinstance(val, (list, tuple)):
+            return ir.MakeTuple([self.unwrap(v) for v in val], ir.Span.unknown())
+        else:
+            raise TypeError(f"Invalid type {type(val)} for unwrap")
+
+    def wrap(self, val: ir.Expr) -> Any:
+        if isinstance(val, (ir.ConstInt, ir.ConstFloat, ir.ConstBool)):
+            return val.value
+        if isinstance(val, ir.Expr):
+            if isinstance(val.type, ir.ScalarType):
+                return pypto.SymbolicScalar(val)
+            elif isinstance(val.type, ir.LogicalTensorType):
+                return pypto.Tensor.from_logical_tensor(val)
+            elif isinstance(val.type, ir.UnknownType):
+                return None
+            else:
+                raise TypeError(f"Invalid type {type(val)} for wrap")
+        return val
 
 
 class InsertPoint:
@@ -203,13 +271,12 @@ class Scope:
         self.varmap = {}
         self.eval = True
 
-    def __getitem__(self, name: str) -> Optional[ir.Var]:
-        var = self.locals[name]
+    def __getitem__(self, name: str) -> Union[ir.Var, Any]:
+        var = self.locals.get(name, None)
         if var is None:
             if self.parent:
-                var = self.parent[name]
-            else:
-                return None
+                return self.parent[name]
+            return None
         return var
 
     def __setitem__(self, key: str, value: Union[ir.Var, Any]):
@@ -219,11 +286,6 @@ class Scope:
     def store(name: str, value: Union[ir.Var, Any]):
         scope = Scope.current()
         scope[name] = value
-
-    @staticmethod
-    def load(name: str) -> Optional[ir.Var]:
-        scope = Scope.current()
-        return scope[name]
 
     @staticmethod
     def current() -> "Scope":
@@ -239,67 +301,19 @@ class Scope:
         finally:
             _current.scope = old
 
-
-class LoopStatus:
-    def __init__(self, mode: bool = True, names: Optional[list[str]] = None):
-        if names is None:
-            names = []
-        self.static_eval = mode
-        self.return_var_names = names
-        self.jump: Optional[Jump] = None
-
-    @staticmethod
-    def current() -> "LoopStatus":
-        return _current.loop_status
-
-    @contextmanager
-    def make_current(self):
-        old, _current.loop_status = _current.loop_status, self
-        try:
-            yield self
-        finally:
-            _current.loop_status = old
+    def resolve(self, val):
+        if isinstance(val, Value):
+            return self.varmap[val.id]
+        elif isinstance(val, tuple):
+            return tuple(self.resolve(v) for v in val)
+        elif isinstance(val, list):
+            return list(self.resolve(v) for v in val)
+        return val
 
 
 class _Current(threading.local):
     scope: Optional[Scope] = None
     build_context: Optional[BuildContext] = None
-    loop_status: LoopStatus = LoopStatus()
 
 
 _current = _Current()
-
-
-def _resolve(val, scope: Scope):
-    if isinstance(val, Value):
-        return scope.varmap[val.id]
-    elif isinstance(val, tuple):
-        return tuple(_resolve(v, scope) for v in val)
-    elif isinstance(val, list):
-        return list(_resolve(v, scope) for v in val)
-    return val
-
-
-def dispatch_call(call: Call, scope: Scope, ctx: BuildContext):
-    callee = _resolve(call.callee, scope)
-    args = tuple(_resolve(v, scope) for v in call.args)
-    kwargs = {k: _resolve(v, scope) for k, v in call.kwargs}
-    ret = dispatch(callee, ctx, *args, **kwargs)
-    if call.result is not None:
-        scope.varmap[call.result.id] = ret
-    ctx.emit_tensor_stmts()
-
-
-def dispatch_block(block: Block):
-    scope = Scope.current()
-    ctx = BuildContext.current()
-    for call in block.calls:
-        with ctx.change_span(call.span):
-            dispatch_call(call, scope, ctx)
-        lstatus = LoopStatus.current()
-        if lstatus.jump is not None:
-            break
-    # Propagate the block's own jump if no sub-call already set one
-    lstatus = LoopStatus.current()
-    if lstatus.static_eval and lstatus.jump is None and block.jump is not Jump.END_BRANCH:
-        lstatus.jump = block.jump

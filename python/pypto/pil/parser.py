@@ -182,6 +182,23 @@ def _is_pypto_loop(node: ast.AST) -> bool:
     )
 
 
+
+def _parse_params(ctx, func: ast.FunctionDef, defaults, kwdefaults):
+    if func.args.vararg or func.args.kwarg:
+        ctx.raise_error(func, "vararg and kwarg not supported")
+
+    positional = [arg.arg for arg in func.args.posonlyargs + func.args.args]
+    kwonly = [arg.arg for arg in func.args.kwonlyargs]
+
+    defaults = defaults or ()
+    kwdefaults = kwdefaults or {}
+    defvals = [None] * (len(positional) + len(kwonly))
+    defvals[len(positional) - len(defaults):len(positional)] = defaults
+    defvals[len(positional):] = [kwdefaults.get(name, None) for name in kwonly]
+
+    return tuple(positional + kwonly), tuple(defvals)
+
+
 class Parser:
 
     @staticmethod
@@ -392,10 +409,9 @@ class Parser:
 
         value = self.visit(stmt.value, ctx) if stmt.value else None
         if ctx.entry_point:
-            ctx.set_jump(Jump.RETURN, value)
+            ctx.raise_error(stmt, "return statement in entry point")
         else:
             ctx.store("$retval", value)
-            ctx.store("$return", True)
             ctx.set_jump(Jump.RETURN, value)
 
     def visit_Assign(self, stmt: ast.Assign, ctx: _Context):
@@ -441,7 +457,38 @@ class Parser:
         pass
 
     def visit_FunctionDef(self, stmt: ast.FunctionDef, ctx: _Context):
-        pass
+        defaults = []
+        for d in stmt.args.defaults:
+            defaults.append(self.visit(d, ctx))
+
+        kwdefaults = {}
+        for arg, d in zip(stmt.args.kwonlyargs, stmt.args.kw_defaults):
+            if d is not None:
+                kwdefaults[arg.arg] = self.visit(d, ctx)
+            else:
+                kwdefaults[arg.arg] = None
+
+        new_ctx = _Context(ctx.source, entry_point=False)
+        parser = Parser()
+        with new_ctx.span(stmt), new_ctx.new_block() as blk:
+            parser.parse(stmt.body, new_ctx)
+            if blk.jump is None:
+                new_ctx.set_jump(Jump.RETURN)
+
+        params, param_defaults = _parse_params(ctx, stmt, defaults, kwdefaults)
+        func = Function(
+            name=stmt.name,
+            span=blk.span,
+            signature=inspect.Signature(),
+            body=blk,
+            load_vars=tuple(sorted(blk.load_names)),
+            store_vars=tuple(sorted(blk.store_names)),
+            global_vars=(),
+            global_values=(),
+            params=params,
+            param_defaults=param_defaults,
+        )
+        ctx.store(stmt.name, func)
 
     def visit_Assert(self, stmt: ast.Assert, ctx: _Context):
         cond = self.visit(stmt.test, ctx)
@@ -485,12 +532,12 @@ class Parser:
                 ctx.raise_error(target)
 
 
-def ast2pil(pyfunc):
+def ast2pil(pyfunc, entry_point: bool = True):
     source = Source(pyfunc)
     if not isinstance(source.func_def, ast.FunctionDef):
         raise ValueError("ast2pil must be called with a function definition")
 
-    ctx = _Context(source)
+    ctx = _Context(source, entry_point=entry_point)
     parser = Parser()
     with ctx.span(source.func_def), ctx.new_block() as blk:
         parser.parse(source.func_def.body, ctx)
@@ -513,6 +560,8 @@ def ast2pil(pyfunc):
     global_vars = tuple(sorted(envs.keys()))
     global_values = [envs[k] for k in global_vars]
 
+    params, param_defaults = _parse_params(ctx, source.func_def, pyfunc.__defaults__, pyfunc.__kwdefaults__)
+
     return Function(
         name=pyfunc.__name__,
         span=blk.span,
@@ -521,5 +570,7 @@ def ast2pil(pyfunc):
         load_vars=tuple(sorted(blk.load_names)),
         store_vars=tuple(sorted(blk.store_names)),
         global_vars=tuple(global_vars),
-        global_values=tuple(global_values)
+        global_values=tuple(global_values),
+        params=params,
+        param_defaults=param_defaults,
     )

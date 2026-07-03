@@ -9,19 +9,20 @@ import inspect
 import pypto
 
 from .parser import ast2pil
-from .pir import Function, BuildContext, InsertPoint, Scope, LoopStatus, ReturnSignal, dispatch_block
+from .pir import Function, BuildContext, InsertPoint, Scope, ReturnSignal
+from .dispatcher import dispatch_block
 from .op_registry import dispatch
 from . import ops
 from ..ir import SeqStmts
 
 
 def pil2ir(func: Function, args: dict):
-    scope = Scope(list(func.load_vars))
+    scope = Scope(sorted(set(func.load_vars) | set(func.global_vars)))
 
-    # Pre-populate globals into scope
+    # Pre-populate globals into scope (all of them, so nested functions can
+    # resolve module globals/builtins via the scope parent chain)
     for name, val in zip(func.global_vars, func.global_values):
-        if name in scope.locals:
-            scope[name] = val
+        scope[name] = val
 
     func_args = []
     body = SeqStmts(func.span)
@@ -32,12 +33,10 @@ def pil2ir(func: Function, args: dict):
                 var = ctx.create_var_like(key, val.logical_tensor())
                 func_args.append(var)
             dispatch('pil.store', ctx, key, val)
-
-        with LoopStatus().make_current():
-            try:
-                dispatch_block(func.body)
-            except ReturnSignal:
-                pass
+        try:
+            dispatch_block(func.body, True)
+        except ReturnSignal:
+            pass
 
     return ctx.create_function(func.name, func_args, [], body, func.span)
 

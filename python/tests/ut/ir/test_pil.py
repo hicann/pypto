@@ -169,6 +169,10 @@ def _for_ops_of(ops):
     return [op for op in ops if isinstance(op, ir.ForStmt)]
 
 
+def info(x):
+    logging.log_info(f"{x}")
+
+
 def test_ir_loop_basic():
     """Carry variables: ans and loop var i."""
     def foo(n):
@@ -421,3 +425,164 @@ def test_tensor_loop_unroll():
     prog = b.create_program([func], "main", ir.Span.unknown())
     prog = ir.Pass.canonicalize()(prog)
     logging.log_info(f"\ncanonical: {prog}")
+
+
+def _opcode_set(stmt, acc=None):
+    """Recursively collect TensorOpStmt opcodes."""
+    if acc is None:
+        acc = set()
+    if isinstance(stmt, ir.TensorOpStmt):
+        acc.add(stmt.opcode)
+    if isinstance(stmt, ir.SeqStmts):
+        for s in stmt.stmts:
+            _opcode_set(s, acc)
+    if isinstance(stmt, ir.IfStmt):
+        _opcode_set(stmt.then_body, acc)
+        _opcode_set(stmt.else_body, acc)
+    if isinstance(stmt, ir.ForStmt):
+        _opcode_set(stmt.body, acc)
+    return acc
+
+
+def test_nested_function_no_args():
+    """Nested function with no arguments."""
+    def foo():
+        def bar():
+            return 41
+        info(bar() + 1)
+    func = pil.compile(foo)
+    assert func is not None
+
+
+def test_nested_function_args():
+    """Nested function taking positional arguments."""
+    def foo(x):
+        def bar(a, b):
+            return a + b
+        info(bar(x, x))
+    pil.compile(foo, 5)
+
+
+def test_nested_function_default_args():
+    """Nested function with default argument values."""
+    def foo():
+        def bar(a, b=10):
+            return a + b
+        info(bar(5))
+    pil.compile(foo)
+
+
+def test_nested_function_capture_scalar():
+    """Nested function captures a scalar from the enclosing scope."""
+    def foo(x):
+        def bar():
+            return x + 1
+        info(bar() + 1)
+    pil.compile(foo, 5)
+
+
+def test_nested_function_capture_tensor():
+    """Nested function captures a tensor; the captured tensor op inlines."""
+    def foo(a):
+        pypto.set_vec_tile_shapes(16, 16)
+
+        def bar():
+            return a + a
+        info(bar())
+
+    a = pypto.Tensor((4, 4), dtype=pypto.DT_FP32)
+    func = pil.compile(foo, a)
+    assert _opcode_set(func.body) == {'ADD'}
+
+
+def test_nested_function_recursion():
+    """Nested function calls itself (base case via early return)."""
+    def foo(n):
+        def fac(k):
+            if k <= 1:
+                return 1
+            return k * fac(k - 1)
+        info(fac(n))
+    pil.compile(foo, 5)
+
+
+def test_nested_function_in_loop():
+    """Nested function called inside a loop body."""
+    def foo(n):
+        def sq(x):
+            return x * x
+        total = 0
+        for i in range(n):
+            total += sq(i)
+        info(total)
+    pil.compile(foo, 4)
+
+
+def test_nested_function_posonly_args():
+    """Nested function with positional-only parameters (before ``/``)."""
+    def foo(x):
+        def bar(a, b, /):
+            return a + b
+        info(bar(x, x))
+    pil.compile(foo, 5)
+
+
+def test_nested_function_kwonly_args():
+    """Nested function with keyword-only parameters (after ``*``)."""
+    def foo(x):
+        def bar(a, *, k):
+            return a + k
+        info(bar(x, k=3))
+    pil.compile(foo, 5)
+
+
+def test_nested_function_kwonly_default_args():
+    """Keyword-only parameters with defaults, mixed with positional defaults."""
+    def foo(x):
+        def bar(a, b=2, /, c=3, *, k=10):
+            return a + b + c + k
+        info(bar(x))  # b, c and k all fall back to their defaults
+    pil.compile(foo, 1)
+
+
+def test_nested_function_return_tensor():
+    """Add dynamic tensor should be supported."""
+    def foo(x, y):
+        def add1(a):
+            return a + 1
+
+        for i in pypto.loop(x.shape[0] // 32):
+            pypto.set_vec_tile_shapes(32, 32)
+            ta = x[i:i + 32, :]
+            y[i:, :] = add1(ta)
+
+    x = pypto.Tensor((-1, 32), pypto.DT_FP32, 'x')
+    y = pypto.Tensor((-1, 32), pypto.DT_FP32, 'y')
+    func = pil.compile(foo, x, y)
+    b = ir.IRBuilder()
+    prog = b.create_program([func], "main", ir.Span.unknown())
+    prog = ir.Pass.canonicalize()(prog)
+    logging.log_info(f"\ncanonical: {prog}")
+
+
+def test_pil_function():
+    """Add dynamic tensor should be supported."""
+    @pil.function
+    def add1(n, a):
+        for _ in pypto.loop(n):
+            a = a + 1
+        return a
+
+    def foo(x, y):
+        for i in pypto.loop(x.shape[0] // 32):
+            pypto.set_vec_tile_shapes(32, 32)
+            ta = x[i:i + 32, :]
+            y[i:, :] = add1(10, ta)
+
+    x = pypto.Tensor((-1, 32), pypto.DT_FP32, 'x')
+    y = pypto.Tensor((-1, 32), pypto.DT_FP32, 'y')
+    func = pil.compile(foo, x, y)
+    b = ir.IRBuilder()
+    prog = b.create_program([func], "main", ir.Span.unknown())
+    prog = ir.Pass.canonicalize()(prog)
+    info(f"\ncanonical: {prog}")
