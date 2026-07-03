@@ -35,6 +35,42 @@ class AttrHolder {
 protected:
     std::map<std::string, std::any> attributes;
 
+private:
+    static std::string DumpElementAttr(const Element& tensorElement)
+    {
+        if (tensorElement.IsSigned()) {
+            return std::to_string(tensorElement.GetSignedData());
+        }
+        if (tensorElement.IsUnsigned()) {
+            return std::to_string(tensorElement.GetUnsignedData());
+        }
+        if (tensorElement.IsFloat()) {
+            return std::to_string(tensorElement.GetFloatData());
+        }
+        return "";
+    }
+
+    static std::string DumpSymbolicScalarListAttr(const std::vector<SymbolicScalar>& scalarList)
+    {
+        std::ostringstream oss;
+        oss << "[";
+        for (size_t k = 0; k < scalarList.size(); k++) {
+            oss << ((k != 0) ? "," : "") << scalarList[k].Dump();
+        }
+        oss << "]";
+        return oss.str();
+    }
+
+    static std::string DumpMapIntIntAttr(const std::map<int, int>& dict)
+    {
+        std::ostringstream oss;
+        size_t index = 0;
+        for (const auto& [src, dst] : dict) {
+            oss << ((index++ == 0) ? "" : ",") << src << ":" << dst;
+        }
+        return oss.str();
+    }
+
 public:
     const std::map<std::string, std::any>& GetAllAttr() const { return attributes; }
     std::map<std::string, std::any>& GetAllAttr() { return attributes; }
@@ -147,29 +183,17 @@ public:
         } else if (it->second.type() == typeid(std::vector<int64_t>)) {
             result = IntVecToStr(pypto::AnyCastRef<std::vector<int64_t>>(it->second));
         } else if (it->second.type() == typeid(Element)) {
-            auto tensorElement = pypto::AnyCastRef<Element>(it->second);
-            if (tensorElement.IsSigned()) {
-                result = std::to_string(tensorElement.GetSignedData());
-            } else if (tensorElement.IsUnsigned()) {
-                result = std::to_string(tensorElement.GetUnsignedData());
-            } else if (tensorElement.IsFloat()) {
-                result = std::to_string(tensorElement.GetFloatData());
-            }
+            result = DumpElementAttr(pypto::AnyCastRef<Element>(it->second));
         } else if (it->second.type() == typeid(SymbolicScalar)) {
             auto scalar = pypto::AnyCastRef<SymbolicScalar>(it->second);
             result = scalar.Dump();
         } else if (it->second.type() == typeid(std::vector<SymbolicScalar>)) {
-            auto scalarList = pypto::AnyCastRef<std::vector<SymbolicScalar>>(it->second);
-            std::ostringstream oss;
-            oss << "[";
-            for (size_t k = 0; k < scalarList.size(); k++) {
-                oss << ((k != 0) ? "," : "") << scalarList[k].Dump();
-            }
-            oss << "]";
-            result = oss.str();
+            result = DumpSymbolicScalarListAttr(pypto::AnyCastRef<std::vector<SymbolicScalar>>(it->second));
         } else if (it->second.type() == typeid(std::vector<bool>)) {
             auto scalarList = pypto::AnyCastRef<std::vector<bool>>(it->second);
             result = IntVecToStr<bool>(scalarList);
+        } else if (it->second.type() == typeid(std::map<int, int>)) {
+            result = DumpMapIntIntAttr(pypto::AnyCastRef<std::map<int, int>>(it->second));
         } else {
             result += "unsupported type ";
             result += it->second.type().name();
@@ -210,6 +234,13 @@ public:
                     return nlohmann::json(pypto::AnyCastRef<bool>(second));
                 } else if (second.type() == typeid(Element)) {
                     return ToJson(pypto::AnyCastRef<Element>(second));
+                } else if (second.type() == typeid(std::map<int, int>)) {
+                    nlohmann::json dict = nlohmann::json::object();
+                    auto inplaceInfo = pypto::AnyCast<std::map<int, int>>(second);
+                    for (const auto& [src, dst] : inplaceInfo) {
+                        dict[std::to_string(src)] = dst;
+                    }
+                    return dict;
                 } else {
                     return nlohmann::json("Unsupported type");
                 }

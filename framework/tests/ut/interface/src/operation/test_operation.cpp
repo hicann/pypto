@@ -133,3 +133,28 @@ TEST_F(OperationOpsTest, QuantMX_Fp32ToFp4Unsupported)
     }
     Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
 }
+
+TEST_F(OperationOpsTest, DumpAttr_PrintsInplaceInfoMap)
+{
+    Program::GetInstance().Reset();
+    Tensor self(DT_FP32, {2, 5});
+    Tensor indices(DT_INT64, {1, 4});
+
+    FUNCTION("DumpAttrScatterInplace", {self, indices})
+    {
+        TileShape::Current().SetVecTile(8, 8);
+        auto out = Scatter(self, indices, Element(DT_FP32, 2.0f), 0, ScatterMode::ADD);
+        (void)out;
+        auto* func = Program::GetInstance().GetCurrentFunction();
+        ASSERT_NE(func, nullptr);
+        ASSERT_EQ(func->GetOperationSize(), 1);
+        auto opDump = func->Operations(false).back().DumpAttr();
+        EXPECT_NE(opDump.find("#INPLACE_INFO{0:0}"), std::string::npos);
+        EXPECT_EQ(opDump.find("unsupported type"), std::string::npos);
+
+        auto opAttrJson = func->Operations(false).back().DumpAttrJson(OpAttributeKey::inplaceInfo);
+        ASSERT_TRUE(opAttrJson.is_object());
+        ASSERT_TRUE(opAttrJson.contains("0"));
+        EXPECT_EQ(opAttrJson["0"], 0);
+    }
+}
