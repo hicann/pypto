@@ -350,6 +350,13 @@ Status PassManager::RunPass(Program& program, Function& function, const std::str
     if (config::GetDebugOption<int64_t>(CFG_COMPILE_DBEUG_MODE) == CFG_DEBUG_ALL && pass != nullptr) {
         ExtractPassLogByFunction(function, strategyLogFolder);
     }
+    if (strategy == config::GetPassStrategy() && !strategyLogFolder.empty()) {
+        const std::string graphPath = config::LogTopFolder() + "/" + kComputationGraphFolder + "/" + strategyLogFolder;
+        const std::string realGraphPath = RealPath(graphPath);
+        if (!realGraphPath.empty()) {
+            config::SetRunDataOption(KEY_COMPUTE_GRAPH_PATH, realGraphPath);
+        }
+    }
     return SUCCESS;
 }
 
