@@ -142,7 +142,7 @@ npu-smi info
 
 > ⚠️ `npu-smi info` 在单机多卡场景下输出可能被截断，导致低估可用卡数。以 `torch_npu.npu.device_count()` 结果为准。
 
-使用空闲卡检测脚本（来自 `pypto-op-develop` skill 的 `scripts/list_idle_chip_ids.sh`）确定空闲 chip id。
+使用本 skill 的空闲卡检测脚本 `scripts/list_idle_chip_ids.sh` 确定空闲 chip id。
 
 #### 步骤 4.3：设置环境变量
 
