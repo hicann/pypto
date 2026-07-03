@@ -271,6 +271,7 @@ Tensor IndexAddUB(const Tensor& self, const Tensor& src, const Tensor& indices, 
     DataType selfDataType = self.GetDataType();
     Element alpha_ = Element(selfDataType, alpha.Cast<float>());
     Tensor result(selfDataType, self.GetShape());
+    result.GetStorage()->UpdateDynValidShape(self.GetStorage()->GetDynValidShape());
     CALL(
         IndexAddUB, *Program::GetInstance().GetCurrentFunction(),
         {self.GetStorage(), src.GetStorage(), indices.GetStorage(), result.GetStorage(), axis, alpha_});
@@ -857,6 +858,7 @@ Tensor Scatter(const Tensor& self, const Tensor& indices, const Element& src, in
     }
     axis = axis < 0 ? operandCast.GetShape().size() + axis : axis;
     Tensor result(operandCast.GetStorage()->Datatype(), operandCast.GetShape());
+    result.GetStorage()->UpdateDynValidShape(operandCast.GetStorage()->GetDynValidShape());
     CALL(
         ScatterElementS, *Program::GetInstance().GetCurrentFunction(),
         {result.GetStorage(), operandCast.GetStorage(), indices.GetStorage(), src, axis, static_cast<int>(reduce)});
@@ -1039,6 +1041,7 @@ Tensor Scatter(const Tensor& self, const Tensor& indices, const Tensor& src, int
     }
     axis = axis < 0 ? operandSelfCast.GetShape().size() + axis : axis;
     Tensor result(operandSelfCast.GetStorage()->Datatype(), operandSelfCast.GetShape());
+    result.GetStorage()->UpdateDynValidShape(operandSelfCast.GetStorage()->GetDynValidShape());
     CALL(
         Scatter, *Program::GetInstance().GetCurrentFunction(),
         {result.GetStorage(), operandSelfCast.GetStorage(), indices.GetStorage(), operandSrcCast.GetStorage(), axis,
