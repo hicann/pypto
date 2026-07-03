@@ -99,7 +99,7 @@ void DeviceRunner::SetHostProfFunction(Function* function, const std::vector<npu
 
 uint32_t DeviceRunner::GetHostProfType() const
 {
-    return hostProf_.GetProfType();
+    return (hostProf_.GetProfSwitch() & MSPF_TASK_TIME_L2_MASK) != 0;
 }
 
 void DeviceRunner::InitDevDfxArgs(const bool isPerfTrace, DevDfxArgs &devDfxArg)
