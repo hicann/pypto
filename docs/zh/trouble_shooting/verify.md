@@ -50,7 +50,7 @@
 ###### 精度工具skill
 
 对于在`tensor graph`阶段的精度问题，借助ai agent进行精度定位。
-当发现算子精度不对但不知道具体问题在哪，可以调用pypto-precision-compare技能，只需要向助手发送明确的指令“算子test_my_op.py精度验证失败了，请帮我使用算子精度问题查找技能定位是哪里有问题”，或者直接指定“使用pypto-precision-compare技能，定位test_my_op.py的精度问题”,就可以自动插入检查点，根据测试生成数据文件用对比脚本分析结果，得出出错的op。
+当发现算子精度不对但不知道具体问题在哪，可以调用[pypto-precision-compare](https://gitcode.com/cann/pypto-gym/blob/master/.agents/skills/pypto-precision-compare/SKILL.md)技能，只需要向助手发送明确的指令“算子test_my_op.py精度验证失败了，请帮我使用算子精度问题查找技能定位是哪里有问题”，或者直接指定“使用pypto-precision-compare技能，定位test_my_op.py的精度问题”,就可以自动插入检查点，根据测试生成数据文件用对比脚本分析结果，得出出错的op。
 
 ###### 精度工具自动比对脚本
 

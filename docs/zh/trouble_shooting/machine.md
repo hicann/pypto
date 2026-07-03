@@ -312,7 +312,7 @@ python3 tools/schema/schema_memory_check.py -d /path/to/my_log/debug/device-8/ -
 **关联Skill**：[pypto-memory-overlap-detector](../../../.agents/skills/pypto-memory-overlap-detector/SKILL.md)
 
 6. **复杂特性排除**：
-使用`pypto-precision-debug` skill，关闭unroll_list、合轴特性、配置submit_before_loop=True使loop串行执行、确定valid_shape配置正确性、+0.0等，缩小定位范围。
+使用[pypto-precision-debug](https://gitcode.com/cann/pypto-gym/blob/master/.agents/skills/pypto-precision-debug/SKILL.md) skill，关闭unroll_list、合轴特性、配置submit_before_loop=True使loop串行执行、确定valid_shape配置正确性、+0.0等，缩小定位范围。
 
 ---
 
