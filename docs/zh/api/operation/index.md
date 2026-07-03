@@ -19,6 +19,7 @@ pypto-assemble
 pypto-atan
 pypto-atan2
 pypto-atanh
+pypto-atomic_add
 pypto-axpy_
 pypto-bitwise_and
 pypto-bitwise_left_shift
