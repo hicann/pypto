@@ -25,9 +25,6 @@
 
 static constexpr size_t PASS_NUM_DIGITS = 2;
 namespace npu::tile_fwk {
-namespace {
-const char* kComputationGraphFolder = "computation_graph";
-}
 
 Pass::Pass(std::string name) : name_(std::move(name)) {}
 

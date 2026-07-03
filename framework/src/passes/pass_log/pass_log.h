@@ -25,6 +25,8 @@
 
 namespace npu::tile_fwk {
 
+constexpr const char* kComputationGraphFolder = "computation_graph";
+
 std::string GetFormatBacktrace(const Operation& op);
 
 std::string GetFormatBacktrace(const OperationPtr& op);

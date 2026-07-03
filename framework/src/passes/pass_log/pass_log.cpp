@@ -33,7 +33,6 @@ namespace npu::tile_fwk {
 namespace {
 const char* kExtractPassLogScriptName = "extract_pass_log.py";
 const char* kExtractPassLogScriptInSource = "tools/scripts/extract_pass_log.py";
-const char* kComputationGraphFolder = "computation_graph";
 constexpr size_t STRATEGY_NUM_DIGITS = 2;
 
 bool IsNumberedStrategyLogFolder(const std::string& strategy)
