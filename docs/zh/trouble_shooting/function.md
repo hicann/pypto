@@ -1,561 +1,208 @@
-# FUNCTION组件错误码
+# F20000 - F3FFFF
 
-- **范围**：F2-F3XXXX
-- 本文档说明FUNCTION组件的错误码定义、场景说明与排查建议。
+## F21001 INVALID_OPERATION
 
----
+**错误描述：**
 
-## 错误码定义与使用说明
+不允许的操作
 
-相关错误码的枚举与码值统一定义在`framework/include/tilefwk/error_code.h`。
-
-其中定义了以下错误码（`FeError`）：
-
-### 通用错误码（0x21001U - 0x2100AU）
-
-- **EINTERNAL (0x21001U)**：内部错误
-
-- **INVALID_OPERATION (0x21002U)**：不允许的操作
-
-- **INVALID_TYPE (0x21003U)**：错误的类型
-
-- **INVALID_VAL (0x21004U)**：无效的值
-
-- **INVALID_PTR (0x21005U)**：无效的指针
-
-- **OUT_OF_RANGE (0x21006U)**：参数超出范围
-
-- **IS_EXIST (0x21007U)**：参数/操作已存在
-
-- **NOT_EXIST (0x21008U)**：参数/操作不存在
-
-- **DYNAMIC_SHAPE_COMPUTE_UNSUPPORTED (0x21009U)**：不支持Shape为动态的Tensor直接参与计算
-
-- **OP_DEPENDENCY_CYCLE (0x2100AU)**：算子依赖图存在环，拓扑排序失败
-
-### 文件错误码（0x29001U - 0x29002U）
-
-- **BAD_FD (0x29001U)**：错误的文件描述符状态
-
-- **INVALID_FILE (0x29002U)**：无效的文件内容
-
-### 未知错误码
-
-- **UNKNOWN (0x3FFFFU)**：未知错误
-
----
-
-## 排查建议
-
-### 通用排查建议
-
-#### 1. 启用详细日志
-
-在遇到FUNCTION组件错误时，可以启用详细日志获取更多信息：
-
-```bash
-export ASCEND_GLOBAL_LOG_LEVEL=0 # Debug级别日志
-export ASCEND_PROCESS_LOG_PATH=./debug_logs # 指定日志落盘路径
-```
-
-#### 2. 开启图编译阶段调试模式开关
-
-Function作为前端，需要根据开发者用法/语法总结出上下文，提供给后续组件使用，比如计算图，当开发者的计算图出问题时，使用该调试开关，可查看Function Dump出来的program.json是否符合预期。开启方法请参考[查看计算图](../tutorials/introduction/quick_start.md#查看计算图)。
-
----
-
-## 错误码相关示例
-
-### EINTERNAL (0x21001U)
-
-**错误描述：**内部错误
-
-**出现原因：**
-
-- 系统内部发生无法预期的错误
-- 内部状态不一致
-
-**解决办法：**
-
-- 检查系统状态
-- 联系技术支持
-
----
-
-### INVALID_OPERATION (0x21002U)
-
-**错误描述：**不允许的操作
-
-**出现原因：**
+**可能原因：**
 
 - 尝试执行不被允许的操作
 - 如Tensor二次写入不同数据
 - 操作上下文不正确
 
-**解决办法：**
+**处理方式：**
 
 - 检查操作是否在正确的上下文中执行
 - 确保操作符合系统约束
 
-**错误用例：**
+## F21002 INVALID_TYPE
 
-```cpp
-// 错误示例- 禁止向有实际数据的Tensor进行不同Tensor的赋值
-Tensor lhs(DT_FP32, tshape, "lhs");
-Tensor rhs(DT_FP32, tshape, "rhs");
+**错误描述：**
 
-auto ptr1 = std::make_unique<uint8_t>(0);
-auto ptr2 = std::make_unique<uint8_t>(0);
+错误的类型
 
-lhs.SetData(ptr1.get());
-rhs.SetData(ptr2.get());
+**可能原因：**
 
-lhs = rhs;  // 错误使用，lhs里已存在实际Data
+- 入参类型不匹配
+- 使用了接口不支持的数据类型
 
-// 正确示例
-Tensor lhs(DT_FP32, tshape, "lhs");
-Tensor rhs(DT_FP32, tshape, "rhs");
+**处理方式：**
 
-auto ptr1 = std::make_unique<uint8_t>(0);
-auto ptr2 = std::make_unique<uint8_t>(0);
+- 检查传入参数的类型是否匹配
+- 使用接口支持的类型
 
-rhs.SetData(ptr2.get());
-lhs = rhs;
+## F21003 INVALID_VAL
 
-```
+**错误描述：**
 
-```python
-# 错误示例- 不在动态函数中
-def not_under_dynamic_function_example():
-    x = pypto.tensor([4, 4], pypto.DT_INT32)
-    y = x[0, 0]  # GetTensorData需要在动态函数中执行
-    return y
+无效的值
 
-# 正确示例
-@pypto.frontend.jit
-def correct_dynamic_function_example(x):
-    y = x[0, 0]  # GetTensorData在动态函数中执行
-    return y
-```
+**可能原因：**
 
----
+- 参数值(shape, offset等维数)不匹配，无法计算
+- 参数值不合法
 
-### INVALID_TYPE (0x21003U)
-
-**错误描述：**错误的类型
-
-**出现原因：**
-
-- 类型不匹配
-- 使用了不支持的数据类型
-
-**解决办法：**
-
-- 检查数据类型
-- 使用正确的类型
-
-**示例：**
-
-```python
-# 错误示例- 数据类型不匹配
-a = pypto.tensor((4, 4), pypto.DT_INT32)
-b = pypto.tensor((4, 4), pypto.DT_FP32)
-a[0, 0] = 1.3 # SetTensorData, supports only DT_INT32 tensors
-data = b[0, 0] # GetTensorData, supports only DT_INT32 tensors
-
-# 正确示例
-a = pypto.tensor((4, 4), pypto.DT_INT32)
-b = pypto.tensor((4, 4), pypto.DT_INT32)
-a[0, 0] = 1
-data = b[0, 0]
-```
-
----
-
-### INVALID_VAL (0x21004U)
-
-**错误描述：**无效的值
-
-**出现原因：**
-
-- 参数值(shape, offset等)不匹配
-- 参数值格式不正确
-
-**解决办法：**
+**处理方式：**
 
 - 检查参数格式
 - 使用有效的参数值
 
-**示例：**
+## F21004 INVALID_PTR
 
-```python
-# 错误示例- 无效形状
-x = pypto.tensor([-2, 4], pypto.DT_FP32)
+**错误描述：**
 
-# 正确示例
-x = pypto.tensor([-1, 4], pypto.DT_FP32)
-y = pypto.tensor([4, 4], pypto.DT_FP32)
-```
+无效的指针
 
-```python
-# 错误示例- shape, offset维度不一致
-x = pypto.tensor([8, 8, 16, 16], pypto.DT_FP32)
-# y = pypto.view(x, shape, offsets, valid_shape) offset和shape的维数不一致
-y = pypto.view(x, [16, 16, 8, 8], [0, 0, 0], [])
-
-# 正确示例
-y = pypto.view(x, [16, 16, 8, 8], [0, 0, 0, 0], [])
-```
-
-```python
-# 错误示例- shape, offset维度不一致
-x = pypto.tensor([8, 8, 16, 16], pypto.DT_FP32)
-# y = pypto.view(x, shape, offsets, valid_shape) offset和shape的维数不一致
-y = pypto.view(x, [16, 16, 8, 8], [0, 0, 0], [])
-# 且view目标shape必须与tensor(x)保持维数一致
-z = pypto.view(x, [16, 16, 64], [0, 0, 0, 0], [])
-
-# 正确示例
-y = pypto.view(x, [16, 16, 8, 8], [0, 0, 0, 0], [])
-```
-
-```python
-# 错误示例- offset
-x = pypto.tensor([8, 8, 16, 16], pypto.DT_FP32)
-# y = pypto.view(x, shape, offsets, valid_shape) offset和shape的维数不一致
-y = pypto.view(x, [16, 16, 8, 8], [0, 0, 0], [])
-
-# 正确示例
-y = pypto.view(x, [16, 16, 8, 8], [0, 0, 0, 0], [])
-```
-
-### DYNAMIC_SHAPE_COMPUTE_UNSUPPORTED (0x21009U)
-
-**错误描述：**不支持Shape为动态的Tensor直接参与计算
-
-**出现原因：**
-
-- 直接使用包含`pypto.DYNAMIC`维度的Tensor作为operation操作数
-- 未在`pypto.loop`中通过view切分出静态shape后再进行计算
-
-**解决办法：**
-
-- 对动态维度按固定view大小切分
-- 在`pypto.loop`中对切分后的静态shape Tensor进行计算表达
-
-**错误用例：**
-
-```python
-# 错误示例
-@pypto.frontend.jit
-def kernel_with_dynamic(
-    a: pypto.Tensor([pypto.DYNAMIC, ...]),
-    out: pypto.Tensor([pypto.DYNAMIC, ...]),
-):
-    pypto.set_vec_tile_shapes(16, 16)
-    # 用动态Shape的Tensor进行计算表达
-    out[:] = pypto.exp(a)
-
-# 正确示例
-@pypto.frontend.jit
-def kernel_with_dynamic(
-    a: pypto.Tensor([pypto.DYNAMIC, ...]),
-    out: pypto.Tensor([pypto.DYNAMIC, ...]),
-):
-    pypto.set_vec_tile_shapes(16, 16)
-    view = 32
-    # 在loop中view出静态shape后，再做计算
-    count = (a.shape[0] - 1 + view) // view
-    for idx in pypto.loop(count):
-        temp = a[idx: idx + view, :]
-        out[idx: idx + view, :] = pypto.exp(temp)
-```
-
----
-
-### OP_DEPENDENCY_CYCLE (0x2100AU)
-
-**错误描述：**算子依赖图存在环，`GetSortedOperations`拓扑排序失败
-
-**报错特征：**
-
-- 错误码：`F2100A`（`Enum: OP_DEPENDENCY_CYCLE`）
-- 附加信息通常包含`cycle detected:`及首个未消减出度的Operation dump
-- Python侧常见前缀：`Record loop function <name> failed`或`Record function <name> failed`
-- 堆栈常见：`Function::GetSortedOperations` → `SortOperations` → `EndFunction` / `EndHiddenLoop` → `RecordLoopFunc::IterationEnd`
-
-**根因：**
-
-同一JIT Function内，对**同一Tensor槽位**先**读**后**写**，依赖边首尾相接，图不再是DAG。
-
-- **读**：`view`、`where`/`matmul`等算子的输入、`x = op(..., x)`中对`x`的引用
-- **写**：`assemble`、`out[:] = ...`等写回同一槽位
-
-框架将Tensor视为整体节点，不区分局部切片；Python变量改名不改变槽位。
-
-**合法写法**：同一槽位可**先写后读**（例如`assemble`填满分块缓冲后，再一次性`op(..., buf)`），但**写完不得再写回该槽位**。
-
-**定位指导适用范围：**
-
-| 触发阶段 | 是否提供用户侧定位指导 |
-|----------|------------------------|
-| **进入Pass流水线之前**（如`EndFunction`内、`SortOperations()`之前） | **是**—用户构图问题，按下方步骤排查 |
-| **Pass执行之后**（堆栈含具体Pass名或`pass.cpp`） | **否**—联系技术支持 |
-
-#### 定位步骤
-
-1. **确定范围**：`Record loop function <name> failed`表示问题在该`pypto.loop`迭代体；否则在整个`@jit`函数体内。
-2. **找读点**：`cycle detected: /* <file>:<line> */`多为**读操作**所在行（如`VIEW`、`WHERE_ST`、`MATMUL`），不一定是写回行。
-3. **找写点**：从读点向**后**检查（含`buf = op(..., buf)`等同行读写），是否对**同一槽位**再有`assemble`或写回？存在「读 → 写回同一槽位」即命中根因。
-4. **验证**：修复后若仍报错但行号变化，说明还有另一处读后写，重复步骤2–3。
-
-#### 修复原则
-
-消除「对同一槽位先读后写」即可，常用做法：
-
-- **读写分槽**：读`buf_rd`，写`buf_wr`，结果落到第三个变量
-- **变换前置**：在`assemble`之前完成`where`等变换，写缓冲只assemble、不再被读取
-- **拆图**：读写无法分离时，拆成两个`@jit`函数（见 [已知问题：view+assemble](../tutorials/appendix/issue.md)）
-
-```python
-# 错误：先读后写同一槽位
-tile = pypto.view(buf, ...)           # 读buf
-pypto.assemble(result, [i, 0], buf)   # 写buf → 成环
-
-# 正确：先写后读，且不再写回
-for i in pypto.loop(M, name="i_loop", idx_name="i"):
-    pypto.assemble(tile, [i, 0], buf) # 只写buf
-out = pypto.mul(buf, scale)           # 只读buf，写入新张量
-```
-
-#### 深度定位（可选）
-
-源码中读后写关系不直观时，可Dump计算图JSON并用`computation_graph_analyzer.py --detect-op-cycle`找出环路径，再映射回读写点。详见[查看计算图](../tutorials/introduction/quick_start.md#查看计算图)与`pypto-pass-error-locator`。
-
----
-
-### INVALID_PTR (0x21005U)
-
-**错误描述：**无效的指针
-
-**出现原因：**
+**可能原因：**
 
 - 指针为空
 - 指针未正确初始化
 
-**解决办法：**
+**处理方式：**
 
 - 确保指针已正确初始化
-- 检查指针有效性
+- 使用前，检查指针有效性
 
-**示例：**
+## F21005 OUT_OF_RANGE
 
-```cpp
-// 错误示例- Tensor构造函数中storage_为nullptr
-Tensor tensor(nullptr);  // 触发FeError::INVALID_PTR错误
-```
+**错误描述：**
 
----
+参数超出范围
 
-### OUT_OF_RANGE (0x21006U)
-
-**错误描述：**参数超出范围
-
-**出现原因：**
+**可能原因：**
 
 - 索引超出范围
 - 参数值超出有效范围
 
-**解决办法：**
+**处理方式：**
 
-- 检查索引范围,使用有效的索引值
-- 使用有效的参数值
+- 检查索引范围，使用有效的索引值
+- 使用有效范围内的参数值
 
-**示例：**
+## F21006 IS_EXIST
 
-```python
-# 错误示例- 轴索引超出范围
-@pypto.frontend.jit
-def axis_out_of_range_example(x):
-    # x形状为 [4, 4]，但尝试访问轴2
-    return pypto.sum(x, axis=2)  # 轴2超出范围（有效轴为0, 1）
+**错误描述：**
 
-# 正确示例
-@pypto.frontend.jit
-def correct_axis_example(x):
-    # 访问有效的轴0或1
-    return pypto.sum(x, axis=0)  # 轴0在范围内
-```
+参数/操作已存在
 
-```python
-# 错误示例- 视图偏移不匹配
-@pypto.frontend.jit
-def view_offset_mismatch_example(x):
-    # x形状为 [8, 8]，但偏移 [10, 10] 超出范围
-    return pypto.view(x, [4, 4], offset=[10, 10])  # 偏移超出范围
-
-# 正确示例
-@pypto.frontend.jit
-def correct_view_offset_example(x):
-    # 偏移在有效范围内
-    return pypto.view(x, [4, 4], offset=[2, 2])  # 正确的偏移
-```
-
-```json
-// 错误- 配置值溢出
-// C++代码调用SetOptionsNg
-config::SetOptionsNg("runtime.device_sched_mode", 4);  // 超出范围 [0, 3]，会报错
-config::SetOptionsNg("runtime.stitch_function_max_num", 1025);  // 超出范围 [1, 1024]，会报错
-
-// tile_fwk_config_schema.json中定义了范围
-{
-    "properties": {
-        "runtime": {
-            "properties": {
-                "device_sched_mode": {
-                    "type": "integer",
-                    "minimum": 0,
-                    "maximum": 3
-                },
-                "stitch_function_max_num": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": 1024
-                }
-            }
-        }
-    }
-}
-```
-
----
-
-### IS_EXIST (0x21007U)
-
-**错误描述：**参数/操作已存在
-
-**出现原因：**
+**可能原因：**
 
 - 尝试创建已存在的对象
 - 对象名称重复
 
-**解决办法：**
+**处理方式：**
 
 - 检查对象是否已存在
 - 使用唯一的对象名称
 
-**示例：**
+## F21007 NOT_EXIST
 
-```python
-# 错误示例- loop的idx_name重复
-for b_idx in pypto.loop(b_scalar, name="LOOP_b", idx_name="b_idx"):
-    for s1_idx in pypto.loop(s1_scalar, name="LOOP_s1", idx_name="b_idx"):
-       ...
+**错误描述：**
 
-# 正确示例
-for b_idx in pypto.loop(b_scalar, name="LOOP_b", idx_name="b_idx"):
-    for s1_idx in pypto.loop(s1_scalar, name="LOOP_s1", idx_name="s1_idx"):
-       ...
-```
+参数/操作不存在
 
-```cpp
-// 错误示例- 函数名称重复
-// 在静态函数的子函数中使用与当前函数相同的名称
-auto &program = npu::tile_fwk::Program::GetInstance();
-// 创建一个静态函数
-std::string funcName = "test_function";
-program.BeginFunction(funcName, npu::tile_fwk::FunctionType::STATIC,
-                        npu::tile_fwk::GraphGraphType::TENSOR_GRAPH, {}, false);
-// 再次执行会触发CHECK断言，由于funcName重复
-// program.BeginFunction(funcName, npu::tile_fwk::FunctionType::STATIC,
-//                      npu::tile_fwk::GraphType::TENSOR_GRAPH, {}, false);
-```
-
----
-
-### NOT_EXIST (0x21008U)
-
-**错误描述：**参数/操作不存在
-
-**出现原因：**
+**可能原因：**
 
 - 访问不存在的对象
 - 对象未正确注册
 
-**解决办法：**
+**处理方式：**
 
 - 检查对象是否存在
 - 确保对象已正确注册
 
-**示例：**
+## F21008 DYNAMIC_SHAPE_COMPUTE_UNSUPPORTED
 
-```cpp
-// C++代码调用GetAnyConfig
-// 错误示例- 会导致"key[xx.no_exist] has been not loaded from tile_fwk_config_schema.json."错误
-auto &cm = ConfigManagerNg::GetInstance();
-auto scope = cm.CurrentScope();
-auto value = AnyCast<int64_t>(scope->GetAnyConfig("xx.no_exist"));
+**错误描述：**
 
-// 正确示例
-auto &cm = ConfigManagerNg::GetInstance();
-auto scope = cm.CurrentScope();
-// 获取的键值必须在tile_fwk_config.json文件中存在
-auto value = AnyCast<int64_t>(scope->GetAnyConfig("pass.pg_parallel_lower_bound"));
-```
+不支持Shape为动态的Tensor直接参与计算
 
-```json
-// 错误示例- 配置字段缺失
-// tile_fwk_config_schema.json中缺少'type'或'properties'字段
-{
-    "properties": {
-        "pg_parallel_lower_bound": {
-            // "type": "integer",
-            "label": "...",
-        }
-    }
-}
+**可能原因：**
 
-// 正确示例
-{
-    "properties": {
-        "pg_parallel_lower_bound": {
-            "type": "integer",
-            "label": "..."
-        }
-    }
-}
-```
+- 直接使用包含`pypto.DYNAMIC`维度的Tensor作为operation操作数
+- 未在`pypto.loop`中通过view切分出静态shape后再进行计算
 
----
+**处理方式：**
 
-### BAD_FD (0x29001U)
+- 对动态维度按固定view大小切分
+- 在`pypto.loop`中对切分后的静态shape Tensor进行计算表达
 
-**错误描述：**错误的文件描述符状态
+## F21009 OP_DEPENDENCY_CYCLE
 
-**出现原因：**
+**错误描述：**
+
+算子依赖图存在环，`GetSortedOperations`拓扑排序失败
+
+**可能原因：**
+
+- 同一JIT Function内，对**同一Tensor槽位**先**读**后**写回**（如先`view`/`where`等读取，再`assemble`把读取结果写回同一Tensor），导致依赖边首尾相接，图不再是DAG
+
+  ```python
+  # 错误示例 - 先读后写回同一槽位
+  tile = pypto.view(buf, ...)           # 读buf
+  pypto.assemble(tile, [i, 0], buf)     # 把tile写回buf → 成环
+  ```
+
+- Python变量改名不改变槽位，框架将Tensor视为整体节点，不区分局部切片
+
+**处理方式：**
+
+- **读写分槽**：读`buf_rd`，写`buf_wr`，结果落到第三个变量
+- **变换前置 / 不再写回**：在`assemble`之前完成`where`等变换；或先写后读，写缓冲只assemble、读后不再写回同一缓冲
+
+  ```python
+  # 正确示例 - 先写后读，且不再写回
+  for i in pypto.loop(M, name="i_loop", idx_name="i"):
+      pypto.assemble(tile, [i, 0], buf) # 只写buf
+  out = pypto.mul(buf, scale)           # 只读buf，写入新张量
+  ```
+
+- **拆图**：读写无法分离时，拆成两个`@jit`函数
+
+## F29001 BAD_FD
+
+**错误描述：**
+
+错误的文件描述符状态
+
+**可能原因：**
 
 - 文件描述符状态错误
 - 文件未正确打开或关闭
-- 文件不存在
-- 文件正在被使用
 
-**解决办法：**
+**处理方式：**
 
 - 检查文件描述符状态
 - 确保文件正确打开和关闭
 
----
+## F29002 INVALID_FILE
 
-### INVALID_FILE (0x29002U)
+**错误描述：**
 
-**错误描述：**无效的文件内容
+无效的文件内容
 
-**出现原因：**
+**可能原因：**
 
 - 文件内容格式错误
 - 文件内容不符合预期
 
-**解决办法：**
+**处理方式：**
 
 - 检查文件内容格式
 - 使用正确的文件内容
+
+## F3FFFF UNKNOWN
+
+**错误描述：**
+
+未知错误
+
+**可能原因：**
+
+- 错误原因未归类/无法归类
+
+**处理方式：**
+
+- 请访问社区提交[Issue](https://gitcode.com/cann/pypto/issues)。

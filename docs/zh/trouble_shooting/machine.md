@@ -535,18 +535,19 @@ Workspace的内存预算结构（定义于`dev_encode_program.h`）：
 ```cpp
 struct {
     struct {
-        uint64_t rootInner;                    // Root Function Inner Tensor内存
+        uint64_t rootInnerSpilledMem;           // Root Function Inner Tensor内存
         uint64_t devTaskInnerExclusiveOutcasts; // DeviceTask内部Exclusive Outcast内存
         uint64_t maxStaticOutcastMem;          // 最大静态Outcast单体大小
         uint64_t maxDynamicAssembleOutcastMem; // 最大动态Assemble Outcast单体大小
-        uint64_t devTaskBoundaryOutcastNum;    // Boundary Outcast slot数量
+        uint64_t devTaskBoundaryOutcastNum;    // Boundary Outcast slot数量（E×2+A×2）
+        uint64_t devTaskInnerTemporalOutcastNum; // Inner Temporal Outcast slot数量（A×K）
 
         uint64_t MaxOutcastMem() const {
             return std::max(maxStaticOutcastMem, maxDynamicAssembleOutcastMem);
         }
         uint64_t Total() const {
-            return rootInner + devTaskInnerExclusiveOutcasts +
-                   MaxOutcastMem() * devTaskBoundaryOutcastNum;
+            return rootInnerSpilledMem + devTaskInnerExclusiveOutcasts +
+                   MaxOutcastMem() * (devTaskBoundaryOutcastNum + devTaskInnerTemporalOutcastNum);
         }
     } tensor;
     uint64_t aicoreSpilled;
@@ -590,7 +591,8 @@ struct {
 
    ```txt
    [workspaceSize] Metadata=12062240, workspaceSize=599916544, tensor=592543744, aicoreSpillen=7372800, debug.DumpTensor=0, leafDumpWorkspace=0.
-   [workspaceSize] Tensor:rootInner=182452224, devTaskInnerOutCasts=29360128, slotted=6144x61964(slots).
+   [workspaceSize] Tensor:rootInnerSpilledMem=182452224, devTaskInnerOutCasts=29360128, slotted=12582912x1380(slots).
+   [workspaceSize] OutcastSlots: boundary=100, innerTemporal=1280.
    ```
 
    其中`workspaceSize`为总大小，`tensor`、`Metadata`、`aicoreSpillen`、`debug.DumpTensor`、`leafDumpWorkspace`为各子项。通过对比可快速确定哪个大类占用最多。
@@ -599,12 +601,18 @@ struct {
 
 3. **分析Tensor Workspace各项占比**：
 
-   Tensor日志格式`Tensor:rootInner=A, devTaskInnerOutCasts=B, slotted=CxD(slots)`中：
-   - `A` = `memBudget.tensor.rootInner`
+   Tensor日志格式 `Tensor:rootInnerSpilledMem=A, devTaskInnerOutCasts=B, slotted=CxD(slots)` 中：
+
+   - `A` = `memBudget.tensor.rootInnerSpilledMem`
    - `B` = `memBudget.tensor.devTaskInnerExclusiveOutcasts`
-   - `C` = `memBudget.tensor.MaxOutcastMem()`（单个Boundary Outcast最大大小）
-   - `D` = `memBudget.tensor.devTaskBoundaryOutcastNum`（slot数量）
-   - Boundary Outcast总内存 = C × D
+   - `C` = `memBudget.tensor.MaxOutcastMem()`（单个 slotted Outcast 最大大小）
+   - `D` = `devTaskBoundaryOutcastNum + devTaskInnerTemporalOutcastNum`（Boundary + Inner Temporal 总 slot 数）
+   - Slotted Outcast 总内存 = `C × D`
+
+   分项日志 `OutcastSlots: boundary=X, innerTemporal=Y`：
+
+   - `X` = `memBudget.tensor.devTaskBoundaryOutcastNum`（固定 boundary ping-pong，含 exclusive 与 assemble 的 `×2`）
+   - `Y` = `memBudget.tensor.devTaskInnerTemporalOutcastNum`（assemble 随 stitch 深度缩放部分）
 
    结合每个Root Function级别的日志进一步缩小范围：
 
@@ -615,20 +623,27 @@ struct {
 
    `MaxRootInnerMem`和`maxDevTaskInnerExclusiveOutcastMem`是**经过unroll和stitch膨胀后**的值。若多个Root Function中某一个的值远超其他，即为问题来源。
 
-   **情况一：rootInner / devTaskInnerOutCasts均匀偏大**
+   **情况一：rootInnerSpilledMem / devTaskInnerOutCasts均匀偏大**
 
-   先确认是否为`stitch_function_max_num`或`unroll_list`配置过大导致。内存膨胀关系大致为（近似，非精确公式）：
+   先确认是否为 `stitch_function_max_num` 或 `max_workspace_kb` 配置导致。内存膨胀关系（encode 按 root function 个数计量 k_eff，与 unrollTimes 无关）：
 
    ```txt
-   rootInner ≈ per_root_budget / unroll × WorkspaceRecyclePeriod
-   devTaskInnerOutCasts ≈ per_root_budget / unroll × EstimatedStitchingCount
+   rootInnerSpilledMem ≈ max_root(AlignUp(rootInnerTensorWsMemoryRequirement) × k_eff)
+   devTaskInnerOutCasts ≈ max_root(AlignUp(exclusiveOutcastWsMemoryRequirement) × k_eff)
+   k_eff = stitch_function_max_num（默认）或由 max_workspace_kb 反推后 cap 至 stitch_function_max_num
+   devTaskBoundaryOutcastNum = E×2 + A×2（boundary 池，不随 k_eff 缩放）
+   devTaskInnerTemporalOutcastNum = A × k_eff（innerTemporal 池）
+   # pool depth = min(k_eff, MAX_STITCH_FUNC_NUM)
+   runtimeOutcastPoolDepth = k_pool
+   runtimeOutcastPoolSize = totalSlot × (runtimeOutcastPoolDepth + 1) × parallelism
+   ctrlflow backup 容量 ≥ devTaskBoundaryOutcastNum + devTaskInnerTemporalOutcastNum
    ```
 
-   其中`WorkspaceRecyclePeriod ≈ stitch_function_max_num × MAX_UNROLL_TIMES`。可通过降低`stitch_function_max_num`或`unroll_list`在牺牲并行度的前提下降低内存。若单个loop的内存需求已经偏高（原始`rootInnerTensorWsMemoryRequirement`超过20MB），则需分析pass的内存复用策略及算子本身写法。
+   **情况二：Boundary Outcast 内存偏大（slotted 项中单体大小 C 异常大）**
 
-   **情况二：Boundary Outcast内存偏大（slotted项中单体大小C异常大）**
+   由于 Tiling 会将 Tensor 切至中等大小（如不超过 512×512），超大的 `MaxOutcastMem()` 通常意味着未经 Tiling 的超大 Tensor 进入了子图。常见原因包括 Inplace 操作、Fixed Address Tensor、shmemData 等例外 case。
 
-   由于Tiling会将Tensor切至中等大小（如不超过512×512），超大的`MaxOutcastMem()`通常意味着未经Tiling的超大Tensor进入了子图。常见原因包括Inplace操作、Fixed Address Tensor、shmemData等例外case，通常为框架未正确处理所致。此时需进一步找到具体的问题Tensor（见步骤4）。
+   若 `innerTemporal` 分项偏大，优先检查 `stitch_function_max_num` / `unroll_list` 配置；若 `boundary` 分项偏大，检查 exclusive/assemble outcast 类型数是否过多。
 
 4. **定位问题Tensor**：
 
@@ -652,15 +667,17 @@ struct {
 
    | 配置项 | 影响范围 | 说明 |
    |--------|----------|------|
-   | `stitch_function_max_num` | rootInner、devTaskInnerOutCasts、Boundary slot数 | 控制stitch并行数，直接影响WorkspaceRecyclePeriod和EstimatedStitchingCount |
-   | `unroll_list` / max_unroll | rootInner、devTaskInnerOutCasts | 控制loop展开次数，影响CalcUnrolledRootBudget |
+   | `stitch_function_max_num` | rootInnerSpilledMem、devTaskInnerOutCasts、innerTemporal slot 数、runtime submit 累计 unroll | encode 容量见 StitchUnitCapacity；runtime 按 unrollTimes 累加达到该配置后 submit |
+   | `max_workspace_kb` | k_eff、innerTemporal slot 数、runtimeOutcastCacheDepth | 内存驱动模式下二分反推 k_eff，boundary 池不变，innerTemporal 随 k_eff 缩减 |
+   | `unroll_list` / max_unroll | rootInnerSpilledMem、devTaskInnerOutCasts | 控制 loop 展开次数；encode 时按 unrollTimes 归一化为 per-stitch-unit 预算再乘 k_eff |
 
 注：
 
-- 动态shape场景下`maxStaticMemReq`为0（无法从符号shape推算静态大小），此类Tensor不会出现在超大Tensor的警告中
-- `aicoreSpilled`为AICore栈溢出到workspace的内存，若该项异常偏大，需检查算子的`stackWorkSpaceSize`
-- `debug.DumpTensor`和`leafDumpWorkspace`为调试模式下的额外内存开销，正常模式下为0
-**关联Skill**：[pypto-environment-setup](../../../.agents/skills/pypto-machine-workspace/SKILL.md)
+- 动态 shape 场景下 `maxStaticMemReq` 为 0（无法从符号 shape 推算静态大小），此类 Tensor 不会出现在超大 Tensor 的警告中
+- `aicoreSpilled` 为 AICore 栈溢出到 workspace 的内存，若该项异常偏大，需检查算子的 `stackWorkSpaceSize`
+- `debug.DumpTensor` 和 `leafDumpWorkspace` 为调试模式下的额外内存开销，正常模式下为 0
+
+**关联 Skill**：[pypto-environment-setup](../../../.agents/skills/pypto-machine-workspace/SKILL.md)
 
 ---
 
