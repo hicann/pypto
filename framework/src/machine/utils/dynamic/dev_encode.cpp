@@ -1265,40 +1265,46 @@ struct EncodeDevAscendFunctionInfo {
     {
         MACHINE_LOGD("Enter EncodeAnalysisOutCastConsumerByProducer: outcast magic=%d rawmagic=%d producerIdx=%d.",
                      o->magic, o->GetRawMagic(), producerIdx);
-        auto* producerOp = callList[static_cast<size_t>(producerIdx)];
-        if (!callOpSuccDict.count(producerOp)) {
-            MACHINE_LOGD("No succ ops for producerIdx=%d, early return.", producerIdx);
-            return;
-        }
-        auto& succOps = callOpSuccDict.at(producerOp);
-        MACHINE_LOGD("producerIdx=%d has %zu successor ops.", producerIdx, succOps.size());
-        for (auto* succOp : succOps) {
-            if (!callList.HasData(succOp)) {
-                MACHINE_LOGD("succOp not in callList, skip.");
+        std::vector<int> hubWorklist = {producerIdx};
+        for (size_t wi = 0; wi < hubWorklist.size(); ++wi) {
+            auto* nodeOp = callList[static_cast<size_t>(hubWorklist[wi])];
+            if (!callOpSuccDict.count(nodeOp)) {
+                MACHINE_LOGD("worklist[%zu]=%d has no succ ops, skip.", wi, hubWorklist[wi]);
                 continue;
             }
-            int succOpIdx = callList.GetIndex(succOp);
-            if (!outcastUseOpSet.insert(succOpIdx).second) {
-                MACHINE_LOGD("MATCH! succOpIdx %d duplicate, ignore.", succOpIdx);
-                continue;
-            }
-            auto callAttrSucc = dynamic_cast<CallOpAttribute*>(succOp->GetOpAttribute().get());
-            for (size_t k = 0; k < succOp->GetIOperands().size(); ++k) {
-                auto& iOperand = succOp->GetIOperands()[k];
-                if (o->tensor->rawmagic != iOperand->tensor->rawmagic) {
+            auto& succOps = callOpSuccDict.at(nodeOp);
+            MACHINE_LOGD("worklist[%zu]=%d has %zu successor ops.", wi, hubWorklist[wi], succOps.size());
+            for (auto* succOp : succOps) {
+                if (!callList.HasData(succOp)) {
+                    MACHINE_LOGD("succOp not in callList, skip.");
                     continue;
                 }
-                auto coaIndex = succOp->GetIOpAttrOffset(k) + COA_INDEX_DIM_BASE;
-                useList.emplace_back(succOpIdx, coaIndex, coaIndex + outcastOpAttr.dim, CellMatchOpType::READ);
-                MACHINE_LOGD("MATCH! consumerList.emplace_back succOpIdx=%d coaIndex=%d dim=%d iOprandIdx=%zu.",
-                    succOpIdx, coaIndex, outcastOpAttr.dim, k);
+                int succOpIdx = callList.GetIndex(succOp);
+                if (IsHubType(GetCoreType(succOp))) {
+                    hubWorklist.push_back(succOpIdx);
+                    continue;
+                }
+                if (!outcastUseOpSet.insert(succOpIdx).second) {
+                    MACHINE_LOGD("succOpIdx %d duplicate, ignore.", succOpIdx);
+                    continue;
+                }
+                auto callAttrSucc = dynamic_cast<CallOpAttribute*>(succOp->GetOpAttribute().get());
+                for (size_t k = 0; k < succOp->GetIOperands().size(); ++k) {
+                    auto& iOperand = succOp->GetIOperands()[k];
+                    if (o->tensor->rawmagic != iOperand->tensor->rawmagic) {
+                        continue;
+                    }
+                    auto coaIndex = succOp->GetIOpAttrOffset(k) + COA_INDEX_DIM_BASE;
+                    useList.emplace_back(succOpIdx, coaIndex, coaIndex + outcastOpAttr.dim, CellMatchOpType::READ);
+                    MACHINE_LOGD("MATCH! consumerList.emplace_back succOpIdx=%d coaIndex=%d dim=%d iOprandIdx=%zu.",
+                        succOpIdx, coaIndex, outcastOpAttr.dim, k);
 
-                auto shape = callAttrSucc->GetLinearImmediateArgList(coaIndex + outcastOpAttr.dim, coaIndex + outcastOpAttr.dim * 0x2, false);
-                UpdateCellMatchShape(outcastOpAttr.cellMatchTableDesc, shape);
-                MACHINE_LOGD(
-                    "Minimal shape for outcast %d rawtensor magic %d consumer op %d %d is %s.\n", o->magic,
-                    o->GetRawMagic(), succOpIdx, succOp->GetOpMagic(),
-                    IntVecToStr(ShapeToVector(outcastOpAttr.cellMatchTableDesc.cellShape)).c_str());
+                    auto shape = callAttrSucc->GetLinearImmediateArgList(coaIndex + outcastOpAttr.dim, coaIndex + outcastOpAttr.dim * 0x2, false);
+                    UpdateCellMatchShape(outcastOpAttr.cellMatchTableDesc, shape);
+                    MACHINE_LOGD("Minimal shape for outcast %d rawtensor magic %d consumer op %d %d is %s.\n", o->magic,
+                        o->GetRawMagic(), succOpIdx, succOp->GetOpMagic(),
+                        IntVecToStr(ShapeToVector(outcastOpAttr.cellMatchTableDesc.cellShape)).c_str());
+                }
             }
         }
     }
