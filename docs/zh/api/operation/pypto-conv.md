@@ -26,7 +26,7 @@ conv(input_conv, weight, out_dtype, strides, paddings, dilations, *, groups=1, t
 | 参数名            | 输入/输出 | 说明                                                                 |
 |-------------------|-----------|----------------------------------------------------------------------|
 | input_conv       | 输入      | 输入特征图Tensor。<br>不支持空Tensor。<br>支持维度：3D（1D conv）、4D（2D conv）、5D（3D conv）。<br>支持格式：NCL、NCHW、NCDHW。<br>支持数据类型：DT_FP16、DT_BF16、DT_FP32。<br>shape约束：各维度取值范围 [1, 1000000]。input_conv的cin需满足：weight的cin * groups = input_conv的cin。 |
-| weight            | 输入      | 卷积核Tensor。<br>维度必须与input_conv一致（3D/4D/5D）。<br>数据类型必须与input_conv一致。<br>shape约束：各维度取值范围 [1, 1000000]。（注意：对于Atlas A2/A3 训练系列产品/Atlas A2/A3 推理系列产品，weight的N轴（cout）除以groups后必须为C0的整数倍，如果配置cout动态轴切分，那么切分后的cout除以groups后也必须为C0的整数倍。） |
+| weight            | 输入      | 卷积核Tensor。<br>维度必须与input_conv一致（3D/4D/5D）。<br>数据类型必须与input_conv一致。<br>shape约束：各维度取值范围 [1, 1000000]。不同型号存在额外约束，详细请参见[约束说明](#约束说明)。 |
 | out_dtype         | 输入      | 输出Tensor数据类型。<br>支持：DT_FP16、DT_BF16、DT_FP32。<br>必须与input_conv一致；fixpipe量化场景可单独指定。 |
 | strides           | 输入      | 卷积步长，单向参数。<br>- 1D（1D conv）<br>- 2D（2D conv）<br>- 3D（3D conv）<br>取值范围：[1, 63]。 |
 | paddings          | 输入      | 卷积填充，双向参数。<br>- 2D（1D conv）<br>- 4D（2D conv）<br>- 6D（3D conv）<br>取值范围：[0, 255]，且每维填充值 < 对应卷积核大小。 |
@@ -34,7 +34,7 @@ conv(input_conv, weight, out_dtype, strides, paddings, dilations, *, groups=1, t
 | groups            | 输入      | 分组卷积组数，默认1。<br>取值范围：[1, 65535]。<br>Cin、Cout必须可被groups整除。 |
 | transposed        | 输入      | 是否为转置卷积（反卷积），默认False。<br>当前暂不支持True。 |
 | output_paddings   | 输入      | 转置卷积输出端填充，仅transposed=True时使用。<br>当前暂不支持。 |
-| extend_params     | 输入      | 扩展参数字典，支持bias、scale、relu、scale_tensor：<br>- bias_tensor：可选的偏置张量，形状为(C_out,)，仅支持ND格式，bias的数据类型必须与input_conv一致（注意：对于Atlas A2/A3 训练系列产品/Atlas A2/A3 推理系列产品，若input_conv的数据类型为DT_BF16，则bias的数据类型应为DT_FP32）。<br>- scale：浮点型，per-tensor缩放因子。<br>- scale_tensor：uint64类型per-channel缩放Tensor，shape [1, Cout]，仅ND格式。<br>- relu_type：激活类型，支持RELU/NO_RELU等。 |
+| extend_params     | 输入      | 扩展参数字典，支持bias、scale、relu、scale_tensor：<br>- bias_tensor：可选的偏置张量，形状为(C_out,)，仅支持ND格式，bias的数据类型必须与input_conv一致。不同型号存在额外约束，详细请参见[约束说明](#约束说明)。<br>- scale：浮点型，per-tensor缩放因子。<br>- scale_tensor：uint64类型per-channel缩放Tensor，shape [1, Cout]，仅ND格式。<br>- relu_type：激活类型，支持RELU/NO_RELU等。 |
 
 ## 返回值说明
 
@@ -73,6 +73,9 @@ conv(input_conv, weight, out_dtype, strides, paddings, dilations, *, groups=1, t
   - Cin（输入通道数）必须能被groups整除；
   - Cout（输出通道数）必须能被groups整除；
   - CinFmap = CinWeight × groups。
+- 产品特定约束：
+  - Atlas A3 训练系列产品/Atlas A3 推理系列产品：weight的N轴（cout）除以groups后必须为C0的整数倍（C0 = ALIGN_SIZE_32 / sizeof(dtype)，ALIGN_SIZE_32 = 32）；如果配置cout动态轴切分，切分后的cout除以groups后也必须为C0的整数倍。若input_conv的数据类型为DT_BF16，则bias的数据类型应为DT_FP32。
+  - Atlas A2 训练系列产品/Atlas A2 推理系列产品：weight的N轴（cout）除以groups后必须为C0的整数倍（C0 = ALIGN_SIZE_32 / sizeof(dtype)，ALIGN_SIZE_32 = 32）；如果配置cout动态轴切分，切分后的cout除以groups后也必须为C0的整数倍。若input_conv的数据类型为DT_BF16，则bias的数据类型应为DT_FP32。
 
 ### 3. 缓存空间约束
 
@@ -98,14 +101,18 @@ conv(input_conv, weight, out_dtype, strides, paddings, dilations, *, groups=1, t
 | Cin        |    ×     | -       | Cin维度暂不支持动态轴切分，请使用set_conv_tile_shapes()进行k的tile切分实现                   |
 
 **注意：**
-- Atlas A2/A3 训练系列产品/Atlas A2/A3 推理系列产品的 1D 卷积，设置vec_tile_shapes为：{n, c, w}，其中, n为16整数倍，c为C0整数倍，C0 = ALIGN_SIZE_32 / sizeof(dtype)，ALIGN_SIZE_32 = 32，w为32B对齐。
-- Atlas A2/A3 训练系列产品/Atlas A2/A3 推理系列产品的 2D 卷积，设置vec_tile_shapes为：{n, c, h, w}，其中, n为16整数倍，c为C0整数倍，C0同上，w为32B对齐。
-- Atlas A2/A3 训练系列产品/Atlas A2/A3 推理系列产品的 3D 卷积，设置vec_tile_shapes为：{n, c, d, h, w}，其中, n为16整数倍，c为C0整数倍，C0同上，w为32B对齐。
+- Atlas A3 训练系列产品/Atlas A3 推理系列产品的 1D 卷积，设置vec_tile_shapes为：{n, c, w}，其中, n为16整数倍，c为C0整数倍，C0 = ALIGN_SIZE_32 / sizeof(dtype)，ALIGN_SIZE_32 = 32，w为32B对齐。
+- Atlas A3 训练系列产品/Atlas A3 推理系列产品的 2D 卷积，设置vec_tile_shapes为：{n, c, h, w}，其中, n为16整数倍，c为C0整数倍，C0同上，w为32B对齐。
+- Atlas A3 训练系列产品/Atlas A3 推理系列产品的 3D 卷积，设置vec_tile_shapes为：{n, c, d, h, w}，其中, n为16整数倍，c为C0整数倍，C0同上，w为32B对齐。
+- Atlas A2 训练系列产品/Atlas A2 推理系列产品的 1D 卷积，设置vec_tile_shapes为：{n, c, w}，其中, n为16整数倍，c为C0整数倍，C0 = ALIGN_SIZE_32 / sizeof(dtype)，ALIGN_SIZE_32 = 32，w为32B对齐。
+- Atlas A2 训练系列产品/Atlas A2 推理系列产品的 2D 卷积，设置vec_tile_shapes为：{n, c, h, w}，其中, n为16整数倍，c为C0整数倍，C0同上，w为32B对齐。
+- Atlas A2 训练系列产品/Atlas A2 推理系列产品的 3D 卷积，设置vec_tile_shapes为：{n, c, d, h, w}，其中, n为16整数倍，c为C0整数倍，C0同上，w为32B对齐。
 
 ### 6. 数据类型约束
 
 - Ascend 950PR产品支持的数据类型为：DT_FP16、DT_BF16、DT_FP32。input、weight、bias和output的数据类型需要相同。
-- Atlas A2/A3 训练系列产品/Atlas A2/A3 推理系列产品支持的数据类型为：DT_FP16、DT_BF16、DT_FP32。对于DT_FP16和DT_FP32类型，input、weight、bias和output的数据类型需要相同；对于DT_BF16类型，input、weight和output为BF16类型，bias需为DT_FP32类型。
+- Atlas A3 训练系列产品/Atlas A3 推理系列产品支持的数据类型为：DT_FP16、DT_BF16、DT_FP32。对于DT_FP16和DT_FP32类型，input、weight、bias和output的数据类型需要相同；对于DT_BF16类型，input、weight和output为BF16类型，bias需为DT_FP32类型。
+- Atlas A2 训练系列产品/Atlas A2 推理系列产品支持的数据类型为：DT_FP16、DT_BF16、DT_FP32。对于DT_FP16和DT_FP32类型，input、weight、bias和output的数据类型需要相同；对于DT_BF16类型，input、weight和output为BF16类型，bias需为DT_FP32类型。
 
 ## 调用示例
 
