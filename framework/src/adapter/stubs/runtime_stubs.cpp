@@ -38,7 +38,7 @@ RtError StubMalloc(void** devPtr, uint64_t size, RtMemType type, const uint16_t 
 
 RtError StubMemset(void* devPtr, uint64_t destMax, uint32_t val, uint64_t cnt)
 {
-    ADAPTER_LOGD("Enter stub function of Memset.");
+    ADAPTER_LOGD("Enter stub function of rtMemset.");
     (void)devPtr;
     (void)destMax;
     (void)val;

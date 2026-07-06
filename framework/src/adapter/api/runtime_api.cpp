@@ -44,7 +44,7 @@ RtError RuntimeMalloc(void **devPtr, uint64_t size, RtMemType type, const uint16
 RtError RuntimeMemset(void *devPtr, uint64_t destMax, uint32_t val, uint64_t cnt)
 {
 #ifdef BUILD_WITH_CANN
-    void *func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::Memset);
+    void *func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::rtMemset);
     if (func != nullptr) {
         rtError_t(*runtimeFunc)(void*, uint64_t, uint32_t, uint64_t) =
             reinterpret_cast<rtError_t(*)(void*, uint64_t, uint32_t, uint64_t)>(func);
