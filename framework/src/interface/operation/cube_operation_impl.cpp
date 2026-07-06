@@ -966,8 +966,11 @@ LogicalTensorPtr LinkTensorA(
             NodeType::LOCAL, tensorGraphNodes.aTensorPtr->Format(),   MemoryType::MEM_L1};
         // 根据是否使用了MXScale标志来决定Padding模式
         int64_t paddingMode = attrParam.hasMXScale ? static_cast<int64_t>(PaddingMode::MX_PADDING_MODE) : 0;
-        aL1TensorPtr = AddOpView<int64_t>(
-            function, tensorGraphNodes.aTensorPtr, aL1TensorInfo, {{COPY_IN_L1_PADDING_MODE, paddingMode}});
+        // K维度在dynValidShape中的索引：transA时K在第0维，非transA时K在第1维
+        int64_t kIndex = attrParam.transA ? 0 : 1;
+        aL1TensorPtr = AddOpView<int64_t, int64_t>(
+            function, tensorGraphNodes.aTensorPtr, aL1TensorInfo, {{COPY_IN_L1_PADDING_MODE, paddingMode},
+            {COPY_IN_L1_K_INDEX, kIndex}});
     }
     std::vector<int64_t> aL0Shape = (attrParam.transA) ? std::vector<int64_t>{iterInfo.kL0Size, iterInfo.mL0Size} :
                                                          std::vector<int64_t>{iterInfo.mL0Size, iterInfo.kL0Size};
@@ -1006,8 +1009,11 @@ LogicalTensorPtr LinkTensorB(
             NodeType::LOCAL, tensorGraphNodes.bTensorPtr->Format(),   MemoryType::MEM_L1};
         // 根据是否使用了MXScale标志来决定Padding模式
         int64_t paddingMode = attrParam.hasMXScale ? static_cast<int64_t>(PaddingMode::MX_PADDING_MODE) : 0;
-        bL1TensorPtr = AddOpView<int64_t>(
-            function, tensorGraphNodes.bTensorPtr, bL1TensorInfo, {{COPY_IN_L1_PADDING_MODE, paddingMode}});
+        // K维度在dynValidShape中的索引：transB时K在第1维，非transB时K在第0维
+        int64_t kIndex = attrParam.transB ? 1 : 0;
+        bL1TensorPtr = AddOpView<int64_t, int64_t>(
+            function, tensorGraphNodes.bTensorPtr, bL1TensorInfo, {{COPY_IN_L1_PADDING_MODE, paddingMode}, 
+            {COPY_IN_L1_K_INDEX, kIndex}});
     }
     std::vector<int64_t> bL0Shape = (attrParam.transB) ? std::vector<int64_t>{iterInfo.nL0Size, iterInfo.kL0Size} :
                                                          std::vector<int64_t>{iterInfo.kL0Size, iterInfo.nL0Size};

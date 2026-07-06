@@ -18,8 +18,24 @@
 
 #include "../cube_utils.h"
 
+namespace {
 template <
-    bool isZeroC, typename TileRes, typename TileLeft, typename TileLeftScale, typename TileRight,
+    typename TileL0C, typename TileL0A, typename TileL0AScale, typename TileL0B, typename TileL0BScale,
+    typename TileC, typename TileA, typename TileAScale, typename TileB, typename TileBScale>
+INLINE void AssignTensorAddresses(
+    TileL0C& l0c, TileL0A& l0a, TileL0AScale& l0aScale, TileL0B& l0b, TileL0BScale& l0bScale,
+    TileC& c, TileA& a, TileAScale& aScale, TileB& b, TileBScale& bScale)
+{
+    pto::TASSIGN(l0a, static_cast<uint64_t>(a.GetAddr()));
+    pto::TASSIGN(l0aScale, static_cast<uint64_t>(aScale.GetAddr()));
+    pto::TASSIGN(l0b, static_cast<uint64_t>(b.GetAddr()));
+    pto::TASSIGN(l0bScale, static_cast<uint64_t>(bScale.GetAddr()));
+    pto::TASSIGN(l0c, static_cast<uint64_t>(c.GetAddr()));
+}
+} // namespace
+
+template <
+    bool initMatrixC, typename TileRes, typename TileLeft, typename TileLeftScale, typename TileRight,
     typename TileRightScale>
 INLINE void MatmulMXImpl(TileRes& c, TileLeft& a, TileLeftScale& aScale, TileRight& b, TileRightScale& bScale)
 {
@@ -27,7 +43,9 @@ INLINE void MatmulMXImpl(TileRes& c, TileLeft& a, TileLeftScale& aScale, TileRig
     int64_t validK = GetShape<1>(a);
     int64_t validN = GetShape<1>(b);
     int64_t validScaleK = GetShape<1>(aScale) * SHAPE_DIM2;
-    if (validM == 0 || validK == 0 || validN == 0 || validScaleK == 0) {
+    // validK=0场景特殊处理：
+    // AMULB需要做MAD产生全0矩阵，AMULACCB跳过MAD
+    if (validM == 0 || validN == 0 || (validK == 0 && !initMatrixC)) {
         return;
     }
     constexpr uint64_t shapeSizeC = Std::tuple_size<typename TileRes::Shape>::value;
@@ -45,6 +63,11 @@ INLINE void MatmulMXImpl(TileRes& c, TileLeft& a, TileLeftScale& aScale, TileRig
         Std::tuple_element<shapeSizeBScale - SHAPE_DIM3, typename TileRightScale::TileShape>::type::value;
     constexpr auto staticL0CH = Std::tuple_element<shapeSizeC - SHAPE_DIM2, typename TileRes::TileShape>::type::value;
     constexpr auto staticL0CW = Std::tuple_element<shapeSizeC - 1, typename TileRes::TileShape>::type::value;
+    // validK=0或者validScaleK=0且A_MUL_B模式：使用静态K大小，配合全零L1数据产生正确输出
+    if (validK == 0 && initMatrixC) {
+        validK = staticL0AW;
+        validScaleK = staticL0AScaleW * SHAPE_DIM2;
+    }
     using tileL0CTensor = pto::TileAcc<typename TileRes::Type, staticL0CH, staticL0CW, -1, -1>;
     using tileL0ATensor = pto::TileLeft<typename TileLeft::Type, staticL0AH, staticL0AW, -1, -1>;
     using tileL0AScaleTensor =
@@ -59,13 +82,9 @@ INLINE void MatmulMXImpl(TileRes& c, TileLeft& a, TileLeftScale& aScale, TileRig
     tileL0BTensor l0b(validK, validN);
     tileL0BScaleTensor l0bScale(validScaleK, validN);
     tileL0CTensor l0c(validM, validN);
-    pto::TASSIGN(l0a, static_cast<uint64_t>(a.GetAddr()));
-    pto::TASSIGN(l0aScale, static_cast<uint64_t>(aScale.GetAddr()));
-    pto::TASSIGN(l0b, static_cast<uint64_t>(b.GetAddr()));
-    pto::TASSIGN(l0bScale, static_cast<uint64_t>(bScale.GetAddr()));
-    pto::TASSIGN(l0c, static_cast<uint64_t>(c.GetAddr()));
+    AssignTensorAddresses(l0c, l0a, l0aScale, l0b, l0bScale, c, a, aScale, b, bScale);
 #ifndef __LITE_NPU
-    if constexpr (!isZeroC) {
+    if constexpr (initMatrixC) {
         pto::TMATMUL_MX(l0c, l0a, l0aScale, l0b, l0bScale);
     } else {
         pto::TMATMUL_MX(l0c, l0c, l0a, l0aScale, l0b, l0bScale);
@@ -83,7 +102,7 @@ INLINE void MatmulMXImpl(
     int64_t validK = GetShape<1>(a);
     int64_t validScaleK = GetShape<1>(aScale) * SHAPE_DIM2;
     int64_t validN = GetShape<1>(b);
-    if (validM == 0 || validK == 0 || validN == 0 || validScaleK == 0) {
+    if (validM == 0 || validN == 0 || validK == 0) {
         return;
     }
     constexpr uint64_t shapeSizeC = Std::tuple_size<typename TileRes::Shape>::value;
@@ -118,11 +137,7 @@ INLINE void MatmulMXImpl(
     tileL0BScaleTensor l0bScale(validScaleK, validN);
     tileL0CTensor l0c(validM, validN);
     tileBiasTensor biasT(1, validM);
-    pto::TASSIGN(l0a, static_cast<uint64_t>(a.GetAddr()));
-    pto::TASSIGN(l0aScale, static_cast<uint64_t>(aScale.GetAddr()));
-    pto::TASSIGN(l0b, static_cast<uint64_t>(b.GetAddr()));
-    pto::TASSIGN(l0bScale, static_cast<uint64_t>(bScale.GetAddr()));
-    pto::TASSIGN(l0c, static_cast<uint64_t>(c.GetAddr()));
+    AssignTensorAddresses(l0c, l0a, l0aScale, l0b, l0bScale, c, a, aScale, b, bScale);
     pto::TASSIGN(biasT, static_cast<uint64_t>(bias.GetAddr()));
 #ifndef __LITE_NPU
     pto::TMATMUL_MX(l0c, l0a, l0aScale, l0b, l0bScale, biasT);

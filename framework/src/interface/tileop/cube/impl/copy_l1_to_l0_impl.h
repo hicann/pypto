@@ -31,12 +31,18 @@ INLINE void TExtractL1ToL0Impl(DstTileData& dst, SrcTileData& src, const int64_t
     int64_t srcShape0 = GetShape<0>(src);
     int64_t srcShape1 = GetShape<1>(src);
     // MX Matmul场景，L0的k轴需要保证64对齐，非对齐输入场景需要对validshapeK对齐到64
-    if constexpr(isMX) {
-        if constexpr (DstTileData::FORMAT == Hardware::L0A) {
+    if constexpr (DstTileData::FORMAT == Hardware::L0A) {
+        if constexpr (isMX) {
             dstShape1 = (dstShape1 + MX_BLOCK_ALIGN_BYTE - 1) / MX_BLOCK_ALIGN_BYTE * MX_BLOCK_ALIGN_BYTE;
-        } else {
+        }
+        // validK=0场景下，L1已预填充零数据，L0A使用staticL0W（静态tile大小）保证计算结果为全零
+        dstShape1 = dstShape1 == 0 ? staticL0W : dstShape1;
+    } else {
+        if constexpr (isMX) {
             dstShape0 = (dstShape0 + MX_BLOCK_ALIGN_BYTE - 1) / MX_BLOCK_ALIGN_BYTE * MX_BLOCK_ALIGN_BYTE;
         }
+        // L0B同理，validK=0场景下使用staticL0W保证计算结果为全零
+        dstShape0 = dstShape0 == 0 ? staticL0H : dstShape0;
     }
     // L1 Tile内模板参数对应含义：
     // Tile类型为Cube用于Matmul，矩阵数据类型，TileShape0，TileShape1，大分型RowMajor表明Z，ColMajor表明N,

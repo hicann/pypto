@@ -20,7 +20,7 @@
 
 namespace npu::tile_fwk {
 std::string CodeGenOpNPU::PrintMatmulTileTensor(
-    bool isAcc, std::unordered_map<OperandType, std::string>& tensorWithMemType) const
+    bool zeroC, std::unordered_map<OperandType, std::string>& tensorWithMemType) const
 {
     std::ostringstream oss;
     bool hasBias = tensorWithMemType.count(OperandType::BUF_BT);
@@ -46,12 +46,12 @@ std::string CodeGenOpNPU::PrintMatmulTileTensor(
         oss << WrapParamByParentheses(paramList) << ";\n";
         return oss.str();
     }
-    oss << WrapParamByAngleBrackets({std::to_string(isAcc), transModeStr, std::to_string(kAlignFlag)});
+    oss << WrapParamByAngleBrackets({std::to_string(zeroC), transModeStr, std::to_string(kAlignFlag)});
     oss << WrapParamByParentheses(paramList) << ";\n";
     return oss.str();
 }
 
-std::string CodeGenOpNPU::PrintMatmulTileTensor(bool isAcc) const
+std::string CodeGenOpNPU::PrintMatmulTileTensor(bool zeroC) const
 {
     std::unordered_map<OperandType, std::string> tensorWithMemType;
     for (int i = 0; i < operandCnt; i++) {
@@ -60,7 +60,7 @@ std::string CodeGenOpNPU::PrintMatmulTileTensor(bool isAcc) const
     bool hasBias = tensorWithMemType.count(OperandType::BUF_BT);
     bool isMXMad = tensorWithMemType.count(OperandType::BUF_L0AMX) || tensorWithMemType.count(OperandType::BUF_L0BMX);
     if (!isMXMad) {
-        return PrintMatmulTileTensor(isAcc, tensorWithMemType);
+        return PrintMatmulTileTensor(zeroC, tensorWithMemType);
     }
     std::ostringstream oss;
     std::vector<std::string> mxParamList = {
@@ -73,7 +73,7 @@ std::string CodeGenOpNPU::PrintMatmulTileTensor(bool isAcc) const
         oss << WrapParamByParentheses(mxParamList) << ";\n";
         return oss.str();
     }
-    oss << WrapParamByAngleBrackets({std::to_string(isAcc)});
+    oss << WrapParamByAngleBrackets({std::to_string(zeroC)});
     oss << WrapParamByParentheses(mxParamList) << ";\n";
     return oss.str();
 }
@@ -81,7 +81,7 @@ std::string CodeGenOpNPU::PrintMatmulTileTensor(bool isAcc) const
 std::string CodeGenOpNPU::GenCubeOp(bool zeroC) const
 {
     if (isSupportTileTensor) {
-        return PrintMatmulTileTensor(!zeroC);
+        return PrintMatmulTileTensor(zeroC);
     }
 
     unsigned uf = 0;

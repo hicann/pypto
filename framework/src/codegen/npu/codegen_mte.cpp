@@ -745,13 +745,17 @@ std::string CodeGenOpNPU::PrintMemCopyWithL1TileTensor(const PrintMemCopyWithL1P
 std::string CodeGenOpNPU::PrintMemCopyInWithL1TileTensor(const PrintMemCopyWithL1Param& param) const
 {
     std::vector<std::string> tileOpParamList = GenTileOpParamForNormalCopyTileTensor(param.gmIdx);
-
+    std::string kIndex = "-1";
     if (opCode == Opcode::OP_L1_COPY_IN) {
         std::vector<int64_t> dstOffset = offset[ID0];
         std::string coordCp = WrapParamByParentheses(dstOffset);
         std::string coord = PrintCoord(rawShape[ID0].size(), coordCp);
         tileOpParamList.insert(tileOpParamList.end() - 1, coord);
         auto [outerValueStr, innerValueStr] = GetOuterInnerValueStr(param.gmIdx, param.gmShape, param.isSpillingToGM);
+        // 获取 K 维度在 dynValidShape 中的索引（0 或 1）
+        int64_t kIndexNum = -1;
+        GetOpAttr(OP_ATTR_PREFIX + "copy_in_l1_k_index", kIndexNum);
+        kIndex = std::to_string(kIndexNum);
         tileOpParamList.insert(tileOpParamList.end(), {outerValueStr, innerValueStr});
     }
 
@@ -778,8 +782,8 @@ std::string CodeGenOpNPU::PrintMemCopyInWithL1TileTensor(const PrintMemCopyWithL
         oss << tileOpName << WrapParamByAngleBrackets({cpModeStr}) << WrapParamByParentheses(tileOpParamList)
             << STMT_END;
     } else {
-        oss << tileOpName << WrapParamByAngleBrackets({cpModeStr, padModStr}) << WrapParamByParentheses(tileOpParamList)
-            << STMT_END;
+        oss << tileOpName << WrapParamByAngleBrackets({cpModeStr, padModStr, kIndex})
+            << WrapParamByParentheses(tileOpParamList) << STMT_END;
     }
     return oss.str();
 }
