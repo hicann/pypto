@@ -255,7 +255,6 @@ bool AssignMemoryType::IsReshapeCubeToVecL0C2UBPattern(Operation& op)
             !isProducerProducerCube.empty() &&
             std::all_of(
                 isProducerProducerCube.begin(), isProducerProducerCube.end(), [](bool val) { return val == true; });
-
         if (!isProducerAssemble || !isProducerProducerAllCube) {
             isL0C2UBPattern = false;
         }
@@ -275,7 +274,6 @@ bool AssignMemoryType::IsReshapeCubeToVecL0C2UBPattern(Operation& op)
             !isConsumerConsumerVector.empty() &&
             std::all_of(
                 isConsumerConsumerVector.begin(), isConsumerConsumerVector.end(), [](bool val) { return val == true; });
-
         if (!isConsumerViewAssemble || !isConsumerConsumerAllVector) {
             isL0C2UBPattern = false;
         }
