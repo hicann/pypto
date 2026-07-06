@@ -192,10 +192,11 @@ def set_pass_options(*,
                      cube_l1_reuse_setting: Optional[
                          Dict[Union[int, str], Union[int, Tuple[int, str]]]] = None,
                      cube_nbuffer_setting: Optional[Dict[Union[int, str], int]] = None,
-                     sg_set_scope: Optional[Union[int, tuple[int, bool, bool]]] = None,
+                     sg_set_scope: Optional[Union[int, Tuple[int, bool, bool]]] = None,
                      sg_set_ooo_scope: Optional[int] = None,
                      ooo_sched_mode: Optional[str] = None,
                      auto_mix_partition: Optional[int] = None,
+                     sg_set_tunevf_mode: Optional[int] = None,
                      ) -> None:
     """
     Set pass options.
@@ -243,6 +244,12 @@ def set_pass_options(*,
     auto_mix_partition : int
         Control the auto mix partition behavior in ReduceCopyMerge pass.
 
+    sg_set_tunevf_mode : int
+        Control the VF (Vector Fusion) tuning pass behavior.
+        - 0: default behavior (no change)
+        - 1: bypass TuneTileOpSeqForVF and TuneSyncForVF passes
+        - 2: ignore performance modeling and maximize fusion in TuneSyncForVF
+
     Raises
     ------
     ValueError
@@ -264,6 +271,11 @@ def set_pass_options(*,
         pass_options['cube_nbuffer_setting'] = cube_nbuffer_setting
     if auto_mix_partition is not None:
         pass_options['auto_mix_partition'] = auto_mix_partition
+    if sg_set_tunevf_mode is not None:
+        if sg_set_tunevf_mode not in (0, 1, 2):
+            raise ValueError(f"Invalid sg_set_tunevf_mode: '{sg_set_tunevf_mode}'. "
+                            f"Expected 0, 1 or 2.")
+        pass_options['sg_set_tunevf_mode'] = sg_set_tunevf_mode
     if sg_set_ooo_scope is not None:
         if sg_set_ooo_scope > 0:
             from pypto._controller import Controller
@@ -320,6 +332,7 @@ def get_pass_options() -> Dict[str, Union[str, int, List[int], Dict[int, int], D
     ooo_val = rst.get('sg_set_ooo_scope', [0])
     result['sg_set_ooo_scope'] = ooo_val[0] // 10000 if ooo_val and ooo_val[0] > 0 else (ooo_val[0] if ooo_val else 0)
     result['ooo_sched_mode'] = rst.get('ooo_sched_mode', '')
+    result['sg_set_tunevf_mode'] = rst.get('sg_set_tunevf_mode', 0)
     return result
 
 

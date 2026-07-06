@@ -43,6 +43,7 @@ constexpr const char* MG_VEC_PARALLEL_LB = "mg_vec_parallel_lb";
 constexpr const char* DB_TYPE = "db_type";
 constexpr const char* COPYOUT_RESOLVE_COALESCING = "copyout_resolve_coalescing";
 constexpr const char* AUTO_MIX_PARTITION = "auto_mix_partition";
+constexpr const char* SG_SET_TUNEVF_MODE = "sg_set_tunevf_mode";
 
 // runtime
 constexpr const char* DEVICE_SCHED_MODE = "device_sched_mode";

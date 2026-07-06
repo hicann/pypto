@@ -16,6 +16,7 @@
 #include "passes/block_graph_pass/tune_sync_for_vf.h"
 #include "passes/block_graph_pass/insert_sync.h"
 #include "passes/pass_log/pass_log.h"
+#include "interface/configs/config_manager_ng.h"
 
 #define MODULE_NAME "TuneSyncForVF"
 
@@ -372,8 +373,11 @@ Status TuneSyncForVF::ChangeOpSeq(Function* subGraphFunc, bool isAIV1)
         }
 
         // 判断是否需要进行调整（所有的SYNC_SRC和SYNC_DST中，只要有一个是有收益的，就进行融合）
-        if (!NeedAdjustOpSeq(subGraphFunc, setFlagList, waitFlagList, left, right)) {
-            continue;
+        int64_t tunevfMode = config::GetPassOption<int64_t>(SG_SET_TUNEVF_MODE);
+        if (tunevfMode != NUM2) {
+            if (!NeedAdjustOpSeq(subGraphFunc, setFlagList, waitFlagList, left, right)) {
+                continue;
+            }
         }
         APASS_LOG_DEBUG_F(Elements::Operation, "Need merge.");
 
@@ -393,10 +397,37 @@ Status TuneSyncForVF::ChangeOpSeq(Function* subGraphFunc, bool isAIV1)
     return SUCCESS;
 }
 
+void TuneSyncForVF::LogOpList(const std::string& label)
+{
+    for (const auto& op : opList_) {
+        if (op->GetOpcodeStr().find("SYNC_SRC") != std::string::npos ||
+            op->GetOpcodeStr().find("SYNC_DST") != std::string::npos || op->GetOpcode() == Opcode::OP_BAR_V ||
+            op->GetOpcode() == Opcode::OP_BAR_M) {
+            APASS_LOG_DEBUG_F(
+                Elements::Operation,
+                "%s operation %d: %s, setpipe type: %s, setcore type: %s, waitpipe type: %s, waitcore type: %s, "
+                "eventid: %d",
+                label.c_str(), op->GetOpMagic(), op->GetOpcodeStr().c_str(),
+                GetPipeTypeDict().Find(op->syncQueue_.pipeId_).c_str(),
+                GetCoreTypeDict().Find(op->syncQueue_.coreType_).c_str(),
+                GetPipeTypeDict().Find(op->syncQueue_.trigPipeId_).c_str(),
+                GetCoreTypeDict().Find(op->syncQueue_.trigCoreType_).c_str(), op->syncQueue_.eventId_);
+            continue;
+        }
+        APASS_LOG_DEBUG_F(
+            Elements::Operation, "%s operation %d: %s", label.c_str(), op->GetOpMagic(), op->GetOpcodeStr().c_str());
+    }
+}
+
 Status TuneSyncForVF::RunOnFunction(Function& function)
 {
     if (!config::GetPassGlobalConfig(KEY_ENABLE_VF, false)) {
         APASS_LOG_DEBUG_F(Elements::Function, "TuneSyncForVF is skipped for ENABLE_VF is false.");
+        return SUCCESS;
+    }
+    int64_t tunevfMode = config::GetPassOption<int64_t>(SG_SET_TUNEVF_MODE);
+    if (tunevfMode == 1) {
+        APASS_LOG_DEBUG_F(Elements::Function, "TuneSyncForVF is bypassed for set_tunevf_mode=1.");
         return SUCCESS;
     }
     size_t funcId = 0;
@@ -404,26 +435,8 @@ Status TuneSyncForVF::RunOnFunction(Function& function)
         std::vector<Operation*> opList(program.second->Operations(false).DuplicatedOpList());
         opList_ = opList;
         APASS_LOG_DEBUG_F(Elements::Function, "=======================function %zu ======================", funcId);
-        for (const auto& op : opList_) {
-            if (op->GetOpcodeStr().find("SYNC_SRC") != std::string::npos ||
-                op->GetOpcodeStr().find("SYNC_DST") != std::string::npos || op->GetOpcode() == Opcode::OP_BAR_V ||
-                op->GetOpcode() == Opcode::OP_BAR_M) {
-                APASS_LOG_DEBUG_F(
-                    Elements::Operation,
-                    "Input operation %d: %s, setpipe type: %s, setcore type: %s, waitpipe type: %s, waitcore type: %s, "
-                    "eventid: %d",
-                    op->GetOpMagic(), op->GetOpcodeStr().c_str(),
-                    GetPipeTypeDict().Find(op->syncQueue_.pipeId_).c_str(),
-                    GetCoreTypeDict().Find(op->syncQueue_.coreType_).c_str(),
-                    GetPipeTypeDict().Find(op->syncQueue_.trigPipeId_).c_str(),
-                    GetCoreTypeDict().Find(op->syncQueue_.trigCoreType_).c_str(), op->syncQueue_.eventId_);
-                continue;
-            }
-            APASS_LOG_DEBUG_F(
-                Elements::Operation, "Input operation %d: %s", op->GetOpMagic(), op->GetOpcodeStr().c_str());
-        }
+        LogOpList("Input");
         GenPipeOpMap(program.second);
-        // AIV0和AIV1各调整一次
         if (ChangeOpSeq(program.second, false) != SUCCESS) {
             APASS_LOG_ERROR_F(Elements::Function, "RunOnFunction failed at function ChangeOpSeq.");
             return FAILED;
@@ -432,27 +445,9 @@ Status TuneSyncForVF::RunOnFunction(Function& function)
             APASS_LOG_ERROR_F(Elements::Function, "RunOnFunction failed at function ChangeOpSeq.");
             return FAILED;
         }
-        // 将调整后的oplist刷新到function中去
         program.second->ScheduleBy(opList_, true);
         APASS_LOG_DEBUG_F(Elements::Function, "---------------------------------------------------");
-        for (const auto& op : opList_) {
-            if (op->GetOpcodeStr().find("SYNC_SRC") != std::string::npos ||
-                op->GetOpcodeStr().find("SYNC_DST") != std::string::npos || op->GetOpcode() == Opcode::OP_BAR_V ||
-                op->GetOpcode() == Opcode::OP_BAR_M) {
-                APASS_LOG_DEBUG_F(
-                    Elements::Operation,
-                    "Output operation %d: %s, setpipe type: %s, setcore type: %s, waitpipe type: %s, waitcore type: "
-                    "%s, eventid: %d",
-                    op->GetOpMagic(), op->GetOpcodeStr().c_str(),
-                    GetPipeTypeDict().Find(op->syncQueue_.pipeId_).c_str(),
-                    GetCoreTypeDict().Find(op->syncQueue_.coreType_).c_str(),
-                    GetPipeTypeDict().Find(op->syncQueue_.trigPipeId_).c_str(),
-                    GetCoreTypeDict().Find(op->syncQueue_.trigCoreType_).c_str(), op->syncQueue_.eventId_);
-                continue;
-            }
-            APASS_LOG_DEBUG_F(
-                Elements::Operation, "Output operation %d: %s", op->GetOpMagic(), op->GetOpcodeStr().c_str());
-        }
+        LogOpList("Output");
         funcId++;
     }
     return SUCCESS;

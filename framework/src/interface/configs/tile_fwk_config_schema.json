@@ -180,6 +180,15 @@
                     "minimum": 0,
                     "maximum": 1
                 },
+                "sg_set_tunevf_mode": {
+                    "type": "integer",
+                    "label": {
+                        "zh": "控制VF（Vector Fusion）调优Pass的行为模式。0为默认行为；1为旁路TuneTileOpSeqForVF和TuneSyncForVF两个Pass；2为在TuneSyncForVF中忽略性能建模最大化融合。",
+                        "en": "Controls the VF (Vector Fusion) tuning pass behavior. 0 for default; 1 to bypass TuneTileOpSeqForVF and TuneSyncForVF; 2 to ignore performance modeling and maximize fusion in TuneSyncForVF."
+                    },
+                    "minimum": 0,
+                    "maximum": 2
+                },
                 "sg_set_scope": {
                     "type": "array",
                     "items": {
