@@ -120,8 +120,6 @@ bool SpillEngine::CheckMachineAndL1(Operation* spillOp, Operation* allocOp)
     return true;
 }
 
-
-
 // ============================================================
 //  Op / Tensor factory
 // ============================================================
@@ -791,7 +789,6 @@ void SpillEngine::NotifySpill(LogicalTensorPtr spillTensor, int spillMemId,
     if (!notifier_.HasObservers()) return;
     auto& buf = state_.localBufferMap.at(spillMemId);
     SpillEvent event;
-    // TODO: clock should come from ScheduleMainLoopBase once migrated to ScheduleState.
     // For now, use execOrder of spillAllocOp as a reasonable proxy.
     int proxyClock = state_.schedInfoMap[spillAllocOp].execOrder;
     event.clock = proxyClock;
@@ -835,7 +832,6 @@ void SpillEngine::NotifyBufferRearrange(Operation* triggerOp, MemoryType memType
 {
     if (!notifier_.HasObservers() || changes.empty()) return;
     BufferRearrangeEvent event;
-    // TODO: clock should come from ScheduleMainLoopBase once migrated to ScheduleState.
     int proxyClock = state_.schedInfoMap[triggerOp].execOrder;
     event.clock = proxyClock;
     event.memType = memType;
@@ -852,7 +848,6 @@ void SpillEngine::NotifyAllocFail(Operation* triggerOp, MemoryType memType, uint
     auto& pool = state_.bufferManagerMap[coreLocation][memType];
 
     AllocFailEvent event;
-    // TODO: clock should come from ScheduleMainLoopBase once migrated to ScheduleState.
     int proxyClock = state_.schedInfoMap[triggerOp].execOrder;
     event.clock = proxyClock;
     event.triggerOpMagic = triggerOp->GetOpMagic();
@@ -882,10 +877,6 @@ void SpillEngine::NotifyAllocFail(Operation* triggerOp, MemoryType memType, uint
 
     notifier_.BroadcastAllocFail(event);
 }
-
-
-
-
 
 // ============================================================
 //  Spill execution variants (migrated from spill_buffer.cpp)
