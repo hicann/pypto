@@ -26,7 +26,7 @@ arange(start: Union[int, float] = 0, end: Union[int, float], step: Union[int, fl
 
 ## 返回值说明
 
-返回一维输出Tensor，若输入值存在float数据类型，则输出Tensor数据类型为float，否则为int。
+返回一维输出Tensor，若输入值存在float数据类型，则输出Tensor数据类型为DT_FP32，否则为DT_INT32。
 
 ## 约束说明
 
