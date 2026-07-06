@@ -39,6 +39,7 @@ constexpr int INVALID_ARG_INDEX = 0xFFFFFFFF;
 using namespace npu::tile_fwk;
 
 namespace CostModel {
+constexpr uint8_t MAIN_BLOCK_SIZE = 2;
 const uint32_t PV_REG_PC = 0;
 const uint32_t PV_REG_PARA_BASE = 4;
 const uint32_t PV_REG_BLOCK_DIM = 9;
@@ -283,25 +284,31 @@ public:
 
         cceBin.emplace_back(PvModelCceBin(0, 0, npu::tile_fwk::CoreType::HUB));
         cceBin.emplace_back(PvModelCceBin(0, HUB_MIX_DUMMY_HASH, npu::tile_fwk::CoreType::HUB_MIX));
+        int leafIndex = 2;
         for (auto& [hash, leaf] : leafDict) {
             (void)hash;
+            auto leafFuncAttr = leaf->GetLeafFuncAttribute();
+            bool hasMainBlock = (leafFuncAttr != nullptr) && !leafFuncAttr->binPathMainBlock.empty();
+            int baseIdx = hasMainBlock ? (leafIndex * MAIN_BLOCK_SIZE - 1) : leafIndex;
+            while (static_cast<int>(cceBin.size()) < baseIdx) {
+                cceBin.emplace_back(PvModelCceBin(0, 0, npu::tile_fwk::CoreType::INVALID));
+            }
             if (leaf->IsDummyFunction()) {
                 cceBin.emplace_back(PvModelCceBin(
                     leaf->GetProgramId(), leaf->GetFunctionHash().GetHash(), npu::tile_fwk::CoreType::HUB));
-                auto leafFuncAttr = leaf->GetLeafFuncAttribute();
-                if (leafFuncAttr != nullptr && !leafFuncAttr->binPathMainBlock.empty()) {
+                if (hasMainBlock) {
                     cceBin.emplace_back(PvModelCceBin(
                         leaf->GetProgramId(), leaf->GetFunctionHash().GetHash(), npu::tile_fwk::CoreType::HUB));
                 }
             } else {
-                auto leafFuncAttr = leaf->GetLeafFuncAttribute();
                 ASSERT(npu::tile_fwk::InternalError::SIM_INNER_ERROR, leafFuncAttr != nullptr)
                     << "LeafFuncAttr is null for " << leaf;
                 CompileCode(func, leaf, leafFuncAttr->binPath);
-                if (!leafFuncAttr->binPathMainBlock.empty()) {
+                if (hasMainBlock) {
                     CompileCode(func, leaf, leafFuncAttr->binPathMainBlock);
                 }
             }
+            leafIndex++;
         }
     }
 
