@@ -37,6 +37,7 @@ constexpr uint64_t ALIGN_SIZE_IN_BYTE = 512;
 constexpr int64_t INVALID_INDEX = -1;
 constexpr size_t OFFSET_INDEX = 1;
 constexpr size_t RAW_SHAPE_POS = 2;
+constexpr size_t TWO_CONSUMER_FAST_PATH_COUNT = 2;
 inline uint64_t Align(const uint64_t n) { return (n + ALIGN_SIZE_IN_BYTE - 1) & (~(ALIGN_SIZE_IN_BYTE - 1)); }
 
 void TensorBucket::UpdateOffset(const uint64_t offset)
@@ -450,7 +451,7 @@ bool Allocator::CheckAllConsumerAccessNoOverlap(
     APASS_LOG_DEBUG_F(Elements::Tensor, "CheckAllConsumerAccessNoOverlap consumerCount=%zu dimCount=%zu.",
                       consumerCount, dimCount);
 
-    if (consumerCount == 2) {
+    if (consumerCount == TWO_CONSUMER_FAST_PATH_COUNT) {
         return CheckNoOverlapForTwoConsumers(allOffsets, allShapes, dimCount);
     }
 
