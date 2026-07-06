@@ -13,6 +13,7 @@
  * \brief
  */
 
+#include <limits>
 #include "tilefwk/data_type.h"
 #include "unary.h"
 #include "binary.h"
@@ -563,6 +564,22 @@ Tensor Gcd(const Tensor& self, const Tensor& other)
     RETURN_CALL(BinaryOperation<BinaryOpType::GCD>, *Program::GetInstance().GetCurrentFunction(), self, other);
 }
 
+static std::pair<int64_t, int64_t> GetIntegerScalarRange(DataType dtype)
+{
+    switch (dtype) {
+        case DT_INT8:
+            return {std::numeric_limits<int8_t>::min(), std::numeric_limits<int8_t>::max()};
+        case DT_INT16:
+            return {std::numeric_limits<int16_t>::min(), std::numeric_limits<int16_t>::max()};
+        case DT_INT32:
+            return {std::numeric_limits<int32_t>::min(), std::numeric_limits<int32_t>::max()};
+        case DT_UINT8:
+            return {0LL, static_cast<int64_t>(std::numeric_limits<uint8_t>::max())};
+        default:
+            return {std::numeric_limits<int64_t>::min(), std::numeric_limits<int64_t>::max()};
+    }
+}
+
 Tensor Gcd(const Tensor& self, const Element& other)
 {
     DECLARE_TRACER();
@@ -571,6 +588,12 @@ Tensor Gcd(const Tensor& self, const Element& other)
     CheckTensorDimRange(self.GetStorage(), 1, 4, "GCD");
     std::unordered_set<DataType> supportedTypes = {DT_INT8, DT_INT16, DT_INT32, DT_UINT8};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "GCD");
+    auto [elemMin, elemMax] = GetIntegerScalarRange(self.GetDataType());
+    if (other.GetSignedData() < elemMin || other.GetSignedData() > elemMax) {
+        CHECK(VectorErrorCode::ERR_PARAM_INVALID, false)
+            << "The value range for the element is incorrect! expected [" << elemMin << ", " << elemMax
+            << "], got " << other.GetSignedData();
+    }
     RETURN_CALL(
         BinaryOperationScalar<BinaryOpType::GCD>, *Program::GetInstance().GetCurrentFunction(), self.GetStorage(),
         other);

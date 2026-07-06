@@ -1144,7 +1144,7 @@ LogicalTensorPtr TransDataNCHW2Fractal_Z(Function& function, const LogicalTensor
     SymbolicScalar validShapeC = self->GetDynValidShape()[1];
     SymbolicScalar validShapeH = self->GetDynValidShape()[2];
     SymbolicScalar validShapeW = self->GetDynValidShape()[3];
-    SymbolicScalar validShapeC1 = validShapeC / C0;
+    SymbolicScalar validShapeC1 = (validShapeC + C0 - 1) / C0;
     SymbolicScalar vSPerGroupN1 = (validShapeN / group + N0 - 1) / N0;
     std::vector<SymbolicScalar> resultValidShape = {
         group * validShapeC1 * validShapeH * validShapeW, vSPerGroupN1, N0, C0};
@@ -1248,7 +1248,7 @@ LogicalTensorPtr TransDataFRACTAL_Z_3D(Function& function, const LogicalTensorPt
     SymbolicScalar validShapeD = self->GetDynValidShape()[2];
     SymbolicScalar validShapeH = self->GetDynValidShape()[3];
     SymbolicScalar validShapeW = self->GetDynValidShape()[4];
-    auto validShapeC1 = (validShapeC - C0 + 1) / C0;
+    auto validShapeC1 = (validShapeC + C0 - 1) / C0;
     auto validShapePerGroupN = validShapeN / group;
     auto validShapePerGroupN1 = (validShapePerGroupN + N0 - 1) / N0;
     std::vector<SymbolicScalar> resultValidShape = {
