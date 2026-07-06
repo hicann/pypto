@@ -2016,5 +2016,164 @@ TEST_F(SplitLargeFanoutTensorTest, TestInferShapeHaveDynValidShape)
         }
     }
 }
+
+// 统计指定 opcode 且首个输入 tensor magic 等于 inputMagic 的 op 数量
+int CountOpsWithInputMagic(Function& func, Opcode oc, int inputMagic)
+{
+    int count = 0;
+    for (auto& op : func.Operations()) {
+        if (op.GetOpcode() != oc || op.iOperand.empty()) {
+            continue;
+        }
+        auto input = op.iOperand.front();
+        if (input != nullptr && input->GetMagic() == inputMagic) {
+            count++;
+        }
+    }
+    return count;
+}
+
+// 为 builder 添加 DDR 内存类型的 tensor 集合
+void AddTensorsWithDDR(ComputationalGraphBuilder& G,
+    const std::map<std::string, std::vector<int64_t>>& tensors)
+{
+    for (const auto& [name, shape] : tensors) {
+        G.AddTensor(DataType::DT_FP32, shape, name);
+        G.GetTensor(name)->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    }
+}
+
+// 为 builder 添加写入 largeTensor 的 Assemble 操作集合
+void AddAssembleOpsToLarge(ComputationalGraphBuilder& G,
+    const std::vector<std::tuple<std::string, std::string, std::vector<int64_t>>>& ops)
+{
+    for (const auto& [input, opName, offset] : ops) {
+        G.AddOp(Opcode::OP_ASSEMBLE, {input}, {"largeTensor"}, opName);
+        G.GetOp(opName)->SetOpAttribute(
+            std::make_shared<AssembleOpAttribute>(MemoryType::MEM_DEVICE_DDR, offset));
+    }
+}
+
+// 添加从 largeTensor 读取的 View 操作
+void AddViewFromLarge(ComputationalGraphBuilder& G, const std::string& output,
+    const std::string& opName, const std::vector<int64_t>& offset)
+{
+    G.AddOp(Opcode::OP_VIEW, {"largeTensor"}, {output}, opName);
+    G.GetOp(opName)->SetOpAttribute(
+        std::make_shared<ViewOpAttribute>(offset, MemoryType::MEM_DEVICE_DDR));
+}
+
+// 混合消费者 1to1 场景构图: 2个Assemble生产者, 1个View + 1个Exp消费者
+void BuildMixedConsumer1to1(ComputationalGraphBuilder& G)
+{
+    std::map<std::string, std::vector<int64_t>> tensors = {
+        {"input1", {16, 16}}, {"input2", {16, 16}},
+        {"in1", {16, 16}}, {"in2", {16, 16}},
+        {"largeTensor", {32, 16}}, {"out1", {16, 16}},
+        {"expOut", {32, 16}}};
+    AddTensorsWithDDR(G, tensors);
+    G.AddOp(Opcode::OP_ABS, {"input1"}, {"in1"}, "Abs_1");
+    G.AddOp(Opcode::OP_ABS, {"input2"}, {"in2"}, "Abs_2");
+    std::vector<std::tuple<std::string, std::string, std::vector<int64_t>>> assembleOps = {
+        {"in1", "Assemble_1", {0, 0}}, {"in2", "Assemble_2", {16, 0}}};
+    AddAssembleOpsToLarge(G, assembleOps);
+    AddViewFromLarge(G, "out1", "View_1", {0, 0});
+    G.AddOp(Opcode::OP_EXP, {"largeTensor"}, {"expOut"}, "Exp_1");
+    G.SetInCast({"input1", "input2"});
+    G.SetOutCast({"out1", "expOut"});
+}
+
+// 混合消费者 1toM 场景构图: 2个Assemble生产者, 2个View + 1个Exp消费者
+void BuildMixedConsumer1toM(ComputationalGraphBuilder& G)
+{
+    std::map<std::string, std::vector<int64_t>> tensors = {
+        {"input1", {16, 32}}, {"input2", {16, 32}},
+        {"in1", {16, 32}}, {"in2", {16, 32}},
+        {"largeTensor", {32, 32}}, {"out1", {16, 16}},
+        {"out2", {16, 16}}, {"expOut", {32, 32}}};
+    AddTensorsWithDDR(G, tensors);
+    G.AddOp(Opcode::OP_ABS, {"input1"}, {"in1"}, "Abs_1");
+    G.AddOp(Opcode::OP_ABS, {"input2"}, {"in2"}, "Abs_2");
+    std::vector<std::tuple<std::string, std::string, std::vector<int64_t>>> assembleOps = {
+        {"in1", "Assemble_1", {0, 0}}, {"in2", "Assemble_2", {16, 0}}};
+    AddAssembleOpsToLarge(G, assembleOps);
+    AddViewFromLarge(G, "out1", "View_1", {0, 0});
+    AddViewFromLarge(G, "out2", "View_2", {0, 16});
+    G.AddOp(Opcode::OP_EXP, {"largeTensor"}, {"expOut"}, "Exp_1");
+    G.SetInCast({"input1", "input2"});
+    G.SetOutCast({"out1", "out2", "expOut"});
+}
+
+// 混合消费者 MtoM 场景构图: 4个Assemble生产者, 1个View + 1个Exp消费者
+void BuildMixedConsumerMtoM(ComputationalGraphBuilder& G)
+{
+    std::map<std::string, std::vector<int64_t>> tensors = {
+        {"input1", {16, 16}}, {"input2", {16, 16}},
+        {"input3", {16, 16}}, {"input4", {16, 16}},
+        {"in1", {16, 16}}, {"in2", {16, 16}},
+        {"in3", {16, 16}}, {"in4", {16, 16}},
+        {"largeTensor", {32, 32}}, {"out1", {32, 16}}, {"expOut", {32, 32}}};
+    AddTensorsWithDDR(G, tensors);
+    G.AddOp(Opcode::OP_ABS, {"input1"}, {"in1"}, "Abs_1");
+    G.AddOp(Opcode::OP_ABS, {"input2"}, {"in2"}, "Abs_2");
+    G.AddOp(Opcode::OP_ABS, {"input3"}, {"in3"}, "Abs_3");
+    G.AddOp(Opcode::OP_ABS, {"input4"}, {"in4"}, "Abs_4");
+    std::vector<std::tuple<std::string, std::string, std::vector<int64_t>>> assembleOps = {
+        {"in1", "Assemble_1", {0, 0}}, {"in2", "Assemble_2", {0, 16}},
+        {"in3", "Assemble_3", {16, 0}}, {"in4", "Assemble_4", {16, 16}}};
+    AddAssembleOpsToLarge(G, assembleOps);
+    AddViewFromLarge(G, "out1", "View_1", {0, 0});
+    G.AddOp(Opcode::OP_EXP, {"largeTensor"}, {"expOut"}, "Exp_1");
+    G.SetInCast({"input1", "input2", "input3", "input4"});
+    G.SetOutCast({"out1", "expOut"});
+}
+
+// 运行 SplitLargeFanoutTensor pass 的公共流程, 返回 function 和 largeTensor magic
+struct MixedPassResult {
+    Function* function;
+    int ltMagic;
+};
+
+template <typename BuildFn>
+MixedPassResult RunMixedConsumerPass(ComputationalGraphBuilder& G, BuildFn buildFn)
+{
+    buildFn(G);
+    Function* function = G.GetFunction();
+    int ltMagic = G.GetTensor("largeTensor")->GetMagic();
+    npu::tile_fwk::SplitLargeFanoutTensor pass;
+    pass.enableMoreSplit_ = false;
+    EXPECT_EQ(SUCCESS, pass.PreCheck(*function));
+    EXPECT_EQ(SUCCESS, pass.RunOnFunction(*function));
+    EXPECT_EQ(SUCCESS, pass.PostCheck(*function));
+    return {function, ltMagic};
+}
+
+// 验证混合消费者场景下 1to1 拆分正常工作, View被重定向, Exp不受影响
+TEST_F(SplitLargeFanoutTensorTest, MixedConsumer_1to1_ShouldSplit)
+{
+    ComputationalGraphBuilder G;
+    auto [function, ltMagic] = RunMixedConsumerPass(G, BuildMixedConsumer1to1);
+    EXPECT_EQ(CountOpsWithInputMagic(*function, Opcode::OP_EXP, ltMagic), 1);
+    EXPECT_EQ(CountOpsWithInputMagic(*function, Opcode::OP_VIEW, ltMagic), 0);
+}
+
+// 验证混合消费者场景下 1toM 拆分正常工作, 两个View均被重定向
+TEST_F(SplitLargeFanoutTensorTest, MixedConsumer_1toM_ShouldSplit)
+{
+    ComputationalGraphBuilder G;
+    auto [function, ltMagic] = RunMixedConsumerPass(G, BuildMixedConsumer1toM);
+    EXPECT_EQ(CountOpsWithInputMagic(*function, Opcode::OP_EXP, ltMagic), 1);
+    EXPECT_EQ(CountOpsWithInputMagic(*function, Opcode::OP_VIEW, ltMagic), 0);
+}
+
+// 验证混合消费者场景下 MtoM 被正确跳过, 不发生拆分
+TEST_F(SplitLargeFanoutTensorTest, MixedConsumer_MtoM_Skipped)
+{
+    ComputationalGraphBuilder G;
+    auto [function, ltMagic] = RunMixedConsumerPass(G, BuildMixedConsumerMtoM);
+    EXPECT_EQ(CountOpsWithInputMagic(*function, Opcode::OP_EXP, ltMagic), 1);
+    EXPECT_EQ(CountOpsWithInputMagic(*function, Opcode::OP_VIEW, ltMagic), 1);
+}
+
 } // namespace tile_fwk
 } // namespace npu

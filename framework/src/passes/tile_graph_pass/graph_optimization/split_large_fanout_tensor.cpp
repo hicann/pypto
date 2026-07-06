@@ -56,6 +56,7 @@ void SplitLargeFanoutTensor::Init()
     largeTensors_.clear();
     toShapes_.clear();
     fromShapes_.clear();
+    mixedConsumerTensors_.clear();
 }
 
 // 求最大公约数
@@ -544,14 +545,26 @@ void SplitLargeFanoutTensor::CollectLargeTensor(Function& function)
         if (logicalTensor == nullptr || logicalTensor->GetProducers().empty() || logicalTensor->GetConsumers().empty()) {
             continue;
         }
-        // 对于每个tensor, 寻找满足前序为Assemble且后序为View的LargeTensor
-        auto producer = *logicalTensor->GetProducers().begin();
-        auto consumer = *logicalTensor->GetConsumers().begin();
-        if (producer == nullptr || consumer == nullptr) {
-            continue;
+        bool allProducersAssemble = std::all_of(logicalTensor->GetProducers().begin(),
+            logicalTensor->GetProducers().end(), [](Operation* op) {
+                return op != nullptr && op->GetOpcode() == Opcode::OP_ASSEMBLE;
+            });
+        bool hasAnyViewConsumer = false;
+        bool allConsumersView = true;
+        for (const auto& consumer : logicalTensor->GetConsumers()) {
+            if (consumer == nullptr) {
+                continue;
+            }
+            if (consumer->GetOpcode() == Opcode::OP_VIEW) {
+                hasAnyViewConsumer = true;
+            } else {
+                allConsumersView = false;
+            }
         }
-        if (producer->GetOpcode() == Opcode::OP_ASSEMBLE && consumer->GetOpcode() == Opcode::OP_VIEW) {
-            // 收集大Tensor, 形成Set{TensorPtr1, TensorPtr2, ...}
+        if (allProducersAssemble && hasAnyViewConsumer) {
+            if (!allConsumersView) {
+                mixedConsumerTensors_.insert(logicalTensor->tensor->rawmagic);
+            }
             if (visited.count(logicalTensor->GetMagic()) == 0) {
                 visited.insert(logicalTensor->GetMagic());
                 largeTensors_.push_back(logicalTensor);
@@ -762,9 +775,10 @@ void SplitLargeFanoutTensor::ProcessTileSplit(
         CommonUtils::ContainerToStr(lcmTileShape).c_str(), CommonUtils::ContainerToStr(tileOffset).c_str(),
         overlaps.size(), dualOverlaps.size());
     // 对于是否有[多个tensor聚合到一个Tensor]的情况进行不同处理
+    bool isMixedConsumer = mixedConsumerTensors_.count(largeTensor->tensor->rawmagic) > 0;
     if (overlaps.size() == 1) {
         CreateOpFor1toM(function, largeTensor, lcmTileShape, tileOffset, overlaps, dualOverlaps);
-    } else {
+    } else if (!isMixedConsumer) {
         FilterOverlaps(function, largeTensor, overlaps, dualOverlaps);
         CreateOpForMtoM(function, largeTensor, lcmTileShape, tileOffset, overlaps, dualOverlaps);
     }
