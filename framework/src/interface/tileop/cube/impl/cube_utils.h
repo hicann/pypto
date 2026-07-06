@@ -90,6 +90,18 @@ INLINE bool CheckShapeValid(const T& dst, const U& src)
     return true;
 }
 
+template <typename L0TileData>
+INLINE bool CheckBASEMNValid(const L0TileData& l0Tile)
+{
+    int64_t l0Shape0 = GetShape<0>(l0Tile);
+    int64_t l0Shape1 = GetShape<1>(l0Tile);
+    if constexpr (L0TileData::FORMAT == Hardware::L0A) {
+        return l0Shape0 > 0;
+    } else {
+        return l0Shape1 > 0;
+    }
+}
+
 // create Scale Tile Data
 template <typename FpTileData>
 INLINE auto CreateScaleTileData(FpTileData& fixbuf)
@@ -118,6 +130,24 @@ constexpr INLINE bool IsSupportedBasicMode()
 {
     return (std::is_same<l0cDType, float>::value && std::is_same<ubDType, half>::value) ||
            (std::is_same<l0cDType, float>::value && std::is_same<ubDType, bfloat16_t>::value);
+}
+
+// Handle K=0 scenario: fill L1 with zero and return early
+// Returns true if early return is needed, false otherwise
+template <CopyInMode copyMode, int64_t kIndex, typename TileData>
+INLINE bool HandleZeroKScenario(TileData& dst)
+{
+    if constexpr (kIndex != -1) {
+        static_assert(kIndex == 0 || kIndex == 1, "K index should be 0 or 1");
+        if constexpr (copyMode != CopyInMode::ND2ND) {
+            int64_t validK = GetShape<kIndex>(dst);
+            if (validK == 0) {
+                TFillPadZeroK(dst);
+                return true;  // Signal that early return is needed
+            }
+        }
+    }
+    return false;  // No early return needed
 }
 
 #endif // TILEOP_TILE_OPERATOR_CUBE_UTILS__H

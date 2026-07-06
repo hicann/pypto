@@ -18,6 +18,25 @@
 
 #include "cube_utils.h"
 
+// validK=0场景：将L1 tensor填充为零，确保matmul计算产生正确的全零输出
+template <typename TileData>
+INLINE void TFillPadZeroK(TileData& dst)
+{
+    constexpr uint64_t shapeSize = Std::tuple_size<typename TileData::Shape>::value;
+    // validShape设为0，表示无有效数据
+    int64_t dstShape0 = 0;
+    int64_t dstShape1 = 0;
+    constexpr auto staticL1H = Std::tuple_element<shapeSize - SHAPE_DIM2, typename TileData::TileShape>::type::value;
+    constexpr auto staticL1W = Std::tuple_element<shapeSize - 1, typename TileData::TileShape>::type::value;
+    using tileData = pto::Tile<
+        pto::TileType::Mat, typename TileData::Type, staticL1H, staticL1W, pto::BLayout::ColMajor, -1, -1,
+        pto::SLayout::RowMajor>;
+    // 构造时传入validShape=(0,0)，TFILLPAD会填充整个静态分配的空间
+    tileData dstL1(dstShape0, dstShape1);
+    pto::TASSIGN(dstL1, static_cast<uint64_t>(dst.GetAddr()));
+    pto::TFILLPAD(dstL1, dstL1);
+}
+
 template <PaddingMode padMode, typename l1TileData>
 INLINE void TLoadFillPad(l1TileData &l1Tile, int64_t l1Shape0, int64_t l1Shape1)
 {

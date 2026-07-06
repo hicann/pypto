@@ -18,13 +18,15 @@
 
 #include "cube_utils.h"
 
-template <bool isZeroC, TransMode transMode, bool kAlignFlag, typename TileAcc, typename TileLeft, typename TileRight>
+template <bool initMatrixC, TransMode transMode, bool kAlignFlag, typename TileAcc, typename TileLeft, typename TileRight>
 INLINE void TMatmulImpl(TileAcc& c, TileLeft& a, TileRight& b)
 {
     int64_t validM = GetShape<0>(a);
     int64_t validN = GetShape<1>(b);
     int64_t validK = GetShape<1>(a);
-    if (validM == 0 || validK == 0 || validN == 0) {
+    // validK=0场景特殊处理：
+    // AMULB需要做MAD产生全0矩阵，AMULACCB跳过MAD
+    if (validM == 0 || validN == 0 || (validK == 0 && !initMatrixC)) {
         return;
     }
     constexpr uint64_t shapeSizeA = Std::tuple_size<typename TileLeft::Shape>::value;
@@ -36,6 +38,10 @@ INLINE void TMatmulImpl(TileAcc& c, TileLeft& a, TileRight& b)
     constexpr auto staticL0BW = Std::tuple_element<shapeSizeB - 1, typename TileRight::TileShape>::type::value;
     constexpr auto staticL0CH = Std::tuple_element<shapeSizeC - SHAPE_DIM2, typename TileAcc::TileShape>::type::value;
     constexpr auto staticL0CW = Std::tuple_element<shapeSizeC - 1, typename TileAcc::TileShape>::type::value;
+    // validK=0且A_MUL_B模式：使用静态K大小，配合全零L1数据产生正确输出
+    if (validK == 0 && initMatrixC) {
+        validK = staticL0AW;
+    }
     using tileL0ATensor = pto::TileLeft<typename TileLeft::Type, staticL0AH, staticL0AW, -1, -1>;
     using tileL0BTensor = pto::TileRight<typename TileRight::Type, staticL0BH, staticL0BW, -1, -1>;
     using tileL0CTensor = pto::TileAcc<typename TileAcc::Type, staticL0CH, staticL0CW, -1, -1>;
@@ -53,7 +59,7 @@ INLINE void TMatmulImpl(TileAcc& c, TileLeft& a, TileRight& b)
     pto::TASSIGN(l0a, static_cast<uint64_t>(a.GetAddr()));
     pto::TASSIGN(l0b, static_cast<uint64_t>(b.GetAddr()));
     pto::TASSIGN(l0c, static_cast<uint64_t>(c.GetAddr()));
-    if constexpr (!isZeroC) {
+    if constexpr (initMatrixC) {
         pto::TMATMUL(l0c, l0a, l0b);
     } else {
         pto::TMATMUL_ACC(l0c, l0c, l0a, l0b);
@@ -69,7 +75,7 @@ INLINE void TMatmulImpl(TileAcc& c, TileLeft& a, TileRight& b, TileBias& bias)
     int64_t validM = GetShape<0>(a);
     int64_t validN = GetShape<1>(b);
     int64_t validK = GetShape<1>(a);
-    if (validM == 0 || validK == 0 || validN == 0) {
+    if (validM == 0 || validN == 0 || validK == 0) {
         return;
     }
     constexpr uint64_t shapeSizeA = Std::tuple_size<typename TileLeft::Shape>::value;

@@ -260,6 +260,10 @@ Status MergeViewAssembleUtils::AppendMergedViewOperations(Function& function)
         if (viewOp.hasL1PaddingMode){
             mergedViewOp.SetAttr("op_attr_copy_in_l1_padding_mode", viewOp.l1PaddingMode);
         }
+        // 继承op_attr_copy_in_l1_k_index属性
+        if (viewOp.hasKIndex) {
+            mergedViewOp.SetAttr("op_attr_copy_in_l1_k_index", viewOp.kIndex);
+        }
         viewOp.output->UpdateDynValidShape(viewOp.dynValidShape);
     }
     return SUCCESS;
@@ -502,12 +506,16 @@ void MergeViewAssembleUtils::RecordMergedViewOperation(
     // 获取特定的 op_attr_copy_in_l1_padding_mode 属性
     int64_t l1PaddingMode = 0;
     bool hasL1PaddingMode = lastViewOp->GetAttr<int64_t>("op_attr_copy_in_l1_padding_mode", l1PaddingMode);
+    // 获取特定的 op_attr_copy_in_l1_k_index 属性
+    int64_t kIndex = 0;
+    bool hasKIndex = lastViewOp->GetAttr<int64_t>("op_attr_copy_in_l1_k_index", kIndex);
     // 清理消费者关系
     endTensor->GetProducers().clear();
     // 记录合并op
     viewOpToAppend_.emplace_back(ViewOp{
         startTensor, endTensor, newOffset, newDynOffset, newDynValidShape, lastViewAttr->GetTo(), hasCopyInMode,
-        std::move(copyInModeValue), hasL1PaddingMode, std::move(l1PaddingMode), span, scopeInfo});
+        std::move(copyInModeValue), hasL1PaddingMode, std::move(l1PaddingMode), hasKIndex, kIndex,
+        span, scopeInfo});
 }
 
 Status MergeViewAssembleUtils::MergeAssembleChain(

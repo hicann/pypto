@@ -129,7 +129,7 @@ TILEOP void TCopyL0C2UB(DstTileTensor& dst, SrcTileTensor& src, FbTileTensor& fi
 }
 
 template <
-    bool isZeroC, typename TileRes, typename TileLeft, typename TileLeftScale, typename TileRight,
+    bool initMatrixC, typename TileRes, typename TileLeft, typename TileLeftScale, typename TileRight,
     typename TileRightScale>
 TILEOP void MatmulMX(TileRes& c, TileLeft& a, TileLeftScale& aScale, TileRight& b, TileRightScale& bScale)
 {
@@ -142,7 +142,7 @@ TILEOP void MatmulMX(TileRes& c, TileLeft& a, TileLeftScale& aScale, TileRight& 
         shapeSizeC == SHAPE_DIM2 && shapeSizeA == SHAPE_DIM2 && shapeSizeAScale == SHAPE_DIM3 &&
             shapeSizeB == SHAPE_DIM2 && shapeSizeBScale == SHAPE_DIM3,
         "[MatmulMX ERROR]: Tensor Shape dim size should be 2 and Scale Shape dim size should be 3");
-    MatmulMXImpl<isZeroC>(c, a, aScale, b, bScale);
+    MatmulMXImpl<initMatrixC>(c, a, aScale, b, bScale);
 }
 
 template <
@@ -168,12 +168,18 @@ TILEOP void MatmulMX(
 // Common Operator TileOp Interface Definitions
 
 // Copy data from DDR to L1
-template <CopyInMode copyMode, PaddingMode padMode, typename Coord, typename TileData, typename GlobalData>
+template <
+    CopyInMode copyMode, PaddingMode padMode, int64_t kIndex, typename Coord, typename TileData, typename GlobalData>
 TILEOP void TLoad(
-    TileData& dst, GlobalData& src, const Coord& dstCoord, const Coord& srcCoord, const int64_t& curH, const int64_t& curW)
+    TileData& dst, GlobalData& src, const Coord& dstCoord, const Coord& srcCoord, const int64_t& curH,
+    const int64_t& curW)
 {
     constexpr auto shapeSize = Std::tuple_size<typename TileData::Shape>::value;
     static_assert(shapeSize == SHAPE_DIM2 && Std::tuple_size<Coord>::value == SHAPE_DIM2, "Shape Size should be 2 Dim");
+    // Handle K=0 scenario: fill L1 with zero and return early if needed
+    if (HandleZeroKScenario<copyMode, kIndex>(dst)) {
+        return;
+    }
     if (!CheckShapeValid(dst, src)) {
         return;
     }
@@ -195,12 +201,17 @@ TILEOP void TLoad(
 }
 
 // Copy data from DDR to L1
-template <CopyInMode copyMode, PaddingMode padMode, typename Coord, typename TileTensor, typename GlobalTensor>
+template <
+    CopyInMode copyMode, PaddingMode padMode, int64_t kIndex, typename Coord, typename TileTensor,
+    typename GlobalTensor>
 TILEOP void TReshapeLoad(
     TileTensor& dst, GlobalTensor& src, const Coord& srcCoord, const int64_t& gShape0, const int64_t& gShape1)
 {
     constexpr auto shapeSize = Std::tuple_size<typename TileTensor::Shape>::value;
     static_assert(shapeSize == SHAPE_DIM2 && Std::tuple_size<Coord>::value == SHAPE_DIM2, "Shape Size should be 2 Dim");
+    if (HandleZeroKScenario<copyMode, kIndex>(dst)) {
+        return;
+    }
     if (!CheckShapeValid(dst, src)) {
         return;
     }
@@ -239,7 +250,7 @@ TILEOP void TExtract(
 template <bool isTrans, bool isMX, typename Coord, typename DstTileData, typename SrcTileData>
 TILEOP void TExtractL1ToL0(DstTileData& dst, SrcTileData& src, const Coord& coord)
 {
-    if (!CheckShapeValid(dst, src)) {
+    if (!CheckBASEMNValid(dst)) {
         return;
     }
     constexpr uint64_t shapeSize = Std::tuple_size<typename DstTileData::Shape>::value;
@@ -284,7 +295,7 @@ TILEOP void TExtractL1ToFB(DstTileData& dst, SrcTileData& src, const Coord& coor
     TExtractL1ToBTOrFBImpl<isTrans>(dst, src);
 }
 
-template <bool isZeroC, TransMode transMode, bool kAlignFlag, typename TileAcc, typename TileLeft, typename TileRight>
+template <bool initMatrixC, TransMode transMode, bool kAlignFlag, typename TileAcc, typename TileLeft, typename TileRight>
 TILEOP void TMatmul(TileAcc& c, TileLeft& a, TileRight& b)
 {
     constexpr uint64_t shapeSizeA = Std::tuple_size<typename TileLeft::Shape>::value;
@@ -293,7 +304,7 @@ TILEOP void TMatmul(TileAcc& c, TileLeft& a, TileRight& b)
     static_assert(
         shapeSizeA == SHAPE_DIM2 && shapeSizeB == SHAPE_DIM2 && shapeSizeC == SHAPE_DIM2,
         "[Matmul ERROR]: Shape dim size should be 2");
-    TMatmulImpl<isZeroC, transMode, kAlignFlag>(c, a, b);
+    TMatmulImpl<initMatrixC, transMode, kAlignFlag>(c, a, b);
 }
 
 template <TransMode transMode, bool kAlignFlag, typename TileAcc, typename TileLeft, typename TileRight, typename TileBias>
