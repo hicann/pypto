@@ -55,6 +55,7 @@ private:
     Status UpdateWaitPipeTime(
         Function* subGraphFunc, std::vector<Operation*>& waitFlagList, const int& curVFStartTime, int& maxMoveBackDist);
     Status MoveBackPipeVOps(int groupNum, const int& maxMoveBackDist);
+    void LogOpList(const std::string& label);
     std::vector<Operation*> opList_;
     std::vector<std::vector<Operation*>> mergedOps;
     std::unordered_map<PipeType, std::vector<Operation*>> pipeOpMap;

@@ -16,6 +16,7 @@
 #include "passes/block_graph_pass/tune_tileopseq_for_vf.h"
 #include "passes/block_graph_pass/insert_sync.h"
 #include "passes/pass_log/pass_log.h"
+#include "interface/configs/config_manager_ng.h"
 
 #define MODULE_NAME "TuneTileOpSeqForVF"
 
@@ -471,10 +472,46 @@ Status TuneTileOpSeqForVF::ProcessViewAssembleOrder(std::vector<Operation*>& opL
     return SUCCESS;
 }
 
+Status TuneTileOpSeqForVF::InitAndValidateOps(PipeSync& ps)
+{
+    for (const auto& op : opList_) {
+        APASS_LOG_DEBUG_F(
+            Elements::Operation, "Input Operation %d %s", op->GetOpMagic(), op->GetOpcodeStr().c_str());
+        ps.BuildTensorRangeMap(op);
+        auto opcfg = OpcodeManager::Inst().GetTileOpCfg(op->GetOpcode());
+        if (opcfg.pipeIdStart_ != PipeType::PIPE_V) {
+            continue;
+        }
+        if (op->HasAttribute(OpAttributeKey::isCube) && op->GetBoolAttribute(OpAttributeKey::isCube)) {
+            continue;
+        }
+        if (op->GetAIVCore() != AIVCore::AIV0 && op->GetAIVCore() != AIVCore::AIV1) {
+            APASS_LOG_ERROR_F(
+                Elements::Operation, "Pipe_V op %d %s AIV type is neither AIV0 nor AIV1, RunOnFunction failed.",
+                op->GetOpMagic(), op->GetOpcodeStr().c_str());
+            return FAILED;
+        }
+    }
+    return SUCCESS;
+}
+
+void TuneTileOpSeqForVF::LogOpList(const std::string& label)
+{
+    for (const auto& op : opList_) {
+        APASS_LOG_DEBUG_F(
+            Elements::Operation, "%s Operation %d %s", label.c_str(), op->GetOpMagic(), op->GetOpcodeStr().c_str());
+    }
+}
+
 Status TuneTileOpSeqForVF::RunOnFunction(Function& function)
 {
     if (!config::GetPassGlobalConfig(KEY_ENABLE_VF, false)) {
         APASS_LOG_DEBUG_F(Elements::Function, "TuneTileOpSeqForVF is skipped for ENABLE_VF is false.");
+        return SUCCESS;
+    }
+    int64_t tunevfMode = config::GetPassOption<int64_t>(SG_SET_TUNEVF_MODE);
+    if (tunevfMode == 1) {
+        APASS_LOG_DEBUG_F(Elements::Function, "TuneTileOpSeqForVF is bypassed for set_tunevf_mode=1.");
         return SUCCESS;
     }
     size_t funcId = 0;
@@ -483,42 +520,21 @@ Status TuneTileOpSeqForVF::RunOnFunction(Function& function)
         opList_ = opList;
         PipeSync ps;
         APASS_LOG_DEBUG_F(Elements::Function, "=======================function %zu ======================", funcId);
-        for (const auto& op : opList_) {
-            APASS_LOG_DEBUG_F(
-                Elements::Operation, "Input Operation %d %s", op->GetOpMagic(), op->GetOpcodeStr().c_str());
-            ps.BuildTensorRangeMap(op);
-            auto opcfg = OpcodeManager::Inst().GetTileOpCfg(op->GetOpcode());
-            if (opcfg.pipeIdStart_ != PipeType::PIPE_V) {
-                continue;
-            }
-            if (op->HasAttribute(OpAttributeKey::isCube) && op->GetBoolAttribute(OpAttributeKey::isCube)) {
-                continue;
-            }
-            // 假定：pipe_V的op的AIV类型只能是AIV0或AIV1
-            if (op->GetAIVCore() != AIVCore::AIV0 && op->GetAIVCore() != AIVCore::AIV1) {
-                APASS_LOG_ERROR_F(
-                    Elements::Operation, "Pipe_V op %d %s AIV type is neither AIV0 nor AIV1, RunOnFunction failed.",
-                    op->GetOpMagic(), op->GetOpcodeStr().c_str());
-                return FAILED;
-            }
+        if (InitAndValidateOps(ps) != SUCCESS) {
+            APASS_LOG_ERROR_F(Elements::Function, "RunOnFunction failed at InitAndValidateOps.");
+            return FAILED;
         }
-        // AIV0和AIV1各调整一次
         ChangeOpSeq(ps, false);
         ChangeOpSeq(ps, true);
-        // 将view和assemble按照其producer和consumer的顺序进行排序
         std::vector<Operation*> opListNew;
         if (ProcessViewAssembleOrder(opList_, opListNew) != SUCCESS) {
             APASS_LOG_ERROR_F(Elements::Operation, "RunOnFunction failed at ProcessViewAssembleOrder");
             return FAILED;
         }
         opList_ = opListNew;
-        // 将调整后的oplist刷新到function中去
         program.second->ScheduleBy(opList_, true);
         APASS_LOG_DEBUG_F(Elements::Function, "---------------------------------------------------");
-        for (const auto& op : opList_) {
-            APASS_LOG_DEBUG_F(
-                Elements::Operation, "Output Operation %d %s", op->GetOpMagic(), op->GetOpcodeStr().c_str());
-        }
+        LogOpList("Output");
         funcId++;
     }
     return SUCCESS;

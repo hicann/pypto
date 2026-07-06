@@ -59,6 +59,8 @@ private:
     Status ReorderViewAssemble(
         std::vector<Operation*>& opLog, std::vector<Operation*>& opListNew,
         const std::unordered_map<Operation*, Operation*>& changeMap);
+    Status InitAndValidateOps(PipeSync& ps);
+    void LogOpList(const std::string& label);
     std::vector<std::vector<Operation*>> mergedOps;
     std::vector<Operation*> opList_;
 };
