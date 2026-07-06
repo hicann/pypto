@@ -430,7 +430,8 @@ ir::StmtPtr RootFunctionBuilder::TransformStmts(ir::StmtPtr stmt, const std::str
         case ir::ObjectKind::SeqStmts: {
             auto seq = ir::SeqStmts::AsMut(stmt);
             if (IsPureTensorOpSeq(seq)) {
-                return CreatePathFuncAndPlaceholder(seq, loopVarName);
+                auto newStmts = CreatePathFuncAndPlaceholder(seq, loopVarName);
+                return std::make_shared<ir::SeqStmts>(std::vector<ir::StmtPtr>{newStmts}, seq->span_);
             }
             auto segments = SplitIntoTensorOpSegments(seq);
             std::vector<ir::StmtPtr> newStmts;

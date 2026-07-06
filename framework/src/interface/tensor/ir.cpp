@@ -110,6 +110,7 @@ Pass pass::CreateRootFunctions()
             auto parentFunc = programInst.GetLastFunction();
 
             std::map<std::string, FunctionPtr> newFunctions;
+            const auto funcMapOld = programInst.GetFunctionMap();
 
             for (const auto& [funcName, irFunc] : irProgram->functions_) {
                 (void)funcName;
@@ -120,7 +121,9 @@ Pass pass::CreateRootFunctions()
 
             const auto& funcMap = programInst.GetFunctionMap();
             for (const auto& [k, v] : funcMap) {
-                newFunctions[k] = std::static_pointer_cast<const ir::Function>(v);
+                if (funcMapOld.find(k) == funcMapOld.end()){
+                    newFunctions[k] = std::static_pointer_cast<const ir::Function>(v);
+                }
             }
 
             return std::make_shared<const ir::Program>(
