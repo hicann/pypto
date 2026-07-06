@@ -491,7 +491,7 @@ enum class MatmulErrorCode : uint32_t {
     ERR_RUNTIME_LOGIC = 0xC5002U,
 };
 
-enum class ConvOperationError : uint32_t { INPUT_INVALID = 0xC6101U, OVER_BUFFER_LIMIT = 0xC6102U, UNKNOWN = 0xC6199U };
+enum class ConvOperationError : uint32_t {OVER_BUFFER_LIMIT = 0xC6101U, UNKNOWN = 0xC6199U };
 
 enum class ConvExpandFuncError : uint32_t {
     EXPANDFUNC_TENSOR_OP_NULLPTR = 0xC6201U,
