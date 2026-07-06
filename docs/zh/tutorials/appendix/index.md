@@ -8,3 +8,4 @@ faq
 issue
 内部各组件常见问题 <../../trouble_shooting/index>
 glossary
+environment_variables

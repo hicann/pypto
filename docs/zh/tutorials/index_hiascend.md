@@ -37,3 +37,4 @@
     - [CONV](../trouble_shooting/conv.md)
     - [视图类OP](../trouble_shooting/view_op.md)
   - [术语表](./appendix/glossary.md)
+  - [环境变量参考](./appendix/environment_variables.md)
