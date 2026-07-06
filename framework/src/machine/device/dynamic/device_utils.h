@@ -78,6 +78,8 @@ const int INVALID_CORE_IDX = 0xFF;
 // A2/A3 架构超时常量 (基于 50MHz aicpu 频率，周期数直接定义，避免运行时乘法)
 constexpr uint64_t TIMEOUT_A2A3_20US   = 1000ULL;           // 1000 cycles
 constexpr uint64_t TIMEOUT_A2A3_50US   = 2500ULL;           // 2500 cycles
+constexpr uint64_t TIMEOUT_A2A3_100US  = 5000ULL;           // 5000 cycles
+constexpr uint64_t TIMEOUT_A2A3_200US  = 10000ULL;          // 10000 cycles
 constexpr uint64_t TIMEOUT_A2A3_1SEC   = 50000000ULL;       // 50M cycles
 constexpr uint64_t TIMEOUT_A2A3_2SEC   = 100000000ULL;       // 50M cycles
 constexpr uint64_t TIMEOUT_A2A3_10SEC  = 500000000ULL;      // 500M cycles

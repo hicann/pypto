@@ -271,6 +271,7 @@ enum class SchedErr : uint32_t {
     FSM_STATUS_ERROR,
     SCH_PARALLEL_DEVTASK_TIMEOUT,
     CORE_INFO_INVALID,
+    WAIT_CTRL_TIMEOUT
 };
 
 enum class CtrlErr : uint32_t {

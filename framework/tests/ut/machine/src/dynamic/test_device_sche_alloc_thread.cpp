@@ -290,7 +290,7 @@ TEST_F(ArbitrationTest, ApplyCtrlDecision_Failed_ReturnsError)
 {
     int curThreadIdx = 1;
     int arbitratedScheNum = 3;
-    EXPECT_EQ(ApplyCtrlDecision(nullptr, curThreadIdx, arbitratedScheNum, CTRL_WAIT_FAILED, ArchInfo::DAV_2201),
+    EXPECT_EQ(ApplyCtrlDecision(curThreadIdx, arbitratedScheNum, CTRL_WAIT_FAILED),
         DEVICE_MACHINE_ERROR);
     EXPECT_EQ(curThreadIdx, 1);
     EXPECT_EQ(arbitratedScheNum, 3);
@@ -300,7 +300,7 @@ TEST_F(ArbitrationTest, ApplyCtrlDecision_Ok_ReturnsOk)
 {
     int curThreadIdx = 1;
     int arbitratedScheNum = 3;
-    EXPECT_EQ(ApplyCtrlDecision(nullptr, curThreadIdx, arbitratedScheNum, CTRL_WAIT_OK, ArchInfo::DAV_2201),
+    EXPECT_EQ(ApplyCtrlDecision(curThreadIdx, arbitratedScheNum, CTRL_WAIT_OK),
         DEVICE_MACHINE_OK);
     EXPECT_EQ(curThreadIdx, 1);
     EXPECT_EQ(arbitratedScheNum, 3);
@@ -310,9 +310,20 @@ TEST_F(ArbitrationTest, ApplyCtrlDecision_Dropped_DropsLastThread)
 {
     int curThreadIdx = 3; // == scheNum(3) → 被丢弃
     int arbitratedScheNum = 3;
-    EXPECT_EQ(ApplyCtrlDecision(nullptr, curThreadIdx, arbitratedScheNum, CTRL_WAIT_DROPPED, ArchInfo::DAV_2201),
+    EXPECT_EQ(ApplyCtrlDecision(curThreadIdx, arbitratedScheNum, CTRL_WAIT_DROPPED),
         DEVICE_MACHINE_OK);
     EXPECT_EQ(curThreadIdx, -1);
+    EXPECT_EQ(arbitratedScheNum, 2);
+}
+
+TEST_F(ArbitrationTest, ApplyCtrlDecision_Dropped_SurvivingThreadKeepsIdx)
+{
+    // curThreadIdx(1) != scheNum(3) → 存活线程，idx 不变
+    int curThreadIdx = 1;
+    int arbitratedScheNum = 3;
+    EXPECT_EQ(ApplyCtrlDecision(curThreadIdx, arbitratedScheNum, CTRL_WAIT_DROPPED),
+        DEVICE_MACHINE_OK);
+    EXPECT_EQ(curThreadIdx, 1);
     EXPECT_EQ(arbitratedScheNum, 2);
 }
 
@@ -345,4 +356,95 @@ TEST_F(ArbitrationTest, WaitCtrlDecision_ReturnsTerminalLevel_Dropped)
 
     EXPECT_EQ(WaitCtrlDecision(ArchInfo::DAV_2201, ctrlWaitLevel, outLevel), DEVICE_MACHINE_OK);
     EXPECT_EQ(outLevel, CTRL_WAIT_DROPPED);
+}
+
+// ---------------------------------------------------------------------------
+// WaitCtrlRoundReady
+// 退出条件：ctrlRound > scheRound（即 ctrlRound <= scheRound 时 spin 至超时）
+// （非 __DEVICE__ 环境 1s 超时，不适合 UT，仅覆盖 ready 分支）
+// ---------------------------------------------------------------------------
+
+TEST_F(ArbitrationTest, WaitCtrlRoundReady_AlreadyReady_ReturnsTrue)
+{
+    std::atomic<uint64_t> ctrlRound{2};
+    std::atomic<uint64_t> scheRound{1};
+    // ctrlRound(2) > scheRound(1)
+    EXPECT_TRUE(WaitCtrlRoundReady(ArchInfo::DAV_2201, ctrlRound, scheRound));
+}
+
+TEST_F(ArbitrationTest, WaitCtrlRoundReady_OneRoundAhead_ReturnsTrue)
+{
+    std::atomic<uint64_t> ctrlRound{3};
+    std::atomic<uint64_t> scheRound{2};
+    // ctrlRound(3) > scheRound(2)
+    EXPECT_TRUE(WaitCtrlRoundReady(ArchInfo::DAV_2201, ctrlRound, scheRound));
+}
+
+// ---------------------------------------------------------------------------
+// WaitForCtrlDecision
+// ---------------------------------------------------------------------------
+
+TEST_F(ArbitrationTest, WaitForCtrlDecision_NonDav2201_ReturnsOkImmediately)
+{
+    // 非 DAV_2201：直接返回 OK，不触碰 ctrlWaitLevel / ctrlRound
+    std::atomic<int> ctrlWaitLevel{CTRL_WAIT_UNSET};
+    std::atomic<uint64_t> ctrlRound{0};
+    std::atomic<uint64_t> scheRound{1};
+    int curThreadIdx = 0;
+    int arbitratedScheNum = 3;
+
+    EXPECT_EQ(WaitForCtrlDecision(ArchInfo::DAV_3510, curThreadIdx, arbitratedScheNum,
+        ctrlWaitLevel, ctrlRound, scheRound), DEVICE_MACHINE_OK);
+    EXPECT_EQ(ctrlWaitLevel.load(), CTRL_WAIT_UNSET);
+    EXPECT_EQ(curThreadIdx, 0);
+    EXPECT_EQ(arbitratedScheNum, 3);
+}
+
+TEST_F(ArbitrationTest, WaitForCtrlDecision_Dav2201_CtrlReady_ReturnsOk)
+{
+    // DAV_2201 + ctrlRound > scheRound → ResolveCtrlDecision CAS 成功 →
+    // WaitCtrlRoundReady 返回 true → outLevel = CTRL_WAIT_OK → ApplyCtrlDecision 返回 OK
+    std::atomic<int> ctrlWaitLevel{CTRL_WAIT_UNSET};
+    std::atomic<uint64_t> ctrlRound{2};
+    std::atomic<uint64_t> scheRound{1};
+    int curThreadIdx = 0;
+    int arbitratedScheNum = 3;
+
+    EXPECT_EQ(WaitForCtrlDecision(ArchInfo::DAV_2201, curThreadIdx, arbitratedScheNum,
+        ctrlWaitLevel, ctrlRound, scheRound), DEVICE_MACHINE_OK);
+    EXPECT_EQ(ctrlWaitLevel.load(), CTRL_WAIT_OK);
+    EXPECT_EQ(curThreadIdx, 0);
+    EXPECT_EQ(arbitratedScheNum, 3);
+}
+
+TEST_F(ArbitrationTest, WaitForCtrlDecision_Dav2201_AlreadyPublishedOk)
+{
+    // follower 路径：ctrlWaitLevel 已被 leader 发布为 CTRL_WAIT_OK →
+    // ResolveCtrlDecision CAS 失败 → WaitCtrlDecision 读取终态 → ApplyCtrlDecision 返回 OK
+    std::atomic<int> ctrlWaitLevel{CTRL_WAIT_OK};
+    std::atomic<uint64_t> ctrlRound{1};
+    std::atomic<uint64_t> scheRound{1};
+    int curThreadIdx = 1;
+    int arbitratedScheNum = 3;
+
+    EXPECT_EQ(WaitForCtrlDecision(ArchInfo::DAV_2201, curThreadIdx, arbitratedScheNum,
+        ctrlWaitLevel, ctrlRound, scheRound), DEVICE_MACHINE_OK);
+    EXPECT_EQ(curThreadIdx, 1);
+    EXPECT_EQ(arbitratedScheNum, 3);
+}
+
+TEST_F(ArbitrationTest, WaitForCtrlDecision_Dav2201_AlreadyPublishedDropped)
+{
+    // follower 路径：ctrlWaitLevel 已被 leader 发布为 CTRL_WAIT_DROPPED →
+    // ApplyCtrlDecision 减一个 sche，最后一个线程被丢弃
+    std::atomic<int> ctrlWaitLevel{CTRL_WAIT_DROPPED};
+    std::atomic<uint64_t> ctrlRound{1};
+    std::atomic<uint64_t> scheRound{1};
+    int curThreadIdx = 3; // == scheNum(3) → 被丢弃
+    int arbitratedScheNum = 3;
+
+    EXPECT_EQ(WaitForCtrlDecision(ArchInfo::DAV_2201, curThreadIdx, arbitratedScheNum,
+        ctrlWaitLevel, ctrlRound, scheRound), DEVICE_MACHINE_OK);
+    EXPECT_EQ(curThreadIdx, -1);
+    EXPECT_EQ(arbitratedScheNum, 2);
 }

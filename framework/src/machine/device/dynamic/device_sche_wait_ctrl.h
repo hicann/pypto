@@ -17,61 +17,57 @@
 namespace npu::tile_fwk::dynamic {
 
 enum CtrlWaitLevel : int {
-    CTRL_WAIT_ARBITRATING = -2, // SchWait 中
-    CTRL_WAIT_FAILED = -1,      // retry 失败
+    CTRL_WAIT_ARBITRATING = -2, // spin 等待中
+    CTRL_WAIT_FAILED = -1,      // scheNum==1 时超时
     CTRL_WAIT_UNSET = 0,        // 未决策
-    CTRL_WAIT_OK = 1,           // 首次 ScheWait 成功，无需丢弃
+    CTRL_WAIT_OK = 1,           // ctrl 已起来，无需丢弃
     CTRL_WAIT_DROPPED = 2,      // 需丢弃一个线程
 };
 
-static inline int ScheWait(const DevAscendProgram* devProg, ArchInfo archInfo)
+// spin 等待 ctrl 线程起来（ctrlRound >= scheRound），成功返回 true，超时返回 false
+static inline bool WaitCtrlRoundReady(ArchInfo archInfo, std::atomic<uint64_t>& ctrlRound, std::atomic<uint64_t>& scheRound)
 {
-    uint64_t scheWaitTimeout = (archInfo == ArchInfo::DAV_2201) ? TIMEOUT_A2A3_1SEC : TIMEOUT_A5_1SEC;
-    TIMEOUT_CHECK_INIT(devProg->devArgs.archInfo, scheWaitTimeout);
-
-    while (unlikely(!devProg->runtimeDataRingBufferInited)) {
-        RuntimeYield(0);
-        __PYPTO_TIMEOUT_CHECK_WARN_EXIT(return DEVICE_MACHINE_ERROR, "#sche.wait: RingBuffer init.");
+    uint64_t waitTimeout = (archInfo == ArchInfo::DAV_2201) ? TIMEOUT_A2A3_100US : TIMEOUT_A5_50US;
+    if (!IsDeviceMode()) {
+        waitTimeout = (archInfo == ArchInfo::DAV_2201) ? TIMEOUT_A2A3_1SEC : TIMEOUT_A5_1SEC;
     }
-    const RuntimeDataRingBufferHead* ringBufferHead = devProg->GetRuntimeDataList();
-
-    while (unlikely(ringBufferHead->Empty())) {
-        RuntimeYield(0);
-        __PYPTO_TIMEOUT_CHECK_WARN_EXIT(return DEVICE_MACHINE_ERROR, "#sche.wait: RingBuffer data.");
+    TIMEOUT_CHECK_INIT(archInfo, waitTimeout);
+    while (ctrlRound.load(std::memory_order_acquire) <= scheRound.load(std::memory_order_acquire)) {
+        __PYPTO_TIMEOUT_CHECK_WARN_EXIT(return false, "#ctrl.wait: ctrl thread not start.");
     }
-    return DEVICE_MACHINE_OK;
+    return true;
 }
 
-// CAS 抢占成功者执行第一次 ScheWait 并发布决策 level；CAS 失败返回 false
-static inline bool ResolveCtrlDecision(const DevAscendProgram* devProg, int scheNum,
-    std::atomic<int>& ctrlWaitLevel, int& outLevel, ArchInfo archInfo)
+// CAS 抢占成功者 spin 等 ctrl 线程起来（ctrlRound >= scheRound），超时则丢弃
+// ctrl 在 EntrySplittedStreamCtrl 第一行 ++ctrlRound_，比 RingBuffer 初始化快得多
+static inline bool ResolveCtrlDecision(ArchInfo archInfo, int scheNum, std::atomic<int>& ctrlWaitLevel, int& outLevel,
+    std::atomic<uint64_t>& ctrlRound, std::atomic<uint64_t>& scheRound)
 {
     int expected = CTRL_WAIT_UNSET;
     if (!ctrlWaitLevel.compare_exchange_strong(expected, CTRL_WAIT_ARBITRATING,
         std::memory_order_acq_rel, std::memory_order_acquire)) {
         return false;
     }
-    int firstRet = ScheWait(devProg, archInfo);
-    if (firstRet == DEVICE_MACHINE_OK) {
+    if (WaitCtrlRoundReady(archInfo, ctrlRound, scheRound)) {
         outLevel = CTRL_WAIT_OK;
-    } else if (scheNum == 1) {
-        outLevel = CTRL_WAIT_FAILED;
     } else {
-        outLevel = CTRL_WAIT_DROPPED;
+        outLevel = (scheNum == 1) ? CTRL_WAIT_FAILED : CTRL_WAIT_DROPPED;
     }
     ctrlWaitLevel.store(outLevel, std::memory_order_release);
     return true;
 }
 
-// 等待第一个 sche 线程 ScheWait 结果
-// 超时必须 >= ScheWait 的超时（TIMEOUT_A2A3_1SEC），否则 follower 会在 leader 发布决策前超时退出
+// follower spin 等待决策终态 level
 static inline int WaitCtrlDecision(ArchInfo archInfo, std::atomic<int>& ctrlWaitLevel, int& outLevel)
 {
-    uint64_t scheWaitTimeout = TIMEOUT_A2A3_2SEC;
-    TIMEOUT_CHECK_INIT(archInfo, scheWaitTimeout);
+    uint64_t waitTimeout = (archInfo == ArchInfo::DAV_2201) ? TIMEOUT_A2A3_200US : TIMEOUT_A5_50US;
+    if (!IsDeviceMode()) {
+        waitTimeout = (archInfo == ArchInfo::DAV_2201) ? TIMEOUT_A2A3_1SEC : TIMEOUT_A5_1SEC;
+    }
+    TIMEOUT_CHECK_INIT(archInfo, waitTimeout);
     int level = ctrlWaitLevel.load(std::memory_order_acquire);
     while (level == CTRL_WAIT_UNSET || level == CTRL_WAIT_ARBITRATING) {
-        __PYPTO_TIMEOUT_CHECK_WARN_EXIT(return DEVICE_MACHINE_ERROR, "#cur wait ctrl decision failed.");
+        __PYPTO_TIMEOUT_CHECK_WARN_EXIT(return DEVICE_MACHINE_ERROR, "Wait for ctrl thread timeout, ctrl wait level: %d", level);
         level = ctrlWaitLevel.load(std::memory_order_acquire);
     }
     outLevel = level;
@@ -79,11 +75,14 @@ static inline int WaitCtrlDecision(ArchInfo archInfo, std::atomic<int>& ctrlWait
 }
 
 // 决策后统一分发：
-//   FAILED → ERROR；OK → 直接返回；DROPPED → 减一个 sche，被丢弃者退出，存活者 retry
-static inline int ApplyCtrlDecision(const DevAscendProgram* devProg, int& curThreadIdx, int& arbitratedScheNum, 
-    int level, ArchInfo archInfo)
+//   FAILED → ERROR
+//   OK → 直接返回（后续由 device_sche.h 统一 ScheWait）
+//   DROPPED → 减一个 sche，被丢弃者退出，存活者直接返回（后续由 device_sche.h 统一 ScheWait）
+static inline int ApplyCtrlDecision(int& curThreadIdx, int& arbitratedScheNum, int level)
 {
     if (level == CTRL_WAIT_FAILED) {
+        DEV_ERROR(SchedErr::WAIT_CTRL_TIMEOUT, "Wait for ctrl thread timeout,"
+            "only one sched thread exists, id is %d.", curThreadIdx);
         return DEVICE_MACHINE_ERROR;
     }
     if (level == CTRL_WAIT_OK) {
@@ -93,39 +92,31 @@ static inline int ApplyCtrlDecision(const DevAscendProgram* devProg, int& curThr
     int scheNum = arbitratedScheNum;
     arbitratedScheNum -= 1;
     if (curThreadIdx == scheNum) {
+        DEV_INFO("Waiting for ctrl thread timed out, release sched thread %d.", curThreadIdx);
         curThreadIdx = -1;
         return DEVICE_MACHINE_OK;
     }
-    // 存活线程 retry，等待 ctrl 就绪
-    int retryRet = ScheWait(devProg, archInfo);
-    if (retryRet != DEVICE_MACHINE_OK) {
-        return DEVICE_MACHINE_ERROR;
-    }
+    DEV_INFO("Thread %d wait ctrl thread timeout, another sched thread released, arbitrated sche num: %d",
+        curThreadIdx, arbitratedScheNum);
     return DEVICE_MACHINE_OK;
 }
 
-// 对于 Dav2201,第一次等待Ctrl初始化超时丢弃一个Sche线程, 再次等待。
-// 对于其他类型, 只等待一次Ctrl, 超时则返回 ERROR
-// 通过全局 ctrlWaitLevel 保证所有线程对"是否丢弃/arbitratedScheNum"达成一致：
-//   CAS 抢占成功者做第一次 ScheWait 决策并发布；其余线程 spin 等待终态。
-//   决策后统一分发：被丢弃线程(curThreadIdx==scheNum)退出不 retry，
-//   其余存活线程 retry ScheWait 等待 ctrl 就绪。
-static inline int WaitForCtrlDecision(const DevAscendProgram* devProg, ArchInfo archInfo, int& curThreadIdx,
-    int& arbitratedScheNum, std::atomic<int>& ctrlWaitLevel)
+// 对于 Dav2201,通过 ctrlRound/scheRound 判断 ctrl 是否已起来，决定是否丢弃一个线程
+// 对于其他类型, 直接返回 DEVICE_MACHINE_OK
+static inline int WaitForCtrlDecision(ArchInfo archInfo, int& curThreadIdx, int& arbitratedScheNum, std::atomic<int>& ctrlWaitLevel,
+    std::atomic<uint64_t>& ctrlRound, std::atomic<uint64_t>& scheRound)
 {
     if (archInfo != ArchInfo::DAV_2201) {
-        return ScheWait(devProg, archInfo);
+        return DEVICE_MACHINE_OK;
     }
 
     int level = CTRL_WAIT_UNSET;
-    if (!ResolveCtrlDecision(devProg, arbitratedScheNum, ctrlWaitLevel, level, archInfo)) {
+    if (!ResolveCtrlDecision(archInfo, arbitratedScheNum, ctrlWaitLevel, level, ctrlRound, scheRound)) {
         int ret = WaitCtrlDecision(archInfo, ctrlWaitLevel, level);
         if (ret != DEVICE_MACHINE_OK) {
             return ret;
         }
     }
-    return ApplyCtrlDecision(devProg, curThreadIdx, arbitratedScheNum, level, archInfo);
+    return ApplyCtrlDecision(curThreadIdx, arbitratedScheNum, level);
 }
-
 } // namespace npu::tile_fwk::dynamic
-

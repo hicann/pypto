@@ -249,6 +249,7 @@ struct DynMachineManager {
     int SyncSchExit(DevAscendProgram* devProg, const DeviceArgs& devArgs, int ret)
     {
         if (++schExitNum_ == devArgs.nrAicpu) {
+            scheFinishRound_.fetch_add(1, std::memory_order_acq_rel);
             RunSchPost(devProg);
             RunSchDeInit();
             PerfEvtMgr::Instance().AddScheduleTurn();
@@ -332,6 +333,7 @@ struct DynMachineManager {
     {
         // ctrl start only one thread
         DEV_INFO("Ctrl enter round=%d", (int)kargs->parameter.globalRound);
+        ctrlStartRound_.fetch_add(1, std::memory_order_acq_rel);
         initCtrl_.store(true);
         int ret = RunCtrlInitNoLock(kargs, entry);
         if (ret != 0) {
@@ -361,6 +363,26 @@ struct DynMachineManager {
         }
     }
 
+    static int WaitForCtrlAndRingBuffer(DevAscendProgram* devProg, ArchInfo archInfo, int& threadIdx, int& arbitratedScheNum, std::atomic<int>& ctrlWaitLevel,
+        std::atomic<uint64_t>& ctrlRound, std::atomic<uint64_t>& scheRound)
+    {
+        int ctrlDecisionRet = WaitForCtrlDecision(archInfo, threadIdx, arbitratedScheNum, ctrlWaitLevel, ctrlRound, scheRound);
+        if (ctrlDecisionRet != DEVICE_MACHINE_OK) {
+            DEV_ERROR(SchedErr::WAIT_CTRL_TIMEOUT, "#sche.wait: WaitForCtrlDecision failed, ret=%d.", ctrlDecisionRet);
+            DeviceTrace::GetInstance().ReportTraceMsg();
+            return ctrlDecisionRet;
+        }
+        if (threadIdx != -1) {
+            int scheWaitRet = SplittedInfo::ScheWait(devProg);
+            if (scheWaitRet != DEVICE_MACHINE_OK) {
+                DEV_ERROR(SchedErr::RINGBUFFER_WAIT_TIMEOUT, "#sche.wait: ScheWait failed, ret=%d.", scheWaitRet);
+                DeviceTrace::GetInstance().ReportTraceMsg();
+                return scheWaitRet;
+            }
+        }
+        return DEVICE_MACHINE_OK;
+    }
+
     int EntrySplittedStreamSche(DeviceKernelArgs* kargs, const KernelCtrlEntry& entry)
     {
         DevAscendProgram* devProg = PtrToPtr<int64_t, DevAscendProgram>(kargs->cfgdata);
@@ -379,11 +401,10 @@ struct DynMachineManager {
             return npu::tile_fwk::dynamic::DEVICE_MACHINE_ERROR;
         }
         if (threadIdx != -1) {
-            int scheWaitRet = WaitForCtrlDecision(devProg, devArgs.archInfo, threadIdx, arbitratedScheNum, ctrlWaitLevel_);
-            if (scheWaitRet != DEVICE_MACHINE_OK) {
-                DEV_ERROR(SchedErr::RINGBUFFER_WAIT_TIMEOUT, "#sche.wait: ScheWait failed, ret=%d.", scheWaitRet);
-                DeviceTrace::GetInstance().ReportTraceMsg();
-                return scheWaitRet;
+            int waitCtrlRet = WaitForCtrlAndRingBuffer(devProg, devArgs.archInfo, threadIdx, arbitratedScheNum,
+                        ctrlWaitLevel_, ctrlStartRound_, scheFinishRound_);
+            if (waitCtrlRet != DEVICE_MACHINE_OK) {
+                return waitCtrlRet;
             }
         }
         PerfMtTrace(PERF_TRACE_ALLOC_THREAD_ID, threadIdx);
@@ -437,11 +458,32 @@ struct DynMachineManager {
     std::atomic<bool> initSch_{false};
     std::atomic<bool> schRunFailed_{false};
     std::atomic<int> globalThreadIdx_{0};
+    std::atomic<uint64_t> ctrlStartRound_{0};
+    std::atomic<uint64_t> scheFinishRound_{0};
 
     struct SplittedInfo {
-        bool ScheSync(DevStartArgs* devStartArgs, int schNum)
+        static int ScheWait(DevAscendProgram* devProg)
         {
-            return ++devStartArgs->devScheState.finished == schNum;
+            TIMEOUT_CHECK_INIT(devProg->devArgs.archInfo, TIMEOUT_1MIN);
+
+            while (unlikely(!devProg->runtimeDataRingBufferInited)) {
+                RuntimeYield(0);
+
+                __PYPTO_TIMEOUT_CHECK(SchedErr::RINGBUFFER_WAIT_TIMEOUT,
+                    return DEVICE_MACHINE_ERROR,
+                    "#sche.wait: RingBuffer init.");
+            }
+            RuntimeDataRingBufferHead* ringBufferHead = devProg->GetRuntimeDataList();
+            start = GetCycles();
+
+            while (unlikely(ringBufferHead->Empty())) {
+                RuntimeYield(0);
+
+                __PYPTO_TIMEOUT_CHECK(SchedErr::RINGBUFFER_WAIT_TIMEOUT,
+                    return DEVICE_MACHINE_ERROR,
+                    "#sche.wait: RingBuffer data.");
+            }
+            return DEVICE_MACHINE_OK;
         }
     } splittedInfo_;
 };

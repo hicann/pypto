@@ -443,6 +443,7 @@ static inline int AllocThreadIdxForDav2201Impl(const DeviceArgs* devArgs, const 
     int scheNum = GetScheNumByArbitrationLevel(static_cast<int>(devArgs->scheCpuNum), level);
     arbitratedScheNum = scheNum;
     AllocThreadIdByArbitrationLevel(level, curThreadIdx, isSameClusterThread, threadIdx);
+    DEV_INFO("Arbitration succeeded. Arbitration level: %d, arbitrated sched num: %d", level, arbitratedScheNum);
     if (curThreadIdx == -1 || curThreadIdx > scheNum) {
         curThreadIdx = -1;
         return DEVICE_MACHINE_OK;
