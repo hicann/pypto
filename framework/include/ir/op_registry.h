@@ -74,7 +74,7 @@ public:
      * before returning the operator instance. This ensures that operators cannot
      * be used until they are fully defined.
      *
-     * Required fields:
+     * Required fields -
      * - name: Set automatically during registration
      * - description: Must be set via set_description()
      * - op_category: Must be set via set_op_category()
