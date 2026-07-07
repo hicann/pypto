@@ -52,11 +52,11 @@ void OoOScheduler::NotifyOpLaunch(Operation* op, int cycleEnd)
 {
     if (observers_.empty()) return;
     OpLaunchEvent event;
-    event.clock = clock;
+    event.clock = state_.clock;
     event.cycleEnd = cycleEnd;
     event.opMagic = op->GetOpMagic();
-    event.pipeType = schedInfoMap_[op].pipeType;
-    event.coreLocation = ToCoreLocation(schedInfoMap_[op].coreLocation);
+    event.pipeType = state_.schedInfoMap[op].pipeType;
+    event.coreLocation = ToCoreLocation(state_.schedInfoMap[op].coreLocation);
     for (size_t i = 0; i < op->GetIOperands().size(); ++i) {
         event.inputMemIds.push_back(op->GetInputOperand(i)->memoryrange.memId);
     }
@@ -72,8 +72,8 @@ void OoOScheduler::NotifyOpLaunch(Operation* op, int cycleEnd)
 void OoOScheduler::NotifyOpRetire(Operation* op, const std::vector<int>& freedMemIds)
 {
     if (observers_.empty()) return;
-    if (schedInfoMap_[op].isAlloc) return;   // alloc retire only awakens successors, no OP_RETIRE event
-    OpRetireEvent event{clock, op->GetOpMagic(), freedMemIds};
+    if (state_.schedInfoMap[op].isAlloc) return;   // alloc retire only awakens successors, no OP_RETIRE event
+    OpRetireEvent event{state_.clock, op->GetOpMagic(), freedMemIds};
     for (auto* obs : observers_) {
         obs->OnOpRetire(event);
     }
@@ -82,12 +82,12 @@ void OoOScheduler::NotifyOpRetire(Operation* op, const std::vector<int>& freedMe
 void OoOScheduler::NotifyAllocExec(Operation* op, int memId)
 {
     if (observers_.empty()) return;
-    auto& buf = localBufferMap_.at(memId);
+    auto& buf = state_.localBufferMap.at(memId);
     AllocExecEvent event;
-    event.clock = clock;
+    event.clock = state_.clock;
     event.memId = memId;
     event.memType = buf->memType;
-    event.coreLocation = ToCoreLocation(schedInfoMap_[op].coreLocation);
+    event.coreLocation = ToCoreLocation(state_.schedInfoMap[op].coreLocation);
     event.addrStart = buf->start;
     event.addrEnd = buf->end;
     uint64_t validSize = buf->size;
@@ -101,60 +101,14 @@ void OoOScheduler::NotifyAllocExec(Operation* op, int memId)
     }
 }
 
-void OoOScheduler::NotifySpill(LogicalTensorPtr spillTensor, int spillMemId,
-    Operation* spillAllocOp, const SingleSpillCreatedOps& created)
-{
-    if (observers_.empty()) return;
-    auto& buf = localBufferMap_.at(spillMemId);
-    SpillEvent event;
-    event.clock = clock;
-    // beginClock = spill decision moment; endClock = beginClock + real copyout
-    // latency. If no copyout op (COPY_IN reuse path), the spill is instant.
-    event.beginClock = clock;
-    event.endClock = created.copyoutOp != nullptr
-        ? clock + created.copyoutOp->GetLatency() : clock;
-    event.spillMemId = spillMemId;
-    event.memType = spillTensor->GetMemoryTypeOriginal();
-    event.coreLocation = ToCoreLocation(schedInfoMap_[spillAllocOp].coreLocation);
-    event.addrStart = buf->start;
-    event.addrEnd = buf->end;
-    event.triggerOpMagic = spillAllocOp->GetOpMagic();
-    event.triggerTensorSize = spillAllocOp->GetOutputOperand(0)->tensor->GetRawDataSize();
-    event.spillCopyoutOpMagic = created.copyoutOp ? created.copyoutOp->GetOpMagic() : -1;
-    event.reloadAllocOpMagic = created.allocOp ? created.allocOp->GetOpMagic() : -1;
-    event.reloadCopyInOpMagic = created.copyinOp ? created.copyinOp->GetOpMagic() : -1;
-    event.spillTensorMagic = spillTensor->GetMagic();
-    event.spillCopyoutSize = (created.copyoutOp != nullptr)
-        ? spillTensor->tensor->GetRawDataSize() : 0;
-    for (const auto& [memId, ownerOp] : tensorOccupyMap) {
-        if (schedInfoMap_[ownerOp].isAlloc) {
-            event.allocOccupiedSize += localBufferMap_.at(memId)->size;
-        }
-    }
-    auto& pool = bufferManagerMap[schedInfoMap_[spillAllocOp].coreLocation][buf->memType];
-    event.bufferCurrentUsage = pool.GetAllocatedSize();
-    event.bufferCapacity = pool.GetMemSize();
-    if (created.gmTensor != nullptr) {
-        event.spillDdrMemId = created.gmTensor->memoryrange.memId;
-        event.ddrKind = DDRBufferKind::SPILL_TEMP;
-        event.ddrMemType = MemoryType::MEM_DEVICE_DDR;
-        event.ddrAddrStart = created.gmTensor->memoryrange.start;
-        event.ddrAddrEnd = created.gmTensor->memoryrange.end;
-        event.ddrSize = event.ddrAddrEnd - event.ddrAddrStart;
-    }
-    for (auto* obs : observers_) {
-        obs->OnSpill(event);
-    }
-}
-
 void OoOScheduler::NotifyBufferRearrange(Operation* triggerOp, MemoryType memType,
     std::vector<BufferRearrangeEvent::Change> changes)
 {
     if (observers_.empty() || changes.empty()) return;
     BufferRearrangeEvent event;
-    event.clock = clock;
+    event.clock = state_.clock;
     event.memType = memType;
-    event.coreLocation = ToCoreLocation(schedInfoMap_[triggerOp].coreLocation);
+    event.coreLocation = ToCoreLocation(state_.schedInfoMap[triggerOp].coreLocation);
     event.triggerOpMagic = triggerOp->GetOpMagic();
     event.changes = std::move(changes);
     for (auto* obs : observers_) {
@@ -165,11 +119,11 @@ void OoOScheduler::NotifyBufferRearrange(Operation* triggerOp, MemoryType memTyp
 void OoOScheduler::NotifyAllocFail(Operation* triggerOp, MemoryType memType, uint64_t requestSize)
 {
     if (observers_.empty()) return;
-    auto coreLocation = schedInfoMap_[triggerOp].coreLocation;
-    auto& pool = bufferManagerMap[coreLocation][memType];
+    auto coreLocation = state_.schedInfoMap[triggerOp].coreLocation;
+    auto& pool = state_.bufferManagerMap[coreLocation][memType];
 
     AllocFailEvent event;
-    event.clock = clock;
+    event.clock = state_.clock;
     event.triggerOpMagic = triggerOp->GetOpMagic();
     event.memType = memType;
     event.coreLocation = ToCoreLocation(coreLocation);
@@ -182,8 +136,8 @@ void OoOScheduler::NotifyAllocFail(Operation* triggerOp, MemoryType memType, uin
         slice.addrStart = pool.GetBufferOffset(memId);
         slice.size = pool.GetBufferSize(memId);
         slice.addrEnd = slice.addrStart + slice.size;
-        auto it = tensorOccupyMap.find(memId);
-        slice.ownerOpMagic = (it != tensorOccupyMap.end()) ? it->second->GetOpMagic() : -1;
+        auto it = state_.tensorOccupyMap.find(memId);
+        slice.ownerOpMagic = (it != state_.tensorOccupyMap.end()) ? it->second->GetOpMagic() : -1;
         event.occupiedSlices.push_back(slice);
     }
 
@@ -205,7 +159,7 @@ void OoOScheduler::NotifyAllocFail(Operation* triggerOp, MemoryType memType, uin
 void OoOScheduler::NotifyScheduleEnd(bool success)
 {
     if (observers_.empty()) return;
-    ScheduleEndEvent event{clock, workspaceOffset, success};
+    ScheduleEndEvent event{state_.clock, state_.workspaceOffset, success};
     for (auto* obs : observers_) {
         obs->OnScheduleEnd(event);
     }
@@ -273,6 +227,61 @@ std::vector<DDRRef> OoOScheduler::BuildDDRRefs(Operation* op) const
     for (const auto& iOp : op->GetIOperands()) add(iOp);
     for (const auto& oOp : op->GetOOperands()) add(oOp);
     return refs;
+}
+
+CoreLocation ToCoreLocation(CoreLocationType c)
+{
+    switch (c) {
+        case CoreLocationType::AIC:  return {CoreClass::AIC, 0};
+        case CoreLocationType::AIV0: return {CoreClass::AIV, 0};
+        case CoreLocationType::AIV1: return {CoreClass::AIV, 1};
+        default:                     return {CoreClass::UNKNOWN, 0};
+    }
+}
+
+void NotifySpill(ScheduleState& state, LogicalTensorPtr spillTensor, int spillMemId,
+    Operation* spillAllocOp, const SingleSpillCreatedOps& created)
+{
+    if (!state.HasObservers()) return;
+    auto& buf = state.localBufferMap.at(spillMemId);
+    SpillEvent event;
+    int curClock = state.clock;
+    event.clock = curClock;
+    event.beginClock = curClock;
+    event.endClock = created.copyoutOp != nullptr
+        ? curClock + created.copyoutOp->GetLatency() : curClock;
+    event.spillMemId = spillMemId;
+    event.memType = spillTensor->GetMemoryTypeOriginal();
+    event.coreLocation = ToCoreLocation(state.schedInfoMap[spillAllocOp].coreLocation);
+    event.addrStart = buf->start;
+    event.addrEnd = buf->end;
+    event.triggerOpMagic = spillAllocOp->GetOpMagic();
+    event.triggerTensorSize = spillAllocOp->GetOutputOperand(0)->tensor->GetRawDataSize();
+    event.spillCopyoutOpMagic = created.copyoutOp ? created.copyoutOp->GetOpMagic() : -1;
+    event.reloadAllocOpMagic = created.allocOp ? created.allocOp->GetOpMagic() : -1;
+    event.reloadCopyInOpMagic = created.copyinOp ? created.copyinOp->GetOpMagic() : -1;
+    event.spillTensorMagic = spillTensor->GetMagic();
+    event.spillCopyoutSize = (created.copyoutOp != nullptr)
+        ? spillTensor->tensor->GetRawDataSize() : 0;
+    for (const auto& [memId, ownerOp] : state.tensorOccupyMap) {
+        if (state.schedInfoMap[ownerOp].isAlloc) {
+            event.allocOccupiedSize += state.localBufferMap.at(memId)->size;
+        }
+    }
+    auto& pool = state.bufferManagerMap[state.schedInfoMap[spillAllocOp].coreLocation][buf->memType];
+    event.bufferCurrentUsage = pool.GetAllocatedSize();
+    event.bufferCapacity = pool.GetMemSize();
+    if (created.gmTensor != nullptr) {
+        event.spillDdrMemId = created.gmTensor->memoryrange.memId;
+        event.ddrKind = DDRBufferKind::SPILL_TEMP;
+        event.ddrMemType = MemoryType::MEM_DEVICE_DDR;
+        event.ddrAddrStart = created.gmTensor->memoryrange.start;
+        event.ddrAddrEnd = created.gmTensor->memoryrange.end;
+        event.ddrSize = event.ddrAddrEnd - event.ddrAddrStart;
+    }
+    for (auto* obs : state.observers_) {
+        obs->OnSpill(event);
+    }
 }
 
 } // namespace npu::tile_fwk

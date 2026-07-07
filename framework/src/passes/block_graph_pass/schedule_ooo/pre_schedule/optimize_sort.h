@@ -16,16 +16,18 @@
 #ifndef PASS_OPTIMIZE_SORT_H
 #define PASS_OPTIMIZE_SORT_H
 
-#include "passes/block_graph_pass/schedule_ooo/common/schedule_base.h"
+#include "passes/block_graph_pass/schedule_ooo/common/schedule_state.h"
 #include <functional>
 #include <vector>
 #include <set>
 
 namespace npu::tile_fwk {
-class OptimizeSort : public ScheduleBase {
+class OptimizeSort {
 public:
+    ScheduleState state_;
+
     OptimizeSort(std::vector<Operation*> opList, Function& function)
-        : ScheduleBase(), operations(opList), function_(function)
+        : operations(opList), function_(function)
     {}
 
     std::vector<Operation*> operations;

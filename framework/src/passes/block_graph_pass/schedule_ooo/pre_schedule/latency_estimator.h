@@ -16,21 +16,22 @@
 #ifndef PASS_ESTIMATE_LATENCY_H
 #define PASS_ESTIMATE_LATENCY_H
 
-#include "passes/block_graph_pass/schedule_ooo/common/schedule_base.h"
-#include "passes/block_graph_pass/schedule_ooo/common/schedule_main_loop_base.h"
+#include "passes/block_graph_pass/schedule_ooo/common/schedule_state.h"
 #include <vector>
 
 namespace npu::tile_fwk {
-class LatencyEstimator : public ScheduleBase, public ScheduleMainLoopBase {
+class LatencyEstimator {
 public:
     LatencyEstimator() {}
     LatencyEstimator(std::vector<Operation*>& newTaskList, std::vector<Operation*>& newOperations)
-        : ScheduleBase(), taskList(newTaskList), operations(newOperations)
+        : taskList(newTaskList), operations(newOperations)
     {
         InitMemWithoutAlloc();
-        Init(taskList);
+        state_.Init(taskList);
     }
     ~LatencyEstimator() {}
+
+    ScheduleState state_;
 
     std::map<MemoryType, OpQueue> allocIssueQueue; // alloc执行 顺序
     std::map<PipeType, OpQueue> opQueues;
@@ -42,23 +43,16 @@ public:
     void LaunchReadyIssue();
     Status FreeBuffer(Operation* op);
     Status RetireOpAndAwakeSucc(Operation* op, uint64_t& commitCnt);
-    // ScheduleMainLoopBase 钩子实现
-    Status PreMainLoop() override;
-    Status PostMainLoop() override;
-    Status RetireIssueStage(uint64_t& commitCnt, int& nextCycle) override;
+    Status PreMainLoop();
+    Status PostMainLoop();
+    Status RetireIssueStage(uint64_t& commitCnt, int& nextCycle);
     Status ExecuteAllocIssue(uint64_t& commitCnt, MemoryType memType, OpQueue& pipe);
-    Status BufferAllocStage(uint64_t& commitCnt) override;
-    Status LaunchIssueStage(int& nextCycle) override;
-    Status SpillOnBlock() override;
+    Status BufferAllocStage(uint64_t& commitCnt);
+    Status LaunchIssueStage(int& nextCycle);
+    Status SpillOnBlock();
     void initLatencyEstimatorOpQueues();
     void InitMemWithoutAlloc();
-    // ScheduleMainLoopBase virtual getters — redirect to ScheduleState via ScheduleBase proxy
-    int& GetClock() override { return clock; }
-    uint64_t& GetNumTotalIssues() override { return numTotalIssues; }
-    // 保留原入口名称,内部直接转发到 ScheduleMainLoopBase::RunMainLoop。
     Status LatencyEstimatorMainLoop();
-
-private:
 };
 } // namespace npu::tile_fwk
 #endif // PASS_SCHEDULE_BASE_H

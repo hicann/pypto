@@ -11,7 +11,7 @@
 #ifndef NPU_TILE_FWK_MEMORY_AWARE_TOPO_SORT_H
 #define NPU_TILE_FWK_MEMORY_AWARE_TOPO_SORT_H
 
-#include "passes/block_graph_pass/schedule_ooo/common/schedule_base.h"
+#include "passes/block_graph_pass/schedule_ooo/common/schedule_state.h"
 #include "passes/block_graph_pass/schedule_ooo/common/dep_manager.h"
 #include <unordered_map>
 #include <vector>
@@ -114,10 +114,16 @@ std::vector<Operation*> MemoryAwareTopologicalSort(
     SchedulingContext& context,
     const ScoringParams& params);
 
-class MemoryAwareTopoSort : public ScheduleBase {
+class MemoryAwareTopoSort {
 public:
+    ScheduleState state_;
+
+    // Proxy reference fields (redirect to state_)
+    std::unordered_map<MemoryType, int64_t>& localMemSize = state_.localMemSize;
+    std::vector<Operation*>& operations = state_.operations;
+
     MemoryAwareTopoSort(std::vector<Operation*> opList, Function& function)
-        : ScheduleBase(), function_(&function)
+        : function_(&function)
     {
         operations = opList;
     }

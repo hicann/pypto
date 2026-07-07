@@ -31,25 +31,17 @@
 
 namespace npu::tile_fwk {
 
-// CoreLocationType, COPY_IN_OPS, CORE_INIT_CONFIGS_HARDWARE_ONE/TWO,
-// OpSchedInfo, SpillContext, SingleSpillCreatedOps, DualDstPair, DualDstAllocCtx
-// are defined in schedule_state.h (included above).
-
 class SpillEngine {
 public:
-    SpillEngine(ScheduleState& state, ScheduleNotifier& notifier, Function& function)
-        : state_(state), notifier_(notifier), function_(function) {}
+    SpillEngine(ScheduleState& state, Function& function)
+        : state_(state), function_(function) {}
     ~SpillEngine() {}
 
-    // === Public interface: pure spill execution ===
-    // SpillBuffer: execute a single memId spill (called by OoOScheduler::GenBufferSpill)
     Status SpillBuffer(int memId, Operation* spillAllocOp, SpillContext& ctx);
 
-    // Factory helpers (public so OoOScheduler orchestrator can call them directly)
     void EmitInitDDRBuffer(const LogicalTensorPtr& t, DDRBufferKind kind);
     int64_t CalcWorkspaceOffset(std::vector<int64_t> shape, std::vector<int64_t> offset, DataType dataType);
 
-    // === Orchestration-accessible query helpers (public for OoOScheduler) ===
     Operation* GetSpillOp(int memId);
     int GetBufNextUseTime(int curMemId);
     bool IsBelongSpillBlackList(Operation* spillOp, Operation* op);
@@ -57,7 +49,6 @@ public:
 
 private:
     ScheduleState& state_;
-    ScheduleNotifier& notifier_;
     Function& function_;
     IRBuilder irBuilder_;
     int64_t workspaceOffset_{0};
@@ -65,7 +56,6 @@ private:
     void FindFilterLtags(Operation* allocOp, std::set<Operation*>& filterLtags);
     bool CheckMachineAndL1(Operation* spillOp, Operation* allocOp);
 
-    // === Spill execution variants ===
     Status HandleSpillMode(int memId, Operation* spillOp, LogicalTensorPtr spillTensor,
         Operation* spillAllocOp, SpillContext& ctx, SingleSpillCreatedOps& created);
     Status SpillBufferFromDDR(int spillMemId, Operation* spillOp, LogicalTensorPtr spillTensor,
@@ -87,14 +77,12 @@ private:
     Status SpillMultiProducerBufferFor3510(int spillMemid, Operation* spillOp, LogicalTensorPtr spillTensor,
         Operation* spillAllocOp, SpillContext& ctx, SingleSpillCreatedOps& created);
 
-    // === Partial buffer helpers ===
     Status CopyoutParticalBuffer(LogicalTensorPtr spillTensor, LogicalTensorPtr gmTensor, SpillContext& ctx);
     Status CreateParticalBuffer(int spillMemid, Operation* producerOp, LogicalTensorPtr assembleOOperand,
         Operation* copyoutOp, Operation* spillAllocOp);
     Status FillSpillAssembleBuffer(int spillMemid, LogicalTensorPtr spillTensor, LogicalTensorPtr assembleTensor,
         Operation* copyoutOp, LogicalTensorPtr gmTensor, Operation* spillAllocOp, Operation*& wholeCopyinOut);
 
-    // === Op / Tensor factory ===
     LogicalTensorPtr CreateLocalTensor(LogicalTensorPtr spillTensor);
     LogicalTensorPtr CreateGMTensor(LogicalTensorPtr spillTensor, LogicalTensorPtr actualSpillTensor,
         int spillMemId, DataType gmDtype = DT_BOTTOM);
@@ -114,7 +102,6 @@ private:
     const std::vector<int64_t>& GetLargerShape(const std::vector<int64_t>& shape1,
         const std::vector<int64_t>& shape2);
 
-    // === Dependency / schedule update ===
     bool IsUnusedTensor(Operation* spillOp);
     void UpdateSuccessorDependencies(Operation* succOp, Operation* spillOp,
         Operation* reloadCopyin, int spillMemId, int reloadMemId);
@@ -123,7 +110,6 @@ private:
         std::vector<std::pair<Operation*, std::vector<int>>> opMemidMap,
         int spillMemId, Operation* spillOp);
 
-    // === RemoveSmallShapeSpillResources helpers ===
     void CollectUBSceneOpsAndTensors(Operation* producerOp,
         std::vector<Operation*>& opsToDelete, std::vector<LogicalTensorPtr>& tensorsToDelete);
     void CollectProducerChainForDeletion(LogicalTensorPtr spillTensor,
@@ -136,14 +122,12 @@ private:
         const std::vector<Operation*>& opsToDelete);
     Status RemoveSmallShapeSpillResources(int spillMemId, LogicalTensorPtr spillTensor, SpillContext& ctx);
 
-    // === Spill query / map update ===
     LogicalTensorPtr GetSpillTensor(Operation* spillOp, int spillMemId);
     void CollectL0CConsumers(LogicalTensorPtr spillTensor, std::vector<Operation*>& consumers);
     Status GetActualSpillForNd2nz(Operation*& spillOp, LogicalTensorPtr& spillTensor);
     Status GetActualSpill(Operation* op, Operation*& actualOp, LogicalTensorPtr& actualTensor);
     Status UpdateSpillOpDepend(Operation* spillOp, LogicalTensorPtr newTensor, int spillMemId);
 
-    // === Tensor input / memId update ===
     void UpdateOperationInput(Operation* targetOp, Operation* spillOp, LogicalTensorPtr tensor, int spillMemId);
     void UpdateTensorInputForView(Operation& op, Operation* spillSrcOp, LogicalTensorPtr tensor);
     void ReplaceViewOpChainMemId(LogicalTensorPtr startTensor, int oldMemId, int newMemId);
@@ -151,7 +135,6 @@ private:
     Status UpdateRemainMemid(int oldMemId, int newMemId);
     void UpdateOpInternalSubgraphID(Operation& op, Operation* srcOp);
 
-    // === Schedule info update ===
     Status UpdateCopyoutScheduleInfo(Operation* op, LogicalTensorPtr spillTensor, int spillMemId,
         Operation* spillAllocOp, bool isRetired = true);
     void UpdateOpScheduleInfo(Operation* op, std::vector<int> memIds, Operation* AllocOp);
@@ -167,15 +150,6 @@ private:
         std::vector<SymbolicScalar>& toDynOffset, std::vector<SymbolicScalar>& fromDynValidShape) const;
 
     Operation* SkipViewChain(Operation* start, bool followProducers);
-
-    // Notification helpers
-    void NotifySpill(LogicalTensorPtr spillTensor, int spillMemId, Operation* spillAllocOp,
-        const SingleSpillCreatedOps& created);
-    void NotifyBufferRearrange(Operation* triggerOp, MemoryType memType,
-        std::vector<BufferRearrangeEvent::Change> changes);
-    void NotifyAllocFail(Operation* triggerOp, MemoryType memType, uint64_t requestSize);
-
-    static CoreLocation ToCoreLocation(CoreLocationType c);
 };
 
 } // namespace npu::tile_fwk

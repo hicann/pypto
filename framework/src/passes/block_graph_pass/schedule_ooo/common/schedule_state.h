@@ -10,9 +10,9 @@
 
 /*!
  * \file schedule_state.h
- * \brief Shared mutable state container for OoOScheduler, SpillEngine, and DualDstEngine.
- *        Step 1: absorbs ScheduleBase fields and state-operation methods.
- *        Steps 4-6 will add OoO-specific fields (schedInfoMap, tensorOccupyMap, etc.).
+ * \brief Shared mutable state container for OoOScheduler, SpillEngine, DualDstEngine,
+ *        LatencyEstimator, OptimizeSort, and MemoryAwareTopoSort.
+ *        Each scheduler holds its own ScheduleState instance via composition.
  */
 
 #ifndef PASS_SCHEDULE_STATE_H
@@ -36,7 +36,7 @@
 #include "tilefwk/error_code.h"
 #include "passes/block_graph_pass/schedule_ooo/common/buffer_pool.h"
 #include "passes/block_graph_pass/schedule_ooo/common/dep_manager.h"
-#include "passes/block_graph_pass/schedule_ooo/common/schedule_notifier.h"
+#include "passes/statistics/schedule_observer.h"
 #include "passes/pass_utils/reschedule_utils.h"
 #include "passes/pass_utils/pass_utils.h"
 
@@ -184,7 +184,10 @@ public:
     ScheduleState() {}
     ~ScheduleState() {}
 
-    // === Fields migrated from ScheduleBase ===
+    std::vector<ScheduleObserver*> observers_;
+    bool HasObservers() const { return !observers_.empty(); }
+
+    // === Buffer and dependency state ===
     std::unordered_map<int, int> bufRefCount;
     std::unordered_map<MemoryType, int64_t> localMemSize;
     std::unordered_map<MemoryType, int64_t> localMemoryCurrentSize;
@@ -194,7 +197,7 @@ public:
     std::vector<Operation*> operations;
     DependencyManager depManager;
 
-    // === OoO-specific fields (Step 4b: moved from OoOScheduler) ===
+    // === OoO scheduling metadata ===
     std::unordered_map<Operation*, OpSchedInfo> schedInfoMap;
     std::unordered_map<int, Operation*> tensorOccupyMap;
     std::unordered_map<int, Operation*> tensorAllocMap;
@@ -206,13 +209,13 @@ public:
     std::unordered_map<PipeType, int> pipeEndTime;
     int workspaceMemId{SYMBOL_STACK_BASE};
 
-    // === OoO scheduling state (Step 4B: moved from OoOScheduler / ScheduleMainLoopBase) ===
+    // === Main loop scheduling state ===
     std::vector<Operation*> orderedOps;
     int clock{0};
     uint64_t numTotalIssues{0};
     std::unordered_map<CoreLocationType, std::map<MemoryType, OpQueue>> allocIssueQueue;
 
-    // === Methods migrated from ScheduleBase ===
+    // === State operation methods ===
 
     std::vector<int>& GetOpMemIds(Operation* op);
     void SetOpMemIds(Operation* op, const std::vector<int>& memIds) { opReqMemIdsMap[op] = memIds; }
@@ -245,6 +248,55 @@ public:
     bool IsOpRetired(Operation* op) const;
     void InsertOrdered(Operation* insertOp);
 };
+
+CoreLocation ToCoreLocation(CoreLocationType c);
+
+void NotifySpill(ScheduleState& state, LogicalTensorPtr spillTensor, int spillMemId,
+    Operation* spillAllocOp, const SingleSpillCreatedOps& created);
+
+template <typename Scheduler>
+Status RunSchedulerMainLoop(Scheduler& self)
+{
+    if (self.PreMainLoop() != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Operation, "PreMainLoop failed.");
+        return FAILED;
+    }
+    uint64_t commitCnt = 0;
+    bool isAllRetired = false;
+    while (!isAllRetired) {
+        int nextCycle = -1;
+        APASS_LOG_DEBUG_F(Elements::Operation, "     clock: %d", self.state_.clock);
+        if (self.RetireIssueStage(commitCnt, nextCycle) != SUCCESS) {
+            APASS_LOG_ERROR_F(Elements::Operation, "RetireIssueStage failed.");
+            return FAILED;
+        }
+        if (self.BufferAllocStage(commitCnt) != SUCCESS) {
+            APASS_LOG_ERROR_F(Elements::Operation, "BufferAllocStage failed.");
+            return FAILED;
+        }
+        if (self.LaunchIssueStage(nextCycle) != SUCCESS) {
+            APASS_LOG_ERROR_F(Elements::Operation, "LaunchIssueStage failed.");
+            return FAILED;
+        }
+        if (self.state_.numTotalIssues == commitCnt && nextCycle == -1) {
+            isAllRetired = true;
+            break;
+        }
+        if (nextCycle == -1) {
+            if (self.SpillOnBlock() != SUCCESS) {
+                APASS_LOG_ERROR_F(Elements::Operation, "SpillOnBlock failed.");
+                return FAILED;
+            }
+        } else {
+            self.state_.clock = nextCycle;
+        }
+    }
+    if (self.PostMainLoop() != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Operation, "PostMainLoop failed.");
+        return FAILED;
+    }
+    return SUCCESS;
+}
 
 } // namespace npu::tile_fwk
 #endif // PASS_SCHEDULE_STATE_H

@@ -172,7 +172,7 @@ public:
     virtual void OnAllocFail(const AllocFailEvent&) {}
     virtual void OnScheduleEnd(const ScheduleEndEvent&) {}
     virtual void OnInitDDRBuffer(const InitDDRBufferEvent&) {}
-    // Fired from ScheduleMainLoopBase::PreMainLoop / PostMainLoop.
+    // Fired from OoOScheduler::PreMainLoop / PostMainLoop and LatencyEstimator::PreMainLoop / PostMainLoop.
     virtual void OnMainLoopBegin() {}
     virtual void OnMainLoopEnd()   {}
 };

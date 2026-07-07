@@ -38,7 +38,6 @@ constexpr int OOO_NUM2 = 2;
 constexpr int OOO_NUM209 = 209;
 constexpr int UBPoolSize = 192 * 1024;
 std::unordered_map<Opcode, int> preNodePriority = {
-    // ALLOC 节点优先级最高，因为一个节点的前序ALLOC节点要在最靠近该节点的地方访问。
     {Opcode::OP_UB_ALLOC, 0},
     {Opcode::OP_L1_ALLOC, 0},
     {Opcode::OP_L0A_ALLOC, 0},
@@ -46,7 +45,6 @@ std::unordered_map<Opcode, int> preNodePriority = {
     {Opcode::OP_L0C_ALLOC, 0},
     {Opcode::OP_BT_ALLOC, 0},
     {Opcode::OP_FIX_ALLOC, 0},
-    // 其次是L0级数据搬运Op。
     {Opcode::OP_L1_TO_L0A, 1},
     {Opcode::OP_L1_TO_L0B, 1},
     {Opcode::OP_L1_TO_L0_AT, 1},
@@ -59,7 +57,6 @@ std::unordered_map<Opcode, int> preNodePriority = {
     {Opcode::OP_L1_TO_FIX_ELT_ANTIQ, 1},
     {Opcode::OP_L1_TO_FIX_MTE2_ANTIQ, 1},
     {Opcode::OP_L1_TO_BT, 1},
-    // 再其次是L1级数据搬运Op。
     {Opcode::OP_COPY_IN, 2},
     {Opcode::OP_UB_COPY_IN, 2},
     {Opcode::OP_L1_COPY_IN, 2},
@@ -67,7 +64,6 @@ std::unordered_map<Opcode, int> preNodePriority = {
     {Opcode::OP_L1_COPY_UB, 2},
     {Opcode::OP_L0C_COPY_UB, 2},
     {Opcode::OP_UB_COPY_L1, 2},
-    // 最后访问其它计算节点（其它节点默认的优先级为10）。
 };
 
 class ScheduleOoOTest : public ::testing::Test {
@@ -229,10 +225,10 @@ TEST_F(ScheduleOoOTest, TestDependencies)
     Status res = ooOScheduler.Init(function->Operations().DuplicatedOpList());
     Operation* op = subGraph.GetOp("RowMax1");
     EXPECT_NE(op, nullptr);
-    EXPECT_EQ(ooOScheduler.depManager_.GetPredecessors(op).size(), 3);
-    EXPECT_TRUE(ooOScheduler.depManager_.GetPredecessors(op).count(subGraph.GetOp("Alloc4")) > 0);
-    EXPECT_EQ(ooOScheduler.depManager_.GetSuccessors(op).size(), 2);
-    EXPECT_TRUE(ooOScheduler.depManager_.GetSuccessors(op).count(subGraph.GetOp("Add1")) > 0);
+    EXPECT_EQ(ooOScheduler.state_.depManager.GetPredecessors(op).size(), 3);
+    EXPECT_TRUE(ooOScheduler.state_.depManager.GetPredecessors(op).count(subGraph.GetOp("Alloc4")) > 0);
+    EXPECT_EQ(ooOScheduler.state_.depManager.GetSuccessors(op).size(), 2);
+    EXPECT_TRUE(ooOScheduler.state_.depManager.GetSuccessors(op).count(subGraph.GetOp("Add1")) > 0);
     EXPECT_EQ(res, SUCCESS);
 }
 
@@ -263,9 +259,9 @@ TEST_F(ScheduleOoOTest, TestDependenciesView)
     EXPECT_NE(copyin, nullptr);
     Operation* add = subGraph.GetOp("Add1");
     EXPECT_NE(add, nullptr);
-    EXPECT_TRUE(ooOScheduler.depManager_.GetPredecessors(copyin).count(subGraph.GetOp("Alloc1")) > 0);
-    EXPECT_TRUE(ooOScheduler.depManager_.GetPredecessors(add).count(subGraph.GetOp("Alloc2")) > 0);
-    EXPECT_TRUE(ooOScheduler.depManager_.GetPredecessors(add).count(subGraph.GetOp("Copyin1")) > 0);
+    EXPECT_TRUE(ooOScheduler.state_.depManager.GetPredecessors(copyin).count(subGraph.GetOp("Alloc1")) > 0);
+    EXPECT_TRUE(ooOScheduler.state_.depManager.GetPredecessors(add).count(subGraph.GetOp("Alloc2")) > 0);
+    EXPECT_TRUE(ooOScheduler.state_.depManager.GetPredecessors(add).count(subGraph.GetOp("Copyin1")) > 0);
     EXPECT_TRUE(CheckViewOps(ooOScheduler.GetViewOps(add), subGraph.GetOp("View1")));
     EXPECT_TRUE(CheckViewOps(ooOScheduler.GetViewOps(add), subGraph.GetOp("View2")));
     EXPECT_EQ(res, SUCCESS);
@@ -300,9 +296,9 @@ TEST_F(ScheduleOoOTest, TestDependenciesAssemble)
     EXPECT_NE(alloc, nullptr);
     Operation* sub = subGraph.GetOp("Sub1");
     EXPECT_NE(sub, nullptr);
-    EXPECT_TRUE(ooOScheduler.depManager_.GetSuccessors(alloc).count(subGraph.GetOp("Sub3")) > 0);
-    EXPECT_TRUE(ooOScheduler.depManager_.GetPredecessors(sub).count(subGraph.GetOp("Alloc1")) > 0);
-    EXPECT_TRUE(ooOScheduler.depManager_.GetSuccessors(sub).count(subGraph.GetOp("Assemble1")) > 0);
+    EXPECT_TRUE(ooOScheduler.state_.depManager.GetSuccessors(alloc).count(subGraph.GetOp("Sub3")) > 0);
+    EXPECT_TRUE(ooOScheduler.state_.depManager.GetPredecessors(sub).count(subGraph.GetOp("Alloc1")) > 0);
+    EXPECT_TRUE(ooOScheduler.state_.depManager.GetSuccessors(sub).count(subGraph.GetOp("Assemble1")) > 0);
     EXPECT_EQ(res, SUCCESS);
 }
 
@@ -329,8 +325,8 @@ TEST_F(ScheduleOoOTest, TestDependenciesInplace)
     Status res = ooOScheduler.Init(function->Operations().DuplicatedOpList());
     Operation* add = subGraph.GetOp("Add1");
     EXPECT_NE(add, nullptr);
-    EXPECT_TRUE(ooOScheduler.depManager_.GetSuccessors(add).count(subGraph.GetOp("Copyout1")) > 0);
-    EXPECT_TRUE(ooOScheduler.depManager_.GetPredecessors(add).count(subGraph.GetOp("Copyin1")) > 0);
+    EXPECT_TRUE(ooOScheduler.state_.depManager.GetSuccessors(add).count(subGraph.GetOp("Copyout1")) > 0);
+    EXPECT_TRUE(ooOScheduler.state_.depManager.GetPredecessors(add).count(subGraph.GetOp("Copyin1")) > 0);
     EXPECT_EQ(res, SUCCESS);
 }
 
@@ -356,8 +352,8 @@ TEST_F(ScheduleOoOTest, TestDependenciesTrue)
     OoOScheduler ooOScheduler(*function);
     Status res = ooOScheduler.Init(function->Operations().DuplicatedOpList());
     EXPECT_EQ(res, SUCCESS);
-    std::rotate(ooOScheduler.orderedOps.begin(), ooOScheduler.orderedOps.begin() + 1, ooOScheduler.orderedOps.end());
-    res = ooOScheduler.depManager_.InitDependencies(ooOScheduler.orderedOps, false);
+    std::rotate(ooOScheduler.state_.orderedOps.begin(), ooOScheduler.state_.orderedOps.begin() + 1, ooOScheduler.state_.orderedOps.end());
+    res = ooOScheduler.state_.depManager.InitDependencies(ooOScheduler.state_.orderedOps, false);
     EXPECT_EQ(res, SUCCESS);
 }
 
@@ -390,8 +386,8 @@ TEST_F(ScheduleOoOTest, TestSpillCopyIn)
     EXPECT_EQ(res, SUCCESS);
     res = ooOScheduler.SeqSchedule();
     EXPECT_EQ(res, SUCCESS);
-    EXPECT_EQ(ooOScheduler.orderedOps[8]->GetOpcodeStr(), "UB_ALLOC");
-    EXPECT_EQ(ooOScheduler.orderedOps[9]->GetOpcodeStr(), "COPY_IN");
+    EXPECT_EQ(ooOScheduler.state_.orderedOps[8]->GetOpcodeStr(), "UB_ALLOC");
+    EXPECT_EQ(ooOScheduler.state_.orderedOps[9]->GetOpcodeStr(), "COPY_IN");
 }
 
 TEST_F(ScheduleOoOTest, TestSpill)
@@ -424,9 +420,9 @@ TEST_F(ScheduleOoOTest, TestSpill)
     EXPECT_EQ(res, SUCCESS);
     res = ooOScheduler.SeqSchedule();
     EXPECT_EQ(res, SUCCESS);
-    EXPECT_EQ(ooOScheduler.orderedOps[8]->GetOpcodeStr(), "COPY_OUT");
-    EXPECT_EQ(ooOScheduler.orderedOps[13]->GetOpcodeStr(), "UB_ALLOC");
-    EXPECT_EQ(ooOScheduler.orderedOps[14]->GetOpcodeStr(), "COPY_IN");
+    EXPECT_EQ(ooOScheduler.state_.orderedOps[8]->GetOpcodeStr(), "COPY_OUT");
+    EXPECT_EQ(ooOScheduler.state_.orderedOps[13]->GetOpcodeStr(), "UB_ALLOC");
+    EXPECT_EQ(ooOScheduler.state_.orderedOps[14]->GetOpcodeStr(), "COPY_IN");
 }
 
 TEST_F(ScheduleOoOTest, TestSpillInplace)
@@ -463,15 +459,15 @@ TEST_F(ScheduleOoOTest, TestSpillInplace)
     OoOScheduler ooOScheduler(*function);
     res = ooOScheduler.Init(sort.operations);
     EXPECT_EQ(res, SUCCESS);
-    std::rotate(ooOScheduler.orderedOps.begin(), ooOScheduler.orderedOps.begin() + 6, ooOScheduler.orderedOps.begin() + 11);
+    std::rotate(ooOScheduler.state_.orderedOps.begin(), ooOScheduler.state_.orderedOps.begin() + 6, ooOScheduler.state_.orderedOps.begin() + 11);
     res = ooOScheduler.SeqSchedule();
     EXPECT_EQ(res, SUCCESS);
     Operation* add1 = subGraph.GetOp("Add1");
     EXPECT_NE(add1, nullptr);
     Operation* add3 = subGraph.GetOp("Add3");
     EXPECT_NE(add3, nullptr);
-    EXPECT_EQ((*ooOScheduler.depManager_.GetSuccessors(add1).begin())->GetOpcodeStr(), "COPY_OUT");
-    EXPECT_EQ(ooOScheduler.depManager_.GetPredecessors(add3).size(), 3);
+    EXPECT_EQ((*ooOScheduler.state_.depManager.GetSuccessors(add1).begin())->GetOpcodeStr(), "COPY_OUT");
+    EXPECT_EQ(ooOScheduler.state_.depManager.GetPredecessors(add3).size(), 3);
 }
 
 TEST_F(ScheduleOoOTest, TestSpillMultiTensor)
@@ -525,7 +521,7 @@ TEST_F(ScheduleOoOTest, TestSpillMultiTensor)
     EXPECT_EQ(res, SUCCESS);
     res = ooOScheduler.SeqSchedule();
     EXPECT_EQ(res, SUCCESS);
-    EXPECT_EQ(ooOScheduler.orderedOps.size(), 23);
+    EXPECT_EQ(ooOScheduler.state_.orderedOps.size(), 23);
 }
 
 TEST_F(ScheduleOoOTest, TestSpillView)
@@ -864,12 +860,12 @@ TEST_F(ScheduleOoOTest, TestScheduleSpillCopyIn)
     EXPECT_EQ(res, SUCCESS);
     res = ooOScheduler.ScheduleMainLoop();
     EXPECT_EQ(res, SUCCESS);
-    EXPECT_EQ(ooOScheduler.newOperations_[8]->GetOpcodeStr(), "UB_ALLOC");
-    EXPECT_EQ(ooOScheduler.newOperations_[8]->oOperand[0]->memoryrange.start, 0);
-    EXPECT_EQ(ooOScheduler.newOperations_[8]->oOperand[0]->memoryrange.end, 65536);
-    EXPECT_EQ(ooOScheduler.newOperations_[10]->GetOpcodeStr(), "COPY_IN");
-    EXPECT_EQ(ooOScheduler.newOperations_[10]->oOperand[0]->memoryrange.start, 0);
-    EXPECT_EQ(ooOScheduler.newOperations_[10]->oOperand[0]->memoryrange.end, 65536);
+    EXPECT_EQ(ooOScheduler.state_.newOperations[8]->GetOpcodeStr(), "UB_ALLOC");
+    EXPECT_EQ(ooOScheduler.state_.newOperations[8]->oOperand[0]->memoryrange.start, 0);
+    EXPECT_EQ(ooOScheduler.state_.newOperations[8]->oOperand[0]->memoryrange.end, 65536);
+    EXPECT_EQ(ooOScheduler.state_.newOperations[10]->GetOpcodeStr(), "COPY_IN");
+    EXPECT_EQ(ooOScheduler.state_.newOperations[10]->oOperand[0]->memoryrange.start, 0);
+    EXPECT_EQ(ooOScheduler.state_.newOperations[10]->oOperand[0]->memoryrange.end, 65536);
 }
 
 TEST_F(ScheduleOoOTest, TestScheduleSpill)
@@ -902,15 +898,15 @@ TEST_F(ScheduleOoOTest, TestScheduleSpill)
     EXPECT_EQ(res, SUCCESS);
     res = ooOScheduler.ScheduleMainLoop();
     EXPECT_EQ(res, SUCCESS);
-    EXPECT_EQ(ooOScheduler.newOperations_[8]->GetOpcodeStr(), "COPY_OUT");
-    EXPECT_EQ(ooOScheduler.newOperations_[8]->oOperand[0]->memoryrange.start, 0);
-    EXPECT_EQ(ooOScheduler.newOperations_[8]->oOperand[0]->memoryrange.end, 65536);
-    EXPECT_EQ(ooOScheduler.newOperations_[13]->GetOpcodeStr(), "UB_ALLOC");
-    EXPECT_EQ(ooOScheduler.newOperations_[13]->oOperand[0]->memoryrange.start, 65536);
-    EXPECT_EQ(ooOScheduler.newOperations_[13]->oOperand[0]->memoryrange.end, 131072);
-    EXPECT_EQ(ooOScheduler.newOperations_[15]->GetOpcodeStr(), "COPY_IN");
-    EXPECT_EQ(ooOScheduler.newOperations_[15]->oOperand[0]->memoryrange.start, 65536);
-    EXPECT_EQ(ooOScheduler.newOperations_[15]->oOperand[0]->memoryrange.end, 131072);
+    EXPECT_EQ(ooOScheduler.state_.newOperations[8]->GetOpcodeStr(), "COPY_OUT");
+    EXPECT_EQ(ooOScheduler.state_.newOperations[8]->oOperand[0]->memoryrange.start, 0);
+    EXPECT_EQ(ooOScheduler.state_.newOperations[8]->oOperand[0]->memoryrange.end, 65536);
+    EXPECT_EQ(ooOScheduler.state_.newOperations[13]->GetOpcodeStr(), "UB_ALLOC");
+    EXPECT_EQ(ooOScheduler.state_.newOperations[13]->oOperand[0]->memoryrange.start, 65536);
+    EXPECT_EQ(ooOScheduler.state_.newOperations[13]->oOperand[0]->memoryrange.end, 131072);
+    EXPECT_EQ(ooOScheduler.state_.newOperations[15]->GetOpcodeStr(), "COPY_IN");
+    EXPECT_EQ(ooOScheduler.state_.newOperations[15]->oOperand[0]->memoryrange.start, 65536);
+    EXPECT_EQ(ooOScheduler.state_.newOperations[15]->oOperand[0]->memoryrange.end, 131072);
 }
 
 TEST_F(ScheduleOoOTest, TestScheduleSpillInplace)
@@ -948,16 +944,16 @@ TEST_F(ScheduleOoOTest, TestScheduleSpillInplace)
     res = ooOScheduler.Init(sort.operations);
     EXPECT_EQ(res, SUCCESS);
     std::rotate(
-        ooOScheduler.orderedOps.begin(), ooOScheduler.orderedOps.begin() + 6, ooOScheduler.orderedOps.begin() + 11);
+        ooOScheduler.state_.orderedOps.begin(), ooOScheduler.state_.orderedOps.begin() + 6, ooOScheduler.state_.orderedOps.begin() + 11);
     res = ooOScheduler.ScheduleMainLoop();
     EXPECT_EQ(res, SUCCESS);
-    EXPECT_EQ(ooOScheduler.newOperations_[6]->GetOpcodeStr(), "COPY_OUT");
-    EXPECT_EQ(ooOScheduler.newOperations_[13]->GetOpcodeStr(), "COPY_IN");
-    EXPECT_EQ(ooOScheduler.newOperations_[13]->oOperand[0]->memoryrange.start, 65536);
-    EXPECT_EQ(ooOScheduler.newOperations_[13]->oOperand[0]->memoryrange.end, 131072);
-    EXPECT_EQ(ooOScheduler.newOperations_[14]->GetOpcodeStr(), "ADD");
-    EXPECT_EQ(ooOScheduler.newOperations_[14]->oOperand[0]->memoryrange.start, 65536);
-    EXPECT_EQ(ooOScheduler.newOperations_[14]->oOperand[0]->memoryrange.end, 131072);
+    EXPECT_EQ(ooOScheduler.state_.newOperations[6]->GetOpcodeStr(), "COPY_OUT");
+    EXPECT_EQ(ooOScheduler.state_.newOperations[13]->GetOpcodeStr(), "COPY_IN");
+    EXPECT_EQ(ooOScheduler.state_.newOperations[13]->oOperand[0]->memoryrange.start, 65536);
+    EXPECT_EQ(ooOScheduler.state_.newOperations[13]->oOperand[0]->memoryrange.end, 131072);
+    EXPECT_EQ(ooOScheduler.state_.newOperations[14]->GetOpcodeStr(), "ADD");
+    EXPECT_EQ(ooOScheduler.state_.newOperations[14]->oOperand[0]->memoryrange.start, 65536);
+    EXPECT_EQ(ooOScheduler.state_.newOperations[14]->oOperand[0]->memoryrange.end, 131072);
 }
 
 TEST_F(ScheduleOoOTest, TestScheduleSpillView)
@@ -1166,7 +1162,7 @@ TEST_F(ScheduleOoOTest, TestSpillMultiProducerBufferNotReady) {
 
 TEST_F(ScheduleOoOTest, TestSpillL0CMultiConsumer)
 {
-    // L0C1 三消费者(UB fp16 / L1 fp32 / CopyOut已retired)，UB/L1 排 alloc2 后触发 spill，按 dtype 分两组各一条 COPY_OUT。
+    // L0C1 三消费�?UB fp16 / L1 fp32 / CopyOut已retired)，UB/L1 �?alloc2 后触�?spill，按 dtype 分两组各一�?COPY_OUT�?
     ComputationalGraphBuilder subGraph;
     std::vector<std::tuple<DataType, MemoryType, std::string>> tensors{
         {DT_FP32, MEM_L0A, "L0A"}, {DT_FP32, MEM_L0B, "L0B"}, {DT_FP32, MEM_L0C, "L0C1"},
@@ -1197,18 +1193,18 @@ TEST_F(ScheduleOoOTest, TestSpillL0CMultiConsumer)
     OoOScheduler ooOScheduler(*function);
     EXPECT_EQ(ooOScheduler.Init(sort.operations), SUCCESS);
 
-    ooOScheduler.bufferManagerMap[CoreLocationType::AIC][MemoryType::MEM_L0C] =
+    ooOScheduler.state_.bufferManagerMap[CoreLocationType::AIC][MemoryType::MEM_L0C] =
         BufferPool(MemoryType::MEM_L0C, 64 * 1024);
-    ooOScheduler.orderedOps = {subGraph.GetOp("L0AAlloc"), subGraph.GetOp("L0BAlloc"), subGraph.GetOp("L0CAlloc1"),
+    ooOScheduler.state_.orderedOps = {subGraph.GetOp("L0AAlloc"), subGraph.GetOp("L0BAlloc"), subGraph.GetOp("L0CAlloc1"),
         subGraph.GetOp("Matmul1"), copyOutOp, subGraph.GetOp("L0CAlloc2"), subGraph.GetOp("Matmul2"),
         subGraph.GetOp("UBAlloc"), subGraph.GetOp("L0CCopyUB"), subGraph.GetOp("L1Alloc"), subGraph.GetOp("L0CToL1")};
-    for (size_t i = 0; i < ooOScheduler.orderedOps.size(); i++) {
-        ooOScheduler.schedInfoMap_[ooOScheduler.orderedOps[i]].execOrder = static_cast<int>(i);
+    for (size_t i = 0; i < ooOScheduler.state_.orderedOps.size(); i++) {
+        ooOScheduler.state_.schedInfoMap[ooOScheduler.state_.orderedOps[i]].execOrder = static_cast<int>(i);
     }
 
     EXPECT_EQ(ooOScheduler.SeqSchedule(), SUCCESS);
 
-    auto spillCopyOut = std::count_if(ooOScheduler.orderedOps.begin(), ooOScheduler.orderedOps.end(),
+    auto spillCopyOut = std::count_if(ooOScheduler.state_.orderedOps.begin(), ooOScheduler.state_.orderedOps.end(),
         [](Operation* op) { return op->GetOpcodeStr() == "COPY_OUT"; });
     EXPECT_EQ(spillCopyOut, 2);
 }
@@ -1258,7 +1254,7 @@ TEST_F(ScheduleOoOTest, TestScheduleSpillWithInplaceView)
     res = ooOScheduler.Init(sort.operations);
     EXPECT_EQ(res, SUCCESS);
     std::rotate(
-        ooOScheduler.orderedOps.begin(), ooOScheduler.orderedOps.begin() + 6, ooOScheduler.orderedOps.begin() + 11);
+        ooOScheduler.state_.orderedOps.begin(), ooOScheduler.state_.orderedOps.begin() + 6, ooOScheduler.state_.orderedOps.begin() + 11);
     res = ooOScheduler.ScheduleMainLoop();
     EXPECT_EQ(res, SUCCESS);
     // The tensor's memId remains the same before and after the view operation following a spill.
@@ -1366,15 +1362,15 @@ TEST_F(ScheduleOoOTest, TestDelBufCount)
 {
     Function function(Program::GetInstance(), "", "", nullptr);
     OoOScheduler oooSchedule(function);
-    oooSchedule.DelBufRefCount(-1);
+    oooSchedule.state_.DelBufRefCount(-1);
 }
 
 TEST_F(ScheduleOoOTest, TestDelBufCount_1)
 {
     Function function(Program::GetInstance(), "", "", nullptr);
     OoOScheduler oooSchedule(function);
-    oooSchedule.bufRefCount_[1] = -1;
-    oooSchedule.DelBufRefCount(1);
+    oooSchedule.state_.bufRefCount[1] = -1;
+    oooSchedule.state_.DelBufRefCount(1);
 }
 
 TEST_F(ScheduleOoOTest, TestGetSpillTensor)
@@ -1416,7 +1412,8 @@ TEST_F(ScheduleOoOTest, TestCheckAllocIssue)
     alloc1.UpdateLatency(1);
 
     OoOScheduler oooSchedule(function);
-    oooSchedule.Init(function.Operations().DuplicatedOpList());
+    auto opList = function.Operations().DuplicatedOpList();
+    oooSchedule.Init(opList);
 }
 
 TEST_F(ScheduleOoOTest, TestBufferUsage)
@@ -1460,7 +1457,7 @@ TEST_F(ScheduleOoOTest, TestBufferUsage)
     EXPECT_NE(testCheck.bufferTotalUsage, invalidBufferTotalUsage);
     EXPECT_NE(testCheck.bufferMaxUsage, invalidBufferMaxUsage);
 
-    // 增加健康检查校验
+    // 增加健康检查校�?
     testCheck.clock = 3; // 模拟数据
     res = testCheck.HealthCheckOoOSchedule();
     EXPECT_EQ(res, SUCCESS);
@@ -1691,13 +1688,13 @@ TEST_F(ScheduleOoOTest, TestHasEnoughBuffer)
     int memId = tensor1->memoryrange.memId;
 
     OoOScheduler ooOScheduler(*function);
-    ooOScheduler.orderedOps.push_back(op);
-    ooOScheduler.schedInfoMap_[op].isAlloc = true;
-    ooOScheduler.depManager_.GetSuccessors(op).clear();
-    ooOScheduler.opReqMemIdsMap[op] = {memId};
+    ooOScheduler.state_.orderedOps.push_back(op);
+    ooOScheduler.state_.schedInfoMap[op].isAlloc = true;
+    ooOScheduler.state_.depManager.GetSuccessors(op).clear();
+    ooOScheduler.state_.opReqMemIdsMap[op] = {memId};
     ooOScheduler.SetCoreLocation(op, CoreLocationType::AIV0);
-    EXPECT_EQ(ooOScheduler.InitLocalBuffer(tensor1, memId), SUCCESS);
-    ooOScheduler.bufferManagerMap[CoreLocationType::AIV0][MemoryType::MEM_UB] = BufferPool(MemoryType::MEM_UB, 0);
+    EXPECT_EQ(ooOScheduler.state_.InitLocalBuffer(tensor1, memId), SUCCESS);
+    ooOScheduler.state_.bufferManagerMap[CoreLocationType::AIV0][MemoryType::MEM_UB] = BufferPool(MemoryType::MEM_UB, 0);
     bool res = ooOScheduler.HasEnoughBuffer(op, MemoryType::MEM_UB);
     EXPECT_EQ(res, false);
 }
@@ -1723,16 +1720,16 @@ TEST_F(ScheduleOoOTest, TestHasEnoughBufferAddMemId)
     op->GetOutputOperand(0)->ClearAllProducers();
     op->GetOutputOperand(0)->AddProducer(*opCopyIn);
     OoOScheduler ooOScheduler(*function);
-    ooOScheduler.orderedOps.push_back(op);
-    ooOScheduler.orderedOps.push_back(opCopyIn);
-    ooOScheduler.schedInfoMap_[op].isAlloc = true;
-    ooOScheduler.depManager_.InsertSuccessor(op, opCopyIn);
-    ooOScheduler.opReqMemIdsMap[opCopyIn] = {1};
-    ooOScheduler.opReqMemIdsMap[op] = {memId1};
+    ooOScheduler.state_.orderedOps.push_back(op);
+    ooOScheduler.state_.orderedOps.push_back(opCopyIn);
+    ooOScheduler.state_.schedInfoMap[op].isAlloc = true;
+    ooOScheduler.state_.depManager.InsertSuccessor(op, opCopyIn);
+    ooOScheduler.state_.opReqMemIdsMap[opCopyIn] = {1};
+    ooOScheduler.state_.opReqMemIdsMap[op] = {memId1};
     ooOScheduler.SetCoreLocation(op, CoreLocationType::AIV0);
-    EXPECT_EQ(ooOScheduler.InitLocalBuffer(tensor1, memId1), SUCCESS);
-    ooOScheduler.bufferManagerMap[CoreLocationType::AIV0][MemoryType::MEM_UB] = BufferPool(MemoryType::MEM_UB, 0);
-    EXPECT_EQ(ooOScheduler.InitLocalBuffer(tensor2, 1), SUCCESS);
+    EXPECT_EQ(ooOScheduler.state_.InitLocalBuffer(tensor1, memId1), SUCCESS);
+    ooOScheduler.state_.bufferManagerMap[CoreLocationType::AIV0][MemoryType::MEM_UB] = BufferPool(MemoryType::MEM_UB, 0);
+    EXPECT_EQ(ooOScheduler.state_.InitLocalBuffer(tensor2, 1), SUCCESS);
     bool res = ooOScheduler.HasEnoughBuffer(op, MemoryType::MEM_UB);
     EXPECT_EQ(res, false);
 }
@@ -1840,7 +1837,7 @@ TEST_F(ScheduleOoOTest, TestLatencyEstimatorMainLoop)
     std::vector<std::string> opNames{"UB_ALLOC2",  "L0A_Alloc1", "L0B_Alloc1",     "Mul1",
                                      "L0C_Alloc1", "UB_ALLOC1",  "OP_L0C_COPY_UB", "OP_UB_COPY_L1"};
 
-    // 构建计算图
+    // 构建计算�?
     EXPECT_EQ(subGraph.AddTensors(DataType::DT_FP32, {16, 16}, tensorMemTypes, tensorNames, 0), true);
     EXPECT_EQ(subGraph.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
 
@@ -1895,7 +1892,7 @@ TEST_F(ScheduleOoOTest, TestBufferPollRearrange)
     pool.bufferSlices[2] = s2;
     EXPECT_FALSE(pool.CheckBufferSlicesOverlap());
 
-    // 构造子图
+    // 构造子�?
     ComputationalGraphBuilder subGraph;
     std::vector<std::string> tensorNames{"t1", "t2", "t3"};
     std::vector<MemoryType> tensorMemTypes{MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB};
@@ -1916,15 +1913,15 @@ TEST_F(ScheduleOoOTest, TestBufferPollRearrange)
     // 验证重排，排序依据为size从大到小
     OoOScheduler oooSchedule(*function);
     auto corePair = CoreLocationType::AIV0;
-    oooSchedule.schedInfoMap_[alloc3].coreLocation = corePair;
-    oooSchedule.bufferManagerMap[corePair][MemoryType::MEM_UB] = pool;
-    oooSchedule.tensorOccupyMap[1] = alloc1;
-    oooSchedule.tensorOccupyMap[2] = alloc2;
+    oooSchedule.state_.schedInfoMap[alloc3].coreLocation = corePair;
+    oooSchedule.state_.bufferManagerMap[corePair][MemoryType::MEM_UB] = pool;
+    oooSchedule.state_.tensorOccupyMap[1] = alloc1;
+    oooSchedule.state_.tensorOccupyMap[2] = alloc2;
 
-    oooSchedule.localBufferMap_[1] = std::make_shared<LocalBuffer>(1, 65536, MemoryType::MEM_UB);
-    oooSchedule.localBufferMap_[2] = std::make_shared<LocalBuffer>(2, 98304, MemoryType::MEM_UB);
+    oooSchedule.state_.localBufferMap[1] = std::make_shared<LocalBuffer>(1, 65536, MemoryType::MEM_UB);
+    oooSchedule.state_.localBufferMap[2] = std::make_shared<LocalBuffer>(2, 98304, MemoryType::MEM_UB);
     EXPECT_EQ(oooSchedule.RearrangeBuffer(alloc3, MemoryType::MEM_UB), SUCCESS);
-    auto &ubPool = oooSchedule.bufferManagerMap[corePair][MemoryType::MEM_UB];
+    auto &ubPool = oooSchedule.state_.bufferManagerMap[corePair][MemoryType::MEM_UB];
     EXPECT_EQ(ubPool.GetBufferSize(1), 65536);
     EXPECT_EQ(ubPool.GetBufferSize(2), 98304);
     EXPECT_EQ(ubPool.GetBufferOffset(1), 98304);
@@ -1976,7 +1973,7 @@ TEST_F(ScheduleOoOTest, TestSchedulerAllocTensorMemRangeNonViewOp)
 
 TEST_F(ScheduleOoOTest, TestSpillOnBlockFailedAtL0)
 {
-    // 构造子图
+    // 构造子�?
     ComputationalGraphBuilder subGraph;
     std::vector<std::string> tensorNames{"t1", "t2", "t3", "t4"};
     std::vector<MemoryType> tensorMemTypes{
@@ -1989,28 +1986,28 @@ TEST_F(ScheduleOoOTest, TestSpillOnBlockFailedAtL0)
     EXPECT_EQ(subGraph.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
     Function* function = subGraph.GetFunction();
     EXPECT_NE(function, nullptr);
-    // 构造Operation和属性
+    // 构造Operation和属�?
     auto L1toL0A = subGraph.GetOp("L1toL0A");
     auto L1toL0B = subGraph.GetOp("L1toL0B");
     auto AllocL0A = subGraph.GetOp("AllocL0A");
     auto AllocL0B = subGraph.GetOp("AllocL0B");
     // 构造alloc队列、内存气泡场景的localBufferMap、tensorOccupyMap
     OoOScheduler oooSchedule(*function);
-    oooSchedule.SetOpMemIds(AllocL0A, {3});
-    oooSchedule.SetOpMemIds(AllocL0B, {4});
+    oooSchedule.state_.SetOpMemIds(AllocL0A, {3});
+    oooSchedule.state_.SetOpMemIds(AllocL0B, {4});
     auto corePair = CoreLocationType::AIC;
-    oooSchedule.allocIssueQueue[corePair][MemoryType::MEM_L0A].Insert(AllocL0A);
-    oooSchedule.allocIssueQueue[corePair][MemoryType::MEM_L0B].Insert(AllocL0B);
-    oooSchedule.tensorOccupyMap.emplace(1, L1toL0A);
-    oooSchedule.tensorOccupyMap.emplace(2, L1toL0B);
-    oooSchedule.localBufferMap_[1] = std::make_shared<LocalBuffer>(1, 32768, MemoryType::MEM_L0A);
-    oooSchedule.localBufferMap_[2] = std::make_shared<LocalBuffer>(2, 32768, MemoryType::MEM_L0B);
-    oooSchedule.localBufferMap_[3] = std::make_shared<LocalBuffer>(3, 32768, MemoryType::MEM_L0A);
-    oooSchedule.localBufferMap_[4] = std::make_shared<LocalBuffer>(4, 32768, MemoryType::MEM_L0B);
-    oooSchedule.localBufferMap_[1]->start = 512;
-    oooSchedule.localBufferMap_[1]->end = 33280;
-    oooSchedule.localBufferMap_[2]->start = 512;
-    oooSchedule.localBufferMap_[2]->end = 33280;
+    oooSchedule.state_.allocIssueQueue[corePair][MemoryType::MEM_L0A].Insert(AllocL0A);
+    oooSchedule.state_.allocIssueQueue[corePair][MemoryType::MEM_L0B].Insert(AllocL0B);
+    oooSchedule.state_.tensorOccupyMap.emplace(1, L1toL0A);
+    oooSchedule.state_.tensorOccupyMap.emplace(2, L1toL0B);
+    oooSchedule.state_.localBufferMap[1] = std::make_shared<LocalBuffer>(1, 32768, MemoryType::MEM_L0A);
+    oooSchedule.state_.localBufferMap[2] = std::make_shared<LocalBuffer>(2, 32768, MemoryType::MEM_L0B);
+    oooSchedule.state_.localBufferMap[3] = std::make_shared<LocalBuffer>(3, 32768, MemoryType::MEM_L0A);
+    oooSchedule.state_.localBufferMap[4] = std::make_shared<LocalBuffer>(4, 32768, MemoryType::MEM_L0B);
+    oooSchedule.state_.localBufferMap[1]->start = 512;
+    oooSchedule.state_.localBufferMap[1]->end = 33280;
+    oooSchedule.state_.localBufferMap[2]->start = 512;
+    oooSchedule.state_.localBufferMap[2]->end = 33280;
     // 验证内存气泡导致L0AB卡死
     EXPECT_EQ(oooSchedule.SpillOnBlock(), FAILED);
 }
@@ -2119,10 +2116,10 @@ void SetAttribute(ComputationalGraphBuilder &subGraph, OoOScheduler &oooSchedule
     oooSchedule.SetIsRetired(alloc7, true);
     oooSchedule.SetIsRetired(copyin2, true);
 
-    auto localBuffer1 = oooSchedule.localBufferMap_[0];
+    auto localBuffer1 = oooSchedule.state_.localBufferMap[0];
     auto coreAIC = CoreLocationType::AIC;
-    oooSchedule.bufferManagerMap[coreAIC][MemoryType::MEM_L1].Allocate(localBuffer1);
-    oooSchedule.tensorOccupyMap.emplace(0, copyin2);
+    oooSchedule.state_.bufferManagerMap[coreAIC][MemoryType::MEM_L1].Allocate(localBuffer1);
+    oooSchedule.state_.tensorOccupyMap.emplace(0, copyin2);
 }
 
 TEST_F(ScheduleOoOTest, TestMixGraphAndDAV_3510)
@@ -2169,7 +2166,7 @@ TEST_F(ScheduleOoOTest, TensorMemTypeMismatch)
     
     auto t = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     t->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR);
-    t->SetMemoryTypeToBe(MemoryType::MEM_UB); // 不一致
+    t->SetMemoryTypeToBe(MemoryType::MEM_UB); // 不一�?
     
     PassOperationUtils::AddOperation(*func, Opcode::OP_NOP, {t}, {t});
     func->inCasts_.push_back(t);
@@ -2364,7 +2361,7 @@ TEST_F(MemoryAwareSortTest, TestReleaseContribution_MultiConsumer)
     EXPECT_GT(c2, c1);
 }
 
-// TestReleaseContribution_SingleConsumer — 验证单一消费者场景
+// TestReleaseContribution_SingleConsumer �?验证单一消费者场�?
 TEST_F(MemoryAwareSortTest, TestReleaseContribution_SingleConsumer)
 {
     ComputationalGraphBuilder subGraph;
@@ -2389,7 +2386,7 @@ TEST_F(MemoryAwareSortTest, TestReleaseContribution_SingleConsumer)
     SchedulingContext context;
     ScoringParams params;
 
-    // 设置内存池状态（UB Abundant）
+    // 设置内存池状态（UB Abundant�?
     MemoryPoolContext ub_pool;
     ub_pool.usage = 0;
     ub_pool.limit = 192 * 1024;
@@ -2397,16 +2394,16 @@ TEST_F(MemoryAwareSortTest, TestReleaseContribution_SingleConsumer)
     ub_pool.can_spill = true;
     context.memory_pools[MemoryType::MEM_UB] = ub_pool;
 
-    // 获取 tensor t2（只有 1 个消费者：Add1）
+    // 获取 tensor t2（只�?1 个消费者：Add1�?
     auto tensor_t2 = subGraph.GetTensor("t2");
     EXPECT_NE(tensor_t2, nullptr);
     int memId = tensor_t2->memoryrange.memId;
 
-    // 初始化 executed_consumers
+    // 初始�?executed_consumers
     context.executed_consumers[memId] = 0;
     context.max_consumer_count = 1;
 
-    // 测试单一消费者执行时的边际收益
+    // 测试单一消费者执行时的边际收�?
     Operation* add1 = subGraph.GetOp("Add1");
     EXPECT_NE(add1, nullptr);
     double contribution = CalcReleaseContribution(memId, add1, context, params);
@@ -2417,7 +2414,7 @@ TEST_F(MemoryAwareSortTest, TestReleaseContribution_SingleConsumer)
     EXPECT_GT(contribution, 0.0);
 }
 
-// TestAllocationPressure_HighFanout — 验证高扇出 tensor 的压力评估
+// TestAllocationPressure_HighFanout �?验证高扇�?tensor 的压力评�?
 TEST_F(MemoryAwareSortTest, TestAllocationPressure_HighFanout)
 {
     ComputationalGraphBuilder subGraph;
@@ -2445,7 +2442,7 @@ TEST_F(MemoryAwareSortTest, TestAllocationPressure_HighFanout)
     ScoringParams params;
     params.beta = 0.4;
 
-    // 设置内存池状态（UB Abundant）
+    // 设置内存池状态（UB Abundant�?
     MemoryPoolContext ub_pool;
     ub_pool.usage = 0;
     ub_pool.limit = 192 * 1024;
@@ -2456,61 +2453,61 @@ TEST_F(MemoryAwareSortTest, TestAllocationPressure_HighFanout)
     // 设置 max_consumer_count
     context.max_consumer_count = 4;
 
-    // 测试高扇出 tensor（t2 有 4 个消费者）
+    // 测试高扇�?tensor（t2 �?4 个消费者）
     auto tensor_t2 = subGraph.GetTensor("t2");
     EXPECT_NE(tensor_t2, nullptr);
 
-    // 计算 allocation pressure（假设 t2 是输出 tensor）
+    // 计算 allocation pressure（假�?t2 是输�?tensor�?
     double pressure = CalcAllocationPressure(tensor_t2, context, params);
 
     // consumer_count = 4, max_consumer_count = 4
     // consumer_pressure_factor = 1 + 0.4 * (4 - 1) / 4 = 1 + 0.4 * 0.75 = 1.3
-    // 验证 pressure > 0（高扇出 tensor 有更高的压力）
+    // 验证 pressure > 0（高扇出 tensor 有更高的压力�?
     EXPECT_GT(pressure, 0.0);
 
-    // 测试低扇出 tensor（t3 只有 0 个消费者）
+    // 测试低扇�?tensor（t3 只有 0 个消费者）
     auto tensor_t3 = subGraph.GetTensor("t3");
     EXPECT_NE(tensor_t3, nullptr);
     double pressure_low = CalcAllocationPressure(tensor_t3, context, params);
 
     // consumer_count = 0, consumer_pressure_factor = 1.0
-    // 验证 pressure > pressure_low（高扇出 tensor 压力更大）
+    // 验证 pressure > pressure_low（高扇出 tensor 压力更大�?
     EXPECT_GT(pressure, pressure_low);
 }
 
-// TestDynamicTypeWeight_L0A_Critical — 验证 L0A Critical 状态权重
+// TestDynamicTypeWeight_L0A_Critical �?验证 L0A Critical 状态权�?
 TEST_F(MemoryAwareSortTest, TestDynamicTypeWeight_L0A_Critical)
 {
     // 初始化调度上下文
     SchedulingContext context;
 
-    // 设置 L0A 内存池状态（Critical）
+    // 设置 L0A 内存池状态（Critical�?
     MemoryPoolContext l0a_pool;
     l0a_pool.usage = 90 * 1024;  // 90KB
     l0a_pool.limit = 100 * 1024; // 100KB
     l0a_pool.type = ConstraintType::SoftConstraint;
-    l0a_pool.can_spill = false;  // L0A 不支持 spill
+    l0a_pool.can_spill = false;  // L0A 不支�?spill
     context.memory_pools[MemoryType::MEM_L0A] = l0a_pool;
 
-    // 计算 L0A 的动态类型权重
+    // 计算 L0A 的动态类型权�?
     double weight = CalcDynamicTypeWeight(MemoryType::MEM_L0A, context);
 
-    // base_weight = 1.0（soft_constraint）
-    // usage_ratio = 90KB / 100KB = 0.9 → Critical
-    // state_factor = 1.5（Critical）
-    // spill_factor = 1.3（不支持 spill）
+    // base_weight = 1.0（soft_constraint�?
+    // usage_ratio = 90KB / 100KB = 0.9 �?Critical
+    // state_factor = 1.5（Critical�?
+    // spill_factor = 1.3（不支持 spill�?
     // weight = 1.0 * 1.5 * 1.3 = 1.95
-    // 验证 weight ≈ 1.95（误差 < 1e-6）
+    // 验证 weight �?1.95（误�?< 1e-6�?
     EXPECT_NEAR(weight, 1.95, 1e-6);
 }
 
-// TestDynamicTypeWeight_UB_Abundant — 验证 UB Abundant 状态权重 = 0.5
+// TestDynamicTypeWeight_UB_Abundant �?验证 UB Abundant 状态权�?= 0.5
 TEST_F(MemoryAwareSortTest, TestDynamicTypeWeight_UB_Abundant)
 {
     // 初始化调度上下文
     SchedulingContext context;
 
-    // 设置 UB 内存池状态（Abundant）
+    // 设置 UB 内存池状态（Abundant�?
     MemoryPoolContext ub_pool;
     ub_pool.usage = 20 * 1024;   // 20KB
     ub_pool.limit = 192 * 1024;  // 192KB
@@ -2518,19 +2515,19 @@ TEST_F(MemoryAwareSortTest, TestDynamicTypeWeight_UB_Abundant)
     ub_pool.can_spill = true;    // UB 支持 spill
     context.memory_pools[MemoryType::MEM_UB] = ub_pool;
 
-    // 计算 UB 的动态类型权重
+    // 计算 UB 的动态类型权�?
     double weight = CalcDynamicTypeWeight(MemoryType::MEM_UB, context);
 
-    // base_weight = 1.0（soft_constraint）
-    // usage_ratio = 20KB / 192KB ≈ 0.104 → Abundant
-    // state_factor = 0.5（Abundant）
-    // spill_factor = 1.0（支持 spill）
+    // base_weight = 1.0（soft_constraint�?
+    // usage_ratio = 20KB / 192KB �?0.104 �?Abundant
+    // state_factor = 0.5（Abundant�?
+    // spill_factor = 1.0（支�?spill�?
     // weight = 1.0 * 0.5 * 1.0 = 0.5
-    // 验证 weight ≈ 0.5（误差 < 1e-6）
+    // 验证 weight �?0.5（误�?< 1e-6�?
     EXPECT_NEAR(weight, 0.5, 1e-6);
 }
 
-// TestNodeScore_Comprehensive — 验证综合评分计算
+// TestNodeScore_Comprehensive �?验证综合评分计算
 TEST_F(MemoryAwareSortTest, TestNodeScore_Comprehensive)
 {
     ComputationalGraphBuilder subGraph;
@@ -2555,7 +2552,7 @@ TEST_F(MemoryAwareSortTest, TestNodeScore_Comprehensive)
     SchedulingContext context;
     ScoringParams params;
 
-    // 设置 UB 内存池状态（Normal）
+    // 设置 UB 内存池状态（Normal�?
     MemoryPoolContext ub_pool;
     ub_pool.usage = 50 * 1024;   // 50KB
     ub_pool.limit = 192 * 1024;  // 192KB
@@ -2568,19 +2565,19 @@ TEST_F(MemoryAwareSortTest, TestNodeScore_Comprehensive)
     EXPECT_NE(tensor_t2, nullptr);
     int memId = tensor_t2->memoryrange.memId;
 
-    // 初始化 executed_consumers
+    // 初始�?executed_consumers
     context.executed_consumers[memId] = 0;
     context.max_consumer_count = 1;
 
-    // 测试 Add1 节点的综合评分
+    // 测试 Add1 节点的综合评�?
     Operation* add1 = subGraph.GetOp("Add1");
     EXPECT_NE(add1, nullptr);
 
-    // NodeID = 2（Add1 在 operations 中的 index）
+    // NodeID = 2（Add1 �?operations 中的 index�?
     int node_id = 2;
     double score = CalcNodeScore(add1, context, params, node_id);
 
-    // 验证综合评分计算：
+    // 验证综合评分计算�?
     // ReleaseScore = CalcReleaseContribution(t2, Add1) * StateFactor(UB)
     // AllocationPressure = CalcAllocationPressure(t3) * StateFactor(UB)
     // Score = ReleaseScore - AllocationPressure + epsilon * node_id
@@ -2588,7 +2585,7 @@ TEST_F(MemoryAwareSortTest, TestNodeScore_Comprehensive)
     EXPECT_TRUE(std::isfinite(score));
 }
 
-// TestNodeScore_TieBreaking — 验证等分节点按 NodeID 排序
+// TestNodeScore_TieBreaking �?验证等分节点�?NodeID 排序
 TEST_F(MemoryAwareSortTest, TestNodeScore_TieBreaking)
 {
     ComputationalGraphBuilder subGraph;
@@ -2615,7 +2612,7 @@ TEST_F(MemoryAwareSortTest, TestNodeScore_TieBreaking)
     SchedulingContext context;
     ScoringParams params;
 
-    // 设置 UB 内存池状态（Abundant）
+    // 设置 UB 内存池状态（Abundant�?
     MemoryPoolContext ub_pool;
     ub_pool.usage = 0;
     ub_pool.limit = 192 * 1024;
@@ -2623,35 +2620,35 @@ TEST_F(MemoryAwareSortTest, TestNodeScore_TieBreaking)
     ub_pool.can_spill = true;
     context.memory_pools[MemoryType::MEM_UB] = ub_pool;
 
-    // 初始化 executed_consumers
+    // 初始�?executed_consumers
     context.max_consumer_count = 1;
 
-    // 测试两个等分节点（Copyin1 和 Copyin2）
+    // 测试两个等分节点（Copyin1 �?Copyin2�?
     Operation* copyin1 = subGraph.GetOp("Copyin1");
     EXPECT_NE(copyin1, nullptr);
     Operation* copyin2 = subGraph.GetOp("Copyin2");
     EXPECT_NE(copyin2, nullptr);
 
-    // NodeID = 2（Copyin1）和 NodeID = 3（Copyin2）
+    // NodeID = 2（Copyin1）和 NodeID = 3（Copyin2�?
     int node_id1 = 2;
     int node_id2 = 3;
 
     double score1 = CalcNodeScore(copyin1, context, params, node_id1);
     double score2 = CalcNodeScore(copyin2, context, params, node_id2);
 
-    // 验证等分节点按 NodeID 排序：
+    // 验证等分节点�?NodeID 排序�?
     // epsilon = 1e-9
     // score1 = base_score + epsilon * 2
     // score2 = base_score + epsilon * 3
-    // score2 > score1（NodeID 大的排在后面）
+    // score2 > score1（NodeID 大的排在后面�?
     EXPECT_GT(score2, score1);
 
-    // 验证差异很小（epsilon * (node_id2 - node_id1) = 1e-9 * 1 = 1e-9）
+    // 验证差异很小（epsilon * (node_id2 - node_id1) = 1e-9 * 1 = 1e-9�?
     EXPECT_NEAR(score2 - score1, 1e-9, 1e-10);
 }
 
 // ============================================================================
-// T10: 拓扑序正确性 + 确定性验证测试
+// T10: 拓扑序正确�?+ 确定性验证测�?
 // ============================================================================
 
 bool VerifyTopologicalOrder(const std::vector<Operation*>& sorted_ops, DependencyManager& depManager)
@@ -2680,7 +2677,7 @@ bool VerifyAllOpsIncluded(const std::vector<Operation*>& sorted_ops, const std::
     return sorted_ops.size() == original_ops.size();
 }
 
-// TestTopologicalSort_SimpleDAG — 简单 DAG 的拓扑序验证
+// TestTopologicalSort_SimpleDAG �?简�?DAG 的拓扑序验证
 TEST_F(MemoryAwareSortTest, TestTopologicalSort_SimpleDAG)
 {
     ComputationalGraphBuilder subGraph;
@@ -2716,11 +2713,11 @@ TEST_F(MemoryAwareSortTest, TestTopologicalSort_SimpleDAG)
     res = ooOScheduler.Init(original_ops);
     EXPECT_EQ(res, SUCCESS);
 
-    EXPECT_TRUE(VerifyTopologicalOrder(sorter.operations, ooOScheduler.depManager_));
+    EXPECT_TRUE(VerifyTopologicalOrder(sorter.operations, ooOScheduler.state_.depManager));
     EXPECT_TRUE(VerifyAllOpsIncluded(sorter.operations, original_ops));
 }
 
-// TestTopologicalSort_ChainGraph — 链状图验证
+// TestTopologicalSort_ChainGraph �?链状图验�?
 TEST_F(MemoryAwareSortTest, TestTopologicalSort_ChainGraph)
 {
     ComputationalGraphBuilder subGraph;
@@ -2756,11 +2753,11 @@ TEST_F(MemoryAwareSortTest, TestTopologicalSort_ChainGraph)
     res = ooOScheduler.Init(original_ops);
     EXPECT_EQ(res, SUCCESS);
 
-    EXPECT_TRUE(VerifyTopologicalOrder(sorter.operations, ooOScheduler.depManager_));
+    EXPECT_TRUE(VerifyTopologicalOrder(sorter.operations, ooOScheduler.state_.depManager));
     EXPECT_TRUE(VerifyAllOpsIncluded(sorter.operations, original_ops));
 }
 
-// TestTopologicalSort_StarGraph — 星状图验证
+// TestTopologicalSort_StarGraph �?星状图验�?
 TEST_F(MemoryAwareSortTest, TestTopologicalSort_StarGraph)
 {
     ComputationalGraphBuilder subGraph;
@@ -2796,11 +2793,11 @@ TEST_F(MemoryAwareSortTest, TestTopologicalSort_StarGraph)
     res = ooOScheduler.Init(original_ops);
     EXPECT_EQ(res, SUCCESS);
 
-    EXPECT_TRUE(VerifyTopologicalOrder(sorter.operations, ooOScheduler.depManager_));
+    EXPECT_TRUE(VerifyTopologicalOrder(sorter.operations, ooOScheduler.state_.depManager));
     EXPECT_TRUE(VerifyAllOpsIncluded(sorter.operations, original_ops));
 }
 
-// TestTopologicalSort_DiamondGraph — 菱形图验证
+// TestTopologicalSort_DiamondGraph �?菱形图验�?
 TEST_F(MemoryAwareSortTest, TestTopologicalSort_DiamondGraph)
 {
     ComputationalGraphBuilder subGraph;
@@ -2836,11 +2833,11 @@ TEST_F(MemoryAwareSortTest, TestTopologicalSort_DiamondGraph)
     res = ooOScheduler.Init(original_ops);
     EXPECT_EQ(res, SUCCESS);
 
-    EXPECT_TRUE(VerifyTopologicalOrder(sorter.operations, ooOScheduler.depManager_));
+    EXPECT_TRUE(VerifyTopologicalOrder(sorter.operations, ooOScheduler.state_.depManager));
     EXPECT_TRUE(VerifyAllOpsIncluded(sorter.operations, original_ops));
 }
 
-// TestTopologicalSort_DenseDAG — 密集 DAG 验证
+// TestTopologicalSort_DenseDAG �?密集 DAG 验证
 TEST_F(MemoryAwareSortTest, TestTopologicalSort_DenseDAG)
 {
     ComputationalGraphBuilder subGraph;
@@ -2879,11 +2876,11 @@ TEST_F(MemoryAwareSortTest, TestTopologicalSort_DenseDAG)
     res = ooOScheduler.Init(original_ops);
     EXPECT_EQ(res, SUCCESS);
 
-    EXPECT_TRUE(VerifyTopologicalOrder(sorter.operations, ooOScheduler.depManager_));
+    EXPECT_TRUE(VerifyTopologicalOrder(sorter.operations, ooOScheduler.state_.depManager));
     EXPECT_TRUE(VerifyAllOpsIncluded(sorter.operations, original_ops));
 }
 
-// TestDeterminism_SameInputSameOutput — 确定性验证：相同输入产生相同输出
+// TestDeterminism_SameInputSameOutput �?确定性验证：相同输入产生相同输出
 TEST_F(MemoryAwareSortTest, TestDeterminism_SameInputSameOutput)
 {
     ComputationalGraphBuilder subGraph;
@@ -2927,7 +2924,7 @@ TEST_F(MemoryAwareSortTest, TestDeterminism_SameInputSameOutput)
     }
 }
 
-// TestMemoryConstraint_NoOverflow — 内存约束验证：硬约束不超限
+// TestMemoryConstraint_NoOverflow �?内存约束验证：硬约束不超�?
 TEST_F(MemoryAwareSortTest, TestMemoryConstraint_NoOverflow)
 {
     ComputationalGraphBuilder subGraph;
@@ -2971,7 +2968,7 @@ TEST_F(MemoryAwareSortTest, TestMemoryConstraint_NoOverflow)
 // MemoryAwareSortTest - 边界场景 + 性能对比测试 (T11)
 // ============================================================================
 
-// TestEmptyGraph — 空图验证：空 operations 列表应返回 SUCCESS 且结果为空
+// TestEmptyGraph �?空图验证：空 operations 列表应返�?SUCCESS 且结果为�?
 TEST_F(MemoryAwareSortTest, TestEmptyGraph)
 {
     Function function(Program::GetInstance(), "TestEmptyGraph", "TestEmptyGraph", nullptr);
@@ -2984,7 +2981,7 @@ TEST_F(MemoryAwareSortTest, TestEmptyGraph)
     EXPECT_TRUE(sorter.operations.empty());
 }
 
-// TestSingleNode — 单节点验证：单个 operation 应直接返回
+// TestSingleNode �?单节点验证：单个 operation 应直接返�?
 TEST_F(MemoryAwareSortTest, TestSingleNode)
 {
     ComputationalGraphBuilder subGraph;
@@ -3010,7 +3007,7 @@ TEST_F(MemoryAwareSortTest, TestSingleNode)
     EXPECT_EQ(sorter.operations.size(), 2);
 }
 
-// TestZeroSizeBuffer — 零大小 buffer 验证：零大小 tensor 不应导致崩溃或异常
+// TestZeroSizeBuffer �?零大�?buffer 验证：零大小 tensor 不应导致崩溃或异�?
 TEST_F(MemoryAwareSortTest, TestZeroSizeBuffer)
 {
     ComputationalGraphBuilder subGraph;
@@ -3031,7 +3028,7 @@ TEST_F(MemoryAwareSortTest, TestZeroSizeBuffer)
     Function* function = subGraph.GetFunction();
     EXPECT_NE(function, nullptr);
 
-    // 将 t2 的 shape 设置为零大小
+    // �?t2 �?shape 设置为零大小
     auto tensor_t2 = subGraph.GetTensor("t2");
     EXPECT_NE(tensor_t2, nullptr);
     tensor_t2->shape = {0, 0};
@@ -3042,12 +3039,12 @@ TEST_F(MemoryAwareSortTest, TestZeroSizeBuffer)
     MemoryAwareTopoSort sorter(opList, *function);
     Status res = sorter.SortOps();
 
-    // 零大小 buffer 不应导致崩溃，排序应正常完成
+    // 零大�?buffer 不应导致崩溃，排序应正常完成
     EXPECT_EQ(res, SUCCESS);
     EXPECT_EQ(sorter.operations.size(), 4);
 }
 
-// TestMemoryExhaustion — 内存耗尽场景验证：当内存池使用率极高时，算法应能优雅处理
+// TestMemoryExhaustion �?内存耗尽场景验证：当内存池使用率极高时，算法应能优雅处理
 TEST_F(MemoryAwareSortTest, TestMemoryExhaustion)
 {
     ComputationalGraphBuilder subGraph;
@@ -3070,12 +3067,12 @@ TEST_F(MemoryAwareSortTest, TestMemoryExhaustion)
     Function* function = subGraph.GetFunction();
     EXPECT_NE(function, nullptr);
 
-    // 初始化调度上下文，模拟内存耗尽场景（usage 接近 limit）
+    // 初始化调度上下文，模拟内存耗尽场景（usage 接近 limit�?
     SchedulingContext context;
     ScoringParams params;
 
     MemoryPoolContext ub_pool;
-    ub_pool.usage = 180 * 1024;   // 180KB，接近 192KB 限制
+    ub_pool.usage = 180 * 1024;   // 180KB，接�?192KB 限制
     ub_pool.limit = 192 * 1024;   // 192KB
     ub_pool.type = ConstraintType::SoftConstraint;
     ub_pool.can_spill = true;
@@ -3087,7 +3084,7 @@ TEST_F(MemoryAwareSortTest, TestMemoryExhaustion)
     context.executed_consumers[memId] = 0;
     context.max_consumer_count = 4;
 
-    // 验证在内存耗尽场景下评分计算仍然有效
+    // 验证在内存耗尽场景下评分计算仍然有�?
     Operation* add1 = subGraph.GetOp("Add1");
     EXPECT_NE(add1, nullptr);
     double score = CalcNodeScore(add1, context, params, 2);
@@ -3101,7 +3098,7 @@ TEST_F(MemoryAwareSortTest, TestMemoryExhaustion)
     EXPECT_EQ(state, MemoryState::Critical);
 }
 
-// TestMemBtSlotLimit — MEM_BT slot 限制验证：最多只能有 1 个 MEM_BT buffer 同时存在
+// TestMemBtSlotLimit �?MEM_BT slot 限制验证：最多只能有 1 �?MEM_BT buffer 同时存在
 TEST_F(MemoryAwareSortTest, TestMemBtSlotLimit)
 {
     ComputationalGraphBuilder subGraph;
@@ -3130,18 +3127,18 @@ TEST_F(MemoryAwareSortTest, TestMemBtSlotLimit)
     MemoryAwareTopoSort sorter(opList, *function);
     Status res = sorter.SortOps();
 
-    // MEM_BT slot 限制为 1，算法应能正确处理
+    // MEM_BT slot 限制�?1，算法应能正确处�?
     EXPECT_EQ(res, SUCCESS);
     EXPECT_EQ(sorter.operations.size(), 7);
 
-    // 验证 MEM_BT pool 的 max_slot_count 为 1
+    // 验证 MEM_BT pool �?max_slot_count �?1
     auto bt_pool_it = sorter.context_.memory_pools.find(MemoryType::MEM_BT);
     if (bt_pool_it != sorter.context_.memory_pools.end()) {
         EXPECT_EQ(bt_pool_it->second.max_slot_count, 1);
     }
 }
 
-// TestEqualScoreNodes — 等分节点排序验证：当多个节点评分相同时，应按 NodeID 排序
+// TestEqualScoreNodes �?等分节点排序验证：当多个节点评分相同时，应按 NodeID 排序
 TEST_F(MemoryAwareSortTest, TestEqualScoreNodes)
 {
     ComputationalGraphBuilder subGraph;
@@ -3175,7 +3172,7 @@ TEST_F(MemoryAwareSortTest, TestEqualScoreNodes)
     EXPECT_EQ(res, SUCCESS);
     EXPECT_EQ(sorter.operations.size(), 10);
 
-    // 验证拓扑顺序正确：Alloc1 必须在 Copyin1/Copyin2 之前
+    // 验证拓扑顺序正确：Alloc1 必须�?Copyin1/Copyin2 之前
     int alloc1_idx = -1;
     int copyin1_idx = -1;
     int copyin2_idx = -1;
@@ -3206,7 +3203,7 @@ TEST_F(MemoryAwareSortTest, TestPerformance_PeakMemoryComparison)
     Status newRes = newSorter.SortOps();
     EXPECT_EQ(newRes, SUCCESS);
 
-    // 验证两个方案都能正确完成排序，且产生完整的算子序列
+    // 验证两个方案都能正确完成排序，且产生完整的算子序�?
     EXPECT_EQ(oldSorter.operations.size(), opList.size());
     EXPECT_EQ(newSorter.operations.size(), opList.size());
 }
@@ -3243,7 +3240,7 @@ TEST_F(MemoryAwareSortTest, TestPerformance_SortingOverhead)
     EXPECT_LE(overhead, 0.20);
 }
 
-// TestInterleavedAllocOrdering — 验证 MemoryAwareTopoSort 产生 ALLOC→consumer 交叉排序
+// TestInterleavedAllocOrdering �?验证 MemoryAwareTopoSort 产生 ALLOC→consumer 交叉排序
 // (而非全部 ALLOC 集中在最前面), 以确保与下游 Pass (GenSpillSchedule/ScheduleMainLoop) 兼容
 TEST_F(MemoryAwareSortTest, TestInterleavedAllocOrdering)
 {
@@ -3298,7 +3295,7 @@ TEST_F(MemoryAwareSortTest, TestInterleavedAllocOrdering)
     }
 }
 
-// TestAllocDependencyDepth — 验证 ALLOC 依赖深度正确: ALLOC 总是在其 consumer 之前
+// TestAllocDependencyDepth �?验证 ALLOC 依赖深度正确: ALLOC 总是在其 consumer 之前
 TEST_F(MemoryAwareSortTest, TestAllocBeforeConsumer)
 {
     ComputationalGraphBuilder subGraph;
@@ -3321,7 +3318,7 @@ TEST_F(MemoryAwareSortTest, TestAllocBeforeConsumer)
 
     const auto& sorted = sorter.operations;
 
-    // 找到 ALLOC 和其 consumer (CopyIn) 的位置
+    // 找到 ALLOC 和其 consumer (CopyIn) 的位�?
     size_t allocIdx = std::string::npos;
     size_t consumerIdx = std::string::npos;
     for (size_t i = 0; i < sorted.size(); i++) {
@@ -3338,8 +3335,8 @@ TEST_F(MemoryAwareSortTest, TestAllocBeforeConsumer)
         << "ALLOC op must precede its consumer (COPY_IN) in topological order";
 }
 
-// TestCubeAllocBeforeDataWriter — 验证 cube 模式: ALLOC 在数据搬运节点之前
-// L0A_ALLOC(申请L0A) → L1_TO_L0A(写入L0A) → A_MUL_B(读取L0A) 的顺序
+// TestCubeAllocBeforeDataWriter �?验证 cube 模式: ALLOC 在数据搬运节点之�?
+// L0A_ALLOC(申请L0A) �?L1_TO_L0A(写入L0A) �?A_MUL_B(读取L0A) 的顺�?
 TEST_F(MemoryAwareSortTest, TestCubeAllocBeforeDataWriter)
 {
     ComputationalGraphBuilder subGraph;
@@ -3389,17 +3386,17 @@ TEST_F(MemoryAwareSortTest, TestCubeAllocBeforeDataWriter)
 }
 
 // ============================================================================
-// T18: ALLOC→writer→reader ordering — 验证 ALLOC 在所有运算符（包括只写不读的 OOperand）之前
-// 回归测试：EnsureAllocInterleaving 曾使用 GetConsumers() 查找消费者，
-// 但 GetConsumers() 只返回 IOperand（读者），遗漏了 COPY_IN 等 OOperand（写者），
-// 导致 ALLOC 被插入到 COPY_IN 之后→ OoOScheduler Free 时 bufferSlices 找不到 tensor。
+// T18: ALLOC→writer→reader ordering �?验证 ALLOC 在所有运算符（包括只写不读的 OOperand）之�?
+// 回归测试：EnsureAllocInterleaving 曾使�?GetConsumers() 查找消费者，
+// �?GetConsumers() 只返�?IOperand（读者），遗漏了 COPY_IN �?OOperand（写者）�?
+// 导致 ALLOC 被插入到 COPY_IN 之后�?OoOScheduler Free �?bufferSlices 找不�?tensor�?
 // ============================================================================
 TEST_F(MemoryAwareSortTest, TestAllocBeforeWriterNotOnlyReader)
 {
     ComputationalGraphBuilder subGraph;
     // 模拟：alloc(ub_tensor0); copyin(ub_tensor0, gm_tensor1); add(ub_tensor0, ...)
-    // copyin 以 ub_tensor0 为 OOperand（输出/写入者），GetConsumers() 不包含它
-    // 只有 add 以 ub_tensor0 为 IOperand（输入/读取者），GetConsumers() 包含它
+    // copyin �?ub_tensor0 �?OOperand（输�?写入者），GetConsumers() 不包含它
+    // 只有 add �?ub_tensor0 �?IOperand（输�?读取者），GetConsumers() 包含�?
     std::vector<MemoryType> memTypes(5, MemoryType::MEM_UB);
     EXPECT_EQ(subGraph.AddTensors(DataType::DT_FP32, {16, 16}, memTypes,
         {"gm_tensor1", "ub_tensor0", "ub_tensor1", "ub_tensor2", "ub_tensor3"}, 0), true);
@@ -3444,7 +3441,7 @@ TEST_F(MemoryAwareSortTest, TestAllocBeforeWriterNotOnlyReader)
 }
 
 // ============================================================================
-// T19: 通用 ALLOC→consumer 顺序验证 — 多个 ALLOC 多个消费者，确保无 ALLOC 在消费者之后
+// T19: 通用 ALLOC→consumer 顺序验证 �?多个 ALLOC 多个消费者，确保�?ALLOC 在消费者之�?
 // ============================================================================
 TEST_F(MemoryAwareSortTest, TestNoAllocAfterAnyConsumer)
 {
@@ -3473,11 +3470,11 @@ TEST_F(MemoryAwareSortTest, TestNoAllocAfterAnyConsumer)
 
     const auto& sorted = sorter.operations;
 
-    // 验证拓扑序 — 使用 sorter 自带的 depManager，避免因 ALLOC/writer tensor
+    // 验证拓扑�?�?使用 sorter 自带�?depManager，避免因 ALLOC/writer tensor
     // 重叠导致 OoOScheduler.Init 失败
     EXPECT_TRUE(VerifyTopologicalOrder(sorted, sorter.depManager_));
 
-    // 验证无 ALLOC 在其消费者之后
+    // 验证�?ALLOC 在其消费者之�?
     std::unordered_map<Operation*, std::set<Operation*>> consumerOf;
     for (size_t i = 0; i < sorted.size(); i++) {
         Operation* op = sorted[i];
@@ -3509,7 +3506,7 @@ TEST_F(MemoryAwareSortTest, TestNoAllocAfterAnyConsumer)
 // === DualDst 融合 / staticValidShape 快照 / core_assign DualDstProcess UT ===
 // ============================================================================
 //
-// 涉及源文件:
+// 涉及源文�?
 //   passes/block_graph_pass/schedule_ooo/dualdst_fuse.cpp
 //   passes/block_graph_pass/schedule_ooo/core_assign.cpp  (HasSameValidShape2D /
 //                                                           DualDstProcess /
@@ -3517,27 +3514,27 @@ TEST_F(MemoryAwareSortTest, TestNoAllocAfterAnyConsumer)
 //   passes/tile_graph_pass/graph_constraint/infer_dyn_shape.cpp
 //                                                          (RecordStaticValidShapeOnL0CCopyUB)
 //
-// 目标: 通过公共/可见 (本文件 #define private public) 入口尽可能驱动覆盖:
-//   - DualDstFuse: RunDualDstFuse / IdentifyDualDstPairs / FuseDualDstPairs / 阶段 2 子步骤
+// 目标: 通过公共/可见 (本文�?#define private public) 入口尽可能驱动覆�?
+//   - DualDstFuse: RunDualDstFuse / IdentifyDualDstPairs / FuseDualDstPairs / 阶段 2 子步�?
 //                  / IsDualDstAlloc / GetDualDstCopyOpFor / GetDualDstPairedMemId
 //                  / AllocateDualDstAtCurrent / ResolveDualDstAllocCtx / CommitDualDstAlloc
 //                  + 匿名 ns 下的 DynShapeEq / ReadGeometry / LoadGeometries /
 //                    ConsumerCore / BuildAdjacencyCandidates / GreedyNonOverlapPick /
-//                    PickAllocOrder / FindAllocPred (经入口路径触达)
-//   - InferDynShape: RecordStaticValidShapeOnL0CCopyUB (含 dyn 跳过分支)
+//                    PickAllocOrder / FindAllocPred (经入口路径触�?
+//   - InferDynShape: RecordStaticValidShapeOnL0CCopyUB (�?dyn 跳过分支)
 //   - core_assign:   HasSameValidShape2D / TryGetStaticValidShapeFromProducer
-//                    (经 DualDstProcess 整体路径触达)
+//                    (�?DualDstProcess 整体路径触达)
 namespace dualdst_ut {
 
 constexpr int64_t TILE_M = 64;
 constexpr int64_t TILE_N = 64;
-// 每个 dualdst UT 自己的小 UB pool, 便于 AllocateDualDstAtCurrent 测试。
+// 每个 dualdst UT 自己的小 UB pool, 便于 AllocateDualDstAtCurrent 测试�?
 constexpr size_t SMALL_UB_POOL = 8 * 1024;
 
-// --- 形态构造工具 -----------------------------------------------------------
+// --- 形态构造工�?-----------------------------------------------------------
 
-// 给 OP_L0C_COPY_UB 类拷贝 op 设置 CopyOpAttribute (fromOff = src L0C 偏移,
-// shape = 实际搬运 tile shape)。dualdst identify 阶段读这两项做相邻 + tile 校验。
+// �?OP_L0C_COPY_UB 类拷�?op 设置 CopyOpAttribute (fromOff = src L0C 偏移,
+// shape = 实际搬运 tile shape)。dualdst identify 阶段读这两项做相�?+ tile 校验�?
 void SetCopyL0cToUbAttr(Operation& op, const std::vector<int64_t>& fromOff,
                         const std::vector<int64_t>& tileShape)
 {
@@ -3547,15 +3544,15 @@ void SetCopyL0cToUbAttr(Operation& op, const std::vector<int64_t>& fromOff,
         fromOffImme, MemoryType::MEM_UB, shapeImme, shapeImme));
 }
 
-// 把 vector<int64_t> 当 staticValidShape 写到 op 属性, 模拟 InferDynShape 阶段
-// RecordStaticValidShapeOnL0CCopyUB 的快照效果。
+// �?vector<int64_t> �?staticValidShape 写到 op 属�? 模拟 InferDynShape 阶段
+// RecordStaticValidShapeOnL0CCopyUB 的快照效果�?
 void InjectStaticValidShape(Operation& op, const std::vector<int64_t>& vals)
 {
     op.SetAttribute(OpAttributeKey::staticValidShape, vals);
 }
 
-// dualdst UT 通用图: 单 L0C tensor + 两条 OP_L0C_COPY_UB + 各自下游 Add(ub→out)。
-// fromOff0 / fromOff1 控制 SplitM 还是 SplitN 候选 (相邻 = tile 尺寸差)。
+// dualdst UT 通用�? �?L0C tensor + 两条 OP_L0C_COPY_UB + 各自下游 Add(ub→out)�?
+// fromOff0 / fromOff1 控制 SplitM 还是 SplitN 候�?(相邻 = tile 尺寸�?�?
 struct DualDstGraph {
     std::shared_ptr<ComputationalGraphBuilder> builder;
     Function* func{nullptr};
@@ -3570,8 +3567,8 @@ struct DualDstGraph {
     Operation* add1{nullptr};    // ub1 -> out1  (consumer => AIV1)
 };
 
-// l0cShape: t_l0c 的 shape; tileShape: copy 的 tile shape (== ub shape);
-// fromOff0/1: 两 copy 的 src 偏移。
+// l0cShape: t_l0c �?shape; tileShape: copy �?tile shape (== ub shape);
+// fromOff0/1: �?copy �?src 偏移�?
 DualDstGraph BuildDualDstGraph(const std::vector<int64_t>& l0cShape,
                                const std::vector<int64_t>& tileShape,
                                const std::vector<int64_t>& fromOff0,
@@ -3592,9 +3589,9 @@ DualDstGraph BuildDualDstGraph(const std::vector<int64_t>& l0cShape,
     EXPECT_EQ(g.builder->AddOp(Opcode::OP_UB_ALLOC, {}, {"t_out1"}, "alloc_out1"), true);
     EXPECT_EQ(g.builder->AddOp(Opcode::OP_L0C_COPY_UB, {"t_l0c"}, {"t_ub0"}, "copy0"), true);
     EXPECT_EQ(g.builder->AddOp(Opcode::OP_L0C_COPY_UB, {"t_l0c"}, {"t_ub1"}, "copy1"), true);
-    // OP_ADD 是 binary, 需要 2 个输入; 给同一 tensor 两次, consumers_ set 去重后
-    // ub0/ub1 的 consumer 仍只各 1 个 add op (满足 dualdst identify ConsumerCore 逻辑)。
-    // 这样能让 BinaryBrcinlineInferFunc 在 InferShape 路径下不越界访问 [1] 而段错。
+    // OP_ADD �?binary, 需�?2 个输�? 给同一 tensor 两次, consumers_ set 去重�?
+    // ub0/ub1 �?consumer 仍只�?1 �?add op (满足 dualdst identify ConsumerCore 逻辑)�?
+    // 这样能让 BinaryBrcinlineInferFunc �?InferShape 路径下不越界访问 [1] 而段错�?
     EXPECT_EQ(g.builder->AddOp(Opcode::OP_ADD, {"t_ub0", "t_ub0"}, {"t_out0"}, "add0"), true);
     EXPECT_EQ(g.builder->AddOp(Opcode::OP_ADD, {"t_ub1", "t_ub1"}, {"t_out1"}, "add1"), true);
 
@@ -3614,29 +3611,29 @@ DualDstGraph BuildDualDstGraph(const std::vector<int64_t>& l0cShape,
     return g;
 }
 
-// 给 OoOScheduler 预填 schedInfoMap_:
-//   - add0->AIV0 / add1->AIV1, 让 dualdst identify 阶段的 ConsumerCore 校验过
-//     split (AIV0 + AIV1)。
-//   - dualdst ResolveDualDstAllocCtx 现已改用 "从 dual_dst op 的 ub output tensor 的
-//     consumer (add op) 反推 core", 不再依赖 tensorAllocCoreMap (该成员已随主线移除),
-//     所以只要 add0/add1 的 schedInfoMap_ 正确就足够。
+// �?OoOScheduler 预填 schedInfoMap_:
+//   - add0->AIV0 / add1->AIV1, �?dualdst identify 阶段�?ConsumerCore 校验�?
+//     split (AIV0 + AIV1)�?
+//   - dualdst ResolveDualDstAllocCtx 现已改用 "�?dual_dst op �?ub output tensor �?
+//     consumer (add op) 反推 core", 不再依赖 tensorAllocCoreMap (该成员已随主线移�?,
+//     所以只�?add0/add1 �?schedInfoMap_ 正确就足够�?
 void InjectCoreMap(OoOScheduler& s, const DualDstGraph& g, bool sameCoreForAdds = false)
 {
-    s.schedInfoMap_[g.copy0].coreLocation  = CoreLocationType::AIC;
-    s.schedInfoMap_[g.copy1].coreLocation  = CoreLocationType::AIC;
-    s.schedInfoMap_[g.add0].coreLocation   = CoreLocationType::AIV0;
-    s.schedInfoMap_[g.add1].coreLocation   = sameCoreForAdds ? CoreLocationType::AIV0 : CoreLocationType::AIV1;
-    s.schedInfoMap_[g.allocL0c].coreLocation  = CoreLocationType::AIC;
-    s.schedInfoMap_[g.allocUb0].coreLocation  = CoreLocationType::AIV0;
-    s.schedInfoMap_[g.allocUb1].coreLocation  = CoreLocationType::AIV1;
-    s.schedInfoMap_[g.allocOut0].coreLocation = CoreLocationType::AIV0;
-    s.schedInfoMap_[g.allocOut1].coreLocation = CoreLocationType::AIV1;
+    s.state_.schedInfoMap[g.copy0].coreLocation  = CoreLocationType::AIC;
+    s.state_.schedInfoMap[g.copy1].coreLocation  = CoreLocationType::AIC;
+    s.state_.schedInfoMap[g.add0].coreLocation   = CoreLocationType::AIV0;
+    s.state_.schedInfoMap[g.add1].coreLocation   = sameCoreForAdds ? CoreLocationType::AIV0 : CoreLocationType::AIV1;
+    s.state_.schedInfoMap[g.allocL0c].coreLocation  = CoreLocationType::AIC;
+    s.state_.schedInfoMap[g.allocUb0].coreLocation  = CoreLocationType::AIV0;
+    s.state_.schedInfoMap[g.allocUb1].coreLocation  = CoreLocationType::AIV1;
+    s.state_.schedInfoMap[g.allocOut0].coreLocation = CoreLocationType::AIV0;
+    s.state_.schedInfoMap[g.allocOut1].coreLocation = CoreLocationType::AIV1;
 }
 
 } // namespace dualdst_ut
 
-// --- DynShapeEq 三条分支 (经 IdentifyDualDstPairs 间接驱动) -----------------
-// dump 严格相等 / concrete 数值相等 / 不等 -> identify 命中 vs miss
+// --- DynShapeEq 三条分支 (�?IdentifyDualDstPairs 间接驱动) -----------------
+// dump 严格相等 / concrete 数值相�?/ 不等 -> identify 命中 vs miss
 TEST_F(ScheduleOoOTest, DualDst_DynShapeEq_DumpEqual_HitsIdentify)
 {
     auto g = dualdst_ut::BuildDualDstGraph(
@@ -3644,7 +3641,7 @@ TEST_F(ScheduleOoOTest, DualDst_DynShapeEq_DumpEqual_HitsIdentify)
         /*tileShape*/ {dualdst_ut::TILE_M, dualdst_ut::TILE_N},
         /*fromOff0*/  {0, 0},
         /*fromOff1*/  {0, dualdst_ut::TILE_N});
-    // 两侧 dyn validShape 都是 {S0, S1}, dump 字符串严格相等 -> DynShapeEq 走分支(1)
+    // 两侧 dyn validShape 都是 {S0, S1}, dump 字符串严格相�?-> DynShapeEq 走分�?1)
     g.copy0->GetOutputOperand(0)->UpdateDynValidShape(
         {SymbolicScalar("S0"), SymbolicScalar("S1")});
     g.copy1->GetOutputOperand(0)->UpdateDynValidShape(
@@ -3665,7 +3662,7 @@ TEST_F(ScheduleOoOTest, DualDst_DynShapeEq_ConcreteEqualButDifferentDump_StillHi
         {dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
         {dualdst_ut::TILE_M, dualdst_ut::TILE_N},
         {0, 0}, {0, dualdst_ut::TILE_N});
-    // 给两侧不同符号名但 concrete 数值相等的 SymbolicScalar -> 走分支(2)
+    // 给两侧不同符号名�?concrete 数值相等的 SymbolicScalar -> 走分�?2)
     g.copy0->GetOutputOperand(0)->UpdateDynValidShape(
         {SymbolicScalar("a", dualdst_ut::TILE_M), SymbolicScalar("b", dualdst_ut::TILE_N)});
     g.copy1->GetOutputOperand(0)->UpdateDynValidShape(
@@ -3686,7 +3683,7 @@ TEST_F(ScheduleOoOTest, DualDst_DynShapeEq_DumpDifferAndNoConcrete_NoPair)
         {dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
         {dualdst_ut::TILE_M, dualdst_ut::TILE_N},
         {0, 0}, {0, dualdst_ut::TILE_N});
-    // 不同符号且无 concrete -> 走分支(3) 返回 false -> identify 0 pair
+    // 不同符号且无 concrete -> 走分�?3) 返回 false -> identify 0 pair
     g.copy0->GetOutputOperand(0)->UpdateDynValidShape(
         {SymbolicScalar("X0"), SymbolicScalar("X1")});
     g.copy1->GetOutputOperand(0)->UpdateDynValidShape(
@@ -3702,15 +3699,15 @@ TEST_F(ScheduleOoOTest, DualDst_DynShapeEq_DumpDifferAndNoConcrete_NoPair)
 }
 
 // --- ReadGeometry: staticValidShape 优先 + dyn fallback ---------------------
-// op 带 staticValidShape 属性, identify 应走属性路径 (覆盖 ReadGeometry 分支 1)
+// op �?staticValidShape 属�? identify 应走属性路�?(覆盖 ReadGeometry 分支 1)
 TEST_F(ScheduleOoOTest, DualDst_ReadGeometry_PrefersStaticValidShape)
 {
     auto g = dualdst_ut::BuildDualDstGraph(
         {dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
         {dualdst_ut::TILE_M, dualdst_ut::TILE_N},
         {0, 0}, {0, dualdst_ut::TILE_N});
-    // 故意把 dyn validShape 设成不同 dump、无 concrete: 若 ReadGeometry 错走 dyn
-    // 路径会判 false; 但我们注入了 staticValidShape -> 必须命中 (返回 1 对)。
+    // 故意�?dyn validShape 设成不同 dump、无 concrete: �?ReadGeometry 错走 dyn
+    // 路径会判 false; 但我们注入了 staticValidShape -> 必须命中 (返回 1 �?�?
     g.copy0->GetOutputOperand(0)->UpdateDynValidShape(
         {SymbolicScalar("X0"), SymbolicScalar("X1")});
     g.copy1->GetOutputOperand(0)->UpdateDynValidShape(
@@ -3756,7 +3753,7 @@ TEST_F(ScheduleOoOTest, DualDst_Identify_SplitN_HappyPath)
 // --- IdentifyDualDstPairs: SplitM 命中 ---------------------------------------
 TEST_F(ScheduleOoOTest, DualDst_Identify_SplitM_HappyPath)
 {
-    // M-axis adjacent: l0cShape M = 2*TILE_M; fromOff 沿 M 轴相差 TILE_M
+    // M-axis adjacent: l0cShape M = 2*TILE_M; fromOff �?M 轴相�?TILE_M
     auto g = dualdst_ut::BuildDualDstGraph(
         {dualdst_ut::TILE_M * 2, dualdst_ut::TILE_N},
         {dualdst_ut::TILE_M,     dualdst_ut::TILE_N},
@@ -3775,19 +3772,19 @@ TEST_F(ScheduleOoOTest, DualDst_Identify_SplitM_HappyPath)
     ASSERT_EQ(pairs.size(), 1u);
     EXPECT_EQ(pairs[0].opEarly, g.copy0);   // fromM 0 < TILE_M
     EXPECT_EQ(pairs[0].opLate,  g.copy1);
-    // SplitM 方向命中后 dualDstL0CDirection_ 应为 0
+    // SplitM 方向命中�?dualDstL0CDirection_ 应为 0
     auto l0c = g.copy0->GetInputOperand(0);
     EXPECT_EQ(s.dualDstEngine_.dualDstL0CDirection_.count(l0c), 1u);
     EXPECT_EQ(s.dualDstEngine_.dualDstL0CDirection_[l0c], 0);
 }
 
-// --- IdentifyDualDstPairs: 不相邻 / 不同 core / shape 不一致 -> 0 pair ------
+// --- IdentifyDualDstPairs: 不相�?/ 不同 core / shape 不一�?-> 0 pair ------
 TEST_F(ScheduleOoOTest, DualDst_Identify_NotAdjacent_NoPair)
 {
     auto g = dualdst_ut::BuildDualDstGraph(
         {dualdst_ut::TILE_M, dualdst_ut::TILE_N * 4},
         {dualdst_ut::TILE_M, dualdst_ut::TILE_N},
-        {0, 0}, {0, dualdst_ut::TILE_N * 2});   // gap = 2*TILE_N, 不相邻
+        {0, 0}, {0, dualdst_ut::TILE_N * 2});   // gap = 2*TILE_N, 不相�?
     g.copy0->GetOutputOperand(0)->UpdateDynValidShape(
         {SymbolicScalar(dualdst_ut::TILE_M), SymbolicScalar(dualdst_ut::TILE_N)});
     g.copy1->GetOutputOperand(0)->UpdateDynValidShape(
@@ -3823,7 +3820,7 @@ TEST_F(ScheduleOoOTest, DualDst_Identify_SameConsumerCore_NoPair)
 }
 
 // --- RunDualDstFuse 三个出口分支 ---------------------------------------------
-// 分支 1: enableDualDst_ false -> 直接 SUCCESS, 不动图
+// 分支 1: enableDualDst_ false -> 直接 SUCCESS, 不动�?
 TEST_F(ScheduleOoOTest, DualDst_RunDualDstFuse_DisabledIsNoOp)
 {
     auto g = dualdst_ut::BuildDualDstGraph(
@@ -3863,9 +3860,9 @@ TEST_F(ScheduleOoOTest, DualDst_RunDualDstFuse_SingleAivPoolEarlyExit)
     EXPECT_EQ(s.dualDstEngine_.RunDualDstFuse(), SUCCESS);
 }
 
-// 分支 3: 真的 fuse: 图实际被改 (旧 op SetAsDeleted -> EraseOperations(false, true) 生效)。
-// 不再校验外部 mutated 标志位 (该 flag 已随 EraseOperations 第二参 true 同步刷新 opPosition_
-// 一并删除), 改为直接对比 operations_.size() 变化。
+// 分支 3: 真的 fuse: 图实际被�?(�?op SetAsDeleted -> EraseOperations(false, true) 生效)�?
+// 不再校验外部 mutated 标志�?(�?flag 已随 EraseOperations 第二�?true 同步刷新 opPosition_
+// 一并删�?, 改为直接对比 operations_.size() 变化�?
 TEST_F(ScheduleOoOTest, DualDst_RunDualDstFuse_ActuallyFusesAndMutatesFunction)
 {
     auto g = dualdst_ut::BuildDualDstGraph(
@@ -3885,12 +3882,12 @@ TEST_F(ScheduleOoOTest, DualDst_RunDualDstFuse_ActuallyFusesAndMutatesFunction)
     s.dualDstEngine_.enableDualDst_ = true;
     EXPECT_EQ(s.dualDstEngine_.RunDualDstFuse(), SUCCESS);
 
-    // EraseOperations(false, true) 移除了 copy0 / copy1 / 一个被剔的 alloc,
-    // 新增 1 个 OP_L0C_COPY_UB_DUAL_DST -> 净减 2 个 op
+    // EraseOperations(false, true) 移除�?copy0 / copy1 / 一个被剔的 alloc,
+    // 新增 1 �?OP_L0C_COPY_UB_DUAL_DST -> 净�?2 �?op
     size_t opsAfter = g.func->Operations().size();
     EXPECT_EQ(opsBefore, opsAfter + 2);
 
-    // 至少有一个 OP_L0C_COPY_UB_DUAL_DST 出现
+    // 至少有一�?OP_L0C_COPY_UB_DUAL_DST 出现
     bool hasFused = false;
     for (auto& op : g.func->Operations()) {
         if (op.GetOpcode() == Opcode::OP_L0C_COPY_UB_DUAL_DST) { hasFused = true; break; }
@@ -3899,7 +3896,7 @@ TEST_F(ScheduleOoOTest, DualDst_RunDualDstFuse_ActuallyFusesAndMutatesFunction)
 }
 
 // --- IsDualDstAlloc / GetDualDstCopyOpFor / GetDualDstPairedMemId ----------
-// fuse 后保留下来的那条 alloc 应被识别成 dualdst alloc, 并能反查 dual op + paired memId
+// fuse 后保留下来的那条 alloc 应被识别�?dualdst alloc, 并能反查 dual op + paired memId
 TEST_F(ScheduleOoOTest, DualDst_AllocQueryHelpers_AfterFuse)
 {
     auto g = dualdst_ut::BuildDualDstGraph(
@@ -3917,7 +3914,7 @@ TEST_F(ScheduleOoOTest, DualDst_AllocQueryHelpers_AfterFuse)
     s.dualDstEngine_.enableDualDst_ = true;
     EXPECT_EQ(s.dualDstEngine_.RunDualDstFuse(), SUCCESS);
 
-    // 找到 fuse 出来的 dualdst op 和它依赖的 (唯一保留) UB alloc
+    // 找到 fuse 出来�?dualdst op 和它依赖�?(唯一保留) UB alloc
     Operation* dual = nullptr;
     for (auto& op : g.func->Operations()) {
         if (op.GetOpcode() == Opcode::OP_L0C_COPY_UB_DUAL_DST) { dual = &op; break; }
@@ -3925,7 +3922,7 @@ TEST_F(ScheduleOoOTest, DualDst_AllocQueryHelpers_AfterFuse)
     ASSERT_NE(dual, nullptr);
 
     Operation* survivingUbAlloc = nullptr;
-    for (auto* pred : s.depManager_.GetPredecessors(dual)) {
+    for (auto* pred : s.state_.depManager.GetPredecessors(dual)) {
         if (pred != nullptr && pred->GetOpcodeStr().find("UB_ALLOC") != std::string::npos) {
             survivingUbAlloc = pred;
             break;
@@ -3939,15 +3936,15 @@ TEST_F(ScheduleOoOTest, DualDst_AllocQueryHelpers_AfterFuse)
     EXPECT_NE(paired, -1);
     EXPECT_NE(paired, survivingUbAlloc->GetOutputOperand(0)->memoryrange.memId);
 
-    // 非 dualdst alloc 应返回 false / nullptr / -1
+    // �?dualdst alloc 应返�?false / nullptr / -1
     EXPECT_FALSE(s.dualDstEngine_.IsDualDstAlloc(g.allocL0c));
     EXPECT_EQ(s.dualDstEngine_.GetDualDstCopyOpFor(g.allocL0c), nullptr);
     EXPECT_EQ(s.dualDstEngine_.GetDualDstPairedMemId(nullptr), -1);
 }
 
 // --- AllocateDualDstAtCurrent: ResolveCtx + Commit 成功路径 ----------------
-// (Full 分支由 OoOScheduler::FindCommonFreeOffset 返回 nullopt 触发, 单测构造代价
-//  较大, 通过 spill 路径集成测试覆盖; 这里只验证 happy path 与 ResolveCtx OK。)
+// (Full 分支�?OoOScheduler::FindCommonFreeOffset 返回 nullopt 触发, 单测构造代�?
+//  较大, 通过 spill 路径集成测试覆盖; 这里只验�?happy path �?ResolveCtx OK�?
 TEST_F(ScheduleOoOTest, DualDst_AllocateDualDstAtCurrent_HappyPath)
 {
     auto g = dualdst_ut::BuildDualDstGraph(
@@ -3971,7 +3968,7 @@ TEST_F(ScheduleOoOTest, DualDst_AllocateDualDstAtCurrent_HappyPath)
     }
     ASSERT_NE(dual, nullptr);
     Operation* survivingUbAlloc = nullptr;
-    for (auto* pred : s.depManager_.GetPredecessors(dual)) {
+    for (auto* pred : s.state_.depManager.GetPredecessors(dual)) {
         if (pred != nullptr && pred->GetOpcodeStr().find("UB_ALLOC") != std::string::npos) {
             survivingUbAlloc = pred;
             break;
@@ -3981,8 +3978,8 @@ TEST_F(ScheduleOoOTest, DualDst_AllocateDualDstAtCurrent_HappyPath)
 
     int memIdA = survivingUbAlloc->GetOutputOperand(0)->memoryrange.memId;
     int memIdB = s.dualDstEngine_.GetDualDstPairedMemId(survivingUbAlloc);
-    ASSERT_NE(s.localBufferMap_.find(memIdA), s.localBufferMap_.end());
-    ASSERT_NE(s.localBufferMap_.find(memIdB), s.localBufferMap_.end());
+    ASSERT_NE(s.state_.localBufferMap.find(memIdA), s.state_.localBufferMap.end());
+    ASSERT_NE(s.state_.localBufferMap.find(memIdB), s.state_.localBufferMap.end());
 
     bool allocated = false;
     EXPECT_EQ(s.dualDstEngine_.AllocateDualDstAtCurrent(survivingUbAlloc, allocated), SUCCESS);
@@ -3992,19 +3989,19 @@ TEST_F(ScheduleOoOTest, DualDst_AllocateDualDstAtCurrent_HappyPath)
 // --- SelectSpillBuffers + GetDualSpillGroup: dualdst 分支专项 ---------------
 // 归一改造后, SelectSpillBuffers 内按 IsDualDstAlloc 分叉:
 //   dualdst -> OoOScheduler::GetDualSpillGroup(poolA, poolB, need)
-//              内部嵌套两次单池滑窗, 匹配条件: 两侧 startAddr (freed segment 起点) 一致
-//              -> 返回 vector<combined memIds>, 前半来自 poolA、后半来自 poolB
+//              内部嵌套两次单池滑窗, 匹配条件: 两侧 startAddr (freed segment 起点) 一�?
+//              -> 返回 vector<combined memIds>, 前半来自 poolA、后半来�?poolB
 //   单池   -> OoOScheduler::GetSpillGroup(pool, need) (薄壳, 委托 pool.GetSpillGroup)
-// 选不出候选时 (canSpillGroups 空 或 GetGroupNextUseTime 全失败) -> 兜底返回 spill-all 列表:
-//   dualdst: 两池 GetAddrSortedBufs() 之并集
+// 选不出候选时 (canSpillGroups �?�?GetGroupNextUseTime 全失�? -> 兜底返回 spill-all 列表:
+//   dualdst: 两池 GetAddrSortedBufs() 之并�?
 //   单池  : 单池 GetAddrSortedBufs()
-// spill 执行段 (GenBufferSpill 内的 SpillBuffer 循环) 与单池路径共用,
-// 不在本 UT 覆盖, 由 ST/集成测试 (test_dualdst.py) 验证。
+// spill 执行�?(GenBufferSpill 内的 SpillBuffer 循环) 与单池路径共�?
+// 不在�?UT 覆盖, �?ST/集成测试 (test_dualdst.py) 验证�?
 
 // Positive: 两池 offset 0 各预填同 size 占位 buf -> GetDualSpillGroup 命中
 //          (startAddrA == startAddrB == 0) -> canSpillGroups 非空, GetGroupNextUseTime
-//          因 placeholder 未绑 alloc op 全部失败 -> 走 spill-all 兜底,
-//          返回两池 sortedBufs 并集 (含两个 placeholder memId)。
+//          �?placeholder 未绑 alloc op 全部失败 -> �?spill-all 兜底,
+//          返回两池 sortedBufs 并集 (含两�?placeholder memId)�?
 TEST_F(ScheduleOoOTest, DualDst_SelectSpillBuffers_PicksMatchingGroupAcrossAivPools)
 {
     auto g = dualdst_ut::BuildDualDstGraph(
@@ -4028,7 +4025,7 @@ TEST_F(ScheduleOoOTest, DualDst_SelectSpillBuffers_PicksMatchingGroupAcrossAivPo
     }
     ASSERT_NE(dual, nullptr);
     Operation* survivingUbAlloc = nullptr;
-    for (auto* pred : s.depManager_.GetPredecessors(dual)) {
+    for (auto* pred : s.state_.depManager.GetPredecessors(dual)) {
         if (pred != nullptr && pred->GetOpcodeStr().find("UB_ALLOC") != std::string::npos) {
             survivingUbAlloc = pred;
             break;
@@ -4038,34 +4035,34 @@ TEST_F(ScheduleOoOTest, DualDst_SelectSpillBuffers_PicksMatchingGroupAcrossAivPo
     ASSERT_TRUE(s.dualDstEngine_.IsDualDstAlloc(survivingUbAlloc));
 
     int memIdA = survivingUbAlloc->GetOutputOperand(0)->memoryrange.memId;
-    ASSERT_NE(s.localBufferMap_.find(memIdA), s.localBufferMap_.end());
-    size_t needSize = s.localBufferMap_[memIdA]->size;
+    ASSERT_NE(s.state_.localBufferMap.find(memIdA), s.state_.localBufferMap.end());
+    size_t needSize = s.state_.localBufferMap[memIdA]->size;
 
-    // 在 AIV0 / AIV1 两池 offset 0 各放一个占位 buf, size = needSize
-    // -> spill 后 freedRange = [0, poolMem) 双侧完全一致
-    auto& poolA = s.bufferManagerMap[CoreLocationType::AIV0][MemoryType::MEM_UB];
-    auto& poolB = s.bufferManagerMap[CoreLocationType::AIV1][MemoryType::MEM_UB];
+    // �?AIV0 / AIV1 两池 offset 0 各放一个占�?buf, size = needSize
+    // -> spill �?freedRange = [0, poolMem) 双侧完全一�?
+    auto& poolA = s.state_.bufferManagerMap[CoreLocationType::AIV0][MemoryType::MEM_UB];
+    auto& poolB = s.state_.bufferManagerMap[CoreLocationType::AIV1][MemoryType::MEM_UB];
     ASSERT_GE(poolA.GetMemSize(), needSize);
     ASSERT_GE(poolB.GetMemSize(), needSize);
 
-    constexpr int kPlaceholderMemIdA = 90001;   // 跨 core 全局唯一 (不与 graph builder 冲突)
+    constexpr int kPlaceholderMemIdA = 90001;   // �?core 全局唯一 (不与 graph builder 冲突)
     constexpr int kPlaceholderMemIdB = 90002;
     auto bufHolderA = std::make_shared<LocalBuffer>(kPlaceholderMemIdA, needSize, MemoryType::MEM_UB);
     auto bufHolderB = std::make_shared<LocalBuffer>(kPlaceholderMemIdB, needSize, MemoryType::MEM_UB);
     ASSERT_EQ(poolA.AllocateAtOffset(bufHolderA, 0), SUCCESS);
     ASSERT_EQ(poolB.AllocateAtOffset(bufHolderB, 0), SUCCESS);
 
-    // 直接调 SelectSpillBuffers 验证 dualdst 选组分支
+    // 直接�?SelectSpillBuffers 验证 dualdst 选组分支
     auto spillGroup = s.SelectSpillBuffers(survivingUbAlloc);
 
-    // 期待: 双池各贡献 1 个 placeholder memId, 合计 2 个
+    // 期待: 双池各贡�?1 �?placeholder memId, 合计 2 �?
     ASSERT_EQ(spillGroup.size(), 2u);
     EXPECT_NE(std::find(spillGroup.begin(), spillGroup.end(), kPlaceholderMemIdA), spillGroup.end());
     EXPECT_NE(std::find(spillGroup.begin(), spillGroup.end(), kPlaceholderMemIdB), spillGroup.end());
 }
 
-// Negative: 两池都为空 (无可 spill 候选) -> GetDualSpillGroup 返回空 -> spill-all
-//          兜底两池 sortedBufs 也为空 -> 最终返回空 vector
+// Negative: 两池都为�?(无可 spill 候�? -> GetDualSpillGroup 返回�?-> spill-all
+//          兜底两池 sortedBufs 也为�?-> 最终返回空 vector
 TEST_F(ScheduleOoOTest, DualDst_SelectSpillBuffers_EmptyPoolsReturnEmpty)
 {
     auto g = dualdst_ut::BuildDualDstGraph(
@@ -4089,7 +4086,7 @@ TEST_F(ScheduleOoOTest, DualDst_SelectSpillBuffers_EmptyPoolsReturnEmpty)
     }
     ASSERT_NE(dual, nullptr);
     Operation* survivingUbAlloc = nullptr;
-    for (auto* pred : s.depManager_.GetPredecessors(dual)) {
+    for (auto* pred : s.state_.depManager.GetPredecessors(dual)) {
         if (pred != nullptr && pred->GetOpcodeStr().find("UB_ALLOC") != std::string::npos) {
             survivingUbAlloc = pred;
             break;
@@ -4098,15 +4095,15 @@ TEST_F(ScheduleOoOTest, DualDst_SelectSpillBuffers_EmptyPoolsReturnEmpty)
     ASSERT_NE(survivingUbAlloc, nullptr);
     ASSERT_TRUE(s.dualDstEngine_.IsDualDstAlloc(survivingUbAlloc));
 
-    // 不预填任何占位 buf -> AIV0/AIV1 两池 allocatedBufs 都空
-    // -> GetSpillGroup 返回空 -> SelectSpillBuffers 返回空
+    // 不预填任何占�?buf -> AIV0/AIV1 两池 allocatedBufs 都空
+    // -> GetSpillGroup 返回�?-> SelectSpillBuffers 返回�?
     auto spillGroup = s.SelectSpillBuffers(survivingUbAlloc);
     EXPECT_TRUE(spillGroup.empty());
 }
 
 // --- GetDualSpillGroup 专项 UT (绕过 SelectSpillBuffers 直接验证 helper) -----
 
-// Positive: 两池各预填一个 buf at offset 0
+// Positive: 两池各预填一�?buf at offset 0
 //   外层 iA=0: startAddrA=0, jA=1, window={bufA}
 //   内层 iB=0: startAddrB=0 (== startAddrA), jB=1, window={bufB}
 //   -> 输出一个组 [bufA_memId, bufB_memId]
@@ -4120,13 +4117,13 @@ TEST_F(ScheduleOoOTest, DualDst_GetDualSpillGroup_FindsSharedStartAddrCandidate)
     OoOScheduler s(*g.func);
     EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), {}, CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
 
-    auto& poolA = s.bufferManagerMap[CoreLocationType::AIV0][MemoryType::MEM_UB];
-    auto& poolB = s.bufferManagerMap[CoreLocationType::AIV1][MemoryType::MEM_UB];
+    auto& poolA = s.state_.bufferManagerMap[CoreLocationType::AIV0][MemoryType::MEM_UB];
+    auto& poolB = s.state_.bufferManagerMap[CoreLocationType::AIV1][MemoryType::MEM_UB];
 
     constexpr int kBufMemIdA = 80001;
     constexpr int kBufMemIdB = 80002;
     constexpr size_t kBufSize = 1024;
-    constexpr size_t kNeedSize = 512;   // 小于 kBufSize, spill 后能腾出足够空闲段
+    constexpr size_t kNeedSize = 512;   // 小于 kBufSize, spill 后能腾出足够空闲�?
     ASSERT_GE(poolA.GetMemSize(), kBufSize);
     ASSERT_GE(poolB.GetMemSize(), kBufSize);
 
@@ -4142,8 +4139,8 @@ TEST_F(ScheduleOoOTest, DualDst_GetDualSpillGroup_FindsSharedStartAddrCandidate)
     EXPECT_NE(std::find(groups[0].begin(), groups[0].end(), kBufMemIdB), groups[0].end());
 }
 
-// Negative: sizeNeedSpill > poolMem -> 外层 iA=0 进入即触发
-//   `(poolA.GetMemSize() - 0) < sizeNeedSpill` break -> 返回空 vector
+// Negative: sizeNeedSpill > poolMem -> 外层 iA=0 进入即触�?
+//   `(poolA.GetMemSize() - 0) < sizeNeedSpill` break -> 返回�?vector
 TEST_F(ScheduleOoOTest, DualDst_GetDualSpillGroup_NeedSizeExceedsPoolReturnsEmpty)
 {
     auto g = dualdst_ut::BuildDualDstGraph(
@@ -4154,10 +4151,10 @@ TEST_F(ScheduleOoOTest, DualDst_GetDualSpillGroup_NeedSizeExceedsPoolReturnsEmpt
     OoOScheduler s(*g.func);
     EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), {}, CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
 
-    auto& poolA = s.bufferManagerMap[CoreLocationType::AIV0][MemoryType::MEM_UB];
-    auto& poolB = s.bufferManagerMap[CoreLocationType::AIV1][MemoryType::MEM_UB];
+    auto& poolA = s.state_.bufferManagerMap[CoreLocationType::AIV0][MemoryType::MEM_UB];
+    auto& poolB = s.state_.bufferManagerMap[CoreLocationType::AIV1][MemoryType::MEM_UB];
 
-    // 占位 buf 让 bufsA/bufsB 非空, 保证外层 while 能进入 (才能命中 size-exceeds 的 break)
+    // 占位 buf �?bufsA/bufsB 非空, 保证外层 while 能进�?(才能命中 size-exceeds �?break)
     constexpr int kBufMemIdA = 80003;
     constexpr int kBufMemIdB = 80004;
     auto bufA = std::make_shared<LocalBuffer>(kBufMemIdA, 1024, MemoryType::MEM_UB);
@@ -4165,15 +4162,15 @@ TEST_F(ScheduleOoOTest, DualDst_GetDualSpillGroup_NeedSizeExceedsPoolReturnsEmpt
     ASSERT_EQ(poolA.AllocateAtOffset(bufA, 0), SUCCESS);
     ASSERT_EQ(poolB.AllocateAtOffset(bufB, 0), SUCCESS);
 
-    // need > 池总容量 -> 不可能腾出 -> 空 vector
+    // need > 池总容�?-> 不可能腾�?-> �?vector
     size_t needSize = poolA.GetMemSize() + 1024;
     auto groups = s.GetDualSpillGroup(poolA, poolB, needSize);
     EXPECT_TRUE(groups.empty());
 }
 
-// --- RecordStaticValidShapeOnL0CCopyUB (InferDynShape 阶段 InferShape 前快照) ---
-// 直接调用快照函数, 绕开 InferShape 全量遍历对 op 状态完整性的依赖。
-// 静态 validShape 应被快照成 op 属性。
+// --- RecordStaticValidShapeOnL0CCopyUB (InferDynShape 阶段 InferShape 前快�? ---
+// 直接调用快照函数, 绕开 InferShape 全量遍历�?op 状态完整性的依赖�?
+// 静�?validShape 应被快照�?op 属性�?
 TEST_F(ScheduleOoOTest, DualDst_InferDynShape_RecordsStaticValidShape)
 {
     auto g = dualdst_ut::BuildDualDstGraph(
@@ -4196,14 +4193,14 @@ TEST_F(ScheduleOoOTest, DualDst_InferDynShape_RecordsStaticValidShape)
     EXPECT_EQ(v0[1], dualdst_ut::TILE_N);
 }
 
-// 含动态成分的 validShape -> staticValidShape 不应被记录
+// 含动态成分的 validShape -> staticValidShape 不应被记�?
 TEST_F(ScheduleOoOTest, DualDst_InferDynShape_SkipsDynamicValidShape)
 {
     auto g = dualdst_ut::BuildDualDstGraph(
         {dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
         {dualdst_ut::TILE_M, dualdst_ut::TILE_N},
         {0, 0}, {0, dualdst_ut::TILE_N});
-    // 一维含符号 (无 concrete) -> allConcrete=false -> 跳过快照
+    // 一维含符号 (�?concrete) -> allConcrete=false -> 跳过快照
     g.copy0->GetOutputOperand(0)->UpdateDynValidShape(
         {SymbolicScalar("dyn0"), SymbolicScalar(dualdst_ut::TILE_N)});
 
@@ -4213,7 +4210,7 @@ TEST_F(ScheduleOoOTest, DualDst_InferDynShape_SkipsDynamicValidShape)
     EXPECT_FALSE(g.copy0->HasAttribute(OpAttributeKey::staticValidShape));
 }
 
-// --- GetNewOperations 去重 (dualdst 防御性 shim) -----------------------------
+// --- GetNewOperations 去重 (dualdst 防御�?shim) -----------------------------
 TEST_F(ScheduleOoOTest, DualDst_GetNewOperations_DedupePreservesFirstOccurrence)
 {
     auto g = dualdst_ut::BuildDualDstGraph(
@@ -4223,12 +4220,12 @@ TEST_F(ScheduleOoOTest, DualDst_GetNewOperations_DedupePreservesFirstOccurrence)
     OoOScheduler s(*g.func);
     EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), {}, CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
 
-    // 故意往 newOperations_ 里塞重复 + nullptr -> GetNewOperations 应去重 + 跳 null
-    s.newOperations_.clear();
-    s.newOperations_.push_back(g.copy0);
-    s.newOperations_.push_back(g.copy1);
-    s.newOperations_.push_back(g.copy0);   // dup
-    s.newOperations_.push_back(nullptr);   // null
+    // 故意往 newOperations_ 里塞重复 + nullptr -> GetNewOperations 应去�?+ �?null
+    s.state_.newOperations.clear();
+    s.state_.newOperations.push_back(g.copy0);
+    s.state_.newOperations.push_back(g.copy1);
+    s.state_.newOperations.push_back(g.copy0);   // dup
+    s.state_.newOperations.push_back(nullptr);   // null
 
     auto uniq = s.GetNewOperations();
     EXPECT_EQ(uniq.size(), 2u);

@@ -391,7 +391,7 @@ Status OoOSchedule::SortAndLatencyEstimate(
         APASS_LOG_ERROR_F(Elements::Operation, "SortAndLatencyEstimate LatencyEstimatorMainLoop failed.");
         return FAILED;
     }
-    latency = latencyEstimator.clock;
+    latency = latencyEstimator.state_.clock;
     APASS_LOG_INFO_F(Elements::Operation, "=======>end SortAndLatencyEstimate");
     return SUCCESS;
 }

@@ -49,8 +49,6 @@ bool DynShapeEq(const std::vector<SymbolicScalar>& a, const std::vector<Symbolic
 
 } // namespace
 
-// ===== 静态工具 =====
-
 int64_t DualDstEngine::SpecifiedInt(const OpImmediate& imm)
 {
     if (!imm.IsSpecified()) {
@@ -121,8 +119,6 @@ void DualDstEngine::GreedyNonOverlapPick(std::vector<CandidatePair>& cands, std:
         used.insert(c.opLate);
     }
 }
-
-// ===== 需要 state_ 的私有方法 (从匿名命名空间辅助函数转换) =====
 
 CoreLocationType DualDstEngine::ConsumerCore(Operation* copyUbOp)
 {
@@ -222,8 +218,6 @@ void DualDstEngine::PickAllocOrder(Operation* a1, Operation* a2, Operation*& ear
     }
 }
 
-// ===== 派生判定 =====
-
 bool DualDstEngine::IsDualDstAlloc(Operation* allocOp)
 {
     if (!enableDualDst_) return false;
@@ -274,8 +268,6 @@ void DualDstEngine::EraseFromOrderedOps(Operation* op)
     state_.opReqMemIdsMap.erase(op);
     state_.inOutOperandsCache.erase(op);
 }
-
-// ===== 阶段 1: 识别 =====
 
 void DualDstEngine::IdentifyPairsForOneL0C(LogicalTensorPtr l0cTensor,
                                            const std::vector<Operation*>& copyUbs,
@@ -344,8 +336,6 @@ Status DualDstEngine::IdentifyDualDstPairs(std::vector<DualDstPair>& pairs)
     APASS_LOG_INFO_F(Elements::Operation, "DualDst identify done: %zu pairs.", pairs.size());
     return SUCCESS;
 }
-
-// ===== 阶段 2: 改图 =====
 
 Status DualDstEngine::FuseDualDstPairs(const std::vector<DualDstPair>& pairs)
 {
@@ -552,8 +542,6 @@ Status DualDstEngine::FuseOnePair(const DualDstPair& p)
     return SUCCESS;
 }
 
-// ===== 阶段 3: UB 联合分配 =====
-
 Status DualDstEngine::ResolveDualDstMemAndBuf(Operation* allocOp, DualDstAllocCtx& ctx)
 {
     if (allocOp == nullptr || allocOp->GetOOperands().empty()) return FAILED;
@@ -687,8 +675,6 @@ Status DualDstEngine::AllocateDualDstAtCurrent(Operation* allocA, bool& allocate
     return SUCCESS;
 }
 
-// ===== 核心 Override 查询 =====
-
 CoreLocationType DualDstEngine::ResolveCoreForFree(int memId)
 {
     auto overrideIt = state_.dualDstMemIdCoreOverride.find(memId);
@@ -697,8 +683,6 @@ CoreLocationType DualDstEngine::ResolveCoreForFree(int memId)
     }
     return state_.schedInfoMap[state_.tensorAllocMap[memId]].coreLocation;
 }
-
-// ===== 入口 =====
 
 Status DualDstEngine::RunDualDstFuse()
 {

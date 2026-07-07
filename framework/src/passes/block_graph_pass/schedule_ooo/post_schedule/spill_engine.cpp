@@ -27,17 +27,13 @@ namespace npu::tile_fwk {
 constexpr int32_t TWO_ISSUE = 2;
 constexpr int32_t DEFAULT_LATENCY = 511;
 
-// ============================================================
-//  Public interface
-// ============================================================
-
 void SpillEngine::EmitInitDDRBuffer(const LogicalTensorPtr& t, DDRBufferKind kind)
 {
     if (t == nullptr) return;
     int memId = t->memoryrange.memId;
     if (ddrKindMap_.count(memId) != 0) return;
     ddrKindMap_[memId] = kind;
-    if (!notifier_.HasObservers()) return;
+    if (!state_.HasObservers()) return;
     InitDDRBufferEvent event;
     event.clock = -1;
     event.memId = memId;
@@ -50,7 +46,9 @@ void SpillEngine::EmitInitDDRBuffer(const LogicalTensorPtr& t, DDRBufferKind kin
     } else {
         for (auto d : t->GetShape()) { event.shape.push_back(std::to_string(d)); }
     }
-    notifier_.BroadcastInitDDRBuffer(event);
+    for (auto* obs : state_.observers_) {
+        obs->OnInitDDRBuffer(event);
+    }
 }
 
 int64_t SpillEngine::CalcWorkspaceOffset(std::vector<int64_t> shape, std::vector<int64_t> offset, DataType dataType)
@@ -119,10 +117,6 @@ bool SpillEngine::CheckMachineAndL1(Operation* spillOp, Operation* allocOp)
     }
     return true;
 }
-
-// ============================================================
-//  Op / Tensor factory
-// ============================================================
 
 LogicalTensorPtr SpillEngine::CreateLocalTensor(LogicalTensorPtr spillTensor)
 {
@@ -301,10 +295,6 @@ Operation* SpillEngine::CreateAssembleOp(LogicalTensorPtr iOperand, LogicalTenso
     return &assembleOp;
 }
 
-// ============================================================
-//  Spill query / map update (state-only helpers)
-// ============================================================
-
 Operation* SpillEngine::GetSpillOp(int memId)
 {
     if (state_.tensorOccupyMap.count(memId)) {
@@ -476,10 +466,6 @@ bool SpillEngine::IsUnusedTensor(Operation* spillOp)
     return true;
 }
 
-// ============================================================
-//  Tensor input / memId update helpers
-// ============================================================
-
 void SpillEngine::UpdateOperationInput(Operation* targetOp, Operation* spillOp, LogicalTensorPtr newTensor,
     int spillMemId)
 {
@@ -605,10 +591,6 @@ Operation* SpillEngine::SkipViewChain(Operation* start, bool followProducers)
     return lastView;
 }
 
-// ============================================================
-//  Dependency / schedule update helpers (state-only)
-// ============================================================
-
 void SpillEngine::UpdateSuccessorDependencies(
     Operation* succOp, Operation* spillOp, Operation* reloadCopyin, int spillMemId, int reloadMemId)
 {
@@ -669,10 +651,6 @@ Status SpillEngine::UpdateSmallShapeDependAndBuf(std::vector<std::pair<Operation
     }
     return SUCCESS;
 }
-
-// ============================================================
-//  RemoveSmallShapeSpillResources helpers (state-only subset)
-// ============================================================
 
 void SpillEngine::CollectUBSceneOpsAndTensors(
     Operation* producerOp, std::vector<Operation*>& opsToDelete, std::vector<LogicalTensorPtr>& tensorsToDelete)
@@ -769,119 +747,6 @@ void SpillEngine::EraseOrphanedTensors(
     }
 }
 
-// ============================================================
-//  Notification helpers (event construction + broadcast)
-// ============================================================
-
-CoreLocation SpillEngine::ToCoreLocation(CoreLocationType c)
-{
-    switch (c) {
-        case CoreLocationType::AIC:  return {CoreClass::AIC, 0};
-        case CoreLocationType::AIV0: return {CoreClass::AIV, 0};
-        case CoreLocationType::AIV1: return {CoreClass::AIV, 1};
-        default:                     return {CoreClass::UNKNOWN, 0};
-    }
-}
-
-void SpillEngine::NotifySpill(LogicalTensorPtr spillTensor, int spillMemId,
-    Operation* spillAllocOp, const SingleSpillCreatedOps& created)
-{
-    if (!notifier_.HasObservers()) return;
-    auto& buf = state_.localBufferMap.at(spillMemId);
-    SpillEvent event;
-    // For now, use execOrder of spillAllocOp as a reasonable proxy.
-    int proxyClock = state_.schedInfoMap[spillAllocOp].execOrder;
-    event.clock = proxyClock;
-    event.beginClock = proxyClock;
-    event.endClock = created.copyoutOp != nullptr
-        ? proxyClock + created.copyoutOp->GetLatency() : proxyClock;
-    event.spillMemId = spillMemId;
-    event.memType = spillTensor->GetMemoryTypeOriginal();
-    event.coreLocation = ToCoreLocation(state_.schedInfoMap[spillAllocOp].coreLocation);
-    event.addrStart = buf->start;
-    event.addrEnd = buf->end;
-    event.triggerOpMagic = spillAllocOp->GetOpMagic();
-    event.triggerTensorSize = spillAllocOp->GetOutputOperand(0)->tensor->GetRawDataSize();
-    event.spillCopyoutOpMagic = created.copyoutOp ? created.copyoutOp->GetOpMagic() : -1;
-    event.reloadAllocOpMagic = created.allocOp ? created.allocOp->GetOpMagic() : -1;
-    event.reloadCopyInOpMagic = created.copyinOp ? created.copyinOp->GetOpMagic() : -1;
-    event.spillTensorMagic = spillTensor->GetMagic();
-    event.spillCopyoutSize = (created.copyoutOp != nullptr)
-        ? spillTensor->tensor->GetRawDataSize() : 0;
-    for (const auto& [memId, ownerOp] : state_.tensorOccupyMap) {
-        if (state_.schedInfoMap[ownerOp].isAlloc) {
-            event.allocOccupiedSize += state_.localBufferMap.at(memId)->size;
-        }
-    }
-    auto& pool = state_.bufferManagerMap[state_.schedInfoMap[spillAllocOp].coreLocation][buf->memType];
-    event.bufferCurrentUsage = pool.GetAllocatedSize();
-    event.bufferCapacity = pool.GetMemSize();
-    if (created.gmTensor != nullptr) {
-        event.spillDdrMemId = created.gmTensor->memoryrange.memId;
-        event.ddrKind = DDRBufferKind::SPILL_TEMP;
-        event.ddrMemType = MemoryType::MEM_DEVICE_DDR;
-        event.ddrAddrStart = created.gmTensor->memoryrange.start;
-        event.ddrAddrEnd = created.gmTensor->memoryrange.end;
-        event.ddrSize = event.ddrAddrEnd - event.ddrAddrStart;
-    }
-    notifier_.BroadcastSpill(event);
-}
-
-void SpillEngine::NotifyBufferRearrange(Operation* triggerOp, MemoryType memType,
-    std::vector<BufferRearrangeEvent::Change> changes)
-{
-    if (!notifier_.HasObservers() || changes.empty()) return;
-    BufferRearrangeEvent event;
-    int proxyClock = state_.schedInfoMap[triggerOp].execOrder;
-    event.clock = proxyClock;
-    event.memType = memType;
-    event.coreLocation = ToCoreLocation(state_.schedInfoMap[triggerOp].coreLocation);
-    event.triggerOpMagic = triggerOp->GetOpMagic();
-    event.changes = std::move(changes);
-    notifier_.BroadcastBufferRearrange(event);
-}
-
-void SpillEngine::NotifyAllocFail(Operation* triggerOp, MemoryType memType, uint64_t requestSize)
-{
-    if (!notifier_.HasObservers()) return;
-    auto coreLocation = state_.schedInfoMap[triggerOp].coreLocation;
-    auto& pool = state_.bufferManagerMap[coreLocation][memType];
-
-    AllocFailEvent event;
-    int proxyClock = state_.schedInfoMap[triggerOp].execOrder;
-    event.clock = proxyClock;
-    event.triggerOpMagic = triggerOp->GetOpMagic();
-    event.memType = memType;
-    event.coreLocation = ToCoreLocation(coreLocation);
-    event.requestSize = requestSize;
-    event.capacity = pool.GetMemSize();
-
-    for (int memId : pool.GetAddrSortedBufs()) {
-        AllocFailEvent::OccupiedSlice slice;
-        slice.memId = memId;
-        slice.addrStart = pool.GetBufferOffset(memId);
-        slice.size = pool.GetBufferSize(memId);
-        slice.addrEnd = slice.addrStart + slice.size;
-        auto it = state_.tensorOccupyMap.find(memId);
-        slice.ownerOpMagic = (it != state_.tensorOccupyMap.end()) ? it->second->GetOpMagic() : -1;
-        event.occupiedSlices.push_back(slice);
-    }
-
-    auto freeIntervalMap = pool.FindFreeIntervals();
-    for (auto& [intervalSize, intervals] : freeIntervalMap) {
-        (void)intervalSize;
-        for (auto& [start, end] : intervals) {
-            event.freeIntervals.push_back({start, end - start});
-        }
-    }
-
-    notifier_.BroadcastAllocFail(event);
-}
-
-// ============================================================
-//  Spill execution variants (migrated from spill_buffer.cpp)
-// ============================================================
-
 Status SpillEngine::SpillBuffer(int memId, Operation* spillAllocOp, SpillContext &ctx)
 {
     Operation* spillOp = GetSpillOp(memId);
@@ -902,7 +767,7 @@ Status SpillEngine::SpillBuffer(int memId, Operation* spillAllocOp, SpillContext
         APASS_LOG_ERROR_F(Elements::Tensor, "Spill %s tensor[%d] failed.", state_.GetOpInfo(spillOp).c_str(), memId);
         return FAILED;
     }
-    NotifySpill(spillTensor, memId, spillAllocOp, created);
+    NotifySpill(state_, spillTensor, memId, spillAllocOp, created);
     if (state_.bufferManagerMap[state_.schedInfoMap[spillAllocOp].coreLocation][state_.localBufferMap[memId]->memType].Free(memId) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "Free spill tensor[%d] failed!", memId);
         return FAILED;
@@ -1409,10 +1274,6 @@ Status SpillEngine::CreateParticalBuffer(int spillMemid, Operation* producerOp, 
     return SUCCESS;
 }
 
-// ============================================================
-//  Spill query / map update (continued)
-// ============================================================
-
 void SpillEngine::EraseSchedulerSideMaps(Operation* op)
 {
     auto it = std::find(state_.orderedOps.begin(), state_.orderedOps.end(), op);
@@ -1444,10 +1305,6 @@ int SpillEngine::GetBufNextUseTime(int curMemId)
     }
     return -1;
 }
-
-// ============================================================
-//  Schedule info update (migrated from spill_buffer.cpp)
-// ============================================================
 
 Status SpillEngine::UpdateCopyoutScheduleInfo(Operation* op, LogicalTensorPtr spillTensor, int spillMemId,
     Operation* spillOp, bool isRetired)
@@ -1556,10 +1413,6 @@ Status SpillEngine::UpdateNeedDeleteScheduleStatus(std::vector<std::pair<Operati
     return SUCCESS;
 }
 
-// ============================================================
-//  Tensor memId update (continued)
-// ============================================================
-
 Status SpillEngine::UpdateRemainMemid(int oldMemId, int newMemId) {
     if (state_.bufRefCount.find(oldMemId) == state_.bufRefCount.end()) {
         APASS_LOG_ERROR_F(Elements::Tensor, "bufRefCount cannot find Tensor[%d]. ", oldMemId);
@@ -1575,10 +1428,6 @@ Status SpillEngine::UpdateRemainMemid(int oldMemId, int newMemId) {
     }
     return SUCCESS;
 }
-
-// ============================================================
-//  RemoveSmallShapeSpillResources helpers (continued)
-// ============================================================
 
 size_t SpillEngine::CleanupCollectedOperations(
     const std::vector<Operation*>& opsToDelete, const std::vector<LogicalTensorPtr>& tensorsToDelete)

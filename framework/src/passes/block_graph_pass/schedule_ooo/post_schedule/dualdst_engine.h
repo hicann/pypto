@@ -32,8 +32,8 @@ namespace npu::tile_fwk {
 
 class DualDstEngine {
 public:
-    DualDstEngine(ScheduleState& state, ScheduleNotifier& notifier, Function& function)
-        : state_(state), notifier_(notifier), function_(function), enableDualDst_(false) {}
+    DualDstEngine(ScheduleState& state, Function& function)
+        : state_(state), function_(function), enableDualDst_(false) {}
     ~DualDstEngine() {}
 
     Status RunDualDstFuse();
@@ -107,7 +107,6 @@ private:
     std::optional<uint64_t> FindCommonFreeOffset(BufferPool& poolA, BufferPool& poolB, uint64_t size);
 
     ScheduleState& state_;
-    ScheduleNotifier& notifier_;
     Function& function_;
     bool enableDualDst_;
     std::unordered_map<LogicalTensorPtr, int64_t> dualDstL0CDirection_;

@@ -9,7 +9,7 @@
  */
 
 #include "memory_aware_topo_sort.h"
-#include "passes/block_graph_pass/schedule_ooo/common/schedule_base.h"
+#include "passes/block_graph_pass/schedule_ooo/common/schedule_state.h"
 #include "passes/pass_log/pass_log.h"
 #include "interface/function/function.h"
 #include <cmath>
@@ -393,10 +393,6 @@ static bool SelectAllocFromReadyQueue(
     best_idx = -1;
     best_node_id = INT_MAX;
 
-    // ALLOC nodes must always be scheduled before any non-ALLOC node.
-    // They have in_degree=0 and produce tensor memory; consumers depend on them.
-    // Selecting ALLOCs first guarantees alloc→copyin→compute ordering without
-    // relying on error-prone post-processing like EnsureAllocInterleaving.
     for (size_t i = 0; i < ready_queue.size(); i++) {
         Operation* candidate = ready_queue[i];
         if (candidate->GetOpcodeStr().find("ALLOC") != std::string::npos) {
@@ -617,7 +613,6 @@ Status MemoryAwareTopoSort::InitContext()
     context_.executed_consumers.clear();
     context_.max_consumer_count = 0;
 
-    // Initialize DependencyManager from operations
     Status init_res = depManager_.InitDependencies(operations, false);
     if (init_res != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation,
