@@ -314,12 +314,11 @@ Docker安装相关内容请参考：
 
 如需体验计算图和泳道图的查看能力，请安装PyPTO Toolkit插件：
 
-1. 单击[PyPTO_Toolkit](https://ascend-cann.obs.cn-north-4.myhuaweicloud.com/devkit/pypto-toolkit-1.1.0.vsix)，下载`.vsix`插件文件。
+1. 打开Visual Studio Code，进入“扩展”选项卡界面，在扩展搜索框里输入"pypto"搜索插件，点击安装即可。
 
-2. 打开Visual Studio Code，进入"扩展"选项卡界面，单击右上角的"..."，选择"从VSIX安装..."。
- ![vscode_install](https://ascend-cann.obs.cn-north-4.myhuaweicloud.com/devkit/images/vscode_install.png)
+    ![install](https://ascend-cann.obs.cn-north-4.myhuaweicloud.com/devkit/images/install.png)
 
-3. 选择已下载的`.vsix`插件文件，完成安装。
+2. 具体使用文档参考 [PyPTO Toolkit 文档](https://pypto-tools.gitcode.com/index.html)
 
 ### MPI依赖
 
