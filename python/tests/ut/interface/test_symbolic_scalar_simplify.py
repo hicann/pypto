@@ -69,14 +69,14 @@ def test_not_eq():
     x = _sym("x")
     y = _sym("y")
     result = (~(x == y)).simplify()
-    assert str(result) == "RUNTIME_Ne(x, y)"
+    assert str(result) == "(x!=y)"
 
 
 def test_not_ne():
     x = _sym("x")
     y = _sym("y")
     result = (~(x != y)).simplify()
-    assert str(result) == "RUNTIME_Eq(x, y)"
+    assert str(result) == "(x==y)"
 
 
 # ============================================================================
@@ -342,7 +342,7 @@ def test_eq_cancel_add():
     y = _sym("y")
     z = _sym("z")
     result = (x + y == x + z).simplify()
-    assert str(result) == "RUNTIME_Eq(y, z)"
+    assert str(result) == "(y==z)"
 
 
 def test_ne_cancel_add():
@@ -350,7 +350,7 @@ def test_ne_cancel_add():
     y = _sym("y")
     z = _sym("z")
     result = (x + y != x + z).simplify()
-    assert str(result) == "RUNTIME_Ne(y, z)"
+    assert str(result) == "(y!=z)"
 
 
 def test_lt_cancel_add():
@@ -402,3 +402,88 @@ def test_complex_cancellation():
     # x*y + x*z => (y+z) * x
     result = (x * y + x * z).simplify()
     assert str(result) == "((y+z)*x)"
+
+
+# ============================================================================
+# Logical and/or rules
+# ============================================================================
+
+def test_and_zero():
+    x = _sym("x")
+    y = _sym("y")
+    result = (x & 0).simplify()
+    assert str(result) == "0"
+
+
+def test_and_one():
+    x = _sym("x")
+    result = (x & 1).simplify()
+    assert str(result) == "x"
+
+
+def test_or_zero():
+    x = _sym("x")
+    result = (x | 0).simplify()
+    assert str(result) == "x"
+
+
+def test_or_one():
+    x = _sym("x")
+    result = (x | 1).simplify()
+    assert str(result) == "1"
+
+
+def test_and_self():
+    x = _sym("x")
+    result = (x & x).simplify()
+    assert str(result) == "x"
+
+
+def test_or_self():
+    x = _sym("x")
+    result = (x | x).simplify()
+    assert str(result) == "x"
+
+
+def test_and_absorption():
+    x = _sym("x")
+    y = _sym("y")
+    result = (x & (x | y)).simplify()
+    assert str(result) == "x"
+
+
+def test_or_absorption():
+    x = _sym("x")
+    y = _sym("y")
+    result = (x | (x & y)).simplify()
+    assert str(result) == "x"
+
+
+def test_and_complement():
+    x = _sym("x")
+    result = (x & (~x)).simplify()
+    assert str(result) == "0"
+    result = ((~x) & x).simplify()
+    assert str(result) == "0"
+
+
+def test_or_complement():
+    x = _sym("x")
+    result = (x | (~x)).simplify()
+    assert str(result) == "1"
+    result = ((~x) | x).simplify()
+    assert str(result) == "1"
+
+
+def test_not_and_de_morgan():
+    x = _sym("x")
+    y = _sym("y")
+    result = (~(x & y)).simplify()
+    assert str(result) == "((!x)||(!y))"
+
+
+def test_not_or_de_morgan():
+    x = _sym("x")
+    y = _sym("y")
+    result = (~(x | y)).simplify()
+    assert str(result) == "((!x)&&(!y))"

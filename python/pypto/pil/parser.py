@@ -171,16 +171,14 @@ _builtin_ops = {
 }
 
 
-def _is_pypto_loop(node: ast.AST) -> bool:
-    """True if node is a ``pypto.loop(...)`` call, the iterable of a dynamic for."""
-    return (
-        isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Attribute)
-        and node.func.attr == "loop"
-        and isinstance(node.func.value, ast.Name)
-        and node.func.value.id == "pypto"
-    )
-
+def _pypto_loop_mode(node: ast.AST) -> Optional[str]:
+    if (isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id == "pypto"
+            and node.func.attr in ("loop", "loop_unroll")):
+        return node.func.attr
+    return None
 
 
 def _parse_params(ctx, func: ast.FunctionDef, defaults, kwdefaults):
@@ -377,8 +375,17 @@ class Parser:
         if node.orelse:
             ctx.raise_error(node, "for-else not supported")
 
+        loop_mode = _pypto_loop_mode(node.iter)
+        kind = LoopKind.DYNAMIC_FOR if loop_mode else LoopKind.FOR
+        if loop_mode == "loop_unroll":
+            if not (isinstance(node.target, (ast.Tuple, ast.List))
+                    and len(node.target.elts) == 2):
+                ctx.raise_error(node,
+                    "pypto.loop_unroll must unpack exactly two targets (index, count), "
+                    "e.g. 'for i, k in pypto.loop_unroll(...)'",
+                )
+
         iter = self.visit(node.iter, ctx)
-        kind = LoopKind.DYNAMIC_FOR if _is_pypto_loop(node.iter) else LoopKind.FOR
         ctx.loop_kinds.append(kind)
         loop_var = ctx.make_temp()
         with ctx.new_block(args=(loop_var,)) as body:
@@ -517,7 +524,6 @@ class Parser:
             if isinstance(target, ast.Name):
                 ctx.store(target.id, value)
             elif isinstance(target, (ast.Tuple, ast.List)):
-                value = ctx.call("pil.unpack", (value, len(target.elts)))
                 for i, elm in enumerate(target.elts):
                     val_i = ctx.call(operator.getitem, (value, i))
                     self._do_assign(elm, val_i, ctx)

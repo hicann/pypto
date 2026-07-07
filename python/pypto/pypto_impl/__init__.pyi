@@ -9,7 +9,8 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 import enum
-from typing import Iterator, overload, Union, List, Dict, Tuple, Optional, NoReturn
+from types import UnionType
+from typing import Any, Iterator, overload, Union, List, Dict, Tuple, Optional, NoReturn
 
 from . import ir
 
@@ -247,6 +248,14 @@ class SymbolicScalar:
     def __rfloordiv__(self, other: Union[SymbolicScalar, int]) -> SymbolicScalar: ...
 
     def __floordiv__(self, other: Union[SymbolicScalar, int]) -> SymbolicScalar: ...
+
+    def __and__(self, other: Union[SymbolicScalar, int]) -> SymbolicScalar: ...
+
+    def __rand__(self, other: Union[SymbolicScalar, int]) -> SymbolicScalar: ...
+
+    def __or__(self, other: Union[SymbolicScalar, int]) -> SymbolicScalar: ...
+
+    def __ror__(self, other: Union[SymbolicScalar, int]) -> SymbolicScalar: ...
 
     def __pos__(self) -> SymbolicScalar: ...
 

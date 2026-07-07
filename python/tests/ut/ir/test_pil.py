@@ -425,7 +425,24 @@ def test_tensor_loop_unroll():
     b = ir.IRBuilder()
     prog = b.create_program([func], "main", ir.Span.unknown())
     prog = ir.Pass.canonicalize()(prog)
-    logging.log_info(f"\ncanonical: {prog}")
+    info(f"\ncanonical: {prog}")
+
+
+def test_tensor_loop_unroll_batch():
+    """Add dynamic tensor should be supported."""
+    def foo(x, y):
+        for i, k in pypto.loop_unroll(x.shape[0], unroll_list=[32, 16, 1]):
+            pypto.set_vec_tile_shapes(32, 32)
+            ta = x[i:i + k, :]
+            y[i:, :] = ta + 1
+
+    x = pypto.Tensor((-1, 32), pypto.DT_FP32, 'x')
+    y = pypto.Tensor((-1, 32), pypto.DT_FP32, 'y')
+    func = pil.compile(foo, x, y)
+    b = ir.IRBuilder()
+    prog = b.create_program([func], "main", ir.Span.unknown())
+    prog = ir.Pass.canonicalize()(prog)
+    info(f"\ncanonical: {prog}")
 
 
 def _opcode_set(stmt, acc=None):

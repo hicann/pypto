@@ -309,9 +309,36 @@ def test_symbolic_scalar_issue36():
     assert str(a) == '((b>=2)*(b<8))'
 
 
-def test_as_expr():
-    b = pypto.symbolic_scalar('b').as_expr()
-    assert str(b) == 'b'
+def test_symbolic_scalar_logical_ops():
+    c = 10
+    x = pypto.symbolic_scalar(10)   # concrete immediate
+    y = pypto.symbolic_scalar('y')  # symbol
+    z = pypto.symbolic_scalar(20)   # concrete immediate
+    zero = pypto.symbolic_scalar(0)
 
+    # concrete && concrete / || concrete folds to 0/1
+    assert (x & z).concrete() == 1    # 10 && 20
+    assert (z & x).concrete() == 1
+    assert (x | z).concrete() == 1
+    assert (zero & x).concrete() == 0  # 0 && 10
+    assert (zero | x).concrete() == 1  # 0 || 10
 
-test_as_expr()
+    # int on either side
+    assert (x & c).concrete() == 1
+    assert (c & x).concrete() == 1
+    assert (x | 0).concrete() == 1
+    assert (0 | x).concrete() == 1
+
+    # symbol op (symbol or concrete) -> expression
+    expr = y & z
+    assert isinstance(expr, pypto.symbolic_scalar)
+    assert expr.is_expression() == True
+    assert expr.is_concrete() == False
+    assert str(expr) == '(y&&20)'
+
+    assert str(y | x) == '1'
+
+    # reverse with int: 0 & y -> expression (annihilator handled by simplify)
+    expr3 = 0 & y
+    assert isinstance(expr3, pypto.symbolic_scalar)
+    assert str(expr3) == '0'

@@ -279,8 +279,7 @@ ScalarImmediateType EvaluateSymbol::EvaluateSymbolicScalar(
                 }
                 if (SymbolicOpcode::T_UOP_BEGIN <= expr->Opcode() && expr->Opcode() < SymbolicOpcode::T_UOP_END) {
                     result = RawSymbolicExpression::GetSymbolicCalcUnary(expr->Opcode())(dataList[0]);
-                } else if (
-                    SymbolicOpcode::T_BOP_BEGIN <= expr->Opcode() && expr->Opcode() < SymbolicOpcode::T_BOP_END) {
+                } else if (RawSymbolicExpression::IsBinaryCalcOpcode(expr->Opcode())) {
                     result = dataList[0];
                     for (size_t i = 1; i < dataList.size(); i++) {
                         result = RawSymbolicExpression::GetSymbolicCalcBinary(expr->Opcode())(result, dataList[i]);

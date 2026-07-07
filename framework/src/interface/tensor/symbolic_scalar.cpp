@@ -429,7 +429,7 @@ std::string SymbolicExpressionTable::BuildExpressionCode(
     if (SymbolicOpcode::T_UOP_BEGIN <= expr->Opcode() && expr->Opcode() < SymbolicOpcode::T_UOP_END) {
         oss << RawSymbolicExpression::GetSymbolicCalcOpcode(expr->Opcode());
         oss << BuildExpressionByRaw(expr->OperandList()[0], exprDict);
-    } else if (SymbolicOpcode::T_BOP_BEGIN <= expr->Opcode() && expr->Opcode() < SymbolicOpcode::T_BOP_END) {
+    } else if (RawSymbolicExpression::IsBinaryCalcOpcode(expr->Opcode())) {
         for (size_t idx = 0; idx < expr->OperandList().size(); idx++) {
             if (idx != 0) {
                 oss << " " + RawSymbolicExpression::GetSymbolicCalcOpcode(expr->Opcode()) + " ";
@@ -739,6 +739,8 @@ SYMBOLIC_SCALAR_DEFINE_BOP(Lt, <, RawSymbolicExpression::CreateBopLt)
 SYMBOLIC_SCALAR_DEFINE_BOP(Le, <=, RawSymbolicExpression::CreateBopLe)
 SYMBOLIC_SCALAR_DEFINE_BOP(Gt, >, RawSymbolicExpression::CreateBopGt)
 SYMBOLIC_SCALAR_DEFINE_BOP(Ge, >=, RawSymbolicExpression::CreateBopGe)
+SYMBOLIC_SCALAR_DEFINE_BOP(And, &&, RawSymbolicExpression::CreateBopAnd)
+SYMBOLIC_SCALAR_DEFINE_BOP(Or, ||, RawSymbolicExpression::CreateBopOr)
 #undef SYMBOLIC_SCALAR_DEFINE_BOP
 
 SymbolicScalar SymbolicScalar::operator()() const
@@ -960,29 +962,15 @@ void RawSymbolicExpression::DumpBuffer(std::ostream& buffer) const
         buffer << "(" << GetSymbolicCalcOpcode(opcode_);
         operandList_[0]->DumpBuffer(buffer);
         buffer << ")";
-    } else if (SymbolicOpcode::T_BOP_BEGIN <= opcode_ && opcode_ < SymbolicOpcode::T_BOP_END) {
-        if (opcode_ == SymbolicOpcode::T_BOP_EQ) {
-            buffer << "RUNTIME_Eq(";
-            operandList_[0]->DumpBuffer(buffer);
-            buffer << ", ";
-            operandList_[1]->DumpBuffer(buffer);
-            buffer << ")";
-        } else if (opcode_ == SymbolicOpcode::T_BOP_NE) {
-            buffer << "RUNTIME_Ne(";
-            operandList_[0]->DumpBuffer(buffer);
-            buffer << ", ";
-            operandList_[1]->DumpBuffer(buffer);
-            buffer << ")";
-        } else {
-            buffer << "(";
-            for (size_t i = 0; i < operandList_.size(); i++) {
-                if (i != 0) {
-                    buffer << GetSymbolicCalcOpcode(opcode_);
-                }
-                operandList_[i]->DumpBuffer(buffer);
+    } else if (RawSymbolicExpression::IsBinaryCalcOpcode(opcode_)) {
+        buffer << "(";
+        for (size_t i = 0; i < operandList_.size(); i++) {
+            if (i != 0) {
+                buffer << GetSymbolicCalcOpcode(opcode_);
             }
-            buffer << ")";
+            operandList_[i]->DumpBuffer(buffer);
         }
+        buffer << ")";
     } else if (opcode_ == SymbolicOpcode::T_MOP_MAX || opcode_ == SymbolicOpcode::T_MOP_MIN) {
         DumpRuntimeExtrema(buffer);
     } else if (opcode_ == SymbolicOpcode::T_MOP_CALL) {

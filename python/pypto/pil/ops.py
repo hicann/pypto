@@ -113,11 +113,8 @@ def max_impl(ctx, *args):
         return pypto.max(args[0], args[1])
     return max(args)
 
-# ---- Control flow ----
 
-
-@impl(pypto.loop)
-def pypto_loop_impl(ctx: BuildContext, *args, name: str = "", unroll_list: Optional[list] = None):
+def _pypto_loop(*args, name: str, unroll_list: Optional[list], batch):
     nargs = len(args)
     if nargs == 1:
         start, stop, step = 0, args[0], 1
@@ -134,7 +131,17 @@ def pypto_loop_impl(ctx: BuildContext, *args, name: str = "", unroll_list: Optio
         if not isinstance(u, int) or u <= 0:
             raise ValueError(f"unroll factor {u} must be a positive integer")
 
-    return LoopRange(start, stop, step, unroll_list)
+    return LoopRange(start, stop, step, unroll_list, batch)
+
+
+@impl(pypto.loop)
+def pypto_loop_impl(ctx: BuildContext, *args, name: str = "", unroll_list: Optional[list] = None):
+    return _pypto_loop(*args, name=name, unroll_list=unroll_list, batch=False)
+
+
+@impl(pypto.loop_unroll)
+def pypto_loop_unroll_impl(ctx: BuildContext, *args, name: str = "", unroll_list: Optional[list] = None):
+    return _pypto_loop(*args, name=name, unroll_list=unroll_list, batch=True)
 
 
 def _add_jump_stmt(ctx: BuildContext, jump, operands: Optional[list[ir.Expr]] = None):
@@ -182,11 +189,11 @@ def _static_while(body: Block):
             continue
 
 
-def _loop_unroll(body: Block, start, end, step, unroll, ctx: BuildContext):
+def _loop_unroll(body: Block, start, end, step, factor, batch, ctx: BuildContext):
     scope = Scope.current()
     loop_val = body.args[0]
 
-    # Create loop variable Varß
+    # Create loop variable Var
     loop_var = ctx.create_scalar_var()
     scope.varmap[loop_val.id] = loop_var
 
@@ -204,9 +211,13 @@ def _loop_unroll(body: Block, start, end, step, unroll, ctx: BuildContext):
     # Compile body into Stmt tree via nested IRBuilder
     body_stmt = ir.SeqStmts(body.span)
     with InsertPoint(body_stmt), ctx.change_span(body.span), ctx.change_return_vars(return_var_names):
-        for i in range(unroll):
-            scope.varmap[loop_val.id] = loop_var + i * step
+        if batch:
+            scope.varmap[loop_val.id] = (loop_var, factor)
             dispatch_block(body, False)
+        else:
+            for i in range(factor):
+                scope.varmap[loop_val.id] = loop_var + i * step
+                dispatch_block(body, False)
         _add_jump_stmt(ctx, body.jump)
 
     return_vars = []
@@ -217,19 +228,19 @@ def _loop_unroll(body: Block, start, end, step, unroll, ctx: BuildContext):
 
     for_stmt = ctx.create_for_stmt(
         loop_var.as_var(), ctx.unwrap(start), ctx.unwrap(end), ctx.unwrap(
-            unroll * step), iter_args, body_stmt, return_vars, ctx.span,
+            factor * step), iter_args, body_stmt, return_vars, ctx.span,
     )
     ctx.emit(for_stmt)
 
 
 def _dyn_for(body: Block, loop: LoopRange, ctx: BuildContext):
     start, stop, step = loop.start, loop.stop, loop.step
-    for unroll in loop.unroll_list:
-        if unroll == 1:
+    for factor in loop.unroll_list:
+        if factor == 1:
             end = stop
         else:
-            end = stop - (stop - start) % (unroll * step)
-        _loop_unroll(body, start, end, step, unroll, ctx)
+            end = stop - (stop - start) % (factor * step)
+        _loop_unroll(body, start, end, step, factor, loop.batch, ctx)
         start = end
 
 

@@ -371,7 +371,7 @@ public:
         G.SetInCast({"a", "b"});
         G.SetOutCast({"out"});
     }
-    
+
     void BuildPerfectlyMatchWithInferShapeGraph(ComputationalGraphBuilder& G, bool setDynShape = false)
     {
         int N = 2;
@@ -798,7 +798,7 @@ TEST_F(SplitLargeFanoutTensorTest, MtoM)
             auto input = op.GetIOperands().front();
             auto inputDynShape = input->GetDynValidShape();
             EXPECT_EQ(inputDynShape.size(), NUM_2);
-            EXPECT_EQ(inputDynShape[0].Dump(), "RUNTIME_Max(c, RUNTIME_Max(((c+64)*RUNTIME_Ne(c, 0)), 0))");
+            EXPECT_EQ(inputDynShape[0].Dump(), "RUNTIME_Max(c, RUNTIME_Max(((c+64)*(c!=0)), 0))");
         }
     }
 }
@@ -1067,7 +1067,7 @@ TEST_F(SplitLargeFanoutTensorTest, PerfectlyMatchWithAll_Full)
             auto input = op.GetIOperands().front();
             auto inputDynShape = input->GetDynValidShape();
             EXPECT_EQ(inputDynShape.size(), NUM_2);
-            EXPECT_EQ(inputDynShape[0].Dump(), "RUNTIME_Max(a, RUNTIME_Max(((a+8)*RUNTIME_Ne(a, 0)), 0))");
+            EXPECT_EQ(inputDynShape[0].Dump(), "RUNTIME_Max(a, RUNTIME_Max(((a+8)*(a!=0)), 0))");
         }
     }
 }
@@ -1466,28 +1466,28 @@ TEST_F(SplitLargeFanoutTensorTest, ComplexOverlap)
     splitLargeFanoutTensor.PostCheck(*function);
     std::cout << "Run Pass Done." << std::endl;
 
-    // 验证： 
-     // 拆分后除了两个incast分别各cover一个outcast的场景会被单独拆出 
-     // 中间的[16, 32]会被拆除形成对两个[8, 32]的多对多 
-     // 剩余两个会被保留 
-     std::unordered_map<int, int> recordAssemble; 
-     std::unordered_map<int, int> recordView; 
-     for (auto& op : function->Operations()) { 
-         if (op.GetOpcode() == Opcode::OP_ASSEMBLE) { 
-             recordAssemble[op.oOperand.front()->GetMagic()]++; 
-         } 
-         if (op.GetOpcode() == Opcode::OP_VIEW) { 
-             recordView[op.iOperand.front()->GetMagic()]++; 
-         } 
-     } 
-     for (auto& [k, v] : recordAssemble) { 
-         // 1. out1被输入a包含，out2被输入b包含，拆为1对1 
-         // 2. 输入e, f组成的[16, 16]tile和out5,out6匹配，拆出2对2 
-         // 3. 剩余无法继续拆分，保留从largeTensor进行view 
-         // 故对于拆分后view和assemble的中间tensor， 
-         // 如果只有一个assemble（场景1），则只有一个view 
-         // 否则（场景2，3）会有两个view 
-         EXPECT_EQ(recordView[k], (v == 1) ? 1 : 2); 
+    // 验证：
+     // 拆分后除了两个incast分别各cover一个outcast的场景会被单独拆出
+     // 中间的[16, 32]会被拆除形成对两个[8, 32]的多对多
+     // 剩余两个会被保留
+     std::unordered_map<int, int> recordAssemble;
+     std::unordered_map<int, int> recordView;
+     for (auto& op : function->Operations()) {
+         if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
+             recordAssemble[op.oOperand.front()->GetMagic()]++;
+         }
+         if (op.GetOpcode() == Opcode::OP_VIEW) {
+             recordView[op.iOperand.front()->GetMagic()]++;
+         }
+     }
+     for (auto& [k, v] : recordAssemble) {
+         // 1. out1被输入a包含，out2被输入b包含，拆为1对1
+         // 2. 输入e, f组成的[16, 16]tile和out5,out6匹配，拆出2对2
+         // 3. 剩余无法继续拆分，保留从largeTensor进行view
+         // 故对于拆分后view和assemble的中间tensor，
+         // 如果只有一个assemble（场景1），则只有一个view
+         // 否则（场景2，3）会有两个view
+         EXPECT_EQ(recordView[k], (v == 1) ? 1 : 2);
      }
 }
 
@@ -1512,9 +1512,9 @@ void BuildPartialInputUnusedGraph(ComputationalGraphBuilder& G)
 
     std::map<std::string, Shape> logicTensors = {
         {"in1", {16, 656}},   {"in2", {16, 656}},   {"in3", {16, 656}},  {"in4", {16, 656}},   {"in5", {16, 656}},
-        {"in6", {16, 656}},   {"in7", {16, 656}},   {"in8", {16, 656}},  {"in1Tensor", {16, 656}},   
-        {"in2Tensor", {16, 656}},   {"in3Tensor", {16, 656}},   {"in4Tensor", {16, 656}},   {"in5Tensor", {16, 656}},  
-        {"in6Tensor", {16, 656}},   {"in7Tensor", {16, 656}},   {"in8Tensor", {16, 656}},   {"out11", {16, 512}}, 
+        {"in6", {16, 656}},   {"in7", {16, 656}},   {"in8", {16, 656}},  {"in1Tensor", {16, 656}},
+        {"in2Tensor", {16, 656}},   {"in3Tensor", {16, 656}},   {"in4Tensor", {16, 656}},   {"in5Tensor", {16, 656}},
+        {"in6Tensor", {16, 656}},   {"in7Tensor", {16, 656}},   {"in8Tensor", {16, 656}},   {"out11", {16, 512}},
         {"out81", {16, 512}},  {"out22", {16, 128}}, {"out82", {16, 128}}, {"out33", {16, 16}}, {"out83", {16, 16}}};
     for (const auto& [name, shape] : logicTensors) {
         G.AddTensor(DataType::DT_FP32, shape, name);
@@ -1683,7 +1683,7 @@ void BuildDiffLcmShape(ComputationalGraphBuilder& G)
     // 定义所有张量的形状和名称并添加
     std::map<std::string, std::vector<int64_t>> tensors = {
         {"a", {NUM_1}}, {"b", {NUM_2}}, {"c", {NUM_1}}, {"d", {NUM_1}},
-        {"a1", {NUM_1}}, {"b1", {NUM_2}}, {"c1", {NUM_1}}, {"d1", {NUM_1}},        
+        {"a1", {NUM_1}}, {"b1", {NUM_2}}, {"c1", {NUM_1}}, {"d1", {NUM_1}},
         {"out1", {NUM_3}}, {"out2", {NUM_1}}, {"largeTensor", {NUM_5}}};
     for (const auto& [name, shape] : tensors) {
         G.AddTensor(DataType::DT_FP32, shape, name);

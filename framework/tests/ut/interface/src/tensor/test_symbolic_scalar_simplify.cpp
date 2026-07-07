@@ -185,4 +185,28 @@ TEST(TestSimplify, ComplexCancellation)
     EXPECT_EQ((x * y + x * z).Simplify().Dump(), "((y+z)*x)");
 }
 
+// ============================================================================
+// Logical and/or
+// ============================================================================
+
+TEST(TestSimplify, LogicOp)
+{
+    auto x = _sym("x");
+    auto y = _sym("y");
+
+    EXPECT_EQ((x && 0).Simplify().Dump(), "0");
+    EXPECT_EQ((x && 1).Simplify().Dump(), "x");
+    EXPECT_EQ((x && x).Simplify().Dump(), "x");
+
+    EXPECT_EQ((x || 0).Simplify().Dump(), "x");
+    EXPECT_EQ((x || 1).Simplify().Dump(), "1");
+    EXPECT_EQ((x || x).Simplify().Dump(), "x");
+
+    EXPECT_EQ((x && (x || y)).Simplify().Dump(), "x");
+    EXPECT_EQ((x || (x && y)).Simplify().Dump(), "x");
+
+    EXPECT_EQ((!(x && y)).Simplify().Dump(), "((!x)||(!y))");
+    EXPECT_EQ((!(x || y)).Simplify().Dump(), "((!x)&&(!y))");
+}
+
 } // namespace npu::tile_fwk

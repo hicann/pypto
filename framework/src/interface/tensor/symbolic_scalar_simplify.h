@@ -343,6 +343,10 @@ SYM_PATTERN_BINARY_NAMED(sym_le, SymbolicOpcode::T_BOP_LE)
 SYM_PATTERN_BINARY_NAMED(sym_gt, SymbolicOpcode::T_BOP_GT)
 SYM_PATTERN_BINARY_NAMED(sym_ge, SymbolicOpcode::T_BOP_GE)
 
+// Logical and/or pattern constructors
+SYM_PATTERN_BINARY_NAMED(sym_and, SymbolicOpcode::T_MOP_AND)
+SYM_PATTERN_BINARY_NAMED(sym_or, SymbolicOpcode::T_MOP_OR)
+
 // Unary pattern: neg()
 template <typename TA>
 inline SUnaryPattern<SymbolicOpcode::T_UOP_NEG, TA> sym_neg(const SPattern<TA>& a)
@@ -500,6 +504,14 @@ private:
             return VisitLe(newOps[1], newOps[0]);
         }
 
+        // Logical and/or
+        if (opcode == SymbolicOpcode::T_MOP_AND) {
+            return VisitAnd(newOps[0], newOps[1]);
+        }
+        if (opcode == SymbolicOpcode::T_MOP_OR) {
+            return VisitOr(newOps[0], newOps[1]);
+        }
+
         // MOP min/max with 2 operands — delegate to binary min/max visitors
         if (opcode == SymbolicOpcode::T_MOP_MIN && newOps.size() == 0x2) {
             return VisitMin(newOps[0], newOps[1]);
@@ -544,6 +556,9 @@ private:
         SYM_TRY_REWRITE(!(sym_le(x, y)), sym_lt(y, x));
         SYM_TRY_REWRITE(!(sym_eq(x, y)), sym_ne(x, y));
         SYM_TRY_REWRITE(!(sym_ne(x, y)), sym_eq(x, y));
+        // De Morgan's laws
+        SYM_TRY_REWRITE(!(sym_and(x, y)), sym_or(!x, !y));
+        SYM_TRY_REWRITE(!(sym_or(x, y)), sym_and(!x, !y));
 
         return ret;
     }
@@ -1026,6 +1041,60 @@ private:
 
         SYM_TRY_REWRITE_IF(sym_le(x * c1, y * c1), sym_le(x, y), c1.Val() > 0);
         SYM_TRY_REWRITE_IF(sym_le(x * c1, y * c1), sym_le(y, x), c1.Val() < 0);
+
+        return ret;
+    }
+
+    // ========================================================================
+    // And (logical)
+    // ========================================================================
+
+    RawPtr VisitAnd(const RawPtr& a, const RawPtr& b)
+    {
+        RawPtr ret = Expr::CreateBopAnd(a, b);
+        PVarRaw x, y;
+
+        // Idempotence
+        SYM_TRY_REWRITE(sym_and(x, x), x);
+        // Annihilator: x && 0 => 0
+        SYM_TRY_REWRITE(sym_and(x, 0), MakeConst(0));
+        SYM_TRY_REWRITE(sym_and(0, x), MakeConst(0));
+        // Identity: x && 1 => x
+        SYM_TRY_REWRITE(sym_and(x, 1), x);
+        SYM_TRY_REWRITE(sym_and(1, x), x);
+        // Complement: x && !x => 0
+        SYM_TRY_REWRITE(sym_and(x, !x), MakeConst(0));
+        SYM_TRY_REWRITE(sym_and(!x, x), MakeConst(0));
+        // Absorption: x && (x || y) => x
+        SYM_TRY_REWRITE(sym_and(x, sym_or(x, y)), x);
+        SYM_TRY_REWRITE(sym_and(x, sym_or(y, x)), x);
+
+        return ret;
+    }
+
+    // ========================================================================
+    // Or (logical)
+    // ========================================================================
+
+    RawPtr VisitOr(const RawPtr& a, const RawPtr& b)
+    {
+        RawPtr ret = Expr::CreateBopOr(a, b);
+        PVarRaw x, y;
+
+        // Idempotence
+        SYM_TRY_REWRITE(sym_or(x, x), x);
+        // Annihilator: x || 1 => 1
+        SYM_TRY_REWRITE(sym_or(x, 1), MakeConst(1));
+        SYM_TRY_REWRITE(sym_or(1, x), MakeConst(1));
+        // Identity: x || 0 => x
+        SYM_TRY_REWRITE(sym_or(x, 0), x);
+        SYM_TRY_REWRITE(sym_or(0, x), x);
+        // Complement: x || !x => 1
+        SYM_TRY_REWRITE(sym_or(x, !x), MakeConst(1));
+        SYM_TRY_REWRITE(sym_or(!x, x), MakeConst(1));
+        // Absorption: x || (x && y) => x
+        SYM_TRY_REWRITE(sym_or(x, sym_and(x, y)), x);
+        SYM_TRY_REWRITE(sym_or(x, sym_and(y, x)), x);
 
         return ret;
     }

@@ -23,6 +23,7 @@ class LoopRange:
     stop: Any
     step: Any
     unroll_list: list[int]
+    batch: bool
 
 
 @dataclass(frozen=True)

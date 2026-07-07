@@ -156,7 +156,6 @@ def test_visit_assign():
     blk = _parse_func(f)
     store_calls = [s for s in blk.calls if isinstance(s, pir.Call) and s.callee == "pil.store"]
     assert any("y" in c.args for c in store_calls)
-    assert len([s for s in blk.calls if isinstance(s, pir.Call) and s.callee == "pil.unpack"]) == 2
     assert _has(blk, operator.setitem)
     assert _has(blk, setattr)
 

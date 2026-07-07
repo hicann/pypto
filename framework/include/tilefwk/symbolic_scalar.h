@@ -104,6 +104,8 @@ public:
     SYMBOLIC_SCALAR_DEFINE_BOP(Le, <=)
     SYMBOLIC_SCALAR_DEFINE_BOP(Gt, >)
     SYMBOLIC_SCALAR_DEFINE_BOP(Ge, >=)
+    SYMBOLIC_SCALAR_DEFINE_BOP(And, &&)
+    SYMBOLIC_SCALAR_DEFINE_BOP(Or, ||)
 #undef SYMBOLIC_SCALAR_DEFINE_BOP
 
     SymbolicScalar Min(const SymbolicScalar& sval) const;

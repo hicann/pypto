@@ -52,21 +52,10 @@ std::vector<ir::VarPtr>& IRContext::GetDependToken(const ir::ExprPtr& val)
 
     std::set<ir::VarPtr> tokenList;
     auto s = std::dynamic_pointer_cast<const RawSymbolicExpression>(val);
-    if (s->Opcode() == SymbolicOpcode::T_MOP_CALL) {
-        for (size_t i = 1; i < s->OperandList().size(); i++) {
-            auto tokens = getToken(s->OperandList()[i]);
-            tokenList.insert(tokens.begin(), tokens.end());
-        }
-    } else if (SymbolicOpcode::T_UOP_BEGIN <= s->Opcode() && s->Opcode() < SymbolicOpcode::T_UOP_END) {
-        auto tokens = getToken(s->OperandList()[0]);
+    auto start = s->Opcode() == SymbolicOpcode::T_MOP_CALL;
+    for (size_t i = start; i < s->OperandList().size(); i++) {
+        auto tokens = getToken(s->OperandList()[i]);
         tokenList.insert(tokens.begin(), tokens.end());
-    } else if (
-        (SymbolicOpcode::T_BOP_BEGIN <= s->Opcode() && s->Opcode() < SymbolicOpcode::T_BOP_END) ||
-        s->Opcode() == SymbolicOpcode::T_MOP_MAX || s->Opcode() == SymbolicOpcode::T_MOP_MIN) {
-        auto tokens0 = getToken(s->OperandList()[0]);
-        tokenList.insert(tokens0.begin(), tokens0.end());
-        auto tokens1 = getToken(s->OperandList()[1]);
-        tokenList.insert(tokens1.begin(), tokens1.end());
     }
     token_map_[val] = std::vector<ir::VarPtr>(tokenList.begin(), tokenList.end());
     return token_map_[val];

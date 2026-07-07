@@ -100,6 +100,9 @@ enum class SymbolicOpcode {
     T_MOP_MIN,
     T_MOP_MAX,
 
+    T_MOP_AND,
+    T_MOP_OR,
+
     T_UOP_BEGIN = T_UOP_POS,
     T_UOP_END = T_UOP_NOT + 1,
     T_BOP_BEGIN = T_BOP_ADD,
@@ -270,6 +273,8 @@ public:
     RAW_SYMBOLIC_EXPRESSION_CALC_DEFINE_BOP(CalcBopLe, <=)
     RAW_SYMBOLIC_EXPRESSION_CALC_DEFINE_BOP(CalcBopGt, >)
     RAW_SYMBOLIC_EXPRESSION_CALC_DEFINE_BOP(CalcBopGe, >=)
+    RAW_SYMBOLIC_EXPRESSION_CALC_DEFINE_BOP(CalcBopAnd, &&)
+    RAW_SYMBOLIC_EXPRESSION_CALC_DEFINE_BOP(CalcBopOr, ||)
 #undef RAW_SYMBOLIC_EXPRESSION_CALC_DEFINE_BOP
 
 #define RAW_SYMBOLIC_EXPRESSION_CALC_DEFINE_BOPF(name, bfn)                                         \
@@ -284,28 +289,60 @@ public:
     using SymbolicCalcUnary = ScalarImmediateType (*)(const ScalarImmediateType&);
     static SymbolicCalcUnary GetSymbolicCalcUnary(SymbolicOpcode opcode)
     {
-        static const RawSymbolicExpression::SymbolicCalcUnary CALC_LIST[] = {
-            RawSymbolicExpression::CalcUopPos,
-            RawSymbolicExpression::CalcUopNeg,
-            RawSymbolicExpression::CalcUopNot,
-        };
-        return CALC_LIST[static_cast<int>(opcode) - static_cast<int>(SymbolicOpcode::T_UOP_BEGIN)];
+        switch (opcode) {
+            case SymbolicOpcode::T_UOP_POS:
+                return &RawSymbolicExpression::CalcUopPos;
+            case SymbolicOpcode::T_UOP_NEG:
+                return &RawSymbolicExpression::CalcUopNeg;
+            case SymbolicOpcode::T_UOP_NOT:
+                return &RawSymbolicExpression::CalcUopNot;
+            default:
+                FE_ASSERT(false);
+                return nullptr;
+        }
     }
 
     using SymbolicCalcBinary = ScalarImmediateType (*)(const ScalarImmediateType&, const ScalarImmediateType&);
 
+    static bool IsBinaryCalcOpcode(SymbolicOpcode opcode)
+    {
+        return (SymbolicOpcode::T_BOP_BEGIN <= opcode && opcode < SymbolicOpcode::T_BOP_END) ||
+               opcode == SymbolicOpcode::T_MOP_AND || opcode == SymbolicOpcode::T_MOP_OR;
+    }
+
     static SymbolicCalcBinary GetSymbolicCalcBinary(SymbolicOpcode opcode)
     {
-        static const RawSymbolicExpression::SymbolicCalcBinary CALC_LIST[] = {
-            RawSymbolicExpression::CalcBopAdd, RawSymbolicExpression::CalcBopSub, RawSymbolicExpression::CalcBopMul,
-            RawSymbolicExpression::CalcBopDiv, RawSymbolicExpression::CalcBopMod,
-
-            RawSymbolicExpression::CalcBopEq,  RawSymbolicExpression::CalcBopNe,  RawSymbolicExpression::CalcBopLt,
-            RawSymbolicExpression::CalcBopLe,  RawSymbolicExpression::CalcBopGt,  RawSymbolicExpression::CalcBopGe,
-
-            RawSymbolicExpression::CalcBopMin, RawSymbolicExpression::CalcBopMax,
-        };
-        return CALC_LIST[static_cast<size_t>(opcode) - static_cast<size_t>(SymbolicOpcode::T_BOP_BEGIN)];
+        switch (opcode) {
+            case SymbolicOpcode::T_BOP_ADD:
+                return &RawSymbolicExpression::CalcBopAdd;
+            case SymbolicOpcode::T_BOP_SUB:
+                return &RawSymbolicExpression::CalcBopSub;
+            case SymbolicOpcode::T_BOP_MUL:
+                return &RawSymbolicExpression::CalcBopMul;
+            case SymbolicOpcode::T_BOP_DIV:
+                return &RawSymbolicExpression::CalcBopDiv;
+            case SymbolicOpcode::T_BOP_MOD:
+                return &RawSymbolicExpression::CalcBopMod;
+            case SymbolicOpcode::T_BOP_EQ:
+                return &RawSymbolicExpression::CalcBopEq;
+            case SymbolicOpcode::T_BOP_NE:
+                return &RawSymbolicExpression::CalcBopNe;
+            case SymbolicOpcode::T_BOP_LT:
+                return &RawSymbolicExpression::CalcBopLt;
+            case SymbolicOpcode::T_BOP_LE:
+                return &RawSymbolicExpression::CalcBopLe;
+            case SymbolicOpcode::T_BOP_GT:
+                return &RawSymbolicExpression::CalcBopGt;
+            case SymbolicOpcode::T_BOP_GE:
+                return &RawSymbolicExpression::CalcBopGe;
+            case SymbolicOpcode::T_MOP_AND:
+                return &RawSymbolicExpression::CalcBopAnd;
+            case SymbolicOpcode::T_MOP_OR:
+                return &RawSymbolicExpression::CalcBopOr;
+            default:
+                FE_ASSERT(false);
+                return nullptr;
+        }
     }
 
     using SymbolicCalcMop = ScalarImmediateType (*)(const std::vector<ScalarImmediateType>&);
@@ -346,7 +383,12 @@ public:
     static std::string GetSymbolicCalcOpcode(SymbolicOpcode opcode)
     {
         static const std::string OPCODE_NAME_LIST[] = {
-            "+", "-", "!", "+", "-", "*", "/", "%", "==", "!=", "<", "<=", ">", ">=", "<:min:>", "<:max:>",
+            "+", "-", "!",                      // T_UOP_POS / T_UOP_NEG / T_UOP_NOT
+            "+", "-", "*", "/", "%",            // T_BOP_ADD .. T_BOP_MOD
+            "==", "!=", "<", "<=", ">", ">=",   // T_BOP_EQ .. T_BOP_GE
+            "<:min:>", "<:max:>",               // deprecated T_BOP_MIN / T_BOP_MAX
+            "", "<:min:>", "<:max:>",           // T_MOP_CALL / T_MOP_MIN / T_MOP_MAX (not rendered here)
+            "&&", "||",                         // T_MOP_AND / T_MOP_OR
         };
         return OPCODE_NAME_LIST[static_cast<size_t>(opcode)];
     }
@@ -465,7 +507,7 @@ public:
         if (SymbolicOpcode::T_UOP_BEGIN <= opcode && opcode < SymbolicOpcode::T_UOP_END) {
             FE_ASSERT(immediateList.size() == 1) << "immediateList.size():  " << immediateList.size();
             return RawSymbolicExpression::GetSymbolicCalcUnary(opcode)(immediateList[0]);
-        } else if (SymbolicOpcode::T_BOP_BEGIN <= opcode && opcode < SymbolicOpcode::T_BOP_END) {
+        } else if (RawSymbolicExpression::IsBinaryCalcOpcode(opcode)) {
             return std::accumulate(
                 immediateList.begin() + 1, immediateList.end(), immediateList[0],
                 [opcode](const ScalarImmediateType& lhs, const ScalarImmediateType& rhs) {
@@ -555,6 +597,28 @@ public:
     RAW_SYMBOLIC_EXPRESSION_DEFINE_MOP(CreateMopMax, SymbolicOpcode::T_MOP_MAX)
     RAW_SYMBOLIC_EXPRESSION_DEFINE_MOP(CreateMopMin, SymbolicOpcode::T_MOP_MIN)
 #undef RAW_SYMBOLIC_EXPRESSION_DEFINE_MOP
+
+    static RawSymbolicScalarPtr CreateBopOr(const RawSymbolicScalarPtr& lhs, const RawSymbolicScalarPtr& rhs)
+    {
+        std::vector<RawSymbolicScalarPtr> operands = {lhs, rhs};
+        for (auto& op : operands) {
+            if (op->IsImmediate() && std::static_pointer_cast<RawSymbolicImmediate>(op)->Immediate() != 0) {
+                return std::make_shared<RawSymbolicImmediate>(1);
+            }
+        }
+        return CreateRuntime(SymbolicOpcode::T_MOP_OR, operands);
+    }
+
+    static RawSymbolicScalarPtr CreateBopAnd(const RawSymbolicScalarPtr& lhs, const RawSymbolicScalarPtr& rhs)
+    {
+        std::vector<RawSymbolicScalarPtr> operands = {lhs, rhs};
+        for (auto& op : operands) {
+            if (op->IsImmediate() && std::static_pointer_cast<RawSymbolicImmediate>(op)->Immediate() == 0) {
+                return std::make_shared<RawSymbolicImmediate>(0);
+            }
+        }
+        return CreateRuntime(SymbolicOpcode::T_MOP_AND, operands);
+    }
 
     static RawSymbolicScalarPtr CreateMopCall(const RawSymbolicScalarPtr& callee)
     {
@@ -661,7 +725,7 @@ protected:
         ScalarImmediateType result = 0;
         if (SymbolicOpcode::T_UOP_BEGIN <= expr->Opcode() && expr->Opcode() < SymbolicOpcode::T_UOP_END) {
             result = RawSymbolicExpression::GetSymbolicCalcUnary(expr->Opcode())(dataList[0]);
-        } else if (SymbolicOpcode::T_BOP_BEGIN <= expr->Opcode() && expr->Opcode() < SymbolicOpcode::T_BOP_END) {
+        } else if (RawSymbolicExpression::IsBinaryCalcOpcode(expr->Opcode())) {
             result = dataList[0];
             for (size_t i = 1; i < dataList.size(); i++) {
                 result = RawSymbolicExpression::GetSymbolicCalcBinary(expr->Opcode())(result, dataList[i]);
