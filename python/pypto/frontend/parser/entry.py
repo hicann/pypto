@@ -24,11 +24,13 @@ import itertools
 
 import pypto
 import torch
+from pypto import pil
 from pypto import pypto_impl
 from pypto.converter import _torch_dtype_from, _gen_pto_tensor, from_torch
 from pypto.cost_model import _cost_model_run_once_data_from_host
 from pypto.frontend.parser.diagnostics import Source
 from pypto.frontend.parser.parser import NestedFunctionMarker, Parser
+from pypto.ir.compile_pipeline import compile_new_ir
 from pypto.runtime import _pto_verify_datas
 from pypto._build_online import BuildOnlineCalculatorManager
 from pypto._utils import get_torch_npu, get_npu_tensor_format, get_dtensor_type
@@ -236,6 +238,7 @@ class JitCallableWrapper:
         verify_options: Optional[dict[str, Any]] = None,
         debug_options: Optional[dict[str, Any]] = None,
         captured_locals: Optional[dict[str, Any]] = None,
+        new_ir: bool = False,
     ):
         """Initialize the JIT callable wrapper with compilation and runtime configurations.
 
@@ -262,6 +265,8 @@ class JitCallableWrapper:
         captured_locals : Optional[dict[str, Any]], optional
             Local variables captured from the original function's scope (copied to a new dict
             to prevent external modification). Defaults to None.
+        new_ir : bool, optional
+            Whether to compile through the new IR pipeline. Defaults to False.
         """
         self._pto_function = pto_function
         self._original_func = original_func
@@ -281,6 +286,7 @@ class JitCallableWrapper:
         self._pass_options = None if pass_options is None else dict(pass_options)
         self._verify_options = None if verify_options is None else dict(verify_options)
         self._debug_options = None if debug_options is None else dict(debug_options)
+        self._use_new_ir = new_ir
 
         self._set_run_mode()
         self.kwargs = None
@@ -458,6 +464,33 @@ class JitCallableWrapper:
 
 
     @_catch_and_wrap_error("compile function")
+    def compile_new(
+        self,
+        tensors,
+        tensor_defs=None,
+    ) -> None:
+        if tensor_defs is not None:
+            self._check_input_defs_match_tensors(tensors, tensor_defs)
+            pto_tensor = self._convert_tensors_with_metadata(tensors, tensor_defs)
+            snapshot_src = list(tensors)
+        else:
+            pto_tensor = tensors
+            snapshot_src = None
+
+        self._set_config_option()
+        self._setup_verify_data(pto_tensor, source_torch_tensors=snapshot_src)
+
+        self._pto_function = compile_new_ir(
+            self._original_func,
+            *pto_tensor,
+            **(self.kwargs or {}),
+        )
+
+        # Reset golden data after compilation
+        _pto_verify_datas.reset()
+
+
+    @_catch_and_wrap_error("compile function")
     def compile(
         self,
         tensors,
@@ -475,6 +508,10 @@ class JitCallableWrapper:
             When provided, tensors are torch tensors and will be converted to PTO via from_torch
             using name/dynamic_axis/dtype from each tensor_def. When None, tensors are PTO tensors.
         """
+        if self._use_new_ir:
+            self.compile_new(tensors, tensor_defs)
+            return
+
         if tensor_defs is not None:
             self._check_input_defs_match_tensors(tensors, tensor_defs)
             args = self._convert_tensors_with_metadata(tensors, tensor_defs)
@@ -1160,6 +1197,7 @@ def jit(
     runtime_options: Optional[dict[str, Any]] = None,
     verify_options: Optional[dict[str, Any]] = None,
     debug_options: Optional[dict[str, Any]] = None,
+    new_ir: bool = False,
 ) -> Union[Callable, Callable[[Callable], JitCallableWrapper]]:
     """JIT decorator for compiling Python functions to PTO IR.
 
@@ -1185,6 +1223,8 @@ def jit(
         Options to configure the verify.
     debug_options : Optional[dict[str, Any]], optional
         Options to configure the debug.
+    new_ir : bool, optional
+        Whether to compile through the new IR pipeline. Defaults to False.
 
     Returns
     -------
@@ -1242,6 +1282,7 @@ def jit(
             verify_options=verify_options,
             debug_options=debug_options,
             captured_locals=captured_locals,
+            new_ir=new_ir,
         )
         return wrapper
 
