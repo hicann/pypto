@@ -16,6 +16,7 @@
 #pragma once
 
 #include "machine/utils/dynamic/dev_encode_types.h"
+#include "interface/operation/opcode.h"
 #include "interface/tensor/runtime_slot.h"
 #include "machine/utils/dynamic/dev_cell_match_mem_layout.h"
 
@@ -54,15 +55,18 @@ struct DevAscendFunctionCallOperandUse {
     int offsetAttrIdx{-1};
     int shapeAttrIdx{-1};
     CellMatchOpType opType{CellMatchOpType::READ};
+    Opcode opCode{Opcode::OP_UNKNOWN};
     int wrapTaskHubOpIdx{INVALID_WRAP_TASK_HUB_OP_IDX};
 
     DevAscendFunctionCallOperandUse() = default;
     DevAscendFunctionCallOperandUse(int operationIdx_, int offsetAttrIdx_, int shapeAttrIdx_,
-                                      CellMatchOpType opType_ = CellMatchOpType::READ)	 
+                                      CellMatchOpType opType_ = CellMatchOpType::READ,
+                                      Opcode opCode_ = Opcode::OP_UNKNOWN)
          : operationIdx(operationIdx_),	 
            offsetAttrIdx(offsetAttrIdx_),	 
            shapeAttrIdx(shapeAttrIdx_),	 
-           opType(opType_)
+           opType(opType_),
+           opCode(opCode_)
     {}
 };
 
