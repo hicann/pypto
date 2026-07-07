@@ -272,6 +272,11 @@ Pass FlattenSingleStmt();
 Pass MergeStmtsIntoIf();
 
 Pass CreateRootFunctions();
+
+/**
+ * \brief Finalize dynamic functions built from new IR (post create_root_functions).
+ */
+Pass FinalizeDynamicFunction();
 } // namespace pass
 
 /**

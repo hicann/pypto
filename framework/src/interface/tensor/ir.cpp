@@ -21,6 +21,7 @@
 #include "logical_tensor.h"
 #include "token_pass.h"
 #include "ir_func_builder.h"
+#include "ir_finalize.h"
 
 using npu::tile_fwk::LogicalTensor;
 using npu::tile_fwk::RawSymbolicExpression;
@@ -87,7 +88,7 @@ Pass pass::AggressiveDCE()
             }
             auto newBody = std::make_shared<ir::SeqStmts>(std::move(newStmts), func->body_->span_);
             return std::make_shared<ir::Function>(
-                func->name_, func->params_, func->returnTypes_, newBody, func->span_, func->funcType_);
+                func->name_, func->params_, func->returnTypes_, newBody, func->span_, func->funcType_, func->entry_);
         },
         "AggressiveDCE");
 }
@@ -116,6 +117,7 @@ Pass pass::CreateRootFunctions()
                 (void)funcName;
                 npu::tile_fwk::RootFunctionBuilder builder(parentFunc);
                 auto dynFunc = builder.Build(irFunc);
+                dynFunc->entry_ = true;
                 newFunctions[dynFunc->name_] = std::static_pointer_cast<const ir::Function>(dynFunc);
             }
 
@@ -130,6 +132,38 @@ Pass pass::CreateRootFunctions()
                 std::move(newFunctions), irProgram->name_, irProgram->span_);
         },
         "CreateRootFunctions");
+}
+
+namespace {
+
+npu::tile_fwk::Function* AsFrameworkFunction(const FunctionPtr& func)
+{
+    auto fwkFunc = std::static_pointer_cast<const npu::tile_fwk::Function>(func);
+    return const_cast<npu::tile_fwk::Function*>(fwkFunc.get());
+}
+
+} // namespace
+
+Pass pass::FinalizeDynamicFunction()
+{
+    return pass::CreateProgramPass(
+        [](const ProgramPtr& irProgram) -> ProgramPtr {
+            auto& programInst = npu::tile_fwk::Program::GetInstance();
+            for (const auto& [funcName, funcPtr] : irProgram->functions_) {
+                (void)funcName;
+                if (!funcPtr->entry_) {
+                    continue;
+                }
+                auto* fwkFunc = AsFrameworkFunction(funcPtr);
+                if (fwkFunc == nullptr) {
+                    continue;
+                }
+                programInst.SetLastFunction(fwkFunc);
+                npu::tile_fwk::FinalizeDynamicFunction(fwkFunc);
+            }
+            return irProgram;
+        },
+        "FinalizeDynamicFunction");
 }
 
 } // namespace pypto::ir

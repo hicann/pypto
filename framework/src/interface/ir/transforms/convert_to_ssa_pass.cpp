@@ -144,7 +144,7 @@ public:
 
         // Create the new function with versioned parameters
         return std::make_shared<Function>(
-            func->name_, new_params_, func->returnTypes_, new_body, func->span_, func->funcType_);
+            func->name_, new_params_, func->returnTypes_, new_body, func->span_, func->funcType_, func->entry_);
     }
 
 protected:

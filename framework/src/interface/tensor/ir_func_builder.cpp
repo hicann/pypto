@@ -13,6 +13,7 @@
 #include "raw_tensor.h"
 #include "interface/function/function.h"
 #include "interface/operation/attribute.h"
+#include "interface/operation/operation.h"
 #include "interface/operation/opcode.h"
 #include "interface/program/program.h"
 #include "interface/tensor/tensor_slot.h"
@@ -20,6 +21,7 @@
 #include "interface/utils/id_gen.h"
 #include "interface/configs/config_manager.h"
 #include "interface/tensor/irbuilder.h"
+#include "interface/tensor/ir_tensor_op_rebuild.h"
 
 #include "ir/expr.h"
 #include "ir/kind_traits.h"
@@ -107,37 +109,16 @@ std::vector<std::vector<ir::StmtPtr>> RootFunctionBuilder::SplitIntoTensorOpSegm
     return segments;
 }
 
-void RootFunctionBuilder::CopyOpAttributes(
-    Operation& operation, const std::vector<std::pair<std::string, std::any>>& attrs)
-{
-    for (auto& [key, value] : attrs) {
-        if (value.type() == typeid(int64_t)) {
-            operation.SetAttribute(key, std::any_cast<int64_t>(value));
-        } else if (value.type() == typeid(int)) {
-            operation.SetAttribute(key, static_cast<int64_t>(std::any_cast<int>(value)));
-        } else if (value.type() == typeid(bool)) {
-            operation.SetAttribute(key, std::any_cast<bool>(value));
-        } else if (value.type() == typeid(std::string)) {
-            operation.SetAttribute(key, std::any_cast<std::string>(value));
-        } else if (value.type() == typeid(std::vector<int64_t>)) {
-            operation.SetAttribute(key, std::any_cast<std::vector<int64_t>>(value));
-        } else if (value.type() == typeid(tile_fwk::DataType)) {
-            operation.SetAttribute(key, std::any_cast<tile_fwk::DataType>(value));
-        }
-    }
-}
-
-void RootFunctionBuilder::ProcessTensorOp(
+ir::StmtPtr RootFunctionBuilder::ProcessTensorOp(
     std::shared_ptr<Function> pathFunc, const ir::StmtPtr& stmt,
     std::unordered_set<std::shared_ptr<LogicalTensor>>& allInputs,
     std::unordered_set<std::shared_ptr<LogicalTensor>>& allOutputs,
     std::unordered_set<std::shared_ptr<LogicalTensor>>& definedOutputs)
 {
     if (stmt->GetKind() != ir::ObjectKind::TensorOpStmt) {
-        return;
+        return stmt;
     }
     auto tensorOpStmt = std::static_pointer_cast<const ir::TensorOpStmt>(stmt);
-    auto opcode = FindOpcode(tensorOpStmt->opcode_);
 
     LogicalTensors iOperands;
     for (auto& arg : tensorOpStmt->args_) {
@@ -165,16 +146,16 @@ void RootFunctionBuilder::ProcessTensorOp(
         definedOutputs.insert(op);
     }
 
-    auto& operation = pathFunc->AddRawOperation(opcode, iOperands, oOperands, tensorOpStmt->span_);
-    CopyOpAttributes(operation, tensorOpStmt->attrs_);
-
-    ir::StmtPtr opStmt = std::static_pointer_cast<const ir::Stmt>(operation.shared_from_this());
+    ir::StmtPtr opStmt = RebuildTensorOpStmt(
+        tensorOpStmt, tensorOpStmt->result_, tensorOpStmt->result_token_, tensorOpStmt->args_, tensorOpStmt->tokens_,
+        tensorOpStmt->span_, pathFunc.get());
     if (tensorOpStmt->result_token_) {
         pathFunc->GetVarDependency().AddProducer(tensorOpStmt->result_token_, opStmt);
     }
     for (auto& token : tensorOpStmt->tokens_) {
         pathFunc->GetVarDependency().AddConsumer(token, opStmt);
     }
+    return opStmt;
 }
 
 void RootFunctionBuilder::ComputeIncast(
@@ -224,12 +205,15 @@ std::shared_ptr<Function> RootFunctionBuilder::CreatePathFunc(
     std::unordered_set<std::shared_ptr<LogicalTensor>> definedOutputs;
     std::unordered_set<std::shared_ptr<LogicalTensor>> allInputs;
     std::unordered_set<std::shared_ptr<LogicalTensor>> allOutputs;
+    std::vector<ir::StmtPtr> bodyStmts;
+    bodyStmts.reserve(seq->stmts_.size());
     for (auto& stmt : seq->stmts_) {
-        ProcessTensorOp(pathFunc, stmt, allInputs, allOutputs, definedOutputs);
+        auto opStmt = ProcessTensorOp(pathFunc, stmt, allInputs, allOutputs, definedOutputs);
+        bodyStmts.push_back(opStmt);
     }
+    pathFunc->body_ = std::make_shared<ir::SeqStmts>(std::move(bodyStmts), seq->span_);
     ComputeIncast(*pathFunc, allInputs, definedOutputs);
     pathFunc->name_ = pathMagicName;
-    pathFunc->body_ = seq;
     pathFunc->funcType_ = ir::FunctionType::IN_CORE;
     return pathFunc;
 }

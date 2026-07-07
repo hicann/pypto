@@ -104,7 +104,10 @@ void BindPasses(py::module_& m)
         .def_static("canonicalize", &pass::Canonicalize, "Canonicalize IR")
         .def_static("token_pass", &pass::TokenPass, "Add WAR/WAW token dependencies")
         .def_static("merge_stmts_into_if", &pass::MergeStmtsIntoIf, "Merge stmts into if branches")
-        .def_static("create_root_functions", &pass::CreateRootFunctions, "Create root functions from IR");
+        .def_static("create_root_functions", &pass::CreateRootFunctions, "Create root functions from IR")
+        .def_static(
+            "finalize_dynamic_function", &pass::FinalizeDynamicFunction,
+            "Finalize dynamic functions built from new IR");
 
     py::class_<PassInstrument, std::shared_ptr<PassInstrument>>(
         m, "PassInstrument", "Abstract base class for pass instrumentation")

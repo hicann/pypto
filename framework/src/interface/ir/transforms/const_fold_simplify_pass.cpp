@@ -396,7 +396,7 @@ static FunctionPtr TransformConstFoldAndSimplify(const FunctionPtr& func)
     if (new_body.get() == func->body_.get())
         return func;
     return std::make_shared<Function>(
-        func->name_, func->params_, func->returnTypes_, new_body, func->span_, func->funcType_);
+        func->name_, func->params_, func->returnTypes_, new_body, func->span_, func->funcType_, func->entry_);
 }
 
 namespace pass {

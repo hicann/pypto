@@ -159,10 +159,12 @@ def _run_dce(func, *args):
     canonical = ir.Pass.canonicalize()
     merge = ir.Pass.merge_stmts_into_if()
     create_pf = ir.Pass.create_root_functions()
+    finalize = ir.Pass.finalize_dynamic_function()
     prog = dce(canonical(prog))
     prog = dce(canonical(prog))
     prog = canonical(merge(prog))
     prog = create_pf(prog)
+    prog = finalize(prog)
     return prog.functions[func.name]
 
 

@@ -16,6 +16,8 @@
 #include "ir/kind_traits.h"
 #include "ir/type.h"
 
+#include "interface/tensor/ir_tensor_op_rebuild.h"
+
 namespace pypto::ir {
 
 using VarTokenMap = std::unordered_map<VarPtr, VarPtr>;
@@ -216,8 +218,8 @@ private:
             }
         }
 
-        auto newStmt = std::make_shared<TensorOpStmt>(
-            op->result_, resultToken, op->opcode_, op->args_, newTokens, op->attrs_, op->span_);
+        auto newStmt = npu::tile_fwk::RebuildTensorOpStmt(
+            op, op->result_, resultToken, op->args_, newTokens, op->span_);
 
         UpdateProducers(op->result_, resultToken);
         return newStmt;

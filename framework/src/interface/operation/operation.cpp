@@ -992,6 +992,62 @@ Operation& Operation::CloneOperation(
     return op;
 }
 
+void Operation::UnlinkFromLogicalTensors()
+{
+    for (auto& input : iOperand) {
+        input->RemoveConsumer(this);
+    }
+    for (auto& output : oOperand) {
+        output->RemoveProducer(this);
+    }
+}
+
+std::shared_ptr<Operation> Operation::CloneTensorOpStmt(
+    const LogicalTensors& iOperandList, const LogicalTensors& oOperandList, const ir::VarPtr& resultToken,
+    const std::vector<ir::VarPtr>& tokens, ir::Span span, Function* targetFunc) const
+{
+    auto applyCloneMetadata = [&](Operation& op) {
+        op.UnlinkFromLogicalTensors();
+        op.SetScopeInfo(scopeInfo_);
+        op.SetOooScopeId(oooScopeId_);
+        if (opAttribute_) {
+            op.opAttribute_ = opAttribute_->Clone();
+        }
+        op.attributes = attributes;
+        op.UpdateTileShape(tileShape_);
+        op.coreType_ = coreType_;
+        op.result_token_ = resultToken;
+        op.tokens_ = tokens;
+        op.attrs_ = attrs_;
+        if (semanticLabel_) {
+            op.semanticLabel_ = semanticLabel_;
+        }
+        if (!span.IsUnknown()) {
+            op.SetSpan(span);
+        }
+    };
+
+    if (targetFunc != nullptr) {
+        auto remapForFunc = [targetFunc](const LogicalTensors& operands) {
+            LogicalTensors remapped;
+            remapped.reserve(operands.size());
+            for (const auto& operand : operands) {
+                remapped.push_back(operand ? operand->Clone(*targetFunc, false) : nullptr);
+            }
+            return remapped;
+        };
+        Operation& op = targetFunc->AddRawOperation(
+            opcode_, remapForFunc(iOperandList), remapForFunc(oOperandList), span);
+        applyCloneMetadata(op);
+        return std::static_pointer_cast<Operation>(op.shared_from_this());
+    }
+
+    FE_ASSERT(BelongTo() != nullptr);
+    auto clone = std::make_shared<Operation>(*BelongTo(), opcode_, iOperandList, oOperandList);
+    applyCloneMetadata(*clone);
+    return clone;
+}
+
 std::string Operation::GetOpcodeStr(bool appendTile) const
 {
     if (appendTile && isTileOp_) {

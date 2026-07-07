@@ -56,7 +56,7 @@ private:
 
     std::shared_ptr<Function> CreatePathFunc(
         const pypto::ir::SeqStmtsPtr& seq, const std::string& loopVarName);
-    void ProcessTensorOp(
+    pypto::ir::StmtPtr ProcessTensorOp(
         std::shared_ptr<Function> pathFunc, const pypto::ir::StmtPtr& stmt,
         std::unordered_set<std::shared_ptr<LogicalTensor>>& allInputs,
         std::unordered_set<std::shared_ptr<LogicalTensor>>& allOutputs,
@@ -81,8 +81,6 @@ private:
     bool IsPureTensorOpSeq(const pypto::ir::SeqStmtsPtr& seq);
     std::vector<std::vector<pypto::ir::StmtPtr>> SplitIntoTensorOpSegments(
         const pypto::ir::SeqStmtsPtr& seq);
-    void CopyOpAttributes(
-        Operation& operation, const std::vector<std::pair<std::string, std::any>>& attrs);
     bool IsPlaceholderCallStmt(const pypto::ir::StmtPtr& stmt);
     std::string GetPlaceholderFuncname(const pypto::ir::StmtPtr& stmt);
     std::unordered_set<std::shared_ptr<LogicalTensor>> CollectAllOutputs(Function& pathFunc);

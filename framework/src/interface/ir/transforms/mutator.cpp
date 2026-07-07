@@ -32,6 +32,8 @@
 #include "ir/transforms/base/functor.h"
 #include "ir/type.h"
 
+#include "interface/tensor/ir_tensor_op_rebuild.h"
+
 namespace pypto {
 namespace ir {
 
@@ -161,7 +163,8 @@ FunctionPtr IRMutator::VisitFunction(const FunctionPtr& func)
         return func;
     }
     return std::make_shared<const Function>(
-        func->name_, func->params_, func->returnTypes_, std::move(new_body), func->span_, func->funcType_);
+        func->name_, func->params_, func->returnTypes_, std::move(new_body), func->span_, func->funcType_,
+        func->entry_);
 }
 
 ExprPtr IRMutator::VisitExpr(const ExprPtr& expr) { return ExprFunctor<ExprPtr>::VisitExpr(expr); }
@@ -702,9 +705,8 @@ StmtPtr IRMutator::VisitStmt_(const TensorOpStmtPtr& op)
     }
 
     if (changed) {
-        return std::make_shared<const TensorOpStmt>(
-            std::move(new_results), std::move(new_token), std::move(op->opcode_), std::move(new_args),
-            std::move(new_tokens), std::move(op->attrs_), op->span_);
+        return npu::tile_fwk::RebuildTensorOpStmt(
+            op, std::move(new_results), std::move(new_token), std::move(new_args), std::move(new_tokens), op->span_);
     }
     return op;
 }

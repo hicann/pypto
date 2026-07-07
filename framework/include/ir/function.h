@@ -101,10 +101,11 @@ public:
      */
     Function(
         std::string name, std::vector<VarPtr> params, std::vector<TypePtr> returnTypes, StmtPtr body, Span span,
-        FunctionType type = FunctionType::OPAQUE)
+        FunctionType type = FunctionType::OPAQUE, bool entry = false)
         : IRNode(std::move(span)),
           name_(std::move(name)),
           funcType_(type),
+          entry_(entry),
           params_(std::move(params)),
           returnTypes_(std::move(returnTypes)),
           body_(SeqStmts::Wrap(body, span))
@@ -128,6 +129,7 @@ public:
             std::make_tuple(
                 reflection::DefField(&Function::params_, "params"),
                 reflection::UsualField(&Function::funcType_, "func_type"),
+                reflection::UsualField(&Function::entry_, "entry"),
                 reflection::UsualField(&Function::returnTypes_, "return_types"),
                 reflection::UsualField(&Function::body_, "body"), reflection::IgnoreField(&Function::name_, "name")));
     }
@@ -135,6 +137,7 @@ public:
 public:
     std::string name_;                 // Function name
     FunctionType funcType_;            // Function type (incore, or opaque)
+    bool entry_{false};                // Whether this is the program entry function
     std::vector<VarPtr> params_;       // Parameter variables
     std::vector<TypePtr> returnTypes_; // Return types
     SeqStmtsPtr body_;                 // Function body statement

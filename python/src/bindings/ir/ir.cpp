@@ -1088,16 +1088,17 @@ void BindProgram(py::module_& ir)
     function_class.def(
         py::init(
             [](const std::string& name, const py::list& params, const std::vector<TypePtr>& return_types,
-               const StmtPtr& body, const Span& span, FunctionType type) -> std::shared_ptr<Function> {
+               const StmtPtr& body, const Span& span, FunctionType type, bool entry) -> std::shared_ptr<Function> {
                 std::vector<VarPtr> param_vars;
                 param_vars.reserve(py::len(params));
                 for (auto item : params) {
                     param_vars.push_back(py::cast<VarPtr>(item));
                 }
-                return std::make_shared<Function>(name, std::move(param_vars), return_types, body, span, type);
+                return std::make_shared<Function>(
+                    name, std::move(param_vars), return_types, body, span, type, entry);
             }),
         py::arg("name"), py::arg("params"), py::arg("return_types"), py::arg("body"), py::arg("span"),
-        py::arg("type") = FunctionType::OPAQUE, "Create a function definition");
+        py::arg("type") = FunctionType::OPAQUE, py::arg("entry") = false, "Create a function definition");
     BindFields<Function>(function_class);
 
     // IRDebugInfo - compilation-session side table for tuple/struct field names.

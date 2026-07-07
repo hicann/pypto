@@ -15,6 +15,7 @@
 #include "ir/expr.h"
 #include "ir/kind_traits.h"
 
+#include "interface/tensor/ir_tensor_op_rebuild.h"
 #include "interface/tensor/logical_tensor.h"
 
 namespace pypto::ir {
@@ -112,9 +113,8 @@ StmtPtr SubstituteReturnVarUses(TensorOpStmtPtr tensorOp, const VarExprMap& varM
     for (auto& arg : tensorOp->args_) {
         newArgs.push_back(LookupVarInExpr(arg, varMap));
     }
-    return std::make_shared<TensorOpStmt>(
-        tensorOp->result_, tensorOp->result_token_, tensorOp->opcode_, newArgs, tensorOp->tokens_, tensorOp->attrs_,
-        tensorOp->span_);
+    return npu::tile_fwk::RebuildTensorOpStmt(
+        tensorOp, tensorOp->result_, tensorOp->result_token_, newArgs, tensorOp->tokens_, tensorOp->span_);
 }
 
 StmtPtr SubstituteReturnVarUses(IfStmtPtr ifStmt, const VarExprMap& varMap)
@@ -180,8 +180,8 @@ StmtPtr SubstituteVars(TensorOpStmtPtr t, const VarExprMap& varMap)
     for (auto& a : t->args_) {
         newArgs.push_back(LookupVarInExpr(a, varMap));
     }
-    return std::make_shared<TensorOpStmt>(
-        newResult, LookupVarDef(t->result_token_, varMap), t->opcode_, newArgs, t->tokens_, t->attrs_, t->span_);
+    return npu::tile_fwk::RebuildTensorOpStmt(
+        t, newResult, LookupVarDef(t->result_token_, varMap), newArgs, t->tokens_, t->span_);
 }
 
 StmtPtr SubstituteVars(IfStmtPtr ifStmt, const VarExprMap& varMap)
