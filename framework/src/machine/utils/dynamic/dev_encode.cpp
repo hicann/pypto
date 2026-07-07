@@ -1202,6 +1202,37 @@ struct EncodeDevAscendFunctionInfo {
         }
     }
 
+    Opcode GetOutcastProducerOpcode(const Operation& op, size_t oOperandIdx) const
+    {
+        if (op.GetOpcode() != Opcode::OP_CALL) {
+            return Opcode::OP_UNKNOWN;
+        }
+        FunctionCache& cache = Program::GetInstance().GetFunctionCache();
+        Function* devLeafFunc = cache.GetCacheFunction(op.GetCalleeHash());
+        if (devLeafFunc == nullptr) {
+            return Opcode::OP_UNKNOWN;
+        }
+        const auto& leafOutcastList = devLeafFunc->GetOutcast();
+        if (oOperandIdx >= leafOutcastList.size() || leafOutcastList[oOperandIdx] == nullptr) {
+            return Opcode::OP_UNKNOWN;
+        }
+        const auto& leafOutcast = leafOutcastList[oOperandIdx];
+        const auto& producers = leafOutcast->GetProducers();
+        if (producers.size() != 1) {
+            for (auto* producer : producers) {
+                if (producer != nullptr && producer->GetOpcode() == Opcode::OP_RESHAPE) {
+                    return Opcode::OP_RESHAPE;
+                }
+            }
+            return Opcode::OP_UNKNOWN;
+        }
+        auto* producerOp = *producers.begin();
+        if (producerOp == nullptr) {
+            return Opcode::OP_UNKNOWN;
+        }
+        return producerOp != nullptr ? producerOp->GetOpcode() : Opcode::OP_UNKNOWN;
+    }
+
     void EncodeAnalysisOutCastConsumerByProducer(
          const std::shared_ptr<LogicalTensor>& o, std::vector<DevAscendFunctionCallOperandUse>& useList,
          InoutOperationAttr& outcastOpAttr, std::set<uint32_t>& outcastUseOpSet, int producerIdx)
@@ -1238,7 +1269,8 @@ struct EncodeDevAscendFunctionInfo {
                         continue;
                     }
                     auto coaIndex = succOp->GetIOpAttrOffset(k) + COA_INDEX_DIM_BASE;
-                    useList.emplace_back(succOpIdx, coaIndex, coaIndex + outcastOpAttr.dim, CellMatchOpType::READ);
+                    useList.emplace_back(
+                        succOpIdx, coaIndex, coaIndex + outcastOpAttr.dim, CellMatchOpType::READ);
                     MACHINE_LOGD("MATCH! consumerList.emplace_back succOpIdx=%d coaIndex=%d dim=%d iOprandIdx=%zu.",
                         succOpIdx, coaIndex, outcastOpAttr.dim, k);
 
@@ -1249,6 +1281,32 @@ struct EncodeDevAscendFunctionInfo {
                         IntVecToStr(ShapeToVector(outcastOpAttr.cellMatchTableDesc.cellShape)).c_str());
                 }
             }
+        }
+    }
+
+    void EncodeAnalysisOutCastProducerUse(
+         const std::shared_ptr<LogicalTensor>& o, Operation& op, CallOpAttribute* callAttr,
+         size_t oOperandIdx, size_t opIdx, int dimSize, InoutOperationAttr& outcastOpAttr,
+         DevAscendFunctionCallOperandUse& stitchPolicyFullCoverProducer,
+         std::vector<DevAscendFunctionCallOperandUse>& useList)
+    {
+        auto& oOperand = op.GetOOperands()[oOperandIdx];
+        auto coaIndex = op.GetOOpAttrOffset(oOperandIdx) + COA_INDEX_DIM_BASE;
+        CellMatchOpType producerOpType = op.GetOOpAttr(oOperandIdx).isAtomic() ? CellMatchOpType::ATOMIC_WRITE : CellMatchOpType::NORMAL_WRITE;
+        Opcode opCode = GetOutcastProducerOpcode(op, oOperandIdx);
+        std::vector<int64_t> offset = callAttr->GetLinearImmediateArgList(coaIndex, coaIndex + dimSize, true);
+        std::vector<int64_t> shape = callAttr->GetLinearImmediateArgList(coaIndex + dimSize, coaIndex + dimSize * 0x2, false);
+        if (offset == std::vector<int64_t>(dimSize, 0) && shape == oOperand->GetShape()) {
+            stitchPolicyFullCoverProducer = DevAscendFunctionCallOperandUse(
+                opIdx, coaIndex, coaIndex + dimSize, producerOpType, opCode);
+        } else {
+            useList.emplace_back(opIdx, coaIndex, coaIndex + dimSize, producerOpType, opCode);
+        }
+        MACHINE_LOGD("Outcast oOperandIdx for outcast %d rawtensor maigic %d is %zu.", o->magic, o->GetRawMagic(), oOperandIdx);
+        auto expr = callAttr->GetOutcastSymbolicExpr(oOperandIdx);
+        outcastOpAttr.bindTensorExprIndex = -1;
+        if ((expr.has_value()) && (expressionTable != nullptr)) {
+            outcastOpAttr.bindTensorExprIndex = expressionTable->LookupPrimaryExpressionIndex(expr.value());
         }
     }
 
@@ -1268,30 +1326,16 @@ struct EncodeDevAscendFunctionInfo {
                 if (o->tensor->rawmagic != oOperand->tensor->rawmagic) {
                     continue;
                 }
-
-                auto coaIndex = op.GetOOpAttrOffset(j) + COA_INDEX_DIM_BASE;
-                CellMatchOpType producerOpType = op.GetOOpAttr(j).isAtomic() ? CellMatchOpType::ATOMIC_WRITE : CellMatchOpType::NORMAL_WRITE;
-                std::vector<int64_t> offset = callAttr->GetLinearImmediateArgList(coaIndex, coaIndex + dimSize, true);
-                std::vector<int64_t> shape = callAttr->GetLinearImmediateArgList(coaIndex + dimSize, coaIndex + dimSize * 0x2, false);
-                if (offset == std::vector<int64_t>(dimSize, 0) && shape == oOperand->GetShape()) {
-                    stitchPolicyFullCoverProducer = DevAscendFunctionCallOperandUse(i, coaIndex, coaIndex + dimSize, producerOpType);
-                } else {
-                    useList.emplace_back(i, coaIndex, coaIndex + dimSize, producerOpType);
-                }
-                MACHINE_LOGD("Outcast oOperandIdx for outcast %d rawtensor maigic %d is %zu.", o->magic, o->GetRawMagic(), j);
+                EncodeAnalysisOutCastProducerUse(
+                    o, op, callAttr, j, i, dimSize, outcastOpAttr, stitchPolicyFullCoverProducer, useList);
                 outcastUseOpSet.insert(i);
-                auto expr = callAttr->GetOutcastSymbolicExpr(j);
-                outcastOpAttr.bindTensorExprIndex = -1;
-                if ((expr.has_value()) && (expressionTable != nullptr)) {
-                    outcastOpAttr.bindTensorExprIndex = expressionTable->LookupPrimaryExpressionIndex(expr.value());
-                }
             }
 
             if (stitchPolicyFullCoverProducer.operationIdx != -1) {
                 outcastOpAttr.stitchPolicyFullCoverProducerList.push_back(stitchPolicyFullCoverProducer);
                 EncodeAnalysisOutCastConsumerByProducer(
-                    o, outcastOpAttr.stitchPolicyFullCoverProducerList,  outcastOpAttr, outcastUseOpSet, i);
-            } else if (useList.size() > 0){
+                    o, outcastOpAttr.stitchPolicyFullCoverProducerList, outcastOpAttr, outcastUseOpSet, i);
+            } else if (useList.size() > 0) {
                 outcastOpAttr.useList.insert(outcastOpAttr.useList.end(), useList.begin(), useList.end());
                 for (auto& use : useList) {
                     UNUSED(use.operationIdx);
@@ -2451,8 +2495,24 @@ void DevAscendProgram::InitStartArgsABIParamList(
     }
 }
 
+static Opcode GetFullCoverProducerOpcodeForOutcast(
+    const DevAscendFunction& devFunc, const DevAscendFunctionOutcast& outcast)
+{
+    if (outcast.stitchPolicyFullCoverProducerList.size() == 0) {
+        return Opcode::OP_UNKNOWN;
+    }
+    auto* fullCoverProducerList = &devFunc.At(outcast.stitchPolicyFullCoverProducerList, 0);
+    for (size_t i = 0; i < outcast.stitchPolicyFullCoverProducerList.size(); i++) {
+        if (fullCoverProducerList[i].opType != CellMatchOpType::READ) {
+            return fullCoverProducerList[i].opCode;
+        }
+    }
+    return Opcode::OP_UNKNOWN;
+}
+
 static void InitPartialUpdateCellMatch(
     const std::vector<const DevAscendFunctionOutcast*>& outcastList,
+    const std::vector<Opcode>& outcastOpcodeList,
     DevCellMatchTableDesc* partialUpdateCellMatchTableDesc)
 {
     std::vector<int> tensorShape;
@@ -2473,19 +2533,29 @@ static void InitPartialUpdateCellMatch(
 
     std::vector<int> cellShape;
     for (size_t d = 0; d < tensorShape.size(); d++) {
-        int dim = 0;
+        int mergeDim = -1;
+        // Primary merge: non-reshape outcasts only; reshape full-cover cellShape is tensor-level initial value.
         for (size_t index = 0; index < outcastList.size(); index++) {
-            if (index == 0) {
-                dim = outcastList[index]->cellMatchTableDesc.GetCellShape(d);
-            } else if (dim != -1) {
-                dim = std::gcd(dim, outcastList[index]->cellMatchTableDesc.GetCellShape(d));
-            } else {
-                ASSERT(DevCommonErr::PARAM_CHECK_FAILED, outcastList[index]->cellMatchTableDesc.GetCellShape(d) == -1)
-                    << "Invalid cell shape for outcastList[" << index << "], dimension: " << d << ", expected -1, got "
-                    << outcastList[index]->cellMatchTableDesc.GetCellShape(d);
+            if (outcastOpcodeList[index] == Opcode::OP_RESHAPE) {
+                continue;
+            }
+            int outcastDim = outcastList[index]->cellMatchTableDesc.GetCellShape(d);
+            ASSERT(DevCommonErr::PARAM_CHECK_FAILED, outcastDim != -1)
+                << "Invalid cell shape for outcastList[" << index << "], dimension: " << d
+                << ", expected concrete value, got -1";
+            mergeDim = mergeDim == -1 ? outcastDim : std::gcd(mergeDim, outcastDim);
+        }
+        // Fallback when all outcasts are reshape: gcd concrete dims from original cellShape, skip -1.
+        if (mergeDim == -1) {
+            for (size_t index = 0; index < outcastList.size(); index++) {
+                int outcastDim = outcastList[index]->cellMatchTableDesc.GetCellShape(d);
+                if (outcastDim == -1) {
+                    continue;
+                }
+                mergeDim = mergeDim == -1 ? outcastDim : std::gcd(mergeDim, outcastDim);
             }
         }
-        cellShape.push_back(dim);
+        cellShape.push_back(mergeDim);
     }
     partialUpdateCellMatchTableDesc->SetCellShape(cellShape);
 
@@ -2617,6 +2687,7 @@ static int InitSinglePartialUpdateSlot(
     bool fillContent, topo_dump::SlotCellTableCsvWriter* slotCellTable)
 {
     std::vector<const DevAscendFunctionOutcast*> outcastList;
+    std::vector<Opcode> outcastOpcodeList;
     bool hasAtomicWrite = false;
 
     ASSERT(DevCommonErr::PARAM_CHECK_FAILED, slotRootOutcastDict.count(slotIndex))
@@ -2629,6 +2700,7 @@ static int InitSinglePartialUpdateSlot(
             reinterpret_cast<DevAscendFunction*>(const_cast<uint8_t*>(devEncodeListInput[funcKey].data()));
         auto& outcast = devFunc->GetOutcast(outcastIndex);
         outcastList.push_back(&outcast);
+        outcastOpcodeList.push_back(GetFullCoverProducerOpcodeForOutcast(*devFunc, outcast));
 
         if (!hasAtomicWrite) {
             hasAtomicWrite = HasAtomicWriteInOutcast(devFunc, outcast);
@@ -2649,7 +2721,7 @@ static int InitSinglePartialUpdateSlot(
     }
 
     DevCellMatchTableDesc partialUpdateCellMatchTableDesc;
-    InitPartialUpdateCellMatch(outcastList, &partialUpdateCellMatchTableDesc);
+    InitPartialUpdateCellMatch(outcastList, outcastOpcodeList, &partialUpdateCellMatchTableDesc);
 
     partialUpdateCellMatchTableDesc.SetCacheOpMaxCount(
         {CELL_MATCH_MAX_NORMAL_WRITE_COUNT, hasAtomicWrite ? CELL_MATCH_MAX_ATOMIC_WRITE_COUNT : 0U,
