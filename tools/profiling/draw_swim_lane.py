@@ -372,7 +372,7 @@ def get_fake_task_start_end_cycles(fake_task_id):
     if not find:
         entry.exec_start = fake_task_start_time_alloc
         entry.exec_end = fake_task_start_time_alloc + 1
-        fake_task_start_time_alloc += 3
+        fake_task_start_time_alloc += 2
     task_analysis[entry.psg_id_in_dyn].add_task(entry)
 
 
