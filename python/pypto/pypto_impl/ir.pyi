@@ -1290,6 +1290,7 @@ class ForStmt(Stmt):
         body: Stmt,
         return_vars: list[Var],
         span: Span,
+        attrs: dict[str, object] | None = None,
     ) -> None:
         """Create a for loop statement.
 
@@ -2084,25 +2085,26 @@ class IRBuilder:
 
     def create_for_stmt(
         self,
-        loopVar: Var,
+        loop_var: Var,
         start: Expr,
         stop: Expr,
         step: Expr,
-        iterArgs: list[IterArg],
+        iter_args: list[IterArg],
         body: Stmt,
-        returnVars: list[Var],
+        return_vars: list[Var],
         span: Span,
+        attrs: dict[str, Any] | None = None,
     ) -> ForStmt:
         """Create a for statement.
 
         Args:
-            loopVar: Loop variable
+            loop_var: Loop variable
             start: Start value expression
             stop: Stop value expression
             step: Step value expression
-            iterArgs: Iteration arguments (loop-carried values)
+            iter_args: Iteration arguments (loop-carried values)
             body: Loop body
-            returnVars: Return variables
+            return_vars: Return variables
             span: Source location
 
         Returns:
@@ -2112,18 +2114,18 @@ class IRBuilder:
     def create_while_stmt(
         self,
         cond: Expr,
-        iterArgs: list[IterArg],
+        iter_args: list[IterArg],
         body: Stmt,
-        returnVars: list[Var],
+        return_vars: list[Var],
         span: Span,
     ) -> WhileStmt:
         """Create a while statement.
 
         Args:
             cond: Condition expression
-            iterArgs: Iteration arguments (loop-carried values)
+            iter_args: Iteration arguments (loop-carried values)
             body: Loop body
-            returnVars: Return variables
+            return_vars: Return variables
             span: Source location
 
         Returns:
@@ -2168,7 +2170,7 @@ class IRBuilder:
 
         Returns:
             The created function
-        """     
+        """
 
     @overload
     def create_function(

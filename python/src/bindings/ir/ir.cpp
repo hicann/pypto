@@ -185,7 +185,7 @@ std::any ConvertAttr(const py::object& attr)
         return py::cast<MemorySpace>(attr);
     } else if (py::isinstance<TensorLayout>(attr)) {
         return py::cast<TensorLayout>(attr);
-    } else if (py::isinstance<bool>(attr)) {
+    } else if (py::isinstance<py::bool_>(attr)) {
         return py::cast<bool>(attr);
     } else if (py::isinstance<py::int_>(attr)) {
         return py::cast<int>(attr);
@@ -953,11 +953,18 @@ void BindStmt(py::module_& ir)
     auto for_stmt_class = py::class_<ForStmt, Stmt, std::shared_ptr<ForStmt>>(
         ir, "ForStmt", "For loop statement: for loop_var in range(start, stop, step): body");
     for_stmt_class.def(
-        py::init<
-            const VarPtr&, const ExprPtr&, const ExprPtr&, const ExprPtr&, const std::vector<IterArgPtr>&,
-            const StmtPtr&, const std::vector<VarPtr>&, const Span&>(),
+        py::init([](const VarPtr& loop_var, const ExprPtr& start, const ExprPtr& stop, const ExprPtr& step,
+                    const std::vector<IterArgPtr>& iter_args, const StmtPtr& body,
+                    const std::vector<VarPtr>& return_vars, const Span& span, const py::object& attrs) {
+            py::dict attr_dict;
+            if (!attrs.is_none()) {
+                attr_dict = attrs.cast<py::dict>();
+            }
+            auto attr_list = ConvertAttrDict(attr_dict);
+            return std::make_shared<ForStmt>(loop_var, start, stop, step, iter_args, body, return_vars, span, attr_list);
+        }),
         py::arg("loop_var"), py::arg("start"), py::arg("stop"), py::arg("step"), py::arg("iter_args"), py::arg("body"),
-        py::arg("return_vars"), py::arg("span"), "Create a for loop statement");
+        py::arg("return_vars"), py::arg("span"), py::arg("attrs") = py::none(), "Create a for loop statement with attributes");
     BindFields<ForStmt>(for_stmt_class);
 
     // WhileStmt - const shared_ptr

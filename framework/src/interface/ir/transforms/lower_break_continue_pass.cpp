@@ -558,7 +558,7 @@ ForStmtPtr LowerBreakInFor(const ForStmtPtr& op)
 
     return std::make_shared<ForStmt>(
         op->loopVar_, op->start_, op->stop_, op->step_, std::move(break_control.iter_args), for_body,
-        std::move(break_control.return_vars), span);
+        std::move(break_control.return_vars), span, op->attrs_);
 }
 
 /// Lower break in a while loop using a do-region original-condition check.
@@ -658,13 +658,13 @@ protected:
                 return op;
             return std::make_shared<ForStmt>(
                 op->loopVar_, op->start_, op->stop_, op->step_, op->iterArgs_, std::move(new_body), op->returnVars_,
-                op->span_);
+                op->span_, op->attrs_);
         }
 
         // Create a working copy with recursed body (use ForStmtPtr = shared_ptr<const ForStmt>)
         ForStmtPtr working = std::make_shared<ForStmt>(
             op->loopVar_, op->start_, op->stop_, op->step_, op->iterArgs_, std::move(new_body), op->returnVars_,
-            op->span_);
+            op->span_, op->attrs_);
 
         // Lower continue first (simpler transformation)
         if (has_continue) {
@@ -673,7 +673,7 @@ protected:
             auto lowered_body = MakeSeqOrSingle(std::move(lowered), working->span_);
             working = ForStmtPtr(std::make_shared<ForStmt>(
                 working->loopVar_, working->start_, working->stop_, working->step_, working->iterArgs_,
-                std::move(lowered_body), working->returnVars_, working->span_));
+                std::move(lowered_body), working->returnVars_, working->span_, working->attrs_));
         }
 
         // Lower break (adds iter_arg, wraps body)

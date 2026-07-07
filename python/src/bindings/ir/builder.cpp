@@ -495,23 +495,35 @@ void BindIRBuilder(py::module_& m)
             "    YieldStmt: The created yield statement")
 
         .def(
-            "create_for_stmt", &IRBuilder::CreateForStmt, py::arg("loopVar"), py::arg("start"), py::arg("stop"),
-            py::arg("step"), py::arg("iterArgs"), py::arg("body"), py::arg("returnVars"), py::arg("span"),
+            "create_for_stmt",
+            [](IRBuilder& self, const ir::VarPtr& loop_var, const ir::ExprPtr& start, const ir::ExprPtr& stop, const ir::ExprPtr& step,
+               const std::vector<ir::IterArgPtr>& iter_args, const ir::StmtPtr& body, const std::vector<ir::VarPtr>& return_vars,
+               const ir::Span& span, const py::object& attrs) {
+                py::dict attr_dict;
+                if (!attrs.is_none()) {
+                    attr_dict = attrs.cast<py::dict>();
+                }
+                auto attr_list = pypto::ir::ConvertAttrDict(attr_dict);
+                return self.CreateForStmt(loop_var, start, stop, step, iter_args, body, return_vars, span, attr_list);
+            },
+            py::arg("loop_var"), py::arg("start"), py::arg("stop"), py::arg("step"), py::arg("iter_args"),
+            py::arg("body"), py::arg("return_vars"), py::arg("span"), py::arg("attrs") = py::none(),
             "Create a for statement.\n\n"
             "Args:\n"
-            "    loopVar: Loop variable of the for statement\n"
+            "    loop_var: Loop variable of the for statement\n"
             "    start: Start value of the loop variable\n"
             "    stop: Stop value of the loop variable\n"
             "    step: Step value of the loop variable\n"
             "    body: Body of the for statement\n"
-            "    returnVars: Return variables of the for statement\n"
+            "    return_vars: Return variables of the for statement\n"
             "    span: Span of the for statement\n\n"
+            "    attrs: Attributes of the for statement\n"
             "Returns:\n"
             "    ForStmt: The created for statement")
 
         .def(
-            "create_while_stmt", &IRBuilder::CreateWhileStmt, py::arg("cond"), py::arg("iterArgs"), py::arg("body"),
-            py::arg("returnVars"), py::arg("span"),
+            "create_while_stmt", &IRBuilder::CreateWhileStmt, py::arg("cond"), py::arg("iter_args"), py::arg("body"),
+            py::arg("return_vars"), py::arg("span"),
             "Create a while statement.\n\n"
             "Args:\n"
             "    cond: Condition of the while statement\n"

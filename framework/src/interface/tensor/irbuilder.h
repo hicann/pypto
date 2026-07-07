@@ -173,7 +173,7 @@ public:
 
     ir::ForStmtPtr CreateForStmt(
         ir::VarPtr loopVar, ir::ExprPtr start, ir::ExprPtr stop, ir::ExprPtr step, std::vector<ir::IterArgPtr> iterArgs,
-        ir::StmtPtr body, std::vector<ir::VarPtr> returnVars, ir::Span span);
+        ir::StmtPtr body, std::vector<ir::VarPtr> returnVars, ir::Span span, std::vector<std::pair<std::string, std::any>> attrs = {});
 
     ir::IterArgPtr CreateIterArg(std::string name, ir::TypePtr type, ir::ExprPtr initValue, ir::Span span);
 

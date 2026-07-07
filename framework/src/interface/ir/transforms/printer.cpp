@@ -324,6 +324,30 @@ void PrintForRangeHeader(
         stream << ", ";
         PrintIterArgInitValues(stream, op->iterArgs_, visit_expr);
     }
+    if (!op->attrs_.empty()) {
+        stream << ", attrs={";
+        for (size_t i = 0; i < op->attrs_.size(); ++i) {
+            if (i != 0)
+                stream << ", ";
+            const auto& [key, value] = op->attrs_[i];
+            stream << std::quoted(key) << ": ";
+            if (value.type() == typeid(int)) {
+                stream << AnyCast<int>(value, key);
+            } else if (value.type() == typeid(double)) {
+                stream << FormatFloatLiteral(AnyCast<double>(value, key));
+            } else if (value.type() == typeid(float)) {
+                stream << FormatFloatLiteral(static_cast<double>(AnyCast<float>(value, key)));
+            } else if (value.type() == typeid(bool)) {
+                stream << (AnyCast<bool>(value, key) ? "True" : "False");
+            } else if (value.type() == typeid(std::string)) {
+                stream << std::quoted(AnyCast<std::string>(value, key));
+            } else {
+                INTERNAL_CHECK(false) << "Unsupported attrs value type for key '" << key
+                                      << "': " << DemangleTypeName(value.type().name());
+            }
+        }
+        stream << "}";
+    }
     stream << "):\n";
 }
 

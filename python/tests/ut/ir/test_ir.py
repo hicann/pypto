@@ -359,9 +359,10 @@ def test_basic_stmt():
     iter_arg = ir.IterArg("sum", st, init, span)
     ret_var = ir.Var("sum_out", st, span)
     body = ir.YieldStmt([val1], span)
-    for_stmt = ir.ForStmt(i, val0, val10, val1, [iter_arg], body, [ret_var], span)
+    attrs: dict = {"a": True, "parallel": True}
+    for_stmt = ir.ForStmt(i, val0, val10, val1, [iter_arg], body, [ret_var], span, attrs)
     assert str(for_stmt) == "\n".join([
-        "for i, (sum,) in ir.range(0, 10, 1, init_values=(0,)):",
+        "for i, (sum,) in ir.range(0, 10, 1, init_values=(0,), attrs={\"a\": True, \"parallel\": True}):",
         "    sum_out: ir.Scalar[ir.INT32] = ir.yield_(1)"
     ])
 
@@ -454,7 +455,7 @@ def test_call_kwargs_conversion():
     """
     span = ir.Span("test", 1, 1)
     a = ir.ConstInt(1, ir.INT32, span)
-    
+
     # Normal cases: types that work end-to-end (convert + read back)
     kwargs = {
         "dtype": ir.FP16,              # DataType
@@ -469,9 +470,7 @@ def test_call_kwargs_conversion():
     assert call.kwargs["axis"] == 0
     assert call.kwargs["mode"] == "fast"
     assert call.kwargs["scale"] == 0.5
-    
+
     # Error case: unsupported type
     with pytest.raises(TypeError):
         ir.Call("test_op", [a], {"bad": object()}, span)
-
-

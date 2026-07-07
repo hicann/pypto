@@ -314,7 +314,7 @@ private:
         producers_ = savedProducers;
 
         return std::make_shared<ForStmt>(
-            op->loopVar_, op->start_, op->stop_, op->step_, op->iterArgs_, processedBody, newReturnVars, op->span_);
+            op->loopVar_, op->start_, op->stop_, op->step_, op->iterArgs_, processedBody, newReturnVars, op->span_, op->attrs_);
     }
 };
 

@@ -10,7 +10,9 @@
 
 #pragma once
 #include <cstdint>
+#include <algorithm>
 #include <memory>
+#include <any>
 #include <optional>
 #include <string>
 #include <tuple>
@@ -406,7 +408,7 @@ public:
      */
     ForStmt(
         VarPtr loopVar, ExprPtr start, ExprPtr stop, ExprPtr step, std::vector<IterArgPtr> iterArgs, StmtPtr body,
-        std::vector<VarPtr> returnVars, Span span)
+        std::vector<VarPtr> returnVars, Span span, std::vector<std::pair<std::string, std::any>> attrs = {})
         : Stmt(std::move(span)),
           loopVar_(std::move(loopVar)),
           start_(std::move(start)),
@@ -414,7 +416,8 @@ public:
           step_(std::move(step)),
           iterArgs_(std::move(iterArgs)),
           body_(SeqStmts::Wrap(body, span)),
-          returnVars_(std::move(returnVars))
+          returnVars_(std::move(returnVars)),
+          attrs_(std::move(attrs))
     {}
 
     [[nodiscard]] ObjectKind GetKind() const override { return ObjectKind::ForStmt; }
@@ -433,7 +436,25 @@ public:
                 reflection::DefField(&ForStmt::loopVar_, "loop_var"), reflection::UsualField(&ForStmt::start_, "start"),
                 reflection::UsualField(&ForStmt::stop_, "stop"), reflection::UsualField(&ForStmt::step_, "step"),
                 reflection::DefField(&ForStmt::iterArgs_, "iter_args"), reflection::UsualField(&ForStmt::body_, "body"),
-                reflection::DefField(&ForStmt::returnVars_, "return_vars")));
+                reflection::DefField(&ForStmt::returnVars_, "return_vars"),
+                reflection::UsualField(&ForStmt::attrs_, "attrs")));
+    }
+
+    /// Get a typed attribute value (returns default_value if key not found)
+    template <typename T>
+    [[nodiscard]] T GetAttr(const std::string& key, const T& default_value = T{}) const
+    {
+        for (const auto& [k, v] : attrs_) {
+            if (k == key)
+                return AnyCast<T>(v, "for_stmt attr key: " + key);
+        }
+        return default_value;
+    }
+
+    /// Check if an attribute exists
+    [[nodiscard]] bool HasAttr(const std::string& key) const
+    {
+        return std::any_of(attrs_.begin(), attrs_.end(), [&key](const auto& pair) { return pair.first == key; });
     }
 
 public:
@@ -444,6 +465,7 @@ public:
     std::vector<IterArgPtr> iterArgs_; // Loop-carried values (scoped to loop body)
     SeqStmtsPtr body_;                 // Loop body statement (must yield if iter_args non-empty)
     std::vector<VarPtr> returnVars_;   // Variables capturing final iteration values (accessible after loop)
+    std::vector<std::pair<std::string, std::any>> attrs_; // Loop attributes
 };
 
 using ForStmtPtr = std::shared_ptr<const ForStmt>;

@@ -24,6 +24,8 @@ class LoopRange:
     step: Any
     unroll_list: list[int]
     batch: bool
+    parallel: bool = False
+    submit_before_loop: bool = False
 
 
 @dataclass(frozen=True)

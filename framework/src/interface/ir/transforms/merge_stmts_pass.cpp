@@ -150,7 +150,7 @@ StmtPtr SubstituteReturnVarUses(ForStmtPtr f, const VarExprMap& varMap)
     ExprPtr newStop = LookupVarInExpr(f->stop_, varMap);
     ExprPtr newStep = LookupVarInExpr(f->step_, varMap);
     return std::make_shared<ForStmt>(
-        f->loopVar_, newStart, newStop, newStep, newIterArgs, newBody, f->returnVars_, f->span_);
+        f->loopVar_, newStart, newStop, newStep, newIterArgs, newBody, f->returnVars_, f->span_, f->attrs_);
 }
 
 StmtPtr SubstituteReturnVarUses(StmtPtr stmt, const VarExprMap& varMap)
@@ -218,7 +218,7 @@ StmtPtr SubstituteVars(ForStmtPtr f, const VarExprMap& varMap)
         newReturnVars.push_back(LookupVarDef(v, varMap));
     }
     return std::make_shared<ForStmt>(
-        f->loopVar_, f->start_, f->stop_, f->step_, f->iterArgs_, newBody, newReturnVars, f->span_);
+        f->loopVar_, f->start_, f->stop_, f->step_, f->iterArgs_, newBody, newReturnVars, f->span_, f->attrs_);
 }
 
 StmtPtr SubstituteVars(YieldStmtPtr y, const VarExprMap& varMap)
@@ -643,7 +643,7 @@ std::vector<StmtPtr> RebuildMergedStmtsRecursively(
             auto processedBody = MergeStmtsIntoIfStmtImpl(forStmt->body_, externalVarNames);
             finalResult.push_back(std::make_shared<ForStmt>(
                 forStmt->loopVar_, forStmt->start_, forStmt->stop_, forStmt->step_, forStmt->iterArgs_, processedBody,
-                forStmt->returnVars_, forStmt->span_));
+                forStmt->returnVars_, forStmt->span_, forStmt->attrs_));
         } else {
             finalResult.push_back(stmt);
         }

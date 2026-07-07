@@ -217,9 +217,9 @@ ir::ReturnStmtPtr IRBuilder::CreateReturnStmt(std::vector<ir::ExprPtr> values, i
 
 ir::ForStmtPtr IRBuilder::CreateForStmt(
     ir::VarPtr loopVar, ir::ExprPtr start, ir::ExprPtr stop, ir::ExprPtr step, std::vector<ir::IterArgPtr> iterArgs,
-    ir::StmtPtr body, std::vector<ir::VarPtr> returnVars, ir::Span span)
+    ir::StmtPtr body, std::vector<ir::VarPtr> returnVars, ir::Span span, std::vector<std::pair<std::string, std::any>> attrs)
 {
-    return std::make_shared<ir::ForStmt>(loopVar, start, stop, step, iterArgs, body, returnVars, span);
+    return std::make_shared<ir::ForStmt>(loopVar, start, stop, step, std::move(iterArgs), body, returnVars, span, std::move(attrs));
 }
 
 ir::WhileStmtPtr IRBuilder::CreateWhileStmt(
