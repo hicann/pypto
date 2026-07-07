@@ -167,7 +167,7 @@ def add_kernel_1(a, b, c):
 
 使用循环变量来表达自增逻辑。
 
-## 已安装torch\_npu，但未安装cann时，执行仿真异常
+## 已安装TorchNPU，但未安装cann时，执行仿真异常
 
 ### 问题现象描述
 
@@ -179,7 +179,7 @@ ImportError: libhccl.so: cannot open shared object file: No such file or directo
 
 ### 问题原因
 
-当程序启动时，torch（版本\>2.5）会自动加载所有名为“torch.backends”的扩展（例如torch npu）。如果环境中已安装了torch\_npu但未安装CANN，由于找不到依赖项，将会引发异常。
+当程序启动时，torch（版本\>2.5）会自动加载所有名为“torch.backends”的扩展（例如TorchNPU）。如果环境中已安装了TorchNPU但未安装CANN，由于找不到依赖项，将会引发异常。
 
 ### 处理步骤
 

@@ -542,7 +542,7 @@ os.environ["PTO_DATADUMP_ENABLE"] = "true"
 ### TORCH_DEVICE_BACKEND_AUTOLOAD
 
 #### 功能描述
-控制 PyTorch（版本 > 2.5）是否自动加载所有 `torch.backends` 扩展。当环境中已安装 `torch_npu` 但未安装 CANN 时，自动加载会因找不到依赖项而报错 `ImportError: libhccl.so`。设置该变量为 `0` 可禁用自动加载，避免启动异常。
+控制 PyTorch（版本 > 2.5）是否自动加载所有 `torch.backends` 扩展。当环境中已安装 `TorchNPU` 但未安装 CANN 时，自动加载会因找不到依赖项而报错 `ImportError: libhccl.so`。设置该变量为 `0` 可禁用自动加载，避免启动异常。
 
 - 类型：整数
 - 取值范围：`0`（禁用自动加载）、`1`（启用，默认）

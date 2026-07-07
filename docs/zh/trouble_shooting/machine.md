@@ -1,4 +1,4 @@
-# MACHINE组件错误码
+# F7XXXX-F8XXXX
 
 - **范围**：F7-F8XXXX
 - 本文档说明MACHINE组件的错误码定义、场景说明与排查建议。
