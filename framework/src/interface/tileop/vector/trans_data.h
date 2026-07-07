@@ -234,6 +234,8 @@ __aicore__ inline void TTransDataNC1HWC02NCHW(
     DST dst, TYPEC coordinate, TMP tmpTensor, INPUT input, int n, int c1, int h, int w, int c0, int groupIndex,
     int group, int padSize)
 {
+    set_flag(PIPE_S, PIPE_V, EVENT_ID7);
+    wait_flag(PIPE_S, PIPE_V, EVENT_ID7);
     constexpr auto inputTypeSize = sizeof(typename INPUT::Type);
     constexpr auto tileN = Std::tuple_element<DIM_1ST, typename INPUT::TileShape>::type::value;
     constexpr auto tileC1 = Std::tuple_element<DIM_2ND, typename INPUT::TileShape>::type::value;
@@ -426,6 +428,8 @@ __aicore__ inline void TTransDataNDC1HWC02NCDHW(
     DST dst, TYPEC coordinate, TMP tmpTensor, INPUT input, int n, int d, int c1, int h, int w, int c0, int groupIndex,
     int group, int padSize)
 {
+    set_flag(PIPE_S, PIPE_V, EVENT_ID7);
+    wait_flag(PIPE_S, PIPE_V, EVENT_ID7);
     constexpr auto inputTypeSize = sizeof(typename INPUT::Type);
     constexpr auto tileD = Std::tuple_element<DIM_1ST, typename INPUT::TileShape>::type::value;
     constexpr auto tileC1 = Std::tuple_element<DIM_2ND, typename INPUT::TileShape>::type::value;
