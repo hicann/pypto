@@ -383,21 +383,35 @@ class ProcessManager:
         stdout_parts: List[str] = []
         stderr_parts: List[str] = []
 
+        def _reader(stream, parts: List[str]) -> None:
+            try:
+                while True:
+                    chunk = stream.read(4096)
+                    if not chunk:
+                        break
+                    parts.append(chunk)
+            except (OSError, ValueError):
+                pass
+
+        t_out = threading.Thread(target=_reader, args=(proc.stdout, stdout_parts), daemon=True)
+        t_err = threading.Thread(target=_reader, args=(proc.stderr, stderr_parts), daemon=True)
+        t_out.start()
+        t_err.start()
+
         while True:
             if self._shutdown_event.is_set():
-                return None, None, True
+                t_out.join(timeout=2)
+                t_err.join(timeout=2)
+                return "".join(stdout_parts), "".join(stderr_parts), True
 
             if proc.poll() is not None:
-                try:
-                    remaining_stdout, remaining_stderr = proc.communicate(timeout=1)
-                    stdout_parts.append(remaining_stdout or "")
-                    stderr_parts.append(remaining_stderr or "")
-                except (subprocess.TimeoutExpired, OSError):
-                    pass
+                t_out.join(timeout=5)
+                t_err.join(timeout=5)
                 return "".join(stdout_parts), "".join(stderr_parts), False
 
             elapsed = time.perf_counter() - start_time
             if elapsed >= timeout:
+                proc.timeout_output = "".join(stdout_parts) + "".join(stderr_parts)
                 raise subprocess.TimeoutExpired(proc.args, timeout)
 
             remaining_time = min(check_interval, timeout - elapsed)
@@ -740,6 +754,19 @@ def _build_command(
     return cmd, env
 
 
+def _collect_timeout_output(proc: subprocess.Popen) -> str:
+    timeout_output = getattr(proc, 'timeout_output', "")
+    if timeout_output:
+        return timeout_output
+    if not proc.stdout:
+        return ""
+    try:
+        remaining_stdout, remaining_stderr = proc.communicate(timeout=1)
+        return (remaining_stdout or "") + (remaining_stderr or "")
+    except (subprocess.TimeoutExpired, OSError):
+        return ""
+
+
 def _execute_process(
     cmd: List[str],
     env: Dict[str, str],
@@ -811,17 +838,7 @@ def _execute_process(
         return proc, stdout, stderr, None
 
     except subprocess.TimeoutExpired:
-        # Try to capture any buffered output before terminating
-        timeout_output = ""
-        try:
-            # Read available output without blocking (using poll)
-            if proc.stdout:
-                # Set a short timeout to avoid hanging
-                remaining_stdout, remaining_stderr = proc.communicate(timeout=1)
-                timeout_output = (remaining_stdout or "") + (remaining_stderr or "")
-        except (subprocess.TimeoutExpired, OSError):
-            # Process didn't respond, continue with termination
-            pass
+        timeout_output = _collect_timeout_output(proc)
         terminate_process_tree(proc)
         ctx.safe_print(f"❌ Failure: {rel_path}")
         snippet = _extract_output_snippet(timeout_output) if timeout_output else ""
