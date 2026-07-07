@@ -19,7 +19,6 @@ import torch
 import torch_npu
 import numpy as np
 import pypto
-from utils.compare import compare
 
 
 @dataclass
