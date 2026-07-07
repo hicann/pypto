@@ -1293,15 +1293,23 @@ int SpillEngine::GetBufNextUseTime(int curMemId)
         auto &op = state_.orderedOps[i];
         if (state_.schedInfoMap[op].isRetired) continue;
         auto &reqMemids = state_.GetOpMemIds(op);
-        if (std::find(reqMemids.begin(), reqMemids.end(), curMemId) != reqMemids.end()) {
-            for (auto pre : state_.depManager.GetPredecessors(op)) {
-                if (state_.schedInfoMap[pre].isRetired) continue;
-                if (state_.schedInfoMap[pre].isAlloc) {
-                    return state_.schedInfoMap[pre].execOrder;
-                }
+        if (std::find(reqMemids.begin(), reqMemids.end(), curMemId) == reqMemids.end()) continue;
+
+        int opExecOrder = state_.schedInfoMap[op].execOrder;
+        int minAlloc = INT_MAX;
+        int allocCnt = 0;
+        for (auto pre : state_.depManager.GetPredecessors(op)) {
+            if (state_.schedInfoMap[pre].isRetired) continue;
+            if (state_.schedInfoMap[pre].isAlloc) {
+                int preOrder = state_.schedInfoMap[pre].execOrder;
+                if (preOrder < minAlloc) minAlloc = preOrder;
+                allocCnt++;
             }
-            return state_.schedInfoMap[op].execOrder;
         }
+        if (allocCnt == 0) {
+            return opExecOrder;
+        }
+        return (opExecOrder - minAlloc <= allocCnt) ? minAlloc : opExecOrder;
     }
     return -1;
 }
