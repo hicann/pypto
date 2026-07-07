@@ -79,6 +79,7 @@ private:
     void RemoveRedundantComsuerOp(TensorsDesc& tensorsDesc);
     void CollectConnectionOps(TensorsDesc& tensorsDesc);
     void StorageNeedToAllocatePreProcess(TensorsDesc& tensorsDesc);
+    void PreProcessStorageGroups();
     Status UpdateStorageId(TensorsDesc& tensorsDesc, std::unordered_map<int64_t, int>& idMap, int& storageId);
     void MarkNonOverlappingConsumerTensors();
     void RecordAllConsumerShapeAndOffset(
@@ -137,9 +138,6 @@ private:
     Status UpdateIncastOutCast();
 
     std::vector<TensorBucket> buckets_;
-
-    // first为buckets的最新一个tensor的size，second是对应的bucket index集合
-    std::map<int64_t, std::vector<int64_t>> bucketsSizeToIdx_;
 
     TensorBucket dummyPackets_; // dummy tensor的bucket
     std::unordered_map<int, size_t> storageMap_;

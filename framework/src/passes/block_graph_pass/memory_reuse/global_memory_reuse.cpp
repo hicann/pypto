@@ -24,6 +24,7 @@
 #include "interface/function/function.h"
 #include "interface/tensor/irbuilder.h"
 #include "interface/tensor/logical_tensor.h"
+#include "interface/utils/common.h"
 #include "passes/pass_log/pass_log.h"
 #include "passes/pass_utils/graph_utils.h"
 
@@ -448,8 +449,8 @@ bool Allocator::CheckAllConsumerAccessNoOverlap(
             << " allShapes[i].size=" << allShapes[i].size() << " dimCount=" << dimCount;
     }
 
-    APASS_LOG_DEBUG_F(Elements::Tensor, "CheckAllConsumerAccessNoOverlap consumerCount=%zu dimCount=%zu.",
-                      consumerCount, dimCount);
+    APASS_LOG_DEBUG_F(
+        Elements::Tensor, "CheckAllConsumerAccessNoOverlap consumerCount=%zu dimCount=%zu.", consumerCount, dimCount);
 
     if (consumerCount == TWO_CONSUMER_FAST_PATH_COUNT) {
         return CheckNoOverlapForTwoConsumers(allOffsets, allShapes, dimCount);
@@ -634,16 +635,16 @@ TensorBucket& Allocator::GetBestFitBucket(const TensorsDesc& tensorsDesc)
 
         if (tensorMagicToBucketIdx_.count(ptr->GetMagic()) > 0) {
             int bucketIdx = tensorMagicToBucketIdx_[ptr->GetMagic()];
-            if (visitedBucket.count(bucketIdx) > 0) {
-                continue;
-            }
-            visitedBucket.insert(bucketIdx);
-            if (bucketsIdxToSize_[bucketIdx] >= rawDataSizeKey &&
-                buckets_[bucketIdx].HasTopoDependency(tensorsDesc.connectionOpsBitmap)) {
-                bucketsIdxToSize_[bucketIdx] = rawDataSize;
-                UpdateTensorMagicToBucketIdx(tensorsDesc.tensors, bucketIdx);
-                APASS_LOG_DEBUG_F(Elements::Tensor, "Reusing bucket %d for tensor magic=%d.", bucketIdx, first->magic);
-                return buckets_[bucketIdx];
+            if (visitedBucket.count(bucketIdx) == 0) {
+                visitedBucket.insert(bucketIdx);
+                if (bucketsIdxToSize_[bucketIdx] >= rawDataSizeKey &&
+                    buckets_[bucketIdx].HasTopoDependency(tensorsDesc.connectionOpsBitmap)) {
+                    bucketsIdxToSize_[bucketIdx] = rawDataSize;
+                    UpdateTensorMagicToBucketIdx(tensorsDesc.tensors, bucketIdx);
+                    APASS_LOG_DEBUG_F(
+                        Elements::Tensor, "Reusing bucket %d for tensor magic=%d.", bucketIdx, first->magic);
+                    return buckets_[bucketIdx];
+                }
             }
         }
 
@@ -844,18 +845,6 @@ void UpdateCallOpRawShape(Operation& consumer, const LogicalTensorPtr& output)
     }
 }
 
-std::string vectorToString(const std::vector<int64_t>& vec, const std::string& delimiter = ", ")
-{
-    std::ostringstream oss;
-    for (size_t i = 0; i < vec.size(); ++i) {
-        if (i != 0) {
-            oss << delimiter;
-        }
-        oss << vec[i];
-    }
-    return oss.str();
-}
-
 void RefreshCallRawShape(
     Operation& callOp, size_t outputIndex, const LogicalTensorPtr& output, const LogicalTensorPtr& reusableInput)
 {
@@ -868,8 +857,8 @@ void RefreshCallRawShape(
     }
     // 刷新producer CallOp的Attr中的output rawshape数据
     APASS_LOG_DEBUG_F(
-        Elements::Tensor, "Updating rawshape for tensor %d: [%s] -> [%s]", output->magic,
-        vectorToString(output->tensor->rawshape).c_str(), vectorToString(reusableInput->tensor->rawshape).c_str());
+        Elements::Tensor, "Updating rawshape for tensor %d: %s -> %s", output->magic,
+        IntVecToStr(output->tensor->rawshape).c_str(), IntVecToStr(reusableInput->tensor->rawshape).c_str());
     output->tensor->UpdateRawShape(reusableInput->tensor->rawshape);
     auto callAttr = std::dynamic_pointer_cast<CallOpAttribute>(callOp.GetOpAttribute());
     if (callAttr == nullptr) {
@@ -1007,6 +996,7 @@ void Allocator::Init()
     InitializeRootCasts();
     InitializeLeafGlobalMemoryReuse();
     ProcessOperations();
+    PreProcessStorageGroups();
 }
 
 void Allocator::CollectComsuerOpDesc(TensorsDesc& tensorsDesc)
@@ -1055,6 +1045,7 @@ void Allocator::CollectConnectionOps(TensorsDesc& tensorsDesc)
             if (producer->GetOpcode() != Opcode::OP_CALL) {
                 continue;
             }
+            // And 操作保证了 clear 的 producer 自身不会再被其他 BitMap 覆写为 1
             tensorsDesc.connectionOpsBitmap.And(connectionMatrix_.GetBitMap(*producer));
 
             // 由于customerOp和producerOp相同时，不能进行内存复用，所以这里需要将bitmap中的指向本操作的位清零
@@ -1074,6 +1065,13 @@ void Allocator::StorageNeedToAllocatePreProcess(TensorsDesc& tensorsDesc)
     // 清理冗余消费者操作索引
     RemoveRedundantComsuerOp(tensorsDesc);
     CollectConnectionOps(tensorsDesc);
+}
+
+void Allocator::PreProcessStorageGroups()
+{
+    for (auto& tensorsDesc : storageNeedToAllocate_) {
+        StorageNeedToAllocatePreProcess(tensorsDesc);
+    }
 }
 
 Status Allocator::UpdateStorageId(TensorsDesc& tensorsDesc, std::unordered_map<int64_t, int>& idMap, int& storageId)
@@ -1151,7 +1149,6 @@ Status Allocator::Allocate()
             APASS_LOG_ERROR_F(Elements::Tensor, "Tensor rawMagic:%d, storage is nullptr.", tensor->GetRawMagic());
             return FAILED;
         }
-        StorageNeedToAllocatePreProcess(tensorsDesc);
         TensorBucket& bucket = GetBestFitBucket(tensorsDesc);
         if (!bucket.AddTensorGroup(tensorsDesc)) {
             APASS_LOG_ERROR_F(

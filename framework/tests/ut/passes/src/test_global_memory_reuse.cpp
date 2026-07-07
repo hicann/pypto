@@ -3776,5 +3776,39 @@ TEST_F(TestGlobalMemoryReuse, TestGlobalMemoryReuseMultiOpParallelConn)
     EXPECT_EQ(mat_b->storage_->id_, mat_c->storage_->id_);
 }
 
+// reshape 附近漏复用回归：多分枝汇聚到合并点，经 RESHAPE 后再接多消费者链。
+// RESHAPE 让 t6/t7 共享 bucket，旧实现回溯时对已访问 bucket 直接 continue，漏掉上游可复用桶（退化为 5 桶）。
+TEST_F(TestGlobalMemoryReuse, CanReuseAroundReshape)
+{
+    ComputationalGraphBuilder G;
+    std::vector<std::string> tensorNames{"t1", "t2", "t3", "t4", "t5", "t6", "t7", "t8", "t9", "t10"};
+    std::vector<Opcode> opCodes{Opcode::OP_CALL,    Opcode::OP_CALL, Opcode::OP_CALL, Opcode::OP_CALL,
+                                Opcode::OP_RESHAPE, Opcode::OP_CALL, Opcode::OP_CALL, Opcode::OP_CALL};
+    std::vector<std::vector<std::string>> ioperands{{"t1", "t2"}, {"t3"}, {"t3"}, {"t4", "t5"},
+                                                    {"t6"},       {"t7"}, {"t7"}, {"t8", "t9"}};
+    std::vector<std::vector<std::string>> ooperands{{"t3"}, {"t4"}, {"t5"}, {"t6"}, {"t7"}, {"t8"}, {"t9"}, {"t10"}};
+    std::vector<std::string> opNames{"C0", "C1", "C2", "C3", "RESHAPE", "C4", "C5", "C6"};
+    EXPECT_EQ(G.AddTensors(DataType::DT_FP32, {16, 16}, tensorNames), true);
+    EXPECT_EQ(G.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
+    EXPECT_EQ(G.SetInCast({"t1", "t2"}), true);
+    EXPECT_EQ(G.SetOutCast({"t10"}), true);
+    Function* function = G.GetFunction();
+    EXPECT_NE(function, nullptr);
+
+    std::vector<std::vector<SymbolicScalar>> list;
+    for (auto& op : function->Operations().DuplicatedOpList()) {
+        if (op->GetOpcode() == Opcode::OP_RESHAPE) {
+            continue;
+        }
+        op->SetOpAttribute(std::make_shared<CallOpAttribute>(function->ComputeHash(), list, function->GetMagicName()));
+    }
+    function->rootFunc_ = function;
+
+    Allocator allocator(function->rootFunc_);
+    allocator.Init();
+    EXPECT_EQ(allocator.Allocate(), SUCCESS);
+    EXPECT_EQ(allocator.size_, 16 * 16 * 4 * 3); // 修复后复用到 3 桶
+}
+
 } // namespace tile_fwk
 } // namespace npu

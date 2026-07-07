@@ -15,11 +15,12 @@
 
 #pragma once
 
+#include <unordered_map>
 #include "interface/function/function.h"
+#include "interface/operation/operation.h"
 #include "interface/tensor/logical_tensor.h"
-#include "connection_matrix_impl.h"
+#include "large_bm.h"
 namespace npu::tile_fwk {
-using ConnectionMatrixImplPtr = std::shared_ptr<ConnectionMatrixImpl>;
 
 class ConnectionMatrix {
 public:
@@ -29,8 +30,6 @@ public:
     bool IsConnected(const Operation& a, const Operation& b) const;
 
     bool IsConnected(uint64_t indexA, uint64_t indexB) const;
-
-    void SetConnectivity(const std::unordered_set<Operation*>& producers, Operation& op);
 
     void Generate(Function* func);
 
@@ -43,6 +42,18 @@ public:
     static constexpr uint64_t INVALID_INDEX = std::numeric_limits<uint64_t>::max();
 
 private:
-    ConnectionMatrixImplPtr impl_{nullptr};
+    ConnectionMatrix() = delete;
+
+    void SetConnectivity(const std::unordered_set<Operation*>& producers, Operation& op);
+
+    LargeBitmap& GetMutableBitMap(const Operation& op);
+
+    size_t size_ = 0;
+
+    LargeBitmap invalidBitmap_ = LargeBitmap(0);
+
+    std::vector<LargeBitmap> bitMaps_;
+
+    Function* func_;
 };
 } // namespace npu::tile_fwk
