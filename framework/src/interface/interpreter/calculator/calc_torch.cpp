@@ -2435,7 +2435,14 @@ static void Reshape(const TensorData& out, const TensorData& self)
 {
     auto tout = From(out);
     auto tself = From(self);
-    auto res = torch::reshape(tself.second, out.shape);
+    
+    torch::Tensor res;
+    if (out.dataPtr == self.dataPtr) {
+        res = torch::reshape(tself.second.clone(), out.shape);
+    } else {
+        res = torch::reshape(tself.second, out.shape);
+    }
+    
     ToOperand(res, tout.first, out.dtype);
 }
 
