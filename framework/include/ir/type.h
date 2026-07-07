@@ -227,16 +227,17 @@ enum class CompactMode {
  * that describe how a tile is physically stored in hardware memory.
  */
 struct HardwareInfo {
+    static constexpr uint64_t kDefaultFractal = 512;
     TileLayout blayout = TileLayout::row_major; ///< Block layout
     TileLayout slayout = TileLayout::none_box;  ///< Scatter layout
-    uint64_t fractal = 512;                     ///< Fractal size
+    uint64_t fractal = kDefaultFractal;         ///< Fractal size
     TilePad pad = TilePad::null;                ///< Pad mode
     CompactMode compact = CompactMode::null;    ///< Compact mode
 
     HardwareInfo() = default;
 
     HardwareInfo(
-        TileLayout blayoutIn, TileLayout slayoutIn = TileLayout::none_box, uint64_t fractalIn = 512,
+        TileLayout blayoutIn, TileLayout slayoutIn = TileLayout::none_box, uint64_t fractalIn = kDefaultFractal,
         TilePad padIn = TilePad::null, CompactMode compactIn = CompactMode::null)
         : blayout(blayoutIn), slayout(slayoutIn), fractal(fractalIn), pad(padIn), compact(compactIn)
     {}

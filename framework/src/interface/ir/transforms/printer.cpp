@@ -631,7 +631,7 @@ void IRPrinter::PrintKwargValue(const std::string& key, const std::any& value)
         }
         stream_ << "]";
     } else if (value.type() == typeid(SymbolicScalar)) {
-        stream_ << AnyCast<SymbolicScalar>(value, "printing kwarg: " + key).Dump();
+        stream_ << (AnyCast<SymbolicScalar>(value, "printing kwarg: " + key)).Dump();
     } else if (value.type() == typeid(std::vector<SymbolicScalar>)) {
         const auto& values = AnyCast<std::vector<SymbolicScalar>>(value, "printing kwarg: " + key);
         stream_ << "[";

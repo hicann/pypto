@@ -1,4 +1,5 @@
 /*
+ * Copyright (c) 2026 Huawei Technologies Co., Ltd.
  * Copyright (c) PyPTO Contributors.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").

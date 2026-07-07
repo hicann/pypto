@@ -1,4 +1,5 @@
 /*
+ * Copyright (c) 2026 Huawei Technologies Co., Ltd.
  * Copyright (c) PyPTO Contributors.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
@@ -67,7 +68,6 @@ namespace {
 using RemovablePredicate = std::function<bool(const StmtPtr&)>;
 
 /// Collect live-root variables.
-///
 /// A statement is a "live root" when it is NOT classified as a removal
 /// candidate by `is_removable`. Its own Var references (expressions and
 /// direct fields, not nested-body refs) are added to the live set; the

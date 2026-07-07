@@ -544,7 +544,7 @@ void BindTypeClass(py::module_& ir)
         .def(
             py::init<TileLayout, TileLayout, uint64_t, TilePad, CompactMode>(),
             py::arg("blayout") = TileLayout::row_major, py::arg("slayout") = TileLayout::none_box,
-            py::arg("fractal") = static_cast<uint64_t>(512), py::arg("pad") = TilePad::null,
+            py::arg("fractal") = HardwareInfo::kDefaultFractal, py::arg("pad") = TilePad::null,
             py::arg("compact") = CompactMode::null,
             "Create hardware info with blayout, slayout, fractal, pad, and compact")
         .def_readwrite("blayout", &HardwareInfo::blayout, "Block layout")

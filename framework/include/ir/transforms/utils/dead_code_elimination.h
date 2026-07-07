@@ -1,4 +1,5 @@
 /*
+ * Copyright (c) 2026 Huawei Technologies Co., Ltd.
  * Copyright (c) PyPTO Contributors.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
@@ -40,7 +41,6 @@ std::vector<StmtPtr> EliminateDeadCode(const std::vector<StmtPtr>& stmts,
 std::vector<StmtPtr> EliminateDeadCode(const std::vector<StmtPtr>& stmts);
 
 /// Conservative scalar-only DCE.
-///
 /// Removes every `AssignStmt` that satisfies ALL of:
 ///   - LHS Var has `ScalarType`
 ///   - RHS expression contains no `Call` anywhere (Call may have side effects)
@@ -52,8 +52,9 @@ std::vector<StmtPtr> EliminateDeadCode(const std::vector<StmtPtr>& stmts);
 /// bodies of those control-flow nodes are filtered recursively, so nested
 /// scalar assignments remain eligible for removal.
 ///
-/// Like `EliminateDeadCode`, iterates to a fixed point so chains of scalar
-/// bindings (`a = 5; b = a + 1; c = b + 1` with `c` unused) collapse fully.
+/// Like `EliminateDeadCode`, iterates to a fixed point so that when a chain of
+/// scalar bindings depends on each other and the final result is unused, the
+/// entire chain is removed.
 std::vector<StmtPtr> EliminateDeadScalarAssignments(const std::vector<StmtPtr>& stmts);
 
 }  // namespace dce

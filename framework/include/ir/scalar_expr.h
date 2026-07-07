@@ -269,13 +269,13 @@ using UnaryExprPtr = std::shared_ptr<const UnaryExpr>;
         [[nodiscard]] std::string TypeName() const override { return #OpName; }                                       \
     };                                                                                                                \
                                                                                                                       \
-    using OpName##Ptr = std::shared_ptr<const OpName>;
+    using OpName##Ptr = std::shared_ptr<const OpName>
 
-DEFINE_UNARY_EXPR_NODE(Abs, "Absolute value expression (abs(operand))")
-DEFINE_UNARY_EXPR_NODE(Neg, "Negation expression (-operand)")
-DEFINE_UNARY_EXPR_NODE(Not, "Logical not expression (not operand)")
-DEFINE_UNARY_EXPR_NODE(BitNot, "Bitwise not expression (~operand)")
-DEFINE_UNARY_EXPR_NODE(Cast, "Cast expression (cast operand to dtype)")
+DEFINE_UNARY_EXPR_NODE(Abs, "Absolute value expression (abs(operand))");
+DEFINE_UNARY_EXPR_NODE(Neg, "Negation expression (-operand)");
+DEFINE_UNARY_EXPR_NODE(Not, "Logical not expression (not operand)");
+DEFINE_UNARY_EXPR_NODE(BitNot, "Bitwise not expression (~operand)");
+DEFINE_UNARY_EXPR_NODE(Cast, "Cast expression (cast operand to dtype)");
 
 #undef DEFINE_UNARY_EXPR_NODE
 

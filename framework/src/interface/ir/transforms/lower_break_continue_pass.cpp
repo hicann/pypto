@@ -89,7 +89,6 @@ bool ContainsContinue(const StmtPtr& stmt)
 ///   NOT (a == b) →  a != b
 ///   NOT (a != b) →  a == b
 ///   NOT (NOT x)  →  x            (double-negation elimination)
-///
 /// Falls back to Not(cond) for non-comparison operands (e.g., boolean variables).
 ExprPtr NegateCondition(const ExprPtr& cond, const Span& span)
 {
@@ -159,13 +158,13 @@ BreakControlState MakeBreakControlState(
 
 /// Lower continue statements in a list of statements.
 ///
-/// Pattern:
+/// The input matches the following structure.
 ///   stmt_before
 ///   if (cond) { continue }
 ///   stmt_after_1
 ///   stmt_after_2
 ///
-/// Becomes:
+/// After lowering, the structure becomes:
 ///   stmt_before
 ///   if (!cond) {
 ///     stmt_after_1
@@ -219,7 +218,6 @@ StmtPtr LowerContinueInStmt(const StmtPtr& stmt, const std::vector<IterArgPtr>& 
         if (if_stmt->elseBody_.has_value()) {
             auto else_stmts = FlattenToStmtList(*if_stmt->elseBody_);
             bool else_is_continue = (else_stmts.size() == 1 && As<ContinueStmt>(else_stmts[0]) != nullptr);
-
             if (else_is_continue) {
                 // `if (cond) { body } else { continue }` → `if (cond) { body }`
                 // The remaining statements after this if will need to be guarded by cond
@@ -392,9 +390,9 @@ std::vector<StmtPtr> LowerContinueInStmtList(
 /// surrounding scf.for / scf.while to correctly propagate the break result
 /// as an iter_arg without relying on invalid scf.break / scf.continue ops.
 ///
-/// Returns:
-///   new_stmts:    transformed statements (may end with a value-producing IfStmt)
-///   result_exprs: 1 + N values: [bool_flag, ia_0_update, ..., ia_N_update]
+/// The function produces two outputs.
+///   new_stmts    - transformed statements (may end with a value-producing IfStmt)
+///   result_exprs - 1 + N values: [bool_flag, ia_0_update, ..., ia_N_update]
 ///
 /// No-break case:  result_exprs = [ConstBool(false), trailing_yield_values...]
 /// Break found:    result_exprs = Var(s) produced by the innermost break IfStmt
@@ -492,12 +490,12 @@ static std::pair<std::vector<StmtPtr>, std::vector<ExprPtr>> LowerBreakToValue(
 
 /// Lower break in a for loop by adding a _can_continue iter_arg.
 ///
-/// Pattern:
+/// The input matches the following structure.
 ///   for i in range(start, stop, step):
 ///     if (cond) { break }
 ///     body
 ///
-/// Becomes (conceptually):
+/// Conceptually, the lowered form is:
 ///   for i in range(start, stop, step) iter_args(_cont=true, ...):
 ///     _new_cont = if (_cont) {          // guard: skip body if already broken
 ///       _r = if (cond) {               // break site — value-producing
@@ -568,12 +566,12 @@ ForStmtPtr LowerBreakInFor(const ForStmtPtr& op)
 /// Avoids And/Or/Not: the before-region checks only _can_continue; the original
 /// condition is checked at the start of the do-region via a value-producing scf.if.
 ///
-/// Pattern:
-///   while (cond):
-///     if (brk_cond): break
+/// The input matches the following structure.
+///   while condition is true
+///     if break condition holds, break
 ///     body
 ///
-/// Becomes (conceptually):
+/// Conceptually, the lowered form is:
 ///   while (_can_continue):                    // before: trivial flag check, no And
 ///     if (cond):                              // do: check original condition first
 ///       _r = if (brk_cond) {                 //   break site — value-producing
@@ -582,7 +580,7 @@ ForStmtPtr LowerBreakInFor(const ForStmtPtr& op)
 ///         body; yield(true, ...)             //     normal path: can continue
 ///       }
 ///       yield(_r, ...)
-///     else:
+///     otherwise
 ///       yield(false, iter_args...)           // cond false → stop loop
 WhileStmtPtr LowerBreakInWhile(const WhileStmtPtr& op)
 {
@@ -693,7 +691,6 @@ protected:
 
         bool has_break = ContainsBreak(new_body);
         bool has_continue = ContainsContinue(new_body);
-
         if (!has_break && !has_continue) {
             if (new_body == op->body_)
                 return op;

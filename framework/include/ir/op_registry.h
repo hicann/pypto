@@ -74,12 +74,12 @@ public:
      * before returning the operator instance. This ensures that operators cannot
      * be used until they are fully defined.
      *
-     * Required fields:
-     * - name: Set automatically during registration
-     * - description: Must be set via set_description()
-     * - op_category: Must be set via set_op_category()
-     * - arguments: Must be set via add_argument() or no_argument()
-     * - deduce_type: Must be set via f_deduce_type()
+     * The following fields must be set before use.
+     * - name - Set automatically during registration
+     * - description - Must be set via set_description()
+     * - op_category - Must be set via set_op_category()
+     * - arguments - Must be set via add_argument() or no_argument()
+     * - deduce_type - Must be set via f_deduce_type()
      *
      * \return Const reference to the operator pointer
      * \throws ValueError if any required field is not set
