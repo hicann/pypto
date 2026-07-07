@@ -61,6 +61,12 @@ namespace pypto {
 
 void BindSymbolicScalar(py::module_& m)
 {
+    py::enum_<SatStatus>(m, "SatStatus")
+        .value("SAT", SatStatus::kSat)
+        .value("UNSAT", SatStatus::kUnsat)
+        .value("UNKNOWN", SatStatus::kUnknown)
+        .export_values();
+
     py::class_<SymbolicScalar>(m, "SymbolicScalar", py::dynamic_attr())
         .def(
             py::init([](int64_t value) { return SymbolicScalar(value); }), py::arg("value"),
@@ -160,7 +166,10 @@ void BindSymbolicScalar(py::module_& m)
             "tenary", [](const SymbolicScalar& cond, const SymbolicScalar& true_val,
                          const SymbolicScalar& false_val) { return std::ternary(cond, true_val, false_val); })
         .def("as_expr", &SymbolicScalar::AsExpr)
-        .def("as_var", &SymbolicScalar::AsVar);
+        .def("as_var", &SymbolicScalar::AsVar)
+        .def_static(
+            "check", &SymbolicScalar::Check, py::arg("conds"),
+            "Satisfiability of the conjunction of conditions: SAT / UNSAT / UNKNOWN");
 
     py::implicitly_convertible<int64_t, SymbolicScalar>();
     py::implicitly_convertible<int, SymbolicScalar>();

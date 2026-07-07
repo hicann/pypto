@@ -23,6 +23,7 @@
 #include "interface/utils/common.h"
 #include "tilefwk/pypto_fwk_log.h"
 #include "symbolic_scalar_simplify.h"
+#include "symbolic_scalar_solver.h"
 
 constexpr uint64_t IMMEDIATE = 0;
 constexpr uint64_t SYMBOL = 1;
@@ -896,6 +897,16 @@ std::vector<SymbolicScalar> SymbolicScalar::FromConcrete(const std::vector<int64
         result.push_back(SymbolicScalar(x));
     }
     return result;
+}
+
+SatStatus SymbolicScalar::Check(const std::vector<SymbolicScalar>& conds)
+{
+    std::vector<RawSymbolicScalarPtr> raws;
+    raws.reserve(conds.size());
+    for (const auto& c : conds) {
+        raws.push_back(c.Simplify().Raw());  // const-fold first: a & ~a -> 0, etc.
+    }
+    return SatChecker(raws).Check();
 }
 
 std::unordered_map<std::string, ScalarImmediateType> &SymbolicScalarTracker::GetSymbolDict()

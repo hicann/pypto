@@ -80,7 +80,7 @@ from .cost_model import *  # noqa
 from ._utils import ceildiv, bytes_of
 from .platform import platform
 from .runtime import verify, set_verify_golden_data, RunMode
-from .symbolic_scalar import SymbolicScalar
+from .symbolic_scalar import SymbolicScalar, SatStatus
 from .tensor import Tensor
 from .functions import Function, get_last_function, get_current_function
 from ._element import Element

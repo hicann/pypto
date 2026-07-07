@@ -30,6 +30,9 @@ using RawSymbolicScalarPtr = std::shared_ptr<RawSymbolicScalar>;
 
 using ScalarImmediateType = long long;
 
+// Tri-state result of SymbolicScalar::Check (satisfiability of a conjunction).
+enum class SatStatus { kSat, kUnsat, kUnknown };
+
 class SymbolicScalar {
 public:
     /* Immediate type */
@@ -66,7 +69,7 @@ public:
 
     operator int() const
     {
-        FE_ASSERT(concreteValid_) << "concrete value is not valid for int() !";
+        FE_ASSERT(concreteValid_) << "concrete value is not valid for int() !" << Dump();
         return concrete_;
     }
 
@@ -133,6 +136,9 @@ public:
 public:
     static std::vector<int64_t> Concrete(const std::vector<SymbolicScalar>& scalarList, int64_t defValue);
     static std::vector<SymbolicScalar> FromConcrete(const std::vector<int64_t>& values);
+
+    // Satisfiability of the conjunction conds[0] && conds[1] && ... : kSat / kUnsat /
+    static SatStatus Check(const std::vector<SymbolicScalar>& conds);
 
 public:
     /* internal use */

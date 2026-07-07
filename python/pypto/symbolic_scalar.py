@@ -12,4 +12,5 @@ from typing import Union
 from . import pypto_impl
 
 SymbolicScalar = pypto_impl.SymbolicScalar
+SatStatus = pypto_impl.SatStatus
 SymInt = Union[int, SymbolicScalar]
