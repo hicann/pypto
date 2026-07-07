@@ -1007,10 +1007,16 @@ class BuildCtrl(CMakeParam):
         self.pip_support_config_setting = self.check_pip_dependencies(deps=self.pip_dependence_desc,
                                                                       raise_err=False, log_err=False)
         # 用于统一 run 和 whl 的构建时间戳
+        timestamp = ""
         self.tag_info: str = os.environ.get('tagInfo')
-        if not self.tag_info:
+        if self.tag_info:
+            parts = self.tag_info.split('_')
+            if len(parts) >= 4:
+                timestamp = '_'.join(parts[-3:-1])
+        if not timestamp:
             # tagInfo 格式须为 prefix_date_time_suffix (至少 4 段), 与 cmake 公共仓中 generate_version_info.py
             # 和 setup.py 均使用 split('_')[-3:-1] 提取 date_time 保持一致
+            # 若外部给定的环境变量内容不符合预期, 则重新生成.
             timestamp = datetime.now(timezone(timedelta(hours=8))).strftime('%Y%m%d_%H%M%S%f')[:-3]
             self.tag_info = f"pypto_{timestamp}_build"
 
