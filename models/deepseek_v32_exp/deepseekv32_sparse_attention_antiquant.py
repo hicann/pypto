@@ -350,13 +350,13 @@ def do_test_sparse_attention_func_aq(bn1n2s1, actual_seq, input_params, input_da
     if is_p:
         sparse_attention_antiquant_p(*pto_inputs, *pto_outputs, n_q, n_kv, softmax_scale, topk, block_size, \
             max_blocknum_perbatch, tile_config)
-    elif b < 64:
-        sparse_attention_antiquant_d(
+    elif pypto.platform.npuarch == 'DAV_3510' and b >= 64:
+        sparse_attention_antiquant_d_large_batch(
             *pto_inputs, *pto_outputs, n_q, n_kv, softmax_scale, topk, block_size,
             max_blocknum_perbatch, tile_config,
         )
     else:
-        sparse_attention_antiquant_d_large_batch(
+        sparse_attention_antiquant_d(
             *pto_inputs, *pto_outputs, n_q, n_kv, softmax_scale, topk, block_size,
             max_blocknum_perbatch, tile_config,
         )
