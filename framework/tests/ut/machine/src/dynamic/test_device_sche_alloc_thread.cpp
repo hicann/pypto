@@ -186,13 +186,14 @@ TEST_F(ArbitrationTest, AllocThreadIdByArbitrationLevel_NonOptimalAlwaysIncremen
 TEST_F(ArbitrationTest, GetArbitTimeOutVal_DispatchesByArch)
 {
     // 非 __DEVICE__ 环境下 DEV_IF_DEBUG / DEV_IF_INFO 均为 if(true)，
-    // arbitTimeout 总被覆盖为 *_20MIN，与 arch / isLastArbitration 无关
+    // DAV_3510：两个宏都覆盖为 TIMEOUT_A5_20MIN
+    // 其他 arch：DEV_IF_DEBUG 最后执行并覆盖 → isLast ? TIMEOUT_A2A3_1SEC : TIMEOUT_A2A3_2MS
     EXPECT_EQ(GetArbitTimeOutVal(ArchInfo::DAV_3510, true), TIMEOUT_A5_20MIN);
     EXPECT_EQ(GetArbitTimeOutVal(ArchInfo::DAV_3510, false), TIMEOUT_A5_20MIN);
-    EXPECT_EQ(GetArbitTimeOutVal(ArchInfo::DAV_2201, true), TIMEOUT_A2A3_20MIN);
-    EXPECT_EQ(GetArbitTimeOutVal(ArchInfo::DAV_2201, false), TIMEOUT_A2A3_20MIN);
-    EXPECT_EQ(GetArbitTimeOutVal(ArchInfo::DAV_UNKNOWN, true), TIMEOUT_A2A3_20MIN);
-    EXPECT_EQ(GetArbitTimeOutVal(ArchInfo::DAV_UNKNOWN, false), TIMEOUT_A2A3_20MIN);
+    EXPECT_EQ(GetArbitTimeOutVal(ArchInfo::DAV_2201, true), TIMEOUT_A2A3_1SEC);
+    EXPECT_EQ(GetArbitTimeOutVal(ArchInfo::DAV_2201, false), TIMEOUT_A2A3_2MS);
+    EXPECT_EQ(GetArbitTimeOutVal(ArchInfo::DAV_UNKNOWN, true), TIMEOUT_A2A3_1SEC);
+    EXPECT_EQ(GetArbitTimeOutVal(ArchInfo::DAV_UNKNOWN, false), TIMEOUT_A2A3_2MS);
 }
 
 // ---------------------------------------------------------------------------
@@ -283,51 +284,6 @@ TEST_F(ArbitrationTest, WaitForArbitrationLevel_ReturnsPublishedLevel)
 }
 
 // ---------------------------------------------------------------------------
-// ApplyCtrlDecision
-// ---------------------------------------------------------------------------
-
-TEST_F(ArbitrationTest, ApplyCtrlDecision_Failed_ReturnsError)
-{
-    int curThreadIdx = 1;
-    int arbitratedScheNum = 3;
-    EXPECT_EQ(ApplyCtrlDecision(curThreadIdx, arbitratedScheNum, CTRL_WAIT_FAILED),
-        DEVICE_MACHINE_ERROR);
-    EXPECT_EQ(curThreadIdx, 1);
-    EXPECT_EQ(arbitratedScheNum, 3);
-}
-
-TEST_F(ArbitrationTest, ApplyCtrlDecision_Ok_ReturnsOk)
-{
-    int curThreadIdx = 1;
-    int arbitratedScheNum = 3;
-    EXPECT_EQ(ApplyCtrlDecision(curThreadIdx, arbitratedScheNum, CTRL_WAIT_OK),
-        DEVICE_MACHINE_OK);
-    EXPECT_EQ(curThreadIdx, 1);
-    EXPECT_EQ(arbitratedScheNum, 3);
-}
-
-TEST_F(ArbitrationTest, ApplyCtrlDecision_Dropped_DropsLastThread)
-{
-    int curThreadIdx = 3; // == scheNum(3) → 被丢弃
-    int arbitratedScheNum = 3;
-    EXPECT_EQ(ApplyCtrlDecision(curThreadIdx, arbitratedScheNum, CTRL_WAIT_DROPPED),
-        DEVICE_MACHINE_OK);
-    EXPECT_EQ(curThreadIdx, -1);
-    EXPECT_EQ(arbitratedScheNum, 2);
-}
-
-TEST_F(ArbitrationTest, ApplyCtrlDecision_Dropped_SurvivingThreadKeepsIdx)
-{
-    // curThreadIdx(1) != scheNum(3) → 存活线程，idx 不变
-    int curThreadIdx = 1;
-    int arbitratedScheNum = 3;
-    EXPECT_EQ(ApplyCtrlDecision(curThreadIdx, arbitratedScheNum, CTRL_WAIT_DROPPED),
-        DEVICE_MACHINE_OK);
-    EXPECT_EQ(curThreadIdx, 1);
-    EXPECT_EQ(arbitratedScheNum, 2);
-}
-
-// ---------------------------------------------------------------------------
 // WaitCtrlDecision
 // ---------------------------------------------------------------------------
 
@@ -402,8 +358,8 @@ TEST_F(ArbitrationTest, WaitForCtrlDecision_NonDav2201_ReturnsOkImmediately)
 
 TEST_F(ArbitrationTest, WaitForCtrlDecision_Dav2201_CtrlReady_ReturnsOk)
 {
-    // DAV_2201 + ctrlRound > scheRound → ResolveCtrlDecision CAS 成功 →
-    // WaitCtrlRoundReady 返回 true → outLevel = CTRL_WAIT_OK → ApplyCtrlDecision 返回 OK
+    // DAV_2201 + ctrlRound > scheRound → CAS 成功（UNSET→ARBITRATING） →
+    // WaitCtrlRoundReady 返回 true → store CTRL_WAIT_OK → 分发返回 OK
     std::atomic<int> ctrlWaitLevel{CTRL_WAIT_UNSET};
     std::atomic<uint64_t> ctrlRound{2};
     std::atomic<uint64_t> scheRound{1};
@@ -420,7 +376,7 @@ TEST_F(ArbitrationTest, WaitForCtrlDecision_Dav2201_CtrlReady_ReturnsOk)
 TEST_F(ArbitrationTest, WaitForCtrlDecision_Dav2201_AlreadyPublishedOk)
 {
     // follower 路径：ctrlWaitLevel 已被 leader 发布为 CTRL_WAIT_OK →
-    // ResolveCtrlDecision CAS 失败 → WaitCtrlDecision 读取终态 → ApplyCtrlDecision 返回 OK
+    // CAS 失败 → WaitCtrlDecision 读取终态 → 分发返回 OK
     std::atomic<int> ctrlWaitLevel{CTRL_WAIT_OK};
     std::atomic<uint64_t> ctrlRound{1};
     std::atomic<uint64_t> scheRound{1};
@@ -436,7 +392,7 @@ TEST_F(ArbitrationTest, WaitForCtrlDecision_Dav2201_AlreadyPublishedOk)
 TEST_F(ArbitrationTest, WaitForCtrlDecision_Dav2201_AlreadyPublishedDropped)
 {
     // follower 路径：ctrlWaitLevel 已被 leader 发布为 CTRL_WAIT_DROPPED →
-    // ApplyCtrlDecision 减一个 sche，最后一个线程被丢弃
+    // 分发：arbitratedScheNum 减 1，最后一个线程被丢弃
     std::atomic<int> ctrlWaitLevel{CTRL_WAIT_DROPPED};
     std::atomic<uint64_t> ctrlRound{1};
     std::atomic<uint64_t> scheRound{1};
@@ -446,5 +402,21 @@ TEST_F(ArbitrationTest, WaitForCtrlDecision_Dav2201_AlreadyPublishedDropped)
     EXPECT_EQ(WaitForCtrlDecision(ArchInfo::DAV_2201, curThreadIdx, arbitratedScheNum,
         ctrlWaitLevel, ctrlRound, scheRound), DEVICE_MACHINE_OK);
     EXPECT_EQ(curThreadIdx, -1);
+    EXPECT_EQ(arbitratedScheNum, 2);
+}
+
+TEST_F(ArbitrationTest, WaitForCtrlDecision_Dav2201_AlreadyPublishedDropped_SurvivingThreadKeepsIdx)
+{
+    // follower 路径：ctrlWaitLevel 已被 leader 发布为 CTRL_WAIT_DROPPED →
+    // curThreadIdx(1) != scheNum(3) → 存活线程，idx 不变，arbitratedScheNum 仍减 1
+    std::atomic<int> ctrlWaitLevel{CTRL_WAIT_DROPPED};
+    std::atomic<uint64_t> ctrlRound{1};
+    std::atomic<uint64_t> scheRound{1};
+    int curThreadIdx = 1;
+    int arbitratedScheNum = 3;
+
+    EXPECT_EQ(WaitForCtrlDecision(ArchInfo::DAV_2201, curThreadIdx, arbitratedScheNum,
+        ctrlWaitLevel, ctrlRound, scheRound), DEVICE_MACHINE_OK);
+    EXPECT_EQ(curThreadIdx, 1);
     EXPECT_EQ(arbitratedScheNum, 2);
 }

@@ -88,12 +88,12 @@ inline uint64_t GetArbitTimeOutVal(ArchInfo archInfo, bool isLastArbitration)
             arbitTimeout = TIMEOUT_A5_20MIN;
         }
     } else {
-        arbitTimeout = isLastArbitration ? TIMEOUT_A2A3_1SEC : TIMEOUT_A2A3_20US;
-        DEV_IF_DEBUG {
-            arbitTimeout = TIMEOUT_A2A3_20MIN;
-        }
+        arbitTimeout = isLastArbitration ? TIMEOUT_A2A3_1SEC : TIMEOUT_A2A3_50US;
         DEV_IF_INFO {
-            arbitTimeout = TIMEOUT_A2A3_20MIN;
+            arbitTimeout = isLastArbitration ? TIMEOUT_A2A3_1SEC : TIMEOUT_A2A3_1MS;;
+        }
+        DEV_IF_DEBUG {
+            arbitTimeout = isLastArbitration ? TIMEOUT_A2A3_1SEC : TIMEOUT_A2A3_2MS;;
         }
     }
     return arbitTimeout;

@@ -80,8 +80,10 @@ constexpr uint64_t TIMEOUT_A2A3_20US   = 1000ULL;           // 1000 cycles
 constexpr uint64_t TIMEOUT_A2A3_50US   = 2500ULL;           // 2500 cycles
 constexpr uint64_t TIMEOUT_A2A3_100US  = 5000ULL;           // 5000 cycles
 constexpr uint64_t TIMEOUT_A2A3_200US  = 10000ULL;          // 10000 cycles
+constexpr uint64_t TIMEOUT_A2A3_1MS    = 50000ULL;          // 50000 cycles
+constexpr uint64_t TIMEOUT_A2A3_2MS    = 100000ULL;         // 100000 cycles
+constexpr uint64_t TIMEOUT_A2A3_3MS    = 150000ULL;         // 150000 cycles
 constexpr uint64_t TIMEOUT_A2A3_1SEC   = 50000000ULL;       // 50M cycles
-constexpr uint64_t TIMEOUT_A2A3_2SEC   = 100000000ULL;       // 50M cycles
 constexpr uint64_t TIMEOUT_A2A3_10SEC  = 500000000ULL;      // 500M cycles
 constexpr uint64_t TIMEOUT_A2A3_1MIN   = 3000000000ULL;     // 3G cycles
 constexpr uint64_t TIMEOUT_A2A3_20MIN  = 60000000000ULL;    // 60G cycles
@@ -312,7 +314,7 @@ inline int CheckTimeOut(const std::string& operation, TimeCheck& timeCheck)
     uint64_t start = GetCycles(); \
     uint64_t warn_interval = (arch == ArchInfo::DAV_3510) ? TIMEOUT_A5_1MIN : TIMEOUT_A2A3_1MIN
 
-constexpr uint64_t TIMEOUT_INDEX_50US  = 0;
+constexpr uint64_t TIMEOUT_INDEX_50US   = 0;
 constexpr uint64_t TIMEOUT_INDEX_1SEC   = 1;
 constexpr uint64_t TIMEOUT_INDEX_10SEC  = 2;
 constexpr uint64_t TIMEOUT_INDEX_1MIN   = 3;
