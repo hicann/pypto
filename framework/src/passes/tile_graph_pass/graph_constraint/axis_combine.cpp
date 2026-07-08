@@ -80,10 +80,10 @@ static void UpdateOperand(
     inputTensor[idx] = newTensor;
 }
 
-void AxisCombine::SetAttrForExpand(Operation& op, LogicalTensors& inputTensor, int idx, Shape& shape)
+static std::vector<SymbolicScalar> BuildAlignedValidShape(
+    IRBuilder& irBuilder, LogicalTensors& inputTensor, int idx, Shape& shape)
 {
     int expandDim = inputTensor[idx]->GetShape().size() - 1;
-    op.SetAttribute(OpAttributeKey::expandDims, std::vector<int>{expandDim});
     auto dynValidShape = CommonUtils::CreateConstIntVector(shape);
     if (!(inputTensor[idx]->GetDynValidShape().empty())) {
         dynValidShape = inputTensor[idx]->GetDynValidShape();
@@ -91,9 +91,9 @@ void AxisCombine::SetAttrForExpand(Operation& op, LogicalTensors& inputTensor, i
     if (!(inputTensor[idx ^ 1]->GetDynValidShape().empty())) {
         dynValidShape[expandDim] = inputTensor[idx ^ 1]->GetDynValidShape()[expandDim];
     } else {
-        dynValidShape[expandDim] = irBuilder_.CreateConstInt(inputTensor[idx ^ 1]->GetShape()[expandDim]);
+        dynValidShape[expandDim] = irBuilder.CreateConstInt(inputTensor[idx ^ 1]->GetShape()[expandDim]);
     }
-    op.SetAttribute(OP_ATTR_PREFIX + "validShape", dynValidShape);
+    return dynValidShape;
 }
 
 static void UpdateBrcOperandAfterExpand(Operation& op)
@@ -144,7 +144,11 @@ Status AxisCombine::AlignBroadCastOpInputs([[maybe_unused]] Function& function, 
             }
             auto alignedTensor = CreateAlignedTensor(srcTensor, alignedShape);
             auto& expand = irBuilder_.CreateTensorOpStmt(function, Opcode::OP_EXPAND, {srcTensor}, {alignedTensor});
-            SetAttrForExpand(expand, inputTensor, idx, alignedShape);
+            auto validShape = BuildAlignedValidShape(irBuilder_, inputTensor, idx, alignedShape);
+            expand.SetAttribute(OpAttributeKey::expandDims,
+                std::vector<int>{static_cast<int>(inputTensor[idx]->GetShape().size() - 1)});
+            expand.SetAttribute(OP_ATTR_PREFIX + "validShape", validShape);
+            alignedTensor->UpdateDynValidShape(validShape);
             expand.UpdateSubgraphID(op.GetSubgraphID());
             UpdateOperand(op, idx, srcTensor, alignedTensor, inputTensor);
             UpdateBrcOperandAfterExpand(op);
@@ -155,6 +159,8 @@ Status AxisCombine::AlignBroadCastOpInputs([[maybe_unused]] Function& function, 
             }
             auto alignedTensor = CreateAlignedTensor(srcTensor, alignedShape);
             auto& brcb = irBuilder_.CreateTensorOpStmt(function, Opcode::OP_BRCB, {srcTensor}, {alignedTensor});
+            auto validShape = BuildAlignedValidShape(irBuilder_, inputTensor, idx, alignedShape);
+            alignedTensor->UpdateDynValidShape(validShape);
             brcb.UpdateSubgraphID(op.GetSubgraphID());
             UpdateOperand(op, idx, srcTensor, alignedTensor, inputTensor);
         }

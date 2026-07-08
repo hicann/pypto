@@ -67,13 +67,6 @@ uint64_t GetScaleAttrOrDefault(const Operation* op)
                0;
 }
 
-bool CheckValidShape(const LogicalTensorDataPtr tensorPtr) {
-    if (tensorPtr == nullptr) return false;
-    for (auto validShape : tensorPtr->GetValidShape()) {
-        if (validShape == 0) return false;
-    }
-    return true;
-}
 
 bool HasMXScaleValue(const ExecuteOperationContext* ctx) {
     if (ctx->ioperandDataViewList->size() <= SCALE_B_INDEX) {
@@ -162,7 +155,6 @@ void ExecuteOpAMulB(ExecuteOperationContext* ctx)
     auto ret = ctx->ooperandInplaceDataViewList->at(0);
     auto lhs = ctx->ioperandDataViewList->at(0);
     auto rhs = ctx->ioperandDataViewList->at(1);
-    if (!CheckValidShape(lhs) || !CheckValidShape(rhs)) return;
     Opcode opcode = ctx->op->GetOpcode();
     bool isAccOp = IsAccOp(opcode);
     bool hasMXScaleByInputs = HasMxScaleByInputs(ctx, isAccOp);

@@ -887,7 +887,8 @@ Operation* OoOScheduler::CreateCopyinOp(LogicalTensorPtr iOperand, LogicalTensor
         offset, // 搬运GM上的偏移
         oOperand->GetMemoryTypeOriginal(),
         OpImmediate::Specified(oOperand->GetShape()), // 搬运数据量
-        OpImmediate::Specified(oOperand->tensor->GetDynRawShape()))); // 暂未使用
+        OpImmediate::Specified(oOperand->tensor->GetDynRawShape()), // 暂未使用
+        OpImmediate::Specified(oOperand->GetDynValidShape())));
     copyinOp.UpdateLatency(DEFAULT_LATENCY);
     bool isCube = true;
     if (oOperand->GetMemoryTypeOriginal() == MemoryType::MEM_UB) {
