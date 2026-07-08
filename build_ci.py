@@ -1256,6 +1256,8 @@ class BuildCtrl(CMakeParam):
             env.update({"PYPTO_THIRD_PARTY_PATH": self.third_party_path})
         # 通过 tag_info 环境变量统一 run 和 whl 内的 build_timestamp
         env.update({"tagInfo": self.tag_info})
+        # 通过 PYPTO_ALLOW_WHL_BUILD 环境变量实现阻止直接 pip install . 覆盖 cann 包内已有 PyPTO
+        env.update({"PYPTO_ALLOW_WHL_BUILD": "1"})
         return env
 
     def get_cmake_build_update_env(self) -> Dict[str, str]:

@@ -767,6 +767,15 @@ class SetupCtrl:
             - editable_wheel: CustomEditableWheel, 处理可编辑安装模式
             - build_ext: CMakeBuild, 调用 CMake 进行构建
         """
+        allow_whl_build = os.environ.get('PYPTO_ALLOW_WHL_BUILD', "")
+        allow_whl_build = bool(allow_whl_build) if allow_whl_build else False
+        if not allow_whl_build:
+            # PyPTO 打入 cann-toolkit 后, 会安装在 ${ASCEND_HOME_PATH}/python/site-packages 目录下,
+            # 此时若直接执行 pip install . / pip install -e . 会触发卸载该路径 whl 包后重新安装.
+            # 此处做防呆保护设计, 禁止这种行为, 要求使用 build_ci.py 或查看文档编译 run 包来管理 PyPTO 二进制.
+            # 直接执行 pip install pypto 时, 因 pypi 源上版本(0.2.0) 小于打入 cann 包首 pypto 版本(0.2.1), 不会重新安装.
+            raise RuntimeError("Build .whl packages directly has been disabled. Please use .run format binary packages")
+
         warnings.filterwarnings("ignore", category=UserWarning, module="setuptools.command.build_py")
         # Setuptools 配置
         setup(
