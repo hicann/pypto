@@ -133,7 +133,6 @@ Span::Span(Span&& other)
 {
     impl_ = other.impl_;
     impl_->Get();
-    other = Unknown();
 }
 
 Span& Span::operator=(Span&& other)
@@ -142,7 +141,6 @@ Span& Span::operator=(Span&& other)
         impl_->Put();
         impl_ = other.impl_;
         impl_->Get();
-        other = Unknown();
     }
     return *this;
 }

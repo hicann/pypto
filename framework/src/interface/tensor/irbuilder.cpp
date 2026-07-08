@@ -274,6 +274,7 @@ void IRBuilder::EmitTensorStmts()
     auto func = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "__entry__");
     for (auto& op : func->Operations(false)) {
         auto stmt = std::dynamic_pointer_cast<ir::TensorOpStmt>(op.shared_from_this());
+        stmt->span_ = ir::Span::Current();
         Emit(stmt);
     }
     func->ResetOperations();

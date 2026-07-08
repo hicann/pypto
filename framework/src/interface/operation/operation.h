@@ -764,7 +764,6 @@ private:
     mutable size_t groupID_{NON_GROUP};
     bool isDeleted_{false};
 
-    ir::Span span_;
     std::shared_ptr<SemanticLabel> semanticLabel_;
     Function* function_;
 

@@ -61,7 +61,7 @@ public:
         auto var_name = name;
         if (var_name.empty()) {
             auto idx = temp_counter_++;
-            var_name = "%" + std::to_string(idx);
+            var_name = "$" + std::to_string(idx);
         } else {
             while (all_vars_.count(var_name)) {
                 auto idx = var_counter_[var_name]++;

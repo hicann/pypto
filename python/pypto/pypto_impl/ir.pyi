@@ -2349,3 +2349,19 @@ class Pass:
         Returns:
             None
         """
+
+    @staticmethod
+    def merge_stmts_into_if() -> Pass:
+        """Merge statements into if statements.
+
+        Returns:
+            None
+        """
+
+    @staticmethod
+    def create_root_functions() -> Pass:
+        """Create root functions.
+
+        Returns:
+            None
+        """

@@ -870,11 +870,6 @@ bool TypeEqual(const LogicalTensorPtr a, const LogicalTensorPtr b)
     if (a->shape != b->shape) {
         return false;
     }
-    for (size_t i = 0; i < a->shape.size(); i++) {
-        if (a->dynValidShape_[i].Dump() != b->dynValidShape_[i].Dump()) {
-            return false;
-        }
-    }
     return true;
 }
 

@@ -8,6 +8,7 @@
 from .pir import Call, Block, Function, Scope, BuildContext, Jump
 from .pir import ReturnSignal, BreakSignal, ContinueSignal
 from .op_registry import dispatch
+from .. import pypto_impl
 
 
 def dispatch_call(call: Call, scope: Scope, ctx: BuildContext):
@@ -20,7 +21,10 @@ def dispatch_call(call: Call, scope: Scope, ctx: BuildContext):
         ret = dispatch(callee, ctx, *args, **kwargs)
     if call.result is not None:
         scope.varmap[call.result.id] = ret
+
+    pypto_impl.SetSpan(call.span.filename, call.span.begin_line)
     ctx.emit_tensor_stmts()
+    pypto_impl.ClearSpan()
 
 
 def call_function(func: Function, args: tuple, kwargs: dict, ctx: BuildContext):
