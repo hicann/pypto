@@ -9,8 +9,7 @@
 
 import pytest
 import pypto
-from pypto import ir
-from python.tests.ut.ir.compiler_utils import compile_new_ir
+from pypto.ir.compile_pipeline import compile_new_ir
 
 
 def test_assemble():

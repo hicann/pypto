@@ -22,12 +22,12 @@ def compile_new_ir(pyfunc, *args, **kwargs):
     canonicalize = ir.Pass.canonicalize()
     merge_stmts = ir.Pass.merge_stmts_into_if()
     create_root_functions = ir.Pass.create_root_functions()
-    token_pass = ir.Pass.token_pass()
+    finalize = ir.Pass.finalize_dynamic_function()
 
-    program = token_pass(program)
     program = canonicalize(program)
     program = dce(program)
     program = dce(canonicalize(program))
     program = canonicalize(merge_stmts(program))
     program = create_root_functions(program)
+    program = finalize(program)
     return program.functions[func.name]
