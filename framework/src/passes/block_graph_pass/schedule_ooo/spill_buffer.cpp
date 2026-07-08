@@ -1388,17 +1388,24 @@ int OoOScheduler::GetBufNextUseTime(int curMemId)
         auto &op = orderedOps[i];
         if (opIsRetiredMap[op]) continue;
         auto &reqMemids = GetOpMemIds(op);
-        if (std::find(reqMemids.begin(), reqMemids.end(), curMemId) != reqMemids.end()) {
-            for (auto pre : depManager_.GetPredecessors(op)) {
-                if (opIsRetiredMap[pre]) continue;
-                if (opIsAllocMap[pre]) {
-                    return opExecOrderMap[pre];
-                }
-            }
-            return opExecOrderMap[op];
-        }
-    }
-    return -1;
+        if (std::find(reqMemids.begin(), reqMemids.end(), curMemId) == reqMemids.end()) continue;
+ 	    int opExecOrder = opExecOrderMap[op];
+ 	    int minAlloc = INT_MAX;
+ 	    int allocCnt = 0;
+ 	    for (auto pre : depManager_.GetPredecessors(op)) {
+ 	        if (opIsRetiredMap[pre]) continue;
+ 	        if (opIsAllocMap[pre]) {
+ 	            int preOrder = opExecOrderMap[pre];
+ 	            if (preOrder < minAlloc) minAlloc = preOrder;
+ 	            allocCnt++;
+ 	        }
+ 	    }
+ 	    if (allocCnt == 0) {
+ 	        return opExecOrder;
+ 	    }
+ 	    return (opExecOrder - minAlloc <= allocCnt) ? minAlloc : opExecOrder;
+ 	}
+ 	return -1;
 }
 
 bool OoOScheduler::IsMultiProducerTensor(LogicalTensorPtr tensor)
