@@ -697,18 +697,18 @@ class CustomEggInfo(egg_info):
 
     @classmethod
     def _get_build_timestamp(cls) -> str:
+        timestamp = ""
         tag_info = os.environ.get('tagInfo')
         if tag_info:
             parts = tag_info.split('_')
-            timestamp = '_'.join(parts[-3:-1])
-        else:
+            if len(parts) >= 4:
+                timestamp = '_'.join(parts[-3:-1])
+        if not timestamp:
             # 1. 当前 CI/CD 流水线构建, build_ci.py 入口构建均会设置 tagInfo 环境变量.
             # 2. 仅通过 pip install . 方式直接触发 whl 包构建不含 tagInfo 环境变量,
             #    此时不会触发 run 构建, 不需补充 tagInfo 环境变量.
+            # 3. 若外部给定的环境变量内容不符合预期, 则重新生成.
             timestamp = datetime.now(timezone(timedelta(hours=8))).strftime('%Y%m%d_%H%M%S%f')[:-3]
-        if not timestamp:
-            raise RuntimeError(f"Failed to extract timestamp from {tag_info!r}, "
-                               "expected format: prefix_date_time_suffix")
         return timestamp
 
     def run(self):
