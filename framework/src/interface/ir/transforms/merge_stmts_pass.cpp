@@ -276,6 +276,9 @@ void CollectDefinedVars(TensorOpStmtPtr t, std::unordered_set<VarPtr>& defs)
             defs.insert(v);
         }
     }
+    if (t->result_token_) {
+ 	    defs.insert(t->result_token_);
+ 	}
 }
 
 void CollectDefinedVars(IfStmtPtr ifStmt, std::unordered_set<VarPtr>& defs)

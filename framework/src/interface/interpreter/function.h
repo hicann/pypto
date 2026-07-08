@@ -36,6 +36,7 @@
 #include "communication.h"
 #include "tilefwk/comm_group_recorder.h"
 #include "interface/operation/distributed/distributed_common.h"
+#include "ir/kind_traits.h"
 
 namespace npu::tile_fwk {
 
@@ -758,6 +759,24 @@ struct FunctionInterpreter {
     ScalarImmediateType EvaluateSymbolicScalar(const SymbolicScalar& ss)
     {
         return GetOperationInterpreterForThisThread().EvaluateSymbolicScalar(ss);
+    }
+
+    static SymbolicScalar ExprToSymbolicScalar(const ir::ExprPtr& expr)
+    {
+        if (auto imm = std::dynamic_pointer_cast<const RawSymbolicImmediate>(expr)) {
+            return SymbolicScalar(std::const_pointer_cast<RawSymbolicImmediate>(imm));
+        }
+        if (auto sym = std::dynamic_pointer_cast<const RawSymbolicSymbol>(expr)) {
+            return SymbolicScalar(std::const_pointer_cast<RawSymbolicSymbol>(sym));
+        }
+        if (auto rawExpr = std::dynamic_pointer_cast<const RawSymbolicExpression>(expr)) {
+            return SymbolicScalar(std::const_pointer_cast<RawSymbolicExpression>(rawExpr));
+        }
+        if (auto constInt = std::dynamic_pointer_cast<const ir::ConstInt>(expr)) {
+            return SymbolicScalar(constInt->value_);
+        }
+        ASSERT(false) << "ExprToSymbolicScalar: unsupported Expr type";
+        return SymbolicScalar();
     }
     std::vector<int64_t> EvaluateOffset(
         const std::vector<int64_t>& offset, const std::vector<SymbolicScalar>& dynOffset,
@@ -1563,8 +1582,54 @@ struct FunctionInterpreter {
         ExecuteHandleFunctionEnd();
     }
 
+    void ExecuteStmtBody(Function* func, const ir::StmtPtr& stmt, FunctionControlFlowExecution& controlFlowExecution)
+    {
+        if (!stmt) {
+            return;
+        }
+        if (auto seq = ir::As<ir::SeqStmts>(stmt)) {
+            for (auto& child : seq->stmts_) {
+                ExecuteStmtBody(func, child, controlFlowExecution);
+            }
+        } else if (auto forStmt = ir::As<ir::ForStmt>(stmt)) {
+            ScalarImmediateType begin = EvaluateSymbolicScalar(ExprToSymbolicScalar(forStmt->start_));
+            ScalarImmediateType end = EvaluateSymbolicScalar(ExprToSymbolicScalar(forStmt->stop_));
+            ScalarImmediateType step = EvaluateSymbolicScalar(ExprToSymbolicScalar(forStmt->step_));
+            for (ScalarImmediateType idx = begin; idx < end; idx += step) {
+                UpdateSymbolDict(forStmt->loopVar_->name_, idx);
+                loopSymbolDict[forStmt->loopVar_->name_] = idx;
+                ExecuteStmtBody(func, forStmt->body_, controlFlowExecution);
+            }
+        } else if (auto ifStmt = ir::As<ir::IfStmt>(stmt)) {
+            auto condVal = EvaluateSymbolicScalar(ExprToSymbolicScalar(ifStmt->condition_));
+            if (static_cast<bool>(condVal)) {
+                ExecuteStmtBody(func, ifStmt->thenBody_, controlFlowExecution);
+            } else if (ifStmt->elseBody_) {
+                ExecuteStmtBody(func, ifStmt->elseBody_.value(), controlFlowExecution);
+            }
+        } else if (auto tensorOp = ir::AsMut<ir::TensorOpStmt>(stmt)) {
+            auto op = std::dynamic_pointer_cast<Operation>(tensorOp);
+            ASSERT(op != nullptr) << "ExecuteStmtBody: TensorOpStmt is not an Operation";
+            Function* callee = GetCallee(op.get());
+            ExecuteHandleOperationBegin(op.get());
+            ExecuteControlFlow(callee, controlFlowExecution);
+            ExecuteHandleOperationEnd();
+        } else {
+            INTERPRETER_LOGW("ExecuteStmtBody: unhandled stmt kind: %d", static_cast<int>(stmt->GetKind()));
+        }
+    }
+
     void ExecuteControlFlow(Function* func, FunctionControlFlowExecution& controlFlowExecution)
     {
+        if (func->body_ && func->GetFunctionType() == FunctionType::DYNAMIC) {
+            std::shared_ptr<FunctionFrame> frame =
+                std::make_shared<FunctionFrame>(func, nullptr, nullptr, nullptr, frameCount++);
+            ExecuteHandleFunctionBegin(func, frame);
+            ExecuteStmtBody(func, func->body_, controlFlowExecution);
+            ExecuteHandleFunctionEnd();
+            return;
+        }
+
         if (func->GetFunctionType() != FunctionType::DYNAMIC &&
             func->GetFunctionType() != FunctionType::DYNAMIC_LOOP_PATH) {
             func->SortOperations();

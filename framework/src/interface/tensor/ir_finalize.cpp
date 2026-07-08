@@ -73,6 +73,9 @@ void FinalizeDynamicFunction(Function* dynFunc)
         return;
     }
 
+    if (config::GetVerifyOption<bool>(KEY_ENABLE_PASS_VERIFY)) {
+        Program::GetInstance().VerifyTensorGraph();
+    }
     SubmitCompileTask(dynFunc);
 }
 

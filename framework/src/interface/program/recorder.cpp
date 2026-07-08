@@ -155,7 +155,7 @@ void RecordFunc::EndFunction()
     (void)Program::GetInstance().EndFunction(funcName);
     if (dynFunc_) {
         Program::GetInstance().SetLastFunction(dynFunc_);
-        if (dynFunc_->IsDyndev()) {
+        if (dynFunc_->IsDyndev() && !dynFunc_->Operations(false).IsEmpty()) {
             Program::GetInstance().ClearEmptyHiddenFunction();
             dynFunc_->CleanRedundantOutCast();
             dynFunc_->InferParamDirection();
