@@ -89,6 +89,17 @@ LogicalTensor::LogicalTensor(
         << "shape.size(): " << shape.size() << ", offset.size(): " << offset.size();
 }
 
+void LogicalTensor::UpdateBelongFunction(Function& newFunc)
+{
+    if (function_ == &newFunc) {
+        return;
+    }
+    auto self = shared_from_this();
+    function_->GetTensorMap().Erase(self);
+    function_ = &newFunc;
+    newFunc.GetTensorMap().Insert(self, false);
+}
+
 std::shared_ptr<LogicalTensor> LogicalTensor::Clone(Function& dstFunc, bool create) const
 {
     /* Clone is only for dstFunc to simplify the process of creating OP_CALL's input and output. */

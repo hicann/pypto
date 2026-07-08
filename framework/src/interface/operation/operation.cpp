@@ -1006,8 +1006,8 @@ std::shared_ptr<Operation> Operation::CloneTensorOpStmt(
     const LogicalTensors& iOperandList, const LogicalTensors& oOperandList, const ir::VarPtr& resultToken,
     const std::vector<ir::VarPtr>& tokens, ir::Span span, Function* targetFunc) const
 {
+    const_cast<Operation*>(this)->UnlinkFromLogicalTensors();
     auto applyCloneMetadata = [&](Operation& op) {
-        op.UnlinkFromLogicalTensors();
         op.SetScopeInfo(scopeInfo_);
         op.SetOooScopeId(oooScopeId_);
         if (opAttribute_) {
@@ -1028,16 +1028,13 @@ std::shared_ptr<Operation> Operation::CloneTensorOpStmt(
     };
 
     if (targetFunc != nullptr) {
-        auto remapForFunc = [targetFunc](const LogicalTensors& operands) {
-            LogicalTensors remapped;
-            remapped.reserve(operands.size());
-            for (const auto& operand : operands) {
-                remapped.push_back(operand ? operand->Clone(*targetFunc, false) : nullptr);
-            }
-            return remapped;
-        };
-        Operation& op = targetFunc->AddRawOperation(
-            opcode_, remapForFunc(iOperandList), remapForFunc(oOperandList), span);
+        for (const auto& operand : iOperandList) {
+            operand->UpdateBelongFunction(*targetFunc);
+        }
+        for (const auto& operand : oOperandList) {
+            operand->UpdateBelongFunction(*targetFunc);
+        }
+        Operation& op = targetFunc->AddRawOperation(opcode_, iOperandList, oOperandList, span);
         applyCloneMetadata(op);
         return std::static_pointer_cast<Operation>(op.shared_from_this());
     }
