@@ -174,6 +174,9 @@ class _BuildOnlineManager:
 
 class BuildOnlineCalculatorManager(_BuildOnlineManager):
 
+    # 独立于 BuildOnlinePyptoImplManager 的编译锁, 避免二者互相阻塞
+    _compile_lock: threading.Lock = threading.Lock()
+
     @dataclasses.dataclass
     class _TorchContext:
         torch_version: str = ""
@@ -205,28 +208,34 @@ class BuildOnlineCalculatorManager(_BuildOnlineManager):
     def build_and_load_calculator(self):
         if self._target_loaded:
             return
-        torch_ctx = self._TorchContext()
-        cmake_ctx = self._CMakeContext()
-        with tempfile.TemporaryDirectory() as _tmp_dir:
-            # 编译
-            ext = f"-DPY3_MOD_TORCH_VERSION={torch_ctx.torch_version}"
-            ext += f" -DPY3_MOD_TORCH_ROOT_PATH={torch_ctx.torch_root_dir}"
-            ext += f" -DPY3_MOD_TORCH_C_GLIBCXX_USE_CXX11_ABI={torch_ctx.torch_c_use_cxx11_abi}"
-            compile_ctx = self._CMakeContext.CompileContext(src_dir=Path(self.pkg_lib_dir, "framework/src/calculator"),
-                                                            tmp_dir=Path(_tmp_dir))
-            compile_ctx.cfg_cmd_ext = ext
-            install_prefix = cmake_ctx.compile(ctx=compile_ctx)
-            # 加载
-            calc_shared = Path(install_prefix, "lib/libtile_fwk_calculator.so")
-            if not calc_shared.exists():
-                raise RuntimeError(f"{calc_shared} not exists.")
-            ctypes.CDLL(str(calc_shared), mode=ctypes.RTLD_GLOBAL)
-        self._target_loaded = True
+        # 双重检查锁定: 外层无锁快速检查, 内层加锁后二次检查, 避免多线程重复编译
+        with self._compile_lock:
+            if self._target_loaded:
+                return
+            torch_ctx = self._TorchContext()
+            cmake_ctx = self._CMakeContext()
+            with tempfile.TemporaryDirectory() as _tmp_dir:
+                # 编译
+                ext = f"-DPY3_MOD_TORCH_VERSION={torch_ctx.torch_version}"
+                ext += f" -DPY3_MOD_TORCH_ROOT_PATH={torch_ctx.torch_root_dir}"
+                ext += f" -DPY3_MOD_TORCH_C_GLIBCXX_USE_CXX11_ABI={torch_ctx.torch_c_use_cxx11_abi}"
+                compile_ctx = self._CMakeContext.CompileContext(
+                    src_dir=Path(self.pkg_lib_dir, "framework/src/calculator"), tmp_dir=Path(_tmp_dir))
+                compile_ctx.cfg_cmd_ext = ext
+                install_prefix = cmake_ctx.compile(ctx=compile_ctx)
+                # 加载
+                calc_shared = Path(install_prefix, "lib/libtile_fwk_calculator.so")
+                if not calc_shared.exists():
+                    raise RuntimeError(f"{calc_shared} not exists.")
+                ctypes.CDLL(str(calc_shared), mode=ctypes.RTLD_GLOBAL)
+            self._target_loaded = True
 
 
 class BuildOnlinePyptoImplManager(_BuildOnlineManager):
 
     _FLOCK_TIMEOUT: int = 300  # 多进程等待编译的超时阈值(秒)
+    # 独立于 BuildOnlineCalculatorManager 的编译锁, 避免二者互相阻塞
+    _compile_lock: threading.Lock = threading.Lock()
 
     class _PythonContext:
 
@@ -295,9 +304,15 @@ class BuildOnlinePyptoImplManager(_BuildOnlineManager):
         self._lock_name: str = f".pypto_impl_build.cp{ver_info.major}{ver_info.minor}.lock"
 
     def ensure_pypto_impl(self):
+        # 双重检查锁定: 外层无锁快速检查, 内层加锁后二次检查, 避免多线程重复编译
         if self._target_compiled:
             return
+        with self._compile_lock:
+            if self._target_compiled:
+                return
+            self._ensure_pypto_impl_locked()
 
+    def _ensure_pypto_impl_locked(self):
         # 搜索已有产物 (pkg_dir 优先, cache_dir 次之)
         found, so_path = self._find_pypto_impl_so(cache_dir=self._cache_dir())
         if found:
