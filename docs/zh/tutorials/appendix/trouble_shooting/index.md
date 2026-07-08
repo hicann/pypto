@@ -1,8 +1,9 @@
-# 内部各组件常见问题
+# 错误码参考
 
 ```{toctree}
 :maxdepth: 2
 
+README
 function
 pass
 codegen

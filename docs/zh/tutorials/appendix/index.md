@@ -1,11 +1,10 @@
 # 附录
 
 ```{toctree}
-:maxdepth: 1
+:maxdepth: 2
 :titlesonly:
 
-faq
-issue
-内部各组件常见问题 <../../trouble_shooting/index>
+faq/index
+trouble_shooting/index
 glossary
 environment_variables
