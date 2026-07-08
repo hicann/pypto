@@ -39,7 +39,7 @@ enum class WsAicpuSlabMemType : uint8_t {
     SLAB_MEM_TYPE_BUTT
 };
 constexpr int SLAB_ALLOCATOR_MAX_CACHES = 16;
-
+constexpr uint32_t SLAB_ALIGN_GRANULARITY = 64;
 struct StageAllocInfo {
     void* heads[SLAB_ALLOCATOR_MAX_CACHES];
     void* tails[SLAB_ALLOCATOR_MAX_CACHES];
@@ -94,7 +94,7 @@ public:
     {
         memBaseaddr_ = static_cast<uint8_t*>(baseAddr);
         totalMemSize_ = totalSize;
-        slabAlignSize_ = (((alignSize) + (sizeof(uint64_t)) - 1) & ~((sizeof(uint64_t)) - 1));
+        slabAlignSize_ = (((alignSize) + (SLAB_ALIGN_GRANULARITY) - 1) & ~((SLAB_ALIGN_GRANULARITY) - 1));
         nextFreeSlabAddr_ = memBaseaddr_;
         freeSlabList_ = nullptr;
         numCaches_ = 0;
@@ -123,7 +123,7 @@ public:
                 "workspace.slab.add_cache: [SlabWsAllocator]Add cache failed: type=%u, objsize=%u", type, objSize);
             return false;
         }
-        uint32_t realObjSize = (((objSize) + (sizeof(uint64_t)) - 1) & ~((sizeof(uint64_t)) - 1));
+        uint32_t realObjSize = (((objSize) + (SLAB_ALIGN_GRANULARITY) - 1) & ~((SLAB_ALIGN_GRANULARITY) - 1));
         caches_[type] = SlabCache(realObjSize, this);
         numCaches_++;
         DEV_DEBUG(
