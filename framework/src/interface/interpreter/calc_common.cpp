@@ -257,6 +257,8 @@ void ExecuteOpCopyOut(ExecuteOperationContext* ctx)
         } else {
             calc::Cast(oopValid, iop);
         }
+    } else if (ctx->op->HasAttribute(OP_ATTR_PREFIX + "atomic_add")) {
+        calc::Add(oopValid, iop, oopValid);
     } else {
         calc::Copy(oopValid, iop, axisCombine);
     }
