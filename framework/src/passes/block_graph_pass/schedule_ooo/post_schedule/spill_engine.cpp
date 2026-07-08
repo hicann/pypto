@@ -218,7 +218,8 @@ Operation* SpillEngine::CreateCopyinOp(LogicalTensorPtr iOperand, LogicalTensorP
         offset,
         oOperand->GetMemoryTypeOriginal(),
         OpImmediate::Specified(oOperand->GetShape()),
-        OpImmediate::Specified(oOperand->tensor->GetDynRawShape())));
+        OpImmediate::Specified(oOperand->tensor->GetDynRawShape()),
+        OpImmediate::Specified(oOperand->GetDynValidShape())));
     copyinOp.UpdateLatency(DEFAULT_LATENCY);
     bool isCube = true;
     if (oOperand->GetMemoryTypeOriginal() == MemoryType::MEM_UB) {
@@ -243,7 +244,8 @@ Operation* SpillEngine::CreateCopyoutOp(Operation* spillOp, LogicalTensorPtr iOp
     copyoutOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(
         iOperand->GetMemoryTypeOriginal(),
         offset, OpImmediate::Specified(iOperand->GetShape()),
-        OpImmediate::Specified(iOperand->GetRawTensor()->GetDynRawShape())));
+        OpImmediate::Specified(iOperand->GetRawTensor()->GetDynRawShape()),
+        OpImmediate::Specified(iOperand->GetDynValidShape())));
     if (spillOp->HasAttribute(OpAttributeKey::scaleValue)) {
         Element scaleValue = Element(DataType::DT_UINT64, 0);
         spillOp->GetAttr(OpAttributeKey::scaleValue, scaleValue);
