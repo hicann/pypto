@@ -27,9 +27,11 @@ void InsertOpForViewAssemble::InsertViewAssemble(Function& function, Operation* 
     LogicalTensorPtr ddrTensorPtr =
         irBuilder_.CreateTensorVar(moveOutTensorPtr->Datatype(), shape, std::vector<SymbolicScalar>{});
     ddrTensorPtr->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    ddrTensorPtr->UpdateDynValidShape(moveOutTensorPtr->GetDynValidShape());
     LogicalTensorPtr moveInTensorPtr =
         irBuilder_.CreateTensorVar(moveOutTensorPtr->Datatype(), shape, std::vector<SymbolicScalar>{});
     moveInTensorPtr->SetMemoryTypeBoth(moveOutTensorPtr->GetMemoryTypeOriginal(), true);
+    moveInTensorPtr->UpdateDynValidShape(moveOutTensorPtr->GetDynValidShape());
     std::vector<int64_t> offset(moveOutTensorPtr->GetShape().size(), 0);
     std::vector<SymbolicScalar> dynOffset(moveOutTensorPtr->GetShape().size(), 0);
     Operation& assemble =
