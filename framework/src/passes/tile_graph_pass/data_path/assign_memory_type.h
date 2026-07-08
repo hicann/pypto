@@ -154,9 +154,19 @@ private:
         Operation& operation, const LogicalTensorPtr& input, const LogicalTensorPtr& output, bool isDynamic,
         bool canUseUb);
 
-    Status InferReshapeL0C2UBPatternLiteNPU(Operation& op);
+    Status InferReshapeL0C2UBAndUB2L1PatternLiteNPU(Operation& op);
 
     bool IsReshapeCubeToVecL0C2UBPattern(Operation& op);
+
+    bool IsReshapeVecToCubeUB2L1Pattern(Operation& op);
+
+    bool IsReshapeVecToCubeUB2L1ProducerPattern(const std::set<Operation*, LogicalTensor::CompareOp>& producers);
+
+    bool IsReshapeVecToCubeUB2L1ConsumerPattern(const std::set<Operation*, LogicalTensor::CompareOp>& consumers);
+
+    void CollectProducerAIVFlags(Operation* op, std::vector<bool>& isProducerVector);
+
+    void CollectConsumerAICFlags(Operation* op, std::vector<bool>& isConsumerCube);
 
     Status InferViewTypeMemoryType(Operation& operation);
 

@@ -60,11 +60,15 @@ INLINE void TCopyUB2L1Impl(DstTileData& dst, SrcTileData& src, const Coord& dstC
         pto::TASSIGN(UBTile, (uint64_t)src.GetAddr());
         pto::TINSERT(l1Tile, UBTile, dstOffset0, dstOffset1);
     }
+#ifndef __LITE_NPU
+    // litenpu does not need set_l1_2d after ub2l1 dma, matmul mmad can be calculated by setting corresponding m,k,n
+    // parameters
     using tileL1PadTensor = pto::Tile<
         pto::TileType::Mat, typename DstTileData::Type, staticL1H, staticL1W, pto::BLayout::ColMajor, -1, -1,
         pto::SLayout::RowMajor>;
     tileL1PadTensor l1PadTile(dstShape0, dstShape1);
     pto::TFILLPAD(l1PadTile, l1PadTile);
+#endif
 }
 
 #endif // TILEOP_TILE_OPERATOR_ARCH35_COPY_UB_TO_L1_IMPL__H

@@ -281,7 +281,130 @@ bool AssignMemoryType::IsReshapeCubeToVecL0C2UBPattern(Operation& op)
     return isL0C2UBPattern;
 }
 
-Status AssignMemoryType::InferReshapeL0C2UBPatternLiteNPU(Operation& op)
+// ub2l1 pattern:
+// 1. vector op -> view(s)/assemble(s) -> reshape op -> view(s) from l1 -> view(s) from l0a -> cube
+// 2. vector op -> view(s)/assemble(s) -> view(s)/assemble(s) -> reshape op -> view(s) from l1 -> view(s) from l0a ->
+// cube
+bool AssignMemoryType::IsReshapeVecToCubeUB2L1Pattern(Operation& op)
+{
+    if (op.GetOpcode() != npu::tile_fwk::Opcode::OP_RESHAPE) {
+        return false;
+    }
+
+    auto& input = op.iOperand.front();
+    auto& output = op.oOperand.front();
+    if ((input == nullptr) || (output == nullptr)) {
+        return false;
+    }
+
+    auto& producers = input->GetProducers();
+    auto& consumers = output->GetConsumers();
+    if (producers.empty() || consumers.empty()) {
+        return false;
+    }
+
+    if (!IsReshapeVecToCubeUB2L1ProducerPattern(producers)) {
+        return false;
+    }
+
+    if (!IsReshapeVecToCubeUB2L1ConsumerPattern(consumers)) {
+        return false;
+    }
+
+    return true;
+}
+
+void AssignMemoryType::CollectProducerAIVFlags(Operation* op, std::vector<bool>& isProducerVector)
+{
+    for (auto& opInput : op->iOperand) {
+        for (auto& producer : opInput->GetProducers()) {
+            isProducerVector.push_back(producer->GetCoreType() == CoreType::AIV);
+        }
+    }
+}
+
+void AssignMemoryType::CollectConsumerAICFlags(Operation* op, std::vector<bool>& isConsumerCube)
+{
+    for (auto& opOutput : op->oOperand) {
+        for (auto& consumer : opOutput->GetConsumers()) {
+            isConsumerCube.push_back(consumer->GetCoreType() == CoreType::AIC);
+        }
+    }
+}
+
+bool AssignMemoryType::IsReshapeVecToCubeUB2L1ProducerPattern(
+    const std::set<Operation*, LogicalTensor::CompareOp>& producers)
+{
+    for (auto& producer : producers) {
+        bool isProducerDepth1ViewAssemble = producer->GetOpcode() == npu::tile_fwk::Opcode::OP_VIEW ||
+                                            producer->GetOpcode() == npu::tile_fwk::Opcode::OP_ASSEMBLE;
+        bool isProducerDepth2AllVector = false;
+        bool isProducerDepth2AllViewAssemble = false;
+        bool isProducerDepth3AllVector = false;
+
+        std::vector<bool> isProducerDepth2Vector;
+        std::vector<bool> isProducerDepth2ViewAssemble;
+        std::vector<bool> isProducerDepth3Vector;
+        for (auto& producerIOperand : producer->iOperand) {
+            for (auto& producerProducer : producerIOperand->GetProducers()) {
+                isProducerDepth2Vector.push_back(producerProducer->GetCoreType() == CoreType::AIV);
+                isProducerDepth2ViewAssemble.push_back(
+                    producerProducer->GetOpcode() == npu::tile_fwk::Opcode::OP_VIEW ||
+                    producerProducer->GetOpcode() == npu::tile_fwk::Opcode::OP_ASSEMBLE);
+                CollectProducerAIVFlags(producerProducer, isProducerDepth3Vector);
+            }
+        }
+        isProducerDepth2AllVector =
+            !isProducerDepth2Vector.empty() &&
+            std::all_of(isProducerDepth2Vector.begin(), isProducerDepth2Vector.end(), [](bool val) { return val; });
+        isProducerDepth2AllViewAssemble =
+            !isProducerDepth2ViewAssemble.empty() &&
+            std::all_of(
+                isProducerDepth2ViewAssemble.begin(), isProducerDepth2ViewAssemble.end(), [](bool val) { return val; });
+        isProducerDepth3AllVector =
+            !isProducerDepth3Vector.empty() &&
+            std::all_of(isProducerDepth3Vector.begin(), isProducerDepth3Vector.end(), [](bool val) { return val; });
+        // currently only support the following patterns:
+        // 1. vector op -> view(s)/assemble(s) -> reshape op
+        // 2. vector op -> view(s)/assemble(s) -> view(s)/assemble(s) -> reshape op
+        if (!((isProducerDepth1ViewAssemble && isProducerDepth2AllViewAssemble && isProducerDepth3AllVector) ||
+              (isProducerDepth1ViewAssemble && isProducerDepth2AllVector))) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool AssignMemoryType::IsReshapeVecToCubeUB2L1ConsumerPattern(
+    const std::set<Operation*, LogicalTensor::CompareOp>& consumers)
+{
+    for (auto& consumer : consumers) {
+        bool isConsumerDepth1View = consumer->GetOpcode() == npu::tile_fwk::Opcode::OP_VIEW;
+        bool isConsumerDepth2AllView = false;
+        bool isConsumerDepth3AllCube = false;
+
+        std::vector<bool> isConsumerDepth2View;
+        std::vector<bool> isConsumerDepth3Cube;
+        for (auto& consumerOOperand : consumer->oOperand) {
+            for (auto& consumerConsumer : consumerOOperand->GetConsumers()) {
+                isConsumerDepth2View.push_back(consumerConsumer->GetOpcode() == npu::tile_fwk::Opcode::OP_VIEW);
+                CollectConsumerAICFlags(consumerConsumer, isConsumerDepth3Cube);
+            }
+        }
+        isConsumerDepth2AllView =
+            !isConsumerDepth2View.empty() &&
+            std::all_of(isConsumerDepth2View.begin(), isConsumerDepth2View.end(), [](bool val) { return val; });
+        isConsumerDepth3AllCube =
+            !isConsumerDepth3Cube.empty() &&
+            std::all_of(isConsumerDepth3Cube.begin(), isConsumerDepth3Cube.end(), [](bool val) { return val; });
+        if (!isConsumerDepth1View || !isConsumerDepth2AllView || !isConsumerDepth3AllCube) {
+            return false;
+        }
+    }
+    return true;
+}
+
+Status AssignMemoryType::InferReshapeL0C2UBAndUB2L1PatternLiteNPU(Operation& op)
 {
     if (!IsLiteNPU(Platform::Instance().GetSoc().GetNPUArch())) {
         return SUCCESS;
@@ -313,6 +436,41 @@ Status AssignMemoryType::InferReshapeL0C2UBPatternLiteNPU(Operation& op)
         for (auto& consumer : consumers) {
             inserter.UpdateTensorTobeMap(output, *consumer, MemoryType::MEM_UB);
         }
+        return SUCCESS;
+    }
+
+    // ub2l1 pattern:
+    // 1. vector op -> view(s)/assemble(s) -> reshape op -> view(s) from l1 -> view(s) from l0a -> cube
+    // 2. vector op -> assemble(s) -> view(s) -> reshape op -> view(s) from l1 -> view(s) from l0a -> cube
+    if (IsReshapeVecToCubeUB2L1Pattern(op) && FitsTensorInUb(output)) {
+        for (auto& producer : producers) {
+            auto& producerInput = producer->iOperand.front();
+            auto& producerOutput = producer->oOperand.front();
+
+            // set producer view/assemble input to UB
+            producerInput->SetMemoryTypeOriginal(MemoryType::MEM_UB, true);
+            inserter.UpdateTensorTobeMap(producerInput, *producer, MemoryType::MEM_UB);
+
+            // set reshape input to UB
+            producerOutput->SetMemoryTypeOriginal(MemoryType::MEM_UB, true);
+            inserter.UpdateTensorTobeMap(producerOutput, op, MemoryType::MEM_UB);
+        }
+
+        for (auto& consumer : consumers) {
+            auto& consumerInput = consumer->iOperand.front();
+            auto& consumerOutput = consumer->oOperand.front();
+
+            // set reshape output to UB, set its tobe mem type to L1
+            consumerInput->SetMemoryTypeOriginal(MemoryType::MEM_UB, true);
+            inserter.UpdateTensorTobeMap(consumerInput, *consumer, MemoryType::MEM_L1);
+
+            // set consumer view output to be L1
+            consumerOutput->SetMemoryTypeOriginal(MemoryType::MEM_L1, true);
+            for (auto& consumerConsumer : consumerOutput->GetConsumers()) {
+                inserter.UpdateTensorTobeMap(consumerOutput, *consumerConsumer, MemoryType::MEM_L1);
+            }
+        }
+        return SUCCESS;
     }
 
     return SUCCESS;
@@ -334,7 +492,7 @@ Status AssignMemoryType::InferUncertainMemoryTypes(Function& function)
                 break;
             case Opcode::OP_RESHAPE:
                 RETURN_IF_NOT_SUCCESS(InferReshapeMemoryType(op));
-                RETURN_IF_NOT_SUCCESS(InferReshapeL0C2UBPatternLiteNPU(op));
+                RETURN_IF_NOT_SUCCESS(InferReshapeL0C2UBAndUB2L1PatternLiteNPU(op));
                 break;
             default:
                 break;
