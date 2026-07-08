@@ -6,6 +6,6 @@
 
 faq
 issue
-内部各组件常见问题 <../../trouble_shooting/index>
-glossary
+错误码参考 <../../trouble_shooting/index>
 environment_variables
+glossary

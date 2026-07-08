@@ -1,22 +1,21 @@
 # 环境变量参考
 
-本文档汇总了 PyPTO 开发、编译、运行和调试过程中涉及的所有环境变量，按功能分类。各变量的详细说明请参见对应的专题文档。
+本文档汇总了PyPTO开发、编译、运行和调试过程中涉及的所有环境变量，按功能分类。各变量的详细说明请参见对应的专题文档。
 
----
-
-## 一、环境配置
+## 环境配置
 
 ### ASCEND_HOME_PATH
 
 #### 功能描述
-CANN toolkit 根目录路径，通过 `set_env.sh` 脚本配置。PyPTO 通过该变量判断当前环境是否具备 NPU 运行能力：若该变量已设置，默认在 NPU 上执行；否则回退到仿真模式。同时也是定位 pto-isa 头文件和库文件的基准路径。
+
+CANN toolkit根目录路径，通过`set_env.sh`脚本配置。PyPTO通过该变量判断当前环境是否具备NPU运行能力：若该变量已设置，默认在NPU上执行；否则回退到仿真模式。同时也是定位pto-isa头文件和库文件的基准路径。
 
 - 类型：字符串（绝对路径）
-- 默认值：无（需通过 `source set_env.sh` 配置）
+- 默认值：无（需通过`source set_env.sh`配置）
 
 #### 配置示例
 ```bash
-# 默认路径安装（root 用户）
+# 默认路径安装（root用户）
 source /usr/local/Ascend/ascend-toolkit/set_env.sh
 
 # 指定路径安装
@@ -24,74 +23,74 @@ source ${install_path}/ascend-toolkit/set_env.sh
 ```
 
 #### 使用约束
-- 必须在运行 PyPTO 前完成配置，否则框架将自动回退到仿真模式。
-- 该变量由 CANN 安装包提供，不应手动硬编码。
+- 必须在运行PyPTO前完成配置，否则框架将自动回退到仿真模式。
+- 该变量由CANN安装包提供，不应手动硬编码。
 
 #### 支持的型号
 - Ascend 950PR
 - Atlas A2 训练系列产品 / Atlas A2 推理系列产品
 - Atlas A3 训练系列产品 / Atlas A3 推理系列产品
 
----
-
 ### PTO_TILE_LIB_CODE_PATH
 
 #### 功能描述
-pto-isa 源码路径，用于编译和运行 PyPTO 算子。CANN toolkit 安装后自带 pto-isa，通常无需手动设置。当内置版本不满足需求时，可通过该环境变量指向独立的 pto-isa 源码目录。
+pto-isa源码路径，用于编译和运行PyPTO算子。CANN toolkit安装后自带pto-isa，通常无需手动设置。当内置版本不满足需求时，可通过该环境变量指向独立的pto-isa源码目录。
 
 - 类型：字符串（绝对路径）
-- 默认值：CANN toolkit 内置路径
+- 默认值：CANN toolkit内置路径
 
 #### 配置示例
+
 ```bash
-# 使用 CANN 内置 pto-isa（推荐）
+# 使用CANN内置pto-isa（推荐）
 export PTO_TILE_LIB_CODE_PATH=${ASCEND_HOME_PATH:-/usr/local/Ascend/cann}/$(uname -m)-linux
 
-# 使用独立 pto-isa 源码
+# 使用独立pto-isa源码
 git clone https://gitcode.com/cann/pto-isa.git
 export PTO_TILE_LIB_CODE_PATH="$PWD/pto-isa"
 ```
 
 #### 使用约束
-- 路径下必须包含 `include/pto/` 目录。
-- PyPI 方式安装 PyPTO 时，pto-isa 已随 CANN 包安装，无需单独设置。
+
+- 路径下必须包含`include/pto/`目录。
+- PyPI方式安装PyPTO时，pto-isa已随CANN包安装，无需单独设置。
 
 #### 支持的型号
+
 - Ascend 950PR
 - Atlas A2 训练系列产品 / Atlas A2 推理系列产品
 - Atlas A3 训练系列产品 / Atlas A3 推理系列产品
 
----
-
 ### TILE_FWK_DEVICE_ID
 
 #### 功能描述
-指定 PyPTO 算子执行时使用的 NPU 设备卡号。框架和测试用例通过该变量确定目标设备。
+
+指定PyPTO算子执行时使用的NPU设备卡号。框架和测试用例通过该变量确定目标设备。
 
 - 类型：整数
-- 取值范围：`0` ~ `N-1`（N 为可用 NPU 数量）
+- 取值范围：`0` ~ `N-1`（N为可用NPU数量）
 - 默认值：`0`
 
 #### 配置示例
+
 ```bash
 export TILE_FWK_DEVICE_ID=0
 ```
 
 #### 使用约束
-- 指定的设备卡号必须为可用状态，可通过 `npu-smi info` 确认。
+- 指定的设备卡号必须为可用状态，可通过`npu-smi info`确认。
 - 多进程场景下应避免多个进程使用同一设备卡号。
 
 #### 支持的型号
+
 - Ascend 950PR
 - Atlas A2 训练系列产品 / Atlas A2 推理系列产品
 - Atlas A3 训练系列产品 / Atlas A3 推理系列产品
 
----
-
 ### TILE_FWK_DEVICE_ID_LIST
 
 #### 功能描述
-分布式测试场景下，指定使用的 NPU 设备组。多个设备 ID 以逗号分隔，用于多卡分布式用例执行。
+分布式测试场景下，指定使用的NPU设备组。多个设备ID以逗号分隔，用于多卡分布式用例执行。
 
 - 类型：字符串（逗号分隔的整数列表）
 - 默认值：无
@@ -110,15 +109,13 @@ export TILE_FWK_DEVICE_ID_LIST="0,1,2,3"
 - Atlas A2 训练系列产品 / Atlas A2 推理系列产品
 - Atlas A3 训练系列产品 / Atlas A3 推理系列产品
 
----
-
 ### TILE_FWK_OUTPUT_DIR
 
 #### 功能描述
-指定 PyPTO 编译产物和运行结果的输出根目录。设置后，所有 output 文件（计算图、泳道图、verify 数据等）将落盘到该目录下。
+指定PyPTO编译产物和运行结果的输出根目录。设置后，所有output文件（计算图、泳道图、verify数据等）将落盘到该目录下。
 
 - 类型：字符串（路径）
-- 默认值：当前工作目录下的 `./output`
+- 默认值：当前工作目录下的`./output`
 
 #### 配置示例
 ```bash
@@ -126,7 +123,7 @@ export TILE_FWK_OUTPUT_DIR=/tmp/pypto_output
 ```
 
 #### 使用约束
-- 当 `compile_debug_mode=2`（固定 CCE）时，设备侧代码输出路径由 `ASCEND_WORK_PATH` 决定，`TILE_FWK_OUTPUT_DIR` 不参与设备侧代码路径计算。
+- 当`compile_debug_mode=2`（固定CCE）时，设备侧代码输出路径由`ASCEND_WORK_PATH`决定，`TILE_FWK_OUTPUT_DIR`不参与设备侧代码路径计算。
 - 该变量优先级高于默认路径，但不影响日志落盘路径。
 
 #### 支持的型号
@@ -134,14 +131,12 @@ export TILE_FWK_OUTPUT_DIR=/tmp/pypto_output
 - Atlas A2 训练系列产品 / Atlas A2 推理系列产品
 - Atlas A3 训练系列产品 / Atlas A3 推理系列产品
 
----
-
-## 二、编译与构建
+## 编译与构建
 
 ### PYPTO_THIRD_PARTY_PATH
 
 #### 功能描述
-指定 PyPTO 编译所需的第三方开源软件源码包路径。当编译环境无法访问 `cann-src-third-party` 仓库自动下载时，需手动准备源码包并通过该变量指定路径。
+指定PyPTO编译所需的第三方开源软件源码包路径。当编译环境无法访问`cann-src-third-party`仓库自动下载时，需手动准备源码包并通过该变量指定路径。
 
 - 类型：字符串（绝对路径）
 - 默认值：无（自动下载）
@@ -156,30 +151,28 @@ python3 -m pip install . --verbose
 ```
 
 #### 使用约束
-- 路径下需包含 `json-3.11.3` 和 `libboundscheck-v1.1.16` 的源码包。
-- 仅在源码编译安装时生效，PyPI 安装无需设置。
+- 路径下需包含`json-3.11.3`和`libboundscheck-v1.1.16`的源码包。
+- 仅在源码编译安装时生效，PyPI安装无需设置。
 
 #### 支持的型号
 - Ascend 950PR
 - Atlas A2 训练系列产品 / Atlas A2 推理系列产品
 - Atlas A3 训练系列产品 / Atlas A3 推理系列产品
 
----
-
 ### PYPTO_BUILD_EXT_ARGS
 
 #### 功能描述
-向 PyPTO 编译过程（`setup.py`）传递额外的 C++ 编译选项。可编辑安装模式下，`setuptools` 不支持通过 `pip --config-setting` 传递配置，需通过该变量预设编译参数。
+向PyPTO编译过程（`setup.py`）传递额外的C++编译选项。可编辑安装模式下，`setuptools`不支持通过`pip --config-setting`传递配置，需通过该变量预设编译参数。
 
 - 类型：字符串（空格分隔的编译选项）
 - 默认值：无
 
 #### 配置示例
 ```bash
-# 编译 Debug 版本并开启编译器详细输出
+# 编译Debug版本并开启编译器详细输出
 export PYPTO_BUILD_EXT_ARGS='--cmake-build-type=Debug --cmake-verbose'
 
-# 指定 CMake Generator 为 Unix Makefiles
+# 指定CMake Generator为Unix Makefiles
 export PYPTO_BUILD_EXT_ARGS='--cmake-build-type=Debug --cmake-verbose --cmake-generator="Unix Makefiles"'
 
 # 执行可编辑安装
@@ -188,19 +181,17 @@ python3 -m pip install -e . --verbose
 
 #### 使用约束
 - 仅在源码编译安装时生效。
-- 常规安装（非 `-e` 模式）应使用 `pip --config-setting` 参数传递编译选项。
+- 常规安装（非`-e`模式）应使用`pip --config-setting`参数传递编译选项。
 
 #### 支持的型号
 - Ascend 950PR
 - Atlas A2 训练系列产品 / Atlas A2 推理系列产品
 - Atlas A3 训练系列产品 / Atlas A3 推理系列产品
 
----
-
 ### MPI_HOME
 
 #### 功能描述
-MPI 安装路径，用于分布式用例的编译和运行。PyPTO 的分布式功能依赖 MPI（推荐版本 >= 3.2.1）。
+MPI安装路径，用于分布式用例的编译和运行。PyPTO的分布式功能依赖MPI（推荐版本 >= 3.2.1）。
 
 - 类型：字符串（绝对路径）
 - 默认值：无
@@ -213,21 +204,19 @@ export PATH=${MPI_HOME}/bin:${PATH}
 
 #### 使用约束
 - 仅在需要运行分布式用例时必需。
-- 需确保 MPI 已正确安装且 `mpirun` 可执行。
+- 需确保MPI已正确安装且`mpirun`可执行。
 
 #### 支持的型号
 - Ascend 950PR
 - Atlas A2 训练系列产品 / Atlas A2 推理系列产品
 - Atlas A3 训练系列产品 / Atlas A3 推理系列产品
 
----
-
-## 三、日志与调试
+## 日志与调试
 
 ### ASCEND_GLOBAL_LOG_LEVEL
 
 #### 功能描述
-设置 CANN 全局日志级别，控制整体日志详细程度。
+设置CANN全局日志级别，控制整体日志详细程度。
 
 - 类型：整数
 - 取值范围：
@@ -256,8 +245,6 @@ export ASCEND_GLOBAL_LOG_LEVEL=1
 - Atlas A2 训练系列产品 / Atlas A2 推理系列产品
 - Atlas A3 训练系列产品 / Atlas A3 推理系列产品
 
----
-
 ### ASCEND_SLOG_PRINT_TO_STDOUT
 
 #### 功能描述
@@ -283,8 +270,6 @@ export ASCEND_SLOG_PRINT_TO_STDOUT=1
 - Ascend 950PR
 - Atlas A2 训练系列产品 / Atlas A2 推理系列产品
 - Atlas A3 训练系列产品 / Atlas A3 推理系列产品
-
----
 
 ### ASCEND_MODULE_LOG_LEVEL
 
@@ -316,8 +301,6 @@ export ASCEND_MODULE_LOG_LEVEL=CODEGEN=1
 - Atlas A2 训练系列产品 / Atlas A2 推理系列产品
 - Atlas A3 训练系列产品 / Atlas A3 推理系列产品
 
----
-
 ### ASCEND_GLOBAL_EVENT_ENABLE
 
 #### 功能描述
@@ -339,8 +322,6 @@ export ASCEND_GLOBAL_EVENT_ENABLE=1
 - Ascend 950PR
 - Atlas A2 训练系列产品 / Atlas A2 推理系列产品
 - Atlas A3 训练系列产品 / Atlas A3 推理系列产品
-
----
 
 ### ASCEND_HOST_LOG_FILE_NUM
 
@@ -365,8 +346,6 @@ export ASCEND_HOST_LOG_FILE_NUM=1000
 - Ascend 950PR
 - Atlas A2 训练系列产品 / Atlas A2 推理系列产品
 - Atlas A3 训练系列产品 / Atlas A3 推理系列产品
-
----
 
 ### ASCEND_PROCESS_LOG_PATH
 
@@ -394,8 +373,6 @@ export ASCEND_GLOBAL_LOG_LEVEL=0
 - Atlas A2 训练系列产品 / Atlas A2 推理系列产品
 - Atlas A3 训练系列产品 / Atlas A3 推理系列产品
 
----
-
 ### ASCEND_WORK_PATH
 
 #### 功能描述
@@ -417,9 +394,7 @@ export ASCEND_WORK_PATH=/tmp/ascend_work
 - Atlas A2 训练系列产品 / Atlas A2 推理系列产品
 - Atlas A3 训练系列产品 / Atlas A3 推理系列产品
 
----
-
-## 四、性能采集
+## 性能采集
 
 ### DUMP_DEVICE_PERF
 
@@ -447,8 +422,6 @@ python tools/scripts/machine_perf_trace.py analyze output/output_<时间戳>/mac
 - Ascend 950PR
 - Atlas A2 训练系列产品 / Atlas A2 推理系列产品
 - Atlas A3 训练系列产品 / Atlas A3 推理系列产品
-
----
 
 ### PROF_PMU_EVENT_TYPE
 
@@ -478,9 +451,7 @@ python tools/profiling/tilefwk_pmu_to_csv.py -p PROF_xxx/device_x/data -pe=$PROF
 - Atlas A2 训练系列产品 / Atlas A2 推理系列产品
 - Atlas A3 训练系列产品 / Atlas A3 推理系列产品
 
----
-
-## 五、运行时控制
+## 运行时控制
 
 ### PYPTO_LAUNCH_SCHED_SAME_CLUSTER
 
@@ -505,8 +476,6 @@ export PYPTO_LAUNCH_SCHED_SAME_CLUSTER=false
 - Ascend 950PR
 - Atlas A2 训练系列产品 / Atlas A2 推理系列产品
 - Atlas A3 训练系列产品 / Atlas A3 推理系列产品
-
----
 
 ### PTO_DATADUMP_ENABLE
 
@@ -537,12 +506,10 @@ os.environ["PTO_DATADUMP_ENABLE"] = "true"
 - Atlas A2 训练系列产品 / Atlas A2 推理系列产品
 - Atlas A3 训练系列产品 / Atlas A3 推理系列产品
 
----
-
 ### TORCH_DEVICE_BACKEND_AUTOLOAD
 
 #### 功能描述
-控制 PyTorch（版本 > 2.5）是否自动加载所有 `torch.backends` 扩展。当环境中已安装 `torch_npu` 但未安装 CANN 时，自动加载会因找不到依赖项而报错 `ImportError: libhccl.so`。设置该变量为 `0` 可禁用自动加载，避免启动异常。
+控制 PyTorch（版本 > 2.5）是否自动加载所有 `torch.backends` 扩展。当环境中已安装 `TorchNPU` 但未安装 CANN 时，自动加载会因找不到依赖项而报错 `ImportError: libhccl.so`。设置该变量为 `0` 可禁用自动加载，避免启动异常。
 
 - 类型：整数
 - 取值范围：`0`（禁用自动加载）、`1`（启用，默认）

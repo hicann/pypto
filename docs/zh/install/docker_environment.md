@@ -65,7 +65,7 @@ RUN python -m pip install --no-cache-dir --upgrade pip setuptools wheel \
     tomli pybind11 pybind11-stubgen pytest pytest-forked pytest-xdist \
     tabulate pandas matplotlib build ml_dtypes jinja2 cloudpickle tornado
 
-# 安装指定版本torch / torch-npu（CPU源 + NPU插件）
+# 安装指定版本torch / TorchNPU（CPU源 + NPU插件）
 RUN python -m pip install --no-cache-dir torch==2.8.0 --index-url https://download.pytorch.org/whl/cpu \
     && python -m pip install --no-cache-dir torch-npu==2.8.0.post4
 
@@ -115,7 +115,7 @@ RUN python -m pip install --no-cache-dir --upgrade pip setuptools wheel \
 # 升级setuptools，满足pypto要求
 RUN pip install --no-cache-dir --upgrade setuptools
 
-# 安装torch / torch-npu
+# 安装torch / TorchNPU
 RUN pip install --no-cache-dir torch==2.8.0 --index-url https://download.pytorch.org/whl/cpu
 RUN pip install --no-cache-dir torch-npu==2.8.0.post4
 
