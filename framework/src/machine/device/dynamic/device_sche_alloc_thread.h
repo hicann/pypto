@@ -8,11 +8,6 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 
-/*!
- * \file device_sche_alloc_thread.h
- * \brief
-*/
-
 #pragma once
 
 #include <algorithm>
@@ -25,14 +20,30 @@ namespace npu::tile_fwk::dynamic {
 constexpr int DAV3510_CPUS_PER_CLUSTER = 2;
 constexpr int DAV3510_START_CPU_ID = 3;
 constexpr int MAX_CPU_MASK_NUM = 16;
+constexpr int CPU_ID_LOW_BOUND_DIE0 = 4;
+constexpr int CPU_ID_HIGH_BOUND_DIE0 = 7;
+constexpr int CPU_ID_LOW_BOUND_DIE1 = 12;
+constexpr int CPU_ID_HIGH_BOUND_DIE1 = 15;
+constexpr int DAV2201_DUAL_SCHE_NUM = 2;
+constexpr int DAV2201_SINGLE_SCHE_NUM = 1;
+
+constexpr uint64_t CPU_MASK_DIE0 =
+    ((1ULL << (CPU_ID_HIGH_BOUND_DIE0 - CPU_ID_LOW_BOUND_DIE0 + 1)) - 1) << CPU_ID_LOW_BOUND_DIE0;
+constexpr uint64_t CPU_MASK_DIE1 =
+    ((1ULL << (CPU_ID_HIGH_BOUND_DIE1 - CPU_ID_LOW_BOUND_DIE1 + 1)) - 1) << CPU_ID_LOW_BOUND_DIE1;
+constexpr uint64_t CLUSTER_CPU_MASK = CPU_MASK_DIE0 | CPU_MASK_DIE1;
 
 enum ArbitrationLevel : int {
-    LEVEL_ARBITRATING = -2, // 仲裁线程已选出，仲裁结果尚未发布
-    LEVEL_FAILED = -1,     // 资源完全不足，分配失败
-    LEVEL_UNSET = 0,       // 仲裁尚未发布
-    LEVEL_CROSS_DIE = 1,   // 跨 die 分配
-    LEVEL_SAME_DIE = 2,    // 同 die 分配
-    LEVEL_OPTIMAL = 3      // 同 die 同 cluster
+    ARBIT_ARBITRATING = -2, // 仲裁线程已选出，仲裁结果尚未发布
+    ARBIT_FAILED = -1,     // 资源完全不足，分配失败
+    ARBIT_UNSET = 0,       // 仲裁尚未发布
+    ARBIT_A5_SAME_DIE_CLUSTER = 1,      // 同 die 同 cluster
+    ARBIT_A5_CROSS_DIE = 2,   // A5 跨 die 分配
+    ARBIT_A5_SAME_DIE = 3,    // A5 同 die 分配
+    ARBIT_A2A3_SAME_CLUSTER = 4,
+    ARBIT_A2A3_CROSS_CLUSTER = 5, // A2 A3 跨 cluster
+    ARBIT_A2A3_DUAL_SCHE = 6,     // A2 A3 两个 sche 线程
+    ARBIT_A2A3_SINGLE_SCHE = 7,   // A2 A3 一个 sche 线程
 };
 
 struct DieMaskInfo {
@@ -59,27 +70,42 @@ struct DieMaskInfo {
     }
 };
 
-inline uint64_t GetArbitTimeOutVal(bool isLastArbitration)
+static inline int GetSameClusterCpuCnt(std::atomic<uint64_t>& cpumask)
 {
-    uint64_t arbitTimeout = isLastArbitration ? TIMEOUT_A5_1SEC : TIMEOUT_A5_50US;
-    DEV_IF_DEBUG {
-        arbitTimeout = TIMEOUT_A5_20MIN;
-    }
-    DEV_IF_INFO {
-        arbitTimeout = TIMEOUT_A5_20MIN;
-    }
+    uint64_t mask = cpumask.load(std::memory_order_acquire);
+    return __builtin_popcountll(mask & CLUSTER_CPU_MASK);
+}
 
+inline uint64_t GetArbitTimeOutVal(ArchInfo archInfo, bool isLastArbitration)
+{   
+    uint64_t arbitTimeout;
+    if (archInfo == ArchInfo::DAV_3510) {
+        arbitTimeout = isLastArbitration ? TIMEOUT_A5_1SEC : TIMEOUT_A5_50US;
+        DEV_IF_DEBUG {
+            arbitTimeout = TIMEOUT_A5_20MIN;
+        }
+        DEV_IF_INFO {
+            arbitTimeout = TIMEOUT_A5_20MIN;
+        }
+    } else {
+        arbitTimeout = isLastArbitration ? TIMEOUT_A2A3_1SEC : TIMEOUT_A2A3_50US;
+        DEV_IF_INFO {
+            arbitTimeout = isLastArbitration ? TIMEOUT_A2A3_1SEC : TIMEOUT_A2A3_1MS;;
+        }
+        DEV_IF_DEBUG {
+            arbitTimeout = isLastArbitration ? TIMEOUT_A2A3_1SEC : TIMEOUT_A2A3_2MS;;
+        }
+    }
     return arbitTimeout;
 }
 
-inline int WaitForCpuMaskReadyForArbitration(DeviceArgs* devArgs, int targetVal, std::atomic<uint64_t>& mask, bool isLastArbitration = false)
+inline int WaitForCpuMaskReadyForArbitration(ArchInfo archInfo, int targetVal, std::atomic<uint64_t>& mask, bool isLastArbitration = false)
 {
-    uint64_t arbitTimeout = GetArbitTimeOutVal(isLastArbitration);
-    TIMEOUT_CHECK_INIT(devArgs->archInfo, arbitTimeout);
-    (void) timeout_map;
+    uint64_t arbitTimeout = GetArbitTimeOutVal(archInfo, isLastArbitration);
+    TIMEOUT_CHECK_INIT(archInfo, arbitTimeout);
 
     while (__builtin_popcount(static_cast<uint32_t>(mask.load(std::memory_order_acquire))) < targetVal) {
-        __PYPTO_TIMEOUT_CHECK_WARN_EXIT(return DEVICE_MACHINE_ERROR, "#cur alloc cpu failed.");
+        __PYPTO_TIMEOUT_CHECK_WARN_EXIT(return DEVICE_MACHINE_ERROR, "#cur alloc %d cpu failed.", targetVal);
     }
 
     return DEVICE_MACHINE_OK;
@@ -92,35 +118,34 @@ inline int ComputeArbitrationLevel(DeviceArgs* devArgs, std::atomic<uint64_t>& c
         DAV3510_CPUS_PER_CLUSTER) * DAV3510_CPUS_PER_CLUSTER;
     int nrAicpu = static_cast<int>(devArgs->nrAicpu);
 
-    int ret = WaitForCpuMaskReadyForArbitration(devArgs, nrAicpu, cpumask);
+    int ret = WaitForCpuMaskReadyForArbitration(devArgs->archInfo, nrAicpu, cpumask);
     if (ret == DEVICE_MACHINE_OK) {
-        return LEVEL_OPTIMAL;
+        return ARBIT_A5_SAME_DIE_CLUSTER;
     }
 
     // 允许部分 die1 的 CPU 未就绪，但 die0 至少有足够的 cluster
-    ret = WaitForCpuMaskReadyForArbitration(devArgs, die0MaxCpuNum + DAV3510_CPUS_PER_CLUSTER, cpumask);
+    ret = WaitForCpuMaskReadyForArbitration(devArgs->archInfo, die0MaxCpuNum + DAV3510_CPUS_PER_CLUSTER, cpumask);
     if (ret == DEVICE_MACHINE_OK) {
-        return LEVEL_SAME_DIE;
+        return ARBIT_A5_SAME_DIE;
     }
 
     // 只要满足最小调度需求即可，不考虑拓扑优化
-    ret = WaitForCpuMaskReadyForArbitration(devArgs, devArgs->scheCpuNum, cpumask, true);
+    ret = WaitForCpuMaskReadyForArbitration(devArgs->archInfo, devArgs->scheCpuNum, cpumask, true);
     if (ret == DEVICE_MACHINE_OK) {
-        return LEVEL_CROSS_DIE;
+        return ARBIT_A5_CROSS_DIE;
     }
 
-    return LEVEL_FAILED;
+    return ARBIT_FAILED;
 }
 
-inline int WaitForArbitrationLevel(DeviceArgs* devArgs, std::atomic<int>& globalArbitrationLevel)
+inline int WaitForArbitrationLevel(ArchInfo archInfo, std::atomic<int>& globalArbitrationLevel)
 {
-    uint64_t arbitTimeout = GetArbitTimeOutVal(true);
-    TIMEOUT_CHECK_INIT(devArgs->archInfo, arbitTimeout);
-    (void) timeout_map;
+    uint64_t arbitTimeout = GetArbitTimeOutVal(archInfo ,true);
+    TIMEOUT_CHECK_INIT(archInfo, arbitTimeout);
 
     int level = globalArbitrationLevel.load(std::memory_order_acquire);
-    while (level == LEVEL_UNSET || level == LEVEL_ARBITRATING) {
-        __PYPTO_TIMEOUT_CHECK_WARN_EXIT(return LEVEL_FAILED, "#cur alloc cpu arbitration wait failed.");
+    while (level == ARBIT_UNSET || level == ARBIT_ARBITRATING) {
+        __PYPTO_TIMEOUT_CHECK_WARN_EXIT(return ARBIT_FAILED, "#cur alloc cpu arbitration wait failed.");
         level = globalArbitrationLevel.load(std::memory_order_acquire);
     }
 
@@ -134,15 +159,15 @@ inline int WaitForArbitrationLevel(DeviceArgs* devArgs, std::atomic<int>& global
 inline int PerformArbitrationDav3510(DeviceArgs* devArgs, std::atomic<uint64_t>& cpumask,
     std::atomic<int>& globalArbitrationLevel)
 {
-    int expected = LEVEL_UNSET;
+    int expected = ARBIT_UNSET;
     if (globalArbitrationLevel.compare_exchange_strong(
-        expected, LEVEL_ARBITRATING, std::memory_order_acq_rel, std::memory_order_acquire)) {
+        expected, ARBIT_ARBITRATING, std::memory_order_acq_rel, std::memory_order_acquire)) {
         int level = ComputeArbitrationLevel(devArgs, cpumask);
         globalArbitrationLevel.store(level, std::memory_order_release);
         return level;
     }
 
-    return WaitForArbitrationLevel(devArgs, globalArbitrationLevel);
+    return WaitForArbitrationLevel(devArgs->archInfo, globalArbitrationLevel);
 }
 
 inline uint64_t SelectCpusForCluster(uint64_t dieMask, int needNum)
@@ -241,9 +266,9 @@ inline int CalculateThreadIdx(int cpu, int die0ScheNum, uint64_t die0Selected, u
  * 1. 非设备模式或 die0MaxCpuid=0：直接递增 threadIdx（无仲裁）
  * 2. 更新 cpumask：标记当前 CPU 就绪
  * 3. 单线程仲裁：第一个到达的线程计算全局级别，其余线程等待并读取
- * 4. LEVEL_FAILED：报错
+ * 4. ARBIT_FAILED：报错
  * 5. LEVEL_CROSS_DIE：退化策略，直接递增 threadIdx
- * 6. LEVEL_OPTIMAL/SAME_DIE：
+ * 6. ARBIT_A5_SAME_DIE_CLUSTER/SAME_DIE：
  *    - 计算 die 分配数量（按比例）
  *    - 选择 CPU（优先 cluster）
  *    - 计算 threadIdx（逻辑索引）
@@ -267,14 +292,14 @@ inline int AllocThreadIdxForDav3510Impl(DeviceArgs* devArgs, int cpu, int& curTh
     int level = PerformArbitrationDav3510(devArgs, cpumask, globalArbitrationLevel);
     
     // 处理仲裁失败
-    if (level == LEVEL_FAILED) {
+    if (level == ARBIT_FAILED) {
         DEV_ERROR(ThreadErr::THREAD_CPU_ALLOC_FAILED, 
             "#sche.thread.arbitration: Currently aicpus resources are insufficient. "
             "Please use the launchSchedAicpuNum frontend interface to reduce the number of aicpus being used.");
         return DEVICE_MACHINE_ERROR;
     }
 
-    if (level == LEVEL_CROSS_DIE) {
+    if (level == ARBIT_A5_CROSS_DIE) {
         curThreadIdx = ++threadIdx;
         return DEVICE_MACHINE_OK;
     }
@@ -307,6 +332,123 @@ inline int AllocThreadIdxForDav3510Impl(DeviceArgs* devArgs, int cpu, int& curTh
     threadIdx.store(curThreadIdx, std::memory_order_release);
     DEV_INFO("Thread alloc success: physicalCpu=%d, threadIdx=%d.", cpu, curThreadIdx);
     return DEVICE_MACHINE_OK;
+}
+
+static inline int WaitForScheCpuInSameCluster(ArchInfo archInfo, int scheCpuNum, std::atomic<uint64_t>& cpumask) 
+{
+    uint64_t arbitTimeout = GetArbitTimeOutVal(archInfo, false);
+    TIMEOUT_CHECK_INIT(archInfo, arbitTimeout);
+    while (GetSameClusterCpuCnt(cpumask) < scheCpuNum) {
+        __PYPTO_TIMEOUT_CHECK_WARN_EXIT(return DEVICE_MACHINE_ERROR, "#cur alloc cpu in same cluster failed.");
+    }
+    return DEVICE_MACHINE_OK;
+}
+
+static inline int CalculateArbitLevelFromArbitScheNum(int scheCpuNum, int arbitScheNum, std::atomic<uint64_t>& cpumask) {
+    if (scheCpuNum == arbitScheNum) {
+        if (GetSameClusterCpuCnt(cpumask) == scheCpuNum) {
+            return ARBIT_A2A3_SAME_CLUSTER;
+        } else {
+            return ARBIT_A2A3_CROSS_CLUSTER;
+        }
+    } else if (arbitScheNum == DAV2201_DUAL_SCHE_NUM) {
+        return ARBIT_A2A3_DUAL_SCHE;
+    } else if (arbitScheNum == DAV2201_SINGLE_SCHE_NUM) {
+        return ARBIT_A2A3_SINGLE_SCHE;
+    }
+    return ARBIT_FAILED;
+}
+
+static inline bool IsSameCpuCluster(const int cpu) 
+{
+    if ((cpu >= CPU_ID_LOW_BOUND_DIE0 && cpu <= CPU_ID_HIGH_BOUND_DIE0) ||
+        (cpu >= CPU_ID_LOW_BOUND_DIE1 && cpu <= CPU_ID_HIGH_BOUND_DIE1)) {
+        return true;
+    }
+    return false;
+}
+
+static inline void AllocThreadIdByArbitrationLevel(int level, int& curThreadIdx, int isSameClusterThread, std::atomic<int>& threadIdx) {
+    if (level == ARBIT_A2A3_SAME_CLUSTER) {
+        if (!isSameClusterThread) {
+            curThreadIdx = -1;
+        } else {
+            curThreadIdx = ++threadIdx;
+        }
+    } else {
+        curThreadIdx = ++threadIdx;
+    }
+}
+
+static inline int GetScheNumByArbitrationLevel(int scheCpuNum, int level) {
+    if (level == ARBIT_A2A3_SAME_CLUSTER || level == ARBIT_A2A3_CROSS_CLUSTER) {
+        return scheCpuNum;
+    } else if (level == ARBIT_A2A3_DUAL_SCHE) {
+        return DAV2201_DUAL_SCHE_NUM;
+    } else if (level == ARBIT_A2A3_SINGLE_SCHE) {
+        return DAV2201_SINGLE_SCHE_NUM;
+    } else {
+        return 0;
+    }
+}
+
+static inline int ComputeArbitrationLevelDav2201(const DeviceArgs* devArgs, std::atomic<uint64_t>& cpumask)
+{
+    // Launch Sched Same Cluster 模式, 有 scheCpuNum 在同一个 cluster 的线程就退出
+    if (devArgs->launchSchedSameCluster) {
+        int ret = WaitForScheCpuInSameCluster(devArgs->archInfo, static_cast<int>(devArgs->scheCpuNum), cpumask);
+        if (ret == DEVICE_MACHINE_OK) {
+            return ARBIT_A2A3_SAME_CLUSTER;
+        }
+    }
+    // 从 devArgs->scheCpuNum 到 1 sche 依次降级
+    for (int arbitScheNum = devArgs->scheCpuNum; arbitScheNum >= 1; arbitScheNum--) {
+        int ret = WaitForCpuMaskReadyForArbitration(devArgs->archInfo, arbitScheNum, cpumask);
+        if (ret == DEVICE_MACHINE_OK) {
+            return CalculateArbitLevelFromArbitScheNum(static_cast<int>(devArgs->scheCpuNum), arbitScheNum, cpumask);
+        }
+    }
+    return ARBIT_FAILED;
+}
+
+static inline int AllocThreadIdxForDav2201Impl(const DeviceArgs* devArgs, const int cpu, int& curThreadIdx,
+    std::atomic<int>& threadIdx, std::atomic<uint64_t>& cpumask, int& arbitratedScheNum, std::atomic<int>& globalArbitrationLevel)
+{
+#ifndef __DEVICE__
+    curThreadIdx = ++threadIdx;
+    return DEVICE_MACHINE_OK;
+#endif
+    int ret = DEVICE_MACHINE_OK;
+    // 判断线程是否在 Cluster1 上
+    bool isSameClusterThread = IsSameCpuCluster(cpu);
+
+    // 执行仲裁，level 通过单次 CAS 原子提交
+    cpumask.fetch_or(1ULL << cpu, std::memory_order_release);
+    int expected = ARBIT_UNSET;
+    int level;
+    if (globalArbitrationLevel.compare_exchange_strong(
+        expected, ARBIT_ARBITRATING, std::memory_order_acq_rel, std::memory_order_acquire)) {
+        level = ComputeArbitrationLevelDav2201(devArgs, cpumask);
+        globalArbitrationLevel.store(level, std::memory_order_release);
+    } else {
+        level = WaitForArbitrationLevel(devArgs->archInfo, globalArbitrationLevel);
+    }
+
+    if (level == ARBIT_FAILED) {
+        DEV_ERROR(ThreadErr::THREAD_CPU_ALLOC_FAILED, 
+            "#sche.thread.arbitration: Currently aicpus resources are insufficient. "
+            "Please use the launchSchedAicpuNum frontend interface to reduce the number of aicpus being used.");
+        return DEVICE_MACHINE_ERROR;
+    }
+    int scheNum = GetScheNumByArbitrationLevel(static_cast<int>(devArgs->scheCpuNum), level);
+    arbitratedScheNum = scheNum;
+    AllocThreadIdByArbitrationLevel(level, curThreadIdx, isSameClusterThread, threadIdx);
+    DEV_INFO("Arbitration succeeded. Arbitration level: %d, arbitrated sched num: %d", level, arbitratedScheNum);
+    if (curThreadIdx == -1 || curThreadIdx > scheNum) {
+        curThreadIdx = -1;
+        return DEVICE_MACHINE_OK;
+    }
+    return ret;
 }
 
 } // namespace npu::tile_fwk::dynamic

@@ -133,7 +133,7 @@ struct DeviceTaskCtrl {
     // 这些原子变量跨线程了，不能sche与ctrl间两边同时写
     std::atomic<uint64_t> finishedFunctionCnt{0};
     std::atomic<bool> runFlag{false};
-    std::atomic<int> runcnt{0};
+    std::atomic<int> runCnt{0};
 
     std::atomic<bool> existNextSameIterTask{false}; // mark have next task
     std::atomic<uint64_t> nextSameIterTaskCtrl{0}; // make sure fetched as soon as possible,ctrl cpu maybe set next task
@@ -162,18 +162,18 @@ struct DeviceTaskCtrl {
             false, std::memory_order_release); // parallel device task will reuse this ctrl,so this ctrl cannot free
     }
 
-    void Free()
+    void Free(int scheCpuNum)
     {
-        if (freeCnt.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+        if (freeCnt.fetch_add(1, std::memory_order_acquire) == scheCpuNum - 1) {
             SetFree();
         }
 
         DEV_DEBUG("freecnt : %d", freeCnt.load());
     }
 
-    bool Finish(bool syncWait)
+    bool Finish(bool syncWait, int scheCpuNum)
     {
-        if (runcnt.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+        if (runCnt.fetch_add(1, std::memory_order_acquire) == scheCpuNum - 1) {
             // parallel device task will reuse this ctrl,so this ctrl cannot free, non-parallel task can free
             if (syncWait) {
                 SetFree();
@@ -182,10 +182,10 @@ struct DeviceTaskCtrl {
         } else {
             if (syncWait) {
                 // sync point, ensure all aiore_manager threads task finished
-                while (runcnt.load(std::memory_order_acquire) != 0) {
+                while (runCnt.load(std::memory_order_acquire) != scheCpuNum) {
                 }
                 return true;
-            } else if (runcnt.load(std::memory_order_acquire) == 0) {
+            } else if (runCnt.load(std::memory_order_acquire) == scheCpuNum) {
                 return true;
             }
         }
@@ -193,9 +193,9 @@ struct DeviceTaskCtrl {
     }
 
     // wait other sch aicpu finish this devtask
-    bool TryWaitAllSchFinish()
+    bool TryWaitAllSchFinish(int scheCpuNum)
     {
-        if (runcnt.load(std::memory_order_acquire) == 0) {
+        if (runCnt.load(std::memory_order_acquire) == scheCpuNum) {
             return true;
         }
         return false;
@@ -215,10 +215,10 @@ struct DeviceTaskCtrl {
         existNextSameIterTask = (reinterpret_cast<DynDeviceTask*>(devTask)->ParallelForId() != 0) ? true : false;
     }
 
-    void SetSchNumCnt(int num)
+    void InitSchNumCnt()
     {
-        runcnt.store(num, std::memory_order_relaxed);
-        freeCnt.store(num, std::memory_order_relaxed);
+        runCnt.store(0, std::memory_order_relaxed);
+        freeCnt.store(0, std::memory_order_relaxed);
     }
 };
 

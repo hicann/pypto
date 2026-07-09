@@ -253,7 +253,7 @@ public:
                     PerfMtEnd(PERF_EVT_SYNC_AICORE, aicpuIdx_);
                     if (isStageFinish) {
                         PerfMtTrace(PERF_TRACE_DEV_TASK_SYNC_CORE_STOP, aicpuIdx_);
-                        if (deviceTaskCtx->GetDeviceTaskCtrl()->Finish(!deviceTaskCtx->IsParallel())) {
+                        if (deviceTaskCtx->GetDeviceTaskCtrl()->Finish(!deviceTaskCtx->IsParallel(), aicpuNum_)) {
                             PerfMtTrace(PERF_TRACE_DEV_TASK_RSP, aicpuIdx_);
                             deviceTaskCtx->EntryStage(DevTaskExecStage::FINISH);
                         } else {
@@ -263,7 +263,7 @@ public:
                     break;
                 }
                 case DevTaskExecStage::WAIT_ALL_SCH_FINISH: {
-                    isStageFinish = deviceTaskCtx->GetDeviceTaskCtrl()->TryWaitAllSchFinish();
+                    isStageFinish = deviceTaskCtx->GetDeviceTaskCtrl()->TryWaitAllSchFinish(aicpuNum_);
                     if (isStageFinish) {
                         deviceTaskCtx->EntryStage(DevTaskExecStage::FINISH);
                         PerfMtTrace(PERF_TRACE_DEV_TASK_RSP, aicpuIdx_);
@@ -417,7 +417,7 @@ public:
             for (uint32_t i = parallelDevTaskCtx.front; i != parallelDevTaskCtx.rear; ++i) {
                 auto &taskCtx = parallelDevTaskCtx.elements[i % SCH_DEVTASK_MAX_PARALLELISM];
                 if (!taskCtx.IsFree()) {
-                    taskCtx.GetDeviceTaskCtrl()->Finish(true);
+                    taskCtx.GetDeviceTaskCtrl()->Finish(true, aicpuNum_);
                 }
                 DEV_ERROR(
                     SchedErr::ABNOMAL_LAST_WORD, "Force finish parallel ctx  parallelidx:%u.",
@@ -431,7 +431,7 @@ public:
             DeviceTaskCtrl* taskCtrl = nullptr;
             while (!taskQueue_->IsEmpty()) {
                 if ((taskCtrl = taskQueue_->Dequeue())) {
-                    taskCtrl->Finish(true);
+                    taskCtrl->Finish(true, aicpuNum_);
                 }
             } ;
 
@@ -449,11 +449,11 @@ public:
             procAivCoreFunctionCnt_);
     }
 
-    inline int RunManager(int threadIdx, DevStartArgs* devStartArgs, DeviceArgs* deviceArgs, int schedIdx)
+    inline int RunManager(int threadIdx, DevStartArgs* devStartArgs, DeviceArgs* deviceArgs, int schedIdx, int arbitratedScheNum)
     {
         int ret = DEVICE_MACHINE_OK;
         DEV_DEBUG("schedule run threadIdx=%d", threadIdx);
-        Init(threadIdx, devStartArgs, deviceArgs, schedIdx);
+        Init(threadIdx, devStartArgs, deviceArgs, schedIdx, arbitratedScheNum);
         PerfMtTrace(PERF_TRACE_INIT, threadIdx);
         DEV_DEBUG("Schedule run init succ");
         DeviceTaskCtrl* taskCtrl = nullptr;
@@ -465,7 +465,7 @@ public:
                 DEV_ERROR(SchedErr::HANDSHAKE_TIMEOUT, "#sche.handshake.error: hand shake timeout.");
                 AbnormalStop();
                 while ((taskCtrl = taskQueue_->Dequeue())) {
-                    taskCtrl->Finish(true);
+                    taskCtrl->Finish(true, aicpuNum_);
                 }
                 return ret;
             }
@@ -475,7 +475,7 @@ public:
             PerfMtTrace(PERF_TRACE_CORE_HAND_SHAKE, threadIdx);
             if (unlikely(ret != 0)) {
                 while ((taskCtrl = taskQueue_->Dequeue())) {
-                    taskCtrl->Finish(true);
+                    taskCtrl->Finish(true, aicpuNum_);
                 }
                 return ret;
             }
@@ -1856,13 +1856,13 @@ private:
         }
     }
 
-    inline void Init(int threadIdx, DevStartArgs* startArgs, DeviceArgs* deviceArgs, int schedIdx)
+    inline void Init(int threadIdx, DevStartArgs* startArgs, DeviceArgs* deviceArgs, int schedIdx, int arbitratedScheNum)
     {
         (void)startArgs;
         archInfo_ = deviceArgs->archInfo;
         aicNum_ = static_cast<int32_t>(deviceArgs->nrAic);
         aivNum_ = static_cast<int32_t>(deviceArgs->nrAiv);
-        aicpuNum_ = deviceArgs->scheCpuNum;
+        aicpuNum_ = arbitratedScheNum;
         aicpuIdx_ = threadIdx;
         schedIdx_ = schedIdx;
         aicValidNum_ = deviceArgs->nrValidAic;
@@ -2401,7 +2401,7 @@ private:
             if (nextTaskCtrl != nullptr) {
                 // reuse this task ctrl and task context for next same iterid device task
                 ReuseUpdateDeviceCtx(devTaskCtx, nextTaskCtrl);
-                curTaskCtrl->Free(); // parallel device taskctrl need free manually
+                curTaskCtrl->Free(aicpuNum_); // parallel device taskctrl need free manually
                 DEV_DEBUG("Sch dev ctx bind next same parallel iter device task(%lu), forid %u, iterid %u",
                     nextTaskCtrl->taskId, nextTaskCtrl->ParallelForId(), nextTaskCtrl->ParallelIterId());
             } else {
@@ -2410,7 +2410,7 @@ private:
             }
         } else {
             // parallel devicetaskctrl and device context need set free manually, wait recycle
-            devTaskCtx->Free();
+            devTaskCtx->Free(aicpuNum_);
         }
     }
 

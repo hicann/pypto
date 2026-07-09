@@ -57,7 +57,7 @@ public:
         }
         auto taskCtrl = &GetTaskCtrlInPool(idx);
         taskCtrl->BindTask(devTask);
-        taskCtrl->SetSchNumCnt(GetScheAicpuNum());
+        taskCtrl->InitSchNumCnt();
         devTask->aicoreModel = reinterpret_cast<uint64_t>(ctx->aicoreModel);
         if (ctx->costModelData != nullptr) {
             devTask->costModelData = reinterpret_cast<uint64_t>(ctx->costModelData);
