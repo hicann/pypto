@@ -4,8 +4,8 @@
 :maxdepth: 1
 :titlesonly:
 
+glossary
 faq
 issue
 错误码参考 <../../trouble_shooting/index>
-environment_variables
-glossary
+env_vars/index
