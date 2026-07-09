@@ -87,8 +87,10 @@ __aicore__ inline void TTransDataNCHW2NC1HWC0(
     pto::TASSIGN(tmpAreaTile, (uint64_t)tmpAreaAddr);
 
     Sync2_VS();
+    pipe_barrier(PIPE_ALL);
     pto::TTRANS(convTmpDst, convInput, tmpAreaTile);
     SyncVS_3();
+    pipe_barrier(PIPE_ALL);
 
     const auto inputLayout = input.GetLayout();
     const auto gmLayout = dst.GetLayout();
@@ -168,8 +170,10 @@ __aicore__ inline void TTransDataNCHW2Fractal_Z(
     pto::TASSIGN(tmpTile, (uint64_t)tmpAreaTileAddr);
 
     Sync2_VS();
+    pipe_barrier(PIPE_ALL);
     pto::TTRANS(convTmpDstNC1HWC0, convInput, tmpTile);
     SyncV();
+    pipe_barrier(PIPE_ALL);
 
     constexpr int64_t N0 = 16;
     constexpr int64_t tileN1 = tileN / N0;
@@ -179,8 +183,10 @@ __aicore__ inline void TTransDataNCHW2Fractal_Z(
     tmpDst2TileData convTmpDstFractalZ;
     pto::TASSIGN(convTmpDstFractalZ, (uint64_t)tmpDstFractalZAddr);
 
+    pipe_barrier(PIPE_ALL);
     pto::TTRANS(convTmpDstFractalZ, convTmpDstNC1HWC0, tmpTile);
     SyncVS_3();
+    pipe_barrier(PIPE_ALL);
 
     const auto inputLayout = input.GetLayout();
     const auto gmLayout = dst.GetLayout();
@@ -234,6 +240,8 @@ __aicore__ inline void TTransDataNC1HWC02NCHW(
     DST dst, TYPEC coordinate, TMP tmpTensor, INPUT input, int n, int c1, int h, int w, int c0, int groupIndex,
     int group, int padSize)
 {
+    set_flag(PIPE_S, PIPE_V, EVENT_ID7);
+    wait_flag(PIPE_S, PIPE_V, EVENT_ID7);
     constexpr auto inputTypeSize = sizeof(typename INPUT::Type);
     constexpr auto tileN = Std::tuple_element<DIM_1ST, typename INPUT::TileShape>::type::value;
     constexpr auto tileC1 = Std::tuple_element<DIM_2ND, typename INPUT::TileShape>::type::value;
@@ -267,8 +275,10 @@ __aicore__ inline void TTransDataNC1HWC02NCHW(
     pto::TASSIGN(tmpAreaTile, (uint64_t)tmpAreaAddr);
 
     Sync2_VS();
+    pipe_barrier(PIPE_ALL);
     pto::TTRANS(convTmpDst, convInput, tmpAreaTile);
     SyncVS_3();
+    pipe_barrier(PIPE_ALL);
 
     const auto inputLayout = input.GetLayout();
     const auto gmLayout = dst.GetLayout();
@@ -401,8 +411,10 @@ __aicore__ inline void TTransDataNCDHW2NDC1HWC0(
         pto::TASSIGN(convInput, (uint64_t)(inputAddr + loopN * elementSize));
 
         Sync23_VS();
+        pipe_barrier(PIPE_ALL);
         pto::TTRANS(convTmpDst, convInput, tmpAreaTile);
         SyncVS_3();
+        pipe_barrier(PIPE_ALL);
 
         for (LoopVar i = 0; i < inputD; i++) {
             for (LoopVar j = 0; j < inputC1; j++) {
@@ -426,6 +438,8 @@ __aicore__ inline void TTransDataNDC1HWC02NCDHW(
     DST dst, TYPEC coordinate, TMP tmpTensor, INPUT input, int n, int d, int c1, int h, int w, int c0, int groupIndex,
     int group, int padSize)
 {
+    set_flag(PIPE_S, PIPE_V, EVENT_ID7);
+    wait_flag(PIPE_S, PIPE_V, EVENT_ID7);
     constexpr auto inputTypeSize = sizeof(typename INPUT::Type);
     constexpr auto tileD = Std::tuple_element<DIM_1ST, typename INPUT::TileShape>::type::value;
     constexpr auto tileC1 = Std::tuple_element<DIM_2ND, typename INPUT::TileShape>::type::value;
@@ -459,8 +473,10 @@ __aicore__ inline void TTransDataNDC1HWC02NCDHW(
     pto::TASSIGN(tmpAreaTile, (uint64_t)tmpAreaAddr);
 
     Sync2_VS();
+    pipe_barrier(PIPE_ALL);
     pto::TTRANS(convTmpDst, convInput, tmpAreaTile);
     SyncVS_3();
+    pipe_barrier(PIPE_ALL);
 
     const auto inputLayout = input.GetLayout();
     const auto gmLayout = dst.GetLayout();
@@ -573,8 +589,10 @@ __aicore__ inline void TTransDataNCDHW2FRACTAL_Z_3D(
     pto::TASSIGN(tmpTile, (uint64_t)tmpAreaTileAddr);
 
     Sync2_VS();
+    pipe_barrier(PIPE_ALL);
     pto::TTRANS(convTmpDstNC1HWC0, convInput, tmpTile);
     SyncVS_3();
+    pipe_barrier(PIPE_ALL);
 
     const auto inputLayout = input.GetLayout();
     const auto gmLayout = dst.GetLayout();
