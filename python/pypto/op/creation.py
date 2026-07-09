@@ -199,6 +199,28 @@ def arange(*args: Union[int, float]) -> Tensor:
     )
 
 
+_UNSIGNED_INT_DTYPES = {DataType.DT_UINT8, DataType.DT_UINT16, DataType.DT_UINT32, DataType.DT_UINT64}
+
+
+def _check_full_fill_value_unsigned(fill_value, dtype: DataType) -> None:
+    if isinstance(fill_value, pypto_impl.Element):
+        elem_dtype = fill_value._get_data_type()
+        if elem_dtype not in _UNSIGNED_INT_DTYPES:
+            return
+        elem_val = fill_value._get_signed_data() if not fill_value._is_float() else fill_value._get_float_data()
+    elif isinstance(fill_value, (int, float)):
+        elem_dtype = dtype
+        elem_val = fill_value
+    else:
+        return
+    if elem_dtype in _UNSIGNED_INT_DTYPES and elem_val < 0:
+        raise PyptoError(0xF00002, ValueError(
+            f"full() does not support negative fill_value for unsigned integer dtype: "
+            f"fill_value is {elem_val} but dtype is {elem_dtype}. "
+            f"Negative values cannot be represented in unsigned integer types."
+        ))
+
+
 @op_wrapper
 def full(
     size: List[int],
@@ -246,6 +268,7 @@ def full(
 
     if valid_shape is None:
         valid_shape = []
+    _check_full_fill_value_unsigned(fill_value, dtype)
     if isinstance(fill_value, pypto_impl.SymbolicScalar):
         return pypto_impl.Full(fill_value, dtype, size, to_syms(valid_shape))
     elif isinstance(fill_value, pypto_impl.Element):
