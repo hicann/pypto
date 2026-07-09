@@ -24,7 +24,7 @@ if (ENABLE_FEATURE_PACKING_WHL_INTO_RUN)
                 SOURCE_DIR "${CANN_CMAKE_SOURCE_DIR}"
                 DOWNLOAD_EXTRACT_TIMESTAMP TRUE
                 URL "${PYPTO_THIRD_PARTY_PATH}/${CANN_CMAKE_TAG}.tar.gz"
-                URL_HASH SHA256=b0db2d4d0d2e94bd0dd961d88dc16b6b042fbacb4de4acb9530128c98e637fca
+                URL_HASH SHA256=464693dc211c618b4bca69a5bdbcf4a83550a4e8383ce9dff20fb66a08915fb8
             )
         else ()
             FetchContent_Declare(
@@ -32,7 +32,7 @@ if (ENABLE_FEATURE_PACKING_WHL_INTO_RUN)
                 SOURCE_DIR "${CANN_CMAKE_SOURCE_DIR}"
                 DOWNLOAD_EXTRACT_TIMESTAMP TRUE
                 URL "https://raw.gitcode.com/cann/cmake/archive/refs/heads/${CANN_CMAKE_TAG}.tar.gz"
-                URL_HASH SHA256=b0db2d4d0d2e94bd0dd961d88dc16b6b042fbacb4de4acb9530128c98e637fca
+                URL_HASH SHA256=464693dc211c618b4bca69a5bdbcf4a83550a4e8383ce9dff20fb66a08915fb8
             )
         endif ()
         FetchContent_GetProperties(${CANN_CMAKE_DIR_NAME})
