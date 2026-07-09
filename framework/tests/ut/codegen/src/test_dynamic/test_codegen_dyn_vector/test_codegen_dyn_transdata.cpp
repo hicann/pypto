@@ -104,7 +104,7 @@ TEST_F(TestCodegenDynTransData, TestTransData3)
          .tileOpFormat = 3,
          .validShape = {1, 1, 1, 1, 8, 8},
          .expect =
-             R"!!!(TTransDataNCDHW2NDC1HWC0<(int)(1), (int)(1), (int)(8), (int)(1), (int)(8)>(gmTensor_3, Coord6Dim((RUNTIME_COA_GET_PARAM_OFFSET(6, 22, 0)), (RUNTIME_COA_GET_PARAM_OFFSET(6, 22, 1)), (RUNTIME_COA_GET_PARAM_OFFSET(6, 22, 2)), (RUNTIME_COA_GET_PARAM_OFFSET(6, 22, 3)), (RUNTIME_COA_GET_PARAM_OFFSET(6, 22, 4)), (RUNTIME_COA_GET_PARAM_OFFSET(6, 22, 5))), ubTensor_4, ubTensor_5, (int)(0), (int)(0), (int)(0), (int)(0), (int)(0));
+             R"!!!(TTransDataNCDHW2NDC1HWC0<(int)(1), (int)(1), (int)(8), (int)(1), (int)(8)>(gmTensor_7, Coord6Dim((RUNTIME_COA_GET_PARAM_OFFSET(6, 22, 0)), (RUNTIME_COA_GET_PARAM_OFFSET(6, 22, 1)), (RUNTIME_COA_GET_PARAM_OFFSET(6, 22, 2)), (RUNTIME_COA_GET_PARAM_OFFSET(6, 22, 3)), (RUNTIME_COA_GET_PARAM_OFFSET(6, 22, 4)), (RUNTIME_COA_GET_PARAM_OFFSET(6, 22, 5))), ubTensor_8, ubTensor_9, (int)(0), (int)(0), (int)(0), (int)(0), (int)(0));
 )!!!"});
 }
 

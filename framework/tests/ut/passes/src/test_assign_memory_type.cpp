@@ -2431,4 +2431,83 @@ TEST_F(AssignMemoryTypeTest, TestUB2L1AssembleDirectPathNotDdrFallback)
     Platform::Instance().ReloadMemoryPaths("2201");
 }
 
+// 为 conv 算子增加的临时规避动作测试，规避动作删除后此测试跟随删除。
+// 场景：permute(incast/DDR) -> view -> transData(outcast/DDR + UB temp)
+// 验证：view 输入被强制 DDR，permute 输出(UB)与 view 输入(DDR)间插入 assemble(UB->DDR)
+TEST_F(AssignMemoryTypeTest, PermuteViewTransDataForceDdr)
+{
+    ComputationalGraphBuilder G;
+    Shape shape{NUM_1, NUM_16, NUM_32, NUM_32};
+    G.AddTensors(DataType::DT_FP16, shape, {"incast", "permute_out", "view_out", "outcast", "ub_temp"});
+    G.AddOps({Opcode::OP_PERMUTE, Opcode::OP_VIEW, Opcode::OP_NCHW2NC1HWC0},
+             {{"incast"}, {"permute_out"}, {"view_out"}},
+             {{"permute_out"}, {"view_out"}, {"outcast", "ub_temp"}}, {"permute", "view", "transdata"});
+    G.GetOp("permute")->SetAttribute(OpAttributeKey::perm, std::vector<int>{0, 2, 1, 3});
+    G.GetOp("view")->SetOpAttribute(std::make_shared<ViewOpAttribute>(Offset{0, 0, 0, 0}));
+    G.GetOp("transdata")->SetAttribute(OpAttributeKey::transDataOffset, CreateTestConstIntVector({0, 0, 0, 0}));
+    G.SetInCast({"incast"});
+    G.SetOutCast({"outcast"});
+    Function* func = G.GetFunction();
+    AssignMemoryType assignMemoryType;
+    EXPECT_EQ(assignMemoryType.RunOnFunction(*func), SUCCESS);
+    EXPECT_EQ(assignMemoryType.PostCheck(*func), SUCCESS);
+    int assembleCount = 0;
+    for (auto& op : func->Operations()) {
+        if (op.GetOpcode() != Opcode::OP_ASSEMBLE) {
+            continue;
+        }
+        assembleCount++;
+        EXPECT_EQ(op.GetIOperands().front()->GetMemoryTypeOriginal(), MemoryType::MEM_UB);
+        EXPECT_EQ(op.GetOOperands().front()->GetMemoryTypeOriginal(), MemoryType::MEM_DEVICE_DDR);
+    }
+    EXPECT_EQ(assembleCount, 1) << "Should insert assemble(UB->DDR) before view for permute->view->transData";
+    EXPECT_EQ(G.GetTensor("permute_out")->GetMemoryTypeOriginal(), MemoryType::MEM_UB);
+    EXPECT_EQ(G.GetTensor("view_out")->GetMemoryTypeOriginal(), MemoryType::MEM_UB);
+}
+
+// 为 conv 算子增加的临时规避动作测试，规避动作删除后此测试跟随删除。
+// 场景：permute(incast/DDR) -> view -> register_copy -> assemble -> transData(outcast/DDR + UB temp)
+// 验证：view 输入被强制 DDR，permute 输出(UB)与 view 输入(DDR)间插入 assemble(UB->DDR)
+TEST_F(AssignMemoryTypeTest, PermuteViewRegisterCopyAssembleTransDataForceDdr)
+{
+    ComputationalGraphBuilder G;
+    Shape shape{NUM_1, NUM_16, NUM_32, NUM_32};
+    G.AddTensors(DataType::DT_FP16, shape,
+                 {"incast", "permute_out", "view_out", "rc_out", "asm_out", "outcast", "ub_temp"});
+    G.AddOps({Opcode::OP_PERMUTE, Opcode::OP_VIEW, Opcode::OP_REGISTER_COPY, Opcode::OP_ASSEMBLE,
+              Opcode::OP_NCHW2NC1HWC0},
+             {{"incast"}, {"permute_out"}, {"view_out"}, {"rc_out"}, {"asm_out"}},
+             {{"permute_out"}, {"view_out"}, {"rc_out"}, {"asm_out"}, {"outcast", "ub_temp"}},
+             {"permute", "view", "reg_copy", "assemble", "transdata"});
+    G.GetOp("permute")->SetAttribute(OpAttributeKey::perm, std::vector<int>{0, 2, 1, 3});
+    G.GetOp("view")->SetOpAttribute(std::make_shared<ViewOpAttribute>(Offset{0, 0, 0, 0}));
+    G.GetOp("assemble")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(Offset{0, 0, 0, 0}));
+    G.GetOp("transdata")->SetAttribute(OpAttributeKey::transDataOffset, CreateTestConstIntVector({0, 0, 0, 0}));
+    G.SetInCast({"incast"});
+    G.SetOutCast({"outcast"});
+    Function* func = G.GetFunction();
+    std::vector<int64_t> beforeMagics;
+    for (auto& op : func->Operations()) {
+        beforeMagics.push_back(op.GetOpMagic());
+    }
+    AssignMemoryType assignMemoryType;
+    EXPECT_EQ(assignMemoryType.RunOnFunction(*func), SUCCESS);
+    EXPECT_EQ(assignMemoryType.PostCheck(*func), SUCCESS);
+    int newAssembleCount = 0;
+    for (auto& op : func->Operations()) {
+        if (op.GetOpcode() != Opcode::OP_ASSEMBLE) {
+            continue;
+        }
+        if (std::find(beforeMagics.begin(), beforeMagics.end(), op.GetOpMagic()) != beforeMagics.end()) {
+            continue;
+        }
+        newAssembleCount++;
+        EXPECT_EQ(op.GetIOperands().front()->GetMemoryTypeOriginal(), MemoryType::MEM_UB);
+        EXPECT_EQ(op.GetOOperands().front()->GetMemoryTypeOriginal(), MemoryType::MEM_DEVICE_DDR);
+    }
+    EXPECT_EQ(newAssembleCount, 1) << "Should insert assemble(UB->DDR) before view for permute->view->rc->asm->transData";
+    EXPECT_EQ(G.GetTensor("permute_out")->GetMemoryTypeOriginal(), MemoryType::MEM_UB);
+    EXPECT_EQ(G.GetTensor("view_out")->GetMemoryTypeOriginal(), MemoryType::MEM_UB);
+}
+
 } // namespace npu::tile_fwk

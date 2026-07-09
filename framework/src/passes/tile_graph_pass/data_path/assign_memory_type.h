@@ -87,6 +87,11 @@ private:
 
     bool HasDynOffsetViewAndReshape(Operation& operation, const LogicalTensorPtr& output) const;
 
+    bool HasTransDataConsumer(const LogicalTensorPtr& tensor) const;
+
+    bool HasPermuteProducerAndTransDataDownstream(
+        const LogicalTensorPtr& input, const LogicalTensorPtr& output) const;
+
     Status InferAssembleMemoryType(
         Function& function, Operation& operation, std::unordered_set<LogicalTensorPtr>& inferredAssembleOutputs);
 
