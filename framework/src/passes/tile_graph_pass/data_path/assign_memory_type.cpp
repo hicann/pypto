@@ -293,7 +293,9 @@ Status AssignMemoryType::InferViewMemoryType(Operation& operation)
     MemoryType inputOriginal = input->GetMemoryTypeOriginal();
     MemoryType outputOriginal = output->GetMemoryTypeOriginal();
     RETURN_IF_NOT_SUCCESS(InferViewOutputFromRequirement(output, outputOriginal));
-    bool forceInputDdr = HasDynOffsetViewAndReshape(operation, output);
+    // HasPermuteProducerAndTransDataDownstream 为 conv 算子问题的临时规避，正式方案落地后删除
+    bool forceInputDdr = HasDynOffsetViewAndReshape(operation, output) ||
+                         HasPermuteProducerAndTransDataDownstream(input, output);
     bool handled = TryHandleUnalignedView(operation, input, inputOriginal, outputOriginal);
     if (!handled && inputOriginal != MemoryType::MEM_UNKNOWN && outputOriginal != MemoryType::MEM_UNKNOWN) {
         RETURN_IF_NOT_SUCCESS(InferViewKnownInputOutput(operation, input, inputOriginal, outputOriginal));
@@ -498,6 +500,54 @@ bool AssignMemoryType::HasDynOffsetViewAndReshape(Operation& operation, const Lo
     for (const auto& consumerOp : output->GetConsumers()) {
         if (consumerOp != nullptr && consumerOp->GetOpcode() == Opcode::OP_RESHAPE) {
             return true;
+        }
+    }
+    return false;
+}
+
+bool AssignMemoryType::HasTransDataConsumer(const LogicalTensorPtr& tensor) const
+{
+    for (const auto& consumerOp : tensor->GetConsumers()) {
+        if (consumerOp != nullptr && consumerOp->HasAttr(OpAttributeKey::transDataOffset)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool AssignMemoryType::HasPermuteProducerAndTransDataDownstream(
+    const LogicalTensorPtr& input, const LogicalTensorPtr& output) const
+{
+    bool hasPermuteProducer = false;
+    for (const auto& producerOp : input->GetProducers()) {
+        if (producerOp != nullptr && producerOp->GetOpcode() == Opcode::OP_PERMUTE) {
+            hasPermuteProducer = true;
+            break;
+        }
+    }
+    if (!hasPermuteProducer) {
+        return false;
+    }
+    if (HasTransDataConsumer(output)) {
+        return true;
+    }
+    for (const auto& consumerOp : output->GetConsumers()) {
+        if (consumerOp == nullptr || consumerOp->GetOpcode() != Opcode::OP_REGISTER_COPY ||
+            consumerOp->oOperand.empty()) {
+            continue;
+        }
+        const auto& registerCopyOutput = consumerOp->oOperand.front();
+        if (registerCopyOutput == nullptr) {
+            continue;
+        }
+        for (const auto& assembleOp : registerCopyOutput->GetConsumers()) {
+            if (assembleOp == nullptr || assembleOp->GetOpcode() != Opcode::OP_ASSEMBLE ||
+                assembleOp->oOperand.empty()) {
+                continue;
+            }
+            if (HasTransDataConsumer(assembleOp->oOperand.front())) {
+                return true;
+            }
         }
     }
     return false;
