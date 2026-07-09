@@ -170,7 +170,8 @@ uint64_t CalcGeneralMetadataSlabWorkspace(DevAscendProgram* devProg)
 {
     DeviceWorkspaceAllocator workspace(devProg);
     uint64_t generalMetadataSlabSize = 0;
-    uint32_t slabSize = workspace.CalcSlabMemObjmaxSize() * ALLOC_NUM_ONE_SLAB;
+    uint32_t slabSize = AlignUpSlab(
+        workspace.CalcSlabMemObjmaxSize() * ALLOC_NUM_ONE_SLAB + SlabWsAllocator::FirstObjBaseOffset());
     uint32_t slabCapacity[ToUnderlying(WsAicpuSlabMemType::COHERENT_SLAB_MEM_TYPE_BUTT)];
     size_t objUsedNum[ToUnderlying(WsAicpuSlabMemType::COHERENT_SLAB_MEM_TYPE_BUTT)]{
         MAX_STITCH_FUNC_NUM, // DevFunctionDupped: protocol max; runtime submits before exceeding
@@ -197,7 +198,7 @@ uint64_t CalcGeneralMetadataSlabWorkspace(DevAscendProgram* devProg)
         "[workspaceSize] General->MetadataSlabSize is %lu.", static_cast<unsigned long>(generalMetadataSlabSize));
     generalMetadataSlabSize =
         (generalMetadataSlabSize < GENERAL_METADATA_SIZE_MIN) ? GENERAL_METADATA_SIZE_MIN : generalMetadataSlabSize;
-    return generalMetadataSlabSize * devProg->GetParallelism();
+    return (generalMetadataSlabSize + SLAB_ALIGN_GRANULARITY) * devProg->GetParallelism();
 }
 
 uint64_t CalcStitchWorkspace(DevAscendProgram& devProg)
@@ -217,7 +218,7 @@ uint64_t CalcStitchWorkspace(DevAscendProgram& devProg)
         stitchPoolSize += slabSize * requiredSlabNum;
     }
     MACHINE_LOGD("[workspaceSize] Stitch pool size is %lu, with slab size:%u.", stitchPoolSize, slabSize);
-    return stitchPoolSize * devProg.GetParallelism();
+    return (stitchPoolSize + SLAB_ALIGN_GRANULARITY) * devProg.GetParallelism();
 }
 
 uint64_t DumpTensorWorkspace()

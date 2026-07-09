@@ -122,7 +122,7 @@ struct DynDeviceTask : DynDeviceTaskBase {
 #endif
 };
 
-#define DYN_DEVICE_TASK_EXT_SIZE 0x300
+#define DYN_DEVICE_TASK_EXT_SIZE 0x400
 static_assert(
     sizeof(DynDeviceTask) < sizeof(DynDeviceTaskBase) + DYN_DEVICE_TASK_EXT_SIZE, "Invalid dyn device task extension");
 
@@ -157,6 +157,7 @@ struct DeviceTaskCtrl {
     void SetFree()
     {
         auto* dynTask = reinterpret_cast<DynDeviceTask*>(devTask);
+        dynTask->taskStageAllocMem.VerifyAll();
         dynTask->taskStageAllocMem.canFree.store(true);
         notFree.store(
             false, std::memory_order_release); // parallel device task will reuse this ctrl,so this ctrl cannot free
