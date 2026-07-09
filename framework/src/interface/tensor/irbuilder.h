@@ -65,7 +65,7 @@ public:
         } else {
             while (all_vars_.count(var_name)) {
                 auto idx = var_counter_[var_name]++;
-                var_name = name + "." + std::to_string(idx);
+                var_name = name + "_" + std::to_string(idx);
             }
         }
         all_vars_[var_name] = name;
