@@ -368,7 +368,6 @@ struct DynMachineManager {
     {
         int ctrlDecisionRet = WaitForCtrlDecision(archInfo, threadIdx, arbitratedScheNum, ctrlWaitLevel, ctrlRound, scheRound);
         if (ctrlDecisionRet != DEVICE_MACHINE_OK) {
-            DEV_ERROR(SchedErr::WAIT_CTRL_TIMEOUT, "#sche.wait: WaitForCtrlDecision failed, ret=%d.", ctrlDecisionRet);
             DeviceTrace::GetInstance().ReportTraceMsg();
             return ctrlDecisionRet;
         }
@@ -404,6 +403,10 @@ struct DynMachineManager {
             int waitCtrlRet = WaitForCtrlAndRingBuffer(devProg, devArgs.archInfo, threadIdx, arbitratedScheNum,
                         ctrlWaitLevel_, ctrlStartRound_, scheFinishRound_);
             if (waitCtrlRet != DEVICE_MACHINE_OK) {
+                DEV_ERROR(SchedErr::WAIT_CTRL_TIMEOUT, 
+                "#sche.wait: WaitForCtrlAndRingBuffer failed: arbitratedScheNum=%d, ctrlStartRound=%lu, scheFinishRound=%lu,"
+                "cpumask=%lu, arbitrationLevel=%d", arbitratedScheNum, ctrlStartRound_.load(), scheFinishRound_.load(),
+                cpumask_.load(), arbitrationLevel_.load());
                 return waitCtrlRet;
             }
         }

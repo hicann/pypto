@@ -83,6 +83,7 @@ constexpr uint64_t TIMEOUT_A2A3_200US  = 10000ULL;          // 10000 cycles
 constexpr uint64_t TIMEOUT_A2A3_1MS    = 50000ULL;          // 50000 cycles
 constexpr uint64_t TIMEOUT_A2A3_2MS    = 100000ULL;         // 100000 cycles
 constexpr uint64_t TIMEOUT_A2A3_3MS    = 150000ULL;         // 150000 cycles
+constexpr uint64_t TIMEOUT_A2A3_55MS   = 2750000ULL;        // 2750000 cycles
 constexpr uint64_t TIMEOUT_A2A3_1SEC   = 50000000ULL;       // 50M cycles
 constexpr uint64_t TIMEOUT_A2A3_10SEC  = 500000000ULL;      // 500M cycles
 constexpr uint64_t TIMEOUT_A2A3_1MIN   = 3000000000ULL;     // 3G cycles

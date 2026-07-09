@@ -315,9 +315,24 @@ TEST_F(ArbitrationTest, WaitCtrlDecision_ReturnsTerminalLevel_Dropped)
 }
 
 // ---------------------------------------------------------------------------
+// CalcWaitTimeout
+// 非 __DEVICE__ 环境：IsDeviceMode()=false，在 !IsDeviceMode() 块内提前 return
+// ---------------------------------------------------------------------------
+
+TEST_F(ArbitrationTest, CalcWaitTimeout_NonDevice_AllBranches)
+{
+    // isWaitCtrlRoundTime=false：提前 return，不走 DEV_IF / isOnlyOneSche
+    EXPECT_EQ(CalcWaitTimeout(false, false), TIMEOUT_A2A3_1SEC);
+    EXPECT_EQ(CalcWaitTimeout(true, false), TIMEOUT_A2A3_1SEC);
+    // isWaitCtrlRoundTime=true：提前 return 10SEC
+    EXPECT_EQ(CalcWaitTimeout(false, true), TIMEOUT_A2A3_10SEC);
+    EXPECT_EQ(CalcWaitTimeout(true, true), TIMEOUT_A2A3_10SEC);
+}
+
+// ---------------------------------------------------------------------------
 // WaitCtrlRoundReady
 // 退出条件：ctrlRound > scheRound（即 ctrlRound <= scheRound 时 spin 至超时）
-// （非 __DEVICE__ 环境 1s 超时，不适合 UT，仅覆盖 ready 分支）
+// 非 __DEVICE__ 环境 WaitCtrlRoundReady 走 CalcWaitTimeout(false,false)=1SEC 超时
 // ---------------------------------------------------------------------------
 
 TEST_F(ArbitrationTest, WaitCtrlRoundReady_AlreadyReady_ReturnsTrue)
@@ -325,7 +340,7 @@ TEST_F(ArbitrationTest, WaitCtrlRoundReady_AlreadyReady_ReturnsTrue)
     std::atomic<uint64_t> ctrlRound{2};
     std::atomic<uint64_t> scheRound{1};
     // ctrlRound(2) > scheRound(1)
-    EXPECT_TRUE(WaitCtrlRoundReady(ArchInfo::DAV_2201, ctrlRound, scheRound));
+    EXPECT_TRUE(WaitCtrlRoundReady(ArchInfo::DAV_2201, ctrlRound, scheRound, 3));
 }
 
 TEST_F(ArbitrationTest, WaitCtrlRoundReady_OneRoundAhead_ReturnsTrue)
@@ -333,7 +348,15 @@ TEST_F(ArbitrationTest, WaitCtrlRoundReady_OneRoundAhead_ReturnsTrue)
     std::atomic<uint64_t> ctrlRound{3};
     std::atomic<uint64_t> scheRound{2};
     // ctrlRound(3) > scheRound(2)
-    EXPECT_TRUE(WaitCtrlRoundReady(ArchInfo::DAV_2201, ctrlRound, scheRound));
+    EXPECT_TRUE(WaitCtrlRoundReady(ArchInfo::DAV_2201, ctrlRound, scheRound, 3));
+}
+
+TEST_F(ArbitrationTest, WaitCtrlRoundReady_NotReady_TimesOut_ReturnsFalse)
+{
+    std::atomic<uint64_t> ctrlRound{1};
+    std::atomic<uint64_t> scheRound{1};
+    // ctrlRound(1) <= scheRound(1)，无人推进 → 超时返回 false
+    EXPECT_FALSE(WaitCtrlRoundReady(ArchInfo::DAV_2201, ctrlRound, scheRound, 3));
 }
 
 // ---------------------------------------------------------------------------

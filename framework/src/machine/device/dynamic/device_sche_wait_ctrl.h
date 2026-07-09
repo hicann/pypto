@@ -24,27 +24,33 @@ enum CtrlWaitLevel : int {
     CTRL_WAIT_DROPPED = 2,      // 需丢弃一个线程
 };
 
-static inline uint64_t CalcWaitTimeout(bool isWaitCtrlRoundTime = false)
+static inline uint64_t CalcWaitTimeout(bool isOnlyOneSche = false, bool isWaitCtrlLevel = false)
 {
-    uint64_t waitTimeout = isWaitCtrlRoundTime ? TIMEOUT_A2A3_1SEC : TIMEOUT_A2A3_100US;
+    uint64_t waitTimeout = isWaitCtrlLevel ? TIMEOUT_A2A3_1SEC : TIMEOUT_A2A3_100US;
     if (!IsDeviceMode()) {
-        waitTimeout = TIMEOUT_A2A3_1SEC;
-    }
+        waitTimeout = isWaitCtrlLevel ? TIMEOUT_A2A3_10SEC : TIMEOUT_A2A3_1SEC;
+        return waitTimeout;
+    }   
     DEV_IF_INFO
     {
-        waitTimeout = isWaitCtrlRoundTime ? TIMEOUT_A2A3_1SEC : TIMEOUT_A2A3_2MS;;
+        waitTimeout = isWaitCtrlLevel ? TIMEOUT_A2A3_1SEC : TIMEOUT_A2A3_2MS;;
     }
     DEV_IF_DEBUG
     {
-        waitTimeout = isWaitCtrlRoundTime ? TIMEOUT_A2A3_1SEC : TIMEOUT_A2A3_3MS;
+        waitTimeout = isWaitCtrlLevel ? TIMEOUT_A2A3_1SEC : TIMEOUT_A2A3_3MS;
+    }
+    // 避免 OS 节流导致 aicpu 拉起时间较长，超时报错
+    if (isOnlyOneSche && !isWaitCtrlLevel) {
+        waitTimeout = TIMEOUT_A2A3_55MS;
     }
     return waitTimeout;
 }
 
 // spin 等待 ctrl 线程起来（ctrlRound >= scheRound），成功返回 true，超时返回 false
-static inline bool WaitCtrlRoundReady(ArchInfo archInfo, std::atomic<uint64_t>& ctrlRound, std::atomic<uint64_t>& scheRound)
+static inline bool WaitCtrlRoundReady(ArchInfo archInfo, std::atomic<uint64_t>& ctrlRound, std::atomic<uint64_t>& scheRound, int arbitratedScheNum)
 {
-    uint64_t waitTimeout = CalcWaitTimeout();
+    bool isOnlyOneSche = arbitratedScheNum == 1;
+    uint64_t waitTimeout = CalcWaitTimeout(isOnlyOneSche, false);
     TIMEOUT_CHECK_INIT(archInfo, waitTimeout);
     while (ctrlRound.load(std::memory_order_acquire) <= scheRound.load(std::memory_order_acquire)) {
         __PYPTO_TIMEOUT_CHECK_WARN_EXIT(return false, "#ctrl.wait: ctrl thread not start.");
@@ -55,7 +61,7 @@ static inline bool WaitCtrlRoundReady(ArchInfo archInfo, std::atomic<uint64_t>& 
 // follower spin 等待决策终态 level
 static inline int WaitCtrlDecision(ArchInfo archInfo, std::atomic<int>& ctrlWaitLevel, int& outLevel)
 {
-    uint64_t waitTimeout = CalcWaitTimeout(true);
+    uint64_t waitTimeout = CalcWaitTimeout(false, true);
     TIMEOUT_CHECK_INIT(archInfo, waitTimeout);
     int level = ctrlWaitLevel.load(std::memory_order_acquire);
     while (level == CTRL_WAIT_UNSET || level == CTRL_WAIT_ARBITRATING) {
@@ -79,7 +85,7 @@ static inline int WaitForCtrlDecision(ArchInfo archInfo, int& curThreadIdx, int&
     int expected = CTRL_WAIT_UNSET;
     if (ctrlWaitLevel.compare_exchange_strong(expected, CTRL_WAIT_ARBITRATING,
         std::memory_order_acq_rel, std::memory_order_acquire)) {
-        if (WaitCtrlRoundReady(archInfo, ctrlRound, scheRound)) {
+        if (WaitCtrlRoundReady(archInfo, ctrlRound, scheRound, arbitratedScheNum)) {
             level = CTRL_WAIT_OK;
         } else {
             level = (arbitratedScheNum == 1) ? CTRL_WAIT_FAILED : CTRL_WAIT_DROPPED;
@@ -88,6 +94,8 @@ static inline int WaitForCtrlDecision(ArchInfo archInfo, int& curThreadIdx, int&
     } else {
         int ret = WaitCtrlDecision(archInfo, ctrlWaitLevel, level);
         if (ret != DEVICE_MACHINE_OK) {
+            DEV_ERROR(SchedErr::WAIT_CTRL_TIMEOUT,
+                "Thread %d encountered timeout when waiting for ctrl level, current level: %d", curThreadIdx, ctrlWaitLevel.load());
             return ret;
         }
     }
