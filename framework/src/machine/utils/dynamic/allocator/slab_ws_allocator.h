@@ -18,6 +18,7 @@
 #include <cstdint>
 #include <algorithm>
 
+
 #include "machine/utils/device_log.h"
 #include "machine/device/dynamic/device_utils.h"
 #include "ws_allocator_basics.h"
@@ -40,10 +41,24 @@ enum class WsAicpuSlabMemType : uint8_t {
 };
 constexpr int SLAB_ALLOCATOR_MAX_CACHES = 16;
 constexpr uint32_t SLAB_ALIGN_GRANULARITY = 64;
+
+constexpr uint64_t SLAB_OBJ_MAGIC = 0xDEADBEEFCAFEBABEULL;
+constexpr uint32_t SLAB_MAGIC_SIZE = sizeof(uint64_t);
+constexpr uint32_t SLAB_OBJ_META_SIZE = sizeof(void*) + SLAB_MAGIC_SIZE;
+
+template<typename T>
+constexpr T AlignUpSlab(T n)
+{
+    return (n + static_cast<T>(SLAB_ALIGN_GRANULARITY) - 1) & ~(static_cast<T>(SLAB_ALIGN_GRANULARITY) - 1);
+}
+
 struct StageAllocInfo {
     void* heads[SLAB_ALLOCATOR_MAX_CACHES];
     void* tails[SLAB_ALLOCATOR_MAX_CACHES];
     uint32_t objCnt[SLAB_ALLOCATOR_MAX_CACHES];
+    uint32_t objSizes[SLAB_ALLOCATOR_MAX_CACHES];
+    uint32_t slabAlignSize{0};
+    uint8_t* slabBase{nullptr};
 };
 
 class SlabWsAllocator {
@@ -51,6 +66,7 @@ private:
     struct SlabHeader;
     struct SlabCache {
         uint32_t objSize{0};
+        uint32_t slotStride{0};
         void* freeList{nullptr};
         void* freeListTail{nullptr};
         SlabHeader* activeSlab{nullptr};
@@ -67,8 +83,9 @@ private:
         uint32_t unPopAllocatedObjCount{0};
 
         SlabCache() {}
-        SlabCache(uint32_t size, SlabWsAllocator* alloc)
+        SlabCache(uint32_t size, uint32_t stride, SlabWsAllocator* alloc)
             : objSize(size),
+              slotStride(stride),
               freeList(nullptr),
               activeSlab(nullptr),
               allocator(alloc),
@@ -85,6 +102,7 @@ private:
         SlabCache* cache; // extend
         uint32_t allocatedCount;
         uint32_t totalCount;
+        uint64_t magic;
     };
 
 public:
@@ -92,9 +110,12 @@ public:
 
     void Init(void* baseAddr, uint32_t totalSize, uint32_t alignSize, ArchInfo arch = ArchInfo::DAV_2201)
     {
-        memBaseaddr_ = static_cast<uint8_t*>(baseAddr);
-        totalMemSize_ = totalSize;
-        slabAlignSize_ = (((alignSize) + (SLAB_ALIGN_GRANULARITY) - 1) & ~((SLAB_ALIGN_GRANULARITY) - 1));
+        uintptr_t rawAddr = reinterpret_cast<uintptr_t>(baseAddr);
+        uintptr_t alignedAddr = AlignUpSlab(rawAddr);
+        memBaseaddr_ = reinterpret_cast<uint8_t*>(alignedAddr);
+        uint32_t padding = static_cast<uint32_t>(alignedAddr - rawAddr);
+        totalMemSize_ = (totalSize > padding) ? (totalSize - padding) : 0;
+        slabAlignSize_ = AlignUpSlab(alignSize);
         nextFreeSlabAddr_ = memBaseaddr_;
         freeSlabList_ = nullptr;
         numCaches_ = 0;
@@ -123,11 +144,11 @@ public:
                 "workspace.slab.add_cache: [SlabWsAllocator]Add cache failed: type=%u, objsize=%u", type, objSize);
             return false;
         }
-        uint32_t realObjSize = (((objSize) + (SLAB_ALIGN_GRANULARITY) - 1) & ~((SLAB_ALIGN_GRANULARITY) - 1));
-        caches_[type] = SlabCache(realObjSize, this);
+        uint32_t slotStride = CalcSlotStride(objSize);
+        caches_[type] = SlabCache(objSize, slotStride, this);
         numCaches_++;
         DEV_DEBUG(
-            "[SlabWsAllocator]Add slab cache: objsize=%u, realObjsize=%u, type=%u.\n", objSize, realObjSize, type);
+            "[SlabWsAllocator]Add slab cache: objsize=%u, slotStride=%u, type=%u.\n", objSize, slotStride, type);
         return true;
     }
 
@@ -142,9 +163,34 @@ public:
         return false;
     }
 
+    static constexpr uint32_t CalcSlotStride(uint32_t objSize)
+    {
+        return AlignUpSlab(SLAB_OBJ_META_SIZE + objSize + SLAB_MAGIC_SIZE);
+    }
+
+    static constexpr uint32_t FirstObjBaseOffset()
+    {
+        return AlignUpSlab(sizeof(SlabHeader) + SLAB_OBJ_META_SIZE) - SLAB_OBJ_META_SIZE;
+    }
+
+    static uint32_t CalcObjsPerSlab(uint32_t slabAlignSize, uint32_t objSize)
+    {
+        if (objSize == 0 || slabAlignSize == 0) {
+            return 0;
+        }
+        uint32_t firstObjBase = FirstObjBaseOffset();
+        uint32_t slotStride = CalcSlotStride(objSize);
+        if (slabAlignSize <= firstObjBase) {
+            return 0;
+        }
+        return (slabAlignSize - firstObjBase) / slotStride;
+    }
+
     void AfterAllocSuccess(SlabCache& cache, void* obj, uint32_t objSize)
     {
         *static_cast<void**>(obj) = nullptr;
+        *reinterpret_cast<uint64_t*>(static_cast<uint8_t*>(obj) + sizeof(void*)) = SLAB_OBJ_MAGIC;
+        *reinterpret_cast<uint64_t*>(static_cast<uint8_t*>(obj) + SLAB_OBJ_META_SIZE + objSize) = SLAB_OBJ_MAGIC;
         if (!cache.stageAllocHead) {
             cache.stageAllocHead = obj;
         } else {
@@ -180,8 +226,8 @@ public:
             DEV_VERBOSE_DEBUG("[SlabWsAllocator]Alloc from slab free list: objsize = %u .\n", objSize);
         } else if (cache.activeSlab && cache.activeSlab->allocatedCount < cache.activeSlab->totalCount) {
             SlabHeader* slab = cache.activeSlab;
-            obj = static_cast<uint8_t*>(static_cast<void*>(slab)) + sizeof(SlabHeader) +
-                  slab->allocatedCount * (sizeof(void*) + objSize);
+            obj = static_cast<uint8_t*>(static_cast<void*>(slab)) + FirstObjBaseOffset() +
+                  slab->allocatedCount * cache.slotStride;
             slab->allocatedCount++;
             DEV_VERBOSE_DEBUG(
                 "[SlabWsAllocator]Alloc from active slab: slab = %p, objsize = %u, allocCnt=%u .\n", slab, objSize,
@@ -198,24 +244,24 @@ public:
             SlabHeader* header = new (slabMem) SlabHeader();
             header->cache = &cache;
             header->allocatedCount = 1;
-            header->totalCount = (slabAlignSize_ - sizeof(SlabHeader)) / (sizeof(void*) + objSize);
+            header->totalCount = CalcObjsPerSlab(slabAlignSize_, objSize);
+            header->magic = SLAB_OBJ_MAGIC;
             cache.activeSlab = header;
-            obj = static_cast<uint8_t*>(slabMem) + sizeof(SlabHeader);
+            obj = static_cast<uint8_t*>(slabMem) + FirstObjBaseOffset();
 
             // Update statistics for new slab
             cache.slabCount++;
             cache.totalObjCount += header->totalCount;
             allocatedSlabCount_++;
 
-            DEV_VERBOSE_DEBUG(
-                "[SlabWsAllocator]Alloc from new slab: slab = %p, objsize = %u, totalCnt=%u .\n", header, objSize,
-                header->totalCount);
+            DEV_VERBOSE_DEBUG("[SlabWsAllocator]Alloc from new slab: slab = %p, objsize = %u, totalCnt=%u .\n",
+                header, objSize, header->totalCount);
         }
 
         AfterAllocSuccess(cache, obj, objSize);
         DEV_VERBOSE_DEBUG(
             "[SlabWsAllocator]Alloc sucess obj = %p cacheType = %u size = %u .\n", obj, cacheType, objSize);
-        return static_cast<uint8_t*>(obj) + sizeof(void*);
+        return static_cast<uint8_t*>(obj) + SLAB_OBJ_META_SIZE;
     }
 
     void ProcessKeepTailCase(uint32_t cacheIdx, StageAllocInfo& info)
@@ -263,9 +309,12 @@ public:
     StageAllocInfo PopStageAllocMem(bool keepTail, uint32_t memType)
     {
         StageAllocInfo info;
+        info.slabAlignSize = slabAlignSize_;
+        info.slabBase = memBaseaddr_;
         for (uint32_t i = 0; i < SLAB_ALLOCATOR_MAX_CACHES; i++) {
             info.heads[i] = caches_[i].stageAllocHead;
             info.tails[i] = caches_[i].stageAllocTail;
+            info.objSizes[i] = caches_[i].objSize;
             if (!keepTail || i != memType) {
                 caches_[i].stageAllocHead = nullptr;
                 caches_[i].stageAllocTail = nullptr;
@@ -305,6 +354,37 @@ public:
             }
             if (info.tails[i]) {
                 cache.freeListTail = info.tails[i];
+            }
+        }
+    }
+
+    static void VerifyStageAllocMem(const StageAllocInfo& info, const char* tag)
+    {
+        for (uint32_t i = 0; i < SLAB_ALLOCATOR_MAX_CACHES; i++) {
+            void* curr = info.heads[i];
+            uint32_t traversed = 0;
+            while (curr) {
+                auto* base = static_cast<uint8_t*>(curr);
+                uint64_t headMagic = *reinterpret_cast<uint64_t*>(base + sizeof(void*));
+                DEV_ASSERT_MSG(WsErr::SLAB_MAGIC_CORRUPTED, headMagic == SLAB_OBJ_MAGIC,
+                    "tag=%s, cache=%u, obj=%p, headMagic expected=0x%llX, actual=0x%llX",
+                    tag, i, curr, (unsigned long long)SLAB_OBJ_MAGIC, (unsigned long long)headMagic);
+                uint64_t tailMagic = *reinterpret_cast<uint64_t*>(base + SLAB_OBJ_META_SIZE + info.objSizes[i]);
+                DEV_ASSERT_MSG(WsErr::SLAB_MAGIC_CORRUPTED, tailMagic == SLAB_OBJ_MAGIC,
+                    "tag=%s, cache=%u, obj=%p, tailMagic expected=0x%llX, actual=0x%llX",
+                    tag, i, curr, (unsigned long long)SLAB_OBJ_MAGIC, (unsigned long long)tailMagic);
+                uintptr_t objAddr = reinterpret_cast<uintptr_t>(curr);
+                uintptr_t baseAddr = reinterpret_cast<uintptr_t>(info.slabBase);
+                uintptr_t slabAddr = baseAddr + ((objAddr - baseAddr) / info.slabAlignSize) * info.slabAlignSize;
+                const SlabHeader* slab = reinterpret_cast<const SlabHeader*>(slabAddr);
+                DEV_ASSERT_MSG(WsErr::SLAB_MAGIC_CORRUPTED, slab->magic == SLAB_OBJ_MAGIC,
+                    "tag=%s, cache=%u, slab=%p, slabMagic expected=0x%llX, actual=0x%llX",
+                    tag, i, slab, (unsigned long long)SLAB_OBJ_MAGIC, (unsigned long long)slab->magic);
+                curr = *static_cast<void**>(curr);
+                traversed++;
+                DEV_ASSERT_MSG(WsErr::SLAB_STAGE_LIST_INCONSISTENT, traversed <= info.objCnt[i],
+                    "tag=%s, cache=%u, traversed=%u > objCnt=%u, list may be corrupted",
+                    tag, i, traversed, info.objCnt[i]);
             }
         }
     }
@@ -468,6 +548,14 @@ struct WsSlabStageAllocMem {
             stitchStageMem = other.stitchStageMem;
         }
         return *this;
+    }
+
+    void VerifyAll() const
+    {
+#if SLAB_OBJ_MAGIC_VERIFY
+        SlabWsAllocator::VerifyStageAllocMem(generalMetadataStageMem, "general");
+        SlabWsAllocator::VerifyStageAllocMem(stitchStageMem, "stitch");
+#endif
     }
 };
 } // namespace npu::tile_fwk::dynamic

@@ -535,7 +535,8 @@ uint32_t DeviceWorkspaceAllocator::CalcStitchSlabMemObjmaxSize(uint32_t* slabCap
             }
         }
     }
-    slabMemObjmaxSize *= ALLOC_NUM_ONE_SLAB;
+    slabMemObjmaxSize = SlabWsAllocator::CalcSlotStride(slabMemObjmaxSize);
+    slabMemObjmaxSize = AlignUpSlab(slabMemObjmaxSize * ALLOC_NUM_ONE_SLAB + SlabWsAllocator::FirstObjBaseOffset());
     slabMemObjmaxSize = std::max(slabMemObjmaxSize, (uint32_t)MEBI);
     DEV_INFO("Stitch slab size=%u", slabMemObjmaxSize);
     devProg_->memBudget.metadata.stitchSlabSize = slabMemObjmaxSize;
@@ -548,7 +549,7 @@ uint32_t DeviceWorkspaceAllocator::CalcStitchSlabMemObjmaxSize(uint32_t* slabCap
         if (currentSize == 0) {
             slabCapacity[j] = 0;
         } else {
-            slabCapacity[j] = slabMemObjmaxSize / currentSize;
+            slabCapacity[j] = SlabWsAllocator::CalcObjsPerSlab(slabMemObjmaxSize, currentSize);
         }
         ++j;
     }
@@ -572,7 +573,7 @@ void DeviceWorkspaceAllocator::CalculateSlabCapacityPerType(uint32_t slabSize, u
     for (size_t i = 0; i < slabTypeNum; ++i) {
         if (slabMemObjSizeFunc[i] != nullptr && (this->*slabMemObjSizeFunc[i])() != 0) {
             DEV_DEBUG("WsAicpuSlabMemType[%zu]=%u", i, (this->*slabMemObjSizeFunc[i])());
-            slabCapacity[i] = slabSize / (this->*slabMemObjSizeFunc[i])();
+            slabCapacity[i] = SlabWsAllocator::CalcObjsPerSlab(slabSize, (this->*slabMemObjSizeFunc[i])());
         }
     }
 }
@@ -888,7 +889,6 @@ uint32_t DeviceWorkspaceAllocator::WrapOffsetListSlabMemObjSize()
 uint32_t DeviceWorkspaceAllocator::CalcAicpuMetaSlabAlloctorSlabMemObjmaxSize()
 {
     uint32_t slabMemObjmaxSize = 0;
-    constexpr uint32_t extendBuf = 1024;
     for (size_t i = 0; i < ToUnderlying(WsAicpuSlabMemType::COHERENT_SLAB_MEM_TYPE_BUTT); ++i) {
         if (slabMemObjSizeFunc[i] != nullptr) {
             uint32_t currentSize = (this->*slabMemObjSizeFunc[i])();
@@ -897,7 +897,7 @@ uint32_t DeviceWorkspaceAllocator::CalcAicpuMetaSlabAlloctorSlabMemObjmaxSize()
             }
         }
     }
-    slabMemObjmaxSize += extendBuf;
+    slabMemObjmaxSize = SlabWsAllocator::CalcSlotStride(slabMemObjmaxSize);
     devProg_->memBudget.metadata.generalSlabSize = slabMemObjmaxSize;
     DEV_INFO("General slab size=%u", slabMemObjmaxSize);
     return slabMemObjmaxSize;
@@ -915,8 +915,7 @@ uint32_t DeviceWorkspaceAllocator::CalcAicpuMetaSlabAlloctorSlabPageSize(uint32_
     if (realMaxAllocNum < allocNumOneSlab) {
         allocNumOneSlab = realMaxAllocNum;
     }
-    slabSize *= allocNumOneSlab;
-    return AlignUp(slabSize, sizeof(uint64_t));
+    return AlignUpSlab(slabSize * allocNumOneSlab + SlabWsAllocator::FirstObjBaseOffset());
 }
 
 

@@ -142,7 +142,7 @@ TEST_F(SlabWsAllocatorTest, StageAllocationTracking)
     EXPECT_EQ(allocInfo.heads[0], nullptr);
     EXPECT_EQ(allocInfo.tails[0], nullptr);
 
-    uint32_t offset = 8;
+    uint32_t offset = SLAB_OBJ_META_SIZE;
     allocInfo = allocator.PopStageAllocMem(false, 0);
     EXPECT_EQ(allocInfo.heads[0], (uint8_t*)tailalloc - offset);
     EXPECT_EQ(allocInfo.tails[0], (uint8_t*)tailalloc - offset);
@@ -221,10 +221,9 @@ TEST_F(SlabWsAllocatorTest, MemoryExhaustion)
 {
     allocator.RegistCache(0, 64);
 
-    const size_t SLAB_USABLE_SIZE = SLAB_ALIGN_SIZE - sizeof(SlabWsAllocator::SlabHeader);
-    const size_t OBJ_FULL_SIZE = sizeof(void*) + 64;
-    const int OBJS_PER_SLAB = SLAB_USABLE_SIZE / OBJ_FULL_SIZE;
-    const int TOTAL_SLABS = TEST_MEM_SIZE / SLAB_ALIGN_SIZE;
+    auto stats = allocator.GetAllocatorStats();
+    const int OBJS_PER_SLAB = SlabWsAllocator::CalcObjsPerSlab(SLAB_ALIGN_SIZE, 64);
+    const int TOTAL_SLABS = stats.totalSlabCount;
     const int MAX_ALLOCS = OBJS_PER_SLAB * TOTAL_SLABS;
 
     int successfulAllocs = 0;
@@ -324,7 +323,7 @@ TEST_F(SlabWsAllocatorTest, MultipleAllocationBatches)
 
 TEST_F(SlabWsAllocatorTest, LargeObjectAllocation)
 {
-    const uint32_t largeObjSize = SLAB_ALIGN_SIZE - sizeof(SlabWsAllocator::SlabHeader) - sizeof(void*);
+    const uint32_t largeObjSize = SLAB_ALIGN_SIZE / 2;
     allocator.RegistCache(0, largeObjSize);
 
     void* obj1 = allocator.Alloc(0);
@@ -357,4 +356,33 @@ TEST_F(SlabWsAllocatorTest, AlignmentHandling)
     EXPECT_NE(obj, nullptr);
 
     free(altMemory);
+}
+
+TEST_F(SlabWsAllocatorTest, MagicNumberIntact)
+{
+    allocator.RegistCache(0, 64);
+    allocator.RegistCache(1, 128);
+
+    (void)allocator.Alloc(0);
+    (void)allocator.Alloc(0);
+    (void)allocator.Alloc(1);
+
+    auto allocInfo = allocator.PopStageAllocMem(false, 0);
+    SlabWsAllocator::VerifyStageAllocMem(allocInfo, "test");
+    allocator.FreeStageAllocMem(allocInfo);
+}
+
+TEST_F(SlabWsAllocatorTest, ObjAddressAlignment)
+{
+    allocator.RegistCache(0, 64);
+    allocator.RegistCache(1, 100);
+    allocator.RegistCache(2, 200);
+
+    for (int i = 0; i < 200; ++i) {
+        void* obj = allocator.Alloc(i % 3);
+        ASSERT_NE(obj, nullptr);
+        uintptr_t addr = reinterpret_cast<uintptr_t>(obj);
+        EXPECT_EQ(addr % SLAB_ALIGN_GRANULARITY, 0u)
+            << "obj " << i << " addr=" << addr << " not 64-byte aligned";
+    }
 }
