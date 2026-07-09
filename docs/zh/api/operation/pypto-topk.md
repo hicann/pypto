@@ -37,13 +37,12 @@ topk(input: Tensor, k: int, dim: Optional[int] = None, largest: bool = True, alg
 ## 约束说明
 
 1. 只支持对尾轴进行topk操作；
-2. TileShape尾轴32bytes对齐\(TileShape\[-1\]\*sizeof\(srcType\) % 32 == 0\)；
-3. 选用MERGE_SORT算法时，TileShape尾轴需要小于22KB\(TileShape\[-1\]\*4 < 22KB\)；
-4. 选用RADIX_SELECT算法时，记TileShape尾轴为tile，tile对齐到128记为tileAlign，则需要临时空间：26\*tileAlign，临时空间加上输入输出的tile块不能超过UB大小；
-5. 选用RADIX_SELECT算法时，尾轴不可切分，TileShape\[-1\]必须大于等于input.shape\[-1\]；
-6. k <= TileShape\[-1\] && k <= input.shape\[-1\]；
-7. RADIX_SELECT算法仅支持Ascend 950PR；
-8. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
+2. 选用MERGE_SORT算法时，TileShape尾轴需要小于22KB\(TileShape\[-1\]\*4 < 22KB\)；
+3. 选用RADIX_SELECT算法时，记TileShape尾轴为tile，tile对齐到128记为tileAlign，则需要临时空间：26\*tileAlign，临时空间加上输入输出的tile块不能超过UB大小；
+4. 选用RADIX_SELECT算法时，尾轴不可切分，TileShape\[-1\]必须大于等于input.shape\[-1\]；
+5. k <= TileShape\[-1\] && k <= input.shape\[-1\]；
+6. RADIX_SELECT算法仅支持Ascend 950PR；
+7. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
 
 
 ## 调用示例
