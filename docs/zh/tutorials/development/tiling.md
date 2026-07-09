@@ -217,7 +217,7 @@ def test_set_cube_different_tile_shapes_runtime():
 
     TileShape数值设置不能过大，过大的TileShape会超出相应硬件（缓冲区）存储的大小，应控制切分后的数据大小（数据类型大小与切分后数据各维度大小乘积）不大于对应硬件单元存储容量。
 
-    此外，set\_vec\_tile\_shapes的维度数量不大于4，外轴切分大小满足32B对齐。set\_cube\_tile\_shapes要求kL0、kL1、nL0、nL1均满足32字节对齐。详细的配置要求请参见相关接口文档。
+    此外，set\_vec\_tile\_shapes的维度数量不大于5，尾轴切分大小满足32B对齐。set\_cube\_tile\_shapes要求kL0、kL1、nL0、nL1均满足32字节对齐。详细的配置要求请参见相关接口文档。
 
 - 设置TileShape会影响上板时间。一般来说，越能充分利用硬件单元的容量，即一次计算的数据量越大，运行时间就越短。然而TileShape参数设置得越大并不一定意味着上板运行会更快，还需要考虑数据搬运等环节的开销。
 
