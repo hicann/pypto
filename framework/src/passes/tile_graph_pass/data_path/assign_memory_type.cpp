@@ -281,10 +281,9 @@ bool AssignMemoryType::IsReshapeCubeToVecL0C2UBPattern(Operation& op)
     return isL0C2UBPattern;
 }
 
-// ub2l1 pattern:
-// 1. vector op -> view(s)/assemble(s) -> reshape op -> view(s) from l1 -> view(s) from l0a -> cube
-// 2. vector op -> view(s)/assemble(s) -> view(s)/assemble(s) -> reshape op -> view(s) from l1 -> view(s) from l0a ->
-// cube
+// ub2l1 pattern: 2 patterns
+// 1. vector op -> view/assemble -> reshape op -> view from l1 -> view from l0a -> cube
+// 2. vector op -> view/assemble -> view/assemble -> reshape op -> view from l1 -> view from l0a -> cube
 bool AssignMemoryType::IsReshapeVecToCubeUB2L1Pattern(Operation& op)
 {
     if (op.GetOpcode() != npu::tile_fwk::Opcode::OP_RESHAPE) {
