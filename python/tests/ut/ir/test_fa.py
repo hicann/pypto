@@ -196,3 +196,6 @@ def test_fa_compile():
     atten_out = pypto.Tensor([-1, nq, qd], pypto.DT_BF16, "atten_out")
 
     _run_dce(fa_kernel, q, k, v, block_table, actual_seq, atten_out, scale, tile_config)
+
+if __name__ == "__main__":
+    test_fa_compile()

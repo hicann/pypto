@@ -20,20 +20,19 @@ namespace npu::tile_fwk {
 
 namespace {
 
-void CollectCompileQueueFunctions(
-    Function* func, std::vector<Function*>& out, std::unordered_set<Function*>& visited)
+void CollectCompileQueueFunctions(Function* func, std::vector<Function*>& out)
 {
-    if (func == nullptr || !visited.insert(func).second) {
+    if (func == nullptr) {
         return;
     }
 
     if (func->HasCallOperation()) {
         for (auto* callee : func->GetCalleeFunctionList()) {
-            CollectCompileQueueFunctions(callee, out, visited);
+            if (!callee->Operations(false).IsEmpty()) {
+                out.push_back(callee);
+            }
         }
-        return;
     }
-
     if (!func->Operations(false).IsEmpty()) {
         out.push_back(func);
     }
@@ -45,8 +44,7 @@ void SubmitCompileTask(Function* dynFunc)
     program.functionSequence_.clear();
 
     std::vector<Function*> compileFuncs;
-    std::unordered_set<Function*> visited;
-    CollectCompileQueueFunctions(dynFunc, compileFuncs, visited);
+    CollectCompileQueueFunctions(dynFunc, compileFuncs);
 
     FE_LOGI("FinalizeDynamicFunction SubmitCompileTask queue_size=%zu", compileFuncs.size());
     for (auto* func : compileFuncs) {
@@ -76,6 +74,7 @@ void FinalizeDynamicFunction(Function* dynFunc)
     if (config::GetVerifyOption<bool>(KEY_ENABLE_PASS_VERIFY)) {
         Program::GetInstance().VerifyTensorGraph();
     }
+    Program::GetInstance().SetCurrentDynamicFunction(dynFunc);
     SubmitCompileTask(dynFunc);
 }
 

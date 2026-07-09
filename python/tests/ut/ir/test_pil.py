@@ -445,6 +445,28 @@ def test_tensor_loop_unroll_batch():
     info(f"\ncanonical: {prog}")
 
 
+def test_loop_unroll_idx_name():
+    def foo(n):
+        for i, k in pypto.loop_unroll(n, name="LoopA", idx_name="i"):
+            _ = i + k
+
+    func = pil.compile(foo, 10)
+    for_stmts = _for_ops_of(func.body)
+    assert len(for_stmts) == 1
+    assert str(for_stmts[0].loop_var) == "loop_idx_i"
+
+
+def test_loop_unroll_default_idx_name():
+    def foo(n):
+        for i, k in pypto.loop_unroll(n):
+            _ = i + k
+
+    func = pil.compile(foo, 10)
+    for_stmts = _for_ops_of(func.body)
+    assert len(for_stmts) == 1
+    assert str(for_stmts[0].loop_var).startswith("loop_idx_")
+
+
 def _opcode_set(stmt, acc=None):
     """Recursively collect TensorOpStmt opcodes."""
     if acc is None:

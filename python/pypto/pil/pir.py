@@ -26,6 +26,8 @@ class LoopRange:
     batch: bool
     parallel: bool = False
     submit_before_loop: bool = False
+    name: Optional[str] = None
+    idx_name: Optional[str] = None
 
 
 @dataclass(frozen=True)

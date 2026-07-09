@@ -129,12 +129,14 @@ def _pypto_loop(batch, *args, **kwargs):
     unroll_list = kwargs.get("unroll_list", None)
     parallel = kwargs.get("parallel", False)
     submit_before_loop = kwargs.get("submit_before_loop", False)
+    name = kwargs.get("name", None)
+    idx_name = kwargs.get("idx_name", None)
     unroll_list = sorted(set(unroll_list or []) | {1}, reverse=True)
     for u in unroll_list:
         if not isinstance(u, int) or u <= 0:
             raise ValueError(f"unroll factor {u} must be a positive integer")
 
-    return LoopRange(start, stop, step, unroll_list, batch, parallel, submit_before_loop)
+    return LoopRange(start, stop, step, unroll_list, batch, parallel, submit_before_loop, name, idx_name)
 
 
 @impl(pypto.loop)
@@ -197,7 +199,8 @@ def _loop_unroll(body: Block, loop: LoopRange, factor, ctx: BuildContext):
     loop_val = body.args[0]
 
     # Create loop variable Var
-    loop_var = ctx.create_scalar_var()
+    loop_var_name = f"loop_idx_{loop.idx_name}" if loop.idx_name else f"loop_idx_{loop_val.id}"
+    loop_var = ctx.create_scalar_var(loop_var_name)
     scope.varmap[loop_val.id] = loop_var
 
     # Save initial values as iterArgs, convert to Vars in scope

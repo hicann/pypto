@@ -13,7 +13,8 @@ import pypto
 import torch
 
 
-@pypto.frontend.jit(new_ir=True)
+@pypto.frontend.jit(new_ir=True,
+    host_options={"compile_stage": pypto.CompStage.TENSOR_GRAPH})
 def assemble_kernel(
     a: pypto.Tensor([pypto.DYN, 128]),
     out: pypto.Tensor([pypto.DYN, 128]),

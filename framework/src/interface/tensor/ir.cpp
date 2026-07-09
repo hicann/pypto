@@ -112,24 +112,28 @@ Pass pass::CreateRootFunctions()
 
             std::map<std::string, FunctionPtr> newFunctions;
             const auto funcMapOld = programInst.GetFunctionMap();
-
+            std::vector<std::shared_ptr<npu::tile_fwk::Function>> dynFuncs;
             for (const auto& [funcName, irFunc] : irProgram->functions_) {
                 (void)funcName;
                 npu::tile_fwk::RootFunctionBuilder builder(parentFunc);
                 auto dynFunc = builder.Build(irFunc);
                 dynFunc->entry_ = true;
                 newFunctions[dynFunc->name_] = std::static_pointer_cast<const ir::Function>(dynFunc);
+                dynFuncs.push_back(dynFunc);
             }
 
             const auto& funcMap = programInst.GetFunctionMap();
             for (const auto& [k, v] : funcMap) {
-                if (funcMapOld.find(k) == funcMapOld.end()){
+                if (funcMapOld.find(k) == funcMapOld.end()) {
                     newFunctions[k] = std::static_pointer_cast<const ir::Function>(v);
                 }
             }
 
-            return std::make_shared<const ir::Program>(
-                std::move(newFunctions), irProgram->name_, irProgram->span_);
+            for (auto& dynFunc : dynFuncs) {
+                programInst.InsertFuncToFunctionMap(dynFunc->GetMagicName(), dynFunc);
+            }
+
+            return std::make_shared<const ir::Program>(std::move(newFunctions), irProgram->name_, irProgram->span_);
         },
         "CreateRootFunctions");
 }
