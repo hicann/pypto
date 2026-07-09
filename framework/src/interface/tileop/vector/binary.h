@@ -137,6 +137,9 @@ TILEOP void BinaryCompute(T0 dst, T1 src0, T2 src1)
     auto shape0 = dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
     auto shape1 = dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
     auto shape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
+    if (shape0 == 0 || shape1 == 0 || shape2 == 0) {
+        return;
+    }
     using Src0TileInfo = TensorTileInfo<T1>;
     using Src1TileInfo = TensorTileInfo<T2>;
     constexpr BrcMode brcmode = GetBrcMode<BrcOperands...>();

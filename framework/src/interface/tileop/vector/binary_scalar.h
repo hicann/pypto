@@ -85,6 +85,9 @@ TILEOP void BinaryScalarCompute(T0 dst, T1 src0, Scalar src1)
     auto shape0 = dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
     auto shape1 = dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
     auto shape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
+    if (shape0 == 0 || shape1 == 0 || shape2 == 0) {
+        return;
+    }
 
     auto dstTile = PtoTile<T0>(dst);
     auto src0Tile = PtoTile<T1>(src0);

@@ -43,6 +43,9 @@ TILEOP void TCast(T0 dst, T1 src, T2 tmp)
     auto shape2 = dstLayout.template GetShapeDim<2, expectSize>();
     auto shape3 = dstLayout.template GetShapeDim<3, expectSize>();
     auto shape4 = dstLayout.template GetShapeDim<4, expectSize>();
+    if (shape0 == 0 || shape1 == 0 || shape2 == 0 || shape3 == 0 || shape4 == 0) {
+        return;
+    }
     auto dstStride0 = dstLayout.template GetStrideDim<0, expectSize>();
     auto dstStride1 = dstLayout.template GetStrideDim<1, expectSize>();
     auto dstStride2 = dstLayout.template GetStrideDim<2, expectSize>();
@@ -108,6 +111,9 @@ TILEOP void TCast(T0 dst, T1 src)
     auto shape2 = dstLayout.template GetShapeDim<2, expectSize>();
     auto shape3 = dstLayout.template GetShapeDim<3, expectSize>();
     auto shape4 = dstLayout.template GetShapeDim<4, expectSize>();
+    if (shape0 == 0 || shape1 == 0 || shape2 == 0 || shape3 == 0 || shape4 == 0) {
+        return;
+    }
     auto dstStride0 = dstLayout.template GetStrideDim<0, expectSize>();
     auto dstStride1 = dstLayout.template GetStrideDim<1, expectSize>();
     auto dstStride2 = dstLayout.template GetStrideDim<2, expectSize>();

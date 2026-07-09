@@ -122,6 +122,14 @@ TILEOP void IsFiniteComputeImpl(TileDefineDst dst, B16TileDefineSrc src, HalfTil
 template <UnaryOp op, auto PrecisionType = 0, typename LastUse, typename T0, typename T1>
 TILEOP void UnaryCompute(T0 dst, T1 src)
 {
+    const auto dstLayout = dst.GetLayout();
+    auto shape0 = dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
+    auto shape1 = dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
+    auto shape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
+    if (shape0 == 0 || shape1 == 0 || shape2 == 0) {
+        return;
+    }
+
     if constexpr (TileOp::IsConstContinous<T0, T1>() == true) {
         auto dstTile = PtoTile<T0, pto::BLayout::RowMajor, true>().Data();
         auto srcTile = PtoTile<T1, pto::BLayout::RowMajor, true>().Data();
@@ -130,10 +138,6 @@ TILEOP void UnaryCompute(T0 dst, T1 src)
         UnaryComputeImpl<op, PrecisionType, LastUse>(dstTile, srcTile);
         return;
     }
-    const auto dstLayout = dst.GetLayout();
-    auto shape0 = dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
-    auto shape1 = dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
-    auto shape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
 
     auto dstTile = PtoTile<T0>(dst);
     auto srcTile = PtoTile<T1>(src);
@@ -157,6 +161,9 @@ TILEOP void BrcbCompute(T0 dst, T1 src)
     auto shape0 = dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
     auto shape1 = dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
     auto shape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
+    if (shape0 == 0 || shape1 == 0 || shape2 == 0) {
+        return;
+    }
     auto dstStride0 = dstLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
     auto dstStride1 = dstLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
     auto dstStride2 = dstLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
