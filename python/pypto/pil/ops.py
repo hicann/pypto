@@ -12,7 +12,7 @@ import pypto
 from pypto import ir
 
 from .pir import Block, LoopRange, Jump
-from .pir import BuildContext, InsertPoint, Scope, BreakSignal, ContinueSignal
+from .pir import BuildContext, InsertPoint, Scope, BreakSignal, ContinueSignal, DoubleStarred
 from .dispatcher import dispatch_block
 from .op_registry import impl
 
@@ -87,12 +87,29 @@ def getattr_impl(ctx, obj, attr):
 
 @impl(list)
 def list_impl(ctx, items):
-    return list(items)
+    return Scope.current().resolve(items)
 
 
 @impl(tuple)
 def tuple_impl(ctx, items):
-    return tuple(items)
+    return tuple(Scope.current().resolve(items))
+
+
+@impl(set)
+def set_impl(ctx, items):
+    return set(Scope.current().resolve(items))
+
+
+@impl(dict)
+def dict_impl(ctx, items=()):
+    scope = Scope.current()
+    result = {}
+    for k, v in items:
+        if isinstance(v, DoubleStarred):
+            result.update(scope.resolve(v.value))
+        else:
+            result[scope.resolve(k)] = scope.resolve(v)
+    return result
 
 
 @impl(operator.getitem)
@@ -233,8 +250,8 @@ def _loop_unroll(body: Block, loop: LoopRange, factor, ctx: BuildContext):
         scope.store(name, ctx.wrap(var))
 
     for_stmt = ctx.create_for_stmt(loop_var.as_var(), ctx.unwrap(loop.start), ctx.unwrap(loop.stop),
-        ctx.unwrap(factor * loop.step), iter_args, body_stmt, return_vars, ctx.span,
-        {"parallel": loop.parallel, "submit_before_loop": loop.submit_before_loop})
+                                   ctx.unwrap(factor * loop.step), iter_args, body_stmt, return_vars, ctx.span,
+                                   {"parallel": loop.parallel, "submit_before_loop": loop.submit_before_loop})
     ctx.emit(for_stmt)
 
 
@@ -297,18 +314,19 @@ def _if_else_stmt(cond, then_block: Block, else_block: Block, ctx: BuildContext)
 
 
 @impl("pil.if_else")
-def if_else_impl(ctx, cond, then_block: Block, else_block: Block):
+def if_else_impl(ctx: BuildContext, cond, then_block: Block, else_block: Block):
     # Concrete condition: interpret one branch, return early
     if isinstance(cond, pypto.SymbolicScalar):
         cond = cond.simplify()
         if cond.is_concrete():
             block = then_block if cond.concrete() else else_block
-            dispatch_block(block, True)
+            return dispatch_block(block, True)
         else:
             _if_else_stmt(cond, then_block, else_block, ctx)
+            return None
     else:
         block = then_block if cond else else_block
-        dispatch_block(block, True)
+        return dispatch_block(block, True)
 
 
 @impl("pil.fstring")

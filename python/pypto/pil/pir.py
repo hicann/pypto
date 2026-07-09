@@ -41,12 +41,31 @@ class Value:
 Operand = Union[Value, Any]
 
 
+@dataclass
+class Starred:
+    """A ``*x`` unpacking marker wrapping an operand within a Call's args.
+    """
+    value: Operand
+
+
+@dataclass
+class DoubleStarred:
+    """A ``**d`` mapping-unpack marker wrapping an operand within a Call's
+    kwargs or a dict literal's items.
+    """
+    value: Operand
+
+
 class Formatter:
     def __init__(self, show_blocks):
         self.blocks = []
         self.show_blocks = show_blocks
 
     def format(self, x: Operand) -> str:
+        if isinstance(x, Starred):
+            return f"*{self.format(x.value)}"
+        if isinstance(x, DoubleStarred):
+            return f"**{self.format(x.value)}"
         if isinstance(x, Block):
             if self.show_blocks:
                 self.blocks.append(x)
@@ -89,9 +108,11 @@ class Call:
         fmt = Formatter(show_blocks)
         result_str = f"{self.result} = " if self.result else ""
         line_info = f"  # Line {self.span.begin_line}"
-        args_all = [fmt.format(x) for x in self.args] + [
-            f"{k}={fmt.format(v)}" for k, v in self.kwargs
+        kw_strs = [
+            f"**{fmt.format(v.value)}" if isinstance(v, DoubleStarred) else f"{k}={fmt.format(v)}"
+            for k, v in self.kwargs
         ]
+        args_all = [fmt.format(x) for x in self.args] + kw_strs
         args_str = ", ".join(args_all)
         block_str = "".join(textwrap.indent(f"\n{b}", "  ") for b in fmt.blocks)
         return (
@@ -306,13 +327,19 @@ class Scope:
         finally:
             _current.scope = old
 
-    def resolve(self, val):
+    def resolve(self, val) -> Any:
         if isinstance(val, Value):
             return self.varmap[val.id]
-        elif isinstance(val, tuple):
-            return tuple(self.resolve(v) for v in val)
-        elif isinstance(val, list):
-            return list(self.resolve(v) for v in val)
+        if isinstance(val, (list, tuple)):
+            result = []
+            for v in val:
+                if isinstance(v, Starred):
+                    result.extend(self.resolve(v.value))
+                else:
+                    result.append(self.resolve(v))
+            if isinstance(val, tuple):
+                return tuple(result)
+            return result
         return val
 
 

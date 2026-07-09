@@ -12,7 +12,7 @@ from contextlib import contextmanager
 from typing import Callable, Any, Optional, NoReturn, Union
 
 from pypto import ir
-from .pir import Block, Jump, LoopKind, Call, Operand, Value, Function
+from .pir import Block, Jump, LoopKind, Call, Operand, Value, Function, Starred, DoubleStarred
 
 
 class Source:
@@ -258,7 +258,11 @@ class Parser:
     def visit_Call(self, stmt: ast.Call, ctx: _Context):
         callee = self.visit(stmt.func, ctx)
         args = tuple(self.visit(arg, ctx) for arg in stmt.args)
-        kwargs = tuple((kw.arg, self.visit(kw.value, ctx)) for kw in stmt.keywords)
+        kwargs = tuple(
+            (None, DoubleStarred(self.visit(kw.value, ctx))) if kw.arg is None
+            else (kw.arg, self.visit(kw.value, ctx))
+            for kw in stmt.keywords
+        )
         return ctx.call(callee, args, kwargs)
 
     def visit_UnaryOp(self, unary: ast.UnaryOp, ctx: _Context):
@@ -328,6 +332,20 @@ class Parser:
         values = list(self.visit(v, ctx) for v in node.elts)
         return ctx.call(list, (values,))
 
+    def visit_Set(self, node: ast.Set, ctx: _Context):
+        values = list(self.visit(v, ctx) for v in node.elts)
+        return ctx.call(set, (values,))
+
+    def visit_Dict(self, node: ast.Dict, ctx: _Context):
+        pairs = []
+        for k, v in zip(node.keys, node.values):
+            value = self.visit(v, ctx)
+            if k is None:
+                pairs.append((None, DoubleStarred(value)))
+            else:
+                pairs.append((self.visit(k, ctx), value))
+        return ctx.call(dict, (pairs,))
+
     def visit_Subscript(self, node: ast.Subscript, ctx: _Context):
         value = self.visit(node.value, ctx)
         index = self.visit(node.slice, ctx)
@@ -349,7 +367,10 @@ class Parser:
             ctx.set_jump(Jump.END_BRANCH, value)
         return ctx.call("pil.if_else", (cond, then_block, else_block))
 
-    # statements
+    def visit_Starred(self, node: ast.Starred, ctx: _Context):
+        if not isinstance(node.ctx, ast.Load):
+            ctx.raise_error(node)
+        return Starred(self.visit(node.value, ctx))
 
     def visit_While(self, stmt: ast.While, ctx: _Context):
         if stmt.orelse:

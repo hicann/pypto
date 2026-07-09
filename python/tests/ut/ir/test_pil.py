@@ -626,3 +626,71 @@ def test_pil_function():
     prog = b.create_program([func], "main", ir.Span.unknown())
     prog = ir.Pass.canonicalize()(prog)
     info(f"\ncanonical: {prog}")
+
+
+def test_pil_starred():
+    res = []
+
+    def f(x):
+        res.append((*x, *x))
+        res.append([*x, *x])
+        res.append({*x, *x})
+
+    pil.compile(f, [1, 2])
+    assert res[0] == (1, 2, 1, 2)
+    assert res[1] == [1, 2, 1, 2]
+    assert res[2] == {1, 2}
+
+
+def test_pil_dict():
+    res = []
+
+    def f(x):
+        x = {1: 2, 3: 4}
+        res.append(x)
+
+    pil.compile(f, [1, 2])
+    assert res[0] == {1: 2, 3: 4}
+
+
+def test_pil_dict_unpack():
+    res = []
+
+    def f(x):
+        res.append({1: 2, **x, 3: 4})
+
+    pil.compile(f, {5: 6})
+    assert res[0] == {1: 2, 5: 6, 3: 4}
+
+
+def test_pil_call_kwargs():
+    res = []
+
+    def g(a, b, c):
+        res.append((a, b, c))
+
+    def f(x):
+        g(**x)
+
+    pil.compile(f, {'a': 1, 'b': 2, 'c': 3})
+    assert res[0] == (1, 2, 3)
+
+
+def test_pil_ifexpr():
+    res = []
+
+    def foo(a, b):
+        c = a if a > b else b
+        res.append(c)
+    pil.compile(foo, 1, 2)
+    assert res == [2]
+
+
+def test_pil_multi_and():
+    res = []
+
+    def foo(a, b, c):
+        c = a if a and b and c else b
+        res.append(c)
+    pil.compile(foo, 1, 2, 0)
+    assert res == [2]

@@ -5,7 +5,7 @@
 # THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
-from .pir import Call, Block, Function, Scope, BuildContext, Jump
+from .pir import Call, Block, Function, Scope, BuildContext, Jump, DoubleStarred
 from .pir import ReturnSignal, BreakSignal, ContinueSignal
 from .op_registry import dispatch
 from .. import pypto_impl
@@ -13,8 +13,15 @@ from .. import pypto_impl
 
 def dispatch_call(call: Call, scope: Scope, ctx: BuildContext):
     callee = scope.resolve(call.callee)
-    args = tuple(scope.resolve(v) for v in call.args)
-    kwargs = {k: scope.resolve(v) for k, v in call.kwargs}
+    args = tuple(scope.resolve(call.args))
+
+    kwargs = {}
+    for k, v in call.kwargs:
+        if isinstance(v, DoubleStarred):
+            kwargs.update(scope.resolve(v.value))
+        else:
+            kwargs[k] = scope.resolve(v)
+
     if isinstance(callee, Function):
         ret = call_function(callee, args, kwargs, ctx)
     else:
@@ -63,3 +70,7 @@ def dispatch_block(block: Block, is_static: bool):
             raise BreakSignal
         if block.jump is Jump.RETURN:
             raise ReturnSignal(ctx.wrap(scope["$retval"]))
+        if block.jump is Jump.END_BRANCH and block.result is not None:
+            return scope.resolve(block.result)
+
+    return None
