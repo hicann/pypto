@@ -501,11 +501,11 @@ std::string GetEnvVar(const std::string& varName, bool trim = true, bool toLower
 // 辅助函数：把字符串变成数组
 std::vector<std::string> SplitString(const std::string& str);
 
-// 判断环境变量 PTO_DATADUMP_ENABLE 是否为 true
+// 判断环境变量 PYPTO_DATADUMP_ENABLE 是否为 true
 inline bool IsPtoDataDumpEnabled()
 {
     static const bool result = []() {
-        std::string value = GetEnvVar("PTO_DATADUMP_ENABLE", true, true);
+        std::string value = GetEnvVar("PYPTO_DATADUMP_ENABLE", true, true);
         return (value == "true");
     }();
 

@@ -98,9 +98,9 @@ void PmuCommon::InitPmuEventType(const ArchInfo& archInfo, std::vector<int64_t>&
     size_t pmuEvtTypeSize = archInfo == ArchInfo::DAV_2201 ? PMU_EVENT_TYPE_MAX_DAV2201 : PMU_EVENT_TYPE_MAX_DAV3510;
     pmuEvtType.resize(pmuEvtTypeSize, 0x0);
     // 获取pmu事件类型环境变量获取方式
-    std::string eventTypeStr = GetEnvVar("PROF_PMU_EVENT_TYPE");
+    std::string eventTypeStr = GetEnvVar("PYPTO_PROF_PMU_EVENT_TYPE");
     if (eventTypeStr.empty()) {
-        MACHINE_LOGW("Dont support PROF_PMU_EVENT_TYPE env, use default pmu event type PIPE_UTILIZATION.\n");
+        MACHINE_LOGW("Dont support PYPTO_PROF_PMU_EVENT_TYPE env, use default pmu event type PIPE_UTILIZATION.\n");
         eventTypeStr = "2";
     }
     int32_t profPmuType = PIPE_UTILIZATION;
@@ -108,7 +108,7 @@ void PmuCommon::InitPmuEventType(const ArchInfo& archInfo, std::vector<int64_t>&
         profPmuType = std::stoi(eventTypeStr);
     } catch (const std::exception& e) {
         MACHINE_LOGW(
-            "Invalid PROF_PMU_EVENT_TYPE value [%s], use default PIPE_UTILIZATION. error: %s", eventTypeStr.c_str(),
+            "Invalid PYPTO_PROF_PMU_EVENT_TYPE value [%s], use default PIPE_UTILIZATION. error: %s", eventTypeStr.c_str(),
             e.what());
     }
 

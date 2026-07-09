@@ -56,7 +56,7 @@ def ini(path, prof, pe):
                                      + "}"
         }
     if real_pe:
-        env["PROF_PMU_EVENT_TYPE"] = str(real_pe)
+        env["PYPTO_PROF_PMU_EVENT_TYPE"] = str(real_pe)
     return env
 
 def find_file_and_get_parent_dirs(target_file, search_dir='.'):

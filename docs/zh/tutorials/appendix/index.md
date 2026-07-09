@@ -4,7 +4,7 @@
 :maxdepth: 2
 :titlesonly:
 
+glossary
 faq/index
 trouble_shooting/index
-glossary
-environment_variables
+env_vars/index

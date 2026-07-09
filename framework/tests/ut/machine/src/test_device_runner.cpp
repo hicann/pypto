@@ -50,11 +50,11 @@ TEST_F(TestDeviceRunner, test_set_pmu_event)
     // auto runner = npu::tile_fwk::DeviceRunner::Get();
     std::vector<int64_t> pmuEvtType;
     for (int i = 0; i < 9; i++) {
-        setenv("PROF_PMU_EVENT_TYPE", std::to_string(i).c_str(), 1);
+        setenv("PYPTO_PROF_PMU_EVENT_TYPE", std::to_string(i).c_str(), 1);
         npu::tile_fwk::PmuCommon::InitPmuEventType(ArchInfo::DAV_2201, pmuEvtType);
     }
     for (int i = 0; i < 9; i++) {
-        setenv("PROF_PMU_EVENT_TYPE", std::to_string(i).c_str(), 1);
+        setenv("PYPTO_PROF_PMU_EVENT_TYPE", std::to_string(i).c_str(), 1);
         npu::tile_fwk::PmuCommon::InitPmuEventType(ArchInfo::DAV_3510, pmuEvtType);
     }
 }
