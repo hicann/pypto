@@ -132,8 +132,10 @@ TILEOP void Tscatter(T0 dst, T1 src1, T2 src2, T3 tmp)
     constexpr bool scalarFlag = true;
 #else
     constexpr bool scalarFlag =
-        ((sizeof(typename T1::Type) == 8) || (scatterMode > 0) || (dstTypeSize == 2 && idxTypeSize == 4)) ? true :
-                                                                                                            false;
+        ((sizeof(typename T1::Type) == 8) || (scatterMode > 0) ||
+         (dstTypeSize == 2 && idxTypeSize == 4) ||
+         (dstTypeSize == 1 && idxTypeSize == 4) ||
+         (dstTypeSize == 4 && idxTypeSize == 4)) ? true : false;
 #endif
     constexpr auto dstTileShapeH = TileOp::GetOutterAxisMergeResult<shapeSize, typename T0::TileShape>();
     using dstTileDefine =
