@@ -20,6 +20,7 @@ from .._element import Element
 
 
 _FLOAT_DTYPES = {DataType.DT_FP32, DataType.DT_FP16, DataType.DT_BF16}
+_UNSIGNED_INT_DTYPES = {DataType.DT_UINT8, DataType.DT_UINT16, DataType.DT_UINT32, DataType.DT_UINT64}
 
 
 def _check_pad_value(x: Tensor, value: Union[float, int]) -> None:
@@ -33,16 +34,54 @@ def _check_pad_value(x: Tensor, value: Union[float, int]) -> None:
     ))
 
 
-def _check_where_scalar_dtype(arg_name: str, scalar_val, tensor_arg, tensor_name: str):
-    if isinstance(scalar_val, float) and isinstance(tensor_arg, Tensor):
-        tensor_dtype = tensor_arg.dtype
-        if tensor_dtype != DataType.DT_FP32:
-            raise PyptoError(0xF00002, TypeError(
-                f"where() does not support float scalar with non-fp32 tensor: "
-                f"'{arg_name}' is a float scalar but '{tensor_name}' tensor dtype is {tensor_dtype}. "
-                f"This type mismatch is not supported. Please use Element to specify the desired dtype, "
-                f"e.g. pypto.Element(pypto.{tensor_dtype}, {scalar_val})."
+def _where_arg_dtype(val):
+    if isinstance(val, pypto_impl.Tensor):
+        return val.dtype
+    if isinstance(val, pypto_impl.Element):
+        return val._get_data_type()
+    if isinstance(val, float):
+        return DataType.DT_FP32
+    return None
+
+
+def _check_where_dtype_consistency(input_val, other_val):
+    input_dtype = _where_arg_dtype(input_val)
+    other_dtype = _where_arg_dtype(other_val)
+    if input_dtype is None or other_dtype is None:
+        return
+    if input_dtype != other_dtype:
+        raise PyptoError(0xF00002, TypeError(
+            f"where() input and other data type inconsistent: "
+            f"input dtype is {input_dtype}, other dtype is {other_dtype}. "
+            f"Please ensure both inputs have the same dtype, or use Element to "
+            f"specify matching dtype."
+        ))
+
+
+def _check_where_scalar_unsigned(arg_name: str, scalar_val, tensor_arg, tensor_name: str):
+    if isinstance(scalar_val, pypto_impl.Element):
+        elem_dtype = scalar_val._get_data_type()
+        if elem_dtype not in _UNSIGNED_INT_DTYPES:
+            return
+        elem_val = scalar_val._get_signed_data() if not scalar_val._is_float() else scalar_val._get_float_data()
+        if elem_val < 0:
+            raise PyptoError(0xF00002, ValueError(
+                f"where() does not support negative scalar for unsigned integer dtype: "
+                f"'{arg_name}' is {elem_val} but Element dtype is {elem_dtype}. "
+                f"Negative values cannot be represented in unsigned integer types."
             ))
+        return
+    if not isinstance(scalar_val, int) or scalar_val >= 0:
+        return
+    if not isinstance(tensor_arg, pypto_impl.Tensor):
+        return
+    if tensor_arg.dtype not in _UNSIGNED_INT_DTYPES:
+        return
+    raise PyptoError(0xF00002, ValueError(
+        f"where() does not support negative scalar for unsigned integer tensor: "
+        f"'{arg_name}' is {scalar_val} but '{tensor_name}' tensor dtype is {tensor_arg.dtype}. "
+        f"Negative values cannot be represented in unsigned integer types."
+    ))
 
 
 @op_wrapper
@@ -124,8 +163,9 @@ def where(
     Output out4: [[1.0 0.0],
                   [0.0 2.0]])
     """
-    _check_where_scalar_dtype("input", input, other, "other")
-    _check_where_scalar_dtype("other", other, input, "input")
+    _check_where_dtype_consistency(input, other)
+    _check_where_scalar_unsigned("input", input, other, "other")
+    _check_where_scalar_unsigned("other", other, input, "input")
 
     if condition.dtype == DataType.DT_UINT8:
         raise PyptoError(0xF00002, TypeError(
