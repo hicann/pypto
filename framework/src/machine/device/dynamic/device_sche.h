@@ -129,9 +129,10 @@ struct DynMachineManager {
     };
 
     static int AllocThreadIdxForDav3510(DeviceArgs* devArgs, int cpu, int& curThreadIdx, std::atomic<int>& threadIdx,
-        std::atomic<uint64_t>& cpumask, std::atomic<int>& arbitrationLevel)
+        std::atomic<uint64_t>& cpumask, std::atomic<int>& arbitrationLevel, std::atomic<uint64_t>& arbitrationCpumask)
     {
-        return AllocThreadIdxForDav3510Impl(devArgs, cpu, curThreadIdx, threadIdx, cpumask, arbitrationLevel);
+        return AllocThreadIdxForDav3510Impl(devArgs, cpu, curThreadIdx, threadIdx, cpumask, arbitrationLevel,
+            arbitrationCpumask);
     }
 
     static int AllocThreadIdxForDav2201(DeviceArgs* devArgs, int cpu, int& curThreadIdx, std::atomic<int>& threadIdx,
@@ -141,7 +142,8 @@ struct DynMachineManager {
     }
 
     static int AllocThreadIdx(DeviceArgs* devArgs, int& curThreadIdx, std::atomic<int>& threadIdx, 
-        std::atomic<uint64_t>& cpumask, int& arbitratedScheNum, std::atomic<int>& arbitrationLevel, std::atomic<int>& simCpuId)
+        std::atomic<uint64_t>& cpumask, int& arbitratedScheNum, std::atomic<int>& arbitrationLevel, std::atomic<int>& simCpuId,
+        std::atomic<uint64_t>& arbitrationCpumask)
     {
         int ret = npu::tile_fwk::dynamic::DEVICE_MACHINE_OK;
 
@@ -152,7 +154,8 @@ struct DynMachineManager {
         int cpu = ++simCpuId;
 #endif
         if (devArgs->archInfo == ArchInfo::DAV_3510) {
-            ret = AllocThreadIdxForDav3510(devArgs, cpu, curThreadIdx, threadIdx, cpumask, arbitrationLevel);
+            ret = AllocThreadIdxForDav3510(devArgs, cpu, curThreadIdx, threadIdx, cpumask, arbitrationLevel,
+                arbitrationCpumask);
         } else if (devArgs->archInfo == ArchInfo::DAV_2201) {
             ret = AllocThreadIdxForDav2201(devArgs, cpu, curThreadIdx, threadIdx, cpumask, arbitratedScheNum, arbitrationLevel);
         } else {
@@ -391,7 +394,8 @@ struct DynMachineManager {
         int threadIdx = -1;
         RunSchInit(&devArgs);
         int arbitratedScheNum = devArgs.scheCpuNum;
-        if (AllocThreadIdx(&devArgs, threadIdx, globalThreadIdx_, cpumask_, arbitratedScheNum, arbitrationLevel_, simCpuId_) != DEVICE_MACHINE_OK) {
+        if (AllocThreadIdx(&devArgs, threadIdx, globalThreadIdx_, cpumask_, arbitratedScheNum, arbitrationLevel_, simCpuId_,
+            arbitrationCpumask_) != DEVICE_MACHINE_OK) {
             DEV_ERROR(
                 ThreadErr::THREAD_CPU_ALLOC_FAILED, "#sche.thread.init: Current cpu[%d] alloc thread failed.",
                 sched_getcpu());
@@ -445,6 +449,9 @@ struct DynMachineManager {
 
     int LastFinishThreadIdx_{0};
     std::atomic<uint64_t> cpumask_{0};
+    std::atomic<uint64_t> arbitrationCpumask_{0};  // 仲裁线程在 WaitForCpuMaskReadyForArbitration 中写入，
+                                                // 所有线程在仲裁完成后通过 PerformArbitrationDav3510 的
+                                                // globalArbitrationLevel release-acquire 保证 happens-before 后读取
     std::atomic<uint32_t> schExitNum_{0};
     std::atomic<int> arbitrationLevel_{ARBIT_UNSET};
     std::atomic<int> ctrlWaitLevel_{CTRL_WAIT_UNSET};
