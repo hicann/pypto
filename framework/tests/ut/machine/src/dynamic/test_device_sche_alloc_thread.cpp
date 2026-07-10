@@ -210,6 +210,28 @@ TEST_F(ArbitrationTest, WaitForCpuMaskReady_MaskAlreadyReady_ReturnsOk)
 }
 
 // ---------------------------------------------------------------------------
+// WaitForCpuMaskReadyForArbitration (arbitrationCpumask)
+// ---------------------------------------------------------------------------
+
+TEST_F(ArbitrationTest, WaitForCpuMaskReady_arbitrationCpumask_ReturnsOk)
+{
+    std::atomic<uint64_t> cpumask{0b111};
+    std::atomic<uint64_t> arbitrationCpumask{0};
+
+    EXPECT_EQ(WaitForCpuMaskReadyForArbitration(ArchInfo::DAV_3510, 2, cpumask, false, &arbitrationCpumask), DEVICE_MACHINE_OK);
+    EXPECT_EQ(arbitrationCpumask.load(), 0b111u);
+}
+
+TEST_F(ArbitrationTest, WaitForCpuMaskReady_arbitrationCpumaskConsistent)
+{
+    std::atomic<uint64_t> cpumask{(1ULL << 4) | (1ULL << 5) | (1ULL << 6)}; // die0 cluster: bit 4,5,6
+    std::atomic<uint64_t> arbitrationCpumask{0};
+
+    EXPECT_EQ(WaitForCpuMaskReadyForArbitration(ArchInfo::DAV_3510, 2, cpumask, false, &arbitrationCpumask), DEVICE_MACHINE_OK);
+    EXPECT_EQ(arbitrationCpumask.load(), cpumask.load());
+}
+
+// ---------------------------------------------------------------------------
 // WaitForScheCpuInSameCluster
 // ---------------------------------------------------------------------------
 
