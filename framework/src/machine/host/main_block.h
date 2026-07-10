@@ -20,7 +20,7 @@
 
 namespace npu::tile_fwk {
 constexpr const uint8_t MAIN_BLOCK_SIZE = 2;
-constexpr const size_t MAX_RUNTIME_AND_NESTING_DEPTH = 7000;
+constexpr const size_t MAX_RUNTIME_AND_NESTING_DEPTH = 6000;
 
 class MainBlockCondBulider {
 public:
