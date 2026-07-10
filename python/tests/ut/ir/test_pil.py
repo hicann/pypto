@@ -220,6 +220,18 @@ def test_ir_loop_two_carries():
     assert len(f.return_vars) == 3
 
 
+def test_ir_loop_unroll_supports_local_float_carry():
+    def foo(n):
+        for i, k in pypto.loop_unroll(0, n, 1, unroll_list=[8, 1]):
+            scale = 1e15
+            _ = i + k
+            _ = scale
+
+    func = pil.compile(foo, 16)
+    for_stmts = _for_ops_of(func.body)
+    assert len(for_stmts) == 2
+
+
 def test_ir_loop_range_two_args():
     """pypto.loop(start, stop) form."""
     def foo():

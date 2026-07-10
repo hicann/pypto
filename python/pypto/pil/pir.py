@@ -247,8 +247,12 @@ class BuildContext(ir.IRBuilder):
     def unwrap(self, val: Any) -> ir.Expr:
         if val is None:
             return self.none()
+        if isinstance(val, bool):
+            return ir.ConstBool(val, ir.Span.unknown())
         if isinstance(val, int):
             return self.create_const_int(val).as_expr()
+        elif isinstance(val, float):
+            return ir.ConstFloat(val, ir.DataType.FP64, ir.Span.unknown())
         elif isinstance(val, pypto.SymbolicScalar):
             return val.as_expr()
         elif isinstance(val, pypto.Tensor):
