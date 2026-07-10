@@ -304,7 +304,8 @@ def extract_kernel_details_baseline(kernel_details_path: str) -> List[Dict[str, 
         reader = csv.DictReader(f)
         for row in reader:
             record = {field: normalize_field_value(row.get(field, '')) for field in required_fields}
-            baseline_records.append(record)
+            if record['Type'] == 'PyPTO':
+                baseline_records.append(record)
     
     return baseline_records
 
