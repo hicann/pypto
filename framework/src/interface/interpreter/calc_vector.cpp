@@ -47,10 +47,19 @@ void ExecuteOpBinary(ExecuteOperationContext* ctx)
     bool rhsFromBrcb =
         !rhsTensor->GetProducers().empty() && (*rhsTensor->GetProducers().begin())->GetOpcode() == Opcode::OP_BRCB;
 
+    // BRCB pads the last dim to block size; interpreter must view it as last-dim=1 for broadcast.
+    // Preserve leading dims so 3D (e.g. [1,4,8] -> [1,4,1]) works the same as 2D ([4,8] -> [4,1]).
+    auto MakeBrcbViewShape = [](const std::vector<int64_t>& shape) {
+        auto viewShape = shape;
+        if (!viewShape.empty()) {
+            viewShape.back() = 1;
+        }
+        return viewShape;
+    };
     if (lhsFromBrcb) {
-        lhs = tlhs->View({tlhs->GetShape()[0], 1}, tlhs->GetOffset());
+        lhs = tlhs->View(MakeBrcbViewShape(tlhs->GetShape()), tlhs->GetOffset());
     } else if (rhsFromBrcb) {
-        rhs = trhs->View({trhs->GetShape()[0], 1}, trhs->GetOffset());
+        rhs = trhs->View(MakeBrcbViewShape(trhs->GetShape()), trhs->GetOffset());
     }
 
     if (lhsFromBrcb || rhsFromBrcb) {

@@ -564,13 +564,23 @@ TEST_F(TorchAdaptorTest, UnaryOps)
             calc::Cast(out, self);
             ASSERT_ALLCLOSE(out, golden);
         }
-        // brcb
+        // brcb 2D: [4,1] -> [4,3]
         {
             std::vector<float> sdata = {1.0f, 2.0f, 3.0f, 4.0f};
             std::vector<float> gdata = {1.0f, 1.0f, 1.0f, 2.0f, 2.0f, 2.0f, 3.0f, 3.0f, 3.0f, 4.0f, 4.0f, 4.0f};
             auto self_brcb = makeTensorData(DT_FP32, {4, 1}, sdata);
             auto out = makeTensorData(DT_FP32, {4, 3}, 0.0f);
             auto golden = makeTensorData(DT_FP32, {4, 3}, gdata);
+            calc::Brcb(out, self_brcb);
+            ASSERT_ALLCLOSE(out, golden);
+        }
+        // brcb 3D: [2,2,1] -> [2,2,3]
+        {
+            std::vector<float> sdata = {1.0f, 2.0f, 3.0f, 4.0f};
+            std::vector<float> gdata = {1.0f, 1.0f, 1.0f, 2.0f, 2.0f, 2.0f, 3.0f, 3.0f, 3.0f, 4.0f, 4.0f, 4.0f};
+            auto self_brcb = makeTensorData(DT_FP32, {2, 2, 1}, sdata);
+            auto out = makeTensorData(DT_FP32, {2, 2, 3}, 0.0f);
+            auto golden = makeTensorData(DT_FP32, {2, 2, 3}, gdata);
             calc::Brcb(out, self_brcb);
             ASSERT_ALLCLOSE(out, golden);
         }

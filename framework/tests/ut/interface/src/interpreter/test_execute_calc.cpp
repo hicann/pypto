@@ -719,6 +719,65 @@ TEST_F(CalcCommonTest, ExecuteOpBinaryWithLhsFromBrcb)
     EXPECT_FLOAT_EQ(outputView->Get<float>(3), 44.f);
 }
 
+// 测试 ExecuteOpBinary 中 3D BRCB 输入：物理 shape 尾轴为 block pad，需 view 成尾轴=1 再广播
+TEST_F(CalcCommonTest, ExecuteOpBinaryWithRhsFromBrcb3D)
+{
+    auto func = std::make_shared<Function>(
+        Program::GetInstance(), "TestBinaryWithRhsFromBrcb3D", "TestBinaryWithRhsFromBrcb3D", nullptr);
+
+    // BRCB FP32 pad: last dim 8 (=32/sizeof(float)); logical broadcast dim is 1
+    std::vector<int64_t> lhsShape = {1, 4, 128};
+    std::vector<int64_t> brcbShape = {1, 4, 8};
+    std::vector<int64_t> brcbSrcShape = {1, 4, 1};
+
+    auto brcbInputTensor = std::make_shared<LogicalTensor>(*func, DT_FP32, brcbSrcShape);
+    auto rhsTensor = std::make_shared<LogicalTensor>(*func, DT_FP32, brcbShape);
+    auto lhsTensor = std::make_shared<LogicalTensor>(*func, DT_FP32, lhsShape);
+    auto outputTensor = std::make_shared<LogicalTensor>(*func, DT_FP32, lhsShape);
+
+    func->AddOperation(Opcode::OP_BRCB, {brcbInputTensor}, {rhsTensor});
+    auto& mulOp = func->AddOperation(Opcode::OP_MUL, {lhsTensor, rhsTensor}, {outputTensor});
+
+    Tensor lhsTensorData(DT_FP32, lhsShape);
+    Tensor rhsTensorData(DT_FP32, brcbShape);
+    Tensor outputTensorData(DT_FP32, lhsShape);
+
+    std::vector<float> lhsVals(1 * 4 * 128, 2.f);
+    // BRCB layout: each of 4 rows has value in first element of padded last dim
+    std::vector<float> rhsVals(1 * 4 * 8, 0.f);
+    rhsVals[0] = 3.f;
+    rhsVals[8] = 4.f;
+    rhsVals[16] = 5.f;
+    rhsVals[24] = 6.f;
+
+    auto lhsData = RawTensorData::CreateTensor<float>(lhsTensorData, lhsVals);
+    auto rhsData = RawTensorData::CreateTensor<float>(rhsTensorData, rhsVals);
+    auto outputData = RawTensorData::CreateConstantTensor<float>(outputTensorData, 0.f);
+
+    auto lhsView = std::make_shared<LogicalTensorData>(lhsData);
+    auto rhsView = std::make_shared<LogicalTensorData>(rhsData);
+    auto outputView = std::make_shared<LogicalTensorData>(outputData);
+
+    auto inoutDataPair = std::make_shared<FunctionIODataPair>();
+    FunctionFrame frame(func.get(), nullptr, nullptr, inoutDataPair, 0);
+    OperationInterpreter opInter;
+
+    std::vector<LogicalTensorDataPtr> ioperandDataViewList = {lhsView, rhsView};
+    std::vector<LogicalTensorDataPtr> ooperandInplaceDataViewList = {outputView};
+
+    ExecuteOperationContext ctx = {
+        &frame, &opInter, &mulOp, &ioperandDataViewList, nullptr, &ooperandInplaceDataViewList};
+    opInter.ExecuteOperation(&ctx);
+
+    ASSERT_EQ(outputView->GetSize(), 1 * 4 * 128);
+    // row0: 2*3, row1: 2*4, row2: 2*5, row3: 2*6
+    EXPECT_FLOAT_EQ(outputView->Get<float>(0), 6.f);
+    EXPECT_FLOAT_EQ(outputView->Get<float>(127), 6.f);
+    EXPECT_FLOAT_EQ(outputView->Get<float>(128), 8.f);
+    EXPECT_FLOAT_EQ(outputView->Get<float>(256), 10.f);
+    EXPECT_FLOAT_EQ(outputView->Get<float>(384), 12.f);
+}
+
 // 测试 FloorDiv
 TEST_F(CalcCommonTest, ExecuteOpBinaryFloorDivWithTmpOutput)
 {

@@ -3018,13 +3018,10 @@ static void Brcb(const TensorData& out, const TensorData& self)
     auto tself = From(self);
     auto tout = From(out);
 
-    std::vector<int64_t> input_shape = tself.second.sizes().vec();
-    std::vector<int64_t> output_shape = tout.second.sizes().vec();
-
-    int64_t M = input_shape[0];
-    int64_t N = output_shape[1];
-    auto first_col = tself.second.index({torch::indexing::Slice(), 0});
-    auto expanded = first_col.unsqueeze(1).expand({M, N});
+    // BRCB broadcasts the first element of the last dim across the output last dim.
+    // Leading dims are preserved, so 2D ([M,1]->[M,N]) and 3D ([B,M,1]->[B,M,N]) share the same path.
+    auto firstAlongLast = tself.second.select(/*dim=*/-1, /*index=*/0);
+    auto expanded = firstAlongLast.unsqueeze(-1).expand(tout.second.sizes());
     tout.second.copy_(expanded);
     ToOperand(tout.second, tout.first, out.dtype);
 }
