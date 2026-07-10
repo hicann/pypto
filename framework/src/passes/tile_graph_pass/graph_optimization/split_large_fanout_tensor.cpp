@@ -14,6 +14,7 @@
  */
 
 #include <algorithm>
+#include <numeric>
 #include "split_large_fanout_tensor.h"
 #include "interface/tensor/irbuilder.h"
 #include "passes/pass_utils/graph_utils.h"
@@ -53,6 +54,8 @@ void SplitLargeFanoutTensor::Init()
     addedOps_.clear();
     toInfoMap_.clear();
     fromInfoMap_.clear();
+    toInfoIndexMap_.clear();
+    fromInfoIndexMap_.clear();
     largeTensors_.clear();
     toShapes_.clear();
     fromShapes_.clear();
@@ -150,24 +153,109 @@ void SplitLargeFanoutTensor::GenerateOffset(
 
 // 收集BE_COVERED/PERFECTLY_MATCH lcmTile 的那些tile们, 分别更新到overlaps和dualOverlaps
 void SplitLargeFanoutTensor::CollectOverlaps(
-    const Shape& lcmTileShape, const Offset& lcmTileOffset,
-    const std::vector<std::pair<LogicalTensorPtr, Offset>>& toTensorInfos,
-    const std::vector<std::pair<LogicalTensorPtr, Offset>>& fromTensorInfos, LogicalTensors& overlaps,
-    LogicalTensors& dualOverlaps)
+    const Shape& lcmTileShape, const Offset& lcmTileOffset, const OverlapSearchIndex& toIndex,
+    const OverlapSearchIndex& fromIndex, LogicalTensors& overlaps, LogicalTensors& dualOverlaps)
 {
-    for (const auto& toTensorInfo : toTensorInfos) {
-        auto status =
-            CalcOverlapByOffsetShape(toTensorInfo.second, toTensorInfo.first->shape, lcmTileOffset, lcmTileShape);
-        if (status == OverlapStatus::BE_COVERED || status == OverlapStatus::PERFECTLY_MATCH) {
-            overlaps.push_back(toTensorInfo.first);
+    CollectCoveredTensors(lcmTileShape, lcmTileOffset, toIndex, overlaps);
+    CollectCoveredTensors(lcmTileShape, lcmTileOffset, fromIndex, dualOverlaps);
+}
+
+void SplitLargeFanoutTensor::BuildOverlapSearchIndex(
+    const std::vector<std::pair<LogicalTensorPtr, Offset>>& tensorInfos, OverlapSearchIndex& index) const
+{
+    index.tensorInfos = &tensorInfos;
+    index.orderByDim.clear();
+    if (tensorInfos.empty() || tensorInfos.front().second.empty()) {
+        return;
+    }
+    size_t ndim = tensorInfos.front().second.size();
+    index.orderByDim.resize(ndim);
+    for (auto& order : index.orderByDim) {
+        order.resize(tensorInfos.size());
+        std::iota(order.begin(), order.end(), 0);
+    }
+    for (size_t dim = 0; dim < ndim; ++dim) {
+        std::sort(index.orderByDim[dim].begin(), index.orderByDim[dim].end(), [&](size_t lhs, size_t rhs) {
+            const auto& lhsInfo = tensorInfos[lhs];
+            const auto& rhsInfo = tensorInfos[rhs];
+            if (lhsInfo.second[dim] != rhsInfo.second[dim]) {
+                return lhsInfo.second[dim] < rhsInfo.second[dim];
+            }
+            return lhsInfo.first->GetMagic() < rhsInfo.first->GetMagic();
+        });
+    }
+}
+
+bool SplitLargeFanoutTensor::IsTensorCoveredByTile(
+    const Offset& tensorOffset, const Shape& tensorShape, const Offset& tileOffset, const Shape& tileShape) const
+{
+    if (tensorOffset.size() != tensorShape.size() || tileOffset.size() != tileShape.size() ||
+        tensorOffset.size() != tileOffset.size()) {
+        return false;
+    }
+    for (size_t dim = 0; dim < tensorOffset.size(); ++dim) {
+        if (tensorOffset[dim] < tileOffset[dim] ||
+            tensorOffset[dim] + tensorShape[dim] > tileOffset[dim] + tileShape[dim]) {
+            return false;
         }
     }
-    for (const auto& fromTensorInfo : fromTensorInfos) {
-        auto status =
-            CalcOverlapByOffsetShape(fromTensorInfo.second, fromTensorInfo.first->shape, lcmTileOffset, lcmTileShape);
-        if (status == OverlapStatus::BE_COVERED || status == OverlapStatus::PERFECTLY_MATCH) {
-            dualOverlaps.push_back(fromTensorInfo.first);
+    return true;
+}
+
+/*
+ * Collect tensors that are fully covered by the given lcm tile.
+ *
+ * The overlap index keeps tensor indexes sorted by offset for each dimension. This function first finds the
+ * dimension that produces the smallest candidate range by binary search on [tileStart, tileEnd), then verifies
+ * those candidates with a full multi-dimensional containment check. Matched indexes are sorted before emitting
+ * tensors so the output follows the original tensorInfos order instead of the selected dimension order.
+ */
+void SplitLargeFanoutTensor::CollectCoveredTensors(
+    const Shape& lcmTileShape, const Offset& lcmTileOffset, const OverlapSearchIndex& index,
+    LogicalTensors& tensors) const
+{
+    if (index.tensorInfos == nullptr || index.tensorInfos->empty() || index.orderByDim.empty()) {
+        return;
+    }
+    const auto& tensorInfos = *index.tensorInfos;
+    size_t bestDim = 0;
+    size_t bestCandidateCount = tensorInfos.size();
+    for (size_t dim = 0; dim < index.orderByDim.size(); ++dim) {
+        const auto& order = index.orderByDim[dim];
+        int64_t tileStart = lcmTileOffset[dim];
+        int64_t tileEnd = lcmTileOffset[dim] + lcmTileShape[dim];
+        auto lower = std::lower_bound(order.begin(), order.end(), tileStart, [&](size_t tensorIndex, int64_t start) {
+            return tensorInfos[tensorIndex].second[dim] < start;
+        });
+        auto upper = std::lower_bound(lower, order.end(), tileEnd, [&](size_t tensorIndex, int64_t end) {
+            return tensorInfos[tensorIndex].second[dim] < end;
+        });
+        size_t candidateCount = static_cast<size_t>(std::distance(lower, upper));
+        if (candidateCount < bestCandidateCount) {
+            bestCandidateCount = candidateCount;
+            bestDim = dim;
         }
+    }
+    const auto& bestOrder = index.orderByDim[bestDim];
+    int64_t tileStart = lcmTileOffset[bestDim];
+    int64_t tileEnd = lcmTileOffset[bestDim] + lcmTileShape[bestDim];
+    auto lower = std::lower_bound(bestOrder.begin(), bestOrder.end(), tileStart, [&](size_t tensorIndex, int64_t start) {
+        return tensorInfos[tensorIndex].second[bestDim] < start;
+    });
+    auto upper = std::lower_bound(lower, bestOrder.end(), tileEnd, [&](size_t tensorIndex, int64_t end) {
+        return tensorInfos[tensorIndex].second[bestDim] < end;
+    });
+    std::vector<size_t> coveredIndexes;
+    coveredIndexes.reserve(static_cast<size_t>(std::distance(lower, upper)));
+    for (auto iter = lower; iter != upper; ++iter) {
+        const auto& tensorInfo = tensorInfos[*iter];
+        if (IsTensorCoveredByTile(tensorInfo.second, tensorInfo.first->shape, lcmTileOffset, lcmTileShape)) {
+            coveredIndexes.emplace_back(*iter);
+        }
+    }
+    std::sort(coveredIndexes.begin(), coveredIndexes.end());
+    for (auto tensorIndex : coveredIndexes) {
+        tensors.push_back(tensorInfos[tensorIndex].first);
     }
 }
 
@@ -539,40 +627,49 @@ void SplitLargeFanoutTensor::CollectLargeTensorFromInfo(const LogicalTensorPtr& 
 void SplitLargeFanoutTensor::CollectLargeTensor(Function& function)
 {
     APASS_LOG_INFO_F(Elements::Function, "---> CollectLargeTensor.");
-    std::unordered_set<int> visited;
-    auto tensorMap = GraphUtils::GetAllTensors(function);
-    for (const auto& logicalTensor : tensorMap) {
-        if (logicalTensor == nullptr || logicalTensor->GetProducers().empty() || logicalTensor->GetConsumers().empty()) {
+    std::unordered_set<int> candidateTensorMagic;
+    auto operations = function.Operations(false);
+    candidateTensorMagic.reserve(operations.size());
+    for (auto& op : operations) {
+        if (op.GetOpcode() != Opcode::OP_ASSEMBLE) {
             continue;
         }
-        bool allProducersAssemble = std::all_of(logicalTensor->GetProducers().begin(),
-            logicalTensor->GetProducers().end(), [](Operation* op) {
-                return op != nullptr && op->GetOpcode() == Opcode::OP_ASSEMBLE;
-            });
-        bool hasAnyViewConsumer = false;
-        bool allConsumersView = true;
-        for (const auto& consumer : logicalTensor->GetConsumers()) {
-            if (consumer == nullptr) {
+        for (const auto& logicalTensor : op.GetOOperands()) {
+            if (logicalTensor == nullptr || !candidateTensorMagic.emplace(logicalTensor->GetMagic()).second ||
+                logicalTensor->GetProducers().empty() || logicalTensor->GetConsumers().empty()) {
                 continue;
             }
-            if (consumer->GetOpcode() == Opcode::OP_VIEW) {
-                hasAnyViewConsumer = true;
-            } else {
-                allConsumersView = false;
+            bool allProducersAssemble = std::all_of(logicalTensor->GetProducers().begin(),
+                logicalTensor->GetProducers().end(), [](Operation* producer) {
+                    return producer != nullptr && producer->GetOpcode() == Opcode::OP_ASSEMBLE;
+                });
+            bool hasAnyViewConsumer = false;
+            bool allConsumersView = true;
+            for (const auto& consumer : logicalTensor->GetConsumers()) {
+                if (consumer == nullptr) {
+                    continue;
+                }
+                if (consumer->GetOpcode() == Opcode::OP_VIEW) {
+                    hasAnyViewConsumer = true;
+                } else {
+                    allConsumersView = false;
+                }
             }
-        }
-        if (allProducersAssemble && hasAnyViewConsumer) {
-            if (!allConsumersView) {
-                mixedConsumerTensors_.insert(logicalTensor->tensor->rawmagic);
-            }
-            if (visited.count(logicalTensor->GetMagic()) == 0) {
-                visited.insert(logicalTensor->GetMagic());
+            if (allProducersAssemble && hasAnyViewConsumer) {
+                if (!allConsumersView) {
+                    mixedConsumerTensors_.insert(logicalTensor->tensor->rawmagic);
+                }
                 largeTensors_.push_back(logicalTensor);
+                CollectLargeTensorToInfo(logicalTensor);
+                CollectLargeTensorFromInfo(logicalTensor);
+                APASS_LOG_DEBUG_F(Elements::Tensor, "Large tensor magic is %d.", logicalTensor->GetMagic());
             }
-            CollectLargeTensorToInfo(logicalTensor);
-            CollectLargeTensorFromInfo(logicalTensor);
-            APASS_LOG_DEBUG_F(Elements::Tensor, "Large tensor magic is %d.", logicalTensor->GetMagic());
         }
+    }
+    for (const auto& largeTensor : largeTensors_) {
+        int rawMagic = largeTensor->tensor->rawmagic;
+        BuildOverlapSearchIndex(toInfoMap_[rawMagic], toInfoIndexMap_[rawMagic]);
+        BuildOverlapSearchIndex(fromInfoMap_[rawMagic], fromInfoIndexMap_[rawMagic]);
     }
 }
 
@@ -663,12 +760,20 @@ void SplitLargeFanoutTensor::SplitLargeTensor(Function& function)
     }
 }
 
+/*
+ * Build candidate lcm tile offsets from existing assemble/write and view/read boundaries.
+ *
+ * For each dimension, this function collects every tile start offset and every internal tile end offset from both
+ * the assemble side and the view side. The Cartesian product of these per-dimension boundaries forms the candidate
+ * offsets. The candidates are intentionally conservative: ProcessTileSplit() later checks whether each lcm tile
+ * actually has matching assemble/view tensors and is fully covered by assemble inputs.
+ */
 void SplitLargeFanoutTensor::GetOffsets(
     std::set<Shape, ShapeDimComparator>& tileOffsets, const Shape& lcmShape, const LogicalTensorPtr& largeTensor)
 {
     auto ndim = lcmShape.size();
-    std::vector<std::set<int64_t>> boundaryPerDim(ndim); // 收集每一维上的 tile 边界线
-    // 分别从 toInfoMap_ (Assemble 端) 和fromInfoMap_ (View 端)提取边界
+    std::vector<std::set<int64_t>> boundaryPerDim(ndim); // Tile boundaries collected for each dimension.
+    // Collect boundaries from both the assemble side (toInfoMap_) and the view side (fromInfoMap_).
     auto toIt = toInfoMap_.find(largeTensor->tensor->rawmagic);
     if (toIt != toInfoMap_.end()) {
         for (const auto& [tensor, offset] : toIt->second) {
@@ -691,7 +796,7 @@ void SplitLargeFanoutTensor::GetOffsets(
             }
         }
     }
-    // 迭代生成所有组合
+    // Generate every multidimensional offset candidate by Cartesian product.
     std::vector<Shape> results;
     results.push_back(Shape(ndim, 0));
     for (size_t d = 0; d < ndim; ++d) {
@@ -746,12 +851,11 @@ bool SplitLargeFanoutTensor::CheckOverlapCoverage(
 }
 
 void SplitLargeFanoutTensor::ProcessTileSplit(
-    Function& function, LogicalTensorPtr largeTensor, const Shape& lcmTileShape,
-    const Shape& tileOffset, LogicalTensors& overlaps, LogicalTensors& dualOverlaps)
+    Function& function, LogicalTensorPtr largeTensor, const Shape& lcmTileShape, const Shape& tileOffset,
+    const OverlapSearchIndex& toIndex, const OverlapSearchIndex& fromIndex, LogicalTensors& overlaps,
+    LogicalTensors& dualOverlaps)
 {
-    CollectOverlaps(
-        lcmTileShape, tileOffset, toInfoMap_[largeTensor->tensor->rawmagic],
-        fromInfoMap_[largeTensor->tensor->rawmagic], overlaps, dualOverlaps);
+    CollectOverlaps(lcmTileShape, tileOffset, toIndex, fromIndex, overlaps, dualOverlaps);
     if (overlaps.size() == 0 || dualOverlaps.size() == 0) {
         APASS_LOG_DEBUG_F(
             Elements::Tensor,
@@ -789,11 +893,14 @@ void SplitLargeFanoutTensor::TryToSplitLargeTensor(
 {
     std::set<Shape, ShapeDimComparator> tileOffsets;
     GetOffsets(tileOffsets, lcmShape, largeTensor);
+    int rawMagic = largeTensor->tensor->rawmagic;
+    const auto& toIndex = toInfoIndexMap_[rawMagic];
+    const auto& fromIndex = fromInfoIndexMap_[rawMagic];
     for (const auto& tileOffset : tileOffsets) {
         auto lcmTileShape = AdjustLcmTileShapeForTailBlock(lcmShape, tileOffset, largeTensor);
         LogicalTensors overlaps;
         LogicalTensors dualOverlaps;
-        ProcessTileSplit(function, largeTensor, lcmTileShape, tileOffset, overlaps, dualOverlaps);
+        ProcessTileSplit(function, largeTensor, lcmTileShape, tileOffset, toIndex, fromIndex, overlaps, dualOverlaps);
     }
 }
 
@@ -808,7 +915,10 @@ void SplitLargeFanoutTensor::RemoveOps(Function& function, std::vector<Operation
             op->SetAsDeleted();
         }
     }
-    function.EraseOperations(true);
+    // The function has no operationGroups_ at pass stage, so LIGHTWEIGHT sort is topologically
+    // equivalent to GENERAL, and is faster by caching tensor deps to avoid repeated producer scans.
+    function.EraseOperations(true, false);
+    function.SortOperations(SortOperationsMode::LIGHTWEIGHT);
 }
 
 void SplitLargeFanoutTensor::UpdateForRedundantAssemble(Operation& op)
@@ -834,7 +944,7 @@ void SplitLargeFanoutTensor::EraseRedundantAssembleOp(Function& function)
 {
     APASS_LOG_INFO_F(Elements::Operation, "---> Remove redundant Assemble op.");
     std::vector<Operation*> redundantCopyOuts;
-    for (auto& op : function.Operations()) {
+    for (auto& op : function.Operations(false)) {
         if (op.GetOpcode() != Opcode::OP_ASSEMBLE) {
             continue;
         }
@@ -933,7 +1043,7 @@ void SplitLargeFanoutTensor::EraseRedundantViewOp(Function& function)
 {
     APASS_LOG_INFO_F(Elements::Operation, "---> Remove redundant View op.");
     std::vector<Operation*> redundantView;
-    for (auto& op : function.Operations()) {
+    for (auto& op : function.Operations(false)) {
         if (op.GetOpcode() != Opcode::OP_VIEW) {
             continue;
         }

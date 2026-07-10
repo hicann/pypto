@@ -13,8 +13,9 @@
  * \brief Unit test for Split Large Fanout Tensor pass.
  */
 
-#include <vector>
+#include <chrono>
 #include <numeric>
+#include <vector>
 #include "gtest/gtest.h"
 #include "tilefwk/tilefwk_op.h"
 #include "interface/function/function.h"
@@ -91,6 +92,30 @@ public:
             }
         }
         return result;
+    }
+
+    struct SplitCounts {
+        size_t vCnt = 0, aCnt = 0, vLargeShape = 0, vTileShape = 0, aTileShape = 0, aLargeShape = 0;
+    };
+
+    SplitCounts CountSplitByShape(
+        Function& func, const std::vector<int64_t>& largeShape, const std::vector<int64_t>& tileShape)
+    {
+        SplitCounts c;
+        for (auto& op : func.Operations()) {
+            if (op.GetOpcode() == Opcode::OP_VIEW) {
+                ++c.vCnt;
+                auto& s = op.GetIOperands().front()->GetShape();
+                if (s == largeShape) ++c.vLargeShape;
+                else if (s == tileShape) ++c.vTileShape;
+            } else if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
+                ++c.aCnt;
+                auto& s = op.GetOOperands().front()->GetShape();
+                if (s == tileShape) ++c.aTileShape;
+                else if (s == largeShape) ++c.aLargeShape;
+            }
+        }
+        return c;
     }
 
     // [16, 16] --> View --> [8, 8] --> Sub --> [8, 8] --> Assemble --> [16, 16]
@@ -492,6 +517,122 @@ public:
         G.SetOutCast({"out", "out2"});
     }
 };
+
+namespace {
+
+void AddAssembleInput(ComputationalGraphBuilder& graph, int inputIndex, int viewIndex, int assembleIndex,
+    int64_t assembleCols, std::vector<std::string>& inputs)
+{
+    auto input = "input_" + std::to_string(inputIndex);
+    ASSERT_TRUE(graph.AddTensor(DataType::DT_FP32, {1, assembleCols}, input));
+    auto inputTensor = graph.GetTensor(input);
+    ASSERT_NE(inputTensor, nullptr);
+    inputTensor->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+
+    auto viewIn = "view_in_" + std::to_string(inputIndex);
+    ASSERT_TRUE(graph.AddTensor(DataType::DT_FP32, {1, assembleCols}, viewIn));
+    auto viewInTensor = graph.GetTensor(viewIn);
+    ASSERT_NE(viewInTensor, nullptr);
+    viewInTensor->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    graph.AddOp(Opcode::OP_VIEW, {input}, {viewIn}, "view_in_" + std::to_string(inputIndex));
+    graph.GetOp("view_in_" + std::to_string(inputIndex))
+        ->SetOpAttribute(std::make_shared<ViewOpAttribute>(
+            std::vector<int64_t>{0, 0}, MemoryType::MEM_DEVICE_DDR));
+
+    auto addsIn = "adds_in_" + std::to_string(inputIndex);
+    ASSERT_TRUE(graph.AddTensor(DataType::DT_FP32, {1, assembleCols}, addsIn));
+    auto addsInTensor = graph.GetTensor(addsIn);
+    ASSERT_NE(addsInTensor, nullptr);
+    addsInTensor->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    graph.AddOp(Opcode::OP_ADDS, {viewIn}, {addsIn}, "adds_in_" + std::to_string(inputIndex));
+    graph.GetOp("adds_in_" + std::to_string(inputIndex))
+        ->SetAttribute(OpAttributeKey::scalar, Element(DataType::DT_FP32, 0.01));
+
+    graph.AddOp(Opcode::OP_ASSEMBLE, {addsIn}, {"largeTensor"}, "assemble_" + std::to_string(inputIndex));
+    graph.GetOp("assemble_" + std::to_string(inputIndex))
+        ->SetOpAttribute(std::make_shared<AssembleOpAttribute>(
+            MemoryType::MEM_DEVICE_DDR, std::vector<int64_t>{viewIndex, assembleIndex * assembleCols}));
+
+    inputs.emplace_back(std::move(input));
+}
+
+void AddViewOutput(ComputationalGraphBuilder& graph, int viewIndex, int64_t viewCols,
+    std::vector<std::string>& outputs)
+{
+    auto viewTmp = "view_tmp_" + std::to_string(viewIndex);
+    ASSERT_TRUE(graph.AddTensor(DataType::DT_FP32, {1, viewCols}, viewTmp));
+    auto viewTmpTensor = graph.GetTensor(viewTmp);
+    ASSERT_NE(viewTmpTensor, nullptr);
+    viewTmpTensor->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    graph.AddOp(Opcode::OP_VIEW, {"largeTensor"}, {viewTmp}, "view_" + std::to_string(viewIndex));
+    graph.GetOp("view_" + std::to_string(viewIndex))
+        ->SetOpAttribute(std::make_shared<ViewOpAttribute>(
+            std::vector<int64_t>{viewIndex, 0}, MemoryType::MEM_DEVICE_DDR));
+
+    auto addsTmp = "adds_tmp_" + std::to_string(viewIndex);
+    ASSERT_TRUE(graph.AddTensor(DataType::DT_FP32, {1, viewCols}, addsTmp));
+    auto addsTmpTensor = graph.GetTensor(addsTmp);
+    ASSERT_NE(addsTmpTensor, nullptr);
+    addsTmpTensor->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    graph.AddOp(Opcode::OP_ADDS, {viewTmp}, {addsTmp}, "adds_" + std::to_string(viewIndex));
+    graph.GetOp("adds_" + std::to_string(viewIndex))
+        ->SetAttribute(OpAttributeKey::scalar, Element(DataType::DT_FP32, 0.01));
+
+    auto output = "output_" + std::to_string(viewIndex);
+    ASSERT_TRUE(graph.AddTensor(DataType::DT_FP32, {1, viewCols}, output));
+    auto outputTensor = graph.GetTensor(output);
+    ASSERT_NE(outputTensor, nullptr);
+    outputTensor->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    graph.AddOp(Opcode::OP_ASSEMBLE, {addsTmp}, {output}, "out_assemble_" + std::to_string(viewIndex));
+    graph.GetOp("out_assemble_" + std::to_string(viewIndex))
+        ->SetOpAttribute(std::make_shared<AssembleOpAttribute>(
+            MemoryType::MEM_DEVICE_DDR, std::vector<int64_t>{0, 0}));
+    outputs.emplace_back(std::move(output));
+}
+
+void BuildLargeLinearFanoutGraph(
+    ComputationalGraphBuilder& graph, int viewCount, int assemblesPerView, int64_t assembleCols)
+{
+    int64_t viewCols = assembleCols * assemblesPerView;
+    std::vector<std::string> inputs;
+    std::vector<std::string> outputs;
+    inputs.reserve(viewCount * assemblesPerView);
+    outputs.reserve(viewCount);
+    ASSERT_TRUE(graph.AddTensor(DataType::DT_FP32, {viewCount, viewCols}, "largeTensor"));
+    auto largeTensor = graph.GetTensor("largeTensor");
+    ASSERT_NE(largeTensor, nullptr);
+    largeTensor->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    for (int viewIndex = 0; viewIndex < viewCount; ++viewIndex) {
+        AddViewOutput(graph, viewIndex, viewCols, outputs);
+        for (int assembleIndex = 0; assembleIndex < assemblesPerView; ++assembleIndex) {
+            int inputIndex = viewIndex * assemblesPerView + assembleIndex;
+            AddAssembleInput(graph, inputIndex, viewIndex, assembleIndex, assembleCols, inputs);
+        }
+    }
+    ASSERT_TRUE(graph.SetInCast(inputs));
+    ASSERT_TRUE(graph.SetOutCast(outputs));
+}
+
+void BuildDynamicDslPerfFunction(Tensor& q, Tensor& out, int b, int sq, int d, const char* perfGuardStrategy)
+{
+    FUNCTION("SplitLargeFanoutDynamicPerfGuard", {q, out})
+    {
+        config::SetPassStrategy(perfGuardStrategy);
+        Tensor addTmp(DT_FP32, {b, sq, d});
+        for (int sqIdx = 0; sqIdx < sq; ++sqIdx) {
+            Tensor viewTmp = View(q, {b, 1, d}, {0, sqIdx, 0});
+            auto res = Add(viewTmp, Element(viewTmp.GetStorage()->Datatype(), 0.01));
+            Assemble(res, {0, sqIdx, 0}, addTmp);
+        }
+
+        for (int sqIdx = 0; sqIdx < sq; ++sqIdx) {
+            Tensor tmp0 = View(addTmp, {b, 1, d}, {0, sqIdx, 0});
+            Tensor tmp = Add(tmp0, Element(tmp0.GetStorage()->Datatype(), 0.01));
+            Assemble(tmp, {0, sqIdx, 0}, out);
+        }
+    }
+}
+} // namespace
 
 TEST_F(SplitLargeFanoutTensorTest, TestLCM)
 {
@@ -2175,5 +2316,128 @@ TEST_F(SplitLargeFanoutTensorTest, MixedConsumer_MtoM_Skipped)
     EXPECT_EQ(CountOpsWithInputMagic(*function, Opcode::OP_VIEW, ltMagic), 1);
 }
 
+TEST_F(SplitLargeFanoutTensorTest, BuilderLargeLinearFanoutPerfGuard)
+{
+    int viewCount = 2048, assemblesPerView = 2, assembleCount = viewCount * assemblesPerView;
+    int64_t assembleCols = 4, thresholdMs = 2000;
+
+    ComputationalGraphBuilder graph;
+    BuildLargeLinearFanoutGraph(graph, viewCount, assemblesPerView, assembleCols);
+    Function* f = graph.GetFunction();
+    ASSERT_NE(f, nullptr);
+    ASSERT_EQ(f->Operations(false).size(), static_cast<size_t>((assembleCount + viewCount) * 3));
+
+    SplitLargeFanoutTensor pass;
+    ASSERT_EQ(pass.PreCheck(*f), SUCCESS);
+
+    auto start = std::chrono::steady_clock::now();
+    EXPECT_EQ(pass.RunOnFunction(*f), SUCCESS);
+    auto end = std::chrono::steady_clock::now();
+    int64_t elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+    EXPECT_EQ(pass.PostCheck(*f), SUCCESS);
+
+    std::vector<int64_t> largeShape{viewCount, assembleCols * assemblesPerView};
+    std::vector<int64_t> tileShape{1, largeShape[1]};
+    int inCnt = assembleCount;
+    int outCnt = viewCount;
+    auto c = CountSplitByShape(*f, largeShape, tileShape);
+    EXPECT_EQ(c.vCnt, static_cast<size_t>(inCnt + outCnt));
+    EXPECT_EQ(c.aCnt, static_cast<size_t>(inCnt + outCnt));
+    EXPECT_EQ(c.vLargeShape, static_cast<size_t>(0));       // no VIEW still reads from largeTensor
+    EXPECT_EQ(c.vTileShape, static_cast<size_t>(outCnt));   // outcast VIEWs now read from tiles
+    EXPECT_EQ(c.aTileShape, static_cast<size_t>(inCnt + outCnt)); // all ASSEMBLEs write into tiles
+    EXPECT_EQ(c.aLargeShape, static_cast<size_t>(0));       // no ASSEMBLE still writes into largeTensor
+    EXPECT_LT(elapsedMs, thresholdMs);
+}
+
+TEST_F(SplitLargeFanoutTensorTest, DynamicDslExpandAndSplitPerfGuard)
+{
+    PROGRAM("SplitLargeFanoutTensorPerfGuard")
+    {
+        const char* perfGuardStrategy = "SplitLargeFanoutTensorPerfGuardStrategy";
+        int64_t thresholdMs = 5000;
+        TileShape::Current().SetVecTile(1, 1, 8);
+        PassManager::Instance().RegisterStrategy(perfGuardStrategy,
+            {{"ExpandFunction", PassName::EXPAND_FUNCTION},
+             {"MergeViewAssemble", PassName::MERGE_VIEW_ASSEMBLE},
+             {"SplitLargeFanoutTensor", PassName::SPLIT_LARGE_FANOUT_TENSOR}});
+        ConfigManager::Instance();
+        config::SetBuildStatic(true);
+        config::SetHostConfig(KEY_STRATEGY, perfGuardStrategy);
+        config::SetPassConfig(perfGuardStrategy, "SplitReshape", KEY_DISABLE_PASS, true);
+        int b = 2, sq = 512, d = 16;
+        Tensor q(DT_FP32, {b, sq, d}, "q");
+        Tensor out(DT_FP32, {b, sq, d}, "out");
+        auto start = std::chrono::steady_clock::now();
+        BuildDynamicDslPerfFunction(q, out, b, sq, d, perfGuardStrategy);
+        auto end = std::chrono::steady_clock::now();
+        int64_t elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+        auto* f = Program::GetInstance().GetFunctionByRawName("TENSOR_SplitLargeFanoutDynamicPerfGuard");
+        ASSERT_NE(f, nullptr);
+
+        // Verify: all ops tiled to {1,1,8}. MergeViewAssemble inlines addTmp,
+        // so all ASSEMBLEs target the large output shape {b,sq,d}.
+        std::vector<int64_t> largeShape{b, sq, d}, tileShape{1, 1, 8};
+        auto c = CountSplitByShape(*f, largeShape, tileShape);
+        int pathCnt = sq * b * (d / 8);  // each {b,1,d} view expands to b*(d/8) tiles
+        EXPECT_EQ(c.vCnt, static_cast<size_t>(pathCnt * 2));    // q→tile + tile→tile VIEWs
+        EXPECT_EQ(c.aCnt, static_cast<size_t>(pathCnt));        // all ASSEMBLEs to out
+        EXPECT_EQ(c.vLargeShape, static_cast<size_t>(pathCnt)); // VIEW from q
+        EXPECT_EQ(c.vTileShape, static_cast<size_t>(pathCnt));  // identity VIEW on tiles
+        EXPECT_EQ(c.aLargeShape, static_cast<size_t>(pathCnt)); // ASSEMBLE into out
+        EXPECT_EQ(c.aTileShape, static_cast<size_t>(0));        // addTmp merged, no tile ASSEMBLE
+        EXPECT_LT(elapsedMs, thresholdMs);
+    }
+}
+
+namespace {
+// 为 OverlapSearchIndex 直接 UT 构造 tensorInfos：(shape, offset) 列表 -> (LogicalTensorPtr, Offset) 列表
+std::vector<std::pair<LogicalTensorPtr, Offset>> BuildOverlapTensorInfos(
+    ComputationalGraphBuilder& graph, const std::vector<std::pair<Shape, Offset>>& shapeOffsets)
+{
+    std::vector<std::pair<LogicalTensorPtr, Offset>> tensorInfos;
+    tensorInfos.reserve(shapeOffsets.size());
+    for (size_t i = 0; i < shapeOffsets.size(); ++i) {
+        const auto name = "overlap_tensor_" + std::to_string(i);
+        EXPECT_TRUE(graph.AddTensor(DataType::DT_FP32, shapeOffsets[i].first, name));
+        tensorInfos.emplace_back(graph.GetTensor(name), shapeOffsets[i].second);
+    }
+    return tensorInfos;
+}
+} // namespace
+
+// 直接覆盖 IsTensorCoveredByTile 的覆盖判断语义（含维度不匹配、完美匹配、被覆盖、部分超出）
+TEST_F(SplitLargeFanoutTensorTest, IsTensorCoveredByTileDirect)
+{
+    SplitLargeFanoutTensor pass;
+    EXPECT_FALSE(pass.IsTensorCoveredByTile({0, 0}, {2, 2}, {0, 0, 0}, {2, 2, 2}));
+    EXPECT_FALSE(pass.IsTensorCoveredByTile({0, 0, 0}, {2, 2, 2}, {0, 0}, {2, 2}));
+    EXPECT_TRUE(pass.IsTensorCoveredByTile({0, 0}, {2, 2}, {0, 0}, {2, 2}));
+    EXPECT_TRUE(pass.IsTensorCoveredByTile({1, 1}, {1, 1}, {0, 0}, {2, 2}));
+    EXPECT_FALSE(pass.IsTensorCoveredByTile({1, 1}, {2, 2}, {0, 0}, {2, 2}));
+}
+
+// 多维场景下 bestDim 非 dim 0：dim1 候选数小于 dim0，验证"选择候选数最少的维度"核心优化逻辑与结果顺序
+TEST_F(SplitLargeFanoutTensorTest, OverlapSearchIndexBestDimNotZero)
+{
+    SplitLargeFanoutTensor pass;
+    ComputationalGraphBuilder graph;
+    // tile {3,4}@{0,0}：dim0 候选 4 个（T0..T3），dim1 候选 3 个（T0,T3,T4），bestDim=dim1
+    auto tensorInfos = BuildOverlapTensorInfos(graph, {
+        {{1, 2}, {0, 0}},
+        {{1, 2}, {1, 6}},
+        {{1, 2}, {2, 6}},
+        {{1, 2}, {2, 0}},
+        {{1, 2}, {7, 0}},
+    });
+    SplitLargeFanoutTensor::OverlapSearchIndex index;
+    pass.BuildOverlapSearchIndex(tensorInfos, index);
+    ASSERT_EQ(index.orderByDim.size(), 2u);
+    LogicalTensors result;
+    pass.CollectCoveredTensors({3, 4}, {0, 0}, index, result);
+    ASSERT_EQ(result.size(), 2u);
+    EXPECT_EQ(result[0], tensorInfos[0].first);
+    EXPECT_EQ(result[1], tensorInfos[3].first);
+}
 } // namespace tile_fwk
 } // namespace npu

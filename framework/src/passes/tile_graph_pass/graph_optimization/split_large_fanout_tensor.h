@@ -60,6 +60,11 @@ public:
     ~SplitLargeFanoutTensor() override = default;
 
 private:
+    struct OverlapSearchIndex {
+        const std::vector<std::pair<LogicalTensorPtr, Offset>>* tensorInfos = nullptr;
+        std::vector<std::vector<size_t>> orderByDim;
+    };
+
     Status RunOnFunction(Function& function) override;
     void Init();
     void EraseRedundantAssembleOp(Function& function);
@@ -75,10 +80,15 @@ private:
     void CollectLargeTensorToInfo(const LogicalTensorPtr& largeTensor);
     void CollectLargeTensorFromInfo(const LogicalTensorPtr& largeTensor);
     void CollectOverlaps(
-        const Shape& lcmTileShape, const Offset& lcmTileOffset,
-        const std::vector<std::pair<LogicalTensorPtr, Offset>>& toTensorInfos,
-        const std::vector<std::pair<LogicalTensorPtr, Offset>>& fromTensorInfos, LogicalTensors& overlaps,
-        LogicalTensors& dualOverlaps);
+        const Shape& lcmTileShape, const Offset& lcmTileOffset, const OverlapSearchIndex& toIndex,
+        const OverlapSearchIndex& fromIndex, LogicalTensors& overlaps, LogicalTensors& dualOverlaps);
+    void BuildOverlapSearchIndex(
+        const std::vector<std::pair<LogicalTensorPtr, Offset>>& tensorInfos, OverlapSearchIndex& index) const;
+    void CollectCoveredTensors(
+        const Shape& lcmTileShape, const Offset& lcmTileOffset, const OverlapSearchIndex& index,
+        LogicalTensors& tensors) const;
+    bool IsTensorCoveredByTile(
+        const Offset& tensorOffset, const Shape& tensorShape, const Offset& tileOffset, const Shape& tileShape) const;
     void CreateOpFor1toM(
         Function& function, LogicalTensorPtr largeTensor, Shape lcmTileShape, Offset lcmTileOffset,
         LogicalTensors overlaps, LogicalTensors dualOverlaps);
@@ -109,14 +119,17 @@ private:
         const Shape& lcmShape, const Shape& tileOffset, const LogicalTensorPtr& largeTensor);
     bool CheckOverlapCoverage(const LogicalTensors& overlaps, const Shape& lcmTileShape);
     void ProcessTileSplit(
-        Function& function, LogicalTensorPtr largeTensor, const Shape& lcmTileShape,
-        const Shape& tileOffset, LogicalTensors& overlaps, LogicalTensors& dualOverlaps);
+        Function& function, LogicalTensorPtr largeTensor, const Shape& lcmTileShape, const Shape& tileOffset,
+        const OverlapSearchIndex& toIndex, const OverlapSearchIndex& fromIndex, LogicalTensors& overlaps,
+        LogicalTensors& dualOverlaps);
     void TryToSplitLargeTensor(Function& function, const Shape& lcmShape, const LogicalTensorPtr& largeTensor);
     void GetOffsets(
         std::set<Shape, ShapeDimComparator>& tileOffsets, const Shape& lcmShape, const LogicalTensorPtr& largeTensor);
     void SetEnableMoreSplit(bool enableMoreSplit);
     std::unordered_map<int, std::vector<std::pair<LogicalTensorPtr, Offset>>> toInfoMap_;
     std::unordered_map<int, std::vector<std::pair<LogicalTensorPtr, Offset>>> fromInfoMap_;
+    std::unordered_map<int, OverlapSearchIndex> toInfoIndexMap_;
+    std::unordered_map<int, OverlapSearchIndex> fromInfoIndexMap_;
     std::vector<LogicalTensorPtr> largeTensors_;
     std::map<LogicalTensorPtr, std::set<Shape>> toShapes_;
     std::map<LogicalTensorPtr, std::set<Shape>> fromShapes_;
