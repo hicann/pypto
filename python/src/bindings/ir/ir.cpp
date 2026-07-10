@@ -1091,7 +1091,7 @@ void BindProgram(py::module_& ir)
 
     // Function - const shared_ptr
     auto function_class = py::class_<Function, IRNode, std::shared_ptr<Function>>(
-        ir, "Function", "Function definition with name, parameters, return types, and body");
+        ir, "Function", py::dynamic_attr(), "Function definition with name, parameters, return types, and body");
     function_class.def(
         py::init(
             [](const std::string& name, const py::list& params, const std::vector<TypePtr>& return_types,

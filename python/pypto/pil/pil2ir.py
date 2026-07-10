@@ -16,7 +16,7 @@ from . import ops
 from ..ir import SeqStmts
 
 
-def pil2ir(func: Function, args: dict):
+def pil2ir(func: Function, args: dict, tensor_args: list[pypto.Tensor]):
     scope = Scope(sorted(set(func.load_vars) | set(func.global_vars)))
 
     # Pre-populate globals into scope (all of them, so nested functions can
@@ -24,21 +24,18 @@ def pil2ir(func: Function, args: dict):
     for name, val in zip(func.global_vars, func.global_values):
         scope[name] = val
 
-    func_args = []
+    params = [x.logical_tensor() for x in tensor_args]
     body = SeqStmts(func.span)
     with BuildContext(func.span) as ctx, InsertPoint(body), scope.make_current():
         # Store function arguments
         for key, val in args.items():
-            if isinstance(val, pypto.Tensor):
-                var = ctx.create_var_like(key, val.logical_tensor())
-                func_args.append(var)
             dispatch('pil.store', ctx, key, val)
         try:
             dispatch_block(func.body, True)
         except ReturnSignal:
             pass
 
-    return ctx.create_function(func.name, func_args, [], body, func.span)
+    return ctx.create_function(func.name, params, [], body, func.span)
 
 
 def compile(pyfunc, *args, **kwargs):
@@ -52,10 +49,14 @@ def compile(pyfunc, *args, **kwargs):
     all_args = {}
     tensor_args = []
     for key, val in bound.arguments.items():
-        all_args[key] = val
         if isinstance(val, pypto.Tensor):
+            val = val.copy(name=key)
             tensor_args.append(val)
+        all_args[key] = val
 
     pypto.pypto_impl.Reset()
     with pypto.function("__entry__", *tensor_args):
-        return pil2ir(func, all_args)
+        func_def = pil2ir(func, all_args, tensor_args)
+        # funtion input args still need to be valid, it'll be used later by tensor slot
+        setattr(func_def, "__args__", tensor_args)
+        return func_def

@@ -39,7 +39,7 @@ def test_war_conflict():
 
     x = pypto.Tensor(shape=(32, 16), dtype=pypto.DT_FP32, name="x")
     y = pypto.Tensor(shape=(32, 16), dtype=pypto.DT_FP32, name="y")
-    func = compile_new_ir(foo, x, y)
+    compile_new_ir(foo, x, y)
 
 
 if __name__ == "__main__":

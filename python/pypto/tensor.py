@@ -604,6 +604,10 @@ class Tensor:
     def is_empty(self) -> bool:
         return self._base.IsEmpty()
 
+    def copy(self, name: str = "") -> 'Tensor':
+        name = name or self.name
+        return Tensor(self._base.GetShape(), self.dtype, name, self.format)
+
     def set_cache_policy(self, policy: CachePolicy, value: bool) -> None:
         self._base.SetCachePolicy(policy, value)
 
