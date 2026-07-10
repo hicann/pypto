@@ -1,5 +1,17 @@
 # PyPTO安装
 
+> **说明**
+>
+> 1. 若您使用**CANN9.1.0之前**的版本，请下载与CANN版本对应的PyPTO源码，并参考对应分支下的`build_and_install.md`完成PyPTO的编译安装。针对CANN的`${cann_version}`版本，请参考下表对应关系：
+>
+>    | CANN版本 | PyPTO版本 |
+>    | :--- | :--- |
+>    | 8.5.0 | 0.1.2 |
+>    | 9.0.0 | 0.2.0 |
+>
+> 2. 若您使用**CANN9.1.0及之后**的版本，CANN包内已集成PyPTO，CANN安装完成后即可使用PyPTO，可跳过本节。
+> 3. 若您需要体验PyPTO最新master版本能力，或基于源码进行PyPTO框架开发，请参考本文档完成源码编译安装。
+
 ## 源码下载
 
 请根据CANN软件版本下载对应分支源码，\$\{tag\_version\}表示分支标签名。
@@ -13,125 +25,45 @@ git clone -b ${tag_version} https://gitcode.com/cann/pypto.git
 
 > [!NOTE] 注意
 >
-> - gitcode平台在使用HTTPS协议的时候要配置并使用个人访问令牌代替登录密码进行克隆，推送等操作。
+> - gitcode平台在使用HTTPS协议的时候要配置并使用个人访问令牌代替登录密码进行克隆、推送等操作。
 > - 若您的编译环境无法访问网络，无法通过git指令下载代码，请先在联网环境中下载源码，再手动上传。
->
-## 通过源码编译安装（推荐）
 
-### 环境自检
+## 通过源码编译安装
 
-如果您的开发环境可以正常访问[cann-src-third-party](https://gitcode.com/cann-src-third-party)，PyPTO编译所需的第三方开源软件将在编译过程中自动下载及编译。
-如果无法访问，请参考[手动安装 - 前提条件](./prepare_environment.md#前提条件)中"准备第三方开源软件源码包"的相关章节完成源码包准备，并在编译前设置如下环境变量：
+### 编译run包
 
-芯片型号自检请参考[环境验证 - 芯片型号自检](./prepare_environment.md#环境验证)章节。
+进入PyPTO源码根目录，执行如下命令编译run包：
 
 ```bash
-export PYPTO_THIRD_PARTY_PATH=<path-to-thirdparty>
-```
-
-### 常规安装
-
-此方式适用于生产环境或代码稳定后使用。编译安装后，对Python源码的修改不会体现到已安装的`pypto`包中。对应命令如下：
-
-```bash
-# (可选)若开发环境无法访问cann-src-third-party，需设置
-export PYPTO_THIRD_PARTY_PATH=<path-to-thirdparty>
-
-# 执行编译及安装
-python3 -m pip install . --verbose
-```
-
-**参数说明**：
- `--verbose`：输出安装流程的基础详细信息(如下载的包版本、安装路径、依赖解析结果等)。
-
-**高级配置**：
-
-以下功能依赖`pip`支持`--config-setting`参数，如需使用，请确保`pip`版本不低于**22.1**。
-
-1. 调整编译类型
-
-   默认情况下，常规安装编译出的C++层二进制文件为`Release`类型。若需进行调试，可通过`pip`的`--config-setting`参数指定不同的编译类型：
-
-   ```bash
-   # 通过--config-setting参数指定C++层二进制编译为Debug类型
-   python3 -m pip install . --verbose --config-setting=--build-option='build_ext --cmake-build-type=Debug'
-   ```
-
-2. 开启C++编译器详细输出模式
-
-   ```bash
-   # 额外开启C++编译器详细输出模式(便于定位C++编译问题)
-   python3 -m pip install . --verbose --config-setting=--build-option='build_ext --cmake-build-type=Debug --cmake-verbose'
-   ```
-
-3. 指定CMake Generator类型
-
-   ```bash
-   # 指定CMake Generator类型(Ninja，Ninja需提前安装)
-   python3 -m pip install . --verbose --config-setting=--build-option='build_ext --cmake-generator=Ninja'
-
-   # 指定CMake Generator类型(Unix Makefiles)
-   python3 -m pip install . --verbose --config-setting=--build-option='build_ext --cmake-generator="Unix Makefiles"'
-   ```
-
-### 可编辑安装
-
-此方式适用于开发调试阶段。该模式会在`site-packages`目录中创建指向本地源码的软链接，对Python源码的修改会即时生效，无需重新安装。对应命令如下：
-
-```bash
-# (可选)设置PYPTO_THIRD_PARTY_PATH，若开发环境无法访问cann-src-third-party
-export PYPTO_THIRD_PARTY_PATH=<path-to-thirdparty>
-
-# 执行编译及安装(可编辑模式)
-python3 -m pip install -e . --verbose
+python3 build_ci.py --clean --py_abi=37 --plat_name=manylinux2014 --no_isolation --whl_into_run
 ```
 
 **参数说明**：
 
-- `-e`：即`--editable`的简写形式，标识采用可编辑安装模式；
-- `--verbose`：会输出安装流程的基础详细信息(如下载的包版本，安装路径，依赖解析结果等)；
+| 参数 | 说明 |
+| :--- | :--- |
+| `--clean` | 编译前清理构建目录和安装输出目录。 |
+| `--py_abi` | 指定whl包的Python ABI tag数字部分，例如`37`对应`cp37`。 |
+| `--plat_name` | 指定whl包的平台标签，例如`manylinux2014`；构建脚本会结合当前系统架构生成完整平台信息。 |
+| `--no_isolation` | 关闭whl隔离构建模式，构建依赖需提前在当前环境中安装完成。 |
+| `--whl_into_run` | 将编译得到的whl包打包进run安装包。 |
 
-**高级配置**：
+### 安装
 
-PyPTO使用`setuptools`作为其编译打包工具。需要注意的是，当前版本的`setuptools`尚不支持直接接收`pip`命令通过`--config-setting`参数传递的配置。
-如需指定特定的C++编译选项，您需要将相关配置预先设置在`PYPTO_BUILD_EXT_ARGS`环境变量中。该环境变量的值将在编译过程(`setup.py`)中被自动识别并使用。
-
-以下示例演示了如何配置环境变量以编译Debug版本的C++二进制文件并开启编译器的详细输出模式，然后进行安装。
-
-```bash
-# 设置编译参数：指定编译类型为Debug，并开启编译器详细输出(便于诊断问题)
-export PYPTO_BUILD_EXT_ARGS='--cmake-build-type=Debug --cmake-verbose'
-
-# 其他配置方式参考：指定编译类型为Debug，并开启编译器详细输出(便于诊断问题)，指定CMake Generator为Unix Makefiles
-# export PYPTO_BUILD_EXT_ARGS='--cmake-build-type=Debug --cmake-verbose --cmake-generator="Unix Makefiles"'
-
-# 执行编译及安装(可编辑模式)
-python3 -m pip install -e . --verbose
-```
-
-## 通过PyPI安装
-
-PyPTO已发布至[PyPI](https://pypi.org/)，若不涉及对PyPTO源码的修改，可以直接使用`pip`命令安装。
-
-使用PyPI安装时，`pto-isa`版本已与CANN包版本匹配，并在安装CANN包时完成安装，无需再单独安装。安装前请先确认当前环境中的CANN版本，并根据下表选择匹配的PyPTO版本：
-
-| CANN版本 | PyPTO版本 |
-|:---|:---|
-| 8.5.0 | 0.1.2 |
-| 9.0.0 | 0.2.0 |
-
-针对CANN的`${cann_version}`版本，请参考上表对应关系，使用如下命令指定PyPTO版本进行安装：
+执行上述编译命令后，会在PyPTO源码根目录的`build_out`目录下生成run包，文件名类似`cann-pypto_9.1.0_linux-aarch64.run`。进入`build_out`目录后，执行如下命令完成安装：
 
 ```bash
-# 从PyPI源下载并安装对应版本
-python3 -m pip install pypto==${pypto_version}
+cd build_out
+bash ./cann-pypto_${pypto_version}_${os_arch}.run --full -q --pylocal
 ```
 
-例如，CANN版本为`8.5.0`时，对应安装PyPTO `0.1.2`：
+变量含义说明：
 
-```bash
-python3 -m pip install pypto==0.1.2
-```
+- \$\{pypto_version}：表示PyPTO包版本号，例如`9.1.0`。
+- \$\{os_arch}：表示操作系统和CPU架构信息，例如`linux-aarch64`。
+- `--full`：表示执行完整安装。
+- `-q`：表示静默安装。
+- `--pylocal`：安装软件包时，是否将python相关信息安装到CANN软件包的安装路径。
 
 ## 安装验证
 

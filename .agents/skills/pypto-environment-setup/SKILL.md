@@ -225,7 +225,10 @@ source env_setup.sh
 pip uninstall pypto -y
 cd ${PYPTO_REPO:-$PWD}
 rm -rf build_out
-python3 -m pip install . --verbose
+# 编译产出 whl
+python3 build_ci.py --clean --py_abi=37 --plat_name=manylinux2014 --no_isolation --whl_into_run
+# 安装到当前环境
+bash build_out/cann-pypto_*.run --full -q --pylocal
 ```
 
 #### 步骤 4.6：运行测试验证

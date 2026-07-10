@@ -35,7 +35,10 @@ pip show pypto
 
 ```bash
 cd /path/to/pypto
-python3 -m pip install . --verbose
+# 编译产出 run
+python3 build_ci.py --clean --py_abi=37 --plat_name=manylinux2014 --no_isolation --whl_into_run
+# 安装到当前环境
+bash build_out/cann-pypto_*.run --full -q --pylocal
 ```
 
 安装完成后重新检查：
@@ -84,7 +87,8 @@ Name: pypto
 Version: 0.2.1
 
 # 如果未安装：
-$ python3 -m pip install . --verbose
+$ python3 build_ci.py --clean --py_abi=37 --plat_name=manylinux2014 --no_isolation --whl_into_run
+$ bash build_out/cann-pypto_*.run --full -q --pylocal
 
 # 步骤2：执行仿真（必须）
 $ cd /path/to/pypto

@@ -1,293 +1,166 @@
-# 环境部署
+﻿# 环境部署
 
-在使用PyPTO开发或运行算子之前，请您先参考下面步骤完成基础环境搭建。完成后请继续参考[PyPTO安装](./build_and_install.md)文档进行安装。
+在使用PyPTO开发或运行之前，请您先参考下面步骤完成基础环境搭建和编译安装，确保已安装NPU驱动、固件和CANN软件（`Ascend-cann-toolkit`和`Ascend-cann-ops`）等。
 
-PyPTO支持在具备NPU硬件的**真实环境**和仅有CPU硬件的**仿真环境**中运行：
-
-| 环境类型 | 硬件要求 | 运行模式 |
-|:-----|:------|:------|
-| 真实环境 | 配备CPU及NPU硬件 | 支持在NPU上执行计算，也可以通过CPU仿真获取预估性能和执行计算 |
-| 仿真环境 | 仅有CPU硬件 | 支持通过CPU仿真，获取预估性能和执行计算 |
-
-**说明:**
-
-- NPU：指昇腾AI处理器，目前仅支持如下产品型号：
-    - Ascend 950PR
-    - Atlas A3 训练系列产品/Atlas A3 推理系列产品
-    - Atlas A2 训练系列产品/Atlas A2 推理系列产品
-- 支持的系统：PyPTO支持在OpenEuler、Ubuntu等主流Linux发行版上编译和运行
-
-## 环境准备
+## 环境安装
 
 本项目提供多种搭建昇腾环境的方式，请按需选择。
 
 > **说明**：本文提到的编译态和运行态含义如下，请根据实际情况选择。
 >
-> - 编译态：针对仅编译PyPTO不运行的场景，只需安装CANN toolkit包。
+> - 编译态：针对仅编译PyPTO不运行的场景，只需安装CANN toolkit包及PyPTO编译依赖。
 > - 运行态：针对运行PyPTO的场景（编译运行或纯运行），需安装驱动与固件、CANN toolkit包、CANN ops包。
 
-| 安装方式 | 使用说明 | 使用场景 |
+|  安装方式  |  使用说明  |  使用场景  |
 | ----- | ------ | ------ |
-| WebIDE | 一站式开发平台，提供在线直接运行的昇腾环境，无需手动安装。<br>当前可提供单机算力，**默认安装最新商发版CANN包**。 | 适用于没有昇腾设备的开发者。 |
-| 主机安装（自动安装/手动安装） | 在宿主机上自行准备环境，可选择脚本自动安装部分软件包，或完全手动安装。 | 适用于有昇腾设备，希望在本机直接搭建环境的开发者。 |
-| Docker | Docker镜像是一种高效部署方式，已预集成运行所需依赖。<br>当前支持Atlas A2 训练系列产品/Atlas A2 推理系列产品、Atlas A3 训练系列产品/Atlas A3 推理系列产品、暂不支持950PR, OS支持Ubuntu和OpenEuler。 | 适用于有昇腾设备，需要快速搭建环境的开发者。 |
+|  CANNLab  | 一站式开发平台，提供在线直接运行的昇腾环境，无需手动安装。<br>当前可提供单机算力，**默认安装最新商发版CANN包**。 | 适用于没有昇腾设备的开发者。 |
+|  Docker  | CANN镜像已预集成CANN及PyPTO运行所需依赖，开箱即用。<br>环境默认安装最新商发版CANN包，源码下载时注意与软件配套。 | 适用有昇腾设备，**需要快速搭建环境的开发者**。 |
+|  手动安装  | 手动安装CANN包和PyPTO基础依赖，灵活性高。 | 适用有昇腾设备，**想体验PyPTO最新master分支能力、已发布版本能力，或基于源码进行PyPTO框架开发的开发者**。 |
 
-### 方式1：使用CANNLab安装
+### 方式1：CANNLab
 
 对于无昇腾设备的开发者，可直接使用CANNLab云开发环境，即"**一站式开发平台**"，该平台为您提供在线可直接运行的昇腾环境，环境中已安装必备的驱动固件、软件包和依赖，无需手动安装。
 
 > **说明**：环境默认安装最新商发版CANN包，源码下载时注意与软件配套。更多关于开发平台的介绍请参考[CANNLab指导](https://gitcode.com/org/cann/discussions/54)。
 
-#### 1-进入开源项目
-
-单击"`CANNLab`"按钮，使用已认证过的华为云账号登录。若未注册或认证，请根据页面提示进行注册和认证。
+1. 进入开源项目，单击"`CANNLab`"按钮，使用已认证过的华为云账号登录。若未注册或认证，请根据页面提示进行注册和认证。
 
 ![创建云开发环境](../tutorials/figures/webide1.png)
 
-#### 2-连接WebIDE
 2. 根据页面提示信息创建并启动云开发环境，单击"`连接 > WebIDE`"进入一站式开发平台。
 
 ![启动并连接WebIDE](../tutorials/figures/webide2.png)
 
-#### 3-安装pto-isa
+### 方式2：Docker部署
 
-**方法一：基于run包安装(推荐)**
-
-> **说明**：若后续考虑通过PyPI方式安装PyPTO，不需要单独安装`pto-isa`。`pto-isa`版本已与CANN包版本匹配，并在安装CANN包时完成安装，可跳过本章节。
-
-根据实际环境下载对应的安装包，下载链接如下（如果浏览器不支持自动下载，请选择右键，"链接另存为..."）：
-
-- x86：[cann-pto-isa_linux-x86_64.run](https://ascend-ci.obs.cn-north-4.myhuaweicloud.com/pto-isa/daily/cann-pto-isa_linux-x86_64.run)
-- aarch64：[cann-pto-isa_linux-aarch64.run](https://ascend-ci.obs.cn-north-4.myhuaweicloud.com/pto-isa/daily/cann-pto-isa_linux-aarch64.run)
-
-```bash
-# 安装命令
-bash ./cann-pto-isa_linux-*.run --full
-```
-
-**方法二：基于源码安装**
-
-```bash
-# 创建用于存放第三方开源软件源码包的目录path-to-your-pto-isa
-mkdir -p ${path-to-your-pto-isa}
-git clone https://gitcode.com/cann/pto-isa.git
-# 设置环境变量
-export PTO_TILE_LIB_CODE_PATH="${path-to-your-pto-isa}/pto-isa"
-# 检查目录是否存在
-ls ${PTO_TILE_LIB_CODE_PATH}/include/pto/
-```
-
-- \$\{path-to-your-pto-isa\}：存放`pto-isa`源码的路径。
-
-### 方式2：主机安装（自动安装/手动安装）
-
-对于有昇腾设备的开发者，若您希望直接在宿主机上搭建昇腾环境，可参考本章节。该章节提供两种软件包安装方式：自动安装和手动安装。
-
-#### 安装方式总览
-
-自动安装与手动安装的区别如下，请先根据自身场景选择：
-
-| 安装子方式 | 覆盖内容 | 适用场景 |
-|:---|:---|:---|
-| 自动安装 | 通过`tools/prepare_env.sh`自动下载并安装CANN toolkit包、CANN ops包、pto-isa。 | 适用于脚本支持的系统环境，希望尽量减少手工操作的场景。 |
-| 手动安装 | 手动下载并安装驱动、固件、CANN包，并手动获取pto-isa源码。 | 适用于脚本不支持的系统环境、需要自定义版本或希望完全控制安装过程的场景。 |
+对于有昇腾设备的开发者，若您想快速搭建昇腾环境，可使用Docker镜像部署。
 
 > **说明**：
 >
-> - 自动安装当前覆盖场景有限同时版本固定，若系统环境不受脚本支持，请自行适配脚本或直接使用手动安装方式。
-> - 本章节中的“自动安装”仅针对软件包准备过程，Python依赖、PyTorch及编译依赖仍需按下文要求准备。
+> - 镜像文件比较大，下载需要一定时间，请您耐心等待。关于docker命令的选项介绍可通过`docker --help`查询。
+> - 环境默认安装最新商发版CANN包，源码下载时注意与软件配套。
 
-#### 需要先手动完成的内容
+1. **安装驱动与固件（运行态依赖）**
 
-在选择自动安装或手动安装之前，请先确认以下事项：
+    驱动与固件是运行态依赖，若仅编译PyPTO，可不安装。使用`npu-smi info`检查是否有NPU相关信息，若没有，请参考《[CANN快速安装](https://www.hiascend.com/cann/download)》完成驱动与固件安装。
 
-1. **安装驱动与固件**
+2. **下载镜像**
 
-    若计划在真实NPU环境中运行PyPTO，必须先完成驱动与固件安装，并确保Ascend HDK版本为25.5.0及以上。详细指导请参考《[CANN软件安装指南](https://www.hiascend.com/document/redirect/CannCommunityInstWizard)》中"安装NPU驱动和固件"章节。
+    - 步骤1：以root用户登录宿主机。确保宿主机已安装Docker引擎（版本1.11.2及以上），使用`docker --version`检查Docker版本，若没有，请参考[Docker官方安装指南](https://docs.docker.com/engine/install/)。
+    - 步骤2：从[昇腾镜像仓库](https://www.hiascend.com/developer/ascendhub/detail/17da20d1c2b6493cb38765adeba85884)拉取已预集成CANN软件包及PyPTO运行所需依赖的镜像。
 
-    > **重要**：
-    >
-    > - 支持版本：Ascend HDK 25.5.0及以上。
-    > - 低于支持版本的HDK环境不在PyPTO验证和支持范围内，运行异常算子时可能导致NPU状态异常，进而影响后续算子执行，出现AIC超时等问题；严重情况下可能需要重启设备或主机后恢复。
-    > - 驱动与固件是运行态依赖，若仅编译PyPTO或仅进行性能仿真，可不安装。
-    > - `prepare_env.sh`的`--with-install-driver`参数仅用于下载驱动与固件安装包，不会自动执行安装，驱动与固件仍需您根据官方指导手动安装。
+        示例如下，请自行替换CANN版本号、芯片系列、操作系统、python版本信息。
 
-2. **明确前提依赖准备范围**
+        ```bash
+        # 以cann:9.1.0-beta.1版本为例
+        docker pull swr.cn-south-1.myhuaweicloud.com/ascendhub/cann:9.1.0-beta.1-910b-openeuler24.03-py3.12-devel
+        ```
 
-    无论最终选择自动安装还是手动安装，下述Python依赖、PyTorch/Ascend Extension for PyTorch以及编译依赖，均需根据实际场景自行准备。
+3. **运行Docker**
 
-#### 前提条件
+    拉取镜像后，需要以特定参数启动容器，以便容器内能访问宿主的昇腾设备。
+
+    ```bash
+    docker run --name cann_container --device /dev/davinci0 --device /dev/davinci_manager --device /dev/devmm_svm --device /dev/hisi_hdc -v /usr/local/dcmi:/usr/local/dcmi -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi -v /usr/local/Ascend/driver/lib64/:/usr/local/Ascend/driver/lib64/ -v /usr/local/Ascend/driver/version.info:/usr/local/Ascend/driver/version.info -v /etc/ascend_install.info:/etc/ascend_install.info -it swr.cn-south-1.myhuaweicloud.com/ascendhub/cann:9.1.0-beta.1-910b-openeuler24.03-py3.12-devel bash
+    ```
+
+    | 参数 | 说明 | 注意事项 |
+    | :--- | :--- | :--- |
+    | `--name cann_container` | 为容器指定名称，便于管理。 | 可自定义。 |
+    | `--device /dev/davinci0` | 核心：将宿主机的NPU设备卡映射到容器内，可指定映射多张NPU设备卡。 | 必须根据实际情况调整：`davinci0`对应系统中的第0张NPU卡。请先在宿主机执行`npu-smi info`命令，根据输出显示的设备号（如`NPU 0`, `NPU 1`）来修改此编号。|
+    | `--device /dev/davinci_manager` | 映射NPU设备管理接口。 | - |
+    | `--device /dev/devmm_svm` | 映射设备内存管理接口。 | - |
+    | `--device /dev/hisi_hdc` | 映射主机与设备间的通信接口。 | - |
+    | `-v /usr/local/dcmi:/usr/local/dcmi` | 挂载设备容器管理接口（DCMI）相关工具和库。 | - |
+    | `-v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi` | 挂载`npu-smi`工具。 | 使容器内可以直接运行此命令来查询NPU状态和性能信息。|
+    | `-v /usr/local/Ascend/driver/lib64/:/usr/local/Ascend/driver/lib64/` | 关键挂载：将宿主机的NPU驱动库映射到容器内。 | - |
+    | `-v /usr/local/Ascend/driver/version.info:/usr/local/Ascend/driver/version.info` | 挂载驱动版本信息文件。 | - |
+    | `-v /etc/ascend_install.info:/etc/ascend_install.info` | 挂载CANN软件安装信息文件。 | - |
+    | `-it` | `-i`（交互式）和`-t`（分配伪终端）的组合参数。 | - |
+    | `swr.cn-south-1.myhuaweicloud.com/ascendhub/cann:9.1.0-beta.1-910b-openeuler24.03-py3.12-devel` | 指定要运行的Docker镜像。 | 请确保此镜像名和标签（tag）与你通过`docker pull`拉取的镜像完全一致。 |
+    | `bash` | 容器启动后立即执行的命令。 | - |
+
+4. **安装PyPTO依赖**
+
+    进入容器后，请参考[手动安装 - PyPTO依赖](#pypto依赖)完成Python依赖及其它编译依赖的安装。
+
+### 方式3：手动安装
+
+对于有昇腾设备的开发者，若您想手动搭建昇腾环境，请参考下述步骤。
+
+#### 安装软件
+
+- **场景1：体验master版本能力或基于master版本进行开发**
+
+    1. **安装驱动与固件（运行态依赖）**
+
+        驱动与固件是运行态依赖，若仅编译PyPTO，可不安装。使用`npu-smi info`检查是否有NPU相关信息，若没有，请参考《[CANN快速安装](https://www.hiascend.com/cann/download)》完成驱动与固件安装。
+
+        > **重要**：
+        >
+        > - 支持版本：Ascend HDK 25.5.1及以上。
+        > - 低于支持版本的HDK环境不在PyPTO验证和支持范围内，运行异常PyPTO程序时可能导致NPU状态异常，进而影响后续任务执行，出现AIC超时等问题；严重情况下可能需要重启设备或主机后恢复。
+
+    2. **安装CANN包**
+
+        请单击[下载链接（待确认）](https://ascend.devcloud.huaweicloud.com/artifactory/cann-run-mirror/software/master/)，选择最新时间版本，并根据产品型号和环境架构下载对应包。安装命令如下，更多指导参考《[CANN快速安装](https://www.hiascend.com/cann/download)》。
+
+        - 安装CANN toolkit包
+
+            ```bash
+            bash ./Ascend-cann-toolkit_${cann_version}_linux-${arch}.run --install --install-path=${install_path}
+            ```
+
+        - 安装CANN ops包（运行态依赖）
+
+            ops包是运行态依赖，若仅编译PyPTO，可不安装此包。
+
+            ```bash
+            bash ./Ascend-cann-${soc_name}-ops_${cann_version}_linux-${arch}.run --install --install-path=${install_path}
+            ```
+
+        变量含义说明：
+
+        - \$\{cann\_version\}：表示CANN包版本号。
+        - \$\{arch\}：表示CPU架构，可通过`uname -m`查询，例如aarch64、x86_64。
+        - \$\{soc\_name\}：表示NPU型号名称。
+        - \$\{install\_path\}：表示指定安装路径，ops包需与toolkit包安装在相同路径，root用户默认安装在`/usr/local/Ascend`目录。
+
+- **场景2：体验PyPTO已发布版本能力或基于已发布版本进行开发**
+
+    请访问[CANN官网下载中心](https://www.hiascend.com/cann/download)，选择与PyPTO版本配套的CANN发布版本，并根据产品型号和环境架构下载对应包，最后参考网页提供的命令完成安装。
+
+#### PyPTO依赖
 
 1. **安装Python依赖**
 
     - Python：版本 >= 3.9
-        - **重要**：若后续需要通过源码编译安装PyPTO，还需安装Python的Development组件（常称为`python3-dev`）。
+        - **重要**：需要安装Python的Development组件（常称为`python3-dev`）。
 
     - 安装Python依赖包：
 
         依赖的pip包及对应版本在`python/requirements.txt`中描述，可以使用如下命令完成安装：
 
         ```bash
-        # 进入pypto项目源码根目录
+        # 进入PyPTO项目源码根目录
         cd pypto
 
         # 安装相关pip包依赖
         python3 -m pip install -r python/requirements.txt
         ```
 
-    - PyTorch及Ascend Extension for PyTorch：
-        - **顺序说明**：请务必参考下文"软件包安装"章节完成对应工具包安装后，再安装`Ascend Extension for PyTorch`。
-        - 请根据实际环境的Python版本单独安装，请参考[Ascend Extension for PyTorch文档中心](https://hiascend.com/document/redirect/pytorchuserguide)中的《软件安装》手册。
-        - **重要**：需确保`PyTorch`、`Ascend Extension for PyTorch`与`PyPTO`三者的Python版本一致。
-        - **仿真环境说明**：在仿真环境中可跳过`Ascend Extension for PyTorch`的安装，但仍需安装`PyTorch`。
+    - PyTorch及TorchNPU：
+        - **顺序说明**：请务必先完成上文"安装CANN包"章节中的toolkit包安装后，再安装`TorchNPU`。
+        - 请根据实际环境的Python版本单独安装，请参考[TorchNPU文档中心](https://hiascend.com/document/redirect/pytorchuserguide)中的《软件安装》手册。
+        - **重要**：需确保`PyTorch`、`TorchNPU`与`PyPTO`三者的Python版本一致。
 
-2. **安装编译依赖**
-
-    若不需要编译PyPTO，可跳过本步骤。
-
-    **安装编译工具：**
+2. **安装其它依赖**
 
     - cmake >= 3.16.3
     - make
     - g++ >= 7.3.1
-
-    **准备第三方开源软件源码包**
-
-    PyPTO编译过程依赖以下第三方开源软件源码包，若您的环境可正常访问[cann-src-third-party](https://gitcode.com/cann-src-third-party)，
-    这些软件的源码包会在编译时自动下载和编译，否则请手动准备：
-
-    | 软件包                 | 版本      |
-    |:--------------------|:--------|
-    | JSON for Modern C++ | v3.11.3 |
-    | libboundscheck      | v1.1.16 |
-
-    手工准备第三方开源源码包的方法:
-
-    方法一：手工下载
-
-    ```bash
-    # 创建并进入用于存放第三方开源软件源码包的目录path-to-your-thirdparty
-    mkdir -p <path-to-your-thirdparty> && cd $_
-
-    # 下载JSON for Modern C++ 三方库
-    wget https://gitcode.com/cann-src-third-party/json/releases/download/v3.11.3/json-3.11.3.tar.gz
-
-    # 下载libboundscheck三方库
-    wget https://gitcode.com/cann-src-third-party/libboundscheck/releases/download/v1.1.16/libboundscheck-v1.1.16.tar.gz
-    ```
-
-    方法二：通过辅助脚本下载
-
-    ```bash
-    # 创建用于存放第三方开源软件源码包的目录path-to-your-thirdparty
-    mkdir -p <path-to-your-thirdparty>
-
-    # 执行辅助脚本
-    # 如果未指定--download-path参数，脚本会将所需三方依赖下载到pypto同级目录的pypto_download/third_party_packages路径下
-    # 如果指定了--download-path参数，脚本会将所需三方依赖下载到path-to-your-thirdparty/third_party_packages路径下
-    bash tools/prepare_env.sh --type=third_party [--download-path=path-to-your-thirdparty]
-    ```
-
-#### 软件包安装
-
-> PyPTO支持两种仿真模式：
->
-> - **性能仿真**：仅评估程序运行性能，无需安装CANN、NPU驱动与固件。
-> - **精度仿真**：模拟真实NPU的执行逻辑，获取运算结果，必须依赖CANN工具包。
->
-> 因此：
->
-> - 若仅编译和运行PyPTO**性能仿真**，可跳过本节。
-> - 若需编译和运行**精度仿真**，或计划在**真实NPU环境**中编译运行PyPTO，必须安装如下软件包。
-
-##### 自动安装（脚本安装）
-
-若当前系统环境受脚本支持，可使用项目`tools`目录下的`prepare_env.sh`进行自动安装。
-
-脚本可覆盖的内容如下：
-
-- 自动下载并安装CANN toolkit包。
-- 自动下载并安装CANN ops包。
-- 自动下载并安装pto-isa。
-
-示例命令如下：
-
-```bash
-# 自动安装CANN toolkit / ops / pto-isa
-bash tools/prepare_env.sh --type=cann --device-type=a2
-
-# 如需额外下载驱动与固件安装包，可增加如下参数
-bash tools/prepare_env.sh --type=cann --device-type=a2 --with-install-driver=true
-```
-
-| 参数                    | 类型   | 是否必须 | 说明                                       |
-|:----------------------|:-----|:-----|:-----------------------------------------|
-| --type                | str  | 是    | 脚本安装类型，可选：cann, all |
-| --device-type         | str  | 是    | 指定NPU型号，可选：a2, a3              |
-| --install-path        | str  | 否    | 指定CANN包安装路径                            |
-| --download-path       | str  | 否    | 指定CANN包以及三方依赖包下载路径                     |
-| --with-install-driver | bool | 否    | 指定是否额外下载NPU驱动和固件安装包，默认为false；不会自动执行驱动和固件安装 |
-| --help                | -    | 否    | 查看命令参数帮助信息                               |
-
-##### 手动安装
-
-若自动安装不适用，可按以下步骤逐项手动完成安装。
-
-1. **安装CANN包**
-
-    请单击[下载链接](https://ascend.devcloud.huaweicloud.com/artifactory/cann-run-mirror/software/master/)，选择最新时间版本，并根据产品型号和环境架构下载对应包。安装命令如下，更多指导参考《[CANN软件安装指南](https://www.hiascend.com/document/redirect/CannCommunityInstWizard)》。
-
-    - 安装CANN toolkit包
-
-        ```bash
-        # 确保安装包具有可执行权限
-        chmod +x Ascend-cann-toolkit_${cann_version}_linux-${arch}.run
-        # 安装命令
-        ./Ascend-cann-toolkit_${cann_version}_linux-${arch}.run --install --install-path=${install_path}
-        ```
-
-    - 安装CANN ops包（运行态依赖）
-
-        ops包是运行态依赖，若仅编译算子，可不安装此包。
-
-        ```bash
-        # 确保安装包具有可执行权限
-        chmod +x Ascend-cann-${soc_name}-ops_${cann_version}_linux-${arch}.run
-        # 安装命令
-        ./Ascend-cann-${soc_name}-ops_${cann_version}_linux-${arch}.run --install --install-path=${install_path}
-        ```
-
-        - \$\{cann\_version\}：表示CANN包版本号。
-        - \$\{arch\}：表示CPU架构，如aarch64、x86_64。
-        - \$\{soc\_name\}：表示NPU型号名称。
-        - \$\{install\_path\}：表示指定安装路径，ops包需与toolkit包安装在相同路径，root用户默认安装在`/usr/local/Ascend`目录。
-
-2. **安装pto-isa**
-
-    具体方法请参考[安装pto-isa](#3-安装pto-isa)。
-
-#### 环境变量配置
-
-安装完成后请配置环境变量，请用户根据set_env.sh的实际路径执行如下命令。
-上述环境变量配置只在当前窗口生效，用户可以按需将以上命令写入环境变量配置文件（如.bashrc文件）。
-
-```bash
-# 默认路径安装，以root用户为例（非root用户，将/usr/local替换为${HOME}）
-source /usr/local/Ascend/ascend-toolkit/set_env.sh
-
-# 指定路径安装
-source ${install_path}/ascend-toolkit/set_env.sh
-```
-
-### 方式3：Docker安装
-
-Docker安装相关内容请参考：
-
-- [Docker环境部署](./docker_environment.md)
-
-在阅读Docker文档前，请先确保已完成宿主机NPU驱动和固件安装。
-
-`pto-isa`安装具体方法请参考[安装pto-isa](#3-安装pto-isa)。
+    - gcc >= 7.3.1
+    - pybind11 >= 2.13.6（pip包，可通过`python3 -m pip install pybind11`安装）
 
 ## 环境验证
 
@@ -305,6 +178,8 @@ Docker安装相关内容请参考：
     ```bash
     # 查看CANN toolkit包及ops包版本信息（默认路径安装），CANNLab场景下将/usr/local替换为/home/developer
     cat /usr/local/Ascend/cann/${arch}-linux/ascend*install.info
+    ```
+    其中\${arch}可通过`uname -m`查询当前架构，如aarch64、x86_64。
 
 环境准备完成后，请参考[PyPTO安装](./build_and_install.md)文档完成PyPTO的安装。
 
@@ -313,13 +188,7 @@ Docker安装相关内容请参考：
 ### PyPTO Toolkit插件
 
 如需体验计算图和泳道图的查看能力，请安装PyPTO Toolkit插件：
-
-1. 单击[PyPTO_Toolkit](https://ascend-cann.obs.cn-north-4.myhuaweicloud.com/devkit/pypto-toolkit-1.1.0.vsix)，下载`.vsix`插件文件。
-
-2. 打开Visual Studio Code，进入"扩展"选项卡界面，单击右上角的"..."，选择"从VSIX安装..."。
- ![vscode_install](https://ascend-cann.obs.cn-north-4.myhuaweicloud.com/devkit/images/vscode_install.png)
-
-3. 选择已下载的`.vsix`插件文件，完成安装。
+具体使用文档参考 [PyPTO Toolkit 文档](https://pypto-tools.gitcode.com/index.html)
 
 ### MPI依赖
 
@@ -352,4 +221,16 @@ make && make install
 ```bash
 export MPI_HOME=/usr/local/mpich
 export PATH=${MPI_HOME}/bin:${PATH}
+```
+
+## 环境变量配置
+
+按需选择合适的命令使CANN环境变量生效。上述环境变量配置只在当前窗口生效，用户可以按需将以上命令写入环境变量配置文件（如`.bashrc`文件）。
+
+```bash
+# 默认路径安装，以root用户为例（非root用户，将/usr/local替换为${HOME}）
+source /usr/local/Ascend/cann/set_env.sh
+
+# 指定路径安装
+source ${install_path}/cann/set_env.sh
 ```
