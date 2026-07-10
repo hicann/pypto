@@ -97,7 +97,7 @@ license: 完整条款见 LICENSE.txt
    - `catch (const std::exception& e)`，打印 `e.what()`
    - `catch (...)`，打印 unknown exception
    - 如有必要，可在 pass 内关键步骤前后增加临时日志，缩小中断位置
-3. 加入临时代码后，重新编译安装 pypto 包，命令：`python3 -m pip install . --verbose`
+3. 加入临时代码后，重新编译并安装 pypto 包：`python3 build_ci.py --clean --py_abi=37 --plat_name=manylinux2014 --no_isolation --whl_into_run && bash build_out/cann-pypto_*.run --full -q --pylocal
 4. 在同样的日志环境变量配置下重新执行用户复现脚本。
 5. 上述异常捕获和临时日志仅用于定位；定位完成后，将临时诊断代码回退。
 
@@ -127,7 +127,7 @@ license: 完整条款见 LICENSE.txt
 1. 如果某个 pass 模块执行异常并在该 pass 内中断，必须先检查该 `Pass_xxx` 目录下的 `After` 计算图是否成功打印。
 2. 如果 `After` 计算图未成功打印，不得直接基于 `Before` 图下结论；必须参考 `references/pass-error-analysis-guide.md` 中的“异常前补打计算图”相关流程，定位最近异常点并插入临时 `DumpJsonFile` 代码。
 3. 插入临时 `DumpJsonFile` 代码后，必须重新编译并安装 pypto 包，再重新执行用户复现脚本。
-4. 常规安装命令：`python3 -m pip install . --verbose`
+4. 常规安装命令：`python3 build_ci.py --clean --py_abi=37 --plat_name=manylinux2014 --no_isolation --whl_into_run && bash build_out/cann-pypto_*.run --full -q --pylocal`
 5. 重新安装完成后，重新执行用户复现脚本，确认临时补打的计算图已成功生成，再继续后续异常分析。
 
 **验证检查点：**

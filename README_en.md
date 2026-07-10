@@ -54,6 +54,12 @@ In the [pypto-gym](https://gitcode.com/cann/pypto-gym) sample repository, fused 
 
 These samples help developers learn how to write PyPTO operators, from simple Tensor operations to complex model network implementations, enabling rapid porting and deployment.
 
+##  Version Compatibility
+
+The source code of this project is released in conjunction with CANN software versions. For the correspondence between CANN software versions and the tags of this project, please refer to the relevant version notes in the [release repository](https://gitcode.com/cann/release-management).
+
+Please note that to ensure smooth customization and development of the source code, you should select the matching CANN version and the corresponding Gitcode tag source code. Using the `master` branch may introduce version mismatch risks.
+
 ## Quick Start
 
 If you want to quickly experience the usage and development process of PyPTO, refer to the following documents for simple tutorials.

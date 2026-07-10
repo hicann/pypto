@@ -1,6 +1,7 @@
 ﻿# 编程指南
 
 - [简介](./introduction/introduction.md)
+- [环境准备](../install/prepare_environment_hiascend.md)
 - [快速入门](./introduction/quick_start.md)
 - [编程范式](./introduction/program_paradigms.md)
 - [算子开发](./development/index.md)
