@@ -62,6 +62,7 @@ TEST_F(TestDevicePlatformConfig, StringToDpaltformAllMappings)
     EXPECT_EQ(StringToDpaltform("ASCEND_910B2"), DPlatform::ASCEND_910B2);
     EXPECT_EQ(StringToDpaltform("ASCEND_910B3"), DPlatform::ASCEND_910B3);
     EXPECT_EQ(StringToDpaltform("ASCEND_910B4"), DPlatform::ASCEND_910B4);
+    EXPECT_EQ(StringToDpaltform("ASCEND_910C4"), DPlatform::ASCEND_910C4);
     EXPECT_EQ(StringToDpaltform("ASCEND_950PR_9579"), DPlatform::ASCEND_950PR_9579);
     EXPECT_EQ(StringToDpaltform("ASCEND_950DT_9582"), DPlatform::ASCEND_950DT_9582);
     EXPECT_EQ(StringToDpaltform("ASCEND_950PR_9582"), DPlatform::ASCEND_950PR_9582);
