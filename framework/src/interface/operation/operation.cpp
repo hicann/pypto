@@ -796,6 +796,7 @@ void Operation::ReplaceIOperand(size_t index, std::shared_ptr<LogicalTensor> new
     GetIOperands()[index]->RemoveConsumer(*this);
     GetIOperands()[index] = std::move(newTensor);
     GetIOperands()[index]->AddConsumer(*this);
+    TensorOpStmt::args_[index] = GetIOperands()[index];
 
     operationHash_ = 0;
 }
@@ -806,6 +807,7 @@ void Operation::ReplaceOOperand(size_t index, std::shared_ptr<LogicalTensor> new
     GetOOperands()[index]->RemoveProducer(*this);
     GetOOperands()[index] = std::move(newTensor);
     GetOOperands()[index]->AddProducer(*this);
+    TensorOpStmt::result_[index] = GetOOperands()[index];
 
     operationHash_ = 0;
 }

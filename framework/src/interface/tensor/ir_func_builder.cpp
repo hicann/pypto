@@ -205,13 +205,9 @@ std::shared_ptr<Function> RootFunctionBuilder::CreatePathFunc(
     std::unordered_set<std::shared_ptr<LogicalTensor>> definedOutputs;
     std::unordered_set<std::shared_ptr<LogicalTensor>> allInputs;
     std::unordered_set<std::shared_ptr<LogicalTensor>> allOutputs;
-    std::vector<ir::StmtPtr> bodyStmts;
-    bodyStmts.reserve(seq->stmts_.size());
     for (auto& stmt : seq->stmts_) {
-        auto opStmt = ProcessTensorOp(pathFunc, stmt, allInputs, allOutputs, definedOutputs);
-        bodyStmts.push_back(opStmt);
+        (void)ProcessTensorOp(pathFunc, stmt, allInputs, allOutputs, definedOutputs);
     }
-    pathFunc->body_ = std::make_shared<ir::SeqStmts>(std::move(bodyStmts), seq->span_);
     ComputeIncast(*pathFunc, allInputs, definedOutputs);
     pathFunc->name_ = pathMagicName;
     pathFunc->funcType_ = ir::FunctionType::IN_CORE;
@@ -241,19 +237,19 @@ int RootFunctionBuilder::FindOrCreateSlot(
 
 void RootFunctionBuilder::BuildPathFuncSlotScope(
     Function* pathFunc, const std::shared_ptr<TensorSlotScope>& scope,
-    const LogicalTensors& inArgumentList, const LogicalTensors& outArgumentList)
+    const LogicalTensors& originalIncasts, const LogicalTensors& originalOutcasts)
 {
     auto slotManager = program_.GetTensorSlotManager();
 
     scope->ioslot.incastSlot.resize(pathFunc->GetIncast().size());
     for (size_t idx = 0; idx < pathFunc->GetIncast().size(); idx++) {
-        int slotIndex = FindOrCreateSlot(inArgumentList[idx], slotManager, pathFunc, true);
+        int slotIndex = FindOrCreateSlot(originalIncasts[idx], slotManager, pathFunc, true);
         scope->ioslot.incastSlot[idx] = {slotIndex};
     }
 
     scope->ioslot.outcastSlot.resize(pathFunc->GetOutcast().size());
     for (size_t idx = 0; idx < pathFunc->GetOutcast().size(); idx++) {
-        int slotIndex = FindOrCreateSlot(outArgumentList[idx], slotManager, pathFunc, false);
+        int slotIndex = FindOrCreateSlot(originalOutcasts[idx], slotManager, pathFunc, false);
         scope->ioslot.outcastSlot[idx] = {slotIndex};
     }
 
@@ -373,20 +369,30 @@ ir::StmtPtr RootFunctionBuilder::FinalizePathFunc(const ir::StmtPtr& placeholder
     auto allOutputs = CollectAllOutputs(*pathFunc);
     ComputeOutcast(*pathFunc, allOutputs);
 
-    for (auto& incast : pathFunc->GetOriginIncast()) {
-        pathFunc->params_.push_back(std::static_pointer_cast<const ir::Var>(incast));
-    }
-    for (auto& outcast : pathFunc->GetOriginOutcast()) {
-        pathFunc->params_.push_back(std::static_pointer_cast<const ir::Var>(outcast));
-    }
-
     auto scope = std::make_shared<TensorSlotScope>(pathFunc);
     pathFunc->SetSlotScope(scope);
     program_.GetTensorSlotManager()->scopeList.push_back(scope);
 
-    auto inArgumentList = pathFunc->MakeIncasts(scope);
-    auto outArgumentList = pathFunc->MakeOutcasts(scope);
-    BuildPathFuncSlotScope(pathFunc, scope, inArgumentList, outArgumentList);
+    auto originalIncasts = pathFunc->GetOriginIncast();
+    auto originalOutcasts = pathFunc->GetOriginOutcast();
+
+    pathFunc->MakeIncasts(scope);
+    pathFunc->MakeOutcasts(scope);
+
+    for (auto& incast : pathFunc->GetIncast()) {
+        pathFunc->params_.push_back(std::static_pointer_cast<const ir::Var>(incast));
+    }
+    for (auto& outcast : pathFunc->GetOutcast()) {
+        pathFunc->params_.push_back(std::static_pointer_cast<const ir::Var>(outcast));
+    }
+
+    BuildPathFuncSlotScope(pathFunc, scope, originalIncasts, originalOutcasts);
+
+    std::vector<ir::StmtPtr> bodyStmts;
+    for (auto& op : pathFunc->Operations(false)) {
+        bodyStmts.push_back(std::static_pointer_cast<const ir::Stmt>(op.shared_from_this()));
+    }
+    pathFunc->body_ = std::make_shared<ir::SeqStmts>(std::move(bodyStmts), placeholder->span_);
 
     pathFunc->ComputeHash();
 
@@ -400,7 +406,7 @@ ir::StmtPtr RootFunctionBuilder::FinalizePathFunc(const ir::StmtPtr& placeholder
     program_.GetFunctionCache().Insert(pathFunc->GetFunctionHash(), *pathFunc);
 
     auto& callOperation = dynFunc_->AddRawOperation(
-        Opcode::OP_CALL, inArgumentList, outArgumentList, placeholder->span_);
+        Opcode::OP_CALL, originalIncasts, originalOutcasts, placeholder->span_);
     callOperation.SetOpAttribute(pathFunc->CreateCallOpAttribute({}, {}));
     dynFunc_->AppendCalleeMagicName(pathFunc->GetMagicName());
     callOperation.attrs_.emplace_back("callee", pathFunc->GetMagicName());

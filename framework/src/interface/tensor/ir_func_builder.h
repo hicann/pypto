@@ -72,7 +72,7 @@ private:
     void BuildDynSlotScope();
     void BuildPathFuncSlotScope(
         Function* pathFunc, const std::shared_ptr<TensorSlotScope>& scope,
-        const LogicalTensors& inArgumentList, const LogicalTensors& outArgumentList);
+        const LogicalTensors& originalIncasts, const LogicalTensors& originalOutcasts);
     int FindOrCreateSlot(
         const std::shared_ptr<LogicalTensor>& lt,
         const std::shared_ptr<TensorSlotManager>& slotManager,

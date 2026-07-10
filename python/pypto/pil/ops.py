@@ -280,7 +280,7 @@ def _if_else_stmt(cond, then_block: Block, else_block: Block, ctx: BuildContext)
     scope = Scope.current()
 
     saved = dict(scope.locals)
-    yield_var_names = then_block.store_names | else_block.store_names
+    yield_var_names = sorted(then_block.store_names | else_block.store_names)
 
     then_body = ir.SeqStmts(then_block.span)
     with InsertPoint(then_body), ctx.change_span(then_block.span):
@@ -297,7 +297,7 @@ def _if_else_stmt(cond, then_block: Block, else_block: Block, ctx: BuildContext)
 
     scope.locals = dict(saved)
     yield_vars = []
-    for i, name in enumerate(sorted(yield_var_names)):
+    for i, name in enumerate(yield_var_names):
         if ir.type_equal(then_yield_vars[i], else_yield_vars[i]):
             var = ctx.create_var_like(name, then_yield_vars[i])
         elif isinstance(then_yield_vars[i].type, ir.UnknownType):
