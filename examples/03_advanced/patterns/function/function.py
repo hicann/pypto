@@ -151,7 +151,7 @@ def gelu_activation_kernel(
     x: pypto.Tensor(),
     out: pypto.Tensor()):
     # Configure tiling
-    tile_shapes = [32 for _ in range(len(x.shape))]
+    tile_shapes = [32] * len(x.shape)
     pypto.set_vec_tile_shapes(*tile_shapes)
 
     # GELU approximation: x * sigmoid(1.702 * x)

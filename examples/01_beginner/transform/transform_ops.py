@@ -77,7 +77,7 @@ def assemble_kernel(
     x: pypto.Tensor([], pypto.DT_FP32),
     out: pypto.Tensor([], pypto.DT_FP32),
     offsets: list):
-    tile_shapes = [8 for _ in range(len(x.shape))]
+    tile_shapes = [8] * len(x.shape)
     pypto.set_vec_tile_shapes(*tile_shapes)
     pypto.assemble(x, offsets, out)
 
@@ -171,7 +171,7 @@ def gather_kernel(
     dim: int):
     print(f"input_shape: {input_tensor.shape}")
     print(f"index_shape: {index_tensor.shape}")
-    tile_shapes = [8 for _ in range(len(input_tensor.shape))]
+    tile_shapes = [8] * len(input_tensor.shape)
     pypto.set_vec_tile_shapes(*tile_shapes)
     out[:] = pypto.gather(input_tensor, dim, index_tensor)
 
@@ -348,7 +348,7 @@ def scatter_update_kernel(
     out: pypto.Tensor([], pypto.DT_FP32),
     dim: int,
     src: float):
-    vec_tile_shapes = [8 for _ in range(len(x.shape))]
+    vec_tile_shapes = [8] * len(x.shape)
     pypto.set_vec_tile_shapes(*vec_tile_shapes)
     out[:] = pypto.scatter(x, dim, y, src)
 
@@ -393,7 +393,7 @@ def concat_op(a_shape: tuple, b_shape: tuple, dim: int):
                           out: pypto.Tensor(out_shape, pypto.DT_FP32)
                         ):
 
-        tile_shapes = [8 for _ in range(len(a.shape))]
+        tile_shapes = [8] * len(a.shape)
         pypto.set_vec_tile_shapes(*tile_shapes)
         out[:] = pypto.concat([a, b], dim=dim)
 
@@ -414,7 +414,7 @@ def concat_multiple_op(a_shape: tuple, b_shape: tuple, c_shape: tuple,
                                     c: pypto.Tensor(c_shape, pypto.DT_FP32),
                                     out: pypto.Tensor(out_shape, pypto.DT_FP32)
                                 ):
-        tile_shapes = [8 for _ in range(len(a.shape))]
+        tile_shapes = [8] * len(a.shape)
         pypto.set_vec_tile_shapes(*tile_shapes)
         out[:] = pypto.concat([a, b, c], dim=dim)
 
@@ -539,7 +539,7 @@ def view_kernel(
     out: pypto.Tensor([], pypto.DT_FP32),
     shape: list,
     offsets: list):
-    tile_shapes = [8 for _ in range(len(x.shape))]
+    tile_shapes = [8] * len(x.shape)
     pypto.set_vec_tile_shapes(*tile_shapes)
     out[:] = pypto.view(x, shape, offsets)
 
@@ -583,7 +583,7 @@ def view_with_valid_shape_kernel(
     shape: list,
     offsets: list,
     valid_shape: list):
-    tile_shapes = [8 for _ in range(len(x.shape))]
+    tile_shapes = [8] * len(x.shape)
     pypto.set_vec_tile_shapes(*tile_shapes)
     out[:] = pypto.view(x, shape, offsets, valid_shape=valid_shape)
 
@@ -631,7 +631,7 @@ def transpose_kernel(
     out: pypto.Tensor([], pypto.DT_FP32),
     dim0: int,
     dim1: int):
-    vec_tile_shapes = [8 for _ in range(len(x.shape))]
+    vec_tile_shapes = [8] * len(x.shape)
     pypto.set_vec_tile_shapes(*vec_tile_shapes)
     out[:] = pypto.transpose(x, dim0, dim1)
 
@@ -689,7 +689,7 @@ data_type = {
 def cast_kernel(
     x: pypto.Tensor([], pypto.DT_FP32),
     out: pypto.Tensor([], pypto.DT_FP16)):
-    vec_tile_shapes = [8 for _ in range(len(x.shape))]
+    vec_tile_shapes = [8] * len(x.shape)
     pypto.set_vec_tile_shapes(*vec_tile_shapes)
     out[:] = pypto.cast(x, pypto.DT_FP16)
 

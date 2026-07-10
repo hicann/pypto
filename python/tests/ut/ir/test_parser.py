@@ -218,6 +218,20 @@ def test_visit_pass_functiondef_expr():
     assert len(blk.calls) >= 1
 
 
+def test_visit_raise():
+    def f(x):
+        if x > 0:
+            raise ValueError(f"bad x: {x}")
+
+    blk = _parse_func(f)
+    if_call = next(
+        s for s in blk.calls
+        if isinstance(s, pir.Call) and s.callee == "pil.if_else"
+    )
+    then_block = if_call.args[1]
+    assert _has(then_block, "pil.raise")
+
+
 def test_visit_while():
     def f(x):
         while x:

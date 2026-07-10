@@ -523,6 +523,14 @@ class Parser:
         msg = self.visit(stmt.msg, ctx) if stmt.msg else None
         ctx.call_void("pil.assert", (cond, msg))
 
+    def visit_Raise(self, stmt: ast.Raise, ctx: _Context):
+        if stmt.exc is None:
+            ctx.raise_error(stmt, "bare raise is not supported")
+
+        exc = self.visit(stmt.exc, ctx)
+        cause = self.visit(stmt.cause, ctx) if stmt.cause else None
+        ctx.call_void("pil.raise", (exc, cause))
+
     def visit(self, node: ast.AST, ctx: _Context):
         method = "visit_" + node.__class__.__name__
         visitor = getattr(self, method)

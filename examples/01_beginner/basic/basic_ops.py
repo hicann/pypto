@@ -278,7 +278,7 @@ def permute_kernel(
     x: pypto.Tensor([], pypto.DT_FP32),
     out: pypto.Tensor([], pypto.DT_FP32),
     dims: list):
-    vec_tile_shapes = [8 for _ in range(len(x.shape))]
+    vec_tile_shapes = [8] * len(x.shape)
     pypto.set_vec_tile_shapes(*vec_tile_shapes)
     out[:] = pypto.permute(x, dims)
 

@@ -18,7 +18,7 @@ from .op_registry import impl
 
 
 def has_scalar(values: list) -> bool:
-    return any(isinstance(v, ir.Var) and isinstance(v.type, ir.ScalarType) for v in values)
+    return any(isinstance(v, pypto.pypto_impl.SymbolicScalar) for v in values)
 
 # ---- Compile-time ops ----
 
@@ -110,6 +110,13 @@ def dict_impl(ctx, items=()):
         else:
             result[scope.resolve(k)] = scope.resolve(v)
     return result
+
+
+@impl("pil.raise")
+def raise_impl(ctx, exc, cause):
+    if cause is None:
+        raise exc
+    raise exc from cause
 
 
 @impl(operator.getitem)

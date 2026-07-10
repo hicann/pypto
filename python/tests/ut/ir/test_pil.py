@@ -9,6 +9,7 @@
 import pypto
 import pytest
 from pypto import pil, ir, logging
+from pypto.pil.ops import has_scalar
 
 # ---------- Ops compile tests ----------
 
@@ -706,3 +707,8 @@ def test_pil_multi_and():
         res.append(c)
     pil.compile(foo, 1, 2, 0)
     assert res == [2]
+
+
+def test_has_scalar_symbolic_scalar():
+    assert has_scalar([pypto.symbolic_scalar("n"), 1]) is True
+    assert has_scalar([1, 2, 3]) is False

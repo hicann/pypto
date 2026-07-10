@@ -89,7 +89,7 @@ def sum_op(a: torch.Tensor, dim: int, keepdim: bool = False) -> torch.Tensor:
     @pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
     def sum_kernel(a: pypto.Tensor([], dtype),
                     out: pypto.Tensor([], dtype)):
-        tile_shapes = [8 for _ in range(len(a.shape))]
+        tile_shapes = [8] * len(a.shape)
         pypto.set_vec_tile_shapes(*tile_shapes)
         out[:] = pypto.sum(a, dim=dim, keepdim=keepdim)
     out = torch.empty(out_shape, dtype=torch.float32, device=a.device)
@@ -205,7 +205,7 @@ def amax_op(a: torch.Tensor, dim: int, keepdim: bool = False) -> torch.Tensor:
     @pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
     def amax_kernel(a: pypto.Tensor([], dtype),
                     out: pypto.Tensor([], dtype)):
-        tile_shapes = [8 for _ in range(len(a.shape))]
+        tile_shapes = [8] * len(a.shape)
         pypto.set_vec_tile_shapes(*tile_shapes)
         out[:] = pypto.amax(a, dim=dim, keepdim=keepdim)
     out = torch.empty(out_shape, dtype=torch.float32, device=a.device)
@@ -325,7 +325,7 @@ def amin_op(a: torch.Tensor, dim: int, keepdim: bool = False) -> torch.Tensor:
     @pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
     def amin_kernel(a: pypto.Tensor([], dtype),
                     out: pypto.Tensor([], dtype)):
-        tile_shapes = [8 for _ in range(len(a.shape))]
+        tile_shapes = [8] * len(a.shape)
         pypto.set_vec_tile_shapes(*tile_shapes)
         out[:] = pypto.amin(a, dim=dim, keepdim=keepdim)
     out = torch.empty(out_shape, dtype=torch.float32, device=a.device)
@@ -443,7 +443,7 @@ def maximum_op(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
 
     @pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
     def maximum_kernel(a: pypto.Tensor([], dtype), b: pypto.Tensor([], dtype), out: pypto.Tensor([], dtype)):
-        tile_shapes = [8 for _ in range(len(a.shape))]
+        tile_shapes = [8] * len(a.shape)
         pypto.set_vec_tile_shapes(*tile_shapes)
         out[:] = pypto.maximum(a, b)
     out = torch.empty(shape1, dtype=torch.float32, device=a.device)
@@ -500,7 +500,7 @@ def minimum_op(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
 
     @pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
     def minimum_kernel(a: pypto.Tensor([], dtype), b: pypto.Tensor([], dtype), out: pypto.Tensor([], dtype)):
-        tile_shapes = [8 for _ in range(len(a.shape))]
+        tile_shapes = [8] * len(a.shape)
         pypto.set_vec_tile_shapes(*tile_shapes)
         out[:] = pypto.minimum(a, b)
     out = torch.empty(shape, dtype=torch.float32, device=a.device)

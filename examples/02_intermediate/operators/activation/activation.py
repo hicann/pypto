@@ -79,7 +79,7 @@ F_NEGA_1 = -1.0
 
 def configure_tiling(x):
     if len(x.shape) >= 2:
-        tile_list = [32 for _ in range(len(x.shape))]
+        tile_list = [32] * len(x.shape)
         pypto.set_vec_tile_shapes(*tile_list)
     else:
         pypto.set_vec_tile_shapes(32, 128)
