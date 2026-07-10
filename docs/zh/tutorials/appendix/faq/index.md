@@ -16,4 +16,6 @@ loop-principle
 uninitialized-tensor
 view-assemble-cycle
 symbolic-scalar-no-increment
+aicore-exception
+swimlane-issue
 ```
