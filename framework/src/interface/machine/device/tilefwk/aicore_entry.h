@@ -25,8 +25,6 @@
 
 // device switch head file begin
 namespace npu::tile_fwk {
-#define PERF_PMU_TEST_SWITCH 0
-
 #define DEBUG_SWITCH 0
 
 } // namespace npu::tile_fwk
@@ -188,22 +186,22 @@ INLINE void SendRegFinish(uint32_t curTaskIdx) { set_cond(curTaskIdx | AICORE_FI
 
 INLINE void SendRegAck(uint32_t taskIdx) { set_cond(taskIdx); }
 
-INLINE void PmuTestBegin(__gm__ KernelArgs* args)
+INLINE void PmuTestBegin(uint32_t profLevel)
 {
-    UNUSED(args);
-#if PERF_PMU_TEST_SWITCH && IS_AICORE
+    UNUSED(profLevel);
+#if IS_AICORE
     // set_ctrl/get_ctrl are CANN CCE intrinsics; unavailable on host AICore model simulation.
-    if (args->taskEntry.reserved[0] == PRO_LEVEL2) {
+    if (unlikely(profLevel == PRO_LEVEL2)) {
         set_ctrl((uint64_t)get_ctrl() | 0x1);
     }
 #endif
 }
 
-INLINE void PmuTestEnd(__gm__ KernelArgs* args)
+INLINE void PmuTestEnd(uint32_t profLevel)
 {
-    UNUSED(args);
-#if PERF_PMU_TEST_SWITCH && IS_AICORE
-    if (args->taskEntry.reserved[0] == PRO_LEVEL2) {
+    UNUSED(profLevel);
+#if IS_AICORE
+    if (unlikely(profLevel == PRO_LEVEL2)) {
         set_ctrl((uint64_t)get_ctrl() - 1);
     }
 #endif
@@ -214,7 +212,7 @@ INLINE __gm__ TaskStat* InitTaskStat(ExecuteContext* ctx)
     __gm__ TaskStat* taskStat = nullptr;
     (void)ctx;
 #ifdef __DAV_V310
-    if (unlikely(ctx->args->taskEntry.reserved[0] >= PRO_LEVEL1)) {
+    if (unlikely(ctx->profLevel >= PRO_LEVEL1)) {
         auto m = (__gm__ Metrics*)(ctx->args->shakeBuffer[SHAK_BUF_DFX_DATA_INDEX]);
         taskStat = &m->tasks[m->taskCount];
         taskStat->perfDataBaseAddr = reinterpret_cast<uint64_t>(m);
@@ -280,7 +278,7 @@ INLINE void ExecDynCoreFunctionKernel(ExecuteContext* ctx, uint32_t taskId, uint
     SetStatus(ctx->args, STAGE_FINISH_EXEC_COREFUNC_KERNEL);
     PipeSync();
     SetStatus(ctx->args, STAGE_FINISH_PIPE_SYNC);
-    if (unlikely(ctx->args->taskEntry.reserved[0] == PRO_LEVEL2 || ctx->args->taskEntry.reserved[0] == PRO_LEVEL1)) {
+    if (unlikely(ctx->profLevel == PRO_LEVEL2 || ctx->profLevel == PRO_LEVEL1)) {
         AddMetricStatistic(ctx, ctx->SeqNo(), taskId, opAttrs[0], t1);
     }
     if (unlikely(ctx->aicoreDevTaskMetric.devTaskMetricEnable)) {
@@ -417,12 +415,13 @@ INLINE void KernelEntry(
         if (isFirstTask) {
             PerfTraceRecord(ctx.SeqNo(), ctx.aicoreDevTaskMetric.devTaskMetric, PERF_TRACE_CORE_DEV_TASK_WAIT_RCV_FIRST_LEAF_TASK);
             isFirstTask = false;
+            ctx.profLevel = args->taskEntry.reserved[0];
         }
 
         SendRegAck(curTaskIdx);
-        PmuTestBegin(args);
+        PmuTestBegin(ctx.profLevel);
         ExecCoreFunctionKernel(&ctx, curTaskIdx, lastMixResourceType);
-        PmuTestEnd(args);
+        PmuTestEnd(ctx.profLevel);
         SendRegFinish(curTaskIdx);
         lastTaskIdx = curTaskIdx;
         SetStatus(args, STAGE_FINISH_CUR_TASK);
