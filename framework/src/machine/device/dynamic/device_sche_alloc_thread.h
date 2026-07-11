@@ -140,7 +140,10 @@ inline int ComputeArbitrationLevel(DeviceArgs* devArgs, std::atomic<uint64_t>& c
     if (ret == DEVICE_MACHINE_OK) {
         return ARBIT_A5_CROSS_DIE;
     }
-
+    DEV_ERROR(DevCommonErr::PARAM_INVALID,
+        "#sche.arbitration.failed: All arbitration levels failed. scheCpuNum=%u, currentCpuNum=%d, cpumask=%lx",
+        devArgs->scheCpuNum, __builtin_popcount(static_cast<uint32_t>(cpumask.load(std::memory_order_acquire))),
+        cpumask.load(std::memory_order_acquire));
     return ARBIT_FAILED;
 }
 

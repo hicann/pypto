@@ -372,11 +372,13 @@ void DeviceLauncher::SetDevPerfAddr([[maybe_unused]] const bool debugEnable, [[m
 
 int DeviceLauncher::LaunchSyncTask(AclRtStream aicoreStream, bool isCaptureMode, int launchEarlyMode)
 {
-    if (launchEarlyMode == 1) { // 1 ： early launch in all modes
-        return 0;
-    }
-    if (launchEarlyMode == 0 && isCaptureMode) {  // 0 : early launch only in capture mode
-        return 0;
+    if (Platform::Instance().GetSoc().GetNPUArch() != NPUArch::DAV_3510) {
+        if (launchEarlyMode == 1) { // 1 ： early launch in all modes
+            return 0;
+        }
+        if (launchEarlyMode == 0 && isCaptureMode) {  // 0 : early launch only in capture mode
+            return 0;
+        }
     }
 
     //  close early launch
