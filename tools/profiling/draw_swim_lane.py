@@ -102,8 +102,9 @@ class TaskInfo:
         return base
 
     def get_task_execution_time_analysis(self):
-        assert self.psg_id_in_dyn in task_analysis
-        psg_id_analysis = task_analysis[self.psg_id_in_dyn]
+        if self.is_fake or not self.func_hash or self.func_hash not in task_analysis:
+            return ""
+        psg_id_analysis = task_analysis[self.func_hash]
         average = psg_id_analysis.total_execution_time / psg_id_analysis.count
         report = (
             f"Average Execution Time: {average}\n"
@@ -373,7 +374,6 @@ def get_fake_task_start_end_cycles(fake_task_id):
         entry.exec_start = fake_task_start_time_alloc
         entry.exec_end = fake_task_start_time_alloc + 1
         fake_task_start_time_alloc += 2
-    task_analysis[entry.psg_id_in_dyn].add_task(entry)
 
 
 def build_leaf_hash_to_events(mix_event_data):
@@ -444,7 +444,6 @@ def parse_swim_data(swim_data, label_type):
             entry.core_type = core_entry.get_brief_core_type()
             entry.sync_events = task.get("syncEvents", [])
             process_sync_events(entry.sync_events)
-            task_analysis[entry.psg_id_in_dyn].add_task(entry)
             # 判断task 间是否存在时间交叠
             if (
                 last_valid == True
@@ -531,6 +530,7 @@ def build_swim_info(swim_data, topo_data, label_type: int = 0, dir_name: str = "
     fake_task_start_time_alloc = mininum_start_time
     for fake_task_id in fake_task_list:
         get_fake_task_start_end_cycles(fake_task_id)
+    build_task_analysis()
     print(f"Total Core:{len(total_cores) - 1}")
     print(f"Total Task Count:{len(total_tasks)}")
     print(f"|--Fake Task Count:{len(fake_task_list)}")
@@ -911,6 +911,14 @@ def get_predecessors():
         for succ in task_entry.successors:
             total_tasks[succ].predecessor += 1
             total_tasks[succ].predecessors_taskid.append(task_entry.task_id)
+
+
+def build_task_analysis():
+    global total_tasks
+    global task_analysis
+    for _, task in total_tasks.items():
+        if task.func_hash and not task.is_fake:
+            task_analysis[task.func_hash].add_task(task)
 
 
 def analysis_wait_cycles(path):
