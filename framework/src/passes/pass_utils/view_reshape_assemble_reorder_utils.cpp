@@ -16,6 +16,7 @@
 #include "view_reshape_assemble_reorder_utils.h"
 
 #include <algorithm>
+#include <climits>
 
 #include "interface/operation/attribute.h"
 #include "interface/operation/attr_holder.h"
@@ -71,6 +72,13 @@ bool HasOnlyFirstUnknownDim(const std::vector<int64_t>& shape)
 bool HasConcreteShape(const std::vector<int64_t>& shape)
 {
     return std::all_of(shape.begin(), shape.end(), [](int64_t dim) { return dim > 0; });
+}
+
+bool HasNegativeDynDim(const std::vector<SymbolicScalar>& dynShape)
+{
+    return std::any_of(dynShape.begin(), dynShape.end(), [](const SymbolicScalar& dim) {
+        return dim.ConcreteValid() && dim.Concrete() < 0;
+    });
 }
 
 bool HasTargetMatmulOp(Function& function)
@@ -743,11 +751,82 @@ Status ViewReshapeAssembleReorderUtils::TryCollectFaninAssembleRecord(
     return SUCCESS;
 }
 
+bool ViewReshapeAssembleReorderUtils::BuildAxisPlanAllowFirstUnknown(
+    const std::vector<int64_t>& srcShape, const std::vector<int64_t>& dstShape, std::vector<AxisGroup>& axisPlan)
+{
+    if (!HasOnlyFirstUnknownDim(srcShape) || !HasOnlyFirstUnknownDim(dstShape)) {
+        return false;
+    }
+    size_t srcIdx = 0;
+    size_t dstIdx = 0;
+    while (srcIdx < srcShape.size() && dstIdx < dstShape.size()) {
+        size_t srcBegin = srcIdx;
+        size_t dstBegin = dstIdx;
+        int64_t srcProduct = srcShape[srcIdx++];
+        int64_t dstProduct = dstShape[dstIdx++];
+        while (srcProduct != dstProduct) {
+            if (srcProduct == UNKNOWN_DIM || dstProduct == UNKNOWN_DIM) {
+                return false;
+            }
+            if (srcProduct < dstProduct) {
+                if (srcIdx >= srcShape.size() || srcShape[srcIdx] == UNKNOWN_DIM ||
+                    srcProduct > LLONG_MAX / srcShape[srcIdx]) {
+                    return false;
+                }
+                srcProduct *= srcShape[srcIdx++];
+                continue;
+            }
+            if (dstIdx >= dstShape.size() || dstShape[dstIdx] == UNKNOWN_DIM ||
+                dstProduct > LLONG_MAX / dstShape[dstIdx]) {
+                return false;
+            }
+            dstProduct *= dstShape[dstIdx++];
+        }
+        axisPlan.emplace_back(AxisGroup{srcBegin, srcIdx, dstBegin, dstIdx});
+    }
+    return srcIdx == srcShape.size() && dstIdx == dstShape.size();
+}
+
+bool ViewReshapeAssembleReorderUtils::InferInputDynRawShapeFromOutput(
+    const LogicalTensorPtr& input, const LogicalTensorPtr& output,
+    std::vector<SymbolicScalar>& inferredInputDynRawShape)
+{
+    if (input == nullptr || output == nullptr || input->GetRawTensor() == nullptr ||
+        output->GetRawTensor() == nullptr) {
+        return false;
+    }
+    const auto& outputDynRawShape = output->GetRawTensor()->GetDynRawShape();
+    if (outputDynRawShape.size() != output->GetShape().size()) {
+        return false;
+    }
+    std::vector<AxisGroup> axisPlan;
+    if (!BuildAxisPlanAllowFirstUnknown(input->GetShape(), output->GetShape(), axisPlan)) {
+        return false;
+    }
+    std::vector<int64_t> inferredStaticShape;
+    if (!ApplyBackwardShape(
+            output->GetShape(), outputDynRawShape, axisPlan, inferredStaticShape, inferredInputDynRawShape)) {
+        return false;
+    }
+    return inferredInputDynRawShape.size() == input->GetShape().size();
+}
+
 void ViewReshapeAssembleReorderUtils::CreateMetadataReshape(
     Function& function, const LogicalTensorPtr& input, const LogicalTensorPtr& output,
     const std::vector<SymbolicScalar>& dynShape, const ir::Span& span, const Operation::ScopeInfo& scopeInfo,
     Operation& srcOp)
 {
+    if (input != nullptr && input->GetRawTensor() != nullptr &&
+        HasNegativeDynDim(input->GetRawTensor()->GetDynRawShape())) {
+        std::vector<SymbolicScalar> inferredInputDynRawShape;
+        if (InferInputDynRawShapeFromOutput(input, output, inferredInputDynRawShape)) {
+            input->GetRawTensor()->UpdateDynRawShape(inferredInputDynRawShape);
+        } else {
+            APASS_LOG_WARN_F(
+                Elements::Operation,
+                "Failed to infer input DynRawShape from output for metadata reshape; keep original DynRawShape.");
+        }
+    }
     auto& newReshape = irBuilder_.CreateTensorOpStmt(function, Opcode::OP_RESHAPE, {input}, {output}, span);
     newReshape.SetScopeInfo(scopeInfo);
     newReshape.CopyAttrFrom(srcOp, "");
@@ -901,29 +980,7 @@ bool ViewReshapeAssembleReorderUtils::BuildAxisPlan(
     if (!HasConcreteShape(srcShape) || !HasConcreteShape(dstShape)) {
         return false;
     }
-    size_t srcIdx = 0;
-    size_t dstIdx = 0;
-    while (srcIdx < srcShape.size() && dstIdx < dstShape.size()) {
-        size_t srcBegin = srcIdx;
-        size_t dstBegin = dstIdx;
-        int64_t srcProduct = srcShape[srcIdx++];
-        int64_t dstProduct = dstShape[dstIdx++];
-        while (srcProduct != dstProduct) {
-            if (srcProduct < dstProduct) {
-                if (srcIdx >= srcShape.size()) {
-                    return false;
-                }
-                srcProduct *= srcShape[srcIdx++];
-                continue;
-            }
-            if (dstIdx >= dstShape.size()) {
-                return false;
-            }
-            dstProduct *= dstShape[dstIdx++];
-        }
-        axisPlan.emplace_back(AxisGroup{srcBegin, srcIdx, dstBegin, dstIdx});
-    }
-    return srcIdx == srcShape.size() && dstIdx == dstShape.size();
+    return BuildAxisPlanAllowFirstUnknown(srcShape, dstShape, axisPlan);
 }
 
 bool ViewReshapeAssembleReorderUtils::ApplyForwardShape(

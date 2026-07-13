@@ -26,6 +26,7 @@
 #include <string>
 #define private public
 #include "passes/tensor_graph_pass/remove_redundant_reshape.h"
+#include "passes/pass_utils/view_reshape_assemble_reorder_utils.h"
 
 using namespace npu::tile_fwk;
 
@@ -533,4 +534,142 @@ TEST_F(RemoveRedundantReshapeTest, TestReshapeAssembleReorderWithConcreteDynVali
         if (op.GetOpcode() == Opcode::OP_A_MUL_B) { matmulCount++; }
     }
     EXPECT_EQ(matmulCount, 1);
+}
+
+TEST_F(RemoveRedundantReshapeTest, TestInferInputDynRawShapeFromOutputRejectsNullArgs)
+{
+    auto input = IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{-1, 64}, CreateTestConstIntVector({-1, 64}));
+    auto output = IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{-1, 4, 16}, CreateTestConstIntVector({-1, 4, 16}));
+
+    std::vector<SymbolicScalar> inferred;
+    EXPECT_FALSE(ViewReshapeAssembleReorderUtils::InferInputDynRawShapeFromOutput(nullptr, output, inferred));
+    EXPECT_FALSE(ViewReshapeAssembleReorderUtils::InferInputDynRawShapeFromOutput(input, nullptr, inferred));
+}
+
+TEST_F(RemoveRedundantReshapeTest, TestInferInputDynRawShapeFromOutputRejectsBadDynShapeSize)
+{
+    auto input = IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{-1, 64}, CreateTestConstIntVector({-1, 64}));
+    auto output = IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{-1, 4, 16}, CreateTestConstIntVector({-1, 4, 16}));
+    output->GetRawTensor()->UpdateDynRawShape(CreateTestConstIntVector({4, 4}));
+
+    std::vector<SymbolicScalar> inferred;
+    EXPECT_FALSE(ViewReshapeAssembleReorderUtils::InferInputDynRawShapeFromOutput(input, output, inferred));
+}
+
+TEST_F(RemoveRedundantReshapeTest, TestInferInputDynRawShapeFromOutputRejectsIncompatibleShapes)
+{
+    auto input = IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{-1, 64}, CreateTestConstIntVector({-1, 64}));
+    auto output = IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{-1, 128}, CreateTestConstIntVector({-1, 128}));
+    output->GetRawTensor()->UpdateDynRawShape(CreateTestConstIntVector({4, 128}));
+
+    std::vector<SymbolicScalar> inferred;
+    EXPECT_FALSE(ViewReshapeAssembleReorderUtils::InferInputDynRawShapeFromOutput(input, output, inferred));
+}
+
+/*
+ * CreateMetadataReshape: when input DynRawShape has a negative value, it is
+ * inferred from the output's concrete DynRawShape and updated in-place.
+ */
+TEST_F(RemoveRedundantReshapeTest, TestCreateMetadataReshapeInfersInputDynRawShape)
+{
+    auto func = std::make_shared<Function>(
+        Program::GetInstance(), "TestInferDynRawShape", "TestInferDynRawShape", nullptr);
+
+    // input: static shape {-1, 64}, dynRawShape {-1, 64} (has negative -> triggers inference)
+    auto input = IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{-1, 64}, CreateTestConstIntVector({-1, 64}));
+    // output: static shape {-1, 4, 16}, dynRawShape {4, 4, 16} (concrete, source for inference)
+    auto output = IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{-1, 4, 16}, CreateTestConstIntVector({-1, 4, 16}));
+    output->GetRawTensor()->UpdateDynRawShape(CreateTestConstIntVector({4, 4, 16}));
+
+    // srcOp: a dummy reshape op for attribute copying
+    auto dummyIn = IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{4}, CreateTestConstIntVector({4}));
+    auto dummyOut = IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{4}, CreateTestConstIntVector({4}));
+    auto& srcOp = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_RESHAPE, {dummyIn}, {dummyOut});
+
+    // Before: input dynRawShape has -1 at first dim
+    const auto& beforeDynRawShape = input->GetRawTensor()->GetDynRawShape();
+    ASSERT_EQ(beforeDynRawShape.size(), 2u);
+    EXPECT_EQ(beforeDynRawShape[0].Concrete(), -1);
+
+    ViewReshapeAssembleReorderUtils utils;
+    utils.CreateMetadataReshape(*func, input, output, CreateTestConstIntVector({4, 4, 16}),
+        ir::Span::Unknown(), Operation::ScopeInfo(), srcOp);
+
+    // After: input dynRawShape inferred to {4, 64}
+    const auto& afterDynRawShape = input->GetRawTensor()->GetDynRawShape();
+    ASSERT_EQ(afterDynRawShape.size(), 2u);
+    EXPECT_EQ(afterDynRawShape[0].Concrete(), 4);
+    EXPECT_EQ(afterDynRawShape[1].Concrete(), 64);
+}
+
+/*
+ * CreateMetadataReshape: when inference fails (incompatible shapes), the
+ * input's original DynRawShape is preserved unchanged.
+ */
+TEST_F(RemoveRedundantReshapeTest, TestCreateMetadataReshapeKeepsOriginalWhenInferFails)
+{
+    auto func = std::make_shared<Function>(
+        Program::GetInstance(), "TestInferFail", "TestInferFail", nullptr);
+
+    // input: {-1, 64}, dynRawShape {-1, 64}
+    auto input = IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{-1, 64}, CreateTestConstIntVector({-1, 64}));
+    // output: {-1, 128} — incompatible (64 vs 128), inference fails
+    auto output = IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{-1, 128}, CreateTestConstIntVector({-1, 128}));
+    output->GetRawTensor()->UpdateDynRawShape(CreateTestConstIntVector({4, 128}));
+
+    auto dummyIn = IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{4}, CreateTestConstIntVector({4}));
+    auto dummyOut = IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{4}, CreateTestConstIntVector({4}));
+    auto& srcOp = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_RESHAPE, {dummyIn}, {dummyOut});
+
+    ViewReshapeAssembleReorderUtils utils;
+    utils.CreateMetadataReshape(*func, input, output, CreateTestConstIntVector({4, 128}),
+        ir::Span::Unknown(), Operation::ScopeInfo(), srcOp);
+
+    // After: input dynRawShape unchanged (still {-1, 64})
+    const auto& afterDynRawShape = input->GetRawTensor()->GetDynRawShape();
+    ASSERT_EQ(afterDynRawShape.size(), 2u);
+    EXPECT_EQ(afterDynRawShape[0].Concrete(), -1);
+    EXPECT_EQ(afterDynRawShape[1].Concrete(), 64);
+}
+
+/*
+ * CreateMetadataReshape: when input DynRawShape has no negative value
+ * (already concrete), inference is skipped and DynRawShape stays unchanged.
+ */
+TEST_F(RemoveRedundantReshapeTest, TestCreateMetadataReshapeSkipsWhenNoNegativeDynDim)
+{
+    auto func = std::make_shared<Function>(
+        Program::GetInstance(), "TestNoNegDim", "TestNoNegDim", nullptr);
+
+    // input: dynRawShape already concrete {8, 64} — no negative dims
+    auto input = IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{-1, 64}, CreateTestConstIntVector({-1, 64}));
+    input->GetRawTensor()->UpdateDynRawShape(CreateTestConstIntVector({8, 64}));
+    auto output = IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{-1, 4, 16}, CreateTestConstIntVector({-1, 4, 16}));
+    output->GetRawTensor()->UpdateDynRawShape(CreateTestConstIntVector({4, 4, 16}));
+
+    auto dummyIn = IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{4}, CreateTestConstIntVector({4}));
+    auto dummyOut = IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{4}, CreateTestConstIntVector({4}));
+    auto& srcOp = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_RESHAPE, {dummyIn}, {dummyOut});
+
+    ViewReshapeAssembleReorderUtils utils;
+    utils.CreateMetadataReshape(*func, input, output, CreateTestConstIntVector({4, 4, 16}),
+        ir::Span::Unknown(), Operation::ScopeInfo(), srcOp);
+
+    // After: input dynRawShape unchanged (still {8, 64}, not overwritten by output's {4,...})
+    const auto& afterDynRawShape = input->GetRawTensor()->GetDynRawShape();
+    ASSERT_EQ(afterDynRawShape.size(), 2u);
+    EXPECT_EQ(afterDynRawShape[0].Concrete(), 8);
+    EXPECT_EQ(afterDynRawShape[1].Concrete(), 64);
 }

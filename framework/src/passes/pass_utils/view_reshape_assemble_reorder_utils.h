@@ -174,6 +174,12 @@ private:
         Function& function, const LogicalTensorPtr& input, const LogicalTensorPtr& output,
         const std::vector<SymbolicScalar>& dynShape, const ir::Span& span, const Operation::ScopeInfo& scopeInfo,
         Operation& srcOp);
+    static bool InferInputDynRawShapeFromOutput(
+        const LogicalTensorPtr& input, const LogicalTensorPtr& output,
+        std::vector<SymbolicScalar>& inferredInputDynRawShape);
+    static bool BuildAxisPlanAllowFirstUnknown(
+        const std::vector<int64_t>& srcShape, const std::vector<int64_t>& dstShape,
+        std::vector<AxisGroup>& axisPlan);
     void CreateView(
         Function& function, const LogicalTensorPtr& input, const LogicalTensorPtr& output,
         const std::vector<int64_t>& offset, const std::vector<SymbolicScalar>& dynOffset,
