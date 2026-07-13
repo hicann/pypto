@@ -32,8 +32,7 @@ relu(input: Tensor) -> Tensor
 
 ## 约束说明
 
-1. input不支持nan、inf等特殊值。
-2. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
+1. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
 
 
 
