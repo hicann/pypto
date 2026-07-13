@@ -391,13 +391,103 @@ TILEOP void TFloorDivS(T0 dst, T1 src0, Scalar src1, T2 tmp)
                 if constexpr (std::is_same_v<typename T0::Type, int32_t>) {
                     using Fp32TileDefine =
                         pto::Tile<pto::TileType::Vec, float, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
-                    Fp32TileDefine tmp0Tile(dstShape3, dstShape4);
-                    pto::TASSIGN(tmp0Tile, FloorDivTmpAddr(tmp, dstOffset, tileShapeSize, 0, sizeof(float)));
-                    pto::TCVT(tmp0Tile, src0Tile, pto::RoundMode::CAST_NONE);
+                    using Int32TileDefine =
+                        pto::Tile<pto::TileType::Vec, int32_t, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
+                    using MaskTileDefine =
+                        pto::Tile<pto::TileType::Vec, uint8_t, tileH, 4 * tileW, pto::BLayout::RowMajor, -1, -1>;
+
+                    Fp32TileDefine tmp0Fp32Tile(dstShape3, dstShape4);
+                    Fp32TileDefine tmp2Fp32Tile(dstShape3, dstShape4);
+                    Int32TileDefine tmp0I32Tile(dstShape3, dstShape4);
+                    Int32TileDefine tmp2I32Tile(dstShape3, dstShape4);
+                    Int32TileDefine tmp3I32Tile(dstShape3, dstShape4);
+                    Int32TileDefine tmp4I32Tile(dstShape3, dstShape4);
+                    Int32TileDefine tmp5I32Tile(dstShape3, dstShape4);
+                    MaskTileDefine tmp1MaskTile(dstShape3, dstShape4);
+
+                    pto::TASSIGN(tmp0Fp32Tile, FloorDivTmpAddr(tmp, dstOffset, tileShapeSize, 0, sizeof(int32_t)));
+                    pto::TASSIGN(tmp2Fp32Tile, FloorDivTmpAddr(tmp, dstOffset, tileShapeSize, 2, sizeof(int32_t)));
+                    pto::TASSIGN(tmp0I32Tile, FloorDivTmpAddr(tmp, dstOffset, tileShapeSize, 0, sizeof(int32_t)));
+                    pto::TASSIGN(tmp2I32Tile, FloorDivTmpAddr(tmp, dstOffset, tileShapeSize, 2, sizeof(int32_t)));
+                    pto::TASSIGN(tmp3I32Tile, FloorDivTmpAddr(tmp, dstOffset, tileShapeSize, 3, sizeof(int32_t)));
+                    pto::TASSIGN(tmp4I32Tile, FloorDivTmpAddr(tmp, dstOffset, tileShapeSize, 4, sizeof(int32_t)));
+                    pto::TASSIGN(tmp5I32Tile, FloorDivTmpAddr(tmp, dstOffset, tileShapeSize, 5, sizeof(int32_t)));
+                    pto::TASSIGN(tmp1MaskTile, FloorDivTmpAddr(tmp, dstOffset, tileShapeSize, 1, sizeof(int32_t)));
+                    auto divisor = static_cast<int32_t>(src1);
+
+                    // Step 1: approximate quotient by float32 division, then floor and cast to int32.
+                    // q = floor(float32(x1) / float32(x2))
+                    pto::TCVT(tmp0Fp32Tile, src0Tile, pto::RoundMode::CAST_NONE, pto::SaturationMode::OFF);
                     SyncV();
-                    pto::TDIVS<pto::DivAlgorithm::HIGH_PRECISION>(tmp0Tile, tmp0Tile, static_cast<float>(src1));
+                    pto::TDIVS<pto::DivAlgorithm::HIGH_PRECISION>(tmp0Fp32Tile, tmp0Fp32Tile, static_cast<float>(divisor));
                     SyncV();
-                    pto::TCVT(dstTile, tmp0Tile, pto::RoundMode::CAST_FLOOR);
+                    pto::TCVT(dstTile, tmp0Fp32Tile, pto::RoundMode::CAST_FLOOR);
+                    SyncV();
+
+                    // Step 2: compute exact int32 remainder: r = x1 - q * x2.
+                    pto::TMULS(tmp0I32Tile, dstTile, divisor);
+                    SyncV();
+                    pto::TSUB(tmp0I32Tile, src0Tile, tmp0I32Tile);
+                    SyncV();
+
+                    // Step 3: refine q with floor(float32(r) / float32(x2)).
+                    pto::TCVT(tmp2Fp32Tile, tmp0I32Tile, pto::RoundMode::CAST_NONE);
+                    SyncV();
+                    pto::TDIVS<pto::DivAlgorithm::HIGH_PRECISION>(tmp2Fp32Tile, tmp2Fp32Tile, static_cast<float>(divisor));
+                    SyncV();
+                    pto::TCVT(tmp0I32Tile, tmp2Fp32Tile, pto::RoundMode::CAST_FLOOR);
+                    SyncV();
+
+                    // Step 4: apply the remainder-based correction.
+                    // q_corrected = q + correction
+                    pto::TADD(dstTile, dstTile, tmp0I32Tile);
+                    SyncV();
+
+                    // Step 5: recompute r2 with q_corrected.
+                    pto::TMULS(tmp0I32Tile, dstTile, divisor);
+                    SyncV();
+                    pto::TSUB(tmp0I32Tile, src0Tile, tmp0I32Tile); // r2
+                    SyncV();
+
+                    // Step 6: final +/-1 correction. A valid floor-div remainder must satisfy
+                    // 0 <= r2 * sign(x2) < abs(x2).
+                    auto absSrc1 = divisor;
+                    if (divisor < 0) {
+                        pto::TMULS(tmp0I32Tile, tmp0I32Tile, -1); // r2_adj = -r2
+                        SyncV();
+                        absSrc1 = -divisor;
+                    }
+
+                    pto::TADDS(tmp3I32Tile, tmp0I32Tile, -absSrc1); // diff = r2_adj - abs(x2)
+                    SyncV();
+
+                    // Build tensor constants and use TSEL instead of TSELS to avoid the A2/A3
+                    // tensor-scalar select path, whose first lane can be unstable across calls.
+                    pto::TSUB(tmp4I32Tile, tmp0I32Tile, tmp0I32Tile); // zero
+                    SyncV();
+
+                    // If r2_adj < 0, q_corrected is too large: final_corr = -1; otherwise 0.
+                    pto::TCVT(tmp2Fp32Tile, tmp0I32Tile, pto::RoundMode::CAST_NONE, pto::SaturationMode::OFF);
+                    SyncV();
+                    pto::TCMPS(tmp1MaskTile, tmp2Fp32Tile, 0.0f, pto::CmpMode::LT);
+                    SyncV();
+                    pto::TADDS(tmp2I32Tile, tmp4I32Tile, -1);
+                    SyncV();
+                    pto::TSEL(tmp0I32Tile, tmp1MaskTile, tmp2I32Tile, tmp4I32Tile, tmp5I32Tile);
+                    SyncV();
+
+                    // If diff >= 0, q_corrected is too small: final_corr = 1.
+                    pto::TCVT(tmp2Fp32Tile, tmp3I32Tile, pto::RoundMode::CAST_NONE, pto::SaturationMode::OFF);
+                    SyncV();
+                    pto::TCMPS(tmp1MaskTile, tmp2Fp32Tile, 0.0f, pto::CmpMode::GE);
+                    SyncV();
+                    pto::TADDS(tmp2I32Tile, tmp4I32Tile, 1);
+                    SyncV();
+                    pto::TSEL(tmp0I32Tile, tmp1MaskTile, tmp2I32Tile, tmp0I32Tile, tmp5I32Tile);
+                    SyncV();
+
+                    // res = q_corrected + final_corr
+                    pto::TADD(dstTile, dstTile, tmp0I32Tile);
                     SyncV();
                 } else if constexpr (std::is_same_v<typename T0::Type, int8_t> ||
                                      std::is_same_v<typename T0::Type, uint8_t>) {

@@ -146,9 +146,9 @@ void TiledBinaryOperation(
             op = &function.AddOperation(
                 GetBinaryOpNameCode<T, false, false>(), {inputTile1, inputTile2}, {resultTile, workspace});
         } else if (opName == "FLOORDIV") {
-            std::vector<int64_t> tmpShape(resultTileInfo.shape);
+            auto tmpShape = resultTileInfo.shape;
             auto alignSize = BLOCK_SIZE / BytesOf(result->Datatype());
-            tmpShape[resultTileInfo.shape.size() - 1] = AlignUp(resultTileInfo.shape.back(), alignSize) * 4;
+            tmpShape[resultTileInfo.shape.size() - 1] = AlignUp(tmpShape.back(), alignSize) * 6;
             int64_t intermediateBytes =
                 std::accumulate(tmpShape.begin(), tmpShape.end(), 1LL, std::multiplies<int64_t>()) * BytesOf(DT_FP32);
             auto tempTensor = std::make_shared<LogicalTensor>(function, DT_UINT8, std::vector<int64_t>{intermediateBytes});
@@ -833,8 +833,8 @@ void TiledBinaryOperationScalar(
             return;
         } else if (opNameCode == Opcode::OP_FLOORDIVS) {
             auto alignSize = BLOCK_SIZE / BytesOf(input1.tensor->Datatype());
-            std::vector<int64_t> tmpShape(resultTileInfo.shape);
-            tmpShape[resultTileInfo.shape.size() - 1] = AlignUp(resultTileInfo.shape.back(), alignSize) * 3;
+            auto tmpShape = resultTileInfo.shape;
+            tmpShape[resultTileInfo.shape.size() - 1] = AlignUp(tmpShape.back(), alignSize) * 6;
             int64_t intermediateBytes =
                 std::accumulate(tmpShape.begin(), tmpShape.end(), 1LL, std::multiplies<int64_t>()) * BytesOf(DT_FP32);
             auto tempTensor = std::make_shared<LogicalTensor>(function, DT_UINT8, std::vector<int64_t>{intermediateBytes});
