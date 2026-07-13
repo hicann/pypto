@@ -61,7 +61,6 @@
         <block name="PyptoBin"/>
     </block_info>
     <dir_info value="pypto" install_path="pypto" install_type="all">
-        <path value="pypto" install_mod="550"/>
         <path value="share" install_mod="750"/>
         <path value="share/info" install_mod="750"/>
         <path value="share/info/pypto" install_mod="750"/>
