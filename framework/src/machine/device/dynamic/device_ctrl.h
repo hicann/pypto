@@ -486,7 +486,13 @@ private:
 private:
     DeviceTaskCtrl& GetTaskCtrlInPool(int index) { return devStartArgs_->deviceRuntimeDataDesc.taskCtrlPool[index]; }
     DeviceTaskCtrlQueue& GetTaskQueue(int index) { return devStartArgs_->deviceRuntimeDataDesc.taskQueueList[index]; }
-    uint32_t GetScheAicpuNum() { return devStartArgs_->devCtrlState.schAicpuNum; }
+    uint32_t GetScheAicpuNum() {
+        uint64_t arbitratedScehNum = devStartArgs_->devCtrlState.arbitratedScehNum.load();
+        if (arbitratedScehNum != 0 && arbitratedScehNum  < devStartArgs_->devCtrlState.schAicpuNum) {
+            return arbitratedScehNum;
+        }
+        return devStartArgs_->devCtrlState.schAicpuNum; 
+    }
 
 private:
     DevStartArgs* devStartArgs_{nullptr};

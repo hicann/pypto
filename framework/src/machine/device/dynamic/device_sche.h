@@ -257,10 +257,12 @@ struct DynMachineManager {
         DEV_INFO("All schedule exited, destroy the machine.");
     }
 
-    int SyncSchExit(DevAscendProgram* devProg, const DeviceArgs& devArgs, int ret)
+    int SyncSchExit(DevAscendProgram* devProg, const DeviceArgs& devArgs, int ret, DevStartArgs* runtimeDataCurrent, int arbitratedScheNum)
     {
         if (++schExitNum_ == devArgs.nrAicpu) {
             scheFinishRound_.fetch_add(1, std::memory_order_acq_rel);
+            ResetDroppedThreadTaskQueues(runtimeDataCurrent, devArgs.scheCpuNum, arbitratedScheNum);
+            UpdateScheNumForCtrl(runtimeDataCurrent, MAX_SCHEDULE_AICPU_NUM);
             RunSchPost(devProg);
             RunSchDeInit();
             PerfEvtMgr::Instance().AddScheduleTurn();
@@ -393,6 +395,16 @@ struct DynMachineManager {
         return DEVICE_MACHINE_OK;
     }
 
+    static void UpdateScheNumForCtrl(DevStartArgs* runtimeDataCurrent, int scheAiCpuNum) {
+        runtimeDataCurrent->devCtrlState.arbitratedScehNum.store(scheAiCpuNum);
+    }
+
+    static void ResetDroppedThreadTaskQueues(DevStartArgs* runtimeDataCurrent, uint32_t scheCpuNum, int arbitratedScheNum) {
+        for (size_t i = arbitratedScheNum; i < scheCpuNum; i++) {
+            runtimeDataCurrent->deviceRuntimeDataDesc.taskQueueList[i].ResetEmpty();
+        }
+    }
+
     int EntrySplittedStreamSche(DeviceKernelArgs* kargs, const KernelCtrlEntry& entry)
     {
         DevAscendProgram* devProg = PtrToPtr<int64_t, DevAscendProgram>(kargs->cfgdata);
@@ -425,8 +437,11 @@ struct DynMachineManager {
         PerfMtTrace(PERF_TRACE_ALLOC_THREAD_ID, threadIdx);
         PerfMtTrace(PERF_TRACE_BEGIN, threadIdx, beginTime);
         int ret = DEVICE_MACHINE_OK;
+        DevStartArgs* runtimeDataCurrent = reinterpret_cast<DevStartArgs*>(devProg->GetRuntimeDataList()->GetRuntimeDataCurrent());
         if (threadIdx != -1 && threadIdx <= arbitratedScheNum) {
             DEV_INFO("SchedThreadEnter idx=%d round=%d", threadIdx, (int)kargs->parameter.globalRound);
+            UpdateScheNumForCtrl(runtimeDataCurrent, arbitratedScheNum);
+            ResetDroppedThreadTaskQueues(runtimeDataCurrent, devArgs.scheCpuNum, arbitratedScheNum);
             ret = RunSche(kargs, entry, threadIdx, arbitratedScheNum);
             DEV_INFO("SchedThreadLeave idx=%d ret=%d", threadIdx, ret);
             if (ret != DEVICE_MACHINE_OK) {
@@ -434,7 +449,7 @@ struct DynMachineManager {
             }
             PerfMtTrace(PERF_TRACE_EXIT, threadIdx);
         }
-        return SyncSchExit(devProg, devArgs, ret);
+        return SyncSchExit(devProg, devArgs, ret, runtimeDataCurrent, arbitratedScheNum);
     }
 
     int Entry(DeviceKernelArgs* kargs, const KernelCtrlEntry& entry)
@@ -501,6 +516,7 @@ struct DynMachineManager {
                     return DEVICE_MACHINE_ERROR,
                     "#sche.wait: RingBuffer data.");
             }
+
             return DEVICE_MACHINE_OK;
         }
     } splittedInfo_;

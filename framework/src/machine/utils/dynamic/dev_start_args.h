@@ -39,6 +39,7 @@ struct DeviceRuntimeDataDesc {
 struct DevCtrlState {
     /* state used by control */
     uint32_t schAicpuNum{MAX_SCHEDULE_AICPU_NUM};
+    std::atomic<uint32_t> arbitratedScehNum{MAX_SCHEDULE_AICPU_NUM};
     uint32_t taskCtrlIndex{0};
 };
 
