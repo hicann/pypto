@@ -386,6 +386,7 @@ if (ENABLE_FEATURE_PYTHON_FRONT_END)
                     framework/src/machine/runtime/launcher/emulation_launcher.h
                     framework/src/machine/runtime/launcher/eslmodel_launcher.h
                     framework/src/machine/runtime/launcher/launcher_router.h
+                    framework/src/machine/runtime/launcher/ctrl_flow_cache_manager.h
                 DESTINATION ${PyPTO_WhlName}/lib/framework/src/machine/runtime/launcher
         )
         install(FILES
@@ -401,6 +402,7 @@ if (ENABLE_FEATURE_PYTHON_FRONT_END)
                     framework/src/machine/runtime/runner/host_prof.h
                     framework/src/machine/runtime/runner/runtime_agent.h
                     framework/src/machine/runtime/runner/runtime_utils.h
+                    framework/src/machine/runtime/runner/kernel_binary.h
                 DESTINATION ${PyPTO_WhlName}/lib/framework/src/machine/runtime/runner
         )
         install(FILES
