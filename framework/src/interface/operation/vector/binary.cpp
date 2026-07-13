@@ -148,7 +148,7 @@ void TiledBinaryOperation(
         } else if (opName == "FLOORDIV") {
             std::vector<int64_t> tmpShape;
             auto alignSize = BLOCK_SIZE / BytesOf(result->Datatype());
-            tmpShape.push_back(AlignUp(resultTileInfo.shape.back(), alignSize) * 4);
+            tmpShape.push_back(AlignUp(resultTileInfo.shape.back(), alignSize) * 6);
             auto tempTensor = std::make_shared<LogicalTensor>(function, result->Datatype(), tmpShape);
             function.AddOperation(
                 GetBinaryOpNameCode<T, false, false>(), {inputTile1, inputTile2}, {resultTile, tempTensor});
@@ -819,7 +819,7 @@ void TiledBinaryOperationScalar(
         } else if (opNameCode == Opcode::OP_FLOORDIVS) {
             std::vector<int64_t> tmpShape;
             auto alignSize = BLOCK_SIZE / BytesOf(input1.tensor->Datatype());
-            tmpShape.push_back(AlignUp(resultTileInfo.shape.back(), alignSize) * 3);
+            tmpShape.push_back(AlignUp(resultTileInfo.shape.back(), alignSize) * 6);
             auto tempTensor = std::make_shared<LogicalTensor>(function, input1.tensor->Datatype(), tmpShape);
             auto& tmpOp = function.AddOperation(opNameCode, {inputTile1}, {resultTile, tempTensor});
             tmpOp.SetAttribute(OpAttributeKey::scalar, value);

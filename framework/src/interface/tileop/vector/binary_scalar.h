@@ -364,22 +364,104 @@ TILEOP void TFloorDivS(T0 dst, T1 src0, Scalar src1, T2 tmp)
                         pto::Tile<pto::TileType::Vec, typename T0::Type, 1, tileW, pto::BLayout::RowMajor, -1, -1>;
                     using FloatTileDefine =
                         pto::Tile<pto::TileType::Vec, float, 1, tileW, pto::BLayout::RowMajor, -1, -1>;
+                    using MaskTileDefine =
+                        pto::Tile<pto::TileType::Vec, uint8_t, 1, tileW * 4, pto::BLayout::RowMajor, -1, -1>;
 
                     IntTileDefine src0Tile(1, dstShape4);
                     IntTileDefine dstTile(1, dstShape4);
-                    FloatTileDefine tmp0Tile(1, dstShape4);
-                    FloatTileDefine tmp1Tile(1, dstShape4);
+                    IntTileDefine tmp0I32Tile(1, dstShape4);
+                    IntTileDefine tmp2I32Tile(1, dstShape4);
+                    IntTileDefine tmp3I32Tile(1, dstShape4);
+                    IntTileDefine tmp4I32Tile(1, dstShape4);
+                    IntTileDefine tmp5I32Tile(1, dstShape4);
+                    FloatTileDefine tmp0Fp32Tile(1, dstShape4);
+                    FloatTileDefine tmp2Fp32Tile(1, dstShape4);
+                    MaskTileDefine tmp1MaskTile(1, dstShape4);
 
-                    pto::TASSIGN(tmp0Tile, (uint64_t)(tmp.GetAddr()));
-                    pto::TASSIGN(tmp1Tile, (uint64_t)(tmp.GetAddr() + tileW * dstTypeSize));
+                    pto::TASSIGN(tmp0I32Tile, (uint64_t)(tmp.GetAddr()));
+                    pto::TASSIGN(tmp2I32Tile, (uint64_t)(tmp.GetAddr() + 2 * tileW * dstTypeSize));
+                    pto::TASSIGN(tmp3I32Tile, (uint64_t)(tmp.GetAddr() + 3 * tileW * dstTypeSize));
+                    pto::TASSIGN(tmp4I32Tile, (uint64_t)(tmp.GetAddr() + 4 * tileW * dstTypeSize));
+                    pto::TASSIGN(tmp5I32Tile, (uint64_t)(tmp.GetAddr() + 5 * tileW * dstTypeSize));
+                    pto::TASSIGN(tmp0Fp32Tile, (uint64_t)(tmp.GetAddr()));
+                    pto::TASSIGN(tmp2Fp32Tile, (uint64_t)(tmp.GetAddr() + 2 * tileW * dstTypeSize));
+                    pto::TASSIGN(tmp1MaskTile, (uint64_t)(tmp.GetAddr() + tileW * dstTypeSize));
                     pto::TASSIGN(src0Tile, (uint64_t)(src0.GetAddr() + offset * dstTypeSize));
                     pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + offset * dstTypeSize));
 
-                    pto::TCVT(tmp0Tile, src0Tile, pto::RoundMode::CAST_NONE, pto::SaturationMode::OFF);
+                    // Step 1: approximate quotient by float32 division, then floor and cast to int32.
+                    // q = floor(float32(x1) / float32(x2))
+                    pto::TCVT(tmp0Fp32Tile, src0Tile, pto::RoundMode::CAST_NONE, pto::SaturationMode::OFF);
                     pipe_barrier(PIPE_V);
-                    pto::TDIVS(tmp1Tile, tmp0Tile, static_cast<float>(src1));
+                    pto::TDIVS(tmp0Fp32Tile, tmp0Fp32Tile, static_cast<float>(src1));
                     pipe_barrier(PIPE_V);
-                    pto::TCVT(dstTile, tmp1Tile, pto::RoundMode::CAST_FLOOR);
+                    pto::TCVT(dstTile, tmp0Fp32Tile, pto::RoundMode::CAST_FLOOR);
+                    pipe_barrier(PIPE_V);
+
+                    // Step 2: compute exact int32 remainder: r = x1 - q * x2.
+                    pto::TMULS(tmp0I32Tile, dstTile, src1);
+                    pipe_barrier(PIPE_V);
+                    pto::TSUB(tmp0I32Tile, src0Tile, tmp0I32Tile);
+                    pipe_barrier(PIPE_V);
+
+                    // Step 3: refine q with floor(float32(r) / float32(x2)).
+                    pto::TCVT(tmp2Fp32Tile, tmp0I32Tile, pto::RoundMode::CAST_NONE);
+                    pipe_barrier(PIPE_V);
+                    pto::TDIVS(tmp2Fp32Tile, tmp2Fp32Tile, static_cast<float>(src1));
+                    pipe_barrier(PIPE_V);
+                    pto::TCVT(tmp0I32Tile, tmp2Fp32Tile, pto::RoundMode::CAST_FLOOR);
+                    pipe_barrier(PIPE_V);
+
+                    // Step 4: apply the remainder-based correction.
+                    // q_corrected = q + correction
+                    pto::TADD(dstTile, dstTile, tmp0I32Tile);
+                    pipe_barrier(PIPE_V);
+
+                    // Step 5: recompute r2 with q_corrected.
+                    pto::TMULS(tmp0I32Tile, dstTile, src1);
+                    pipe_barrier(PIPE_V);
+                    pto::TSUB(tmp0I32Tile, src0Tile, tmp0I32Tile); // r2
+                    pipe_barrier(PIPE_V);
+
+                    // Step 6: final +/-1 correction. A valid floor-div remainder must satisfy
+                    // 0 <= r2 * sign(x2) < abs(x2).
+                    auto absSrc1 = src1;
+                    if (src1 < 0) {
+                        pto::TMULS(tmp0I32Tile, tmp0I32Tile, -1); // r2_adj = -r2
+                        pipe_barrier(PIPE_V);
+                        absSrc1 = -src1;
+                    }
+
+                    pto::TADDS(tmp3I32Tile, tmp0I32Tile, -absSrc1); // diff = r2_adj - abs(x2)
+                    pipe_barrier(PIPE_V);
+
+                    // Build tensor constants and use TSEL instead of TSELS to avoid the A2/A3
+                    // tensor-scalar select path, whose first lane can be unstable across calls.
+                    pto::TSUB(tmp4I32Tile, tmp0I32Tile, tmp0I32Tile); // zero
+                    pipe_barrier(PIPE_V);
+
+                    // If r2_adj < 0, q_corrected is too large: final_corr = -1; otherwise 0.
+                    pto::TCVT(tmp2Fp32Tile, tmp0I32Tile, pto::RoundMode::CAST_NONE, pto::SaturationMode::OFF);
+                    pipe_barrier(PIPE_V);
+                    pto::TCMPS(tmp1MaskTile, tmp2Fp32Tile, 0.0f, pto::CmpMode::LT);
+                    pipe_barrier(PIPE_V);
+                    pto::TADDS(tmp2I32Tile, tmp4I32Tile, -1);
+                    pipe_barrier(PIPE_V);
+                    pto::TSEL(tmp0I32Tile, tmp1MaskTile, tmp2I32Tile, tmp4I32Tile, tmp5I32Tile);
+                    pipe_barrier(PIPE_V);
+
+                    // If diff >= 0, q_corrected is too small: final_corr = 1.
+                    pto::TCVT(tmp2Fp32Tile, tmp3I32Tile, pto::RoundMode::CAST_NONE, pto::SaturationMode::OFF);
+                    pipe_barrier(PIPE_V);
+                    pto::TCMPS(tmp1MaskTile, tmp2Fp32Tile, 0.0f, pto::CmpMode::GE);
+                    pipe_barrier(PIPE_V);
+                    pto::TADDS(tmp2I32Tile, tmp4I32Tile, 1);
+                    pipe_barrier(PIPE_V);
+                    pto::TSEL(tmp0I32Tile, tmp1MaskTile, tmp2I32Tile, tmp0I32Tile, tmp5I32Tile);
+                    pipe_barrier(PIPE_V);
+
+                    // res = q_corrected + final_corr
+                    pto::TADD(dstTile, dstTile, tmp0I32Tile);
                     pipe_barrier(PIPE_V);
 #else
                     using DataTileDefine =
