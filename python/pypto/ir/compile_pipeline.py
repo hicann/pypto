@@ -10,24 +10,45 @@
 """Helpers for lowering PIL-compiled functions through the new IR pipeline."""
 
 from .. import ir, pil
+from ..logging import log_debug
 
 
-def compile_new_ir(pyfunc, *args, **kwargs):
-    """Compile a Python function and run the complete new-IR lowering pipeline."""
-    builder = ir.IRBuilder()
-    func = pil.compile(pyfunc, *args, **kwargs)
-    program = builder.create_program([func], "main", ir.Span.unknown())
+def _dump_program(name, program):
+    log_debug(f"=========================={name}=========================\n{program}")
 
+
+def _build_default_pipeline():
     dce = ir.Pass.aggressive_dce()
     canonicalize = ir.Pass.canonicalize()
     merge_stmts = ir.Pass.merge_stmts_into_if()
     create_root_functions = ir.Pass.create_root_functions()
     finalize = ir.Pass.finalize_dynamic_function()
 
-    program = canonicalize(program)
-    program = dce(program)
-    program = dce(canonicalize(program))
-    program = canonicalize(merge_stmts(program))
-    program = create_root_functions(program)
-    program = finalize(program)
+    return [
+        ("first_canonicalize_dce", lambda p: dce(canonicalize(p))),
+        ("second_canonicalize_dce", lambda p: dce(canonicalize(p))),
+        ("canonicalize(merge_stmts)", lambda p: canonicalize(merge_stmts(p))),
+        ("create_root_functions", create_root_functions),
+        ("finalize", finalize),
+    ]
+
+
+def _run_pipeline(program, pipeline):
+    _dump_program("initial", program)
+    for name, transform in pipeline:
+        program = transform(program)
+        _dump_program(f"after {name}", program)
+    return program
+
+
+def compile_new_ir(pyfunc, *args, pipeline=None, **kwargs):
+    """Compile a Python function and run the complete new-IR lowering pipeline."""
+    builder = ir.IRBuilder()
+    func = pil.compile(pyfunc, *args, **kwargs)
+    program = builder.create_program([func], "main", ir.Span.unknown())
+
+    if pipeline is None:
+        pipeline = _build_default_pipeline()
+
+    program = _run_pipeline(program, pipeline)
     return program.functions[func.name]

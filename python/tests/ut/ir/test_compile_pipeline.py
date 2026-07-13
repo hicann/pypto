@@ -26,6 +26,25 @@ def test_assemble():
     compile_new_ir(assemble_kernel, a, out)
 
 
+def test_compile_new_ir_logging(capfd):
+    def foo(x, y):
+        pypto.set_vec_tile_shapes(16, 16)
+        pypto.assemble(x, [0, 0], y)
+
+    x = pypto.Tensor(shape=(16, 16), dtype=pypto.DT_FP32, name="x")
+    y = pypto.Tensor(shape=(16, 16), dtype=pypto.DT_FP32, name="y")
+    original_level = pypto.get_log_level()
+    try:
+        pypto.set_log_level(pypto.LogLevel.DEBUG)
+        compile_new_ir(foo, x, y)
+        captured = capfd.readouterr()
+    finally:
+        pypto.set_log_level(original_level)
+
+    assert "==========================initial=========================" in captured.err
+    assert "==========================after finalize=========================" in captured.err
+
+
 # ---------- Write-After-Read ----------
 @pytest.mark.skip(reason="FeError::OP_DEPENDENCY_CYCLE")
 def test_war_conflict():

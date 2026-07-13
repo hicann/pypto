@@ -9,7 +9,7 @@
 from dataclasses import dataclass
 
 import pypto
-from pypto import ir, pil
+from pypto.ir.compile_pipeline import compile_new_ir
 
 
 @dataclass
@@ -151,21 +151,8 @@ def fa_kernel(q, k, v, block_table, kv_act_seqs, atten_out, softmax_scale, tile_
 
 
 def _run_dce(func, *args):
-    """Build a program from a compiled function and run aggressive DCE."""
-    b = ir.IRBuilder()
-    func = pil.compile(func, *args)
-    prog = b.create_program([func], "main", ir.Span.unknown())
-    dce = ir.Pass.aggressive_dce()
-    canonical = ir.Pass.canonicalize()
-    merge = ir.Pass.merge_stmts_into_if()
-    create_pf = ir.Pass.create_root_functions()
-    finalize = ir.Pass.finalize_dynamic_function()
-    prog = dce(canonical(prog))
-    prog = dce(canonical(prog))
-    prog = canonical(merge(prog))
-    prog = create_pf(prog)
-    prog = finalize(prog)
-    return prog.functions[func.name]
+    """Compile a function through the shared new-IR pipeline."""
+    return compile_new_ir(func, *args)
 
 
 def test_fa_compile():
