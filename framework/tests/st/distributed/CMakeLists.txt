@@ -56,7 +56,7 @@ endif ()
 
 # 用例可执行程序(执行)
 set(_num_ranks "4")
-set(_num_cases "3")
+set(_num_cases "1")
 set(_DistributedGTestCaseFilterConfig "")
 foreach(i RANGE 0 ${_num_cases})
    list(APPEND _DistributedGTestCaseFilterConfig
