@@ -202,11 +202,19 @@ private:
 
     std::vector<std::shared_ptr<Operation>> RunTopologicalSort()
     {
-        std::queue<int> readyOps;
+        // Sort initial ready ops by opmagic to ensure deterministic topological order.
+        std::vector<int> readyList;
         for (size_t idx = 0; idx < operations_.size(); idx++) {
             if (context_.outDegree[idx] == 0) {
-                readyOps.emplace(idx);
+                readyList.push_back(static_cast<int>(idx));
             }
+        }
+        std::sort(readyList.begin(), readyList.end(), [this](int a, int b) {
+            return operations_[a]->GetOpMagic() < operations_[b]->GetOpMagic();
+        });
+        std::queue<int> readyOps;
+        for (int idx : readyList) {
+            readyOps.emplace(idx);
         }
         auto releasePrevOp = [this, &readyOps](int prevOpIndex) {
             if (--context_.outDegree[prevOpIndex] == 0) {

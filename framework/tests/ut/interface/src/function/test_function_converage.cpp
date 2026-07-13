@@ -391,3 +391,51 @@ TEST_F(FunctionCoverageTest, TestOpValidCheckProducerInOpMap)
 
     EXPECT_THROW(func->ValidCheck(), Error);
 }
+
+// Verify RunTopologicalSort produces the same order regardless of operations_ array ordering.
+// The fix sorts initial ready ops by opmagic to guarantee idempotent topo sort.
+TEST_F(FunctionCoverageTest, TestLightweightSortIdempotent)
+{
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
+    TileShape::Current().SetVecTile(16, 16);
+    std::vector<int64_t> shape{32, 32};
+    Tensor input(DT_FP32, shape, "input");
+    Tensor output1(DT_FP32, shape, "output1");
+    Tensor output2(DT_FP32, shape, "output2");
+
+    FUNCTION("TestIdempotentSort")
+    {
+        // Branch A: input -> Exp -> Sqrt -> output1 (root: last Exp)
+        Tensor a = Exp(input);
+        Tensor b = Sqrt(a);
+        output1 = Exp(b);
+        // Branch B: input -> Reciprocal -> Exp -> output2 (root: last Sqrt)
+        Tensor c = Reciprocal(input);
+        Tensor d = Exp(c);
+        output2 = Sqrt(d);
+    }
+
+    Function* func = Program::GetInstance().GetFunctionByRawName("TENSOR_TestIdempotentSort");
+    ASSERT_NE(func, nullptr);
+
+    auto baseline = func->GetLightweightSortedOperations();
+    std::vector<int> baselineMagics;
+    for (const auto& op : baseline) {
+        baselineMagics.push_back(op->GetOpMagic());
+    }
+    ASSERT_FALSE(baselineMagics.empty());
+
+    std::reverse(func->operations_.begin(), func->operations_.end());
+
+    auto shuffled = func->GetLightweightSortedOperations();
+    std::vector<int> shuffledMagics;
+    for (const auto& op : shuffled) {
+        shuffledMagics.push_back(op->GetOpMagic());
+    }
+
+    EXPECT_EQ(baselineMagics.size(), shuffledMagics.size());
+    for (size_t i = 0; i < baselineMagics.size(); i++) {
+        EXPECT_EQ(baselineMagics[i], shuffledMagics[i])
+            << "Topo sort order differs at index " << i;
+    }
+}
