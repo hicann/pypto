@@ -19,18 +19,6 @@
 
 namespace npu::tile_fwk {
 
-// using pmu
-
-#define PMU_COLLECT 0
-
-#if PMU_COLLECT
-#define PERF_PMU_TEST_SWITCH 1
-#define SCHEDULE_USE_PENDING_AND_RUNING_SWITCH 0
-#else
-#define PERF_PMU_TEST_SWITCH 0 // PMU test switch
-// whether to use the pending and running async task mode(set macro 1) or just use running sync mode(set macro 0)
-#define SCHEDULE_USE_PENDING_AND_RUNING_SWITCH 1
-#endif
 // When enabled, logs will be written to the /tmp directory.
 #define ENABLE_TMP_LOG 0
 

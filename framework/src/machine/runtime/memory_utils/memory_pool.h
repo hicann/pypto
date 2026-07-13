@@ -38,6 +38,8 @@ struct MemoryBlock {
     void Free(void* ptr, size_t size);
 };
 
+RtError NormalizedRtMemcpy(void *dst, uint64_t destMax, const void *src, uint64_t cnt, RtMemcpyKind kind);
+
 class DevMemoryPool {
 public:
     static DevMemoryPool& Instance();

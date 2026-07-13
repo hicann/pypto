@@ -30,16 +30,15 @@ inline uint64_t MemSizeAlign(const uint64_t bytes, const uint32_t aligns = 512U)
     const uint64_t alignSize = (aligns == 0U) ? sizeof(uintptr_t) : aligns;
     return (((bytes + alignSize) - 1U) / alignSize) * alignSize;
 }
+}
 
-inline RtError NormalizedRtMemcpy(
-    void *dst, uint64_t destMax, const void *src, uint64_t cnt, RtMemcpyKind kind)
+RtError NormalizedRtMemcpy(void *dst, uint64_t destMax, const void *src, uint64_t cnt, RtMemcpyKind kind)
 {
     std::optional<dynamic::AclModeGuard> captureRelaxGuard;
     if (dynamic::DeviceLauncher::IsCaptureMode()) {
         captureRelaxGuard.emplace(AclMdlRICaptureMode::RELAXED);
     }
     return RuntimeMemcpyDirect(dst, destMax, src, cnt, kind);
-}
 }
 
 MemoryBlock::MemoryBlock(void* addr, size_t size, bool isHuge)

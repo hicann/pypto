@@ -133,6 +133,13 @@ public:
         this->context_ = context;
     }
 
+    inline void SetSchedSyncMode(uint8_t usingSynModel)
+    {
+        releaseCoreByRegValFn_ = usingSynModel == 1 ?
+            &AiCoreManager::ReleaseCoreByRegValBySyncMode:            // 串行执行模式
+            &AiCoreManager::ReleaseCoreByRegValByAsyncMode;           // 并行执行模式[默认执行模式]
+    }
+
     inline bool CheckAndResetReg()
     {
         if (!validGetPgMask_) {
@@ -1334,7 +1341,6 @@ private:
         CoreType type, int coreIdx, [[maybe_unused]]ResolveTaskContext* ctx,
         [[maybe_unused]]uint32_t& finishCnt, uint32_t& resloveParallelIdx)
     {
-        int32_t ret = DEVICE_MACHINE_OK;
         uint64_t finTaskRegVal = aicoreHal_.GetFinishedTask(coreIdx);
         [[maybe_unused]] uint32_t aicpuCallCode = finTaskRegVal >> 32;
         uint32_t finTaskId = REG_LOW_TASK_ID(finTaskRegVal);
@@ -1342,7 +1348,15 @@ private:
         DEV_VERBOSE_DEBUG(
             "reslove task core index: %d, finishtaskid:%x, finishstate: %u.", coreIdx, finTaskId, finTaskState);
 
-#if SCHEDULE_USE_PENDING_AND_RUNING_SWITCH
+        return (this->*releaseCoreByRegValFn_)(type, coreIdx, ctx, finishCnt, resloveParallelIdx,
+                                               finTaskRegVal, aicpuCallCode, finTaskId, finTaskState);
+    }
+
+    inline int32_t ReleaseCoreByRegValByAsyncMode(
+        CoreType type, int coreIdx, ResolveTaskContext* ctx, uint32_t& finishCnt, uint32_t& resloveParallelIdx,
+        uint64_t finTaskRegVal, uint32_t aicpuCallCode, uint32_t finTaskId, uint32_t finTaskState)
+    {
+        int32_t ret = DEVICE_MACHINE_OK;
         auto& pendingIdRef = pendingIds_[coreIdx];
         auto& pendingResolveIndexBaseRef = pendingResolveIndexList_[coreIdx];
         auto& runningIdRef = runningIds_[coreIdx];
@@ -1457,12 +1471,19 @@ private:
                 "Warning, maybe inconsistent state. coreidx: %d,finTask: %lx,pending: %x,running: %x.", coreIdx,
                 finTaskRegVal, pendingIdRef, runningIdRef);
         }
-#else
-        ret = ResolveWhenSyncMode(type, finTaskId, finTaskState, coreIdx, resloveParallelIdx);
+        return ret;
+    }
+
+    inline int32_t ReleaseCoreByRegValBySyncMode(
+        CoreType type, int coreIdx, [[maybe_unused]] ResolveTaskContext* ctx,
+        [[maybe_unused]] uint32_t& finishCnt, uint32_t& resloveParallelIdx,
+        [[maybe_unused]] uint64_t finTaskRegVal, [[maybe_unused]] uint32_t aicpuCallCode,
+        uint32_t finTaskId, uint32_t finTaskState)
+    {
+        int32_t ret = ResolveWhenSyncMode(type, finTaskId, finTaskState, coreIdx, resloveParallelIdx);
         if (unlikely(ret != DEVICE_MACHINE_OK)) {
             return ret;
         }
-#endif
         return ret;
     }
 
@@ -2260,12 +2281,10 @@ private:
         DumpAicoreLog(coreIdx);
 #endif
 
-#if PMU_COLLECT
         aicoreProf_.ProfGetPmu(
             coreIdx, 0,
             static_cast<uint32_t>(taskId & TASKID_FROM_CTRL_TOPO_MASK),
             deviceTaskCtx->TaskId());
-#endif
 
 #if ENABLE_TENSOR_DUMP
         DEV_IF_DEVICE {
@@ -2526,5 +2545,12 @@ private:
     bool disableControlCore_{false};
     bool hasAicpuTask_{false};
     bool isMixPending_{false};
+
+    using ReleaseCoreByRegValFn = int32_t (AiCoreManager::*)(
+        CoreType type, int coreIdx, ResolveTaskContext* ctx,
+        uint32_t& finishCnt, uint32_t& resloveParallelIdx,
+        uint64_t finTaskRegVal, uint32_t aicpuCallCode,
+        uint32_t finTaskId, uint32_t finTaskState);
+    ReleaseCoreByRegValFn releaseCoreByRegValFn_{nullptr};
 };
 } // namespace npu::tile_fwk::dynamic

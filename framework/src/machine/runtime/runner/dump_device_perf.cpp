@@ -22,6 +22,7 @@
 #include "adapter/api/runtime_api.h"
 #include "machine/runtime/runner/runtime_utils.h"
 #include "machine/runtime/launcher/device_launcher.h"
+#include "machine/runtime/memory_utils/memory_pool.h"
 #include "interface/machine/device/tilefwk/aicpu_common.h"
 #include "utils/file_utils.h"
 #include "interface/configs/config_manager.h"
@@ -36,16 +37,6 @@ namespace {
 constexpr int DUMP_LEVEL_FOUR = 4;
 constexpr uint32_t AICPU_NUM_OF_RUN_AICPU_TASKS = 1;
 uint32_t g_last_round_num = 0;
-
-inline RtError NormalizedRtMemcpy(
-    void *dst, uint64_t destMax, const void *src, uint64_t cnt, RtMemcpyKind kind)
-{
-    std::optional<AclModeGuard> captureRelaxGuard;
-    if (DeviceLauncher::IsCaptureMode()) {
-        captureRelaxGuard.emplace(AclMdlRICaptureMode::RELAXED);
-    }
-    return RuntimeMemcpyDirect(dst, destMax, src, cnt, kind);
-}
 } // namespace
 
 void DumpDevTaskPerfData(DeviceArgs& args, const std::vector<void*>& perfData, bool isLast)

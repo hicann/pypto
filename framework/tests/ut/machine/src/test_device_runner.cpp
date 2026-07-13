@@ -94,6 +94,12 @@ TEST_F(TestDeviceRunner, test_ini_proflevel)
     toSubMachineConfig.profConfig.Remove(ProfConfig::AICORE_TIME);
     toSubMachineConfig.profConfig.Add(ProfConfig::AICORE_PMU);
     devArgs->toSubMachineConfig = toSubMachineConfig;
+    int64_t* pmuEventAddrs = (int64_t*)calloc(10, sizeof(int64_t));
+    if (pmuEventAddrs == nullptr) {
+        return;
+    }
+    devArgs->corePmuRegAddr = reinterpret_cast<uint64_t>(regAddrs_);
+    devArgs->pmuEventAddr = reinterpret_cast<uint64_t>(pmuEventAddrs);
     prof.ProfInit(devArgs.get());
     prof.ProfStart();
     int32_t aicoreId = 0;
@@ -114,6 +120,7 @@ TEST_F(TestDeviceRunner, test_ini_proflevel)
     prof.addrs_.ctrl0Addr = &ctrl0val;
     prof.ProfStop();
     delete taskStat;
+    free(pmuEventAddrs);
     free(oriRegAddrs_);
 }
 

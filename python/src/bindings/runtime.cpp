@@ -484,6 +484,14 @@ public:
         kernelName_ = "PyPTO_" + dynFunc->GetOriginalRawName();
     }
 
+    void SetSyncMode(uint8_t syncModel) {
+        scheSyncModel_ = syncModel;
+    }
+
+    uint8_t GetSyncMode() {
+        return scheSyncModel_;
+    }
+
     ToSubMachineConfig& GetMachineConfig() {
         return toSubMachineConfig_;
     }
@@ -732,6 +740,7 @@ private:
     bool runtimeDynamicCellMatchHostOwned_{false};
     std::string kernelName_;
     ToSubMachineConfig toSubMachineConfig_;
+    uint8_t scheSyncModel_{0};
 
     void RefreshRuntimeDynamicCellMatchMeta(uint64_t needBytes)
     {
@@ -910,6 +919,7 @@ public:
         args->kArgs.maxDynamicCellMatchTableMem = kernel->GetMaxDynamicCellMatchTableMem();
         args->kArgs.runtimeDynamicCellMatchAddr = kernel->GetRuntimeDynamicCellMatchAddr();
         args->kArgs.runtimeDynamicCellMatchCapacity = kernel->GetRuntimeDynamicCellMatchCapacity();
+        args->kArgs.schedSyncMode = kernel->GetSyncMode();
         auto isCaptureMode = DeviceLauncher::IsCaptureMode();  // KernelModule
         bool debugEnable = !isCaptureMode && isDebugMode;
 

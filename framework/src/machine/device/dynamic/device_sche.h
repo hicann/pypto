@@ -73,6 +73,11 @@ public:
         schThreadStatus.Init();
     }
 
+    void SetDevSchedSyncMode(uint8_t devScheSyncMode) {
+        devScheSyncMode_ = devScheSyncMode;
+        DEV_INFO("Current front setted devSchedSynMode is %s", devScheSyncMode == 1 ? "SynMode" : "AsyncMode");
+    }
+
     int RunThread(int threadIdx, DevStartArgs* devStartArgs, DeviceArgs* args, int schedIdx, int arbitratedScheNum)
     {
         int ret = 0;
@@ -92,6 +97,7 @@ public:
 #if ENABLE_AICORE_PRINT
         aicoreManager_[schedIdx]->InitLogger(logManager.logger);
 #endif
+        aicoreManager_[schedIdx]->SetSchedSyncMode(devScheSyncMode_);
         ret = aicoreManager_[schedIdx]->RunManager(threadIdx, devStartArgs, args, schedIdx, arbitratedScheNum);
         DEV_INFO("threadIdx=%d end, ret=%d", threadIdx, ret);
         return ret;
@@ -110,6 +116,7 @@ public:
     }
 
 private:
+    uint8_t devScheSyncMode_{0};
     SchThreadStatus schThreadStatus;
     uint32_t schAicpuNum_{MAX_SCHEDULE_AICPU_NUM};
     std::unique_ptr<AiCoreManager> aicoreManager_[MAX_SCHEDULE_AICPU_NUM];
@@ -217,6 +224,7 @@ struct DynMachineManager {
         DevAscendProgram* devProg = reinterpret_cast<DevAscendProgram*>(kargs->cfgdata);
         DevStartArgs* devStartArgs =
             reinterpret_cast<DevStartArgs*>(devProg->GetRuntimeDataList()->GetRuntimeDataCurrent());
+        schMachine_.SetDevSchedSyncMode(kargs->schedSyncMode);
         int ret = schMachine_.RunThread(threadIdx, devStartArgs, devArgs, schedIdx, arbitratedScheNum);
 
         DEV_INFO("ThreadScheLeave idx=%d ret=%d", threadIdx, ret);

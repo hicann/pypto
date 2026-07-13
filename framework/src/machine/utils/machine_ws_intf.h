@@ -99,6 +99,7 @@ struct DeviceKernelArgs {
     uint64_t runtimeDynamicCellMatchAddr{0};
     uint64_t runtimeDynamicCellMatchCapacity{0};
     uint8_t machineConfig;
+    uint8_t schedSyncMode{0}; // 0: AsyncMode 1: SyncMode
     ToSubMachineConfig toSubMachineConfig;
     DeviceKernelArgsParameter parameter;
 };

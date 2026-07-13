@@ -101,23 +101,7 @@
 
 PMU（Performance Monitoring Unit）是现代处理器中关键的硬件模块，专门用于监控和分析处理器的运行性能。PMU内部有多个可编程计数器，每个计数器可监控一种或多种事件。
 
-**步骤1：编译宏适配**
-
-由于当前仅支持串行采集，而AI CPU是异步执行的，需要先适配以下编译宏，然后重新编译whl包。
-
-修改`device_switch.h`：
-
-```cpp
-#define PMU_COLLECT 1
-```
-
-修改`aicore_entry.h`：
-
-```cpp
-#define PERF_PMU_TEST_SWITCH 1
-```
-
-**步骤2：选择采集模式**
+**步骤1：选择采集模式**
 
 通过环境变量选择采集模式：
 
@@ -129,7 +113,7 @@ export PYPTO_PROF_PMU_EVENT_TYPE=<group_id>
 
 ![](../figures/PMU_event.png "PMU支持的模式")
 
-**步骤3：数据采集**
+**步骤2：数据采集**
 
 适配编译宏后，通过`msprof`命令采集PMU数据：
 
@@ -142,7 +126,7 @@ msprof --task-time=l3 [--output=<数据存放路径>] python xxx.py
 - `l3`：开启PMU采集开关
 - `--output`：指定PROF产物的输出路径，默认落盘在项目根目录下
 
-**步骤4：数据解析**
+**步骤3：数据解析**
 
 PMU 数据采集完成后，会落盘在 `output/PROF*/device_*/data/` 目录下。根据所选的 `PYPTO_PROF_PMU_EVENT_TYPE`，执行解析脚本：
 
