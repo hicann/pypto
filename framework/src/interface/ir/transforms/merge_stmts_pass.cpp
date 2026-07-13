@@ -17,6 +17,10 @@
 
 #include "interface/tensor/ir_tensor_op_rebuild.h"
 #include "interface/tensor/logical_tensor.h"
+#include "tilefwk/symbolic_scalar.h"
+
+using npu::tile_fwk::SymbolicScalar;
+using npu::tile_fwk::SatStatus;
 
 namespace pypto::ir {
 
@@ -105,7 +109,8 @@ VarExprMap BuildYieldVarMapForForStmt(ForStmtPtr forStmt)
 StmtPtr SubstituteReturnVarUses(StmtPtr stmt, const VarExprMap& varMap);
 StmtPtr SubstituteVars(StmtPtr stmt, const VarExprMap& varMap);
 void CollectDefinedVars(StmtPtr stmt, std::unordered_set<VarPtr>& defs);
-SeqStmtsPtr MergeStmtsIntoIfStmtImpl(SeqStmtsPtr seq, const std::vector<std::string>& externalVarNames);
+SeqStmtsPtr MergeStmtsIntoIfStmtImpl(
+    SeqStmtsPtr seq, const std::vector<std::string>& externalVarNames, const std::vector<SymbolicScalar>& path);
 
 StmtPtr SubstituteReturnVarUses(TensorOpStmtPtr tensorOp, const VarExprMap& varMap)
 {
@@ -113,8 +118,12 @@ StmtPtr SubstituteReturnVarUses(TensorOpStmtPtr tensorOp, const VarExprMap& varM
     for (auto& arg : tensorOp->args_) {
         newArgs.push_back(LookupVarInExpr(arg, varMap));
     }
+    std::vector<VarPtr> newTokens;
+    for (auto& tok : tensorOp->tokens_) {
+        newTokens.push_back(LookupVarDef(tok, varMap));
+    }
     return npu::tile_fwk::RebuildTensorOpStmt(
-        tensorOp, tensorOp->result_, tensorOp->result_token_, newArgs, tensorOp->tokens_, tensorOp->span_);
+        tensorOp, tensorOp->result_, tensorOp->result_token_, newArgs, newTokens, tensorOp->span_);
 }
 
 StmtPtr SubstituteReturnVarUses(IfStmtPtr ifStmt, const VarExprMap& varMap)
@@ -153,6 +162,21 @@ StmtPtr SubstituteReturnVarUses(ForStmtPtr f, const VarExprMap& varMap)
         f->loopVar_, newStart, newStop, newStep, newIterArgs, newBody, f->returnVars_, f->span_, f->attrs_);
 }
 
+StmtPtr SubstituteReturnVarUses(WhileStmtPtr w, const VarExprMap& varMap)
+{
+    std::vector<StmtPtr> newBodyStmts;
+    for (auto& s : w->body_->stmts_) {
+        newBodyStmts.push_back(SubstituteReturnVarUses(s, varMap));
+    }
+    auto newBody = std::make_shared<SeqStmts>(newBodyStmts, w->span_);
+    std::vector<IterArgPtr> newIterArgs;
+    for (auto& arg : w->iterArgs_) {
+        newIterArgs.push_back(std::make_shared<IterArg>(arg->iterVar_, LookupVarInExpr(arg->initValue_, varMap)));
+    }
+    ExprPtr newCond = LookupVarInExpr(w->condition_, varMap);
+    return std::make_shared<WhileStmt>(newCond, newIterArgs, newBody, w->returnVars_, w->span_);
+}
+
 StmtPtr SubstituteReturnVarUses(StmtPtr stmt, const VarExprMap& varMap)
 {
     if (!stmt || varMap.empty()) {
@@ -167,6 +191,9 @@ StmtPtr SubstituteReturnVarUses(StmtPtr stmt, const VarExprMap& varMap)
     if (auto f = As<ForStmt>(stmt)) {
         return SubstituteReturnVarUses(f, varMap);
     }
+    if (auto w = As<WhileStmt>(stmt)) {
+        return SubstituteReturnVarUses(w, varMap);
+    }
     return stmt;
 }
 
@@ -180,8 +207,12 @@ StmtPtr SubstituteVars(TensorOpStmtPtr t, const VarExprMap& varMap)
     for (auto& a : t->args_) {
         newArgs.push_back(LookupVarInExpr(a, varMap));
     }
+    std::vector<VarPtr> newTokens;
+    for (auto& tok : t->tokens_) {
+        newTokens.push_back(LookupVarDef(tok, varMap));
+    }
     return npu::tile_fwk::RebuildTensorOpStmt(
-        t, newResult, LookupVarDef(t->result_token_, varMap), newArgs, t->tokens_, t->span_);
+        t, newResult, LookupVarDef(t->result_token_, varMap), newArgs, newTokens, t->span_);
 }
 
 StmtPtr SubstituteVars(IfStmtPtr ifStmt, const VarExprMap& varMap)
@@ -221,6 +252,20 @@ StmtPtr SubstituteVars(ForStmtPtr f, const VarExprMap& varMap)
         f->loopVar_, f->start_, f->stop_, f->step_, f->iterArgs_, newBody, newReturnVars, f->span_, f->attrs_);
 }
 
+StmtPtr SubstituteVars(WhileStmtPtr w, const VarExprMap& varMap)
+{
+    std::vector<StmtPtr> newBodyStmts;
+    for (auto& s : w->body_->stmts_) {
+        newBodyStmts.push_back(SubstituteVars(s, varMap));
+    }
+    auto newBody = std::make_shared<SeqStmts>(newBodyStmts, w->span_);
+    std::vector<VarPtr> newReturnVars;
+    for (auto& v : w->returnVars_) {
+        newReturnVars.push_back(LookupVarDef(v, varMap));
+    }
+    return std::make_shared<WhileStmt>(w->condition_, w->iterArgs_, newBody, newReturnVars, w->span_);
+}
+
 StmtPtr SubstituteVars(YieldStmtPtr y, const VarExprMap& varMap)
 {
     std::vector<ExprPtr> newValues;
@@ -253,6 +298,9 @@ StmtPtr SubstituteVars(StmtPtr stmt, const VarExprMap& varMap)
     if (auto f = As<ForStmt>(stmt)) {
         return SubstituteVars(f, varMap);
     }
+    if (auto w = As<WhileStmt>(stmt)) {
+        return SubstituteVars(w, varMap);
+    }
     if (auto seq = As<SeqStmts>(stmt)) {
         std::vector<StmtPtr> newStmts;
         for (auto& s : seq->stmts_) {
@@ -277,8 +325,8 @@ void CollectDefinedVars(TensorOpStmtPtr t, std::unordered_set<VarPtr>& defs)
         }
     }
     if (t->result_token_) {
- 	    defs.insert(t->result_token_);
- 	}
+        defs.insert(t->result_token_);
+    }
 }
 
 void CollectDefinedVars(IfStmtPtr ifStmt, std::unordered_set<VarPtr>& defs)
@@ -310,6 +358,18 @@ void CollectDefinedVars(ForStmtPtr f, std::unordered_set<VarPtr>& defs)
     }
 }
 
+void CollectDefinedVars(WhileStmtPtr w, std::unordered_set<VarPtr>& defs)
+{
+    for (auto& v : w->returnVars_) {
+        if (v) {
+            defs.insert(v);
+        }
+    }
+    for (auto& s : w->body_->stmts_) {
+        CollectDefinedVars(s, defs);
+    }
+}
+
 void CollectDefinedVars(StmtPtr stmt, std::unordered_set<VarPtr>& defs)
 {
     if (!stmt) {
@@ -325,6 +385,10 @@ void CollectDefinedVars(StmtPtr stmt, std::unordered_set<VarPtr>& defs)
     }
     if (auto f = As<ForStmt>(stmt)) {
         CollectDefinedVars(f, defs);
+        return;
+    }
+    if (auto w = As<WhileStmt>(stmt)) {
+        CollectDefinedVars(w, defs);
         return;
     }
 }
@@ -392,6 +456,9 @@ std::vector<VarPtr> CollectOutputVars(const std::vector<StmtPtr>& stmts)
                     outputs.push_back(var);
                 }
             }
+            if (t->result_token_) {
+                outputs.push_back(t->result_token_);
+            }
         } else if (auto i = As<IfStmt>(stmt)) {
             for (auto& var : i->returnVars_) {
                 if (var) {
@@ -400,6 +467,12 @@ std::vector<VarPtr> CollectOutputVars(const std::vector<StmtPtr>& stmts)
             }
         } else if (auto f = As<ForStmt>(stmt)) {
             for (auto& var : f->returnVars_) {
+                if (var) {
+                    outputs.push_back(var);
+                }
+            }
+        } else if (auto w = As<WhileStmt>(stmt)) {
+            for (auto& var : w->returnVars_) {
                 if (var) {
                     outputs.push_back(var);
                 }
@@ -628,44 +701,111 @@ MergeSegmentResult MergeSegment(const std::vector<StmtPtr>& segment, const std::
     return MergeSegmentResult{collectedStmts, accumulatedCloneMap};
 }
 
-std::vector<StmtPtr> RebuildMergedStmtsRecursively(
-    const std::vector<StmtPtr>& merged, const std::vector<std::string>& externalVarNames)
+bool IsEmptyBody(const SeqStmtsPtr& body)
 {
-    std::vector<StmtPtr> finalResult;
-    for (auto& stmt : merged) {
-        if (auto ifStmt = As<IfStmt>(stmt)) {
-            auto processedThen = MergeStmtsIntoIfStmtImpl(ifStmt->thenBody_, externalVarNames);
-            std::optional<SeqStmtsPtr> processedElse;
-            if (ifStmt->elseBody_) {
-                processedElse = MergeStmtsIntoIfStmtImpl(ifStmt->elseBody_.value(), externalVarNames);
-            }
-            auto [resolvedThen, resolvedElse] = ResolveBranchConflicts(processedThen, processedElse, externalVarNames);
-            finalResult.push_back(std::make_shared<IfStmt>(
-                ifStmt->condition_, resolvedThen, resolvedElse, ifStmt->returnVars_, ifStmt->span_));
-        } else if (auto forStmt = As<ForStmt>(stmt)) {
-            auto processedBody = MergeStmtsIntoIfStmtImpl(forStmt->body_, externalVarNames);
-            finalResult.push_back(std::make_shared<ForStmt>(
-                forStmt->loopVar_, forStmt->start_, forStmt->stop_, forStmt->step_, forStmt->iterArgs_, processedBody,
-                forStmt->returnVars_, forStmt->span_, forStmt->attrs_));
-        } else {
-            finalResult.push_back(stmt);
-        }
-    }
-    return finalResult;
+    if (!body || body->stmts_.empty())
+        return true;
+    if (body->stmts_.size() == 1 && IsA<YieldStmt>(body->stmts_[0]))
+        return true;
+    return false;
 }
 
-SeqStmtsPtr MergeStmtsIntoIfStmtImpl(SeqStmtsPtr seq, const std::vector<std::string>& externalVarNames)
+void MergeIfStmts(IfStmtPtr ifStmt, std::vector<StmtPtr>& result, VarExprMap& subst, const std::vector<std::string>& exVarNames, const std::vector<SymbolicScalar>& condPath)
+{
+    auto cond = SymbolicScalar::FromExpr(ifStmt->condition_);
+
+    std::vector<SymbolicScalar> thenConds = condPath;
+    std::vector<SymbolicScalar> elseConds = condPath;
+    if (cond.IsValid()) {
+        thenConds.push_back(cond);
+        elseConds.push_back(!cond);
+    }
+
+    auto spliceSurvivor = [&](auto body, auto conds) {
+        auto survivor = MergeStmtsIntoIfStmtImpl(body, exVarNames, conds);
+        if (survivor) {
+            auto yieldMap = BuildYieldVarMap(ifStmt, survivor);
+            for (auto& s : RemoveLastYieldStmt(survivor->stmts_)) {
+                result.push_back(s);
+            }
+            for (auto& [k, v] : yieldMap) {
+                subst[k] = v;
+            }
+        }
+    };
+
+    bool thenDead = IsEmptyBody(ifStmt->thenBody_);
+    if (!thenDead && SymbolicScalar::Check(thenConds) == SatStatus::kUnsat) {
+        // then dead
+        if (ifStmt->elseBody_) {
+            spliceSurvivor(ifStmt->elseBody_.value(), elseConds);
+        }
+        return;
+    }
+
+    bool elseDead = !ifStmt->elseBody_ || IsEmptyBody(*ifStmt->elseBody_);
+    if (!elseDead && SymbolicScalar::Check(elseConds) == SatStatus::kUnsat) {
+        // else dead
+        spliceSurvivor(ifStmt->thenBody_, thenConds);
+        return;
+    }
+
+    // Neither proven dead: merge both branches, resolve conflicts, rebuild.
+    auto thenBody = MergeStmtsIntoIfStmtImpl(ifStmt->thenBody_, exVarNames, thenConds);
+    std::optional<SeqStmtsPtr> elseBody;
+    if (ifStmt->elseBody_) {
+        elseBody = MergeStmtsIntoIfStmtImpl(ifStmt->elseBody_.value(), exVarNames, elseConds);
+    }
+    auto [resolvedThen, resolvedElse] = ResolveBranchConflicts(thenBody, elseBody, exVarNames);
+    result.push_back(std::make_shared<IfStmt>(
+        ifStmt->condition_, resolvedThen, resolvedElse, ifStmt->returnVars_, ifStmt->span_));
+}
+
+std::vector<StmtPtr> RebuildMergedStmtsRecursively(
+    const std::vector<StmtPtr>& merged, const std::vector<std::string>& exVarNames,
+    const std::vector<SymbolicScalar>& condPath)
+{
+    std::vector<StmtPtr> result;
+    VarExprMap subst;
+    for (auto& stmt : merged) {
+        auto cur = SubstituteVars(stmt, subst); // no-op when subst is empty
+        if (auto ifStmt = AsMut<IfStmt>(cur)) {
+            MergeIfStmts(ifStmt, result, subst, exVarNames, condPath);
+        } else if (auto forStmt = As<ForStmt>(cur)) {
+            auto conds = condPath;
+            if (forStmt->HasAttr("constraints")) {
+                auto constraints = forStmt->GetAttr<std::vector<SymbolicScalar>>("constraints");
+                conds.insert(conds.end(), constraints.begin(), constraints.end());
+            }
+            auto body = MergeStmtsIntoIfStmtImpl(forStmt->body_, exVarNames, conds);
+            result.push_back(std::make_shared<ForStmt>(
+                forStmt->loopVar_, forStmt->start_, forStmt->stop_, forStmt->step_, forStmt->iterArgs_, body,
+                forStmt->returnVars_, forStmt->span_, forStmt->attrs_));
+        } else if (auto whileStmt = As<WhileStmt>(cur)) {
+            auto body = MergeStmtsIntoIfStmtImpl(whileStmt->body_, exVarNames, condPath);
+            result.push_back(std::make_shared<WhileStmt>(
+                whileStmt->condition_, whileStmt->iterArgs_, body, whileStmt->returnVars_, whileStmt->span_));
+        } else {
+            result.push_back(cur);
+        }
+    }
+    return result;
+}
+
+SeqStmtsPtr MergeStmtsIntoIfStmtImpl(
+    SeqStmtsPtr seq, const std::vector<std::string>& externalVarNames, const std::vector<SymbolicScalar>& condPath)
 {
     if (!seq) {
         return nullptr;
     }
-
     std::vector<StmtPtr> currentSegment;
     std::vector<StmtPtr> merged;
     VarExprMap accumulatedCloneMap;
 
     for (auto& stmt : seq->stmts_) {
-        if (IsA<YieldStmt>(stmt) || IsA<ContinueStmt>(stmt)) {
+        // For/While are barriers: they terminate the current segment so a loop is never pushed into an
+        // if. Its body is still transformed when RebuildMergedStmtsRecursively recurses into it below.
+        if (IsA<YieldStmt>(stmt) || IsA<ContinueStmt>(stmt) || IsA<ForStmt>(stmt) || IsA<WhileStmt>(stmt)) {
             auto segResult = MergeSegment(currentSegment, externalVarNames);
             for (auto& s : segResult.stmts) {
                 merged.push_back(s);
@@ -697,7 +837,7 @@ SeqStmtsPtr MergeStmtsIntoIfStmtImpl(SeqStmtsPtr seq, const std::vector<std::str
         merged.back() = std::make_shared<YieldStmt>(newValues, yieldStmt->span_);
     }
 
-    auto finalResult = RebuildMergedStmtsRecursively(merged, externalVarNames);
+    auto finalResult = RebuildMergedStmtsRecursively(merged, externalVarNames, condPath);
     return std::make_shared<SeqStmts>(finalResult, seq->span_);
 }
 
@@ -705,7 +845,8 @@ SeqStmtsPtr MergeStmtsIntoIfStmtImpl(SeqStmtsPtr seq, const std::vector<std::str
 
 SeqStmtsPtr MergeStmtsIntoIfStmt(SeqStmtsPtr seq, const std::vector<std::string>& externalVarNames)
 {
-    return MergeStmtsIntoIfStmtImpl(seq, externalVarNames);
+    std::vector<SymbolicScalar> condPath;
+    return MergeStmtsIntoIfStmtImpl(seq, externalVarNames, condPath);
 }
 
 } // namespace pypto::ir

@@ -441,7 +441,7 @@ ir::StmtPtr RootFunctionBuilder::TransformStmts(ir::StmtPtr stmt, const std::str
             auto transformedBody = TransformStmts(forStmt->body_, currentLoopVarName);
             return std::make_shared<ir::ForStmt>(
                 forStmt->loopVar_, forStmt->start_, forStmt->stop_, forStmt->step_, forStmt->iterArgs_, transformedBody,
-                forStmt->returnVars_, forStmt->span_);
+                forStmt->returnVars_, forStmt->span_, forStmt->attrs_);
         }
         case ir::ObjectKind::IfStmt: {
             auto ifStmt = std::static_pointer_cast<const ir::IfStmt>(stmt);

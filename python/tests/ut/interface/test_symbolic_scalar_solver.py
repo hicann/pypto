@@ -453,6 +453,21 @@ def test_nonlinear_and_non_affine():
     assert check([x * y >= 1, x * y <= 0]) != SatStatus.UNSAT
 
 
+def test_affine_mop_call():
+    c = pypto.Tensor([-1, 32], pypto.DT_FP32, 'c')
+    b = c.shape[0]
+    assert str(b) == "RUNTIME_GetInputShapeDim(ARG_c,0)"
+    a = pypto.symbolic_scalar("a")
+
+    # Three equalities pin a-b to three distinct constants -> UNSAT.
+    assert check([a + 1 == b - 1, a + 2 == b - 1, a + 3 == b - 1]) == SatStatus.UNSAT
+    # The plain-symbol baseline (same shape) is UNSAT too.
+    bs = pypto.symbolic_scalar("b")
+    assert check([a + 1 == bs - 1, a + 2 == bs - 1, a + 3 == bs - 1]) == SatStatus.UNSAT
+    # A satisfiable equality over the runtime dim must never be flagged UNSAT.
+    assert check([a + 1 == b - 1]) != SatStatus.UNSAT
+
+
 def test_affine_tautology_complex():
     # Multi-symbol equalities whose two sides are affine-equivalent (ConstDiff 0) are
     # provably true -> SAT, even when the surface forms differ.

@@ -136,6 +136,7 @@ public:
 public:
     static std::vector<int64_t> Concrete(const std::vector<SymbolicScalar>& scalarList, int64_t defValue);
     static std::vector<SymbolicScalar> FromConcrete(const std::vector<int64_t>& values);
+    static SymbolicScalar FromExpr(const pypto::ir::ExprPtr& expr);
 
     // Satisfiability of the conjunction conds[0] && conds[1] && ... : kSat / kUnsat /
     static SatStatus Check(const std::vector<SymbolicScalar>& conds);

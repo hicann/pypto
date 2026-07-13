@@ -24,6 +24,7 @@
 #include "tilefwk/pypto_fwk_log.h"
 #include "symbolic_scalar_simplify.h"
 #include "symbolic_scalar_solver.h"
+#include "ir/kind_traits.h"
 
 constexpr uint64_t IMMEDIATE = 0;
 constexpr uint64_t SYMBOL = 1;
@@ -875,6 +876,18 @@ SymbolicScalar::SymbolicScalar(RawSymbolicScalarPtr raw) : raw_(raw)
         concreteValid_ = true;
         concrete_ = std::dynamic_pointer_cast<RawSymbolicImmediate>(raw)->Immediate();
     }
+}
+
+SymbolicScalar SymbolicScalar::FromExpr(const pypto::ir::ExprPtr& expr)
+{
+    if (auto val = ir::AsMut<ir::ConstInt>(expr))
+        return SymbolicScalar(std::static_pointer_cast<RawSymbolicImmediate>(val));
+    if (auto var = ir::AsMut<ir::Var>(expr))
+        return SymbolicScalar(std::static_pointer_cast<RawSymbolicSymbol>(var));
+    if (auto sexpr = ir::AsMut<ir::ScalarExpr>(expr)) {
+        return SymbolicScalar(std::static_pointer_cast<RawSymbolicExpression>(sexpr));
+    }
+    return SymbolicScalar();
 }
 
 std::vector<int64_t> SymbolicScalar::Concrete(const std::vector<SymbolicScalar>& scalarList, int64_t defValue)

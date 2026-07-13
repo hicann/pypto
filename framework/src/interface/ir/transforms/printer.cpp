@@ -341,8 +341,28 @@ void PrintForRangeHeader(
                 stream << (AnyCast<bool>(value, key) ? "True" : "False");
             } else if (value.type() == typeid(std::string)) {
                 stream << std::quoted(AnyCast<std::string>(value, key));
+            } else if (value.type() == typeid(SymbolicScalar)) {
+                stream << AnyCast<SymbolicScalar>(value, key).Dump();
+            } else if (value.type() == typeid(std::vector<int>)) {
+                const auto& values = AnyCast<std::vector<int>>(value, key);
+                stream << "[";
+                for (size_t j = 0; j < values.size(); ++j) {
+                    if (j != 0)
+                        stream << ", ";
+                    stream << values[j];
+                }
+                stream << "]";
+            } else if (value.type() == typeid(std::vector<SymbolicScalar>)) {
+                const auto& values = AnyCast<std::vector<SymbolicScalar>>(value, key);
+                stream << "[";
+                for (size_t j = 0; j < values.size(); ++j) {
+                    if (j != 0)
+                        stream << ", ";
+                    stream << values[j].Dump();
+                }
+                stream << "]";
             } else {
-                INTERNAL_CHECK(false) << "Unsupported attrs value type for key '" << key
+                INTERNAL_CHECK(false) << "Unsupported for-loop attrs value type for key '" << key
                                       << "': " << DemangleTypeName(value.type().name());
             }
         }

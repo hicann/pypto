@@ -187,7 +187,7 @@ std::vector<StmtPtr> FilterDeadCodeImpl(
             auto new_body = MakeSeqBody(filtered, for_stmt->span_);
             auto new_for = std::make_shared<const ForStmt>(
                 for_stmt->loopVar_, for_stmt->start_, for_stmt->stop_, for_stmt->step_, for_stmt->iterArgs_, new_body,
-                for_stmt->returnVars_, for_stmt->span_);
+                for_stmt->returnVars_, for_stmt->span_, for_stmt->attrs_);
             result.push_back(new_for);
         } else if (auto if_stmt = std::dynamic_pointer_cast<const IfStmt>(stmt)) {
             auto then_orig = FlattenBody(if_stmt->thenBody_);

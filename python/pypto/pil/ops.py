@@ -9,7 +9,7 @@ import operator
 from typing import Any, Optional, Union
 
 import pypto
-from pypto import ir
+from pypto import ir, SymbolicScalar, SatStatus
 
 from .pir import Block, LoopRange, Jump
 from .pir import BuildContext, InsertPoint, Scope, BreakSignal, ContinueSignal, DoubleStarred
@@ -173,6 +173,20 @@ def pypto_loop_unroll_impl(ctx: BuildContext, *args, **kwargs):
     return _pypto_loop(True, *args, **kwargs)
 
 
+@impl(pypto.is_loop_begin)
+def is_loop_begin_impl(ctx: BuildContext, scalar: SymbolicScalar):
+    start = Scope.current()["_loop_begin"]
+    assert isinstance(start, (SymbolicScalar, int)), "is_loop_begin() must be called in a pypto.loop"
+    return scalar == start
+
+
+@impl(pypto.is_loop_end)
+def is_loop_end_impl(ctx: BuildContext, scalar: SymbolicScalar):
+    end = Scope.current()["_loop_end"]
+    assert isinstance(end, (SymbolicScalar, int)), "is_loop_end() must be called in a pypto.loop"
+    return scalar == (end - 1)
+
+
 def _add_jump_stmt(ctx: BuildContext, jump, operands: Optional[list[ir.Expr]] = None):
     if operands is None:
         operands = []
@@ -218,7 +232,7 @@ def _static_while(body: Block):
             continue
 
 
-def _loop_unroll(body: Block, loop: LoopRange, factor, ctx: BuildContext):
+def _loop_unroll(body: Block, loop: LoopRange, factor, stop, ctx: BuildContext):
     scope = Scope.current()
     loop_val = body.args[0]
 
@@ -240,7 +254,15 @@ def _loop_unroll(body: Block, loop: LoopRange, factor, ctx: BuildContext):
 
     # Compile body into Stmt tree via nested IRBuilder
     body_stmt = ir.SeqStmts(body.span)
+    constraints = []
     with InsertPoint(body_stmt), ctx.change_span(body.span), ctx.change_return_vars(return_var_names):
+        is_positive = SymbolicScalar.check([loop.step > 0]) == SatStatus.SAT
+        is_negative = SymbolicScalar.check([loop.step < 0]) == SatStatus.SAT
+        if is_positive:
+            constraints.append(loop_var >= loop.start)
+        if is_negative:
+            constraints.append(loop_var <= loop.start)
+
         if loop.batch:
             scope.varmap[loop_val.id] = (loop_var, loop.step * factor)
             dispatch_block(body, False)
@@ -248,6 +270,10 @@ def _loop_unroll(body: Block, loop: LoopRange, factor, ctx: BuildContext):
             for i in range(factor):
                 scope.varmap[loop_val.id] = loop_var + i * loop.step
                 dispatch_block(body, False)
+        if is_positive:
+            constraints.append(loop_var + (factor - 1) * loop.step < stop)
+        if is_negative:
+            constraints.append(loop_var + (factor - 1) * loop.step > stop)
         _add_jump_stmt(ctx, body.jump)
 
     return_vars = []
@@ -258,7 +284,8 @@ def _loop_unroll(body: Block, loop: LoopRange, factor, ctx: BuildContext):
 
     for_stmt = ctx.create_for_stmt(loop_var.as_var(), ctx.unwrap(loop.start), ctx.unwrap(loop.stop),
                                    ctx.unwrap(factor * loop.step), iter_args, body_stmt, return_vars, ctx.span,
-                                   {"parallel": loop.parallel, "submit_before_loop": loop.submit_before_loop})
+                                   {"parallel": loop.parallel, "submit_before_loop": loop.submit_before_loop,
+                                    "constraints": constraints})
     ctx.emit(for_stmt)
 
 
@@ -269,16 +296,19 @@ def _dyn_for(body: Block, loop: LoopRange, ctx: BuildContext):
             loop.stop = stop
         else:
             loop.stop = stop - (stop - loop.start) % (factor * loop.step)
-        _loop_unroll(body, loop, factor, ctx)
+        _loop_unroll(body, loop, factor, stop, ctx)
         loop.start = loop.stop
 
 
 @impl("pil.loop")
-def loop_impl(ctx, body: Block, iterator):
-    if isinstance(iterator, LoopRange):
-        _dyn_for(body, iterator, ctx)
-    elif iterator is not None:
-        _static_for(body, iterator)
+def loop_impl(ctx, body: Block, loop):
+    if isinstance(loop, LoopRange):
+        scope = Scope.current()
+        scope["_loop_begin"] = loop.start
+        scope["_loop_end"] = loop.stop
+        _dyn_for(body, loop, ctx)
+    elif loop is not None:
+        _static_for(body, loop)
     else:
         _static_while(body)
 

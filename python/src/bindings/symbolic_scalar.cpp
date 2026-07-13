@@ -78,17 +78,7 @@ void BindSymbolicScalar(py::module_& m)
             py::init([](std::string name, int64_t value) { return SymbolicScalar(name, value); }), py::arg("name"),
             py::arg("value"), "Create SymbolicScalar from symbol name and integer value")
         .def(
-            py::init([](ir::ExprPtr expr) {
-                if (auto val = ir::As<ir::ConstInt>(expr))
-                    return SymbolicScalar(val->value_);
-                if (auto var = ir::As<ir::Var>(expr))
-                    return SymbolicScalar(var->name_);
-                if (auto sexpr = ir::As<ir::ScalarExpr>(expr)) {
-                    auto raw = std::dynamic_pointer_cast<const RawSymbolicExpression>(sexpr);
-                    return SymbolicScalar(std::const_pointer_cast<RawSymbolicExpression>(raw));
-                }
-                throw py::value_error("Invalid expression.");
-            }),
+            py::init([](ir::ExprPtr expr) { return SymbolicScalar::FromExpr(expr); }),
             py::arg("expr"), "Create SymbolicScalar from expression")
         .def("__str__", &SymbolicScalar::Dump)
         .def("__repr__", &SymbolicScalar::Dump)

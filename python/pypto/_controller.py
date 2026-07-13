@@ -549,7 +549,7 @@ def _loop_function(
 
 
 @overload
-def loop(stop: SymInt, /, **kwargs) -> Iterator[SymInt]:
+def loop(stop: SymInt, /, **kwargs) -> Iterator[SymbolicScalar]:
     """ Create a symbolic loop ranging from 0 to `stop` (exclusive).
 
     Parameters

@@ -2365,3 +2365,11 @@ class Pass:
         Returns:
             None
         """
+
+    @staticmethod
+    def run_verifier() -> Pass:
+        """Run the verifier on the program.
+
+        Returns:
+            None
+        """

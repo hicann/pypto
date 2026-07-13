@@ -57,6 +57,14 @@ public:
         auto e = std::static_pointer_cast<Expr>(n);
         const auto& ops = e->OperandList();
         switch (e->Opcode()) {
+            case SymbolicOpcode::T_MOP_CALL:
+                // A runtime call (e.g. RUNTIME_GetInputShapeDim) is an opaque free
+                // integer at compile time: treat it as a distinct symbol keyed by its
+                // Dump() string so the affine passes can reason about it. Otherwise the
+                // whole equality row is dropped (ok=false) and contradictions are missed.
+                coeffs[n->Dump()] = 1;
+                ok = true;
+                return;
             case SymbolicOpcode::T_UOP_POS:
                 *this = MulS(ops[0], 1);
                 return;
