@@ -36,7 +36,9 @@ TILEOP void LoadVecTile(
     GlobalData srcGlobal((__gm__ ActualSrcType*)(srcAddr + gmOff),
         pto::Shape(1, 1, 1, 1, innerDim), pto::Stride(0, 0, 0, 0, srcStride4));
     pto::TASSIGN(dstTile, (uint64_t)dstPtr);
+    pipe_barrier(PIPE_ALL);
     pto::TLOAD(dstTile, srcGlobal);
+    pipe_barrier(PIPE_ALL);
 }
 
 template <
@@ -55,9 +57,11 @@ TILEOP void PermuteDim2(
         sc[pad + axis1] = 0;
         auto gmOff = sc[0] * srcStride0 + sc[1] * srcStride1 + sc[2] * 0 + sc[3] * 0 + sc[4] * srcStride4;
         LoadVecTile<tileH, tileW>(dstAddr + i0 * ds0, srcAddr, gmOff, d1, srcStride4);
+        pipe_barrier(PIPE_ALL);
     }
     set_flag(PIPE_S, PIPE_MTE2, EVENT_ID7);
     wait_flag(PIPE_S, PIPE_MTE2, EVENT_ID7);
+    pipe_barrier(PIPE_ALL);
 }
 
 template <
@@ -82,10 +86,12 @@ TILEOP void PermuteDim3(
             auto gmOff = sc[0] * srcStride0 + sc[1] * srcStride1 + sc[2] * srcStride2 + sc[3] * srcStride3 +
                          sc[4] * srcStride4;
             LoadVecTile<tileH, tileW>(dst1 + i1 * ds1, srcAddr, gmOff, d2, srcStride4);
+            pipe_barrier(PIPE_ALL);
         }
     }
     set_flag(PIPE_S, PIPE_MTE2, EVENT_ID7);
     wait_flag(PIPE_S, PIPE_MTE2, EVENT_ID7);
+    pipe_barrier(PIPE_ALL);
 }
 
 template <
@@ -115,11 +121,13 @@ TILEOP void PermuteDim4(
                 auto gmOff = sc[0] * srcStride0 + sc[1] * srcStride1 + sc[2] * srcStride2 + sc[3] * srcStride3 +
                              sc[4] * srcStride4;
                 LoadVecTile<tileH, tileW>(dst2 + i2 * ds2, srcAddr, gmOff, d3, srcStride4);
+                pipe_barrier(PIPE_ALL);
             }
         }
     }
     set_flag(PIPE_S, PIPE_MTE2, EVENT_ID7);
     wait_flag(PIPE_S, PIPE_MTE2, EVENT_ID7);
+    pipe_barrier(PIPE_ALL);
 }
 
 template <
@@ -154,12 +162,14 @@ TILEOP void PermuteDim5(
                     auto gmOff = sc[0] * srcStride0 + sc[1] * srcStride1 + sc[2] * srcStride2 + sc[3] * srcStride3 +
                                  sc[4] * srcStride4;
                     LoadVecTile<tileH, tileW>(dst3 + i3 * ds3, srcAddr, gmOff, d4, srcStride4);
+                    pipe_barrier(PIPE_ALL);
                 }
             }
         }
     }
     set_flag(PIPE_S, PIPE_MTE2, EVENT_ID7);
     wait_flag(PIPE_S, PIPE_MTE2, EVENT_ID7);
+    pipe_barrier(PIPE_ALL);
 }
 
 template <typename dstType, typename srcType>
@@ -326,6 +336,7 @@ TILEOP void TPermute(T0 dst, T1 src, C0 srcCoordinate)
     auto srcStride2 = srcLayout.template GetStrideDim<2, srcExpectSize>();
     auto srcStride3 = srcLayout.template GetStrideDim<3, srcExpectSize>();
     auto srcStride4 = srcLayout.template GetStrideDim<4, srcExpectSize>();
+    pipe_barrier(PIPE_ALL);
 
     constexpr int pad = 5 - dimCount;
     if constexpr (dimCount == 2 && axis0 == 1 && axis1 == 0) {
@@ -341,6 +352,7 @@ TILEOP void TPermute(T0 dst, T1 src, C0 srcCoordinate)
         permute_detail::PermuteDim5<pad, axis0, axis1, axis2, axis3, axis4, tileH, tileW, dstType, srcType>(
             dstAddr, srcAddr, srcLayout, dstLayout, srcStride0, srcStride1, srcStride2, srcStride3, srcStride4);
     }
+    pipe_barrier(PIPE_ALL);
 }
 
 #define OP_TILE_OP_PERMUTE_ELEMENT TPermuteElewise
