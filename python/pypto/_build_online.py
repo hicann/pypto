@@ -164,7 +164,7 @@ class _BuildOnlineManager:
         self.run_version: str = _meta["X-Run-Version"] or ""
         self.build_timestamp: str = _meta["X-Build-Timestamp"] or ""
         if pkg_dir != cur_dir:
-            # 非 edit 模式下，必须存在
+            # 非 edit 模式下, 必须存在
             if not self.run_version:
                 raise RuntimeError("Can't get X-Run-Version in pypto METADATA")
             if not self.build_timestamp:
@@ -354,7 +354,7 @@ class BuildOnlinePyptoImplManager(_BuildOnlineManager):
             self._load_from_cache(so_path=so_path)
             self._target_compiled = True
         finally:
-            # 在仍持有锁时删除 lock 文件, 防止 unlock 后、unlink 前的竞态窗口:
+            # 在仍持有锁时删除 lock 文件, 防止 unlock 后, unlink 前的竞态窗口:
             # 若先 unlock 再 unlink, 其他进程可能 open 同一 inode 并获取锁,
             # 随后 unlink 使该 inode 不可达, 导致后续进程创建新 inode 并获取新锁,
             # 两个进程同时持有各自的"排他锁"并发编译.
@@ -484,9 +484,26 @@ class BuildOnlinePyptoImplManager(_BuildOnlineManager):
             pass
 
         # 缓存目录分支
-        # 暂不使用 XDG_CACHE_HOME 环境变量做缓存目录, 避免用户在配/不配该环境变量间切换时导致缓存目录切换
-        # edit 模式下 self.run_version 及 self.build_timestamp 为空
-        cache_dir = Path.home() / ".cache" / "cann" / "pypto"
+        # 使用 XDG_CACHE_HOME 环境变量做缓存目录, edit 模式下 self.run_version 及 self.build_timestamp 为空
+        # 补充说明:
+        #   1. 绝大多数情况下: 不会配置 XDG_CACHE_HOME
+        #      Linux 发行版 (Ubuntu, openEuler, Debian 等) 默认不预设该环境变量, 需要程序自动 fallback 到 ~/.cache
+        #      若没有迁移缓存的需求, 完全没必要改, 所以几乎没人配置.
+        #   2. 配置后很少改动
+        #      2.1 大量工具会在启动时一次性读取该变量, 缓存目录一旦生成海量文件 (pip, ccache, 浏览器, 编译缓存),
+        #          迁移缓存目录需要手动拷贝 / 同步所有缓存文件夹;
+        #      2.2 直接改环境变量后旧缓存不会自动迁移, 软件会重新生成一份全新缓存, 浪费磁盘, 拖慢首次运行.
+        #   3. 配置逻辑一般是长期规划:
+        #      比如把缓存放到高速 SSD, 独立分区, 大容量存储, 属于固定磁盘布局方案, 布局不变就不用改变量.
+        cache_dir = None
+        xdg_cache = os.environ.get("XDG_CACHE_HOME")
+        if xdg_cache:
+            if Path(xdg_cache).is_absolute():
+                cache_dir = Path(xdg_cache)
+            else:
+                _log.warning("XDG_CACHE_HOME=%s is not absolute, fallback to ~/.cache", xdg_cache)
+        cache_dir = cache_dir if cache_dir else Path.home() / ".cache"
+        cache_dir = cache_dir / "cann" / "pypto"
         if self.run_version:
             cache_dir = cache_dir / self.run_version
         cache_dir = cache_dir / self.pypto_version
