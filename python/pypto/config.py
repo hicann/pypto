@@ -473,7 +473,8 @@ def get_verify_options() -> Dict[str, Union[str, int, List[int], Dict[int, int]]
 
 def set_debug_options(*,
                       compile_debug_mode: Optional[int] = None,
-                      runtime_debug_mode: Optional[int] = None
+                      runtime_debug_mode: Optional[int] = None,
+                      dump_pass_graph: Optional[List[str]] = None
                       ) -> None:
     """
     Set debug options.
@@ -494,12 +495,17 @@ def set_debug_options(*,
         2: enable AICORE_MODEL simulation;
         3: enable runtime dependency-verification data dump;
         4: enable runtime GM memory out-of-bounds check.
+
+    dump_pass_graph : List[str]
+        Pass identifiers to dump computation graph and print IR. Empty list disables it.
+        Unmatched identifiers are ignored with a warning. If compile_debug_mode is 1,
+        all passes dump graph and print IR regardless of dump_pass_graph.
     """
     options_dict = {k: v for k, v in locals().items() if v is not None}
     set_options(debug_options=options_dict)
 
 
-def get_debug_options() -> Dict[str, Union[str, int, List[int], Dict[int, int]]]:
+def get_debug_options() -> Dict[str, Union[str, int, List[str], List[int], Dict[int, int]]]:
     """
     Get debug options.
 

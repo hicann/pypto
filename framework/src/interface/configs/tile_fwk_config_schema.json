@@ -544,6 +544,16 @@
                     },
                     "minimum": 0,
                     "maximum": 4
+                },
+                "dump_pass_graph": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "label": {
+                        "zh": "指定一个或多个Pass开启计算图和IR输出。配置值为当前Pass策略中的Pass标识符列表，而非PassName枚举。为空列表时不启用；仅对匹配Pass开启计算图dump和IR打印，未匹配的标识符输出告警。",
+                        "en": "Specify one or more passes to dump computation graph and print IR. The value is a list of pass identifiers in the current pass strategy, not PassName enums. Empty list disables it; only matched passes dump graph and print IR, and unmatched identifiers emit warnings."
+                    }
                 }
             }
         },

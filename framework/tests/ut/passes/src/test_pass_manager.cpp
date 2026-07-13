@@ -207,6 +207,43 @@ TEST_F(PassManagerTest, TestPassDFX)
     PassManager::Instance().RunPass(Program::GetInstance(), *function, "TestPassDFX");
 }
 
+TEST_F(PassManagerTest, TestDumpMultiplePassGraphByDebugOption)
+{
+    const std::string testStrategy = "TestDumpMultiplePassGraphByDebugOption";
+    PassManager::Instance().RegisterStrategy(
+        testStrategy, {{"RemoveRedundantReshape", PassName::REMOVE_REDUNDANT_RESHAPE},
+                       {"InferMemoryConflict", PassName::INFER_MEMORY_CONFLICT},
+                       {"RemoveUndrivenView", PassName::REMOVE_UNDRIVEN_VIEW}});
+    ComputationalGraphBuilder G;
+    GetGraph(G);
+    Function* function = G.GetFunction();
+    auto rootPath = config::LogTopFolder();
+    auto strategyPath = rootPath + "/computation_graph/Strategy_00_" + testStrategy;
+    if (IsPathExist(strategyPath)) {
+        DeleteDir(strategyPath, true);
+    }
+
+    config::SetOptionsNg<std::vector<std::string>>(
+        "debug.dump_pass_graph",
+        std::vector<std::string>{"RemoveRedundantReshape", "InferMemoryConflict"});
+    EXPECT_EQ(PassManager::Instance().RunPass(Program::GetInstance(), *function, testStrategy), SUCCESS);
+
+    auto firstAfterJsonPath =
+        strategyPath + "/Pass_00_RemoveRedundantReshape/After_000_RemoveRedundantReshape_PROGRAM_ENTRY.json";
+    auto firstAfterIRPath =
+        strategyPath + "/Pass_00_RemoveRedundantReshape/After_000_RemoveRedundantReshape_PROGRAM_ENTRY.tifwkgr";
+    auto secondAfterJsonPath =
+        strategyPath + "/Pass_01_InferMemoryConflict/After_001_InferMemoryConflict_PROGRAM_ENTRY.json";
+    auto secondAfterIRPath =
+        strategyPath + "/Pass_01_InferMemoryConflict/After_001_InferMemoryConflict_PROGRAM_ENTRY.tifwkgr";
+    EXPECT_TRUE(IsPathExist(firstAfterJsonPath));
+    EXPECT_TRUE(IsPathExist(firstAfterIRPath));
+    EXPECT_TRUE(IsPathExist(secondAfterJsonPath));
+    EXPECT_TRUE(IsPathExist(secondAfterIRPath));
+    EXPECT_FALSE(IsPathExist(strategyPath + "/Pass_02_RemoveUndrivenView"));
+    config::SetOptionsNg<std::vector<std::string>>("debug.dump_pass_graph", std::vector<std::string>{});
+}
+
 TEST_F(PassManagerTest, TestPassStrategyRepeatRegister)
 {
     const std::string testStrategy = "RepeatRegStrategy";

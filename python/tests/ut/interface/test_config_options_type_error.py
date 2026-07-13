@@ -66,6 +66,16 @@ def assert_option_type_error(setter, pattern):
             lambda: pypto.set_debug_options(runtime_debug_mode="1"),
             "CHECK FAILED: ErrCode: F00001! Enum: ExternalError::INVALID_TYPE\n"
             "Option 'debug.runtime_debug_mode' has invalid type. Expected int64, but got string",
+        ),
+        (
+            lambda: pypto.set_debug_options(dump_pass_graph=1),
+            "CHECK FAILED: ErrCode: F00001! Enum: ExternalError::INVALID_TYPE\n"
+            "Option 'debug.dump_pass_graph' has invalid type. Expected list\\[string\\], but got int64",
+        ),
+        (
+            lambda: pypto.set_debug_options(dump_pass_graph="RemoveRedundantReshape"),
+            "CHECK FAILED: ErrCode: F00001! Enum: ExternalError::INVALID_TYPE\n"
+            "Option 'debug.dump_pass_graph' has invalid type. Expected list\\[string\\], but got string",
         )
     ],
 )

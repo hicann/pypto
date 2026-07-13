@@ -22,6 +22,7 @@ def kernel_with_dynamic(
     # get the global config in the kernel and verify it
     assert 1 == pypto.get_debug_options().get("runtime_debug_mode")
     assert 1 == pypto.get_debug_options().get("compile_debug_mode")
+    assert ["RemoveRedundantReshape", "InferMemoryConflict"] == pypto.get_debug_options().get("dump_pass_graph")
 
     assert True == pypto.get_codegen_options().get("support_dynamic_aligned")
     assert {1: 4} == pypto.get_pass_options().get("cube_l1_reuse_setting")
@@ -35,6 +36,7 @@ def kernel_with_dynamic(
 def test_config_scope():
     pypto.set_debug_options(compile_debug_mode=1)
     pypto.set_debug_options(runtime_debug_mode=1)
+    pypto.set_debug_options(dump_pass_graph=["RemoveRedundantReshape", "InferMemoryConflict"])
 
     pypto.set_codegen_options(support_dynamic_aligned=True)
     pypto.set_pass_options(cube_l1_reuse_setting={1: 4})

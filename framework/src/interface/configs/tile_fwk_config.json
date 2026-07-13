@@ -55,7 +55,8 @@
     },
     "debug": {
         "compile_debug_mode": 0,
-        "runtime_debug_mode": 0
+        "runtime_debug_mode": 0,
+        "dump_pass_graph": []
     },
     "operation": {
         "combine_axis" : true
