@@ -18,56 +18,10 @@ try:
 except ImportError:
     pass
 
-
-def _load_shared_libs():
-    import os
-    import ctypes
-    from pathlib import Path
-    from importlib import metadata
-    from typing import List, Any
-
-    cur_dir: Path = Path(__file__).parent
-    pkg_dir: Path = Path(str(metadata.distribution("pypto").locate_file("pypto"))).resolve()
-    pkg_dir = pkg_dir if pkg_dir == cur_dir else cur_dir  # 适配 edit 模式
-    lib_dir: Path = Path(pkg_dir, "lib")
-    use_cann: bool = bool(os.environ.get("ASCEND_HOME_PATH"))
-
-    def _load_shared_lib(_desc: List[Any]):
-        _name: str = _desc[0]
-        _load: bool = _desc[1]
-        if not _load:
-            return
-        _file: Path = Path(lib_dir, _name)
-        if not _file.exists():
-            return
-        ctypes.CDLL(str(_file), mode=ctypes.RTLD_GLOBAL)
-
-    _load_shared_lib(_desc=["libc_sec.so", not use_cann, ])
-
-    # name, load
-    desc_lst: List[List[Any]] = [
-        ["libtile_fwk_utils.so", True, ],
-        ["libtile_fwk_adapter.so", True, ],
-        ["libtile_fwk_cann_host_runtime.so", True, ],
-        ["libtile_fwk_platform.so", True, ],
-        ["libtile_fwk_interface.so", True, ],
-        ["libtile_fwk_codegen.so", True, ],
-        ["libtile_fwk_compiler.so", True, ],
-        ["libtile_fwk_runtime.so", True, ],
-        ["libtile_fwk_simulation.so", True, ],
-        ["libtile_fwk_simulation_pv.so", use_cann, ],
-    ]
-    for desc in desc_lst:
-        _load_shared_lib(_desc=desc)
-
-
-_load_shared_libs()
-
-from ._build_online import ensure_pypto_impl
-ensure_pypto_impl()
+# shared lib should be loaded first
+from . import _loader
 
 from . import experimental
-
 from .config import *  # noqa
 from ._controller import *  # noqa
 from .converter import from_torch
