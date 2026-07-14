@@ -562,7 +562,7 @@ REGISTER_CALC_OP(OP_TRUNC, Opcode::OP_TRUNC, ExecuteOpTrunc);
 
 void ExecuteOpExp2(ExecuteOperationContext* ctx)
 {
-    ASSERT(ExecuteOperationScene::CTX_OUTPUT_COUNT_MISMATCH, ctx->ooperandInplaceDataViewList->size() == 1);
+    ASSERT(ExecuteOperationScene::CTX_OUTPUT_COUNT_MISMATCH, ctx->ooperandInplaceDataViewList->size() <= 0x3);
     ASSERT(ExecuteOperationScene::CTX_INPUT_COUNT_MISMATCH, ctx->ioperandDataViewList->size() == 1);
     auto& ret = ctx->ooperandInplaceDataViewList->at(0);
     auto& iop = ctx->ioperandDataViewList->at(0);

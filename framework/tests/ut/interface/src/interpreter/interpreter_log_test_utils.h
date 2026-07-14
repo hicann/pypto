@@ -161,15 +161,11 @@ static inline std::string CaptureStdoutAndEcho(std::function<void()> func)
     return captured;
 }
 
-// 仅检查 [VERIFY] 日志行中是否出现 FAILED，其他模块日志不参与判断
+// 检查日志中是否出现 [ERROR] 级别记录，任何 ERROR 均视为用例失败
 inline bool VerifyLogContainsFailed(const std::string& logOutput)
 {
-    // 兼容两类格式：
-    // 1) "...[VERIFY]...FAILED..."
-    // 2) "... Verify for ... result FAILED"（可能由 [ERROR]/[EVENT] 前缀承载）
-    static const std::regex kVerifyFailedPattern1(R"(\[VERIFY][^\n]*FAILED)");
-    static const std::regex kVerifyFailedPattern2(R"(Verify for[^\n]*result FAILED)");
-    return std::regex_search(logOutput, kVerifyFailedPattern1) || std::regex_search(logOutput, kVerifyFailedPattern2);
+    static const std::regex kErrorPattern(R"(\[ERROR\])");
+    return std::regex_search(logOutput, kErrorPattern);
 }
 
 // 仅检查 [VERIFY] 日志行中 index 0 是否出现 FAILED，用于 Topk 用例
