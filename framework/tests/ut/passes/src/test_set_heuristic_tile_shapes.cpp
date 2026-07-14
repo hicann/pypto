@@ -69,7 +69,7 @@ GatherMatmulSetup SetupGatherInL1WithMatmul(
     bool matmulUsesGatherAsFirstInput = true)
 {
     auto gatherOut =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, outputShape, CreateTestConstIntVector(outputShape));
+        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapeOut, CreateTestConstIntVector(shapeOut));
     auto matmulBIn =
         npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulBShape, CreateTestConstIntVector(matmulBShape));
     auto matmulOut =
