@@ -61,23 +61,23 @@ TypePtr DeduceSyncAllType(
     const std::vector<ExprPtr>& args,
     const std::vector<std::pair<std::string, std::any>>& kwargs)
 {
-    std::string mode = "hard";
-    std::string core_type = "mix";
+    int mode = 0;        // SyncAllMode::HARD = 0
+    int core_type = 2;   // SyncCoreType::MIX = 2
     for (const auto& [key, value] : kwargs) {
-        if (key == "mode") mode = std::any_cast<std::string>(value);
-        if (key == "core_type") core_type = std::any_cast<std::string>(value);
+        if (key == "mode") mode = std::any_cast<int>(value);
+        if (key == "core_type") core_type = std::any_cast<int>(value);
     }
 
-    if (mode == "hard") {
+    if (mode == 0) {  // HARD
         // args[0] is an empty MakeTuple for hard mode
         if (!args.empty()) {
             auto tuple = As<MakeTuple>(args[0]);
             CHECK(!tuple || tuple->elements_.empty())
                 << "system.sync_all hard mode does not accept workspace arguments";
         }
-    } else if (mode == "soft") {
-        CHECK(core_type == "aiv_only" || core_type == "aic_only" || core_type == "mix")
-            << "system.sync_all soft mode core_type must be aiv_only, aic_only, or mix, got '" << core_type << "'";
+    } else if (mode == 1) {  // SOFT
+        CHECK(core_type == 0 || core_type == 1 || core_type == 2)
+            << "system.sync_all soft mode core_type must be AIV_ONLY(0), AIC_ONLY(1), or MIX(2), got " << core_type;
         CHECK(args.size() == 1) << "system.sync_all soft mode requires exactly 1 argument (workspaces list), got "
                                 << args.size();
 
@@ -116,18 +116,18 @@ TypePtr DeduceSyncAllType(
 
         // Validate required workspaces per core_type
         CHECK(has_gm) << "system.sync_all soft mode: workspaces list must contain a gm_workspace (TensorType)";
-        if (core_type == "aiv_only") {
+        if (core_type == 0) {  // AIV_ONLY
             CHECK(has_ub) << "system.sync_all soft aiv_only: workspaces list must contain ub_workspace (Vec TileType)";
             CHECK(!has_l1) << "system.sync_all soft aiv_only: l1_workspace (Mat TileType) is not allowed";
-        } else if (core_type == "aic_only") {
+        } else if (core_type == 1) {  // AIC_ONLY
             CHECK(has_l1) << "system.sync_all soft aic_only: workspaces list must contain l1_workspace (Mat TileType)";
             CHECK(!has_ub) << "system.sync_all soft aic_only: ub_workspace (Vec TileType) is not allowed";
-        } else { // mix
+        } else { // MIX
             CHECK(has_ub) << "system.sync_all soft mix: workspaces list must contain ub_workspace (Vec TileType)";
             CHECK(has_l1) << "system.sync_all soft mix: workspaces list must contain l1_workspace (Mat TileType)";
         }
     } else {
-        CHECK(false) << "system.sync_all: mode must be 'hard' or 'soft', got '" << mode << "'";
+        CHECK(false) << "system.sync_all: mode must be HARD(0) or SOFT(1), got " << mode;
     }
 
     return GetUnknownType();
@@ -211,18 +211,17 @@ REGISTER_OP("system.set_cross_core")
     .no_argument()
     .set_attr<int>("pipe")
     .set_attr<int>("event_id")
-    .set_attr<int>("mode_id")
+    .set_attr<int>("sync_mode")
     .f_deduce_type(DeduceUnknownType);
 
 // Register system.wait_cross_core (Wait Cross Core Flag)
-// Attributes: pipe, event_id
 REGISTER_OP("system.wait_cross_core")
     .set_description("Wait for a synchronization signal (Cross core)")
     .set_op_category("SyncOp")
     .no_argument()
     .set_attr<int>("pipe")
     .set_attr<int>("event_id")
-    .set_attr<std::string>("sync_mode")
+    .set_attr<int>("sync_mode")
     .f_deduce_type(DeduceUnknownType);
 
 // Register system.set_cross_core_dyn (Set Cross Core Flag, dynamic event_id)
@@ -231,7 +230,7 @@ REGISTER_OP("system.set_cross_core_dyn")
     .set_op_category("SyncOp")
     .add_argument("event_id", "Dynamic event ID (ScalarType INDEX)")
     .set_attr<int>("pipe")
-    .set_attr<int>("max_event_id")
+    .set_attr<int>("sync_mode")
     .f_deduce_type(DeduceUnknownType);
 
 // Register system.wait_cross_core_dyn (Wait Cross Core Flag, dynamic event_id)
@@ -240,8 +239,7 @@ REGISTER_OP("system.wait_cross_core_dyn")
     .set_op_category("SyncOp")
     .add_argument("event_id", "Dynamic event ID (ScalarType INDEX)")
     .set_attr<int>("pipe")
-    .set_attr<int>("max_event_id")
-    .set_attr<std::string>("sync_mode")
+    .set_attr<int>("sync_mode")
     .f_deduce_type(DeduceUnknownType);
 
 // Register system.sync_all (Global Core Synchronization)
@@ -253,8 +251,8 @@ REGISTER_OP("system.sync_all")
     .set_description("Global core synchronization (hard or soft mode)")
     .set_op_category("SyncOp")
     .add_argument("workspaces", "Soft mode workspace list as MakeTuple (Tensor gm + Tile ub/l1 + optional int used_cores)")
-    .set_attr<std::string>("mode")       // "hard" or "soft"
-    .set_attr<std::string>("core_type")  // "aiv_only", "aic_only", "mix"
+    .set_attr<int>("mode")
+    .set_attr<int>("core_type")
     .f_deduce_type(DeduceSyncAllType);
 
 // Register system.dcci (Data Cache Clean and Invalid)
@@ -270,8 +268,8 @@ REGISTER_OP("system.dcci")
     .set_op_category("SyncOp")
     .add_argument("target", "GM tensor (TensorType) or UB tile (TileType)")
     .add_argument("offset", "Optional tensor offsets or tile element offset")
-    .set_attr<std::string>("cache_line")
-    .set_attr<std::string>("dst")
+    .set_attr<int>("cache_line")
+    .set_attr<int>("dst")
     .f_deduce_type([](const std::vector<ExprPtr>& args, const std::vector<std::pair<std::string, std::any>>& kwargs) {
         (void)kwargs;
         CHECK(args.size() == 1 || args.size() == 2) << "system.dcci requires 1 or 2 arguments, got " << args.size();

@@ -193,7 +193,8 @@ protected:
         // If no variables diverged, just return the updated if statement
         if (phi_vars.empty() && op->returnVars_.empty()) {
             current_version_ = versions_after_then; // Use then branch versions as default
-            return std::make_shared<IfStmt>(new_condition, new_then, new_else, std::vector<VarPtr>{}, op->span_);
+            return std::make_shared<IfStmt>(
+                new_condition, new_then, new_else, std::vector<VarPtr>{}, op->span_);
         }
 
         // Create return_vars and yields for phi nodes
@@ -267,9 +268,14 @@ protected:
 
         RegisterIterArgsInCurrentScope(new_iter_args);
 
+        // Track loop-carried values so native break/continue in the body self-describe their phis.
+        loop_ctx_stack_.push_back(BuildLoopCtx(new_iter_args));
+
         // Visit loop body - now it will correctly reference iter_args
         auto new_body = VisitStmt(op->body_);
         auto versions_after_body = current_version_;
+
+        loop_ctx_stack_.pop_back();
 
         // Exit loop scope
         ExitScope();
@@ -325,9 +331,14 @@ protected:
         // Visit condition - it will reference iter_args
         auto new_condition = VisitExpr(op->condition_);
 
+        // Track loop-carried values so native break/continue in the body self-describe their phis.
+        loop_ctx_stack_.push_back(BuildLoopCtx(new_iter_args));
+
         // Visit loop body - now it will correctly reference iter_args
         auto new_body = VisitStmt(op->body_);
         auto versions_after_body = current_version_;
+
+        loop_ctx_stack_.pop_back();
 
         // Exit loop scope
         ExitScope();
@@ -358,6 +369,26 @@ protected:
         return std::make_shared<WhileStmt>(new_condition, new_iter_args, final_body, return_vars, op->span_);
     }
 
+    // A native break/continue exits/restarts the loop mid-body, skipping the trailing yield. Capture
+    // the live SSA version of every loop-carried value at this point (same order as iterArgs_) and
+    // attach it to the jump, so the backend can write those values back before jumping without
+    // reconstructing versions from variable-name string heuristics.
+    StmtPtr VisitStmt_(const BreakStmtPtr& op) override
+    {
+        if (loop_ctx_stack_.empty()) {
+            return op; // break outside a loop: leave untouched (verifier rejects elsewhere)
+        }
+        return std::make_shared<BreakStmt>(SnapshotLoopCarried(), op->span_);
+    }
+
+    StmtPtr VisitStmt_(const ContinueStmtPtr& op) override
+    {
+        if (loop_ctx_stack_.empty()) {
+            return op;
+        }
+        return std::make_shared<ContinueStmt>(SnapshotLoopCarried(), op->span_);
+    }
+
 private:
     // Version counter per base variable name
     std::unordered_map<std::string, int> version_counter_;
@@ -370,6 +401,15 @@ private:
 
     // New versioned parameters
     std::vector<VarPtr> new_params_;
+
+    // One frame per enclosing loop: the ordered base names of all loop-carried values
+    // ([explicit iter_arg bases..., implicit outer-assigned bases...], matching iterArgs_/yield
+    // order). A native break/continue snapshots current_version_ for each base, so the jump carries
+    // its own phi values instead of the codegen reconstructing them. Innermost loop = back().
+    struct LoopCtx {
+        std::vector<std::string> carriedBases;
+    };
+    std::vector<LoopCtx> loop_ctx_stack_;
 
     VersionMap VisitThenBranch(const StmtPtr& then_body, StmtPtr& new_then)
     {
@@ -407,6 +447,14 @@ private:
             checked_vars.insert(base_name);
             auto before_it = versions_before.find(base_name);
             if (before_it == versions_before.end()) {
+                // Variable first defined *inside* a branch (absent before the if). It still needs a
+                // phi at the merge if it is assigned on both branches, otherwise its versioned name
+                // stays scoped to one branch and any later use dangles. It can only be safely merged
+                // when defined on both paths; if it exists on just one branch its value is undefined
+                // on the other, so we leave it alone.
+                if (other_versions.find(base_name) != other_versions.end()) {
+                    phi_vars.push_back(base_name);
+                }
                 continue;
             }
             bool changed_in_source = before_it->second != var;
@@ -526,16 +574,47 @@ private:
         return return_vars;
     }
 
-    void RegisterIterArgsInCurrentScope(const std::vector<IterArgPtr>& iter_args)
+    // The current_version_ key for an iter_arg: its base name with any `_iter` suffix stripped.
+    static std::string IterArgBaseKey(const std::string& name)
     {
-        for (const auto& iter_arg : iter_args) {
-            std::string base_name = GetBaseName(iter_arg->iterVar_->name_);
-            size_t iter_pos = base_name.find("_iter");
-            if (iter_pos != std::string::npos) {
-                base_name = base_name.substr(0, iter_pos);
-            }
-            current_version_[base_name] = iter_arg->iterVar_;
+        std::string base = GetBaseName(name);
+        size_t iterPos = base.find("_iter");
+        return iterPos != std::string::npos ? base.substr(0, iterPos) : base;
+    }
+
+    void RegisterIterArgsInCurrentScope(const std::vector<IterArgPtr>& iterArgs)
+    {
+        for (const auto& iterArg : iterArgs) {
+            current_version_[IterArgBaseKey(iterArg->iterVar_->name_)] = iterArg->iterVar_;
         }
+    }
+
+    // Build a loop-carried context from the final iter_args of a loop. The order matches
+    // iterArgs_/yield order, so a break/continue snapshot lines up positionally with the
+    // backend's iter_arg write-back targets.
+    LoopCtx BuildLoopCtx(const std::vector<IterArgPtr>& iterArgs)
+    {
+        LoopCtx ctx;
+        ctx.carriedBases.reserve(iterArgs.size());
+        for (const auto& ia : iterArgs) {
+            ctx.carriedBases.push_back(IterArgBaseKey(ia->iterVar_->name_));
+        }
+        return ctx;
+    }
+
+    // Snapshot the current live SSA version of every loop-carried value of the innermost loop,
+    // in iterArgs_ order. Used to populate a native break/continue's carried values.
+    std::vector<ExprPtr> SnapshotLoopCarried()
+    {
+        std::vector<ExprPtr> values;
+        const auto& ctx = loop_ctx_stack_.back();
+        values.reserve(ctx.carriedBases.size());
+        for (const auto& base : ctx.carriedBases) {
+            auto it = current_version_.find(base);
+            // A carried base is always in scope inside its loop body; fall back defensively.
+            values.push_back(it != current_version_.end() ? it->second : nullptr);
+        }
+        return values;
     }
 
     std::vector<ExprPtr> CollectYieldValues(
@@ -664,7 +743,7 @@ private:
     /**
      * \brief Append a YieldStmt to a statement
      *
-     * When the statement already ends with a YieldStmt (e.g. from LowerBreakContinue),
+     * When the statement already ends with a YieldStmt,
      * the new phi values are prepended to the existing yield values so that the merged
      * YieldStmt matches the return_vars order: [phi_vars..., existing_rvs...].
      */

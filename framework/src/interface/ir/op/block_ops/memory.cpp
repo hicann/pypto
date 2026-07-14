@@ -46,8 +46,7 @@ TypePtr DeduceBlockGetBlockIdxType(
 {
     CHECK(args.size() == 0) << "The operator " << op_name << " requires no arguments, but got " << args.size();
 
-    // get_block_idx returns INT64 scalar (for compatibility with arith.index_cast)
-    return std::make_shared<ScalarType>(DataType::INT64);
+    return std::make_shared<ScalarType>(DataType::INDEX);
 }
 
 TypePtr DeduceBlockCreateTileType(
@@ -141,59 +140,48 @@ TypePtr DeduceBlockCreateTileType(
     return std::make_shared<TileType>(tile_shape, dtype, std::nullopt, tile_view, hw_info);
 }
 
-TypePtr DeduceBlockGetValType(
+TypePtr DeduceGetValType(
     [[maybe_unused]] const std::vector<ExprPtr>& args,
     [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
 {
-    // block.getval: Read a scalar value from a tile at flattened index
-    // Args: (tile, index)
-    // Returns: ScalarType with tile's element dtype
-    CHECK(args.size() == 0x2)
-        << "block.getval requires exactly 2 arguments (tile, index), but got " << args.size();
+    CHECK(args.size() == 0x2) << "getval requires exactly 2 arguments, but got " << args.size();
 
-    // First argument must be TileType
-    auto tile_type = As<TileType>(args[0]->GetType());
-    CHECK(tile_type) << "block.getval requires first argument to be a TileType, but got "
-                     << args[0]->GetType()->TypeName();
+    auto first_type = args[0]->GetType();
+    auto offset_type = As<ScalarType>(args[1]->GetType());
+    CHECK(offset_type) << "getval requires offset to be ScalarType, but got " << args[1]->GetType()->TypeName();
+    CHECK(offset_type->dtype_.IsInt()) << "getval offset must have integer dtype, but got "
+                                      << offset_type->dtype_.ToString();
 
-    // Second argument must be ScalarType with integer dtype (flattened index)
-    auto index_type = As<ScalarType>(args[1]->GetType());
-    CHECK(index_type) << "block.getval requires index to be ScalarType, but got " << args[1]->GetType()->TypeName();
-    CHECK(index_type->dtype_.IsInt()) << "block.getval index must have integer dtype, but got "
-                                      << index_type->dtype_.ToString();
-
-    // Return ScalarType with tile's element dtype
-    return std::make_shared<ScalarType>(tile_type->dtype_);
+    if (auto tile_type = As<TileType>(first_type)) {
+        return std::make_shared<ScalarType>(tile_type->dtype_);
+    }
+    auto tensor_type = As<TensorType>(first_type);
+    CHECK(tensor_type) << "getval requires first argument to be TileType or TensorType, but got "
+                       << first_type->TypeName();
+    return std::make_shared<ScalarType>(tensor_type->dtype_);
 }
 
-TypePtr DeduceBlockSetValType(
+TypePtr DeduceSetValType(
     [[maybe_unused]] const std::vector<ExprPtr>& args,
     [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
 {
-    // block.setval: Write a scalar value to a tile at flattened index
-    // Args: (tile, index, value)
-    // Returns: TileType (same as input tile)
-    CHECK(args.size() == 0x3)
-        << "block.setval requires exactly 3 arguments (tile, index, value), but got " << args.size();
+    CHECK(args.size() == 0x3) << "setval requires exactly 3 arguments, but got " << args.size();
 
-    // First argument must be TileType
-    auto tile_type = As<TileType>(args[0]->GetType());
-    CHECK(tile_type) << "block.setval requires first argument to be a TileType, but got "
-                     << args[0]->GetType()->TypeName();
-
-    // Second argument must be ScalarType with integer dtype (flattened index)
-    auto index_type = As<ScalarType>(args[1]->GetType());
-    CHECK(index_type) << "block.setval requires index to be ScalarType, but got " << args[1]->GetType()->TypeName();
-    CHECK(index_type->dtype_.IsInt()) << "block.setval index must have integer dtype, but got "
-                                      << index_type->dtype_.ToString();
-
-    // Third argument must be ScalarType (value to write)
+    auto first_type = args[0]->GetType();
+    auto offset_type = As<ScalarType>(args[1]->GetType());
+    CHECK(offset_type) << "setval requires offset to be ScalarType, but got " << args[1]->GetType()->TypeName();
+    CHECK(offset_type->dtype_.IsInt()) << "setval offset must have integer dtype, but got "
+                                      << offset_type->dtype_.ToString();
     auto value_type = As<ScalarType>(args[2]->GetType());
-    CHECK(value_type) << "block.setval requires value to be ScalarType, but got " << args[2]->GetType()->TypeName();
+    CHECK(value_type) << "setval requires value to be ScalarType, but got " << args[2]->GetType()->TypeName();
 
-    // Value type should match tile (or be compatible for implicit conversion)
-    // For now, we just return the tile type with same shape, dtype, and memref
-    return std::make_shared<TileType>(tile_type->shape_, tile_type->dtype_, tile_type->memref_);
+    if (auto tile_type = As<TileType>(first_type)) {
+        return std::make_shared<TileType>(tile_type->shape_, tile_type->dtype_, tile_type->memref_);
+    }
+    auto tensor_type = As<TensorType>(first_type);
+    CHECK(tensor_type) << "setval requires first argument to be TileType or TensorType, but got "
+                       << first_type->TypeName();
+    return std::make_shared<TensorType>(tensor_type->shape_, tensor_type->dtype_);
 }
 
 // ============================================================================
@@ -227,19 +215,6 @@ REGISTER_OP("get_subblock_idx")
         return DeduceBlockGetBlockIdxType(args, kwargs, "get_subblock_idx");
     });
 
-REGISTER_OP("index_cast")
-    .set_op_category("LanguageOp")
-    .set_description("Cast scalar to index type")
-    .add_argument("idx", "Input scalar (ScalarType)")
-    .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
-                      [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
-        CHECK(args.size() == 1) << "index_cast requires 1 argument, but got " << args.size();
-        auto scalar_type = As<ScalarType>(args[0]->GetType());
-        CHECK(scalar_type) << "index_cast requires argument to be ScalarType, but got "
-                           << args[0]->GetType()->TypeName();
-        return std::make_shared<ScalarType>(DataType::INDEX);
-    });
-
 REGISTER_OP("block.make_tile")
     .set_op_category("BlockOp")
     .set_description("Create a tile")
@@ -262,23 +237,23 @@ REGISTER_OP("block.make_tile")
 
 REGISTER_OP("block.getval")
     .set_op_category("BlockOp")
-    .set_description("Read a scalar value from a tile at flattened index")
-    .add_argument("tile", "Input tile (TileType)")
-    .add_argument("index", "Flattened element index in tile layout (ScalarType with integer dtype)")
+    .set_description("Read a scalar value from a tile or tensor at offset")
+    .add_argument("container", "Input tile (TileType) or tensor (TensorType)")
+    .add_argument("offset", "Element offset (ScalarType with integer dtype)")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
-        return DeduceBlockGetValType(args, kwargs);
+        return DeduceGetValType(args, kwargs);
     });
 
 REGISTER_OP("block.setval")
     .set_op_category("BlockOp")
-    .set_description("Write a scalar value to a tile at flattened index")
-    .add_argument("tile", "Input tile (TileType)")
-    .add_argument("index", "Flattened element index in tile layout (ScalarType with integer dtype)")
+    .set_description("Write a scalar value to a tile or tensor at offset")
+    .add_argument("container", "Input tile (TileType) or tensor (TensorType)")
+    .add_argument("offset", "Element offset (ScalarType with integer dtype)")
     .add_argument("value", "Scalar value to write (ScalarType)")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
-        return DeduceBlockSetValType(args, kwargs);
+        return DeduceSetValType(args, kwargs);
     });
 } // namespace ir
 } // namespace pypto

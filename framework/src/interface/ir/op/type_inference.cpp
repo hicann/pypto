@@ -219,9 +219,9 @@ TypePtr DeduceBlockOutTileType(
 {
     CHECK(args.size() == expected_args) << "The operator " << op_name << " requires exactly " << expected_args
                                         << " arguments, but got " << args.size();
-    auto out_type = As<TileType>(args.back()->GetType());
-    CHECK(out_type) << "The operator " << op_name << " requires last argument (out) to be TileType, but got "
-                    << args.back()->GetType()->TypeName();
+    auto out_type = As<TileType>(args.front()->GetType());
+    CHECK(out_type) << "The operator " << op_name << " requires first argument (out) to be TileType, but got "
+                    << args.front()->GetType()->TypeName();
     return out_type;
 }
 

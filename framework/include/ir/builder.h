@@ -592,7 +592,8 @@ private:
 class IfStmtContext : public BuildContext {
 public:
     IfStmtContext(ExprPtr condition, Span span)
-        : BuildContext(Type::IF_STMT, std::move(span)), condition_(std::move(condition))
+        : BuildContext(Type::IF_STMT, std::move(span)),
+          condition_(std::move(condition))
     {}
 
     void BeginElseBranch()

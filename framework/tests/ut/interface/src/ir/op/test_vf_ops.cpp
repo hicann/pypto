@@ -38,49 +38,49 @@ using namespace test_helpers;
 class VFOpsTest : public testing::Test {};
 
 // ============================================================================
-// DeduceVFScalarType: vf.RegTensor
+// DeduceVFScalarType: vf.reg_tensor
 // ============================================================================
 
 TEST_F(VFOpsTest, RegTensor_NoArgs_ReturnsFP32Scalar)
 {
     auto& reg = OpRegistry::GetInstance();
-    auto call = reg.Create("vf.RegTensor", {}, Sp());
+    auto call = reg.Create("vf.reg_tensor", {}, Sp());
     auto rt = As<ScalarType>(call->GetType());
     ASSERT_NE(rt, nullptr);
     EXPECT_EQ(rt->dtype_, DataType::FP32);
 }
 
 // ============================================================================
-// DeduceVFMaskType: vf.CreateMask
+// DeduceVFMaskType: vf.create_mask
 // ============================================================================
 
 TEST_F(VFOpsTest, CreateMask_NoArgs_ReturnsUINT16Scalar)
 {
     auto& reg = OpRegistry::GetInstance();
-    auto call = reg.Create("vf.CreateMask", {}, Sp());
+    auto call = reg.Create("vf.create_mask", {}, Sp());
     auto rt = As<ScalarType>(call->GetType());
     ASSERT_NE(rt, nullptr);
     EXPECT_EQ(rt->dtype_, DataType::UINT16);
 }
 
 // ============================================================================
-// DeduceVFFromDstArg: vf.Duplicate
+// DeduceVFFromDstArg: vf.full
 // ============================================================================
 
-TEST_F(VFOpsTest, Duplicate_WithArgs_ReturnsDstArgType)
+TEST_F(VFOpsTest, Full_WithArgs_ReturnsDstArgType)
 {
     auto& reg = OpRegistry::GetInstance();
     auto dst = MakeScalarVar("dst", DataType::FP16);
     auto scalar = MakeScalarVar("scalar", DataType::FP32);
     auto mask = MakeScalarVar("mask", DataType::UINT16);
-    auto call = reg.Create("vf.Duplicate", {dst, scalar, mask}, Sp());
+    auto call = reg.Create("vf.full", {dst, scalar, mask}, Sp());
     auto rt = As<ScalarType>(call->GetType());
     ASSERT_NE(rt, nullptr);
     EXPECT_EQ(rt->dtype_, DataType::FP16);
 }
 
 // ============================================================================
-// DeduceVFFromDstArg: vf.Muls, vf.Add
+// DeduceVFFromDstArg: vf.muls, vf.add
 // ============================================================================
 
 TEST_F(VFOpsTest, Muls_WithArgs_ReturnsDstArgType)
@@ -90,7 +90,7 @@ TEST_F(VFOpsTest, Muls_WithArgs_ReturnsDstArgType)
     auto src = MakeScalarVar("src", DataType::FP16);
     auto scalar = MakeScalarVar("scalar", DataType::FP16);
     auto mask = MakeScalarVar("mask", DataType::UINT16);
-    auto call = reg.Create("vf.Muls", {dst, src, scalar, mask}, Sp());
+    auto call = reg.Create("vf.muls", {dst, src, scalar, mask}, Sp());
     auto rt = As<ScalarType>(call->GetType());
     ASSERT_NE(rt, nullptr);
     EXPECT_EQ(rt->dtype_, DataType::FP32);
@@ -103,7 +103,7 @@ TEST_F(VFOpsTest, Add_WithArgs_ReturnsDstArgType)
     auto src0 = MakeScalarVar("src0", DataType::FP16);
     auto src1 = MakeScalarVar("src1", DataType::FP16);
     auto mask = MakeScalarVar("mask", DataType::UINT16);
-    auto call = reg.Create("vf.Add", {dst, src0, src1, mask}, Sp());
+    auto call = reg.Create("vf.add", {dst, src0, src1, mask}, Sp());
     auto rt = As<ScalarType>(call->GetType());
     ASSERT_NE(rt, nullptr);
     EXPECT_EQ(rt->dtype_, DataType::FP32);

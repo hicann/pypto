@@ -12,13 +12,13 @@
  * @file block_ops/out_matmul.cpp
  * \brief Block matrix multiplication operations with explicit output tiles.
  *
- * All operations receive a pre-allocated output tile as the last argument.
- *   block.matmul       (lhs, rhs, out)
- *   block.matmul_acc   (acc, lhs, rhs, out)
- *   block.matmul_bias  (lhs, rhs, bias, out)
- *   block.gemv         (lhs, rhs, out)
- *   block.gemv_acc     (acc, lhs, rhs, out)
- *   block.gemv_bias    (lhs, rhs, bias, out)
+ * All operations receive a pre-allocated output tile as the first argument.
+ *   block.matmul       (out, lhs, rhs)
+ *   block.matmul_acc   (out, acc, lhs, rhs)
+ *   block.matmul_bias  (out, lhs, rhs, bias)
+ *   block.gemv         (out, lhs, rhs)
+ *   block.gemv_acc     (out, acc, lhs, rhs)
+ *   block.gemv_bias    (out, lhs, rhs, bias)
  */
 
 #include <any>
@@ -40,79 +40,79 @@ namespace ir {
 // Op registration
 // ---------------------------------------------------------------------------
 
-// block.matmul: (lhs, rhs, out) -> out's type
+// block.matmul: (out, lhs, rhs) -> out's type
 REGISTER_OP("block.matmul")
     .set_op_category("BlockOp")
     .set_description("Block explicit-output matrix multiplication: out = lhs @ rhs")
+    .add_argument("out", "Pre-allocated output tile [M,N] (TileType)")
     .add_argument("lhs", "Left matrix tile [M,K] (TileType)")
     .add_argument("rhs", "Right matrix tile [K,N] (TileType)")
-    .add_argument("out", "Pre-allocated output tile [M,N] (TileType)")
-    .set_attr<std::string>("phase") // AccPhase: "unspecified" / "partial" / "final" — unit_flag for TMATMUL
+    .set_attr<int>("phase")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
         return DeduceBlockOutTileType(args, kwargs, "block.matmul", 3);
     });
 
-// block.matmul_acc: (acc, lhs, rhs, out) -> out's type
+// block.matmul_acc: (out, acc, lhs, rhs) -> out's type
 REGISTER_OP("block.matmul_acc")
     .set_op_category("BlockOp")
     .set_description("Block explicit-output matmul with accumulation: out = acc + lhs @ rhs")
+    .add_argument("out", "Pre-allocated output tile [M,N] (TileType)")
     .add_argument("acc", "Accumulator tile [M,N] (TileType)")
     .add_argument("lhs", "Left matrix tile [M,K] (TileType)")
     .add_argument("rhs", "Right matrix tile [K,N] (TileType)")
-    .add_argument("out", "Pre-allocated output tile [M,N] (TileType)")
-    .set_attr<std::string>("phase") // AccPhase: "unspecified" / "partial" / "final" — unit_flag for TMATMUL_ACC
+    .set_attr<int>("phase")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
         return DeduceBlockOutTileType(args, kwargs, "block.matmul_acc", 4);
     });
 
-// block.matmul_bias: (lhs, rhs, bias, out) -> out's type
+// block.matmul_bias: (out, lhs, rhs, bias) -> out's type
 REGISTER_OP("block.matmul_bias")
     .set_op_category("BlockOp")
     .set_description("Block explicit-output matmul with bias: out = lhs @ rhs + bias")
+    .add_argument("out", "Pre-allocated output tile [M,N] (TileType)")
     .add_argument("lhs", "Left matrix tile [M,K] (TileType)")
     .add_argument("rhs", "Right matrix tile [K,N] (TileType)")
     .add_argument("bias", "Bias tile [1,N] (TileType)")
-    .add_argument("out", "Pre-allocated output tile [M,N] (TileType)")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
         return DeduceBlockOutTileType(args, kwargs, "block.matmul_bias", 4);
     });
 
-// block.gemv: (lhs, rhs, out) -> out's type
+// block.gemv: (out, lhs, rhs) -> out's type
 REGISTER_OP("block.gemv")
     .set_op_category("BlockOp")
     .set_description("Block explicit-output GEMV: out[1,N] = lhs[1,K] @ rhs[K,N]")
+    .add_argument("out", "Pre-allocated output tile [1,N] (TileType)")
     .add_argument("lhs", "Row vector tile [1,K] (TileType)")
     .add_argument("rhs", "Matrix tile [K,N] (TileType)")
-    .add_argument("out", "Pre-allocated output tile [1,N] (TileType)")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
         return DeduceBlockOutTileType(args, kwargs, "block.gemv", 3);
     });
 
-// block.gemv_acc: (acc, lhs, rhs, out) -> out's type
+// block.gemv_acc: (out, acc, lhs, rhs) -> out's type
 REGISTER_OP("block.gemv_acc")
     .set_op_category("BlockOp")
     .set_description("Block explicit-output GEMV with accumulation: out += lhs @ rhs")
+    .add_argument("out", "Pre-allocated output tile [1,N] (TileType)")
     .add_argument("acc", "Accumulator tile [1,N] (TileType)")
     .add_argument("lhs", "Row vector tile [1,K] (TileType)")
     .add_argument("rhs", "Matrix tile [K,N] (TileType)")
-    .add_argument("out", "Pre-allocated output tile [1,N] (TileType)")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
         return DeduceBlockOutTileType(args, kwargs, "block.gemv_acc", 4);
     });
 
-// block.gemv_bias: (lhs, rhs, bias, out) -> out's type
+// block.gemv_bias: (out, lhs, rhs, bias) -> out's type
 REGISTER_OP("block.gemv_bias")
     .set_op_category("BlockOp")
     .set_description("Block explicit-output GEMV with bias: out = lhs @ rhs + bias")
+    .add_argument("out", "Pre-allocated output tile [1,N] (TileType)")
     .add_argument("lhs", "Row vector tile [1,K] (TileType)")
     .add_argument("rhs", "Matrix tile [K,N] (TileType)")
     .add_argument("bias", "Bias tile [1,N] (TileType)")
-    .add_argument("out", "Pre-allocated output tile [1,N] (TileType)")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
         return DeduceBlockOutTileType(args, kwargs, "block.gemv_bias", 4);

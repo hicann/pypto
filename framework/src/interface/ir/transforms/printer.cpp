@@ -10,6 +10,7 @@
 
 #include <cmath>
 #include <cstddef>
+#include <cstring>
 #include <any>
 #include <iomanip>
 #include <ios>
@@ -260,17 +261,9 @@ const char* CompactModeToPythonName(CompactMode compact)
 
 const char* TensorLayoutToPythonName(TensorLayout layout)
 {
-    switch (layout) {
-        case TensorLayout::ND:
-            return "ND";
-        case TensorLayout::DN:
-            return "DN";
-        case TensorLayout::NZ:
-            return "NZ";
-        default:
-            INTERNAL_CHECK(false) << "Unknown TensorLayout in PrintTensorView";
-            return "";
-    }
+    const char* full = EnumToString(layout);
+    const char* sep = std::strstr(full, "::");
+    return sep ? sep + 2 : full;
 }
 
 void PrintIterArgNames(std::ostringstream& stream, const std::vector<IterArgPtr>& iter_args)

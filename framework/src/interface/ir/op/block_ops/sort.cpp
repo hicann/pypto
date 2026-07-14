@@ -35,16 +35,16 @@ REGISTER_OP("block.sort32")
     .set_description(
         "Block explicit-output sort fixed-size 32-element blocks with index mapping. "
         "Sorts each 32-element block and produces sorted values and permutation indices.")
+    .add_argument("dst", "Output tile for sorted values (TileType)")
     .add_argument("src", "Input tile (TileType)")
     .add_argument("idx", "Input/output tile for permutation indices (TileType, UINT32)")
-    .add_argument("dst", "Output tile for sorted values (TileType)")
     .add_argument("tmp", "Optional scratch tile (TileType)")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
         CHECK(args.size() == 3 || args.size() == 4)
-            << "block.sort32 requires 3 or 4 arguments (src, idx, dst[, tmp]), but got " << args.size();
-        auto dst_type = As<TileType>(args[2]->GetType());
-        CHECK(dst_type) << "block.sort32: dst must be TileType, but got " << args[2]->GetType()->TypeName();
+            << "block.sort32 requires 3 or 4 arguments (dst, src, idx[, tmp]), but got " << args.size();
+        auto dst_type = As<TileType>(args[0]->GetType());
+        CHECK(dst_type) << "block.sort32: dst must be TileType, but got " << args[0]->GetType()->TypeName();
         return dst_type;
     });
 
@@ -57,14 +57,14 @@ REGISTER_OP("block.mrgsort")
     .set_description(
         "Block explicit-output merge sort on sorted lists (format1). "
         "Performs merge sort with specified block length.")
-    .add_argument("src", "Input tile (TileType)")
     .add_argument("dst", "Output tile (TileType)")
+    .add_argument("src", "Input tile (TileType)")
     .set_attr<int>("block_len")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
-        CHECK(args.size() == 2) << "block.mrgsort requires 2 arguments (src, dst) for format1, but got " << args.size();
-        auto dst_type = As<TileType>(args[1]->GetType());
-        CHECK(dst_type) << "block.mrgsort: dst must be TileType, but got " << args[1]->GetType()->TypeName();
+        CHECK(args.size() == 2) << "block.mrgsort requires 2 arguments (dst, src) for format1, but got " << args.size();
+        auto dst_type = As<TileType>(args[0]->GetType());
+        CHECK(dst_type) << "block.mrgsort: dst must be TileType, but got " << args[0]->GetType()->TypeName();
         return dst_type;
     });
 
@@ -77,17 +77,17 @@ REGISTER_OP("block.mrgsort2")
     .set_description(
         "Block explicit-output merge sort on multiple sorted lists (format2). "
         "Merges 2, 3, or 4 pre-sorted source tiles into dst using tmp buffer.")
-    .add_argument("src0", "First input tile (TileType)")
     .add_argument("dst", "Output tile (TileType)")
+    .add_argument("src0", "First input tile (TileType)")
     .add_argument("tmp", "Temporary buffer tile (TileType, same shape as dst)")
     .add_argument("src1", "Second input tile (TileType)")
     .set_attr<bool>("exhausted")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
         CHECK(args.size() >= 4 && args.size() <= 6)
-            << "block.mrgsort2 requires 4-6 arguments (src0, dst, tmp, src1, [src2, src3]), but got " << args.size();
-        auto dst_type = As<TileType>(args[1]->GetType());
-        CHECK(dst_type) << "block.mrgsort2: dst must be TileType, but got " << args[1]->GetType()->TypeName();
+            << "block.mrgsort2 requires 4-6 arguments (dst, src0, tmp, src1, [src2, src3]), but got " << args.size();
+        auto dst_type = As<TileType>(args[0]->GetType());
+        CHECK(dst_type) << "block.mrgsort2: dst must be TileType, but got " << args[0]->GetType()->TypeName();
         return dst_type;
     });
 
@@ -96,15 +96,15 @@ REGISTER_OP("block.histogram")
     .set_description(
         "Radix sort histogram accumulation for 256-bin histograms. "
         "Only supported on A5. Builds histogram for radix sort preprocessing.")
+    .add_argument("dst", "Destination histogram tile (TileType, dtype=UINT32, cols=256)")
     .add_argument("src", "Source tile (TileType, dtype=UINT16 or UINT32)")
     .add_argument("idx", "Index tile for LSB filtering (TileType, dtype=UINT8)")
-    .add_argument("dst", "Destination histogram tile (TileType, dtype=UINT32, cols=256)")
     .set_attr<bool>("is_msb")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
-        CHECK(args.size() == 3) << "block.histogram requires 3 arguments (src, idx, dst), but got " << args.size();
-        auto dst_type = As<TileType>(args[2]->GetType());
-        CHECK(dst_type) << "block.histogram: dst must be TileType, but got " << args[2]->GetType()->TypeName();
+        CHECK(args.size() == 3) << "block.histogram requires 3 arguments (dst, src, idx), but got " << args.size();
+        auto dst_type = As<TileType>(args[0]->GetType());
+        CHECK(dst_type) << "block.histogram: dst must be TileType, but got " << args[0]->GetType()->TypeName();
         return dst_type;
     });
 

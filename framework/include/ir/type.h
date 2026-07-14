@@ -21,6 +21,7 @@
 
 #include "core/dtype.h"
 #include "ir/core.h"
+#include "ir/op_attr_types.h"
 #include "ir/reflection/field_traits.h"
 
 namespace pypto {
@@ -125,16 +126,24 @@ using ScalarTypePtr = std::shared_ptr<const ScalarType>;
 /**
  * \brief Tensor layout enumeration
  *
- * Defines the available tensor layout types:
- * - ND: ND layout
- * - DN: DN layout
- * - NZ: NZ layout
+ * Used by both Tensor (global memory) and Tile (on-chip buffer) layers.
+ *
+ * Tensor layer (ND/DN/NZ only; ZN/NN/ZZ have no Tensor-layer meaning):
+ * - ND: Row-major, contiguous in the last dimension
+ * - DN: Column-major, contiguous in the first dimension
+ * - NZ: Fractal — N-dimension outer block, Z-order inner block
+ *
+ * Tile layer — maps to (blayout, slayout) of HardwareInfo:
+ *   blayout/slayout values: row_major, col_major, none_box
+ * - ND: (row_major,  none_box)   — no fractal
+ * - DN: (col_major,  none_box)   — no fractal
+ * - NZ: (col_major,  row_major)  — standard fractal
+ * - ZN: (row_major,  col_major)  — transposed fractal
+ * - NN: (col_major,  col_major)  — both levels col_major
+ * - ZZ: (row_major,  row_major)  — both levels row_major
+ *
+ * \see Defined via PYPTO_DECLARE_ENUM in ir/op_attr_types.h
  */
-enum class TensorLayout {
-    ND, ///< ND layout
-    DN, ///< DN layout
-    NZ  ///< NZ layout
-};
 
 /**
  * \brief Tensor view representation
@@ -177,7 +186,7 @@ struct TensorView {
 /**
  * \brief Tile layout enumeration
  *
- * Shared by blayout and slayout fields in TileView:
+ * Shared by blayout and slayout fields in HardwareInfo:
  * - none_box: No layout constraint
  * - row_major: Row-major layout
  * - col_major: Column-major layout

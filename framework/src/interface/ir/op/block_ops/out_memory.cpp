@@ -13,7 +13,7 @@
  * \brief Block memory operations with explicit output tiles: load, store, store_fp, move, ub_copy, full, fillpad,
  * fillpad_inplace, fillpad_expand.
  *
- * Each block explicit-output op receives the pre-allocated output tile as its last argument
+ * Each block explicit-output op receives the pre-allocated output tile as its first argument
  * and returns that tile's type rather than creating a fresh SSA result type.
  * This mirrors the hardware semantics where the programmer explicitly manages
  * tile buffers.
@@ -50,7 +50,7 @@ static TypePtr DeduceBlockOutFillPadType(
 {
     auto out_type = As<TileType>(DeduceBlockOutTileType(args, kwargs, op_name, 2));
     CHECK(out_type) << op_name << ": out must be TileType";
-    auto src_type = As<TileType>(args[0]->GetType());
+    auto src_type = As<TileType>(args[1]->GetType());
     CHECK(src_type) << op_name << ": src must be TileType";
     CHECK(out_type->hardwareInfo_.has_value()) << op_name << ": out tile must carry hardware_info metadata";
 
@@ -101,138 +101,149 @@ static TypePtr DeduceBlockOutFillPadType(
 // Op registration
 // ---------------------------------------------------------------------------
 
-// block.load: (tensor, offsets, out) -> TileType (out's type)
+// block.load: (out, tensor, offsets) -> TileType (out's type)
 REGISTER_OP("block.load")
     .set_op_category("BlockOp")
     .set_description(
         "Block explicit-output load: copy data from a global tensor into a pre-allocated tile. "
-        "The output tile (last arg) defines the destination buffer; its type is returned. "
+        "The output tile (first arg) defines the destination buffer; its type is returned. "
         "Partition view sizes are derived from the tile type's shape/valid_shape.")
+    .add_argument("out", "Pre-allocated destination tile (TileType)")
     .add_argument("tensor", "Source tensor (TensorType)")
     .add_argument("offsets", "Offset tuple per dimension (MakeTuple)")
-    .add_argument("out", "Pre-allocated destination tile (TileType)")
-    .set_attr<std::string>("layout")
+    .set_attr<bool>("is_transpose")
     .set_attr<std::vector<int>>("tile_dims")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
         CHECK(args.size() == 3) << "block.load requires 3 arguments, got " << args.size();
-        CHECK(As<TensorType>(args[0]->GetType())) << "block.load: arg 0 must be TensorType";
-        auto offsets = As<MakeTuple>(args[1]);
-        CHECK(offsets) << "block.load: arg 1 must be MakeTuple (offsets)";
-        CHECK(As<TileType>(args[2]->GetType())) << "block.load: arg 2 must be TileType";
-        return args[2]->GetType();
+        CHECK(As<TileType>(args[0]->GetType())) << "block.load: arg 0 must be TileType";
+        CHECK(As<TensorType>(args[1]->GetType())) << "block.load: arg 1 must be TensorType";
+        auto offsets = As<MakeTuple>(args[2]);
+        CHECK(offsets) << "block.load: arg 2 must be MakeTuple (offsets)";
+        return args[0]->GetType();
     });
 
-// block.store: (tile, offsets, output_tensor) -> TensorType
+// block.store: (output_tensor, tile, offsets, [pre_quant_scalar]) -> TensorType
 REGISTER_OP("block.store")
     .set_op_category("BlockOp")
     .set_description("Block explicit-output store: copy data from a pre-allocated tile to a global tensor.")
+    .add_argument("output_tensor", "Destination tensor (TensorType)")
     .add_argument("tile", "Source tile (TileType)")
     .add_argument("offsets", "Offset tuple per dimension (MakeTuple)")
-    .add_argument("output_tensor", "Destination tensor (TensorType)")
+    .add_argument("pre_quant_scalar", "Optional fixpipe quant scale (ScalarType, low-32-bit float bits)")
     .set_attr<std::vector<int>>("tile_dims")
-    .set_attr<std::string>("relu_pre_mode")
-    .set_attr<int>("pre_quant_scalar")
-    .set_attr<std::string>("atomic") // "none" or "add"
-    .set_attr<std::string>("phase") // STPhase: "unspecified" / "partial" / "final" — unit_flag for TSTORE
+    .set_attr<int>("relu_pre_mode")
+    .set_attr<int>("atomic")
+    .set_attr<int>("phase")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
-        CHECK(args.size() == 3) << "block.store requires 3 arguments, got " << args.size();
-        CHECK(As<TileType>(args[0]->GetType())) << "block.store: arg 0 must be TileType";
-        auto offsets = As<MakeTuple>(args[1]);
-        CHECK(offsets) << "block.store: arg 1 must be MakeTuple (offsets)";
-        auto out_type = As<TensorType>(args[2]->GetType());
-        CHECK(out_type) << "block.store: arg 2 must be TensorType";
+        CHECK(args.size() == 3 || args.size() == 4) << "block.store requires 3 or 4 arguments, got " << args.size();
+        auto out_type = As<TensorType>(args[0]->GetType());
+        CHECK(out_type) << "block.store: arg 0 must be TensorType";
+        CHECK(As<TileType>(args[1]->GetType())) << "block.store: arg 1 must be TileType";
+        auto offsets = As<MakeTuple>(args[2]);
+        CHECK(offsets) << "block.store: arg 2 must be MakeTuple (offsets)";
+        if (args.size() == 4) {
+            CHECK(As<ScalarType>(args[3]->GetType()))
+                << "block.store: arg 3 (pre_quant_scalar) must be ScalarType";
+        }
         return out_type;
     });
 
-// block.store_fp: (tile, fp_tile, offsets, output_tensor) -> TensorType
+// block.store_fp: (output_tensor, tile, fp_tile, offsets) -> TensorType
 REGISTER_OP("block.store_fp")
     .set_op_category("BlockOp")
     .set_description(
         "Block explicit-output floating-point store: copy data from a pre-allocated Acc tile to a global tensor "
         "using an auxiliary fp tile.")
+    .add_argument("output_tensor", "Destination tensor (TensorType)")
     .add_argument("tile", "Source tile (TileType, Acc memory)")
     .add_argument("fp_tile", "Floating-point parameter tile (TileType)")
     .add_argument("offsets", "Offset tuple per dimension (MakeTuple)")
-    .add_argument("output_tensor", "Destination tensor (TensorType)")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
         CHECK(args.size() == 4) << "block.store_fp requires 4 arguments, got " << args.size();
-        CHECK(As<TileType>(args[0]->GetType())) << "block.store_fp: arg 0 must be TileType";
+        auto out_type = As<TensorType>(args[0]->GetType());
+        CHECK(out_type) << "block.store_fp: arg 0 must be TensorType";
         CHECK(As<TileType>(args[1]->GetType())) << "block.store_fp: arg 1 must be TileType";
-        auto offsets = As<MakeTuple>(args[2]);
-        CHECK(offsets) << "block.store_fp: arg 2 must be MakeTuple (offsets)";
-        auto out_type = As<TensorType>(args[3]->GetType());
-        CHECK(out_type) << "block.store_fp: arg 3 must be TensorType";
+        CHECK(As<TileType>(args[2]->GetType())) << "block.store_fp: arg 2 must be TileType";
+        auto offsets = As<MakeTuple>(args[3]);
+        CHECK(offsets) << "block.store_fp: arg 3 must be MakeTuple (offsets)";
         return out_type;
     });
 
-// block.move: (src_tile, out, [offset]) -> TileType (out's type)
+// block.move: (out, src_tile, [offset]) -> TileType (out's type)
 REGISTER_OP("block.move")
     .set_op_category("BlockOp")
     .set_description(
         "Block explicit-output move: transfer a tile between memory levels into a pre-allocated buffer. "
         "The TMOV variant is determined by the output tile's memory space.")
-    .add_argument("src", "Source tile (TileType)")
     .add_argument("out", "Pre-allocated destination tile (TileType)")
+    .add_argument("src", "Source tile (TileType)")
     .add_argument("offset", "Optional 2D offset [offset_m, offset_k] for sub-tile extraction (TupleType)")
-    .set_attr<std::string>("acc_to_vec_mode")
-    .set_attr<std::string>("relu_pre_mode")
-    .set_attr<int>("pre_quant_scalar")
+    .add_argument("pre_quant_scalar", "Optional fixpipe quant scale (ScalarType, low-32-bit float bits)")
+    .set_attr<int>("acc_to_vec_mode")
+    .set_attr<int>("relu_pre_mode")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
-        CHECK(args.size() == 2 || args.size() == 3) << "The operator block.move requires 2 or 3 arguments, but got " << args.size();
-        auto out_type = As<TileType>(args[1]->GetType());
-        CHECK(out_type) << "block.move: second argument (out) must be TileType";
+        CHECK(args.size() >= 2 && args.size() <= 4)
+            << "The operator block.move requires 2 to 4 arguments, but got " << args.size();
+        auto out_type = As<TileType>(args[0]->GetType());
+        CHECK(out_type) << "block.move: first argument (out) must be TileType";
+        // Optional trailing operands (args[2], args[3]) are distinguished by TYPE, not position:
+        // a TupleType is the 2D sub-tile offset; a ScalarType is the pre_quant_scalar quant scale.
+        for (size_t i = 2; i < args.size(); ++i) {
+            CHECK(As<TupleType>(args[i]->GetType()) || As<ScalarType>(args[i]->GetType()))
+                << "block.move: optional arg " << i << " must be TupleType (offset) or ScalarType (pre_quant_scalar)";
+        }
         return out_type;
     });
 
-// block.move_fp: (src_tile, fp_tile, out) -> TileType (out's type)
+// block.move_fp: (out, src_tile, fp_tile) -> TileType (out's type)
 REGISTER_OP("block.move_fp")
     .set_op_category("BlockOp")
     .set_description("Block explicit-output move with scaling tile: convert an Acc tile into a pre-allocated Vec tile.")
+    .add_argument("out", "Pre-allocated destination tile (TileType, Vec memory)")
     .add_argument("src", "Source tile (TileType, Acc memory)")
     .add_argument("fp_tile", "Floating-point parameter tile (TileType, Scaling memory)")
-    .add_argument("out", "Pre-allocated destination tile (TileType, Vec memory)")
-    .set_attr<std::string>("acc_to_vec_mode")
-    .set_attr<std::string>("relu_pre_mode")
+    .set_attr<int>("acc_to_vec_mode")
+    .set_attr<int>("relu_pre_mode")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
         CHECK(args.size() == 3) << "The operator block.move_fp requires 3 arguments, but got " << args.size();
-        CHECK(As<TileType>(args[0]->GetType())) << "block.move_fp: arg 0 must be TileType";
+        auto out_type = As<TileType>(args[0]->GetType());
+        CHECK(out_type) << "block.move_fp: first argument (out) must be TileType";
         CHECK(As<TileType>(args[1]->GetType())) << "block.move_fp: arg 1 must be TileType";
-        auto out_type = As<TileType>(args.back()->GetType());
-        CHECK(out_type) << "block.move_fp: last argument (out) must be TileType";
+        CHECK(As<TileType>(args[2]->GetType())) << "block.move_fp: arg 2 must be TileType";
         return out_type;
     });
 
-// block.insert: (src, index_row, index_col, out) or (src, index_row, index_col, offset, out) -> TileType
+// block.insert: (out, src, row, col) -> TileType
 REGISTER_OP("block.insert")
     .set_op_category("BlockOp")
     .set_description(
-        "Block explicit-output insert: insert source sub-tile into destination tile at (indexRow, indexCol). "
+        "Block explicit-output insert: insert source sub-tile into destination tile at a 2-D offset. "
         "Corresponds to pto-isa TINSERT instruction for UB→L1 transfer.")
+    .add_argument("out", "Destination tile (TileType, Mat memory)")
     .add_argument("src", "Source sub-tile (TileType, Vec memory)")
-    .add_argument("index_row", "Row index where insertion begins")
-    .add_argument("index_col", "Column index where insertion begins")
-    .add_argument("out", "Destination tile (TileType, Mat memory), or offset + out when 5 args")
+    .add_argument("row", "Row offset where insertion begins")
+    .add_argument("col", "Column offset where insertion begins")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
-        CHECK(args.size() == 4 || args.size() == 5)
-            << "The operator block.insert requires 4 or 5 arguments, but got " << args.size();
-        auto out_type = As<TileType>(args.back()->GetType());
-        CHECK(out_type) << "block.insert: last argument (out) must be TileType";
+        CHECK(args.size() == 4)
+            << "The operator block.insert requires 4 arguments, but got " << args.size();
+        auto out_type = As<TileType>(args[0]->GetType());
+        CHECK(out_type) << "block.insert: first argument (out) must be TileType";
         return out_type;
     });
 
-// block.ub_copy: (src_tile, out) -> TileType (out's type)
+// block.ub_copy: (out, src_tile) -> TileType (out's type)
 REGISTER_OP("block.ub_copy")
     .set_op_category("BlockOp")
     .set_description(
         "Block explicit-output UB-to-UB copy: copy a tile within unified buffer into a pre-allocated buffer.")
-    .add_argument("src", "Source UB tile (TileType)")
     .add_argument("out", "Pre-allocated destination UB tile (TileType)")
+    .add_argument("src", "Source UB tile (TileType)")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
         return DeduceBlockOutTileType(args, kwargs, "block.ub_copy", 2);
@@ -265,66 +276,84 @@ REGISTER_OP("block.ssbuf_load")
         return std::make_shared<ScalarType>(DataType::INDEX);
     });
 
-// block.full: (scalar, out) -> TileType (out's type)
+// block.full: (out, scalar) -> TileType (out's type)
 // Fills the pre-allocated tile with a scalar value. Shape comes from out's TileType.
 REGISTER_OP("block.full")
     .set_op_category("BlockOp")
     .set_description("Block explicit-output fill: broadcast a scalar value across a pre-allocated tile (out = scalar).")
-    .add_argument("scalar", "Fill value (ScalarType or constant)")
     .add_argument("out", "Pre-allocated tile to fill (TileType)")
+    .add_argument("scalar", "Fill value (ScalarType or constant)")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
         return DeduceBlockOutTileType(args, kwargs, "block.full", 2);
     });
 
-// block.fillpad: (src_tile, out) -> TileType (out's type)
+// block.fillpad: (out, src_tile) -> TileType (out's type)
 REGISTER_OP("block.fillpad")
     .set_op_category("BlockOp")
     .set_description("Block explicit-output fill-with-padding: copy src tile into out and pad remaining elements.")
-    .add_argument("src", "Source tile (TileType)")
     .add_argument("out", "Pre-allocated destination tile (TileType)")
+    .add_argument("src", "Source tile (TileType)")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
         return DeduceBlockOutFillPadType(args, kwargs, "block.fillpad", false);
     });
 
-// block.fillpad_inplace: (src_tile, out) -> TileType (out's type)
+// block.fillpad_inplace: (out, src_tile) -> TileType (out's type)
 REGISTER_OP("block.fillpad_inplace")
     .set_op_category("BlockOp")
     .set_description(
         "Block explicit-output inplace fill-with-padding: src and out share backing storage while preserving distinct "
         "metadata.")
-    .add_argument("src", "Source tile (TileType)")
     .add_argument("out", "Pre-allocated destination tile (TileType)")
+    .add_argument("src", "Source tile (TileType)")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
         return DeduceBlockOutFillPadType(args, kwargs, "block.fillpad_inplace", false, true);
     });
 
-// block.fillpad_expand: (src_tile, out) -> TileType (out's type)
+// block.fillpad_expand: (out, src_tile) -> TileType (out's type)
 REGISTER_OP("block.fillpad_expand")
     .set_op_category("BlockOp")
     .set_description(
         "Block explicit-output fill-with-padding: copy src tile into a larger out tile and pad remaining elements.")
-    .add_argument("src", "Source tile (TileType)")
     .add_argument("out", "Pre-allocated destination tile (TileType)")
+    .add_argument("src", "Source tile (TileType)")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
         return DeduceBlockOutFillPadType(args, kwargs, "block.fillpad_expand", true);
     });
 
-// block.set_validshape: (row, col, tile) -> TileType (tile's type)
+// block.set_validshape: (tile, row, col) -> TileType (tile's type)
 REGISTER_OP("block.set_validshape")
     .set_op_category("BlockOp")
     .set_description(
         "Update valid-shape metadata on a dynamic tile in place. "
         "Emits a pto.set_validshape instruction to set the runtime valid row/col.")
+    .add_argument("tile", "Dynamic tile buffer to update (TileType)")
     .add_argument("row", "Runtime valid row count (ScalarType or constant)")
     .add_argument("col", "Runtime valid column count (ScalarType or constant)")
-    .add_argument("tile", "Dynamic tile buffer to update (TileType)")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
         return DeduceBlockOutTileType(args, kwargs, "block.set_validshape", 3);
+    });
+
+// block.set_stride: (tensor, row_stride, col_stride) -> TensorType (tensor's type)
+REGISTER_OP("block.set_stride")
+    .set_op_category("BlockOp")
+    .set_description(
+        "Override the per-dimension stride of a global tensor descriptor in place. "
+        "Emits a GlobalTensor::SetStride call so subsequent loads/stores walk the "
+        "tensor with the supplied (row, col) element strides.")
+    .add_argument("tensor", "Global tensor whose stride descriptor is rewritten (TensorType)")
+    .add_argument("row", "Runtime row stride in elements (ScalarType or constant)")
+    .add_argument("col", "Runtime column stride in elements (ScalarType or constant)")
+    .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
+                      [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
+        CHECK(args.size() == 3) << "block.set_stride requires 3 arguments (tensor, row, col), got " << args.size();
+        auto tensor_type = As<TensorType>(args[0]->GetType());
+        CHECK(tensor_type) << "block.set_stride: arg 0 must be a TensorType";
+        return args[0]->GetType();
     });
 
 } // namespace ir

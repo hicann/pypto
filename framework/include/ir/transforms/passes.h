@@ -277,6 +277,31 @@ Pass CreateRootFunctions();
  * \brief Finalize dynamic functions built from new IR (post create_root_functions).
  */
 Pass FinalizeDynamicFunction();
+
+/**
+ * \brief Normalize "clear-form" Mat matmul operands to the physical layout pto-isa needs.
+ *
+ * The L1(Mat)->L0(Left/Right) move (`block.move`) requires the source and destination
+ * tiles to have the SAME physical [Rows, Cols] (the CANN TMOV tileop static-asserts on it).
+ * Because `Mat [N,K] NZ` and `Mat [K,N] ZN` are the *same bytes*, a matmul operand that is
+ * logically transposed on-chip previously had to be declared in the physical form
+ * `Mat [K,N] ZN`, whose shape does not match the source data it is filled from.
+ *
+ * This pass lets the frontend declare such an operand in "clear form" — shape equal to the
+ * data it holds, layout matching that shape (e.g. `Mat [N,K] NZ` for data `d=[N,K]`) — and
+ * rewrites it back to the physical form. It detects a `block.move(dst=Left/Right, src=Mat)`
+ * whose src shape is the reverse of the dst shape (and non-square), then relabels that Mat
+ * allocation: swap the two shape dims and swap blayout<->slayout (flips NZ<->ZN). The bytes
+ * are unchanged, so codegen and the hardware behave exactly as with the explicit physical form.
+ *
+ * The rewrite follows the allocation by MemRef identity, so every reference Var is updated
+ * regardless of tile-group assignment or control flow. It is a no-op when src.shape ==
+ * dst.shape (the convention every other kernel uses), so existing kernels are unaffected.
+ *
+ * Must run before ConvertToSSA (and after helper inlining so the move and make_tile are in
+ * the same function).
+ */
+Pass NormalizeMatTransposeLayout();
 } // namespace pass
 
 /**

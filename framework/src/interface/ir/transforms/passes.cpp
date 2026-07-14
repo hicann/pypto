@@ -259,7 +259,7 @@ Pass MergeStmtsIntoIf()
 // ---------------------------------------------------------------------------
 // Stub (no-op) implementations for passes whose .cpp files were removed.
 // Each returns the program unchanged.  The factory functions are still declared
-// in passes.h and referenced from Python bindings / PassManager.
+// in passes.h and referenced from Python bindings.
 // ---------------------------------------------------------------------------
 namespace pass {
 

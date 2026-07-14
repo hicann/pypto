@@ -317,7 +317,7 @@ TEST_F(TensorOpsMatmulTest, Matmul_WrongArgCount_Throws)
 }
 
 // ============================================================================
-// memory.cpp: tensor.create, tensor.view, tensor.assemble, tensor.dim, tensor.getval
+// tensor.create, tensor.view, tensor.assemble
 // ============================================================================
 
 class TensorOpsMemoryTest : public testing::Test {};
@@ -370,51 +370,6 @@ TEST_F(TensorOpsMemoryTest, TensorAssemble_ReturnsTargetType)
     auto rt = As<TensorType>(call->GetType());
     ASSERT_NE(rt, nullptr);
     EXPECT_EQ(rt->dtype_, DataType::FP16);
-}
-
-TEST_F(TensorOpsMemoryTest, TensorDim_ReturnsIndexScalar)
-{
-    auto& reg = OpRegistry::GetInstance();
-    auto tensor = MakeTensorVar("t", {16, 32, 64}, DataType::FP32);
-    auto axis = std::make_shared<ConstInt>(int64_t(1), DataType::INT64, Sp());
-    auto call = reg.Create("tensor.dim", {tensor, axis}, Sp());
-    auto rt = As<ScalarType>(call->GetType());
-    ASSERT_NE(rt, nullptr);
-    EXPECT_EQ(rt->dtype_, DataType::INDEX);
-}
-
-TEST_F(TensorOpsMemoryTest, TensorDim_NegativeAxis_ReturnsIndexScalar)
-{
-    auto& reg = OpRegistry::GetInstance();
-    auto tensor = MakeTensorVar("t", {16, 32}, DataType::FP32);
-    auto axis = std::make_shared<ConstInt>(int64_t(-1), DataType::INT64, Sp());
-    auto call = reg.Create("tensor.dim", {tensor, axis}, Sp());
-    auto rt = As<ScalarType>(call->GetType());
-    ASSERT_NE(rt, nullptr);
-    EXPECT_EQ(rt->dtype_, DataType::INDEX);
-}
-
-TEST_F(TensorOpsMemoryTest, TensorGetval_ReturnsScalarOfTensorDtype)
-{
-    auto& reg = OpRegistry::GetInstance();
-    auto tensor = MakeTensorVar("t", {64}, DataType::FP16);
-    auto offset = MakeScalarVar("off", DataType::INT32);
-    auto call = reg.Create("tensor.getval", {tensor, offset}, Sp());
-    auto rt = As<ScalarType>(call->GetType());
-    ASSERT_NE(rt, nullptr);
-    EXPECT_EQ(rt->dtype_, DataType::FP16);
-}
-
-TEST_F(TensorOpsMemoryTest, TensorSetval_ReturnsTensorType)
-{
-    auto& reg = OpRegistry::GetInstance();
-    auto tensor = MakeTensorVar("t", {64}, DataType::FP32);
-    auto offset = MakeScalarVar("off", DataType::INT64);
-    auto val = MakeScalarVar("v", DataType::FP32);
-    auto call = reg.Create("tensor.setval", {tensor, offset, val}, Sp());
-    auto rt = As<TensorType>(call->GetType());
-    ASSERT_NE(rt, nullptr);
-    EXPECT_EQ(rt->dtype_, DataType::FP32);
 }
 
 // ============================================================================

@@ -58,6 +58,8 @@ static std::optional<int64_t> ResolveToConst(
         return std::nullopt;
     if (auto ci = As<ConstInt>(expr))
         return ci->value_;
+    if (auto cb = As<ConstBool>(expr))
+        return cb->value_ ? 1 : 0;
     if (auto v = As<Var>(expr)) {
         auto it = var_vals.find(v->name_);
         if (it != var_vals.end())
@@ -281,7 +283,10 @@ public:
     std::optional<StmtPtr> SimplifyConstCondition(
         const ExprPtr& cond, const StmtPtr& then_body, const std::optional<StmtPtr>& else_body, const Span& span)
     {
-        auto const_value = TryGetConstInt(cond);
+        // Resolve through Vars and tuple accesses so a compile-time-constant condition
+        // (e.g. a bool field of a make_tuple threaded through helpers) prunes the dead
+        // branch, hoisting the live branch into the parent scope.
+        auto const_value = ResolveToConst(cond, var_vals_);
         if (!const_value) {
             return std::nullopt;
         }

@@ -26,6 +26,7 @@
 #include "core/error.h"
 #include "ir/expr.h"
 #include "ir/kind_traits.h"
+#include "ir/op_attr_types.h"
 #include "ir/op_registry.h"
 #include "ir/scalar_expr.h"
 #include "ir/type.h"
@@ -49,8 +50,8 @@ TEST_F(SyncOpsDcciTest, Dcci_TensorTarget_TupleOffset_ReturnsUnknown)
     auto tensor = MakeTensorVar("gm", {32, 64}, DataType::FP16);
     auto offset = MakeOffsetsTuple({0, 16});
     std::vector<std::pair<std::string, std::any>> kwargs = {
-        {"cache_line", std::string("SINGLE_CACHE_LINE")},
-        {"dst", std::string("auto")}};
+        {"cache_line", static_cast<int>(CacheLine::SINGLE_CACHE_LINE)},
+        {"dst", static_cast<int>(DcciDst::AUTO)}};
     auto call = reg.Create("system.dcci", {tensor, offset}, kwargs, Sp());
     ASSERT_NE(call, nullptr);
     EXPECT_NE(As<UnknownType>(call->GetType()), nullptr);
@@ -62,8 +63,8 @@ TEST_F(SyncOpsDcciTest, Dcci_TileTarget_ScalarOffset_ReturnsUnknown)
     auto tile = MakeTileVar("ub", {16, 32}, DataType::FP16);
     auto offset = MakeScalarVar("off", DataType::INDEX);
     std::vector<std::pair<std::string, std::any>> kwargs = {
-        {"cache_line", std::string("SINGLE_CACHE_LINE")},
-        {"dst", std::string("CACHELINE_UB")}};
+        {"cache_line", static_cast<int>(CacheLine::SINGLE_CACHE_LINE)},
+        {"dst", static_cast<int>(DcciDst::CACHELINE_UB)}};
     auto call = reg.Create("system.dcci", {tile, offset}, kwargs, Sp());
     ASSERT_NE(call, nullptr);
     EXPECT_NE(As<UnknownType>(call->GetType()), nullptr);
@@ -75,8 +76,8 @@ TEST_F(SyncOpsDcciTest, Dcci_TileTarget_TupleOffset_Throws)
     auto tile = MakeTileVar("ub", {16, 32}, DataType::FP16);
     auto offset = MakeOffsetsTuple({0, 16});
     std::vector<std::pair<std::string, std::any>> kwargs = {
-        {"cache_line", std::string("SINGLE_CACHE_LINE")},
-        {"dst", std::string("auto")}};
+        {"cache_line", static_cast<int>(CacheLine::SINGLE_CACHE_LINE)},
+        {"dst", static_cast<int>(DcciDst::AUTO)}};
     EXPECT_THROW((void)reg.Create("system.dcci", {tile, offset}, kwargs, Sp()), npu::tile_fwk::Error);
 }
 
@@ -85,8 +86,8 @@ TEST_F(SyncOpsDcciTest, Dcci_NonTensorNonTileTarget_Throws)
     auto& reg = OpRegistry::GetInstance();
     auto scalar = MakeScalarVar("x", DataType::INT32);
     std::vector<std::pair<std::string, std::any>> kwargs = {
-        {"cache_line", std::string("SINGLE_CACHE_LINE")},
-        {"dst", std::string("auto")}};
+        {"cache_line", static_cast<int>(CacheLine::SINGLE_CACHE_LINE)},
+        {"dst", static_cast<int>(DcciDst::AUTO)}};
     EXPECT_THROW((void)reg.Create("system.dcci", {scalar}, kwargs, Sp()), npu::tile_fwk::Error);
 }
 
@@ -96,8 +97,8 @@ TEST_F(SyncOpsDcciTest, Dcci_TensorTarget_NonIntOffset_Throws)
     auto tensor = MakeTensorVar("gm", {64, 128}, DataType::FP16);
     auto bad_offset = MakeScalarVar("off", DataType::FP32);
     std::vector<std::pair<std::string, std::any>> kwargs = {
-        {"cache_line", std::string("SINGLE_CACHE_LINE")},
-        {"dst", std::string("auto")}};
+        {"cache_line", static_cast<int>(CacheLine::SINGLE_CACHE_LINE)},
+        {"dst", static_cast<int>(DcciDst::AUTO)}};
     EXPECT_THROW((void)reg.Create("system.dcci", {tensor, bad_offset}, kwargs, Sp()), npu::tile_fwk::Error);
 }
 

@@ -211,8 +211,8 @@ def test_builder_emit_block_ops():
     dst = ir.Var("dst", pypto_impl.ir.TileType([16, 32], ir.FP32), sp)
     out = ir.Var("out", ir.TensorType([16, 32], ir.FP16), sp)
     offsets = ir.MakeTuple([ir.ConstInt(0, ir.INT64, sp), ir.ConstInt(0, ir.INT64, sp)], sp)
-    block_store = pypto_impl.ir.create_op_call("block.store", [src, offsets, out], {"phase": "final"}, sp)
-    block_move = pypto_impl.ir.create_op_call("block.move", [src, dst, offsets], sp)
+    block_store = pypto_impl.ir.create_op_call("block.store", [out, src, offsets], {"phase": 0}, sp)
+    block_move = pypto_impl.ir.create_op_call("block.move", [dst, src, offsets], sp)
 
     b.begin_function("f", sp)
     for call in [block_store, block_move]:
@@ -221,7 +221,7 @@ def test_builder_emit_block_ops():
 
     assert [func.body[i].expr.name for i in range(2)] == ["block.store", "block.move"]
     assert isinstance(func.body[0].expr.type, ir.TensorType)
-    assert func.body[0].expr.kwargs["phase"] == "final"
+    assert func.body[0].expr.kwargs["phase"] == 0
     assert isinstance(func.body[1].expr.type, pypto_impl.ir.TileType)
     assert func.body[1].expr.type.dtype == ir.FP32
 
@@ -236,13 +236,13 @@ def test_builder_emit_vf_op():
     src0 = ir.Var("src0", ir.ScalarType(ir.FP16), sp)
     src1 = ir.Var("src1", ir.ScalarType(ir.FP16), sp)
     mask = ir.Var("mask", ir.ScalarType(ir.UINT16), sp)
-    vf_add = pypto_impl.ir.create_op_call("vf.Add", [dst_reg, src0, src1, mask], sp)
+    vf_add = pypto_impl.ir.create_op_call("vf.add", [dst_reg, src0, src1, mask], sp)
 
     b.begin_function("f", sp)
     b.emit(ir.EvalStmt(vf_add, sp))
     func = b.end_function(sp)
 
-    assert func.body[0].expr.name == "vf.Add"
+    assert func.body[0].expr.name == "vf.add"
     assert func.body[0].expr.type.dtype == ir.FP32
 
 
@@ -491,7 +491,7 @@ def test_builder_if_with_runtime_op():
 
     b.begin_function("f", sp)
     b.begin_if(ir.ConstBool(True, sp), sp)
-    sync = pypto_impl.ir.create_op_call("system.sync_all", [], {"mode": "hard", "core_type": "mix"}, sp)
+    sync = pypto_impl.ir.create_op_call("system.sync_all", [], {"mode": 0, "core_type": 2}, sp)
     b.emit(ir.EvalStmt(sync, sp))
     if_stmt = b.end_if(sp)
     func = b.end_function(sp)

@@ -305,8 +305,8 @@ StmtPtr IRBuilder::EndIf(const Span& end_span)
     auto combinedSpan = MakeCombinedSpan(if_ctx->GetBeginSpan(), end_span);
 
     // Create if statement
-    auto if_stmt =
-        std::make_shared<IfStmt>(if_ctx->GetCondition(), then_body, else_body, if_ctx->GetReturnVars(), combinedSpan);
+    auto if_stmt = std::make_shared<IfStmt>(
+        if_ctx->GetCondition(), then_body, else_body, if_ctx->GetReturnVars(), combinedSpan);
     // Pop context
     context_stack_.pop_back();
 

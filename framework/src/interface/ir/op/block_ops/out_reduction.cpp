@@ -12,7 +12,7 @@
  * @file block_ops/out_reduction.cpp
  * \brief Block reduction and broadcast operations with explicit output tiles.
  *
- * Reduction ops: row_sum, row_max, row_min  (tile, tmp, out)
+ * Reduction ops: row_sum, row_max, row_min  (out, tile, tmp)
  * Broadcast ops: row_expand, col_expand, row_expand_*, col_expand_*
  */
 
@@ -36,15 +36,15 @@ namespace ir {
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
-// Reduction operations: (tile, tmp, out) -> out's type
+// Reduction operations: (out, tile, tmp) -> out's type
 // ---------------------------------------------------------------------------
 
 REGISTER_OP("block.row_sum")
     .set_op_category("BlockOp")
     .set_description("Block explicit-output row-wise sum reduction: out[i,0] = sum_j(tile[i,j])")
+    .add_argument("out", "Pre-allocated output row vector tile (TileType)")
     .add_argument("tile", "Input tile (TileType)")
     .add_argument("tmp", "Scratch tile required by hardware (TileType)")
-    .add_argument("out", "Pre-allocated output row vector tile (TileType)")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
         return DeduceBlockOutTileType(args, kwargs, "block.row_sum", 3);
@@ -53,9 +53,9 @@ REGISTER_OP("block.row_sum")
 REGISTER_OP("block.row_max")
     .set_op_category("BlockOp")
     .set_description("Block explicit-output row-wise max reduction: out[i,0] = max_j(tile[i,j])")
+    .add_argument("out", "Pre-allocated output row vector tile (TileType)")
     .add_argument("tile", "Input tile (TileType)")
     .add_argument("tmp", "Scratch tile required by hardware (TileType)")
-    .add_argument("out", "Pre-allocated output row vector tile (TileType)")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
         return DeduceBlockOutTileType(args, kwargs, "block.row_max", 3);
@@ -64,9 +64,9 @@ REGISTER_OP("block.row_max")
 REGISTER_OP("block.row_min")
     .set_op_category("BlockOp")
     .set_description("Block explicit-output row-wise min reduction: out[i,0] = min_j(tile[i,j])")
+    .add_argument("out", "Pre-allocated output row vector tile (TileType)")
     .add_argument("tile", "Input tile (TileType)")
     .add_argument("tmp", "Scratch tile required by hardware (TileType)")
-    .add_argument("out", "Pre-allocated output row vector tile (TileType)")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
         return DeduceBlockOutTileType(args, kwargs, "block.row_min", 3);
@@ -75,9 +75,9 @@ REGISTER_OP("block.row_min")
 REGISTER_OP("block.col_max")
     .set_op_category("BlockOp")
     .set_description("Block explicit-output col-wise max reduction: out[0,j] = max_i(tile[i,j])")
+    .add_argument("out", "Pre-allocated output col vector tile [1,N] (TileType)")
     .add_argument("tile", "Input tile (TileType)")
     .add_argument("tmp", "Scratch tile required by hardware (TileType)")
-    .add_argument("out", "Pre-allocated output col vector tile [1,N] (TileType)")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
         return DeduceBlockOutTileType(args, kwargs, "block.col_max", 3);
@@ -86,9 +86,9 @@ REGISTER_OP("block.col_max")
 REGISTER_OP("block.col_sum")
     .set_op_category("BlockOp")
     .set_description("Block explicit-output col-wise sum reduction: out[0,j] = sum_i(tile[i,j])")
+    .add_argument("out", "Pre-allocated output col vector tile [1,N] (TileType)")
     .add_argument("tile", "Input tile (TileType)")
     .add_argument("tmp", "Scratch tile required by hardware (TileType)")
-    .add_argument("out", "Pre-allocated output col vector tile [1,N] (TileType)")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
         return DeduceBlockOutTileType(args, kwargs, "block.col_sum", 3);
@@ -97,9 +97,9 @@ REGISTER_OP("block.col_sum")
 REGISTER_OP("block.col_min")
     .set_op_category("BlockOp")
     .set_description("Block explicit-output col-wise min reduction: out[0,j] = min_i(tile[i,j])")
+    .add_argument("out", "Pre-allocated output col vector tile [1,N] (TileType)")
     .add_argument("tile", "Input tile (TileType)")
     .add_argument("tmp", "Scratch tile required by hardware (TileType)")
-    .add_argument("out", "Pre-allocated output col vector tile [1,N] (TileType)")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
         return DeduceBlockOutTileType(args, kwargs, "block.col_min", 3);
@@ -108,9 +108,9 @@ REGISTER_OP("block.col_min")
 REGISTER_OP("block.row_prod")
     .set_op_category("BlockOp")
     .set_description("Block explicit-output row-wise product reduction: out[i,0] = prod_j(tile[i,j])")
+    .add_argument("out", "Pre-allocated output row vector tile (TileType)")
     .add_argument("tile", "Input tile (TileType)")
     .add_argument("tmp", "Scratch tile required by hardware (TileType)")
-    .add_argument("out", "Pre-allocated output row vector tile (TileType)")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
         return DeduceBlockOutTileType(args, kwargs, "block.row_prod", 3);
@@ -119,9 +119,9 @@ REGISTER_OP("block.row_prod")
 REGISTER_OP("block.col_prod")
     .set_op_category("BlockOp")
     .set_description("Block explicit-output col-wise product reduction: out[0,j] = prod_i(tile[i,j])")
+    .add_argument("out", "Pre-allocated output col vector tile [1,N] (TileType)")
     .add_argument("tile", "Input tile (TileType)")
     .add_argument("tmp", "Scratch tile required by hardware (TileType)")
-    .add_argument("out", "Pre-allocated output col vector tile [1,N] (TileType)")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
         return DeduceBlockOutTileType(args, kwargs, "block.col_prod", 3);
@@ -130,9 +130,9 @@ REGISTER_OP("block.col_prod")
 REGISTER_OP("block.row_reduce")
     .set_op_category("BlockOp")
     .set_description("Block explicit-output generic row-wise reduction with op_type param")
+    .add_argument("out", "Pre-allocated output row vector tile (TileType)")
     .add_argument("tile", "Input tile (TileType)")
     .add_argument("tmp", "Scratch tile required by hardware (TileType)")
-    .add_argument("out", "Pre-allocated output row vector tile (TileType)")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
         return DeduceBlockOutTileType(args, kwargs, "block.row_reduce", 3);
@@ -141,9 +141,9 @@ REGISTER_OP("block.row_reduce")
 REGISTER_OP("block.col_reduce")
     .set_op_category("BlockOp")
     .set_description("Block explicit-output generic col-wise reduction with op_type param")
+    .add_argument("out", "Pre-allocated output col vector tile [1,N] (TileType)")
     .add_argument("tile", "Input tile (TileType)")
     .add_argument("tmp", "Scratch tile required by hardware (TileType)")
-    .add_argument("out", "Pre-allocated output col vector tile [1,N] (TileType)")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
         return DeduceBlockOutTileType(args, kwargs, "block.col_reduce", 3);
@@ -157,9 +157,9 @@ REGISTER_OP("block.col_reduce")
     REGISTER_OP("block." #direction "_" #op_suffix)                                                       \
         .set_op_category("BlockOp")                                                                       \
         .set_description("Block explicit-output " #direction "-wise " description)                        \
+        .add_argument("out", "Pre-allocated output index tile (TileType)")                                \
         .add_argument("tile", "Input tile (TileType)")                                                    \
         .add_argument("tmp", "Scratch tile required by hardware (TileType)")                              \
-        .add_argument("out", "Pre-allocated output index tile (TileType)")                                \
         .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,                              \
                           [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) { \
             return DeduceBlockOutTileType(args, kwargs, "block." #direction "_" #op_suffix, 3);           \
@@ -176,36 +176,36 @@ REGISTER_BLOCK_REDUCE_IDX(col, argmin, "argmin: out[0,j] = argmin_i(tile[i,j])")
 // Broadcast / expansion operations
 // ---------------------------------------------------------------------------
 
-// row_expand (src, out): unary broadcast.
+// row_expand (out, src): unary broadcast.
 REGISTER_OP("block.row_expand")
     .set_op_category("BlockOp")
     .set_description("Block explicit-output row broadcast: out[i,j] = src[i,0] for all j")
-    .add_argument("src", "Source tile [M,1] (TileType)")
     .add_argument("out", "Pre-allocated output tile [M,N] (TileType)")
+    .add_argument("src", "Source tile [M,1] (TileType)")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
         return DeduceBlockOutTileType(args, kwargs, "block.row_expand", 2);
     });
 
-// col_expand (col_vec, out): unary broadcast.
+// col_expand (out, col_vec): unary broadcast.
 REGISTER_OP("block.col_expand")
     .set_op_category("BlockOp")
     .set_description("Block explicit-output column broadcast: out[i,j] = col_vec[0,j] for all i")
-    .add_argument("col_vec", "Source column vector [1,N] (TileType)")
     .add_argument("out", "Pre-allocated output tile [M,N] (TileType)")
+    .add_argument("col_vec", "Source column vector [1,N] (TileType)")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
         return DeduceBlockOutTileType(args, kwargs, "block.col_expand", 2);
     });
 
-// row_expand_* (tile, row_vec, out): binary broadcast-arithmetic.
+// row_expand_* (out, tile, row_vec): binary broadcast-arithmetic.
 #define REGISTER_BLOCK_OUT_ROW_EXPAND(op_suffix, description)                                             \
     REGISTER_OP("block.row_expand_" #op_suffix)                                                           \
         .set_op_category("BlockOp")                                                                       \
         .set_description("Block explicit-output row broadcast " description)                              \
+        .add_argument("out", "Pre-allocated output tile [M,N] (TileType)")                                \
         .add_argument("tile", "Input tile [M,N] (TileType)")                                              \
         .add_argument("row_vec", "Row vector [M,1] (TileType)")                                           \
-        .add_argument("out", "Pre-allocated output tile [M,N] (TileType)")                                \
         .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,                              \
                           [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) { \
             return DeduceBlockOutTileType(args, kwargs, "block.row_expand_" #op_suffix, 3);               \
@@ -221,26 +221,26 @@ REGISTER_BLOCK_OUT_ROW_EXPAND(expdif, "expdif: out = exp(tile - broadcast(row_ve
 
 #undef REGISTER_BLOCK_OUT_ROW_EXPAND
 
-// row_expand_binop (tile, row_vec, out) + op_type kwarg: generic binary broadcast.
+// row_expand_binop (out, tile, row_vec) + op_type kwarg: generic binary broadcast.
 REGISTER_OP("block.row_expand_binop")
     .set_op_category("BlockOp")
     .set_description("Block explicit-output row broadcast with parameterized binary op")
+    .add_argument("out", "Pre-allocated output tile [M,N] (TileType)")
     .add_argument("tile", "Input tile [M,N] (TileType)")
     .add_argument("row_vec", "Row vector [M,1] (TileType)")
-    .add_argument("out", "Pre-allocated output tile [M,N] (TileType)")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
         return DeduceBlockOutTileType(args, kwargs, "block.row_expand_binop", 3);
     });
 
-// col_expand_* (tile, col_vec, out): binary broadcast-arithmetic.
+// col_expand_* (out, tile, col_vec): binary broadcast-arithmetic.
 #define REGISTER_BLOCK_OUT_COL_EXPAND(op_suffix, description)                                             \
     REGISTER_OP("block.col_expand_" #op_suffix)                                                           \
         .set_op_category("BlockOp")                                                                       \
         .set_description("Block explicit-output column broadcast " description)                           \
+        .add_argument("out", "Pre-allocated output tile [M,N] (TileType)")                                \
         .add_argument("tile", "Input tile [M,N] (TileType)")                                              \
         .add_argument("col_vec", "Column vector [1,N] (TileType)")                                        \
-        .add_argument("out", "Pre-allocated output tile [M,N] (TileType)")                                \
         .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,                              \
                           [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) { \
             return DeduceBlockOutTileType(args, kwargs, "block.col_expand_" #op_suffix, 3);               \
@@ -256,13 +256,13 @@ REGISTER_BLOCK_OUT_COL_EXPAND(expdif, "expdif: out = exp(tile - broadcast(col_ve
 
 #undef REGISTER_BLOCK_OUT_COL_EXPAND
 
-// col_expand_binop (tile, col_vec, out) + op_type kwarg: generic binary broadcast.
+// col_expand_binop (out, tile, col_vec) + op_type kwarg: generic binary broadcast.
 REGISTER_OP("block.col_expand_binop")
     .set_op_category("BlockOp")
     .set_description("Block explicit-output column broadcast with parameterized binary op")
+    .add_argument("out", "Pre-allocated output tile [M,N] (TileType)")
     .add_argument("tile", "Input tile [M,N] (TileType)")
     .add_argument("col_vec", "Column vector [1,N] (TileType)")
-    .add_argument("out", "Pre-allocated output tile [M,N] (TileType)")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
         return DeduceBlockOutTileType(args, kwargs, "block.col_expand_binop", 3);

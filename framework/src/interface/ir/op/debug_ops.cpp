@@ -20,6 +20,8 @@
 #include "core/logging.h"
 #include "ir/expr.h"
 #include "ir/kind_traits.h"
+#include "ir/memref.h"
+#include "ir/memory_space.h"
 #include "ir/op_registry.h"
 #include "ir/scalar_expr.h"
 #include "ir/type.h"
@@ -31,7 +33,7 @@ namespace {
 
 bool IsSupportedPrintfConversion(char conversion)
 {
-    return conversion == 'd' || conversion == 'i' || conversion == 'u' || conversion == 'x' || conversion == 'f';
+    return conversion == 'd' || conversion == 'i' || conversion == 'u' || conversion == 'x' || conversion == 'f' || conversion == 'p';
 }
 
 std::vector<char> ParsePrintfConversions(const std::string& format)
@@ -174,14 +176,15 @@ TypePtr DeduceDebugDumpTileType(
     [[maybe_unused]] const std::vector<ExprPtr>& args,
     [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
 {
-    CHECK(args.size() == 1 || args.size() == 0x3)
-        << "debug.dump_tile requires 1 argument (tile) or 3 arguments (tile, offsets, shapes), but got " << args.size();
+    CHECK(args.size() == 1 || args.size() == 0x3 || args.size() == 0x4)
+        << "debug.dump_tile requires 1 argument (tile), 3 arguments (tile, offsets, shapes), "
+        << "or 4 arguments (tile, offsets, shapes, workspace), but got " << args.size();
 
     auto tile_type = As<TileType>(args[0]->GetType());
     CHECK(tile_type) << "debug.dump_tile requires first argument to be a TileType, but got "
                      << args[0]->GetType()->TypeName();
 
-    if (args.size() == 0x3) {
+    if (args.size() == 0x3 || args.size() == 0x4) {
         auto offsets = As<MakeTuple>(args[1]);
         CHECK(offsets) << "debug.dump_tile requires second argument to be a MakeTuple (offsets)";
 
@@ -216,6 +219,21 @@ TypePtr DeduceDebugDumpTileType(
         }
     }
 
+    if (args.size() == 0x4) {
+        auto workspace_type = As<TensorType>(args[3]->GetType());
+        CHECK(workspace_type) << "debug.dump_tile workspace (4th argument) must be a TensorType, but got "
+                              << args[3]->GetType()->TypeName();
+        CHECK(workspace_type->dtype_ == tile_type->dtype_)
+            << "debug.dump_tile workspace dtype must match tile dtype (tile: "
+            << tile_type->dtype_.ToString() << ", workspace: " << workspace_type->dtype_.ToString() << ")";
+        CHECK(tile_type->memref_.has_value())
+            << "debug.dump_tile workspace requires tile to have a memref";
+        auto tile_space = (*tile_type->memref_)->memorySpace_;
+        CHECK(tile_space == MemorySpace::Acc)
+            << "debug.dump_tile workspace is only supported for Acc tiles, but got tile in "
+            << MemorySpaceToString(tile_space);
+    }
+
     return GetUnknownType();
 }
 
@@ -239,12 +257,18 @@ TypePtr DeduceDebugPrintfType(
         << "debug.printf format expects " << conversions.size() << " scalar arguments, but got " << args.size();
 
     for (size_t i = 0; i < args.size(); ++i) {
+        char conversion = conversions[i];
+        if (conversion == 'p') {
+            auto ptr_type = As<PtrType>(args[i]->GetType());
+            CHECK(ptr_type) << "debug.printf argument " << i << " with '%p' must be PtrType, but got "
+                            << args[i]->GetType()->TypeName();
+            continue;
+        }
         auto scalar_type = As<ScalarType>(args[i]->GetType());
         CHECK(scalar_type) << "debug.printf argument " << i << " must be ScalarType, but got "
                            << args[i]->GetType()->TypeName();
 
         const DataType& dtype = scalar_type->dtype_;
-        char conversion = conversions[i];
         if (conversion == 'f') {
             CHECK(dtype == DataType::FP32)
                 << "debug.printf conversion '%f' requires FP32 scalar, but got " << dtype.ToString();
@@ -348,10 +372,12 @@ REGISTER_OP("debug.dump_tile")
     .set_description(
         "Print a tile or tile window for debugging. Full dumps support tiles with dynamic valid-shape; "
         "window dumps support dynamic offsets on PTO and CCE, and dynamic shapes on CCE only; "
-        "PTO window shapes remain static-only. Tile windows are currently 2D-only.")
+        "PTO window shapes remain static-only. Tile windows are currently 2D-only. "
+        "Acc tiles require a workspace Tensor (GM temporary space).")
     .add_argument("tile", "Input tile (TileType)")
     .add_argument("offsets", "Optional offsets per dimension (MakeTuple of integer scalars)")
     .add_argument("shapes", "Optional shape per dimension (MakeTuple of integer scalars; dynamic only on CCE)")
+    .add_argument("workspace", "Optional GM Tensor for Acc tile temporary space (required for Acc tiles)")
     .set_attr<bool>("show_location")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {

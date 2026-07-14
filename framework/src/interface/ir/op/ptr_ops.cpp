@@ -29,6 +29,7 @@
 #include "ir/op_registry.h"
 #include "ir/scalar_expr.h"
 #include "ir/type.h"
+#include "ir/type_inference.h"
 
 namespace pypto {
 namespace ir {
@@ -92,19 +93,66 @@ REGISTER_OP("ptr.addptr")
         return DeduceAddPtrType(args, kwargs);
     });
 
+TypePtr DeduceMakePtrType(
+    [[maybe_unused]] const std::vector<ExprPtr>& args,
+    [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
+{
+    // ptr.make_ptr: Reinterpret a pointer as a (usually different) element dtype.
+    // Args: (ptr); kwarg: dtype
+    // Returns: a PtrType with the new element dtype, reusing the same underlying address.
+    CHECK(args.size() == 1) << "ptr.make_ptr requires exactly 1 argument (ptr), but got " << args.size();
+
+    auto ptr_type = As<PtrType>(args[0]->GetType());
+    CHECK(ptr_type) << "ptr.make_ptr requires first argument to be a PtrType, but got "
+                    << args[0]->GetType()->TypeName() << ". Use pl.Ptr[dtype] to annotate pointer parameters.";
+
+    // The new element dtype: explicit 'dtype' kwarg if given, otherwise keep the source dtype
+    // (an identity reinterpret). This is what lets callers turn a pl.Ptr[uint8] into a
+    // pl.Ptr[fp16] without baking the dtype into the pointer parameter.
+    DataType result_dtype = GetOpKwarg<DataType>(kwargs, "dtype", std::optional<DataType>(ptr_type->dtype_));
+
+    // Preserve the base_ptr/offset codegen annotations from the source pointer so that a
+    // make_ptr derived from an addptr chain still carries its indirect-select metadata.
+    if (ptr_type->base_ptr.has_value() && ptr_type->offset.has_value()) {
+        return std::make_shared<PtrType>(result_dtype, *ptr_type->base_ptr, *ptr_type->offset);
+    }
+    return std::make_shared<PtrType>(result_dtype);
+}
+
+REGISTER_OP("ptr.make_ptr")
+    .set_op_category("PtrOp")
+    .set_description("Reinterpret a pointer as a different element dtype (emits a pointer cast)")
+    .add_argument("ptr", "Input raw pointer (PtrType)")
+    .set_attr<DataType>("dtype")
+    .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
+                      [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
+        return DeduceMakePtrType(args, kwargs);
+    });
+
 TypePtr DeduceMakeTensorType(
     [[maybe_unused]] const std::vector<ExprPtr>& args,
     [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
 {
-    // ptr.make_tensor: Create a tensor view from a pointer with explicit shape and strides
-    // Args: (ptr, shape_tuple, stride_tuple)
+    // ptr.make_tensor: Create a tensor view from a pointer (or an existing tensor) with explicit
+    // shape and strides. Args: (ptr_or_tensor, shape_tuple, stride_tuple)
     CHECK(args.size() == 0x3) << "ptr.make_tensor requires exactly 3 arguments (ptr, shape, stride), but got "
                             << args.size();
 
-    // First argument must be PtrType (a raw pointer to typed global memory)
-    auto ptr_type = As<PtrType>(args[0]->GetType());
-    CHECK(ptr_type) << "ptr.make_tensor requires first argument to be a PtrType, but got "
-                    << args[0]->GetType()->TypeName() << ". Use pl.Ptr[dtype] to annotate pointer parameters.";
+    // First argument is either:
+    //   - a PtrType: a raw pointer to typed global memory, or
+    //   - a TensorType: re-view an existing tensor, reusing its underlying data pointer with a
+    //     new shape/stride (and optionally a new dtype). args[0] itself is stored as the view's
+    //     source expr; the CCE codegen resolves the tensor's base pointer from it.
+    DataType source_dtype;
+    if (auto ptr_type = As<PtrType>(args[0]->GetType())) {
+        source_dtype = ptr_type->dtype_;
+    } else if (auto src_tensor_type = As<TensorType>(args[0]->GetType())) {
+        source_dtype = src_tensor_type->dtype_;
+    } else {
+        CHECK(false) << "ptr.make_tensor requires first argument to be a PtrType or TensorType, but got "
+                     << args[0]->GetType()->TypeName()
+                     << ". Use pl.Ptr[dtype] to annotate pointer parameters, or pass an existing pl.Tensor.";
+    }
 
     // Second argument must be MakeTuple (shape)
     auto shape_tuple = As<MakeTuple>(args[1]);
@@ -118,18 +166,24 @@ TypePtr DeduceMakeTensorType(
         << "ptr.make_tensor shape rank (" << shape_tuple->elements_.size() << ") must match stride rank ("
         << stride_tuple->elements_.size() << ")";
 
+    // Element dtype: use the explicit 'dtype' kwarg if provided, otherwise derive it from the
+    // source pointer/tensor's element type. This lets callers reinterpret a raw byte pointer
+    // (e.g. uint8) as a typed view (e.g. fp16) without baking the dtype into the pointer parameter.
+    DataType result_dtype = GetOpKwarg<DataType>(kwargs, "dtype", std::optional<DataType>(source_dtype));
+
     TensorView tv(stride_tuple->elements_, TensorLayout::ND, args[0]);
-    return std::make_shared<TensorType>(shape_tuple->elements_, ptr_type->dtype_, std::nullopt, tv);
+    return std::make_shared<TensorType>(shape_tuple->elements_, result_dtype, std::nullopt, tv);
 }
 
 REGISTER_OP("ptr.make_tensor")
     .set_op_category("PtrOp")
     .set_description(
-        "Create a tensor view from a pointer with explicit shape and strides"
+        "Create a tensor view from a pointer or an existing tensor with explicit shape and strides"
         " (emits pto.make_tensor_view)")
-    .add_argument("ptr", "Input raw pointer (PtrType)")
+    .add_argument("ptr", "Input raw pointer (PtrType) or source tensor (TensorType)")
     .add_argument("shape", "New shape dimensions (MakeTuple of ConstInt)")
     .add_argument("stride", "Stride per dimension (MakeTuple of ConstInt or Var)")
+    .set_attr<DataType>("dtype")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
         return DeduceMakeTensorType(args, kwargs);

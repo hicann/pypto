@@ -27,6 +27,7 @@
 #include "core/error.h"
 #include "ir/core.h"
 #include "ir/expr.h"
+#include "ir/op_attr_types.h"
 #include "ir/function.h"
 #include "ir/memref.h"
 #include "ir/op_registry.h"
@@ -145,14 +146,9 @@ std::vector<std::pair<std::string, std::any>> ConvertKwargsDict(const py::dict& 
             kwargs.emplace_back(key, py::cast<DataType>(item.second));
         } else if (py::isinstance<MemorySpace>(item.second)) {
             kwargs.emplace_back(key, py::cast<MemorySpace>(item.second));
-        } else if (py::isinstance<TilePad>(item.second)) {
-            kwargs.emplace_back(key, static_cast<int>(py::cast<TilePad>(item.second)));
-        } else if (py::isinstance<PipeType>(item.second)) {
-            // Cast enum to int for storage
-            kwargs.emplace_back(key, static_cast<int>(py::cast<PipeType>(item.second)));
-        } else if (py::isinstance<CoreType>(item.second)) {
-            // Cast enum to int for storage
-            kwargs.emplace_back(key, static_cast<int>(py::cast<CoreType>(item.second)));
+        } else if (py::hasattr(item.second, "value")) {
+            // Generic pybind11 enum: extract underlying int value
+            kwargs.emplace_back(key, py::cast<int>(item.second.attr("value")));
         } else if (py::isinstance<py::bool_>(item.second)) {
             kwargs.emplace_back(key, py::cast<bool>(item.second));
         } else if (py::isinstance<py::int_>(item.second)) {
@@ -410,6 +406,9 @@ void BindTypeClass(py::module_& ir)
         .value("ND", TensorLayout::ND, "ND layout")
         .value("DN", TensorLayout::DN, "DN layout")
         .value("NZ", TensorLayout::NZ, "NZ layout")
+        .value("ZN", TensorLayout::ZN, "ZN layout (Tile only)")
+        .value("NN", TensorLayout::NN, "NN layout (Tile only)")
+        .value("ZZ", TensorLayout::ZZ, "ZZ layout (Tile only)")
         .export_values();
 
     // TensorView - struct for tensor view information - must be before TensorType
@@ -536,6 +535,217 @@ void BindTypeClass(py::module_& ir)
         .value("normal", CompactMode::normal, "Normal compact mode")
         .value("row_plus_one", CompactMode::row_plus_one, "Row plus one compact mode")
         .export_values();
+
+    // -----------------------------------------------------------------------
+    // Block-level API parameter enums
+    // -----------------------------------------------------------------------
+
+    py::enum_<ir::ReluPreMode>(ir, "ReluPreMode", "ReLU pre-processing mode for store/move")
+        .value("NormalRelu", ir::ReluPreMode::NormalRelu, "Normal ReLU fusion");
+
+    py::enum_<ir::AtomicType>(ir, "AtomicType", "Atomic write mode for store")
+        .value("AtomicNone", ir::AtomicType::AtomicNone, "Overwrite (default)")
+        .value("AtomicAdd", ir::AtomicType::AtomicAdd, "Atomic accumulate");
+
+    py::enum_<ir::STPhase>(ir, "STPhase", "Fixpipe drain phase for store")
+        .value("Unspecified", ir::STPhase::Unspecified, "Unspecified phase")
+        .value("Partial", ir::STPhase::Partial, "Partial drain")
+        .value("Final", ir::STPhase::Final, "Final drain");
+
+    py::enum_<ir::AccPhase>(ir, "AccPhase", "Fixpipe drain phase for matmul/matmul_acc")
+        .value("Unspecified", ir::AccPhase::Unspecified, "Unspecified phase")
+        .value("Partial", ir::AccPhase::Partial, "Partial drain")
+        .value("Final", ir::AccPhase::Final, "Final drain");
+
+    py::enum_<ir::AccToVecMode>(ir, "AccToVecMode", "Accumulator to vector transfer mode")
+        .value("SingleModeVec0", ir::AccToVecMode::SingleModeVec0, "Single vector sub-core 0")
+        .value("DualModeSplitM", ir::AccToVecMode::DualModeSplitM, "Dual split along M dimension")
+        .value("DualModeSplitN", ir::AccToVecMode::DualModeSplitN, "Dual split along N dimension");
+
+    py::enum_<ir::RoundMode>(ir, "RoundMode", "Rounding mode for cast operations")
+        .value("CAST_NONE", ir::RoundMode::CAST_NONE, "No rounding (0)")
+        .value("CAST_RINT", ir::RoundMode::CAST_RINT, "Round to nearest integer (1)")
+        .value("CAST_ROUND", ir::RoundMode::CAST_ROUND, "Round half away from zero (2)")
+        .value("CAST_FLOOR", ir::RoundMode::CAST_FLOOR, "Round toward negative infinity (3)")
+        .value("CAST_CEIL", ir::RoundMode::CAST_CEIL, "Round toward positive infinity (4)")
+        .value("CAST_TRUNC", ir::RoundMode::CAST_TRUNC, "Truncate toward zero (5)")
+        .value("CAST_ODD", ir::RoundMode::CAST_ODD, "Round to odd (6)");
+
+    py::enum_<ir::QuantMode>(ir, "QuantMode", "Quantization mode")
+        .value("SYM", ir::QuantMode::SYM, "Symmetric quantization")
+        .value("ASYM", ir::QuantMode::ASYM, "Asymmetric quantization");
+
+    py::enum_<ir::CrossCoreSyncMode>(ir, "CrossCoreSyncMode", "Cross-core synchronization mode")
+        .value("INTER_BLOCK", ir::CrossCoreSyncMode::INTER_BLOCK, "Inter-core sync (mode 0)")
+        .value("INTER_SUBBLOCK", ir::CrossCoreSyncMode::INTER_SUBBLOCK, "AIV-to-AIV sync (mode 1)")
+        .value("INTRA_BLOCK", ir::CrossCoreSyncMode::INTRA_BLOCK, "AIC<->AIV sync, both subcores (mode 2)")
+        .value("UNICAST_BLOCK", ir::CrossCoreSyncMode::UNICAST_BLOCK, "AIC<->AIV sync, one subcore (mode 3)");
+
+    py::enum_<ir::SyncCoreType>(ir, "SyncCoreType", "Core type for sync_all")
+        .value("AIV_ONLY", ir::SyncCoreType::AIV_ONLY, "Sync vector cores only")
+        .value("AIC_ONLY", ir::SyncCoreType::AIC_ONLY, "Sync cube cores only")
+        .value("MIX", ir::SyncCoreType::MIX, "Sync both AIC and AIV cores");
+
+    py::enum_<ir::SyncAllMode>(ir, "SyncAllMode", "Synchronization mode for sync_all")
+        .value("HARD", ir::SyncAllMode::HARD, "Hardware FFTS signal (default)")
+        .value("SOFT", ir::SyncAllMode::SOFT, "GM workspace polling");
+
+    py::enum_<ir::CacheLine>(ir, "CacheLine", "Cache line scope for DCCI")
+        .value("SINGLE_CACHE_LINE", ir::CacheLine::SINGLE_CACHE_LINE, "Single cache line")
+        .value("ENTIRE_DATA_CACHE", ir::CacheLine::ENTIRE_DATA_CACHE, "Entire data cache");
+
+    py::enum_<ir::DcciDst>(ir, "DcciDst", "DCCI destination")
+        .value("AUTO", ir::DcciDst::AUTO, "Auto: tensor->CACHELINE_OUT, tile->CACHELINE_UB")
+        .value("CACHELINE_OUT", ir::DcciDst::CACHELINE_OUT, "Cache line out")
+        .value("CACHELINE_UB", ir::DcciDst::CACHELINE_UB, "Cache line UB")
+        .value("CACHELINE_ALL", ir::DcciDst::CACHELINE_ALL, "Cache line all")
+        .value("CACHELINE_ATOMIC", ir::DcciDst::CACHELINE_ATOMIC, "Cache line atomic");
+
+    // --- VF (Vector Function) API enumerations ---
+
+    py::enum_<ir::MaskPattern>(ir, "MaskPattern", "Mask pattern for vf.create_mask")
+        .value("ALL", ir::MaskPattern::ALL)
+        .value("ALLF", ir::MaskPattern::ALLF)
+        .value("VL1", ir::MaskPattern::VL1)
+        .value("VL2", ir::MaskPattern::VL2)
+        .value("VL3", ir::MaskPattern::VL3)
+        .value("VL4", ir::MaskPattern::VL4)
+        .value("VL8", ir::MaskPattern::VL8)
+        .value("VL16", ir::MaskPattern::VL16)
+        .value("VL32", ir::MaskPattern::VL32)
+        .value("VL64", ir::MaskPattern::VL64)
+        .value("VL128", ir::MaskPattern::VL128)
+        .value("M3", ir::MaskPattern::M3)
+        .value("M4", ir::MaskPattern::M4)
+        .value("H", ir::MaskPattern::H)
+        .value("Q", ir::MaskPattern::Q);
+
+    py::enum_<ir::MergeMode>(ir, "MergeMode", "Mask merge mode for VF ops")
+        .value("ZEROING", ir::MergeMode::ZEROING)
+        .value("MERGING", ir::MergeMode::MERGING);
+
+    py::enum_<ir::ReduceMode>(ir, "ReduceMode", "Reduction mode for vf.reduce")
+        .value("SUM", ir::ReduceMode::SUM)
+        .value("MAX", ir::ReduceMode::MAX)
+        .value("MIN", ir::ReduceMode::MIN);
+
+    py::enum_<ir::CompareMode>(ir, "CompareMode", "Comparison mode for vf.compare")
+        .value("EQ", ir::CompareMode::EQ)
+        .value("NE", ir::CompareMode::NE)
+        .value("LT", ir::CompareMode::LT)
+        .value("GT", ir::CompareMode::GT)
+        .value("LE", ir::CompareMode::LE)
+        .value("GE", ir::CompareMode::GE);
+
+    py::enum_<ir::DuplicatePos>(ir, "DuplicatePos", "Position for vf.full")
+        .value("LOWEST", ir::DuplicatePos::LOWEST)
+        .value("HIGHEST", ir::DuplicatePos::HIGHEST);
+
+    py::enum_<ir::CastLayout>(ir, "CastLayout", "Layout for vf.astype")
+        .value("ZERO", ir::CastLayout::ZERO)
+        .value("ONE", ir::CastLayout::ONE)
+        .value("TWO", ir::CastLayout::TWO)
+        .value("THREE", ir::CastLayout::THREE);
+
+    py::enum_<ir::VFRoundMode>(ir, "VFRoundMode", "Rounding mode for VF cast/truncate")
+        .value("CAST_ROUND", ir::VFRoundMode::CAST_ROUND)
+        .value("CAST_RINT", ir::VFRoundMode::CAST_RINT)
+        .value("CAST_FLOOR", ir::VFRoundMode::CAST_FLOOR)
+        .value("CAST_CEIL", ir::VFRoundMode::CAST_CEIL)
+        .value("CAST_TRUNC", ir::VFRoundMode::CAST_TRUNC)
+        .value("CAST_RNA", ir::VFRoundMode::CAST_RNA)
+        .value("CAST_ODD", ir::VFRoundMode::CAST_ODD)
+        .value("CAST_HYBRID", ir::VFRoundMode::CAST_HYBRID);
+
+    py::enum_<ir::SaturateMode>(ir, "SaturateMode", "Saturation mode for vf.astype")
+        .value("OFF", ir::SaturateMode::OFF)
+        .value("ON", ir::SaturateMode::ON);
+
+    py::enum_<ir::BinType>(ir, "BinType", "Histogram bin type")
+        .value("BIN0", ir::BinType::BIN0)
+        .value("BIN1", ir::BinType::BIN1);
+
+    py::enum_<ir::HistType>(ir, "HistType", "Histogram accumulation type")
+        .value("ACCUMULATE", ir::HistType::ACCUMULATE)
+        .value("FREQUENCY", ir::HistType::FREQUENCY);
+
+    py::enum_<ir::SqueezeMode>(ir, "SqueezeMode", "Squeeze store mode")
+        .value("STORE_REG", ir::SqueezeMode::STORE_REG)
+        .value("NO_STORE_REG", ir::SqueezeMode::NO_STORE_REG);
+
+    py::enum_<ir::PackPart>(ir, "PackPart", "Part selector for vf.pack/unpack")
+        .value("LOWER", ir::PackPart::LOWER)
+        .value("UPPER", ir::PackPart::UPPER);
+
+    py::enum_<ir::MaskWidth>(ir, "MaskWidth", "Mask width for vf.get_mask_spr")
+        .value("B32", ir::MaskWidth::B32)
+        .value("B16", ir::MaskWidth::B16);
+
+    py::enum_<ir::LoadDist>(ir, "LoadDist", "Load distribution mode for vf.load_align")
+        .value("NORM", ir::LoadDist::NORM)
+        .value("BRC", ir::LoadDist::BRC)
+        .value("BRC_B8", ir::LoadDist::BRC_B8)
+        .value("BRC_B16", ir::LoadDist::BRC_B16)
+        .value("BRC_B32", ir::LoadDist::BRC_B32)
+        .value("US", ir::LoadDist::US)
+        .value("US_B8", ir::LoadDist::US_B8)
+        .value("US_B16", ir::LoadDist::US_B16)
+        .value("DS", ir::LoadDist::DS)
+        .value("DS_B8", ir::LoadDist::DS_B8)
+        .value("DS_B16", ir::LoadDist::DS_B16)
+        .value("UNPK", ir::LoadDist::UNPK)
+        .value("UNPK_B8", ir::LoadDist::UNPK_B8)
+        .value("UNPK_B16", ir::LoadDist::UNPK_B16)
+        .value("UNPK_B32", ir::LoadDist::UNPK_B32)
+        .value("UNPK4", ir::LoadDist::UNPK4)
+        .value("BLK", ir::LoadDist::BLK)
+        .value("E2B", ir::LoadDist::E2B)
+        .value("E2B_B16", ir::LoadDist::E2B_B16)
+        .value("E2B_B32", ir::LoadDist::E2B_B32)
+        .value("DINTLV_B8", ir::LoadDist::DINTLV_B8)
+        .value("DINTLV_B16", ir::LoadDist::DINTLV_B16)
+        .value("DINTLV_B32", ir::LoadDist::DINTLV_B32);
+
+    py::enum_<ir::StoreDist>(ir, "StoreDist", "Store distribution mode for vf.store_align")
+        .value("NORM", ir::StoreDist::NORM)
+        .value("NORM_B16", ir::StoreDist::NORM_B16)
+        .value("FIRST_ELEMENT", ir::StoreDist::FIRST_ELEMENT)
+        .value("PACK", ir::StoreDist::PACK)
+        .value("PACK4", ir::StoreDist::PACK4)
+        .value("INTLV", ir::StoreDist::INTLV)
+        .value("INTLV_B32", ir::StoreDist::INTLV_B32);
+
+    py::enum_<ir::DataCopyMode>(ir, "DataCopyMode", "Data copy mode for vf.load_align/store_align")
+        .value("NORM", ir::DataCopyMode::NORM)
+        .value("DATA_BLOCK_LOAD", ir::DataCopyMode::DATA_BLOCK_LOAD)
+        .value("DATA_BLOCK_COPY", ir::DataCopyMode::DATA_BLOCK_COPY);
+
+    py::enum_<ir::IndexOrder>(ir, "IndexOrder", "Index generation order for vf.arange")
+        .value("INCREASE_ORDER", ir::IndexOrder::INCREASE_ORDER)
+        .value("DECREASE_ORDER", ir::IndexOrder::DECREASE_ORDER);
+
+    py::enum_<ir::MemBarMode>(ir, "MemBarMode", "Memory barrier mode for vf.mem_bar")
+        .value("VST_VLD", ir::MemBarMode::VST_VLD)
+        .value("VLD_VST", ir::MemBarMode::VLD_VST)
+        .value("VST_VST", ir::MemBarMode::VST_VST)
+        .value("VST_LD", ir::MemBarMode::VST_LD)
+        .value("VST_ST", ir::MemBarMode::VST_ST)
+        .value("VLD_ST", ir::MemBarMode::VLD_ST)
+        .value("ST_VLD", ir::MemBarMode::ST_VLD)
+        .value("ST_VST", ir::MemBarMode::ST_VST)
+        .value("LD_VST", ir::MemBarMode::LD_VST)
+        .value("VV_ALL", ir::MemBarMode::VV_ALL)
+        .value("VS_ALL", ir::MemBarMode::VS_ALL)
+        .value("SV_ALL", ir::MemBarMode::SV_ALL);
+
+    py::enum_<ir::MaskLoadDist>(ir, "MaskLoadDist", "Load distribution for vf.mask_load / pld/plds")
+        .value("NORM", ir::MaskLoadDist::NORM)
+        .value("US", ir::MaskLoadDist::US)
+        .value("DS", ir::MaskLoadDist::DS);
+
+    py::enum_<ir::MaskStoreDist>(ir, "MaskStoreDist", "Store distribution for vf.mask_store / pst/psts")
+        .value("NORM", ir::MaskStoreDist::NORM)
+        .value("PK", ir::MaskStoreDist::PK);
 
     // HardwareInfo - struct for hardware-specific tile information
     py::class_<HardwareInfo>(
@@ -928,7 +1138,8 @@ void BindStmt(py::module_& ir)
         py::init<
             const ExprPtr&, const StmtPtr&, const std::optional<StmtPtr>&, const std::vector<VarPtr>&, const Span&>(),
         py::arg("condition"), py::arg("then_body"), py::arg("else_body") = py::none(), py::arg("return_vars"),
-        py::arg("span"), "Create a conditional statement with then and else branches (else_body can be None)");
+        py::arg("span"),
+        "Create a conditional statement with then and else branches (else_body can be None)");
     BindFields<IfStmt>(if_stmt_class);
 
     // YieldStmt - const shared_ptr
@@ -1238,6 +1449,7 @@ void BindHelpers(py::module_& ir)
         "bit_shift_right", &MakeBitShiftRight, py::arg("lhs"), py::arg("rhs"), py::arg("span") = Span::Unknown(),
         "Bitwise right shift operator");
     ir.def("bit_not", &MakeBitNot, py::arg("operand"), py::arg("span") = Span::Unknown(), "Bitwise not operator");
+    ir.def("not_", &MakeNot, py::arg("operand"), py::arg("span") = Span::Unknown(), "Logical not operator");
     ir.def("min_", &MakeMin, py::arg("lhs"), py::arg("rhs"), py::arg("span") = Span::Unknown(), "Minimum operator");
     ir.def("max_", &MakeMax, py::arg("lhs"), py::arg("rhs"), py::arg("span") = Span::Unknown(), "Maximum operator");
 
