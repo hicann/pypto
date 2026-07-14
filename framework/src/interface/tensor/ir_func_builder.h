@@ -39,6 +39,7 @@ private:
     Program& program_;
     Function* parentFunc_;
     std::shared_ptr<Function> dynFunc_;
+    // std::shared_ptr<TensorSlotScope> dynScope_;
     LogicalTensors logicalParams_;
     std::unordered_set<int> consumedRawMagics_;
     std::unordered_set<int> paramRawMagics_;
@@ -54,8 +55,12 @@ private:
         const pypto::ir::SeqStmtsPtr& seq, const std::string& loopVarName);
     pypto::ir::StmtPtr FinalizePathFunc(const pypto::ir::StmtPtr& placeholder);
 
-    std::shared_ptr<Function> CreatePathFunc(
+    std::shared_ptr<Function> CreateHiddenFunc(
         const pypto::ir::SeqStmtsPtr& seq, const std::string& loopVarName);
+    void CreateAndFinalizePathFunc(
+        Function* pathFunc, Function* hiddenFunc,
+        const LogicalTensors& hiddenInArgs, const LogicalTensors& hiddenOutArgs,
+        const pypto::ir::StmtPtr& placeholder);
     pypto::ir::StmtPtr ProcessTensorOp(
         std::shared_ptr<Function> pathFunc, const pypto::ir::StmtPtr& stmt,
         std::unordered_set<std::shared_ptr<LogicalTensor>>& allInputs,
@@ -76,7 +81,7 @@ private:
     int FindOrCreateSlot(
         const std::shared_ptr<LogicalTensor>& lt,
         const std::shared_ptr<TensorSlotManager>& slotManager,
-        Function* func, bool isInput);
+        Function* func, bool isAssembleOut = false);
 
     bool IsPureTensorOpSeq(const pypto::ir::SeqStmtsPtr& seq);
     std::vector<std::vector<pypto::ir::StmtPtr>> SplitIntoTensorOpSegments(
@@ -84,6 +89,7 @@ private:
     bool IsPlaceholderCallStmt(const pypto::ir::StmtPtr& stmt);
     std::string GetPlaceholderFuncname(const pypto::ir::StmtPtr& stmt);
     std::unordered_set<std::shared_ptr<LogicalTensor>> CollectAllOutputs(Function& pathFunc);
+    void DumpFunctionGraph(Function* func);
 };
 
 } // namespace npu::tile_fwk

@@ -926,14 +926,12 @@ void Function::FillOriginInOutCast(std::vector<Operation*>& operationList)
     };
     for (auto& op : operationList) {
         for (auto& iOperand : op->iOperand) {
-            if (op->IsCall()) {
-                addOrigin(iOperand, originInCasts_);
+            if (visited.count(iOperand) != 0) {
+                continue;
             }
-            else if (visited.count(iOperand) == 0) {
-                visited.insert(iOperand);
-                if (&iOperand->BelongFunction() != this) {
-                    addOrigin(iOperand, originInCasts_);
-                }
+            visited.insert(iOperand);
+            if (op->IsCall() || &iOperand->BelongFunction() != this) {
+                addOrigin(iOperand, originInCasts_);
             }
         }
         for (auto& oOperand : op->oOperand) {

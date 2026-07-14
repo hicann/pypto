@@ -554,3 +554,31 @@ def test_merge_pass8():
     z = pypto.Tensor([-1, 32], pypto.DT_FP32, 'z')
     func = _run_merge(foo, x, y, z)
     assert len(_collect_stmts(func.body, ir.IfStmt)) == 6
+
+
+def test_forstmt_attrs_and_step_name_preserved():
+    """ForStmt attrs and step-based path func naming must survive DCE/canonicalize/TransformStmts."""
+    def foo(x, z):
+        pypto.set_vec_tile_shapes(16, 16)
+        for i in pypto.loop(0, 4, 2, name="LOOP_TEST", parallel=True):
+            x_view = pypto.view(x, [16, 32], [i * 16, 0])
+            pypto.assemble(x_view, [i * 16, 0], z)
+
+    x = pypto.Tensor(shape=[64, 32], dtype=pypto.DT_FP32, name="x")
+    z = pypto.Tensor(shape=[64, 32], dtype=pypto.DT_FP32, name="z")
+
+    b = ir.IRBuilder()
+    func = pil.compile(foo, x, z)
+    prog = b.create_program([func], "main", ir.Span.unknown())
+    prog = ir.Pass.canonicalize()(prog)
+    prog = ir.Pass.aggressive_dce()(prog)
+    prog = ir.Pass.create_root_functions()(prog)
+
+    # 1. ForStmt exists (attrs preserved, no crash)
+    dyn_func = prog.functions[func.name]
+    for_stmts = _collect_stmts(dyn_func.body, ir.ForStmt)
+    assert len(for_stmts) >= 1, "Expected at least one ForStmt after create_root_functions"
+
+    # 2. path function name contains step value
+    prog_str = str(prog)
+    assert "_Unroll2" in prog_str, f"Expected '_Unroll2' (step=2) in program: {prog_str}"

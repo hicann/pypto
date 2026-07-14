@@ -40,6 +40,7 @@ std::shared_ptr<Function> RootFunctionBuilder::Build(const ir::FunctionPtr& irFu
     auto stmtsWithCall = TransformBody(irFunc->body_);
     dynFunc_->body_ = ir::SeqStmts::Wrap(stmtsWithCall, irFunc->span_);
     FinalizeDynFunc(irFunc);
+    DumpFunctionGraph(dynFunc_.get());
     return dynFunc_;
 }
 
@@ -56,23 +57,35 @@ void RootFunctionBuilder::InitDynFunc(const ir::FunctionPtr& irFunc)
     dynFunc_ = std::make_shared<Function>(program_, funcMagicName, irFunc->name_, parentFunc_);
     dynFunc_->SetFunctionType(FunctionType::DYNAMIC);
     dynFunc_->SetGraphType(GraphType::TENSOR_GRAPH);
-
-    for (auto& param : logicalParams_) {
-        dynFunc_->AddOriginIncast(param);
-        dynFunc_->inCasts_.push_back(param);
-        dynFunc_->GetTensorMap().Insert(param);
-    }
+    ir::Span span = irFunc->span_;
+    dynFunc_->SetSpan(span);
 }
 
 void RootFunctionBuilder::FinalizeDynFunc(const ir::FunctionPtr& irFunc)
 {
     dynFunc_->name_ = irFunc->name_;
     dynFunc_->funcType_ = ir::FunctionType::ORCHESTRATION;
+
+    auto dynScope = std::make_shared<TensorSlotScope>(dynFunc_.get());
+    dynFunc_->SetSlotScope(dynScope);
+    program_.GetTensorSlotManager()->scopeList.push_back(dynScope);
+
+    auto operationList = dynFunc_->Operations(false).DuplicatedOpList();
+    dynFunc_->FillOriginInOutCast(operationList);
+    dynFunc_->SetCallOpSlot();
+
+    for (auto& incast : dynFunc_->GetOriginIncast()) {
+        dynFunc_->AppendIncast(incast, 0, 0);
+    }
+    for (auto& outcast : dynFunc_->GetOriginOutcast()) {
+        dynFunc_->AppendOutcast(outcast, 0, 0);
+    }
+
     for (auto& param : logicalParams_) {
         dynFunc_->params_.push_back(std::static_pointer_cast<const ir::Var>(param));
     }
     dynFunc_->ComputeHash();
-    BuildDynSlotScope();
+    BuildDynSlotScope();  // CleanRedundantOutCast 会过滤 outCasts_ 中的中间输出
 }
 
 bool RootFunctionBuilder::IsPureTensorOpSeq(const ir::SeqStmtsPtr& seq)
@@ -189,50 +202,58 @@ void RootFunctionBuilder::ComputeOutcast(
     }
 }
 
-std::shared_ptr<Function> RootFunctionBuilder::CreatePathFunc(
+std::shared_ptr<Function> RootFunctionBuilder::CreateHiddenFunc(
     const ir::SeqStmtsPtr& seq, const std::string& loopVarName)
 {
     auto pathFuncId = IdGen<IdType::FUNCTION>::Inst().NewId();
     std::string pathSuffix =
-        loopVarName.empty() ? std::to_string(pathFuncId) : loopVarName + "_" + std::to_string(pathFuncId);
-    auto pathMagicName = dynFunc_->GetRawName() + "_path_" + pathSuffix;
-    auto pathFunc = std::make_shared<Function>(program_, pathMagicName, pathMagicName, dynFunc_.get());
-    pathFunc->SetFunctionType(FunctionType::DYNAMIC_LOOP_PATH);
-    pathFunc->SetGraphType(GraphType::TENSOR_GRAPH);
-    pathFunc->SetUnderDynamicFunction(true);
-    program_.InsertFuncToFunctionMap(pathMagicName, pathFunc);
+        loopVarName.empty() ? std::to_string(pathFuncId) : loopVarName + "_PATH" + std::to_string(pathFuncId);
+    auto hiddenRawName = dynFunc_->GetRawName() + "_" + pathSuffix + "_hiddenfunc";
+    auto hiddenMagicName = hiddenRawName + "_" + std::to_string(IdGen<IdType::FUNCTION>::Inst().NewId());
+    auto hiddenFunc = std::make_shared<Function>(program_, hiddenMagicName, hiddenRawName, dynFunc_.get());
+    hiddenFunc->SetFunctionType(FunctionType::DYNAMIC_LOOP_PATH);
+    hiddenFunc->SetGraphType(GraphType::TENSOR_GRAPH);
+    hiddenFunc->SetUnderDynamicFunction(true);
+    program_.InsertFuncToFunctionMap(hiddenMagicName, hiddenFunc);
+
 
     std::unordered_set<std::shared_ptr<LogicalTensor>> definedOutputs;
     std::unordered_set<std::shared_ptr<LogicalTensor>> allInputs;
     std::unordered_set<std::shared_ptr<LogicalTensor>> allOutputs;
     for (auto& stmt : seq->stmts_) {
-        (void)ProcessTensorOp(pathFunc, stmt, allInputs, allOutputs, definedOutputs);
+        (void)ProcessTensorOp(hiddenFunc, stmt, allInputs, allOutputs, definedOutputs);
     }
-    ComputeIncast(*pathFunc, allInputs, definedOutputs);
-    pathFunc->name_ = pathMagicName;
-    pathFunc->funcType_ = ir::FunctionType::IN_CORE;
-    return pathFunc;
+    ComputeIncast(*hiddenFunc, allInputs, definedOutputs);
+    hiddenFunc->name_ = hiddenMagicName;
+    hiddenFunc->funcType_ = ir::FunctionType::IN_CORE;
+    return hiddenFunc;
 }
 
 int RootFunctionBuilder::FindOrCreateSlot(
     const std::shared_ptr<LogicalTensor>& lt, const std::shared_ptr<TensorSlotManager>& slotManager, Function* func,
-    bool isInput)
+    bool isAssembleOut)
 {
     int rawMagic = lt->tensor->GetRawMagic();
     int existingSlot = slotManager->LookupSlotIndexByRawMagic(rawMagic);
     if (existingSlot != -1) {
+        if (isAssembleOut) {
+            auto& slotTensors = func->GetSlotTensors();
+            auto it = slotTensors.find(existingSlot);
+            if (it != slotTensors.end()) {
+                slotManager->TensorWrite(*it->second, SlotProperty::ASSEMBLE_DST);
+            }
+        }
         return existingSlot;
     }
 
     auto newTensor = std::make_unique<Tensor>(lt);
-    if (isInput) {
-        slotManager->MarkInput(*newTensor);
-    } else {
-        slotManager->MarkOutput(*newTensor);
+    if (isAssembleOut) {
+        slotManager->TensorWrite(*newTensor, SlotProperty::ASSEMBLE_DST);
     }
 
-    func->GetSlotTensors().push_back(std::move(newTensor));
-    return slotManager->LookupSlotIndexByRawMagic(rawMagic);
+    int tensorSlot = slotManager->LookupSlotIndexByRawMagic(rawMagic);
+    func->GetSlotTensors()[tensorSlot] = std::move(newTensor);
+    return tensorSlot;
 }
 
 void RootFunctionBuilder::BuildPathFuncSlotScope(
@@ -243,20 +264,25 @@ void RootFunctionBuilder::BuildPathFuncSlotScope(
 
     scope->ioslot.incastSlot.resize(pathFunc->GetIncast().size());
     for (size_t idx = 0; idx < pathFunc->GetIncast().size(); idx++) {
-        int slotIndex = FindOrCreateSlot(originalIncasts[idx], slotManager, pathFunc, true);
+        int slotIndex = FindOrCreateSlot(originalIncasts[idx], slotManager, pathFunc);
         scope->ioslot.incastSlot[idx] = {slotIndex};
     }
 
     scope->ioslot.outcastSlot.resize(pathFunc->GetOutcast().size());
     for (size_t idx = 0; idx < pathFunc->GetOutcast().size(); idx++) {
-        int slotIndex = FindOrCreateSlot(originalOutcasts[idx], slotManager, pathFunc, false);
+        int slotIndex = FindOrCreateSlot(originalOutcasts[idx], slotManager, pathFunc);
         scope->ioslot.outcastSlot[idx] = {slotIndex};
+        if (scope->partialUpdateOutcastDict.count(pathFunc->GetOutcast()[idx])) {
+            scope->ioslot.partialUpdateOutcastList.push_back(idx);
+        }
     }
 
     for (auto& op : pathFunc->Operations()) {
-        if (op.GetOpcode() == Opcode::OP_ASSEMBLE || op.GetOpcode() == Opcode::OP_ASSEMBLE_SSA) {
+        if ((op.GetOpcode() == Opcode::OP_ASSEMBLE && op.HasAttr("dassemble")) ||
+            op.GetOpcode() == Opcode::OP_ASSEMBLE_SSA ||
+            op.GetOpcode() == Opcode::OP_ATOMIC_RMW) {
             for (auto& oOperand : op.GetOOperands()) {
-                int slotIndex = FindOrCreateSlot(oOperand, slotManager, pathFunc, false);
+                int slotIndex = FindOrCreateSlot(oOperand, slotManager, pathFunc, true);
                 scope->constructAssembleSlotList.push_back(slotIndex);
             }
         }
@@ -269,35 +295,19 @@ void RootFunctionBuilder::BuildDynSlotScope()
     dynFunc_->SetDyndevAttribute(attr);
 
     auto slotManager = program_.GetTensorSlotManager();
-    auto dynScope = std::make_shared<TensorSlotScope>(dynFunc_.get());
-    dynFunc_->SetSlotScope(dynScope);
-    slotManager->scopeList.push_back(dynScope);
+    auto& dynScope = dynFunc_->GetSlotScope();
 
-    dynScope->ioslot.incastSlot.resize(logicalParams_.size());
+    dynScope->ioslot.incastSlot = dynScope->originalIocastsSlot.incastSlot;
+    dynScope->ioslot.outcastSlot = dynScope->originalIocastsSlot.outcastSlot;
+
+    attr->startArgsInputLogicalTensorList.resize(logicalParams_.size());
     for (size_t idx = 0; idx < logicalParams_.size(); idx++) {
-        int slotIndex = FindOrCreateSlot(logicalParams_[idx], slotManager, dynFunc_.get(), true);
-        dynScope->ioslot.incastSlot[idx] = {slotIndex};
+        FindOrCreateSlot(logicalParams_[idx], slotManager, dynFunc_.get());
         const Tensor* tensor = slotManager->LookupTensorByRawMagic(logicalParams_[idx]->tensor->GetRawMagic());
         attr->startArgsInputTensorList.emplace_back(*tensor);
+        attr->startArgsInputLogicalTensorList[idx] = attr->startArgsInputTensorList.back().get().GetStorage(false);
+        slotManager->MarkInput(*tensor);
     }
-    attr->startArgsInputLogicalTensorList.resize(attr->startArgsInputTensorList.size());
-    for (size_t k = 0; k < attr->startArgsInputTensorList.size(); k++) {
-        attr->startArgsInputLogicalTensorList[k] = attr->startArgsInputTensorList[k].get().GetStorage(false);
-    }
-
-    auto calleeList = dynFunc_->GetCalleeFunctionList();
-    for (auto callee : calleeList) {
-        if (callee == nullptr) {
-            continue;
-        }
-        const auto calleeScope = callee->GetSlotScope();
-        if (calleeScope == nullptr) {
-            continue;
-        }
-        auto& oSlot = dynScope->originalIocastsSlot.outcastSlot;
-        oSlot.insert(oSlot.end(), calleeScope->ioslot.outcastSlot.begin(), calleeScope->ioslot.outcastSlot.end());
-    }
-    dynScope->ioslot.outcastSlot = dynScope->originalIocastsSlot.outcastSlot;
 
     dynFunc_->CleanRedundantOutCast();
     dynFunc_->InferParamDirection();
@@ -345,7 +355,7 @@ std::unordered_set<std::shared_ptr<LogicalTensor>> RootFunctionBuilder::CollectA
 ir::StmtPtr RootFunctionBuilder::CreatePathFuncAndPlaceholder(
     const ir::SeqStmtsPtr& seq, const std::string& loopVarName)
 {
-    auto pathFunc = CreatePathFunc(seq, loopVarName);
+    auto pathFunc = CreateHiddenFunc(seq, loopVarName);
 
     for (auto& incast : pathFunc->GetOriginIncast()) {
         consumedRawMagics_.insert(incast->GetRawMagic());
@@ -360,51 +370,107 @@ ir::StmtPtr RootFunctionBuilder::CreatePathFuncAndPlaceholder(
     return placeholderStmt;
 }
 
+void RootFunctionBuilder::CreateAndFinalizePathFunc(
+    Function* pathFunc,
+    Function* hiddenFunc,
+    const LogicalTensors& hiddenInArgs,
+    const LogicalTensors& hiddenOutArgs,
+    const ir::StmtPtr& placeholder)
+{
+    // 1. pathFunc 中创建 OP_CALL 指向 hiddenFunc
+    auto& callOp = pathFunc->AddRawOperation(
+        Opcode::OP_CALL, hiddenInArgs, hiddenOutArgs, placeholder->span_);
+    callOp.SetOpAttribute(hiddenFunc->CreateCallOpAttribute({}, {}));
+    pathFunc->AppendCalleeMagicName(hiddenFunc->GetMagicName());
+    callOp.attrs_.emplace_back("callee", hiddenFunc->GetMagicName());
+
+    // 2. pathFunc 的 incast/outcast
+    for (auto& incast : hiddenInArgs)
+        pathFunc->AddOriginIncast(incast);
+    for (auto& outcast : hiddenOutArgs)
+        pathFunc->AddOriginOutcast(outcast);
+
+    // 3. pathFunc 的 scope + MakeIncasts/MakeOutcasts
+    auto pathScope = std::make_shared<TensorSlotScope>(pathFunc);
+    pathFunc->SetSlotScope(pathScope);
+    program_.GetTensorSlotManager()->scopeList.push_back(pathScope);
+
+    LogicalTensors pathInArgs = pathFunc->MakeIncasts(pathScope);
+    LogicalTensors pathOutArgs = pathFunc->MakeOutcasts(pathScope);
+
+    for (auto& incast : pathFunc->GetIncast())
+        pathFunc->params_.push_back(std::static_pointer_cast<const ir::Var>(incast));
+    for (auto& outcast : pathFunc->GetOutcast())
+        pathFunc->params_.push_back(std::static_pointer_cast<const ir::Var>(outcast));
+
+    // 4. 复制 constructAssembleSlotList
+    BuildPathFuncSlotScope(pathFunc, pathScope, pathInArgs, pathOutArgs);
+
+    // 5. pathFunc body_ 重建
+    std::vector<ir::StmtPtr> pathBodyStmts;
+    for (auto& op : pathFunc->Operations(false))
+        pathBodyStmts.push_back(std::static_pointer_cast<const ir::Stmt>(op.shared_from_this()));
+    pathFunc->body_ = std::make_shared<ir::SeqStmts>(std::move(pathBodyStmts), placeholder->span_);
+    pathFunc->ComputeHash();
+    DumpFunctionGraph(pathFunc);
+    program_.GetFunctionCache().Insert(pathFunc->GetFunctionHash(), *pathFunc);
+}
+
 ir::StmtPtr RootFunctionBuilder::FinalizePathFunc(const ir::StmtPtr& placeholder)
 {
-    auto funcname = GetPlaceholderFuncname(placeholder);
-    auto pathFunc = program_.GetFunctionByMagicName(funcname);
-    FE_ASSERT(FeError::NOT_EXIST, pathFunc) << funcname << " is not in functionmap!";
+    auto hiddenFuncName = GetPlaceholderFuncname(placeholder);
+    auto hiddenFunc = program_.GetFunctionByMagicName(hiddenFuncName);
+    FE_ASSERT(FeError::NOT_EXIST, hiddenFunc) << hiddenFuncName << " is not in functionmap!";
 
-    auto allOutputs = CollectAllOutputs(*pathFunc);
-    ComputeOutcast(*pathFunc, allOutputs);
+    // 1. 创建 pathFunc（在 SetParent 之前）
+    auto pathRawName = hiddenFunc->GetRawName().substr(0, hiddenFunc->GetRawName().find("_hiddenfunc"));
+    auto pathMagicName = pathRawName + "_" + std::to_string(IdGen<IdType::FUNCTION>::Inst().NewId());
+    auto pathFunc = std::make_shared<Function>(program_, pathMagicName, pathRawName, dynFunc_.get());
+    pathFunc->SetFunctionType(FunctionType::DYNAMIC_LOOP_PATH);
+    pathFunc->SetGraphType(GraphType::TENSOR_GRAPH);
+    pathFunc->SetUnderDynamicFunction(true);
+    program_.InsertFuncToFunctionMap(pathMagicName, pathFunc);
+    pathFunc->name_ = pathMagicName;
+    pathFunc->funcType_ = ir::FunctionType::IN_CORE;
 
-    auto scope = std::make_shared<TensorSlotScope>(pathFunc);
-    pathFunc->SetSlotScope(scope);
-    program_.GetTensorSlotManager()->scopeList.push_back(scope);
+    // 2. hiddenFunc 设为 hidden，parent 改为 pathFunc
+    hiddenFunc->SetHiddenFunction(true);
+    hiddenFunc->SetParent(pathFunc.get());
 
-    auto originalIncasts = pathFunc->GetOriginIncast();
-    auto originalOutcasts = pathFunc->GetOriginOutcast();
+    // 3. hiddenFunc 处理（MakeIncasts 的 Parent() = pathFunc）
+    auto allOutputs = CollectAllOutputs(*hiddenFunc);
+    ComputeOutcast(*hiddenFunc, allOutputs);
+    auto hiddenScope = std::make_shared<TensorSlotScope>(hiddenFunc);
+    hiddenFunc->SetSlotScope(hiddenScope);
+    program_.GetTensorSlotManager()->scopeList.push_back(hiddenScope);
 
-    pathFunc->MakeIncasts(scope);
-    pathFunc->MakeOutcasts(scope);
+    auto originalIncasts = hiddenFunc->GetOriginIncast();
+    auto originalOutcasts = hiddenFunc->GetOriginOutcast();
 
-    for (auto& incast : pathFunc->GetIncast()) {
-        pathFunc->params_.push_back(std::static_pointer_cast<const ir::Var>(incast));
-    }
-    for (auto& outcast : pathFunc->GetOutcast()) {
-        pathFunc->params_.push_back(std::static_pointer_cast<const ir::Var>(outcast));
-    }
+    auto hiddenInArgs = hiddenFunc->MakeIncasts(hiddenScope);
+    auto hiddenOutArgs = hiddenFunc->MakeOutcasts(hiddenScope);
 
-    BuildPathFuncSlotScope(pathFunc, scope, originalIncasts, originalOutcasts);
+    for (auto& incast : hiddenFunc->GetIncast())
+        hiddenFunc->params_.push_back(std::static_pointer_cast<const ir::Var>(incast));
+    for (auto& outcast : hiddenFunc->GetOutcast())
+        hiddenFunc->params_.push_back(std::static_pointer_cast<const ir::Var>(outcast));
 
-    std::vector<ir::StmtPtr> bodyStmts;
-    for (auto& op : pathFunc->Operations(false)) {
-        bodyStmts.push_back(std::static_pointer_cast<const ir::Stmt>(op.shared_from_this()));
-    }
-    pathFunc->body_ = std::make_shared<ir::SeqStmts>(std::move(bodyStmts), placeholder->span_);
+    BuildPathFuncSlotScope(hiddenFunc, hiddenScope, originalIncasts, originalOutcasts);
 
-    pathFunc->ComputeHash();
+    std::vector<ir::StmtPtr> hiddenBodyStmts;
+    for (auto& op : hiddenFunc->Operations(false))
+        hiddenBodyStmts.push_back(std::static_pointer_cast<const ir::Stmt>(op.shared_from_this()));
+    hiddenFunc->body_ = std::make_shared<ir::SeqStmts>(std::move(hiddenBodyStmts), placeholder->span_);
+    hiddenFunc->ComputeHash();
+    program_.GetFunctionCache().Insert(hiddenFunc->GetFunctionHash(), *hiddenFunc);
+    DumpFunctionGraph(hiddenFunc);
 
-    if (config::GetPassDefaultConfig(KEY_PRINT_GRAPH, false)) {
-        std::string dumpDir = config::LogTensorGraphFolder();
-        std::string baseName = pathFunc->GetRawName();
-        pathFunc->DumpJsonFile(dumpDir + "/" + baseName + ".json");
-        pathFunc->DumpFile(dumpDir + "/" + baseName + ".tifwkgr");
-    }
+    // 4. pathFunc 处理（独立函数）
+    CreateAndFinalizePathFunc(
+        pathFunc.get(), hiddenFunc, hiddenInArgs, hiddenOutArgs, placeholder);
+    pathFunc->GetSlotScope()->constructAssembleSlotList = hiddenScope->constructAssembleSlotList;
 
-    program_.GetFunctionCache().Insert(pathFunc->GetFunctionHash(), *pathFunc);
-
+    // 5. dynFunc 的 CALL op
     auto& callOperation = dynFunc_->AddRawOperation(
         Opcode::OP_CALL, originalIncasts, originalOutcasts, placeholder->span_);
     callOperation.SetOpAttribute(pathFunc->CreateCallOpAttribute({}, {}));
@@ -438,6 +504,9 @@ ir::StmtPtr RootFunctionBuilder::TransformStmts(ir::StmtPtr stmt, const std::str
         case ir::ObjectKind::ForStmt: {
             auto forStmt = std::static_pointer_cast<const ir::ForStmt>(stmt);
             auto currentLoopVarName = IRContext::Get().GetOriginName(forStmt->loopVar_);
+            auto stepConst = ir::As<ir::ConstInt>(forStmt->step_);
+            int64_t stepValue = stepConst ? stepConst->value_ : 1;
+            currentLoopVarName += "_Unroll" + std::to_string(stepValue);
             auto transformedBody = TransformStmts(forStmt->body_, currentLoopVarName);
             return std::make_shared<ir::ForStmt>(
                 forStmt->loopVar_, forStmt->start_, forStmt->stop_, forStmt->step_, forStmt->iterArgs_, transformedBody,
@@ -501,8 +570,8 @@ ir::StmtPtr RootFunctionBuilder::TransformBody(ir::StmtPtr stmt)
     }
 
     paramRawMagics_.clear();
-    for (auto& incast : dynFunc_->GetOriginIncast()) {
-        paramRawMagics_.insert(incast->GetRawMagic());
+    for (auto& param : logicalParams_) {
+        paramRawMagics_.insert(param->GetRawMagic());
     }
 
     consumedRawMagics_.clear();
@@ -511,6 +580,17 @@ ir::StmtPtr RootFunctionBuilder::TransformBody(ir::StmtPtr stmt)
     ReplacePlaceholders(irTree);
 
     return irTree;
+}
+
+void RootFunctionBuilder::DumpFunctionGraph(Function* func)
+{
+    if (!config::GetPassDefaultConfig(KEY_PRINT_GRAPH, false)) {
+        return;
+    }
+    std::string dumpDir = config::LogTensorGraphFolder();
+    std::string baseName = func->GetRawName();
+    func->DumpJsonFile(dumpDir + "/" + baseName + ".json");
+    func->DumpFile(dumpDir + "/" + baseName + ".tifwkgr");
 }
 
 } // namespace npu::tile_fwk

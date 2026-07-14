@@ -20,17 +20,16 @@ namespace npu::tile_fwk {
 
 namespace {
 
-void CollectCompileQueueFunctions(Function* func, std::vector<Function*>& out)
+void CollectCompileQueueFunctions(
+    Function* func, std::vector<Function*>& out, std::unordered_set<Function*>& visited)
 {
-    if (func == nullptr) {
+    if (func == nullptr || !visited.insert(func).second) {
         return;
     }
 
     if (func->HasCallOperation()) {
         for (auto* callee : func->GetCalleeFunctionList()) {
-            if (!callee->Operations(false).IsEmpty()) {
-                out.push_back(callee);
-            }
+            CollectCompileQueueFunctions(callee, out, visited);
         }
     }
     if (!func->Operations(false).IsEmpty()) {
@@ -44,7 +43,8 @@ void SubmitCompileTask(Function* dynFunc)
     program.functionSequence_.clear();
 
     std::vector<Function*> compileFuncs;
-    CollectCompileQueueFunctions(dynFunc, compileFuncs);
+    std::unordered_set<Function*> visited;
+    CollectCompileQueueFunctions(dynFunc, compileFuncs, visited);
 
     FE_LOGI("FinalizeDynamicFunction SubmitCompileTask queue_size=%zu", compileFuncs.size());
     for (auto* func : compileFuncs) {
