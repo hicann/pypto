@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <type_traits>
 #include <algorithm>
 #include <cstddef>
 #include <memory>
@@ -38,6 +39,22 @@ struct RebuildableAttributeBase {
     virtual void Rebuild(Function *func);
     virtual void Reset(void *data);
     virtual ~RebuildableAttributeBase() = default;
+    virtual bool AllowRead() const { return true; }
+    virtual bool AllowWrite() const { return true; }
+};
+
+template<typename T>
+struct RebuildableAttribute : RebuildableAttributeBase {
+    virtual void Reset(void *dataPtr) override {
+        FE_ASSERT(this->AllowWrite());
+        data = *(T *)dataPtr;
+    }
+    const T &Get() const {
+        FE_ASSERT(this->AllowRead());
+        return data;
+    }
+protected:
+    T data;
 };
 
 class RebuildableAttributeManager {
@@ -49,6 +66,8 @@ public:
     template<typename T>
     T *GetAttr(Function *func)
     {
+        static_assert(std::is_base_of_v<RebuildableAttributeBase, T>,
+                      "T must inherit from RebuildableAttributeBase");
         if (attrDict_.find(func) == attrDict_.end()) {
             InitAttrsForFunc(func);
         }
@@ -97,14 +116,7 @@ struct RebuildableAttrInitContext {
     } \
     static EntryRegistrarNode node(RebuildableAttributeManager::GetRegistrarGroup(), Entry##TyAttr, #TyAttr);
 
-struct RebuildableWorkspaceDesc : RebuildableAttributeBase {
-    void Reset(void *data) override
-    {
-        desc = *static_cast<WorkspaceDesc *>(data);
-    }
-
-    WorkspaceDesc desc;
-
+struct RebuildableWorkspaceDesc : RebuildableAttribute<WorkspaceDesc> {
     uint64_t GetSizeForCheckOnly(uint64_t maxDynamicAssembleOutcastMem, uint64_t debugSize) const;
 
     std::string PrettyDumpSize(uint64_t maxDynamicAssembleOutcastMem, uint64_t debugSize) const;

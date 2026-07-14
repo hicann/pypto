@@ -52,15 +52,15 @@ void RebuildableAttributeManager::InitAttrsForFunc(Function *func)
 
 #define ComputeSize(name) \
     constexpr uint64_t ALIGNMENT_32K = 32 * 1024; \
-    uint64_t tensorRootInnerSpill = desc.maxRootInnerSpilledMem; \
-    uint64_t tensorDevTaskInnerExclusiveOutcast = desc.maxRootTotalExclusiveOutcastMem; \
-    uint64_t tensorMaxOutcast = std::max(desc.maxStaticOutcastMem, maxDynamicAssembleOutcastMem); \
-    uint64_t tensorBoundaryAndInnerTemporalOutcastNum = desc.devTaskBoundaryOutcastNum + desc.devTaskInnerTemporalOutcastNum; \
+    uint64_t tensorRootInnerSpill = data.maxRootInnerSpilledMem; \
+    uint64_t tensorDevTaskInnerExclusiveOutcast = data.maxRootTotalExclusiveOutcastMem; \
+    uint64_t tensorMaxOutcast = std::max(data.maxStaticOutcastMem, maxDynamicAssembleOutcastMem); \
+    uint64_t tensorBoundaryAndInnerTemporalOutcastNum = data.devTaskBoundaryOutcastNum + data.devTaskInnerTemporalOutcastNum; \
     uint64_t tensorPerOutcast = tensorMaxOutcast * tensorBoundaryAndInnerTemporalOutcastNum; \
     uint64_t tensorTotal = \
         tensorRootInnerSpill + tensorDevTaskInnerExclusiveOutcast + tensorPerOutcast; \
-    uint64_t tensorTotalAlloc = AlignUp(tensorTotal, ALIGNMENT_32K) * desc.config.parallelism; \
-    uint64_t leafSpill = desc.platform.aicoreCount * desc.maxLeafPerCoreSpilledMem; \
+    uint64_t tensorTotalAlloc = AlignUp(tensorTotal, ALIGNMENT_32K) * data.config.parallelism; \
+    uint64_t leafSpill = data.platform.aicoreCount * data.maxLeafPerCoreSpilledMem; \
     uint64_t name = tensorTotalAlloc + leafSpill + debugSize
 
 uint64_t RebuildableWorkspaceDesc::GetSizeForCheckOnly(
@@ -76,9 +76,9 @@ std::string RebuildableWorkspaceDesc::PrettyDumpSize(
     std::ostringstream oss;
     oss << "Config:\n"
         << "  " << std::setw(30) << std::left << "parallelism:"
-        << std::setw(10) << std::right << desc.config.parallelism << "\n";
+        << std::setw(10) << std::right << data.config.parallelism << "\n";
     oss << "Root:\n";
-    for (auto &rootFuncDesc : desc.rootFuncDescList) {
+    for (auto &rootFuncDesc : data.rootFuncDescList) {
         oss << "  " << "name: " << rootFuncDesc.devFuncName << "\n";
         oss << "    " << "unroll:" << std::setw(3) << rootFuncDesc.unroll
             << " innerSpilledRaw:" << std::setw(10) << rootFuncDesc.rootInnerSpilledRawMem
@@ -101,15 +101,15 @@ std::string RebuildableWorkspaceDesc::PrettyDumpSize(
     print(4, "devTaskInnerOutcast:", tensorDevTaskInnerExclusiveOutcast);
     print(4, "devTaskBoundaryAndInnerOutcast:", tensorPerOutcast);
     print(5, "maxOutcast:", tensorMaxOutcast);
-    print(6, "staticOutcast:", desc.maxStaticOutcastMem);
+    print(6, "staticOutcast:", data.maxStaticOutcastMem);
     print(6, "dynamicOutcast:", maxDynamicAssembleOutcastMem);
     print(5, "devTaskBoundaryAndInnerOutcastCount:", tensorBoundaryAndInnerTemporalOutcastNum);
-    print(6, "devTaskBoundaryOutcastCount:", desc.devTaskBoundaryOutcastNum);
-    print(6, "devTaskInnerOutcastCount:", desc.devTaskInnerTemporalOutcastNum);
-    print(3, "parallel:", desc.config.parallelism);
+    print(6, "devTaskBoundaryOutcastCount:", data.devTaskBoundaryOutcastNum);
+    print(6, "devTaskInnerOutcastCount:", data.devTaskInnerTemporalOutcastNum);
+    print(3, "parallel:", data.config.parallelism);
     print(2, "leafSpill:", leafSpill);
-    print(3, "aicoreCount:", desc.platform.aicoreCount);
-    print(3, "maxLeafPerCoreSpilled:", desc.maxLeafPerCoreSpilledMem);
+    print(3, "aicoreCount:", data.platform.aicoreCount);
+    print(3, "maxLeafPerCoreSpilled:", data.maxLeafPerCoreSpilledMem);
     print(2, "debug:", debugSize);
     return oss.str();
 }

@@ -252,8 +252,8 @@ TEST_F(TestDevEncode, test_dev_encode_program)
     ASSERT_NE(func, nullptr);
     auto* wsAttr = RebuildableAttributeManager::GetInstance().GetAttr<RebuildableWorkspaceDesc>(func);
     ASSERT_NE(wsAttr, nullptr);
-    EXPECT_EQ(devProg->memBudget.tensor.rootInnerSpilledMem, wsAttr->desc.maxRootInnerSpilledMem);
-    EXPECT_EQ(devProg->memBudget.tensor.devTaskInnerExclusiveOutcasts, wsAttr->desc.maxRootTotalExclusiveOutcastMem);
+    EXPECT_EQ(devProg->memBudget.tensor.rootInnerSpilledMem, wsAttr->data.maxRootInnerSpilledMem);
+    EXPECT_EQ(devProg->memBudget.tensor.devTaskInnerExclusiveOutcasts, wsAttr->data.maxRootTotalExclusiveOutcastMem);
 
     devProg->RelocProgram(0, reinterpret_cast<uint64_t>(devProg), true);
     devProg->controlFlowCache.isRecording = false;
