@@ -16,6 +16,7 @@
 #include <climits>
 #include <queue>
 #include <fstream>
+#include <cmath>
 #include "interface/operation/opcode.h"
 #include "interface/function/function.h"
 #include "interface/tensor/raw_tensor.h"
@@ -26,6 +27,7 @@
 #include "interface/operation/operation_impl.h"
 #include "interface/configs/config_manager.h"
 #include "passes/pass_log/pass_log.h"
+#include "passes/tensor_graph_pass/derivation_tile_shape.h"
 #include "set_heuristic_tile_shapes.h"
 #include "tilefwk/error_code.h"
 
@@ -41,811 +43,1004 @@ Status SetHeuristicTileShapes::RunOnFunction(Function& function)
     return SUCCESS;
 }
 
-const std::unordered_map<DataType, int64_t> Latency{
-    {DataType::DT_FP16, 200}, {DataType::DT_FP32, 200}, {DataType::DT_INT32, 0}, {DataType::DT_INT16, 0}};
-
-const std::unordered_map<DataType, int64_t> Parallelism{
-    {DataType::DT_FP16, 64}, // 128B/cycle
-    {DataType::DT_FP32, 32},
-    {DataType::DT_INT32, 32},
-    {DataType::DT_INT16, 64}};
-
-const std::set<Opcode> uniqueOps = { // Ops with possible InputShape != OutputShape
-    // Unary ops
-    Opcode::OP_INDEX_PUT, Opcode::OP_TRANSPOSE_MOVEIN, Opcode::OP_TRANSPOSE_MOVEOUT, Opcode::OP_TRANSPOSE_VNCHWCONV,
-    Opcode::OP_ROWMAX, Opcode::OP_ROWSUM, Opcode::OP_ROWEXPMAX, Opcode::OP_ROWEXPSUM, Opcode::OP_ROWSUMLINE,
-    Opcode::OP_ROWMAXLINE, Opcode::OP_ROWMINLINE,
-    // Binary ops
-    Opcode::OP_ROWMAX_SINGLE, Opcode::OP_ROWMIN_SINGLE, Opcode::OP_ROWSUM_SINGLE,
-    // Move ops
-    Opcode::OP_INDEX_OUTCAST,
-    // Logic ops
-    Opcode::OP_VIEW, Opcode::OP_ASSEMBLE, Opcode::OP_RESHAPE};
-
-const std::set<Opcode> wholeLastDimOps = { // Ops with Tile[lastDim] = Shape[lastDim]
-    // Unary ops
-    Opcode::OP_ROWMAX, Opcode::OP_ROWSUM, Opcode::OP_ROWEXPMAX, Opcode::OP_ROWEXPSUM, Opcode::OP_ROWSUMLINE,
-    Opcode::OP_ROWMAXLINE, Opcode::OP_ROWMINLINE, Opcode::OP_TRANSPOSE_MOVEIN, Opcode::OP_TRANSPOSE_MOVEOUT,
-    Opcode::OP_TRANSPOSE_VNCHWCONV, Opcode::OP_INDEX_PUT,
-    // Binary ops
-    Opcode::OP_ROWMAX_SINGLE, Opcode::OP_ROWMIN_SINGLE, Opcode::OP_ROWSUM_SINGLE,
-    // Move ops
-    Opcode::OP_INDEX_OUTCAST};
-
-const std::set<Opcode> reduceOps = {
-    // Unary ops
-    Opcode::OP_ROWMAX, Opcode::OP_ROWSUM, Opcode::OP_ROWSUMLINE, Opcode::OP_ROWMAXLINE, Opcode::OP_ROWMINLINE,
-    Opcode::OP_ROWEXPMAX, Opcode::OP_ROWEXPSUM,
-    // Binary ops
-    Opcode::OP_ROWMAX_SINGLE, Opcode::OP_ROWMIN_SINGLE, Opcode::OP_ROWSUM_SINGLE};
-
-const std::set<Opcode> transposeOps = {
-    Opcode::OP_TRANSPOSE_MOVEIN, Opcode::OP_TRANSPOSE_MOVEOUT, Opcode::OP_TRANSPOSE_VNCHWCONV};
-
-uint64_t GetLatency(DataType dtype)
+void UnstableDimsCalculation(std::stack<size_t>& unstableDims, Shape opBaseInputShape, Shape opBaseOutputShape)
 {
-    auto iterDtype = Latency.find(dtype);
-    if (iterDtype == Latency.end()) {
-        return DEFAULT_LATENCY;
-    }
-    return iterDtype->second;
-}
-
-uint64_t GetParallelism(DataType dtype)
-{
-    auto iterDtype = Parallelism.find(dtype);
-    if (iterDtype == Parallelism.end()) {
-        return DEFAULT_MAX_PARALLELISM;
-    }
-    return iterDtype->second;
-}
-
-bool IsFloat(const std::shared_ptr<LogicalTensor> tensor)
-{
-    auto dataType = tensor->Datatype();
-    if ((dataType == DT_FP16) || (dataType == DT_FP32) || (dataType == DT_BF16)) {
-        return true;
-    }
-    return false;
-}
-
-double CalculateGeometricMean(const std::vector<double>& vectorRatio)
-{
-    double product = 1.0;
-    for (double num : vectorRatio) {
-        product *= num;
-    }
-    return std::pow(product, 1.0 / vectorRatio.size());
-}
-
-std::map<int, int> FordBellman(const std::vector<std::pair<int, int>>& edges, Function& function)
-{
-    std::map<int, int> subgrDepthMap;
-    for (auto& op : function.Operations()) {
-        subgrDepthMap[op.GetOpMagic()] = INT_MAX;
-    }
-    subgrDepthMap[-1] = 0;
-
-    bool any = true;
-    while (any == true) {
-        any = false;
-        for (auto elem : edges) {
-            if (subgrDepthMap[elem.second] > subgrDepthMap[elem.first] - 1) {
-                subgrDepthMap[elem.second] = subgrDepthMap[elem.first] - 1;
-                any = true;
+    size_t inProd = 1;
+    size_t outProd = 1;
+    for (size_t inPos = 0, outPos = 0; (inPos < opBaseInputShape.size()) && (outPos < opBaseOutputShape.size());) {
+        if ((opBaseInputShape[inPos] == -1) || (opBaseOutputShape[outPos] == -1)) {
+            unstableDims.push(inPos);
+            auto ePos = inPos + 1;
+            for (size_t ePos1 = opBaseInputShape.size() - 1, ePos2 = opBaseOutputShape.size() - 1;
+                 ePos1 > inPos && ePos2 > inPos; ePos1--, ePos2--) {
+                if ((opBaseInputShape[ePos1] == -1) || (opBaseOutputShape[ePos2] == -1) ||
+                    (opBaseInputShape[ePos1] != opBaseOutputShape[ePos2])) {
+                    ePos = ePos1;
+                    break;
+                }
             }
-        }
-    }
-    return subgrDepthMap;
-}
-
-void FindCubeTilesCombinations(
-    std::map<std::vector<int64_t>, double>& setOfCubeTiles, int64_t m, int64_t k, int64_t n, int64_t inputTypeSize,
-    int64_t outputTypeSize)
-{
-    // Platform params
-    const int64_t L0A_MAX_SIZE = Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_L0A);
-    const int64_t L0B_MAX_SIZE = Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_L0B);
-    const int64_t L0C_MAX_SIZE = Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_L0C);
-    std::vector<int64_t> tmpTile = {0, 0, 0}; // m,k,n
-    if (((m * k * inputTypeSize) <= (L0A_MAX_SIZE / DOUBLE_BUFFER)) &&
-        ((k * n * inputTypeSize) <= (L0B_MAX_SIZE / DOUBLE_BUFFER)) &&
-        ((m * n * outputTypeSize) <= (L0C_MAX_SIZE / DOUBLE_BUFFER))) {
-        tmpTile[M_DIM] = m;
-        tmpTile[K_DIM] = k;
-        tmpTile[N_DIM] = n;
-        setOfCubeTiles[tmpTile] = 0.f; // set initial score = 0
-    }
-}
-
-void FindScoreForCubeTiles(
-    std::pair<std::vector<int64_t>, std::vector<DataType>> shapeAndTypeInfo,
-    std::map<std::vector<int64_t>, double>& setOfCubeTiles, int64_t cubeL1Reuse, int64_t cubeNBuffer,
-    int64_t numOfMatmuls)
-{
-    // Platform params
-    const int64_t L0A_MAX_SIZE = Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_L0A);
-    const int64_t L0B_MAX_SIZE = Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_L0B);
-    const int64_t L0C_MAX_SIZE = Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_L0C);
-    const int64_t CUBE_CORES = Platform::Instance().GetSoc().GetAICoreNum();
-
-    // Input shapes
-    int64_t M = shapeAndTypeInfo.first[M_DIM];
-    int64_t K = shapeAndTypeInfo.first[K_DIM];
-    int64_t N = shapeAndTypeInfo.first[N_DIM];
-
-    // Input types
-    DataType inputType = shapeAndTypeInfo.second[M_DIM];
-    DataType outputType = shapeAndTypeInfo.second[K_DIM];
-    int64_t inputTypeSize = BytesOf(inputType);
-    int64_t outputTypeSize = BytesOf(outputType);
-
-    uint64_t inputMKN = std::max(M, MIN_TILE) * std::max(K, MIN_TILE) * std::max(N, MIN_TILE);
-    std::vector<double> vectorRatio = {0.f, 0.f, 0.f};
-    for (auto& [tile, score] : setOfCubeTiles) {
-        uint64_t mkn = tile[M_DIM] * tile[K_DIM] * tile[N_DIM];
-
-        // If the tiling size = shape size -> the preferred option
-        score = (tile[M_DIM] == std::max(M, MIN_TILE)) ? (score + WHOLE_M_SCORE) : score;
-        score = (tile[K_DIM] == std::max(K, MIN_TILE)) ? (score + WHOLE_K_SCORE) : score;
-        score = (tile[N_DIM] == std::max(N, MIN_TILE)) ? (score + WHOLE_N_SCORE) : score;
-
-        // The more filled L0A, L0B, L0C is better
-        double utilizationL0A =
-            static_cast<double>((tile[M_DIM] * tile[K_DIM] * inputTypeSize)) / (L0A_MAX_SIZE / DOUBLE_BUFFER);
-        double utilizationL0B =
-            static_cast<double>((tile[K_DIM] * tile[N_DIM] * inputTypeSize)) / (L0B_MAX_SIZE / DOUBLE_BUFFER);
-        double utilizationL0C =
-            static_cast<double>((tile[M_DIM] * tile[N_DIM] * outputTypeSize)) / (L0C_MAX_SIZE / DOUBLE_BUFFER);
-        vectorRatio = {utilizationL0A, utilizationL0B, utilizationL0C};
-        double geomeanUtilizationL0 = CalculateGeometricMean(vectorRatio);
-        score += WEIGHT_L0 * geomeanUtilizationL0;
-
-        // The closer the tasksRatio is to 1, the better
-        double tasks = numOfMatmuls * (std::max(M, MIN_TILE) / static_cast<double>(tile[M_DIM])) *
-                       (std::max(N, MIN_TILE) / static_cast<double>(tile[N_DIM])) / (cubeL1Reuse * cubeNBuffer);
-        double tasksRatioLess = (tasks < CUBE_CORES) ? (CUBE_CORES / tasks - 1) : 0;
-        double tasksRatioMore = (tasks > 2 * CUBE_CORES) ? (tasks / (2 * CUBE_CORES) - 1) : 0;
-
-        // Penalty for tasks < CUBE_CORES & tasks > 2 * CUBE_CORES
-        score -= TASKS_CUBE_WEIGHT * (tasksRatioLess + tasksRatioMore);
-
-        // The more residualTasks the better
-        int64_t residualTasks = (static_cast<int64_t>(std::ceil(tasks)) % static_cast<int64_t>(CUBE_CORES) == 0) ?
-                                    static_cast<int64_t>(CUBE_CORES) :
-                                    (static_cast<int64_t>(std::ceil(tasks)) % static_cast<int64_t>(CUBE_CORES));
-        score += RESIDUAL_CUBE_TASKS_WEIGHT * residualTasks;
-
-        // The closer the ratio's is to 1, the better
-        double ratioMK = (tile[M_DIM] > tile[K_DIM]) ? static_cast<double>((tile[M_DIM] / tile[K_DIM])) :
-                                                       static_cast<double>((tile[K_DIM] / tile[M_DIM]));
-        double ratioKN = (tile[K_DIM] > tile[N_DIM]) ? static_cast<double>((tile[K_DIM] / tile[N_DIM])) :
-                                                       static_cast<double>((tile[N_DIM] / tile[K_DIM]));
-        double ratioMN = (tile[M_DIM] > tile[N_DIM]) ? static_cast<double>((tile[M_DIM] / tile[N_DIM])) :
-                                                       static_cast<double>((tile[N_DIM] / tile[M_DIM]));
-        vectorRatio = {ratioMK, ratioKN, ratioMN};
-        double ratioMKN = CalculateGeometricMean(vectorRatio);
-
-        // Penalty for bad balance
-        score -= BALANCE_WEIGHT * ratioMKN;
-
-        // Consider num of L1CopyIn cycles
-        uint64_t numL1CopyInL1A = inputMKN / (mkn * cubeL1Reuse * cubeNBuffer); // Num of L1CopyIn instructions for A
-        uint64_t numL1CopyInL1B = inputMKN / mkn;                               // Num of L1CopyIn instructions for B
-
-        uint64_t elePerRepeat = BYTES_PER_REPEAT / BytesOf(inputType);
-        uint64_t parallelism = GetParallelism(inputType) == 0 ? 1 : GetParallelism(inputType);
-        uint64_t cyclePerRepeat = elePerRepeat / parallelism;
-        uint64_t latency = GetLatency(inputType);
-
-        uint64_t repeatCountL1A = (tile[M_DIM] * tile[K_DIM] * inputTypeSize - BYTES_PER_REPEAT) / BYTES_PER_REPEAT + 1;
-        uint64_t repeatCountL1B = (tile[K_DIM] * tile[N_DIM] * inputTypeSize - BYTES_PER_REPEAT) / BYTES_PER_REPEAT + 1;
-
-        uint64_t cyclesL1A = numL1CopyInL1A * (latency + cyclePerRepeat * repeatCountL1A - 1);
-        uint64_t cyclesL1B = numL1CopyInL1B * (latency + cyclePerRepeat * repeatCountL1B - 1);
-
-        // Overall cycles of L1CopyIn for {m, k, n} tiles (the less the better)
-        double cyclesLog = std::log2(cyclesL1A + cyclesL1B);
-
-        // Penalty for large num of cycles
-        score -= CYCLES_WEIGHT * cyclesLog;
-    }
-}
-
-void SetPossibleCubeTiles(
-    std::pair<std::vector<int64_t>, std::vector<DataType>> shapeAndTypeInfo,
-    std::map<std::vector<int64_t>, double>& setOfCubeTiles)
-{
-    // Input shapes
-    int64_t M = shapeAndTypeInfo.first[M_DIM];
-    int64_t K = shapeAndTypeInfo.first[K_DIM];
-    int64_t N = shapeAndTypeInfo.first[N_DIM];
-
-    // Input types
-    DataType inputType = shapeAndTypeInfo.second[M_DIM];
-    DataType outputType = shapeAndTypeInfo.second[K_DIM];
-    int64_t inputTypeSize = BytesOf(inputType);
-    int64_t outputTypeSize = BytesOf(outputType);
-
-    int64_t newM =
-        static_cast<int64_t>(std::pow(NUM2, static_cast<int64_t>(std::ceil(std::log2(std::max(M, MIN_TILE))))));
-    int64_t newK =
-        static_cast<int64_t>(std::pow(NUM2, static_cast<int64_t>(std::ceil(std::log2(std::max(K, MIN_TILE))))));
-    int64_t newN =
-        static_cast<int64_t>(std::pow(NUM2, static_cast<int64_t>(std::ceil(std::log2(std::max(N, MIN_TILE))))));
-
-    for (int64_t m = MIN_TILE; m <= newM; m *= FACTOR) {
-        m = m > std::max(M, MIN_TILE) ? std::max(M, MIN_TILE) : m;
-        for (int64_t k = MIN_TILE; k <= newK; k *= FACTOR) {
-            k = k > std::max(K, MIN_TILE) ? std::max(K, MIN_TILE) : k;
-            for (int64_t n = MIN_TILE; n <= newN; n *= FACTOR) {
-                n = n > std::max(N, MIN_TILE) ? std::max(N, MIN_TILE) : n;
-                FindCubeTilesCombinations(setOfCubeTiles, m, k, n, inputTypeSize, outputTypeSize);
+            for (; (inPos < ePos); inPos++) {
+                unstableDims.push(inPos);
             }
+            break;
         }
-    }
-}
-
-std::vector<int64_t> FindAndSetCubeTileShapes(
-    std::pair<std::vector<int64_t>, std::vector<DataType>> shapeAndTypeInfo, int64_t numOfMatmuls, int64_t cubeL1Reuse,
-    int64_t cubeNBuffer)
-{
-    // Define set of possible cube tiles
-    std::map<std::vector<int64_t>, double> setOfCubeTiles;
-    SetPossibleCubeTiles(shapeAndTypeInfo, setOfCubeTiles);
-
-    // Find score for each set of cube tiles
-    FindScoreForCubeTiles(shapeAndTypeInfo, setOfCubeTiles, cubeL1Reuse, cubeNBuffer, numOfMatmuls);
-
-    // Find set of tiles with max Score
-    double maxScore = -std::numeric_limits<double>::max();
-    int64_t mFinal = 0;
-    int64_t kFinal = 0;
-    int64_t nFinal = 0;
-    for (auto& [tile, score] : setOfCubeTiles) {
-        if (maxScore < score) {
-            mFinal = tile[M_DIM];
-            kFinal = tile[K_DIM];
-            nFinal = tile[N_DIM];
-            maxScore = score;
-        }
-    }
-
-    std::vector<int64_t> resultCubeTiles;
-    resultCubeTiles.push_back(mFinal);
-    resultCubeTiles.push_back(kFinal);
-    resultCubeTiles.push_back(nFinal);
-    return resultCubeTiles;
-}
-
-size_t DimsCalculation(Operation* op, size_t tensorsNum, bool isInput)
-{
-    size_t tensorDims = 0;
-    for (size_t tensor = 0; tensor < tensorsNum; tensor++) {
-        if (isInput) {
-            tensorDims = std::max(tensorDims, op->GetIOperands()[tensor]->shape.size());
+        if (inProd < outProd) {
+            inProd *= opBaseInputShape[inPos];
+            unstableDims.push(inPos);
+            inPos++;
+        } else if (inProd > outProd) {
+            outProd *= opBaseOutputShape[outPos];
+            outPos++;
         } else {
-            tensorDims = std::max(tensorDims, op->GetOOperands()[tensor]->shape.size());
-        }
-    }
-    return tensorDims;
-}
-
-std::vector<int64_t> MaxInputShapeCalculation(Operation* op, size_t inputsNum, size_t inputDims, int64_t maxTypeSize)
-{
-    // Find the maximum values of the shape dimensions among the inputs, to find the maximum boundary of the tile values
-    if (maxTypeSize == 0) {
-        APASS_LOG_ERROR_F(Elements::Operation, "maxTypeSize = 0, division by zero");
-    }
-    std::vector<int64_t> maxInputShape(inputDims, LLONG_MIN);
-    for (size_t input = 0; input < inputsNum; input++) {
-        for (size_t inputDim = 0; inputDim < op->GetIOperands()[input]->shape.size(); inputDim++) {
-            maxInputShape[inputDim] = std::max(maxInputShape[inputDim], op->GetIOperands()[input]->shape[inputDim]);
-        }
-    }
-    maxInputShape[inputDims - 1] = (maxInputShape[inputDims - 1] == -1) ? -1 : maxInputShape[inputDims - 1];
-    return maxInputShape;
-}
-
-void VcnhwconvProcessing(
-    Operation* opInit, Operation* opNew, std::vector<int64_t>& vectorTilesNew, const std::vector<int64_t> maxInputShape,
-    std::vector<int> perm, int64_t maxTypeSize, int64_t tileSize, bool isForward, bool isTranspose)
-{
-    bool backwardTranspose = isTranspose ? (opNew->GetOpcode() == Opcode::OP_TRANSPOSE_VNCHWCONV && !isForward) :
-                                           (opInit->GetOpcode() == Opcode::OP_TRANSPOSE_VNCHWCONV && !isForward);
-    bool forwardTranspose = (opNew->GetOpcode() == Opcode::OP_TRANSPOSE_VNCHWCONV && isForward);
-    if (backwardTranspose || forwardTranspose) {
-        if (tileSize == 0) {
-            APASS_LOG_ERROR_F(Elements::Operation, "tileSize = 0, division by zero");
-        }
-        int64_t smallDim = (maxInputShape[perm[0]] < maxInputShape[perm[1]]) ? perm[0] : perm[1];
-        int64_t bigDim = (maxInputShape[perm[0]] > maxInputShape[perm[1]]) ? perm[0] : perm[1];
-        vectorTilesNew[bigDim] = std::max(VNCHWCONV_POINTERS, vectorTilesNew[bigDim]);
-        int64_t smallDimSize = BLOCK_SIZE / (maxTypeSize * vectorTilesNew[smallDim]);
-        int64_t newTileSize =
-            std::accumulate(vectorTilesNew.begin(), vectorTilesNew.end(), 1, std::multiplies<int64_t>());
-        newTileSize *= std::max(smallDimSize, static_cast<int64_t>(1));
-        int64_t dimRatio = newTileSize / tileSize;
-        if (dimRatio > 1) {
-            for (size_t dim = 0; dim < vectorTilesNew.size(); dim++) {
-                int64_t curRatio = std::min(dimRatio, vectorTilesNew[dim]);
-                vectorTilesNew[dim] = (curRatio > 1) ? vectorTilesNew[dim] / curRatio : vectorTilesNew[dim];
-                dimRatio /= curRatio;
+            inProd = 1;
+            outProd = 1;
+            if (opBaseInputShape[inPos] == opBaseOutputShape[outPos]) {
+                inPos++;
+                outPos++;
+                continue;
+            }
+            inProd *= opBaseInputShape[inPos];
+            outProd *= opBaseOutputShape[outPos];
+            unstableDims.push(inPos);
+            if (opBaseInputShape[inPos] < opBaseOutputShape[outPos]) {
+                inPos++;
+            } else {
+                outPos++;
             }
         }
     }
+}
+
+static NegDimResultType ProcessNegativeDimensions(Shape& opBaseInputShape, Shape& opBaseOutputShape)
+{
+    NegDimResultType result{0, 0, false};
+    int64_t inProd = 1;
+    int64_t outProd = 1;
+    for (size_t s = 0; s < opBaseInputShape.size(); s++) {
+        if (opBaseInputShape[s] == -1) {
+            opBaseInputShape[s] = 1;
+            result.inToReplace = s;
+            result.hasNegDim = true;
+        }
+        inProd *= opBaseInputShape[s];
+    }
+    for (size_t s = 0; s < opBaseOutputShape.size(); s++) {
+        if (opBaseOutputShape[s] == -1) {
+            opBaseOutputShape[s] = 1;
+            result.outToReplace = s;
+            result.hasNegDim = true;
+        }
+        outProd *= opBaseOutputShape[s];
+    }
+    if (result.hasNegDim && inProd > outProd) {
+        opBaseOutputShape[result.outToReplace] = inProd / outProd;
+    }
+    if (result.hasNegDim && inProd < outProd) {
+        opBaseInputShape[result.inToReplace] = outProd / inProd;
+    }
+    return result;
+}
+
+static bool TryDerivationWithAdjustments(
+    Operation* op, Shape& opBaseInputShape, Shape& opBaseOutputShape, Shape& vectorTilesOld, Shape& outTileShape,
+    std::stack<size_t>& unstableDims)
+{
+    DerivationTileShape derivationTileShapePass;
+    Status curStatus = derivationTileShapePass.DerivationReshapeTileShape(
+        op, opBaseInputShape, opBaseOutputShape, vectorTilesOld, outTileShape);
+    while (curStatus != SUCCESS && unstableDims.size() != 0) {
+        int32_t curDiTile = unstableDims.top();
+        vectorTilesOld[curDiTile] = opBaseInputShape[curDiTile];
+        unstableDims.pop();
+        if (unstableDims.size() == 0) {
+            size_t outIdx = opBaseOutputShape.size() - (opBaseInputShape.size() - curDiTile);
+            vectorTilesOld[curDiTile] = std::min(opBaseInputShape[curDiTile], opBaseOutputShape[outIdx]);
+        }
+        curStatus = derivationTileShapePass.DerivationReshapeTileShape(
+            op, opBaseInputShape, opBaseOutputShape, vectorTilesOld, outTileShape);
+    }
+    return curStatus == SUCCESS;
+}
+
+static void SetFullShapeFallback(
+    Operation* op, Shape& opBaseInputShape, Shape& opBaseOutputShape, Shape& vectorTilesOld, Shape& outTileShape)
+{
+    for (size_t di = 0; di < opBaseInputShape.size(); di++) {
+        vectorTilesOld[di] = opBaseInputShape[di];
+    }
+    DerivationTileShape derivationTileShapePass;
+    Status curStatus = derivationTileShapePass.DerivationReshapeTileShape(
+        op, opBaseInputShape, opBaseOutputShape, vectorTilesOld, outTileShape);
+    if (curStatus != SUCCESS) {
+        outTileShape.resize(opBaseOutputShape.size());
+        for (size_t di = 0; di < opBaseOutputShape.size(); di++) {
+            outTileShape[di] = opBaseOutputShape[di];
+        }
+        APASS_LOG_WARN_F(Elements::Operation, "DerivationReshapeTileShape failed. %s", GetFormatBacktrace(*op).c_str());
+    }
+}
+
+void AdjustTilesToReshape(
+    Operation* op, Shape opBaseInputShape, Shape opBaseOutputShape, Shape& vectorTilesOld, Shape& outTileShape)
+{
+    std::stack<size_t> unstableDims;
+    UnstableDimsCalculation(unstableDims, opBaseInputShape, opBaseOutputShape);
+    ProcessNegativeDimensions(opBaseInputShape, opBaseOutputShape);
+    if (!TryDerivationWithAdjustments(
+        op, opBaseInputShape, opBaseOutputShape, vectorTilesOld, outTileShape, unstableDims)) {
+        SetFullShapeFallback(op, opBaseInputShape, opBaseOutputShape, vectorTilesOld, outTileShape);
+        return;
+    }
+    int64_t outTileProd = std::accumulate(outTileShape.begin(), outTileShape.end(), 1, std::multiplies<int64_t>());
+    int64_t inTileProd = std::accumulate(vectorTilesOld.begin(), vectorTilesOld.end(), 1, std::multiplies<int64_t>());
+    if (inTileProd > outTileProd && inTileProd != 0 && outTileProd != 0) {
+        int64_t tileRatio = inTileProd / outTileProd;
+        for (size_t di = 0; di < vectorTilesOld.size(); di++) {
+            if (vectorTilesOld[di] > 1) {
+                vectorTilesOld[di] = vectorTilesOld[di] / tileRatio;
+            }
+        }
+    }
+    DerivationTileShape derivationTileShapePass;
+    derivationTileShapePass.DerivationReshapeTileShape(
+        op, opBaseInputShape, opBaseOutputShape, vectorTilesOld, outTileShape);
+}
+
+void TileThroughReshape(Operation* op, std::vector<int64_t>& vectorTilesOld, bool isForward)
+{
+    std::vector<int64_t> opBaseInputShape;
+    std::vector<int64_t> opBaseOutputShape;
+    if (isForward) {
+        opBaseInputShape = op->GetIOperands()[0]->shape;
+        opBaseOutputShape = op->GetOOperands()[0]->shape;
+    } else {
+        opBaseInputShape = op->GetOOperands()[0]->shape;
+        opBaseOutputShape = op->GetIOperands()[0]->shape;
+    }
+    Shape outTileShape(opBaseOutputShape.size());
+    AdjustTilesToReshape(op, opBaseInputShape, opBaseOutputShape, vectorTilesOld, outTileShape);
+    vectorTilesOld.resize(outTileShape.size());
+    vectorTilesOld = outTileShape;
+}
+
+void TileThroughTranspose(Operation* op, std::vector<int64_t>& tile)
+{
+    auto perm = op->GetVectorIntAttribute<int>(OP_ATTR_PREFIX + "shape");
+    std::swap(tile[perm[0]], tile[perm[1]]);
+}
+
+uint64_t MemUsedCalculation(Operation* op, Shape& vectorTilesNew, Shape& vectorTilesOut)
+{
+    uint64_t memUsed = 0;
+    for (auto inp : op->GetIOperands()) {
+        Shape realTile(vectorTilesNew);
+        size_t memUsedTmp = 1;
+        for (size_t di = 0; di < std::min(vectorTilesNew.size(), inp->GetShape().size()); di++) {
+            realTile[di] =
+                (inp->GetShape()[di] != -1) ? std::min(vectorTilesNew[di], inp->GetShape()[di]) : vectorTilesNew[di];
+            if (di == vectorTilesNew.size() - 1) {
+                realTile[di] = (realTile[di] + (BLOCK_SIZE / BytesOf(inp->tensor->GetDataType())) - 1) /
+                               (BLOCK_SIZE / BytesOf(inp->tensor->GetDataType())) *
+                               (BLOCK_SIZE / BytesOf(inp->tensor->GetDataType()));
+            }
+            memUsedTmp *= realTile[di];
+        }
+        memUsedTmp *= BytesOf(inp->tensor->GetDataType());
+        memUsed += memUsedTmp;
+    }
+    for (auto out : op->GetOOperands()) {
+        Shape realTile(vectorTilesOut);
+        size_t memUsedTmp = 1;
+        for (size_t di = 0; di < std::min(vectorTilesOut.size(), out->GetShape().size()); di++) {
+            realTile[di] =
+                (out->GetShape()[di] != -1) ? std::min(vectorTilesOut[di], out->GetShape()[di]) : vectorTilesOut[di];
+            if (di == vectorTilesOut.size() - 1) {
+                realTile[di] = (realTile[di] + (BLOCK_SIZE / BytesOf(out->tensor->GetDataType())) - 1) /
+                               (BLOCK_SIZE / BytesOf(out->tensor->GetDataType())) *
+                               (BLOCK_SIZE / BytesOf(out->tensor->GetDataType()));
+            }
+            memUsedTmp *= realTile[di];
+        }
+        memUsedTmp *= BytesOf(out->tensor->GetDataType());
+        memUsed += memUsedTmp;
+    }
+    return memUsed;
+}
+
+void AdjustTileToUB(Operation* op, Shape& vectorTilesNew)
+{
+    if (!IsOperationUBReq(op->GetOpcode())) {
+        return;
+    }
+    const uint64_t UB_MAX_SIZE = Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB);
+    Shape vectorTilesOut(vectorTilesNew);
+    RecalcTileThroughOps(op, vectorTilesOut, true);
+    uint64_t memUsed = MemUsedCalculation(op, vectorTilesNew, vectorTilesOut);
+    uint64_t memUsedPrev = memUsed + 1;
+    while ((memUsed > UB_MAX_SIZE) && (memUsedPrev > memUsed)) {
+        size_t d = 0;
+        while (d < vectorTilesNew.size() && vectorTilesNew[d] == 1) {
+            d++;
+        }
+        if (d >= vectorTilesNew.size()) {
+            return; // impossible case if UB_MAX_SIZE!=0
+        }
+        vectorTilesNew[d] /= 2;
+        vectorTilesOut = vectorTilesNew;
+        RecalcTileThroughOps(op, vectorTilesOut, true);
+        memUsed = MemUsedCalculation(op, vectorTilesNew, vectorTilesOut);
+    }
+    ASSERT(memUsed <= UB_MAX_SIZE);
+}
+
+ShapeDimsType MapGatherVecTileToCubeTile(const std::vector<int64_t>& vecTile, bool isB, bool isTrans)
+{
+    ShapeDimsType dims;
+    int64_t tileRows = vecTile[0];
+    int64_t tileCols = vecTile[1];
+    if (!isB && !isTrans) {
+        dims.M = tileRows;
+        dims.K = tileCols;
+        dims.N = -1;
+    } else if (!isB && isTrans) {
+        dims.M = tileCols;
+        dims.K = tileRows;
+        dims.N = -1;
+    } else if (isB && !isTrans) {
+        dims.M = -1;
+        dims.K = tileRows;
+        dims.N = tileCols;
+    } else {
+        dims.M = -1;
+        dims.K = tileCols;
+        dims.N = tileRows;
+    }
+    return dims;
+}
+
+void AdjustGatherTileToL1(Operation* op, std::vector<int64_t>& vectorTilesNew)
+{
+    const uint64_t L1_MAX_SIZE = Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_L1);
+    bool isB = op->GetBoolAttribute("isB");
+    bool isTrans = op->GetBoolAttribute("isTrans");
+    ShapeDimsType tileDims = MapGatherVecTileToCubeTile(vectorTilesNew, isB, isTrans);
+    ASSERT(tileDims.K != -1 && ((tileDims.M == -1) != (tileDims.N == -1)));
+    uint64_t memUsed;
+    if (tileDims.N == -1) {
+        memUsed = static_cast<uint64_t>(tileDims.M) * static_cast<uint64_t>(tileDims.K);
+    } else {
+        memUsed = static_cast<uint64_t>(tileDims.K) * static_cast<uint64_t>(tileDims.N);
+    }
+    uint64_t memUsedPrev = memUsed + 1;
+    while ((memUsed > L1_MAX_SIZE) && (memUsedPrev > memUsed)) {
+        size_t d = 0;
+        while (d < vectorTilesNew.size() && vectorTilesNew[d] == 1) {
+            d++;
+        }
+        if (d >= vectorTilesNew.size()) {
+            return;
+        }
+        vectorTilesNew[d] /= NUM2;
+        tileDims = MapGatherVecTileToCubeTile(vectorTilesNew, isB, isTrans);
+        ASSERT(tileDims.K != -1 && ((tileDims.M == -1) != (tileDims.N == -1)));
+        if (tileDims.N == -1) {
+            memUsed = static_cast<uint64_t>(tileDims.M) * static_cast<uint64_t>(tileDims.K);
+        } else {
+            memUsed = static_cast<uint64_t>(tileDims.K) * static_cast<uint64_t>(tileDims.N);
+        }
+        memUsedPrev = memUsed;
+    }
+}
+
+void SetGatherInL1CubeTile(Operation* op, const std::vector<int64_t>& vectorTilesNew)
+{
+    bool isB = op->GetBoolAttribute("isB");
+    bool isTrans = op->GetBoolAttribute("isTrans");
+    ShapeDimsType dims = MapGatherVecTileToCubeTile(vectorTilesNew, isB, isTrans);
+    std::array<int64_t, MAX_MDIM> mArray = {dims.M, dims.M};
+    std::array<int64_t, MAX_KDIM> kArray = {dims.K, dims.K, dims.K};
+    std::array<int64_t, MAX_NDIM> nArray = {dims.N, dims.N};
+    op->GetTileShapeForSetting().SetCubeTile(mArray, kArray, nArray);
+}
+
+static void HandleGatherVectorOps(
+    Operation* producerOp, Operation* op, size_t outputProducerDims, size_t outputOpDims,
+    std::vector<int64_t>& vectorTilesOld)
+{
+    std::vector<int64_t> vectorTilesOldTmp = vectorTilesOld;
+    int magicFirst = op->GetIOperands()[0]->magic;
+    int magicSecond = op->GetIOperands()[1]->magic;
+    int magicProducer = producerOp->GetOOperands()[0]->magic;
+    if (magicFirst == magicProducer) {
+        if (outputProducerDims == NUM2) {
+            vectorTilesOld.resize(outputProducerDims);
+            vectorTilesOld[0] = FloorPowerOf2(producerOp->GetOOperands()[0]->shape[0]);
+            vectorTilesOld[1] = FloorPowerOf2(vectorTilesOldTmp[outputOpDims - 1]);
+        } else {
+            APASS_LOG_ERROR_F(Elements::Operation, "Gather first input should be 2D, need to check this case");
+        }
+    }
+    if (magicSecond == magicProducer) {
+        if (outputProducerDims == 1) {
+            vectorTilesOld.resize(outputProducerDims);
+            vectorTilesOld[0] = FloorPowerOf2(vectorTilesOldTmp[0]);
+        } else if (outputProducerDims == NUM2) {
+            vectorTilesOld.resize(outputProducerDims);
+            vectorTilesOld[0] = FloorPowerOf2(vectorTilesOldTmp[0]);
+            vectorTilesOld[1] = FloorPowerOf2(vectorTilesOldTmp[1]);
+        } else {
+            APASS_LOG_ERROR_F(Elements::Operation, "Gather second input should be 1D or 2D, need to check this case");
+        }
+    }
+    AdjustTileToUB(op, vectorTilesOld);
+}
+
+static void HandleGatherMoveOps(Operation* producerOp, Operation* op, std::vector<int64_t>& vectorTilesOld)
+{
+    int magicFirst = op->GetIOperands()[0]->magic;
+    int magicSecond = op->GetIOperands()[1]->magic;
+    int magicThird = op->GetIOperands()[NUM2]->magic;
+    int magicProducer = producerOp->GetOOperands()[0]->magic;
+    if (magicFirst == magicProducer) {
+        vectorTilesOld[0] = FloorPowerOf2(vectorTilesOld[0]);
+        vectorTilesOld[1] = FloorPowerOf2(vectorTilesOld[1]);
+    }
+    if ((magicSecond == magicProducer) || (magicThird == magicProducer)) {
+        vectorTilesOld[0] = FloorPowerOf2(producerOp->GetOOperands()[0]->shape[0]);
+        vectorTilesOld[1] = FloorPowerOf2(producerOp->GetOOperands()[0]->shape[1]);
+    }
+    if (op->GetOpcode() == Opcode::OP_GATHER_IN_L1) {
+        AdjustGatherTileToL1(op, vectorTilesOld);
+    } else {
+        AdjustTileToUB(op, vectorTilesOld);
+    }
+}
+
+void TileThroughGather(Operation* producerOp, Operation* op, std::vector<int64_t>& vectorTilesOld)
+{
+    size_t outputsProducerNum = producerOp->GetOOperands().size();
+    size_t outputsOpNum = op->GetOOperands().size();
+    size_t outputProducerDims = DimsCalculation(producerOp, outputsProducerNum, false);
+    size_t outputOpDims = DimsCalculation(op, outputsOpNum, false);
+    if (gatherVectorOps.find(op->GetOpcode()) != gatherVectorOps.end()) {
+        HandleGatherVectorOps(producerOp, op, outputProducerDims, outputOpDims, vectorTilesOld);
+    } else {
+        HandleGatherMoveOps(producerOp, op, vectorTilesOld);
+    }
+}
+
+void ReshapeTileSetting(Operation* op, const std::vector<int64_t>& vectorTilesOld, std::vector<int64_t>& vectorTilesNew)
+{
+    std::vector<int64_t> opBaseInputShape;
+    std::vector<int64_t> opBaseOutputShape;
+    opBaseInputShape = op->GetIOperands()[0]->shape;
+    opBaseOutputShape = op->GetOOperands()[0]->shape;
+    Shape vectorTilesWorking = vectorTilesOld; // Create local working copy
+    Shape outTileShape;
+    AdjustTilesToReshape(op, opBaseInputShape, opBaseOutputShape, vectorTilesWorking, outTileShape);
+    vectorTilesNew.resize(vectorTilesWorking.size());
+    vectorTilesNew = vectorTilesWorking;
+    AdjustTileToUB(op, vectorTilesNew);
 }
 
 void TransposeTileSetting(
-    Operation* opInit, Operation* opBase, Operation* opNew, const std::vector<int64_t> vectorTilesOld,
-    const std::vector<int64_t> maxInputShape, std::queue<Operation*>& queueBFS, std::map<int, bool>& visitedBFS,
-    int64_t maxTypeSize, int64_t tileSize, bool isForward)
+    Operation* op, const std::vector<int64_t>& vectorTilesOld, std::vector<int64_t>& vectorTilesNew)
 {
-    auto perm = opBase->GetVectorIntAttribute<int>(OP_ATTR_PREFIX + "shape");
-    std::vector<int64_t> vectorTilesNew = vectorTilesOld;
-    if (opBase->GetOpcode() != Opcode::OP_TRANSPOSE_VNCHWCONV) {
-        std::swap(vectorTilesNew[perm[0]], vectorTilesNew[perm[1]]);
-    } else {
-        std::swap(vectorTilesNew[perm[0]], vectorTilesNew[perm[1]]);
-        VcnhwconvProcessing(opInit, opNew, vectorTilesNew, maxInputShape, perm, maxTypeSize, tileSize, isForward, true);
+    ASSERT(op->GetIOperands().size() == 1) << "Transpose should have 1 input";
+    ASSERT(op->GetOOperands().size() == 1) << "Transpose should have 1 output";
+    DataType inputType = op->GetIOperands()[0]->tensor->GetDataType();
+    DataType outputType = op->GetOOperands()[0]->tensor->GetDataType();
+    ASSERT(inputType == outputType) << "Input & output data types should be the same for Transpose";
+    uint8_t typeSize = BytesOf(inputType);
+    std::vector<int64_t> inputShape = op->GetIOperands()[0]->GetShape();
+    size_t inputDims = inputShape.size();
+    const uint64_t UB_MAX_SIZE = Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB);
+    uint32_t argsCount =
+        (op->GetOpcode() == Opcode::OP_TRANSPOSE_VNCHWCONV) ? NUM3 : 1; // At least IN and OUT should be placed in UB
+    ASSERT(inputShape[inputDims - 1] != -1);
+    ASSERT(typeSize != 0);
+    ASSERT(argsCount != 0);
+    int64_t maxTile = UB_MAX_SIZE / (typeSize * argsCount);
+    uint8_t blockSizeForType = BLOCK_SIZE / typeSize;
+    auto lastDimAligned = ((inputShape[inputDims - 1] + blockSizeForType - 1) / blockSizeForType) * blockSizeForType;
+    if (lastDimAligned > maxTile) {
+        APASS_LOG_ERROR_F(Elements::Operation, "Transpose have row that more than UB, doesn't support");
     }
-    opNew->GetTileShapeForSetting().SetVecTile(vectorTilesNew);
-    if (!visitedBFS[opNew->GetOpMagic()]) {
-        queueBFS.push(opNew);
+    vectorTilesNew.resize(vectorTilesOld.size());
+    vectorTilesNew = vectorTilesOld;
+    vectorTilesNew[inputDims - 1] = inputShape[inputDims - 1];
+    maxTile /= lastDimAligned;
+    vectorTilesNew[inputDims - NUM2] =
+        (vectorTilesNew[inputDims - NUM2] != 1) ?
+            (vectorTilesNew[inputDims - NUM2] + VNCHWCONV_POINTERS - 1) / VNCHWCONV_POINTERS * VNCHWCONV_POINTERS :
+            1;
+    vectorTilesNew[inputDims - NUM2] = std::min(
+        maxTile / VNCHWCONV_POINTERS * VNCHWCONV_POINTERS, vectorTilesNew[inputDims - 2]); // UB overflow condition
+    maxTile /= vectorTilesNew[inputDims - NUM2];
+    for (int64_t di = inputDims - NUM3; di >= 0; di--) {
+        if (maxTile < vectorTilesNew[di]) {
+            uint32_t coeff = (inputShape[di] + maxTile - 1) / maxTile;
+            vectorTilesNew[di] = inputShape[di] / coeff;
+        }
+        maxTile /= vectorTilesNew[di];
     }
-    visitedBFS[opNew->GetOpMagic()] = true;
 }
 
-void ReshapeInfoFilling(
-    std::vector<int64_t>& reshapeInfo, std::vector<int64_t> opBaseInputShape, std::vector<int64_t> opBaseOutputShape)
+static std::vector<uint32_t> PrepareAssembleTileBase(
+    Operation* op, const std::vector<int64_t>& vectorTilesOld, std::vector<int64_t>& vectorTilesNew)
 {
-    for (int64_t i = 0; i < static_cast<int64_t>(reshapeInfo.size()); i++) {
-        if (!((static_cast<int64_t>(opBaseInputShape.size() - i - 1) >= 0) &&
-              (static_cast<int64_t>(opBaseOutputShape.size() - i - 1) >= 0) &&
-              (opBaseInputShape[opBaseInputShape.size() - i - 1] ==
-               opBaseOutputShape[opBaseOutputShape.size() - i - 1]))) {
-            reshapeInfo[reshapeInfo.size() - i - 1] = 0;
-        }
-    }
-    bool isZero = std::all_of(reshapeInfo.begin(), reshapeInfo.end(), [](int64_t i) { return i == 0; });
-    if (isZero) {
-        std::fill(reshapeInfo.begin(), reshapeInfo.end(), 1);
-        for (int64_t i = 0; i < static_cast<int64_t>(reshapeInfo.size()); i++) {
-            if (!((static_cast<int64_t>(opBaseInputShape.size() - i - 1) >= 0) &&
-                  (static_cast<int64_t>(opBaseOutputShape.size() - i - 1) >= 0) &&
-                  (opBaseInputShape[i] == opBaseOutputShape[i]))) {
-                reshapeInfo[i] = 0;
+    auto inShape = op->GetIOperands()[0]->shape;
+    auto outShape = op->GetOOperands()[0]->shape;
+    ASSERT(inShape.size() == outShape.size()) << "VIEW have different number of dimension in input and output "
+                                              << inShape.size() << " vs " << outShape.size() << "\n";
+
+    vectorTilesNew.resize(vectorTilesOld.size());
+    vectorTilesNew = vectorTilesOld;
+    return FindChangedDims(inShape, outShape);
+}
+
+void AssembleTileSettingForward(
+    Operation* op, const std::vector<int64_t>& vectorTilesOld, std::vector<int64_t>& vectorTilesNew)
+{
+    auto changedDims = PrepareAssembleTileBase(op, vectorTilesOld, vectorTilesNew);
+    auto outShape = op->GetOOperands()[0]->shape;
+    auto allAssembles = op->GetOOperands()[0]->GetProducers();
+    for (auto sp : changedDims) {
+        auto tile = outShape[sp];
+        for (auto v : allAssembles) {
+            if (v->GetOpcode() == Opcode::OP_ASSEMBLE) {
+                tile = (tile != -1) ? std::gcd(tile, v->GetIOperands()[0]->shape[sp]) : v->GetIOperands()[0]->shape[sp];
             }
         }
+        ASSERT((size_t)sp < vectorTilesNew.size())
+            << "Split dim > vectorTiles.size(): " << sp << " vs " << vectorTilesNew.size() << "\n";
+        vectorTilesNew[sp] = (tile != -1) ? std::gcd(tile, vectorTilesNew[sp]) : vectorTilesNew[sp];
     }
 }
 
-void ReshapeTileSetting(
-    Operation* opInit, Operation* opBase, Operation* opNew, std::vector<int64_t> vectorTilesOld,
-    const std::vector<int64_t> maxInputShape, std::queue<Operation*>& queueBFS, std::map<int, bool>& visitedBFS,
-    size_t inputDims, int64_t maxTypeSize, int64_t tileSize, bool isForward)
+void AssembleTileSettingBackward(
+    Operation* op, const std::vector<int64_t>& vectorTilesOld, std::vector<int64_t>& vectorTilesNew)
 {
-    // Fill reshapeInfo
-    int64_t initTileSize = tileSize;
-    std::vector<int64_t> opBaseInputShape = opBase->GetIOperands()[0]->shape;
-    std::vector<int64_t> opBaseOutputShape = opBase->GetOOperands()[0]->shape;
-    std::vector<int64_t> reshapeInfo(std::max(opBaseInputShape.size(), opBaseOutputShape.size()), 1);
-    ReshapeInfoFilling(reshapeInfo, opBaseInputShape, opBaseOutputShape);
+    auto changedDims = PrepareAssembleTileBase(op, vectorTilesOld, vectorTilesNew);
+    auto outShape = op->GetOOperands()[0]->shape;
+    for (auto sp : changedDims) {
+        auto tile = outShape[sp];
+        vectorTilesNew[sp] = (tile != -1) ? std::min(tile, vectorTilesNew[sp]) : vectorTilesNew[sp];
+    }
+}
 
-    std::vector<int64_t> vectorTilesNew(inputDims, -1);
-    if (reshapeInfo[reshapeInfo.size() - 1] == 1) {
-        for (size_t i = 0; i < reshapeInfo.size(); i++) {
-            if ((reshapeInfo[reshapeInfo.size() - i - 1] == 1) &&
-                (static_cast<int64_t>(vectorTilesOld.size() - i - 1) >= 0) &&
-                (static_cast<int64_t>(vectorTilesNew.size() - i - 1) >= 0)) {
-                vectorTilesNew[vectorTilesNew.size() - i - 1] = vectorTilesOld[vectorTilesOld.size() - i - 1];
-                tileSize /= vectorTilesOld[vectorTilesOld.size() - i - 1];
+void OpWithSeveralInputsTileSetting(
+    Operation* op, const std::vector<int64_t>& vectorTilesOld, std::vector<int64_t>& vectorTilesNew)
+{
+    size_t inputsNum = op->GetIOperands().size();
+    size_t inputDims = DimsCalculation(op, inputsNum, true);
+    vectorTilesNew.resize(vectorTilesOld.size());
+    vectorTilesNew = vectorTilesOld;
+    std::vector<Operation*> toUpdate;
+    for (size_t inp = 0; inp < op->GetIOperands().size(); inp++) {
+        ASSERT(op->GetIOperands()[inp]->GetProducers().size() != 0);
+        auto prodOp = *(op->GetIOperands()[inp]->GetProducers().begin());
+        std::vector<int64_t> inpTile(inputDims, 1);
+        auto consumers = op->GetOOperands()[0]->GetConsumers();
+        if (((prodOp->GetIOperands().size() == 0) || (prodOp->GetIOperands()[0]->GetProducers().size() == 0))) {
+            if (!consumers.empty()) {
+                auto consOp = *(consumers.begin());
+                if ((consOp->GetTileShape().GetVecTile().tile.size() != 1) ||
+                    (consOp->GetTileShape().GetVecTile().tile[0] != -1)) {
+                    inpTile = consOp->GetTileShape().GetVecTile().tile;
+                } else {
+                    inpTile = vectorTilesNew;
+                }
+            } else {
+                inpTile = vectorTilesNew;
             }
+            if (inpTile.back() == 1) {
+                inpTile.back() = op->GetIOperands()[inp]->GetShape()[inputDims - 1];
+            }
+            toUpdate.push_back(prodOp);
+        } else {
+            inpTile = prodOp->GetTileShape().GetVecTile().tile;
         }
-    } else {
-        for (size_t i = 0; i < reshapeInfo.size(); i++) {
-            if ((reshapeInfo[i] == 1) && (static_cast<int64_t>(vectorTilesOld.size() - i - 1) >= 0) &&
-                (static_cast<int64_t>(vectorTilesNew.size() - i - 1) >= 0)) {
-                vectorTilesNew[i] = vectorTilesOld[i];
-                tileSize /= vectorTilesOld[i];
-            }
+        // Tile not set yet
+        if ((inpTile.size() == 1) && (inpTile[0] == -1)) {
+            vectorTilesNew.resize(1);
+            vectorTilesNew[0] = -1;
+            return;
+        }
+        // In all other cases recalculate tile through reshape/transpose operations
+        RecalcTileThroughOps(prodOp, inpTile, true);
+        // Evaluate new tile according to all existing tiles
+        for (size_t di = 0; di < inputDims; di++) {
+            inpTile[di] = std::min(inpTile[di], op->GetIOperands()[inp]->GetShape()[di]);
+            vectorTilesNew[di] = (inpTile[di] != -1) ? std::lcm(vectorTilesNew[di], inpTile[di]) : vectorTilesNew[di];
         }
     }
+    AdjustTileToUB(op, vectorTilesNew);
+    for (auto& opupd : toUpdate) {
+        opupd->GetTileShapeForSetting().SetVecTile(vectorTilesNew);
+    }
+}
 
-    for (size_t dim = 0; dim < inputDims; dim++) {
-        if (vectorTilesNew[inputDims - 1 - dim] != -1) {
+void GatherFromTiles(
+    Operation* op, std::vector<int64_t>& vectorTilesNew, std::vector<int64_t> inpTile, size_t outputDims, size_t inp,
+    std::vector<bool>& inputHasTile)
+{
+    if (gatherVectorOps.find(op->GetOpcode()) != gatherVectorOps.end()) {
+        if (inp == 0) { // Broadcast tiles from first input
+            GatherTilesForFirstInput(vectorTilesNew, inpTile, outputDims);
+            inputHasTile[0] = true;
+        } else if (inp == 1) { // Broadcast tiles from second input
+            GatherTilesForSecondInput(vectorTilesNew, inpTile, outputDims);
+            inputHasTile[1] = true;
+        }
+    } else {
+        if (inp == 0) { // Broadcast tiles from 1st input if they are
+            vectorTilesNew[1] = FloorPowerOf2(inpTile[1]);
+            inputHasTile[0] = true;
+        } else if (inp == 1) { // Otherwise broadcast tiles from 2nd or 3rd input if they are set
+            vectorTilesNew[0] =
+                (vectorTilesNew[0] == -1) ? FloorPowerOf2(inpTile[1]) : std::min(vectorTilesNew[0], inpTile[1]);
+            int64_t inputTypeSize = BytesOf(op->GetIOperands()[0]->tensor->GetDataType());
+            if (inputTypeSize == 0) {
+                APASS_LOG_ERROR_F(
+                    Elements::Operation, "inputTypeSize is zero in GatherFromInputTileSetting, cannot divide");
+                return;
+            }
+            vectorTilesNew[0] = std::max(vectorTilesNew[0], BLOCK_SIZE / inputTypeSize);
+            inputHasTile[1] = true;
+        }
+        // inp == 2 -> blockTable: is not sliced in ExpandFunction, it is always processed as a whole
+    }
+}
+
+void GatherFromShapes(
+    Operation* op, std::vector<int64_t>& vectorTilesNew, size_t outputDims, const std::vector<bool>& inputHasTile)
+{
+    ASSERT(inputHasTile.size() >= NUM2);
+    if (gatherVectorOps.find(op->GetOpcode()) != gatherVectorOps.end()) {
+        if (!inputHasTile[0]) {
+            auto firstInputShape = op->GetIOperands()[0]->shape;
+            GatherTilesForFirstInput(vectorTilesNew, firstInputShape, outputDims);
+        }
+        if (!inputHasTile[1]) {
+            auto secondInputShape = op->GetIOperands()[1]->shape;
+            GatherTilesForSecondInput(vectorTilesNew, secondInputShape, outputDims);
+        }
+    } else {
+        if (!inputHasTile[0]) { // If the tiles were not broadcasted, set tiles based on the first input
+            auto firstInputShape = op->GetIOperands()[0]->shape;
+            vectorTilesNew[1] = FloorPowerOf2(firstInputShape[1]);
+        }
+        if (!inputHasTile[1]) {
+            auto secondInputShape = op->GetIOperands()[1]->shape;
+            vectorTilesNew[0] = FloorPowerOf2(secondInputShape[1]);
+        }
+        int64_t inputTypeSize = BytesOf(op->GetIOperands()[0]->tensor->GetDataType());
+        if (inputTypeSize == 0) {
+            APASS_LOG_ERROR_F(Elements::Operation, "inputTypeSize is zero in GatherFromShapes, cannot divide");
+            return;
+        }
+        vectorTilesNew[0] = std::max(vectorTilesNew[0], BLOCK_SIZE / inputTypeSize);
+    }
+}
+
+void GatherTileSetting(
+    Operation* op, [[maybe_unused]] const std::vector<int64_t>& vectorTilesOld, std::vector<int64_t>& vectorTilesNew)
+{
+    size_t inputsNum = op->GetIOperands().size();
+    size_t outputsNum = op->GetOOperands().size();
+    size_t inputDims = DimsCalculation(op, inputsNum, true);
+    size_t outputDims = DimsCalculation(op, outputsNum, false);
+    vectorTilesNew.clear();
+    vectorTilesNew.resize(outputDims, -1);
+    if (op->GetTileShape().GetVecTile().tile.size() == outputDims) {
+        vectorTilesNew = op->GetTileShape().GetVecTile().tile;
+    }
+    std::vector<bool> inputHasTile(inputsNum);
+    // Fill vectorTilesNew based on input tiles
+    for (size_t inp = 0; inp < inputsNum; inp++) {
+        inputHasTile[inp] = false;
+        ASSERT(op->GetIOperands()[inp]->GetProducers().size() == 1);
+        auto prodOp = *(op->GetIOperands()[inp]->GetProducers().begin());
+        if ((prodOp->GetIOperands().size() == 0) || (prodOp->GetIOperands()[0]->GetProducers().size() == 0)) {
             continue;
         }
-        int64_t curTile = std::min(
-            static_cast<int64_t>(std::pow(NUM2, static_cast<int64_t>(std::log2(tileSize)))),
-            static_cast<int64_t>(std::pow(NUM2, static_cast<int64_t>(std::log2(maxInputShape[inputDims - 1 - dim])))));
-        curTile = ((maxInputShape[inputDims - 1 - dim] > curTile) && (dim == 0)) ?
-                      std::gcd(curTile, maxInputShape[inputDims - 1 - dim]) :
-                      curTile;
-        curTile = (curTile != 0) ? curTile : 1;
-        vectorTilesNew[inputDims - 1 - dim] = curTile;
-        tileSize /= curTile;
-    }
-
-    auto perm = isForward ? opNew->GetVectorIntAttribute<int>(OP_ATTR_PREFIX + "shape") :
-                            opInit->GetVectorIntAttribute<int>(OP_ATTR_PREFIX + "shape");
-    VcnhwconvProcessing(
-        opInit, opNew, vectorTilesNew, maxInputShape, perm, maxTypeSize, initTileSize, isForward, false);
-    opNew->GetTileShapeForSetting().SetVecTile(vectorTilesNew);
-
-    if (!visitedBFS[opNew->GetOpMagic()]) {
-        queueBFS.push(opNew);
-    }
-    visitedBFS[opNew->GetOpMagic()] = true;
-}
-
-int64_t TileSizeCalculation(Operation* op, std::vector<int64_t> vectorTilesOld, int64_t maxTypeSize)
-{
-    if (maxTypeSize == 0) {
-        APASS_LOG_ERROR_F(Elements::Operation, "maxTypeSize = 0, division by zero");
-    }
-    int64_t tileSize = std::accumulate(vectorTilesOld.begin(), vectorTilesOld.end(), 1, std::multiplies<int64_t>());
-    tileSize = (op->GetOpcode() == Opcode::OP_TRANSPOSE_VNCHWCONV) ? tileSize * (BLOCK_SIZE / maxTypeSize) : tileSize;
-    while (tileSize < MIN_TILE_SIZE) {
-        tileSize *= NUM2;
-    }
-    while (tileSize > (MAX_TILE_SIZE / maxTypeSize)) {
-        tileSize /= NUM2;
-    }
-    return tileSize;
-}
-
-void TileShapeSetting(
-    Operation* opBase, Operation* opNew, std::vector<int64_t> vectorTilesOld, std::vector<int64_t> maxInputShape,
-    int64_t tileSize, int64_t inputTypeSize, size_t inputDims, size_t outputDims)
-{
-    std::vector<int64_t> vectorTilesNew;
-    auto iterLastDim = wholeLastDimOps.find(opBase->GetOpcode());
-    auto iterRowDim = reduceOps.find(opBase->GetOpcode());
-    auto iterUniqueDim = uniqueOps.find(opBase->GetOpcode());
-    if (inputTypeSize == 0) {
-        APASS_LOG_ERROR_F(Elements::Operation, "inputTypeSize = 0, division by zero");
-    }
-
-    // Last Dim processing
-    int64_t curTile =
-        (iterUniqueDim != uniqueOps.end()) ?
-            std::max(
-                std::max(vectorTilesOld[outputDims - 1], BLOCK_SIZE / inputTypeSize),
-                static_cast<int64_t>(std::pow(
-                    NUM2, static_cast<int64_t>(
-                              std::log2(std::min(maxInputShape[inputDims - 1], BYTES_PER_REPEAT / inputTypeSize)))))) :
-            vectorTilesOld[outputDims - 1]; // For ops with InputShape = OutputShape just set previous tileShape
-    curTile = (maxInputShape[inputDims - 1] > curTile) ?
-                  std::max(std::gcd(curTile, maxInputShape[inputDims - 1]), BLOCK_SIZE / inputTypeSize) :
-                  curTile; // GCD for VIEW and ASSEMBLE ops
-    curTile = (iterLastDim != wholeLastDimOps.end()) ?
-                  std::max(std::max(curTile, maxInputShape[inputDims - 1]), BLOCK_SIZE / inputTypeSize) :
-                  curTile; // TileShape[lastDim] = InputShape[lastDim]
-    curTile =
-        ((iterRowDim != reduceOps.end()) && (maxInputShape[inputDims - 1] >= (UINT8MAX * BLOCK_SIZE / inputTypeSize))) ?
-            std::min(
-                static_cast<int64_t>(
-                    std::pow(NUM2, static_cast<int64_t>(std::log2(UINT8MAX * BLOCK_SIZE / inputTypeSize)))),
-                curTile) :
-            curTile;                       // Consider additional restriction for REDUCE ops
-    curTile = std::min(tileSize, curTile); // UB overflow condition
-    curTile = (curTile != 0) ? curTile : 1;
-    vectorTilesNew.push_back(curTile);
-    tileSize /= curTile;
-
-    // Other Dims processing
-    for (size_t dim = 1; dim < inputDims; dim++) {
-        curTile = (iterUniqueDim != uniqueOps.end()) ?
-                      ((maxInputShape[inputDims - 1 - dim] != -1) ?
-                           std::min(
-                               static_cast<int64_t>(std::pow(NUM2, static_cast<int64_t>(std::log2(tileSize)))),
-                               static_cast<int64_t>(std::pow(
-                                   NUM2, static_cast<int64_t>(std::log2(maxInputShape[inputDims - 1 - dim]))))) :
-                           static_cast<int64_t>(std::pow(NUM2, static_cast<int64_t>(std::log2(tileSize))))) :
-                      std::min(
-                          static_cast<int64_t>(std::pow(NUM2, static_cast<int64_t>(std::log2(tileSize)))),
-                          vectorTilesOld[outputDims - 1 - dim]); // For ops with InputShape = OutputShape just set
-                                                                 // previous tileShape
-        curTile = (curTile != 0) ? curTile : 1;
-        vectorTilesNew.push_back(curTile);
-        tileSize /= curTile;
-    }
-    if (wholeLastDimOps.find(opNew->GetOpcode()) == wholeLastDimOps.end()) {
-        vectorTilesNew[0] *= tileSize;
-    } else if (wholeLastDimOps.find(opNew->GetOpcode()) != wholeLastDimOps.end()) {
-        if (inputDims != 1) {
-            vectorTilesNew[inputDims - 1] *= tileSize;
+        std::vector<int64_t> inpTile(inputDims, 1);
+        inpTile = prodOp->GetTileShape().GetVecTile().tile;
+        // Tile not set yet
+        if ((inpTile.size() == 1) && (inpTile[0] == -1)) {
+            continue;
         }
+        // In all other cases recalculate tile through reshape/transpose operations
+        RecalcTileThroughOps(prodOp, inpTile, true);
+        inputHasTile[inp] = true;
+        // Evaluate new tile according to all existing tiles
+        GatherFromTiles(op, vectorTilesNew, inpTile, outputDims, inp, inputHasTile);
     }
-    std::reverse(vectorTilesNew.begin(), vectorTilesNew.end());
-    opNew->GetTileShapeForSetting().SetVecTile(vectorTilesNew);
-}
-
-void CubeDepsProcessing(
-    Operation* cubeOp, Operation* opInit, Operation* opBase, Operation* opNew, bool isFirst, bool isSecond)
-{
-    std::vector<int64_t> vectorTilesCube;
-    auto& cubeTile = cubeOp->GetTileShape().GetCubeTile();
-    int magicA = cubeOp->GetIOperands()[0]->magic;
-    int magicB = cubeOp->GetIOperands()[1]->magic;
-    int magicC = cubeOp->GetOOperands()[0]->magic;
-
-    std::vector<int64_t> vectorTilesA = {cubeTile.m[0], cubeTile.k[0]};
-    std::vector<int64_t> vectorTilesB = {cubeTile.k[0], cubeTile.n[0]};
-    std::vector<int64_t> vectorTilesC = {cubeTile.m[0], cubeTile.n[0]};
-
-    if (isFirst) {
-        if ((opBase->GetOOperands()[0]->magic == magicA) || (opBase->GetOOperands()[0]->magic == magicB)) {
-            if (opInit->GetOpcodeStr() == "At_MUL_B" || opInit->GetOpcodeStr() == "At_MUL_Bt") {
-                std::reverse(vectorTilesA.begin(), vectorTilesA.end());
-            }
-            if (opInit->GetOpcodeStr() == "A_MUL_Bt" || opInit->GetOpcodeStr() == "At_MUL_Bt") {
-                std::reverse(vectorTilesB.begin(), vectorTilesB.end());
-            }
-
-            vectorTilesCube = (vectorTilesA[1] > vectorTilesB[1]) ? vectorTilesA : vectorTilesB;
-            opInit->GetTileShapeForSetting().SetVecTile(vectorTilesCube); // Set vector tiles for Matmuls
-        }
-    }
-    if (isSecond) {
-        if (opNew->GetIOperands()[0]->magic == magicC) {
-            vectorTilesCube = vectorTilesC;
-            opInit->GetTileShapeForSetting().SetVecTile(vectorTilesCube); // Set vector tiles for Matmuls
-        }
+    GatherFromShapes(op, vectorTilesNew, outputDims, inputHasTile);
+    if (op->GetOpcode() != Opcode::OP_GATHER_IN_L1) {
+        AdjustTileToUB(op, vectorTilesNew);
+    } else {
+        AdjustGatherTileToL1(op, vectorTilesNew);
     }
 }
-
-bool Propagation(
-    Operation* cubeOp, Operation* opInit, Operation* opBase, Operation* opNew, std::queue<Operation*>& queueBFS,
-    std::map<int, bool>& visitedBFS, bool isFirst, bool isSecond, bool isReduce, bool isForward)
+void DefaultTileSetting(Operation* op, const std::vector<int64_t>& vectorTilesOld, std::vector<int64_t>& vectorTilesNew)
 {
-    // Direct cube dependencies proccesing
-    if (isFirst || isSecond) {
-        CubeDepsProcessing(cubeOp, opInit, opBase, opNew, isFirst, isSecond);
-    }
-
-    size_t inputsNum = opNew->GetIOperands().size();
-    size_t outputsNum = (isForward) ? opBase->GetIOperands().size() : opBase->GetOOperands().size();
-    size_t inputDims = DimsCalculation(opNew, inputsNum, true);
-    size_t outputDims = DimsCalculation(opBase, outputsNum, isForward);
-    int64_t inputTypeSize = BytesOf(opNew->GetIOperands()[0]->tensor->GetDataType());
-    int64_t outputTypeSize = BytesOf(opNew->GetOOperands()[0]->tensor->GetDataType());
-    int64_t maxTypeSize = std::max(inputTypeSize, outputTypeSize);
-    std::vector<int64_t> vectorTilesOld = opInit->GetTileShape().GetVecTile().tile;
-    if (inputTypeSize == 0 || maxTypeSize == 0) {
-        APASS_LOG_ERROR_F(Elements::Operation, "typeSize = 0, division by zero");
-    }
-    if (isReduce) {
-        if (reduceOps.find(opNew->GetOpcode()) != reduceOps.end()) {
-            return true;
-        }
-    }
-
-    std::vector<int64_t> maxInputShape = MaxInputShapeCalculation(opNew, inputsNum, inputDims, maxTypeSize);
-    int64_t tileSize = TileSizeCalculation(opNew, vectorTilesOld, maxTypeSize);
-    auto iterTransposeDim = transposeOps.find(opBase->GetOpcode());
-    if (iterTransposeDim != transposeOps.end()) {
-        TransposeTileSetting(
-            opInit, opBase, opNew, vectorTilesOld, maxInputShape, queueBFS, visitedBFS, maxTypeSize, tileSize,
-            isForward);
-        return true;
-    }
-
-    if (opBase->GetOpcode() == Opcode::OP_RESHAPE) {
-        ReshapeTileSetting(
-            opInit, opBase, opNew, vectorTilesOld, maxInputShape, queueBFS, visitedBFS, inputDims, maxTypeSize,
-            tileSize, isForward);
-        return true;
-    }
-
-    if (isReduce) {
-        // Broadcast tiles from Reduce op directly
-        auto iterRowDim = reduceOps.find(opBase->GetOpcode());
-        if (iterRowDim != reduceOps.end()) {
-            opNew->GetTileShapeForSetting().SetVecTile(vectorTilesOld);
-            if (!visitedBFS[opNew->GetOpMagic()]) {
-                queueBFS.push(opNew);
-            }
-            visitedBFS[opNew->GetOpMagic()] = true;
-            return true;
-        }
-    }
-
-    // Calculate and set tiles
-    TileShapeSetting(opBase, opNew, vectorTilesOld, maxInputShape, tileSize, inputTypeSize, inputDims, outputDims);
-    return false;
-}
-
-std::pair<std::vector<int64_t>, std::vector<DataType>> ShapeAndTypeSetting(
-    Operation* op, int64_t& shapeM, int64_t& shapeK, int64_t& shapeN)
-{
-    if (op->GetOpcodeStr() == "A_MUL_B") { // [m, k] * [k, n]
-        shapeM = op->GetIOperands()[0]->shape[0];
-        shapeK = op->GetIOperands()[0]->shape[1];
-        shapeN = op->GetIOperands()[1]->shape[1];
-    }
-    if (op->GetOpcodeStr() == "A_MUL_Bt") { // [m, k] * [n, k]
-        shapeM = op->GetIOperands()[0]->shape[0];
-        shapeK = op->GetIOperands()[0]->shape[1];
-        shapeN = op->GetIOperands()[1]->shape[0];
-    }
-    if (op->GetOpcodeStr() == "At_MUL_B") { // [k, m] * [k, n]
-        shapeM = op->GetIOperands()[0]->shape[1];
-        shapeK = op->GetIOperands()[0]->shape[0];
-        shapeN = op->GetIOperands()[1]->shape[1];
-    }
-    if (op->GetOpcodeStr() == "At_MUL_Bt") { // [k, m] * [n, k]
-        shapeM = op->GetIOperands()[0]->shape[1];
-        shapeK = op->GetIOperands()[0]->shape[0];
-        shapeN = op->GetIOperands()[1]->shape[0];
-    }
     DataType inputType = op->GetIOperands()[0]->tensor->GetDataType();
-    DataType outputType = (IsFloat(op->GetOOperands()[0])) ? DataType::DT_FP32 : DataType::DT_INT32;
-    return {{shapeM, shapeK, shapeN}, {inputType, outputType}};
+    int64_t inputTypeSize = BytesOf(inputType);
+    vectorTilesNew.resize(vectorTilesOld.size());
+    vectorTilesNew = vectorTilesOld;
+    ASSERT(inputTypeSize != 0);
+    uint32_t typedBlock = BLOCK_SIZE / inputTypeSize;
+    if (vectorTilesNew[vectorTilesNew.size() - 1] % typedBlock != 0) {
+        vectorTilesNew[vectorTilesNew.size() - 1] =
+            (vectorTilesNew[vectorTilesNew.size() - 1] + typedBlock - 1) / typedBlock * typedBlock;
+    }
+    AdjustTileToUB(op, vectorTilesNew);
 }
 
-void UniqueTilesFilling(
-    Function& function, std::map<std::pair<std::vector<int64_t>, std::vector<DataType>>, int64_t>& uniqueTiles,
-    std::pair<std::vector<int64_t>, std::vector<DataType>>& curShapeAndType, int64_t& shapeM, int64_t& shapeK,
-    int64_t& shapeN)
+void ExpandTileSetting(Operation* op, const std::vector<int64_t>& vectorTilesOld, std::vector<int64_t>& vectorTilesNew)
 {
-    for (auto& op : function.Operations()) {
-        if (op.GetCoreTypeStr() == "AIC") {
-            // Calculate ShapeAndType for each operation
-            curShapeAndType = ShapeAndTypeSetting(&op, shapeM, shapeN, shapeK);
+    DataType inputType = op->GetIOperands()[0]->tensor->GetDataType();
+    int64_t inputTypeSize = BytesOf(inputType);
+    vectorTilesNew.resize(vectorTilesOld.size());
+    vectorTilesNew = (vectorTilesOld[vectorTilesOld.size() - 1] == 1) ? op->GetOOperands()[0]->shape : vectorTilesOld;
+    ASSERT(inputTypeSize != 0);
+    uint32_t typedBlock = BLOCK_SIZE / inputTypeSize;
+    if (vectorTilesNew[vectorTilesNew.size() - 1] % typedBlock != 0) {
+        vectorTilesNew[vectorTilesNew.size() - 1] =
+            (vectorTilesNew[vectorTilesNew.size() - 1] + typedBlock - 1) / typedBlock * typedBlock;
+    }
+    AdjustTileToUB(op, vectorTilesNew);
+}
 
-            // Find set of tiles by key
-            auto it = uniqueTiles.find(curShapeAndType);
-            if (it != uniqueTiles.end()) {
-                uniqueTiles[curShapeAndType]++;
+static int32_t FindReducedDimension(Operation* op, const std::vector<int64_t>& maxInputShape, size_t inputDims)
+{
+    int32_t reducedDim = -1;
+    for (uint32_t i = 0; i < inputDims; i++) {
+        if ((maxInputShape[i] != op->GetOOperands()[0]->shape[i]) && (op->GetOOperands()[0]->shape[i] == 1) &&
+            (reducedDim == -1)) {
+            reducedDim = i;
+        } else if (
+            (maxInputShape[i] != op->GetOOperands()[0]->shape[i]) && (op->GetOOperands()[0]->shape[i] == 1) &&
+            (reducedDim != -1)) {
+            return -2;
+        }
+    }
+    return reducedDim;
+}
+
+static void ProcessOtherDimsForReduce(
+    Operation* op, std::vector<int64_t>& vectorTilesNew, const std::vector<int64_t>& maxInputShape, int32_t reducedDim,
+    size_t inputDims, int64_t tileSize, int64_t inputTypeSize)
+{
+    (void)op;
+    if (inputTypeSize == 0) {
+        return;
+    }
+    bool setBlock = false;
+    int64_t curTile;
+    int64_t blockSizePerType = BLOCK_SIZE / inputTypeSize;
+    for (int64_t dim = inputDims - 1; dim >= 0; dim--) {
+        if (dim == reducedDim) {
+            continue;
+        }
+        curTile = ((reducedDim == (int32_t)(inputDims - 1))) ?
+                      (((maxInputShape[dim] != 1) && (!setBlock)) ? blockSizePerType : 1) :
+                      std::min(FloorPowerOf2(tileSize), FloorPowerOf2(maxInputShape[dim]));
+        if (curTile == blockSizePerType) {
+            if (maxInputShape[dim] < NUM2 * curTile && (tileSize > maxInputShape[dim])) {
+                curTile = maxInputShape[dim];
+            }
+            setBlock = true;
+        }
+        vectorTilesNew[dim] = std::min(FloorPowerOf2(tileSize), curTile);
+        tileSize /= vectorTilesNew[dim];
+    }
+}
+
+void ReduceTileSetting(Operation* op, std::vector<int64_t>& vectorTilesNew)
+{
+    size_t inputsNum = op->GetIOperands().size();
+    size_t outputsNum = op->GetOOperands().size();
+    DataType inputType = op->GetIOperands()[0]->tensor->GetDataType();
+    DataType outputType = op->GetOOperands()[0]->tensor->GetDataType();
+    int64_t inputTypeSize = BytesOf(inputType);
+    int64_t outputTypeSize = BytesOf(outputType);
+    int64_t maxTypeSize = std::max(inputTypeSize, outputTypeSize);
+    size_t inputDims = DimsCalculation(op, inputsNum, true);
+    size_t outputDims = DimsCalculation(op, outputsNum, false);
+    const uint64_t UB_MAX_SIZE = Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB);
+    uint32_t argsCount = NUM3;
+    ASSERT(maxTypeSize != 0);
+    ASSERT(inputTypeSize != 0);
+    ASSERT(argsCount != 0);
+    int64_t tileSize = UB_MAX_SIZE / (maxTypeSize * argsCount);
+    std::vector<int64_t> maxInputShape = MaxInputShapeCalculation(op, inputsNum, inputDims);
+    ASSERT(outputsNum == 1) << "Reduce have several outputs";
+    ASSERT(inputDims == outputDims) << "Reduce have different shape size for input and output";
+    int32_t reducedDim = FindReducedDimension(op, maxInputShape, inputDims);
+    if (reducedDim == -2) {
+        return;
+    }
+    ASSERT(reducedDim >= 0) << "Not found reduced dims";
+    int64_t curTile = (reducedDim == (int32_t)(inputDims - 1)) ?
+                          std::max(maxInputShape[reducedDim], BLOCK_SIZE / inputTypeSize) :
+                          maxInputShape[reducedDim];
+    vectorTilesNew[reducedDim] = curTile;
+    tileSize /= curTile;
+    ProcessOtherDimsForReduce(op, vectorTilesNew, maxInputShape, reducedDim, inputDims, tileSize, inputTypeSize);
+}
+
+void IndexInOutTileSetting(Operation* op, std::vector<int64_t>& vectorTilesNew)
+{
+    size_t inputsNum = op->GetIOperands().size();
+    size_t inputDims = DimsCalculation(op, inputsNum, true);
+    DataType inputType = op->GetIOperands()[0]->tensor->GetDataType();
+    int64_t inputTypeSize = BytesOf(inputType);
+    ASSERT(inputTypeSize != 0);
+    std::vector<int64_t> maxInputShape = MaxInputShapeCalculation(op, inputsNum, inputDims);
+    int64_t curTile = std::max(maxInputShape[inputDims - 1], BLOCK_SIZE / inputTypeSize);
+    curTile = (maxInputShape[inputDims - 1] >= (UINT8MAX * BLOCK_SIZE / inputTypeSize)) ?
+                  std::min(
+                      static_cast<int64_t>(FloorPowerOf2(UINT8MAX * BLOCK_SIZE / inputTypeSize)),
+                      curTile) :
+                  curTile; // Consider additional restriction for REDUCE ops
+    // temporal solution, check if it s is good
+    vectorTilesNew[inputDims - 1] = curTile;
+    auto curProd = curTile;
+    for (size_t di = 0; di < inputDims - 1; di++) {
+        if (op->GetIOperands()[0]->shape[di] != 1) {
+            if (curProd > MIN_TILE_SIZE) {
+                vectorTilesNew[di] = 1;
             } else {
-                uniqueTiles[curShapeAndType] = 1;
+                vectorTilesNew[di] = std::max(
+                    ((MIN_TILE_SIZE / curProd) / (BLOCK_SIZE / inputTypeSize)) * (BLOCK_SIZE / inputTypeSize),
+                    (long int)1);
+                if (scatterOps.find(op->GetOpcode()) != scatterOps.end() && di == inputDims - NUM2) {
+                    vectorTilesNew[di] = std::max<int64_t>(
+                        1, std::min(
+                            vectorTilesNew[di] / TRANSPOSE_NUM * TRANSPOSE_NUM,
+                            (maxInputShape[di] - 1) / TRANSPOSE_NUM * TRANSPOSE_NUM));
+                }
+                vectorTilesNew[di] = std::min(vectorTilesNew[di], op->GetIOperands()[0]->shape[di]);
+                curProd *= vectorTilesNew[di];
+            }
+        } else {
+            vectorTilesNew[di] = 1;
+        }
+    }
+}
+
+void TopkTileSetting(Operation* op, std::vector<int64_t>& vectorTilesNew)
+{
+    size_t inputsNum = op->GetIOperands().size();
+    size_t outputsNum = op->GetOOperands().size();
+    size_t inputDims = DimsCalculation(op, inputsNum, true);
+    size_t outputDims = DimsCalculation(op, outputsNum, false);
+    DataType inputType = op->GetIOperands()[0]->tensor->GetDataType();
+    DataType outputType = op->GetOOperands()[0]->tensor->GetDataType();
+    int64_t inputTypeSize = BytesOf(inputType);
+    int64_t outputTypeSize = BytesOf(outputType);
+    int64_t maxTypeSize = std::max(inputTypeSize, outputTypeSize);
+    const uint64_t UB_MAX_SIZE = Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB);
+    uint32_t argsCount = NUM3 + NUM4; // input + 2 outputs + temporal buffer (4 inputs)
+    ASSERT(inputDims == outputDims) << "Reduce have different shape size for input and output";
+    ASSERT(maxTypeSize != 0);
+    ASSERT(argsCount != 0);
+    ASSERT(op->GetIOperands().size() == 1);
+    ASSERT(op->GetOOperands().size() >= 1);
+    int64_t tileSize = UB_MAX_SIZE / (maxTypeSize * argsCount);
+    auto maxInputShape = op->GetIOperands()[0]->GetShape();
+    int32_t reducedDim = -1;
+    for (uint32_t i = 0; i < inputDims; i++) {
+        if ((maxInputShape[i] != op->GetOOperands()[0]->shape[i]) && (reducedDim == -1)) {
+            reducedDim = i;
+        } else if ((maxInputShape[i] != op->GetOOperands()[0]->shape[i]) && (reducedDim != -1)) {
+            return;
+        }
+    }
+    if (reducedDim == -1) {
+        vectorTilesNew = maxInputShape;
+        return;
+    }
+    vectorTilesNew[reducedDim] =
+        std::min(NUM2 * op->GetOOperands()[0]->GetShape()[reducedDim], maxInputShape[reducedDim]);
+    vectorTilesNew[reducedDim] = std::min(tileSize, vectorTilesNew[reducedDim]);
+    // Other Dims processing
+    for (int64_t dim = inputDims - 1; dim >= 0; dim--) {
+        if (dim == reducedDim) {
+            continue;
+        }
+        vectorTilesNew[dim] = 1;
+    }
+}
+
+void AdaptTileToRealOutputShape(Operation* op, int opBaseMagic, std::vector<int64_t>& vectorTiles)
+{
+    size_t outputsNum = op->GetOOperands().size();
+    size_t outputDims = DimsCalculation(op, outputsNum, false);
+    std::vector<int64_t> maxOutShape(outputDims, -1);
+    for (auto outOp : op->GetOOperands()) {
+        bool outToOpbase = false;
+        for (auto c : outOp->GetConsumers()) {
+            if (c->GetOpMagic() == opBaseMagic) {
+                outToOpbase = true;
+                break;
+            }
+        }
+        if (!outToOpbase) {
+            continue;
+        }
+        for (size_t di = 0; di < outOp->shape.size(); di++) {
+            maxOutShape[di] = (outOp->shape[di] != -1) ? std::max(maxOutShape[di], outOp->shape[di]) : maxOutShape[di];
+        }
+    }
+    for (size_t s = vectorTiles.size(); s < maxOutShape.size(); s++) {
+        vectorTiles.insert(vectorTiles.begin(), 1);
+    }
+    vectorTiles.resize(maxOutShape.size()); // resize is required for case if vectorTiles.size > shape.size
+    for (size_t di = 0; di < vectorTiles.size(); di++) {
+        vectorTiles[di] = (maxOutShape[di] != -1) ? std::min(maxOutShape[di], vectorTiles[di]) : vectorTiles[di];
+    }
+}
+
+bool IsBroadcastedShapes(Operation* op)
+{
+    auto inputsNum = op->GetIOperands().size();
+    auto outputsNum = op->GetOOperands().size();
+    if ((inputsNum <= 1) || (outputsNum == 0)) {
+        return false;
+    }
+    Shape outShape = op->GetOOperands()[0]->GetShape();
+    for (auto out : op->GetOOperands()) {
+        if (outShape.size() != out->GetShape().size()) {
+            return false;
+        }
+        for (size_t di = 0; di < outShape.size(); di++) {
+            if (outShape[di] != out->GetShape()[di]) {
+                return false;
             }
         }
     }
-}
-
-void SetHeuristicCubeTiles(Function& function, std::unordered_set<Operation*> cubeOperations)
-{
-    std::map<std::pair<std::vector<int64_t>, std::vector<DataType>>, int64_t> uniqueTiles;
-    std::pair<std::vector<int64_t>, std::vector<DataType>> curShapeAndType = {
-        {0, 0, 0}, {DataType::DT_FP16, DataType::DT_FP16}}; // shapeM, shapeK, shapeN, InputType, OutputType
-
-    // cubeL1ReuseSetting value packs (count, side); strip the matrix-side part to get count.
-    int64_t cubeL1Reuse = (function.paramConfigs_.cubeL1ReuseSetting.size() == 1 &&
-                           function.paramConfigs_.cubeL1ReuseSetting.begin()->first == -1) ?
-                              (function.paramConfigs_.cubeL1ReuseSetting.begin()->second % L1_REUSE_SIDE_BASE) :
-                              1;
-    int64_t cubeNBuffer = (function.paramConfigs_.cubeNBufferSetting.size() == 1 &&
-                           function.paramConfigs_.cubeNBufferSetting.begin()->first == -1) ?
-                              function.paramConfigs_.cubeNBufferSetting.begin()->second :
-                              1;
-    int64_t shapeM = 0, shapeK = 0, shapeN = 0;
-    UniqueTilesFilling(function, uniqueTiles, curShapeAndType, shapeM, shapeK, shapeN);
-
-    // Find and set heuristic cube tile shapes
-    std::map<std::pair<std::vector<int64_t>, std::vector<DataType>>, std::vector<int64_t>> resultCubeTilesAndInfo;
-    for (auto& [shapeAndTypeInfo, numOfMatmuls] : uniqueTiles) {
-        std::vector<int64_t> resultCubeTiles =
-            FindAndSetCubeTileShapes(shapeAndTypeInfo, numOfMatmuls, cubeL1Reuse, cubeNBuffer);
-        resultCubeTilesAndInfo[shapeAndTypeInfo] = resultCubeTiles;
-    }
-
-    std::array<int64_t, MAX_MDIM> m = {0, 0};
-    std::array<int64_t, MAX_KDIM> k = {0, 0, 0};
-    std::array<int64_t, MAX_NDIM> n = {0, 0};
-
-    for (auto& op : cubeOperations) {
-        // Calculate ShapeAndType for each operation
-        curShapeAndType = ShapeAndTypeSetting(op, shapeM, shapeN, shapeK);
-
-        m[0] = resultCubeTilesAndInfo[curShapeAndType][M_DIM];
-        k[0] = resultCubeTilesAndInfo[curShapeAndType][K_DIM];
-        n[0] = resultCubeTilesAndInfo[curShapeAndType][N_DIM];
-
-        // The algorithm calculates tiles for L0, let's assume that tiles for L1 are the same
-        m[1] = m[0];
-        k[1] = k[0];
-        k[MAX_KDIM - 1] = k[0];
-        n[1] = n[0];
-
-        // Set new tiles for each operation (M = m, N = n, K = k)
-        op->GetTileShapeForSetting().SetCubeTile(m, k, n);
-    }
-}
-
-std::vector<Operation*> FordBellman(
-    Function& function, std::unordered_set<Operation*> cubeOperations, std::map<int, int>& subgrDepthMap)
-{
-    // Create edges
-    std::vector<std::pair<int, int>> edges;
-    for (auto& op : function.Operations()) {
-        for (auto consumerOp : op.ConsumerOps()) {
-            edges.push_back({consumerOp->GetOpMagic(), op.GetOpMagic()});
+    for (auto inp : op->GetIOperands()) {
+        auto inpShape = inp->GetShape();
+        if (inpShape.size() != outShape.size()) {
+            return false;
+        }
+        for (size_t di = 0; di < outShape.size(); di++) {
+            if (outShape[di] % inpShape[di] != 0) {
+                return false;
+            }
         }
     }
+    return true;
+}
 
-    // Create lastVertices
-    std::vector<int> lastVertices;
-    for (auto& op : function.Operations()) {
-        if (op.ConsumerOps().size() == 0 && op.ProducerOps().size() != 0) {
-            lastVertices.push_back(op.GetOpMagic());
+void AlignLastDim(Operation* op, std::vector<int64_t>& vectorTiles)
+{
+    DataType inputType = op->GetIOperands()[0]->tensor->GetDataType();
+    int64_t inputTypeSize = BytesOf(inputType);
+    if (inputTypeSize == 0) {
+        APASS_LOG_ERROR_F(Elements::Operation, "inputTypeSize is zero in AlignLastDim, cannot divide");
+        return;
+    }
+    int64_t lastDim = std::max(vectorTiles[vectorTiles.size() - 1], BLOCK_SIZE / inputTypeSize);
+    if (lastDim != vectorTiles[vectorTiles.size() - 1]) {
+        size_t inputsNum = op->GetIOperands().size();
+        size_t outputsNum = op->GetOOperands().size();
+        uint32_t argsCount = inputsNum + outputsNum;
+        int64_t tileRatio = static_cast<int64_t>(
+            std::ceil(static_cast<double>(lastDim) / static_cast<double>(vectorTiles[vectorTiles.size() - 1])));
+        vectorTiles[vectorTiles.size() - 1] = lastDim;
+        auto wholeSize = std::accumulate(vectorTiles.begin(), vectorTiles.end(), 1, std::multiplies<int64_t>());
+        const uint64_t UB_MAX_SIZE = Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB);
+        int64_t maxTile = (UB_MAX_SIZE / inputTypeSize / argsCount);
+        while (wholeSize > maxTile) {
+            for (size_t di = 0; di < op->GetIOperands()[0]->GetShape().size() - 1; di++) {
+                int64_t curTileRatio = std::min(vectorTiles[di], tileRatio);
+                if (curTileRatio == 0) {
+                    APASS_LOG_ERROR_F(Elements::Operation, "curTileRatio is zero in AlignLastDim loop, cannot divide");
+                    return;
+                }
+                vectorTiles[di] /= curTileRatio;
+                tileRatio /= curTileRatio;
+            }
+            wholeSize = std::accumulate(vectorTiles.begin(), vectorTiles.end(), 1, std::multiplies<int64_t>());
         }
     }
-
-    // Define depth for each node using FordBellman algorithm
-    for (size_t idx = 0; idx < lastVertices.size(); idx++) {
-        edges.push_back({-1, lastVertices[idx]});
-    }
-    auto d = FordBellman(edges, function);
-    for (auto& [magic, depth] : d) {
-        subgrDepthMap[magic] = std::max(subgrDepthMap[magic], -depth - 1);
-    }
-    subgrDepthMap.erase(-1);
-    edges.clear();
-    lastVertices.clear();
-
-    // Sort cube operations by depth
-    std::vector<std::pair<Operation*, int>> cubeTmpOperations;
-    for (auto cubeOp : cubeOperations) {
-        cubeTmpOperations.push_back(std::make_pair(cubeOp, subgrDepthMap[cubeOp->GetOpMagic()]));
-    }
-    std::sort(
-        cubeTmpOperations.begin(), cubeTmpOperations.end(),
-        [](const std::pair<Operation*, int>& x, const std::pair<Operation*, int>& y) { return x.second < y.second; });
-
-    std::vector<Operation*> cubeOrderedOperations;
-    for (auto op : cubeTmpOperations) {
-        cubeOrderedOperations.push_back(op.first);
-    }
-    return cubeOrderedOperations;
 }
 
-bool DuplicateTileSetting(
-    Operation* opInit, Operation* opNew, std::queue<Operation*>& queueBFS, std::map<int, bool>& visitedBFS)
+void BackPropagate(Operation* producerOp, Operation* op)
 {
-    std::vector<int64_t> vectorTilesNew;
-    if (opNew->GetIOperands().size() == 0) {
-        vectorTilesNew = opInit->GetTileShape().GetVecTile().tile;
-        opNew->GetTileShapeForSetting().SetVecTile(vectorTilesNew);
-        if (!visitedBFS[opNew->GetOpMagic()]) {
-            queueBFS.push(opNew);
-        }
-        visitedBFS[opNew->GetOpMagic()] = true;
-        return true;
+    size_t inputsNum = producerOp->GetIOperands().size();
+    size_t inputDims = DimsCalculation(producerOp, inputsNum, true);
+    std::vector<int64_t> vectorTilesNew(inputDims, -1);
+    std::vector<int64_t> vectorTilesOld = op->GetTileShape().GetVecTile().tile;
+    if (producerOp->GetOpcode() == Opcode::OP_REDUCE_ACC) {
+        return;
     }
-    return false;
+    // Correct vectorTileOld to real shape of output
+    if (gatherVectorOps.find(op->GetOpcode()) == gatherVectorOps.end() &&
+        gatherMoveOps.find(op->GetOpcode()) == gatherMoveOps.end()) {
+        AdaptTileToRealOutputShape(producerOp, op->GetOpMagic(), vectorTilesOld);
+    } else {
+        TileThroughGather(producerOp, op, vectorTilesOld);
+    }
+    // Recalculate tile from tile of output to tile of input tensor (backward)
+    RecalcTileThroughOps(producerOp, vectorTilesOld, false);
+    // Map lookup for backward tile setting handlers
+    auto handlerIt = backwardTileHandlers.find(producerOp->GetOpcode());
+    if (handlerIt != backwardTileHandlers.end()) {
+        handlerIt->second(producerOp, vectorTilesOld, vectorTilesNew);
+    } else {
+        DefaultTileSetting(producerOp, vectorTilesOld, vectorTilesNew);
+    }
+    if (OpcodeManager::Inst().IsCopyInOrOut(producerOp->GetOpcode())) {
+        AlignLastDim(producerOp, vectorTilesNew);
+    }
+    producerOp->GetTileShapeForSetting().SetVecTile(vectorTilesNew);
+    if (producerOp->GetOpcode() == Opcode::OP_GATHER_IN_L1) {
+        SetGatherInL1CubeTile(producerOp, vectorTilesNew);
+    }
 }
 
-void UpdateBFS(Operation* op, std::queue<Operation*>& queueBFS, std::map<int, bool>& visitedBFS)
+void Propagate(Operation* consumerOp, Operation* op)
 {
-    if (!visitedBFS[op->GetOpMagic()]) {
-        queueBFS.push(op);
+    size_t inputsNum = consumerOp->GetIOperands().size();
+    size_t inputDims = DimsCalculation(consumerOp, inputsNum, true);
+    std::vector<int64_t> maxInputShape = MaxInputShapeCalculation(consumerOp, inputsNum, inputDims);
+    std::vector<int64_t> vectorTilesNew(inputDims, -1);
+    std::vector<int64_t> vectorTilesOld = op->GetTileShape().GetVecTile().tile;
+    // Recalculate tile through reshape/transpose/view/assemble operations
+    RecalcTileThroughOps(op, vectorTilesOld, true);
+    AdaptTileToRealOutputShape(op, consumerOp->GetOpMagic(), vectorTilesOld);
+    // Map lookup for forward tile setting handlers first
+    auto handlerIt = forwardTileHandlers.find(consumerOp->GetOpcode());
+    if (handlerIt != forwardTileHandlers.end()) {
+        handlerIt->second(consumerOp, vectorTilesOld, vectorTilesNew);
+    } else if (IsBroadcastedShapes(consumerOp)) {
+        OpWithSeveralInputsTileSetting(consumerOp, vectorTilesOld, vectorTilesNew);
+    } else {
+        DefaultTileSetting(consumerOp, vectorTilesOld, vectorTilesNew);
     }
-    visitedBFS[op->GetOpMagic()] = true;
+    if (gatherVectorOps.find(consumerOp->GetOpcode()) == gatherVectorOps.end() &&
+        consumerOp->GetOpcode() != Opcode::OP_EXPAND) {
+        AdaptTileToRealInputShape(consumerOp, vectorTilesNew);
+    }
+    if (OpcodeManager::Inst().IsCopyInOrOut(consumerOp->GetOpcode())) {
+        AlignLastDim(consumerOp, vectorTilesNew);
+    } else if (OpcodeManager::Inst().IsCopyInOrOut(op->GetOpcode())) {
+        AlignLastDim(op, vectorTilesNew);
+        op->GetTileShapeForSetting().SetVecTile(vectorTilesNew);
+    }
+    consumerOp->GetTileShapeForSetting().SetVecTile(vectorTilesNew);
+    if (consumerOp->GetOpcode() == Opcode::OP_GATHER_IN_L1) {
+        SetGatherInL1CubeTile(consumerOp, vectorTilesNew);
+    }
 }
 
-void BackwardCubePropagation(
-    std::vector<Operation*> cubeOrderedOperations, std::queue<Operation*>& queueBFS, std::map<int, bool>& visitedBFS)
+void BackwardPropagation(
+    std::vector<Operation*> orderedOperations, std::queue<Operation*>& queueBFS, std::map<int, bool>& visitedBFS)
 {
-    for (auto cubeOp : cubeOrderedOperations) {
+    for (auto cubeOp : orderedOperations) {
         queueBFS.push(cubeOp);
         while (!queueBFS.empty()) {
             auto op = queueBFS.front();
             queueBFS.pop();
             for (auto producerOp : op->ProducerOps()) {
+                if (cubeMMOps.find(producerOp->GetOpcode()) != cubeMMOps.end() ||
+                    singletonTileHandlers.find(producerOp->GetOpcode()) != singletonTileHandlers.end()) {
+                    continue;
+                }
                 bool isContinue = DuplicateTileSetting(op, producerOp, queueBFS, visitedBFS);
                 if (isContinue) {
                     continue;
                 }
-
-                // Call propagation
-                isContinue =
-                    Propagation(cubeOp, op, producerOp, producerOp, queueBFS, visitedBFS, true, false, false, false);
-                if (isContinue) {
-                    continue;
+                if (cubeMMOps.find(op->GetOpcode()) != cubeMMOps.end()) {
+                    CubeInDepsProcessing(op, producerOp);
                 }
+                BackPropagate(producerOp, op);
 
                 // Update queueBFS and visitedBFS
                 UpdateBFS(producerOp, queueBFS, visitedBFS);
@@ -855,27 +1050,49 @@ void BackwardCubePropagation(
     }
 }
 
-void ForwardCubePropagation(
-    std::vector<Operation*> cubeOrderedOperations, std::queue<Operation*>& queueBFS, std::map<int, bool>& visitedBFS)
+void ForwardPropagation(
+    std::vector<Operation*> orderedOperations, std::queue<Operation*>& queueBFS, std::map<int, bool>& visitedBFS)
 {
-    for (auto cubeOp : cubeOrderedOperations) {
+    for (auto cubeOp : orderedOperations) {
         queueBFS.push(cubeOp);
         while (!queueBFS.empty()) {
             auto op = queueBFS.front();
             queueBFS.pop();
             for (auto consumerOp : op->ConsumerOps()) {
-                bool isVisitedNode = (consumerOp->GetTileShape().GetVecTile()[0] != -1);
-                if (isVisitedNode) {
+                if (cubeMMOps.find(consumerOp->GetOpcode()) != cubeMMOps.end() ||
+                    singletonTileHandlers.find(consumerOp->GetOpcode()) != singletonTileHandlers.end()) {
+                    continue;
+                }
+                // Only skip propagation if op is NOT a cube op and vecTile is unset
+                if ((op->GetTileShape().GetVecTile().size() == 1) && (op->GetTileShape().GetVecTile()[0] == -1) &&
+                    (cubeMMOps.find(op->GetOpcode()) == cubeMMOps.end())) {
+                    UpdateBFS(consumerOp, queueBFS, visitedBFS);
+                    continue;
+                }
+                // For cube ops, set vecTile from cubeTile (m, n dimensions)
+                if (cubeMMOps.find(op->GetOpcode()) != cubeMMOps.end()) {
+                    CubeOutDepsProcessing(op);
+                }
+                auto prevTile = consumerOp->GetTileShape().GetVecTile();
+                // Find the maximum values of the shape dimensions among the outputs, to find the maximum boundary of
+                // the tile values
+                Propagate(consumerOp, op);
+                if ((consumerOp->GetTileShape().GetVecTile().size() == 1) &&
+                    (consumerOp->GetTileShape().GetVecTile()[0] == -1)) {
+                    continue;
+                }
+                if (prevTile.size() != consumerOp->GetTileShape().GetVecTile().size()) {
+                    visitedBFS[consumerOp->GetOpMagic()] = false;
                     // Update queueBFS and visitedBFS
                     UpdateBFS(consumerOp, queueBFS, visitedBFS);
                     continue;
                 }
-
-                // Call propagation
-                bool isContinue =
-                    Propagation(cubeOp, op, op, consumerOp, queueBFS, visitedBFS, false, true, false, true);
-                if (isContinue) {
-                    continue;
+                size_t di = 0;
+                while ((di < prevTile.size()) && (prevTile[di] == consumerOp->GetTileShape().GetVecTile()[di])) {
+                    di++;
+                }
+                if (di < prevTile.size()) {
+                    visitedBFS[consumerOp->GetOpMagic()] = false;
                 }
 
                 // Update queueBFS and visitedBFS
@@ -886,40 +1103,71 @@ void ForwardCubePropagation(
     }
 }
 
+void SetReduceTiles(std::vector<Operation*> reduceOrderedOperations)
+{
+    for (auto op : reduceOrderedOperations) {
+        size_t inputsNum = op->GetIOperands().size();
+        size_t inputDims = DimsCalculation(op, inputsNum, true);
+        std::vector<int64_t> vectorTilesReduce(inputDims, 1);
+        // Find the maximum values of the shape dimensions among the inputs, to find the maximum boundary of the tile
+        // values
+        std::vector<int64_t> maxInputShape = MaxInputShapeCalculation(op, inputsNum, inputDims);
+        auto handlerIt = singletonTileHandlers.find(op->GetOpcode());
+        if (handlerIt != singletonTileHandlers.end()) {
+            handlerIt->second(op, vectorTilesReduce);
+        }
+        op->GetTileShapeForSetting().SetVecTile(vectorTilesReduce);
+    }
+}
+
+static std::vector<int64_t> CalculateDefaultTileSequence(Operation& op, size_t inputDims, int64_t inputTypeSize)
+{
+    if (inputTypeSize == 0) {
+        inputTypeSize = 1;
+    }
+    std::vector<int64_t> tiles;
+    int64_t defaultTileSize = DEFAULT_TILE_SIZE;
+    int64_t curTile = std::min(
+        defaultTileSize, static_cast<int64_t>(std::pow(
+            NUM2, static_cast<int64_t>(std::log2(std::max(
+                op.GetIOperands()[0]->shape[inputDims - 1], BLOCK_SIZE / inputTypeSize))))));
+    curTile = (curTile == 0) ? MIN_TILE_SIZE : curTile;
+    tiles.push_back(curTile);
+    defaultTileSize /= curTile;
+    for (size_t j = 1; j < inputDims; j++) {
+        curTile = std::min(
+            defaultTileSize,
+            static_cast<int64_t>(
+                std::pow(NUM2, static_cast<int64_t>(std::log2(op.GetIOperands()[0]->shape[inputDims - 1 - j])))));
+        curTile = (curTile == 0) ? MIN_TILE_SIZE : curTile;
+        tiles.push_back(curTile);
+        defaultTileSize /= curTile;
+    }
+    std::reverse(tiles.begin(), tiles.end());
+    return tiles;
+}
+
+static void SetTilesForNoConsumerOp(Operation& op)
+{
+    if (op.GetTileShape().GetVecTile()[0] != -1) {
+        return;
+    }
+    if (!IsOperationUBReq(op.GetOpcode()) && !IsOperationL1Req(op.GetOpcode())) {
+        SetFullShapeTiles(op);
+        return;
+    }
+    size_t inputDims = op.GetIOperands()[0]->shape.size();
+    int64_t inputTypeSize = BytesOf(op.GetIOperands()[0]->tensor->GetDataType());
+    std::vector<int64_t> tiles = CalculateDefaultTileSequence(op, inputDims, inputTypeSize);
+    op.GetTileShapeForSetting().SetVecTile(tiles);
+}
+
 std::vector<Operation*> FillNoConsumersOperations(Function& function)
 {
     std::vector<Operation*> noConsumersOperations;
-    std::vector<int64_t> vectorTilesNew;
     for (auto& op : function.Operations()) {
         if (op.ConsumerOps().size() == 0) {
-            vectorTilesNew.clear();
-            size_t inputDims = op.GetIOperands()[0]->shape.size();
-            int64_t inputTypeSize = BytesOf(op.GetIOperands()[0]->tensor->GetDataType());
-            int64_t defaultTileSize = DEFAULT_TILE_SIZE;
-            if (inputTypeSize == 0) {
-                APASS_LOG_ERROR_F(Elements::Operation, "inputTypeSize = 0, division by zero");
-            }
-            if (op.GetTileShape().GetVecTile()[0] == -1) {
-                int64_t curTile = std::min(
-                    defaultTileSize,
-                    static_cast<int64_t>(std::pow(
-                        NUM2, static_cast<int64_t>(std::log2(
-                                  std::max(op.GetIOperands()[0]->shape[inputDims - 1], BLOCK_SIZE / inputTypeSize))))));
-                curTile = (curTile != 0) ? curTile : 1;
-                vectorTilesNew.push_back(curTile);
-                defaultTileSize /= curTile;
-                for (size_t j = 1; j < inputDims; j++) {
-                    curTile = std::min(
-                        defaultTileSize,
-                        static_cast<int64_t>(std::pow(
-                            NUM2, static_cast<int64_t>(std::log2(op.GetIOperands()[0]->shape[inputDims - 1 - j])))));
-                    curTile = (curTile != 0) ? curTile : 1;
-                    vectorTilesNew.push_back(curTile);
-                    defaultTileSize /= curTile;
-                }
-                std::reverse(vectorTilesNew.begin(), vectorTilesNew.end());
-                op.GetTileShapeForSetting().SetVecTile(vectorTilesNew);
-            }
+            SetTilesForNoConsumerOp(op);
             noConsumersOperations.push_back(&op);
         }
     }
@@ -945,13 +1193,8 @@ void BackwardNoConsumersPropagation(
                 if (isContinue) {
                     continue;
                 }
-
                 // Call propagation
-                isContinue = Propagation(
-                    noConsumerOp, op, producerOp, producerOp, queueBFS, visitedBFS, false, false, false, false);
-                if (isContinue) {
-                    continue;
-                }
+                BackPropagate(producerOp, op);
                 // Update queueBFS and visitedBFS
                 UpdateBFS(producerOp, queueBFS, visitedBFS);
             }
@@ -960,176 +1203,49 @@ void BackwardNoConsumersPropagation(
     }
 }
 
-void SetReduceTiles(std::vector<Operation*> reduceOrderedOperations)
+void SetHeuristicVectorTiles(
+    Function& function, const std::set<Operation*>& cubeOperations, const std::set<Operation*>& inpOperations)
 {
-    std::vector<int64_t> vectorTilesReduce;
-    for (auto op : reduceOrderedOperations) {
-        size_t inputsNum = op->GetIOperands().size();
-        size_t outputsNum = op->GetOOperands().size();
-        size_t inputDims = DimsCalculation(op, inputsNum, true);
-        size_t outputDims = DimsCalculation(op, outputsNum, false);
-        int64_t inputTypeSize = BytesOf(op->GetIOperands()[0]->tensor->GetDataType());
-        int64_t outputTypeSize = BytesOf(op->GetOOperands()[0]->tensor->GetDataType());
-        int64_t maxTypeSize = std::max(inputTypeSize, outputTypeSize);
-        if (inputTypeSize == 0 || maxTypeSize == 0) {
-            APASS_LOG_ERROR_F(Elements::Operation, "typeSize = 0, division by zero");
-        }
-        ASSERT(TensorErr::TENSOR_SHAPE_MISMATCH, inputDims == outputDims) << "Input dims should be equal output dims";
-        ASSERT(OperationErr::OP_INVALID_OPERAND_COUNT, outputsNum == 1) << "ReduceOp must have 1 output";
-
-        std::vector<int64_t> maxInputShape = MaxInputShapeCalculation(op, inputsNum, inputDims, maxTypeSize);
-        int64_t reducedDim = -1;
-        for (size_t dim = 0; dim < inputDims; dim++) {
-            if ((maxInputShape[dim] != op->GetOOperands()[0]->shape[dim]) && (op->GetOOperands()[0]->shape[dim] == 1) &&
-                (reducedDim == -1)) {
-                reducedDim = dim;
-            } else {
-                ASSERT(OperationErr::OP_SPECIAL_CONSTRAINT,
-                    !((maxInputShape[dim] != op->GetOOperands()[0]->shape[dim]) &&
-                      (op->GetOOperands()[0]->shape[dim] == 1) && (reducedDim != -1)))
-                    << "Several reduced dims \n";
-            }
-        }
-        ASSERT(OperationErr::OP_SPECIAL_CONSTRAINT, reducedDim >= 0) << "Not found reduced dims";
-        int64_t tileSize = MAX_TILE_SIZE / maxTypeSize;
-        vectorTilesReduce.resize(inputDims);
-
-        // Reduce Dim processing
-        int64_t curTile = std::max(maxInputShape[reducedDim], BLOCK_SIZE / inputTypeSize);
-        curTile = (maxInputShape[reducedDim] >= (UINT8MAX * BLOCK_SIZE / inputTypeSize)) ?
-                      std::min(
-                          static_cast<int64_t>(
-                              std::pow(NUM2, static_cast<int64_t>(std::log2(UINT8MAX * BLOCK_SIZE / inputTypeSize)))),
-                          curTile) :
-                      curTile;                 // Consider additional restriction for REDUCE ops
-        curTile = std::min(tileSize, curTile); // UB overflow condition
-        curTile = (curTile != 0) ? curTile : 1;
-        vectorTilesReduce[reducedDim] = curTile;
-        tileSize /= curTile;
-
-        // Other Dims processing
-        for (size_t dim = inputDims; dim > 0; dim--) {
-            if ((dim - 1) == static_cast<size_t>(reducedDim)) {
-                continue;
-            }
-            curTile = std::min(
-                static_cast<int64_t>(std::pow(NUM2, static_cast<int64_t>(std::log2(tileSize)))),
-                static_cast<int64_t>(std::pow(NUM2, static_cast<int64_t>(std::log2(maxInputShape[dim - 1])))));
-            curTile = (curTile != 0) ? curTile : 1;
-            vectorTilesReduce[dim - 1] = curTile;
-            tileSize /= curTile;
-        }
-        vectorTilesReduce[0] = (inputDims != 1) ? vectorTilesReduce[0] * tileSize : vectorTilesReduce[0];
-        op->GetTileShapeForSetting().SetVecTile(vectorTilesReduce);
-    }
-}
-
-void ForwardReducePropagation(
-    std::vector<Operation*> reduceOrderedOperations, std::queue<Operation*>& queueBFS, std::map<int, bool>& visitedBFS)
-{
-    for (auto reduceOp : reduceOrderedOperations) {
-        queueBFS.push(reduceOp);
-        while (!queueBFS.empty()) {
-            auto op = queueBFS.front();
-            queueBFS.pop();
-            for (auto consumerOp : op->ConsumerOps()) {
-                // Call propagation
-                bool isContinue =
-                    Propagation(reduceOp, op, op, consumerOp, queueBFS, visitedBFS, false, false, true, true);
-                if (isContinue) {
-                    continue;
-                }
-
-                // Update queueBFS and visitedBFS
-                UpdateBFS(consumerOp, queueBFS, visitedBFS);
-            }
-        }
-        visitedBFS.clear();
-    }
-}
-
-void BackwardReducePropagation(
-    std::vector<Operation*> reduceOrderedOperations, std::queue<Operation*>& queueBFS, std::map<int, bool>& visitedBFS)
-{
-    for (auto reduceOp : reduceOrderedOperations) {
-        queueBFS.push(reduceOp);
-        while (!queueBFS.empty()) {
-            auto op = queueBFS.front();
-            queueBFS.pop();
-            for (auto producerOp : op->ProducerOps()) {
-                bool isContinue = DuplicateTileSetting(op, producerOp, queueBFS, visitedBFS);
-                if (isContinue) {
-                    continue;
-                }
-
-                // Call propagation
-                isContinue =
-                    Propagation(reduceOp, op, producerOp, producerOp, queueBFS, visitedBFS, false, false, true, false);
-                if (isContinue) {
-                    continue;
-                }
-
-                // Update queueBFS and visitedBFS
-                UpdateBFS(producerOp, queueBFS, visitedBFS);
-            }
-        }
-        visitedBFS.clear();
-    }
-}
-
-void SetHeuristicVectorTiles(Function& function, std::unordered_set<Operation*> cubeOperations)
-{
-    // Define cube operations oredered by depth
+    // Define priority levels for operation processing
+    enum PriorLevel : uint8_t { CUBE_AND_INPUT_O_LEVEL = 1, REDUCE_AND_INPUT_O_LEVEL = NUM2 };
+    // Define cube operations ordered by depth
     std::map<int, int> subgrDepthMap;
-    std::vector<Operation*> cubeOrderedOperations = FordBellman(function, cubeOperations, subgrDepthMap);
-
+    std::map<uint8_t, std::vector<Operation*>> priorOps;
+    priorOps[PriorLevel::CUBE_AND_INPUT_O_LEVEL] = SortCubeOpsByDepth(function, cubeOperations, subgrDepthMap);
+    for (auto op : inpOperations) {
+        priorOps[PriorLevel::CUBE_AND_INPUT_O_LEVEL].insert(priorOps[PriorLevel::CUBE_AND_INPUT_O_LEVEL].begin(), op);
+    }
     // Define auxiliary data structures
     std::queue<Operation*> queueBFS;
     std::map<int, bool> visitedBFS;
-
-    // 1. Backward propagation from CubeOps
-    BackwardCubePropagation(cubeOrderedOperations, queueBFS, visitedBFS);
-
-    // 2. Forward propagation from CubeOps
-    ForwardCubePropagation(cubeOrderedOperations, queueBFS, visitedBFS);
-
-    // Need to set initial vector tiles for nodes without consumers
-    std::vector<Operation*> noConsumersOperations = FillNoConsumersOperations(function);
-
-    // 3. Backward propagation from nodes without consumers
-    BackwardNoConsumersPropagation(noConsumersOperations, queueBFS, visitedBFS);
-
     // Sort reduce operations by depth
-    std::unordered_set<Operation*> reduceOperations;
     std::vector<std::pair<Operation*, int>> reduceTmpOperations;
     for (auto& op : function.Operations()) {
-        auto iterRowDim = reduceOps.find(op.GetOpcode());
-        if (iterRowDim != reduceOps.end()) {
-            reduceOperations.insert(&op);
+        if (singletonTileHandlers.find(op.GetOpcode()) != singletonTileHandlers.end()) {
+            reduceTmpOperations.push_back(std::make_pair(&op, subgrDepthMap[op.GetOpMagic()]));
         }
-    }
-
-    for (auto reduceOp : reduceOperations) {
-        reduceTmpOperations.push_back(std::make_pair(reduceOp, subgrDepthMap[reduceOp->GetOpMagic()]));
     }
     std::sort(
         reduceTmpOperations.begin(), reduceTmpOperations.end(),
         [](const std::pair<Operation*, int>& x, const std::pair<Operation*, int>& y) { return x.second < y.second; });
-
-    std::vector<Operation*> reduceOrderedOperations;
     for (auto op : reduceTmpOperations) {
-        reduceOrderedOperations.push_back(op.first);
+        priorOps[PriorLevel::REDUCE_AND_INPUT_O_LEVEL].push_back(op.first);
     }
     reduceTmpOperations.clear();
-
     // Need to set initial vector tiles for ReduceOps
-    SetReduceTiles(reduceOrderedOperations);
-
-    // 4. Forward propagation from ReduceOps
-    ForwardReducePropagation(reduceOrderedOperations, queueBFS, visitedBFS);
-
-    // 5. Backward propagation from ReduceOps
-    BackwardReducePropagation(reduceOrderedOperations, queueBFS, visitedBFS);
+    SetReduceTiles(priorOps[PriorLevel::REDUCE_AND_INPUT_O_LEVEL]);
+    for (auto op : inpOperations) {
+        priorOps[PriorLevel::REDUCE_AND_INPUT_O_LEVEL].insert(
+            priorOps[PriorLevel::REDUCE_AND_INPUT_O_LEVEL].begin(), op);
+    }
+    for (auto pOps : priorOps) {
+        BackwardPropagation(pOps.second, queueBFS, visitedBFS);
+        ForwardPropagation(pOps.second, queueBFS, visitedBFS);
+    }
+    std::vector<int64_t> vectorTilesNew;
+    // 3. Backward propagation Matmul (need to set tiles for rest -1 tiles), Start from nodes without consumers
+    std::vector<Operation*> noConsumersOperations = FillNoConsumersOperations(function);
+    BackwardNoConsumersPropagation(noConsumersOperations, queueBFS, visitedBFS);
 }
 
 void GenerateJsonForPython(Function& function)
@@ -1138,7 +1254,6 @@ void GenerateJsonForPython(Function& function)
     json pythonJson;
     std::ofstream python_tiles(config::LogTopFolder() + "/python_tiles.json");
     int operationIdx = 0;
-
     if (python_tiles.is_open()) {
         for (auto& op : function.Operations()) {
             std::string opIdName = "operation_" + std::to_string(operationIdx);
@@ -1146,7 +1261,6 @@ void GenerateJsonForPython(Function& function)
             if (full_dump["file"].is_null()) {
                 continue;
             }
-
             if (op.GetCoreTypeStr() == "AIC") {
                 pythonJson[opIdName]["type"] = "CubeTile";
                 auto cubeShape = op.GetTileShape();
@@ -1164,7 +1278,6 @@ void GenerateJsonForPython(Function& function)
             pythonJson[opIdName]["opcode"] = full_dump["opcode"];
             pythonJson[opIdName]["file"] = full_dump["file"];
             pythonJson[opIdName]["line"] = full_dump["line"];
-
             operationIdx += 1;
         }
         python_tiles << pythonJson.dump(kJsonDumpIndent) << std::endl;
@@ -1176,14 +1289,12 @@ void GenerateJsonForSemanticLabels(Function& function)
     constexpr int kJsonDumpIndent = 4; // JSON 输出缩进空格数
     json semanticJson;
     std::ofstream graph_tiles(config::LogTopFolder() + "/semantic_labels_tiles.json");
-
     if (graph_tiles.is_open()) {
         for (auto& op : function.Operations()) {
             if (op.GetSemanticLabel()) {
                 auto sem_label = op.GetSemanticLabel()->label;
                 semanticJson[sem_label] = {
                     {"filename", op.GetSemanticLabel()->filename}, {"line_num", op.GetSemanticLabel()->lineno}};
-
                 if (op.GetCoreTypeStr() == "AIC") {
                     auto cubeShape = op.GetTileShape();
                     auto tile = cubeShape.GetCubeTile();
@@ -1205,39 +1316,91 @@ void GenerateJsonForSemanticLabels(Function& function)
     }
 }
 
+void PrintTiles(Function& function, std::string fileName)
+{
+    int opIdx = 0;
+    std::ofstream file(fileName, std::ofstream::app);
+    if (file.is_open()) {
+        file << "\n\n---------------------------------------BEGIN---------------------------------------\n\n"
+             << std::endl;
+        for (auto& op : function.Operations()) {
+            if (op.GetCoreTypeStr() == "AIC") {
+                file << "!Cube Operation " << opIdx << " : " << op.GetOpcodeStr() << " magic : " << op.GetOpMagic()
+                     << std::endl;
+                file << op.GetTileShape().ToString(TileType::CUBE) << std::endl;
+            } else if (op.GetCoreTypeStr() == "AIV") {
+                file << "!Vector Operation " << opIdx << " : " << op.GetOpcodeStr() << " magic : " << op.GetOpMagic()
+                     << std::endl;
+                file << op.GetTileShape().ToString(TileType::VEC) << std::endl;
+            } else {
+                file << "!Other Operation " << opIdx << " : " << op.GetOpcodeStr() << " magic : " << op.GetOpMagic()
+                     << std::endl;
+                file << op.GetTileShape().ToString(TileType::VEC) << std::endl;
+            }
+            for (size_t it = 0; it < op.GetIOperands().size(); it++) {
+                file << "Input " << it << " Magic = " << op.GetIOperands()[it]->magic
+                     << " DataType = " << BytesOf(op.GetIOperands()[it]->tensor->GetDataType()) << " Shape = [";
+                auto InputShape = op.GetIOperands()[it]->shape;
+                for (size_t j = 0; j < InputShape.size(); j++) {
+                    file << InputShape[j] << " ";
+                }
+                file << "]  ";
+            }
+            for (size_t it = 0; it < op.GetOOperands().size(); it++) {
+                file << "Output " << it << " Magic = " << op.GetOOperands()[it]->magic
+                     << " DataType = " << BytesOf(op.GetOOperands()[it]->tensor->GetDataType()) << " Shape = [";
+                auto OutputShape = op.GetOOperands()[it]->shape;
+                for (size_t j = 0; j < OutputShape.size(); j++) {
+                    file << OutputShape[j] << " ";
+                }
+                file << "]" << std::endl;
+            }
+            file << "\n----------------------------------------------------------------------------------" << std::endl;
+            opIdx++;
+        }
+        file << "\n\n---------------------------------------END---------------------------------------\n\n"
+             << std::endl;
+        file.close();
+    }
+}
+
 void SetHeuristicTileShapes::SetHeuristicTileShapesFunc(Function& function) const
 {
     (void)function;
-
     // Find all cube operations from all operations
-    std::unordered_set<Operation*> cubeOperations;
+    std::set<Operation*> cubeOperations;
     for (auto& op : function.Operations()) {
-        if (op.GetCoreTypeStr() == "AIC") {
+        if (op.GetCoreTypeStr() == "AIC" && cubeMMOps.find(op.GetOpcode()) != cubeMMOps.end()) {
             cubeOperations.insert(&op);
         }
     }
-
-#ifdef CUBE_TILES
-    // Set heuristic cube tiles
-    SetHeuristicCubeTiles(function, cubeOperations);
+#ifdef PRINT_TILES
+    PrintTiles(function, "main_tiles.txt");
 #endif
-
+#ifdef CUBE_TILES
+    SetMMTiles(function, cubeOperations);
+#endif
 #ifdef VECTOR_TILES
     // Define -1 tile shapes for non-cubes operations
+    std::set<Operation*> inpOperations;
     std::vector<int64_t> defTile = {-1};
     for (auto& op : function.Operations()) {
         op.GetTileShapeForSetting().SetVecTile(defTile);
+        if ((op.GetIOperands().size() == 1) && (op.GetIOperands()[0]->GetProducers().size() == 0)) {
+            inpOperations.insert(&op);
+        }
     }
-
     // Set heuristic vector tiles
-    SetHeuristicVectorTiles(function, cubeOperations);
-
+    SetHeuristicVectorTiles(function, cubeOperations, inpOperations);
     // Check that all tiles was defined by algorithm
     for (auto& op : function.Operations()) {
-        ASSERT(OperationErr::OP_SPECIAL_CONSTRAINT, op.GetTileShape().GetVecTile()[0] != -1) << "Not all tiles was set";
+        ASSERT(OperationErr::OP_SPECIAL_CONSTRAINT, op.GetTileShape().GetVecTile()[0] != -1)
+            << "Not all tiles were set";
     }
 #endif
-
+#ifdef PRINT_TILES
+    PrintTiles(function, "custom_tiles.txt");
+#endif
     GenerateJsonForPython(function);
     GenerateJsonForSemanticLabels(function);
 }
