@@ -77,6 +77,17 @@ def test_visit_compare():
         assert _has(blk, op), f"Missing compare {op}"
 
 
+def test_visit_compare_membership():
+    def f(x, xs, d):
+        z = x in xs
+        z = x not in xs
+        z = x in d
+
+    blk = _parse_func(f)
+    assert _has(blk, pir.in_), "Missing membership compare in"
+    assert _has(blk, pir.not_in), "Missing membership compare not_in"
+
+
 def test_visit_compare_chained():
     def f(a, b, c):
         z = a < b < c

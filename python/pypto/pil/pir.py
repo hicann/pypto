@@ -201,6 +201,14 @@ class ContinueSignal(Exception):
     pass
 
 
+def in_(item: Any, container: Any) -> bool:
+    return item in container
+
+
+def not_in(item: Any, container: Any) -> bool:
+    return item not in container
+
+
 class BuildContext(ir.IRBuilder):
     def __init__(self, span: ir.Span):
         super().__init__()

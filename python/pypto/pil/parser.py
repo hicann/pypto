@@ -13,6 +13,7 @@ from typing import Callable, Any, Optional, NoReturn, Union
 
 from pypto import ir
 from .pir import Block, Jump, LoopKind, Call, Operand, Value, Function, Starred, DoubleStarred
+from .pir import in_, not_in
 
 
 class Source:
@@ -168,6 +169,8 @@ _builtin_ops = {
     ast.GtE: operator.ge,
     ast.Is: operator.is_,
     ast.IsNot: operator.is_not,
+    ast.In: in_,
+    ast.NotIn: not_in,
 }
 
 
