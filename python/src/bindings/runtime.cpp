@@ -703,6 +703,10 @@ private:
                 totalTimeoutSec = host_options["compile_timeout"].cast<int>();
             }
         }
+
+        if (launchEarlyMode < 0) {
+            launchEarlyMode = (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510) ? 2 : 0;
+        }
     }
 
     DevControlFlowCache* FindHostCtrlFlowCache(std::vector<DeviceTensorData>& tensors, std::vector<uint8_t>& hostCache)
@@ -742,7 +746,7 @@ private:
     int intervalSec{60};
     double timeoutSec{static_cast<double>(config::GetHostOption<int>(TIMEOUT_SEC))};
     int totalTimeoutSec{600};
-    int launchEarlyMode{0};
+    int launchEarlyMode{-1};
 
     RtHostInputInfo hostInfo;
     RtAicpuArgsEx rtAicpuArgs;
