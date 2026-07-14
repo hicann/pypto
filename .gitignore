@@ -5,6 +5,7 @@ cmake-build-*
 .codemate
 build/
 build_out/
+oat_reports/
 dist/
 .cache
 *.log
