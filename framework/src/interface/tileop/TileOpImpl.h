@@ -38,6 +38,7 @@
 #include "vector/trans.h"
 #include "vector/trans_data.h"
 #include "vector/binary.h"
+#include "vector/floor_div.h"
 #include "vector/binary_scalar.h"
 #include "vector/cast.h"
 #include "vector/sign.h"
