@@ -49,9 +49,8 @@ prelu(input: Tensor, weight: Tensor) -> Tensor
 
 1. input和weight类型应该相同。
 2. weight的Shape必须为一维，当input为1维时长度为1；当input为2-4维时长度等于input的第二维大小。
-3. input和weight不支持nan、inf等特殊值。
-4. 由于存在临时内存使用，输入维度为二维时，TileShape大小有额外约束，假设TileShape为\[a,b\]，那么a*b*sizeof(self) + b/8 + 8KB < UB。
-5. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
+3. 由于存在临时内存使用，输入维度为二维时，TileShape大小有额外约束，假设TileShape为\[a,b\]，那么a*b*sizeof(self) + b/8 + 8KB < UB。
+4. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
 
 
 
