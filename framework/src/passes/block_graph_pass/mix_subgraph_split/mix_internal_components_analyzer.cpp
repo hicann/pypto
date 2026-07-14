@@ -320,7 +320,7 @@ bool MixInternalComponentsAnalyzer::MergeSyncOperation(
     }
 
     // OP_SYNC_SRC、OP_CV_SYNC_SRC: 往前找到第一个非同步op放到该op所在分组
-    if (opcode == Opcode::OP_SYNC_SRC || opcode == Opcode::OP_CV_SYNC_SRC) {
+    if (opcode == Opcode::OP_SYNC_SRC) {
         Operation* targetSrcOp = FindFirstOpBackward(
             op, mixSubgraphFunc, [this](Operation* candidate) { return !IsSyncOperation(candidate); });
         return MergeSyncSrcDst(op, targetSrcOp, componentsByInternalID, opToComponentMap);
@@ -328,7 +328,7 @@ bool MixInternalComponentsAnalyzer::MergeSyncOperation(
 
     // BAR类、OP_SYNC_DST、OP_CV_SYNC_DST: 往后找到第一个非同步op放到该op所在分组
     if (opcode == Opcode::OP_BAR_V || opcode == Opcode::OP_BAR_M ||
-        opcode == Opcode::OP_SYNC_DST || opcode == Opcode::OP_CV_SYNC_DST) {
+        opcode == Opcode::OP_SYNC_DST) {
         Operation* targetDstOp = FindFirstOpForward(
             op, mixSubgraphFunc, [this](Operation* candidate) { return !IsSyncOperation(candidate); });
         return MergeSyncSrcDst(op, targetDstOp, componentsByInternalID, opToComponentMap);

@@ -816,6 +816,7 @@ Status PipeSync::InjectWaitFlag(Function& function, size_t idx, std::vector<Inde
             continue;
         }
         // insert wait_flag
+        syncOp.SetAIVCore(currPipe.aivCore);
         syncedOpLog.emplace_back(std::make_pair(++waitIdx, std::ref(syncOp)));
         APASS_LOG_DEBUG_F(
             Elements::Operation,
@@ -884,6 +885,7 @@ Status PipeSync::InjectSetFlag(Function& function, size_t idx, std::vector<Index
         bool res = GenSyncOp(currPipeRealEx, waitPipeRealEx, eventId, true, syncOp);
         if (res) {
             // insert set_flag
+            syncOp.SetAIVCore(currPipe.aivCore);
             syncedOpLog.emplace_back(std::make_pair(++setIdx, std::ref(syncOp)));
             APASS_LOG_DEBUG_F(
                 Elements::Operation,
@@ -1881,6 +1883,85 @@ void InsertSync::InsertPipeAll(Function* subGraphFunc)
     subGraphFunc->oriOpList = oriOpList;
 }
 
+void InsertSync::InsertCvSyncOps(Function* subGraphFunc, Operation* currOp, Operation* nextOp,
+                                 std::vector<Operation*>& newOpList)
+{
+    std::vector<std::shared_ptr<LogicalTensor>> input;
+    std::vector<std::shared_ptr<LogicalTensor>> output;
+    AIVCore currAivCore = currOp->GetAIVCore();
+    AIVCore nextAIVCore = nextOp->GetAIVCore();
+    int eventId = (currAivCore == AIVCore::AIV0 || nextAIVCore == AIVCore::AIV0) ? 15 : 31;
+
+    Operation& syncOp1 =
+        irBuilder_.CreateTensorOpStmt(*subGraphFunc, npu::tile_fwk::Opcode::OP_BAR_ALL, input, output);
+    syncOp1.syncQueue_ = {PipeType::PIPE_ALL, PipeType::PIPE_ALL, CoreType::AIV, CoreType::AIV, -1,
+                            currAivCore, currAivCore};
+    syncOp1.SetAIVCore(currAivCore);
+    PipeType srcPipe = (currAivCore == AIVCore::UNSPECIFIED) ? PipeType::PIPE_FIX : PipeType::PIPE_MTE3;
+    Operation& cvSyncSrc1 =
+        irBuilder_.CreateTensorOpStmt(*subGraphFunc, npu::tile_fwk::Opcode::OP_CV_SYNC_SRC, input, output);
+    cvSyncSrc1.syncQueue_ = {srcPipe, srcPipe, CoreType::AIV, CoreType::AIV, eventId, currAivCore, currAivCore};
+    cvSyncSrc1.SetAIVCore(currAivCore);
+    Operation& cvSyncDst1 =
+        irBuilder_.CreateTensorOpStmt(*subGraphFunc, npu::tile_fwk::Opcode::OP_CV_SYNC_DST, input, output);
+    cvSyncDst1.syncQueue_ = {PipeType::PIPE_S, PipeType::PIPE_S, CoreType::AIV, CoreType::AIV, eventId, currAivCore, currAivCore};
+    cvSyncDst1.SetAIVCore(currAivCore);
+
+    Operation& syncOp2 =
+        irBuilder_.CreateTensorOpStmt(*subGraphFunc, npu::tile_fwk::Opcode::OP_BAR_ALL, input, output);
+    syncOp2.syncQueue_ = {PipeType::PIPE_ALL, PipeType::PIPE_ALL, CoreType::AIV, CoreType::AIV, -1,
+                            nextAIVCore, nextAIVCore};
+    syncOp2.SetAIVCore(nextAIVCore);
+    PipeType dstPipe = (nextAIVCore == AIVCore::UNSPECIFIED) ? PipeType::PIPE_FIX : PipeType::PIPE_MTE3;
+    Operation& cvSyncDst2 =
+        irBuilder_.CreateTensorOpStmt(*subGraphFunc, npu::tile_fwk::Opcode::OP_CV_SYNC_DST, input, output);
+    cvSyncDst2.syncQueue_ = {PipeType::PIPE_S, PipeType::PIPE_S, CoreType::AIV, CoreType::AIV, eventId, nextAIVCore, nextAIVCore};
+    cvSyncDst2.SetAIVCore(nextAIVCore);
+    Operation& cvSyncSrc2 =
+        irBuilder_.CreateTensorOpStmt(*subGraphFunc, npu::tile_fwk::Opcode::OP_CV_SYNC_SRC, input, output);
+    cvSyncSrc2.syncQueue_ = {dstPipe, dstPipe, CoreType::AIV, CoreType::AIV, eventId, nextAIVCore, nextAIVCore};
+    cvSyncSrc2.SetAIVCore(nextAIVCore);
+
+    newOpList.push_back(&syncOp1);
+    newOpList.push_back(&cvSyncSrc1);
+    newOpList.push_back(&cvSyncDst1);
+    newOpList.push_back(&syncOp2);
+    newOpList.push_back(&cvSyncDst2);
+    newOpList.push_back(&cvSyncSrc2);
+}
+
+void InsertSync::InsertCvPipeAll(Function* subGraphFunc)
+{
+    std::vector<Operation*> oriOpList(subGraphFunc->Operations(false).DuplicatedOpList());
+    std::vector<Operation*> newOpList;
+    PipeSync ps;
+    for (size_t i = 0; i < oriOpList.size(); i++) {
+        newOpList.push_back(oriOpList[i]);
+        if (i == oriOpList.size() - 1) {
+            continue;
+        }
+        auto currOpCfg = OpcodeManager::Inst().GetTileOpCfg(oriOpList[i]->GetOpcode());
+        ps.AdjustOpCfg(currOpCfg, *oriOpList[i]);
+        auto nextOpCfg = OpcodeManager::Inst().GetTileOpCfg(oriOpList[i+1]->GetOpcode());
+        ps.AdjustOpCfg(nextOpCfg, *oriOpList[i+1]);
+        if (currOpCfg.coreType_ == nextOpCfg.coreType_) {
+            std::vector<std::shared_ptr<LogicalTensor>> input;
+            std::vector<std::shared_ptr<LogicalTensor>> output;
+            Operation& syncOp =
+                irBuilder_.CreateTensorOpStmt(*subGraphFunc, npu::tile_fwk::Opcode::OP_BAR_ALL, input, output);
+            AIVCore nextAIVCore = oriOpList[i + 1]->GetAIVCore();
+            syncOp.syncQueue_ = {PipeType::PIPE_ALL, PipeType::PIPE_ALL, CoreType::AIV, CoreType::AIV, -1,
+                                 nextAIVCore, nextAIVCore};
+            syncOp.SetAIVCore(nextAIVCore);
+            newOpList.push_back(&syncOp);
+            continue;
+        }
+        InsertCvSyncOps(subGraphFunc, oriOpList[i], oriOpList[i + 1], newOpList);
+    }
+    subGraphFunc->ScheduleBy(newOpList, true);
+    subGraphFunc->oriOpList = oriOpList;
+}
+
 Status InsertSync::CheckNewOpListSeq(const std::vector<Operation*>& oriOpList, const std::vector<Operation*>& opListNew)
 {
     if (oriOpList.size() <= 1) {
@@ -1929,6 +2010,10 @@ Status InsertSync::InsertSyncMainLoop(Function* subGraphFunc)
 {
     if (enableDebug_) {
         InsertPipeAll(subGraphFunc);
+        return SUCCESS;
+    }
+    if (enableCvDebug_) {
+        InsertCvPipeAll(subGraphFunc);
         return SUCCESS;
     }
     std::vector<Operation*> opListNew;
