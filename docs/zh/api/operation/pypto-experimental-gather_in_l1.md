@@ -35,6 +35,9 @@ gather_in_l1(src: Tensor, indices: Tensor, block_table: Tensor, block_size: int,
 
 返回输出Tensor
 
+## 约束说明
+
+无。
 
 ## 调用示例
 

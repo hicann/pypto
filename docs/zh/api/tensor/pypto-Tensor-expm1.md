@@ -1,4 +1,4 @@
-# pypto.Tensor.exp
+# pypto.Tensor.expm1
 
 ## 产品支持情况
 

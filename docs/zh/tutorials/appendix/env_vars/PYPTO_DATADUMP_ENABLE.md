@@ -19,7 +19,6 @@ os.environ["PYPTO_DATADUMP_ENABLE"] = "true"
 ## 使用约束
 - 需配合`verify_options`中的`enable_pass_verify`和`pass_verify_save_tensor`使用。
 - dump数据落盘在`output/output_*/tensor/`目录下。
-- 仅在NPU上板执行时生效，仿真模式下无效。
 
 ## 支持的型号
 - Ascend 950PR

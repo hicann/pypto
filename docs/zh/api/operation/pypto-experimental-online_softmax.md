@@ -2,13 +2,13 @@
 
 ## 产品支持情况
 
-- Ascend 950PR/Ascend 950DT：支持
+- Ascend 950PR：支持
+- Atlas A3 训练系列产品/Atlas A3 推理系列产品：不支持
+- Atlas A2 训练系列产品/Atlas A2 推理系列产品：不支持
 
 ## 功能说明
 
 该接口为定制接口，约束较多。不保证稳定性。
-
-该接口仅支持A5架构（Ascend 950PR/Ascend 950DT）。在其他架构上调用会报错。
 
 该算子用于块式在线Softmax计算，对输入scores按第0维做局部统计。算子会先对scores乘以scale，再计算每一列的最大值和指数和，同时输出未归一化的指数结果。该接口通常用于FlashAttention等分块注意力场景，配合`pypto.experimental.online_softmax_update`逐块更新全局最大值、指数和与中间输出。
 

@@ -1,11 +1,10 @@
 # 附录
 
 ```{toctree}
-:maxdepth: 1
+:maxdepth: 2
 :titlesonly:
 
 glossary
-faq
-issue
-错误码参考 <../../trouble_shooting/index>
+faq/index
+trouble_shooting/index
 env_vars/index

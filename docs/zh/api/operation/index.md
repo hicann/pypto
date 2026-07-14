@@ -35,7 +35,6 @@ pypto-clip
 pypto-clone
 pypto-concat
 pypto-conv
-pypto-copysign
 pypto-cos
 pypto-cosh
 pypto-cumprod

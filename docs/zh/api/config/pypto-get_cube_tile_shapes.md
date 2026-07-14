@@ -13,7 +13,7 @@
 ## 函数原型
 
 ```python
-get_cube_tile_shapes() -> Tuple[List[int], List[int], List[int], bool]:
+get_cube_tile_shapes() -> Tuple[List[int], List[int], List[int], bool]
 ```
 
 ## 参数说明
