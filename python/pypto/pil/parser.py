@@ -184,7 +184,7 @@ def _pypto_loop_mode(node: ast.AST) -> Optional[str]:
     return None
 
 
-def _parse_params(ctx, func: ast.FunctionDef, defaults, kwdefaults):
+def _parse_params(ctx, func: Union[ast.FunctionDef, ast.Lambda], defaults, kwdefaults):
     if func.args.vararg or func.args.kwarg:
         ctx.raise_error(func, "vararg and kwarg not supported")
 
@@ -520,6 +520,94 @@ class Parser:
             param_defaults=param_defaults,
         )
         ctx.store(stmt.name, func)
+
+    def visit_Lambda(self, node: ast.Lambda, ctx: _Context):
+        defaults = []
+        for d in node.args.defaults:
+            defaults.append(self.visit(d, ctx))
+
+        kwdefaults = {}
+        for arg, d in zip(node.args.kwonlyargs, node.args.kw_defaults):
+            if d is not None:
+                kwdefaults[arg.arg] = self.visit(d, ctx)
+            else:
+                kwdefaults[arg.arg] = None
+
+        new_ctx = _Context(ctx.source, entry_point=False)
+        with new_ctx.span(node), new_ctx.new_block() as blk:
+            value = self.visit(node.body, new_ctx)
+            new_ctx.store("$retval", value)
+            new_ctx.set_jump(Jump.RETURN, value)
+
+        params, param_defaults = _parse_params(ctx, node, defaults, kwdefaults)
+        func = Function(
+            name="<lambda>",
+            span=blk.span,
+            signature=inspect.Signature(),
+            body=blk,
+            load_vars=tuple(sorted(blk.load_names)),
+            store_vars=tuple(sorted(blk.store_names)),
+            global_vars=(),
+            global_values=(),
+            params=params,
+            param_defaults=param_defaults,
+        )
+        return func
+
+    def comprehension(self, node, ctx, acc_init, innermost, name):
+        acc = "$c_acc"
+        body: list[ast.stmt] = [innermost]
+        # wrap innermost -> outermost; every generator is uniform
+        for gen in reversed(node.generators):
+            for cond in reversed(gen.ifs):
+                body = [ast.If(test=cond, body=body, orelse=[])]
+            body = [ast.For(target=gen.target, iter=gen.iter, body=body, orelse=[])]
+
+        stmts: list[ast.stmt] = [ast.Assign([ast.Name(acc, ast.Store())], acc_init)]
+        stmts += body
+        stmts += [ast.Return(ast.Name(acc, ast.Load()))]
+        ast.fix_missing_locations(ast.Module(body=stmts, type_ignores=[]))
+
+        new_ctx = _Context(ctx.source, entry_point=False)
+        with new_ctx.span(node), new_ctx.new_block() as blk:
+            self._stmts(stmts, new_ctx)
+            if blk.jump is None:
+                new_ctx.set_jump(Jump.RETURN)
+
+        func = Function(
+            name=name,
+            span=blk.span,
+            signature=inspect.Signature(),
+            body=blk,
+            load_vars=tuple(sorted(blk.load_names)),
+            store_vars=tuple(sorted(blk.store_names)),
+            global_vars=(),
+            global_values=(),
+        )
+        return ctx.call(func, ())
+
+    def visit_ListComp(self, node: ast.ListComp, ctx: _Context):
+        acc = "$c_acc"
+        innermost = ast.Expr(ast.Call(
+            func=ast.Attribute(ast.Name(acc, ast.Load()), "append", ast.Load()),
+            args=[node.elt], keywords=[]))
+        return self.comprehension(node, ctx, ast.List([], ast.Load()), innermost, "<listcomp>")
+
+    def visit_SetComp(self, node: ast.SetComp, ctx: _Context):
+        acc = "$c_acc"
+        innermost = ast.Expr(ast.Call(
+            func=ast.Attribute(ast.Name(acc, ast.Load()), "add", ast.Load()),
+            args=[node.elt], keywords=[]))
+        return self.comprehension(node, ctx, ast.Call(ast.Name("set", ast.Load()),
+                                   [ast.List([], ast.Load())], []), innermost, "<setcomp>")
+
+    def visit_DictComp(self, node: ast.DictComp, ctx: _Context):
+        acc = "$c_acc"
+        innermost = ast.Assign(
+            targets=[ast.Subscript(
+                value=ast.Name(acc, ast.Load()), slice=node.key, ctx=ast.Store())],
+            value=node.value)
+        return self.comprehension(node, ctx, ast.Dict(keys=[], values=[]), innermost, "<dictcomp>")
 
     def visit_Assert(self, stmt: ast.Assert, ctx: _Context):
         cond = self.visit(stmt.test, ctx)

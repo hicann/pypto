@@ -618,6 +618,76 @@ def test_nested_function_return_tensor():
     logging.log_info(f"\ncanonical: {prog}")
 
 
+def test_lambda():
+    ans = []
+
+    def foo(x):
+        # lambda has args
+        add1 = lambda a: a + 1
+        ans.append(add1(x))
+        # lambda with capture args
+        addx = lambda a: x + a
+        ans.append(addx(1))
+        # lambda with default args
+        add_def = lambda a, b=10: a + b
+        ans.append(add_def(5))
+        ans.append(add_def(5, 15))
+    pil.compile(foo, 5)
+    assert ans == [6, 6, 15, 20]
+
+
+def test_listcomp():
+    ans = []
+
+    def foo(n):
+        # simple list comprehension
+        ans.extend([i + 1 for i in range(n)])
+        # list comprehension with an if filter
+        ans.extend([i for i in range(n) if i % 2 == 0])
+        # list comprehension with multiple for clauses
+        ans.extend([(i, j) for i in range(2) for j in range(2)])
+        # more complicated case
+        ans.extend([(i, j) for i in range(9) for j in range(9) if i < j])
+    pil.compile(foo, 5)
+    real, ans = ans, []
+    foo(5)
+    assert ans == real
+
+
+def test_setcomp():
+    ans = []
+
+    def foo(n):
+        # simple set comprehension (sorted for deterministic compare)
+        ans.extend(sorted({i * i for i in range(n)}))
+        # set comprehension with an if filter
+        ans.extend(sorted({i for i in range(n) if i % 2 == 0}))
+        # set comprehension with multiple for clauses
+        ans.extend(sorted({(i, j) for i in range(3) for j in range(3) if i < j}))
+    pil.compile(foo, 5)
+    real, ans = ans, []
+    foo(5)
+    assert ans == real
+
+
+def test_dictcomp():
+    ans = []
+
+    def foo(n):
+        d = {i: i * i for i in range(n)}
+        for k in range(n):
+            ans.append(d[k])
+        # dict comprehension with an if filter
+        d2 = {i: i for i in range(n) if i % 2 == 0}
+        for k in range(n):
+            if k in d2:
+                ans.append(d2[k])
+    pil.compile(foo, 5)
+    real, ans = ans, []
+    foo(5)
+    assert ans == real
+
+
 def test_pil_function():
     """Add dynamic tensor should be supported."""
     @pil.function

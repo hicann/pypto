@@ -454,3 +454,12 @@ def test_visit_pil_function():
     assert g.body is not None
     # outermost function defaults is not replaced
     assert g.param_defaults == (None, 2, 3, 4, None, 9)
+
+
+def test_visit_listcomp():
+    def f(xs):
+        y = [x + 1 for x in xs]
+        _ = [x for x in xs]
+        _ = [(i, j) for i in range(2) for j in range(2) if i < j]
+
+    _parse_func(f)
