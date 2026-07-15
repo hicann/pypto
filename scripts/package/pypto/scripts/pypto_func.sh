@@ -410,7 +410,7 @@ _check() {
             exit 1
         fi
         if [ "${ret}" -ne 0 ]; then
-            _confirm_action "You are going to put run-files on an unsecure install-path, do you want to continue?"
+            _confirm_action "You are going to put run-files on an insecure install-path, do you want to continue?"
         fi
     fi
 

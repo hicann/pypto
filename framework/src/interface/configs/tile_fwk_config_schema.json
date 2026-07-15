@@ -321,7 +321,7 @@
                             "value": 0,
                             "label": {
                                 "zh": "默认值，所有块采用动态图进行编译",
-                                "en": "Defalut value, all blocks are compiled using dynamic shape"
+                                "en": "Default value, all blocks are compiled using dynamic shape"
                             }
                         },
                         {

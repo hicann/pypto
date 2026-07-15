@@ -1,5 +1,5 @@
 
-PRs with no body should be avoided. The body should be written to convey the intetion of the changes, it should be clear and concise. For example, commits with a tag like `fix` if body is empty, it'll leave the reviewer wondering what exactly is fixed or why the change is nessary.
+PRs with no body should be avoided. The body should be written to convey the intetion of the changes, it should be clear and concise. For example, commits with a tag like `fix` if body is empty, it'll leave the reviewer wondering what exactly is fixed or why the change is necessary.
 If the PR related to specific issue, `Related Issue:` could be included as the last part of the body.
 
 Below is an example of a PR body:
