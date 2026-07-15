@@ -40,19 +40,30 @@ def sigmoid(input: Tensor) -> Tensor:
     Input x:[-3.0, 0.0, 2.0, 5.0]
     Output y:[0.0474, 0.5000, 0.8808, 0.9933]
     """
-    dtype = input.dtype
-    input = pypto.cast(input, pypto.DT_FP32)
+    codegen_options = pypto.get_codegen_options()
 
+    soc_version = ""
+    if "soc_version" in codegen_options:
+        soc_version = codegen_options["soc_version"]
+
+    dtype = input.dtype
     f_1 = 1.0
     f_nega_1 = -1.0
 
-    exp_res = pypto.exp(pypto.mul(input, f_nega_1))
-    res = pypto.add(exp_res, f_1)
-    ones = pypto.full(res.shape, 1.0, pypto.DT_FP32, valid_shape=res.shape)
-    res = pypto.div(ones, res, pypto.PrecisionType.INTRINSIC)
+    if soc_version in ["Kirin9030", "KirinX90"]:
+        exp_res = pypto.exp(pypto.mul(input, f_nega_1))
+        res = pypto.add(exp_res, f_1)
+        ones = pypto.full(res.shape, 1.0, dtype, valid_shape=res.shape)
+        res = pypto.div(ones, res, pypto.PrecisionType.INTRINSIC)
+    else:
+        input = pypto.cast(input, pypto.DT_FP32)
+        exp_res = pypto.exp(pypto.mul(input, f_nega_1))
+        res = pypto.add(exp_res, f_1)
+        ones = pypto.full(res.shape, 1.0, pypto.DT_FP32, valid_shape=res.shape)
+        res = pypto.div(ones, res, pypto.PrecisionType.INTRINSIC)
 
-    if dtype != pypto.DT_FP32:
-        res = pypto.cast(res, dtype)
+        if dtype != pypto.DT_FP32:
+            res = pypto.cast(res, dtype)
     return res
 
 

@@ -354,6 +354,7 @@ class BuildParam(CMakeParam):
     gcov_incr: bool = False  # 使能增量覆盖率 GCov 计算
     clang_install_path: Optional[Path] = None  # Clang 安装位置
     compile_dependency_check: bool = False  # 使能编译依赖关系检查
+    enable_build_with_cann_mobile: bool = False  # 使能使用 CANN Mobile 构建
     # Build
     targets: Optional[List[str]] = None  # 编译目标
     job_num: Optional[int] = None  # 编译阶段使用核数
@@ -375,7 +376,8 @@ class BuildParam(CMakeParam):
         self.gcov_incr = args.gcov_increment
         self.clang_install_path = self._get_clang_install_path(opt=args.clang)
         self.compile_dependency_check = args.compile_dependency_check
-
+        self.enable_build_with_cann_mobile = args.enable_build_with_cann_mobile
+        
     def __str__(self) -> str:
         """返回构建参数的字符串表示
 
@@ -392,6 +394,7 @@ class BuildParam(CMakeParam):
         desc += f"\n                       GCov : {self.gcov}, Increment: {self.gcov_incr}"
         desc += f"\n           ClangInstallPath : {self.clang_install_path}"
         desc += f"\n            CompileDepCheck : {self.compile_dependency_check}"
+        desc += f"\n  EnableBuildWithCannMobile : {self.enable_build_with_cann_mobile}"
         desc += f"\n        Build"
         desc += f"\n                    Targets : {self.targets}"
         desc += f"\n                    Job Num : {self.job_num}"
@@ -425,6 +428,8 @@ class BuildParam(CMakeParam):
                             help="Specify clang install path, such as /usr/bin/clang")
         parser.add_argument("--compile_dependency_check", action="store_true", default=False,
                             help="Enable compile dependency relation check.")
+        parser.add_argument("--enable_build_with_cann_mobile", action="store_true", default=False,
+                            help="Enable build with CANN mobile.")
         # Build
         parser.add_argument("-t", "--targets", nargs="?", type=str, action="append",
                             help="targets, specific build targets, "
@@ -535,6 +540,7 @@ class BuildParam(CMakeParam):
 
         # Others
         cmd += self._cfg_require(opt="ENABLE_COMPILE_DEPENDENCY_CHECK", ctr=self.compile_dependency_check)
+        cmd += self._cfg_require(opt="BUILD_WITH_CANN_MOBILE", ctr=self.enable_build_with_cann_mobile)
         return cmd
 
     def get_build_cmd_lst(self, cmake: Path, binary_path: Path) -> List[str]:

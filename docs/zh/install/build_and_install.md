@@ -47,6 +47,7 @@ python3 build_ci.py --clean --py_abi=37 --plat_name=manylinux2014 --no_isolation
 | `--plat_name` | 指定whl包的平台标签，例如`manylinux2014`；构建脚本会结合当前系统架构生成完整平台信息。 |
 | `--no_isolation` | 关闭whl隔离构建模式，构建依赖需提前在当前环境中安装完成。 |
 | `--whl_into_run` | 将编译得到的whl包打包进run安装包。 |
+| `--enable_build_with_cann_mobile` | 用于构建PyPTO时传递BUILD_WITH_CANN_MOBILE参数(kirin专用)。 |
 
 ### 安装
 

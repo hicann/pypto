@@ -47,7 +47,7 @@ KernelBinary::KernelBinary(std::shared_ptr<Function> func) : dynFunc(func)
     auto aicpuArgs = (AiCpuArgs*)aicpuArgBuf.data();
     DeviceLauncher::FillSwimLaneEnableInfo(toSubMachineConfig_);
     if (config::GetRuntimeOption<int64_t>(CFG_RUN_MODE) == CFG_RUN_MODE_SIM) {
-        EslModelMemoryUtils eslMemoryUtils;
+        EslModelMemoryUtils eslMemoryUtils{true, false};
         DeviceLauncher::FillDeviceKernelArgs(eslMemoryUtils, dynAttr->devProgBinary, aicpuArgs->kArgs, dynAttr->commGroupNames);
     } else {
         DeviceMemoryUtils deviceMemoryUtils;
