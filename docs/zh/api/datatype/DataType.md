@@ -50,5 +50,13 @@ class DataType(enum.Enum):
 
 ## 约束说明
 
-- Atlas A3 训练系列产品/Atlas A3 推理系列产品不支持DT_FP8E4M3，DT_FP8E5M2和DT_FP8E8M0类型。
-- Atlas A2 训练系列产品/Atlas A2 推理系列产品不支持DT_FP8E4M3，DT_FP8E5M2和DT_FP8E8M0类型。
+不同型号支持的数据类型有所差异：
+<!-- npu="950" id6 -->
+- Ascend 950PR：所有数据类型均支持。
+<!-- end id6 -->
+<!-- npu="A3" id4 -->
+- Atlas A3 训练系列产品/Atlas A3 推理系列产品：不支持DT_FP8E4M3，DT_FP8E5M2和DT_FP8E8M0类型。
+<!-- end id4 -->
+<!-- npu="910b" id5 -->
+- Atlas A2 训练系列产品/Atlas A2 推理系列产品：不支持DT_FP8E4M3，DT_FP8E5M2和DT_FP8E8M0类型。
+<!-- end id5 -->

@@ -39,7 +39,16 @@ void：Set方法无返回值。设置操作成功即生效。
 
 support\_dynamic\_aligned选项效果后续会通过Pass推导机制进行优化，无需用户手工设置并日落，建议用户谨慎使用。
 
-enable\_pmu\_trace 当前仅支持 Ascend 950PR / Ascend 950DT，仅支持单算子采集（不支持整网场景），且最多只能采集 6 个核的数据。更多使用说明参见[性能调优指南](../../tutorials/debug/performance.md#pmu-trace)。
+enable\_pmu\_trace使用说明：
+<!-- npu="950" id4 -->
+- Ascend 950PR：仅支持单算子采集（不支持整网场景），且最多只能采集 6 个核的数据。更多使用说明参见[性能调优指南](../../tutorials/debug/performance.md#pmu-trace)。
+<!-- end id4 -->
+<!-- npu="A3" id5 -->
+- Atlas A3 训练系列产品/Atlas A3 推理系列产品：不支持。
+<!-- end id5 -->
+<!-- npu="910b" id6 -->
+- Atlas A2 训练系列产品/Atlas A2 推理系列产品：不支持
+<!-- end id6 -->
 
 ## 调用示例
 

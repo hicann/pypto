@@ -59,34 +59,34 @@ matmul(input, mat2, out_dtype, *, a_trans = False, b_trans = False, c_matrix_nz 
 
 表3： Matmul支持的数据类型
 
-| input | mat2 | out_dtype | bias_tensor | 产品支持 |
-|:------|:-----|:----------|:------------|:---------|
-| DT_FP16 | DT_FP16 | DT_FP16/DT_FP32 | DT_FP16/DT_FP32 | Ascend 950PR <br> Atlas A2 训练系列产品/Atlas A2 推理系列产品 <br> Atlas A3 训练系列产品/Atlas A3 推理系列产品 |
-| DT_BF16 | DT_BF16 | DT_BF16/DT_FP32 | DT_FP32 | Atlas A2 训练系列产品/Atlas A2 推理系列产品 <br> Atlas A3 训练系列产品/Atlas A3 推理系列产品 |
-| DT_BF16 | DT_BF16 | DT_BF16/DT_FP32 | DT_BF16 | Ascend 950PR |
-| DT_FP32 | DT_FP32 | DT_FP32 | DT_FP32 | Ascend 950PR <br> Atlas A2 训练系列产品/Atlas A2 推理系列产品 <br> Atlas A3 训练系列产品/Atlas A3 推理系列产品 |
-| DT_INT8 | DT_INT8 | DT_INT32 | DT_INT32 | Ascend 950PR <br> Atlas A2 训练系列产品/Atlas A2 推理系列产品 <br> Atlas A3 训练系列产品/Atlas A3 推理系列产品 |
-| DT_FP8E5M2 | DT_FP8E5M2/DT_FP8E4M3 | DT_FP16/DT_BF16/DT_FP32 | DT_FP16/DT_BF16/DT_FP32 | Ascend 950PR |
-| DT_FP8E4M3 | DT_FP8E5M2/DT_FP8E4M3 | DT_FP16/DT_BF16/DT_FP32 | DT_FP16/DT_BF16/DT_FP32 | Ascend 950PR |
-| DT_HF8 | DT_HF8 | DT_FP16/DT_BF16/DT_FP32 | DT_FP16/DT_BF16/DT_FP32 | Ascend 950PR |
+| input | mat2 | out_dtype | bias_tensor | 
+|:------|:-----|:----------|:------------|
+| DT_FP16 | DT_FP16 | DT_FP16/DT_FP32 | DT_FP16/DT_FP32 |
+| DT_BF16 | DT_BF16 | DT_BF16/DT_FP32 | DT_FP32 |
+| DT_BF16 | DT_BF16 | DT_BF16/DT_FP32 | DT_BF16 | 
+| DT_FP32 | DT_FP32 | DT_FP32 | DT_FP32 |
+| DT_INT8 | DT_INT8 | DT_INT32 | DT_INT32 | 
+| DT_FP8E5M2 | DT_FP8E5M2/DT_FP8E4M3 | DT_FP16/DT_BF16/DT_FP32 | DT_FP16/DT_BF16/DT_FP32 | 
+| DT_FP8E4M3 | DT_FP8E5M2/DT_FP8E4M3 | DT_FP16/DT_BF16/DT_FP32 | DT_FP16/DT_BF16/DT_FP32 | 
+| DT_HF8 | DT_HF8 | DT_FP16/DT_BF16/DT_FP32 | DT_FP16/DT_BF16/DT_FP32 | 
 
 表4：反量化支持的数据类型
 
-| input | mat2 | out_dtype | 产品支持 |
-|:------|:-----|:----------|:----------|
-| DT_INT8 | DT_INT8 | DT_FP16 | Ascend 950PR <br> Atlas A2 训练系列产品/Atlas A2 推理系列产品 <br> Atlas A3 训练系列产品/Atlas A3 推理系列产品 |
+| input | mat2 | out_dtype |
+|:------|:-----|:----------|
+| DT_INT8 | DT_INT8 | DT_FP16 |
 
 表5：量化支持的数据类型
 
-| input | mat2 | out_dtype | 产品支持 |
-|:------|:-----|:----------|:----------|
-| DT_BF16 | DT_BF16 | DT_INT8 | Ascend 950PR <br> Atlas A2 训练系列产品/Atlas A2 推理系列产品 <br> Atlas A3 训练系列产品/Atlas A3 推理系列产品 |
-| DT_FP16 | DT_FP16 | DT_INT8 | Ascend 950PR <br> Atlas A2 训练系列产品/Atlas A2 推理系列产品 <br> Atlas A3 训练系列产品/Atlas A3 推理系列产品 |
-| DT_FP32 | DT_FP32 | DT_INT8 | Ascend 950PR <br> Atlas A2 训练系列产品/Atlas A2 推理系列产品 <br> Atlas A3 训练系列产品/Atlas A3 推理系列产品 |
-| DT_INT8 | DT_INT8 | DT_INT8 | Ascend 950PR <br> Atlas A2 训练系列产品/Atlas A2 推理系列产品 <br> Atlas A3 训练系列产品/Atlas A3 推理系列产品 |
-| DT_FP8E5M2 | DT_FP8E5M2/DT_FP8E4M3 | DT_INT8 | Ascend 950PR |
-| DT_FP8E4M3 | DT_FP8E5M2/DT_FP8E4M3 | DT_INT8 | Ascend 950PR |
-| DT_HF8 | DT_HF8 | DT_INT8 | Ascend 950PR |
+| input | mat2 | out_dtype | 
+|:------|:-----|:----------|
+| DT_BF16 | DT_BF16 | DT_INT8 |
+| DT_FP16 | DT_FP16 | DT_INT8 | 
+| DT_FP32 | DT_FP32 | DT_INT8 | 
+| DT_INT8 | DT_INT8 | DT_INT8 |
+| DT_FP8E5M2 | DT_FP8E5M2/DT_FP8E4M3 | DT_INT8 | 
+| DT_FP8E4M3 | DT_FP8E5M2/DT_FP8E4M3 | DT_INT8 | 
+| DT_HF8 | DT_HF8 | DT_INT8 | 
 
 ## 返回值说明
 
@@ -94,8 +94,12 @@ matmul(input, mat2, out_dtype, *, a_trans = False, b_trans = False, c_matrix_nz 
 
 ## 约束说明
 
-- Atlas A2 训练系列产品/Atlas A2 推理系列产品：不支持DT_HF8，DT_FP8E5M2，DT_FP8E4M3，不支持extend_params中的trans_mode参数。
-- Atlas A3 训练系列产品/Atlas A3 推理系列产品：不支持DT_HF8，DT_FP8E5M2，DT_FP8E4M3，不支持extend_params中的trans_mode参数。
+<!-- npu="910b" id4 -->
+- Atlas A2 训练系列产品/Atlas A2 推理系列产品：不支持DT_HF8，DT_FP8E5M2，DT_FP8E4M3，不支持extend_params中的trans_mode参数；当输入矩阵的数据类型为DT_BF16时，bias_tensor数据类型不支持DT_BF16。
+<!-- end id4 -->
+<!-- npu="A3" id5 -->
+- Atlas A3 训练系列产品/Atlas A3 推理系列产品：不支持DT_HF8，DT_FP8E5M2，DT_FP8E4M3，不支持extend_params中的trans_mode参数。当输入矩阵的数据类型为DT_BF16时，bias_tensor数据类型不支持DT_BF16。
+<!-- end id5 -->
 - 调用matmul接口前需要通过pypto.set\_cube\_tile\_shapes设置M、N、K轴上的切分大小
 - 当矩阵维度为3维或者4维时，需要调用pypto.set\_vec\_tile\_shapes接口设置vector的TileShape切分，如未设置，接口内部会设置2维的vec\_tile\_shape，其值为128，128。
 - 调用matmul接口的输入为调用pypto.reshape后的NZ格式时，需要调用pypto.set\_matrix\_size接口设置pypto.reshape前的输入到matmul的原始Shape的m,k,n值。
@@ -158,10 +162,15 @@ a = pypto.tensor((16, 32), pypto.DT_FP32, "tensor_a")
 b = pypto.tensor((32, 64), pypto.DT_FP32, "tensor_b")
 extend_params = {'scale_tensor': scale_tensor, 'relu_type': pypto.ReLuType.RELU}
 pypto.matmul(a, b, pypto.DT_INT8, extend_params=extend_params)
+```
 
-# TF32计算模式（仅950PR/DT）
+<!-- npu="950" id6 -->
+```python
+# TF32计算模式（Ascend 950PR）
 a = pypto.tensor((16, 32), pypto.DT_FP32, "tensor_a")
 b = pypto.tensor((32, 64), pypto.DT_FP32, "tensor_b")
 extend_params = {'trans_mode': pypto.TransMode.CAST_ROUND}
 pypto.matmul(a, b, pypto.DT_FP32, extend_params=extend_params)
 ```
+<!-- end id6 -->
+

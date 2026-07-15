@@ -20,7 +20,14 @@ python tools/profiling/tilefwk_pmu_to_csv.py -p PROF_xxx/device_x/data -pe=$PYPT
 ## 使用约束
 - 完整的PMU采集流程详见[采集PMU数据](../../debug/performance.md)。
 
-## 支持的型号
-- Ascend 950PR
-- Atlas A2训练系列产品 / Atlas A2推理系列产品
-- Atlas A3训练系列产品 / Atlas A3推理系列产品
+## 产品支持情况
+
+<!-- npu="950" id1 -->
+- Ascend 950PR：支持
+<!-- end id1 -->
+<!-- npu="A3" id2 -->
+- Atlas A3训练系列产品 / Atlas A3推理系列产品：支持
+<!-- end id2 -->
+<!-- npu="910b" id3 -->
+- Atlas A2训练系列产品 / Atlas A2推理系列产品：支持
+<!-- end id3 -->

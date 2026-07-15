@@ -55,19 +55,19 @@ scaled_mm(mat_a, mat_b, out_dtype, scale_a, scale_b, *, a_trans = False, b_trans
 
 表3： scaled_mm支持的数据类型
 
-| mat_a | mat_b | out_dtype | scale_a | scale_b | bias_tensor | 产品支持 |
-|:------|:------|:----------|:--------|:--------|:------------|:---------|
-| DT_FP8E5M2 | DT_FP8E5M2/DT_FP8E4M3 | DT_FP16/DT_BF16/DT_FP32 | DT_FP8E8M0 | DT_FP8E8M0 | DT_FP16/DT_BF16/DT_FP32 | Ascend 950PR |
-| DT_FP8E4M3 | DT_FP8E5M2/DT_FP8E4M3 | DT_FP16/DT_BF16/DT_FP32 | DT_FP8E8M0 | DT_FP8E8M0 | DT_FP16/DT_BF16/DT_FP32 | Ascend 950PR |
-| DT_FP4_E2M1 | DT_FP4_E2M1 | DT_FP16/DT_BF16/DT_FP32 | DT_FP8E8M0 | DT_FP8E8M0 | DT_FP16/DT_BF16/DT_FP32 | Ascend 950PR |
+| mat_a | mat_b | out_dtype | scale_a | scale_b | bias_tensor | 
+|:------|:------|:----------|:--------|:--------|:------------|
+| DT_FP8E5M2 | DT_FP8E5M2/DT_FP8E4M3 | DT_FP16/DT_BF16/DT_FP32 | DT_FP8E8M0 | DT_FP8E8M0 | DT_FP16/DT_BF16/DT_FP32 | 
+| DT_FP8E4M3 | DT_FP8E5M2/DT_FP8E4M3 | DT_FP16/DT_BF16/DT_FP32 | DT_FP8E8M0 | DT_FP8E8M0 | DT_FP16/DT_BF16/DT_FP32 |
+| DT_FP4_E2M1 | DT_FP4_E2M1 | DT_FP16/DT_BF16/DT_FP32 | DT_FP8E8M0 | DT_FP8E8M0 | DT_FP16/DT_BF16/DT_FP32 | 
 
 表4：量化支持的数据类型
 
-| mat_a | mat_b | out_dtype | 产品支持 |
-|:------|:-----|:----------|:----------|
-| DT_FP8E5M2 | DT_FP8E5M2，DT_FP8E4M3 | DT_INT8 | Ascend 950PR |
-| DT_FP8E4M3 | DT_FP8E5M2，DT_FP8E4M3 | DT_INT8 | Ascend 950PR |
-| DT_FP4_E2M1 | DT_FP4_E2M1 | DT_INT8 | Ascend 950PR |
+| mat_a | mat_b | out_dtype | 
+|:------|:-----|:----------|
+| DT_FP8E5M2 | DT_FP8E5M2，DT_FP8E4M3 | DT_INT8 |
+| DT_FP8E4M3 | DT_FP8E5M2，DT_FP8E4M3 | DT_INT8 |
+| DT_FP4_E2M1 | DT_FP4_E2M1 | DT_INT8 |
 
 ## 返回值说明
 

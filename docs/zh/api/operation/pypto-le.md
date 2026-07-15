@@ -38,9 +38,15 @@ le(input: Tensor, other: Union[Tensor, float, Element]) -> Tensor
 1. input和other类型须保持一致。
 2. 支持一维广播。
 3. Tensor和Element数据类型说明：
-   - Ascend 950PR：DT_FP16, DT_FP32, DT_INT16。
-   - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_FP16, DT_FP32。
-   - Atlas A2 训练系列产品/Atlas A2 推理系列产品：DT_FP16, DT_FP32。
+   <!-- npu="950" id4 -->
+   - Ascend 950PR：DT_FP16, DT_FP32, DT_INT16
+   <!-- end id4 -->
+   <!-- npu="A3" id5 -->
+   - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_FP16, DT_FP32
+   <!-- end id5 -->
+   <!-- npu="910b" id6 -->
+   - Atlas A2 训练系列产品/Atlas A2 推理系列产品：DT_FP16, DT_FP32
+   <!-- end id6 -->
 4. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
 
 

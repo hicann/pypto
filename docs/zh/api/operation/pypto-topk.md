@@ -47,7 +47,16 @@ topk(input: Tensor, k: int, dim: Optional[int] = None, largest: bool = True, alg
 3. 选用RADIX_SELECT算法时，记TileShape尾轴为tile，tile对齐到128记为tileAlign，则需要临时空间：26\*tileAlign，临时空间加上输入输出的tile块不能超过UB大小；
 4. 选用RADIX_SELECT算法时，尾轴不可切分，TileShape\[-1\]必须大于等于input.shape\[-1\]；
 5. k <= TileShape\[-1\] && k <= input.shape\[-1\]；
-6. RADIX_SELECT算法仅支持Ascend 950PR；
+6. RADIX_SELECT算法在不同型号的支持度：
+   <!-- npu="950" id4 -->
+   - Ascend 950PR：支持
+   <!-- end id4 -->
+   <!-- npu="A3" id5 -->
+   - Atlas A3 训练系列产品/Atlas A3 推理系列产品：不支持
+   <!-- end id5 -->
+   <!-- npu="910b" id6 -->
+   - Atlas A2 训练系列产品/Atlas A2 推理系列产品：不支持
+   <!-- end id6 -->
 7. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
 
 

@@ -16,7 +16,14 @@ export PYPTO_LAUNCH_SCHED_SAME_CLUSTER=false
 - 设置为`false`时，可以配合`launch_sched_aicpu_num`（通过`runtime_options`配置）指定可用的AICPU数量。
 - 开启同Cluster分配时，`launch_sched_aicpu_num`配置不生效。
 
-## 支持的型号
-- Ascend 950PR
-- Atlas A2训练系列产品 / Atlas A2推理系列产品
-- Atlas A3训练系列产品 / Atlas A3推理系列产品
+## 产品支持情况
+
+<!-- npu="950" id1 -->
+- Ascend 950PR：支持
+<!-- end id1 -->
+<!-- npu="A3" id2 -->
+- Atlas A3训练系列产品 / Atlas A3推理系列产品：支持
+<!-- end id2 -->
+<!-- npu="910b" id3 -->
+- Atlas A2训练系列产品 / Atlas A2推理系列产品：支持
+<!-- end id3 -->

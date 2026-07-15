@@ -42,9 +42,15 @@ bitwise_xor(input: Tensor, other: Union[Tensor, int]) -> Tensor
 1. input和other都为Tensor时，数据类型应该相同。
 2. 由于存在临时内存使用，TileShape大小有额外约束，假设TileShape为\[a,b,c,d\]，那么a\*b\*c\*d\*sizeof\(self\) + a\*b\*c\*d\*sizeof\(other\) + a\*b\*c\*d\*sizeof\(self\) < UB。
 3. Tensor数据类型说明：
-   - Ascend 950PR：DT_INT16，DT_UINT16，DT_INT8，DT_UINT8，DT_INT32。
-   - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_INT16，DT_UINT16，DT_INT8，DT_UINT8。
-   - Atlas A2 训练系列产品/Atlas A2 推理系列产品：DT_INT16，DT_UINT16，DT_INT8，DT_UINT8。
+   <!-- npu="950" id4 -->
+   - Ascend 950PR：DT_INT16，DT_UINT16，DT_INT8，DT_UINT8，DT_INT32
+   <!-- end id4 -->
+   <!-- npu="A3" id5 -->
+   - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_INT16，DT_UINT16，DT_INT8，DT_UINT8
+   <!-- end id5 -->
+   <!-- npu="910b" id6 -->
+   - Atlas A2 训练系列产品/Atlas A2 推理系列产品：DT_INT16，DT_UINT16，DT_INT8，DT_UINT8
+   <!-- end id6 -->
 4. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
 
 

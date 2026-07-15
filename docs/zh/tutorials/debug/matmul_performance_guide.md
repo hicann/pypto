@@ -40,7 +40,7 @@ pypto.set_cube_tile_shapes([mL0, mL1], [kL0, kL1], [nL0, nL1], enable_split_k=Fa
 
 其中，mL0、kL0和nL0表示在L0 Buffer的切分大小，mL1、kL1和nL1表示在L1 Buffer的切分大小。
 
-由于NPU的CUBE计算是以分型数据块为最小计算粒度，因此，要求切分大小也要满足分型格式的要求（也就是外轴16元素对齐，内轴32字节对齐）。同时，切分大小还要满足Buffer空间约束，具体计算约束详见：pypto\docs\api\config\pypto-set_cube_tile_shapes.md。
+由于NPU的CUBE计算是以分型数据块为最小计算粒度，因此，要求切分大小也要满足分型格式的要求（也就是外轴16元素对齐，内轴32字节对齐）。同时，切分大小还要满足Buffer空间约束，具体计算约束详见pypto.set_cube_tile_shapes。
 
 以Atlas A3 训练系列产品/Atlas A3 推理系列产品和Atlas A2 训练系列产品/Atlas A2 推理系列产品为例，对于A、B矩阵均为FP16类型的场景，满足Buffer空间约束的推荐Tile配置为：
 

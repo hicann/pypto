@@ -36,9 +36,15 @@ triu(input: Tensor, diagonal: SymInt = 0) -> Tensor
 ## 约束说明
 
 1. Tensor数据类型说明：
-   - Ascend 950PR：DT_FP32, DT_FP16, DT_BF16, DT_INT8, DT_INT16, DT_INT32, DT_UINT16, DT_UINT32。
-   - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_FP32, DT_FP16, DT_BF16, DT_INT8, DT_INT16, DT_INT32。
-   - Atlas A2 训练系列产品/Atlas A2 推理系列产品：DT_FP32, DT_FP16, DT_BF16, DT_INT8, DT_INT16, DT_INT32。
+   <!-- npu="950" id4 -->
+   - Ascend 950PR：DT_FP32, DT_FP16, DT_BF16, DT_INT8, DT_INT16, DT_INT32, DT_UINT16, DT_UINT32
+   <!-- end id4 -->
+   <!-- npu="A3" id5 -->
+   - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_FP32, DT_FP16, DT_BF16, DT_INT8, DT_INT16, DT_INT32
+   <!-- end id5 -->
+   <!-- npu="910b" id6 -->
+   - Atlas A2 训练系列产品/Atlas A2 推理系列产品：DT_FP32, DT_FP16, DT_BF16, DT_INT8, DT_INT16, DT_INT32
+   <!-- end id6 -->
 
 2. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
 

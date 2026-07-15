@@ -19,7 +19,14 @@ python tools/scripts/machine_perf_trace.py analyze output/output_<时间戳>/mac
 - 最多支持200轮数据采集和打屏，超出部分将被截断。
 - 当前只支持采集200次devTask构建的数据，超出时日志中会出现告警。
 
-## 支持的型号
-- Ascend 950PR
-- Atlas A2训练系列产品 / Atlas A2推理系列产品
-- Atlas A3训练系列产品 / Atlas A3推理系列产品
+## 产品支持情况
+
+<!-- npu="950" id1 -->
+- Ascend 950PR：支持
+<!-- end id1 -->
+<!-- npu="A3" id2 -->
+- Atlas A3训练系列产品 / Atlas A3推理系列产品：支持
+<!-- end id2 -->
+<!-- npu="910b" id3 -->
+- Atlas A2训练系列产品 / Atlas A2推理系列产品：支持
+<!-- end id3 -->

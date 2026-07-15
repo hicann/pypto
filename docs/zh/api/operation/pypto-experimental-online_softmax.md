@@ -3,14 +3,18 @@
 ## 产品支持情况
 
 <!-- npu="950" id1 -->
-- Ascend 950PR/Ascend 950DT：支持
+- Ascend 950PR：支持
 <!-- end id1 -->
+<!-- npu="A3" id2 -->
+- Atlas A3 训练系列产品/Atlas A3 推理系列产品：不支持
+<!-- end id2 -->
+<!-- npu="910b" id3 -->
+- Atlas A2 训练系列产品/Atlas A2 推理系列产品：不支持
+<!-- end id3 -->
 
 ## 功能说明
 
 该接口为定制接口，约束较多。不保证稳定性。
-
-该接口仅支持A5架构（Ascend 950PR/Ascend 950DT）。在其他架构上调用会报错。
 
 该算子用于块式在线Softmax计算，对输入scores按第0维做局部统计。算子会先对scores乘以scale，再计算每一列的最大值和指数和，同时输出未归一化的指数结果。该接口通常用于FlashAttention等分块注意力场景，配合`pypto.experimental.online_softmax_update`逐块更新全局最大值、指数和与中间输出。
 
@@ -40,9 +44,8 @@ online_softmax(scores: Tensor, scale: float) -> Tuple[Tensor, Tensor, Tensor]
 ## 约束说明
 
 1. 该接口为定制接口，不保证稳定性。
-2. 该接口仅支持A5架构（Ascend 950PR/Ascend 950DT）。
-3. scores 数据类型仅支持 DT_FP32。
-4. 当前版本不切分第0维，要求 scores.shape[0] <= vec_tile[0]。
+2. scores 数据类型仅支持 DT_FP32。
+3. 当前版本不切分第0维，要求 scores.shape[0] <= vec_tile[0]。
 
 ## 调用示例
 

@@ -42,7 +42,16 @@ pow(input: Tensor, other: Union[Tensor, int, float], precision_type: PrecisionTy
 
 ## 约束说明
 
-1. 高精度模式当前仅在Ascend 950PR上有效，其他产品底层默认使用指令模式 `INTRINSIC`。
+1. precision_type使用说明：
+   <!-- npu="950" id4 -->
+   - Ascend 950PR：支持
+   <!-- end id4 -->
+   <!-- npu="A3" id5 -->
+   - Atlas A3 训练系列产品/Atlas A3 推理系列产品：不支持，默认使用指令模式 `INTRINSIC`
+   <!-- end id5 -->
+   <!-- npu="910b" id6 -->
+   - Atlas A2 训练系列产品/Atlas A2 推理系列产品：不支持，默认使用指令模式 `INTRINSIC`
+   <!-- end id6 -->
 2. 两个输入均为Tensor且输入类型为int8/uint8/int16时，两个输入参数数据类型需相同。
 3. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
 

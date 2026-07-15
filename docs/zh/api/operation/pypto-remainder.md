@@ -47,7 +47,16 @@ remainder(
 1. 当前不支持混合精度类型输入，即输入都是Tensor时数据类型都相同，输入有一个是标量时，Tenosr的数据类型必须是对应的整数类型（DT_INT32或DT_INT16）或浮点数类型（DT_FP32、DT_FP16、DT_BF16）；
 2. 当input为整型数据类型时， **other不能含0**，整数取余的结果由芯片类型决定，可能为0或-1。
 3. 若输入Tensor的数据类型为DT_INT32，数据范围超过\[-2^24, 2^24\]范围时不保证精度；
-4. 高精度模式当前仅在Ascend 950PR上有效，其他产品底层默认使用指令模式 `INTRINSIC`。
+4. precision_type使用说明：
+   <!-- npu="950" id4 -->
+   - Ascend 950PR：支持
+   <!-- end id4 -->
+   <!-- npu="A3" id5 -->
+   - Atlas A3 训练系列产品/Atlas A3 推理系列产品：不支持，默认使用指令模式 `INTRINSIC`
+   <!-- end id5 -->
+   <!-- npu="910b" id6 -->
+   - Atlas A2 训练系列产品/Atlas A2 推理系列产品：不支持，默认使用指令模式 `INTRINSIC`
+   <!-- end id6 -->
 5. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
 
 

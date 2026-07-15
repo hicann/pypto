@@ -43,7 +43,16 @@ fmod(input: Tensor, other: Union[Tensor, float], precision_type: PrecisionType =
 1. input和other类型应该相同。
 2. other为数字的时候，不支持隐式转化。
 3. other不支持nan、inf等特殊值
-4. 高精度模式当前仅在Ascend 950PR上有效，其他产品底层默认使用指令模式 `INTRINSIC`。
+4. precision_type使用说明：
+   <!-- npu="950" id4 -->
+   - Ascend 950PR：支持高精度模式
+   <!-- end id4 -->
+   <!-- npu="A3" id5 -->
+   - Atlas A3 训练系列产品/Atlas A3 推理系列产品：不支持高精度模式，默认使用指令模式 `INTRINSIC`。
+   <!-- end id5 -->
+   <!-- npu="910b" id6 -->
+   - Atlas A2 训练系列产品/Atlas A2 推理系列产品：不支持高精度模式，默认使用指令模式 `INTRINSIC`。
+   <!-- end id6 -->
 5. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
 
 

@@ -42,7 +42,7 @@ set_pass_options(*,
 | auto_mix_partition      | 输入      | 含义：控制ReduceCopyMerge Pass中的自动混合子图切分行为。<br> 说明：该参数用于控制CV混合场景下子图的自动合并策略，值为1时编译器会评估相邻子图，若合并预估能带来性能收益且不会形成环，则会合并成MIX子图，否则不会进行合并。<br> 类型：int <br> 取值：0：不进行自动CV Mix合图；1：进行自动CV Mix合图。<br> 默认值：0 <br> 影响Pass范围：ReduceCopyMerge |
 | sg_set_ooo_scope            | 输入      | 含义：控制MIX子图内的OoO调度。<br> 说明：通过为 Operation分配ooo_scope，使得相同ooo_scope_id（非-1）的相邻 Operation 强制合并归入同一ooo_task，从而让相同ooo_scope_id（非-1）的相邻Operation在OoO调度生成的流水上尽可能相邻。不允许并行分支合并和跨ooo_scope合并, 不允许不同loop循环次数下的Operation的合并。 <br> 类型：`int`，即设置ooo_scope_id <br> 默认值：-1 <br> 取值范围：-1或1~100000 <br> `ooo_scope_id`：ooo_scope标识。相同ooo_scope_id的相邻Operation归入同一ooo_task；-1表示不参与ooo_scope合并，由切分算法决定ooo_task划分。 <br> 影响Pass范围：OoOSchedule <br> 配置要求：该功能仅对MIX子图生效。同时使用该功能和loop unroll时，unroll设置不得大于10000。|
 | ooo_sched_mode            | 输入      | 含义：控制MIX子图内的OoO调度。<br> 说明：设置MIX子图内ooo_task的流水调度模式。 <br> 类型：`str` <br> 默认值："" <br> 取值范围：{"", "GAPMIN", "HLF"} <br> 影响Pass范围：OoOSchedule <br> 配置说明：取值为""（默认）时使用基于拓扑序遍历和局部搜索的调度（GapMin调度 + local-search）；取值为"GAPMIN"时仅执行GapMin调度，跳过local-search; 取值为"HLF"时使用Highest Level First调度（按任务到汇点最长路径降序排列后做EFT插入调度）。|
-| sg_set_tunevf_mode           | 输入      | 含义：控制VF（Vector Fusion）调优Pass的行为模式。<br> 说明：用于控制TuneTileOpSeqForVF和TuneSyncForVF两个Pass的执行行为。<br> 类型：`int` <br> 默认值：0 <br> 取值范围：{0, 1, 2} <br> - 0：均衡模式，在OoO Pass输出的op序列的基础上自动完成op顺序的调整，自动平衡Pipeline流水与VF融合的整体性能收益。<br> - 1：指令流水优先模式，不改变OoO排好的op执行序。<br> - 2：vf融合优先模式，不考虑性能建模的收益评估，尽量调整op顺序以保证更大范围的VF融合。<br> 影响Pass范围：TuneTileOpSeqForVF, TuneSyncForVF |
+| sg_set_tunevf_mode           | 输入      | 含义：控制VF（Vector Fusion）调优Pass的行为模式。<br> 说明：用于控制TuneTileOpSeqForVF和TuneSyncForVF两个Pass的执行行为。<br> 类型：`int` <br> 默认值：0 <br> 取值范围：{0, 1, 2} <br> - 0：均衡模式，在OoO Pass输出的op序列的基础上自动完成op顺序的调整，自动平衡Pipeline流水与VF融合的整体性能收益。<br> - 1：指令流水优先模式，不改变OoO排好的op执行序。<br> - 2：vf融合优先模式，不考虑性能建模的收益评估，尽量调整op顺序以保证更大范围的VF融合。该模式仅影响TuneSyncForVF中的NeedAdjustOpSeq判断，不影响TuneTileOpSeqForVF。<br> 影响Pass范围：TuneTileOpSeqForVF, TuneSyncForVF |
 
 
 ## 返回值说明
@@ -59,26 +59,55 @@ set_pass_options(*,
 - scope_id为 -1时，`allow_parallel_merge`和`allow_cross_scope_merge`必须为False。
 - 不同scope_id的子图之间不可合并，`allow_cross_scope_merge`仅控制带scope的子图与无scope（scope_id=-1）的子图合并。
 - auto_mix_partition使用说明：
+   <!-- npu="950" id4 -->
    - Ascend 950PR：支持。
+   <!-- end id4 -->
+   <!-- npu="A3" id5 -->
    - Atlas A3 训练系列产品/Atlas A3 推理系列产品：不支持，不进行自动cv mix合图。
+   <!-- end id5 -->
+   <!-- npu="910b" id6 -->
    - Atlas A2 训练系列产品/Atlas A2 推理系列产品：不支持，不进行自动cv mix合图。
+   <!-- end id6 -->
 - sg_set_scope使用说明：
+   <!-- npu="950" id7 -->
    - Ascend 950PR：支持纯Vector、纯Cube以及CV混合场景的scope配置。
+   <!-- end id7 -->
+   <!-- npu="A3" id8 -->
    - Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持纯Vector或纯Cube的scope配置，不支持CV混合场景的scope配置。
+   <!-- end id8 -->
+   <!-- npu="910b" id9 -->
    - Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持纯Vector或纯Cube的scope配置，不支持CV混合场景的scope配置。
+   <!-- end id9 -->
 - sg_set_ooo_scope使用说明：
+   <!-- npu="950" id10 -->
    - Ascend 950PR：支持。
+   <!-- end id10 -->
+   <!-- npu="A3" id11 -->
    - Atlas A3 训练系列产品/Atlas A3 推理系列产品：不支持，因为不支持cv mix合图。
+   <!-- end id11 -->
+   <!-- npu="910b" id12 -->
    - Atlas A2 训练系列产品/Atlas A2 推理系列产品：不支持，因为不支持cv mix合图。
+   <!-- end id12 -->
 - ooo_sched_mode使用说明：
+   <!-- npu="950" id13 -->
    - Ascend 950PR：支持。
+   <!-- end id13 -->
+   <!-- npu="A3" id14 -->
    - Atlas A3 训练系列产品/Atlas A3 推理系列产品：不支持，因为不支持cv mix合图。
+   <!-- end id14 -->
+   <!-- npu="910b" id15 -->
    - Atlas A2 训练系列产品/Atlas A2 推理系列产品：不支持，因为不支持cv mix合图。
+   <!-- end id15 -->
 - sg_set_tunevf_mode使用说明：
+   <!-- npu="950" id16 -->
    - Ascend 950PR：支持。
+   <!-- end id16 -->
+   <!-- npu="A3" id17 -->
    - Atlas A3 训练系列产品/Atlas A3 推理系列产品：不支持，因为不支持cv mix合图。
+   <!-- end id17 -->
+   <!-- npu="910b" id18 -->
    - Atlas A2 训练系列产品/Atlas A2 推理系列产品：不支持，因为不支持cv mix合图。
-   - mode=2仅影响TuneSyncForVF中的NeedAdjustOpSeq判断，不影响TuneTileOpSeqForVF。
+   <!-- end id18 -->
 
 ## 调用示例
 
@@ -211,11 +240,18 @@ pypto.set_pass_options(sg_set_scope=-1)
 
 #### 典型场景
 
+<!-- npu="A3" id19 -->
+- Atlas A3 训练系列产品/Atlas A3 推理系列产品：不支持场景二
+<!-- end id19 -->
+<!-- npu="910b" id20 -->
+- Atlas A2 训练系列产品/Atlas A2 推理系列产品：不支持场景二
+<!-- end id20 -->
+
 ##### 场景一：整张计算图不切分
 
 当需要将整个计算图保持不切分时，因数据切块会产生多条并行分支，这些分支之间无直接数据依赖，默认会被切分算法拆为独立子图。推荐设置`sg_set_scope=(scope_id, True, False)`，通过`allow_parallel_merge=True`使相同scope_id的并行分支Operation合并到同一子图。
 
-##### 场景二：CV混合场景，构造Mix子图以减少GM搬运（Ascend 950PR）
+##### 场景二：CV混合场景，构造Mix子图以减少GM搬运
 
 当Cube操作的前后均有Vec操作时，目标是构造一个包含Cube和Vec的Mix子图，避免中间结果在GM上反复搬运。根据是否明确scope边界，分为以下两种情况：
 

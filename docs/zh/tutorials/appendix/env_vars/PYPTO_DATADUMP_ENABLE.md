@@ -21,7 +21,14 @@ os.environ["PYPTO_DATADUMP_ENABLE"] = "true"
 - dump数据落盘在`output/output_*/tensor/`目录下。
 - 仅在NPU上板执行时生效，仿真模式下无效。
 
-## 支持的型号
-- Ascend 950PR
-- Atlas A2训练系列产品 / Atlas A2推理系列产品
-- Atlas A3训练系列产品 / Atlas A3推理系列产品
+## 产品支持情况
+
+<!-- npu="950" id1 -->
+- Ascend 950PR：支持
+<!-- end id1 -->
+<!-- npu="A3" id2 -->
+- Atlas A3训练系列产品 / Atlas A3推理系列产品：支持
+<!-- end id2 -->
+<!-- npu="910b" id3 -->
+- Atlas A2训练系列产品 / Atlas A2推理系列产品：支持
+<!-- end id3 -->

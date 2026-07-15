@@ -55,10 +55,15 @@ index_select(input: Tensor, dim: int, index: Tensor) -> Tensor
 3. input.shape的dim轴viewshape不可切，要求viewshape\[dim\] \>= input.shape\[dim\]，其余维度的Shape大小不做限制。该约束来自index_select的算子语义：dim轴作为索引源，需要在当前view中整体可见，而不是当前实现的额外限制。若dim轴按照小于input.shape\[dim\] 的viewshape切分，index可能引用当前view之外的数据，导致结果精度错误或AICore Error；
 
 4. Tensor数据类型说明：
-   - Ascend 950PR：DT_INT8, DT_INT16, DT_INT32, DT_UINT8, DT_UINT16, DT_UINT32, DT_FP16, DT_FP32, DT_BF16, DT_BOOL, DT_FP8E4M3, DT_FP8E5M2, DT_FP8E8M0。
-   - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_INT8, DT_INT16, DT_INT32, DT_UINT8, DT_UINT16, DT_UINT32, DT_FP16, DT_FP32, DT_BF16。
-   - Atlas A2 训练系列产品/Atlas A2 推理系列产品：DT_INT8, DT_INT16, DT_INT32, DT_UINT8, DT_UINT16, DT_UINT32, DT_FP16, DT_FP32, DT_BF16。
-
+   <!-- npu="950" id4 -->
+   - Ascend 950PR：DT_INT8, DT_INT16, DT_INT32, DT_UINT8, DT_UINT16, DT_UINT32, DT_FP16, DT_FP32, DT_BF16, DT_BOOL, DT_FP8E4M3, DT_FP8E5M2, DT_FP8E8M0
+   <!-- end id4 -->
+   <!-- npu="A3" id5 -->
+   - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_INT8, DT_INT16, DT_INT32, DT_UINT8, DT_UINT16, DT_UINT32, DT_FP16, DT_FP32, DT_BF16
+   <!-- end id5 -->
+   <!-- npu="910b" id6 -->
+   - Atlas A2 训练系列产品/Atlas A2 推理系列产品：DT_INT8, DT_INT16, DT_INT32, DT_UINT8, DT_UINT16, DT_UINT32, DT_FP16, DT_FP32, DT_BF16
+   <!-- end id6 -->
 5. TileShape的维度与result相同，用于切分result。TileShape设置需保证result不超过UB大小，具体用法详见 [TileShape设置示例](#tileshape设置示例)。
 
 ## 调用示例

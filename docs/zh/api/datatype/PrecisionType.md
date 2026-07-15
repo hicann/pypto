@@ -28,7 +28,7 @@ class PrecisionType(enum.Enum):
 
 | 参数值 | 说明 |
 |:-------|:-----|
-| HIGH_PRECISION | 高精度模式。在底层实现中使用更高精度的计算方式，当前仅在Ascend 950PR/Ascend 950DT上有效。 |
+| HIGH_PRECISION | 高精度模式。在底层实现中使用更高精度的计算方式。 |
 | INTRINSIC | 指令模式。直接使用芯片指令进行计算，性能更高。 |
 
 ## 使用建议
@@ -36,6 +36,16 @@ class PrecisionType(enum.Enum):
 1. **默认行为**：如果不指定精度模式，默认使用`HIGH_PRECISION`模式，以确保计算精度。
 2. **精度要求高的场景**：推荐使用`HIGH_PRECISION`模式，可以有效减少精度损失，提高计算结果的准确性。
 3. **对精度要求不高但追求性能的场景**：可以使用`INTRINSIC`模式，直接使用芯片指令进行计算。
+4. HIGH_PRECISION使用说明：
+   <!-- npu="950" id4 -->
+   - Ascend 950PR：支持
+   <!-- end id4 -->
+   <!-- npu="A3" id5 -->
+   - Atlas A3 训练系列产品/Atlas A3 推理系列产品：不支持
+   <!-- end id5 -->
+   <!-- npu="910b" id6 -->
+   - Atlas A2 训练系列产品/Atlas A2 推理系列产品：不支持
+   <!-- end id6 -->
 
 ## 支持的算子
 

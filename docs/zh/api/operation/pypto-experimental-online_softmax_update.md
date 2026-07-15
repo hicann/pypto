@@ -3,14 +3,18 @@
 ## 产品支持情况
 
 <!-- npu="950" id1 -->
-- Ascend 950PR/Ascend 950DT：支持
+- Ascend 950PR：支持
 <!-- end id1 -->
+<!-- npu="A3" id2 -->
+- Atlas A3 训练系列产品/Atlas A3 推理系列产品：不支持
+<!-- end id2 -->
+<!-- npu="910b" id3 -->
+- Atlas A2 训练系列产品/Atlas A2 推理系列产品：不支持
+<!-- end id3 -->
 
 ## 功能说明
 
 该接口为定制接口，约束较多。不保证稳定性。
-
-该接口仅支持A5架构（Ascend 950PR/Ascend 950DT）。在其他架构上调用会报错。
 
 该算子用于在线Softmax的状态更新。给定历史块的最大值、指数和、中间输出，以及当前块的最大值、指数和、中间输出，算子会按在线Softmax公式合并两部分状态，得到更新后的最大值、指数和与未归一化输出。
 
@@ -53,10 +57,9 @@ online_softmax_update(
 ## 约束说明
 
 1. 该接口为定制接口，不保证稳定性。
-2. 该接口仅支持A5架构（Ascend 950PR/Ascend 950DT）。
-3. 所有输入Tensor数据类型仅支持 DT_FP32。
-4. current_output 需要与 previous_output 形状一致。
-5. 当前版本不切分第0维，要求 previous_output.shape[0] <= vec_tile[0]。
+2. 所有输入Tensor数据类型仅支持 DT_FP32。
+3. current_output 需要与 previous_output 形状一致。
+4. 当前版本不切分第0维，要求 previous_output.shape[0] <= vec_tile[0]。
 
 ## 调用示例
 

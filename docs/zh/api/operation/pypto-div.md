@@ -43,7 +43,16 @@ div(input: Tensor, other: Union[Tensor, float, int], precision_type: PrecisionTy
 1. input和other都为Tensor时，数据类型应该相同。
 2. other为scalar时，若input为浮点类型，则scalar支持整型（自动转为浮点）；若input为整型，则scalar不支持浮点类型（会报错）。
 3. **精度模式说明**：
-    - **HIGH_PRECISION（高精度模式）**：默认模式，在底层实现中会使用更高精度的计算方式，当前仅在Ascend 950PR上有效。
+    - **HIGH_PRECISION（高精度模式）**：默认模式，在底层实现中会使用更高精度的计算方式，在不同型号上的支持情况：
+      <!-- npu="950" id4 -->
+      - Ascend 950PR：支持
+      <!-- end id4 -->
+      <!-- npu="A3" id5 -->
+      - Atlas A3 训练系列产品/Atlas A3 推理系列产品：不支持
+      <!-- end id5 -->
+      <!-- npu="910b" id6 -->
+      - Atlas A2 训练系列产品/Atlas A2 推理系列产品：不支持
+      <!-- end id6 -->
     - **INTRINSIC（指令模式）**：直接使用芯片指令进行计算。
 4. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
 5. 整型输入约束：当输入为DT_INT16或DT_INT32时，内部会将输入转换为DT_FP32进行计算（float32尾数为24位）。在 $[-2^{24},\ 2^{24}]$ 范围内的整数可精确转换，超出范围的整数在转换时可能丢失低位精度。

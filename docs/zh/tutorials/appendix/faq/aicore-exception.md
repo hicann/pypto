@@ -77,14 +77,14 @@ AiCore Print用于在AICore kernel中打印tensor数据和调试信息，支持G
 
 ### 对外接口
 
-| 接口名称 | 功能 | 适用场景 | Ascend 950PR |
-|---------|------|---------|:---:|
-| **AiCoreLogF** | 格式化日志打印 | 打印地址、标量、提示信息 | 支持 |
-| **AiCorePrintShape** | 打印Shape信息 | 查看tensor shape维度 | 支持 |
-| **AiCorePrintGmTensor** | 打印GM Tensor | 查看Global Memory数据 | 支持 |
-| **AiCorePrintUbTensor** | 打印UB Tensor | 查看Unified Buffer数据（仅AIV kernel） | 支持 |
-| **AiCorePrintL1Tensor** | 打印L1 Tensor | 查看Circular Buffer数据（仅AIC kernel） | 不支持 |
-| **AiCorePrintL0CTensor** | 打印L0C Tensor | 查看Accumulator Buffer数据（仅AIC kernel） | 支持 |
+| 接口名称 | 功能 | 适用场景 |
+|---------|------|---------|
+| **AiCoreLogF** | 格式化日志打印 | 打印地址、标量、提示信息 | 
+| **AiCorePrintShape** | 打印Shape信息 | 查看tensor shape维度 | 
+| **AiCorePrintGmTensor** | 打印GM Tensor | 查看Global Memory数据 | 
+| **AiCorePrintUbTensor** | 打印UB Tensor | 查看Unified Buffer数据（仅AIV kernel） |
+| **AiCorePrintL1Tensor** | 打印L1 Tensor | 查看Circular Buffer数据（仅AIC kernel） |
+| **AiCorePrintL0CTensor** | 打印L0C Tensor | 查看Accumulator Buffer数据（仅AIC kernel） |
 
 ### 支持的数据类型
 
@@ -92,14 +92,12 @@ AiCore Print支持以下数据类型：
 
 **浮点类型**：
 
-- Ascend 950PR：支持
 - **fp32**：`float`
 - **fp16**：`half`
 - **bf16**：`bfloat16_t`
 
 **整数类型**：
 
-- Ascend 950PR：支持
 - **int8**：`int8_t`
 - **uint8**：`uint8_t`
 - **int16**：`int16_t`
@@ -109,17 +107,12 @@ AiCore Print支持以下数据类型：
 - **int64**：`int64_t`
 - **uint64**：`uint64_t`
 
-**FP8类型**（平台限制）：
+**FP8类型**：
 
-- Ascend 950PR：支持
 - **fp8_e4m3**：`float8_e4m3_t`
 - **fp8_e5m2**：`float8_e5m2_t`
 - **fp8_e8m0**：`float8_e8m0_t`
 - **hifloat8**：`hifloat8_t`
-
-**平台限制说明**：FP8和HiFloat8类型仅在Ascend 950PR上支持（`SUPPORT_FP8_HF8_PRINT=1`，对应`__NPU_ARCH__ == 3510`）。
-
-其他平台不支持FP8/HiFloat8打印功能。
 
 ### 使用步骤
 
@@ -309,11 +302,18 @@ AiCoreLogF(param->ctx, "INT8 input loaded");
 
 2. **打印数量控制**：PRINT_BUFFER_SIZE当前为128KB（定义于`framework/src/interface/machine/device/tilefwk/aicpu_common.h`），若触发overflow warning，需增大该值后重新编译。
 
-3. **FP8/HiFloat8支持平台**：仅Ascend 950PR（`__NPU_ARCH__ == 3510`）支持（见`SUPPORT_FP8_HF8_PRINT`宏定义）。
+3. **AiCorePrintL1Tensor使用说明**：
+   <!-- npu="950" id1 -->
+   - Ascend 950PR：不支持
+   <!-- end id1 -->
+   <!-- npu="A3" id2 -->
+   - Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
+   <!-- end id2 -->
+   <!-- npu="910b" id3 -->
+   - Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持
+   <!-- end id3 -->
 
-4. **AiCorePrintL1Tensor支持平台**：Ascend 950PR不支持；Atlas A2训练系列产品/Atlas A2推理系列产品、Atlas A3训练系列产品/Atlas A3推理系列产品支持（见`SUPPORT_L1_COPY`宏定义）。
-
-5. **AIC (Cube核)中不能使用AiCorePrintUbTensor**：AIC (Cube核)的标量处理器(SP)没有到UB地址空间的物理通路，无法从UB标量读取数据。编译期已通过`static_assert`拦截，在AIC kernel中调用`AiCorePrintUbTensor`会触发编译报错：
+4. **AIC (Cube核)中不能使用AiCorePrintUbTensor**：AIC (Cube核)的标量处理器(SP)没有到UB地址空间的物理通路，无法从UB标量读取数据。编译期已通过`static_assert`拦截，在AIC kernel中调用`AiCorePrintUbTensor`会触发编译报错：
 
    ```text
    error: static assertion failed: [AIC UB Print Error] AiCorePrintUbTensor is not supported on AIC (Cube) kernel.
@@ -321,7 +321,7 @@ AiCoreLogF(param->ctx, "INT8 input loaded");
 
    UB数据检查请在AIV (Vector核) kernel中完成，或在AIC中使用`AiCorePrintGmTensor`打印已搬到GM的数据。
 
-6. **AiCoreLogF在AIC中打印UB数据值会触发运行时错误**：`AiCoreLogF`在AIC kernel中使用`%f`、`%d`等格式打印UB数据值时（如`((__ubuf__ float*)addr)[521]`），编译器会生成一条从UB地址空间的标量load指令，AIC SP不支持此操作，触发MPU error 271：
+5. **AiCoreLogF在AIC中打印UB数据值会触发运行时错误**：`AiCoreLogF`在AIC kernel中使用`%f`、`%d`等格式打印UB数据值时（如`((__ubuf__ float*)addr)[521]`），编译器会生成一条从UB地址空间的标量load指令，AIC SP不支持此操作，触发MPU error 271：
 
    ```text
    error from aicore error exception, core id is 0, error code = 271
@@ -330,7 +330,7 @@ AiCoreLogF(param->ctx, "INT8 input loaded");
 
    `%p`打印地址值（不读取UB数据）是安全的。**正确做法**：AIC kernel中不直接读取UB数据值，将UB打印逻辑移到AIV kernel中。
 
-7. **不可通过DMA将UB数据搬到GM再打印**：AIC (Cube核)上没有MTE3 DMA引擎（`copy_ubuf_to_gm`、`copy_ubuf_to_gm_align_v2`等intrinsic不支持cube target），`TStoreVec`（`OP_UB_COPY_OUT`）的`OpCoreType`为`AIV`，属于Vector核专用。在AIC kernel中调用这些接口会编译报错：
+6. **不可通过DMA将UB数据搬到GM再打印**：AIC (Cube核)上没有MTE3 DMA引擎（`copy_ubuf_to_gm`、`copy_ubuf_to_gm_align_v2`等intrinsic不支持cube target），`TStoreVec`（`OP_UB_COPY_OUT`）的`OpCoreType`为`AIV`，属于Vector核专用。在AIC kernel中调用这些接口会编译报错：
 
    ```text
    error: function type '...' of 'copy_ubuf_to_gm' does not support the given target feature
@@ -338,27 +338,23 @@ AiCoreLogF(param->ctx, "INT8 input loaded");
 
 ### 常见问题
 
-### 1. 未看到打印输出
+### 未看到打印输出
 
 检查：ENABLE_AICORE_PRINT=1、已重新编译安装，已指定日志落盘路径，已设置日志级别为info级别（1），grep搜索文件正确。
 
-### 2. L1/L0C Print对齐WARNING
+### L1/L0C Print对齐WARNING
 
 确保l1_staging / l0c_staging地址32B对齐，workspaceAddr本身已对齐。
 
-### 3. Overflow Warning
+### Overflow Warning
 
 减少打印数量或增大PRINT_BUFFER_SIZE后重新编译。
 
-### 4. FP8/HiFloat8无法打印
-
-当前平台不支持（检查`SUPPORT_FP8_HF8_PRINT`宏；仅Ascend 950PR / `__NPU_ARCH__ == 3510`时为1）。
-
-### 5. AiCorePrintL1Tensor找不到接口定义
+### AiCorePrintL1Tensor找不到接口定义
 
 当前平台不支持（检查SUPPORT_L1_COPY宏）。
 
-### 6. ld.lld: error: undefined symbol
+### ld.lld: error: undefined symbol
 
 编译时出现`ld.lld: error: undefined symbol`链接错误，导致编译失败。
 

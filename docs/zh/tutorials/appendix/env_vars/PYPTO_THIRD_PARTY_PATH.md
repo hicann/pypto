@@ -18,7 +18,14 @@ python3 -m pip install . --verbose
 - 路径下需包含`json-3.11.3`和`libboundscheck-v1.1.16`的源码包。
 - 仅在源码编译安装时生效，PyPI安装无需设置。
 
-## 支持的型号
-- Ascend 950PR
-- Atlas A2训练系列产品 / Atlas A2推理系列产品
-- Atlas A3训练系列产品 / Atlas A3推理系列产品
+## 产品支持情况
+
+<!-- npu="950" id1 -->
+- Ascend 950PR：支持
+<!-- end id1 -->
+<!-- npu="A3" id2 -->
+- Atlas A3训练系列产品 / Atlas A3推理系列产品：支持
+<!-- end id2 -->
+<!-- npu="910b" id3 -->
+- Atlas A2训练系列产品 / Atlas A2推理系列产品：支持
+<!-- end id3 -->

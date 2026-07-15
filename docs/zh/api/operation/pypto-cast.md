@@ -48,7 +48,8 @@ cast(input: Tensor, dtype: DataType, mode: CastMode = CastMode.CAST_NONE,
 
 > **CastMode舍入模式详细说明请参考**：[CastMode](../datatype/CastMode.md)
 
-### A2A3架构支持的转换
+<!-- npu="A3,910b" id4 -->
+### Atlas A3 训练系列产品/Atlas A3 推理系列产品/Atlas A2 训练系列产品/Atlas A2 推理系列产品支持的转换
 
 | 源类型 | 目标类型 | 支持的CastMode | 默认CastMode | 特殊说明 |
 |--------|----------|----------------|--------------|----------|
@@ -77,9 +78,9 @@ cast(input: Tensor, dtype: DataType, mode: CastMode = CastMode.CAST_NONE,
 | DT_UINT8 | DT_FP16 | 不支持舍入模式 | - | 类型扩展 |
 | DT_INT8 | DT_FP16 | 不支持舍入模式 | - | 类型扩展 |
 | DT_INT4 | DT_FP16 | 不支持舍入模式 | - | 打包类型，每字节包含2个元素 |
+<!-- end id4 -->
 
----
-
+<!-- npu="950" id5 -->
 ### Ascend 950PR支持的转换
 
 Ascend 950PR使用不同的CastMode体系，内部实现基于 `RoundRType`/`RoundAType`/`RoundFType`/`RoundCType`/`RoundZType`/`RoundOType` 等模板参数，用户接口层面仍使用统一的CastMode enum。
@@ -132,8 +133,7 @@ Ascend 950PR使用不同的CastMode体系，内部实现基于 `RoundRType`/`Rou
 | DT_BF16 | DT_FP4_E1M2X2 | 不支持舍入模式 | - | - |
 | DT_FP4_E2M1X2 | DT_BF16 | 不支持舍入模式 | - | - |
 | DT_FP4_E1M2X2 | DT_BF16 | 不支持舍入模式 | - | - |
-
----
+<!-- end id5 -->
 
 ### 饱和模式设置说明
 
@@ -152,13 +152,29 @@ Ascend 950PR使用不同的CastMode体系，内部实现基于 `RoundRType`/`Rou
 
 2. **DT_INT4（S4）特殊说明**：打包类型，每字节包含2个元素，仅支持与DT_FP16的相互转换。
 
-3. **DT_FP4_E2M1X2/DT_FP4_E1M2X2 特殊说明**：
-    - 仅Ascend 950PR/Ascend 950DT（A5）支持
+3. **DT_FP4_E2M1X2/DT_FP4_E1M2X2特殊说明**：
+    <!-- npu="950" id6 -->
+    - Ascend 950PR：支持
+    <!-- end id6 -->
+    <!-- npu="A3" id7 -->
+    - Atlas A3 训练系列产品/Atlas A3 推理系列产品：不支持
+    <!-- end id7 -->
+    <!-- npu="910b" id8 -->
+    - Atlas A2 训练系列产品/Atlas A2 推理系列产品：不支持
+    <!-- end id8 -->
     - 打包类型，每字节包含2个FP4元素（4-bit nibble）
     - 仅支持与DT_BF16的相互转换
 
 3. **DT_HF8 (hifloat8)特殊说明**：
-    - 仅Ascend 950PR支持
+    <!-- npu="950" id9 -->
+    - Ascend 950PR：支持
+    <!-- end id9 -->
+    <!-- npu="A3" id10 -->
+    - Atlas A3 训练系列产品/Atlas A3 推理系列产品：不支持
+    <!-- end id10 -->
+    <!-- npu="910b" id11 -->
+    - Atlas A2 训练系列产品/Atlas A2 推理系列产品：不支持
+    <!-- end id11 -->
     - 必须使用CAST_ROUND舍入模式（对应硬件的ROUND_A）
     - 如果指定其他CastMode，会自动回退到CAST_ROUND
 

@@ -47,13 +47,25 @@ minimum(
 ## 约束说明
 
 1. 两个输入均为Tensor类型时，支持的数据类型如下：
-   - Ascend 950PR：DT_INT32，DT_UINT32，DT_FP32，DT_INT16，DT_UINT16，DT_FP16，DT_BF16，DT_UINT8，DT_INT8。
-   - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_INT32，DT_INT16，DT_FP16，DT_FP32，DT_BF16。
-   - Atlas A2 训练系列产品/Atlas A2 推理系列产品：DT_INT32，DT_INT16，DT_FP16，DT_FP32，DT_BF16。
+   <!-- npu="950" id4 -->
+   - Ascend 950PR：DT_INT32，DT_UINT32，DT_FP32，DT_INT16，DT_UINT16，DT_FP16，DT_BF16，DT_UINT8，DT_INT8
+   <!-- end id4 -->
+   <!-- npu="A3" id5 -->
+   - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_INT32，DT_INT16，DT_FP16，DT_FP32，DT_BF16
+   <!-- end id5 -->
+   <!-- npu="910b" id6 -->
+   - Atlas A2 训练系列产品/Atlas A2 推理系列产品：DT_INT32，DT_INT16，DT_FP16，DT_FP32，DT_BF16
+   <!-- end id6 -->
 2. 一个输入为Tensor，另一个输入为Element类型时，支持的数据类型如下：
-   - Ascend 950PR：DT_INT32，DT_INT16，DT_FP16，DT_FP32，DT_BF16。
-   - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_INT32，DT_INT16，DT_FP16，DT_FP32，DT_BF16。
-   - Atlas A2 训练系列产品/Atlas A2 推理系列产品：DT_INT32，DT_INT16，DT_FP16，DT_FP32，DT_BF16。
+   <!-- npu="950" id7 -->
+   - Ascend 950PR：DT_INT32，DT_INT16，DT_FP16，DT_FP32，DT_BF16
+   <!-- end id7 -->
+   <!-- npu="A3" id8 -->
+   - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_INT32，DT_INT16，DT_FP16，DT_FP32，DT_BF16
+   <!-- end id8 -->
+   <!-- npu="910b" id9 -->
+   - Atlas A2 训练系列产品/Atlas A2 推理系列产品：DT_INT32，DT_INT16，DT_FP16，DT_FP32，DT_BF16
+   <!-- end id9 -->
 3. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
 
 

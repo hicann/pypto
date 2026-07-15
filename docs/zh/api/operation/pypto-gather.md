@@ -53,9 +53,15 @@ gather(input: Tensor, dim: int, index: Tensor) -> Tensor
 4. TileShape的维度与index相同，用于切分input和index，input的dim轴不可切，且所有输入和输出的TileShape大小总和不能超过UB内存的大小；
 
 5. Tensor数据类型说明：
-   - Ascend 950PR：DT_INT16, DT_INT32, DT_UINT16, DT_UINT32, DT_FP16, DT_FP32, DT_BF16。
-   - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_INT16, DT_INT32, DT_UINT16, DT_UINT32, DT_FP16, DT_FP32, DT_BF16。
-   - Atlas A2 训练系列产品/Atlas A2 推理系列产品：DT_INT16, DT_INT32, DT_UINT16, DT_UINT32, DT_FP16, DT_FP32, DT_BF16。
+   <!-- npu="950" id4 -->
+   - Ascend 950PR：DT_INT16, DT_INT32, DT_UINT16, DT_UINT32, DT_FP16, DT_FP32, DT_BF16
+   <!-- end id4 -->
+   <!-- npu="A3" id5 -->
+   - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_INT16, DT_INT32, DT_UINT16, DT_UINT32, DT_FP16, DT_FP32, DT_BF16
+   <!-- end id5 -->
+   <!-- npu="910b" id6 -->
+   - Atlas A2 训练系列产品/Atlas A2 推理系列产品：DT_INT16, DT_INT32, DT_UINT16, DT_UINT32, DT_FP16, DT_FP32, DT_BF16
+   <!-- end id6 -->
 
 6. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
 
