@@ -56,6 +56,7 @@ target_compile_options(tile_fwk_server
             -D__DEVICE__
             -Werror
             -fno-common
+            -fstack-protector-strong
 )
 target_include_directories(tile_fwk_server
         PRIVATE

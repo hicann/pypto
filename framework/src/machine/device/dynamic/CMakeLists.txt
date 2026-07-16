@@ -48,6 +48,7 @@ target_compile_options(pypto_ctrl_server
             -D__DEVICE__
             -Werror
             -D__USE_CUSTOM_CTRLFLOW__
+            -fstack-protector-strong
 )
 target_include_directories(pypto_ctrl_server
         PRIVATE
