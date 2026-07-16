@@ -35,8 +35,8 @@ struct SignbitOpMetaData {
     nlohmann::json test_data_;
 };
 
-static void SignbitOperationExeFunc2Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void SignbitOperationExeFunc2Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                         const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0]})
     {
@@ -52,11 +52,10 @@ static void SignbitOperationExeFunc2Dims(
         {
             LOOP("LOOP_L1_sIdx", FunctionType::DYNAMIC_LOOP, sIdx, LoopRange(0, sloop, 1))
             {
-                auto tileTensor = View(
-                    inputs[0], {firstViewShape, secondViewShape},
-                    {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                     std::min(secondDim - sIdx * secondViewShape, secondViewShape)},
-                    {bIdx * firstViewShape, sIdx * secondViewShape});
+                auto tileTensor = View(inputs[0], {firstViewShape, secondViewShape},
+                                       {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                        std::min(secondDim - sIdx * secondViewShape, secondViewShape)},
+                                       {bIdx * firstViewShape, sIdx * secondViewShape});
                 TileShape::Current().SetVecTile(args->tileShape_);
                 auto res = Signbit(tileTensor);
                 Assemble(res, {bIdx * firstViewShape, sIdx * secondViewShape}, outputs[0]);
@@ -65,8 +64,8 @@ static void SignbitOperationExeFunc2Dims(
     }
 }
 
-static void SignbitOperationExeFunc3Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void SignbitOperationExeFunc3Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                         const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0]})
     {
@@ -87,12 +86,11 @@ static void SignbitOperationExeFunc3Dims(
             {
                 LOOP("LOOP_L3_nIdx", FunctionType::DYNAMIC_LOOP, nIdx, LoopRange(0, nloop, 1))
                 {
-                    auto tileTensor = View(
-                        inputs[0], {firstViewShape, secondViewShape, thirdViewShape},
-                        {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                         std::min(secondDim - sIdx * secondViewShape, secondViewShape),
-                         std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape)},
-                        {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape});
+                    auto tileTensor = View(inputs[0], {firstViewShape, secondViewShape, thirdViewShape},
+                                           {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                            std::min(secondDim - sIdx * secondViewShape, secondViewShape),
+                                            std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape)},
+                                           {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape});
                     TileShape::Current().SetVecTile(args->tileShape_);
                     auto res = Signbit(tileTensor);
                     Assemble(res, {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape}, outputs[0]);
@@ -102,8 +100,8 @@ static void SignbitOperationExeFunc3Dims(
     }
 }
 
-static void SignbitOperationExeFunc4Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void SignbitOperationExeFunc4Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                         const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0]})
     {
@@ -130,21 +128,20 @@ static void SignbitOperationExeFunc4Dims(
                 {
                     LOOP("LOOP_L3_nIdx", FunctionType::DYNAMIC_LOOP, nIdx, LoopRange(0, nloop, 1))
                     {
-                        Tensor tileTensor0 = View(
-                            inputs[0], {firstViewShape, secondViewShape, thirdViewShape, fourthViewShape},
-                            {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                             std::min(secondDim - sIdx * secondViewShape, secondViewShape),
-                             std::min(thirdDim - mIdx * thirdViewShape, thirdViewShape),
-                             std::min(fourthDim - nIdx * fourthViewShape, fourthViewShape)},
-                            {bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape,
-                             nIdx * fourthViewShape});
+                        Tensor tileTensor0 = View(inputs[0],
+                                                  {firstViewShape, secondViewShape, thirdViewShape, fourthViewShape},
+                                                  {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                                   std::min(secondDim - sIdx * secondViewShape, secondViewShape),
+                                                   std::min(thirdDim - mIdx * thirdViewShape, thirdViewShape),
+                                                   std::min(fourthDim - nIdx * fourthViewShape, fourthViewShape)},
+                                                  {bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape,
+                                                   nIdx * fourthViewShape});
                         TileShape::Current().SetVecTile(args->tileShape_);
                         auto res = Signbit(tileTensor0);
-                        Assemble(
-                            res,
-                            {bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape,
-                             nIdx * fourthViewShape},
-                            outputs[0]);
+                        Assemble(res,
+                                 {bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape,
+                                  nIdx * fourthViewShape},
+                                 outputs[0]);
                     }
                 }
             }
@@ -154,10 +151,10 @@ static void SignbitOperationExeFunc4Dims(
 
 class SignbitOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac_param<SignbitOpMetaData> {};
 
-INSTANTIATE_TEST_SUITE_P(
-    TestSignbit, SignbitOperationTest,
-    ::testing::ValuesIn(GetOpMetaData<SignbitOpMetaData>(
-        {SignbitOperationExeFunc2Dims, SignbitOperationExeFunc3Dims, SignbitOperationExeFunc4Dims}, "Signbit")));
+INSTANTIATE_TEST_SUITE_P(TestSignbit, SignbitOperationTest,
+                         ::testing::ValuesIn(GetOpMetaData<SignbitOpMetaData>(
+                             {SignbitOperationExeFunc2Dims, SignbitOperationExeFunc3Dims, SignbitOperationExeFunc4Dims},
+                             "Signbit")));
 
 TEST_P(SignbitOperationTest, TestSignbit)
 {

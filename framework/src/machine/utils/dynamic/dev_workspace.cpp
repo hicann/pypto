@@ -37,8 +37,8 @@ void DeviceWorkspaceAllocator::Init(DevStartArgs* devStartArgs)
 
 #if DEBUG_INFINITE_LIFETIME
     dumpTensorWsAllocator_.InitTensorAllocator(baseAddr, devProg->memBudget.debug.dumpTensor);
-    DEV_DEBUG(
-        "[DumpTensor] dumpTensorWsAllocator_: ptr=0x%lx, size=%lu", baseAddr, devProg->memBudget.debug.dumpTensor);
+    DEV_DEBUG("[DumpTensor] dumpTensorWsAllocator_: ptr=0x%lx, size=%lu", baseAddr,
+              devProg->memBudget.debug.dumpTensor);
     baseAddr += devProg->memBudget.debug.dumpTensor;
 
     // Allocate 512 for address alignment
@@ -46,13 +46,11 @@ void DeviceWorkspaceAllocator::Init(DevStartArgs* devStartArgs)
     *dumpTensorWsAllocatorCounter_ = dumpTensorWsAllocator_.AllocatedSize();
 #endif
     SetupVector(rtBoundaryOutcastToBeFree_);
-    rtBoundaryOutcastToBeFree_.reserve(
-        devProg->memBudget.tensor.BoundaryAndInnerTemporalOutcastSlotNum());
+    rtBoundaryOutcastToBeFree_.reserve(devProg->memBudget.tensor.BoundaryAndInnerTemporalOutcastSlotNum());
 
-    SetupItemPool(
-        runtimeOutcastTensorPool_, devProg->memBudget.tensor.runtimeOutcastPoolSize, WsMemCategory::ITEMPOOL_RUNTIME_OUTCAST);
+    SetupItemPool(runtimeOutcastTensorPool_, devProg->memBudget.tensor.runtimeOutcastPoolSize,
+                  WsMemCategory::ITEMPOOL_RUNTIME_OUTCAST);
 }
-
 
 void DeviceWorkspaceAllocator::MemoryInfo::DumpError() const
 {
@@ -67,13 +65,12 @@ void DeviceWorkspaceAllocator::MemoryInfo::DumpError() const
         default:
             break;
     }
-    DEV_INFO(
-        "  Func (%2zu) %16s rawTensor[%2zu], @%" PRIx64 " [%zu bytes]%s.", stitchedListIndex,
-        dup.GetSource()->GetRawName(), rawIndex, ptr, size, ioPropertyDump.c_str());
+    DEV_INFO("  Func (%2zu) %16s rawTensor[%2zu], @%" PRIx64 " [%zu bytes]%s.", stitchedListIndex,
+             dup.GetSource()->GetRawName(), rawIndex, ptr, size, ioPropertyDump.c_str());
 }
 
-
-void DeviceWorkspaceAllocator::VerifyStitchedListMemory(DevStartArgs& args, const DevAscendFunctionDupped* stitchedList, size_t size)
+void DeviceWorkspaceAllocator::VerifyStitchedListMemory(DevStartArgs& args, const DevAscendFunctionDupped* stitchedList,
+                                                        size_t size)
 {
     std::set<uintdevptr_t> inoutAddr;
     for (int i = 0; i < args.GetInputTensorSize(); i++) {
@@ -91,28 +88,29 @@ void DeviceWorkspaceAllocator::VerifyStitchedListMemory(DevStartArgs& args, cons
         for (size_t j = 0; j < rawTensorCount; j++) {
             auto* rawTensor = dup.GetSource()->GetRawTensor(j);
             auto memReq = rawTensor->GetMemoryRequirement(dup.GetExpressionAddr());
-            MemoryInfo memInfo{ dup.GetRawTensorAddr(j), rawTensor->ioProperty == DevIOProperty::NONE ? 0 : memReq, dup, i, j, };
+            MemoryInfo memInfo{
+                dup.GetRawTensorAddr(j), rawTensor->ioProperty == DevIOProperty::NONE ? 0 : memReq, dup, i, j,
+            };
             switch (VerifyTensorMemoryState(memInfo.ptr, memInfo.size)) {
                 case WsMemoryState::INSIDE:
                     if (!IsValidWsTensor(memInfo.ptr, memInfo.size)) {
                         DEV_ERROR(WsErr::WS_TENSOR_ADDRESS_OUT_OF_RANGE,
-                            "workspace.verify.tensor: Invalid workspace tensor (not completely inside any "
-                            "workspace segment):");
+                                  "workspace.verify.tensor: Invalid workspace tensor (not completely inside any "
+                                  "workspace segment):");
                         memInfo.DumpError();
                         verificationSuccess = false;
                     }
                     break;
                 case WsMemoryState::CROSS_BOUNDARY:
-                    DEV_ERROR(
-                        WsErr::WS_TENSOR_ADDRESS_OUT_OF_RANGE,
-                        "workspace.verify.tensor: Memory crossing workspace boundary:");
+                    DEV_ERROR(WsErr::WS_TENSOR_ADDRESS_OUT_OF_RANGE,
+                              "workspace.verify.tensor: Memory crossing workspace boundary:");
                     memInfo.DumpError();
                     verificationSuccess = false;
                     break;
                 default:
                     if (!inoutAddr.count(memInfo.ptr)) {
                         DEV_ERROR(WsErr::WS_TENSOR_ADDRESS_OUT_OF_RANGE,
-                            "workspace.verify.tensor: Non input/output tensor outside of workspace:");
+                                  "workspace.verify.tensor: Non input/output tensor outside of workspace:");
                         memInfo.DumpError();
                         verificationSuccess = false;
                     }
@@ -123,19 +121,18 @@ void DeviceWorkspaceAllocator::VerifyStitchedListMemory(DevStartArgs& args, cons
     DEV_ASSERT(WsErr::WORKSPACE_INIT_RESOURCE_ERROR, verificationSuccess);
 }
 
-
-void DeviceWorkspaceAllocator::AllocateFunctionInnerWorkspace(
-    DevAscendFunctionDupped dup, uint64_t rootInnerMemReq, [[maybe_unused]] WsAllocatorCounter* dfxCounter)
+void DeviceWorkspaceAllocator::AllocateFunctionInnerWorkspace(DevAscendFunctionDupped dup, uint64_t rootInnerMemReq,
+                                                              [[maybe_unused]] WsAllocatorCounter* dfxCounter)
 {
     if (!tensorAllocators_[curParallelWsId].rootInner.CanAllocate(rootInnerMemReq)) {
         tensorAllocators_[curParallelWsId].rootInner.ResetPool();
-        DEV_ASSERT_MSG(
-            WsErr::WORKSPACE_INIT_RESOURCE_ERROR, tensorAllocators_[curParallelWsId].rootInner.CanAllocate(rootInnerMemReq),
-            "After reset, still cannot allocate root inner workspace unexpectedly, memReq=%" PRIu64,
-            rootInnerMemReq);
+        DEV_ASSERT_MSG(WsErr::WORKSPACE_INIT_RESOURCE_ERROR,
+                       tensorAllocators_[curParallelWsId].rootInner.CanAllocate(rootInnerMemReq),
+                       "After reset, still cannot allocate root inner workspace unexpectedly, memReq=%" PRIu64,
+                       rootInnerMemReq);
     }
-    WsAllocation allocation =
-        tensorAllocators_[curParallelWsId].rootInner.Malloc(rootInnerMemReq, WsMemCategory::TENSOR_ROOTFUNC_INTERNAL);
+    WsAllocation allocation = tensorAllocators_[curParallelWsId].rootInner.Malloc(
+        rootInnerMemReq, WsMemCategory::TENSOR_ROOTFUNC_INTERNAL);
 #if DEBUG_MEM_DUMP_LEVEL >= DEBUG_MEM_DUMP_FULL
     if (dfxCounter) {
         dfxCounter->LogMalloc(allocation);
@@ -146,17 +143,15 @@ void DeviceWorkspaceAllocator::AllocateFunctionInnerWorkspace(
     reuseInfo.poolResetTimes = tensorAllocators_[curParallelWsId].rootInner.ResetTimes();
 }
 
-
 // Helper: allocate outcast workspace for a duplicated root function
-void DeviceWorkspaceAllocator::AllocateOutcastWorkspaceForDup(
-    DevAscendFunctionDupped devRootDup, [[maybe_unused]] WsAllocatorCounter* pDfxCounter)
+void DeviceWorkspaceAllocator::AllocateOutcastWorkspaceForDup(DevAscendFunctionDupped devRootDup,
+                                                              [[maybe_unused]] WsAllocatorCounter* pDfxCounter)
 {
     DevAscendFunction* devRootSrc = devRootDup.GetSource();
     size_t outcastMemReq = devRootSrc->exclusiveOutcastWsMemoryRequirement;
     if (outcastMemReq != 0) {
-        DEV_ASSERT(
-            WsErr::WORKSPACE_INIT_RESOURCE_ERROR,
-            tensorAllocators_[curParallelWsId].devTaskInnerExclusiveOutcasts.CanAllocate(outcastMemReq));
+        DEV_ASSERT(WsErr::WORKSPACE_INIT_RESOURCE_ERROR,
+                   tensorAllocators_[curParallelWsId].devTaskInnerExclusiveOutcasts.CanAllocate(outcastMemReq));
         WsAllocation allocation = tensorAllocators_[curParallelWsId].devTaskInnerExclusiveOutcasts.Malloc(
             outcastMemReq, WsMemCategory::TENSOR_ROOTFUNC_INTERNAL);
 #if DEBUG_MEM_DUMP_LEVEL >= DEBUG_MEM_DUMP_FULL
@@ -173,9 +168,9 @@ void DeviceWorkspaceAllocator::AllocateOutcastWorkspaceForDup(
     }
 }
 
-
 // Helper: allocate inner workspace for a duplicated root function
-void DeviceWorkspaceAllocator::AllocateInnerWorkspaceForDup(DevAscendFunctionDupped devRootDup, WsAllocatorCounter* pDfxCounter)
+void DeviceWorkspaceAllocator::AllocateInnerWorkspaceForDup(DevAscendFunctionDupped devRootDup,
+                                                            WsAllocatorCounter* pDfxCounter)
 {
     DevAscendFunction* devRootSrc = devRootDup.GetSource();
     size_t rootInnerMemReq = devRootSrc->rootInnerTensorWsMemoryRequirement;
@@ -190,20 +185,18 @@ void DeviceWorkspaceAllocator::AllocateInnerWorkspaceForDup(DevAscendFunctionDup
     }
 }
 
-
 // Helper: assign incast address descriptors for a duplicated root function
 void DeviceWorkspaceAllocator::AssignIncastAddresses(DevAscendFunctionDupped devRootDup, DeviceExecuteSlot* slotList)
 {
     DevAscendFunction* devRootSrc = devRootDup.GetSource();
     for (size_t i = 0; i < devRootSrc->GetIncastSize(); ++i) {
-        DEV_ASSERT_MSG(
-            WsErr::WORKSPACE_ITER_INVALID, devRootSrc->GetIncast(i).fromSlotList.size() > 0,
-            "Root [%s] Incast %zu has no fromSlotList.", devRootSrc->GetRawName(), i);
+        DEV_ASSERT_MSG(WsErr::WORKSPACE_ITER_INVALID, devRootSrc->GetIncast(i).fromSlotList.size() > 0,
+                       "Root [%s] Incast %zu has no fromSlotList.", devRootSrc->GetRawName(), i);
 
         int slotIndex = devRootSrc->At(devRootSrc->GetIncast(i).fromSlotList, 0);
-        DEV_ASSERT_MSG(
-            WsErr::WORKSPACE_ITER_INVALID, slotList[slotIndex].rtOutcastIter != ITEM_POOL_INVALID_INDEX,
-            "Root[%s] incast %zu  slotIndex %d read from empty address.", devRootSrc->GetRawName(), i, slotIndex);
+        DEV_ASSERT_MSG(WsErr::WORKSPACE_ITER_INVALID, slotList[slotIndex].rtOutcastIter != ITEM_POOL_INVALID_INDEX,
+                       "Root[%s] incast %zu  slotIndex %d read from empty address.", devRootSrc->GetRawName(), i,
+                       slotIndex);
         auto& incastDesc = devRootDup.GetIncastAddress(i);
         incastDesc = AddressDescriptor::MakeFromRtOutcast(slotList[slotIndex].rtOutcastIter);
         RuntimeOutcastTensorRef(incastDesc.GetRtOutcastIter());
@@ -211,18 +204,18 @@ void DeviceWorkspaceAllocator::AssignIncastAddresses(DevAscendFunctionDupped dev
     }
 }
 
-
 // Helper: assign outcast address descriptors for a duplicated root function
-void DeviceWorkspaceAllocator::ResolveOutcastAddress(
-    DevAscendFunctionDupped devRootDup, DevAscendFunction* devRootSrc, DeviceExecuteSlot* slotList, size_t outcastIdx,
-    int outputSlotIndex, int assembleSlotIndex, uintdevptr_t outcastBaseAddr, AddressDescriptor& outcastDesc)
+void DeviceWorkspaceAllocator::ResolveOutcastAddress(DevAscendFunctionDupped devRootDup, DevAscendFunction* devRootSrc,
+                                                     DeviceExecuteSlot* slotList, size_t outcastIdx,
+                                                     int outputSlotIndex, int assembleSlotIndex,
+                                                     uintdevptr_t outcastBaseAddr, AddressDescriptor& outcastDesc)
 {
     auto rawTensor = devRootSrc->GetOutcastRawTensor(outcastIdx);
     if (outputSlotIndex != -1) {
         /* Output tensor */
         if (slotList[outputSlotIndex].isOutputTensorNeedCellMatch) {
-                TryAllocateDynamicCellMatchForAssembleSlot(slotList[outputSlotIndex]);
-            }
+            TryAllocateDynamicCellMatchForAssembleSlot(slotList[outputSlotIndex]);
+        }
         outcastDesc = AddressDescriptor::MakeFromRtOutcast(slotList[outputSlotIndex].rtOutcastIter);
         RuntimeOutcastTensorRef(outcastDesc.GetRtOutcastIter());
     } else if (rawTensor->linkedIncastId != -1) {
@@ -240,12 +233,12 @@ void DeviceWorkspaceAllocator::ResolveOutcastAddress(
                 AllocateInnerTemporalOutcastSlot(devRootSrc->GetRawName()), RuntimeTensorMemProperty::BOUNDARY_OUTCAST);
             slotList[assembleSlotIndex].isAssembleSlotNeedAlloc = false;
             TryAllocateDynamicCellMatchForAssembleSlot(slotList[assembleSlotIndex]);
-            slotList[assembleSlotIndex].ChangeSlotAllocIterId(); // mark tensor memory changed for stitch dependency cell match
+            slotList[assembleSlotIndex]
+                .ChangeSlotAllocIterId(); // mark tensor memory changed for stitch dependency cell match
         } else {
-            DEV_ASSERT_MSG(
-                WsErr::WORKSPACE_ITER_INVALID,
-                slotList[assembleSlotIndex].rtOutcastIter != ITEM_POOL_INVALID_INDEX,
-                "Missing RUNTIME_SlotMarkNeedAlloc for assemble slot %d.", assembleSlotIndex);
+            DEV_ASSERT_MSG(WsErr::WORKSPACE_ITER_INVALID,
+                           slotList[assembleSlotIndex].rtOutcastIter != ITEM_POOL_INVALID_INDEX,
+                           "Missing RUNTIME_SlotMarkNeedAlloc for assemble slot %d.", assembleSlotIndex);
         }
         outcastDesc = AddressDescriptor::MakeFromRtOutcast(slotList[assembleSlotIndex].rtOutcastIter);
         RuntimeOutcastTensorRef(outcastDesc.GetRtOutcastIter());
@@ -261,7 +254,6 @@ void DeviceWorkspaceAllocator::ResolveOutcastAddress(
             RuntimeTensorMemProperty::DEVTASK_INNER_OUTCAST));
     }
 }
-
 
 void DeviceWorkspaceAllocator::AssignOutcastAddresses(DevAscendFunctionDupped devRootDup, DeviceExecuteSlot* slotList)
 {
@@ -281,16 +273,13 @@ void DeviceWorkspaceAllocator::AssignOutcastAddresses(DevAscendFunctionDupped de
         }
 
         AddressDescriptor& outcastDesc = devRootDup.GetOutcastAddress(i);
-        ResolveOutcastAddress(
-            devRootDup, devRootSrc, slotList, i, outputSlotIndex, assembleSlotIndex, outcastBaseAddr, outcastDesc);
+        ResolveOutcastAddress(devRootDup, devRootSrc, slotList, i, outputSlotIndex, assembleSlotIndex, outcastBaseAddr,
+                              outcastDesc);
 
-        DEV_VERBOSE_DEBUG(
-            "get outcast %zu slot %d/%d address %s.", i, outputSlotIndex, assembleSlotIndex,
-            outcastDesc.Dump().c_str());
+        DEV_VERBOSE_DEBUG("get outcast %zu slot %d/%d address %s.", i, outputSlotIndex, assembleSlotIndex,
+                          outcastDesc.Dump().c_str());
     }
 }
-
-
 
 void DeviceWorkspaceAllocator::TryAllocateDynamicCellMatchForAssembleSlot(DeviceExecuteSlot& slot)
 {
@@ -307,24 +296,20 @@ void DeviceWorkspaceAllocator::TryAllocateDynamicCellMatchForAssembleSlot(Device
         return;
     }
     auto dynamicCellMatchSlotBytes = DynamicCellMatchSlotByteSize();
-    DEV_ASSERT_MSG(
-        WsErr::WORKSPACE_INIT_PARAM_INVALID, dynamicCellMatchSlotBytes > 0,
-        "Dynamic cell match slot bytes invalid, slotBytes=%" PRIu64, dynamicCellMatchSlotBytes);
-    DEV_ASSERT_MSG(
-        WsErr::WORKSPACE_INIT_RESOURCE_ERROR, metadataAllocators_.dynamicCellMatch.AvailableSlots() > 0,
-        "Dynamic cell match allocator exhausted, available=%zu", metadataAllocators_.dynamicCellMatch.AvailableSlots());
+    DEV_ASSERT_MSG(WsErr::WORKSPACE_INIT_PARAM_INVALID, dynamicCellMatchSlotBytes > 0,
+                   "Dynamic cell match slot bytes invalid, slotBytes=%" PRIu64, dynamicCellMatchSlotBytes);
+    DEV_ASSERT_MSG(WsErr::WORKSPACE_INIT_RESOURCE_ERROR, metadataAllocators_.dynamicCellMatch.AvailableSlots() > 0,
+                   "Dynamic cell match allocator exhausted, available=%zu",
+                   metadataAllocators_.dynamicCellMatch.AvailableSlots());
     WsAllocation dynamicCellMatchAlloc = metadataAllocators_.dynamicCellMatch.Allocate();
-    DEV_ASSERT_MSG(
-        WsErr::WORKSPACE_INIT_RESOURCE_ERROR, dynamicCellMatchAlloc.ptr != 0,
-        "Dynamic cell match metadata alloc failed, size=%" PRIu64, dynamicCellMatchSlotBytes);
+    DEV_ASSERT_MSG(WsErr::WORKSPACE_INIT_RESOURCE_ERROR, dynamicCellMatchAlloc.ptr != 0,
+                   "Dynamic cell match metadata alloc failed, size=%" PRIu64, dynamicCellMatchSlotBytes);
     dynamicCellMatchAlloc.parallelWsId = curParallelWsId;
-    partialUpdate->cellMatchRuntimePartialUpdateTable =
-        DevRelocVector<uint64_t>(0, reinterpret_cast<uint64_t*>(dynamicCellMatchAlloc.ptr));
+    partialUpdate->cellMatchRuntimePartialUpdateTable = DevRelocVector<uint64_t>(
+        0, reinterpret_cast<uint64_t*>(dynamicCellMatchAlloc.ptr));
     auto& runtimeOutcastTensor = GetRuntimeOutcastTensor(slot.rtOutcastIter);
     runtimeOutcastTensor.dynamicCellMatchAllocation = dynamicCellMatchAlloc;
 }
-
-
 
 bool DeviceWorkspaceAllocator::IsValidSlotMemRequirement(uint64_t memReq) const
 {
@@ -332,12 +317,6 @@ bool DeviceWorkspaceAllocator::IsValidSlotMemRequirement(uint64_t memReq) const
     auto& innerTemporalPool = tensorAllocators_[curParallelWsId].devTaskInnerTemporalOutcasts;
     return boundaryPool.IsValidSlotMemRequirement(memReq) || innerTemporalPool.IsValidSlotMemRequirement(memReq);
 }
-
-
-
-
-
-
 
 void DeviceWorkspaceAllocator::TriggerDelayedRecycle()
 {
@@ -347,9 +326,9 @@ void DeviceWorkspaceAllocator::TriggerDelayedRecycle()
         if (innerTemporalPool.ContainsPtr(outcast.allocation.ptr)) {
             innerTemporalPool.Deallocate(outcast.allocation.ptr);
         } else {
-            DEV_ASSERT_MSG(
-                WsErr::WS_TENSOR_ADDRESS_OUT_OF_RANGE, boundaryPool.ContainsPtr(outcast.allocation.ptr),
-                "Boundary outcast pointer is not in boundary or inner temporal pool, ptr=0x%lx", outcast.allocation.ptr);
+            DEV_ASSERT_MSG(WsErr::WS_TENSOR_ADDRESS_OUT_OF_RANGE, boundaryPool.ContainsPtr(outcast.allocation.ptr),
+                           "Boundary outcast pointer is not in boundary or inner temporal pool, ptr=0x%lx",
+                           outcast.allocation.ptr);
             boundaryPool.Deallocate(outcast.allocation.ptr);
         }
         if (outcast.dynamicCellMatchAllocation.ptr != 0) {
@@ -359,13 +338,11 @@ void DeviceWorkspaceAllocator::TriggerDelayedRecycle()
     rtBoundaryOutcastToBeFree_.clear();
 }
 
-
 void DeviceWorkspaceAllocator::RecycleDevFuncWorkspace()
 {
     tensorAllocators_[curParallelWsId].devTaskInnerExclusiveOutcasts.ResetPool();
     tensorAllocators_[curParallelWsId].rootInner.ResetPool();
 }
-
 
 DevAscendFunctionDupped DeviceWorkspaceAllocator::DuplicateRoot(DevAscendFunction* func)
 {
@@ -375,22 +352,19 @@ DevAscendFunctionDupped DeviceWorkspaceAllocator::DuplicateRoot(DevAscendFunctio
     return DevAscendFunctionDupped::DuplicateRoot(func, tinyAlloc);
 }
 
-
 void DeviceWorkspaceAllocator::DestroyDuppedFunc(DevAscendFunctionDupped& dup)
 {
     dup.ReleaseDuppedMemory(metadataAllocators_.general);
 }
 
-
 DynDeviceTask* DeviceWorkspaceAllocator::MakeDynDeviceTask()
 {
-    WsAllocation alloc = ControlFlowAllocateSlab(
-        devProg_, sizeof(DynDeviceTask), SlabAlloc(sizeof(DynDeviceTask), WsAicpuSlabMemType::DEV_DYN_TASK));
+    WsAllocation alloc = ControlFlowAllocateSlab(devProg_, sizeof(DynDeviceTask),
+                                                 SlabAlloc(sizeof(DynDeviceTask), WsAicpuSlabMemType::DEV_DYN_TASK));
     DynDeviceTask* dynTask = new (reinterpret_cast<void*>(alloc.ptr)) DynDeviceTask(*this);
     dynTask->selfAlloc = alloc;
     return dynTask;
 }
-
 
 DevAscendFunctionDuppedStitch* DeviceWorkspaceAllocator::AllocateStitch()
 {
@@ -404,15 +378,13 @@ DevAscendFunctionDuppedStitch* DeviceWorkspaceAllocator::AllocateStitch()
     return stitch;
 }
 
-
 DynFuncHeader* DeviceWorkspaceAllocator::AllocateDynFuncData(uint64_t size)
 {
-    WsAllocation allocation =
-        ControlFlowAllocateSlab(devProg_, size, SlabAlloc(size, WsAicpuSlabMemType::DYN_FUNC_DATA));
+    WsAllocation allocation = ControlFlowAllocateSlab(devProg_, size,
+                                                      SlabAlloc(size, WsAicpuSlabMemType::DYN_FUNC_DATA));
     DynFuncHeader* header = allocation.As<DynFuncHeader>();
     return header;
 }
-
 
 void DeviceWorkspaceAllocator::ResetAicpuMemCounter()
 {
@@ -421,14 +393,12 @@ void DeviceWorkspaceAllocator::ResetAicpuMemCounter()
 #endif // DEBUG_MEM_DUMP_LEVEL >= DEBUG_MEM_DUMP_FULL
 }
 
-
 void DeviceWorkspaceAllocator::RewindMemoryDumper()
 {
 #if DEBUG_MEM_DUMP_LEVEL >= DEBUG_MEM_DUMP_FULL
     wsMemDelayedDumper_.Rewind();
 #endif // DEBUG_MEM_DUMP_LEVEL >= DEBUG_MEM_DUMP_FULL
 }
-
 
 void DeviceWorkspaceAllocator::MarkAsNewStitchWindow()
 {
@@ -438,7 +408,6 @@ void DeviceWorkspaceAllocator::MarkAsNewStitchWindow()
     wsMemDelayedDumper_.MarkAsNewStitchWindow();
 #endif // DEBUG_MEM_DUMP_LEVEL >= DEBUG_MEM_DUMP_FULL
 }
-
 
 void DeviceWorkspaceAllocator::DumpMemoryUsage(const char* hint) const
 {
@@ -454,8 +423,8 @@ void DeviceWorkspaceAllocator::DumpMemoryUsage(const char* hint) const
     for (uint32_t i = 0; i < devProg_->GetParallelism(); i++) {
         DEV_MEM_DUMP("Parallel workspace %u.", i);
         tensorAllocators_[i].rootInner.DumpMemoryUsage(hint, "Tensor (root inner) workspace");
-        tensorAllocators_[i].devTaskInnerExclusiveOutcasts.DumpMemoryUsage(hint,
-            "Tensor (DeviceTask inner outcasts) workspace");
+        tensorAllocators_[i].devTaskInnerExclusiveOutcasts.DumpMemoryUsage(
+            hint, "Tensor (DeviceTask inner outcasts) workspace");
         tensorAllocators_[i].devTaskBoundaryOutcasts.DumpMemoryUsage(hint);
         tensorAllocators_[i].devTaskInnerTemporalOutcasts.DumpMemoryUsage(hint);
     }
@@ -466,7 +435,6 @@ void DeviceWorkspaceAllocator::DumpMemoryUsage(const char* hint) const
 #endif // DEBUG_MEM_DUMP_LEVEL >= DEBUG_MEM_DUMP_LIGHT
 }
 
-
 void DeviceWorkspaceAllocator::InitMetadataSlabAllocator()
 {
     DEV_ASSERT(WsErr::WORKSPACE_CAPACITY_INSUFFICIENT, metadataAllocators_.general.FreeMemorySize() > 0);
@@ -474,16 +442,16 @@ void DeviceWorkspaceAllocator::InitMetadataSlabAllocator()
     uint64_t realMemBase = AlignUp(memBase, sizeof(uint64_t));
     uint32_t metaSlabMemSize = metadataAllocators_.general.FreeMemorySize() - (realMemBase - memBase);
     uint32_t slabSize = CalcAicpuMetaSlabAlloctorSlabPageSize(metaSlabMemSize);
-    metadataAllocators_.generalSlab.Init(reinterpret_cast<void*>(realMemBase), metaSlabMemSize, slabSize, devProg_->devArgs.archInfo);
+    metadataAllocators_.generalSlab.Init(reinterpret_cast<void*>(realMemBase), metaSlabMemSize, slabSize,
+                                         devProg_->devArgs.archInfo);
     for (size_t i = 0; i < ToUnderlying(WsAicpuSlabMemType::COHERENT_SLAB_MEM_TYPE_BUTT); i++) {
         if ((slabMemObjSizeFunc[i] != nullptr) && ((this->*slabMemObjSizeFunc[i])() != 0)) {
-            [[maybe_unused]] bool registCacheRes =
-                metadataAllocators_.generalSlab.RegistCache(i, (this->*slabMemObjSizeFunc[i])());
+            [[maybe_unused]] bool registCacheRes = metadataAllocators_.generalSlab.RegistCache(
+                i, (this->*slabMemObjSizeFunc[i])());
             DEV_ASSERT(WsErr::WORKSPACE_ALLOCATOR_REGIST_FAILED, registCacheRes);
         }
     }
 }
-
 
 uint64_t DeviceWorkspaceAllocator::CalcMetadataItemPoolMemSize(const DevAscendProgram* devProg)
 {
@@ -492,7 +460,6 @@ uint64_t DeviceWorkspaceAllocator::CalcMetadataItemPoolMemSize(const DevAscendPr
     uint64_t itemPoolMemSize = itemBlockSize * devProg->memBudget.tensor.runtimeOutcastPoolSize;
     return itemPoolMemSize;
 }
-
 
 uint64_t DeviceWorkspaceAllocator::CalcMetadataVectorMemSize(const DevAscendProgram* devProg)
 {
@@ -505,8 +472,8 @@ uint64_t DeviceWorkspaceAllocator::CalcMetadataVectorMemSize(const DevAscendProg
     uint64_t slotListMemory = slotListCapacity * sizeof(DeviceExecuteSlot);
     DEV_DEBUG("slotListMemory=%lu.", slotListMemory);
     // 3. rtBoundaryOutcastToBeFree_
-    uint64_t boundaryOutcastToFreeListSize =
-        CalculateVectorCapacity(devProg->memBudget.tensor.BoundaryAndInnerTemporalOutcastSlotNum());
+    uint64_t boundaryOutcastToFreeListSize = CalculateVectorCapacity(
+        devProg->memBudget.tensor.BoundaryAndInnerTemporalOutcastSlotNum());
     uint64_t boundaryOutcastToFreeMemory = boundaryOutcastToFreeListSize * sizeof(RuntimeOutcastTensor);
     DEV_DEBUG("boundaryOutcastToFreeMemory=%lu.", boundaryOutcastToFreeMemory);
     // total
@@ -514,18 +481,16 @@ uint64_t DeviceWorkspaceAllocator::CalcMetadataVectorMemSize(const DevAscendProg
     return totalSetupVectorMemory;
 }
 
-
 uint64_t DeviceWorkspaceAllocator::CalcMetadataSlotAllocatorMemSize(const DevAscendProgram* devProg)
 {
     size_t blockHeaderSize = sizeof(WsSlotAllocator::BlockHeader);
     uint64_t boundaryOutcastSlotNum = devProg->memBudget.tensor.BoundaryAndInnerTemporalOutcastSlotNum();
     uint64_t dynamicCellMatchSlotNum = devProg->memBudget.metadata.dynamicCellMatchSlotNum;
-    DEV_DEBUG(
-        "boundaryOutcastSlotNum=%lu, dynamicCellMatchSlotNum=%lu", boundaryOutcastSlotNum, dynamicCellMatchSlotNum);
+    DEV_DEBUG("boundaryOutcastSlotNum=%lu, dynamicCellMatchSlotNum=%lu", boundaryOutcastSlotNum,
+              dynamicCellMatchSlotNum);
     uint64_t blockHeadersBytes = (boundaryOutcastSlotNum + dynamicCellMatchSlotNum) * blockHeaderSize;
     return blockHeadersBytes;
 }
-
 
 uint32_t DeviceWorkspaceAllocator::CalcSlabMemObjmaxSize()
 {
@@ -533,7 +498,6 @@ uint32_t DeviceWorkspaceAllocator::CalcSlabMemObjmaxSize()
     DEV_DEBUG("[workspaceSize] slabMemObjmaxSize=%u", slabMemObjmaxSize);
     return slabMemObjmaxSize;
 }
-
 
 uint32_t DeviceWorkspaceAllocator::CalcStitchSlabMemObjmaxSize(uint32_t* slabCapacity)
 {
@@ -569,8 +533,8 @@ uint32_t DeviceWorkspaceAllocator::CalcStitchSlabMemObjmaxSize(uint32_t* slabCap
     return slabMemObjmaxSize;
 }
 
-
-void DeviceWorkspaceAllocator::CalculateSlabCapacityPerType(uint32_t slabSize, uint32_t* slabCapacity, uint32_t slabTypeNum)
+void DeviceWorkspaceAllocator::CalculateSlabCapacityPerType(uint32_t slabSize, uint32_t* slabCapacity,
+                                                            uint32_t slabTypeNum)
 {
     if (slabCapacity == nullptr) {
         DEV_ERROR(WsErr::WORKSPACE_INIT_PARAM_INVALID, "#workspace.init.resource: slabCapacity is nullptr");
@@ -578,9 +542,8 @@ void DeviceWorkspaceAllocator::CalculateSlabCapacityPerType(uint32_t slabSize, u
     }
     constexpr uint32_t maxSlabTypes = ToUnderlying(WsAicpuSlabMemType::COHERENT_SLAB_MEM_TYPE_BUTT);
     if (slabTypeNum > maxSlabTypes) {
-        DEV_ERROR(
-            WsErr::SLAB_TYPE_INVALID, "#workspace.init.check: slabTypeNum exceeds the allowed maxSlabTypes=%u",
-            maxSlabTypes);
+        DEV_ERROR(WsErr::SLAB_TYPE_INVALID, "#workspace.init.check: slabTypeNum exceeds the allowed maxSlabTypes=%u",
+                  maxSlabTypes);
         return;
     }
     for (size_t i = 0; i < slabTypeNum; ++i) {
@@ -613,31 +576,33 @@ WsAllocation DeviceWorkspaceAllocator::SlabAlloc(uint32_t objSize, WsAicpuSlabMe
         if (submmitTaskQueue_.IsEmpty()) {
             metadataAllocators_.generalSlab.DumpMemoryStatusWhenAbnormal("SlabAlloc null");
             metadataAllocators_.stitchSlab.DumpMemoryStatusWhenAbnormal("SlabAlloc null");
-            DEV_ERROR(
-                WsErr::SLAB_ADD_CACHE_FAILED, "#workspace.init.check: Slab alloc null,type=%u,objsize=%u.",
-                ToUnderlying(type), objSize);
-            DEV_ASSERT_MSG(
-                WsErr::SLAB_ADD_CACHE_FAILED, false, "Slab alloc null,type=%u,objsize=%u.", ToUnderlying(type),
-                objSize);
+            DEV_ERROR(WsErr::SLAB_ADD_CACHE_FAILED, "#workspace.init.check: Slab alloc null,type=%u,objsize=%u.",
+                      ToUnderlying(type), objSize);
+            DEV_ASSERT_MSG(WsErr::SLAB_ADD_CACHE_FAILED, false, "Slab alloc null,type=%u,objsize=%u.",
+                           ToUnderlying(type), objSize);
         }
 
         while (!DeviceTaskMemTryRecycle()) {
             if ((GetCycles() - inner_start) > timeout_cycles) {
                 DEV_ERROR(WsErr::SLAB_ADD_CACHE_FAILED,
-                    "#workspace.alloc.inner: Inner recycle timeout, type=%u, objSize=%u.",
-                    ToUnderlying(type), objSize);
+                          "#workspace.alloc.inner: Inner recycle timeout, type=%u, objSize=%u.", ToUnderlying(type),
+                          objSize);
                 break;
             }
             if ((GetCycles() - inner_start) % warn_interval == 0) {
                 DEV_WARN("#workspace.alloc.inner: Inner recycle still waiting, type=%u, objSize=%u.",
-                    ToUnderlying(type), objSize);
+                         ToUnderlying(type), objSize);
             }
         };
 
-        __PYPTO_TIMEOUT_CHECK(WsErr::SLAB_ADD_CACHE_FAILED,
-            { WsAllocation emptyAlloc; emptyAlloc.ptr = 0; return emptyAlloc; },
-            "#workspace.alloc: SlabAlloc, type=%u, objSize=%u.",
-            ToUnderlying(type), objSize);
+        __PYPTO_TIMEOUT_CHECK(
+            WsErr::SLAB_ADD_CACHE_FAILED,
+            {
+                WsAllocation emptyAlloc;
+                emptyAlloc.ptr = 0;
+                return emptyAlloc;
+            },
+            "#workspace.alloc: SlabAlloc, type=%u, objSize=%u.", ToUnderlying(type), objSize);
     } while (true);
 
     WsAllocation allocation;
@@ -645,26 +610,22 @@ WsAllocation DeviceWorkspaceAllocator::SlabAlloc(uint32_t objSize, WsAicpuSlabMe
     return allocation;
 }
 
-
 WsSlabStageAllocMem DeviceWorkspaceAllocator::SlabGetStageAllocMem(bool keepTail, WsAicpuSlabMemType keepType)
 {
     WsSlabStageAllocMem stageMem;
-    stageMem.generalMetadataStageMem =
-        metadataAllocators_.generalSlab.PopStageAllocMem(keepTail, ToUnderlying(keepType));
-    stageMem.stitchStageMem =
-        metadataAllocators_.stitchSlab.PopStageAllocMem(false, 0); // not support keep alloc memory
+    stageMem.generalMetadataStageMem = metadataAllocators_.generalSlab.PopStageAllocMem(keepTail,
+                                                                                        ToUnderlying(keepType));
+    stageMem.stitchStageMem = metadataAllocators_.stitchSlab.PopStageAllocMem(false,
+                                                                              0); // not support keep alloc memory
     return stageMem;
 }
 
 void DeviceWorkspaceAllocator::DumpSlabUsageBeforeSubmit(uint32_t taskId, DynDeviceTask* devTask)
 {
-    DEV_VERBOSE_DEBUG(
-        "[workspace.slab.usage] before submit devTask, taskId=%u, devTask=%p. ",
-        taskId, devTask);
+    DEV_VERBOSE_DEBUG("[workspace.slab.usage] before submit devTask, taskId=%u, devTask=%p. ", taskId, devTask);
     metadataAllocators_.generalSlab.DumpSlabUsage("General metadata slab");
     metadataAllocators_.stitchSlab.DumpSlabUsage("Stitch pool slab");
 }
-
 
 void DeviceWorkspaceAllocator::SlabStageAllocMemSubmmit(DynDeviceTask* devTask)
 {
@@ -672,13 +633,10 @@ void DeviceWorkspaceAllocator::SlabStageAllocMemSubmmit(DynDeviceTask* devTask)
     while (!submmitTaskQueue_.TryEnqueue(devTask)) {
         DeviceTaskMemTryRecycle();
 
-        __PYPTO_TIMEOUT_CHECK(WsErr::SLAB_ADD_CACHE_FAILED,
-            return,
-            "#workspace.submit: SlabStageAllocMemSubmmit.");
+        __PYPTO_TIMEOUT_CHECK(WsErr::SLAB_ADD_CACHE_FAILED, return, "#workspace.submit: SlabStageAllocMemSubmmit.");
     }
     return;
 }
-
 
 void DeviceWorkspaceAllocator::InitMetadataAllocators(DevAscendProgram* devProg, DevStartArgs* devStartArgs)
 {
@@ -690,9 +648,8 @@ void DeviceWorkspaceAllocator::InitMetadataAllocators(DevAscendProgram* devProg,
 
     uint64_t stitchPoolAddr = devStartArgs->deviceRuntimeDataDesc.stitchPoolAddr;
     InitAicpuStitchSlabAllocator(reinterpret_cast<void*>(stitchPoolAddr), devProg->memBudget.metadata.stitchPool);
-    DEV_TRACE_DEBUG(CtrlEvent(
-        none(),
-        WorkspaceMetadataStitch(Range(stitchPoolAddr, stitchPoolAddr + devProg->memBudget.metadata.stitchPool))));
+    DEV_TRACE_DEBUG(CtrlEvent(none(), WorkspaceMetadataStitch(Range(
+                                          stitchPoolAddr, stitchPoolAddr + devProg->memBudget.metadata.stitchPool))));
 
     uint64_t dynamicCellMatchSlotNum = devProg->memBudget.metadata.dynamicCellMatchSlotNum;
     uint64_t dynamicCellMatchSlotBytes = devProg->memBudget.metadata.maxDynamicCellMatchTableMem;
@@ -701,20 +658,19 @@ void DeviceWorkspaceAllocator::InitMetadataAllocators(DevAscendProgram* devProg,
     if (dynamicCellMatchSlotNum == 0 || dynamicCellMatchSlotBytes == 0 || dynamicCellMatchBytes == 0) {
         return;
     }
-    DEV_ASSERT_MSG(
-        WsErr::WORKSPACE_INIT_PARAM_INVALID, dynamicCellMatchAddr != 0,
-        "Dynamic cell match addr is null while bytes=%lu", dynamicCellMatchBytes);
-    DEV_ASSERT_MSG(
-        WsErr::WORKSPACE_INIT_PARAM_INVALID, dynamicCellMatchBytes == dynamicCellMatchSlotNum * dynamicCellMatchSlotBytes,
-        "Dynamic cell match pool bytes mismatch, budget=%lu, calc=%lu", dynamicCellMatchBytes,
-        dynamicCellMatchSlotNum * dynamicCellMatchSlotBytes);
+    DEV_ASSERT_MSG(WsErr::WORKSPACE_INIT_PARAM_INVALID, dynamicCellMatchAddr != 0,
+                   "Dynamic cell match addr is null while bytes=%lu", dynamicCellMatchBytes);
+    DEV_ASSERT_MSG(WsErr::WORKSPACE_INIT_PARAM_INVALID,
+                   dynamicCellMatchBytes == dynamicCellMatchSlotNum * dynamicCellMatchSlotBytes,
+                   "Dynamic cell match pool bytes mismatch, budget=%lu, calc=%lu", dynamicCellMatchBytes,
+                   dynamicCellMatchSlotNum * dynamicCellMatchSlotBytes);
     WsAllocation dynamicCellMatchBase(dynamicCellMatchAddr, dynamicCellMatchBytes);
-    metadataAllocators_.dynamicCellMatch.InitTensorAllocator(
-        dynamicCellMatchBase.ptr, dynamicCellMatchSlotNum, dynamicCellMatchSlotBytes, metadataAllocators_.general);
+    metadataAllocators_.dynamicCellMatch.InitTensorAllocator(dynamicCellMatchBase.ptr, dynamicCellMatchSlotNum,
+                                                             dynamicCellMatchSlotBytes, metadataAllocators_.general);
 }
 
-
-void DeviceWorkspaceAllocator::InitTensorAllocators(uintdevptr_t workspaceAddr, uint64_t tensorWorkspaceSize, DevAscendProgram* devProg)
+void DeviceWorkspaceAllocator::InitTensorAllocators(uintdevptr_t workspaceAddr, uint64_t tensorWorkspaceSize,
+                                                    DevAscendProgram* devProg)
 {
     uint64_t baseAddr = workspaceAddr;
 
@@ -729,8 +685,8 @@ void DeviceWorkspaceAllocator::InitTensorAllocators(uintdevptr_t workspaceAddr, 
     uint64_t slotMem = devProg->memBudget.tensor.MaxOutcastMem();
     uint64_t boundaryOutcastBudgetPerParallel = boundarySlotNum * slotMem;
     uint64_t innerTemporalOutcastBudgetPerParallel = innerTemporalSlotNum * slotMem;
-    slotVerifier_.Init(
-        baseAddr, paallelism * (boundaryOutcastBudgetPerParallel + innerTemporalOutcastBudgetPerParallel));
+    slotVerifier_.Init(baseAddr,
+                       paallelism * (boundaryOutcastBudgetPerParallel + innerTemporalOutcastBudgetPerParallel));
     for (uint32_t parallelIdx = 0; parallelIdx < paallelism; parallelIdx++) {
         auto& boundaryPool = tensorAllocators_[parallelIdx].devTaskBoundaryOutcasts;
         auto& innerTemporalPool = tensorAllocators_[parallelIdx].devTaskInnerTemporalOutcasts;
@@ -739,10 +695,8 @@ void DeviceWorkspaceAllocator::InitTensorAllocators(uintdevptr_t workspaceAddr, 
             none(), WorkspaceCrossDeviceTaskOutcast(Range(baseAddr, baseAddr + boundaryOutcastBudgetPerParallel))));
         baseAddr += boundaryOutcastBudgetPerParallel;
         innerTemporalPool.InitTensorAllocator(baseAddr, innerTemporalSlotNum, slotMem, metadataAllocators_.general);
-        DEV_TRACE_DEBUG(CtrlEvent(
-            none(),
-            WorkspaceCrossDeviceTaskOutcast(
-                Range(baseAddr, baseAddr + innerTemporalOutcastBudgetPerParallel))));
+        DEV_TRACE_DEBUG(CtrlEvent(none(), WorkspaceCrossDeviceTaskOutcast(
+                                              Range(baseAddr, baseAddr + innerTemporalOutcastBudgetPerParallel))));
         baseAddr += innerTemporalOutcastBudgetPerParallel;
     }
 
@@ -759,17 +713,16 @@ void DeviceWorkspaceAllocator::InitTensorAllocators(uintdevptr_t workspaceAddr, 
     auto devTaskInnerOutcastBudget = devProg->memBudget.tensor.devTaskInnerExclusiveOutcasts;
     devTaskInnerExclusiveOutcastsWsVerifier_.Init(baseAddr, paallelism * devTaskInnerOutcastBudget);
     for (uint32_t parallelIdx = 0; parallelIdx < paallelism; parallelIdx++) {
-        tensorAllocators_[parallelIdx].devTaskInnerExclusiveOutcasts.InitTensorAllocator(baseAddr, devTaskInnerOutcastBudget);
+        tensorAllocators_[parallelIdx].devTaskInnerExclusiveOutcasts.InitTensorAllocator(baseAddr,
+                                                                                         devTaskInnerOutcastBudget);
         DEV_TRACE_DEBUG(
             CtrlEvent(none(), WorkspaceInDeviceTaskOutcast(Range(baseAddr, baseAddr + devTaskInnerOutcastBudget))));
         baseAddr += devTaskInnerOutcastBudget;
     }
 
-    DEV_ASSERT(
-        WsErr::WORKSPACE_BASE_ADDR_OUT_OF_RANGE,
-        workspaceAddr <= baseAddr && baseAddr <= workspaceAddr + tensorWorkspaceSize);
+    DEV_ASSERT(WsErr::WORKSPACE_BASE_ADDR_OUT_OF_RANGE,
+               workspaceAddr <= baseAddr && baseAddr <= workspaceAddr + tensorWorkspaceSize);
 }
-
 
 void DeviceWorkspaceAllocator::InitAICoreSpilledMemory(uintdevptr_t workspaceAddr, DevAscendProgram* devProg)
 {
@@ -779,19 +732,17 @@ void DeviceWorkspaceAllocator::InitAICoreSpilledMemory(uintdevptr_t workspaceAdd
     }
     // Compile time `aicoreSpilled` per single core is required to be aligned by 512.
     // This formula will never result into a value smaller than compile time one.
-    uint64_t perCoreMem =
-        devProg->memBudget.aicoreSpilled.Total() / TENSOR_ADDR_ALIGNMENT / coreNum * TENSOR_ADDR_ALIGNMENT;
+    uint64_t perCoreMem = devProg->memBudget.aicoreSpilled.Total() / TENSOR_ADDR_ALIGNMENT / coreNum *
+                          TENSOR_ADDR_ALIGNMENT;
 
     // Initialize in-core stack memory
     stackWorkspaceBase_ = workspaceAddr;
     standardStackWorkspacePerCore_ = perCoreMem;
     stackWorkspaceSize_ = devProg->memBudget.aicoreSpilled.Total();
-    DEV_TRACE_DEBUG(CtrlEvent(
-        none(),
-        WorkspaceSpill(
-            mem(perCoreMem), coreNum, Range(stackWorkspaceBase_, stackWorkspaceBase_ + stackWorkspaceSize_))));
+    DEV_TRACE_DEBUG(
+        CtrlEvent(none(), WorkspaceSpill(mem(perCoreMem), coreNum,
+                                         Range(stackWorkspaceBase_, stackWorkspaceBase_ + stackWorkspaceSize_))));
 }
-
 
 uint32_t DeviceWorkspaceAllocator::DevFunctionDuppedSlabMemObjSize()
 {
@@ -807,7 +758,6 @@ uint32_t DeviceWorkspaceAllocator::DevFunctionDuppedSlabMemObjSize()
     return maxDevFuncDuppedSize_;
 }
 
-
 /*计算使用vector的元数据的数据结构大小*/
 uint64_t DeviceWorkspaceAllocator::CalculateVectorCapacity(uint64_t size)
 {
@@ -821,13 +771,11 @@ uint64_t DeviceWorkspaceAllocator::CalculateVectorCapacity(uint64_t size)
     return capacity;
 }
 
-
 /* 按照devicetask最大支持stitch阈值分配对象 */
 uint32_t DeviceWorkspaceAllocator::DynFuncDataSlabMemObjSize()
 {
     return (sizeof(DynFuncHeader) + MAX_STITCH_FUNC_NUM * sizeof(DynFuncData));
 }
-
 
 /* 按照devicetask最大支持stitch阈值分配对象 */
 uint32_t DeviceWorkspaceAllocator::VecStitchListSLabMemObjSize()
@@ -835,12 +783,7 @@ uint32_t DeviceWorkspaceAllocator::VecStitchListSLabMemObjSize()
     return MAX_STITCH_FUNC_NUM * sizeof(DevAscendFunctionDupped);
 }
 
-
-uint32_t DeviceWorkspaceAllocator::DynDevTaskSlabMemObjSize()
-{
-    return sizeof(struct DynDeviceTask);
-}
-
+uint32_t DeviceWorkspaceAllocator::DynDevTaskSlabMemObjSize() { return sizeof(struct DynDeviceTask); }
 
 uint32_t DeviceWorkspaceAllocator::ShmemWaitUntilCacheSlabMemObjSize()
 {
@@ -850,18 +793,12 @@ uint32_t DeviceWorkspaceAllocator::ShmemWaitUntilCacheSlabMemObjSize()
     return 0;
 }
 
-
-uint32_t DeviceWorkspaceAllocator::DuppedStitchSlabMemObjSize()
-{
-    return sizeof(struct DevAscendFunctionDuppedStitch);
-}
-
+uint32_t DeviceWorkspaceAllocator::DuppedStitchSlabMemObjSize() { return sizeof(struct DevAscendFunctionDuppedStitch); }
 
 uint32_t DeviceWorkspaceAllocator::ReadyQueSlabMemObjSize()
 {
     return sizeof(ReadyCoreFunctionQueue) + devProg_->stitchFunctionsize * sizeof(uint32_t);
 }
-
 
 uint32_t DeviceWorkspaceAllocator::DieReadyQueSlabMemObjSize()
 {
@@ -872,7 +809,6 @@ uint32_t DeviceWorkspaceAllocator::DieReadyQueSlabMemObjSize()
     }
 }
 
-
 uint32_t DeviceWorkspaceAllocator::WrapQueSlabMemObjSize()
 {
     if (devProg_->devArgs.archInfo == ArchInfo::DAV_3510) {
@@ -881,7 +817,6 @@ uint32_t DeviceWorkspaceAllocator::WrapQueSlabMemObjSize()
         return 0;
     }
 }
-
 
 uint32_t DeviceWorkspaceAllocator::WrapQueForThreadSlabMemObjSize()
 {
@@ -893,20 +828,19 @@ uint32_t DeviceWorkspaceAllocator::WrapQueForThreadSlabMemObjSize()
     }
 }
 
-
 uint32_t DeviceWorkspaceAllocator::WrapOffsetListSlabMemObjSize()
 {
     if (devProg_->devArgs.archInfo == ArchInfo::DAV_3510) {
         uint32_t maxWrapIdNum = 0;
         for (uint32_t i = 0; i < devProg_->GetFunctionSize(); i++) {
-            maxWrapIdNum = std::max<uint32_t>(maxWrapIdNum, static_cast<uint32_t>(devProg_->GetFunction(i)->wrapIdNum_));
+            maxWrapIdNum = std::max<uint32_t>(maxWrapIdNum,
+                                              static_cast<uint32_t>(devProg_->GetFunction(i)->wrapIdNum_));
         }
         return maxWrapIdNum * sizeof(uint16_t);
     } else {
         return 0;
     }
 }
-
 
 /* 根据当前算子的业务模型分析计算出slab 管理内存页大小, 基于当前可评估的所有内存类型的最大值评估 */
 uint32_t DeviceWorkspaceAllocator::CalcAicpuMetaSlabAlloctorSlabMemObjmaxSize()
@@ -931,9 +865,8 @@ uint32_t DeviceWorkspaceAllocator::CalcAicpuMetaSlabAlloctorSlabPageSize(uint32_
     uint32_t allocNumOneSlab = 4; // default
     uint32_t slabSize = devProg_->memBudget.metadata.generalSlabSize;
     uint32_t leastSlabReqMem = (ToUnderlying(WsAicpuSlabMemType::COHERENT_SLAB_MEM_TYPE_BUTT)) * slabSize;
-    DEV_ASSERT_MSG(
-        WsErr::WORKSPACE_CAPACITY_INSUFFICIENT, leastSlabReqMem < totalMemSize,
-        "leastSlabReqMem=%u >= totalMemSize=%u", leastSlabReqMem, totalMemSize);
+    DEV_ASSERT_MSG(WsErr::WORKSPACE_CAPACITY_INSUFFICIENT, leastSlabReqMem < totalMemSize,
+                   "leastSlabReqMem=%u >= totalMemSize=%u", leastSlabReqMem, totalMemSize);
     uint32_t realMaxAllocNum = totalMemSize / leastSlabReqMem;
     if (realMaxAllocNum < allocNumOneSlab) {
         allocNumOneSlab = realMaxAllocNum;
@@ -941,53 +874,47 @@ uint32_t DeviceWorkspaceAllocator::CalcAicpuMetaSlabAlloctorSlabPageSize(uint32_
     return AlignUpSlab(slabSize * allocNumOneSlab + SlabWsAllocator::FirstObjBaseOffset());
 }
 
-
 void DeviceWorkspaceAllocator::InitAicpuStitchSlabAllocator(void* memBase, uint32_t totalSize)
 {
-    DEV_ASSERT_MSG(
-        WsErr::WORKSPACE_INIT_PARAM_INVALID, memBase != nullptr && totalSize > 0, "memBase %s null, totalSize=%u",
-        memBase == nullptr ? "is" : "is not", totalSize);
+    DEV_ASSERT_MSG(WsErr::WORKSPACE_INIT_PARAM_INVALID, memBase != nullptr && totalSize > 0,
+                   "memBase %s null, totalSize=%u", memBase == nullptr ? "is" : "is not", totalSize);
     uint32_t slabSize = devProg_->memBudget.metadata.stitchSlabSize;
     metadataAllocators_.stitchSlab.Init(memBase, totalSize, slabSize, devProg_->devArgs.archInfo);
     for (size_t i = ToUnderlying(WsAicpuSlabMemType::COHERENT_SLAB_MEM_TYPE_BUTT) + 1;
          i < ToUnderlying(WsAicpuSlabMemType::SLAB_MEM_TYPE_BUTT); ++i) {
         if ((slabMemObjSizeFunc[i] != nullptr) && ((this->*slabMemObjSizeFunc[i])() != 0)) {
             uint32_t objSize = (this->*slabMemObjSizeFunc[i])();
-            DEV_ASSERT_MSG(
-                WsErr::WORKSPACE_CAPACITY_INSUFFICIENT, slabSize > objSize, "slabSize=%u <= objSize=%u", slabSize,
-                objSize);
+            DEV_ASSERT_MSG(WsErr::WORKSPACE_CAPACITY_INSUFFICIENT, slabSize > objSize, "slabSize=%u <= objSize=%u",
+                           slabSize, objSize);
             [[maybe_unused]] bool registCacheRes = metadataAllocators_.stitchSlab.RegistCache(i, objSize);
             DEV_ASSERT(WsErr::WORKSPACE_ALLOCATOR_REGIST_FAILED, registCacheRes);
         }
     }
 }
 
-
 void DeviceWorkspaceAllocator::SlabTryDynAddCache(WsAicpuSlabMemType type, uint32_t objSize)
 {
     if (type < WsAicpuSlabMemType::COHERENT_SLAB_MEM_TYPE_BUTT) {
         if (!metadataAllocators_.generalSlab.ExistCache(ToUnderlying(type), objSize)) {
-            [[maybe_unused]] bool registCacheRes =
-                metadataAllocators_.generalSlab.RegistCache(ToUnderlying(type), objSize);
+            [[maybe_unused]] bool registCacheRes = metadataAllocators_.generalSlab.RegistCache(ToUnderlying(type),
+                                                                                               objSize);
             DEV_ASSERT(WsErr::WORKSPACE_ALLOCATOR_REGIST_FAILED, registCacheRes);
         }
     } else if (type < WsAicpuSlabMemType::SLAB_MEM_TYPE_BUTT) {
         if (!metadataAllocators_.stitchSlab.ExistCache(ToUnderlying(type), objSize)) {
-            [[maybe_unused]] bool registCacheRes =
-                metadataAllocators_.stitchSlab.RegistCache(ToUnderlying(type), objSize);
+            [[maybe_unused]] bool registCacheRes = metadataAllocators_.stitchSlab.RegistCache(ToUnderlying(type),
+                                                                                              objSize);
             DEV_ASSERT(WsErr::WORKSPACE_ALLOCATOR_REGIST_FAILED, registCacheRes);
         }
     } else {
-        DEV_ERROR(
-            WsErr::SLAB_TYPE_INVALID, "#workspace.init.check: Invalid slab memory type: %u", (unsigned int)type);
+        DEV_ERROR(WsErr::SLAB_TYPE_INVALID, "#workspace.init.check: Invalid slab memory type: %u", (unsigned int)type);
         DEV_ASSERT(WsErr::SLAB_TYPE_INVALID, false);
     }
 }
 
-
 bool DeviceWorkspaceAllocator::DeviceTaskMemTryRecycle()
 {
-    auto FreeTaskSlabMemfunc = [this] (DynDeviceTask* deviceTask, bool &continueNext) -> bool {
+    auto FreeTaskSlabMemfunc = [this](DynDeviceTask* deviceTask, bool& continueNext) -> bool {
         if (deviceTask == nullptr) {
             continueNext = true;
             return true;
@@ -1002,7 +929,8 @@ bool DeviceWorkspaceAllocator::DeviceTaskMemTryRecycle()
         }
 
         // parallel device task need continue check next
-        // devtask(iter1)(canFree = true), devtask(iter1)(canFree = false), ... devtask(iter2)(canFree = true), devtask(iter2)
+        // devtask(iter1)(canFree = true), devtask(iter1)(canFree = false), ... devtask(iter2)(canFree = true),
+        // devtask(iter2)
         continueNext = deviceTask->SupportParallel();
         return false;
     };

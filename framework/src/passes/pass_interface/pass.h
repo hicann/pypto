@@ -28,13 +28,10 @@ class Pass {
 public:
     explicit Pass(std::string name);
     virtual ~Pass() = default;
-    Status Run(
-        Function& function, const std::string& strategy, const std::string& identifier, size_t runtimeIdx,
-        const std::string& logStrategy);
-    Status Run(
-        Function& function, const std::string& strategy, const std::string& identifier, size_t runtimeIdx);
-    Status Run(
-        Function& function, const std::string& strategy, const std::string& identifier);
+    Status Run(Function& function, const std::string& strategy, const std::string& identifier, size_t runtimeIdx,
+               const std::string& logStrategy);
+    Status Run(Function& function, const std::string& strategy, const std::string& identifier, size_t runtimeIdx);
+    Status Run(Function& function, const std::string& strategy, const std::string& identifier);
     virtual Status PreCheck(Function& function);
     virtual Status PostCheck(Function& function);
     virtual Status DefaultEnabledPreCheck(Function& function);
@@ -73,8 +70,8 @@ protected:
     virtual void DoHealthCheckAfter(Function& function, const std::string& folderPath);
     mutable PassConfigs passDfxconfigs_;
     // 获取dump的文件名，如果是leaffunction，后面两个参数需要配置
-    std::string GetDumpFilePrefix(
-        Function& function, bool before = false, Function* subFunction = nullptr, int subFuncId = -1);
+    std::string GetDumpFilePrefix(Function& function, bool before = false, Function* subFunction = nullptr,
+                                  int subFuncId = -1);
 
 private:
     mutable std::string identifier_;

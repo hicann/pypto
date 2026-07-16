@@ -27,7 +27,8 @@ public:
     static void SetUpTestCase() { GegisterOps(); }
 
     void SetUp() override
-    {   const nlohmann::json& testData = GetParam().testData_;
+    {
+        const nlohmann::json& testData = GetParam().testData_;
         std::string opName = testData["operation"].get<std::string>();
         if (opName == "MultiCommGroupsOp") {
             Distributed::TestFrameworkInit2Groups(testParam, hcomTestParam, physicalDeviceId);
@@ -63,9 +64,8 @@ public:
         std::string caseName = testData["case_name"].get<std::string>();
         std::string goldenDir = GetGoldenDirPath(testData, fileName);
         DisOpRegister::GetRegister().Run(opName, testParam, dtype, goldenDir);
-        DISTRIBUTED_LOGI(
-            "test case finished successfully: op=%s, case=%s, json file=%s.", opName.c_str(), caseName.c_str(),
-            fileName.c_str());
+        DISTRIBUTED_LOGI("test case finished successfully: op=%s, case=%s, json file=%s.", opName.c_str(),
+                         caseName.c_str(), fileName.c_str());
     }
 
 protected:

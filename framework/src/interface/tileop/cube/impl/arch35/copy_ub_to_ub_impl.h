@@ -25,20 +25,18 @@ INLINE void TMoveND2NZImpl(DstTileData& dst, SrcTileData& src)
         return;
     }
     constexpr int64_t shapeSize = Std::tuple_size<typename DstTileData::Shape>::value;
-    constexpr int64_t staticNDH =
-        Std::tuple_element<shapeSize - SHAPE_DIM2, typename SrcTileData::TileShape>::type::value;
+    constexpr int64_t
+        staticNDH = Std::tuple_element<shapeSize - SHAPE_DIM2, typename SrcTileData::TileShape>::type::value;
     constexpr int64_t staticNDW = Std::tuple_element<shapeSize - 1, typename SrcTileData::TileShape>::type::value;
-    constexpr int64_t staticNZH =
-        Std::tuple_element<shapeSize - SHAPE_DIM2, typename DstTileData::TileShape>::type::value;
+    constexpr int64_t
+        staticNZH = Std::tuple_element<shapeSize - SHAPE_DIM2, typename DstTileData::TileShape>::type::value;
     constexpr int64_t staticNZW = Std::tuple_element<shapeSize - 1, typename DstTileData::TileShape>::type::value;
-    using tileNDTensor = pto::Tile<
-        pto::TileType::Vec, typename SrcTileData::Type, staticNDH, staticNDW, pto::BLayout::RowMajor, staticNDH,
-        staticNDW>;
+    using tileNDTensor = pto::Tile<pto::TileType::Vec, typename SrcTileData::Type, staticNDH, staticNDW,
+                                   pto::BLayout::RowMajor, staticNDH, staticNDW>;
     // staticNZH - 1 is for resolving bank conflicts
-    using tileNZTensor = pto::Tile<
-        pto::TileType::Vec, typename DstTileData::Type, staticNZH, staticNZW, pto::BLayout::ColMajor, staticNZH - 1,
-        staticNZW, pto::SLayout::RowMajor, pto::TileConfig::fractalABSize, pto::PadValue::Null,
-        pto::CompactMode::RowPlusOne>;
+    using tileNZTensor = pto::Tile<pto::TileType::Vec, typename DstTileData::Type, staticNZH, staticNZW,
+                                   pto::BLayout::ColMajor, staticNZH - 1, staticNZW, pto::SLayout::RowMajor,
+                                   pto::TileConfig::fractalABSize, pto::PadValue::Null, pto::CompactMode::RowPlusOne>;
     tileNDTensor srcTile;
     tileNZTensor dstTile;
     pto::TASSIGN(srcTile, static_cast<uint64_t>(src.GetAddr()));

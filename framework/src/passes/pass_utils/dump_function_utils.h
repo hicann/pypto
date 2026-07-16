@@ -28,17 +28,11 @@ class DumpFunctionUtils {
 public:
     Status GetTileFunction(Function* function, std::unordered_set<Function*>& tileFunctionSet);
 
-    Status DumpTileFunctionsJson(
-        Function& function,
-        const std::string& logFolder,
-        bool beforeFunction,
-        std::function<Status(Function&, const std::string&, bool)> dumpFunc);
+    Status DumpTileFunctionsJson(Function& function, const std::string& logFolder, bool beforeFunction,
+                                 std::function<Status(Function&, const std::string&, bool)> dumpFunc);
 
-    Status PrintTileFunctions(
-        Function& function,
-        const std::string& logFolder,
-        bool beforeFunction,
-        std::function<Status(Function&, const std::string&, bool)> printFunc);
+    Status PrintTileFunctions(Function& function, const std::string& logFolder, bool beforeFunction,
+                              std::function<Status(Function&, const std::string&, bool)> printFunc);
 
 private:
     Status GetCallee(const Operation& callop, Function*& callFunc);

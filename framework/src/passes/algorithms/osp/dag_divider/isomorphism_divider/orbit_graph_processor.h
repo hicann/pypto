@@ -51,34 +51,19 @@ public:
         // Each vector of vertices represents one of the isomorphic subgraphs in this group.
         std::vector<std::vector<VertexType>> subgraphs_;
 
-        inline size_t size() const
-        {
-            return subgraphs_.size();
-        }
+        inline size_t size() const { return subgraphs_.size(); }
     };
 
     explicit OrbitGraphProcessor() {}
 
-    void SetMergeDifferentNodeTypes(bool flag)
-    {
-        mergeDifferentNodeTypes_ = flag;
-    }
-    void SetWorkThreshold(VWorkwT<ConstrGraphT> workThreshold)
-    {
-        workThreshold_ = workThreshold;
-    }
+    void SetMergeDifferentNodeTypes(bool flag) { mergeDifferentNodeTypes_ = flag; }
+    void SetWorkThreshold(VWorkwT<ConstrGraphT> workThreshold) { workThreshold_ = workThreshold; }
     void SetCriticalPathThreshold(VWorkwT<ConstrGraphT> criticalPathThreshold)
     {
         criticalPathThreshold_ = criticalPathThreshold;
     }
-    void SetLockRatio(double lockRatio)
-    {
-        lockOrbitRatio_ = lockRatio;
-    }
-    void SetNaturalBreaksCountPercentage(double percentage)
-    {
-        naturalBreaksCountPercentage_ = percentage;
-    }
+    void SetLockRatio(double lockRatio) { lockOrbitRatio_ = lockRatio; }
+    void SetNaturalBreaksCountPercentage(double percentage) { naturalBreaksCountPercentage_ = percentage; }
 
     /**
      * @brief Discovers isomorphic groups (orbits) in the DAG and constructs an initial coarse graph.
@@ -89,32 +74,17 @@ public:
      * @param dag The input computational DAG.
      * @param hasher The hash computer providing orbit information.
      */
-    void DiscoverIsomorphicGroups(const GraphT &dag, const HashComputer<VertexType> &hasher);
+    void DiscoverIsomorphicGroups(const GraphT& dag, const HashComputer<VertexType>& hasher);
 
-    const ConstrGraphT &GetCoarseGraph() const
-    {
-        return coarseGraph_;
-    }
+    const ConstrGraphT& GetCoarseGraph() const { return coarseGraph_; }
 
-    const std::vector<VertexType> &GetContractionMap() const
-    {
-        return contractionMap_;
-    }
+    const std::vector<VertexType>& GetContractionMap() const { return contractionMap_; }
 
-    const ConstrGraphT &GetFinalCoarseGraph() const
-    {
-        return finalCoarseGraph_;
-    }
+    const ConstrGraphT& GetFinalCoarseGraph() const { return finalCoarseGraph_; }
 
-    const std::vector<VertexType> &GetFinalContractionMap() const
-    {
-        return finalContractionMap_;
-    }
+    const std::vector<VertexType>& GetFinalContractionMap() const { return finalContractionMap_; }
 
-    const std::vector<Group> &GetFinalGroups() const
-    {
-        return finalGroups_;
-    }
+    const std::vector<Group>& GetFinalGroups() const { return finalGroups_; }
 
 private:
     // Results from the first (orbit) coarsening step
@@ -127,7 +97,7 @@ private:
     std::vector<Group> finalGroups_;
     size_t currentSymmetry_;
 
-    size_t minSymmetry_ = 2;    // min symmetry threshold
+    size_t minSymmetry_ = 2; // min symmetry threshold
     VWorkwT<ConstrGraphT> workThreshold_ = 0;
     VWorkwT<ConstrGraphT> criticalPathThreshold_ = 0;
     bool mergeDifferentNodeTypes_ = true;
@@ -137,7 +107,7 @@ private:
 
     struct PairHasher {
         template <class T1, class T2>
-        std::size_t operator()(const std::pair<T1, T2> &p) const
+        std::size_t operator()(const std::pair<T1, T2>& p) const
         {
             auto h1 = std::hash<T1>{}(p.first);
             auto h2 = std::hash<T2>{}(p.second);
@@ -149,87 +119,64 @@ private:
     std::unordered_set<std::pair<VertexType, VertexType>, PairHasher> nonViableEdgesCache_;
     std::unordered_set<std::pair<VertexType, VertexType>, PairHasher> nonViableCritPathEdgesCache_;
 
-    std::pair<ConstrGraphT, std::vector<VertexType>> SimulateMerge(
-        VertexType u, VertexType v,
-        const ConstrGraphT &currentCoarseGraph) const;
+    std::pair<ConstrGraphT, std::vector<VertexType>> SimulateMerge(VertexType u, VertexType v,
+                                                                   const ConstrGraphT& currentCoarseGraph) const;
 
-    void CommitMerge(VertexType u, VertexType v, ConstrGraphT &&nextCoarseGraph,
-                     const std::vector<VertexType> &groupRemap,
-                     std::vector<std::vector<VertexType>> &&newSubgraphs,
-                     ConstrGraphT &currentCoarseGraph,
-                     std::vector<Group> &currentGroups);
+    void CommitMerge(VertexType u, VertexType v, ConstrGraphT&& nextCoarseGraph,
+                     const std::vector<VertexType>& groupRemap, std::vector<std::vector<VertexType>>&& newSubgraphs,
+                     ConstrGraphT& currentCoarseGraph, std::vector<Group>& currentGroups);
 
-    bool ShouldSkipEdge(VertexType u, VertexType v,
-                        const ConstrGraphT &currentCoarseGraph,
-                        const std::vector<Group> &currentGroups,
-                        const std::vector<VertexIdxT<ConstrGraphT>> &vertexPoset,
-                        const std::vector<VertexIdxT<ConstrGraphT>> &vertexBotPoset,
+    bool ShouldSkipEdge(VertexType u, VertexType v, const ConstrGraphT& currentCoarseGraph,
+                        const std::vector<Group>& currentGroups,
+                        const std::vector<VertexIdxT<ConstrGraphT>>& vertexPoset,
+                        const std::vector<VertexIdxT<ConstrGraphT>>& vertexBotPoset,
                         const VWorkwT<ConstrGraphT> workThreshold) const;
 
-    bool TryMergeEdge(VertexType u, VertexType v, const GraphT &originalDag,
-                      const ConstrGraphT &currentCoarseGraph,
-                      const std::vector<Group> &currentGroups,
-                      const VWorkwT<ConstrGraphT> pathThreshold,
-                      std::vector<std::vector<VertexType>> &outNewSubgraphs,
-                      ConstrGraphT &outTempGraph,
-                      std::vector<VertexType> &outTempContractionMap);
+    bool TryMergeEdge(VertexType u, VertexType v, const GraphT& originalDag, const ConstrGraphT& currentCoarseGraph,
+                      const std::vector<Group>& currentGroups, const VWorkwT<ConstrGraphT> pathThreshold,
+                      std::vector<std::vector<VertexType>>& outNewSubgraphs, ConstrGraphT& outTempGraph,
+                      std::vector<VertexType>& outTempContractionMap);
 
-    void MergeSmallOrbits(const GraphT &originalDag,
-                          ConstrGraphT &currentCoarseGraph,
-                          std::vector<Group> &currentGroups,
-                          const VWorkwT<ConstrGraphT> workThreshold,
+    void MergeSmallOrbits(const GraphT& originalDag, ConstrGraphT& currentCoarseGraph,
+                          std::vector<Group>& currentGroups, const VWorkwT<ConstrGraphT> workThreshold,
                           const VWorkwT<ConstrGraphT> pathThreshold = 0);
 
-    bool IsEdgeMergeCandidate(VertexType u, VertexType v,
-                              const ConstrGraphT &currentCoarseGraph,
-                              const std::vector<VertexIdxT<ConstrGraphT>> &vertexPoset,
-                              const std::vector<VertexIdxT<ConstrGraphT>> &vertexBotPoset,
+    bool IsEdgeMergeCandidate(VertexType u, VertexType v, const ConstrGraphT& currentCoarseGraph,
+                              const std::vector<VertexIdxT<ConstrGraphT>>& vertexPoset,
+                              const std::vector<VertexIdxT<ConstrGraphT>>& vertexBotPoset,
                               const bool mergeDifferentNodeTypes);
 
-    bool IsSignificanceMergeBlocked(VertexType u, VertexType v,
-                                    const ConstrGraphT &currentCoarseGraph,
-                                    const std::vector<Group> &currentGroups,
-                                    const std::vector<VWorkwT<GraphT>> &lockThresholdPerType,
-                                    const bool mergeDifferentNodeTypes,
-                                    std::size_t newSize);
+    bool IsSignificanceMergeBlocked(VertexType u, VertexType v, const ConstrGraphT& currentCoarseGraph,
+                                    const std::vector<Group>& currentGroups,
+                                    const std::vector<VWorkwT<GraphT>>& lockThresholdPerType,
+                                    const bool mergeDifferentNodeTypes, std::size_t newSize);
 
-    bool TryContractEdge(VertexType u, VertexType v,
-                         const GraphT &originalDag,
-                         ConstrGraphT &currentCoarseGraph,
-                         std::vector<Group> &currentGroups,
-                         const bool mergeBelowThreshold,
-                         const std::vector<VWorkwT<GraphT>> &lockThresholdPerType,
-                         const bool mergeDifferentNodeTypes,
+    bool TryContractEdge(VertexType u, VertexType v, const GraphT& originalDag, ConstrGraphT& currentCoarseGraph,
+                         std::vector<Group>& currentGroups, const bool mergeBelowThreshold,
+                         const std::vector<VWorkwT<GraphT>>& lockThresholdPerType, const bool mergeDifferentNodeTypes,
                          const VWorkwT<ConstrGraphT> pathThreshold);
 
-    void ContractEdgesAdpativeSym(const GraphT &originalDag,
-                                  ConstrGraphT &currentCoarseGraph,
-                                  std::vector<Group> &currentGroups,
-                                  const bool mergeDifferentNodeTypes,
+    void ContractEdgesAdpativeSym(const GraphT& originalDag, ConstrGraphT& currentCoarseGraph,
+                                  std::vector<Group>& currentGroups, const bool mergeDifferentNodeTypes,
                                   const bool mergeBelowThreshold,
-                                  const std::vector<VWorkwT<GraphT>> &lockThresholdPerType,
+                                  const std::vector<VWorkwT<GraphT>>& lockThresholdPerType,
                                   const VWorkwT<ConstrGraphT> pathThreshold = 0);
 
-    std::vector<size_t> FindSignificantSymmetryLevels(
-        const std::map<size_t, size_t> &orbitSizeCounts,
-        size_t countThreshold);
+    std::vector<size_t> FindSignificantSymmetryLevels(const std::map<size_t, size_t>& orbitSizeCounts,
+                                                      size_t countThreshold);
 
-    size_t FindFallbackSymmetryLevel(const std::map<size_t, size_t> &orbitSizeCounts);
+    size_t FindFallbackSymmetryLevel(const std::map<size_t, size_t>& orbitSizeCounts);
 
     std::vector<size_t> ComputeSymmetryLevels(const std::map<size_t, size_t> orbitSizeCounts);
 
-    void PerformCoarseningAdaptiveSymmetry(
-        const GraphT &originalDag,
-        const ConstrGraphT &initialCoarseGraph,
-        const std::vector<VWorkwT<GraphT>> &lockThresholdPerType,
-        const std::vector<size_t> &symmetryLevelsToTest);
+    void PerformCoarseningAdaptiveSymmetry(const GraphT& originalDag, const ConstrGraphT& initialCoarseGraph,
+                                           const std::vector<VWorkwT<GraphT>>& lockThresholdPerType,
+                                           const std::vector<size_t>& symmetryLevelsToTest);
 
-    bool IsMergeViable(const GraphT &originalDag,
-                       const Group &groupU,
-                       const Group &groupV,
-                       std::vector<std::vector<VertexType>> &outNewSubgraphs) const;
+    bool IsMergeViable(const GraphT& originalDag, const Group& groupU, const Group& groupV,
+                       std::vector<std::vector<VertexType>>& outNewSubgraphs) const;
 };
-}    // namespace osp
+} // namespace osp
 } // namespace npu::tile_fwk
 
 #include "passes/algorithms/osp/dag_divider/isomorphism_divider/orbit_graph_processor.tpp"

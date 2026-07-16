@@ -101,9 +101,8 @@ void ModelVisualizer::DrawFunction(FunctionPtr func, const std::string& outdir, 
     SIMULATION_LOGW("Path: %s", path.c_str());
 }
 
-void ModelVisualizer::DebugFunction(
-    FunctionPtr func, std::unordered_map<int, TilePtr>& tiles, std::unordered_map<int, TileOpPtr>& tileOps,
-    const std::string& outdir) const
+void ModelVisualizer::DebugFunction(FunctionPtr func, std::unordered_map<int, TilePtr>& tiles,
+                                    std::unordered_map<int, TileOpPtr>& tileOps, const std::string& outdir) const
 {
     std::string path = outdir + "/" + func->funcName + ".deadlock_debug_graph.dot";
     std::ofstream os(path);

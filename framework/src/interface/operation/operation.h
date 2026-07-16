@@ -388,9 +388,10 @@ private:
     void DumpTileInfoJson(Json& opDump) const;
     void DumpAttributesJson(Json& opDump) const;
 
-    static void LoadOperandsFromJson(
-        const Json& opDump, const std::unordered_map<int, std::shared_ptr<LogicalTensor>>& tensorDict,
-        std::vector<std::shared_ptr<LogicalTensor>>& ioperands, std::vector<std::shared_ptr<LogicalTensor>>& ooperands);
+    static void LoadOperandsFromJson(const Json& opDump,
+                                     const std::unordered_map<int, std::shared_ptr<LogicalTensor>>& tensorDict,
+                                     std::vector<std::shared_ptr<LogicalTensor>>& ioperands,
+                                     std::vector<std::shared_ptr<LogicalTensor>>& ooperands);
     void LoadLocationFromJson(const Json& opDump);
     void LoadBasicInfoFromJson(const Json& opDump);
     void LoadTileInfoFromJson(const Json& opDump);
@@ -480,12 +481,12 @@ public:
 
     void RemoveOutCtrlOperation(Operation& operation);
 
-    Operation& CloneOperation(
-        Function& func, const LogicalTensors& iOperandList, const LogicalTensors& oOperandList) const;
+    Operation& CloneOperation(Function& func, const LogicalTensors& iOperandList,
+                              const LogicalTensors& oOperandList) const;
 
-    std::shared_ptr<Operation> CloneTensorOpStmt(
-        const LogicalTensors& iOperandList, const LogicalTensors& oOperandList, const ir::VarPtr& resultToken,
-        const std::vector<ir::VarPtr>& tokens, ir::Span span, Function* targetFunc = nullptr) const;
+    std::shared_ptr<Operation> CloneTensorOpStmt(const LogicalTensors& iOperandList, const LogicalTensors& oOperandList,
+                                                 const ir::VarPtr& resultToken, const std::vector<ir::VarPtr>& tokens,
+                                                 ir::Span span, Function* targetFunc = nullptr) const;
 
     [[nodiscard]] std::string GetOpcodeStr(bool appendTile = false) const;
     [[nodiscard]] CoreType GetCoreType() const { return coreType_; }
@@ -507,50 +508,49 @@ public:
     void SetOpAttribute(const std::shared_ptr<OpAttribute>& attr)
     {
         opAttribute_ = attr;
-        static std::unordered_set<Opcode> copyOpAttrOpTypes{
-            Opcode::OP_L1_COPY_IN,
-            Opcode::OP_L1_COPY_OUT,
-            Opcode::OP_COPY_IN,
-            Opcode::OP_L0C_TO_L1,
-            Opcode::OP_L0C_COPY_UB,
-            Opcode::OP_L0C_COPY_UB_DUAL_DST,
-            Opcode::OP_L1_TO_BT,
-            Opcode::OP_L1_TO_FIX_QUANT_PRE,
-            Opcode::OP_L1_TO_L0A,
-            Opcode::OP_L1_TO_L0B,
-            Opcode::OP_L1_TO_L0_AT,
-            Opcode::OP_L1_TO_L0_BT,
-            Opcode::OP_UB_COPY_L1,
-            Opcode::OP_COPY_OUT,
-            Opcode::OP_RESHAPE_COPY_IN,
-            Opcode::OP_RESHAPE_COPY_OUT,
-            Opcode::OP_INDEX_OUTCAST,
-            Opcode::OP_INDEX_PUT,
-            Opcode::OP_INDEX_ADD,
-            Opcode::OP_TRANSPOSE_MOVEIN,
-            Opcode::OP_TRANSPOSE_MOVEOUT,
-            Opcode::OP_NCHW2NC1HWC0,
-            Opcode::OP_NCHW2Fractal_Z,
-            Opcode::OP_NC1HWC02NCHW,
-            Opcode::OP_NCDHW2NDC1HWC0,
-            Opcode::OP_NCDHW2FRACTAL_Z_3D,
-            Opcode::OP_NDC1HWC02NCDHW,
-            Opcode::OP_SHMEM_PUT,
-            Opcode::OP_SHMEM_STORE,
-            Opcode::OP_SHMEM_SIGNAL,
-            Opcode::OP_SHMEM_GET,
-            Opcode::OP_SHMEM_LOAD,
-            Opcode::OP_SHMEM_SET,
-            Opcode::OP_GATHER_IN_UB,
-            Opcode::OP_L1_COPY_IN_A_SCALE,
-            Opcode::OP_L1_COPY_IN_B_SCALE,
-            Opcode::OP_L1_TO_L0A_SCALE,
-            Opcode::OP_L1_TO_L0B_SCALE,
-            Opcode::OP_L1_COPY_IN_CONV,
-            Opcode::OP_L0C_COPY_OUT,
-            Opcode::OP_L0C_COPY_OUT_CONV,
-            Opcode::OP_L1_RESHAPE_COPY_IN,
-            Opcode::OP_L0C_RESHAPE_COPY_OUT};
+        static std::unordered_set<Opcode> copyOpAttrOpTypes{Opcode::OP_L1_COPY_IN,
+                                                            Opcode::OP_L1_COPY_OUT,
+                                                            Opcode::OP_COPY_IN,
+                                                            Opcode::OP_L0C_TO_L1,
+                                                            Opcode::OP_L0C_COPY_UB,
+                                                            Opcode::OP_L0C_COPY_UB_DUAL_DST,
+                                                            Opcode::OP_L1_TO_BT,
+                                                            Opcode::OP_L1_TO_FIX_QUANT_PRE,
+                                                            Opcode::OP_L1_TO_L0A,
+                                                            Opcode::OP_L1_TO_L0B,
+                                                            Opcode::OP_L1_TO_L0_AT,
+                                                            Opcode::OP_L1_TO_L0_BT,
+                                                            Opcode::OP_UB_COPY_L1,
+                                                            Opcode::OP_COPY_OUT,
+                                                            Opcode::OP_RESHAPE_COPY_IN,
+                                                            Opcode::OP_RESHAPE_COPY_OUT,
+                                                            Opcode::OP_INDEX_OUTCAST,
+                                                            Opcode::OP_INDEX_PUT,
+                                                            Opcode::OP_INDEX_ADD,
+                                                            Opcode::OP_TRANSPOSE_MOVEIN,
+                                                            Opcode::OP_TRANSPOSE_MOVEOUT,
+                                                            Opcode::OP_NCHW2NC1HWC0,
+                                                            Opcode::OP_NCHW2Fractal_Z,
+                                                            Opcode::OP_NC1HWC02NCHW,
+                                                            Opcode::OP_NCDHW2NDC1HWC0,
+                                                            Opcode::OP_NCDHW2FRACTAL_Z_3D,
+                                                            Opcode::OP_NDC1HWC02NCDHW,
+                                                            Opcode::OP_SHMEM_PUT,
+                                                            Opcode::OP_SHMEM_STORE,
+                                                            Opcode::OP_SHMEM_SIGNAL,
+                                                            Opcode::OP_SHMEM_GET,
+                                                            Opcode::OP_SHMEM_LOAD,
+                                                            Opcode::OP_SHMEM_SET,
+                                                            Opcode::OP_GATHER_IN_UB,
+                                                            Opcode::OP_L1_COPY_IN_A_SCALE,
+                                                            Opcode::OP_L1_COPY_IN_B_SCALE,
+                                                            Opcode::OP_L1_TO_L0A_SCALE,
+                                                            Opcode::OP_L1_TO_L0B_SCALE,
+                                                            Opcode::OP_L1_COPY_IN_CONV,
+                                                            Opcode::OP_L0C_COPY_OUT,
+                                                            Opcode::OP_L0C_COPY_OUT_CONV,
+                                                            Opcode::OP_L1_RESHAPE_COPY_IN,
+                                                            Opcode::OP_L0C_RESHAPE_COPY_OUT};
         if (copyOpAttrOpTypes.count(opcode_) > 0) {
             FE_ASSERT(std::dynamic_pointer_cast<CopyOpAttribute>(opAttribute_) != nullptr);
             return;
@@ -567,9 +567,8 @@ public:
             }
             case Opcode::OP_ASSEMBLE_SSA:
             case Opcode::OP_ATOMIC_RMW:
-                FE_ASSERT(
-                    std::dynamic_pointer_cast<AssembleOpAttribute>(opAttribute_) != nullptr ||
-                    std::dynamic_pointer_cast<CopyOpAttribute>(opAttribute_) != nullptr);
+                FE_ASSERT(std::dynamic_pointer_cast<AssembleOpAttribute>(opAttribute_) != nullptr ||
+                          std::dynamic_pointer_cast<CopyOpAttribute>(opAttribute_) != nullptr);
                 break;
             case Opcode::OP_BLOCK_CALL:
             case Opcode::OP_CALL: {
@@ -585,11 +584,11 @@ public:
         }
     }
 
-    void SetAssembleOpAttribute(
-        const std::vector<int64_t>& toOffset, const std::vector<SymbolicScalar>& toDynOffset = {})
+    void SetAssembleOpAttribute(const std::vector<int64_t>& toOffset,
+                                const std::vector<SymbolicScalar>& toDynOffset = {})
     {
-        FE_ASSERT(
-            opcode_ == Opcode::OP_ASSEMBLE || opcode_ == Opcode::OP_ASSEMBLE_SSA || opcode_ == Opcode::OP_ATOMIC_RMW);
+        FE_ASSERT(opcode_ == Opcode::OP_ASSEMBLE || opcode_ == Opcode::OP_ASSEMBLE_SSA ||
+                  opcode_ == Opcode::OP_ATOMIC_RMW);
         SetOpAttribute(std::make_shared<AssembleOpAttribute>(toOffset, toDynOffset));
     }
 
@@ -617,8 +616,8 @@ public:
     void EraseInput(const std::shared_ptr<LogicalTensor>& input);
     void EraseDependTensor(const std::shared_ptr<LogicalTensor>& dependTensor);
     void ReplaceInput(const std::shared_ptr<LogicalTensor>& newInput, const std::shared_ptr<LogicalTensor>& oldInput);
-    void ReplaceOutput(
-        const std::shared_ptr<LogicalTensor>& newOutput, const std::shared_ptr<LogicalTensor>& oldOutput);
+    void ReplaceOutput(const std::shared_ptr<LogicalTensor>& newOutput,
+                       const std::shared_ptr<LogicalTensor>& oldOutput);
 
     Opcode GetOpcode() const { return opcode_; }
 
@@ -640,9 +639,8 @@ public:
     }
     void UpdateSubgraphID(int subgraphID) { subgraphID_ = subgraphID; }
     // HashOrder attribute setters/getters using attribute mechanism
-    void SetHashOrderInfo(
-        const std::string& hashOrderKey, const std::string& countKey, const std::string& hashOrder,
-        size_t subgraphCount)
+    void SetHashOrderInfo(const std::string& hashOrderKey, const std::string& countKey, const std::string& hashOrder,
+                          size_t subgraphCount)
     {
         SetAttr(hashOrderKey, hashOrder);
         SetAttr(countKey, static_cast<int64_t>(subgraphCount));

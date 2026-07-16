@@ -43,8 +43,8 @@ TEST_F(DynamicOpTest, FullUnalign)
 
         LOOP("L0", FunctionType::DYNAMIC_LOOP, sIdx, LoopRange((curSeq + sTile - 1) / sTile))
         {
-            Tensor tmp = Full(
-                Element(DataType::DT_FP32, 2.0f), DT_FP32, {sTile, h}, {std::min(curSeq - sIdx * sTile, sTile), h});
+            Tensor tmp = Full(Element(DataType::DT_FP32, 2.0f), DT_FP32, {sTile, h},
+                              {std::min(curSeq - sIdx * sTile, sTile), h});
             Assemble(tmp, {sIdx * sTile, 0}, output);
         }
     }

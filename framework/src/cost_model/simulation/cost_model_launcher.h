@@ -45,8 +45,7 @@ public:
     uint8_t* AllocHostAddr(uint64_t size)
     {
         auto hostPtr = (uint8_t*)malloc(size);
-        CHECK(npu::tile_fwk::InternalError::SIM_INNER_ERROR, hostPtr != nullptr)
-            << "alloc host addr failed.";
+        CHECK(npu::tile_fwk::InternalError::SIM_INNER_ERROR, hostPtr != nullptr) << "alloc host addr failed.";
         allocatedHostAddr.emplace_back(hostPtr);
         return hostPtr;
     }
@@ -167,9 +166,9 @@ extern "C" int PyptoKernelCtrlServer(void* targ);
 
 class CostModelLauncher : public DeviceLauncher {
 public:
-    static void CostModelRunOnce(
-        Function* function, const std::vector<RawTensorDataPtr>& inputs, const std::vector<RawTensorDataPtr>& outputs,
-        const DeviceLauncherConfig& config = DeviceLauncherConfig())
+    static void CostModelRunOnce(Function* function, const std::vector<RawTensorDataPtr>& inputs,
+                                 const std::vector<RawTensorDataPtr>& outputs,
+                                 const DeviceLauncherConfig& config = DeviceLauncherConfig())
     {
         auto runner = CostModelLauncher(function, config);
         runner.RunDynamic(inputs, outputs);
@@ -261,22 +260,23 @@ private:
     }
 
     void RunPvModel(DeviceKernelArgs& kArgs, const std::vector<RawTensorDataPtr>& inputs,
-        const std::vector<RawTensorDataPtr>& outputs)
+                    const std::vector<RawTensorDataPtr>& outputs)
     {
         if (std::getenv("ASCEND_HOME_PATH") == nullptr) {
-            SIMULATION_LOGE(CostModel::PrecisionSimErrorScene::CANN_LOAD_FAILED, "ASCEND_HOME_PATH is not set, precision simulation unavailable.");
+            SIMULATION_LOGE(CostModel::PrecisionSimErrorScene::CANN_LOAD_FAILED,
+                            "ASCEND_HOME_PATH is not set, precision simulation unavailable.");
             return;
         }
-        
+
         auto archType = npu::tile_fwk::Platform::Instance().GetSoc().GetNPUArch();
         if (archType == NPUArch::DAV_3510) {
             if (std::getenv("CAMODEL_LOG_PATH") == nullptr) {
                 SIMULATION_LOGE(CostModel::PrecisionSimErrorScene::CANNSIM_FAILED,
-                    "cannsim not used to start, precision simulation unavailable.");
+                                "cannsim not used to start, precision simulation unavailable.");
                 return;
             }
         }
-        
+
         try {
             pv_ = CostModel::PvModelFactory::CreateDyn();
             pv_->InitPv();
@@ -291,7 +291,7 @@ private:
     }
 
     void BuildPvKernelArgs(DeviceKernelArgs& kArgs, const std::vector<RawTensorDataPtr>& inputs,
-        const std::vector<RawTensorDataPtr>& outputs)
+                           const std::vector<RawTensorDataPtr>& outputs)
     {
         MemoryHelper devMem{true};
         auto buildInouts = [&](auto& tensorList, DevTensorData* tensorData) {
@@ -313,7 +313,8 @@ private:
         PatchRuntimeDynamicCellMatchMeta(devMem, devProg, kArgs);
         const uint64_t maxPatchCount = function_->GetDyndevAttribute()->dynamicCellMatchLaunchMetaList.size();
         size_t patchTailSize = sizeof(uint64_t) + maxPatchCount * sizeof(DevDynamicCellMatchStridePatch);
-        size_t tensorSize = (inputs.size() + outputs.size()) * sizeof(DevTensorData) + 2 * sizeof(uint64_t) + patchTailSize;
+        size_t tensorSize = (inputs.size() + outputs.size()) * sizeof(DevTensorData) + 2 * sizeof(uint64_t) +
+                            patchTailSize;
         std::vector<uint8_t> tensorInfo(tensorSize);
         auto data = reinterpret_cast<uint64_t*>(tensorInfo.data());
         *data = inputs.size();
@@ -324,7 +325,8 @@ private:
         buildInouts(inputs, dataPtr);
         dataPtr += inputs.size();
         buildInouts(outputs, dataPtr);
-        WriteDynamicCellMatchStridePatchesToLaunchArgs(reinterpret_cast<int64_t*>(tensorInfo.data()), cellMatchDescPatches_);
+        WriteDynamicCellMatchStridePatchesToLaunchArgs(reinterpret_cast<int64_t*>(tensorInfo.data()),
+                                                       cellMatchDescPatches_);
         kArgs.inputs = (int64_t*)pv_->CopyToDev(tensorInfo.data(), tensorSize);
         kArgs.outputs = kArgs.inputs + 1;
         kArgs.cfgdata = (int64_t*)pv_->CopyToDev(devProgData.data(), devProgData.size());
@@ -336,8 +338,8 @@ private:
         std::atomic<int> idx{0};
         auto* devProg = (DevAscendProgram*)(kArgs->cfgdata);
         size_t shmSize = DEVICE_TASK_CTRL_POOL_SIZE + DEVICE_TASK_QUEUE_SIZE * devProg->devArgs.scheCpuNum;
-        auto deviceTaskCtrlPoolAddr =
-            devProg->devArgs.runtimeDataRingBufferAddr + sizeof(RuntimeDataRingBufferHead) + DEV_ARGS_SIZE;
+        auto deviceTaskCtrlPoolAddr = devProg->devArgs.runtimeDataRingBufferAddr + sizeof(RuntimeDataRingBufferHead) +
+                                      DEV_ARGS_SIZE;
         (void)memset_s(reinterpret_cast<void*>(deviceTaskCtrlPoolAddr), shmSize, 0, shmSize);
         int launchAiCpuNum = static_cast<int>(devProg->devArgs.nrAicpu + dynamic::MAX_CONTROL_FLOW_AICPU_NUM);
         std::vector<std::thread> aicpus(launchAiCpuNum);
@@ -356,7 +358,7 @@ private:
 
         aicpus[0] = std::thread(threadFun, RUN_SPLITTED_STREAM_CTRL);
         for (int i = 1; i < launchAiCpuNum; i++) {
-           aicpus[i] = std::thread(threadFun, RUN_SPLITTED_STREAM_SCHE);
+            aicpus[i] = std::thread(threadFun, RUN_SPLITTED_STREAM_SCHE);
         }
 
         for (int i = 0; i < launchAiCpuNum; i++) {
@@ -366,9 +368,8 @@ private:
         }
     }
 
-    void InitKernelInOuts(
-        DeviceKernelArgs& kArgs, const std::vector<RawTensorDataPtr>& inputTensors,
-        const std::vector<RawTensorDataPtr>& outputTensors, bool isTest)
+    void InitKernelInOuts(DeviceKernelArgs& kArgs, const std::vector<RawTensorDataPtr>& inputTensors,
+                          const std::vector<RawTensorDataPtr>& outputTensors, bool isTest)
     {
         std::vector<DeviceTensorData> inputList;
         std::vector<DeviceTensorData> outputList;
@@ -377,14 +378,13 @@ private:
         const uint64_t maxPatchCount = function_->GetDyndevAttribute()->dynamicCellMatchLaunchMetaList.size();
         DeviceInitKernelInOuts(memoryHelper, kArgs, inputList, outputList, {}, maxPatchCount);
         WriteDynamicCellMatchStridePatchesToLaunchArgs(kArgs.inputs, cellMatchDescPatches_);
-        SIMULATION_LOGI(
-            "Inputs %p outputs %p workspace %p cfgdata %p", kArgs.inputs, kArgs.outputs, kArgs.workspace,
-            kArgs.cfgdata);
+        SIMULATION_LOGI("Inputs %p outputs %p workspace %p cfgdata %p", kArgs.inputs, kArgs.outputs, kArgs.workspace,
+                        kArgs.cfgdata);
     }
 
-    void RefillDynamicCellMatchAndMemBudget(
-        MemoryHelper& memoryHelper, DeviceKernelArgs& kArgs, const std::vector<RawTensorDataPtr>& inputs,
-        const std::vector<RawTensorDataPtr>& outputs)
+    void RefillDynamicCellMatchAndMemBudget(MemoryHelper& memoryHelper, DeviceKernelArgs& kArgs,
+                                            const std::vector<RawTensorDataPtr>& inputs,
+                                            const std::vector<RawTensorDataPtr>& outputs)
     {
         auto dynAttr = function_->GetDyndevAttribute();
         auto* functionDevProg = reinterpret_cast<DevAscendProgram*>(dynAttr->devProgBinary.data());

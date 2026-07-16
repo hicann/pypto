@@ -43,8 +43,8 @@ struct TypeBase {};
 
 template <typename Ty0, typename... Tys>
 struct MaxTypeSize {
-    constexpr static int size =
-        std::max(static_cast<size_t>(sizeof(Ty0)), static_cast<size_t>(MaxTypeSize<Tys...>::size));
+    constexpr static int size = std::max(static_cast<size_t>(sizeof(Ty0)),
+                                         static_cast<size_t>(MaxTypeSize<Tys...>::size));
 };
 template <typename Ty0>
 struct MaxTypeSize<Ty0> {
@@ -241,7 +241,7 @@ template <typename Ty0, typename Ty1>
 struct AttributeCall_2 : AttributeCall_1<Ty0> {
     using Base = AttributeCall_1<Ty0>;
     AttributeCall_2() = default;
-    AttributeCall_2(const std::string& name) : Base(name){};
+    AttributeCall_2(const std::string& name) : Base(name) {};
     AttributeCall_2(const std::string& name, const Ty0& arg0, const Ty1& arg1) : Base(name, arg0), arg1_(arg1) {}
     std::string Dump(bool top = true) const
     {
@@ -260,7 +260,7 @@ template <typename Ty0, typename Ty1, typename Ty2>
 struct AttributeCall_3 : AttributeCall_2<Ty0, Ty1> {
     using Base = AttributeCall_2<Ty0, Ty1>;
     AttributeCall_3() = default;
-    AttributeCall_3(const std::string& name) : Base(name){};
+    AttributeCall_3(const std::string& name) : Base(name) {};
     AttributeCall_3(const std::string& name, const Ty0& arg0, const Ty1& arg1, const Ty2& arg2)
         : Base(name, arg0, arg1), arg2_(arg2)
     {}
@@ -281,7 +281,7 @@ template <typename Ty0, typename Ty1, typename Ty2, typename Ty3>
 struct AttributeCall_4 : AttributeCall_3<Ty0, Ty1, Ty2> {
     using Base = AttributeCall_3<Ty0, Ty1, Ty2>;
     AttributeCall_4() = default;
-    AttributeCall_4(const std::string& name) : Base(name){};
+    AttributeCall_4(const std::string& name) : Base(name) {};
     AttributeCall_4(const std::string& name, const Ty0& arg0, const Ty1& arg1, const Ty2& arg2, const Ty3& arg3)
         : Base(name, arg0, arg1, arg2), arg3_(arg3)
     {}
@@ -302,9 +302,9 @@ template <typename Ty0, typename Ty1, typename Ty2, typename Ty3, typename Ty4>
 struct AttributeCall_5 : AttributeCall_4<Ty0, Ty1, Ty2, Ty3> {
     using Base = AttributeCall_4<Ty0, Ty1, Ty2, Ty3>;
     AttributeCall_5() = default;
-    AttributeCall_5(const std::string& name) : Base(name){};
-    AttributeCall_5(
-        const std::string& name, const Ty0& arg0, const Ty1& arg1, const Ty2& arg2, const Ty3& arg3, const Ty4& arg4)
+    AttributeCall_5(const std::string& name) : Base(name) {};
+    AttributeCall_5(const std::string& name, const Ty0& arg0, const Ty1& arg1, const Ty2& arg2, const Ty3& arg3,
+                    const Ty4& arg4)
         : Base(name, arg0, arg1, arg2, arg3), arg4_(arg4)
     {}
     std::string Dump(bool top = true) const
@@ -324,10 +324,9 @@ template <typename Ty0, typename Ty1, typename Ty2, typename Ty3, typename Ty4, 
 struct AttributeCall_6 : AttributeCall_5<Ty0, Ty1, Ty2, Ty3, Ty4> {
     using Base = AttributeCall_5<Ty0, Ty1, Ty2, Ty3, Ty4>;
     AttributeCall_6() = default;
-    AttributeCall_6(const std::string& name) : Base(name){};
-    AttributeCall_6(
-        const std::string& name, const Ty0& arg0, const Ty1& arg1, const Ty2& arg2, const Ty3& arg3, const Ty4& arg4,
-        const Ty5& arg5)
+    AttributeCall_6(const std::string& name) : Base(name) {};
+    AttributeCall_6(const std::string& name, const Ty0& arg0, const Ty1& arg1, const Ty2& arg2, const Ty3& arg3,
+                    const Ty4& arg4, const Ty5& arg5)
         : Base(name, arg0, arg1, arg2, arg3, arg4), arg5_(arg5)
     {}
     std::string Dump(bool top = true) const
@@ -551,16 +550,16 @@ private:
         name() : name##Base(#name) {}                            \
         static const std::string Name() { return #name; }        \
     };
-#define SCHEMA_DEF_ATTR_CALL_(name, ...)                              \
-    typedef npu::tile_fwk::schema::type::SCHEMA_DEF_ATTR_CONCAT(      \
-        AttributeCall_, SCHEMA_DEF_ATTR_NR(__VA_ARGS__))<__VA_ARGS__> \
-        name##Base;                                                   \
-    struct name : name##Base {                                        \
-        name() : name##Base(#name) {}                                 \
-        template <typename... TyArgs>                                 \
-        name(const TyArgs&... args) : name##Base(#name, args...)      \
-        {}                                                            \
-        static const std::string Name() { return #name; }             \
+#define SCHEMA_DEF_ATTR_CALL_(name, ...)                                                                      \
+    typedef npu::tile_fwk::schema::type::SCHEMA_DEF_ATTR_CONCAT(AttributeCall_,                               \
+                                                                SCHEMA_DEF_ATTR_NR(__VA_ARGS__))<__VA_ARGS__> \
+        name##Base;                                                                                           \
+    struct name : name##Base {                                                                                \
+        name() : name##Base(#name) {}                                                                         \
+        template <typename... TyArgs>                                                                         \
+        name(const TyArgs&... args) : name##Base(#name, args...)                                              \
+        {}                                                                                                    \
+        static const std::string Name() { return #name; }                                                     \
     };
 
 #define SCHEMA_DEF_ATTR_NAME(name, text)                         \

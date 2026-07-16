@@ -43,9 +43,8 @@ void BackendConfig::SetBackendType(BackendType type)
 
     if (backend_type_.has_value()) {
         // Idempotent: allow setting the same type multiple times
-        CHECK(*backend_type_ == type) << "Backend type already set to "
-                                      << BackendTypeName(*backend_type_) << ", cannot change to "
-                                      << BackendTypeName(type);
+        CHECK(*backend_type_ == type) << "Backend type already set to " << BackendTypeName(*backend_type_)
+                                      << ", cannot change to " << BackendTypeName(type);
         return;
     }
 

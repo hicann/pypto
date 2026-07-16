@@ -102,14 +102,13 @@ struct TypeInfo {
                 FE_LOGE(FeError::INVALID_TYPE, "invalid type: %s at %s", type.c_str(), prefix.c_str());
             }
         } else {
-            FE_LOGE(
-                FeError::NOT_EXIST, "Label<%s> field['type', 'properties'] not found in tile_fwk_config_schema.json",
-                prefix.c_str());
+            FE_LOGE(FeError::NOT_EXIST,
+                    "Label<%s> field['type', 'properties'] not found in tile_fwk_config_schema.json", prefix.c_str());
         }
     }
 
-    void parse_range_info(
-        const nlohmann::json& jData, const std::string& prefix, const std::string& min_key, const std::string& max_key)
+    void parse_range_info(const nlohmann::json& jData, const std::string& prefix, const std::string& min_key,
+                          const std::string& max_key)
     {
         int64_t minBound = jData.contains(min_key) ? jData[min_key].get<int64_t>() : INT_MIN;
         int64_t maxBound = jData.contains(max_key) ? jData[max_key].get<int64_t>() : INT_MAX;
@@ -256,9 +255,8 @@ void DumpValues(std::stringstream& os, const std::map<std::string, std::any>& va
     }
 }
 
-void DumpRange(
-    std::stringstream& os, const std::type_info& type, const std::string& key,
-    const std::map<std::string, std::pair<int64_t, int64_t>>& rangeInfos)
+void DumpRange(std::stringstream& os, const std::type_info& type, const std::string& key,
+               const std::map<std::string, std::pair<int64_t, int64_t>>& rangeInfos)
 {
     os << "Range: ";
     if (type == typeid(std::map<int64_t, int64_t>)) {
@@ -269,9 +267,8 @@ void DumpRange(
     }
 }
 
-bool HasRangeConstraint(
-    const std::string& key, const std::type_info& type,
-    const std::map<std::string, std::pair<int64_t, int64_t>>& rangeInfos)
+bool HasRangeConstraint(const std::string& key, const std::type_info& type,
+                        const std::map<std::string, std::pair<int64_t, int64_t>>& rangeInfos)
 {
     if (rangeInfos.count(key) != 0) {
         return true;
@@ -380,8 +377,8 @@ struct ConfigManagerImpl {
 
     bool IsWithinRange(const std::string& properties, const int64_t& value) const
     {
-        return IntervalJudge(
-            value, typeInfo.rangeInfos.at(properties).first, typeInfo.rangeInfos.at(properties).second);
+        return IntervalJudge(value, typeInfo.rangeInfos.at(properties).first,
+                             typeInfo.rangeInfos.at(properties).second);
     }
 
     bool IsWithinRange(const std::string& properties, const std::map<int64_t, int64_t>& value) const
@@ -548,8 +545,8 @@ private:
     }
 };
 
-void ConfigManagerNg::BeginScope(
-    const std::string& name, std::map<std::string, std::any>&& values, const char* file, int lino)
+void ConfigManagerNg::BeginScope(const std::string& name, std::map<std::string, std::any>&& values, const char* file,
+                                 int lino)
 {
     impl_->BeginScope(name, std::move(values), file, lino);
 }
@@ -563,8 +560,8 @@ ConfigManagerNg::ScopedRestore::ScopedRestore(std::shared_ptr<ConfigScope> scope
 
 ConfigManagerNg::ScopedRestore::~ScopedRestore() { ConfigManagerNg::GetInstance().EndScope(); }
 
-ConfigManagerNg::JitScopeGuard::JitScopeGuard(
-    const std::string& name, std::map<std::string, std::any>&& values, const char* file, int lino)
+ConfigManagerNg::JitScopeGuard::JitScopeGuard(const std::string& name, std::map<std::string, std::any>&& values,
+                                              const char* file, int lino)
 {
     ConfigManagerNg::GetInstance().BeginScope(name, std::move(values), file, lino);
 }
@@ -596,8 +593,8 @@ bool ConfigManagerNg::IsWithinRange(const std::string& properties, std::any& val
             return impl_->IsWithinRange(properties, AnyCast<int64_t>(value));
         }
     } catch (const std::out_of_range& e) {
-        FE_LOGE(
-            FeError::INVALID_VAL, "key[%s] has been not loaded form tile_fwk_config_schema.json.", properties.c_str());
+        FE_LOGE(FeError::INVALID_VAL, "key[%s] has been not loaded form tile_fwk_config_schema.json.",
+                properties.c_str());
         return false;
     }
     return true;

@@ -53,8 +53,9 @@ static std::string GetDtype(DataType dtype)
     }
 }
 
-std::unordered_map<int, std::string> CodeGenLiteNPU::GenParamsSymbolMap(
-    const SubfuncParam& subFuncParam, std::vector<std::string>& params, std::map<std::string, std::string>& dTypeMap)
+std::unordered_map<int, std::string> CodeGenLiteNPU::GenParamsSymbolMap(const SubfuncParam& subFuncParam,
+                                                                        std::vector<std::string>& params,
+                                                                        std::map<std::string, std::string>& dTypeMap)
 {
     auto& tensorInvokeArgs = subFuncParam.tensorsArgs_;
 
@@ -103,9 +104,8 @@ std::unordered_map<int, std::string> CodeGenLiteNPU::GenParamsSymbolMap(
 
 void CodeGenLiteNPU::GenCode(Function& topFunc)
 {
-    COMPILER_LOGI(
-        "Start Generate AI_CORE code for topFunc: %s, hash: %s", topFunc.GetMagicName().c_str(),
-        topFunc.GetFunctionHash().c_str());
+    COMPILER_LOGI("Start Generate AI_CORE code for topFunc: %s, hash: %s", topFunc.GetMagicName().c_str(),
+                  topFunc.GetFunctionHash().c_str());
 
     compileTasks_.clear();
 
@@ -132,11 +132,10 @@ void CodeGenLiteNPU::GenCode(Function& topFunc)
 
                 // kirin json codegen
                 std::vector<std::string> inOutParams = GetInOutParams(subFuncPair);
-                int blockDim = 1;          // NEXTNEXT: currently only support one block dim
+                int blockDim = 1; // NEXTNEXT: currently only support one block dim
                 int jsonWorkspaceSize = subFunc->GetStackWorkespaceSize();
-                GenConfigJson(
-                    compileInfo.GetJsonAbsPath(), compileInfo.GetCCEAbsPath(), compileInfo.GetBinAbsPath(),
-                    topFunc.GetMagicName(), jsonWorkspaceSize, inOutParams, blockDim);
+                GenConfigJson(compileInfo.GetJsonAbsPath(), compileInfo.GetCCEAbsPath(), compileInfo.GetBinAbsPath(),
+                              topFunc.GetMagicName(), jsonWorkspaceSize, inOutParams, blockDim);
             }
 #endif
             UpdateSubFunc(subFuncPair, compileInfo);
@@ -157,14 +156,12 @@ void CodeGenLiteNPU::GenFuncBody(Function& subFunc, Function& topFunc, std::ostr
 {
     OperationsViewer operationList = subFunc.Operations(false);
     if (operationList.IsEmpty()) {
-        CODEGEN_LOGW(
-            "operationList from PASS is empty, func magic name: %s, func hash: %s", subFunc.GetMagicName().c_str(),
-            subFunc.GetFunctionHash().c_str());
+        CODEGEN_LOGW("operationList from PASS is empty, func magic name: %s, func hash: %s",
+                     subFunc.GetMagicName().c_str(), subFunc.GetFunctionHash().c_str());
     }
 
-    CODEGEN_LOGI(
-        "TopFunc Type is %s\nFunction to codegen:\n %s\n", topFunc.GetFunctionTypeStr().c_str(),
-        topFunc.Dump().c_str());
+    CODEGEN_LOGI("TopFunc Type is %s\nFunction to codegen:\n %s\n", topFunc.GetFunctionTypeStr().c_str(),
+                 topFunc.Dump().c_str());
 
     std::shared_ptr<SymbolManager> symbolMgr = std::make_shared<SymbolManager>();
     std::shared_ptr<ForBlockManager> forBlkMgr = std::make_shared<ForBlockManager>(symbolMgr);
@@ -172,8 +169,8 @@ void CodeGenLiteNPU::GenFuncBody(Function& subFunc, Function& topFunc, std::ostr
     std::string tileOpSourceRegion;
     tileOpSourceRegion.reserve(CODE_RESERVED_SIZE);
     for (const auto& op : operationList) {
-        CODEGEN_LOGI(
-            "======================== Op CodeGenNPU Start ========================\nGen OP IS: %s", op.Dump().c_str());
+        CODEGEN_LOGI("======================== Op CodeGenNPU Start ========================\nGen OP IS: %s",
+                     op.Dump().c_str());
         if (SKIP_OPCODE_FOR_CODEGEN.find(op.GetOpcode()) != SKIP_OPCODE_FOR_CODEGEN.end()) {
             CODEGEN_LOGI("ignore this op\n------------------------ Op CodeGenNPU Finish -----------------------");
             continue;
@@ -229,22 +226,22 @@ std::string CodeGenLiteNPU::GetCoreArch([[maybe_unused]] const CompileInfo& comp
 }
 
 void CodeGenLiteNPU::AppendLiteNPUVFOptions(std::ostringstream& oss) const
-    {
-        if (!config::GetPassGlobalConfig(KEY_ENABLE_VF, true)) {
-            oss << "--cce-simd-vf-fusion=false ";
-            return;
-        }
-    
-        oss << "--enable-pto-tile-fusion "
-            << "-mllvm --tile-fusion-skip-shape-inference=true "
-            << "-mllvm --tile-fusion-skip-reduceop-fusion=false "
-            << "-mllvm --tile-fusion-skip-legality-check=false "
-            << "-Rpass=tile-fusion "
-            << "-Rpass-missed=tile-fusion ";
+{
+    if (!config::GetPassGlobalConfig(KEY_ENABLE_VF, true)) {
+        oss << "--cce-simd-vf-fusion=false ";
+        return;
     }
 
-void CodeGenLiteNPU::BuildExtraOptions(
-    std::ostringstream& oss, [[maybe_unused]] const CompileInfo& compileInfo, const std::string& compileOptions) const
+    oss << "--enable-pto-tile-fusion "
+        << "-mllvm --tile-fusion-skip-shape-inference=true "
+        << "-mllvm --tile-fusion-skip-reduceop-fusion=false "
+        << "-mllvm --tile-fusion-skip-legality-check=false "
+        << "-Rpass=tile-fusion "
+        << "-Rpass-missed=tile-fusion ";
+}
+
+void CodeGenLiteNPU::BuildExtraOptions(std::ostringstream& oss, [[maybe_unused]] const CompileInfo& compileInfo,
+                                       const std::string& compileOptions) const
 {
     oss << "-mllvm -cce-aicore-jump-expand=true "
         << "-mllvm -cce-aicore-function-stack-size=16384 "
@@ -279,9 +276,9 @@ std::vector<std::string> CodeGenLiteNPU::GetInOutParams(std::pair<uint64_t, Func
     return inOutParams;
 }
 
-void CodeGenLiteNPU::GenConfigJson(
-    const std::string& jsonName, const std::string& cppName, const std::string& binName, const std::string& kernelName,
-    const int& workspaceSize, const std::vector<std::string>& argNames, const int& blockDim) const
+void CodeGenLiteNPU::GenConfigJson(const std::string& jsonName, const std::string& cppName, const std::string& binName,
+                                   const std::string& kernelName, const int& workspaceSize,
+                                   const std::vector<std::string>& argNames, const int& blockDim) const
 {
     std::ofstream file;
     file.open(jsonName);
@@ -289,8 +286,7 @@ void CodeGenLiteNPU::GenConfigJson(
     file << "{\n"
          << "   \"kernelFile\": \"" << cppName << "\",\n"
          << "   \"kernelBin\": \"" << binName << "\",\n"
-         << "   \"kernelName\": \"" << kernelName + "_main"
-         << "\",\n"
+         << "   \"kernelName\": \"" << kernelName + "_main" << "\",\n"
          << "   \"workspaceSize\": " << workspaceSize << ",\n"
          << "   \"blockDim\": " << blockDim << ",\n"
          << "   \"argNames\": [";
@@ -306,8 +302,9 @@ void CodeGenLiteNPU::GenConfigJson(
     file << "]\n}";
 }
 
-std::string CodeGenLiteNPU::GenFuncGlobalCodeAfterReplace(
-    const Function& func, std::pair<uint64_t, Function*> subFuncPair, const std::string& subProgramCode)
+std::string CodeGenLiteNPU::GenFuncGlobalCodeAfterReplace(const Function& func,
+                                                          std::pair<uint64_t, Function*> subFuncPair,
+                                                          const std::string& subProgramCode)
 {
     std::string tpl = R"!!!(
 #include "TileOpImpl.h"

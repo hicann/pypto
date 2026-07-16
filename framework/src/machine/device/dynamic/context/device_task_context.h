@@ -21,11 +21,11 @@
 
 namespace npu::tile_fwk::dynamic {
 struct DeviceTaskContext {
-    void InitAllocator(
-        DevAscendProgram* devProg, DeviceWorkspaceAllocator& workspace, npu::tile_fwk::DevStartArgsBase* startArgs);
+    void InitAllocator(DevAscendProgram* devProg, DeviceWorkspaceAllocator& workspace,
+                       npu::tile_fwk::DevStartArgsBase* startArgs);
 
-    DynDeviceTask* BuildDeviceTaskData(
-        DeviceStitchContext& stitchContext, uint32_t taskId, DevAscendProgram* devProg, bool withoutTail);
+    DynDeviceTask* BuildDeviceTaskData(DeviceStitchContext& stitchContext, uint32_t taskId, DevAscendProgram* devProg,
+                                       bool withoutTail);
 
     void ReleaseFinishedTasks(int perfEvtReleaseFinishTask, int perfEvtDeallocateTask);
 
@@ -50,28 +50,27 @@ private:
 
 private:
     int BuildReadyQueue(DynDeviceTask* dyntask, DevAscendProgram* devProg);
-    void BuildReadyQueueForFunc(
-        DynDeviceTask* dyntask, size_t funcIndex, bool isNeedWrap, WrapInfoQueue* wrapQueue, int& wrapTaskNum);
-    void ProcessAivBatchTasks(
-        ReadyCoreFunctionQueue* aivQueue, size_t totalZeroPredAIVBatchEnd, const predcount_t* dupPredCountList,
-        size_t funcIndex);
+    void BuildReadyQueueForFunc(DynDeviceTask* dyntask, size_t funcIndex, bool isNeedWrap, WrapInfoQueue* wrapQueue,
+                                int& wrapTaskNum);
+    void ProcessAivBatchTasks(ReadyCoreFunctionQueue* aivQueue, size_t totalZeroPredAIVBatchEnd,
+                              const predcount_t* dupPredCountList, size_t funcIndex);
     void InitReadyCoreFunctionQueue(ReadyCoreFunctionQueue* q, uint32_t capacity);
-    int InitReadyQueues(
-        DynDeviceTask* dyntask, DevAscendProgram* devProg, ReadyCoreFunctionQueue* queue[READY_QUEUE_SIZE]);
+    int InitReadyQueues(DynDeviceTask* dyntask, DevAscendProgram* devProg,
+                        ReadyCoreFunctionQueue* queue[READY_QUEUE_SIZE]);
     int ProcessZeroPredTask(DynDeviceTask* dyntask, WrapInfoQueue* wrapQueue, bool isNeedWrap);
     void InitDieReadyQueues(DynDeviceTask* dyntask, DevAscendProgram* devProg);
-    void UpdateDeviceTaskQueueInfo(
-        DynDeviceTask* dyntask, ReadyCoreFunctionQueue* aicpuQueue, ReadyCoreFunctionQueue* aivQueue,
-        ReadyCoreFunctionQueue* aicQueue, WrapInfoQueue* wrapQueue);
-    int BuildDynFuncData(
-        DynDeviceTask* dyntask, uint32_t taskId, DevAscendFunctionDupped* stitchedList, uint64_t stitchedSize);
+    void UpdateDeviceTaskQueueInfo(DynDeviceTask* dyntask, ReadyCoreFunctionQueue* aicpuQueue,
+                                   ReadyCoreFunctionQueue* aivQueue, ReadyCoreFunctionQueue* aicQueue,
+                                   WrapInfoQueue* wrapQueue);
+    int BuildDynFuncData(DynDeviceTask* dyntask, uint32_t taskId, DevAscendFunctionDupped* stitchedList,
+                         uint64_t stitchedSize);
 
     // mix subgraph schedule
     WrapInfoQueue* AllocWrapQueue(DynDeviceTask* dyntask);
     void InitWrapQueueForThread(DynDeviceTask* dyntask);
     void InitWrapOffsetList(DynDeviceTask* dyntask);
-    void ProcessWrapQueue(
-        DynDeviceTask* dyntask, uint32_t wrapId, int funcIndex, size_t opIndex, WrapInfoQueue* wrapQueue);
+    void ProcessWrapQueue(DynDeviceTask* dyntask, uint32_t wrapId, int funcIndex, size_t opIndex,
+                          WrapInfoQueue* wrapQueue);
     bool IsMixArch(DevAscendProgram* devProg);
     bool IsMultiDie(DevAscendProgram* devProg);
     bool IsNeedWrapProcess(DynDeviceTask* dyntask, DevAscendProgram* devProg);
@@ -82,8 +81,8 @@ private:
             return;
 
         if (IsHubType(coreType)) {
-            DEV_VERBOSE_DEBUG(
-                "doResolve hub func %d succindex %d", static_cast<int>(funcIdx), static_cast<int>(succIdx));
+            DEV_VERBOSE_DEBUG("doResolve hub func %d succindex %d", static_cast<int>(funcIdx),
+                              static_cast<int>(succIdx));
             ResolveEarlyDepends(dyntask, funcIdx, succIdx);
         } else {
             int32_t* opWrapList = reinterpret_cast<int32_t*>(dyntask->devTask.mixTaskData.opWrapList[funcIdx]);
@@ -115,8 +114,8 @@ private:
 public:
     static void DumpReadyQueue(DynDeviceTask* dynTask, const char* prefix);
 
-    static void DumpDepend(
-        DynDeviceTask* dyntask, DevAscendProgram* devProg, DevStartArgs* startArgs, const char* prefix);
+    static void DumpDepend(DynDeviceTask* dyntask, DevAscendProgram* devProg, DevStartArgs* startArgs,
+                           const char* prefix);
 
     int BuildDeviceTaskDataAndReadyQueue(DynDeviceTask* dyntask, uint32_t taskId, DevAscendProgram* devProg);
 

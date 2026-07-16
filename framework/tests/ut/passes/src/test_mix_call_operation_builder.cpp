@@ -91,9 +91,9 @@ protected:
         return func;
     }
 
-    std::shared_ptr<Function> createLeafFuncWithPropagatedTensors(
-        const std::string& name, int componentId, const TestScenario& scenario,
-        const PropagatedTensors& propagatedTensors)
+    std::shared_ptr<Function> createLeafFuncWithPropagatedTensors(const std::string& name, int componentId,
+                                                                  const TestScenario& scenario,
+                                                                  const PropagatedTensors& propagatedTensors)
     {
         auto leafFunc = createSimpleFunction(name);
         const std::vector<int64_t> shape = {MS_NUM16, MS_NUM16};
@@ -103,8 +103,8 @@ protected:
         leafFunc->outCasts_.push_back(scenario.outputTensor);
         addPropagatedIncastOutcast(leafFunc, propagatedTensors.input, propagatedTensors.output);
 
-        createOperationsWithOffsets(
-            leafFunc, componentId, scenario.inputTensor1, scenario.inputTensor2, scenario.outputTensor, shape);
+        createOperationsWithOffsets(leafFunc, componentId, scenario.inputTensor1, scenario.inputTensor2,
+                                    scenario.outputTensor, shape);
         addPropagatedTensorOperations(leafFunc, componentId, propagatedTensors.input, propagatedTensors.output);
 
         return leafFunc;
@@ -133,9 +133,10 @@ protected:
         return components;
     }
 
-    SubfuncInvokeInfoTy createInvokeInfoWithTensorParams(
-        uint64_t programId, const std::shared_ptr<LogicalTensor>& input1, const std::shared_ptr<LogicalTensor>& input2,
-        const std::shared_ptr<LogicalTensor>& output)
+    SubfuncInvokeInfoTy createInvokeInfoWithTensorParams(uint64_t programId,
+                                                         const std::shared_ptr<LogicalTensor>& input1,
+                                                         const std::shared_ptr<LogicalTensor>& input2,
+                                                         const std::shared_ptr<LogicalTensor>& output)
     {
         SubfuncInvokeInfoTy invokeInfo;
         invokeInfo.UpdateProgramSubgraphId(programId);
@@ -144,33 +145,32 @@ protected:
         const std::vector<int64_t> offset = {0, 0};
         const std::vector<int64_t> rawShape = {MS_NUM16, MS_NUM16};
 
-        invokeInfo.RecordConnection(
-            -1, programId, TENSOR_INDEX_0, TENSOR_INDEX_0, offset, shape, rawShape, DT_FP32, input1,
-            OP_MAGIC_BASE + MS_NUM1);
-        invokeInfo.RecordConnection(
-            -1, programId, TENSOR_INDEX_1, TENSOR_INDEX_0, offset, shape, rawShape, DT_FP32, input2,
-            OP_MAGIC_BASE + MS_NUM2);
+        invokeInfo.RecordConnection(-1, programId, TENSOR_INDEX_0, TENSOR_INDEX_0, offset, shape, rawShape, DT_FP32,
+                                    input1, OP_MAGIC_BASE + MS_NUM1);
+        invokeInfo.RecordConnection(-1, programId, TENSOR_INDEX_1, TENSOR_INDEX_0, offset, shape, rawShape, DT_FP32,
+                                    input2, OP_MAGIC_BASE + MS_NUM2);
 
         SubfuncInvokeInfoTy::SuccessorIncastInfoTy emptySuccessorInfo;
-        invokeInfo.RecordOutcast(
-            programId, TENSOR_INDEX_0, TENSOR_INDEX_1, TENSOR_INDEX_0, emptySuccessorInfo, offset, shape, rawShape,
-            DT_FP32, output, OP_MAGIC_BASE + MS_NUM4);
+        invokeInfo.RecordOutcast(programId, TENSOR_INDEX_0, TENSOR_INDEX_1, TENSOR_INDEX_0, emptySuccessorInfo, offset,
+                                 shape, rawShape, DT_FP32, output, OP_MAGIC_BASE + MS_NUM4);
 
-        invokeInfo.RecordTensorArg(
-            TENSOR_INDEX_0, TENSOR_INDEX_0, offset, shape, rawShape, DT_FP32, false, input1, OP_MAGIC_BASE + MS_NUM1);
-        invokeInfo.RecordTensorArg(
-            TENSOR_INDEX_1, TENSOR_INDEX_0, offset, shape, rawShape, DT_FP32, false, input2, OP_MAGIC_BASE + MS_NUM2);
-        invokeInfo.RecordTensorArg(
-            TENSOR_INDEX_0, TENSOR_INDEX_0, offset, shape, rawShape, DT_FP32, true, output, OP_MAGIC_BASE + MS_NUM4);
+        invokeInfo.RecordTensorArg(TENSOR_INDEX_0, TENSOR_INDEX_0, offset, shape, rawShape, DT_FP32, false, input1,
+                                   OP_MAGIC_BASE + MS_NUM1);
+        invokeInfo.RecordTensorArg(TENSOR_INDEX_1, TENSOR_INDEX_0, offset, shape, rawShape, DT_FP32, false, input2,
+                                   OP_MAGIC_BASE + MS_NUM2);
+        invokeInfo.RecordTensorArg(TENSOR_INDEX_0, TENSOR_INDEX_0, offset, shape, rawShape, DT_FP32, true, output,
+                                   OP_MAGIC_BASE + MS_NUM4);
 
         invokeInfo.DoFinishRecord();
 
         return invokeInfo;
     }
 
-    SubfuncInvokeInfoTy createInvokeInfoWithIncastOutcast(
-        uint64_t programId, const std::shared_ptr<LogicalTensor>& input1, const std::shared_ptr<LogicalTensor>& input2,
-        const std::shared_ptr<LogicalTensor>& output, Function* leafFunc = nullptr)
+    SubfuncInvokeInfoTy createInvokeInfoWithIncastOutcast(uint64_t programId,
+                                                          const std::shared_ptr<LogicalTensor>& input1,
+                                                          const std::shared_ptr<LogicalTensor>& input2,
+                                                          const std::shared_ptr<LogicalTensor>& output,
+                                                          Function* leafFunc = nullptr)
     {
         SubfuncInvokeInfoTy invokeInfo;
         invokeInfo.UpdateProgramSubgraphId(programId);
@@ -204,22 +204,21 @@ protected:
             }
         }
 
-        invokeInfo.RecordConnection(
-            -1, programId, 0, input1->GetRawMagic(), offset, shape, rawShape, DT_FP32, input1, input1OpMagic);
-        invokeInfo.RecordConnection(
-            -1, programId, 0, input2->GetRawMagic(), offset, shape, rawShape, DT_FP32, input2, input2OpMagic);
+        invokeInfo.RecordConnection(-1, programId, 0, input1->GetRawMagic(), offset, shape, rawShape, DT_FP32, input1,
+                                    input1OpMagic);
+        invokeInfo.RecordConnection(-1, programId, 0, input2->GetRawMagic(), offset, shape, rawShape, DT_FP32, input2,
+                                    input2OpMagic);
 
         SubfuncInvokeInfoTy::SuccessorIncastInfoTy emptySuccessorInfo;
-        invokeInfo.RecordOutcast(
-            programId, 0, 1, output->GetRawMagic(), emptySuccessorInfo, offset, shape, rawShape, DT_FP32, output,
-            outputOpMagic);
+        invokeInfo.RecordOutcast(programId, 0, 1, output->GetRawMagic(), emptySuccessorInfo, offset, shape, rawShape,
+                                 DT_FP32, output, outputOpMagic);
 
-        invokeInfo.RecordTensorArg(
-            0, input1->GetRawMagic(), offset, shape, rawShape, DT_FP32, false, input1, input1OpMagic);
-        invokeInfo.RecordTensorArg(
-            0, input2->GetRawMagic(), offset, shape, rawShape, DT_FP32, false, input2, input2OpMagic);
-        invokeInfo.RecordTensorArg(
-            0, output->GetRawMagic(), offset, shape, rawShape, DT_FP32, true, output, outputOpMagic);
+        invokeInfo.RecordTensorArg(0, input1->GetRawMagic(), offset, shape, rawShape, DT_FP32, false, input1,
+                                   input1OpMagic);
+        invokeInfo.RecordTensorArg(0, input2->GetRawMagic(), offset, shape, rawShape, DT_FP32, false, input2,
+                                   input2OpMagic);
+        invokeInfo.RecordTensorArg(0, output->GetRawMagic(), offset, shape, rawShape, DT_FP32, true, output,
+                                   outputOpMagic);
 
         invokeInfo.DoFinishRecord();
         invokeInfo.ConstructActualInvokeParam(programId);
@@ -227,8 +226,8 @@ protected:
         return invokeInfo;
     }
 
-    SubgraphToFunction createSubgraphToFunctionForComponents(
-        size_t componentCount, uint64_t baseProgramId = TEST_PROGRAM_ID)
+    SubgraphToFunction createSubgraphToFunctionForComponents(size_t componentCount,
+                                                             uint64_t baseProgramId = TEST_PROGRAM_ID)
     {
         SubgraphToFunction subgraphToFunction;
         for (size_t i = 0; i < componentCount; ++i) {
@@ -244,23 +243,26 @@ protected:
         TestScenario scenario;
 
         scenario.shape = {MS_NUM16, MS_NUM16};
-        scenario.inputTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, scenario.shape, CreateTestConstIntVector(scenario.shape));
-        scenario.inputTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, scenario.shape, CreateTestConstIntVector(scenario.shape));
-        scenario.outputTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, scenario.shape, CreateTestConstIntVector(scenario.shape));
+        scenario.inputTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, scenario.shape,
+                                                                           CreateTestConstIntVector(scenario.shape));
+        scenario.inputTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, scenario.shape,
+                                                                           CreateTestConstIntVector(scenario.shape));
+        scenario.outputTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, scenario.shape,
+                                                                           CreateTestConstIntVector(scenario.shape));
 
         return scenario;
     }
 
-    void buildOriginalMixFuncAndCallOp(
-        const std::string& funcName, TestScenario& scenario, uint64_t programId = TEST_PROGRAM_ID)
+    void buildOriginalMixFuncAndCallOp(const std::string& funcName, TestScenario& scenario,
+                                       uint64_t programId = TEST_PROGRAM_ID)
     {
-        scenario.originalMixFunc = createFunctionWithRealOffsetOps(
-            funcName, COMPONENT_ID_0, scenario.inputTensor1, scenario.inputTensor2, scenario.outputTensor);
+        scenario.originalMixFunc = createFunctionWithRealOffsetOps(funcName, COMPONENT_ID_0, scenario.inputTensor1,
+                                                                   scenario.inputTensor2, scenario.outputTensor);
 
-        scenario.originalCallOp =
-            createCallOpWithArgList(programId, scenario.inputTensor1, scenario.inputTensor2, scenario.outputTensor);
-        scenario.originalCallAttr =
-            std::dynamic_pointer_cast<CallOpAttribute>(scenario.originalCallOp->GetOpAttribute());
+        scenario.originalCallOp = createCallOpWithArgList(programId, scenario.inputTensor1, scenario.inputTensor2,
+                                                          scenario.outputTensor);
+        scenario.originalCallAttr = std::dynamic_pointer_cast<CallOpAttribute>(
+            scenario.originalCallOp->GetOpAttribute());
     }
 
     void verifyWrapIdSet(CallOpAttribute* callAttr)
@@ -276,8 +278,8 @@ protected:
         EXPECT_EQ(oOperands.size(), expectedOutputs) << "Output count should match";
     }
 
-    void verifyCallOpOffsets(
-        Operation* callOp, const std::vector<int>& expectedInputOffsets, const std::vector<int>& expectedOutputOffsets)
+    void verifyCallOpOffsets(Operation* callOp, const std::vector<int>& expectedInputOffsets,
+                             const std::vector<int>& expectedOutputOffsets)
     {
         ASSERT_NE(callOp, nullptr) << "CallOp should not be null";
 
@@ -307,17 +309,17 @@ protected:
         return tensors;
     }
 
-    void addPropagatedIncastOutcast(
-        const std::shared_ptr<Function>& func, const std::shared_ptr<LogicalTensor>& propagatedInput,
-        const std::shared_ptr<LogicalTensor>& propagatedOutput)
+    void addPropagatedIncastOutcast(const std::shared_ptr<Function>& func,
+                                    const std::shared_ptr<LogicalTensor>& propagatedInput,
+                                    const std::shared_ptr<LogicalTensor>& propagatedOutput)
     {
         func->inCasts_.push_back(propagatedInput);
         func->outCasts_.push_back(propagatedOutput);
     }
 
-    void createLeafFunctionsAndPointers(
-        int count, const std::string& baseName, std::vector<std::shared_ptr<Function>>& leafFuncs,
-        std::vector<Function*>& newFunctions)
+    void createLeafFunctionsAndPointers(int count, const std::string& baseName,
+                                        std::vector<std::shared_ptr<Function>>& leafFuncs,
+                                        std::vector<Function*>& newFunctions)
     {
         leafFuncs.clear();
         newFunctions.clear();
@@ -338,11 +340,11 @@ protected:
         return programIds;
     }
 
-    void createComponentsAndSubgraphInfo(
-        const std::vector<ComponentType>& componentTypes, const TestScenario& scenario,
-        std::vector<InternalComponentInfo>& components, std::vector<std::shared_ptr<Function>>& leafFuncs,
-        std::vector<Function*>& newFunctions, SubgraphToFunction& subgraphToFunction,
-        std::vector<uint64_t>& newProgramIDs)
+    void createComponentsAndSubgraphInfo(const std::vector<ComponentType>& componentTypes, const TestScenario& scenario,
+                                         std::vector<InternalComponentInfo>& components,
+                                         std::vector<std::shared_ptr<Function>>& leafFuncs,
+                                         std::vector<Function*>& newFunctions, SubgraphToFunction& subgraphToFunction,
+                                         std::vector<uint64_t>& newProgramIDs)
     {
         components.clear();
         leafFuncs.clear();
@@ -354,14 +356,14 @@ protected:
             int componentId = static_cast<int>(i);
             components.emplace_back(componentId, "comp_" + std::to_string(i), AIVCore::UNSPECIFIED, componentTypes[i]);
 
-            auto leafFunc = createFunctionWithRealOffsetOps(
-                "leaf_" + std::to_string(i), componentId, scenario.inputTensor1, scenario.inputTensor2,
-                scenario.outputTensor);
+            auto leafFunc = createFunctionWithRealOffsetOps("leaf_" + std::to_string(i), componentId,
+                                                            scenario.inputTensor1, scenario.inputTensor2,
+                                                            scenario.outputTensor);
             leafFuncs.push_back(leafFunc);
             newFunctions.push_back(leafFunc.get());
 
-            auto invokeInfo = createInvokeInfoWithTensorParams(
-                TEST_PROGRAM_ID + i, scenario.inputTensor1, scenario.inputTensor2, scenario.outputTensor);
+            auto invokeInfo = createInvokeInfoWithTensorParams(TEST_PROGRAM_ID + i, scenario.inputTensor1,
+                                                               scenario.inputTensor2, scenario.outputTensor);
             subgraphToFunction.subFuncInvokeInfos.push_back(invokeInfo);
 
             newProgramIDs.push_back(TEST_PROGRAM_ID + i);
@@ -414,15 +416,14 @@ protected:
         auto operations = func->Operations(false).DuplicatedOpList();
         auto& addOp = operations[2];
 
-        invokeInfo->RecordConnection(
-            -1, TEST_PROGRAM_ID, 0, 0, offset, shape, rawShape, DT_FP32, func->inCasts_[0], addOp->GetOpMagic());
-        invokeInfo->RecordConnection(
-            -1, TEST_PROGRAM_ID, 1, 0, offset, shape, rawShape, DT_FP32, func->inCasts_[1], addOp->GetOpMagic());
+        invokeInfo->RecordConnection(-1, TEST_PROGRAM_ID, 0, 0, offset, shape, rawShape, DT_FP32, func->inCasts_[0],
+                                     addOp->GetOpMagic());
+        invokeInfo->RecordConnection(-1, TEST_PROGRAM_ID, 1, 0, offset, shape, rawShape, DT_FP32, func->inCasts_[1],
+                                     addOp->GetOpMagic());
 
         SubfuncInvokeInfoTy::SuccessorIncastInfoTy emptySuccessorInfo;
-        invokeInfo->RecordOutcast(
-            TEST_PROGRAM_ID, 0, 1, 0, emptySuccessorInfo, offset, shape, rawShape, DT_FP32, func->outCasts_[0],
-            addOp->GetOpMagic());
+        invokeInfo->RecordOutcast(TEST_PROGRAM_ID, 0, 1, 0, emptySuccessorInfo, offset, shape, rawShape, DT_FP32,
+                                  func->outCasts_[0], addOp->GetOpMagic());
 
         invokeInfo->DoFinishRecord();
 
@@ -446,9 +447,9 @@ protected:
     std::unique_ptr<MixCallOperationBuilder> builder;
 
 private:
-    void createCopyInOperation(
-        const std::shared_ptr<Function>& func, int internalSubgraphId, const std::shared_ptr<LogicalTensor>& input,
-        const std::shared_ptr<LogicalTensor>& output, int offset)
+    void createCopyInOperation(const std::shared_ptr<Function>& func, int internalSubgraphId,
+                               const std::shared_ptr<LogicalTensor>& input,
+                               const std::shared_ptr<LogicalTensor>& output, int offset)
     {
         const std::vector<int64_t> shape = {MS_NUM16, MS_NUM16};
         auto shapeImme = OpImmediate::Specified(shape);
@@ -468,9 +469,9 @@ private:
         copyIn.opmagic = opMagic;
     }
 
-    void createAddOperation(
-        const std::shared_ptr<Function>& func, int internalSubgraphId, const std::shared_ptr<LogicalTensor>& input1,
-        const std::shared_ptr<LogicalTensor>& input2, const std::shared_ptr<LogicalTensor>& output)
+    void createAddOperation(const std::shared_ptr<Function>& func, int internalSubgraphId,
+                            const std::shared_ptr<LogicalTensor>& input1, const std::shared_ptr<LogicalTensor>& input2,
+                            const std::shared_ptr<LogicalTensor>& output)
     {
         auto& addOp = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_ADD, {input1, input2}, {output});
         addOp.SetIOpAtt(TENSOR_INDEX_0, OFFSET_ADD_INPUT1);
@@ -480,9 +481,9 @@ private:
         addOp.SetAttr(OpAttributeKey::isCube, true);
     }
 
-    void createCopyOutOperation(
-        const std::shared_ptr<Function>& func, int internalSubgraphId, const std::shared_ptr<LogicalTensor>& input,
-        const std::shared_ptr<LogicalTensor>& output, int offset)
+    void createCopyOutOperation(const std::shared_ptr<Function>& func, int internalSubgraphId,
+                                const std::shared_ptr<LogicalTensor>& input,
+                                const std::shared_ptr<LogicalTensor>& output, int offset)
     {
         const std::vector<int64_t> shape = {MS_NUM16, MS_NUM16};
         auto shapeImme = OpImmediate::Specified(shape);
@@ -502,10 +503,11 @@ private:
         copyOut.opmagic = opMagic;
     }
 
-    std::shared_ptr<Function> createOperationsWithOffsets(
-        const std::shared_ptr<Function>& func, int internalSubgraphId, const std::shared_ptr<LogicalTensor>& input1,
-        const std::shared_ptr<LogicalTensor>& input2, const std::shared_ptr<LogicalTensor>& output,
-        const std::vector<int64_t>& shape)
+    std::shared_ptr<Function> createOperationsWithOffsets(const std::shared_ptr<Function>& func, int internalSubgraphId,
+                                                          const std::shared_ptr<LogicalTensor>& input1,
+                                                          const std::shared_ptr<LogicalTensor>& input2,
+                                                          const std::shared_ptr<LogicalTensor>& output,
+                                                          const std::vector<int64_t>& shape)
     {
         auto internal1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
         auto internal2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
@@ -519,9 +521,10 @@ private:
         return func;
     }
 
-    std::shared_ptr<Function> createFunctionWithRealOffsetOps(
-        const std::string& name, int internalSubgraphId, const std::shared_ptr<LogicalTensor>& input1,
-        const std::shared_ptr<LogicalTensor>& input2, const std::shared_ptr<LogicalTensor>& output)
+    std::shared_ptr<Function> createFunctionWithRealOffsetOps(const std::string& name, int internalSubgraphId,
+                                                              const std::shared_ptr<LogicalTensor>& input1,
+                                                              const std::shared_ptr<LogicalTensor>& input2,
+                                                              const std::shared_ptr<LogicalTensor>& output)
     {
         auto func = createSimpleFunction(name);
         const std::vector<int64_t> shape = {MS_NUM16, MS_NUM16};
@@ -565,21 +568,24 @@ private:
         return func;
     }
 
-    void addPropagatedTensorOperations(
-        const std::shared_ptr<Function>& func, int componentId, const std::shared_ptr<LogicalTensor>& propagatedInput,
-        const std::shared_ptr<LogicalTensor>& propagatedOutput)
+    void addPropagatedTensorOperations(const std::shared_ptr<Function>& func, int componentId,
+                                       const std::shared_ptr<LogicalTensor>& propagatedInput,
+                                       const std::shared_ptr<LogicalTensor>& propagatedOutput)
     {
         const std::vector<int64_t> shape = {MS_NUM16, MS_NUM16};
 
-        auto internalPropagatedInput = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+        auto internalPropagatedInput = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape,
+                                                                                  CreateTestConstIntVector(shape));
         createCopyInOperation(func, componentId, propagatedInput, internalPropagatedInput, OFFSET_INPUT1 + MS_NUM10);
 
-        auto internalPropagatedOutput = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+        auto internalPropagatedOutput = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape,
+                                                                                   CreateTestConstIntVector(shape));
         createCopyOutOperation(func, componentId, internalPropagatedOutput, propagatedOutput, OFFSET_OUTPUT + MS_NUM10);
     }
 
-    std::shared_ptr<Function> createOriginalMixFuncWithPropagatedTensors(
-        const std::string& name, const TestScenario& scenario, const PropagatedTensors& propagatedTensors)
+    std::shared_ptr<Function> createOriginalMixFuncWithPropagatedTensors(const std::string& name,
+                                                                         const TestScenario& scenario,
+                                                                         const PropagatedTensors& propagatedTensors)
     {
         auto originalMixFunc = createSimpleFunction(name);
         const std::vector<int64_t> shape = {MS_NUM16, MS_NUM16};
@@ -589,11 +595,10 @@ private:
         originalMixFunc->outCasts_.push_back(scenario.outputTensor);
         addPropagatedIncastOutcast(originalMixFunc, propagatedTensors.input, propagatedTensors.output);
 
-        createOperationsWithOffsets(
-            originalMixFunc, COMPONENT_ID_0, scenario.inputTensor1, scenario.inputTensor2, scenario.outputTensor,
-            shape);
-        addPropagatedTensorOperations(
-            originalMixFunc, COMPONENT_ID_0, propagatedTensors.input, propagatedTensors.output);
+        createOperationsWithOffsets(originalMixFunc, COMPONENT_ID_0, scenario.inputTensor1, scenario.inputTensor2,
+                                    scenario.outputTensor, shape);
+        addPropagatedTensorOperations(originalMixFunc, COMPONENT_ID_0, propagatedTensors.input,
+                                      propagatedTensors.output);
 
         return originalMixFunc;
     }
@@ -611,9 +616,9 @@ private:
         return tensorArgs;
     }
 
-    Operation* createCallOpWithArgList(
-        uint64_t programId, const std::shared_ptr<LogicalTensor>& input1, const std::shared_ptr<LogicalTensor>& input2,
-        const std::shared_ptr<LogicalTensor>& output)
+    Operation* createCallOpWithArgList(uint64_t programId, const std::shared_ptr<LogicalTensor>& input1,
+                                       const std::shared_ptr<LogicalTensor>& input2,
+                                       const std::shared_ptr<LogicalTensor>& output)
     {
         auto& callOp = IRBuilder().CreateTensorOpStmt(*rootFunc, Opcode::OP_CALL, {input1, input2}, {output});
 
@@ -653,8 +658,9 @@ private:
         const TestScenario& scenario, const PropagatedTensors& propagatedTensors,
         const std::shared_ptr<LogicalTensor>& propagatedInput2, const std::shared_ptr<LogicalTensor>& propagatedOutput2)
     {
-        auto& originalCallOp = IRBuilder().CreateTensorOpStmt(*rootFunc,
-            Opcode::OP_CALL, {scenario.inputTensor1, scenario.inputTensor2, propagatedTensors.input, propagatedInput2},
+        auto& originalCallOp = IRBuilder().CreateTensorOpStmt(
+            *rootFunc, Opcode::OP_CALL,
+            {scenario.inputTensor1, scenario.inputTensor2, propagatedTensors.input, propagatedInput2},
             {scenario.outputTensor, propagatedTensors.output, propagatedOutput2});
 
         auto originalCallAttr = std::make_shared<CallOpAttribute>();
@@ -672,8 +678,8 @@ private:
 
         for (size_t i = 0; i < components.size(); ++i) {
             std::string leafName = "leaf" + std::to_string(i);
-            auto leafFunc =
-                createLeafFuncWithPropagatedTensors(leafName, static_cast<int>(i), scenario, propagatedTensors);
+            auto leafFunc = createLeafFuncWithPropagatedTensors(leafName, static_cast<int>(i), scenario,
+                                                                propagatedTensors);
 
             leafFunc->inCasts_.push_back(propagatedInput2);
             leafFunc->outCasts_.push_back(propagatedOutput2);
@@ -685,15 +691,15 @@ private:
         return leafFuncs;
     }
 
-    SubgraphToFunction createSubgraphInfoForPropagatedTest(
-        const TestScenario& scenario, const std::vector<Function*>& newFunctions)
+    SubgraphToFunction createSubgraphInfoForPropagatedTest(const TestScenario& scenario,
+                                                           const std::vector<Function*>& newFunctions)
     {
         SubgraphToFunction subgraphToFunction;
 
         for (size_t i = 0; i < newFunctions.size(); ++i) {
             auto leafFunc = newFunctions[i];
-            auto invokeInfo = createInvokeInfoWithIncastOutcast(
-                TEST_PROGRAM_ID + i, scenario.inputTensor1, scenario.inputTensor2, scenario.outputTensor, leafFunc);
+            auto invokeInfo = createInvokeInfoWithIncastOutcast(TEST_PROGRAM_ID + i, scenario.inputTensor1,
+                                                                scenario.inputTensor2, scenario.outputTensor, leafFunc);
             subgraphToFunction.subFuncInvokeInfos.push_back(invokeInfo);
         }
 
@@ -735,9 +741,8 @@ TEST_F(MixCallOperationBuilderTest, TestSameWrapIdForSameOriginalCallOp)
 
     std::vector<uint64_t> newProgramIDs = createProgramIds(components.size());
 
-    Status status = builder->CreateCallOps(
-        *rootFunc, {originalCallOp}, originalMixFunc.get(), components, newProgramIDs, subgraphToFunction,
-        newFunctions);
+    Status status = builder->CreateCallOps(*rootFunc, {originalCallOp}, originalMixFunc.get(), components,
+                                           newProgramIDs, subgraphToFunction, newFunctions);
 
     EXPECT_EQ(status, SUCCESS) << "CreateCallOps should succeed";
 
@@ -784,9 +789,8 @@ TEST_F(MixCallOperationBuilderTest, TestDifferentWrapIdForDifferentOriginalCallO
 
     std::vector<uint64_t> newProgramIDs = createProgramIds(components.size());
 
-    Status status = builder->CreateCallOps(
-        *rootFunc, {originalCallOp1, originalCallOp2}, originalMixFunc.get(), components, newProgramIDs,
-        subgraphToFunction, newFunctions);
+    Status status = builder->CreateCallOps(*rootFunc, {originalCallOp1, originalCallOp2}, originalMixFunc.get(),
+                                           components, newProgramIDs, subgraphToFunction, newFunctions);
 
     EXPECT_EQ(status, SUCCESS) << "CreateCallOps should succeed";
 
@@ -815,24 +819,23 @@ TEST_F(MixCallOperationBuilderTest, TestGlobalTensorHandling)
         {COMPONENT_ID_0, "comp_cube", AIVCore::UNSPECIFIED, ComponentType::C_SCOPE},
         {COMPONENT_ID_1, "comp_vector", AIVCore::AIV0, ComponentType::V_SCOPE}};
 
-    auto leafFuncCube = createFunctionWithRealOffsetOps(
-        "leaf_cube", COMPONENT_ID_0, scenario.inputTensor1, scenario.inputTensor2, scenario.outputTensor);
-    auto leafFuncVector = createFunctionWithRealOffsetOps(
-        "leaf_vector", COMPONENT_ID_1, scenario.inputTensor1, scenario.inputTensor2, scenario.outputTensor);
+    auto leafFuncCube = createFunctionWithRealOffsetOps("leaf_cube", COMPONENT_ID_0, scenario.inputTensor1,
+                                                        scenario.inputTensor2, scenario.outputTensor);
+    auto leafFuncVector = createFunctionWithRealOffsetOps("leaf_vector", COMPONENT_ID_1, scenario.inputTensor1,
+                                                          scenario.inputTensor2, scenario.outputTensor);
     std::vector<Function*> newFunctions = {leafFuncCube.get(), leafFuncVector.get()};
 
     SubgraphToFunction subgraphToFunction;
     for (int i = 0; i < MS_NUM2; ++i) {
-        auto leafInvokeInfo = createInvokeInfoWithTensorParams(
-            TEST_PROGRAM_ID + i, scenario.inputTensor1, scenario.inputTensor2, scenario.outputTensor);
+        auto leafInvokeInfo = createInvokeInfoWithTensorParams(TEST_PROGRAM_ID + i, scenario.inputTensor1,
+                                                               scenario.inputTensor2, scenario.outputTensor);
         subgraphToFunction.subFuncInvokeInfos.push_back(leafInvokeInfo);
     }
 
     std::vector<uint64_t> newProgramIDs = createProgramIds(components.size());
 
-    Status status = builder->CreateCallOps(
-        *rootFunc, {scenario.originalCallOp}, scenario.originalMixFunc.get(), components, newProgramIDs,
-        subgraphToFunction, newFunctions);
+    Status status = builder->CreateCallOps(*rootFunc, {scenario.originalCallOp}, scenario.originalMixFunc.get(),
+                                           components, newProgramIDs, subgraphToFunction, newFunctions);
 
     EXPECT_EQ(status, SUCCESS) << "CreateCallOps should succeed with global tensors";
 
@@ -867,9 +870,8 @@ TEST_F(MixCallOperationBuilderTest, TestInternalDependencies)
 
     std::vector<uint64_t> newProgramIDs = createProgramIds(components.size());
 
-    Status status = builder->CreateCallOps(
-        *rootFunc, {originalCallOp}, originalMixFunc.get(), components, newProgramIDs, subgraphToFunction,
-        newFunctionVec);
+    Status status = builder->CreateCallOps(*rootFunc, {originalCallOp}, originalMixFunc.get(), components,
+                                           newProgramIDs, subgraphToFunction, newFunctionVec);
 
     EXPECT_EQ(status, SUCCESS) << "CreateCallOps should succeed with internal dependencies";
 }
@@ -887,12 +889,11 @@ TEST_F(MixCallOperationBuilderTest, TestOffsets)
     SubgraphToFunction subgraphToFunction;
     std::vector<uint64_t> newProgramIDs;
 
-    createComponentsAndSubgraphInfo(
-        componentTypes, scenario, components, leafFuncs, newFunctions, subgraphToFunction, newProgramIDs);
+    createComponentsAndSubgraphInfo(componentTypes, scenario, components, leafFuncs, newFunctions, subgraphToFunction,
+                                    newProgramIDs);
 
-    Status status = builder->CreateCallOps(
-        *rootFunc, {scenario.originalCallOp}, scenario.originalMixFunc.get(), components, newProgramIDs,
-        subgraphToFunction, newFunctions);
+    Status status = builder->CreateCallOps(*rootFunc, {scenario.originalCallOp}, scenario.originalMixFunc.get(),
+                                           components, newProgramIDs, subgraphToFunction, newFunctions);
 
     EXPECT_EQ(status, SUCCESS) << "CreateCallOps should succeed for different component types";
 
@@ -918,15 +919,16 @@ TEST_F(MixCallOperationBuilderTest, TestPropagatedIncastOutcast)
 
     const std::vector<int64_t> shape = {MS_NUM16, MS_NUM16};
     auto propagatedInput2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
-    auto propagatedOutput2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto propagatedOutput2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape,
+                                                                        CreateTestConstIntVector(shape));
 
     // 创建原始混合函数
     auto originalMixFunc = createOriginalMixFuncWithMultiplePropagatedTensors(
         "original_mix", scenario, propagatedTensors, propagatedInput2, propagatedOutput2);
 
     // 创建原始调用操作
-    auto originalCallOp = createOriginalCallOpWithMultiplePropagatedTensors(
-        scenario, propagatedTensors, propagatedInput2, propagatedOutput2);
+    auto originalCallOp = createOriginalCallOpWithMultiplePropagatedTensors(scenario, propagatedTensors,
+                                                                            propagatedInput2, propagatedOutput2);
 
     // 创建组件信息
     std::vector<InternalComponentInfo> components = {
@@ -934,8 +936,8 @@ TEST_F(MixCallOperationBuilderTest, TestPropagatedIncastOutcast)
         {COMPONENT_ID_1, "comp_v_scope", AIVCore::AIV0, ComponentType::V_SCOPE}};
 
     // 创建叶子函数
-    auto leafFuncs = createLeafFunctionsForPropagatedTest(
-        scenario, propagatedTensors, propagatedInput2, propagatedOutput2, components);
+    auto leafFuncs = createLeafFunctionsForPropagatedTest(scenario, propagatedTensors, propagatedInput2,
+                                                          propagatedOutput2, components);
 
     // 准备函数指针列表
     std::vector<Function*> newFunctions;
@@ -949,9 +951,8 @@ TEST_F(MixCallOperationBuilderTest, TestPropagatedIncastOutcast)
     // 执行测试
     std::vector<uint64_t> newProgramIDs = createProgramIds(components.size());
 
-    Status status = builder->CreateCallOps(
-        *rootFunc, {originalCallOp}, originalMixFunc.get(), components, newProgramIDs, subgraphToFunction,
-        newFunctions);
+    Status status = builder->CreateCallOps(*rootFunc, {originalCallOp}, originalMixFunc.get(), components,
+                                           newProgramIDs, subgraphToFunction, newFunctions);
 
     EXPECT_EQ(status, SUCCESS) << "CreateCallOps should succeed with mixed incast/outcast";
 
@@ -973,9 +974,8 @@ TEST_F(MixCallOperationBuilderTest, TestCreateCallOpWithNullCallAttribute)
     std::vector<uint64_t> newProgramIDs = {TEST_PROGRAM_ID};
     auto subgraphToFunction = createSubgraphToFunctionForComponents(1);
 
-    Status status = builder->CreateCallOps(
-        *rootFunc, {originalCallOp}, originalMixFunc.get(), components, newProgramIDs, subgraphToFunction,
-        newFunctions);
+    Status status = builder->CreateCallOps(*rootFunc, {originalCallOp}, originalMixFunc.get(), components,
+                                           newProgramIDs, subgraphToFunction, newFunctions);
 
     EXPECT_EQ(status, FAILED) << "CreateCallOps should fail with null CallOpAttribute";
 }
@@ -1007,7 +1007,8 @@ TEST_F(MixCallOperationBuilderTest, TestFindOOpAttrOffsetFromActualOutcastsWithE
     auto originalMixFunc = createFunctionWithOps("original_mix");
 
     const std::vector<int64_t> emptyShape = {};
-    auto tensorWithEmptyShape = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, emptyShape, CreateTestConstIntVector(emptyShape));
+    auto tensorWithEmptyShape = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, emptyShape,
+                                                                           CreateTestConstIntVector(emptyShape));
 
     std::vector<std::shared_ptr<LogicalTensor>> actualOutcasts = {tensorWithEmptyShape};
 

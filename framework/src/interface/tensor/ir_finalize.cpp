@@ -20,8 +20,7 @@ namespace npu::tile_fwk {
 
 namespace {
 
-void CollectCompileQueueFunctions(
-    Function* func, std::vector<Function*>& out, std::unordered_set<Function*>& visited)
+void CollectCompileQueueFunctions(Function* func, std::vector<Function*>& out, std::unordered_set<Function*>& visited)
 {
     if (func == nullptr || !visited.insert(func).second) {
         return;
@@ -48,9 +47,8 @@ void SubmitCompileTask(Function* dynFunc)
 
     FE_LOGI("FinalizeDynamicFunction SubmitCompileTask queue_size=%zu", compileFuncs.size());
     for (auto* func : compileFuncs) {
-        FE_LOGI(
-            "FinalizeDynamicFunction enqueue compile task: %s ops=%zu", func->GetMagicName().c_str(),
-            func->Operations(false).size());
+        FE_LOGI("FinalizeDynamicFunction enqueue compile task: %s ops=%zu", func->GetMagicName().c_str(),
+                func->Operations(false).size());
         program.RefillCompileQueue(func);
     }
 

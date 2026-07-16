@@ -42,9 +42,9 @@ namespace npu::tile_fwk {
  * output:
  * attentionOut: [b, s1, n1, v_dim] fp32
  */
-void SparseFlashAttentionCompute(
-    const Tensor& qNope, const Tensor& qRope, const Tensor& kSlc, const Tensor& vSlc, const Tensor& kvSlcActSeqs,
-    int nQ, int nKv, float softmaxScale, int topk, Tensor& attentionOut, SaTileShapeConfig tileConfig)
+void SparseFlashAttentionCompute(const Tensor& qNope, const Tensor& qRope, const Tensor& kSlc, const Tensor& vSlc,
+                                 const Tensor& kvSlcActSeqs, int nQ, int nKv, float softmaxScale, int topk,
+                                 Tensor& attentionOut, SaTileShapeConfig tileConfig)
 {
     auto dtype = qNope.GetDataType();
     int dN = qNope.GetShape()[1];
@@ -64,7 +64,7 @@ void SparseFlashAttentionCompute(
     SymbolicScalar s1N2GSym = GetInputShape(qNope, 0) / batchSizeSym; // s1n2
     SymbolicScalar s1S2Sym = GetInputShape(kSlc, 0) / batchSizeSym;   // s1s2
 
-    SymbolicScalar s1Sym = s1N2GSym / nQ;                             // s1
+    SymbolicScalar s1Sym = s1N2GSym / nQ; // s1
     SymbolicScalar gLoopSym = group / gTile;
 
     SymbolicScalar s2Sym = s1S2Sym / s1Sym; // s2
@@ -73,8 +73,8 @@ void SparseFlashAttentionCompute(
         SymbolicScalar curKvSlcSeq = GetTensorData(kvSlcActSeqs, {bIdx});
         LOOP("LOOP_L1_s1_SA", FunctionType::DYNAMIC_LOOP, s1Idx, LoopRange(0, s1Sym, 1))
         {
-            SymbolicScalar curSeq = std::min(
-                std::max(curKvSlcSeq - s1Sym + 1 + s1Idx, 0), topk); // for MTP s1!= 1 casual计算, 并且与topk取min
+            SymbolicScalar curSeq = std::min(std::max(curKvSlcSeq - s1Sym + 1 + s1Idx, 0),
+                                             topk); // for MTP s1!= 1 casual计算, 并且与topk取min
             curSeq.AsIntermediateVariable();
             SymbolicScalar bnPerBatch = (curSeq + s2Tile - 1) / s2Tile;
 
@@ -88,8 +88,8 @@ void SparseFlashAttentionCompute(
                     Tensor miUpdate(DT_FP32, {curGTile, 1}, "miUpdate");
 
                     SymbolicScalar curOffset = bIdx * s1N2GSym + s1Idx * nQ + n2Idx * group + gIdx * curGTile;
-                    std::vector<SymbolicScalar> oiOffset = {
-                        bIdx, s1Idx, n2Idx * group + gIdx * curGTile, 0}; // 按最终结果(B,S1,N1,D)进行assemble
+                    std::vector<SymbolicScalar> oiOffset = {bIdx, s1Idx, n2Idx * group + gIdx * curGTile,
+                                                            0}; // 按最终结果(B,S1,N1,D)进行assemble
 
                     LOOP("LOOP_L4_s2_SA", FunctionType::DYNAMIC_LOOP, s2Idx, LoopRange(0, bnPerBatch, 1), PowersOf2(1))
                     {
@@ -103,16 +103,15 @@ void SparseFlashAttentionCompute(
                         Assemble(qn, {0, 0}, qi);
                         Assemble(qr, {0, dN}, qi);
 
-                        auto kj = View(
-                            kSlc, {curS2Tile, dN + dR}, {std::min(curSeq - s2Idx * curS2Tile, curS2Tile), dN + dR},
-                            {curKvOffset, 0}); // kSlc已经合并了rope和nope
-                        auto vj = View(
-                            vSlc, {curS2Tile, dN}, {std::min(curSeq - s2Idx * curS2Tile, curS2Tile), dN},
-                            {curKvOffset, 0});
+                        auto kj = View(kSlc, {curS2Tile, dN + dR},
+                                       {std::min(curSeq - s2Idx * curS2Tile, curS2Tile), dN + dR},
+                                       {curKvOffset, 0}); // kSlc已经合并了rope和nope
+                        auto vj = View(vSlc, {curS2Tile, dN}, {std::min(curSeq - s2Idx * curS2Tile, curS2Tile), dN},
+                                       {curKvOffset, 0});
 
                         // C1
-                        TileShape::Current().SetCubeTile(
-                            {c1Tile[0], c1Tile[1]}, {c1Tile[2], c1Tile[3]}, {c1Tile[4], c1Tile[5]});
+                        TileShape::Current().SetCubeTile({c1Tile[0], c1Tile[1]}, {c1Tile[2], c1Tile[3]},
+                                                         {c1Tile[4], c1Tile[5]});
                         config::SetSemanticLabel("Sa_QkMM");
                         TileShape::Current().SetMatrixSize({qi.GetShape()[0], 0, kj.GetShape()[0]});
                         auto sij = Matrix::Matmul(DataType::DT_FP32, qi, kj, false, true);
@@ -122,17 +121,17 @@ void SparseFlashAttentionCompute(
                         TileShape::Current().SetVecTile(v1Tile[0], v1Tile[1]);
                         auto sijScale = Mul(sij, Element(sij.GetDataType(), softmaxScale));
                         auto tildaMij = Amax(sijScale, -1, true); // (curGTile, curS2Tile) -> (curGTile, 1)
-                        auto tsub =
-                            Sub(sijScale, tildaMij); // (curGTile, curS2Tile), (curGTile, 1) -> (curGTile, curS2Tile)
-                        auto tildaPij = Exp(tsub);   // (curGTile, curS2Tile) -> (curGTile, curS2Tile)
+                        auto tsub = Sub(sijScale,
+                                        tildaMij); // (curGTile, curS2Tile), (curGTile, 1) -> (curGTile, curS2Tile)
+                        auto tildaPij = Exp(tsub); // (curGTile, curS2Tile) -> (curGTile, curS2Tile)
                         auto tildaPijF16 = Cast(tildaPij, dtype);
                         auto tildaLij = Sum(tildaPij, -1, true);
 
                         IF(IsLoopBegin(s2Idx, 0))
                         {
                             // C2
-                            TileShape::Current().SetCubeTile(
-                                {c2Tile[0], c2Tile[1]}, {c2Tile[2], c2Tile[3]}, {c2Tile[4], c2Tile[5]});
+                            TileShape::Current().SetCubeTile({c2Tile[0], c2Tile[1]}, {c2Tile[2], c2Tile[3]},
+                                                             {c2Tile[4], c2Tile[5]});
                             config::SetSemanticLabel("Sa_KvMm");
                             TileShape::Current().SetMatrixSize(
                                 {tildaPijF16.GetShape()[0], tildaPijF16.GetShape()[1], vj.GetShape()[1]});
@@ -171,8 +170,8 @@ void SparseFlashAttentionCompute(
                             auto liNew = Add(t6, t5);
 
                             auto q3 = Mul(oi, t2);
-                            TileShape::Current().SetCubeTile(
-                                {c2Tile[0], c2Tile[1]}, {c2Tile[2], c2Tile[3]}, {c2Tile[4], c2Tile[5]});
+                            TileShape::Current().SetCubeTile({c2Tile[0], c2Tile[1]}, {c2Tile[2], c2Tile[3]},
+                                                             {c2Tile[4], c2Tile[5]});
                             config::SetSemanticLabel("Sa_UpdateMM2");
                             TileShape::Current().SetMatrixSize(
                                 {tildaPijF16.GetShape()[0], tildaPijF16.GetShape()[1], vj.GetShape()[1]});
@@ -201,14 +200,14 @@ void SparseFlashAttentionCompute(
     }
 }
 
-void SparseFlashAttention(
-    const Tensor& qNope, const Tensor& qRope, const Tensor& kSlc, const Tensor& vSlc, const Tensor& kvSlcActSeqs,
-    int nQ, int nKv, float softmaxScale, int topk, Tensor& attentionOut, SaTileShapeConfig tileConfig)
+void SparseFlashAttention(const Tensor& qNope, const Tensor& qRope, const Tensor& kSlc, const Tensor& vSlc,
+                          const Tensor& kvSlcActSeqs, int nQ, int nKv, float softmaxScale, int topk,
+                          Tensor& attentionOut, SaTileShapeConfig tileConfig)
 {
     FUNCTION("R2_SA_MAIN", {qNope, qRope, kSlc, vSlc, kvSlcActSeqs}, {attentionOut})
     {
-        SparseFlashAttentionCompute(
-            qNope, qRope, kSlc, vSlc, kvSlcActSeqs, nQ, nKv, softmaxScale, topk, attentionOut, tileConfig);
+        SparseFlashAttentionCompute(qNope, qRope, kSlc, vSlc, kvSlcActSeqs, nQ, nKv, softmaxScale, topk, attentionOut,
+                                    tileConfig);
     }
 }
 

@@ -51,8 +51,8 @@ SCHEMA_DEF_ATTR(LActIncastCount, Int64Type);
 SCHEMA_DEF_ATTR(LActIncast, shape, offset, range);
 SCHEMA_DEF_ATTR(LActOutcastCount, Int64Type);
 SCHEMA_DEF_ATTR(LActOutcast, shape, offset, range);
-SCHEMA_DEF_TYPE_UNION(
-    LActType, LActStart, LActFinish, coa, succ, LActIncastCount, LActIncast, LActOutcastCount, LActOutcast);
+SCHEMA_DEF_TYPE_UNION(LActType, LActStart, LActFinish, coa, succ, LActIncastCount, LActIncast, LActOutcastCount,
+                      LActOutcast);
 
 SCHEMA_DEF_ATTR(RActDup, name);
 SCHEMA_DEF_ATTR(RActStitch);
@@ -64,9 +64,8 @@ SCHEMA_DEF_ATTR(RActRawTensorCount, Int64Type);
 SCHEMA_DEF_ATTR(RActRawTensor, rawTensor, rawDesc);
 SCHEMA_DEF_ATTR(RActExpressionCount, Int64Type);
 SCHEMA_DEF_ATTR(RActWorkspace, range);
-SCHEMA_DEF_TYPE_UNION(
-    RActType, RActDup, RActStitch, RActIncastCount, RActIncast, RActOutcastCount, RActOutcast, expr, RActRawTensorCount,
-    RActRawTensor, RActWorkspace, RActExpressionCount);
+SCHEMA_DEF_TYPE_UNION(RActType, RActDup, RActStitch, RActIncastCount, RActIncast, RActOutcastCount, RActOutcast, expr,
+                      RActRawTensorCount, RActRawTensor, RActWorkspace, RActExpressionCount);
 
 SCHEMA_DEF_ATTR(Producer, LUidType, OOperandIndexType, OutcastIndexType, SlotIndexType, DimOffset, DimShape);
 SCHEMA_DEF_TYPE_UNION(ProducerType, Producer);
@@ -79,9 +78,8 @@ SCHEMA_DEF_ATTR(StitchReasonUniqueMatch);
 SCHEMA_DEF_ATTR(StitchReasonOneToManyMatch);
 SCHEMA_DEF_ATTR(StitchReasonManyToOneMatch);
 SCHEMA_DEF_ATTR(StitchReasonWorkspaceReuse);
-SCHEMA_DEF_TYPE_UNION(
-    StitchReasonType, StitchReasonSomeMatch, StitchReasonUniqueMatch, StitchReasonOneToManyMatch,
-    StitchReasonManyToOneMatch, StitchReasonWorkspaceReuse);
+SCHEMA_DEF_TYPE_UNION(StitchReasonType, StitchReasonSomeMatch, StitchReasonUniqueMatch, StitchReasonOneToManyMatch,
+                      StitchReasonManyToOneMatch, StitchReasonWorkspaceReuse);
 
 SCHEMA_DEF_ATTR(DActSubmit, Int64Type);
 SCHEMA_DEF_ATTR(DActStitchStart, RUidType);
@@ -116,12 +114,12 @@ SCHEMA_DEF_ATTR(OutputTensorCount, Int64Type);
 SCHEMA_DEF_ATTR(OutputTensorRange, Int64Type, range);
 SCHEMA_DEF_ATTR(OutputTensorElement, Int64Type, AddressType, Int64Type);
 
-SCHEMA_DEF_TYPE_UNION(
-    CtrlActType, ThreadStart, ThreadFinish, ControlFlowCacheFullRunCache, ControlFlowCacheFullRunControl,
-    ControlFlowCachePartRunCache, ControlFlowCachePartRunControl, ControlFlowCachePartRunControlContinue, RawWorkspace,
-    Workspace, WorkspaceMetadataGeneral, WorkspaceMetadataStitch, WorkspaceInnerTensor, WorkspacePartialOutcast,
-    WorkspaceInDeviceTaskOutcast, WorkspaceCrossDeviceTaskOutcast, WorkspaceSpill, InputTensorCount, InputTensorRange,
-    InputTensorElement, OutputTensorCount, OutputTensorRange, OutputTensorElement);
+SCHEMA_DEF_TYPE_UNION(CtrlActType, ThreadStart, ThreadFinish, ControlFlowCacheFullRunCache,
+                      ControlFlowCacheFullRunControl, ControlFlowCachePartRunCache, ControlFlowCachePartRunControl,
+                      ControlFlowCachePartRunControlContinue, RawWorkspace, Workspace, WorkspaceMetadataGeneral,
+                      WorkspaceMetadataStitch, WorkspaceInnerTensor, WorkspacePartialOutcast,
+                      WorkspaceInDeviceTaskOutcast, WorkspaceCrossDeviceTaskOutcast, WorkspaceSpill, InputTensorCount,
+                      InputTensorRange, InputTensorElement, OutputTensorCount, OutputTensorRange, OutputTensorElement);
 SCHEMA_DEF_TYPE_UNION(ScheActType, ThreadStart, ThreadFinish);
 
 SCHEMA_DEF_ATTR(CtrlEvent, ControlThreadIndexType, CtrlActType);

@@ -55,9 +55,8 @@ struct FunctionIODataPair {
     std::vector<std::shared_ptr<LogicalTensorData>> outcastDataViewList;
 
     FunctionIODataPair() {}
-    FunctionIODataPair(
-        std::vector<std::shared_ptr<LogicalTensorData>> incastDataViewList_,
-        std::vector<std::shared_ptr<LogicalTensorData>> outcastDataViewList_)
+    FunctionIODataPair(std::vector<std::shared_ptr<LogicalTensorData>> incastDataViewList_,
+                       std::vector<std::shared_ptr<LogicalTensorData>> outcastDataViewList_)
         : incastDataViewList(incastDataViewList_), outcastDataViewList(outcastDataViewList_)
     {}
 
@@ -160,11 +159,8 @@ struct FunctionFrame {
         ProcessInplaceOpIndices(ops, opIndexMap, indexAddOpIndices, 0);
     }
 
-    void ProcessInplaceOpIndices(
-        OperationsViewer& ops,
-        const std::unordered_map<Operation*, int>& opIndexMap,
-        std::set<int>& opIndices,
-        size_t startTensorIdx)
+    void ProcessInplaceOpIndices(OperationsViewer& ops, const std::unordered_map<Operation*, int>& opIndexMap,
+                                 std::set<int>& opIndices, size_t startTensorIdx)
     {
         std::set<int> indices = opIndices;
         for (auto index : indices) {
@@ -204,9 +200,8 @@ struct FunctionFrame {
         }
     }
 
-    FunctionFrame(
-        const Function* func_, const Operation* callop_, const std::shared_ptr<CallOpAttribute>& callopAttr_,
-        std::shared_ptr<FunctionIODataPair> inoutDataPair_, int frameIndex_)
+    FunctionFrame(const Function* func_, const Operation* callop_, const std::shared_ptr<CallOpAttribute>& callopAttr_,
+                  std::shared_ptr<FunctionIODataPair> inoutDataPair_, int frameIndex_)
         : func(func_), callop(callop_), callopAttr(callopAttr_), inoutDataPair(inoutDataPair_), frameIndex(frameIndex_)
     {
         if (func != nullptr) {
@@ -224,15 +219,13 @@ struct FunctionFrame {
         }
         InitInplaceDataViewList();
         if (inoutDataPair != nullptr) {
-            ASSERT(
-                ControlFlowScene::FUNC_INCAST_COUNT_MISMATCH,
-                func->GetIncast().size() == inoutDataPair->incastDataViewList.size());
+            ASSERT(ControlFlowScene::FUNC_INCAST_COUNT_MISMATCH,
+                   func->GetIncast().size() == inoutDataPair->incastDataViewList.size());
             for (size_t i = 0; i < inoutDataPair->incastDataViewList.size(); i++) {
                 AddDataView(func->GetIncast()[i], inoutDataPair->incastDataViewList[i]);
             }
-            ASSERT(
-                ControlFlowScene::FUNC_OUTCAST_COUNT_MISMATCH,
-                func->GetOutcast().size() == inoutDataPair->outcastDataViewList.size());
+            ASSERT(ControlFlowScene::FUNC_OUTCAST_COUNT_MISMATCH,
+                   func->GetOutcast().size() == inoutDataPair->outcastDataViewList.size());
             for (size_t i = 0; i < inoutDataPair->outcastDataViewList.size(); i++) {
                 AddDataView(func->GetOutcast()[i], inoutDataPair->outcastDataViewList[i]);
             }
@@ -270,9 +263,8 @@ struct FunctionFrame {
             DoAddRawTensorDataView(tensor->GetRawTensor(), dataView->GetData()->GetRawData());
         }
     }
-    void AddDataViewList(
-        const std::vector<std::shared_ptr<LogicalTensor>>& tensorList,
-        const std::vector<std::shared_ptr<LogicalTensorData>>& dataViewList)
+    void AddDataViewList(const std::vector<std::shared_ptr<LogicalTensor>>& tensorList,
+                         const std::vector<std::shared_ptr<LogicalTensorData>>& dataViewList)
     {
         ASSERT(ControlFlowScene::FUNC_TENSOR_DATAVIEW_LIST_SIZE_MISMATCH, tensorList.size() == dataViewList.size());
         for (size_t i = 0; i < tensorList.size(); i++) {
@@ -280,10 +272,11 @@ struct FunctionFrame {
         }
     }
 
-    std::shared_ptr<LogicalTensorData> AllocateDataView(
-        const std::shared_ptr<LogicalTensor>& tensor, const std::vector<int64_t>& offset,
-        const std::vector<int64_t>& validShape, const std::vector<int64_t>& rawShape, DataType dtype,
-        const std::shared_ptr<LogicalTensor>& inplaceTensor = nullptr)
+    std::shared_ptr<LogicalTensorData> AllocateDataView(const std::shared_ptr<LogicalTensor>& tensor,
+                                                        const std::vector<int64_t>& offset,
+                                                        const std::vector<int64_t>& validShape,
+                                                        const std::vector<int64_t>& rawShape, DataType dtype,
+                                                        const std::shared_ptr<LogicalTensor>& inplaceTensor = nullptr)
     {
         if (tensorDataViewDict.count(tensor)) {
             if (!validShape.empty()) {
@@ -312,17 +305,15 @@ struct FunctionFrame {
             auto existingRawData = rawTensorDataDict[raw->GetRawMagic()];
             // Validate size consistency when sharing RawTensor
             size_t requiredSize = RawTensorData::CalcRequiredSize(dtype, rawShape);
-            ASSERT(ControlFlowScene::FUNC_RAW_TENSOR_SIZE_MISMATCH, 
-                   existingRawData->size() >= requiredSize)
+            ASSERT(ControlFlowScene::FUNC_RAW_TENSOR_SIZE_MISMATCH, existingRawData->size() >= requiredSize)
                 << "RawTensor size mismatch when sharing: rawMagic=" << raw->GetRawMagic()
-                << ", existing size=" << existingRawData->size()
-                << ", required size=" << requiredSize;
+                << ", existing size=" << existingRawData->size() << ", required size=" << requiredSize;
             rawData = std::make_shared<RawTensorData>(existingRawData, dtype, rawShape);
         } else {
             ASSERT(ControlFlowScene::FUNC_INPLACE_ALLOC_CONFLICT, inplaceTensor == nullptr);
             rawData = std::make_shared<RawTensorData>(dtype, rawShape);
             rawData->resize(rawData->GetDataSize());
-            for (auto& [lt, ltd]: tensorDataViewDict) {
+            for (auto& [lt, ltd] : tensorDataViewDict) {
                 if (lt->GetRawTensor() == tensor->GetRawTensor() && ltd->IsShmTensor()) {
                     rawData->SetShmOffset(ltd->GetData()->GetShmOffset());
                     rawData->SetAsShmTensor();
@@ -330,8 +321,8 @@ struct FunctionFrame {
             }
         }
         DoAddRawTensorDataView(tensor->GetRawTensor(), rawData->GetRawData());
-        std::shared_ptr<LogicalTensorData> view =
-            std::make_shared<LogicalTensorData>(rawData, tensor->GetShape(), validShape, offset);
+        std::shared_ptr<LogicalTensorData> view = std::make_shared<LogicalTensorData>(rawData, tensor->GetShape(),
+                                                                                      validShape, offset);
         view->SetIsSpilled(isSpilled);
         DoAddTensorDataView(tensor, view);
         return view;
@@ -358,10 +349,10 @@ private:
         }
     }
 
-    void TraverseBackward(
-        LogicalTensorPtr t, std::set<LogicalTensorPtr>& tensorGroup,
-        std::unordered_set<LogicalTensorPtr>& visitedTensor, std::unordered_set<Operation*>& visitedOp,
-        bool& chainValid, const std::unordered_map<Operation*, int>& opIndexMap)
+    void TraverseBackward(LogicalTensorPtr t, std::set<LogicalTensorPtr>& tensorGroup,
+                          std::unordered_set<LogicalTensorPtr>& visitedTensor,
+                          std::unordered_set<Operation*>& visitedOp, bool& chainValid,
+                          const std::unordered_map<Operation*, int>& opIndexMap)
     {
         if (!chainValid || t == nullptr) {
             return;
@@ -383,18 +374,16 @@ private:
                 auto opcode = producer->GetOpcode();
                 int idx = (opcode == Opcode::OP_INDEX_OUTCAST) ? 2 : 0;
                 if (producerInputs.size() > static_cast<size_t>(idx) && producerInputs[idx] != nullptr) {
-                    TraverseBackward(
-                        producerInputs[idx], tensorGroup, visitedTensor, visitedOp, chainValid,
-                        opIndexMap);
+                    TraverseBackward(producerInputs[idx], tensorGroup, visitedTensor, visitedOp, chainValid,
+                                     opIndexMap);
                 }
             }
         }
     }
 
-    void TraverseForward(
-        LogicalTensorPtr t, std::set<LogicalTensorPtr>& tensorGroup,
-        std::unordered_set<LogicalTensorPtr>& visitedTensor, std::unordered_set<Operation*>& visitedOp,
-        bool& chainValid, const std::unordered_map<Operation*, int>& opIndexMap)
+    void TraverseForward(LogicalTensorPtr t, std::set<LogicalTensorPtr>& tensorGroup,
+                         std::unordered_set<LogicalTensorPtr>& visitedTensor, std::unordered_set<Operation*>& visitedOp,
+                         bool& chainValid, const std::unordered_map<Operation*, int>& opIndexMap)
     {
         if (!chainValid || t == nullptr) {
             return;
@@ -414,16 +403,14 @@ private:
                 TryEraseOpIndex(consumerOp, opIndexMap);
                 auto& consumerOutputs = consumerOp->GetOOperands();
                 if (!consumerOutputs.empty() && consumerOutputs[0] != nullptr) {
-                    TraverseForward(
-                        consumerOutputs[0], tensorGroup, visitedTensor, visitedOp, chainValid,
-                        opIndexMap);
+                    TraverseForward(consumerOutputs[0], tensorGroup, visitedTensor, visitedOp, chainValid, opIndexMap);
                 }
             }
         }
     }
 
-    void DoAddTensorDataView(
-        const std::shared_ptr<LogicalTensor>& tensor, const std::shared_ptr<LogicalTensorData>& dataView)
+    void DoAddTensorDataView(const std::shared_ptr<LogicalTensor>& tensor,
+                             const std::shared_ptr<LogicalTensorData>& dataView)
     {
         ASSERT(ControlFlowScene::FUNC_TENSOR_DATAVIEW_DUP, !tensorDataViewDict.count(tensor));
         tensorDataViewDict[tensor] = dataView;
@@ -469,8 +456,8 @@ struct FunctionCaptureExecution {
 
     const std::vector<std::shared_ptr<FunctionFrame>>& GetFrameList() const { return frameList; }
 
-    void CaptureFrom(
-        const std::shared_ptr<FunctionIODataPair>& b, const std::unordered_map<std::string, ScalarImmediateType>& s)
+    void CaptureFrom(const std::shared_ptr<FunctionIODataPair>& b,
+                     const std::unordered_map<std::string, ScalarImmediateType>& s)
     {
         FunctionIODataPair::CopyWithLinkRelationship(*baseline, *b);
         symbolDict = s;
@@ -655,27 +642,28 @@ struct FunctionInterpreter {
     bool mixMultiThreadEnabled_{false};
     std::mutex dumpStateMutex_;
 
-    bool CheckWaitUntilReady(Operation *op, LogicalTensorDataPtr shmData)
+    bool CheckWaitUntilReady(Operation* op, LogicalTensorDataPtr shmData)
     {
         Distributed::ShmemWaitUntilAttr attr;
         op->GetAttr(OpAttributeKey::distOpAttr, attr);
-        std::shared_ptr<SimulationCommContext> context =
-            SimulationCommManager::Instance().GetCommContext(attr.group);
+        std::shared_ptr<SimulationCommContext> context = SimulationCommManager::Instance().GetCommContext(attr.group);
         int srcRank = context->GetRank();
         size_t slotSize = shmData->GetSize() * BytesOf(shmData->GetDataType());
         uint64_t offset = shmData->GetShmStorageOffset();
         return context->CheckWaitCondition(srcRank, attr.expectedSum, slotSize, offset);
     }
 
-    std::unordered_map<Operation*, std::vector<Operation*>> ConstructOpConsumers(OperationsViewer operations, std::unordered_map<Operation*, int> &inDegree) {
+    std::unordered_map<Operation*, std::vector<Operation*>> ConstructOpConsumers(
+        OperationsViewer operations, std::unordered_map<Operation*, int>& inDegree)
+    {
         std::unordered_map<Operation*, std::vector<Operation*>> consumers;
         std::unordered_set<Operation*> opSet;
-        for (auto &op: operations) {
+        for (auto& op : operations) {
             opSet.insert(&op);
         }
-        for (auto &op: operations) {
-            for (auto &iTensor: op.GetIOperands()) {
-                for (auto *producer: iTensor->GetProducers()) {
+        for (auto& op : operations) {
+            for (auto& iTensor : op.GetIOperands()) {
+                for (auto* producer : iTensor->GetProducers()) {
                     if (opSet.count(producer)) {
                         inDegree[&op]++;
                         consumers[producer].push_back(&op);
@@ -683,9 +671,9 @@ struct FunctionInterpreter {
                 }
             }
         }
-        for (auto &op: operations) {
-            for (auto &dTensor: op.GetDependOperands()) {
-                for (auto *producer: dTensor->GetProducers()) {
+        for (auto& op : operations) {
+            for (auto& dTensor : op.GetDependOperands()) {
+                for (auto* producer : dTensor->GetProducers()) {
                     if (opSet.count(producer)) {
                         inDegree[&op]++;
                         consumers[producer].push_back(&op);
@@ -778,19 +766,19 @@ struct FunctionInterpreter {
         ASSERT(false) << "ExprToSymbolicScalar: unsupported Expr type";
         return SymbolicScalar();
     }
-    std::vector<int64_t> EvaluateOffset(
-        const std::vector<int64_t>& offset, const std::vector<SymbolicScalar>& dynOffset,
-        const std::vector<SymbolicScalar>& linearArgList = {})
+    std::vector<int64_t> EvaluateOffset(const std::vector<int64_t>& offset,
+                                        const std::vector<SymbolicScalar>& dynOffset,
+                                        const std::vector<SymbolicScalar>& linearArgList = {})
     {
         return GetOperationInterpreterForThisThread().EvaluateOffset(offset, dynOffset, linearArgList);
     }
-    std::vector<int64_t> EvaluateValidShape(
-        const std::vector<SymbolicScalar>& dynValidShape, const std::vector<SymbolicScalar>& linearArgList = {})
+    std::vector<int64_t> EvaluateValidShape(const std::vector<SymbolicScalar>& dynValidShape,
+                                            const std::vector<SymbolicScalar>& linearArgList = {})
     {
         return GetOperationInterpreterForThisThread().EvaluateValidShape(dynValidShape, linearArgList);
     }
-    void EvaluateDynParam(
-        const std::map<std::string, DynParamInfo>& dynParamTable, const std::vector<SymbolicScalar>& linearArgList)
+    void EvaluateDynParam(const std::map<std::string, DynParamInfo>& dynParamTable,
+                          const std::vector<SymbolicScalar>& linearArgList)
     {
         GetOperationInterpreterForThisThread().evaluateSymbol->EvaluateDynParam(dynParamTable, linearArgList);
     }
@@ -816,16 +804,16 @@ struct FunctionInterpreter {
 
     LogicalTensorDataPtr FormatNZ2ND(LogicalTensorDataPtr& view)
     {
-        auto out = LogicalTensorData::CreateEmpty(
-            view->GetDataType(), view->GetShape(), view->GetValidShape(), view->GetData()->GetShape());
+        auto out = LogicalTensorData::CreateEmpty(view->GetDataType(), view->GetShape(), view->GetValidShape(),
+                                                  view->GetData()->GetShape());
         calc::FormatNZ2ND(out, view);
         return out;
     }
 
     LogicalTensorDataPtr FormatND2NZ(LogicalTensorDataPtr& view)
     {
-        auto out = LogicalTensorData::CreateEmpty(
-            view->GetDataType(), view->GetShape(), view->GetValidShape(), view->GetData()->GetShape());
+        auto out = LogicalTensorData::CreateEmpty(view->GetDataType(), view->GetShape(), view->GetValidShape(),
+                                                  view->GetData()->GetShape());
         calc::FormatND2NZ(out, view);
         return out;
     }
@@ -857,9 +845,9 @@ struct FunctionInterpreter {
         }
     }
 
-    std::shared_ptr<LogicalTensorData> AllocateDataView(
-        FunctionFrame& frame, const std::shared_ptr<LogicalTensor>& tensor, DataType dtype,
-        const std::shared_ptr<LogicalTensor>& inplaceTensor = nullptr)
+    std::shared_ptr<LogicalTensorData> AllocateDataView(FunctionFrame& frame,
+                                                        const std::shared_ptr<LogicalTensor>& tensor, DataType dtype,
+                                                        const std::shared_ptr<LogicalTensor>& inplaceTensor = nullptr)
     {
         std::vector<SymbolicScalar> linearArgList;
         if (frame.callopAttr != nullptr) {
@@ -868,15 +856,16 @@ struct FunctionInterpreter {
         std::vector<int64_t> offset = EvaluateOffset(tensor->GetOffset(), tensor->GetDynOffset(), linearArgList);
         auto validShape = EvaluateValidShape(tensor->GetDynValidShape(), linearArgList);
         auto rawShape = EvaluateValidShape(tensor->GetRawTensor()->GetDynRawShape());
-        ASSERT(ControlFlowScene::INVALID_TENSOR_SHAPE, std::all_of(rawShape.begin(), rawShape.end(), [](int64_t dim)
-            { return dim >= 0; })) << "ShapeToStride: shape dimension must be non-negative" <<rawShape;
+        ASSERT(ControlFlowScene::INVALID_TENSOR_SHAPE,
+               std::all_of(rawShape.begin(), rawShape.end(), [](int64_t dim) { return dim >= 0; }))
+            << "ShapeToStride: shape dimension must be non-negative" << rawShape;
         auto ret = frame.AllocateDataView(tensor, offset, validShape, rawShape, dtype, inplaceTensor);
         return ret;
     }
 
-    std::shared_ptr<LogicalTensorData> AllocateDataView(
-        FunctionFrame& frame, const std::shared_ptr<LogicalTensor>& tensor,
-        const std::shared_ptr<LogicalTensor>& inplaceTensor = nullptr)
+    std::shared_ptr<LogicalTensorData> AllocateDataView(FunctionFrame& frame,
+                                                        const std::shared_ptr<LogicalTensor>& tensor,
+                                                        const std::shared_ptr<LogicalTensor>& inplaceTensor = nullptr)
     {
         return AllocateDataView(frame, tensor, tensor->GetRawTensor()->GetDataType(), inplaceTensor);
     }
@@ -884,8 +873,8 @@ struct FunctionInterpreter {
     void ExecuteOpCallLeaf(ExecuteOperationContext* ctx)
     {
         Function* callee = GetCallee(ctx->op);
-        auto inoutDataPair =
-            std::make_shared<FunctionIODataPair>(*ctx->ioperandDataViewList, *ctx->ooperandInplaceDataViewList);
+        auto inoutDataPair = std::make_shared<FunctionIODataPair>(*ctx->ioperandDataViewList,
+                                                                  *ctx->ooperandInplaceDataViewList);
         ExecuteFunctionFrame(callee, ctx->op, inoutDataPair);
     }
 
@@ -1032,20 +1021,20 @@ struct FunctionInterpreter {
     }
 
     void ExecuteBindTensor(FunctionFrame& frame, Operation& op,
-        const std::vector<std::shared_ptr<LogicalTensorData>>& iOpDataList,
-        std::vector<std::shared_ptr<LogicalTensorData>>& oOpDataList)
+                           const std::vector<std::shared_ptr<LogicalTensorData>>& iOpDataList,
+                           std::vector<std::shared_ptr<LogicalTensorData>>& oOpDataList)
     {
-        (void) iOpDataList;
-        (void) oOpDataList;
+        (void)iOpDataList;
+        (void)oOpDataList;
         ASSERT(op.GetIOperands().size() == 0);
         ASSERT(op.GetOOperands().size() == 1);
         SymbolicScalar attr = op.GetSymbolicScalarAttribute(OpAttributeKey::bindTensor);
         std::vector<uint64_t> parameters = UnBind(attr);
         uint64_t groupIndex = parameters[0];
         uint64_t memType = parameters[1];
-        const auto &groupNames = Distributed::CommGroupRecorder::GetInstance().Output();
+        const auto& groupNames = Distributed::CommGroupRecorder::GetInstance().Output();
         ASSERT(groupIndex < static_cast<uint64_t>(groupNames.size()));
-        const std::string &groupName = groupNames[groupIndex];
+        const std::string& groupName = groupNames[groupIndex];
         LogicalTensorDataPtr out;
         RawTensorDataPtr tmp;
         auto outOp = op.GetOOperands()[0];
@@ -1067,10 +1056,9 @@ struct FunctionInterpreter {
         oOpDataList.emplace_back(out);
     }
 
-    void ExecuteInplaceOperation(
-        FunctionFrame& frame, Operation& op, int oOperandIdx,
-        const std::vector<std::shared_ptr<LogicalTensorData>>& iOpDataList,
-        std::vector<std::shared_ptr<LogicalTensorData>>& oOpDataList)
+    void ExecuteInplaceOperation(FunctionFrame& frame, Operation& op, int oOperandIdx,
+                                 const std::vector<std::shared_ptr<LogicalTensorData>>& iOpDataList,
+                                 std::vector<std::shared_ptr<LogicalTensorData>>& oOpDataList)
     {
         auto oop = op.GetOOperands()[oOperandIdx];
         auto index = GetInplaceIndex(&op, oOperandIdx);
@@ -1103,13 +1091,12 @@ struct FunctionInterpreter {
     }
 
     bool isOutCast(const std::vector<std::shared_ptr<LogicalTensor>>& outCasts,
-        const std::shared_ptr<LogicalTensor>& oop)
+                   const std::shared_ptr<LogicalTensor>& oop)
     {
         auto it = std::find(outCasts.begin(), outCasts.end(), oop);
         if (it == outCasts.end()) {
             return false;
-        }
-        else {
+        } else {
             return true;
         }
     }
@@ -1117,8 +1104,9 @@ struct FunctionInterpreter {
     /// Mix-split leaf output: reuse mixGlobalTensorDict entry for (oop, wrapId) if present; else allocate under
     /// mixGlobalTensorMutex_ and publish. Caller must only use this after input views are ready (AllocateDataView
     /// must not recurse into WaitAndGetMixGlobalTensorDataView while the mutex is held).
-    std::shared_ptr<LogicalTensorData> AllocateOrReuseMixGlobalOutputDataView(
-        FunctionFrame& frame, const std::shared_ptr<LogicalTensor>& oop, int32_t wrapId)
+    std::shared_ptr<LogicalTensorData> AllocateOrReuseMixGlobalOutputDataView(FunctionFrame& frame,
+                                                                              const std::shared_ptr<LogicalTensor>& oop,
+                                                                              int32_t wrapId)
     {
         const std::pair<std::shared_ptr<LogicalTensor>, int32_t> mixKey{oop, wrapId};
         bool reusedFromMixDict = false;
@@ -1171,7 +1159,7 @@ struct FunctionInterpreter {
             }
             if (auto index = GetInplaceIndex(op, i); index != -1) {
                 ExecuteInplaceOperation(frame, *op, i, iOpDataList, oOpDataList);
-            } else if (op->GetOpcode() == Opcode::OP_BIND_TENSOR){
+            } else if (op->GetOpcode() == Opcode::OP_BIND_TENSOR) {
                 ExecuteBindTensor(frame, *op, iOpDataList, oOpDataList);
             } else {
                 if (isConsumerAccMatmul(op)) {
@@ -1181,10 +1169,10 @@ struct FunctionInterpreter {
                         dtype = DataType::DT_FP32;
                     }
                     oOpDataList.push_back(AllocateDataView(frame, oop, dtype));
-                } else if (frame.callop != nullptr && MIX_PATH_OPS.count(op->GetOpcode()) > 0 && !isOutCast(frame.func->GetOutcast(), oop)) {
+                } else if (frame.callop != nullptr && MIX_PATH_OPS.count(op->GetOpcode()) > 0 &&
+                           !isOutCast(frame.func->GetOutcast(), oop)) {
                     auto callopAttr = std::static_pointer_cast<CallOpAttribute>(frame.callop->GetOpAttribute());
-                    oOpDataList.push_back(
-                        AllocateOrReuseMixGlobalOutputDataView(frame, oop, callopAttr->wrapId));
+                    oOpDataList.push_back(AllocateOrReuseMixGlobalOutputDataView(frame, oop, callopAttr->wrapId));
                 } else {
                     oOpDataList.push_back(AllocateDataView(frame, oop));
                 }
@@ -1200,31 +1188,32 @@ struct FunctionInterpreter {
             {
                 std::lock_guard<std::mutex> dumpGuard(dumpStateMutex_);
                 opUsage[op->GetOpcodeStr()] += ts.Duration();
-                auto* ooperandDumpList =
-                    ctx.ooperandInplaceDataViewList ? ctx.ooperandInplaceDataViewList : ctx.ooperandDataViewList;
+                auto* ooperandDumpList = ctx.ooperandInplaceDataViewList ? ctx.ooperandInplaceDataViewList :
+                                                                           ctx.ooperandDataViewList;
                 DumpOperationTensor(ctx.op, ctx.frame, ooperandDumpList, ctx.ioperandDataViewList);
                 dumpOperationUsage += ts.Duration();
             }
         }
     }
 
-    std::shared_ptr<LogicalTensorData> WaitAndGetMixGlobalTensorDataView(
-        FunctionFrame& frame, const std::shared_ptr<LogicalTensor>& iop, Operation* mixCallop = nullptr)
+    std::shared_ptr<LogicalTensorData> WaitAndGetMixGlobalTensorDataView(FunctionFrame& frame,
+                                                                         const std::shared_ptr<LogicalTensor>& iop,
+                                                                         Operation* mixCallop = nullptr)
     {
         Operation* callop = mixCallop != nullptr ? mixCallop : const_cast<Operation*>(frame.callop);
         ASSERT(ControlFlowScene::INVALID_INPLACE_CHAIN, callop != nullptr);
         auto callopAttr = std::static_pointer_cast<CallOpAttribute>(callop->GetOpAttribute());
         const std::pair<std::shared_ptr<LogicalTensor>, int32_t> mixKey{iop, callopAttr->wrapId};
         std::unique_lock<std::mutex> mixTensorGuard(mixGlobalTensorMutex_);
-        const auto waitDeadline =
-            std::chrono::steady_clock::now() + std::chrono::milliseconds(MIX_GLOBAL_TENSOR_WAIT_TIMEOUT_MS);
+        const auto waitDeadline = std::chrono::steady_clock::now() +
+                                  std::chrono::milliseconds(MIX_GLOBAL_TENSOR_WAIT_TIMEOUT_MS);
         const bool waitOk = mixGlobalTensorCv_.wait_until(mixTensorGuard, waitDeadline, [this, mixKey] {
             auto it = mixGlobalTensorDict.find(mixKey);
             return it != mixGlobalTensorDict.end() && it->second != nullptr;
         });
         ASSERT(ControlFlowScene::MIX_GLOBAL_TENSOR_WAIT_TIMEOUT, waitOk)
-            << "Timeout while waiting mixGlobalTensorDict in multithread execution, wrapId="
-            << callopAttr->wrapId << ", timeoutMs=" << MIX_GLOBAL_TENSOR_WAIT_TIMEOUT_MS;
+            << "Timeout while waiting mixGlobalTensorDict in multithread execution, wrapId=" << callopAttr->wrapId
+            << ", timeoutMs=" << MIX_GLOBAL_TENSOR_WAIT_TIMEOUT_MS;
         std::shared_ptr<LogicalTensorData> result = nullptr;
         if (waitOk) {
             auto it = mixGlobalTensorDict.find(mixKey);
@@ -1267,8 +1256,8 @@ struct FunctionInterpreter {
     }
     void ExecuteHandleOperationEnd() {}
 
-    bool TryExecuteMixSplitCallOps(
-        FunctionFrame& frame, const OperationsViewer& operations, size_t& opIdx, Operation& op)
+    bool TryExecuteMixSplitCallOps(FunctionFrame& frame, const OperationsViewer& operations, size_t& opIdx,
+                                   Operation& op)
     {
         if (!IsMixSplitCallOp(&op)) {
             return false;
@@ -1304,11 +1293,12 @@ struct FunctionInterpreter {
         return true;
     }
 
-    void ExecuteHasWaitUntilFrame(Function* func, std::shared_ptr<FunctionFrame> frame) {
+    void ExecuteHasWaitUntilFrame(Function* func, std::shared_ptr<FunctionFrame> frame)
+    {
         auto operations = func->Operations();
         std::queue<Operation*> queue;
         std::unordered_map<Operation*, int> inDegree;
-        for (auto &operation: operations) {
+        for (auto& operation : operations) {
             queue.push(&operation);
             inDegree[&operation] = 0;
         }
@@ -1327,7 +1317,7 @@ struct FunctionInterpreter {
                     ExecuteHandleOperationBegin(op);
                     ExecuteOperation(*frame, op);
                     ExecuteHandleOperationEnd();
-                    for (auto *consumer: consumers[op]) {
+                    for (auto* consumer : consumers[op]) {
                         inDegree[consumer]--;
                     }
                 } else {
@@ -1339,15 +1329,15 @@ struct FunctionInterpreter {
                 ExecuteHandleOperationBegin(op);
                 ExecuteOperation(*frame, op);
                 ExecuteHandleOperationEnd();
-                for (auto *consumer: consumers[op]) {
+                for (auto* consumer : consumers[op]) {
                     inDegree[consumer]--;
                 }
             }
         }
     }
 
-    std::shared_ptr<FunctionFrame> ExecuteFunctionFrame(
-        Function* func, Operation* callop, std::shared_ptr<FunctionIODataPair>& inoutDataPair)
+    std::shared_ptr<FunctionFrame> ExecuteFunctionFrame(Function* func, Operation* callop,
+                                                        std::shared_ptr<FunctionIODataPair>& inoutDataPair)
     {
         std::shared_ptr<CallOpAttribute> callopAttr;
         std::vector<SymbolicScalar> linearArgList;
@@ -1355,8 +1345,8 @@ struct FunctionInterpreter {
             callopAttr = std::static_pointer_cast<CallOpAttribute>(callop->GetOpAttribute());
             linearArgList = callopAttr->GetLinearArgList();
         }
-        std::shared_ptr<FunctionFrame> frame =
-            std::make_shared<FunctionFrame>(func, callop, callopAttr, inoutDataPair, frameCount.fetch_add(1));
+        std::shared_ptr<FunctionFrame> frame = std::make_shared<FunctionFrame>(func, callop, callopAttr, inoutDataPair,
+                                                                               frameCount.fetch_add(1));
         if (callop == nullptr) {
             interpreterSyncSimulation_->Reset();
         }
@@ -1387,7 +1377,7 @@ struct FunctionInterpreter {
         auto operations = func->Operations();
 
         bool hasWaitUntil = false;
-        for (auto &op: operations) {
+        for (auto& op : operations) {
             if (op.GetOpcode() == Opcode::OP_SHMEM_WAIT_UNTIL) {
                 hasWaitUntil = true;
                 break;
@@ -1518,8 +1508,8 @@ struct FunctionInterpreter {
 
     void ExecuteFunctionDynamic(Function* func, FunctionControlFlowExecution& controlFlowExecution)
     {
-        std::shared_ptr<FunctionFrame> frame =
-            std::make_shared<FunctionFrame>(func, nullptr, nullptr, nullptr, frameCount++);
+        std::shared_ptr<FunctionFrame> frame = std::make_shared<FunctionFrame>(func, nullptr, nullptr, nullptr,
+                                                                               frameCount++);
         ExecuteHandleFunctionBegin(func, frame);
 
         std::vector<Operation*> callopList = func->GetCallopList();
@@ -1554,8 +1544,8 @@ struct FunctionInterpreter {
 
     void ExecuteFunctionLoop(Function* func, FunctionControlFlowExecution& controlFlowExecution)
     {
-        std::shared_ptr<FunctionFrame> frame =
-            std::make_shared<FunctionFrame>(func, nullptr, nullptr, nullptr, frameCount++);
+        std::shared_ptr<FunctionFrame> frame = std::make_shared<FunctionFrame>(func, nullptr, nullptr, nullptr,
+                                                                               frameCount++);
         ExecuteHandleFunctionBegin(func, frame);
 
         auto loop = func->GetDynloopAttribute();
@@ -1622,8 +1612,8 @@ struct FunctionInterpreter {
     void ExecuteControlFlow(Function* func, FunctionControlFlowExecution& controlFlowExecution)
     {
         if (func->body_ && func->GetFunctionType() == FunctionType::DYNAMIC) {
-            std::shared_ptr<FunctionFrame> frame =
-                std::make_shared<FunctionFrame>(func, nullptr, nullptr, nullptr, frameCount++);
+            std::shared_ptr<FunctionFrame> frame = std::make_shared<FunctionFrame>(func, nullptr, nullptr, nullptr,
+                                                                                   frameCount++);
             ExecuteHandleFunctionBegin(func, frame);
             ExecuteStmtBody(func, func->body_, controlFlowExecution);
             ExecuteHandleFunctionEnd();
@@ -1683,8 +1673,8 @@ struct FunctionInterpreter {
                         auto outcast = func->GetOutcast()[i];
                         auto validShape = EvaluateValidShape(outcast->GetDynValidShape());
                         auto rawShape = EvaluateValidShape(outcast->GetRawTensor()->GetDynRawShape());
-                        outcastView = LogicalTensorData::CreateEmpty(
-                            outcast->Datatype(), outcast->GetShape(), validShape, rawShape);
+                        outcastView = LogicalTensorData::CreateEmpty(outcast->Datatype(), outcast->GetShape(),
+                                                                     validShape, rawShape);
                     }
                     for (auto& s : outcastSlot[i]) {
                         slotDataViewDict_[s] = outcastView;
@@ -1714,40 +1704,36 @@ struct FunctionInterpreter {
         return oss.str();
     }
     void DumpOperation(Operation* op);
-    void DumpOperationTensor(
-        Operation* op, FunctionFrame* frame,
-        const std::vector<std::shared_ptr<LogicalTensorData>>* ooperandDataViewList,
-        const std::vector<std::shared_ptr<LogicalTensorData>>* ioperandDataViewList);
+    void DumpOperationTensor(Operation* op, FunctionFrame* frame,
+                             const std::vector<std::shared_ptr<LogicalTensorData>>* ooperandDataViewList,
+                             const std::vector<std::shared_ptr<LogicalTensorData>>* ioperandDataViewList);
 
 private:
     void FillOperationBasicInfo(Operation* op, FunctionFrame* frame, std::vector<std::string>& opInfo);
-    void FillOperationOffsetInfo(
-        Operation* op, FunctionFrame* frame, const std::vector<SymbolicScalar>& linearArgList,
-        std::vector<std::string>& opInfo);
-    void FillOperationInputInfo(
-        Operation* op, FunctionFrame* frame,
-        const std::vector<std::shared_ptr<LogicalTensorData>>* ioperandDataViewList, std::vector<std::string>& opInfo);
-    void FillOperationOutputInfo(
-        Operation* op, FunctionFrame* frame,
-        const std::vector<std::shared_ptr<LogicalTensorData>>* ooperandDataViewList,
-        const std::vector<SymbolicScalar>& linearArgList, int indent, std::vector<std::string>& opInfo);
+    void FillOperationOffsetInfo(Operation* op, FunctionFrame* frame, const std::vector<SymbolicScalar>& linearArgList,
+                                 std::vector<std::string>& opInfo);
+    void FillOperationInputInfo(Operation* op, FunctionFrame* frame,
+                                const std::vector<std::shared_ptr<LogicalTensorData>>* ioperandDataViewList,
+                                std::vector<std::string>& opInfo);
+    void FillOperationOutputInfo(Operation* op, FunctionFrame* frame,
+                                 const std::vector<std::shared_ptr<LogicalTensorData>>* ooperandDataViewList,
+                                 const std::vector<SymbolicScalar>& linearArgList, int indent,
+                                 std::vector<std::string>& opInfo);
 
 public:
-    void DumpTensorBinary(
-        const std::shared_ptr<LogicalTensor>& tensor, const std::shared_ptr<LogicalTensorData>& dataView);
-    void DumpTensorBinary(
-        const std::shared_ptr<LogicalTensorData>& dataView, std::string dumpTensorFileName, bool isRaw = false);
-    void DumpBinary(
-        std::vector<int64_t>& shape, std::vector<int64_t>& stride, std::vector<int64_t>& offset, FILE* fdata,
-        uint8_t* data, size_t dtypeSize);
-    std::shared_ptr<LogicalTensorData> LoadTensorBinary(
-        const std::shared_ptr<LogicalTensor>& tensor, const std::string dumpTensorFileName);
+    void DumpTensorBinary(const std::shared_ptr<LogicalTensor>& tensor,
+                          const std::shared_ptr<LogicalTensorData>& dataView);
+    void DumpTensorBinary(const std::shared_ptr<LogicalTensorData>& dataView, std::string dumpTensorFileName,
+                          bool isRaw = false);
+    void DumpBinary(std::vector<int64_t>& shape, std::vector<int64_t>& stride, std::vector<int64_t>& offset,
+                    FILE* fdata, uint8_t* data, size_t dtypeSize);
+    std::shared_ptr<LogicalTensorData> LoadTensorBinary(const std::shared_ptr<LogicalTensor>& tensor,
+                                                        const std::string dumpTensorFileName);
     void DumpFunctionHead(Function* func);
     void DumpBegin();
     void DumpEnd();
-    void DumpPassTensorDiff(
-        const std::shared_ptr<FunctionCaptureExecution>& captureExecution,
-        const std::shared_ptr<FunctionCaptureExecution>& captureGolden);
+    void DumpPassTensorDiff(const std::shared_ptr<FunctionCaptureExecution>& captureExecution,
+                            const std::shared_ptr<FunctionCaptureExecution>& captureGolden);
     std::string GetDumpFilePath(const std::string& lv0, const std::string& lv1, const std::string& filename);
 
     std::string GetDumpFrameDirName() const
@@ -1757,18 +1743,18 @@ public:
     }
     std::string GetDumpOperationTensorFileName(Operation* op) const
     {
-        std::string fileName =
-            "frame_" + GetFrameCurrIndex() + "_operation_" + std::to_string(op->GetOpMagic()) + ".html";
+        std::string fileName = "frame_" + GetFrameCurrIndex() + "_operation_" + std::to_string(op->GetOpMagic()) +
+                               ".html";
         return fileName;
     }
     std::string GetDumpTensorFileName(const std::shared_ptr<LogicalTensor>& tensor) const
     {
-        std::string fileName =
-            "frame_" + GetFrameCurrIndex() + "_tensor_" + std::to_string(tensor->GetMagic()) + ".data";
+        std::string fileName = "frame_" + GetFrameCurrIndex() + "_tensor_" + std::to_string(tensor->GetMagic()) +
+                               ".data";
         return fileName;
     }
-    std::string GetDumpTensorFileName(
-        const std::shared_ptr<LogicalTensor>& tensor, Operation* op, FunctionFrame* frame) const
+    std::string GetDumpTensorFileName(const std::shared_ptr<LogicalTensor>& tensor, Operation* op,
+                                      FunctionFrame* frame) const
     {
         auto callopMagic = (frame->callop != nullptr) ? std::to_string(frame->callop->GetOpMagic()) + "~" : "~";
         struct timeval tv;
@@ -1798,8 +1784,8 @@ public:
         }
         return loop.str();
     }
-    std::string GetDumpTensorId(
-        const std::shared_ptr<FunctionFrame>& frame, const std::shared_ptr<LogicalTensor>& tensor) const
+    std::string GetDumpTensorId(const std::shared_ptr<FunctionFrame>& frame,
+                                const std::shared_ptr<LogicalTensor>& tensor) const
     {
         std::string index = GetFrameIndex(frame);
         std::string magic = tensor != nullptr ? std::to_string(tensor->GetMagic()) : "null";
@@ -1905,8 +1891,8 @@ public:
         return ss.str();
     }
 
-    std::shared_ptr<FunctionCaptureExecution> ExecuteUnit(
-        Function* func, const std::shared_ptr<FunctionCaptureExecution>& capture)
+    std::shared_ptr<FunctionCaptureExecution> ExecuteUnit(Function* func,
+                                                          const std::shared_ptr<FunctionCaptureExecution>& capture)
     {
         auto unitCapture = std::make_shared<FunctionCaptureExecution>(func);
         auto symbolDict = capture->CaptureTo(unitCapture->baseline);
@@ -1971,8 +1957,8 @@ public:
         return execution;
     }
 
-    std::shared_ptr<FunctionCaptureExecution> RunForPass(
-        std::string& funcKey, Function* func, const std::shared_ptr<FunctionCaptureExecution>& capture)
+    std::shared_ptr<FunctionCaptureExecution> RunForPass(std::string& funcKey, Function* func,
+                                                         const std::shared_ptr<FunctionCaptureExecution>& capture)
     {
         execDumpFuncKey = funcKey;
 

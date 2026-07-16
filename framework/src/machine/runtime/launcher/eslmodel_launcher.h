@@ -9,9 +9,9 @@
  */
 
 /*!
-* \file eslmodel_launcher.h
-* \brief
-*/
+ * \file eslmodel_launcher.h
+ * \brief
+ */
 
 #pragma once
 
@@ -24,18 +24,18 @@ namespace npu::tile_fwk::dynamic {
 
 class EslModelLauncher {
 public:
-    static int EslModelRunOnce(void *kernel, const DeviceLauncherConfig &config = DeviceLauncherConfig());
-    static int EslModelLaunchDeviceTensorData(Function *function,
-        const std::vector<DeviceTensorData> &inputList, const std::vector<DeviceTensorData> &outputList,
-        RtStream aicpuStream, RtStream aicoreStream, void *kernel, const DeviceLauncherConfig &config);
-    static int DynamicKernelLaunchEsl(DeviceKernelArgs *kArgs, AclRtStream aicoreStream, void *kernel);
-    static int EslModelLaunchAicore(AclRtStream aicoreStream, void *kernel, DeviceKernelArgs *kernelArgs);
+    static int EslModelRunOnce(void* kernel, const DeviceLauncherConfig& config = DeviceLauncherConfig());
+    static int EslModelLaunchDeviceTensorData(Function* function, const std::vector<DeviceTensorData>& inputList,
+                                              const std::vector<DeviceTensorData>& outputList, RtStream aicpuStream,
+                                              RtStream aicoreStream, void* kernel, const DeviceLauncherConfig& config);
+    static int DynamicKernelLaunchEsl(DeviceKernelArgs* kArgs, AclRtStream aicoreStream, void* kernel);
+    static int EslModelLaunchAicore(AclRtStream aicoreStream, void* kernel, DeviceKernelArgs* kernelArgs);
     static void CopyInputOutputData();
-    static int EslModelLiteRunOnce(Function *function, std::vector<DeviceTensorData> &tensors);
+    static int EslModelLiteRunOnce(Function* function, std::vector<DeviceTensorData>& tensors);
 
 private:
-    static void LiteAllocDeviceMemory(const std::vector<DeviceTensorData> &tensors,
-        std::vector<uint8_t *> &deviceAddrs, uint8_t *&workspaceAddr, Function *function);
-    static void LiteRegisterKernel(Function *function, void *&hdl, int &stubFunc);
+    static void LiteAllocDeviceMemory(const std::vector<DeviceTensorData>& tensors, std::vector<uint8_t*>& deviceAddrs,
+                                      uint8_t*& workspaceAddr, Function* function);
+    static void LiteRegisterKernel(Function* function, void*& hdl, int& stubFunc);
 };
-}
+} // namespace npu::tile_fwk::dynamic

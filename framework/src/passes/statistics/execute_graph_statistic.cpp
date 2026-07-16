@@ -187,9 +187,9 @@ std::unordered_map<CoreType, int> ExecutionGraphStatistic::CountCoreTypes(Functi
     return coreTypeCounts;
 }
 
-uint64_t ExecutionGraphStatistic::AnalyzeSubgraphLatencies(
-    Function& func, uint64_t& maxLatency, uint64_t& minLatency, std::vector<int>& maxLatencySubgraphs,
-    std::vector<int>& minLatencySubgraphs)
+uint64_t ExecutionGraphStatistic::AnalyzeSubgraphLatencies(Function& func, uint64_t& maxLatency, uint64_t& minLatency,
+                                                           std::vector<int>& maxLatencySubgraphs,
+                                                           std::vector<int>& minLatencySubgraphs)
 {
     int totalSubgraphNum = func.GetTotalSubGraphCount();
     std::vector<uint64_t> subgraphLatencies(totalSubgraphNum, 0);
@@ -224,9 +224,8 @@ uint64_t ExecutionGraphStatistic::AnalyzeSubgraphLatencies(
     return totalLatency;
 }
 
-json ExecutionGraphStatistic::AnalyzeExecutionGraph(
-    Function& func, const std::multimap<int, int>& psgToESgMap,
-    const std::vector<std::vector<OperationPtr>>& subgraphGroups)
+json ExecutionGraphStatistic::AnalyzeExecutionGraph(Function& func, const std::multimap<int, int>& psgToESgMap,
+                                                    const std::vector<std::vector<OperationPtr>>& subgraphGroups)
 {
     json report;
     Function* rootFunc = func.GetRootFunction();
@@ -240,24 +239,23 @@ json ExecutionGraphStatistic::AnalyzeExecutionGraph(
     uint64_t minLatency;
     std::vector<int> maxLatencySubgraphs;
     std::vector<int> minLatencySubgraphs;
-    auto totalLatency =
-        AnalyzeSubgraphLatencies(func, maxLatency, minLatency, maxLatencySubgraphs, minLatencySubgraphs);
+    auto totalLatency = AnalyzeSubgraphLatencies(func, maxLatency, minLatency, maxLatencySubgraphs,
+                                                 minLatencySubgraphs);
     int totalSubgraphNum = func.GetTotalSubGraphCount();
-    report = {
-        {"totalSubgraphCount", totalSubgraphNum},
-        {"maxSubgraphCycle", maxLatency},
-        {"minSubgraphCycle", minLatency == UINT64_MAX ? 0 : minLatency},
-        {"avgSubgraphCycle", totalSubgraphNum > 0 ? totalLatency / totalSubgraphNum : 0},
-        {"maxCycleSubgraphs", maxLatencySubgraphs},
-        {"minCycleSubgraphs", minLatencySubgraphs},
-        {"aivSubgraphCount", coreTypeCounts[CoreType::AIV]},
-        {"aicSubgraphCount", coreTypeCounts[CoreType::AIC]},
-        {"aicpuSubgraphCount", coreTypeCounts[CoreType::AICPU]},
-        {"gmatomicSubgraphCount", coreTypeCounts[CoreType::GMATOMIC]},
-        {"hubSubgraphCount", coreTypeCounts[CoreType::HUB]},
-        {"hubMixSubgraphCount", coreTypeCounts[CoreType::HUB_MIX]},
-        {"invalidSubgraphCount", coreTypeCounts[CoreType::INVALID]},
-        {"mixSubgraphCount", coreTypeCounts[CoreType::MIX]}};
+    report = {{"totalSubgraphCount", totalSubgraphNum},
+              {"maxSubgraphCycle", maxLatency},
+              {"minSubgraphCycle", minLatency == UINT64_MAX ? 0 : minLatency},
+              {"avgSubgraphCycle", totalSubgraphNum > 0 ? totalLatency / totalSubgraphNum : 0},
+              {"maxCycleSubgraphs", maxLatencySubgraphs},
+              {"minCycleSubgraphs", minLatencySubgraphs},
+              {"aivSubgraphCount", coreTypeCounts[CoreType::AIV]},
+              {"aicSubgraphCount", coreTypeCounts[CoreType::AIC]},
+              {"aicpuSubgraphCount", coreTypeCounts[CoreType::AICPU]},
+              {"gmatomicSubgraphCount", coreTypeCounts[CoreType::GMATOMIC]},
+              {"hubSubgraphCount", coreTypeCounts[CoreType::HUB]},
+              {"hubMixSubgraphCount", coreTypeCounts[CoreType::HUB_MIX]},
+              {"invalidSubgraphCount", coreTypeCounts[CoreType::INVALID]},
+              {"mixSubgraphCount", coreTypeCounts[CoreType::MIX]}};
 
     // 只在静态流程中添加拓扑相关指标和内存使用指标
     if (func.GetFunctionType() == FunctionType::STATIC) {
@@ -266,15 +264,14 @@ json ExecutionGraphStatistic::AnalyzeExecutionGraph(
         auto concurrencyStats = CalculateConcurrency(func);
         std::vector<int> peakMemoryUsageSubgraphs;
         auto peakMemoryUsage = AnalyzePeakMemoryUsage(rootFunc, peakMemoryUsageSubgraphs);
-        report.update(
-            {{"peakMemoryUsage", peakMemoryUsage},
-             {"peakMemoryUsageSubgraphs", peakMemoryUsageSubgraphs},
-             {"maxSubgraphDepth", longestPath.maxLength},
-             {"maxSubgraphWidth", concurrencyStats.maxConcurrency},
-             {"maxSubgraphFanin", dependencies["Predecessors"]["MAX"]["value"]},
-             {"maxFaninSubgraphs", dependencies["Predecessors"]["MAX"]["subgraph"]},
-             {"maxSubgraphFanout", dependencies["Successors"]["MAX"]["value"]},
-             {"maxFanoutSubgraphs", dependencies["Successors"]["MAX"]["subgraph"]}});
+        report.update({{"peakMemoryUsage", peakMemoryUsage},
+                       {"peakMemoryUsageSubgraphs", peakMemoryUsageSubgraphs},
+                       {"maxSubgraphDepth", longestPath.maxLength},
+                       {"maxSubgraphWidth", concurrencyStats.maxConcurrency},
+                       {"maxSubgraphFanin", dependencies["Predecessors"]["MAX"]["value"]},
+                       {"maxFaninSubgraphs", dependencies["Predecessors"]["MAX"]["subgraph"]},
+                       {"maxSubgraphFanout", dependencies["Successors"]["MAX"]["value"]},
+                       {"maxFanoutSubgraphs", dependencies["Successors"]["MAX"]["subgraph"]}});
     }
     AnalyzeIsomorphism(report, psgToESgMap, subgraphGroups);
     // 添加流程类型信息
@@ -338,35 +335,33 @@ json ExecutionGraphStatistic::FormatDependencyStats(const DependencyStats& stats
     double avg_successors = stats.valid_entries > 0 ?
                                 static_cast<double>(stats.total_successors) / static_cast<double>(stats.valid_entries) :
                                 0.0;
-    return {
-        {"Predecessors",
-         {{"MIN",
-           {
-               {"value", stats.min_predecessors}, {"subgraph", stats.min_pred_nodes} // 添加最小前驱节点列表
-           }},
-          {"MAX",
-           {
-               {"value", stats.max_predecessors}, {"subgraph", stats.max_pred_nodes} // 添加最大前驱节点列表
-           }},
-          {"AVG", avg_predecessors}}},
-        {"Successors",
-         {{"MIN",
-           {
-               {"value", stats.min_successors}, {"subgraph", stats.min_succ_nodes} // 添加最小后继节点列表
-           }},
-          {"MAX",
-           {
-               {"value", stats.max_successors}, {"subgraph", stats.max_succ_nodes} // 添加最大后继节点列表
-           }},
-          {"AVG", avg_successors}}}};
+    return {{"Predecessors",
+             {{"MIN",
+               {
+                   {"value", stats.min_predecessors}, {"subgraph", stats.min_pred_nodes} // 添加最小前驱节点列表
+               }},
+              {"MAX",
+               {
+                   {"value", stats.max_predecessors}, {"subgraph", stats.max_pred_nodes} // 添加最大前驱节点列表
+               }},
+              {"AVG", avg_predecessors}}},
+            {"Successors",
+             {{"MIN",
+               {
+                   {"value", stats.min_successors}, {"subgraph", stats.min_succ_nodes} // 添加最小后继节点列表
+               }},
+              {"MAX",
+               {
+                   {"value", stats.max_successors}, {"subgraph", stats.max_succ_nodes} // 添加最大后继节点列表
+               }},
+              {"AVG", avg_successors}}}};
 }
 
 double ExecutionGraphStatistic::FormatUsageRate(double value) { return std::round(value * decimal) / decimal; }
 
 // 基于psgToESgMap的同构性分析
-void ExecutionGraphStatistic::AnalyzeIsomorphism(
-    json& report, const std::multimap<int, int>& psgToESgMap,
-    const std::vector<std::vector<OperationPtr>>& subgraphGroups)
+void ExecutionGraphStatistic::AnalyzeIsomorphism(json& report, const std::multimap<int, int>& psgToESgMap,
+                                                 const std::vector<std::vector<OperationPtr>>& subgraphGroups)
 {
     // 统计同构子图分布
     std::unordered_map<int, std::vector<int>> isomorphicGroups;
@@ -375,8 +370,9 @@ void ExecutionGraphStatistic::AnalyzeIsomorphism(
     }
 
     // 计算同构率
-    double homogeneityRatio =
-        subgraphGroups.empty() ? 0.0 : static_cast<double>(subgraphGroups.size()) / isomorphicGroups.size();
+    double homogeneityRatio = subgraphGroups.empty() ?
+                                  0.0 :
+                                  static_cast<double>(subgraphGroups.size()) / isomorphicGroups.size();
     report["uniqueSubgraphTypes"] = isomorphicGroups.size();
     report["homogeneityRatio"] = FormatUsageRate(homogeneityRatio);
 

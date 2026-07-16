@@ -139,24 +139,21 @@ std::string GetFormatBacktrace(const Operation* op)
     return GetFormatBacktrace(*op);
 }
 
-void LogPassRuntime(
-    const std::string& identifier, Program& program, Function& function,
-    const std::chrono::time_point<std::chrono::high_resolution_clock>& start)
+void LogPassRuntime(const std::string& identifier, Program& program, Function& function,
+                    const std::chrono::time_point<std::chrono::high_resolution_clock>& start)
 {
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-    APASS_LOG_INFO_F(
-        Elements::Function, "The Runtime of pass %s for program %s function %s is %ld us.", identifier.c_str(),
-        program.Name().c_str(), function.GetMagicName().c_str(), duration.count());
+    APASS_LOG_INFO_F(Elements::Function, "The Runtime of pass %s for program %s function %s is %ld us.",
+                     identifier.c_str(), program.Name().c_str(), function.GetMagicName().c_str(), duration.count());
 }
 
 void ExtractPassLogByFunction(const Function& function, const std::string& strategy)
 {
     const std::string scriptPath = ResolveExtractPassLogScriptPath();
     if (scriptPath.empty()) {
-        APASS_LOG_WARN_F(
-            Elements::Function, "%s not found under install(%s/scripts), or source(%s).", kExtractPassLogScriptName,
-            GetPyptoLibPath().c_str(), kExtractPassLogScriptInSource);
+        APASS_LOG_WARN_F(Elements::Function, "%s not found under install(%s/scripts), or source(%s).",
+                         kExtractPassLogScriptName, GetPyptoLibPath().c_str(), kExtractPassLogScriptInSource);
         return;
     }
 
@@ -175,8 +172,7 @@ void ExtractPassLogByFunction(const Function& function, const std::string& strat
     }
 }
 
-PassLogUtil::PassLogUtil(Pass& pass, Function& function, size_t passIndex)
-    : PassLogUtil(pass, function, "", passIndex)
+PassLogUtil::PassLogUtil(Pass& pass, Function& function, size_t passIndex) : PassLogUtil(pass, function, "", passIndex)
 {}
 
 PassLogUtil::PassLogUtil(Pass& pass, Function& function, const std::string& strategy, size_t passIndex)

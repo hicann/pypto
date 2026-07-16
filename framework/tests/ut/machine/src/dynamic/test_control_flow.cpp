@@ -288,9 +288,8 @@ TEST_F(ControlFlowTest, CtrlFlowPartialCache)
     config.blockdim = 24; // 24:max aicore num
     EmulationMemoryUtils memUtils;
     DevControlFlowCache* ctrolCache = nullptr;
-    EXPECT_EQ(
-        0, EmulationLauncher::BuildControlFlowCache(
-               Program::GetInstance().GetLastFunction(), memUtils, inputList, outputList, &ctrolCache, config));
+    EXPECT_EQ(0, EmulationLauncher::BuildControlFlowCache(Program::GetInstance().GetLastFunction(), memUtils, inputList,
+                                                          outputList, &ctrolCache, config));
     DevAscendProgram* devProg = DeviceLauncher::GetDevProg(Program::GetInstance().GetLastFunction());
 
     EXPECT_EQ(0x5, ctrolCache->deviceTaskCount);
@@ -397,12 +396,10 @@ TEST_F(ControlFlowTest, TestParallelLoop)
             {
                 LOOP("s1", FunctionType::DYNAMIC_LOOP, col_iter, LoopRange(0x4))
                 {
-                    Tensor view_x = View(
-                        input_tensor_x, {parallel_tile_size, parallel_tile_size},
-                        {row_iter * parallel_tile_size, col_iter * parallel_tile_size});
-                    Tensor view_y = View(
-                        input_tensor_y, {parallel_tile_size, parallel_tile_size},
-                        {row_iter * parallel_tile_size, col_iter * parallel_tile_size});
+                    Tensor view_x = View(input_tensor_x, {parallel_tile_size, parallel_tile_size},
+                                         {row_iter * parallel_tile_size, col_iter * parallel_tile_size});
+                    Tensor view_y = View(input_tensor_y, {parallel_tile_size, parallel_tile_size},
+                                         {row_iter * parallel_tile_size, col_iter * parallel_tile_size});
                     Tensor add_result = Add(view_x, view_y);
                     Assemble(add_result, {row_iter * parallel_tile_size, col_iter * parallel_tile_size}, accum_tensor);
                 }

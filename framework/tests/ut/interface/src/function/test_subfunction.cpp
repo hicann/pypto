@@ -143,16 +143,14 @@ TEST_F(SubFunctionTest, SubfuncInvokeInfoTy_Print1)
 TEST_F(SubFunctionTest, SubfuncInvokeInfoTy_ToJson)
 {
     SubfuncInvokeInfoTy subfuncInvokeInfo;
-    subfuncInvokeInfo.RecordTensorArg(
-        1, 456, {0, 1}, {16, 32}, {16, 32}, DataType::DT_FP32, true, nullptr, 20);
-    subfuncInvokeInfo.RecordConnection(
-        2, 3, 4, 123, {2, 3}, {64, 65}, {64, 65}, DataType::DT_FP16, nullptr, 30);
+    subfuncInvokeInfo.RecordTensorArg(1, 456, {0, 1}, {16, 32}, {16, 32}, DataType::DT_FP32, true, nullptr, 20);
+    subfuncInvokeInfo.RecordConnection(2, 3, 4, 123, {2, 3}, {64, 65}, {64, 65}, DataType::DT_FP16, nullptr, 30);
 
     std::vector<SubfuncInvokeInfoTy::SuccessorIncastRecTy> inCasts;
     inCasts.emplace_back(100, 7, nullptr, 88);
     inCasts.emplace_back(101, 8, nullptr, 99);
-    subfuncInvokeInfo.RecordOutcast(
-        4, 0, 2, 789, inCasts, {6, 7}, {128, 129}, {128, 129}, DataType::DT_INT32, nullptr, 40);
+    subfuncInvokeInfo.RecordOutcast(4, 0, 2, 789, inCasts, {6, 7}, {128, 129}, {128, 129}, DataType::DT_INT32, nullptr,
+                                    40);
 
     Json result = subfuncInvokeInfo.ToJson();
 
@@ -189,8 +187,8 @@ TEST_F(SubFunctionTest, SubfuncParam_PrettyPrint)
     SubfuncParam subfuncParam;
     subfuncParam.AppendTensorParam(1, 11, {16, 32}, {0, 1}, "tensor_sym", 0, "tensor_symbol", DataType::DT_FP32);
     subfuncParam.AppendIncastParam(2, 22, {64, 65}, {2, 3}, "incast_sym", 1, "incast_symbol", DataType::DT_FP16);
-    subfuncParam.AppendOutcastParam(
-        3, 33, 2, {128, 129}, {4, 5}, "outcast_sym", 2, "outcast_symbol", DataType::DT_INT32);
+    subfuncParam.AppendOutcastParam(3, 33, 2, {128, 129}, {4, 5}, "outcast_sym", 2, "outcast_symbol",
+                                    DataType::DT_INT32);
 
     std::ostringstream osm;
     subfuncParam.PrettyPrint(123, osm);
@@ -245,9 +243,9 @@ TEST_F(SubFunctionTest, SubfuncTopologyInfoTy_DumpEachEntryInfo)
 
     std::vector<int64_t> entryParam(10, 10);
     std::vector<int32_t> readyState(10, 10);
-    Status status = subfuncTopoInfo.DumpEachEntryInfo(
-        1, CoreType::AIC, 0, entryParam.data(), entryParam.size() * sizeof(int64_t), readyState.data(),
-        readyState.size());
+    Status status = subfuncTopoInfo.DumpEachEntryInfo(1, CoreType::AIC, 0, entryParam.data(),
+                                                      entryParam.size() * sizeof(int64_t), readyState.data(),
+                                                      readyState.size());
 
     EXPECT_EQ(status, SUCCESS);
     const int64_t graphId = static_cast<int64_t>((static_cast<uint64_t>(CoreType::AIC) << 32) | 1U);
@@ -267,9 +265,9 @@ TEST_F(SubFunctionTest, SubfuncTopologyInfoTy_DumpEachEntryInfoEntryParamOverflo
 
     std::vector<int64_t> entryParam(2, 10);
     std::vector<int32_t> readyState(4, 10);
-    Status status = subfuncTopoInfo.DumpEachEntryInfo(
-        1, CoreType::AIC, 0, entryParam.data(), entryParam.size() * sizeof(int64_t), readyState.data(),
-        readyState.size());
+    Status status = subfuncTopoInfo.DumpEachEntryInfo(1, CoreType::AIC, 0, entryParam.data(),
+                                                      entryParam.size() * sizeof(int64_t), readyState.data(),
+                                                      readyState.size());
 
     EXPECT_EQ(status, FAILED);
     EXPECT_EQ(entryParam[0], 10);
@@ -287,9 +285,9 @@ TEST_F(SubFunctionTest, SubfuncTopologyInfoTy_DumpEachEntryInfoReadyStateOverflo
 
     std::vector<int64_t> entryParam(10, 10);
     std::vector<int32_t> readyState(3, 10);
-    Status status = subfuncTopoInfo.DumpEachEntryInfo(
-        1, CoreType::AIC, 0, entryParam.data(), entryParam.size() * sizeof(int64_t), readyState.data(),
-        readyState.size());
+    Status status = subfuncTopoInfo.DumpEachEntryInfo(1, CoreType::AIC, 0, entryParam.data(),
+                                                      entryParam.size() * sizeof(int64_t), readyState.data(),
+                                                      readyState.size());
 
     EXPECT_EQ(status, FAILED);
     EXPECT_EQ(entryParam[0], 10);

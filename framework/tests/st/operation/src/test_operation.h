@@ -377,17 +377,18 @@ private:
 static DataType GetDataType(const std::string& name)
 {
     static const std::map<std::string, DataType> name_to_dtype = {
-        {"int4", DataType::DT_INT4},       {"int8", DataType::DT_INT8},     {"int16", DataType::DT_INT16},
-        {"int32", DataType::DT_INT32},     {"int64", DataType::DT_INT64},   {"fp8", DataType::DT_FP8},
-        {"fp16", DataType::DT_FP16},       {"fp32", DataType::DT_FP32},     {"bf16", DataType::DT_BF16},
-        {"hf4", DataType::DT_HF4},         {"hf8", DataType::DT_HF8},       {"uint8", DataType::DT_UINT8},
-        {"uint16", DataType::DT_UINT16},   {"uint32", DataType::DT_UINT32}, {"uint64", DataType::DT_UINT64},
-        {"bool", DataType::DT_BOOL},       {"double", DataType::DT_DOUBLE}, {"fp8e4m3", DataType::DT_FP8E4M3},
-        {"fp8e5m2", DataType::DT_FP8E5M2}, {"fp8e8m0", DataType::DT_FP8E8M0},
-        {"fp4_e2m1", DataType::DT_FP4_E2M1},
-        {"fp4_e2m1x2", DataType::DT_FP4_E2M1X2},
-        {"fp4_e1m2", DataType::DT_FP4_E1M2},
-        {"fp4_e1m2x2", DataType::DT_FP4_E1M2X2},
+        {"int4", DataType::DT_INT4},         {"int8", DataType::DT_INT8},
+        {"int16", DataType::DT_INT16},       {"int32", DataType::DT_INT32},
+        {"int64", DataType::DT_INT64},       {"fp8", DataType::DT_FP8},
+        {"fp16", DataType::DT_FP16},         {"fp32", DataType::DT_FP32},
+        {"bf16", DataType::DT_BF16},         {"hf4", DataType::DT_HF4},
+        {"hf8", DataType::DT_HF8},           {"uint8", DataType::DT_UINT8},
+        {"uint16", DataType::DT_UINT16},     {"uint32", DataType::DT_UINT32},
+        {"uint64", DataType::DT_UINT64},     {"bool", DataType::DT_BOOL},
+        {"double", DataType::DT_DOUBLE},     {"fp8e4m3", DataType::DT_FP8E4M3},
+        {"fp8e5m2", DataType::DT_FP8E5M2},   {"fp8e8m0", DataType::DT_FP8E8M0},
+        {"fp4_e2m1", DataType::DT_FP4_E2M1}, {"fp4_e2m1x2", DataType::DT_FP4_E2M1X2},
+        {"fp4_e1m2", DataType::DT_FP4_E1M2}, {"fp4_e1m2x2", DataType::DT_FP4_E1M2X2},
     };
     if (name_to_dtype.find(name) == name_to_dtype.end()) {
         MATMUL_LOGW("Not support type %s yet, return fp32 as default.", name.c_str());
@@ -624,12 +625,11 @@ TestCaseDesc CreateTestCaseDesc(const T& param, const OpFuncArgs* args)
     testCase.outputTensors = GetOutputTensors(test_data);
     testCase.args = args;
     testCase.opFunc = param.opFunc_;
-    std::transform(
-        testCase.inputTensors.begin(), testCase.inputTensors.end(), std::back_inserter(testCase.inputPaths),
-        [](const auto& tensor) { return GetGoldenDir() + "/" + tensor.GetStorage()->Symbol() + ".bin"; });
-    std::transform(
-        testCase.outputTensors.begin(), testCase.outputTensors.end(), std::back_inserter(testCase.goldenPaths),
-        [](const auto& tensor) { return GetGoldenDir() + "/" + tensor.GetStorage()->Symbol() + ".bin"; });
+    std::transform(testCase.inputTensors.begin(), testCase.inputTensors.end(), std::back_inserter(testCase.inputPaths),
+                   [](const auto& tensor) { return GetGoldenDir() + "/" + tensor.GetStorage()->Symbol() + ".bin"; });
+    std::transform(testCase.outputTensors.begin(), testCase.outputTensors.end(),
+                   std::back_inserter(testCase.goldenPaths),
+                   [](const auto& tensor) { return GetGoldenDir() + "/" + tensor.GetStorage()->Symbol() + ".bin"; });
     auto params_dict = test_data.at("params");
     testCase.onBoard = params_dict.find("on_board") == params_dict.end() || GetValueByName<bool>(test_data, "on_board");
     return testCase;

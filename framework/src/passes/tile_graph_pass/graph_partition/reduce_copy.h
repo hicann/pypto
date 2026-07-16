@@ -80,12 +80,12 @@ private:
     void BuildMixDeps(MixScheduleContext& ctx, const EstimateInput& input);
     void InitMixTopology(MixScheduleContext& ctx);
     int CalcMixStartTime(int mixId, const MixScheduleContext& ctx, int scheduleTime);
-    void InitSubgraphContext(
-        SubgraphScheduleContext& subCtx, const MixScheduleContext& ctx, const EstimateInput& input);
-    void ScheduleOneSubgraph(
-        int current, SubgraphScheduleContext& subCtx, const MixScheduleContext& ctx, const EstimateInput& input);
-    void ProcessSubgraphConsumers(
-        int current, SubgraphScheduleContext& subCtx, const MixScheduleContext& ctx, const EstimateInput& input);
+    void InitSubgraphContext(SubgraphScheduleContext& subCtx, const MixScheduleContext& ctx,
+                             const EstimateInput& input);
+    void ScheduleOneSubgraph(int current, SubgraphScheduleContext& subCtx, const MixScheduleContext& ctx,
+                             const EstimateInput& input);
+    void ProcessSubgraphConsumers(int current, SubgraphScheduleContext& subCtx, const MixScheduleContext& ctx,
+                                  const EstimateInput& input);
     int GetMixFinishTime(const SubgraphScheduleContext& subCtx, const MixScheduleContext& ctx);
     void ProcessMixConsumers(int mixId, MixScheduleContext& ctx);
 };
@@ -116,6 +116,7 @@ public:
     ~MixGraphMerger() = default;
     MergeOutput Merge(const MergeInput& input);
     bool enableAutoMix{true};
+
 private:
     MergeInput mInput;
     MergeOutput mOutput;
@@ -146,11 +147,9 @@ private:
 
 class ReduceCopyMerge : public Pass {
 public:
-    ReduceCopyMerge() : Pass("ReduceCopyMerge")
-    {
-        SetSupportedArches({NPUArch::DAV_3510});
-    }
+    ReduceCopyMerge() : Pass("ReduceCopyMerge") { SetSupportedArches({NPUArch::DAV_3510}); }
     ~ReduceCopyMerge() override = default;
+
 private:
     Status BuildGraph(Function& function, MergeInput& mergeInput);
     Status BuildMergeGroup(Function& function, MergeInput& mergeInput);
@@ -158,8 +157,7 @@ private:
     Status MarkNoMergeSubgraph(Function& function);
     void UpdateConnectRecord(Function& function, MergeInput& mergeInput);
     void UpdateBoundaryTensorSize(LogicalTensorPtr& tensor, int tensorSize);
-    void RecordBoundaryTensorInfo(
-        LogicalTensorPtr& tensor, MergeInput& mergeInput, const std::set<int>& connectGraphs);
+    void RecordBoundaryTensorInfo(LogicalTensorPtr& tensor, MergeInput& mergeInput, const std::set<int>& connectGraphs);
     void UpdateMergeInput(MergeInput& mergeInput, std::multimap<int, std::vector<int>>& sortedMergeGroup);
     bool IsEnforceMergeBoundary(LogicalTensorPtr& tensor);
     Status RunOnFunction(Function& function) override;

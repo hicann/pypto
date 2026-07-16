@@ -70,10 +70,7 @@ AclError HookVersionNonOfficial(const char* pkgName, char* versionStr)
     return WriteVersionToBuf(pkgName, versionStr, "7.0.t9.0.b811");
 }
 
-AclError HookVersionEmpty(const char* pkgName, char* versionStr)
-{
-    return WriteVersionToBuf(pkgName, versionStr, "");
-}
+AclError HookVersionEmpty(const char* pkgName, char* versionStr) { return WriteVersionToBuf(pkgName, versionStr, ""); }
 
 int gSysGetVersionCallCount = 0;
 

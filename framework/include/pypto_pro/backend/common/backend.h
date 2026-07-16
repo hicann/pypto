@@ -117,9 +117,9 @@ private:
 };
 
 // Macro for registering backend operators with fluent interface
-#define REGISTER_BACKEND_OP(BackendClass, OpName)                                                                  \
-    static PYPTO_STR_CONCAT(PYPTO_UNUSED ::pypto::backend::BackendOpRegistryEntry& BackendOpEntry_, __COUNTER__) = \
-        BackendClass::Instance().RegisterOp(OpName)
+#define REGISTER_BACKEND_OP(BackendClass, OpName)                                                   \
+    static PYPTO_STR_CONCAT(PYPTO_UNUSED ::pypto::backend::BackendOpRegistryEntry& BackendOpEntry_, \
+                            __COUNTER__) = BackendClass::Instance().RegisterOp(OpName)
 
 /**
  * \brief Abstract backend base class

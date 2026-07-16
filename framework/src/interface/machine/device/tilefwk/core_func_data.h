@@ -21,7 +21,7 @@
 #include <cstdint>
 #include "tilefwk/aikernel_data.h"
 
-inline constexpr size_t MAX_STITCH_FUNC_NUM = 1024;      // stitch数量阈值
+inline constexpr size_t MAX_STITCH_FUNC_NUM = 1024; // stitch数量阈值
 inline constexpr size_t MAX_STITCH_LEAFFUNC_NUM = 60000;
 constexpr int MAX_DIMS = 8;
 constexpr uint32_t AICORE_TYPE_NUM = 2;
@@ -72,8 +72,8 @@ struct CoreFunctionWsAddr {
           invokeEntryInfo(info),
           invokeEntryNum(num)
     {}
-    CoreFunctionWsAddr(
-        uint64_t bin, uint64_t invoke, uint64_t psg, uint64_t topo, uint64_t info, uint64_t num, uint64_t oriAddr)
+    CoreFunctionWsAddr(uint64_t bin, uint64_t invoke, uint64_t psg, uint64_t topo, uint64_t info, uint64_t num,
+                       uint64_t oriAddr)
         : functionBinAddr(bin),
           invokeEntryAddr(invoke),
           psgId(psg),
@@ -121,10 +121,11 @@ struct L2PreInfo {
 };
 
 struct MixTaskData {
-    uint64_t readyWrapCoreFunctionQue;              // 指针指向WrapInfoQueue 结构
-    uint64_t wrapIdNum;                             // 包含的有效wrapId个数
+    uint64_t readyWrapCoreFunctionQue;        // 指针指向WrapInfoQueue 结构
+    uint64_t wrapIdNum;                       // 包含的有效wrapId个数
     uint64_t opWrapList[MAX_STITCH_FUNC_NUM]; // 指针数组，指向每个function的callop对应的wrapId
-    uint16_t* opWrapOffsetList[MAX_STITCH_FUNC_NUM]; // 偏移数组，存储每个function的callop对应的wrapInfo在readyWrapCoreFunctionQue的下标
+    uint16_t* opWrapOffsetList
+        [MAX_STITCH_FUNC_NUM]; // 偏移数组，存储每个function的callop对应的wrapInfo在readyWrapCoreFunctionQue的下标
     uint64_t wrapQueueForThread[MAX_SCHEDULE_AICPU_NUM]; // 指向每个Sche线程的StaticReadyCoreFunctionQueue的起始位置
 };
 
@@ -159,7 +160,7 @@ struct TensorInfo {
     uint32_t opMagic;
     int32_t stride[MAX_DIMS];
     int32_t hostpid{0};
-    int32_t dataType;  // INT8...
+    int32_t dataType; // INT8...
     uint32_t dataByte;
     int32_t format;    // ND...
     int32_t paramType; // 0:func incast; 1:func outcas; 2:mid incast; 3:mid outcast

@@ -82,22 +82,21 @@ struct MockLogger {
         self->buffer += std::to_string(DecodeHf8(rawBits));
     }
 
-
     MockLogger()
     {
         ctx.PrintInt64 = &MockLogger::PrintInt;
-        ctx.PrintFp32  = &MockLogger::PrintFp32;
-        ctx.PrintBf16  = &MockLogger::PrintBf16;
-        ctx.PrintFp16  = &MockLogger::PrintFp16;
-        ctx.PrintRaw   = &MockLogger::PrintRaw;
+        ctx.PrintFp32 = &MockLogger::PrintFp32;
+        ctx.PrintBf16 = &MockLogger::PrintBf16;
+        ctx.PrintFp16 = &MockLogger::PrintFp16;
+        ctx.PrintRaw = &MockLogger::PrintRaw;
         ctx.PrintFp8E4M3 = &MockLogger::PrintFp8E4M3;
         ctx.PrintFp8E5M2 = &MockLogger::PrintFp8E5M2;
         ctx.PrintFp8E8M0 = &MockLogger::PrintFp8E8M0;
-        ctx.PrintHf8     = &MockLogger::PrintHf8;
+        ctx.PrintHf8 = &MockLogger::PrintHf8;
     }
 };
 
-}
+} // namespace
 
 class AiCorePrintUTest : public testing::Test {
 protected:
@@ -538,9 +537,9 @@ TEST_F(Fp8DecodeTest, DecodeFp8E8M0_PowersOfTwo)
     // exp=127 (0x7F) → 2^0 = 1.0
     EXPECT_NEAR(1.0f, DecodeFp8E8M0(0x7F), 0.01f);
     EXPECT_NEAR(0.5f, DecodeFp8E8M0(0x7E), 0.01f);   // 2^-1
-    EXPECT_NEAR(0.25f, DecodeFp8E8M0(0x7D), 0.01f);   // 2^-2
-    EXPECT_NEAR(0.125f, DecodeFp8E8M0(0x7C), 0.01f);  // 2^-3
-    EXPECT_NEAR(2.0f, DecodeFp8E8M0(0x80), 0.01f);    // 2^1
+    EXPECT_NEAR(0.25f, DecodeFp8E8M0(0x7D), 0.01f);  // 2^-2
+    EXPECT_NEAR(0.125f, DecodeFp8E8M0(0x7C), 0.01f); // 2^-3
+    EXPECT_NEAR(2.0f, DecodeFp8E8M0(0x80), 0.01f);   // 2^1
 }
 
 // E8M0 boundary values: 0x01→2^-126 (min normal), 0xFE→2^127 (max), 0xFF→NaN
@@ -579,10 +578,13 @@ TEST_F(Fp8DecodeTest, DecodeHf8_SignPreservation)
 {
     for (int i = 1; i < 128; i++) {
         uint8_t posBits = static_cast<uint8_t>(i);
-        if (posBits == 0x6F) continue; // positive infinity
+        if (posBits == 0x6F)
+            continue; // positive infinity
         uint8_t negBits = static_cast<uint8_t>(i | 0x80);
-        if (negBits == 0x80) continue;  // NaN
-        if (negBits == 0xEF) continue;  // negative infinity
+        if (negBits == 0x80)
+            continue; // NaN
+        if (negBits == 0xEF)
+            continue; // negative infinity
 
         float posVal = DecodeHf8(posBits);
         float negVal = DecodeHf8(negBits);
@@ -655,10 +657,7 @@ TEST_F(AiCorePrintUTest, AicorePrintConst_RemoteHeaderSize)
 }
 
 // 测试 AicorePrintConst MAX_SHAPE_DIMS 常量值为 6
-TEST_F(AiCorePrintUTest, AicorePrintConst_MaxShapeDims)
-{
-    EXPECT_EQ(AicorePrintConst::MAX_SHAPE_DIMS, 6u);
-}
+TEST_F(AiCorePrintUTest, AicorePrintConst_MaxShapeDims) { EXPECT_EQ(AicorePrintConst::MAX_SHAPE_DIMS, 6u); }
 
 // ============================================================================
 // Section 7: DataType 枚举功能测试 - 数据类型标记值验证
@@ -732,10 +731,7 @@ TEST_F(AiCorePrintUTest, Fp16Const_CorrectValues)
 }
 
 // 测试 Bf16Const TO_FP32_SHIFT 常量为 16(BF16 是 FP32 高 16 位)
-TEST_F(AiCorePrintUTest, Bf16Const_CorrectValue)
-{
-    EXPECT_EQ(Bf16Const::TO_FP32_SHIFT, 16u);
-}
+TEST_F(AiCorePrintUTest, Bf16Const_CorrectValue) { EXPECT_EQ(Bf16Const::TO_FP32_SHIFT, 16u); }
 
 // 测试 Fp8Const 各常量(sign shift、bit mask)的正确值
 TEST_F(AiCorePrintUTest, Fp8Const_CorrectValues)
@@ -767,16 +763,10 @@ TEST_F(AiCorePrintUTest, Fp8E5M2Const_CorrectValues)
 // ============================================================================
 
 // 测试 ENABLE_AICORE_PRINT 宏默认为 0(打印功能关闭)
-TEST_F(AiCorePrintUTest, CompileConditions_EnableAicorePrint)
-{
-    EXPECT_EQ(ENABLE_AICORE_PRINT, 0);
-}
+TEST_F(AiCorePrintUTest, CompileConditions_EnableAicorePrint) { EXPECT_EQ(ENABLE_AICORE_PRINT, 0); }
 
 // 测试 CACHE_LINE_SIZE 宏为 64 字节
-TEST_F(AiCorePrintUTest, CompileConditions_CacheLineSize)
-{
-    EXPECT_EQ(CACHE_LINE_SIZE, 64);
-}
+TEST_F(AiCorePrintUTest, CompileConditions_CacheLineSize) { EXPECT_EQ(CACHE_LINE_SIZE, 64); }
 
 // 测试 __TILE_FWK_HOST__ 宏在当前编译环境已定义(Host 测试可用)
 TEST_F(AiCorePrintUTest, HostEnvironmentDefined)
@@ -789,10 +779,7 @@ TEST_F(AiCorePrintUTest, HostEnvironmentDefined)
 }
 
 // 测试 IS_AICORE 宏在 Host 环境为 0(非 AiCore 设备侧)
-TEST_F(AiCorePrintUTest, IsAicoreValue)
-{
-    EXPECT_EQ(IS_AICORE, 0) << "IS_AICORE should be 0 in Host environment";
-}
+TEST_F(AiCorePrintUTest, IsAicoreValue) { EXPECT_EQ(IS_AICORE, 0) << "IS_AICORE should be 0 in Host environment"; }
 
 // ============================================================================
 // Section 10: MockLogger 打印功能测试 - LogContext 函数指针调用
@@ -860,10 +847,7 @@ protected:
     static constexpr size_t BUFFER_SIZE = 4096;
     alignas(64) uint8_t buffer[BUFFER_SIZE];
 
-    void InitBuffer()
-    {
-        std::fill(buffer, buffer + BUFFER_SIZE, 0);
-    }
+    void InitBuffer() { std::fill(buffer, buffer + BUFFER_SIZE, 0); }
 
     std::string ReadAllOutput(AicoreLogger& logger)
     {
@@ -871,7 +855,8 @@ protected:
         std::string output;
         while (true) {
             int bytesRead = logger.Read(readBuf, sizeof(readBuf));
-            if (bytesRead == 0) break;
+            if (bytesRead == 0)
+                break;
             output.append(readBuf, bytesRead);
         }
         return output;
@@ -1112,8 +1097,7 @@ TEST_F(AiCorePrintUTest, HostLogger_OverflowWarningContainsRecommendation)
     std::string output = fixture.ReadAllOutput(logger);
 
     if (output.find("WARNING") != std::string::npos) {
-        EXPECT_TRUE(output.find("Recommend") != std::string::npos ||
-                    output.find("double") != std::string::npos);
+        EXPECT_TRUE(output.find("Recommend") != std::string::npos || output.find("double") != std::string::npos);
     }
 }
 

@@ -36,13 +36,13 @@ public:
         std::vector<SymbolicScalar> dynOffset;
         std::vector<SymbolicScalar> dynValidShape;
         MemoryType toType = MemoryType::MEM_UNKNOWN;
-        bool hasCopyInMode;                 // 是否有copy_in_mode属性
-        std::any copyInModeValue;           // copy_in_mode属性值
-        bool hasL1PaddingMode;              // 是否有copy_in_l1_padding_mode属性
-        std::any l1PaddingMode;             // copy_in_l1_padding_mode属性值
-        bool hasKIndex;                     // 是否有copy_in_l1_k_index属性
-        std::any kIndex;                    // copy_in_l1_k_index属性值（K维度在dynValidShape中的索引，0或1）
-        ir::Span span;                      // 链路最早操作的span
+        bool hasCopyInMode;       // 是否有copy_in_mode属性
+        std::any copyInModeValue; // copy_in_mode属性值
+        bool hasL1PaddingMode;    // 是否有copy_in_l1_padding_mode属性
+        std::any l1PaddingMode;   // copy_in_l1_padding_mode属性值
+        bool hasKIndex;           // 是否有copy_in_l1_k_index属性
+        std::any kIndex;          // copy_in_l1_k_index属性值（K维度在dynValidShape中的索引，0或1）
+        ir::Span span;            // 链路最早操作的span
         Operation::ScopeInfo scopeInfo;
     };
     struct AssembleOp {
@@ -74,8 +74,8 @@ public:
      * @param chain the list of operations in the view chain.
      * @return Status indicating success or failed.
      */
-    Status MergeViewChain(
-        Function& function, Operation& operation, std::vector<Operation*>& chain, int effectiveScopeId = -1);
+    Status MergeViewChain(Function& function, Operation& operation, std::vector<Operation*>& chain,
+                          int effectiveScopeId = -1);
 
     void InitOperationChain(Operation& operation, std::vector<Operation*>& chain);
 
@@ -88,9 +88,8 @@ public:
      * @param chainEnd a flag indicating whether the chain has ended.
      * @return Status indicating success or failed.
      */
-    Status ProcessConsumerChain(
-        Function& function, const ConsumerCacheEntry& consumers, std::vector<Operation*>& chain, bool& chainEnd,
-        int effectiveScopeId);
+    Status ProcessConsumerChain(Function& function, const ConsumerCacheEntry& consumers, std::vector<Operation*>& chain,
+                                bool& chainEnd, int effectiveScopeId);
 
     Status ProcessChainEnd(Function& function, std::vector<Operation*>& chain);
 
@@ -103,9 +102,9 @@ public:
      * @param newDynValidShape the calculated newDynValidShape.
      * @return Status indicating success or failed.
      */
-    Status CalculateMergedOffsets(
-        const std::vector<Operation*>& chain, std::vector<int64_t>& newOffset,
-        std::vector<SymbolicScalar>& newDynOffset, std::vector<SymbolicScalar>& newDynValidShape);
+    Status CalculateMergedOffsets(const std::vector<Operation*>& chain, std::vector<int64_t>& newOffset,
+                                  std::vector<SymbolicScalar>& newDynOffset,
+                                  std::vector<SymbolicScalar>& newDynValidShape);
 
     /**
      * @brief Recode the merged offsets and dynamic vaildshapes for the chain of a view.
@@ -117,11 +116,12 @@ public:
      * @param newDynOffset the calculated newDynOffset.
      * @param newDynValidShape the calculated newDynValidShape.
      */
-    void RecordMergedViewOperation(
-        Operation* lastViewOp, const std::shared_ptr<LogicalTensor>& startTensor,
-        const std::shared_ptr<LogicalTensor>& endTensor, const std::vector<int64_t>& newOffset,
-        const std::vector<SymbolicScalar>& newDynOffset, const std::vector<SymbolicScalar>& newDynValidShape,
-        const ir::Span& span, const Operation::ScopeInfo& scopeInfo);
+    void RecordMergedViewOperation(Operation* lastViewOp, const std::shared_ptr<LogicalTensor>& startTensor,
+                                   const std::shared_ptr<LogicalTensor>& endTensor,
+                                   const std::vector<int64_t>& newOffset,
+                                   const std::vector<SymbolicScalar>& newDynOffset,
+                                   const std::vector<SymbolicScalar>& newDynValidShape, const ir::Span& span,
+                                   const Operation::ScopeInfo& scopeInfo);
 
     // Assemble chain processing methods
     /**
@@ -132,8 +132,8 @@ public:
      * @param chain the list of operations in the assemble chain.
      * @return Status indicating success or failed.
      */
-    Status MergeAssembleChain(
-        Function& function, Operation& operation, std::vector<Operation*>& chain, int effectiveScopeId = -1);
+    Status MergeAssembleChain(Function& function, Operation& operation, std::vector<Operation*>& chain,
+                              int effectiveScopeId = -1);
 
     void InitAssembleChain(Operation& operation, std::vector<Operation*>& chain);
 
@@ -146,19 +146,18 @@ public:
      * @param chainEnd a flag indicating whether the chain has ended.
      * @return Status indicating success or failed.
      */
-    Status ProcessAssembleConsumers(
-        Function& function, const ConsumerCacheEntry& consumers, std::vector<Operation*>& chain, bool& chainEnd,
-        int effectiveScopeId);
+    Status ProcessAssembleConsumers(Function& function, const ConsumerCacheEntry& consumers,
+                                    std::vector<Operation*>& chain, bool& chainEnd, int effectiveScopeId);
 
     Status ProcessAssembleChainEnd(Function& function, std::vector<Operation*>& chain, Operation& operation);
 
     std::pair<std::vector<int64_t>, std::vector<SymbolicScalar>> CalculateAssembleOffsets(
         const std::vector<Operation*>& chain, size_t offsetSize);
 
-    void RecordAssembleOperation(
-        const std::shared_ptr<LogicalTensor>& input, const std::shared_ptr<LogicalTensor>& output,
-        const std::vector<int64_t>& offset, const std::vector<SymbolicScalar>& dynOffset, const ir::Span& span,
-        const Operation::ScopeInfo& scopeInfo, const std::string& rmwModeAttr);
+    void RecordAssembleOperation(const std::shared_ptr<LogicalTensor>& input,
+                                 const std::shared_ptr<LogicalTensor>& output, const std::vector<int64_t>& offset,
+                                 const std::vector<SymbolicScalar>& dynOffset, const ir::Span& span,
+                                 const Operation::ScopeInfo& scopeInfo, const std::string& rmwModeAttr);
 
     // Common methods
     Status Initialize();

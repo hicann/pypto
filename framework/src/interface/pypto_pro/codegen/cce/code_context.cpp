@@ -62,10 +62,7 @@ void CodeContext::RegisterVar(const ir::VarPtr& var, const std::string& cpp_name
     name_to_cpp_[var->name_] = cpp_name;
 }
 
-void CodeContext::Clear()
-{
-    name_to_cpp_.clear();
-}
+void CodeContext::Clear() { name_to_cpp_.clear(); }
 
 std::string CodeContext::SanitizeName(const ir::VarPtr& var) const
 {

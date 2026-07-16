@@ -57,12 +57,12 @@ inline bool InitAicoreModelCoreAddrs(DeviceMemoryTy& devMem, DevAscendProgram* d
     };
     size_t sharedBufferSize = static_cast<size_t>(totalCoreNum) * static_cast<size_t>(SHARED_BUFFER_SIZE);
     return allocAndAssign(devProg->devArgs.sharedBuffer, sharedBufferSize, "sharedBuffer") &&
-           allocAndAssign(devProg->devArgs.coreRegAddr, static_cast<size_t>(totalCoreNum) * sizeof(uint64_t), "coreRegAddr") &&
-           allocAndAssign(
-               devProg->devArgs.corePmuRegAddr, static_cast<size_t>(totalCoreNum) * sizeof(uint64_t), "corePmuRegAddr") &&
-           allocAndAssign(
-               devProg->devArgs.corePmuAddr, static_cast<size_t>(totalCoreNum) * static_cast<size_t>(PMU_BUFFER_SIZE),
-               "corePmuAddr") &&
+           allocAndAssign(devProg->devArgs.coreRegAddr, static_cast<size_t>(totalCoreNum) * sizeof(uint64_t),
+                          "coreRegAddr") &&
+           allocAndAssign(devProg->devArgs.corePmuRegAddr, static_cast<size_t>(totalCoreNum) * sizeof(uint64_t),
+                          "corePmuRegAddr") &&
+           allocAndAssign(devProg->devArgs.corePmuAddr,
+                          static_cast<size_t>(totalCoreNum) * static_cast<size_t>(PMU_BUFFER_SIZE), "corePmuAddr") &&
            allocAndAssign(devProg->devArgs.taskWastTime, sizeof(uint64_t), "taskWastTime") &&
            allocAndAssign(devProg->devArgs.devDfxArgAddr, sizeof(DevDfxArgs), "devDfxArgAddr");
 }
@@ -91,14 +91,14 @@ inline bool InitAicoreModelMetrics(DeviceMemoryTy& devMem, DevAscendProgram* dev
 }
 
 template <typename DeviceMemoryTy>
-inline void AicoreModelInitKernelMetaDeviceArgs(
-    DeviceMemoryTy& devMem, DeviceKernelArgs& kArgs, const std::vector<uint8_t>& devProgData)
+inline void AicoreModelInitKernelMetaDeviceArgs(DeviceMemoryTy& devMem, DeviceKernelArgs& kArgs,
+                                                const std::vector<uint8_t>& devProgData)
 {
-    auto *devProg = reinterpret_cast<DevAscendProgram*>(const_cast<uint8_t*>(devProgData.data()));
+    auto* devProg = reinterpret_cast<DevAscendProgram*>(const_cast<uint8_t*>(devProgData.data()));
     InitAicoreModelDefaultDevArgs(devProg);
     constexpr uint32_t kAicpuRunTaskNum = 1;
-    const uint32_t totalCoreNum =
-        static_cast<uint32_t>(devProg->devArgs.nrAic + devProg->devArgs.nrAiv) + kAicpuRunTaskNum;
+    const uint32_t totalCoreNum = static_cast<uint32_t>(devProg->devArgs.nrAic + devProg->devArgs.nrAiv) +
+                                  kAicpuRunTaskNum;
     if (totalCoreNum == 0) {
         return;
     }

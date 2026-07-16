@@ -129,7 +129,6 @@ constexpr uint8_t EXP_BIAS = 15;
 #include "tileop/utils/layout.h"
 #endif
 
-
 namespace AicorePrint {
 enum class DataType : uint8_t {
     End = 0,
@@ -172,20 +171,24 @@ struct LogContext {
 
 template <typename ElemT>
 struct IndexedTypeInfo {
-    static constexpr AicorePrint::DataType Type =
-        std::is_same_v<ElemT, float>   ? AicorePrint::DataType::IndexedFp32 :
-        std::is_same_v<ElemT, int64_t> ? AicorePrint::DataType::IndexedInt64 :
+    static constexpr AicorePrint::DataType Type = std::is_same_v<ElemT, float>   ? AicorePrint::DataType::IndexedFp32 :
+                                                  std::is_same_v<ElemT, int64_t> ? AicorePrint::DataType::IndexedInt64 :
 #if IS_AICORE
-        std::is_same_v<ElemT, bfloat16_t> ? AicorePrint::DataType::IndexedBf16 :
-        std::is_same_v<ElemT, half>       ? AicorePrint::DataType::IndexedFp16 :
+                                                  std::is_same_v<ElemT, bfloat16_t> ?
+                                                                                   AicorePrint::DataType::IndexedBf16 :
+                                                  std::is_same_v<ElemT, half> ? AicorePrint::DataType::IndexedFp16 :
 #if SUPPORT_FP8_HF8_PRINT
-        std::is_same_v<ElemT, float8_e4m3_t> ? AicorePrint::DataType::IndexedFp8E4M3 :
-        std::is_same_v<ElemT, float8_e5m2_t> ? AicorePrint::DataType::IndexedFp8E5M2 :
-        std::is_same_v<ElemT, float8_e8m0_t> ? AicorePrint::DataType::IndexedFp8E8M0 :
-        std::is_same_v<ElemT, hifloat8_t>    ? AicorePrint::DataType::IndexedHf8 :
+                                                  std::is_same_v<ElemT, float8_e4m3_t> ?
+                                                                                AicorePrint::DataType::IndexedFp8E4M3 :
+                                                  std::is_same_v<ElemT, float8_e5m2_t> ?
+                                                                                AicorePrint::DataType::IndexedFp8E5M2 :
+                                                  std::is_same_v<ElemT, float8_e8m0_t> ?
+                                                                                AicorePrint::DataType::IndexedFp8E8M0 :
+                                                  std::is_same_v<ElemT, hifloat8_t> ?
+                                                                                AicorePrint::DataType::IndexedHf8 :
 #endif
 #endif
-                                            AicorePrint::DataType::End;
+                                                                                AicorePrint::DataType::End;
 };
 
 template <typename T, typename U>
@@ -398,16 +401,14 @@ INLINE float DecodeHf8EvMvPattern(int signBit, int lower7)
 
 INLINE float DecodeHf8Large(int signBit, int lower7)
 {
-    return DecodeHf8EvMvPattern<
-        Hf8Const::TOP4_SHIFT, Hf8Const::EB_MASK_WIDTH_LARGE, Hf8Const::EV_BASE_LARGE, Hf8Const::MV_MASK_3BIT,
-        Hf8Const::MANT_BITS_3>(signBit, lower7);
+    return DecodeHf8EvMvPattern<Hf8Const::TOP4_SHIFT, Hf8Const::EB_MASK_WIDTH_LARGE, Hf8Const::EV_BASE_LARGE,
+                                Hf8Const::MV_MASK_3BIT, Hf8Const::MANT_BITS_3>(signBit, lower7);
 }
 
 INLINE float DecodeHf8Huge(int signBit, int lower7)
 {
-    return DecodeHf8EvMvPattern<
-        Hf8Const::EB_SHIFT_HUGE, Hf8Const::EB_MASK_WIDTH_HUGE, Hf8Const::EV_BASE_HUGE, Hf8Const::MV_MASK_2BIT,
-        Hf8Const::MANT_BITS_2>(signBit, lower7);
+    return DecodeHf8EvMvPattern<Hf8Const::EB_SHIFT_HUGE, Hf8Const::EB_MASK_WIDTH_HUGE, Hf8Const::EV_BASE_HUGE,
+                                Hf8Const::MV_MASK_2BIT, Hf8Const::MANT_BITS_2>(signBit, lower7);
 }
 
 // HiFloat8 Max (D=4, prefix 11): ev=±[8,15], 1-bit mantissa.

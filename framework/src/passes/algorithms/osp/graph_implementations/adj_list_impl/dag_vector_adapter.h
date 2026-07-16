@@ -76,10 +76,13 @@ public:
      *
      * @warning The adapter stores pointers to these vectors. They must remain valid for the lifetime of the adapter.
      */
-    DagVectorAdapter(const std::vector<std::vector<IndexT>> &outNeigbors,
-                     const std::vector<std::vector<IndexT>> &inNeigbors)
-        : vertices_(outNeigbors.size()), outNeigbors_(&outNeigbors),
-          inNeigbors_(&inNeigbors), numEdges_(0), numVertexTypes_(1)
+    DagVectorAdapter(const std::vector<std::vector<IndexT>>& outNeigbors,
+                     const std::vector<std::vector<IndexT>>& inNeigbors)
+        : vertices_(outNeigbors.size()),
+          outNeigbors_(&outNeigbors),
+          inNeigbors_(&inNeigbors),
+          numEdges_(0),
+          numVertexTypes_(1)
     {
         for (VertexIdx i = 0; i < static_cast<VertexIdx>(outNeigbors.size()); ++i) {
             vertices_[i].id_ = i;
@@ -87,15 +90,15 @@ public:
         }
     }
 
-    DagVectorAdapter(const DagVectorAdapter &other) = default;
-    DagVectorAdapter &operator=(const DagVectorAdapter &other) = default;
-    DagVectorAdapter(DagVectorAdapter &&other) noexcept = default;
-    DagVectorAdapter &operator=(DagVectorAdapter &&other) noexcept = default;
+    DagVectorAdapter(const DagVectorAdapter& other) = default;
+    DagVectorAdapter& operator=(const DagVectorAdapter& other) = default;
+    DagVectorAdapter(DagVectorAdapter&& other) noexcept = default;
+    DagVectorAdapter& operator=(DagVectorAdapter&& other) noexcept = default;
 
     ~DagVectorAdapter() = default;
 
-    void SetInOutNeighbors(const std::vector<std::vector<IndexT>> &inNeigbors,
-                           const std::vector<std::vector<IndexT>> &outNeigbors)
+    void SetInOutNeighbors(const std::vector<std::vector<IndexT>>& inNeigbors,
+                           const std::vector<std::vector<IndexT>>& outNeigbors)
     {
         outNeigbors_ = &outNeigbors;
         inNeigbors_ = &inNeigbors;
@@ -111,26 +114,11 @@ public:
         numVertexTypes_ = 1;
     }
 
-    [[nodiscard]] auto Vertices() const
-    {
-        return IntegralRange<VertexIdx>(static_cast<VertexIdx>(vertices_.size()));
-    }
-    [[nodiscard]] VertexIdx NumVertices() const
-    {
-        return static_cast<VertexIdx>(vertices_.size());
-    }
-    [[nodiscard]] VertexIdx NumEdges() const
-    {
-        return static_cast<VertexIdx>(numEdges_);
-    }
-    [[nodiscard]] auto Parents(const VertexIdx v) const
-    {
-        return (*inNeigbors_)[v];
-    }
-    [[nodiscard]] auto Children(const VertexIdx v) const
-    {
-        return (*outNeigbors_)[v];
-    }
+    [[nodiscard]] auto Vertices() const { return IntegralRange<VertexIdx>(static_cast<VertexIdx>(vertices_.size())); }
+    [[nodiscard]] VertexIdx NumVertices() const { return static_cast<VertexIdx>(vertices_.size()); }
+    [[nodiscard]] VertexIdx NumEdges() const { return static_cast<VertexIdx>(numEdges_); }
+    [[nodiscard]] auto Parents(const VertexIdx v) const { return (*inNeigbors_)[v]; }
+    [[nodiscard]] auto Children(const VertexIdx v) const { return (*outNeigbors_)[v]; }
     [[nodiscard]] VertexIdx InDegree(const VertexIdx v) const
     {
         return static_cast<VertexIdx>((*inNeigbors_)[v].size());
@@ -139,26 +127,11 @@ public:
     {
         return static_cast<VertexIdx>((*outNeigbors_)[v].size());
     }
-    [[nodiscard]] VertexWorkWeightType VertexWorkWeight(const VertexIdx v) const
-    {
-        return vertices_[v].workWeight_;
-    }
-    [[nodiscard]] VertexCommWeightType VertexCommWeight(const VertexIdx v) const
-    {
-        return vertices_[v].commWeight_;
-    }
-    [[nodiscard]] VertexMemWeightType VertexMemWeight(const VertexIdx v) const
-    {
-        return vertices_[v].memWeight_;
-    }
-    [[nodiscard]] VertexTypeType NumVertexTypes() const
-    {
-        return numVertexTypes_;
-    }
-    [[nodiscard]] VertexTypeType VertexType(const VertexIdx v) const
-    {
-        return vertices_[v].vertexType_;
-    }
+    [[nodiscard]] VertexWorkWeightType VertexWorkWeight(const VertexIdx v) const { return vertices_[v].workWeight_; }
+    [[nodiscard]] VertexCommWeightType VertexCommWeight(const VertexIdx v) const { return vertices_[v].commWeight_; }
+    [[nodiscard]] VertexMemWeightType VertexMemWeight(const VertexIdx v) const { return vertices_[v].memWeight_; }
+    [[nodiscard]] VertexTypeType NumVertexTypes() const { return numVertexTypes_; }
+    [[nodiscard]] VertexTypeType VertexType(const VertexIdx v) const { return vertices_[v].vertexType_; }
 
     void SetVertexWorkWeight(const VertexIdx v, const VertexWorkWeightType workWeight)
     {
@@ -181,12 +154,12 @@ public:
 private:
     std::vector<VImpl> vertices_;
 
-    const std::vector<std::vector<IndexT>> *outNeigbors_;
-    const std::vector<std::vector<IndexT>> *inNeigbors_;
+    const std::vector<std::vector<IndexT>>* outNeigbors_;
+    const std::vector<std::vector<IndexT>>* inNeigbors_;
 
     std::size_t numEdges_ = 0;
     unsigned numVertexTypes_ = 0;
 };
-}    // namespace osp
-}    // namespace npu::tile_fwk
-#endif    // PASS_OSP_DAG_VECTOR_ADAPTER_HPP
+} // namespace osp
+} // namespace npu::tile_fwk
+#endif // PASS_OSP_DAG_VECTOR_ADAPTER_HPP

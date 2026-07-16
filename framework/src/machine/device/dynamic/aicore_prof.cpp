@@ -46,7 +46,8 @@ bool ProfCheckLevel(uint64_t feature)
 #ifdef __DEVICE__
 uint64_t AiCoreProf::devProfSwitch_ = 0;
 uint32_t AiCoreProf::devProfType_ = 0;
-int32_t AiCoreProf::DevProfInit(uint32_t type, void *data, uint32_t len) {
+int32_t AiCoreProf::DevProfInit(uint32_t type, void* data, uint32_t len)
+{
     if (data == nullptr || len == 0) {
         DEV_WARN("Para is invalid");
         return -1;
@@ -59,14 +60,15 @@ int32_t AiCoreProf::DevProfInit(uint32_t type, void *data, uint32_t len) {
         DEV_WARN("Prof CommandHandle len [%u] is invalid", len);
         return -1;
     }
-    PyPtoMsprofCommandHandle *hostProfHandleConfig = reinterpret_cast<PyPtoMsprofCommandHandle *>(data);
+    PyPtoMsprofCommandHandle* hostProfHandleConfig = reinterpret_cast<PyPtoMsprofCommandHandle*>(data);
     devProfSwitch_ = hostProfHandleConfig->profSwitch;
     devProfType_ = hostProfHandleConfig->type;
     DEV_DEBUG("Dev prof profSwitch is %lu profType is %u", devProfSwitch_, devProfType_);
     return 0;
 }
 
-void AiCoreProf::RegDevProf() {
+void AiCoreProf::RegDevProf()
+{
     if (MsprofRegisterCallback == nullptr) {
         DEV_DEBUG("MsprofRegister is not supproted");
         return;
@@ -77,7 +79,8 @@ void AiCoreProf::RegDevProf() {
     }
 }
 
-void AiCoreProf::GetIsOpenDevProf() {
+void AiCoreProf::GetIsOpenDevProf()
+{
     if (ProfCheckLevel(PROF_TASK_TIME_L3)) {
         profLevel_ = PROF_LEVEL_FUNC_LOG_PMU;
         return;
@@ -100,7 +103,8 @@ void AiCoreProf::GetIsOpenDevProf() {
 }
 #endif
 
-void AiCoreProf::ProfInit(DeviceArgs *deviceArgs) {
+void AiCoreProf::ProfInit(DeviceArgs* deviceArgs)
+{
     DEV_DEBUG("Begin Prof init");
     profLevel_ = CreateProfLevel(deviceArgs->toSubMachineConfig.profConfig);
 #ifdef __DEVICE__
@@ -120,7 +124,7 @@ void AiCoreProf::ProfInit(DeviceArgs *deviceArgs) {
     } else if (profLevel_ == PROF_LEVEL_FUNC_LOG_PMU) {
         ProfInitLog();
         ProfInitPmu(reinterpret_cast<int64_t*>(deviceArgs->corePmuRegAddr),
-            reinterpret_cast<int64_t*>(deviceArgs->pmuEventAddr));
+                    reinterpret_cast<int64_t*>(deviceArgs->pmuEventAddr));
         hostAicoreMng_.SetSchedSyncMode(true);
     } else {
         profLevel_ = PROF_LEVEL_OFF;
@@ -176,8 +180,8 @@ inline void AiCoreProf::ProfInitLog()
     logData_.resize(coreNum_, nullptr);
     for (int32_t i = 0; i < coreNum_; i++) {
         logHead_[i] = reinterpret_cast<MsprofAicpuPyPtoLogHead*>(&logMsg_[i].data);
-        logData_[i] =
-            reinterpret_cast<MsprofAicpuPyPtoLogData*>(reinterpret_cast<uintptr_t>(logHead_[i]) + logHeadSize_);
+        logData_[i] = reinterpret_cast<MsprofAicpuPyPtoLogData*>(reinterpret_cast<uintptr_t>(logHead_[i]) +
+                                                                 logHeadSize_);
         logHead_[i]->cnt = 0;
 
         logMsg_[i].magicNumber = 0x5A5AU;
@@ -203,9 +207,8 @@ inline void AiCoreProf::ProfStopLog()
     hostAicoreMng_.ForEachManageAicore([&](int coreIdx) {
         if (logHead_[coreIdx]->cnt != 0) {
             int32_t ret = profReportAdditionalInfoFunc_(1, &logMsg_[coreIdx], sizeof(PyPtoMsprofAdditionalInfo));
-            DEV_DEBUG(
-                "aicore profiling send log mesg, core id: %d, task num: %d, ret: %d.", coreIdx, logHead_[coreIdx]->cnt,
-                ret);
+            DEV_DEBUG("aicore profiling send log mesg, core id: %d, task num: %d, ret: %d.", coreIdx,
+                      logHead_[coreIdx]->cnt, ret);
             (void)(ret);
             memset_s(&logMsg_[coreIdx], logMsgSize_, 0, logMsgSize_);
         }
@@ -225,9 +228,8 @@ void AiCoreProf::ProfGetLog(int32_t coreIdx, const struct TaskStat* taskStat)
             logDataSize_, taskStat, logDataSize_);
         logMsg.dataLen += logDataSize_;
         logHead->cnt++;
-        DEV_DEBUG(
-            "aicore profiling gen log mesg, taskid: %d core id: %d, task start: %ld, end: %ld.", taskStat->taskId,
-            coreIdx, taskStat->execStart, taskStat->execEnd);
+        DEV_DEBUG("aicore profiling gen log mesg, taskid: %d core id: %d, task start: %ld, end: %ld.", taskStat->taskId,
+                  coreIdx, taskStat->execStart, taskStat->execEnd);
     } else if (logHead->cnt == logDataMaxNum_ - 1) {
         DevMemcpyS(
             reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(logData_[coreIdx]) + logDataSize_ * logHead->cnt),
@@ -235,7 +237,8 @@ void AiCoreProf::ProfGetLog(int32_t coreIdx, const struct TaskStat* taskStat)
         logHead->cnt++;
         logMsg.dataLen += logDataSize_;
         int32_t reportRet = profReportAdditionalInfoFunc_(1, &logMsg, sizeof(PyPtoMsprofAdditionalInfo));
-        DEV_DEBUG("aicore profiling send log mesg, core id: %d, task num: %d, ret: %d.", coreIdx, logHead->cnt, reportRet);
+        DEV_DEBUG("aicore profiling send log mesg, core id: %d, task num: %d, ret: %d.", coreIdx, logHead->cnt,
+                  reportRet);
         // reset
         (void)(reportRet);
         logHead->cnt = 0;
@@ -254,8 +257,8 @@ void AiCoreProf::ProfInitPmu(int64_t* regAddrs, int64_t* pmuEventAddrs)
     pmuData_.resize(coreNum_, nullptr);
     for (int32_t i = 0; i < coreNum_; i++) {
         pmuHead_[i] = reinterpret_cast<MsprofAicpuPyPtoPmuHead*>(&pmuMsg_[i].data);
-        pmuData_[i] =
-            reinterpret_cast<MsprofAicpuPyPtoPmuData*>(reinterpret_cast<uintptr_t>(pmuHead_[i]) + pmuHeadSize_);
+        pmuData_[i] = reinterpret_cast<MsprofAicpuPyPtoPmuData*>(reinterpret_cast<uintptr_t>(pmuHead_[i]) +
+                                                                 pmuHeadSize_);
         pmuHead_[i]->cnt = 0;
     }
 
@@ -279,17 +282,16 @@ void AiCoreProf::ProfInitPmu(int64_t* regAddrs, int64_t* pmuEventAddrs)
     if (it != kArchPmuConfigs.end()) {
         size_t pmuCntSize = it->second.pmuCntIdxOffsets.size();
         if (pmuCntSize == MAX_PMU_CNT) {
-            DEV_INFO(
-                "0: %x, 1: %x, 2: %x, 3: %x, 4: %x, 5: %x, 6: %x, 7: %x.", (uint32_t)pmuEventAddrs_[0],
-                (uint32_t)pmuEventAddrs_[1], (uint32_t)pmuEventAddrs_[2], (uint32_t)pmuEventAddrs_[3],
-                (uint32_t)pmuEventAddrs_[4], (uint32_t)pmuEventAddrs_[5], (uint32_t)pmuEventAddrs_[6],
-                (uint32_t)pmuEventAddrs_[7]);
+            DEV_INFO("0: %x, 1: %x, 2: %x, 3: %x, 4: %x, 5: %x, 6: %x, 7: %x.", (uint32_t)pmuEventAddrs_[0],
+                     (uint32_t)pmuEventAddrs_[1], (uint32_t)pmuEventAddrs_[2], (uint32_t)pmuEventAddrs_[3],
+                     (uint32_t)pmuEventAddrs_[4], (uint32_t)pmuEventAddrs_[5], (uint32_t)pmuEventAddrs_[6],
+                     (uint32_t)pmuEventAddrs_[7]);
         } else if (pmuCntSize == MAX_PMU_CNT_3510) {
-            DEV_INFO(
-                "0: %x, 1: %x, 2: %x, 3: %x, 4: %x, 5: %x, 6: %x, 7: %x, 8: %x, 9: %x.", (uint32_t)pmuEventAddrs_[0],
-                (uint32_t)pmuEventAddrs_[1], (uint32_t)pmuEventAddrs_[2], (uint32_t)pmuEventAddrs_[3],
-                (uint32_t)pmuEventAddrs_[4], (uint32_t)pmuEventAddrs_[5], (uint32_t)pmuEventAddrs_[6],
-                (uint32_t)pmuEventAddrs_[7], (uint32_t)pmuEventAddrs_[8], (uint32_t)pmuEventAddrs_[9]);
+            DEV_INFO("0: %x, 1: %x, 2: %x, 3: %x, 4: %x, 5: %x, 6: %x, 7: %x, 8: %x, 9: %x.",
+                     (uint32_t)pmuEventAddrs_[0], (uint32_t)pmuEventAddrs_[1], (uint32_t)pmuEventAddrs_[2],
+                     (uint32_t)pmuEventAddrs_[3], (uint32_t)pmuEventAddrs_[4], (uint32_t)pmuEventAddrs_[5],
+                     (uint32_t)pmuEventAddrs_[6], (uint32_t)pmuEventAddrs_[7], (uint32_t)pmuEventAddrs_[8],
+                     (uint32_t)pmuEventAddrs_[9]);
         }
     }
 }
@@ -329,8 +331,8 @@ void AiCoreProf::SetPmuEvents(void* mapBase, const int32_t coreIdx) const
     }
     const auto& cfg = it->second;
     for (size_t i = 0; i < cfg.pmuCntIdxOffsets.size(); ++i) {
-        uint32_t* cntIdxAddr =
-            reinterpret_cast<uint32_t*>(reinterpret_cast<uint8_t*>(mapBase) + cfg.pmuCntIdxOffsets[i]);
+        uint32_t* cntIdxAddr = reinterpret_cast<uint32_t*>(reinterpret_cast<uint8_t*>(mapBase) +
+                                                           cfg.pmuCntIdxOffsets[i]);
         *cntIdxAddr = pmuEventAddrs_[i];
     }
     (void)coreIdx;
@@ -350,14 +352,14 @@ AiCoreProf::PmuCtrlAddrs AiCoreProf::InitPmuRegAddrsForCore(void* addr, void* ma
         &pmuCnt5Plain_, &pmuCnt6Plain_, &pmuCnt7Plain_, &pmuCnt8Plain_, &pmuCnt9Plain_};
 
     for (size_t i = 0; i < cfg.pmuCntOffsets.size(); ++i) {
-        (*pmuCntPlains[i])[coreIdx] =
-            reinterpret_cast<volatile uint32_t*>(reinterpret_cast<uint8_t*>(addr) + cfg.pmuCntOffsets[i]);
+        (*pmuCntPlains[i])[coreIdx] = reinterpret_cast<volatile uint32_t*>(reinterpret_cast<uint8_t*>(addr) +
+                                                                           cfg.pmuCntOffsets[i]);
     }
 
-    pmuCntTotal0Plain_[coreIdx] =
-        reinterpret_cast<volatile uint32_t*>(reinterpret_cast<uint8_t*>(addr) + cfg.pmuCntTotal0Offset);
-    pmuCntTotal1Plain_[coreIdx] =
-        reinterpret_cast<volatile uint32_t*>(reinterpret_cast<uint8_t*>(addr) + cfg.pmuCntTotal1Offset);
+    pmuCntTotal0Plain_[coreIdx] = reinterpret_cast<volatile uint32_t*>(reinterpret_cast<uint8_t*>(addr) +
+                                                                       cfg.pmuCntTotal0Offset);
+    pmuCntTotal1Plain_[coreIdx] = reinterpret_cast<volatile uint32_t*>(reinterpret_cast<uint8_t*>(addr) +
+                                                                       cfg.pmuCntTotal1Offset);
 
     addrs.ctrl0Addr = reinterpret_cast<uint32_t*>(reinterpret_cast<uint8_t*>(mapBase) + cfg.ctrl0Offset);
     if (cfg.ctrl1Offset != 0) {
@@ -402,8 +404,8 @@ void AiCoreProf::ProfStartPmu()
     hostAicoreMng_.ForEachManageAicore([&](int coreIdx) {
         void* addr = reinterpret_cast<void*>(regAddrs_[hostAicoreMng_.GetPhyIdByBlockId(coreIdx)]);
         uint32_t pageSize = static_cast<uint32_t>(sysconf(_SC_PAGESIZE));
-        void* mapBase =
-            reinterpret_cast<void*>(reinterpret_cast<uint64_t>(addr) & ~(static_cast<uint64_t>(pageSize) - 1));
+        void* mapBase = reinterpret_cast<void*>(reinterpret_cast<uint64_t>(addr) &
+                                                ~(static_cast<uint64_t>(pageSize) - 1));
         addrs_ = InitPmuRegAddrsForCore(addr, mapBase, coreIdx);
         ProgramPmuStartForCore(mapBase, coreIdx, addrs_);
     });
@@ -421,23 +423,21 @@ void AiCoreProf::ProfStopPmu()
     hostAicoreMng_.ForEachManageAicore([&](int coreIdx) {
         if (pmuHead_[coreIdx]->cnt != 0) {
             int32_t ret = profReportAdditionalInfoFunc_(1, &pmuMsg_[coreIdx], sizeof(PyPtoMsprofAdditionalInfo));
-            DEV_DEBUG(
-                "aicore profiling send pmu mesg, core id: %d, task num: %d, ret: %d.", coreIdx, pmuHead_[coreIdx]->cnt,
-                ret);
+            DEV_DEBUG("aicore profiling send pmu mesg, core id: %d, task num: %d, ret: %d.", coreIdx,
+                      pmuHead_[coreIdx]->cnt, ret);
             (void)(ret);
             memset_s(&pmuMsg_[coreIdx], pmuMsgSize_, 0, pmuMsgSize_);
         }
     });
 }
 
-void AiCoreProf::FillPmuData(
-    MsprofAicpuPyPtoPmuData& data, int32_t& coreIdx, uint32_t& subGraphId, uint32_t& taskId,
-    uint64_t taskCtrlTaskId) const
+void AiCoreProf::FillPmuData(MsprofAicpuPyPtoPmuData& data, int32_t& coreIdx, uint32_t& subGraphId, uint32_t& taskId,
+                             uint64_t taskCtrlTaskId) const
 {
     data.seqNo = static_cast<uint32_t>(taskCtrlTaskId);
     data.taskId = taskId;
-    data.totalCyc =
-        *(pmuCntTotal0Plain_[coreIdx]) + (static_cast<uint64_t>(*(pmuCntTotal1Plain_[coreIdx])) << HIG_32BIT);
+    data.totalCyc = *(pmuCntTotal0Plain_[coreIdx]) +
+                    (static_cast<uint64_t>(*(pmuCntTotal1Plain_[coreIdx])) << HIG_32BIT);
     data.pmuCnt0 = *(pmuCnt0Plain_[coreIdx]);
     data.pmuCnt1 = *(pmuCnt1Plain_[coreIdx]);
     data.pmuCnt2 = *(pmuCnt2Plain_[coreIdx]);
@@ -455,14 +455,13 @@ void AiCoreProf::FillPmuData(
 
 void AiCoreProf::DebugPmuData(int32_t coreIdx, const MsprofAicpuPyPtoPmuData& data) const
 {
-    DEV_DEBUG(
-        "aicore profiling pmu info, core id: %d: (%u, %u | %lu | %p=%u, %p=%u, %p=%u, %p=%u, "
-        "%p=%u, %p=%u, %p=%u, %p=%u, %p=%u, %p=%u).",
-        coreIdx, data.seqNo, data.taskId, data.totalCyc, pmuCnt0Plain_[coreIdx], data.pmuCnt0, pmuCnt1Plain_[coreIdx],
-        data.pmuCnt1, pmuCnt2Plain_[coreIdx], data.pmuCnt2, pmuCnt3Plain_[coreIdx], data.pmuCnt3,
-        pmuCnt4Plain_[coreIdx], data.pmuCnt4, pmuCnt5Plain_[coreIdx], data.pmuCnt5, pmuCnt6Plain_[coreIdx],
-        data.pmuCnt6, pmuCnt7Plain_[coreIdx], data.pmuCnt7, pmuCnt8Plain_[coreIdx], data.pmuCnt8,
-        pmuCnt9Plain_[coreIdx], data.pmuCnt9);
+    DEV_DEBUG("aicore profiling pmu info, core id: %d: (%u, %u | %lu | %p=%u, %p=%u, %p=%u, %p=%u, "
+              "%p=%u, %p=%u, %p=%u, %p=%u, %p=%u, %p=%u).",
+              coreIdx, data.seqNo, data.taskId, data.totalCyc, pmuCnt0Plain_[coreIdx], data.pmuCnt0,
+              pmuCnt1Plain_[coreIdx], data.pmuCnt1, pmuCnt2Plain_[coreIdx], data.pmuCnt2, pmuCnt3Plain_[coreIdx],
+              data.pmuCnt3, pmuCnt4Plain_[coreIdx], data.pmuCnt4, pmuCnt5Plain_[coreIdx], data.pmuCnt5,
+              pmuCnt6Plain_[coreIdx], data.pmuCnt6, pmuCnt7Plain_[coreIdx], data.pmuCnt7, pmuCnt8Plain_[coreIdx],
+              data.pmuCnt8, pmuCnt9Plain_[coreIdx], data.pmuCnt9);
 }
 
 void AiCoreProf::ProfGetPmu(int32_t coreIdx, uint32_t subGraphId, uint32_t taskId, uint64_t taskCtrlTaskId)
@@ -491,23 +490,20 @@ void AiCoreProf::ProfGetPmu(int32_t coreIdx, uint32_t subGraphId, uint32_t taskI
         pmuHead_[coreIdx]->cnt++;
     } else if (pmuHead_[coreIdx]->cnt == pmuDataMaxNum_ - 1) {
         pmuMsg_[coreIdx].timeStamp = ProfGetCurCpuTimestamp();
-        DevMemcpyS(
-            reinterpret_cast<void*>(
-                (reinterpret_cast<uintptr_t>(pmuData_[coreIdx]) + pmuDataSize_ * pmuHead_[coreIdx]->cnt)),
-            pmuDataSize_, &data, pmuDataSize_);
+        DevMemcpyS(reinterpret_cast<void*>(
+                       (reinterpret_cast<uintptr_t>(pmuData_[coreIdx]) + pmuDataSize_ * pmuHead_[coreIdx]->cnt)),
+                   pmuDataSize_, &data, pmuDataSize_);
         pmuMsg_[coreIdx].dataLen += pmuDataSize_;
         pmuHead_[coreIdx]->cnt++;
         int32_t ret = profReportAdditionalInfoFunc_(1, &pmuMsg_[coreIdx], sizeof(PyPtoMsprofAdditionalInfo));
-        DEV_DEBUG(
-            "aicore profiling send pmu mesg, core id: %d, task num: %d, ret: %d.", coreIdx, pmuHead_[coreIdx]->cnt,
-            ret);
+        DEV_DEBUG("aicore profiling send pmu mesg, core id: %d, task num: %d, ret: %d.", coreIdx,
+                  pmuHead_[coreIdx]->cnt, ret);
         (void)(ret);
         memset_s(&pmuMsg_[coreIdx], pmuMsgSize_, 0, pmuMsgSize_);
     } else {
-        DevMemcpyS(
-            reinterpret_cast<void*>(
-                (reinterpret_cast<uintptr_t>(pmuData_[coreIdx]) + pmuDataSize_ * pmuHead_[coreIdx]->cnt)),
-            pmuDataSize_, &data, pmuDataSize_);
+        DevMemcpyS(reinterpret_cast<void*>(
+                       (reinterpret_cast<uintptr_t>(pmuData_[coreIdx]) + pmuDataSize_ * pmuHead_[coreIdx]->cnt)),
+                   pmuDataSize_, &data, pmuDataSize_);
         pmuMsg_[coreIdx].dataLen += pmuDataSize_;
         pmuHead_[coreIdx]->cnt++;
     }

@@ -119,8 +119,8 @@ TEST_F(TestCodegenScalar, TestPipeAll)
     auto function = GenMockFuncStatic("TestPipeAll");
     std::vector<int64_t> shape = {64, 64};
     std::vector<SymbolicScalar> dynValidShape = {64, 64};
-    auto ddrTensor =
-        CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_DEVICE_DDR, shape, dynValidShape});
+    auto ddrTensor = CreateLogicalTensor(
+        {*function, DataType::DT_FP32, MemoryType::MEM_DEVICE_DDR, shape, dynValidShape});
     auto ubTensor = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape});
     Operation& syncOp = function->AddOperation(npu::tile_fwk::Opcode::OP_BAR_ALL, {ddrTensor}, {ubTensor});
     syncOp.syncQueue_ = {PipeType::PIPE_ALL,   PipeType::PIPE_ALL,  CoreType::AIV, CoreType::AIV, -1,

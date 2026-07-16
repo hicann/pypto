@@ -20,8 +20,8 @@ namespace {
 using TileBody = std::function<void(const std::vector<SymbolicScalar>&, const std::vector<SymbolicScalar>&)>;
 
 struct InterleaveOpFuncArgs : public OpFuncArgs {
-    InterleaveOpFuncArgs(
-        const std::vector<int64_t>& viewShape, const std::vector<int64_t> tileShape, bool singleInput = false)
+    InterleaveOpFuncArgs(const std::vector<int64_t>& viewShape, const std::vector<int64_t> tileShape,
+                         bool singleInput = false)
         : viewShape_(viewShape), tileShape_(tileShape), singleInput_(singleInput)
     {}
 
@@ -59,9 +59,9 @@ static std::vector<int> GetLoops(const std::vector<SymbolicScalar>& shape, const
     return loops;
 }
 
-static std::vector<SymbolicScalar> GetValidShape(
-    const std::vector<SymbolicScalar>& shape, const std::vector<int64_t>& viewShape,
-    const std::vector<SymbolicScalar>& offset)
+static std::vector<SymbolicScalar> GetValidShape(const std::vector<SymbolicScalar>& shape,
+                                                 const std::vector<int64_t>& viewShape,
+                                                 const std::vector<SymbolicScalar>& offset)
 {
     std::vector<SymbolicScalar> validShape;
     validShape.reserve(viewShape.size());
@@ -71,9 +71,9 @@ static std::vector<SymbolicScalar> GetValidShape(
     return validShape;
 }
 
-static void RunTileLoop(
-    size_t cur, const std::vector<SymbolicScalar>& shape, const std::vector<int>& loops,
-    const std::vector<int64_t>& viewShape, std::vector<SymbolicScalar>& offset, const TileBody& body)
+static void RunTileLoop(size_t cur, const std::vector<SymbolicScalar>& shape, const std::vector<int>& loops,
+                        const std::vector<int64_t>& viewShape, std::vector<SymbolicScalar>& offset,
+                        const TileBody& body)
 {
     if (cur == viewShape.size()) {
         body(offset, GetValidShape(shape, viewShape, offset));
@@ -127,8 +127,8 @@ static std::vector<SymbolicScalar> GetSingleInputDeInterleaveOutputOffset(std::v
 }
 
 template <size_t RANK>
-static void InterleaveOperationExeFunc(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void InterleaveOperationExeFunc(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                       const OpFuncArgs* opArgs)
 {
     static_assert(RANK >= 1 && RANK <= 4);
     FUNCTION("main", {inputs[0], inputs[1]}, {outputs[0], outputs[1]})
@@ -146,8 +146,8 @@ static void InterleaveOperationExeFunc(
 }
 
 template <size_t RANK>
-static void DeInterleaveOperationExeFunc(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void DeInterleaveOperationExeFunc(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                         const OpFuncArgs* opArgs)
 {
     static_assert(RANK >= 1 && RANK <= 4);
     auto args = static_cast<const InterleaveOpFuncArgs*>(opArgs);
@@ -182,19 +182,17 @@ static void DeInterleaveOperationExeFunc(
 class InterleaveOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac_param<InterleaveOpMetaData> {};
 class DeInterleaveOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac_param<InterleaveOpMetaData> {};
 
-INSTANTIATE_TEST_SUITE_P(
-    TestInterleave, InterleaveOperationTest,
-    ::testing::ValuesIn(GetOpMetaData<InterleaveOpMetaData, 1>(
-        {InterleaveOperationExeFunc<1>, InterleaveOperationExeFunc<2>, InterleaveOperationExeFunc<3>,
-         InterleaveOperationExeFunc<4>},
-        "Interleave")));
+INSTANTIATE_TEST_SUITE_P(TestInterleave, InterleaveOperationTest,
+                         ::testing::ValuesIn(GetOpMetaData<InterleaveOpMetaData, 1>(
+                             {InterleaveOperationExeFunc<1>, InterleaveOperationExeFunc<2>,
+                              InterleaveOperationExeFunc<3>, InterleaveOperationExeFunc<4>},
+                             "Interleave")));
 
-INSTANTIATE_TEST_SUITE_P(
-    TestDeInterleave, DeInterleaveOperationTest,
-    ::testing::ValuesIn(GetOpMetaData<InterleaveOpMetaData, 1>(
-        {DeInterleaveOperationExeFunc<1>, DeInterleaveOperationExeFunc<2>, DeInterleaveOperationExeFunc<3>,
-         DeInterleaveOperationExeFunc<4>},
-        "DeInterleave")));
+INSTANTIATE_TEST_SUITE_P(TestDeInterleave, DeInterleaveOperationTest,
+                         ::testing::ValuesIn(GetOpMetaData<InterleaveOpMetaData, 1>(
+                             {DeInterleaveOperationExeFunc<1>, DeInterleaveOperationExeFunc<2>,
+                              DeInterleaveOperationExeFunc<3>, DeInterleaveOperationExeFunc<4>},
+                             "DeInterleave")));
 
 TEST_P(InterleaveOperationTest, TestInterleave)
 {

@@ -46,8 +46,8 @@ TEST_F(IntraSubgraphAdapterTest, TestBoundaryConvert)
 {
     ComputationalGraphBuilder subGraph;
     std::vector<std::string> tensorNames{"t1", "t2", "t3", "t4"};
-    std::vector<MemoryType> tensorMemTypes{
-        MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_L1, MemoryType::MEM_L0A};
+    std::vector<MemoryType> tensorMemTypes{MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_L1,
+                                           MemoryType::MEM_L0A};
     std::vector<Opcode> opCodes{Opcode::OP_ADDS, Opcode::OP_CONVERT, Opcode::OP_L1_TO_L0A};
     std::vector<std::vector<std::string>> ioperands{{"t1"}, {"t2"}, {"t3"}};
     std::vector<std::vector<std::string>> ooperands{{"t2"}, {"t3"}, {"t4"}};
@@ -80,8 +80,8 @@ TEST_F(IntraSubgraphAdapterTest, TestBoundaryConvertFailed)
 {
     ComputationalGraphBuilder subGraph;
     std::vector<std::string> tensorNames{"t1", "t2", "t3", "t4"};
-    std::vector<MemoryType> tensorMemTypes{
-        MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_L1, MemoryType::MEM_L0B};
+    std::vector<MemoryType> tensorMemTypes{MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_L1,
+                                           MemoryType::MEM_L0B};
     std::vector<Opcode> opCodes{Opcode::OP_ADDS, Opcode::OP_CONVERT, Opcode::OP_L1_TO_L0B};
     std::vector<std::vector<std::string>> ioperands{{"t1"}, {"t2"}, {"t3"}};
     std::vector<std::vector<std::string>> ooperands{{"t2"}, {"t3"}, {"t4"}};
@@ -105,8 +105,8 @@ TEST_F(IntraSubgraphAdapterTest, TestInnerConvert)
 {
     ComputationalGraphBuilder subGraph;
     std::vector<std::string> tensorNames{"t0", "t1", "t2", "t3"};
-    std::vector<MemoryType> tensorMemTypes{
-        MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_L1, MemoryType::MEM_L0A};
+    std::vector<MemoryType> tensorMemTypes{MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_L1,
+                                           MemoryType::MEM_L0A};
     std::vector<Opcode> opCodes{Opcode::OP_ADDS, Opcode::OP_CONVERT, Opcode::OP_L1_TO_L0A};
     std::vector<std::vector<std::string>> ioperands{{"t0"}, {"t1"}, {"t2"}};
     std::vector<std::vector<std::string>> ooperands{{"t1"}, {"t2"}, {"t3"}};
@@ -132,7 +132,8 @@ TEST_F(IntraSubgraphAdapterTest, TestValidShapeInfer)
 {
     ComputationalGraphBuilder subGraph;
     std::vector<std::string> tensorNames{"t1", "t2", "t3", "t4"};
-    std::vector<MemoryType> tensorMemTypes{ MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_L1, MemoryType::MEM_L0A};
+    std::vector<MemoryType> tensorMemTypes{MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_L1,
+                                           MemoryType::MEM_L0A};
     std::vector<Opcode> opCodes{Opcode::OP_ADDS, Opcode::OP_CONVERT, Opcode::OP_L1_TO_L0A};
     std::vector<std::vector<std::string>> ioperands{{"t1"}, {"t2"}, {"t3"}};
     std::vector<std::vector<std::string>> ooperands{{"t2"}, {"t3"}, {"t4"}};

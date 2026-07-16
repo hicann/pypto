@@ -18,28 +18,27 @@
 namespace npu::tile_fwk {
 
 struct EntryRegistrarNode {
-    typedef void (*Entry)(void *data);
+    typedef void (*Entry)(void* data);
 
     Entry entry{nullptr};
-    const char *name{nullptr};
+    const char* name{nullptr};
 
-    EntryRegistrarNode *next{nullptr};
+    EntryRegistrarNode* next{nullptr};
 
-    template<typename T>
-    EntryRegistrarNode(T &group, Entry entryArg, const char *nameArg = nullptr)
-      : entry(entryArg), name(nameArg)
+    template <typename T>
+    EntryRegistrarNode(T& group, Entry entryArg, const char* nameArg = nullptr) : entry(entryArg), name(nameArg)
     {
         group.Append(this);
     }
 };
 
 struct EntryRegistrarGroup {
-    EntryRegistrarNode *head{nullptr};
+    EntryRegistrarNode* head{nullptr};
 
-    void Append(EntryRegistrarNode *node);
+    void Append(EntryRegistrarNode* node);
 
     // Register one fresh attribute instance per type into the given manager.
-    void Init(void *data);
+    void Init(void* data);
 };
 
 } // namespace npu::tile_fwk

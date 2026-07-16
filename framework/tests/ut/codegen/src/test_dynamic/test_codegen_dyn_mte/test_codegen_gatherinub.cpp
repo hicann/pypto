@@ -76,8 +76,8 @@ Function* GatherInUBUT(Config& cfg)
     }
 
 #if ENABLE_HIDDENLOOP
-    auto function =
-        Program::GetInstance().GetFunctionByRawName("TENSOR_TENSOR_" + funName + "_loop_Unroll1_PATH0_hiddenfunc0");
+    auto function = Program::GetInstance().GetFunctionByRawName("TENSOR_TENSOR_" + funName +
+                                                                "_loop_Unroll1_PATH0_hiddenfunc0");
 #else
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funName);
 #endif

@@ -36,8 +36,8 @@ struct FullOpMetaData {
     nlohmann::json test_data_;
 };
 
-static void FullOperationExeFunc2Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void FullOperationExeFunc2Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                      const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0]})
     {
@@ -54,18 +54,17 @@ static void FullOperationExeFunc2Dims(
         {
             LOOP("LOOP_L1_sIdx", FunctionType::DYNAMIC_LOOP, sIdx, LoopRange(0, sloop, 1))
             {
-                auto tileTensor = Full(
-                    args->value_, outputs[0].GetDataType(), {firstViewShape, secondViewShape},
-                    {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                     std::min(secondDim - sIdx * secondViewShape, secondViewShape)});
+                auto tileTensor = Full(args->value_, outputs[0].GetDataType(), {firstViewShape, secondViewShape},
+                                       {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                        std::min(secondDim - sIdx * secondViewShape, secondViewShape)});
                 Assemble(tileTensor, {bIdx * firstViewShape, sIdx * secondViewShape}, outputs[0]);
             }
         }
     }
 }
 
-static void FullOperationExeFunc3Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void FullOperationExeFunc3Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                      const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0]})
     {
@@ -87,21 +86,21 @@ static void FullOperationExeFunc3Dims(
             {
                 LOOP("LOOP_L3_nIdx", FunctionType::DYNAMIC_LOOP, nIdx, LoopRange(0, nloop, 1))
                 {
-                    auto tileTensor = Full(
-                        args->value_, outputs[0].GetDataType(), {firstViewShape, secondViewShape, thirdViewShape},
-                        {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                         std::min(secondDim - sIdx * secondViewShape, secondViewShape),
-                         std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape)});
-                    Assemble(
-                        tileTensor, {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape}, outputs[0]);
+                    auto tileTensor = Full(args->value_, outputs[0].GetDataType(),
+                                           {firstViewShape, secondViewShape, thirdViewShape},
+                                           {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                            std::min(secondDim - sIdx * secondViewShape, secondViewShape),
+                                            std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape)});
+                    Assemble(tileTensor, {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape},
+                             outputs[0]);
                 }
             }
         }
     }
 }
 
-static void FullOperationExeFunc4Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void FullOperationExeFunc4Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                      const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0]})
     {
@@ -130,18 +129,16 @@ static void FullOperationExeFunc4Dims(
                 {
                     LOOP("LOOP_L3_nIdx", FunctionType::DYNAMIC_LOOP, nIdx, LoopRange(0, nloop, 1))
                     {
-                        Tensor tileTensor0 = Full(
-                            args->value_, outputs[0].GetDataType(),
-                            {firstViewShape, secondViewShape, thirdViewShape, fourthViewShape},
-                            {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                             std::min(secondDim - sIdx * secondViewShape, secondViewShape),
-                             std::min(thirdDim - mIdx * thirdViewShape, thirdViewShape),
-                             std::min(fourthDim - nIdx * fourthViewShape, fourthViewShape)});
-                        Assemble(
-                            tileTensor0,
-                            {bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape,
-                             nIdx * fourthViewShape},
-                            outputs[0]);
+                        Tensor tileTensor0 = Full(args->value_, outputs[0].GetDataType(),
+                                                  {firstViewShape, secondViewShape, thirdViewShape, fourthViewShape},
+                                                  {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                                   std::min(secondDim - sIdx * secondViewShape, secondViewShape),
+                                                   std::min(thirdDim - mIdx * thirdViewShape, thirdViewShape),
+                                                   std::min(fourthDim - nIdx * fourthViewShape, fourthViewShape)});
+                        Assemble(tileTensor0,
+                                 {bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape,
+                                  nIdx * fourthViewShape},
+                                 outputs[0]);
                     }
                 }
             }
@@ -151,10 +148,10 @@ static void FullOperationExeFunc4Dims(
 
 class FullOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac_param<FullOpMetaData> {};
 
-INSTANTIATE_TEST_SUITE_P(
-    TestFull, FullOperationTest,
-    ::testing::ValuesIn(GetOpMetaData<FullOpMetaData>(
-        {FullOperationExeFunc2Dims, FullOperationExeFunc3Dims, FullOperationExeFunc4Dims}, "Full")));
+INSTANTIATE_TEST_SUITE_P(TestFull, FullOperationTest,
+                         ::testing::ValuesIn(GetOpMetaData<FullOpMetaData>(
+                             {FullOperationExeFunc2Dims, FullOperationExeFunc3Dims, FullOperationExeFunc4Dims},
+                             "Full")));
 
 TEST_P(FullOperationTest, TestFull)
 {

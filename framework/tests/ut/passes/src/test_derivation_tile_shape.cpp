@@ -66,9 +66,8 @@ static void BuildGraphAndCheck(ComputationalGraphBuilder& G)
     EXPECT_NE(function, nullptr);
 }
 
-static void BuildShapeAndCheckSucc(
-    Function* function, const Shape& inShape, const Shape& outShape, const std::vector<int64_t>& inTileShape,
-    const std::vector<int64_t>& resultTileShape)
+static void BuildShapeAndCheckSucc(Function* function, const Shape& inShape, const Shape& outShape,
+                                   const std::vector<int64_t>& inTileShape, const std::vector<int64_t>& resultTileShape)
 {
     std::vector<int64_t> outTileShape;
     DerivationTileShape derivationTileShapePass;
@@ -78,16 +77,16 @@ static void BuildShapeAndCheckSucc(
             continue;
         }
         auto op = opList[i];
-        auto status =
-            derivationTileShapePass.DerivationReshapeTileShape(op, inShape, outShape, inTileShape, outTileShape);
+        auto status = derivationTileShapePass.DerivationReshapeTileShape(op, inShape, outShape, inTileShape,
+                                                                         outTileShape);
 
         EXPECT_EQ(status, SUCCESS);
         EXPECT_EQ(outTileShape, resultTileShape);
     }
 }
 
-static void BuildShapeAndCheckFail(
-    Function* function, const Shape& inShape, const Shape& outShape, const std::vector<int64_t>& inTileShape)
+static void BuildShapeAndCheckFail(Function* function, const Shape& inShape, const Shape& outShape,
+                                   const std::vector<int64_t>& inTileShape)
 {
     std::vector<int64_t> outTileShape;
     DerivationTileShape derivationTileShapePass;
@@ -97,8 +96,8 @@ static void BuildShapeAndCheckFail(
             continue;
         }
         auto op = opList[i];
-        auto status =
-            derivationTileShapePass.DerivationReshapeTileShape(op, inShape, outShape, inTileShape, outTileShape);
+        auto status = derivationTileShapePass.DerivationReshapeTileShape(op, inShape, outShape, inTileShape,
+                                                                         outTileShape);
 
         EXPECT_EQ(status, WARNING);
     }

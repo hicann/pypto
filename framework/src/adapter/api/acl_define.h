@@ -1,5 +1,5 @@
 /**
-* Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
  * Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -23,12 +23,12 @@ namespace npu::tile_fwk {
 constexpr int ACLRT_SUCCESS = 0;
 constexpr int ACLRT_ERROR_REPEAT_INITIALIZE = 100002;
 
-#define ACL_ERROR_RT_FEATURE_NOT_SUPPORT        207000 // feature not support
-#define ACL_EVENT_SYNC                    0x00000001U
+#define ACL_ERROR_RT_FEATURE_NOT_SUPPORT 207000 // feature not support
+#define ACL_EVENT_SYNC 0x00000001U
 
 typedef int AclError;
-typedef void *AclRtStream;
-typedef void *AclRtEvent;
+typedef void* AclRtStream;
+typedef void* AclRtEvent;
 
 enum class AclRtMemcpyKind {
     HOST_TO_HOST,
@@ -50,16 +50,16 @@ enum class AclRtMemMallocPolicy {
     NORMAL_ONLY_P2P,
     HUGE1G_ONLY,
     HUGE1G_ONLY_P2P,
-    LOW_BAND_WIDTH   = 0x0100,
-    HIGH_BAND_WIDTH  = 0x1000,
+    LOW_BAND_WIDTH = 0x0100,
+    HIGH_BAND_WIDTH = 0x1000,
     ACCESS_USER_SPACE_READONLY = 0x100000,
 };
 
 enum class AclRtStreamAttr {
-    FAILURE_MODE         = 1,
+    FAILURE_MODE = 1,
     FLOAT_OVERFLOW_CHECK = 2,
-    USER_CUSTOM_TAG      = 3,
-    CACHE_OP_INFO        = 4,
+    USER_CUSTOM_TAG = 3,
+    CACHE_OP_INFO = 4,
 };
 
 typedef union {
@@ -77,9 +77,9 @@ enum class AclRtDevResLimitType {
 
 typedef struct RtExceptionInfo AclRtExceptionInfo;
 
-typedef void (*AclRtExceptionInfoCallback)(AclRtExceptionInfo *exceptionInfo);
+typedef void (*AclRtExceptionInfoCallback)(AclRtExceptionInfo* exceptionInfo);
 
-typedef void *AclMdlRI;
+typedef void* AclMdlRI;
 
 enum class AclMdlRICaptureStatus {
     NONE = 0,
@@ -92,4 +92,4 @@ enum class AclMdlRICaptureMode {
     THREAD_LOCAL,
     RELAXED,
 };
-}
+} // namespace npu::tile_fwk

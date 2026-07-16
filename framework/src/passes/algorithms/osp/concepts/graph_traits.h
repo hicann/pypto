@@ -72,22 +72,16 @@ struct DirectedEdge {
     VertexIdxT<GraphT> source_;
     VertexIdxT<GraphT> target_;
 
-    bool operator==(const DirectedEdge &other) const
-    {
-        return source_ == other.source_ && target_ == other.target_;
-    }
+    bool operator==(const DirectedEdge& other) const { return source_ == other.source_ && target_ == other.target_; }
 
-    bool operator!=(const DirectedEdge &other) const
-    {
-        return !(*this == other);
-    }
+    bool operator!=(const DirectedEdge& other) const { return !(*this == other); }
 
     DirectedEdge() : source_(0), target_(0) {}
 
-    DirectedEdge(const DirectedEdge &other) = default;
-    DirectedEdge(DirectedEdge &&other) = default;
-    DirectedEdge &operator=(const DirectedEdge &other) = default;
-    DirectedEdge &operator=(DirectedEdge &&other) = default;
+    DirectedEdge(const DirectedEdge& other) = default;
+    DirectedEdge(DirectedEdge&& other) = default;
+    DirectedEdge& operator=(const DirectedEdge& other) = default;
+    DirectedEdge& operator=(DirectedEdge&& other) = default;
     ~DirectedEdge() = default;
 
     DirectedEdge(VertexIdxT<GraphT> src, VertexIdxT<GraphT> tgt) : source_(src), target_(tgt) {}
@@ -106,8 +100,8 @@ struct DirectedGraphEdgeDescTraitsHelper {
 
 template <typename T>
 struct DirectedGraphEdgeDescTraits {
-    using DirectedEdgeDescriptor =
-        typename DirectedGraphEdgeDescTraitsHelper<T, HasEdgeDescTmember<T>::value>::DirectedEdgeDescriptor;
+    using DirectedEdgeDescriptor = typename DirectedGraphEdgeDescTraitsHelper<
+        T, HasEdgeDescTmember<T>::value>::DirectedEdgeDescriptor;
 };
 
 template <typename T>
@@ -131,8 +125,8 @@ struct HasVerticesInTopOrderTrait<T, std::void_t<decltype(T::verticesInTopOrder_
 
 template <typename T>
 inline constexpr bool hasVerticesInTopOrderV = HasVerticesInTopOrderTrait<T>::value;
-}    // namespace osp
-}    // namespace npu::tile_fwk
+} // namespace osp
+} // namespace npu::tile_fwk
 
 /**
  * @brief Specialization of std::hash for osp::directed_edge.
@@ -142,8 +136,8 @@ inline constexpr bool hasVerticesInTopOrderV = HasVerticesInTopOrderTrait<T>::va
  */
 template <typename GraphT>
 struct std::hash<npu::tile_fwk::osp::DirectedEdge<GraphT>> {
-    std::size_t operator()(const npu::tile_fwk::osp::DirectedEdge<GraphT> &p) const noexcept
-{
+    std::size_t operator()(const npu::tile_fwk::osp::DirectedEdge<GraphT>& p) const noexcept
+    {
         // Combine hashes of source and target
         std::size_t h1 = std::hash<npu::tile_fwk::osp::VertexIdxT<GraphT>>{}(p.source_);
         std::size_t h2 = std::hash<npu::tile_fwk::osp::VertexIdxT<GraphT>>{}(p.target_);

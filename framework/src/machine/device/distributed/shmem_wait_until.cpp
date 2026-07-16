@@ -59,9 +59,10 @@ int32_t ShmemWaitUntilImpl::PollCompleted(npu::tile_fwk::dynamic::AiCoreManager*
     });
 }
 
-TensorInfo ShmemWaitUntilImpl::GetTensorInfo(
-    uint64_t taskId, const npu::tile_fwk::dynamic::DevRelocVector<int32_t>& aicpuCode,
-    npu::tile_fwk::DynFuncData* funcDataList, int64_t* hcclContextAddr, const AicpuParamInfo& paramInfo)
+TensorInfo ShmemWaitUntilImpl::GetTensorInfo(uint64_t taskId,
+                                             const npu::tile_fwk::dynamic::DevRelocVector<int32_t>& aicpuCode,
+                                             npu::tile_fwk::DynFuncData* funcDataList, int64_t* hcclContextAddr,
+                                             const AicpuParamInfo& paramInfo)
 {
     const uint32_t funcId = npu::tile_fwk::FuncID(taskId);
     const uint32_t opIndex = npu::tile_fwk::TaskID(taskId);

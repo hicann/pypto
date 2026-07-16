@@ -46,9 +46,9 @@ int BroadcastAxis(const std::vector<SymbolicScalar>& inputsShape, const std::vec
     return brcAxis;
 }
 
-int BroadcastTensor(
-    const std::vector<SymbolicScalar>& firstInputsShape, const std::vector<SymbolicScalar>& secondInputsShape,
-    const std::vector<SymbolicScalar>& outputsShape)
+int BroadcastTensor(const std::vector<SymbolicScalar>& firstInputsShape,
+                    const std::vector<SymbolicScalar>& secondInputsShape,
+                    const std::vector<SymbolicScalar>& outputsShape)
 {
     for (size_t i = 0; i < firstInputsShape.size(); i++) {
         if (firstInputsShape[i] != outputsShape[i]) {
@@ -61,9 +61,8 @@ int BroadcastTensor(
     return -1;
 }
 
-void UpdateInputBrcViewShape(
-    std::vector<int64_t>& inputBrcViewShape, const std::vector<SymbolicScalar>& inputsShape,
-    const std::vector<SymbolicScalar>& outputsShape)
+void UpdateInputBrcViewShape(std::vector<int64_t>& inputBrcViewShape, const std::vector<SymbolicScalar>& inputsShape,
+                             const std::vector<SymbolicScalar>& outputsShape)
 {
     for (size_t i = 0; i < inputsShape.size(); i++) {
         if (inputsShape[i] != outputsShape[i]) {
@@ -72,8 +71,8 @@ void UpdateInputBrcViewShape(
     }
 }
 
-static void CopySignOperationExeFunc2Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void CopySignOperationExeFunc2Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                          const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0], inputs[1]}, {outputs[0]})
     {
@@ -129,17 +128,17 @@ static void CopySignOperationExeFunc2Dims(
     }
 }
 
-static void CopySignOperationExeFunc3Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void CopySignOperationExeFunc3Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                          const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0], inputs[1]}, {outputs[0]})
     {
-        std::vector<SymbolicScalar> firstInputsShape = {
-            inputs[0].GetShape()[0], inputs[0].GetShape()[1], inputs[0].GetShape()[2]};
-        std::vector<SymbolicScalar> secondInputsShape = {
-            inputs[1].GetShape()[0], inputs[1].GetShape()[1], inputs[1].GetShape()[2]};
-        std::vector<SymbolicScalar> outputsShape = {
-            outputs[0].GetShape()[0], outputs[0].GetShape()[1], outputs[0].GetShape()[2]};
+        std::vector<SymbolicScalar> firstInputsShape = {inputs[0].GetShape()[0], inputs[0].GetShape()[1],
+                                                        inputs[0].GetShape()[2]};
+        std::vector<SymbolicScalar> secondInputsShape = {inputs[1].GetShape()[0], inputs[1].GetShape()[1],
+                                                         inputs[1].GetShape()[2]};
+        std::vector<SymbolicScalar> outputsShape = {outputs[0].GetShape()[0], outputs[0].GetShape()[1],
+                                                    outputs[0].GetShape()[2]};
         auto args = static_cast<const CopySignOpFuncArgs*>(opArgs);
         std::vector<int64_t> viewShape = {args->viewShape_[0], args->viewShape_[1], args->viewShape_[2]};
         std::vector<int64_t> firstInputViewShape = viewShape;
@@ -174,10 +173,10 @@ static void CopySignOperationExeFunc3Dims(
                         std::min(secondInputsShape[0] - bIdx * secondInputViewShape[0], secondInputViewShape[0]),
                         std::min(secondInputsShape[1] - sIdx * secondInputViewShape[1], secondInputViewShape[1]),
                         std::min(secondInputsShape[2] - nIdx * secondInputViewShape[2], secondInputViewShape[2])};
-                    firstOffset = {
-                        bIdx * firstInputViewShape[0], sIdx * firstInputViewShape[1], nIdx * firstInputViewShape[2]};
-                    secondOffset = {
-                        bIdx * secondInputViewShape[0], sIdx * secondInputViewShape[1], nIdx * secondInputViewShape[2]};
+                    firstOffset = {bIdx * firstInputViewShape[0], sIdx * firstInputViewShape[1],
+                                   nIdx * firstInputViewShape[2]};
+                    secondOffset = {bIdx * secondInputViewShape[0], sIdx * secondInputViewShape[1],
+                                    nIdx * secondInputViewShape[2]};
 
                     if (brcTensor == 0 && brcAxis != -1) {
                         firstInputValidShape[brcAxis] = firstInputViewShape[brcAxis];
@@ -197,20 +196,20 @@ static void CopySignOperationExeFunc3Dims(
     }
 }
 
-static void CopySignOperationExeFunc4Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void CopySignOperationExeFunc4Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                          const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0], inputs[1]}, {outputs[0]})
     {
-        std::vector<SymbolicScalar> firstInputsShape = {
-            inputs[0].GetShape()[0], inputs[0].GetShape()[1], inputs[0].GetShape()[2], inputs[0].GetShape()[3]};
-        std::vector<SymbolicScalar> secondInputsShape = {
-            inputs[1].GetShape()[0], inputs[1].GetShape()[1], inputs[1].GetShape()[2], inputs[1].GetShape()[3]};
-        std::vector<SymbolicScalar> outputsShape = {
-            outputs[0].GetShape()[0], outputs[0].GetShape()[1], outputs[0].GetShape()[2], outputs[0].GetShape()[3]};
+        std::vector<SymbolicScalar> firstInputsShape = {inputs[0].GetShape()[0], inputs[0].GetShape()[1],
+                                                        inputs[0].GetShape()[2], inputs[0].GetShape()[3]};
+        std::vector<SymbolicScalar> secondInputsShape = {inputs[1].GetShape()[0], inputs[1].GetShape()[1],
+                                                         inputs[1].GetShape()[2], inputs[1].GetShape()[3]};
+        std::vector<SymbolicScalar> outputsShape = {outputs[0].GetShape()[0], outputs[0].GetShape()[1],
+                                                    outputs[0].GetShape()[2], outputs[0].GetShape()[3]};
         auto args = static_cast<const CopySignOpFuncArgs*>(opArgs);
-        std::vector<int64_t> viewShape = {
-            args->viewShape_[0], args->viewShape_[1], args->viewShape_[2], args->viewShape_[3]};
+        std::vector<int64_t> viewShape = {args->viewShape_[0], args->viewShape_[1], args->viewShape_[2],
+                                          args->viewShape_[3]};
         std::vector<int64_t> firstInputViewShape = viewShape;
         std::vector<int64_t> secondInputViewShape = viewShape;
         std::vector<SymbolicScalar> firstInputValidShape(4, 0);
@@ -248,12 +247,10 @@ static void CopySignOperationExeFunc4Dims(
                             std::min(secondInputsShape[1] - sIdx * secondInputViewShape[1], secondInputViewShape[1]),
                             std::min(secondInputsShape[2] - nIdx * secondInputViewShape[2], secondInputViewShape[2]),
                             std::min(secondInputsShape[3] - mIdx * secondInputViewShape[3], secondInputViewShape[3])};
-                        firstOffset = {
-                            bIdx * firstInputViewShape[0], sIdx * firstInputViewShape[1], nIdx * firstInputViewShape[2],
-                            mIdx * firstInputViewShape[3]};
-                        secondOffset = {
-                            bIdx * secondInputViewShape[0], sIdx * secondInputViewShape[1],
-                            nIdx * secondInputViewShape[2], mIdx * secondInputViewShape[3]};
+                        firstOffset = {bIdx * firstInputViewShape[0], sIdx * firstInputViewShape[1],
+                                       nIdx * firstInputViewShape[2], mIdx * firstInputViewShape[3]};
+                        secondOffset = {bIdx * secondInputViewShape[0], sIdx * secondInputViewShape[1],
+                                        nIdx * secondInputViewShape[2], mIdx * secondInputViewShape[3]};
 
                         if (brcTensor == 0 && brcAxis != -1) {
                             firstInputValidShape[brcAxis] = firstInputViewShape[brcAxis];
@@ -266,9 +263,9 @@ static void CopySignOperationExeFunc4Dims(
                         Tensor tileTensor1 = View(inputs[1], secondInputViewShape, secondInputValidShape, secondOffset);
                         TileShape::Current().SetVecTile(args->tileShape_);
                         auto res = CopySign(tileTensor0, tileTensor1);
-                        Assemble(
-                            res, {bIdx * viewShape[0], sIdx * viewShape[1], nIdx * viewShape[2], mIdx * viewShape[3]},
-                            outputs[0]);
+                        Assemble(res,
+                                 {bIdx * viewShape[0], sIdx * viewShape[1], nIdx * viewShape[2], mIdx * viewShape[3]},
+                                 outputs[0]);
                     }
                 }
             }
@@ -278,10 +275,11 @@ static void CopySignOperationExeFunc4Dims(
 
 class CopySignOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac_param<CopySignOpMetaData> {};
 
-INSTANTIATE_TEST_SUITE_P(
-    TestCopySign, CopySignOperationTest,
-    ::testing::ValuesIn(GetOpMetaData<CopySignOpMetaData>(
-        {CopySignOperationExeFunc2Dims, CopySignOperationExeFunc3Dims, CopySignOperationExeFunc4Dims}, "CopySign")));
+INSTANTIATE_TEST_SUITE_P(TestCopySign, CopySignOperationTest,
+                         ::testing::ValuesIn(GetOpMetaData<CopySignOpMetaData>({CopySignOperationExeFunc2Dims,
+                                                                                CopySignOperationExeFunc3Dims,
+                                                                                CopySignOperationExeFunc4Dims},
+                                                                               "CopySign")));
 
 TEST_P(CopySignOperationTest, TestCopySign)
 {

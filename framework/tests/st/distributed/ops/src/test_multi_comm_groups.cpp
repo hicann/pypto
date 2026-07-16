@@ -37,7 +37,7 @@ void Test2GroupsAllGather(OpTestParam& testParam, std::string& goldenDir)
     Tensor out(dType, outShape, "out");
 
     std::vector<T> inPtr;
-    if(testParam.worldRankId % 2 == 0) {
+    if (testParam.worldRankId % 2 == 0) {
         inPtr = ReadToVector<T>(goldenDir + "/input_even_rank_" + std::to_string(testParam.rankId) + ".bin", shape);
     } else {
         inPtr = ReadToVector<T>(goldenDir + "/input_odd_rank_" + std::to_string(testParam.rankId) + ".bin", shape);
@@ -63,7 +63,7 @@ void Test2GroupsAllGather(OpTestParam& testParam, std::string& goldenDir)
     RunTest();
     auto outPtr = ProgramData::GetInstance().GetOutputData(0)->GetDevPtr();
     int32_t outSize = row * col * testParam.rankSize;
-    if(testParam.worldRankId % 2 == 0) {
+    if (testParam.worldRankId % 2 == 0) {
         EXPECT_TRUE(CompareWithGolden<uint8_t*>(dType, goldenDir + "/output_even_rank_", outSize, outPtr, testParam));
     } else {
         EXPECT_TRUE(CompareWithGolden<uint8_t*>(dType, goldenDir + "/output_odd_rank_", outSize, outPtr, testParam));

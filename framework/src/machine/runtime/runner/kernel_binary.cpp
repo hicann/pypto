@@ -47,10 +47,12 @@ KernelBinary::KernelBinary(std::shared_ptr<Function> func) : dynFunc(func)
     DeviceLauncher::FillSwimLaneEnableInfo(toSubMachineConfig_);
     if (config::GetRuntimeOption<int64_t>(CFG_RUN_MODE) == CFG_RUN_MODE_SIM) {
         EslModelMemoryUtils eslMemoryUtils{true, false};
-        DeviceLauncher::FillDeviceKernelArgs(eslMemoryUtils, dynAttr->devProgBinary, aicpuArgs->kArgs, dynAttr->commGroupNames);
+        DeviceLauncher::FillDeviceKernelArgs(eslMemoryUtils, dynAttr->devProgBinary, aicpuArgs->kArgs,
+                                             dynAttr->commGroupNames);
     } else {
         DeviceMemoryUtils deviceMemoryUtils;
-        DeviceLauncher::FillDeviceKernelArgs(deviceMemoryUtils, dynAttr->devProgBinary, aicpuArgs->kArgs, dynAttr->commGroupNames);
+        DeviceLauncher::FillDeviceKernelArgs(deviceMemoryUtils, dynAttr->devProgBinary, aicpuArgs->kArgs,
+                                             dynAttr->commGroupNames);
     }
     runtimeDynamicCellMatchAddr_ = devProg->devArgs.dynamicCellMatchAddr;
     runtimeDynamicCellMatchCapacity_ = devProg->devArgs.dynamicCellMatchCapacity;
@@ -75,10 +77,7 @@ KernelBinary::~KernelBinary()
     }
 }
 
-ToSubMachineConfig& KernelBinary::GetMachineConfig()
-{
-    return toSubMachineConfig_;
-}
+ToSubMachineConfig& KernelBinary::GetMachineConfig() { return toSubMachineConfig_; }
 
 uint8_t* KernelBinary::FindCtrlFlowCache(std::vector<std::vector<int64_t>>& inputs, bool isOriginShape)
 {
@@ -136,15 +135,15 @@ int64_t KernelBinary::GetWorkspaceSize(const std::vector<DeviceTensorData>& tens
     PatchHostDynamicCellMatchTableDesc(devProg, dynamicCellMatchDescPatches_);
     if (dynAttr->maxDynamicAssembleOutcastMem.IsValid() || dynAttr->maxDynamicCellMatchTableMem.IsValid()) {
         if (dynAttr->maxDynamicAssembleOutcastMem.IsValid()) {
-            devProg->memBudget.tensor.maxDynamicAssembleOutcastMem =
-                eval.Evaluate(dynAttr->maxDynamicAssembleOutcastMem);
+            devProg->memBudget.tensor.maxDynamicAssembleOutcastMem = eval.Evaluate(
+                dynAttr->maxDynamicAssembleOutcastMem);
         }
         if (dynAttr->maxDynamicCellMatchTableMem.IsValid()) {
-            devProg->memBudget.metadata.maxDynamicCellMatchTableMem =
-                eval.Evaluate(dynAttr->maxDynamicCellMatchTableMem);
+            devProg->memBudget.metadata.maxDynamicCellMatchTableMem = eval.Evaluate(
+                dynAttr->maxDynamicCellMatchTableMem);
             uint64_t totalDynamicCellMatchSlotNum = devProg->memBudget.metadata.dynamicCellMatchSlotNum;
-            devProg->memBudget.metadata.dynamicCellMatch =
-                totalDynamicCellMatchSlotNum * devProg->memBudget.metadata.maxDynamicCellMatchTableMem;
+            devProg->memBudget.metadata.dynamicCellMatch = totalDynamicCellMatchSlotNum *
+                                                           devProg->memBudget.metadata.maxDynamicCellMatchTableMem;
             ValidateDynamicCellMatchTableMemBudget(*dynAttr, devProg);
         }
         if (devProg->memBudget.metadata.dynamicCellMatch != lastPreparedDynamicCellMatchBytes_) {
@@ -155,15 +154,15 @@ int64_t KernelBinary::GetWorkspaceSize(const std::vector<DeviceTensorData>& tens
         workspaceSize = devProg->memBudget.Total();
 
         // check and pretty print total workspace consumption
-        auto *wsChecker =
-            RebuildableAttributeManager::GetInstance().GetAttr<RebuildableWorkspaceDesc>(dynFunc.get());
-        MACHINE_LOGI_FULL("Memory Consumption: size=%ld\n%s\n", workspaceSize, wsChecker->PrettyDumpSize(
-                devProg->memBudget.tensor.maxDynamicAssembleOutcastMem,
-                devProg->memBudget.debug.Total()).c_str());
+        auto* wsChecker = RebuildableAttributeManager::GetInstance().GetAttr<RebuildableWorkspaceDesc>(dynFunc.get());
+        MACHINE_LOGI_FULL("Memory Consumption: size=%ld\n%s\n", workspaceSize,
+                          wsChecker
+                              ->PrettyDumpSize(devProg->memBudget.tensor.maxDynamicAssembleOutcastMem,
+                                               devProg->memBudget.debug.Total())
+                              .c_str());
         MACHINE_ASSERT(uint64_t(workspaceSize) ==
-            wsChecker->GetSizeForCheckOnly(
-                devProg->memBudget.tensor.maxDynamicAssembleOutcastMem,
-                devProg->memBudget.debug.Total()));
+                       wsChecker->GetSizeForCheckOnly(devProg->memBudget.tensor.maxDynamicAssembleOutcastMem,
+                                                      devProg->memBudget.debug.Total()));
     }
     return workspaceSize;
 }
@@ -250,13 +249,9 @@ uint64_t KernelBinary::GetRuntimeDynamicCellMatchAddr() const { return runtimeDy
 
 uint64_t KernelBinary::GetRuntimeDynamicCellMatchCapacity() const { return runtimeDynamicCellMatchCapacity_; }
 
-void KernelBinary::SetSyncMode(uint8_t syncModel) {
-    scheSyncModel_ = syncModel;
-}
+void KernelBinary::SetSyncMode(uint8_t syncModel) { scheSyncModel_ = syncModel; }
 
-uint8_t KernelBinary::GetSyncMode() {
-    return scheSyncModel_;
-}
+uint8_t KernelBinary::GetSyncMode() { return scheSyncModel_; }
 
 void KernelBinary::PatchHostDynamicCellMatchAddr(DevAscendProgram* hostProg)
 {
@@ -269,8 +264,7 @@ void KernelBinary::PatchHostDynamicCellMatchAddr(DevAscendProgram* hostProg)
 
 void KernelBinary::InitCachedArgs()
 {
-    auto argNum =
-        dynAttr->startArgsInputLogicalTensorList.size() + dynAttr->startArgsOutputLogicalTensorList.size();
+    auto argNum = dynAttr->startArgsInputLogicalTensorList.size() + dynAttr->startArgsOutputLogicalTensorList.size();
     const uint64_t maxPatchCount = dynAttr->dynamicCellMatchLaunchMetaList.size();
     auto argSize = sizeof(AiCpuArgs) + 2 * sizeof(int64_t) + argNum * sizeof(DevTensorData) + sizeof(uint64_t) +
                    maxPatchCount * sizeof(DevDynamicCellMatchStridePatch);

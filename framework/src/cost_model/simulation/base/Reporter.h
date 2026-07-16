@@ -41,8 +41,8 @@ public:
     static void ReportTitle(const std::string& title);
     static void ReportMap(const std::string& name, std::map<uint64_t, uint64_t>& vals);
     static void ReportMapAndPct(const std::string& name, std::map<int, uint64_t>& vals, const uint64_t& baseVal);
-    static void ReportMapsAndPct(
-        const std::string& name, std::map<int, uint64_t>& vals, std::map<int, uint64_t>& baseVals);
+    static void ReportMapsAndPct(const std::string& name, std::map<int, uint64_t>& vals,
+                                 std::map<int, uint64_t>& baseVals);
     static void ReportValWithLvl(const std::string& name, uint64_t val, uint32_t level);
     static void ReportValWithLvl(const std::string& name, float val, uint32_t level);
     static void ReportValWithLvl(const std::string& name, double val, uint32_t level);
@@ -55,16 +55,16 @@ public:
     static void ReportPct(const std::string& name, uint64_t numerator, uint64_t denominator);
     static void ReportPct(const std::string& name, float numerator, float denominator);
     static void ReportPct(const std::string& name, float rate);
-    static void ReportValAndPctWithLvl(
-        const std::string& name, uint64_t numerator, uint64_t denominator, uint32_t level);
+    static void ReportValAndPctWithLvl(const std::string& name, uint64_t numerator, uint64_t denominator,
+                                       uint32_t level);
     static void ReportValAndPctWithLvl(const std::string& name, float numerator, uint64_t denominator, uint32_t level);
     static void ReportValAndPct(const std::string& name, uint64_t numerator, uint64_t denominator);
     static void ReportValAndPct(const std::string& name, float numerator, uint64_t denominator);
     static void ReportValAndPctFlWithLvl(const std::string& name, double numerator, double denominator, uint32_t level);
     static void ReportValAndPctFl(const std::string& name, double numerator, double denominator);
     static void ReportHexCounter(const std::string& name, uint64_t pc, uint64_t counter);
-    static void ReportStallLoc(
-        const std::string& name, uint64_t localBpc, uint64_t localTpc, uint64_t peerBpc, uint64_t val);
+    static void ReportStallLoc(const std::string& name, uint64_t localBpc, uint64_t localTpc, uint64_t peerBpc,
+                               uint64_t val);
     std::streambuf* ReportSetOutStreamFile(const std::string& fileName);
     std::streambuf* ReportSetOutStreamFile(const std::string& fileName, bool isApp);
 

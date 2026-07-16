@@ -31,11 +31,11 @@ private:
 
     std::string GenGmParamVar(unsigned gmParamIdx) const override;
 
-    TileTensor BuildTileTensor(
-        int paramIdx, const std::string& usingType, const TileTensorShape& tileTensorShape = {}) override;
+    TileTensor BuildTileTensor(int paramIdx, const std::string& usingType,
+                               const TileTensorShape& tileTensorShape = {}) override;
 
-    void UpdateTileTensorShapeAndStride(
-        int paramIdx, TileTensor& tileTensor, bool isSpillToGm, const TileTensorShape& tileTensorShape = {}) override;
+    void UpdateTileTensorShapeAndStride(int paramIdx, TileTensor& tileTensor, bool isSpillToGm,
+                                        const TileTensorShape& tileTensorShape = {}) override;
 
     std::vector<std::string> GetGmOffsetForTileTensor(unsigned gmIdx) const override;
 

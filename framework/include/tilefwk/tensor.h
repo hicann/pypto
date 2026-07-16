@@ -71,9 +71,8 @@ public:
      * \param format : Format of the tensor. The default value is TileOpFormat::TILEOP_ND.
      * \attention : The parameters dataType,shape,dataPtr and name are required parameters.
      */
-    Tensor(
-        DataType dataType, const Shape& shape, uint8_t* dataPtr, std::string name,
-        TileOpFormat format = TileOpFormat::TILEOP_ND)
+    Tensor(DataType dataType, const Shape& shape, uint8_t* dataPtr, std::string name,
+           TileOpFormat format = TileOpFormat::TILEOP_ND)
         : Tensor(dataType, shape, name, format)
     {
         SetData(dataPtr);
@@ -87,9 +86,8 @@ public:
      * \param name : Name of the tensor.
      * \param format : Format of the tensor. The default value is TileOpFormat::TILEOP_ND.
      */
-    Tensor(
-        DataType dataType, std::vector<SymbolicScalar> shape, std::string name = "",
-        TileOpFormat format = TileOpFormat::TILEOP_ND);
+    Tensor(DataType dataType, std::vector<SymbolicScalar> shape, std::string name = "",
+           TileOpFormat format = TileOpFormat::TILEOP_ND);
 
     /**
      * \brief Construct a new Tensor object
@@ -104,9 +102,8 @@ public:
      * Tensor t2(DT_FP32, {GetInputShapeDim(t1, 0), 32}) // shape same as t1
      * \endcode
      */
-    Tensor(
-        DataType t, std::initializer_list<SymbolicScalar> shape, std::string name = "",
-        TileOpFormat format = TileOpFormat::TILEOP_ND)
+    Tensor(DataType t, std::initializer_list<SymbolicScalar> shape, std::string name = "",
+           TileOpFormat format = TileOpFormat::TILEOP_ND)
         : Tensor(t, std::vector<SymbolicScalar>(shape), name, format)
     {}
 

@@ -80,12 +80,10 @@ TILEOP void LogicalNotImplInt(DstTile dstTile, SrcTile srcTile, TmpTile tmpTile)
     }
 }
 
-template <
-    typename T, typename DstTile, typename SrcTile, typename CastTile, typename ExpTile, typename VcmpResTile,
-    typename TileStartAddrUB>
-TILEOP void LogicalNotImpl(
-    DstTile dstTile, SrcTile srcTile, CastTile castTile, ExpTile oneTile, ExpTile zeroTile, VcmpResTile vcmpResTile,
-    TileStartAddrUB startAddrUBTile)
+template <typename T, typename DstTile, typename SrcTile, typename CastTile, typename ExpTile, typename VcmpResTile,
+          typename TileStartAddrUB>
+TILEOP void LogicalNotImpl(DstTile dstTile, SrcTile srcTile, CastTile castTile, ExpTile oneTile, ExpTile zeroTile,
+                           VcmpResTile vcmpResTile, TileStartAddrUB startAddrUBTile)
 {
     // Existing path for bool/uint8/int8/half/float
     if constexpr (std::is_same<T, bool>::value || std::is_same<T, uint8_t>::value || std::is_same<T, int8_t>::value) {
@@ -124,8 +122,8 @@ TILEOP void LogicalNotImpl(
 }
 
 template <typename T0, typename T1>
-TILEOP void LogicalNotProcessTileInt(
-    T0 dst, T1 src, __ubuf__ int8_t* tmpBuffer, unsigned count, uint64_t dstOff, uint64_t srcOff)
+TILEOP void LogicalNotProcessTileInt(T0 dst, T1 src, __ubuf__ int8_t* tmpBuffer, unsigned count, uint64_t dstOff,
+                                     uint64_t srcOff)
 {
     using T = select_type_bool<T1>;
     constexpr auto dstTypeSize = sizeof(typename T0::Type);
@@ -145,8 +143,9 @@ TILEOP void LogicalNotProcessTileInt(
 
 template <typename T0, typename T1, typename VcmpResTileT, typename TileStartAddrUBT>
 TILEOP void LogicalNotProcessTileGeneric(T0 dst, T1 src, __ubuf__ int8_t* compareCondition,
-    __ubuf__ int8_t* oneCondition, __ubuf__ half* castCondition, VcmpResTileT vcmpResTile,
-    TileStartAddrUBT startAddrUBTile, unsigned count, uint64_t dstOff, uint64_t srcOff)
+                                         __ubuf__ int8_t* oneCondition, __ubuf__ half* castCondition,
+                                         VcmpResTileT vcmpResTile, TileStartAddrUBT startAddrUBTile, unsigned count,
+                                         uint64_t dstOff, uint64_t srcOff)
 {
     using U = select_type<T1>;
     using T = select_type_bool<T1>;
@@ -173,7 +172,8 @@ TILEOP void LogicalNotProcessTileGeneric(T0 dst, T1 src, __ubuf__ int8_t* compar
 
 template <typename T1, typename T2, typename VcmpResTileT, typename TileStartAddrUBT>
 TILEOP void LogicalNotGenericSetup(T2 tmp, __ubuf__ int8_t*& compareCondition, __ubuf__ int8_t*& oneCondition,
-    __ubuf__ half*& castCondition, VcmpResTileT& vcmpResTile, TileStartAddrUBT& startAddrUBTile)
+                                   __ubuf__ half*& castCondition, VcmpResTileT& vcmpResTile,
+                                   TileStartAddrUBT& startAddrUBTile)
 {
     constexpr int64_t COUNT_MAX = 2048;
     constexpr uint32_t ALIGN_SIZE = 32;
@@ -197,23 +197,23 @@ TILEOP void LogicalNotGenericSetup(T2 tmp, __ubuf__ int8_t*& compareCondition, _
 }
 
 template <typename T0, typename T1, typename VcmpResTileT, typename TileStartAddrUBT>
-TILEOP void LogicalNotProcessTile(T0 dst, T1 src, __ubuf__ int8_t* tmpBuffer,
-    __ubuf__ int8_t* compareCondition, __ubuf__ int8_t* oneCondition, __ubuf__ half* castCondition,
-    VcmpResTileT vcmpResTile, TileStartAddrUBT startAddrUBTile, unsigned count, uint64_t dstOff, uint64_t srcOff)
+TILEOP void LogicalNotProcessTile(T0 dst, T1 src, __ubuf__ int8_t* tmpBuffer, __ubuf__ int8_t* compareCondition,
+                                  __ubuf__ int8_t* oneCondition, __ubuf__ half* castCondition, VcmpResTileT vcmpResTile,
+                                  TileStartAddrUBT startAddrUBTile, unsigned count, uint64_t dstOff, uint64_t srcOff)
 {
     if constexpr (std::is_same_v<typename T1::Type, int16_t> || std::is_same_v<typename T1::Type, uint16_t> ||
                   std::is_same_v<typename T1::Type, int32_t> || std::is_same_v<typename T1::Type, uint32_t>) {
         LogicalNotProcessTileInt(dst, src, tmpBuffer, count, dstOff, srcOff);
     } else {
-        LogicalNotProcessTileGeneric(dst, src, compareCondition, oneCondition, castCondition,
-            vcmpResTile, startAddrUBTile, count, dstOff, srcOff);
+        LogicalNotProcessTileGeneric(dst, src, compareCondition, oneCondition, castCondition, vcmpResTile,
+                                     startAddrUBTile, count, dstOff, srcOff);
     }
 }
 
 template <typename T1, typename T2, typename VcmpResTileT, typename TileStartAddrUBT>
 TILEOP void LogicalNotPrepareState(T2 tmp, __ubuf__ int8_t*& tmpBuffer, __ubuf__ int8_t*& compareCondition,
-    __ubuf__ int8_t*& oneCondition, __ubuf__ half*& castCondition, VcmpResTileT& vcmpResTile,
-    TileStartAddrUBT& startAddrUBTile)
+                                   __ubuf__ int8_t*& oneCondition, __ubuf__ half*& castCondition,
+                                   VcmpResTileT& vcmpResTile, TileStartAddrUBT& startAddrUBTile)
 {
     if constexpr (std::is_same_v<typename T1::Type, int16_t> || std::is_same_v<typename T1::Type, uint16_t> ||
                   std::is_same_v<typename T1::Type, int32_t> || std::is_same_v<typename T1::Type, uint32_t>) {
@@ -245,34 +245,34 @@ TILEOP void LogicalNotIterateTiles(T0 dst, T1 src, T2 tmp, LayoutD dstLayout, La
     __ubuf__ int8_t* compareCondition = nullptr;
     __ubuf__ int8_t* oneCondition = nullptr;
     __ubuf__ half* castCondition = nullptr;
-    using VcmpResTile = pto::Tile<pto::TileType::Vec, uint8_t, 1, COUNT_MAX / 8,
-                                  pto::BLayout::RowMajor, 1, COUNT_MAX / 8>;
+    using VcmpResTile = pto::Tile<pto::TileType::Vec, uint8_t, 1, COUNT_MAX / 8, pto::BLayout::RowMajor, 1,
+                                  COUNT_MAX / 8>;
     using TileStartAddrUB = pto::Tile<pto::TileType::Vec, uint8_t, 1, ALIGN_SIZE, pto::BLayout::RowMajor, -1, -1>;
     VcmpResTile vcmpResTile;
     TileStartAddrUB startAddrUBTile(1, ALIGN_SIZE / 8);
-    LogicalNotPrepareState<T1>(tmp, tmpBuffer, compareCondition, oneCondition, castCondition,
-                               vcmpResTile, startAddrUBTile);
+    LogicalNotPrepareState<T1>(tmp, tmpBuffer, compareCondition, oneCondition, castCondition, vcmpResTile,
+                               startAddrUBTile);
     unsigned numLoop = dstShape4 / COUNT_MAX;
     unsigned remainAfterLoop = dstShape4 % COUNT_MAX;
     for (LoopVar n0Index = 0; n0Index < dstShape0; ++n0Index) {
         for (LoopVar n1Index = 0; n1Index < dstShape1; ++n1Index) {
             for (LoopVar n2Index = 0; n2Index < dstShape2; ++n2Index) {
                 for (LoopVar n3Index = 0; n3Index < dstShape3; ++n3Index) {
-                    auto dstOffset = n0Index * dstStride0 + n1Index * dstStride1 +
-                                     n2Index * dstStride2 + n3Index * dstStride3;
-                    auto srcOffset = n0Index * srcStride0 + n1Index * srcStride1 +
-                                     n2Index * srcStride2 + n3Index * srcStride3;
+                    auto dstOffset = n0Index * dstStride0 + n1Index * dstStride1 + n2Index * dstStride2 +
+                                     n3Index * dstStride3;
+                    auto srcOffset = n0Index * srcStride0 + n1Index * srcStride1 + n2Index * srcStride2 +
+                                     n3Index * srcStride3;
                     for (LoopVar j = 0; j < numLoop; j++) {
-                        LogicalNotProcessTile(dst, src, tmpBuffer, compareCondition, oneCondition,
-                            castCondition, vcmpResTile, startAddrUBTile, static_cast<unsigned>(COUNT_MAX),
-                            static_cast<uint64_t>(dstOffset + j * COUNT_MAX),
-                            static_cast<uint64_t>(srcOffset + j * COUNT_MAX));
+                        LogicalNotProcessTile(dst, src, tmpBuffer, compareCondition, oneCondition, castCondition,
+                                              vcmpResTile, startAddrUBTile, static_cast<unsigned>(COUNT_MAX),
+                                              static_cast<uint64_t>(dstOffset + j * COUNT_MAX),
+                                              static_cast<uint64_t>(srcOffset + j * COUNT_MAX));
                     }
                     if (remainAfterLoop > 0) {
-                        LogicalNotProcessTile(dst, src, tmpBuffer, compareCondition, oneCondition,
-                            castCondition, vcmpResTile, startAddrUBTile, remainAfterLoop,
-                            static_cast<uint64_t>(dstOffset + numLoop * COUNT_MAX),
-                            static_cast<uint64_t>(srcOffset + numLoop * COUNT_MAX));
+                        LogicalNotProcessTile(dst, src, tmpBuffer, compareCondition, oneCondition, castCondition,
+                                              vcmpResTile, startAddrUBTile, remainAfterLoop,
+                                              static_cast<uint64_t>(dstOffset + numLoop * COUNT_MAX),
+                                              static_cast<uint64_t>(srcOffset + numLoop * COUNT_MAX));
                     }
                 }
             }

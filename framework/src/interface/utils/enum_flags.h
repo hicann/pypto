@@ -41,8 +41,16 @@ public:
     // Single-flag construction, e.g. EnumFlags<E>{E::A}.
     constexpr EnumFlags(E e) noexcept : bits_(Bit(e)) {}
 
-    constexpr EnumFlags& Add(E e) noexcept { bits_ |= Bit(e); return *this; }
-    constexpr EnumFlags& Remove(E e) noexcept { bits_ &= ~Bit(e); return *this; }
+    constexpr EnumFlags& Add(E e) noexcept
+    {
+        bits_ |= Bit(e);
+        return *this;
+    }
+    constexpr EnumFlags& Remove(E e) noexcept
+    {
+        bits_ &= ~Bit(e);
+        return *this;
+    }
     constexpr bool Contains(E e) const noexcept { return (bits_ & Bit(e)) != storage_type{0}; }
 
     constexpr bool Empty() const noexcept { return bits_ == storage_type{0}; }
@@ -56,9 +64,21 @@ public:
     constexpr EnumFlags operator&(EnumFlags rhs) const noexcept { return EnumFlags(bits_ & rhs.bits_, internal{}); }
     constexpr EnumFlags operator^(EnumFlags rhs) const noexcept { return EnumFlags(bits_ ^ rhs.bits_, internal{}); }
     constexpr EnumFlags operator~() const noexcept { return EnumFlags(~bits_, internal{}); }
-    constexpr EnumFlags& operator|=(EnumFlags rhs) noexcept { bits_ |= rhs.bits_; return *this; }
-    constexpr EnumFlags& operator&=(EnumFlags rhs) noexcept { bits_ &= rhs.bits_; return *this; }
-    constexpr EnumFlags& operator^=(EnumFlags rhs) noexcept { bits_ ^= rhs.bits_; return *this; }
+    constexpr EnumFlags& operator|=(EnumFlags rhs) noexcept
+    {
+        bits_ |= rhs.bits_;
+        return *this;
+    }
+    constexpr EnumFlags& operator&=(EnumFlags rhs) noexcept
+    {
+        bits_ &= rhs.bits_;
+        return *this;
+    }
+    constexpr EnumFlags& operator^=(EnumFlags rhs) noexcept
+    {
+        bits_ ^= rhs.bits_;
+        return *this;
+    }
 
     friend constexpr bool operator==(EnumFlags lhs, EnumFlags rhs) noexcept { return lhs.bits_ == rhs.bits_; }
     friend constexpr bool operator!=(EnumFlags lhs, EnumFlags rhs) noexcept { return lhs.bits_ != rhs.bits_; }
@@ -74,7 +94,8 @@ private:
     {
         // Cast through the unsigned underlying type so signed enums are handled,
         // then widen to uint64_t to test against the Storage bit width safely.
-        const std::uint64_t raw = static_cast<std::uint64_t>(static_cast<UnsignedUnderlying>(static_cast<Underlying>(e)));
+        const std::uint64_t raw = static_cast<std::uint64_t>(
+            static_cast<UnsignedUnderlying>(static_cast<Underlying>(e)));
         constexpr std::uint64_t width = sizeof(Storage) * 8ULL;
         return (raw >= width) ? storage_type{0} : static_cast<storage_type>(storage_type{1} << raw);
     }

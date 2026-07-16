@@ -39,12 +39,11 @@ std::optional<CacheValue> FunctionCache::Get(HashKey key)
 
 static void AssertValidCoreType(uint64_t coreType)
 {
-    FE_ASSERT(FeError::INVALID_TYPE,
-        (coreType == static_cast<uint64_t>(CoreType::AIV)) ||
-        (coreType == static_cast<uint64_t>(CoreType::AIC)) ||
-        (coreType == static_cast<uint64_t>(CoreType::HUB)) ||
-        (coreType == static_cast<uint64_t>(CoreType::HUB_MIX)) ||
-        (coreType == static_cast<uint64_t>(CoreType::AICPU)))
+    FE_ASSERT(FeError::INVALID_TYPE, (coreType == static_cast<uint64_t>(CoreType::AIV)) ||
+                                         (coreType == static_cast<uint64_t>(CoreType::AIC)) ||
+                                         (coreType == static_cast<uint64_t>(CoreType::HUB)) ||
+                                         (coreType == static_cast<uint64_t>(CoreType::HUB_MIX)) ||
+                                         (coreType == static_cast<uint64_t>(CoreType::AICPU)))
         << "Invalid core type: " << coreType;
 }
 
@@ -76,9 +75,8 @@ void FunctionCache::UpdateTopoCache(const Function& func, CacheValue& value)
         tempPtr->depNum = func.topoInfo_.topology_[i].outGraph.size();
         tempPtr->extParamNum = func.topoInfo_.topology_[i].extParamNum;
         tempPtr->extType = func.topoInfo_.topology_[i].extType;
-        MACHINE_LOGD(
-            "[function cache]topo %u, readycount:%ld, depnum:%lu, coreType:%lu, extType:%u", i, tempPtr->readyCount,
-            tempPtr->depNum, tempPtr->coreType, tempPtr->extType);
+        MACHINE_LOGD("[function cache]topo %u, readycount:%ld, depnum:%lu, coreType:%lu, extType:%u", i,
+                     tempPtr->readyCount, tempPtr->depNum, tempPtr->coreType, tempPtr->extType);
         uint32_t j = 0;
         for (auto& ele : func.topoInfo_.topology_[i].outGraph) {
             tempPtr->depIds[j] = ele;

@@ -25,8 +25,8 @@
 
 namespace npu::tile_fwk::dynamic {
 
-constexpr uint64_t MAX_SHMEM_GROUP_NUM = 2;    // max comm groups
-constexpr uint64_t SHMEM_MEM_TYPE_NUM = 2; // shmem type (data + status)
+constexpr uint64_t MAX_SHMEM_GROUP_NUM = 2; // max comm groups
+constexpr uint64_t SHMEM_MEM_TYPE_NUM = 2;  // shmem type (data + status)
 
 using DeviceTaskInspectorEntry = void (*)(void* inspector_, DeviceExecuteContext* execCtx, DynDeviceTask* task);
 
@@ -34,7 +34,8 @@ struct ParallelForContext {
     ParallelInfo info;
     bool isInParallelForScope{false};
 
-    void Begin() {
+    void Begin()
+    {
         if (info.forId == 0) { // first loop is parallel for, forid cannot equal 0
             ++info.forId;
         }
@@ -45,15 +46,12 @@ struct ParallelForContext {
         }
     }
 
-    void End() {
-        isInParallelForScope = false;
-    }
+    void End() { isInParallelForScope = false; }
 
-    void SwitchDefaultWorkspace() {
-        info.wsId = 0;
-    }
+    void SwitchDefaultWorkspace() { info.wsId = 0; }
 
-    void ChangeForId() {
+    void ChangeForId()
+    {
         ++info.forId;
         info.iterId = 0; // begin a new prallel for
     }
@@ -68,7 +66,7 @@ struct DeviceExecuteContext {
     DevStartArgs* args{nullptr};
     uint64_t taskId{0};
     bool isFirstTaskSend{true};
-    ParallelForContext  parallelCtx;
+    ParallelForContext parallelCtx;
 
     DevAscendProgram* devProg{nullptr};
     DeviceExecuteProgram execProg;

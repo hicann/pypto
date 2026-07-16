@@ -34,9 +34,8 @@ void PostCompute(Tensor& input, PostTensors& postTensors, const PostTileConfig& 
     // weightO: [v*kvLoraRank,h], fp16/bf16/int8
     // weightOScale: [1,h], fp32
     // params check
-    assert(
-        input.GetShape().size() == SHAPE_DIM4 && postTensors.weightUV.GetShape().size() == SHAPE_DIM3 &&
-        postTensors.weightO.GetShape().size() == SHAPE_DIM2);
+    assert(input.GetShape().size() == SHAPE_DIM4 && postTensors.weightUV.GetShape().size() == SHAPE_DIM3 &&
+           postTensors.weightO.GetShape().size() == SHAPE_DIM2);
     auto dtype = input.GetStorage()->Datatype();
     auto n = postTensors.weightUV.GetShape()[0];
     auto kvLoraRank = postTensors.weightUV.GetShape()[1];
@@ -76,8 +75,8 @@ void PostCompute(Tensor& input, PostTensors& postTensors, const PostTileConfig& 
             config::SetSemanticLabel("postBmm");
             int c0 = 16;
             int m = (std::min(32, tileBS) + c0 - 1) / c0 * c0;
-            TileShape::Current().SetCubeTile(
-                {m, m}, {std::min(256L, kvLoraRank), std::min(512L, kvLoraRank)}, {vHeadDim, vHeadDim});
+            TileShape::Current().SetCubeTile({m, m}, {std::min(256L, kvLoraRank), std::min(512L, kvLoraRank)},
+                                             {vHeadDim, vHeadDim});
 
             Tensor bmm;
             if (isQuantWUv) {
@@ -99,9 +98,9 @@ void PostCompute(Tensor& input, PostTensors& postTensors, const PostTileConfig& 
                 TileShape::Current().SetVecTile({1, std::min(16, tileBS), std::min(32L, vHeadDim)});
                 Tensor res = Cast(mm, DataType::DT_FP32);
                 res = Mul(res, scaleDequant); // [n, tileBS, VHeadDim] * [n, tileBS, 1] -> [n, tileBS, vHeadDim]
-                res =
-                    Mul(res,
-                        postTensors.weightUvScale); // [n, tileBS, VHeadDim] * [n, 1, VHeadDim] -> [n, tileBS, vHeadDim]
+                res = Mul(
+                    res,
+                    postTensors.weightUvScale); // [n, tileBS, VHeadDim] * [n, 1, VHeadDim] -> [n, tileBS, vHeadDim]
                 bmm = Cast(res, dtype, CAST_RINT);
             } else {
                 // [n,tileBS,kvLoraRank] @ [n,kvLoraRank,vHeadDim] -> [n,tileBS,vHeadDim]
@@ -115,9 +114,8 @@ void PostCompute(Tensor& input, PostTensors& postTensors, const PostTileConfig& 
             auto bmmRes = Reshape(bmmTrans, {tileBS, n * vHeadDim});
 
             Tensor mmRes;
-            TileShape::Current().SetCubeTile(
-                {m, m}, {std::min(512L, n * vHeadDim), std::min(512L, n * vHeadDim)},
-                {std::min(64L, h), std::min(64L, h)});
+            TileShape::Current().SetCubeTile({m, m}, {std::min(512L, n * vHeadDim), std::min(512L, n * vHeadDim)},
+                                             {std::min(64L, h), std::min(64L, h)});
             if (isQuantWo) {
                 config::SetSemanticLabel("postQuantWo");
                 TileShape::Current().SetVecTile({1, n * vHeadDim});
@@ -154,11 +152,10 @@ void PostCompute(Tensor& input, PostTensors& postTensors, const PostTileConfig& 
 
 void AttentionPostStandalone(Tensor& input, PostTensors& postTensors, const PostTileConfig& tileConfig, Tensor& postOut)
 {
-    FUNCTION(
-        "POST_MAIN",
-        {input, postTensors.weightUV, postTensors.weightO, postTensors.weightUvScale, postTensors.smoothScalesWUv,
-         postTensors.weightOScale, postTensors.smoothScalesWo},
-        {postOut})
+    FUNCTION("POST_MAIN",
+             {input, postTensors.weightUV, postTensors.weightO, postTensors.weightUvScale, postTensors.smoothScalesWUv,
+              postTensors.weightOScale, postTensors.smoothScalesWo},
+             {postOut})
     {
         PostCompute(input, postTensors, tileConfig, postOut);
     }

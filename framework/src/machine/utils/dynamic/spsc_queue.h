@@ -69,7 +69,7 @@ public:
         }
     }
 
-    inline bool TempDequeue(T &val)
+    inline bool TempDequeue(T& val)
     {
         auto head = head_.load(std::memory_order_relaxed);
         auto tail = tail_.load(std::memory_order_acquire);
@@ -86,7 +86,8 @@ public:
         while (true) {
             size_t head = head_.load(std::memory_order_acquire);
             size_t tail = tail_.load(std::memory_order_acquire);
-            if (head == tail) break;
+            if (head == tail)
+                break;
 
             size_t i = 0;
             bool popped = false;

@@ -50,9 +50,8 @@ TEST_F(TestCodegenDynUniform, UniformTileTensorFP32)
     uint16_t rounds = 10;
 
     auto& op = function->AddOperation(Opcode::OP_UNIFORM, {}, {localTensor, tempTensor});
-    std::vector<Element> scalars = {
-        Element(DT_UINT64, key), Element(DT_UINT64, counter1), Element(DT_UINT16, rounds),
-        Element(DT_INT32, static_cast<int32_t>(DT_FP32))};
+    std::vector<Element> scalars = {Element(DT_UINT64, key), Element(DT_UINT64, counter1), Element(DT_UINT16, rounds),
+                                    Element(DT_INT32, static_cast<int32_t>(DT_FP32))};
     op.SetAttribute(OpAttributeKey::vectorScalar, scalars);
     SymbolicScalar tileIdx(0);
     op.SetAttribute(OpAttributeKey::dynScalar, tileIdx);
@@ -79,9 +78,8 @@ TEST_F(TestCodegenDynUniform, UniformTileTensorFP16)
     uint16_t rounds = 10;
 
     auto& op = function->AddOperation(Opcode::OP_UNIFORM, {}, {localTensor, tempTensor});
-    std::vector<Element> scalars = {
-        Element(DT_UINT64, key), Element(DT_UINT64, counter1), Element(DT_UINT16, rounds),
-        Element(DT_INT32, static_cast<int32_t>(DT_FP16))};
+    std::vector<Element> scalars = {Element(DT_UINT64, key), Element(DT_UINT64, counter1), Element(DT_UINT16, rounds),
+                                    Element(DT_INT32, static_cast<int32_t>(DT_FP16))};
     op.SetAttribute(OpAttributeKey::vectorScalar, scalars);
     SymbolicScalar tileIdx(0);
     op.SetAttribute(OpAttributeKey::dynScalar, tileIdx);
@@ -108,9 +106,8 @@ TEST_F(TestCodegenDynUniform, UniformTileTensorBF16)
     uint16_t rounds = 10;
 
     auto& op = function->AddOperation(Opcode::OP_UNIFORM, {}, {localTensor, tempTensor});
-    std::vector<Element> scalars = {
-        Element(DT_UINT64, key), Element(DT_UINT64, counter1), Element(DT_UINT16, rounds),
-        Element(DT_INT32, static_cast<int32_t>(DT_BF16))};
+    std::vector<Element> scalars = {Element(DT_UINT64, key), Element(DT_UINT64, counter1), Element(DT_UINT16, rounds),
+                                    Element(DT_INT32, static_cast<int32_t>(DT_BF16))};
     op.SetAttribute(OpAttributeKey::vectorScalar, scalars);
     SymbolicScalar tileIdx(0);
     op.SetAttribute(OpAttributeKey::dynScalar, tileIdx);

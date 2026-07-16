@@ -1,5 +1,5 @@
 /**
-* Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
  * Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@ HcommResult StubGetCommName(HcommHandle comm, char* commName)
     return HCOMM_SUCCESS;
 }
 
-HcommResult StubGetL0TopoTypeEx(const char *group, HCommTopo *topoType, uint32_t flag)
+HcommResult StubGetL0TopoTypeEx(const char* group, HCommTopo* topoType, uint32_t flag)
 {
     ADAPTER_LOGD("Enter stub function of GetL0TopoTypeEx.");
     (void)group;
@@ -34,7 +34,7 @@ HcommResult StubGetL0TopoTypeEx(const char *group, HCommTopo *topoType, uint32_t
     return HCOMM_SUCCESS;
 }
 
-HcommResult StubGetCommHandleByGroup(const char *group, HcommHandle *commHandle)
+HcommResult StubGetCommHandleByGroup(const char* group, HcommHandle* commHandle)
 {
     ADAPTER_LOGD("Enter stub function of GetCommHandleByGroup.");
     (void)group;
@@ -42,14 +42,14 @@ HcommResult StubGetCommHandleByGroup(const char *group, HcommHandle *commHandle)
     return HCOMM_SUCCESS;
 }
 
-HcommResult StubGetRootInfo(HcommRootInfo *rootInfo)
+HcommResult StubGetRootInfo(HcommRootInfo* rootInfo)
 {
     ADAPTER_LOGD("Enter stub function of GetRootInfo.");
     (void)rootInfo;
     return HCOMM_SUCCESS;
 }
 
-HcommResult StubCommInitRootInfo(uint32_t nRanks, const HcommRootInfo *rootInfo, uint32_t rank, HcommHandle *comm)
+HcommResult StubCommInitRootInfo(uint32_t nRanks, const HcommRootInfo* rootInfo, uint32_t rank, HcommHandle* comm)
 {
     ADAPTER_LOGD("Enter stub function of CommInitRootInfo.");
     (void)nRanks;
@@ -66,7 +66,7 @@ HcommResult StubCommDestroy(HcommHandle comm)
     return HCOMM_SUCCESS;
 }
 
-HcommResult StubAllocComResourceByTiling(HcommHandle comm, void *stream, void *Mc2Tiling, void **commContext)
+HcommResult StubAllocComResourceByTiling(HcommHandle comm, void* stream, void* Mc2Tiling, void** commContext)
 {
     ADAPTER_LOGD("Enter stub function of AllocComResourceByTiling.");
     (void)comm;
@@ -75,4 +75,4 @@ HcommResult StubAllocComResourceByTiling(HcommHandle comm, void *stream, void *M
     (void)commContext;
     return HCOMM_SUCCESS;
 }
-}
+} // namespace npu::tile_fwk

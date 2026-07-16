@@ -25,19 +25,19 @@
 #include "interface/operation/distributed/distributed_common.h"
 
 namespace npu::tile_fwk {
-void ExecuteOpBindTensor(ExecuteOperationContext *ctx) {
-    (void) ctx;
-}
+void ExecuteOpBindTensor(ExecuteOperationContext* ctx) { (void)ctx; }
 REGISTER_CALC_OP(OP_BIND_TENSOR, Opcode::OP_BIND_TENSOR, ExecuteOpBindTensor);
 
-void ExecuteOpShmemSet(ExecuteOperationContext *ctx) {
+void ExecuteOpShmemSet(ExecuteOperationContext* ctx)
+{
     ASSERT(ExecuteOperationScene::CTX_INPUT_COUNT_MISMATCH, ctx->ioperandDataViewList->size() == 0x2);
-    ASSERT(ExecuteOperationScene::CTX_OUTPUT_COUNT_MISMATCH, ctx->ooperandInplaceDataViewList->size() == 1 || ctx->ooperandInplaceDataViewList->size() == 0x2);
-    auto &shm = ctx->ioperandDataViewList->at(1);
+    ASSERT(ExecuteOperationScene::CTX_OUTPUT_COUNT_MISMATCH,
+           ctx->ooperandInplaceDataViewList->size() == 1 || ctx->ooperandInplaceDataViewList->size() == 0x2);
+    auto& shm = ctx->ioperandDataViewList->at(1);
 
     Distributed::ShmemSetAttr attr;
     ctx->op->GetAttr(OpAttributeKey::distOpAttr, attr);
-    
+
     std::shared_ptr<SimulationCommContext> context = SimulationCommManager::Instance().GetCommContext(attr.group);
     size_t slotSize = shm->GetSize() * BytesOf(shm->GetDataType());
     if (!attr.isSetData) {
@@ -48,15 +48,17 @@ void ExecuteOpShmemSet(ExecuteOperationContext *ctx) {
 }
 REGISTER_CALC_OP(OP_SHMEM_SET, Opcode::OP_SHMEM_SET, ExecuteOpShmemSet);
 
-void ExecuteOpShmemPut(ExecuteOperationContext *ctx) {
+void ExecuteOpShmemPut(ExecuteOperationContext* ctx)
+{
     ASSERT(ExecuteOperationScene::CTX_INPUT_COUNT_MISMATCH, ctx->ioperandDataViewList->size() == 0x3);
-    ASSERT(ExecuteOperationScene::CTX_OUTPUT_COUNT_MISMATCH, ctx->ooperandInplaceDataViewList->size() == 1 || ctx->ooperandInplaceDataViewList->size() == 0x2);
-    auto &in = ctx->ioperandDataViewList->at(1);
-    auto &shm = ctx->ioperandDataViewList->at(0x2);
+    ASSERT(ExecuteOperationScene::CTX_OUTPUT_COUNT_MISMATCH,
+           ctx->ooperandInplaceDataViewList->size() == 1 || ctx->ooperandInplaceDataViewList->size() == 0x2);
+    auto& in = ctx->ioperandDataViewList->at(1);
+    auto& shm = ctx->ioperandDataViewList->at(0x2);
 
     Distributed::ShmemPutAttr attr;
     ctx->op->GetAttr(OpAttributeKey::distOpAttr, attr);
-    
+
     std::shared_ptr<SimulationCommContext> context = SimulationCommManager::Instance().GetCommContext(attr.group);
     int dstRank = ctx->opInter->EvaluateSymbolicScalar(attr.ownerRank);
     int atomicType = 0;
@@ -68,7 +70,8 @@ void ExecuteOpShmemPut(ExecuteOperationContext *ctx) {
     }
 
     if (shm->GetDataType() != in->GetDataType()) {
-        auto castedIn = LogicalTensorData::CreateEmpty(shm->GetDataType(), shm->GetShape(), shm->GetValidShape(), shm->GetShape());
+        auto castedIn = LogicalTensorData::CreateEmpty(shm->GetDataType(), shm->GetShape(), shm->GetValidShape(),
+                                                       shm->GetShape());
         calc::Cast(castedIn, in);
         context->Put(castedIn, dstRank, shm->GetShmStorageOffset(), atomicType);
     } else {
@@ -77,14 +80,16 @@ void ExecuteOpShmemPut(ExecuteOperationContext *ctx) {
 }
 REGISTER_CALC_OP(OP_SHMEM_PUT, Opcode::OP_SHMEM_PUT, ExecuteOpShmemPut);
 
-void ExecuteOpShmemSignal(ExecuteOperationContext *ctx) {
+void ExecuteOpShmemSignal(ExecuteOperationContext* ctx)
+{
     ASSERT(ExecuteOperationScene::CTX_INPUT_COUNT_MISMATCH, ctx->ioperandDataViewList->size() == 0x2);
-    ASSERT(ExecuteOperationScene::CTX_OUTPUT_COUNT_MISMATCH, ctx->ooperandInplaceDataViewList->size() == 0x2 || ctx->ooperandInplaceDataViewList->size() == 1);
-    auto &shm = ctx->ioperandDataViewList->at(1);
+    ASSERT(ExecuteOperationScene::CTX_OUTPUT_COUNT_MISMATCH,
+           ctx->ooperandInplaceDataViewList->size() == 0x2 || ctx->ooperandInplaceDataViewList->size() == 1);
+    auto& shm = ctx->ioperandDataViewList->at(1);
 
     Distributed::ShmemSignalAttr attr;
     ctx->op->GetAttr(OpAttributeKey::distOpAttr, attr);
-    
+
     std::shared_ptr<SimulationCommContext> context = SimulationCommManager::Instance().GetCommContext(attr.group);
     int dstRank = ctx->opInter->EvaluateSymbolicScalar(attr.ownerRank);
     int atomicType = 0;
@@ -101,33 +106,36 @@ void ExecuteOpShmemSignal(ExecuteOperationContext *ctx) {
 }
 REGISTER_CALC_OP(OP_SHMEM_SIGNAL, Opcode::OP_SHMEM_SIGNAL, ExecuteOpShmemSignal);
 
-void ExecuteOpShmemWaitUntil(ExecuteOperationContext *ctx) {
+void ExecuteOpShmemWaitUntil(ExecuteOperationContext* ctx)
+{
     ASSERT(ExecuteOperationScene::CTX_INPUT_COUNT_MISMATCH, ctx->ioperandDataViewList->size() == 0x2);
     ASSERT(ExecuteOperationScene::CTX_OUTPUT_COUNT_MISMATCH, ctx->ooperandInplaceDataViewList->size() == 1);
-    auto &shm = ctx->ioperandDataViewList->at(1);
+    auto& shm = ctx->ioperandDataViewList->at(1);
 
     Distributed::ShmemWaitUntilAttr attr;
     ctx->op->GetAttr(OpAttributeKey::distOpAttr, attr);
-    
+
     std::shared_ptr<SimulationCommContext> context = SimulationCommManager::Instance().GetCommContext(attr.group);
     int srcRank = context->GetRank();
     int expect = attr.expectedSum;
     bool reset = attr.resetSignal;
-    size_t slotSize =  shm->GetSize() * BytesOf(shm->GetDataType());
+    size_t slotSize = shm->GetSize() * BytesOf(shm->GetDataType());
 
     context->Wait(srcRank, expect, slotSize, shm->GetShmStorageOffset(), reset);
 }
 REGISTER_CALC_OP(OP_SHMEM_WAIT_UNTIL, Opcode::OP_SHMEM_WAIT_UNTIL, ExecuteOpShmemWaitUntil);
 
-void ExecuteOpShmemGet(ExecuteOperationContext *ctx) {
+void ExecuteOpShmemGet(ExecuteOperationContext* ctx)
+{
     ASSERT(ExecuteOperationScene::CTX_INPUT_COUNT_MISMATCH, ctx->ioperandDataViewList->size() == 0x2);
-    ASSERT(ExecuteOperationScene::CTX_OUTPUT_COUNT_MISMATCH, ctx->ooperandInplaceDataViewList->size() == 0x2 || ctx->ooperandInplaceDataViewList->size() == 1);
-    auto &shm = ctx->ioperandDataViewList->at(1);
+    ASSERT(ExecuteOperationScene::CTX_OUTPUT_COUNT_MISMATCH,
+           ctx->ooperandInplaceDataViewList->size() == 0x2 || ctx->ooperandInplaceDataViewList->size() == 1);
+    auto& shm = ctx->ioperandDataViewList->at(1);
     auto out = ctx->ooperandInplaceDataViewList->at(0);
 
     Distributed::ShmemGetAttr attr;
     ctx->op->GetAttr(OpAttributeKey::distOpAttr, attr);
-    
+
     std::shared_ptr<SimulationCommContext> context = SimulationCommManager::Instance().GetCommContext(attr.group);
     int srcRank = ctx->opInter->EvaluateSymbolicScalar(attr.ownerRank);
     LogicalTensorDataPtr tmp = context->Get(srcRank, out->GetDataType(), out->GetShape(), shm->GetShmStorageOffset());
@@ -135,4 +143,4 @@ void ExecuteOpShmemGet(ExecuteOperationContext *ctx) {
 }
 REGISTER_CALC_OP(OP_SHMEM_GET, Opcode::OP_SHMEM_GET, ExecuteOpShmemGet);
 REGISTER_CALC_OP(OP_SHMEM_LOAD, Opcode::OP_SHMEM_LOAD, ExecuteOpShmemGet);
-}
+} // namespace npu::tile_fwk

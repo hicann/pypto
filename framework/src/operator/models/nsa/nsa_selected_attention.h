@@ -29,7 +29,7 @@ namespace npu::tile_fwk {
 struct SATileShapeConfig {
     std::array<int, TILE_VEC_DIMS> kvSlcV0TileShape;
 
-    int gTile;                                   // 由于没有处理尾块，当前仅支持因子切分
+    int gTile; // 由于没有处理尾块，当前仅支持因子切分
     int sKvTile;
     std::array<int, TILE_CUBE_DIMS> c1TileShape; // (m, M), (k, K), (n, N)
     std::array<int, TILE_VEC_DIMS> v1TileShape;
@@ -37,22 +37,21 @@ struct SATileShapeConfig {
     std::array<int, TILE_VEC_DIMS> v2TileShape;
 };
 
-void SelectedAttentionCompute(
-    Tensor& topKIndcies, Tensor& kvNopeCache, Tensor& kRopeCache, Tensor& kvActSeqs, Tensor& blockTable,
-    const Tensor& qNope, const Tensor& qRope, Tensor& attentionOut, int nQ, int nKv, float softmaxScale, int front,
-    int near, int topk, int blockSize, int cmpBlockSize, int slcBlockSize, SATileShapeConfig saTileConfig,
-    bool debug = false);
+void SelectedAttentionCompute(Tensor& topKIndcies, Tensor& kvNopeCache, Tensor& kRopeCache, Tensor& kvActSeqs,
+                              Tensor& blockTable, const Tensor& qNope, const Tensor& qRope, Tensor& attentionOut,
+                              int nQ, int nKv, float softmaxScale, int front, int near, int topk, int blockSize,
+                              int cmpBlockSize, int slcBlockSize, SATileShapeConfig saTileConfig, bool debug = false);
 
-void SelectedAttentionFlashCompute(
-    Tensor& topKIndcies, Tensor& kvNopeCache, Tensor& kRopeCache, Tensor& kvActSeqs, Tensor& blockTable,
-    const Tensor& qNope, const Tensor& qRope, Tensor& attentionOut, int nQ, int nKv, float softmaxScale, int front,
-    int near, int topk, int blockSize, int cmpBlockSize, int slcBlockSize, SATileShapeConfig saTileConfig,
-    bool debug = false);
+void SelectedAttentionFlashCompute(Tensor& topKIndcies, Tensor& kvNopeCache, Tensor& kRopeCache, Tensor& kvActSeqs,
+                                   Tensor& blockTable, const Tensor& qNope, const Tensor& qRope, Tensor& attentionOut,
+                                   int nQ, int nKv, float softmaxScale, int front, int near, int topk, int blockSize,
+                                   int cmpBlockSize, int slcBlockSize, SATileShapeConfig saTileConfig,
+                                   bool debug = false);
 
-void SelectedAttention(
-    Tensor& topKIndcies, Tensor& kvNopeCache, Tensor& kRopeCache, Tensor& kvActSeqs, Tensor& blockTable,
-    const Tensor& qNope, const Tensor& qRope, Tensor& attentionOut, int nQ, int nKv, float softmaxScale, int front,
-    int near, int topk, int blockSize, int cmpBlockSize, int slcBlockSize, SATileShapeConfig saTileConfig);
+void SelectedAttention(Tensor& topKIndcies, Tensor& kvNopeCache, Tensor& kRopeCache, Tensor& kvActSeqs,
+                       Tensor& blockTable, const Tensor& qNope, const Tensor& qRope, Tensor& attentionOut, int nQ,
+                       int nKv, float softmaxScale, int front, int near, int topk, int blockSize, int cmpBlockSize,
+                       int slcBlockSize, SATileShapeConfig saTileConfig);
 
 } // namespace npu::tile_fwk
 

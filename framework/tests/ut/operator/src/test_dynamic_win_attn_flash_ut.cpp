@@ -90,9 +90,8 @@ void TestWinAttenFlashUt(WinAttenTileShapeConfig& tileConfig)
     Tensor blockTable(DT_INT32, blockTableShape, "blockTable");
     Tensor attentionOut(DT_FP32, attentionOutShape, "attentionOut");
 
-    WinAttentionFlash(
-        qNope, vNopeCache, qRope, kRopeCache, nQ, nKV, blockTable, actSeqs, windowSize, blockSize, softmaxScale,
-        attentionOut, tileConfig);
+    WinAttentionFlash(qNope, vNopeCache, qRope, kRopeCache, nQ, nKV, blockTable, actSeqs, windowSize, blockSize,
+                      softmaxScale, attentionOut, tileConfig);
 }
 
 TEST_F(DynamicTestWinAttenFlashUt, TestOnboardWinAttnTest_FP16_Test1)

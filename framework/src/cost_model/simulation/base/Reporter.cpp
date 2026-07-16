@@ -140,8 +140,8 @@ void Reporter::ReportMapAndPct(const std::string& name, std::map<int, uint64_t>&
     }
 }
 
-void Reporter::ReportMapsAndPct(
-    const std::string& name, std::map<int, uint64_t>& vals, std::map<int, uint64_t>& baseVals)
+void Reporter::ReportMapsAndPct(const std::string& name, std::map<int, uint64_t>& vals,
+                                std::map<int, uint64_t>& baseVals)
 {
     cout << left << setw(NAME_WIDTH - 1) << setfill('.') << name << ':' << endl;
 

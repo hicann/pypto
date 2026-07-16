@@ -50,8 +50,8 @@ TILEOP void TscatterElementS(T0 dst, T1 src1, Scalar src2)
             for (LoopVar k = 0; k < n2IdxShape; ++k) {
                 for (LoopVar l = 0; l < n3IdxShape; ++l) {
                     for (LoopVar m = 0; m < n4IdxShape; ++m) {
-                        typename T1::Type index =
-                            *(idxAddr + i * n0IdxStride + j * n1IdxStride + k * n2IdxStride + l * n3IdxStride + m);
+                        typename T1::Type index = *(idxAddr + i * n0IdxStride + j * n1IdxStride + k * n2IdxStride +
+                                                    l * n3IdxStride + m);
                         typename T1::Type dstOffset = 0;
                         if constexpr (axis == 0) {
                             dstOffset = index * n0DstStride + j * n1DstStride + k * n2DstStride + l * n3DstStride + m;
@@ -131,15 +131,15 @@ TILEOP void Tscatter(T0 dst, T1 src1, T2 src2, T3 tmp)
     /* A2 A3不支持vscatter指令，调用pto封装接口会导致性能劣化，因此pypto自行用scalar计算实现，A5正常调用pto接口 */
     constexpr bool scalarFlag = true;
 #else
-    constexpr bool scalarFlag =
-        ((sizeof(typename T1::Type) == 8) || (scatterMode > 0) ||
-         (dstTypeSize == 2 && idxTypeSize == 4) ||
-         (dstTypeSize == 1 && idxTypeSize == 4) ||
-         (dstTypeSize == 4 && idxTypeSize == 4)) ? true : false;
+    constexpr bool scalarFlag = ((sizeof(typename T1::Type) == 8) || (scatterMode > 0) ||
+                                 (dstTypeSize == 2 && idxTypeSize == 4) || (dstTypeSize == 1 && idxTypeSize == 4) ||
+                                 (dstTypeSize == 4 && idxTypeSize == 4)) ?
+                                    true :
+                                    false;
 #endif
     constexpr auto dstTileShapeH = TileOp::GetOutterAxisMergeResult<shapeSize, typename T0::TileShape>();
-    using dstTileDefine =
-        pto::Tile<pto::TileType::Vec, typename T0::Type, dstTileShapeH, dstTileW, pto::BLayout::RowMajor>;
+    using dstTileDefine = pto::Tile<pto::TileType::Vec, typename T0::Type, dstTileShapeH, dstTileW,
+                                    pto::BLayout::RowMajor>;
     using idxTileDefine = pto::Tile<pto::TileType::Vec, typename T1::Type, 1, idxTileW, pto::BLayout::RowMajor, -1, -1>;
     using srcTileDefine = pto::Tile<pto::TileType::Vec, typename T2::Type, 1, srcTileW, pto::BLayout::RowMajor>;
     dstTileDefine dstTile;
@@ -164,10 +164,10 @@ TILEOP void Tscatter(T0 dst, T1 src1, T2 src2, T3 tmp)
                         wait_flag(PIPE_V, PIPE_S, EVENT_ID7);
                     }
                     for (LoopVar m = 0; m < idxShape4; ++m) {
-                        typename T1::Type index =
-                            *(idxAddr + i * idxStride0 + j * idxStride1 + k * idxStride2 + l * idxStride3 + m);
-                        typename T1::Type src2Offset =
-                            i * srcStride0 + j * srcStride1 + k * srcStride2 + l * srcStride3 + m;
+                        typename T1::Type index = *(idxAddr + i * idxStride0 + j * idxStride1 + k * idxStride2 +
+                                                    l * idxStride3 + m);
+                        typename T1::Type src2Offset = i * srcStride0 + j * srcStride1 + k * srcStride2 +
+                                                       l * srcStride3 + m;
                         if constexpr (axis == 0) {
                             dstOffset = index * dstStride0 + j * dstStride1 + k * dstStride2 + l * dstStride3 + m;
                         } else if constexpr (axis == 1) {

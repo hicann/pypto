@@ -198,10 +198,7 @@ public:
     /**
      * \brief Retrieves the ConvTile configuration.
      */
-    ConvTile GetConvTile() const
-    {
-        return pypto::AnyCast<ConvTile>(GetAnyConfig("conv_tile_shapes"));
-    }
+    ConvTile GetConvTile() const { return pypto::AnyCast<ConvTile>(GetAnyConfig("conv_tile_shapes")); }
 
     /**
      * \brief Retrieves the VecTile configuration as a VecTile structure.
@@ -317,9 +314,8 @@ public:
      *
      * \param values
      */
-    void BeginScope(
-        const std::string& name, std::map<std::string, std::any>&& values, const char* file = __builtin_FILE(),
-        int line = __builtin_LINE());
+    void BeginScope(const std::string& name, std::map<std::string, std::any>&& values,
+                    const char* file = __builtin_FILE(), int line = __builtin_LINE());
 
     /**
      * \brief End the current scope.
@@ -333,9 +329,8 @@ public:
      */
     class JitScopeGuard {
     public:
-        JitScopeGuard(
-            const std::string& name, std::map<std::string, std::any>&& values = {}, const char* file = __builtin_FILE(),
-            int line = __builtin_LINE());
+        JitScopeGuard(const std::string& name, std::map<std::string, std::any>&& values = {},
+                      const char* file = __builtin_FILE(), int line = __builtin_LINE());
         ~JitScopeGuard();
         JitScopeGuard(const JitScopeGuard&) = delete;
         JitScopeGuard& operator=(const JitScopeGuard&) = delete;
@@ -370,8 +365,8 @@ public:
      *
      * @param values
      */
-    void SetScope(
-        std::map<std::string, std::any>&& values, const char* file = __builtin_FILE(), int line = __builtin_LINE());
+    void SetScope(std::map<std::string, std::any>&& values, const char* file = __builtin_FILE(),
+                  int line = __builtin_LINE());
 
     /**
      * @brief Get the Current Scope object

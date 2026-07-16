@@ -36,8 +36,8 @@ public:
         config::Reset();
         config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
         config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
-        dynFunc = std::make_shared<Function>(
-            Program::GetInstance(), "DYN_0", "DYN", Program::GetInstance().GetCurrentFunction());
+        dynFunc = std::make_shared<Function>(Program::GetInstance(), "DYN_0", "DYN",
+                                             Program::GetInstance().GetCurrentFunction());
         Program::GetInstance().SetCurrentDynamicFunction(dynFunc.get());
     }
     void TearDown() override { Program::GetInstance().SetCurrentDynamicFunction(nullptr); }

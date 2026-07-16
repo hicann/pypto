@@ -57,8 +57,8 @@ public:
                 output = TransData(inputSrc, TileOpFormat(tc.tileOpFormat), tc.outputShape, tc.validShape, 1);
             }
         }
-        auto function = Program::GetInstance().GetFunctionByRawName(
-            FUNCTION_PREFIX + tc.caseName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+        auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + tc.caseName + SUB_FUNC_SUFFIX +
+                                                                    HIDDEN_FUNC_SUFFIX);
         std::string res = GenCodeByFunction(*function);
         CheckStringExist(tc.expect, res);
     }

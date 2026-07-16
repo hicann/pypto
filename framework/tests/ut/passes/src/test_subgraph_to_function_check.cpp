@@ -38,10 +38,9 @@ using namespace std;
 
 static const std::vector<int64_t> kShape88 = {8, 8};
 
-static void RunPreCheckTest(
-    const std::string& funcName, Opcode opcode, const std::vector<std::string>& iops,
-    const std::vector<std::string>& oops, const std::string& opName, int opSubGraphId, int totalSubGraphCount,
-    Status expectedStatus)
+static void RunPreCheckTest(const std::string& funcName, Opcode opcode, const std::vector<std::string>& iops,
+                            const std::vector<std::string>& oops, const std::string& opName, int opSubGraphId,
+                            int totalSubGraphCount, Status expectedStatus)
 {
     config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
     auto f = std::make_shared<Function>(Program::GetInstance(), funcName, funcName, nullptr);
@@ -58,9 +57,9 @@ static void RunPreCheckTest(
     EXPECT_EQ(checker.DoPreCheck(*G.GetFunction()), expectedStatus);
 }
 
-static void RunColorOutGraphCheckTest(
-    const std::string& funcName, const std::vector<std::vector<int>>& colorInGraph,
-    const std::vector<std::vector<int>>& colorOutGraph, Status expectedPostCheckStatus, bool threeOpFork = false)
+static void RunColorOutGraphCheckTest(const std::string& funcName, const std::vector<std::vector<int>>& colorInGraph,
+                                      const std::vector<std::vector<int>>& colorOutGraph,
+                                      Status expectedPostCheckStatus, bool threeOpFork = false)
 {
     config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
     auto f = std::make_shared<Function>(Program::GetInstance(), funcName, funcName, nullptr);
@@ -173,8 +172,8 @@ TEST_F(SubgraphToFunctionCheckTest, CheckSubGraphTopo_SubGraphIdOutOfRange_Fail)
     RunPreCheckTest("OutOfRangeTest", Opcode::OP_ADD, {"a"}, {"b"}, "add_op", 1, 1, FAILED);
 }
 
-static void RunPreCheck2OpTest(
-    const std::string& funcName, int add1SgId, int add2SgId, int totalSubGraphCount, Status expectedStatus)
+static void RunPreCheck2OpTest(const std::string& funcName, int add1SgId, int add2SgId, int totalSubGraphCount,
+                               Status expectedStatus)
 {
     config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
     auto f = std::make_shared<Function>(Program::GetInstance(), funcName, funcName, nullptr);
@@ -246,7 +245,8 @@ TEST_F(SubgraphToFunctionCheckTest, NOPCheckHasOOperands)
     TileShape::Current().SetVecTile(kTileSize, kTileSize);
     std::vector<int64_t> shape = {kVectorSize, kVectorSize};
     auto func = std::make_shared<Function>(Program::GetInstance(), "NopOutputTest", "NopOutputTest", nullptr);
-    LogicalTensorPtr outTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    LogicalTensorPtr outTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape,
+                                                                            CreateTestConstIntVector(shape));
     Operation& nopOp = PassOperationUtils::AddOperation(*func, Opcode::OP_NOP, {}, {outTensor});
     SubGraphToFuncChecker checker;
     Status ret = checker.NOPCheck(nopOp);

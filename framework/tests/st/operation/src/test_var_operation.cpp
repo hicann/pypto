@@ -18,9 +18,8 @@
 using namespace tile_fwk::test_operation;
 namespace {
 struct VarOpFuncArgs : public OpFuncArgs {
-    VarOpFuncArgs(
-        const std::vector<int64_t>& viewShape, const std::vector<int64_t>& tileShape, const std::vector<int>& dim,
-        float correction, bool keepDim)
+    VarOpFuncArgs(const std::vector<int64_t>& viewShape, const std::vector<int64_t>& tileShape,
+                  const std::vector<int>& dim, float correction, bool keepDim)
         : viewShape_(viewShape), tileShape_(tileShape), dim_(dim), correction_(correction), keepDim_(keepDim)
     {
         dimReduceFlag_.resize(viewShape_.size(), false);
@@ -50,8 +49,8 @@ struct VarOpMetaData {
     nlohmann::json test_data_;
 };
 
-static void VarSetTileShapeBeforeAssemble(
-    const std::vector<int64_t>& oriTileShape, const std::vector<int>& oriDim, bool keepDim, DataType dtype)
+static void VarSetTileShapeBeforeAssemble(const std::vector<int64_t>& oriTileShape, const std::vector<int>& oriDim,
+                                          bool keepDim, DataType dtype)
 {
     if (keepDim) {
         return;
@@ -78,8 +77,8 @@ static void VarSetTileShapeBeforeAssemble(
     TileShape::Current().SetVecTile(vecTile);
 }
 
-static void VarOperationExeFunc2Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void VarOperationExeFunc2Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                     const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0]})
     {
@@ -96,11 +95,10 @@ static void VarOperationExeFunc2Dims(
         {
             LOOP("LOOP_L1_sIdx", FunctionType::DYNAMIC_LOOP, sIdx, LoopRange(0, sloop, 1))
             {
-                auto tileTensor = View(
-                    inputs[0], {firstViewShape, secondViewShape},
-                    {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                     std::min(secondDim - sIdx * secondViewShape, secondViewShape)},
-                    {bIdx * firstViewShape, sIdx * secondViewShape});
+                auto tileTensor = View(inputs[0], {firstViewShape, secondViewShape},
+                                       {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                        std::min(secondDim - sIdx * secondViewShape, secondViewShape)},
+                                       {bIdx * firstViewShape, sIdx * secondViewShape});
                 TileShape::Current().SetVecTile(args->tileShape_);
                 auto res = Var(tileTensor, args->dim_, args->correction_, args->keepDim_);
                 VarSetTileShapeBeforeAssemble(args->tileShape_, args->dim_, args->keepDim_, inputs[0].GetDataType());
@@ -113,8 +111,8 @@ static void VarOperationExeFunc2Dims(
     }
 }
 
-static void VarOperationExeFunc3Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void VarOperationExeFunc3Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                     const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0]})
     {
@@ -136,20 +134,19 @@ static void VarOperationExeFunc3Dims(
             {
                 LOOP("LOOP_L3_nIdx", FunctionType::DYNAMIC_LOOP, nIdx, LoopRange(0, nloop, 1))
                 {
-                    auto tileTensor = View(
-                        inputs[0], {firstViewShape, secondViewShape, thirdViewShape},
-                        {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                         std::min(secondDim - sIdx * secondViewShape, secondViewShape),
-                         std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape)},
-                        {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape});
+                    auto tileTensor = View(inputs[0], {firstViewShape, secondViewShape, thirdViewShape},
+                                           {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                            std::min(secondDim - sIdx * secondViewShape, secondViewShape),
+                                            std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape)},
+                                           {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape});
                     TileShape::Current().SetVecTile(args->tileShape_);
                     auto res = Var(tileTensor, args->dim_, args->correction_, args->keepDim_);
-                    VarSetTileShapeBeforeAssemble(
-                        args->tileShape_, args->dim_, args->keepDim_, inputs[0].GetDataType());
+                    VarSetTileShapeBeforeAssemble(args->tileShape_, args->dim_, args->keepDim_,
+                                                  inputs[0].GetDataType());
                     IF(args->keepDim_)
                     {
-                        Assemble(
-                            res, {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape}, outputs[0]);
+                        Assemble(res, {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape},
+                                 outputs[0]);
                     }
                     ELSE IF(dimFlag[0] && dimFlag[1] && dimFlag[2]) { Assemble(res, {0}, outputs[0]); }
                     ELSE IF(dimFlag[0] && dimFlag[1]) { Assemble(res, {nIdx * thirdViewShape}, outputs[0]); }
@@ -164,8 +161,8 @@ static void VarOperationExeFunc3Dims(
     }
 }
 
-static void VarOperationExeFunc4Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void VarOperationExeFunc4Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                     const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0]})
     {
@@ -192,25 +189,24 @@ static void VarOperationExeFunc4Dims(
                 {
                     LOOP("LOOP_L3_nIdx", FunctionType::DYNAMIC_LOOP, nIdx, LoopRange(0, nloop, 1))
                     {
-                        Tensor tileTensor = View(
-                            inputs[0], {firstViewShape, secondViewShape, thirdViewShape, fourthViewShape},
-                            {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                             std::min(secondDim - sIdx * secondViewShape, secondViewShape),
-                             std::min(thirdDim - mIdx * thirdViewShape, thirdViewShape),
-                             std::min(fourthDim - nIdx * fourthViewShape, fourthViewShape)},
-                            {bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape,
-                             nIdx * fourthViewShape});
+                        Tensor tileTensor = View(inputs[0],
+                                                 {firstViewShape, secondViewShape, thirdViewShape, fourthViewShape},
+                                                 {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                                  std::min(secondDim - sIdx * secondViewShape, secondViewShape),
+                                                  std::min(thirdDim - mIdx * thirdViewShape, thirdViewShape),
+                                                  std::min(fourthDim - nIdx * fourthViewShape, fourthViewShape)},
+                                                 {bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape,
+                                                  nIdx * fourthViewShape});
                         TileShape::Current().SetVecTile(args->tileShape_);
                         auto res = Var(tileTensor, args->dim_, args->correction_, args->keepDim_);
-                        VarSetTileShapeBeforeAssemble(
-                            args->tileShape_, args->dim_, args->keepDim_, inputs[0].GetDataType());
+                        VarSetTileShapeBeforeAssemble(args->tileShape_, args->dim_, args->keepDim_,
+                                                      inputs[0].GetDataType());
                         IF(args->keepDim_)
                         {
-                            Assemble(
-                                res,
-                                {bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape,
-                                 nIdx * fourthViewShape},
-                                outputs[0]);
+                            Assemble(res,
+                                     {bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape,
+                                      nIdx * fourthViewShape},
+                                     outputs[0]);
                         }
                         ELSE IF(dimFlag[0] && dimFlag[1] && dimFlag[2] && dimFlag[3])
                         {
@@ -254,27 +250,23 @@ static void VarOperationExeFunc4Dims(
                         }
                         ELSE IF(dimFlag[0])
                         {
-                            Assemble(
-                                res, {sIdx * secondViewShape, mIdx * thirdViewShape, nIdx * fourthViewShape},
-                                outputs[0]);
+                            Assemble(res, {sIdx * secondViewShape, mIdx * thirdViewShape, nIdx * fourthViewShape},
+                                     outputs[0]);
                         }
                         ELSE IF(dimFlag[1])
                         {
-                            Assemble(
-                                res, {bIdx * firstViewShape, mIdx * thirdViewShape, nIdx * fourthViewShape},
-                                outputs[0]);
+                            Assemble(res, {bIdx * firstViewShape, mIdx * thirdViewShape, nIdx * fourthViewShape},
+                                     outputs[0]);
                         }
                         ELSE IF(dimFlag[2])
                         {
-                            Assemble(
-                                res, {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * fourthViewShape},
-                                outputs[0]);
+                            Assemble(res, {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * fourthViewShape},
+                                     outputs[0]);
                         }
                         ELSE
                         {
-                            Assemble(
-                                res, {bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape},
-                                outputs[0]);
+                            Assemble(res, {bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape},
+                                     outputs[0]);
                         }
                     }
                 }
@@ -285,10 +277,9 @@ static void VarOperationExeFunc4Dims(
 
 class VarOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac_param<VarOpMetaData> {};
 
-INSTANTIATE_TEST_SUITE_P(
-    TestVar, VarOperationTest,
-    ::testing::ValuesIn(GetOpMetaData<VarOpMetaData>(
-        {VarOperationExeFunc2Dims, VarOperationExeFunc3Dims, VarOperationExeFunc4Dims}, "Var")));
+INSTANTIATE_TEST_SUITE_P(TestVar, VarOperationTest,
+                         ::testing::ValuesIn(GetOpMetaData<VarOpMetaData>(
+                             {VarOperationExeFunc2Dims, VarOperationExeFunc3Dims, VarOperationExeFunc4Dims}, "Var")));
 
 TEST_P(VarOperationTest, TestVar)
 {

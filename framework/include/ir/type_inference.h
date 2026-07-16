@@ -148,23 +148,22 @@ std::vector<ExprPtr> ExtractShape(const TypePtr& type);
  * \param expected_args Expected argument count
  * \return The first argument as TileType and the second argument as ScalarType
  */
-TileScalarTypes RequireTileScalarArgs(
-    const std::vector<ExprPtr>& args, const std::string& op_name, size_t expected_args = 2);
+TileScalarTypes RequireTileScalarArgs(const std::vector<ExprPtr>& args, const std::string& op_name,
+                                      size_t expected_args = 2);
 
 /**
  * \brief Return the TileType of the last argument for block explicit-output operators
  */
-TypePtr DeduceBlockOutTileType(
-    const std::vector<ExprPtr>& args, const std::vector<std::pair<std::string, std::any>>& kwargs,
-    const std::string& op_name, size_t expected_args);
+TypePtr DeduceBlockOutTileType(const std::vector<ExprPtr>& args,
+                               const std::vector<std::pair<std::string, std::any>>& kwargs, const std::string& op_name,
+                               size_t expected_args);
 
 /**
  * \brief Read an operator keyword argument, optionally falling back to a default value
  */
 template <typename T>
-T GetOpKwarg(
-    const std::vector<std::pair<std::string, std::any>>& kwargs, const std::string& key,
-    const std::optional<T>& default_value = std::nullopt)
+T GetOpKwarg(const std::vector<std::pair<std::string, std::any>>& kwargs, const std::string& key,
+             const std::optional<T>& default_value = std::nullopt)
 {
     for (const auto& kwarg : kwargs) {
         if (kwarg.first == key) {

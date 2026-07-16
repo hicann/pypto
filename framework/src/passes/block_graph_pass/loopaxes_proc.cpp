@@ -36,24 +36,23 @@ constexpr size_t MIN_SHAPE_DIM = 2;
 void SetOpLoopEnd(Operation* op)
 {
     op->SetAttribute(OpAttributeKey::loopGroupEnd, true);
-    APASS_LOG_INFO_F(
-        Elements::Operation, "Op Code %s, Op[%d] set loopGroup --End--", op->GetOpcodeStr().c_str(), op->GetOpMagic());
+    APASS_LOG_INFO_F(Elements::Operation, "Op Code %s, Op[%d] set loopGroup --End--", op->GetOpcodeStr().c_str(),
+                     op->GetOpMagic());
 }
 
 void SetOpDynLoopEnd(Operation* op)
 {
     op->SetAttribute(OpAttributeKey::dynloopGroupEnd, true);
-    APASS_LOG_INFO_F(
-        Elements::Operation, "Op Code %s, Op[%d] set dynloopGroup --End--", op->GetOpcodeStr().c_str(),
-        op->GetOpMagic());
+    APASS_LOG_INFO_F(Elements::Operation, "Op Code %s, Op[%d] set dynloopGroup --End--", op->GetOpcodeStr().c_str(),
+                     op->GetOpMagic());
 }
 
 bool NeedClearStatus(const Operation& op)
 {
     auto opCode = op.GetOpcode();
     if (SUPPORT_VF_FUSE_OPS.find(opCode) == SUPPORT_VF_FUSE_OPS.end()) {
-        APASS_LOG_DEBUG_F(
-            Elements::Operation, "%d %s doesn't support VF fuse", op.GetOpMagic(), op.GetOpcodeStr().c_str());
+        APASS_LOG_DEBUG_F(Elements::Operation, "%d %s doesn't support VF fuse", op.GetOpMagic(),
+                          op.GetOpcodeStr().c_str());
         return true;
     }
     return false;
@@ -97,11 +96,11 @@ Status LoopaxesProc::RunOnFunction(Function& function)
         return SUCCESS;
     }
 
-    APASS_LOG_INFO_F(
-        Elements::Operation, "===============================================================> Start LoopaxesProc.");
+    APASS_LOG_INFO_F(Elements::Operation,
+                     "===============================================================> Start LoopaxesProc.");
     UpdateFuncLoopAxes(function);
-    APASS_LOG_INFO_F(
-        Elements::Operation, "===============================================================> Finish LoopaxesProc.");
+    APASS_LOG_INFO_F(Elements::Operation,
+                     "===============================================================> Finish LoopaxesProc.");
     return SUCCESS;
 }
 
@@ -127,8 +126,8 @@ void LoopaxesProc::ClearStatus()
 Status LoopaxesProc::UpdateOpLoopAxes(Operation& op, Function& subFunc)
 {
     if (SKIP_OPCODE_FOR_CODEGEN.find(op.GetOpcode()) != SKIP_OPCODE_FOR_CODEGEN.end()) {
-        APASS_LOG_DEBUG_F(
-            Elements::Operation, "Op Code %s, Op[%d] ignore this op", op.GetOpcodeStr().c_str(), op.GetOpMagic());
+        APASS_LOG_DEBUG_F(Elements::Operation, "Op Code %s, Op[%d] ignore this op", op.GetOpcodeStr().c_str(),
+                          op.GetOpMagic());
         return SUCCESS;
     }
 
@@ -141,9 +140,8 @@ Status LoopaxesProc::UpdateOpLoopAxes(Operation& op, Function& subFunc)
     auto shape = output->GetShape();
     auto dynShape = output->GetDynValidShape();
     if (shape.size() != dynShape.size()) {
-        APASS_LOG_ERROR_F(
-            Elements::Operation, "Op Code %s, Op[%d] output dynShape size != shape size.", op.GetOpcodeStr().c_str(),
-            op.GetOpMagic());
+        APASS_LOG_ERROR_F(Elements::Operation, "Op Code %s, Op[%d] output dynShape size != shape size.",
+                          op.GetOpcodeStr().c_str(), op.GetOpMagic());
         return FAILED;
     }
 
@@ -160,16 +158,16 @@ Status LoopaxesProc::UpdateOpLoopAxes(Operation& op, Function& subFunc)
     ProcessDynLoopGroup(op, dynloopAxes, subFunc);
     ProcessStaticLoopGroup(op, loopAxes);
 
-    APASS_LOG_INFO_F(
-        Elements::Operation, "Op Code %s, Op[%d] groupIdx=%ld, loopAxes=%s, dynGroupIdx=%ld, dynLoopAxes=%s",
-        op.GetOpcodeStr().c_str(), op.GetOpMagic(), groupIdx, IntVecToStr(loopAxes).c_str(), dynGroupIdx,
-        IntVecToStr(dynloopAxes).c_str());
+    APASS_LOG_INFO_F(Elements::Operation,
+                     "Op Code %s, Op[%d] groupIdx=%ld, loopAxes=%s, dynGroupIdx=%ld, dynLoopAxes=%s",
+                     op.GetOpcodeStr().c_str(), op.GetOpMagic(), groupIdx, IntVecToStr(loopAxes).c_str(), dynGroupIdx,
+                     IntVecToStr(dynloopAxes).c_str());
 
     return SUCCESS;
 }
 
-void LoopaxesProc::ProcessDynLoopGroup(
-    Operation& op, const std::vector<SymbolicScalar>& dynloopAxes, const Function& subFunc)
+void LoopaxesProc::ProcessDynLoopGroup(Operation& op, const std::vector<SymbolicScalar>& dynloopAxes,
+                                       const Function& subFunc)
 {
     if (!SameDynLoopAxes(dynloopAxes, subFunc)) {
         CheckAddrOverLap(false, sameDynLoopOpGroup, addrDynConflictIdx, addrDynRecordMap);
@@ -179,9 +177,8 @@ void LoopaxesProc::ProcessDynLoopGroup(
         if (dynLastOpInLoop != nullptr) {
             SetOpDynLoopEnd(dynLastOpInLoop);
         }
-        APASS_LOG_INFO_F(
-            Elements::Operation, "Op Code %s, Op[%d] set dynloopGroup ++Start++", op.GetOpcodeStr().c_str(),
-            op.GetOpMagic());
+        APASS_LOG_INFO_F(Elements::Operation, "Op Code %s, Op[%d] set dynloopGroup ++Start++",
+                         op.GetOpcodeStr().c_str(), op.GetOpMagic());
         sameDynLoopOpGroup.clear();
         addrDynConflictIdx.clear();
         addrDynRecordMap.clear();
@@ -233,8 +230,8 @@ int CalculateMaxSegment(const std::vector<int>& sortedCuts, int groupSize)
     return std::max(maxSeg, groupSize - prev);
 }
 
-void UpdateBestSolution(
-    const std::vector<int>& cuts, int groupSize, std::vector<int>& bestCuts, int& bestCutCount, int& bestMaxSeg)
+void UpdateBestSolution(const std::vector<int>& cuts, int groupSize, std::vector<int>& bestCuts, int& bestCutCount,
+                        int& bestMaxSeg)
 {
     int curCutCount = static_cast<int>(cuts.size());
     std::vector<int> sortedCuts = cuts;
@@ -280,7 +277,7 @@ std::vector<int> FindCuts(const std::set<std::pair<int, int>>& conflicts, int& g
 }
 
 void LoopaxesProc::IsOverLap(std::vector<size_t>& addrRange, bool& isAdd, int& conflictIdx,
-                             std::map<int, std::vector<std::vector<size_t>>> &addrRecordMap,
+                             std::map<int, std::vector<std::vector<size_t>>>& addrRecordMap,
                              std::set<std::pair<int, int>>& addrConflictIdx, int& idx)
 {
     for (auto& entry : addrRecordMap) {
@@ -299,7 +296,7 @@ void LoopaxesProc::IsOverLap(std::vector<size_t>& addrRange, bool& isAdd, int& c
 }
 
 void LoopaxesProc::RecordAddrOverLap(Operation* op, int& idx, std::set<std::pair<int, int>>& addrConflictIdx,
-                                     std::map<int, std::vector<std::vector<size_t>>> &addrRecordMap)
+                                     std::map<int, std::vector<std::vector<size_t>>>& addrRecordMap)
 {
     std::vector<size_t> inAddrRange;
     std::vector<size_t> outAddrRange;
@@ -323,12 +320,12 @@ void LoopaxesProc::RecordAddrOverLap(Operation* op, int& idx, std::set<std::pair
 
 void LoopaxesProc::CheckAddrOverLap(bool isStaticLoop, std::vector<Operation*>& sameLoopOpGroup,
                                     std::set<std::pair<int, int>>& addrConflictIdx,
-                                    std::map<int, std::vector<std::vector<size_t>>> &addrRecordMap)
+                                    std::map<int, std::vector<std::vector<size_t>>>& addrRecordMap)
 {
     if (sameLoopOpGroup.size() != 1) {
         for (int idx = 0; idx < static_cast<int>(sameLoopOpGroup.size()); idx++) {
             APASS_LOG_INFO_F(Elements::Operation, "RecordAddrOverLap %s[%d].",
-                sameLoopOpGroup[idx]->GetOpcodeStr().c_str(), sameLoopOpGroup[idx]->GetOpMagic());
+                             sameLoopOpGroup[idx]->GetOpcodeStr().c_str(), sameLoopOpGroup[idx]->GetOpMagic());
             RecordAddrOverLap(sameLoopOpGroup[idx], idx, addrConflictIdx, addrRecordMap);
         }
     }
@@ -348,7 +345,8 @@ void LoopaxesProc::CheckAddrOverLap(bool isStaticLoop, std::vector<Operation*>& 
     }
 }
 
-void LoopaxesProc::ProcessCutStaticGroup(std::vector<int>& cutResult, std::vector<Operation*>& sameLoopOpGroup) {
+void LoopaxesProc::ProcessCutStaticGroup(std::vector<int>& cutResult, std::vector<Operation*>& sameLoopOpGroup)
+{
     for (size_t i = 0; i < cutResult.size(); i++) {
         lastGroupIdx = groupIdx++;
         lastOpInLoop1 = sameLoopOpGroup[cutResult[i]];
@@ -357,8 +355,8 @@ void LoopaxesProc::ProcessCutStaticGroup(std::vector<int>& cutResult, std::vecto
         }
         sameLoopOpGroup[cutResult[i] + 1]->SetAttribute(OpAttributeKey::loopGroupStart, true);
         APASS_LOG_INFO_F(Elements::Operation, "Op Code %s, Op[%d] set loopGroup ++Start++",
-            sameLoopOpGroup[cutResult[i] + 1]->GetOpcodeStr().c_str(),
-            sameLoopOpGroup[cutResult[i] + 1]->GetOpMagic());
+                         sameLoopOpGroup[cutResult[i] + 1]->GetOpcodeStr().c_str(),
+                         sameLoopOpGroup[cutResult[i] + 1]->GetOpMagic());
         if (i != cutResult.size() - 1) {
             for (int opIdx = cutResult[i] + 1; opIdx <= cutResult[i + 1]; opIdx++) {
                 sameLoopOpGroup[opIdx]->SetAttribute(OpAttributeKey::loopGroup, groupIdx);
@@ -371,7 +369,8 @@ void LoopaxesProc::ProcessCutStaticGroup(std::vector<int>& cutResult, std::vecto
     }
 }
 
-void LoopaxesProc::ProcessCutDynGroup(std::vector<int>& cutResult, std::vector<Operation*>& sameLoopOpGroup) {
+void LoopaxesProc::ProcessCutDynGroup(std::vector<int>& cutResult, std::vector<Operation*>& sameLoopOpGroup)
+{
     for (size_t i = 0; i < cutResult.size(); i++) {
         dynLastGroupIdx = dynGroupIdx++;
         lastOpInLoop1 = sameLoopOpGroup[cutResult[i]];
@@ -380,8 +379,8 @@ void LoopaxesProc::ProcessCutDynGroup(std::vector<int>& cutResult, std::vector<O
         }
         sameLoopOpGroup[cutResult[i] + 1]->SetAttribute(OpAttributeKey::dynloopGroupStart, true);
         APASS_LOG_INFO_F(Elements::Operation, "Op Code %s, Op[%d] set loopGroup ++Start++",
-            sameLoopOpGroup[cutResult[i] + 1]->GetOpcodeStr().c_str(),
-            sameLoopOpGroup[cutResult[i] + 1]->GetOpMagic());
+                         sameLoopOpGroup[cutResult[i] + 1]->GetOpcodeStr().c_str(),
+                         sameLoopOpGroup[cutResult[i] + 1]->GetOpMagic());
         if (i != cutResult.size() - 1) {
             for (int opIdx = cutResult[i] + 1; opIdx <= cutResult[i + 1]; opIdx++) {
                 sameLoopOpGroup[opIdx]->SetAttribute(OpAttributeKey::dynloopGroup, dynGroupIdx);
@@ -404,9 +403,8 @@ void LoopaxesProc::ProcessStaticLoopGroup(Operation& op, const std::vector<int64
         if (lastOpInLoop != nullptr) {
             SetOpLoopEnd(lastOpInLoop);
         }
-        APASS_LOG_INFO_F(
-            Elements::Operation, "Op Code %s, Op[%d] set loopGroup ++Start++", op.GetOpcodeStr().c_str(),
-            op.GetOpMagic());
+        APASS_LOG_INFO_F(Elements::Operation, "Op Code %s, Op[%d] set loopGroup ++Start++", op.GetOpcodeStr().c_str(),
+                         op.GetOpMagic());
         sameStaticLoopOpGroup.clear();
         addrStaticConflictIdx.clear();
         addrStaticRecordMap.clear();

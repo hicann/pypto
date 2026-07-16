@@ -49,8 +49,8 @@ public:
 
     virtual uint64_t AicoreGetData() { return 0; }
 
-    virtual void AicoreCallSubFuncTask(
-        uint64_t funcIdx, npu::tile_fwk::CoreFuncParam* param, int64_t gmStackAddr, __gm__ int64_t* hcclContext, TaskStat* taskStat)
+    virtual void AicoreCallSubFuncTask(uint64_t funcIdx, npu::tile_fwk::CoreFuncParam* param, int64_t gmStackAddr,
+                                       __gm__ int64_t* hcclContext, TaskStat* taskStat)
     {
         UNUSED(funcIdx);
         UNUSED(param);
@@ -241,8 +241,8 @@ static inline uint64_t GetDataMainBase()
     return mainBase;
 }
 
-static inline void CallSubFuncTask(
-    uint64_t funcIdx, npu::tile_fwk::CoreFuncParam* param, int64_t gmStackAddr, __gm__ int64_t* hcclContext, TaskStat* taskStat)
+static inline void CallSubFuncTask(uint64_t funcIdx, npu::tile_fwk::CoreFuncParam* param, int64_t gmStackAddr,
+                                   __gm__ int64_t* hcclContext, TaskStat* taskStat)
 {
     npu::tile_fwk::machine::AicoreEmulationManager::GetInstance().GetEmulation()->AicoreCallSubFuncTask(
         funcIdx, param, gmStackAddr, hcclContext, taskStat);

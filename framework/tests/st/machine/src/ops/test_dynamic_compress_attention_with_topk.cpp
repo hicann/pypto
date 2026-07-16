@@ -129,13 +129,12 @@ void TestCmpAttnTopk(CmpAttnTopkTile& tileConfig)
                                                    cmpBlockTableData, actSeqData, auxData};
     std::vector<RawTensorDataPtr> outputDataList = {cmpAttnData, topkResData};
 
-    FUNCTION(
-        "CompressAttentionWithTopK", {qNope, qRope, cmpKvCache, cmpKrCache, cmpBlockTable, actSeq, auxTensor},
-        {cmpAttn, topkRes})
+    FUNCTION("CompressAttentionWithTopK", {qNope, qRope, cmpKvCache, cmpKrCache, cmpBlockTable, actSeq, auxTensor},
+             {cmpAttn, topkRes})
     {
-        CompressAttentionWithTopK(
-            qNope, qRope, cmpKvCache, cmpKrCache, cmpBlockTable, actSeq, auxTensor, cmpAttn, topkRes, blockSize,
-            cmpBlockSize, cmpStride, slcBlockSize, softmaxScale, n1, topk, front, near, tileConfig);
+        CompressAttentionWithTopK(qNope, qRope, cmpKvCache, cmpKrCache, cmpBlockTable, actSeq, auxTensor, cmpAttn,
+                                  topkRes, blockSize, cmpBlockSize, cmpStride, slcBlockSize, softmaxScale, n1, topk,
+                                  front, near, tileConfig);
     }
 
     auto funcop = Program::GetInstance().GetLastFunction();

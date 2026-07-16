@@ -32,62 +32,32 @@ public:
 
     virtual ~KlActiveSchedule() = default;
 
-    inline const BspInstance<GraphT> &GetInstance() const
-    {
-        return *instance_;
-    }
+    inline const BspInstance<GraphT>& GetInstance() const { return *instance_; }
 
-    inline const BspSchedule<GraphT> &GetVectorSchedule() const
-    {
-        return vectorSchedule_;
-    }
+    inline const BspSchedule<GraphT>& GetVectorSchedule() const { return vectorSchedule_; }
 
-    inline BspSchedule<GraphT> &GetVectorSchedule()
-    {
-        return vectorSchedule_;
-    }
+    inline BspSchedule<GraphT>& GetVectorSchedule() { return vectorSchedule_; }
 
-    inline const SetSchedule<GraphT> &GetSetSchedule() const
-    {
-        return setSchedule_;
-    }
+    inline const SetSchedule<GraphT>& GetSetSchedule() const { return setSchedule_; }
 
-    inline CostT GetCost()
-    {
-        return cost_;
-    }
+    inline CostT GetCost() { return cost_; }
 
-    inline bool IsFeasible()
-    {
-        return feasible_;
-    }
+    inline bool IsFeasible() { return feasible_; }
 
-    inline unsigned NumSteps() const
-    {
-        return vectorSchedule_.NumberOfSupersteps();
-    }
+    inline unsigned NumSteps() const { return vectorSchedule_.NumberOfSupersteps(); }
 
-    inline unsigned AssignedProcessor(VertexType node) const
-    {
-        return vectorSchedule_.AssignedProcessor(node);
-    }
+    inline unsigned AssignedProcessor(VertexType node) const { return vectorSchedule_.AssignedProcessor(node); }
 
-    inline unsigned AssignedSuperstep(VertexType node) const
-    {
-        return vectorSchedule_.AssignedSuperstep(node);
-    }
+    inline unsigned AssignedSuperstep(VertexType node) const { return vectorSchedule_.AssignedSuperstep(node); }
 
-    inline VWorkwT<GraphT> GetStepMaxWork(unsigned step) const
-    {
-        return workDatastructures_.StepMaxWork(step);
-    }
+    inline VWorkwT<GraphT> GetStepMaxWork(unsigned step) const { return workDatastructures_.StepMaxWork(step); }
 
     inline VWorkwT<GraphT> GetStepSecondMaxWork(unsigned step) const
     {
         return workDatastructures_.StepSecondMaxWork(step);
     }
 
-    inline std::vector<unsigned> &GetStepMaxWorkProcessorCount()
+    inline std::vector<unsigned>& GetStepMaxWorkProcessorCount()
     {
         return workDatastructures_.stepMaxWorkProcessorCount_;
     }
@@ -102,20 +72,11 @@ public:
         return workDatastructures_.GetPreMoveWorkData(move);
     }
 
-    inline VWorkwT<GraphT> GetMaxWorkWeight()
-    {
-        return workDatastructures_.maxWorkWeight_;
-    }
+    inline VWorkwT<GraphT> GetMaxWorkWeight() { return workDatastructures_.maxWorkWeight_; }
 
-    inline VWorkwT<GraphT> GetTotalWorkWeight()
-    {
-        return workDatastructures_.totalWorkWeight_;
-    }
+    inline VWorkwT<GraphT> GetTotalWorkWeight() { return workDatastructures_.totalWorkWeight_; }
 
-    inline void SetCost(CostT cost)
-    {
-        cost_ = cost;
-    }
+    inline void SetCost(CostT cost) { cost_ = cost; }
 
     KlActiveScheduleWorkDatastructures<GraphT> workDatastructures_;
 
@@ -128,7 +89,7 @@ public:
         return totalWork;
     }
 
-    void ApplyMove(KlMove move, ThreadDataT &threadData)
+    void ApplyMove(KlMove move, ThreadDataT& threadData)
     {
         vectorSchedule_.SetAssignedProcessor(move.node_, move.toProc_);
         vectorSchedule_.SetAssignedSuperstep(move.node_, move.toStep_);
@@ -143,12 +104,8 @@ public:
     }
 
     template <typename CommDatastructuresT>
-    void RevertToBestSchedule(unsigned startMove,
-                              unsigned insertStep,
-                              CommDatastructuresT &commDatastructures,
-                              ThreadDataT &threadData,
-                              unsigned startStep,
-                              unsigned &endStep)
+    void RevertToBestSchedule(unsigned startMove, unsigned insertStep, CommDatastructuresT& commDatastructures,
+                              ThreadDataT& threadData, unsigned startStep, unsigned& endStep)
     {
         const unsigned bound = std::max(startMove, threadData.bestScheduleIdx_);
         RevertMoves(bound, commDatastructures, threadData, startStep, endStep);
@@ -167,12 +124,8 @@ public:
     }
 
     template <typename CommDatastructuresT>
-    void RevertScheduleToBound(const size_t bound,
-                               const CostT newCost,
-                               const bool isFeasible,
-                               CommDatastructuresT &commDatastructures,
-                               ThreadDataT &threadData,
-                               unsigned startStep,
+    void RevertScheduleToBound(const size_t bound, const CostT newCost, const bool isFeasible,
+                               CommDatastructuresT& commDatastructures, ThreadDataT& threadData, unsigned startStep,
                                unsigned endStep)
     {
         RevertMoves(bound, commDatastructures, threadData, startStep, endStep);
@@ -182,17 +135,17 @@ public:
         threadData.cost_ = newCost;
     }
 
-    void ComputeViolations(ThreadDataT &threadData);
+    void ComputeViolations(ThreadDataT& threadData);
     void ComputeWorkMemoryDatastructures(unsigned startStep, unsigned endStep);
-    void WriteSchedule(BspSchedule<GraphT> &schedule);
-    inline void Initialize(const BspSchedule<GraphT> &schedule);
+    void WriteSchedule(BspSchedule<GraphT>& schedule);
+    inline void Initialize(const BspSchedule<GraphT>& schedule);
     inline void Clear();
     void SwapEmptyStepFwd(const unsigned step, const unsigned toStep);
     void SwapEmptyStepBwd(const unsigned toStep, const unsigned emptyStep);
     void SwapSteps(const unsigned step1, const unsigned step2);
 
 private:
-    const BspInstance<GraphT> *instance_;
+    const BspInstance<GraphT>* instance_;
 
     BspSchedule<GraphT> vectorSchedule_;
     SetSchedule<GraphT> setSchedule_;
@@ -201,11 +154,8 @@ private:
     bool feasible_ = true;
 
     template <typename CommDatastructuresT>
-    void RevertMoves(const size_t bound,
-                     CommDatastructuresT &commDatastructures,
-                     ThreadDataT &threadData,
-                     unsigned startStep,
-                     unsigned endStep)
+    void RevertMoves(const size_t bound, CommDatastructuresT& commDatastructures, ThreadDataT& threadData,
+                     unsigned startStep, unsigned endStep)
     {
         while (threadData.appliedMoves_.size() > bound) {
             const auto move = threadData.appliedMoves_.back().ReverseMove();
@@ -236,8 +186,8 @@ private:
     }
 
     template <typename IsViolationFn>
-    void ProcessEdgeViolation(const EdgeType &edge, VertexType neighbor,
-                              IsViolationFn &&isViolation, ThreadDataT &threadData)
+    void ProcessEdgeViolation(const EdgeType& edge, VertexType neighbor, IsViolationFn&& isViolation,
+                              ThreadDataT& threadData)
     {
         const bool currentlyViolated = threadData.currentViolations_.find(edge) != threadData.currentViolations_.end();
         if (!currentlyViolated) {
@@ -253,7 +203,7 @@ private:
         }
     }
 
-    void UpdateViolations(VertexType node, ThreadDataT &threadData)
+    void UpdateViolations(VertexType node, ThreadDataT& threadData)
     {
         threadData.newViolations_.clear();
         threadData.resolvedViolations_.clear();
@@ -261,20 +211,16 @@ private:
         const unsigned nodeStep = vectorSchedule_.AssignedSuperstep(node);
         const unsigned nodeProc = vectorSchedule_.AssignedProcessor(node);
 
-        for (const auto &edge : OutEdges(node, instance_->GetComputationalDag())) {
-            const auto &child = Target(edge, instance_->GetComputationalDag());
+        for (const auto& edge : OutEdges(node, instance_->GetComputationalDag())) {
+            const auto& child = Target(edge, instance_->GetComputationalDag());
             ProcessEdgeViolation(
-                edge, child,
-                [&]() { return IsOutEdgeViolation(nodeStep, nodeProc, child); },
-                threadData);
+                edge, child, [&]() { return IsOutEdgeViolation(nodeStep, nodeProc, child); }, threadData);
         }
 
-        for (const auto &edge : InEdges(node, instance_->GetComputationalDag())) {
-            const auto &parent = Source(edge, instance_->GetComputationalDag());
+        for (const auto& edge : InEdges(node, instance_->GetComputationalDag())) {
+            const auto& parent = Source(edge, instance_->GetComputationalDag());
             ProcessEdgeViolation(
-                edge, parent,
-                [&]() { return IsInEdgeViolation(nodeStep, nodeProc, parent); },
-                threadData);
+                edge, parent, [&]() { return IsInEdgeViolation(nodeStep, nodeProc, parent); }, threadData);
         }
 
         threadData.feasible_ = threadData.currentViolations_.empty();
@@ -290,14 +236,14 @@ void KlActiveSchedule<GraphT, CostT>::Clear()
 }
 
 template <typename GraphT, typename CostT>
-void KlActiveSchedule<GraphT, CostT>::ComputeViolations(ThreadDataT &threadData)
+void KlActiveSchedule<GraphT, CostT>::ComputeViolations(ThreadDataT& threadData)
 {
     threadData.currentViolations_.clear();
     threadData.feasible_ = true;
 
-    for (const auto &edge : Edges(instance_->GetComputationalDag())) {
-        const auto &sourceV = Source(edge, instance_->GetComputationalDag());
-        const auto &targetV = Target(edge, instance_->GetComputationalDag());
+    for (const auto& edge : Edges(instance_->GetComputationalDag())) {
+        const auto& sourceV = Source(edge, instance_->GetComputationalDag());
+        const auto& targetV = Target(edge, instance_->GetComputationalDag());
 
         const unsigned sourceProc = AssignedProcessor(sourceV);
         const unsigned targetProc = AssignedProcessor(targetV);
@@ -311,7 +257,7 @@ void KlActiveSchedule<GraphT, CostT>::ComputeViolations(ThreadDataT &threadData)
 }
 
 template <typename GraphT, typename CostT>
-void KlActiveSchedule<GraphT, CostT>::Initialize(const BspSchedule<GraphT> &schedule)
+void KlActiveSchedule<GraphT, CostT>::Initialize(const BspSchedule<GraphT>& schedule)
 {
     instance_ = &schedule.GetInstance();
     vectorSchedule_ = BspSchedule(schedule);
@@ -331,7 +277,7 @@ void KlActiveSchedule<GraphT, CostT>::ComputeWorkMemoryDatastructures(unsigned s
 }
 
 template <typename GraphT, typename CostT>
-void KlActiveSchedule<GraphT, CostT>::WriteSchedule(BspSchedule<GraphT> &schedule)
+void KlActiveSchedule<GraphT, CostT>::WriteSchedule(BspSchedule<GraphT>& schedule)
 {
     for (const auto v : instance_->Vertices()) {
         schedule.SetAssignedProcessor(v, vectorSchedule_.AssignedProcessor(v));
@@ -388,6 +334,6 @@ void KlActiveSchedule<GraphT, CostT>::SwapSteps(const unsigned step1, const unsi
     std::swap(setSchedule_.GetProcessorStepVertices()[step1], setSchedule_.GetProcessorStepVertices()[step2]);
     workDatastructures_.SwapSteps(step1, step2);
 }
-}    // namespace osp
+} // namespace osp
 } // namespace npu::tile_fwk
 #endif // OSP_KL_ACTIVE_SCHEDULE_HPP

@@ -127,9 +127,8 @@ void TestWinAttenInterpreter(WinAttenTileShapeConfig& tileConfig)
         RawTensorData::CreateTensor<float>(attentionOut, golden),
     });
 
-    WinAttentionDebug(
-        qNope, vNopeCache, qRope, kRopeCache, nQ, nKV, blockTable, actSeqs, windowSize, blockSize, softmaxScale,
-        attentionOut, tileConfig);
+    WinAttentionDebug(qNope, vNopeCache, qRope, kRopeCache, nQ, nKV, blockTable, actSeqs, windowSize, blockSize,
+                      softmaxScale, attentionOut, tileConfig);
 }
 
 TEST_F(DynamicWinAttenInterpreterTest, test_DynAttn_nas_win_attn_s1_2_actseqlen_1024_mla_fp16_inter)

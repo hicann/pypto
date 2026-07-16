@@ -125,14 +125,14 @@ inline const std::set<Opcode> stopOps = {
     Opcode::OP_AT_MUL_B,      Opcode::OP_AT_MUL_BT,     Opcode::OP_A_MULACC_B,      Opcode::OP_A_MULACC_BT,
     Opcode::OP_INDEX_OUTCAST, Opcode::OP_INDEX_PUT,     Opcode::OP_SCATTER_ELEMENT, Opcode::OP_SCATTER};
 
-inline const std::set<Opcode> transposeOps = {
-    Opcode::OP_TRANSPOSE_MOVEIN, Opcode::OP_TRANSPOSE_MOVEOUT, Opcode::OP_TRANSPOSE_VNCHWCONV};
+inline const std::set<Opcode> transposeOps = {Opcode::OP_TRANSPOSE_MOVEIN, Opcode::OP_TRANSPOSE_MOVEOUT,
+                                              Opcode::OP_TRANSPOSE_VNCHWCONV};
 
-inline const std::set<Opcode> scatterOps = {
-    Opcode::OP_INDEX_OUTCAST, Opcode::OP_INDEX_PUT, Opcode::OP_SCATTER_ELEMENT, Opcode::OP_SCATTER};
+inline const std::set<Opcode> scatterOps = {Opcode::OP_INDEX_OUTCAST, Opcode::OP_INDEX_PUT, Opcode::OP_SCATTER_ELEMENT,
+                                            Opcode::OP_SCATTER};
 
-inline const std::set<Opcode> gatherVectorOps = {
-    Opcode::OP_GATHER_ELEMENT, Opcode::OP_GATHER, Opcode::OP_GATHER_FROM_UB};
+inline const std::set<Opcode> gatherVectorOps = {Opcode::OP_GATHER_ELEMENT, Opcode::OP_GATHER,
+                                                 Opcode::OP_GATHER_FROM_UB};
 
 inline const std::set<Opcode> gatherMoveOps = {Opcode::OP_GATHER_IN_UB, Opcode::OP_GATHER_IN_L1};
 
@@ -188,20 +188,20 @@ using SingletonTileSettingHandler = void (*)(Operation*, std::vector<int64_t>&);
 
 // Forward declarations for handlers (some are inline, some in .cpp)
 void ViewTileSetting(Operation* op, const std::vector<int64_t>& vectorTilesOld, std::vector<int64_t>& vectorTilesNew);
-void AssembleTileSettingForward(
-    Operation* op, const std::vector<int64_t>& vectorTilesOld, std::vector<int64_t>& vectorTilesNew);
-void AssembleTileSettingBackward(
-    Operation* op, const std::vector<int64_t>& vectorTilesOld, std::vector<int64_t>& vectorTilesNew);
-void TransposeTileSetting(
-    Operation* op, const std::vector<int64_t>& vectorTilesOld, std::vector<int64_t>& vectorTilesNew);
+void AssembleTileSettingForward(Operation* op, const std::vector<int64_t>& vectorTilesOld,
+                                std::vector<int64_t>& vectorTilesNew);
+void AssembleTileSettingBackward(Operation* op, const std::vector<int64_t>& vectorTilesOld,
+                                 std::vector<int64_t>& vectorTilesNew);
+void TransposeTileSetting(Operation* op, const std::vector<int64_t>& vectorTilesOld,
+                          std::vector<int64_t>& vectorTilesNew);
 void GatherTileSetting(Operation* op, const std::vector<int64_t>& vectorTilesOld, std::vector<int64_t>& vectorTilesNew);
-void OpWithSeveralInputsTileSetting(
-    Operation* op, const std::vector<int64_t>& vectorTilesOld, std::vector<int64_t>& vectorTilesNew);
-void ReshapeTileSetting(
-    Operation* op, const std::vector<int64_t>& vectorTilesOld, std::vector<int64_t>& vectorTilesNew);
+void OpWithSeveralInputsTileSetting(Operation* op, const std::vector<int64_t>& vectorTilesOld,
+                                    std::vector<int64_t>& vectorTilesNew);
+void ReshapeTileSetting(Operation* op, const std::vector<int64_t>& vectorTilesOld,
+                        std::vector<int64_t>& vectorTilesNew);
 void ExpandTileSetting(Operation* op, const std::vector<int64_t>& vectorTilesOld, std::vector<int64_t>& vectorTilesNew);
-void DefaultTileSetting(
-    Operation* op, const std::vector<int64_t>& vectorTilesOld, std::vector<int64_t>& vectorTilesNew);
+void DefaultTileSetting(Operation* op, const std::vector<int64_t>& vectorTilesOld,
+                        std::vector<int64_t>& vectorTilesNew);
 
 // Reduce tile setting handlers
 void ReduceTileSetting(Operation* op, std::vector<int64_t>& vectorTilesNew);
@@ -323,8 +323,8 @@ inline std::vector<uint32_t> FindChangedDims(Shape inShape, Shape outShape)
     return changedDims;
 }
 
-inline void GatherTilesForFirstInput(
-    std::vector<int64_t>& vectorTilesNew, std::vector<int64_t> inputShape, size_t outputDims)
+inline void GatherTilesForFirstInput(std::vector<int64_t>& vectorTilesNew, std::vector<int64_t> inputShape,
+                                     size_t outputDims)
 {
     if (outputDims == NUM2) {
         vectorTilesNew[K_DIM] = FloorPowerOf2(inputShape[1]);
@@ -333,8 +333,8 @@ inline void GatherTilesForFirstInput(
     }
 }
 
-inline void GatherTilesForSecondInput(
-    std::vector<int64_t>& vectorTilesNew, std::vector<int64_t> inputShape, size_t outputDims)
+inline void GatherTilesForSecondInput(std::vector<int64_t>& vectorTilesNew, std::vector<int64_t> inputShape,
+                                      size_t outputDims)
 {
     if (outputDims == NUM2) {
         vectorTilesNew[0] = FloorPowerOf2(inputShape[0]);
@@ -398,8 +398,8 @@ inline void UpdateBFS(Operation* op, std::queue<Operation*>& queueBFS, std::map<
     visitedBFS[op->GetOpMagic()] = true;
 }
 
-inline bool DuplicateTileSetting(
-    Operation* opInit, Operation* opNew, std::queue<Operation*>& queueBFS, std::map<int, bool>& visitedBFS)
+inline bool DuplicateTileSetting(Operation* opInit, Operation* opNew, std::queue<Operation*>& queueBFS,
+                                 std::map<int, bool>& visitedBFS)
 {
     std::vector<int64_t> vectorTilesNew;
     if (opNew->GetIOperands().size() == 0) {
@@ -421,9 +421,8 @@ inline void CubeOutDepsProcessing(Operation* cubeOp)
     cubeOp->GetTileShapeForSetting().SetVecTile(vectorTilesOut);
 }
 
-inline void CollectShapesAndAddProducers(
-    Operation* currentOp, std::vector<std::vector<int64_t>>& collectedShapes, std::queue<Operation*>& worklist,
-    std::set<Operation*>& visitedOps)
+inline void CollectShapesAndAddProducers(Operation* currentOp, std::vector<std::vector<int64_t>>& collectedShapes,
+                                         std::queue<Operation*>& worklist, std::set<Operation*>& visitedOps)
 {
     for (const auto& input : currentOp->GetIOperands()) {
         if (input->shape.size() == NUM2) {
@@ -442,9 +441,8 @@ inline void CollectShapesAndAddProducers(
     }
 }
 
-inline bool ProcessOperation(
-    Operation* currentOp, std::vector<std::vector<int64_t>>& collectedShapes, std::queue<Operation*>& worklist,
-    std::set<Operation*>& visitedOps)
+inline bool ProcessOperation(Operation* currentOp, std::vector<std::vector<int64_t>>& collectedShapes,
+                             std::queue<Operation*>& worklist, std::set<Operation*>& visitedOps)
 {
     if (!ShouldProcessOperation(currentOp, visitedOps)) {
         return true;
@@ -501,8 +499,8 @@ inline void RecalcTileThroughOps(Operation* op, std::vector<int64_t>& tile, bool
     }
 }
 
-inline void ViewTileSetting(
-    Operation* op, const std::vector<int64_t>& vectorTilesOld, std::vector<int64_t>& vectorTilesNew)
+inline void ViewTileSetting(Operation* op, const std::vector<int64_t>& vectorTilesOld,
+                            std::vector<int64_t>& vectorTilesNew)
 {
     auto allViews = op->GetIOperands()[0]->GetConsumers();
     auto inShape = op->GetIOperands()[0]->shape;
@@ -533,8 +531,8 @@ inline bool IsTileValid(const std::vector<int64_t>& tile, const std::array<int64
     return true;
 }
 
-inline void FilterCubeTilesByDimensions(
-    std::map<std::vector<int64_t>, double>& setOfCubeTiles, const std::array<int64_t, NUM3>& filter)
+inline void FilterCubeTilesByDimensions(std::map<std::vector<int64_t>, double>& setOfCubeTiles,
+                                        const std::array<int64_t, NUM3>& filter)
 {
     auto it = setOfCubeTiles.begin();
     while (it != setOfCubeTiles.end()) {
@@ -559,13 +557,11 @@ private:
 // Cube tile functions (implemented in cube_tile_setting.cpp)
 std::map<int, int> FordBellman(const std::vector<std::pair<int, int>>& edges, Function& function);
 
-void FindCubeTilesCombinations(
-    std::map<std::vector<int64_t>, double>& setOfCubeTiles, int64_t m, int64_t k, int64_t n, int64_t inputTypeSize,
-    int64_t outputTypeSize);
+void FindCubeTilesCombinations(std::map<std::vector<int64_t>, double>& setOfCubeTiles, int64_t m, int64_t k, int64_t n,
+                               int64_t inputTypeSize, int64_t outputTypeSize);
 
-void FindScoreForCubeTiles(
-    const pairShapeType shapeAndTypeInfo, std::map<std::vector<int64_t>, double>& setOfCubeTiles, int64_t cubeL1Reuse,
-    int64_t cubeNBuffer, int64_t numOfMatmuls);
+void FindScoreForCubeTiles(const pairShapeType shapeAndTypeInfo, std::map<std::vector<int64_t>, double>& setOfCubeTiles,
+                           int64_t cubeL1Reuse, int64_t cubeNBuffer, int64_t numOfMatmuls);
 
 void SetPossibleCubeTiles(const pairShapeType shapeAndTypeInfo, std::map<std::vector<int64_t>, double>& setOfCubeTiles);
 
@@ -579,9 +575,8 @@ std::array<int64_t, NUM3> CalculateTileFilterForMatmul(Operation* matmulOp);
 
 std::vector<std::vector<int64_t>> CollectShapesFromBackwardTraversal(const std::shared_ptr<LogicalTensor>& startTensor);
 
-std::vector<int64_t> DetermineBestCubeTile(
-    const std::map<std::vector<int64_t>, double>& setOfCubeTiles, const pairShapeType& shapeInfo,
-    const std::array<int64_t, NUM3>& tileFilter);
+std::vector<int64_t> DetermineBestCubeTile(const std::map<std::vector<int64_t>, double>& setOfCubeTiles,
+                                           const pairShapeType& shapeInfo, const std::array<int64_t, NUM3>& tileFilter);
 
 CubeTilesResultType FindAndSetCubeTileShapes(
     const std::pair<pairShapeType, std::array<int64_t, NUM3>> shapeAndTypeInfoFilter, int64_t numOfMatmuls,
@@ -597,14 +592,13 @@ void SetGatherInL1CubeTile(Operation* op, const std::vector<int64_t>& vectorTile
 
 pairShapeType ShapeAndTypeSetting(Operation* op);
 
-void UniqueTilesFilling(
-    const std::set<Operation*>& cubeOperations, std::map<pairShapeType, int64_t>& uniqueTiles,
-    std::map<uint64_t, std::pair<pairShapeType, std::array<int64_t, NUM3>>>& opShapeFilter);
+void UniqueTilesFilling(const std::set<Operation*>& cubeOperations, std::map<pairShapeType, int64_t>& uniqueTiles,
+                        std::map<uint64_t, std::pair<pairShapeType, std::array<int64_t, NUM3>>>& opShapeFilter);
 
 void SetMMTiles(Function& function, const std::set<Operation*>& cubeOperations);
 
-std::vector<Operation*> SortCubeOpsByDepth(
-    Function& function, const std::set<Operation*>& cubeOperations, std::map<int, int>& subgrDepthMap);
+std::vector<Operation*> SortCubeOpsByDepth(Function& function, const std::set<Operation*>& cubeOperations,
+                                           std::map<int, int>& subgrDepthMap);
 
 void CubeInDepsProcessing(Operation* cubeOp, Operation* opBase);
 

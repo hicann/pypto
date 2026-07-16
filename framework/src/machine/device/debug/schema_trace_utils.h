@@ -27,7 +27,8 @@ namespace npu::tile_fwk::dynamic {
 
 class SchemaDumpUtil {
 public:
-    static inline void DumpSchemaOperationInfo(SchDeviceTaskContext* devTaskCtx, uint64_t taskId) {
+    static inline void DumpSchemaOperationInfo(SchDeviceTaskContext* devTaskCtx, uint64_t taskId)
+    {
         auto dyntask = reinterpret_cast<DynDeviceTask*>(devTaskCtx->GetDeviceTask());
         auto deviceTaskId = devTaskCtx->GetDeviceTaskCtrl()->taskId;
         uint32_t funcId = FuncID(taskId);
@@ -39,7 +40,7 @@ public:
         auto attrBase = &duppedData->GetSource()->GetOperationAttr(opIdx, 0);
 
         DEV_TRACE_DEBUG_SPLIT(LEvent(LUid(deviceTaskId, funcId, rootIndex, opIdx, leafIndex),
-            duppedData->GetSource()->SchemaGetCoa(opIdx)));
+                                     duppedData->GetSource()->SchemaGetCoa(opIdx)));
 
         auto iOperandSize = duppedData->GetSource()->GetOperationIOperandSize(opIdx);
         DEV_TRACE_INFO(LEvent(LUid(deviceTaskId, funcId, rootIndex, opIdx, leafIndex), LActIncastCount(iOperandSize)));
@@ -48,8 +49,10 @@ public:
             auto base = GetTensorAddr(dynFuncData, iOperand->rawIndex);
             auto size = duppedData->GetRawTensorDataSize(iOperand->rawIndex);
             auto opInfo = duppedData->GetSource()->GetOperationIOperandInfo(opIdx, i);
-            DEV_TRACE_INFO(LEvent(LUid(deviceTaskId, funcId, rootIndex, opIdx, leafIndex),
-                LActIncast(SchemaGetShape(dynFuncData, attrBase, opInfo), SchemaGetOffset(dynFuncData, attrBase, opInfo), Range(base, base + size))));
+            DEV_TRACE_INFO(
+                LEvent(LUid(deviceTaskId, funcId, rootIndex, opIdx, leafIndex),
+                       LActIncast(SchemaGetShape(dynFuncData, attrBase, opInfo),
+                                  SchemaGetOffset(dynFuncData, attrBase, opInfo), Range(base, base + size))));
         }
 
         auto oOperandSize = duppedData->GetSource()->GetOperationOOperandSize(opIdx);
@@ -59,20 +62,24 @@ public:
             auto base = GetTensorAddr(dynFuncData, oOperand->rawIndex);
             auto size = duppedData->GetRawTensorDataSize(oOperand->rawIndex);
             auto opInfo = duppedData->GetSource()->GetOperationOOperandInfo(opIdx, i);
-            DEV_TRACE_INFO(LEvent(LUid(deviceTaskId, funcId, rootIndex, opIdx, leafIndex),
-                LActOutcast(SchemaGetShape(dynFuncData, attrBase, opInfo), SchemaGetOffset(dynFuncData, attrBase, opInfo), Range(base, base + size))));
+            DEV_TRACE_INFO(
+                LEvent(LUid(deviceTaskId, funcId, rootIndex, opIdx, leafIndex),
+                       LActOutcast(SchemaGetShape(dynFuncData, attrBase, opInfo),
+                                   SchemaGetOffset(dynFuncData, attrBase, opInfo), Range(base, base + size))));
         }
     }
 
 private:
-    static inline DynFuncData* GetDynFuncData(DynDeviceTask *dyntask, uint64_t taskId) {
-        DynFuncHeader *head = (DynFuncHeader *)dyntask->GetDynFuncDataList();
-        auto funcDataList = (DynFuncData *)(head + 1);
+    static inline DynFuncData* GetDynFuncData(DynDeviceTask* dyntask, uint64_t taskId)
+    {
+        DynFuncHeader* head = (DynFuncHeader*)dyntask->GetDynFuncDataList();
+        auto funcDataList = (DynFuncData*)(head + 1);
         auto funcData = &funcDataList[FuncID(taskId)];
         return funcData;
     }
 
-    static inline uint64_t GetTensorAddr(DynFuncData *dynFuncData, uint64_t rawTensorIndex) {
+    static inline uint64_t GetTensorAddr(DynFuncData* dynFuncData, uint64_t rawTensorIndex)
+    {
         auto desc = &dynFuncData->rawTensorDesc[rawTensorIndex];
         if (desc->location == npu::tile_fwk::RAW_TENSOR_LOCATION_LOCAL) {
             return dynFuncData->workspaceAddr + desc->offsetOrIndex;
@@ -81,11 +88,14 @@ private:
         }
     }
 
-    static inline uint64_t GetCoa(DynFuncData *dynFuncData, const SymInt *attrs, int idx) {
+    static inline uint64_t GetCoa(DynFuncData* dynFuncData, const SymInt* attrs, int idx)
+    {
         return attrs[idx].IsExpression() ? dynFuncData->exprTbl[attrs[idx].Value()] : attrs[idx].Value();
     }
 
-    static inline schema::shape SchemaGetShape(DynFuncData *dynFuncData, const SymInt *attrs, const DevAscendOperationOperandInfo &info) {
+    static inline schema::shape SchemaGetShape(DynFuncData* dynFuncData, const SymInt* attrs,
+                                               const DevAscendOperationOperandInfo& info)
+    {
         auto attrOffset = info.staticOffsetAttrBeginIndex;
         std::vector<schema::Int64Type> shapeList;
         for (int d = 0; d < info.GetDim(); d++) {
@@ -96,7 +106,9 @@ private:
         return schema::shape(schema::shapeList(shapeList));
     }
 
-    static inline schema::offset SchemaGetOffset(DynFuncData *dynFuncData, const SymInt *attrs, const DevAscendOperationOperandInfo &info) {
+    static inline schema::offset SchemaGetOffset(DynFuncData* dynFuncData, const SymInt* attrs,
+                                                 const DevAscendOperationOperandInfo& info)
+    {
         auto attrOffset = info.staticOffsetAttrBeginIndex;
         std::vector<schema::Int64Type> offsetList;
         for (int d = 0; d < info.GetDim(); d++) {
@@ -107,21 +119,19 @@ private:
         return schema::offset(schema::offsetList(offsetList));
     }
 
-    static inline uint32_t FuncID(uint32_t taskId) {
-        return taskId >> TASKID_TASK_BITS;
-    }
+    static inline uint32_t FuncID(uint32_t taskId) { return taskId >> TASKID_TASK_BITS; }
 
-    static inline uint32_t TaskID(uint32_t taskId) {
-        return taskId & TASKID_TASK_MASK;
-    }
+    static inline uint32_t TaskID(uint32_t taskId) { return taskId & TASKID_TASK_MASK; }
 
-    static inline int GetRootIndex(DynDeviceTask *dyntask, uint64_t taskId) {
+    static inline int GetRootIndex(DynDeviceTask* dyntask, uint64_t taskId)
+    {
         uint32_t funcId = FuncID(taskId);
         auto func = dyntask->dynFuncDataCacheList[funcId].devFunc;
         return func->GetRootIndex();
     }
 
-    static inline int GetLeafIndex(DynDeviceTask *dyntask, uint64_t taskId) {
+    static inline int GetLeafIndex(DynDeviceTask* dyntask, uint64_t taskId)
+    {
         uint32_t funcId = FuncID(taskId);
         uint32_t opIndex = TaskID(taskId);
         auto callList = dyntask->dynFuncDataCacheList[funcId].calleeList;

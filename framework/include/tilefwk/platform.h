@@ -123,9 +123,8 @@ struct MemoryGraph {
     std::map<MemoryType, std::shared_ptr<MemoryNode>> nodes;
     void AddPath(MemoryType from, MemoryType to);
     std::shared_ptr<MemoryNode> GetNode(MemoryType type);
-    void DFS(
-        MemoryType target, const std::shared_ptr<MemoryNode>& node, std::vector<MemoryType>& candidate,
-        std::vector<MemoryType>& paths) const;
+    void DFS(MemoryType target, const std::shared_ptr<MemoryNode>& node, std::vector<MemoryType>& candidate,
+             std::vector<MemoryType>& paths) const;
     bool FindNearestPath(MemoryType from, MemoryType to, std::vector<MemoryType>& paths) const;
     bool HasDirectPath(MemoryType from, MemoryType to) const;
     void Reset() { nodes.clear(); }

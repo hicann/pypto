@@ -19,13 +19,10 @@ using namespace npu::tile_fwk;
 
 class TestCodeGenKirinX90Minimum : public CodegenTestLiteNPU {
 public:
-    TestCodeGenKirinX90Minimum() : CodegenTestLiteNPU("KirinX90"){};
+    TestCodeGenKirinX90Minimum() : CodegenTestLiteNPU("KirinX90") {};
 };
 
-TEST_F(TestCodeGenKirinX90Minimum, test_minimum_int16_001)
-{
-    TestCodeGenMinimum::Instance().test_minimum_int16_001();
-}
+TEST_F(TestCodeGenKirinX90Minimum, test_minimum_int16_001) { TestCodeGenMinimum::Instance().test_minimum_int16_001(); }
 
 TEST_F(TestCodeGenKirinX90Minimum, DISABLED_test_minimum_int16_002)
 {

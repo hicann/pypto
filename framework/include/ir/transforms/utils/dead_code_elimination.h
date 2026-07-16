@@ -28,14 +28,12 @@ namespace dce {
 using RemovablePredicate = std::function<bool(const StmtPtr&)>;
 
 /// Collect all AssignStmts recursively from nested statements.
-void CollectAllAssignStmts(const std::vector<StmtPtr>& stmts,
-                           std::vector<std::shared_ptr<const AssignStmt>>& assigns);
+void CollectAllAssignStmts(const std::vector<StmtPtr>& stmts, std::vector<std::shared_ptr<const AssignStmt>>& assigns);
 
 /// Eliminate dead code from a statement list using a custom removable predicate.
 /// Dead statements are those whose defined variable is not transitively
 /// used by any non-removable (live-root) statement.
-std::vector<StmtPtr> EliminateDeadCode(const std::vector<StmtPtr>& stmts,
-                                       const RemovablePredicate& is_removable);
+std::vector<StmtPtr> EliminateDeadCode(const std::vector<StmtPtr>& stmts, const RemovablePredicate& is_removable);
 
 /// Eliminate dead code from a statement list using the default removable predicate.
 std::vector<StmtPtr> EliminateDeadCode(const std::vector<StmtPtr>& stmts);
@@ -56,8 +54,8 @@ std::vector<StmtPtr> EliminateDeadCode(const std::vector<StmtPtr>& stmts);
 /// bindings (`a = 5; b = a + 1; c = b + 1` with `c` unused) collapse fully.
 std::vector<StmtPtr> EliminateDeadScalarAssignments(const std::vector<StmtPtr>& stmts);
 
-}  // namespace dce
-}  // namespace ir
-}  // namespace pypto
+} // namespace dce
+} // namespace ir
+} // namespace pypto
 
-#endif  // PYPTO_IR_TRANSFORMS_UTILS_DEAD_CODE_ELIMINATION_H_
+#endif // PYPTO_IR_TRANSFORMS_UTILS_DEAD_CODE_ELIMINATION_H_

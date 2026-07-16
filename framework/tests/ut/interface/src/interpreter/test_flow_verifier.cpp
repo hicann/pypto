@@ -56,9 +56,8 @@ LogicalTensorDataPtr MakeHf8Scalar(uint8_t byte)
 constexpr float kVerifyRtol = 1e-3f;
 constexpr float kVerifyAtol = 1e-2f;
 
-LogicalTensorDataPtr MakeInt8ViewOnPaddedRaw(
-    const std::vector<int8_t>& rawVals, const std::vector<int64_t>& rawShape, const std::vector<int64_t>& viewShape,
-    const std::vector<int64_t>& offset)
+LogicalTensorDataPtr MakeInt8ViewOnPaddedRaw(const std::vector<int8_t>& rawVals, const std::vector<int64_t>& rawShape,
+                                             const std::vector<int64_t>& viewShape, const std::vector<int64_t>& offset)
 {
     Tensor t(DT_INT8, rawShape);
     auto raw = RawTensorData::CreateTensor<int8_t>(t, rawVals);
@@ -184,8 +183,8 @@ TEST(FlowVerifierStrideTest, PaddedRawViewUsesPhysicalStride)
     // raw index mapping for view:
     // row0 -> [1,2], row1 -> [5,6]
     const std::vector<int8_t> goldenRaw = {
-        99, 10, 11, 98,                                    // row0
-        97, 12, 13, 96                                     // row1
+        99, 10, 11, 98, // row0
+        97, 12, 13, 96  // row1
     };
     const std::vector<int8_t> outputRaw = {-1, 10, 11, -2, // padding bytes intentionally differ
                                            -3, 12, 13, -4};

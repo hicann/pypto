@@ -44,7 +44,7 @@ private:
     }
 };
 
-}  // namespace
+} // namespace
 
 std::unordered_set<const Var*> CollectVarUses(const ExprPtr& expr)
 {
@@ -65,10 +65,9 @@ std::unordered_set<const Var*> CollectStmtVarRefs(const std::vector<StmtPtr>& st
 {
     VarUseCollector collector;
     for (const auto& s : stmts) {
-        if (skip_iter_updates
-            && (std::dynamic_pointer_cast<const YieldStmt>(s)
-                || std::dynamic_pointer_cast<const BreakStmt>(s)
-                || std::dynamic_pointer_cast<const ContinueStmt>(s)))
+        if (skip_iter_updates &&
+            (std::dynamic_pointer_cast<const YieldStmt>(s) || std::dynamic_pointer_cast<const BreakStmt>(s) ||
+             std::dynamic_pointer_cast<const ContinueStmt>(s)))
             continue;
         collector.VisitStmt(s);
     }
@@ -98,6 +97,6 @@ SeqStmtsPtr MakeSeqBody(const std::vector<StmtPtr>& stmts, const Span& span)
 {
     return std::make_shared<SeqStmts>(stmts, span);
 }
-}  // namespace utils
-}  // namespace ir
-}  // namespace pypto
+} // namespace utils
+} // namespace ir
+} // namespace pypto

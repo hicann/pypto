@@ -38,9 +38,9 @@ void SubfuncInvokeInfoTy::ConstructActualInvokeParam(int esgId)
     int paramLoc = 0;
     for (auto& tensorArg : tensorArgs_) {
         APASS_LOG_DEBUG_F(Elements::Function, "Construct TA for %d", esgId);
-        tensorParamList_.emplace_back(
-            paramLoc, tensorArg.realDDRId, tensorArg.offset, tensorArg.shape, tensorArg.rawShape, tensorArg.dType,
-            tensorArg.isOutputToGM, tensorArg.tensor, tensorArg.opMagic, tensorArg.operandIdx);
+        tensorParamList_.emplace_back(paramLoc, tensorArg.realDDRId, tensorArg.offset, tensorArg.shape,
+                                      tensorArg.rawShape, tensorArg.dType, tensorArg.isOutputToGM, tensorArg.tensor,
+                                      tensorArg.opMagic, tensorArg.operandIdx);
         paramLoc++;
     }
 
@@ -58,9 +58,9 @@ void SubfuncInvokeInfoTy::ConstructActualInvokeParam(int esgId)
 
     int oParamLoc = 0 | 0x20000000;
     for (auto& outCast : outCasts_) {
-        outcastTensorParamList_.emplace_back(
-            oParamLoc, outCast.realOutCastDDRId, outCast.refCount, outCast.shape, outCast.rawShape, outCast.offset,
-            outCast.dType, outCast.tensor, outCast.opMagic, outCast.operandIdx);
+        outcastTensorParamList_.emplace_back(oParamLoc, outCast.realOutCastDDRId, outCast.refCount, outCast.shape,
+                                             outCast.rawShape, outCast.offset, outCast.dType, outCast.tensor,
+                                             outCast.opMagic, outCast.operandIdx);
 
         oParamLoc++;
     }
@@ -134,9 +134,8 @@ void SubfuncInvokeInfoTy::DumpInvokeInfo(int64_t invokeParamMemOffset, int64_t* 
         outcastTensorParam.DumpOutcastInfo(invokeParam);
     }
 
-    if (memcpy_s(
-        invokeParamPtr + invokeParamMemOffset / sizeof(int64_t), invokeParam.size() * sizeof(int64_t),
-        invokeParam.data(), invokeParam.size() * sizeof(int64_t)) != EOK) {
+    if (memcpy_s(invokeParamPtr + invokeParamMemOffset / sizeof(int64_t), invokeParam.size() * sizeof(int64_t),
+                 invokeParam.data(), invokeParam.size() * sizeof(int64_t)) != EOK) {
         APASS_LOG_ERROR_F(Elements::Function, "Error: memcpy_s failed in DumpInvokeInfo");
         return;
     }
@@ -151,34 +150,34 @@ std::tuple<int, int, int> SubfuncInvokeInfoTy::LookupInvokeArgs(const int paramL
                     return std::tuple<int, int, int>{tensorParam.ddrId, tensorParam.offset[0], tensorParam.offset[1]};
                 }
             }
-            APASS_LOG_WARN_F(
-                Elements::Function, "LookupInvokeArgs failed: tensor param not found, paramLoc=%d", paramLoc);
+            APASS_LOG_WARN_F(Elements::Function, "LookupInvokeArgs failed: tensor param not found, paramLoc=%d",
+                             paramLoc);
             return std::tuple<int, int, int>{0, 0, 0};
 
         case ParamLocIncast:
             for (auto& incastTensorParam : incastTensorParamList_) {
                 if (incastTensorParam.paramLoc == paramLoc) {
-                    return std::tuple<int, int, int>{
-                        incastTensorParam.ddrId, incastTensorParam.offset[0], incastTensorParam.offset[1]};
+                    return std::tuple<int, int, int>{incastTensorParam.ddrId, incastTensorParam.offset[0],
+                                                     incastTensorParam.offset[1]};
                 }
             }
-            APASS_LOG_WARN_F(
-                Elements::Function, "LookupInvokeArgs failed: incast param not found, paramLoc=%d", paramLoc);
+            APASS_LOG_WARN_F(Elements::Function, "LookupInvokeArgs failed: incast param not found, paramLoc=%d",
+                             paramLoc);
             return std::tuple<int, int, int>{0, 0, 0};
 
         case ParamLocOutcast:
             for (auto& outcastTensorParam : outcastTensorParamList_) {
                 if (outcastTensorParam.paramLoc == paramLoc) {
-                    return std::tuple<int, int, int>{
-                        outcastTensorParam.ddrId, outcastTensorParam.offset[0], outcastTensorParam.offset[1]};
+                    return std::tuple<int, int, int>{outcastTensorParam.ddrId, outcastTensorParam.offset[0],
+                                                     outcastTensorParam.offset[1]};
                 }
             }
-            APASS_LOG_WARN_F(
-                Elements::Function, "LookupInvokeArgs failed: outcast param not found, paramLoc=%d", paramLoc);
+            APASS_LOG_WARN_F(Elements::Function, "LookupInvokeArgs failed: outcast param not found, paramLoc=%d",
+                             paramLoc);
             return std::tuple<int, int, int>{0, 0, 0};
         default:
-            APASS_LOG_WARN_F(
-                Elements::Function, "LookupInvokeArgs failed: invalid paramLoc type, paramLoc=%d", paramLoc);
+            APASS_LOG_WARN_F(Elements::Function, "LookupInvokeArgs failed: invalid paramLoc type, paramLoc=%d",
+                             paramLoc);
             return std::tuple<int, int, int>{0, 0, 0};
     }
 }
@@ -290,19 +289,17 @@ void SubfuncInvokeInfoTy::LoadIncastFromJson(const Json& incastJson, Function* b
     int paramLoc = incastJson["param_loc"].get<int>();
     int opMagic = incastJson["op_magic"].get<int>();
     int operandIdx = incastJson["operandIdx"].get<int>();
-    std::shared_ptr<LogicalTensor> tensorPtr =
-        GraphUtils::GetTensorByMagic(*belongTo, incastJson["tensor"].get<int>());
+    std::shared_ptr<LogicalTensor> tensorPtr = GraphUtils::GetTensorByMagic(*belongTo, incastJson["tensor"].get<int>());
     if (tensorPtr == nullptr) {
-        APASS_LOG_ERROR_F(
-            Elements::Function, "Tile FWK for incast %d op %d is nullptr, function type %s name %s",
-            incastJson["tensor"].get<int>(), opMagic, belongTo->GetFunctionTypeStr().c_str(),
-            belongTo->GetMagicName().c_str());
+        APASS_LOG_ERROR_F(Elements::Function, "Tile FWK for incast %d op %d is nullptr, function type %s name %s",
+                          incastJson["tensor"].get<int>(), opMagic, belongTo->GetFunctionTypeStr().c_str(),
+                          belongTo->GetMagicName().c_str());
         return;
     }
-    incastTensorParamList_.emplace_back(IncastParamPackTy(
-        paramLoc, tensorPtr->GetRawMagic(), incastJson["offset"].get<std::vector<int64_t>>(),
-        incastJson["shape"].get<std::vector<int64_t>>(), tensorPtr->tensor->rawshape, tensorPtr->tensor->GetDataType(),
-        tensorPtr, opMagic, operandIdx));
+    incastTensorParamList_.emplace_back(
+        IncastParamPackTy(paramLoc, tensorPtr->GetRawMagic(), incastJson["offset"].get<std::vector<int64_t>>(),
+                          incastJson["shape"].get<std::vector<int64_t>>(), tensorPtr->tensor->rawshape,
+                          tensorPtr->tensor->GetDataType(), tensorPtr, opMagic, operandIdx));
 }
 
 void SubfuncInvokeInfoTy::LoadOutcastFromJson(const Json& outcastJson, Function* belongTo)
@@ -311,13 +308,12 @@ void SubfuncInvokeInfoTy::LoadOutcastFromJson(const Json& outcastJson, Function*
     int refCount = outcastJson["ref_count"].get<int>();
     int opMagic = outcastJson["op_magic"].get<int>();
     int operandIdx = outcastJson["operandIdx"].get<int>();
-    std::shared_ptr<LogicalTensor> tensorPtr =
-        GraphUtils::GetTensorByMagic(*belongTo, outcastJson["tensor"].get<int>());
+    std::shared_ptr<LogicalTensor> tensorPtr = GraphUtils::GetTensorByMagic(*belongTo,
+                                                                            outcastJson["tensor"].get<int>());
     if (tensorPtr == nullptr) {
-        APASS_LOG_ERROR_F(
-            Elements::Function, "Tile FWK for outcast %d op %d is nullptr function type %s name %s",
-            outcastJson["tensor"].get<int>(), opMagic, belongTo->GetFunctionTypeStr().c_str(),
-            belongTo->GetMagicName().c_str());
+        APASS_LOG_ERROR_F(Elements::Function, "Tile FWK for outcast %d op %d is nullptr function type %s name %s",
+                          outcastJson["tensor"].get<int>(), opMagic, belongTo->GetFunctionTypeStr().c_str(),
+                          belongTo->GetMagicName().c_str());
         return;
     }
     outcastTensorParamList_.emplace_back(OutcastParamPackTy(
@@ -331,20 +327,18 @@ void SubfuncInvokeInfoTy::LoadTensorFromJson(const Json& tensorJson, Function* b
     int paramLoc = tensorJson["param_loc"].get<int>();
     int opMagic = tensorJson["op_magic"].get<int>();
     int operandIdx = tensorJson["operandIdx"].get<int>();
-    std::shared_ptr<LogicalTensor> tensorPtr =
-        GraphUtils::GetTensorByMagic(*belongTo, tensorJson["tensor"].get<int>());
+    std::shared_ptr<LogicalTensor> tensorPtr = GraphUtils::GetTensorByMagic(*belongTo, tensorJson["tensor"].get<int>());
     if (tensorPtr == nullptr) {
-        APASS_LOG_ERROR_F(
-            Elements::Function, "Tile FWK for tensor %d op %d is nullptr, function type %s name %s",
-            tensorJson["tensor"].get<int>(), opMagic, belongTo->GetFunctionTypeStr().c_str(),
-            belongTo->GetMagicName().c_str());
+        APASS_LOG_ERROR_F(Elements::Function, "Tile FWK for tensor %d op %d is nullptr, function type %s name %s",
+                          tensorJson["tensor"].get<int>(), opMagic, belongTo->GetFunctionTypeStr().c_str(),
+                          belongTo->GetMagicName().c_str());
         return;
     }
     bool isOutput = tensorJson["is_output"].get<bool>();
-    tensorParamList_.emplace_back(TensorParamPackTy(
-        paramLoc, tensorPtr->GetRawMagic(), tensorJson["offset"].get<std::vector<int64_t>>(),
-        tensorJson["shape"].get<std::vector<int64_t>>(), tensorPtr->tensor->rawshape, tensorPtr->tensor->GetDataType(),
-        isOutput, tensorPtr, opMagic, operandIdx));
+    tensorParamList_.emplace_back(
+        TensorParamPackTy(paramLoc, tensorPtr->GetRawMagic(), tensorJson["offset"].get<std::vector<int64_t>>(),
+                          tensorJson["shape"].get<std::vector<int64_t>>(), tensorPtr->tensor->rawshape,
+                          tensorPtr->tensor->GetDataType(), isOutput, tensorPtr, opMagic, operandIdx));
 }
 
 void SubfuncInvokeInfoTy::LoadJson(const Json& invokeInfoJson, Function* belongTo)
@@ -602,24 +596,24 @@ void SubfuncParam::FromJson(const Json& params)
     tensorsArgs_.clear();
     outCastArgs_.clear();
     for (auto& ele : params["incasts"]) {
-        AppendIncastParam(
-            ele["operandIdx"].get<int>(), ele["ddrId"].get<int>(), ele["shape"].get<std::vector<int64_t>>(),
-            ele["offset"].get<std::vector<int64_t>>(), ele["name"].get<std::string>(), ele["loc"].get<int>(),
-            ele["symbol"].get<std::string>(), static_cast<DataType>(ele["data_type"].get<int>()));
+        AppendIncastParam(ele["operandIdx"].get<int>(), ele["ddrId"].get<int>(),
+                          ele["shape"].get<std::vector<int64_t>>(), ele["offset"].get<std::vector<int64_t>>(),
+                          ele["name"].get<std::string>(), ele["loc"].get<int>(), ele["symbol"].get<std::string>(),
+                          static_cast<DataType>(ele["data_type"].get<int>()));
     }
 
     for (auto& ele : params["outcasts"]) {
-        AppendOutcastParam(
-            ele["operandIdx"].get<int>(), ele["ddrId"].get<int>(), 0, ele["shape"].get<std::vector<int64_t>>(),
-            ele["offset"].get<std::vector<int64_t>>(), ele["name"].get<std::string>(), ele["loc"].get<int>(),
-            ele["symbol"].get<std::string>(), static_cast<DataType>(ele["data_type"].get<int>()));
+        AppendOutcastParam(ele["operandIdx"].get<int>(), ele["ddrId"].get<int>(), 0,
+                           ele["shape"].get<std::vector<int64_t>>(), ele["offset"].get<std::vector<int64_t>>(),
+                           ele["name"].get<std::string>(), ele["loc"].get<int>(), ele["symbol"].get<std::string>(),
+                           static_cast<DataType>(ele["data_type"].get<int>()));
     }
 
     for (auto& ele : params["tensors"]) {
-        AppendTensorParam(
-            ele["operandIdx"].get<int>(), ele["ddrId"].get<int>(), ele["shape"].get<std::vector<int64_t>>(),
-            ele["offset"].get<std::vector<int64_t>>(), ele["name"].get<std::string>(), ele["loc"].get<int>(),
-            ele["symbol"].get<std::string>(), static_cast<DataType>(ele["data_type"].get<int>()));
+        AppendTensorParam(ele["operandIdx"].get<int>(), ele["ddrId"].get<int>(),
+                          ele["shape"].get<std::vector<int64_t>>(), ele["offset"].get<std::vector<int64_t>>(),
+                          ele["name"].get<std::string>(), ele["loc"].get<int>(), ele["symbol"].get<std::string>(),
+                          static_cast<DataType>(ele["data_type"].get<int>()));
     }
 }
 
@@ -684,9 +678,8 @@ bool SubfuncParam::TensorParamTy::CompareParam(const SubfuncInvokeInfoTy::Tensor
 namespace {
 constexpr size_t READY_STATE_INFO_NUM = 2;
 
-Status CheckDumpEntryArgs(
-    int esgId, int64_t entryOffset, const int64_t* entryParamPtr, const int32_t* readyStatePtr, size_t topologySize,
-    size_t readyStateTotalSize, size_t& esgIndex, size_t& readyStateOffset)
+Status CheckDumpEntryArgs(int esgId, int64_t entryOffset, const int64_t* entryParamPtr, const int32_t* readyStatePtr,
+                          size_t topologySize, size_t readyStateTotalSize, size_t& esgIndex, size_t& readyStateOffset)
 {
     if (entryParamPtr == nullptr || readyStatePtr == nullptr) {
         APASS_LOG_ERROR_F(Elements::Function, "Error: null buffer in DumpEachEntryInfo");
@@ -698,9 +691,8 @@ Status CheckDumpEntryArgs(
     }
     esgIndex = static_cast<size_t>(esgId);
     if (esgIndex >= topologySize) {
-        APASS_LOG_ERROR_F(
-            Elements::Function, "Error: invalid esgId %d in DumpEachEntryInfo, topology size is %zu", esgId,
-            topologySize);
+        APASS_LOG_ERROR_F(Elements::Function, "Error: invalid esgId %d in DumpEachEntryInfo, topology size is %zu",
+                          esgId, topologySize);
         return FAILED;
     }
     if (entryOffset < 0 || entryOffset % static_cast<int64_t>(sizeof(int64_t)) != 0) {
@@ -709,9 +701,9 @@ Status CheckDumpEntryArgs(
     }
     readyStateOffset = esgIndex * READY_STATE_INFO_NUM;
     if (readyStateOffset + 1 >= readyStateTotalSize) {
-        APASS_LOG_ERROR_F(
-            Elements::Function, "Error: readyState buffer overflow risk in DumpEachEntryInfo, offset=%zu, total=%zu",
-            readyStateOffset, readyStateTotalSize);
+        APASS_LOG_ERROR_F(Elements::Function,
+                          "Error: readyState buffer overflow risk in DumpEachEntryInfo, offset=%zu, total=%zu",
+                          readyStateOffset, readyStateTotalSize);
         return FAILED;
     }
     return SUCCESS;
@@ -735,12 +727,12 @@ Status CheckEntryParamBuffer(size_t entryOffsetBytes, size_t copyBytes, size_t e
     if (entryOffsetBytes <= entryParamTotalBytes && copyBytes <= entryParamTotalBytes - entryOffsetBytes) {
         return SUCCESS;
     }
-    APASS_LOG_ERROR_F(
-        Elements::Function, "Error: entry buffer overflow risk in DumpEachEntryInfo, offset=%zu, copy=%zu, total=%zu",
-        entryOffsetBytes, copyBytes, entryParamTotalBytes);
+    APASS_LOG_ERROR_F(Elements::Function,
+                      "Error: entry buffer overflow risk in DumpEachEntryInfo, offset=%zu, copy=%zu, total=%zu",
+                      entryOffsetBytes, copyBytes, entryParamTotalBytes);
     return FAILED;
 }
-}
+} // namespace
 
 void SubfuncTopologyInfoTy::AddEntry(const int esgId, const int readState, const setType& succ)
 {
@@ -754,8 +746,8 @@ void SubfuncTopologyInfoTy::AddEntry(const int esgId, const int readState, const
     }
 }
 
-void SubfuncTopologyInfoTy::UpdateEntry(
-    const uint32_t extType, const uint32_t extParamNum, const std::vector<int64_t>& extParams)
+void SubfuncTopologyInfoTy::UpdateEntry(const uint32_t extType, const uint32_t extParamNum,
+                                        const std::vector<int64_t>& extParams)
 {
     auto& entry = topology_.back();
     entry.extType = extType;
@@ -817,15 +809,14 @@ void SubfuncTopologyInfoTy::Print(std::ostream& osm) const
     }
 }
 
-Status SubfuncTopologyInfoTy::DumpEachEntryInfo(
-    int esgId, CoreType coreType, int64_t entryOffset, int64_t* entryParamPtr, size_t entryParamTotalBytes,
-    int32_t* readyStatePtr, size_t readyStateTotalSize) const
+Status SubfuncTopologyInfoTy::DumpEachEntryInfo(int esgId, CoreType coreType, int64_t entryOffset,
+                                                int64_t* entryParamPtr, size_t entryParamTotalBytes,
+                                                int32_t* readyStatePtr, size_t readyStateTotalSize) const
 { // dump each entry
     size_t esgIndex = 0;
     size_t readyStateOffset = 0;
-    if (CheckDumpEntryArgs(
-            esgId, entryOffset, entryParamPtr, readyStatePtr, topology_.size(), readyStateTotalSize, esgIndex,
-            readyStateOffset) != SUCCESS) {
+    if (CheckDumpEntryArgs(esgId, entryOffset, entryParamPtr, readyStatePtr, topology_.size(), readyStateTotalSize,
+                           esgIndex, readyStateOffset) != SUCCESS) {
         return FAILED;
     }
 
@@ -838,9 +829,8 @@ Status SubfuncTopologyInfoTy::DumpEachEntryInfo(
         return FAILED;
     }
 
-    if (memcpy_s(
-        entryParamPtr + entryOffsetElements, entryParamTotalBytes - entryOffsetBytes, entryParam.data(),
-        copyBytes) != EOK) {
+    if (memcpy_s(entryParamPtr + entryOffsetElements, entryParamTotalBytes - entryOffsetBytes, entryParam.data(),
+                 copyBytes) != EOK) {
         APASS_LOG_ERROR_F(Elements::Function, "Error: memcpy_s failed in DumpEachEntryInfo");
         return FAILED;
     }

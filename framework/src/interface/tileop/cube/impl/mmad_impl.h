@@ -18,7 +18,8 @@
 
 #include "cube_utils.h"
 
-template <bool initMatrixC, TransMode transMode, bool kAlignFlag, typename TileAcc, typename TileLeft, typename TileRight>
+template <bool initMatrixC, TransMode transMode, bool kAlignFlag, typename TileAcc, typename TileLeft,
+          typename TileRight>
 INLINE void TMatmulImpl(TileAcc& c, TileLeft& a, TileRight& b)
 {
     int64_t validM = GetShape<0>(a);
@@ -69,7 +70,8 @@ INLINE void TMatmulImpl(TileAcc& c, TileLeft& a, TileRight& b)
     }
 }
 
-template <TransMode transMode, bool kAlignFlag, typename TileAcc, typename TileLeft, typename TileRight, typename TileBias>
+template <TransMode transMode, bool kAlignFlag, typename TileAcc, typename TileLeft, typename TileRight,
+          typename TileBias>
 INLINE void TMatmulImpl(TileAcc& c, TileLeft& a, TileRight& b, TileBias& bias)
 {
     int64_t validM = GetShape<0>(a);
@@ -90,8 +92,8 @@ INLINE void TMatmulImpl(TileAcc& c, TileLeft& a, TileRight& b, TileBias& bias)
     using tileL0ATensor = pto::TileLeft<typename TileLeft::Type, staticL0AH, staticL0AW, -1, -1>;
     using tileL0BTensor = pto::TileRight<typename TileRight::Type, staticL0BH, staticL0BW, -1, -1>;
     using tileL0CTensor = pto::TileAcc<typename TileAcc::Type, staticL0CH, staticL0CW, -1, -1>;
-    using tileBiasTensor =
-        pto::Tile<pto::TileType::Bias, typename TileBias::Type, 1, staticL0BW, pto::BLayout::RowMajor, -1, -1>;
+    using tileBiasTensor = pto::Tile<pto::TileType::Bias, typename TileBias::Type, 1, staticL0BW,
+                                     pto::BLayout::RowMajor, -1, -1>;
     validM = (validM + BLOCK_CUBE_M_N - 1) / BLOCK_CUBE_M_N * BLOCK_CUBE_M_N;
     tileL0ATensor l0a(validM, validK);
     tileL0BTensor l0b(validK, validN);

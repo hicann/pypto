@@ -36,8 +36,8 @@ struct MulsOpMetaData {
     nlohmann::json test_data_;
 };
 
-static void MulsOperationExeFuncDoubleCut(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void MulsOperationExeFuncDoubleCut(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                          const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0]})
     {
@@ -53,11 +53,10 @@ static void MulsOperationExeFuncDoubleCut(
         {
             LOOP("LOOP_L1_sIdx", FunctionType::DYNAMIC_LOOP, sIdx, LoopRange(0, sloop, 1))
             {
-                auto tileTensor0 = View(
-                    inputs[0], {firstViewShape, secondViewShape},
-                    {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                     std::min(secondDim - sIdx * secondViewShape, secondViewShape)},
-                    {bIdx * firstViewShape, sIdx * secondViewShape});
+                auto tileTensor0 = View(inputs[0], {firstViewShape, secondViewShape},
+                                        {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                         std::min(secondDim - sIdx * secondViewShape, secondViewShape)},
+                                        {bIdx * firstViewShape, sIdx * secondViewShape});
                 TileShape::Current().SetVecTile(args->tileShape_);
                 auto res = Mul(tileTensor0, args->value_);
                 Assemble(res, {bIdx * firstViewShape, sIdx * secondViewShape}, outputs[0]);
@@ -66,8 +65,8 @@ static void MulsOperationExeFuncDoubleCut(
     }
 }
 
-static void MulsOperationExeFuncTripleCut(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void MulsOperationExeFuncTripleCut(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                          const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0]})
     {
@@ -88,12 +87,11 @@ static void MulsOperationExeFuncTripleCut(
             {
                 LOOP("LOOP_L2_nIdx", FunctionType::DYNAMIC_LOOP, nIdx, LoopRange(0, nloop, 1))
                 {
-                    auto tileTensor0 = View(
-                        inputs[0], {firstViewShape, secondViewShape, thirdViewShape},
-                        {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                         std::min(secondDim - sIdx * secondViewShape, secondViewShape),
-                         std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape)},
-                        {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape});
+                    auto tileTensor0 = View(inputs[0], {firstViewShape, secondViewShape, thirdViewShape},
+                                            {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                             std::min(secondDim - sIdx * secondViewShape, secondViewShape),
+                                             std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape)},
+                                            {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape});
                     TileShape::Current().SetVecTile(args->tileShape_);
                     auto res = Mul(tileTensor0, args->value_);
                     Assemble(res, {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape}, outputs[0]);
@@ -103,8 +101,8 @@ static void MulsOperationExeFuncTripleCut(
     }
 }
 
-static void MulsOperationExeFuncQuadrupleCut(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void MulsOperationExeFuncQuadrupleCut(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                             const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0]})
     {
@@ -130,21 +128,20 @@ static void MulsOperationExeFuncQuadrupleCut(
                 {
                     LOOP("LOOP_L3_qIdx", FunctionType::DYNAMIC_LOOP, qIdx, LoopRange(0, qloop, 1))
                     {
-                        auto tileTensor0 = View(
-                            inputs[0], {firstViewShape, secondViewShape, thirdViewShape, fourthViewShape},
-                            {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                             std::min(secondDim - sIdx * secondViewShape, secondViewShape),
-                             std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape),
-                             std::min(fourthDim - qIdx * fourthViewShape, fourthViewShape)},
-                            {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape,
-                             qIdx * fourthViewShape});
+                        auto tileTensor0 = View(inputs[0],
+                                                {firstViewShape, secondViewShape, thirdViewShape, fourthViewShape},
+                                                {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                                 std::min(secondDim - sIdx * secondViewShape, secondViewShape),
+                                                 std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape),
+                                                 std::min(fourthDim - qIdx * fourthViewShape, fourthViewShape)},
+                                                {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape,
+                                                 qIdx * fourthViewShape});
                         TileShape::Current().SetVecTile(args->tileShape_);
                         auto res = Mul(tileTensor0, args->value_);
-                        Assemble(
-                            res,
-                            {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape,
-                             qIdx * fourthViewShape},
-                            outputs[0]);
+                        Assemble(res,
+                                 {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape,
+                                  qIdx * fourthViewShape},
+                                 outputs[0]);
                     }
                 }
             }
@@ -154,10 +151,11 @@ static void MulsOperationExeFuncQuadrupleCut(
 
 class MulsOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac_param<MulsOpMetaData> {};
 
-INSTANTIATE_TEST_SUITE_P(
-    TestMuls, MulsOperationTest,
-    ::testing::ValuesIn(GetOpMetaData<MulsOpMetaData>(
-        {MulsOperationExeFuncDoubleCut, MulsOperationExeFuncTripleCut, MulsOperationExeFuncQuadrupleCut}, "Muls")));
+INSTANTIATE_TEST_SUITE_P(TestMuls, MulsOperationTest,
+                         ::testing::ValuesIn(GetOpMetaData<MulsOpMetaData>({MulsOperationExeFuncDoubleCut,
+                                                                            MulsOperationExeFuncTripleCut,
+                                                                            MulsOperationExeFuncQuadrupleCut},
+                                                                           "Muls")));
 
 TEST_P(MulsOperationTest, TestMuls)
 {

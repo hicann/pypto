@@ -21,8 +21,8 @@
 #include "adapter/api/runtime_api.h"
 
 namespace npu::tile_fwk::dynamic {
-   int32_t AdumpRegExceptionDump();
-   int32_t ExceptionDumpCallBack(AclRtExceptionInfo *exceptionInfo, AdxExceptionDumpInfo *exceptionDumpInfo,
-        uint32_t exceptionDumpSize, uint32_t* exceptionDumpRealSize, AdxExceptionDumpMode *mode);
-}
+int32_t AdumpRegExceptionDump();
+int32_t ExceptionDumpCallBack(AclRtExceptionInfo* exceptionInfo, AdxExceptionDumpInfo* exceptionDumpInfo,
+                              uint32_t exceptionDumpSize, uint32_t* exceptionDumpRealSize, AdxExceptionDumpMode* mode);
+} // namespace npu::tile_fwk::dynamic
 #endif // exception Dump h

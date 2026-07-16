@@ -192,10 +192,10 @@ TEST_F(IRVisitorTest, TestVisitForStmt)
     auto init = std::make_shared<ConstInt>(0, DataType::INT32, Sp());
     auto iterArg = std::make_shared<IterArg>("sum", Scalar(DataType::INT32), init, Sp());
     auto retVar = std::make_shared<Var>("sum_out", Scalar(DataType::INT32), Sp());
-    auto body =
-        std::make_shared<YieldStmt>(std::vector<ExprPtr>{std::make_shared<ConstInt>(1, DataType::INT32, Sp())}, Sp());
-    v.VisitStmt(std::make_shared<ForStmt>(
-        i, start, stop, step, std::vector<IterArgPtr>{iterArg}, body, std::vector<VarPtr>{retVar}, Sp()));
+    auto body = std::make_shared<YieldStmt>(std::vector<ExprPtr>{std::make_shared<ConstInt>(1, DataType::INT32, Sp())},
+                                            Sp());
+    v.VisitStmt(std::make_shared<ForStmt>(i, start, stop, step, std::vector<IterArgPtr>{iterArg}, body,
+                                          std::vector<VarPtr>{retVar}, Sp()));
     ASSERT_FALSE(v.visited.empty());
 }
 
@@ -275,9 +275,9 @@ TEST_F(IRVisitorTest, TestVisitTensorOpStmt)
     auto result = std::make_shared<Var>("res", Scalar(DataType::INT32), Sp());
     auto token = std::make_shared<Var>("tok", Scalar(DataType::INT32), Sp());
     auto arg = std::make_shared<ConstInt>(1, DataType::INT32, Sp());
-    auto stmt = std::make_shared<TensorOpStmt>(
-        std::vector<VarPtr>{result}, token, "matmul", std::vector<ExprPtr>{arg}, std::vector<VarPtr>{},
-        std::vector<std::pair<std::string, std::any>>{}, Sp());
+    auto stmt = std::make_shared<TensorOpStmt>(std::vector<VarPtr>{result}, token, "matmul", std::vector<ExprPtr>{arg},
+                                               std::vector<VarPtr>{}, std::vector<std::pair<std::string, std::any>>{},
+                                               Sp());
     v.VisitStmt(stmt);
     ASSERT_EQ(v.visited.back(), "TensorOpStmt");
 }
@@ -291,8 +291,8 @@ TEST_F(IRVisitorTest, TestVisitFunction)
     TestVisitor v;
     auto x = std::make_shared<Var>("x", Scalar(DataType::INT32), Sp());
     auto body = std::make_shared<AssignStmt>(x, std::make_shared<ConstInt>(42, DataType::INT32, Sp()), Sp());
-    auto func = std::make_shared<Function>(
-        "f", std::vector<VarPtr>{x}, std::vector<TypePtr>{Scalar(DataType::INT32)}, body, Sp());
+    auto func = std::make_shared<Function>("f", std::vector<VarPtr>{x}, std::vector<TypePtr>{Scalar(DataType::INT32)},
+                                           body, Sp());
     v.VisitFunction(func);
     ASSERT_FALSE(v.visited.empty());
 }

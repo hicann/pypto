@@ -30,20 +30,19 @@ namespace npu::tile_fwk {
 namespace osp {
 template <typename GraphTIn, typename GraphTOut>
 std::unordered_map<VertexIdxT<GraphTIn>, VertexIdxT<GraphTOut>> CreateInducedSubgraphMap(
-    const GraphTIn &dag, GraphTOut &dagOut, const std::vector<VertexIdxT<GraphTIn>> &selectedNodes)
+    const GraphTIn& dag, GraphTOut& dagOut, const std::vector<VertexIdxT<GraphTIn>>& selectedNodes)
 {
     std::unordered_map<VertexIdxT<GraphTIn>, VertexIdxT<GraphTOut>> localIdx;
     localIdx.reserve(selectedNodes.size());
 
-    for (const auto &node : selectedNodes) {
+    for (const auto& node : selectedNodes) {
         localIdx[node] = dagOut.NumVertices();
-        dagOut.AddVertex(
-            dag.VertexWorkWeight(node), dag.VertexCommWeight(node),
-            dag.VertexMemWeight(node), dag.VertexType(node));
+        dagOut.AddVertex(dag.VertexWorkWeight(node), dag.VertexCommWeight(node), dag.VertexMemWeight(node),
+                         dag.VertexType(node));
     }
 
-    for (const auto &node : selectedNodes) {
-        for (const auto &pred : dag.Parents(node)) {
+    for (const auto& node : selectedNodes) {
+        for (const auto& pred : dag.Parents(node)) {
             if (localIdx.count(pred)) {
                 dagOut.AddEdge(localIdx[pred], localIdx[node]);
             }
@@ -52,6 +51,6 @@ std::unordered_map<VertexIdxT<GraphTIn>, VertexIdxT<GraphTOut>> CreateInducedSub
 
     return localIdx;
 }
-}    // end namespace osp
+} // end namespace osp
 } // namespace npu::tile_fwk
 #endif // OSP_SUBGRAPH_ALGORITHMS_HPP

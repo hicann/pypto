@@ -69,18 +69,18 @@ TEST_F(TestCodegenDynIndexOutCast, IndexOutCast)
             past_key_states = ScatterUpdate(past_key_states, kv_len, key_states, -2);
         }
     }
-    auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX +
+                                                                HIDDEN_FUNC_SUFFIX);
 
-    auto ddrTensor =
-        CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_DEVICE_DDR, shape0, "IndexOutCast"});
-    auto localTensorSrc0 =
-        CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape2, dynValidShape2});
-    auto localTensorSrc1 =
-        CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape1, dynValidShape1});
+    auto ddrTensor = CreateLogicalTensor(
+        {*function, DataType::DT_FP32, MemoryType::MEM_DEVICE_DDR, shape0, "IndexOutCast"});
+    auto localTensorSrc0 = CreateLogicalTensor(
+        {*function, DataType::DT_FP32, MemoryType::MEM_UB, shape2, dynValidShape2});
+    auto localTensorSrc1 = CreateLogicalTensor(
+        {*function, DataType::DT_FP32, MemoryType::MEM_UB, shape1, dynValidShape1});
 
-    auto& op =
-        function->AddOperation(Opcode::OP_INDEX_OUTCAST, {localTensorSrc0, localTensorSrc1, ddrTensor}, {ddrTensor});
+    auto& op = function->AddOperation(Opcode::OP_INDEX_OUTCAST, {localTensorSrc0, localTensorSrc1, ddrTensor},
+                                      {ddrTensor});
     op.SetAttribute("axis", 0);
     op.SetAttribute(OpAttributeKey::panzBlockSize, 1);
     std::string cacheMode = "PA_BNSD";
@@ -108,10 +108,10 @@ TEST_F(TestCodegenDynIndexOutCast, TestIndexOutTileTensor)
 
     std::vector<int64_t> scaterShape = {64, 64};
     std::vector<SymbolicScalar> dynValidShape = {64, 64};
-    auto indexoutTensor =
-        CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_DEVICE_DDR, scaterShape, dynValidShape});
-    auto localOutTensor =
-        CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, scaterShape, dynValidShape});
+    auto indexoutTensor = CreateLogicalTensor(
+        {*function, DataType::DT_FP32, MemoryType::MEM_DEVICE_DDR, scaterShape, dynValidShape});
+    auto localOutTensor = CreateLogicalTensor(
+        {*function, DataType::DT_FP32, MemoryType::MEM_UB, scaterShape, dynValidShape});
 
     std::vector<int64_t> offset = {0, 0};
     std::vector<SymbolicScalar> dynoffset = {0, 0};
@@ -142,18 +142,18 @@ TEST_F(TestCodegenDynIndexOutCast, DynIndexOutUnaligned)
     TileShape::Current().SetVecTile({32, 32});
 
     PassManager& passManager = PassManager::Instance();
-    passManager.RegisterStrategy(
-        "GenerateMoveOpPassTestStrategy", {
-                                              {"RemoveRedundantReshape", PassName::REMOVE_REDUNDANT_RESHAPE},
-                                              {"ExpandFunction", PassName::EXPAND_FUNCTION},
-                                              {"DuplicateOp", PassName::DUPLICATE_OP},
-                                              {"MergeViewAssemble", PassName::MERGE_VIEW_ASSEMBLE},
-                                              {"AssignMemoryType", PassName::ASSIGN_MEMORY_TYPE},
-                                              {"SplitLargeFanoutTensor", PassName::SPLIT_LARGE_FANOUT_TENSOR},
-                                              {"SplitReshape", PassName::SPLIT_RESHAPE},
-                                              {"RemoveRedundantOp", PassName::REMOVE_REDUNDANT_OP},
-                                              {"GenerateMoveOp", PassName::GENERATE_MOVE_OP},
-                                          });
+    passManager.RegisterStrategy("GenerateMoveOpPassTestStrategy",
+                                 {
+                                     {"RemoveRedundantReshape", PassName::REMOVE_REDUNDANT_RESHAPE},
+                                     {"ExpandFunction", PassName::EXPAND_FUNCTION},
+                                     {"DuplicateOp", PassName::DUPLICATE_OP},
+                                     {"MergeViewAssemble", PassName::MERGE_VIEW_ASSEMBLE},
+                                     {"AssignMemoryType", PassName::ASSIGN_MEMORY_TYPE},
+                                     {"SplitLargeFanoutTensor", PassName::SPLIT_LARGE_FANOUT_TENSOR},
+                                     {"SplitReshape", PassName::SPLIT_RESHAPE},
+                                     {"RemoveRedundantOp", PassName::REMOVE_REDUNDANT_OP},
+                                     {"GenerateMoveOp", PassName::GENERATE_MOVE_OP},
+                                 });
 
     int h = 32;
     int minusTwo = -2;
@@ -171,8 +171,8 @@ TEST_F(TestCodegenDynIndexOutCast, DynIndexOutUnaligned)
         }
     }
 #if ENABLE_HIDDENLOOP
-    auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX +
+                                                                HIDDEN_FUNC_SUFFIX);
 #else
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX);
 #endif

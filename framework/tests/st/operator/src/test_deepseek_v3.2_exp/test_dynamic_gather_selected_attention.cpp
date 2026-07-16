@@ -71,8 +71,8 @@ void TestSa(SaTileShapeConfig& tileConfig)
     auto qRope = CreateTensorAndData<T>(qRopeShape, dType, "qRope", "/q_rope.bin", {0});
     auto kRope2D = CreateTensorAndData<T>(krShape, dType, "kr", "/k_rope.bin", {0});
     auto knScales = CreateTensorAndData<float>(knScalesShape, DT_FP32, "knScales", "/kn_scales.bin", {0});
-    auto topKIndcies =
-        CreateTensorAndData<int32_t>(topKIndciesShape, DT_INT32, "topKIndcies", "/topk_indcies.bin", {0});
+    auto topKIndcies = CreateTensorAndData<int32_t>(topKIndciesShape, DT_INT32, "topKIndcies", "/topk_indcies.bin",
+                                                    {0});
     auto blockTable = CreateTensorAndData<int32_t>(blockTableShape, DT_INT32, "blockTable", "/block_table.bin", {0, 1});
     auto actSeqs = CreateTensorAndData<int32_t>(actSeqsShape, DT_INT32, "actSeqs", "/actual_seq.bin", {0});
 
@@ -81,18 +81,17 @@ void TestSa(SaTileShapeConfig& tileConfig)
 
     if (isKnQuant == 0) {
         auto kNope2D = CreateTensorAndData<T>(knShape, dType, "kn", "/k_nope.bin", {0});
-        SelectedAttentionV2(
-            qNope.tensor, qRope.tensor, kNope2D.tensor, kRope2D.tensor, knScales.tensor, topKIndcies.tensor,
-            blockTable.tensor, actSeqs.tensor, nq, nkv, softmaxScale, topk, blockSize, maxBlockNumPerBatch, saOut,
-            tileConfig);
+        SelectedAttentionV2(qNope.tensor, qRope.tensor, kNope2D.tensor, kRope2D.tensor, knScales.tensor,
+                            topKIndcies.tensor, blockTable.tensor, actSeqs.tensor, nq, nkv, softmaxScale, topk,
+                            blockSize, maxBlockNumPerBatch, saOut, tileConfig);
         // 读数据
         int saOutSize = std::accumulate(saOutShape.begin(), saOutShape.end(), 1, std::multiplies<>());
         std::vector<T> golden(saOutSize, 0);
         readInput(GetGoldenDir() + "/atten_out.bin", golden);
 
-        ProgramData::GetInstance().AppendInputs(
-            {qNope.dataPtr, qRope.dataPtr, kNope2D.dataPtr, kRope2D.dataPtr, knScales.dataPtr, topKIndcies.dataPtr,
-             blockTable.dataPtr, actSeqs.dataPtr});
+        ProgramData::GetInstance().AppendInputs({qNope.dataPtr, qRope.dataPtr, kNope2D.dataPtr, kRope2D.dataPtr,
+                                                 knScales.dataPtr, topKIndcies.dataPtr, blockTable.dataPtr,
+                                                 actSeqs.dataPtr});
         ProgramData::GetInstance().AppendOutputs({saOutData});
         DevFuncRunner::Run(Program::GetInstance().GetLastFunction());
         auto outs = npu::tile_fwk::ProgramData::GetInstance().GetOutputData(0);
@@ -100,17 +99,16 @@ void TestSa(SaTileShapeConfig& tileConfig)
     } else {
         // kn int8
         auto kNope2D = CreateTensorAndData<int8_t>(knShape, DT_INT8, "kn", "/k_nope.bin", {0});
-        SelectedAttentionV2(
-            qNope.tensor, qRope.tensor, kNope2D.tensor, kRope2D.tensor, knScales.tensor, topKIndcies.tensor,
-            blockTable.tensor, actSeqs.tensor, nq, nkv, softmaxScale, topk, blockSize, maxBlockNumPerBatch, saOut,
-            tileConfig);
+        SelectedAttentionV2(qNope.tensor, qRope.tensor, kNope2D.tensor, kRope2D.tensor, knScales.tensor,
+                            topKIndcies.tensor, blockTable.tensor, actSeqs.tensor, nq, nkv, softmaxScale, topk,
+                            blockSize, maxBlockNumPerBatch, saOut, tileConfig);
         int saOutSize = std::accumulate(saOutShape.begin(), saOutShape.end(), 1, std::multiplies<>());
         std::vector<T> golden(saOutSize, 0);
         readInput(GetGoldenDir() + "/atten_out.bin", golden);
 
-        ProgramData::GetInstance().AppendInputs(
-            {qNope.dataPtr, qRope.dataPtr, kNope2D.dataPtr, kRope2D.dataPtr, knScales.dataPtr, topKIndcies.dataPtr,
-             blockTable.dataPtr, actSeqs.dataPtr});
+        ProgramData::GetInstance().AppendInputs({qNope.dataPtr, qRope.dataPtr, kNope2D.dataPtr, kRope2D.dataPtr,
+                                                 knScales.dataPtr, topKIndcies.dataPtr, blockTable.dataPtr,
+                                                 actSeqs.dataPtr});
         ProgramData::GetInstance().AppendOutputs({saOutData});
         DevFuncRunner::Run(Program::GetInstance().GetLastFunction());
         auto outs = npu::tile_fwk::ProgramData::GetInstance().GetOutputData(0);

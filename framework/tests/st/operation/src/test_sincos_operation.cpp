@@ -53,8 +53,8 @@ static inline Tensor ApplySinCosOp(SinCosOp op, const Tensor& input)
     }
 }
 
-static void SinCosOperationExeFunc2Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void SinCosOperationExeFunc2Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                        const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0]})
     {
@@ -66,8 +66,8 @@ static void SinCosOperationExeFunc2Dims(
             LOOP("LOOP_L0_bIdx", FunctionType::DYNAMIC_LOOP, bIdx, LoopRange(loop[0]))
             {
                 std::vector<SymbolicScalar> offset = {bIdx * args->viewShape_[0]};
-                auto viewTensor = View(
-                    inputs[0], args->viewShape_, {std::min(firstDim - bIdx * firstViewShape, firstViewShape)}, offset);
+                auto viewTensor = View(inputs[0], args->viewShape_,
+                                       {std::min(firstDim - bIdx * firstViewShape, firstViewShape)}, offset);
                 TileShape::Current().SetVecTile(args->tileShape_);
                 auto res = ApplySinCosOp(args->op_, viewTensor);
                 Assemble(res, offset, outputs[0]);
@@ -87,11 +87,10 @@ static void SinCosOperationExeFunc2Dims(
             {
                 LOOP("LOOP_L1_sIdx", FunctionType::DYNAMIC_LOOP, sIdx, LoopRange(0, sloop, 1))
                 {
-                    auto tileTensor = View(
-                        inputs[0], {firstViewShape, secondViewShape},
-                        {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                         std::min(secondDim - sIdx * secondViewShape, secondViewShape)},
-                        {bIdx * firstViewShape, sIdx * secondViewShape});
+                    auto tileTensor = View(inputs[0], {firstViewShape, secondViewShape},
+                                           {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                            std::min(secondDim - sIdx * secondViewShape, secondViewShape)},
+                                           {bIdx * firstViewShape, sIdx * secondViewShape});
                     TileShape::Current().SetVecTile(args->tileShape_);
                     // 使用 ApplySinCosOp 函数，根据 args->op_ 的值动态决定是 sin 还是 cos
                     auto res = ApplySinCosOp(args->op_, tileTensor);
@@ -102,8 +101,8 @@ static void SinCosOperationExeFunc2Dims(
     }
 }
 
-static void SinCosOperationExeFunc3Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void SinCosOperationExeFunc3Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                        const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0]})
     {
@@ -126,12 +125,11 @@ static void SinCosOperationExeFunc3Dims(
             {
                 LOOP("LOOP_L3_nIdx", FunctionType::DYNAMIC_LOOP, nIdx, LoopRange(0, nloop, 1))
                 {
-                    auto tileTensor = View(
-                        inputs[0], {firstViewShape, secondViewShape, thirdViewShape},
-                        {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                         std::min(secondDim - sIdx * secondViewShape, secondViewShape),
-                         std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape)},
-                        {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape});
+                    auto tileTensor = View(inputs[0], {firstViewShape, secondViewShape, thirdViewShape},
+                                           {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                            std::min(secondDim - sIdx * secondViewShape, secondViewShape),
+                                            std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape)},
+                                           {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape});
 
                     TileShape::Current().SetVecTile(args->tileShape_);
                     auto res = ApplySinCosOp(args->op_, tileTensor);
@@ -142,8 +140,8 @@ static void SinCosOperationExeFunc3Dims(
     }
 }
 
-static void SinCosOperationExeFunc4Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void SinCosOperationExeFunc4Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                        const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0]})
     {
@@ -171,22 +169,21 @@ static void SinCosOperationExeFunc4Dims(
                 {
                     LOOP("LOOP_L3_nIdx", FunctionType::DYNAMIC_LOOP, nIdx, LoopRange(0, nloop, 1))
                     {
-                        Tensor tileTensor0 = View(
-                            inputs[0], {firstViewShape, secondViewShape, thirdViewShape, fourthViewShape},
-                            {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                             std::min(secondDim - sIdx * secondViewShape, secondViewShape),
-                             std::min(thirdDim - mIdx * thirdViewShape, thirdViewShape),
-                             std::min(fourthDim - nIdx * fourthViewShape, fourthViewShape)},
-                            {bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape,
-                             nIdx * fourthViewShape});
+                        Tensor tileTensor0 = View(inputs[0],
+                                                  {firstViewShape, secondViewShape, thirdViewShape, fourthViewShape},
+                                                  {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                                   std::min(secondDim - sIdx * secondViewShape, secondViewShape),
+                                                   std::min(thirdDim - mIdx * thirdViewShape, thirdViewShape),
+                                                   std::min(fourthDim - nIdx * fourthViewShape, fourthViewShape)},
+                                                  {bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape,
+                                                   nIdx * fourthViewShape});
 
                         TileShape::Current().SetVecTile(args->tileShape_);
                         auto res = ApplySinCosOp(args->op_, tileTensor0);
-                        Assemble(
-                            res,
-                            {bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape,
-                             nIdx * fourthViewShape},
-                            outputs[0]);
+                        Assemble(res,
+                                 {bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape,
+                                  nIdx * fourthViewShape},
+                                 outputs[0]);
                     }
                 }
             }
@@ -197,11 +194,10 @@ static void SinCosOperationExeFunc4Dims(
 // 为每种操作创建独立的测试类
 class SinOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac_param<SinCosOpMetaData> {};
 
-INSTANTIATE_TEST_SUITE_P(
-    TestSin, SinOperationTest,
-    ::testing::ValuesIn(GetOpMetaData<SinCosOpMetaData>(
-        {SinCosOperationExeFunc2Dims, SinCosOperationExeFunc3Dims, SinCosOperationExeFunc4Dims},
-        "Sin"))); // 注意这里的字符串参数是 "Sin"
+INSTANTIATE_TEST_SUITE_P(TestSin, SinOperationTest,
+                         ::testing::ValuesIn(GetOpMetaData<SinCosOpMetaData>(
+                             {SinCosOperationExeFunc2Dims, SinCosOperationExeFunc3Dims, SinCosOperationExeFunc4Dims},
+                             "Sin"))); // 注意这里的字符串参数是 "Sin"
 
 TEST_P(SinOperationTest, TestSin)
 {
@@ -214,11 +210,10 @@ TEST_P(SinOperationTest, TestSin)
 
 class CosOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac_param<SinCosOpMetaData> {};
 
-INSTANTIATE_TEST_SUITE_P(
-    TestCos, CosOperationTest,
-    ::testing::ValuesIn(GetOpMetaData<SinCosOpMetaData>(
-        {SinCosOperationExeFunc2Dims, SinCosOperationExeFunc3Dims, SinCosOperationExeFunc4Dims},
-        "Cos"))); // 注意这里的字符串参数是 "Cos"
+INSTANTIATE_TEST_SUITE_P(TestCos, CosOperationTest,
+                         ::testing::ValuesIn(GetOpMetaData<SinCosOpMetaData>(
+                             {SinCosOperationExeFunc2Dims, SinCosOperationExeFunc3Dims, SinCosOperationExeFunc4Dims},
+                             "Cos"))); // 注意这里的字符串参数是 "Cos"
 
 TEST_P(CosOperationTest, TestCos)
 {

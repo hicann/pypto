@@ -29,9 +29,8 @@
 namespace pypto {
 namespace ir {
 
-void ValidateKwargs(
-    const std::vector<std::pair<std::string, std::any>>& kwargs,
-    const std::unordered_map<std::string, std::type_index>& allowed_kwargs, const std::string& op_name)
+void ValidateKwargs(const std::vector<std::pair<std::string, std::any>>& kwargs,
+                    const std::unordered_map<std::string, std::type_index>& allowed_kwargs, const std::string& op_name)
 {
     for (const auto& [key, value] : kwargs) {
         auto it = allowed_kwargs.find(key);
@@ -47,9 +46,8 @@ void ValidateKwargs(
                 << "' expects DataType or int, but got incompatible type";
         } else if (it->second == std::type_index(typeid(int))) {
             std::type_index value_type(value.type());
-            CHECK(
-                value_type == std::type_index(typeid(int)) || value_type == std::type_index(typeid(int64_t)) ||
-                value_type == std::type_index(typeid(TilePad)))
+            CHECK(value_type == std::type_index(typeid(int)) || value_type == std::type_index(typeid(int64_t)) ||
+                  value_type == std::type_index(typeid(TilePad)))
                 << "Kwarg '" << key << "' for operator '" << op_name
                 << "' expects int/int64/TilePad, but got incompatible type";
         } else if (it->second == std::type_index(typeid(MemorySpace))) {
@@ -102,9 +100,8 @@ CallPtr OpRegistry::Create(const std::string& op_name, const std::vector<ExprPtr
     return Create(op_name, args, {}, std::move(span));
 }
 
-CallPtr OpRegistry::Create(
-    const std::string& op_name, const std::vector<ExprPtr>& args,
-    const std::vector<std::pair<std::string, std::any>>& kwargs, Span span) const
+CallPtr OpRegistry::Create(const std::string& op_name, const std::vector<ExprPtr>& args,
+                           const std::vector<std::pair<std::string, std::any>>& kwargs, Span span) const
 {
     // Look up operator in registry
     auto it = registry_.find(op_name);

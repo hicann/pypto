@@ -22,8 +22,8 @@
 #include <string>
 #include <vector>
 #include "interface/utils/common.h"
-#include "tilefwk/data_type.h"   // MemoryType
-#include "passes/block_graph_pass/schedule_ooo/common/buffer_pool.h"   // BufferAddrChange
+#include "tilefwk/data_type.h"                                       // MemoryType
+#include "passes/block_graph_pass/schedule_ooo/common/buffer_pool.h" // BufferAddrChange
 
 namespace npu::tile_fwk {
 
@@ -41,10 +41,10 @@ struct LogicalTensorBrief {
 };
 
 enum class DDRBufferKind : int {
-    FUNCTION_TEMP = 0,   // workspace alloc for function I/O / intermediate DDR
-    SPILL_TEMP    = 1,   // CreateGMTensor spill destination
-    INCAST        = 2,   // cross-device input, machine layer owns the buffer
-    OUTCAST       = 3,   // cross-device output
+    FUNCTION_TEMP = 0, // workspace alloc for function I/O / intermediate DDR
+    SPILL_TEMP = 1,    // CreateGMTensor spill destination
+    INCAST = 2,        // cross-device input, machine layer owns the buffer
+    OUTCAST = 3,       // cross-device output
 };
 
 // INCAST/OUTCAST have no OoO-side address, so addr/size stay 0.
@@ -63,7 +63,7 @@ struct OpLaunchEvent {
     int opMagic;
     PipeType pipeType;
     CoreLocation coreLocation;
-    std::vector<int> inputMemIds;     // memId snapshot at launch time
+    std::vector<int> inputMemIds; // memId snapshot at launch time
     std::vector<int> outputMemIds;
     std::vector<DDRRef> ddrRefs;
 };
@@ -71,7 +71,7 @@ struct OpLaunchEvent {
 struct OpRetireEvent {
     int clock;
     int opMagic;
-    std::vector<int> freedMemIds;     // memIds whose refcount dropped to 0
+    std::vector<int> freedMemIds; // memIds whose refcount dropped to 0
 };
 
 struct AllocExecEvent {
@@ -95,16 +95,16 @@ struct SpillEvent {
     uint64_t addrEnd;
     int triggerOpMagic;
     int64_t triggerTensorSize;
-    int spillCopyoutOpMagic;          // -1 = COPY_IN reuse path, no copyout
+    int spillCopyoutOpMagic; // -1 = COPY_IN reuse path, no copyout
     int reloadAllocOpMagic;
     int reloadCopyInOpMagic;
     int spillTensorMagic;
     uint64_t spillCopyoutSize;
-    uint64_t allocOccupiedSize{0};   // buffer held by owners still being alloc ops (not yet consumed)
-    uint64_t bufferCurrentUsage{0};   // pool occupancy sampled at spill (valid in both phases)
+    uint64_t allocOccupiedSize{0};  // buffer held by owners still being alloc ops (not yet consumed)
+    uint64_t bufferCurrentUsage{0}; // pool occupancy sampled at spill (valid in both phases)
     uint64_t bufferCapacity{0};
     // DDR landing buffer, valid when spillCopyoutOpMagic != -1.
-    int spillDdrMemId{-1};            // >= 0x3f000000
+    int spillDdrMemId{-1}; // >= 0x3f000000
     DDRBufferKind ddrKind{DDRBufferKind::SPILL_TEMP};
     MemoryType ddrMemType{MemoryType::MEM_DEVICE_DDR};
     uint64_t ddrAddrStart{0};
@@ -152,12 +152,12 @@ struct ScheduleEndEvent {
 // incast/outcast registration: machine layer owns the buffers, so only magic +
 // shape are surfaced (no OoO address) for IDE placeholders and graph lookup.
 struct InitDDRBufferEvent {
-    int clock;                        // always -1, predates the timeline
+    int clock; // always -1, predates the timeline
     int memId;
     DDRBufferKind kind;
     int magic;
     DataType dtype;
-    std::vector<std::string> shape;   // dynamic axes carry SymbolicScalar names
+    std::vector<std::string> shape; // dynamic axes carry SymbolicScalar names
 };
 
 class ScheduleObserver {
@@ -174,7 +174,7 @@ public:
     virtual void OnInitDDRBuffer(const InitDDRBufferEvent&) {}
     // Fired from OoOScheduler::PreMainLoop / PostMainLoop and LatencyEstimator::PreMainLoop / PostMainLoop.
     virtual void OnMainLoopBegin() {}
-    virtual void OnMainLoopEnd()   {}
+    virtual void OnMainLoopEnd() {}
 };
 
 } // namespace npu::tile_fwk

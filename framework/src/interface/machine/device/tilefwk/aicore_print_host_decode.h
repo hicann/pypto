@@ -80,8 +80,8 @@ inline int DecodeTensorHeader(DecodeState& state, char* buf, size_t maxSize)
 
     state.lastTensorName_ = name;
 
-    return snprintf_s(
-        buf, maxSize, maxSize - 1, "tensor '%s', range=[%" PRId64 ", %" PRId64 ")\n", name.c_str(), begin, end);
+    return snprintf_s(buf, maxSize, maxSize - 1, "tensor '%s', range=[%" PRId64 ", %" PRId64 ")\n", name.c_str(), begin,
+                      end);
 }
 
 template <typename BitsT, typename DecodeFunc>
@@ -152,14 +152,13 @@ inline int DecodeOverflowWarning(DecodeState& state, char* buf, size_t maxSize)
     int64_t fullBufferSize = bufferSize + remoteHeaderSize;
     int64_t recommendedSize = fullBufferSize * 2;
 
-    return snprintf_s(
-        buf, maxSize, maxSize - 1,
-        "[WARNING] The PRINT_BUFFER_SIZE (ring buffer) is full! "
-        "Current buffer: %ld bytes (%ld KB). "
-        "Recommend: set PRINT_BUFFER_SIZE >= %ld (%ld KB, double current size) "
-        "in framework/src/interface/machine/device/tilefwk/aicpu_common.h, "
-        "then rebuild and reinstall.\n",
-        fullBufferSize, fullBufferSize / 1024, recommendedSize, recommendedSize / 1024);
+    return snprintf_s(buf, maxSize, maxSize - 1,
+                      "[WARNING] The PRINT_BUFFER_SIZE (ring buffer) is full! "
+                      "Current buffer: %ld bytes (%ld KB). "
+                      "Recommend: set PRINT_BUFFER_SIZE >= %ld (%ld KB, double current size) "
+                      "in framework/src/interface/machine/device/tilefwk/aicpu_common.h, "
+                      "then rebuild and reinstall.\n",
+                      fullBufferSize, fullBufferSize / 1024, recommendedSize, recommendedSize / 1024);
 }
 
 inline int DecodeLegacyRecord(DecodeState& state, AicorePrint::DataType type, char* buf, size_t maxSize)
@@ -258,4 +257,3 @@ inline int DecodeRecordImpl(DecodeState& state, AicorePrint::DataType type, char
 }
 
 #endif
-

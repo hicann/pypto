@@ -68,10 +68,7 @@ struct EmulationMemoryUtils {
         return (T*)CopyToDev((uint8_t*)data.data(), data.size() * sizeof(T), nullptr);
     }
 
-    void CopyFromDev(uint8_t* data, uint8_t* devPtr, uint64_t size)
-    {
-        MemcpyS(data, size, devPtr, size);
-    }
+    void CopyFromDev(uint8_t* data, uint8_t* devPtr, uint64_t size) { MemcpyS(data, size, devPtr, size); }
 
     uint8_t* CopyToDev(RawTensorData& data)
     {
@@ -89,4 +86,4 @@ struct EmulationMemoryUtils {
 private:
     std::vector<std::shared_ptr<uint8_t>> EmulationAllocatePtrs_;
 };
-}
+} // namespace npu::tile_fwk::dynamic

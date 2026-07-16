@@ -23,9 +23,8 @@ TileCalculator TileCalculator::instance;
 
 static inline bool IsCopyOutOp(const Opcode& op)
 {
-    return (
-        op == Opcode::OP_COPY_OUT || op == Opcode::OP_L0C_COPY_OUT || op == Opcode::OP_TRANSPOSE_MOVEOUT ||
-        op == Opcode::OP_INDEX_OUTCAST);
+    return (op == Opcode::OP_COPY_OUT || op == Opcode::OP_L0C_COPY_OUT || op == Opcode::OP_TRANSPOSE_MOVEOUT ||
+            op == Opcode::OP_INDEX_OUTCAST);
 }
 
 static inline bool IsCopyInOp(const Opcode& op)
@@ -39,8 +38,8 @@ static uint64_t CalculateInputHash(const TilePtr& tile)
     return static_cast<uint64_t>(buffer.Digest());
 }
 
-static uint64_t LoadTile(
-    TileState::TileStateKeyTy& k, std::shared_ptr<TileState> local, std::shared_ptr<TileState> global)
+static uint64_t LoadTile(TileState::TileStateKeyTy& k, std::shared_ptr<TileState> local,
+                         std::shared_ptr<TileState> global)
 {
     if (k.bufType == BUF_DDR) {
         return global->Load(k);
@@ -49,8 +48,8 @@ static uint64_t LoadTile(
     }
 }
 
-static void StoreTile(
-    TileState::TileStateKeyTy& k, uint64_t& value, std::shared_ptr<TileState> local, std::shared_ptr<TileState> global)
+static void StoreTile(TileState::TileStateKeyTy& k, uint64_t& value, std::shared_ptr<TileState> local,
+                      std::shared_ptr<TileState> global)
 {
     if (k.bufType == BUF_DDR) {
         return global->Store(k, value);
@@ -59,9 +58,8 @@ static void StoreTile(
     }
 }
 
-static uint64_t CalculateOutputHash(
-    TileOpPtr& op, size_t idx, FunctionInvokeInfo& invoke, std::shared_ptr<TileState> local,
-    std::shared_ptr<TileState> global)
+static uint64_t CalculateOutputHash(TileOpPtr& op, size_t idx, FunctionInvokeInfo& invoke,
+                                    std::shared_ptr<TileState> local, std::shared_ptr<TileState> global)
 {
     std::vector<uint64_t> hash;
     for (auto& incast : op->iOperand) {
@@ -102,8 +100,8 @@ inline bool IsCopyOut(const std::string& op)
     return (op == "COPY_OUT" || op == "L0C_COPY_OUT" || op == "TRANSPOSE_MOVEOUT" || op == "INDEX_OUTCAST");
 }
 
-void TileCalculator::Calculate(
-    TileOpPtr op, FunctionInvokeInfo& invoke, std::shared_ptr<TileState> local, std::shared_ptr<TileState> global)
+void TileCalculator::Calculate(TileOpPtr op, FunctionInvokeInfo& invoke, std::shared_ptr<TileState> local,
+                               std::shared_ptr<TileState> global)
 {
     seq++;
 

@@ -113,13 +113,12 @@ void TestLightningIndexerTopkQuant(IndexerTile& tileConfig)
 
     FUNCTION("IndexerTopk", {query, key, qScale, kScale, weights, actSeq, blockTable}, {topkRes, tmpOut, topkValue})
     {
-        LightningIndexerTopkImpl(
-            query, key, true, &qScale, &kScale, weights, actSeq, blockTable, topkRes, selectedCount, tileConfig,
-            unrollList, &tmpOut, &topkValue);
+        LightningIndexerTopkImpl(query, key, true, &qScale, &kScale, weights, actSeq, blockTable, topkRes,
+                                 selectedCount, tileConfig, unrollList, &tmpOut, &topkValue);
     }
 
-    DevFuncRunner::Run(
-        Program::GetInstance().GetLastFunction(), inputDataList, outputDataList, DeviceLauncherConfig(0));
+    DevFuncRunner::Run(Program::GetInstance().GetLastFunction(), inputDataList, outputDataList,
+                       DeviceLauncherConfig(0));
     constexpr float PRE_TAIL = 1e-5f;
     constexpr int TOPK_COUNT = 100;
     constexpr float ratio = 5e-3f;
@@ -136,9 +135,9 @@ TEST_F(DynamicIndexerTopk, indexer_topk_quant_4_b_1_s1_64k_s2)
     config::SetPassOption(SG_PG_LOWER_BOUND, 1024);
     config::SetPassOption(CUBE_L1_REUSE_SETTING, std::map<int64_t, int64_t>{{-1, 32}});
     config::SetPassOption(SG_PARALLEL_NUM, 2);
-    config::SetRuntimeOption<uint8_t>(
-        DEVICE_SCHED_MODE, static_cast<uint8_t>(MachineScheduleConfig::L2CACHE_AFFINITY_SCH) |
-                               static_cast<uint8_t>(MachineScheduleConfig::MULTI_CORE_FAIR_SCH));
+    config::SetRuntimeOption<uint8_t>(DEVICE_SCHED_MODE,
+                                      static_cast<uint8_t>(MachineScheduleConfig::L2CACHE_AFFINITY_SCH) |
+                                          static_cast<uint8_t>(MachineScheduleConfig::MULTI_CORE_FAIR_SCH));
 
     IndexerTile config;
 

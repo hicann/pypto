@@ -87,8 +87,7 @@ TEST_F(PassLogTest, ExtractPassLogByFunctionCoverSystemReturnBranches)
     script.close();
 
     ASSERT_EQ(chdir(tmpDir.c_str()), 0);
-    auto function = std::make_shared<Function>(
-        Program::GetInstance(), "TENSOR_PassLog'UT", "PassLogUT", nullptr);
+    auto function = std::make_shared<Function>(Program::GetInstance(), "TENSOR_PassLog'UT", "PassLogUT", nullptr);
 
     ASSERT_EQ(setenv("PYPTO_PASS_LOG_UT_RET", "0", 1), 0);
     EXPECT_NO_THROW(ExtractPassLogByFunction(*function, "UTStrategy"));
@@ -110,8 +109,7 @@ TEST_F(PassLogTest, PassLogUtilDeleteEmptyFolderOnDestruct)
     ConfigManager::Instance().ResetLog(tmpDir + "/out");
     ASSERT_TRUE(CreateDir(config::LogTopFolder(), true));
 
-    auto function =
-        std::make_shared<Function>(Program::GetInstance(), "TENSOR_PassLogUtil", "PassLogUtil", nullptr);
+    auto function = std::make_shared<Function>(Program::GetInstance(), "TENSOR_PassLogUtil", "PassLogUtil", nullptr);
     DummyPass pass;
     std::string expectedFolder;
 
@@ -135,8 +133,7 @@ TEST_F(PassLogTest, PassLogUtilKeepFolderWhenNotEmpty)
     ConfigManager::Instance().ResetLog(tmpDir + "/out");
     ASSERT_TRUE(CreateDir(config::LogTopFolder(), true));
 
-    auto function =
-        std::make_shared<Function>(Program::GetInstance(), "TENSOR_PassLogKeep", "PassLogKeep", nullptr);
+    auto function = std::make_shared<Function>(Program::GetInstance(), "TENSOR_PassLogKeep", "PassLogKeep", nullptr);
     DummyPass pass;
     std::string expectedFolder;
 
@@ -162,11 +159,11 @@ TEST_F(PassLogTest, PassLogUtilCreatesStrategyScopedFolder)
     ASSERT_EQ(setenv("TILE_FWK_OUTPUT_DIR", (tmpDir + "/out").c_str(), 1), 0);
     ConfigManager::Instance().ResetLog(tmpDir + "/out");
 
-    auto function =
-        std::make_shared<Function>(Program::GetInstance(), "TENSOR_PassLogStrategy", "PassLogStrategy", nullptr);
+    auto function = std::make_shared<Function>(Program::GetInstance(), "TENSOR_PassLogStrategy", "PassLogStrategy",
+                                               nullptr);
     DummyPass pass;
-    const std::string expectedFolder =
-        config::LogTopFolder() + "/computation_graph/Strategy_00_UTStrategy/Pass_11_UTDummyPass";
+    const std::string expectedFolder = config::LogTopFolder() +
+                                       "/computation_graph/Strategy_00_UTStrategy/Pass_11_UTDummyPass";
 
     {
         PassLogUtil util(pass, *function, "UTStrategy", 11);
@@ -189,8 +186,8 @@ TEST_F(PassLogTest, PassLogUtilDeletesEmptyStrategyScopedParents)
     ASSERT_EQ(setenv("TILE_FWK_OUTPUT_DIR", (tmpDir + "/out").c_str(), 1), 0);
     ConfigManager::Instance().ResetLog(tmpDir + "/out");
 
-    auto function = std::make_shared<Function>(
-        Program::GetInstance(), "TENSOR_PassLogEmptyStrategy", "PassLogEmptyStrategy", nullptr);
+    auto function = std::make_shared<Function>(Program::GetInstance(), "TENSOR_PassLogEmptyStrategy",
+                                               "PassLogEmptyStrategy", nullptr);
     DummyPass pass;
     const std::string computationGraphFolder = config::LogTopFolder() + "/computation_graph";
     const std::string strategyFolder = computationGraphFolder + "/Strategy_00_UTEmptyStrategy";
@@ -215,8 +212,8 @@ TEST_F(PassLogTest, PassRunDeletesEmptyFunctionGraphFolder)
     ASSERT_EQ(setenv("TILE_FWK_OUTPUT_DIR", (tmpDir + "/out").c_str(), 1), 0);
     ConfigManager::Instance().ResetLog(tmpDir + "/out");
 
-    auto function =
-        std::make_shared<Function>(Program::GetInstance(), "TENSOR_PassLogEmptyGraph", "PassLogEmptyGraph", nullptr);
+    auto function = std::make_shared<Function>(Program::GetInstance(), "TENSOR_PassLogEmptyGraph", "PassLogEmptyGraph",
+                                               nullptr);
     DummyPass pass;
     PassConfigs cfg;
     cfg.dumpGraph = true;

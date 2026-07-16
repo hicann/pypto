@@ -63,10 +63,10 @@ TILEOP void TPRelu(T0 dst, T1 src, T2 weight, T3 tmp)
 
     if constexpr (axis == 5) {
         // For 1D input (N), weight is (1,)
-        using DstTileDefine =
-            pto::Tile<pto::TileType::Vec, typename T0::Type, 1, dstTileW, pto::BLayout::RowMajor, -1, -1>;
-        using SrcTileDefine =
-            pto::Tile<pto::TileType::Vec, typename T1::Type, 1, srcTileW, pto::BLayout::RowMajor, -1, -1>;
+        using DstTileDefine = pto::Tile<pto::TileType::Vec, typename T0::Type, 1, dstTileW, pto::BLayout::RowMajor, -1,
+                                        -1>;
+        using SrcTileDefine = pto::Tile<pto::TileType::Vec, typename T1::Type, 1, srcTileW, pto::BLayout::RowMajor, -1,
+                                        -1>;
         DstTileDefine dstTile(1, dstShape4);
         SrcTileDefine srcTile(1, srcShape4);
         auto weightAddr = (__ubuf__ typename T2::Type*)((uint64_t)(weight.GetAddr()));
@@ -87,10 +87,10 @@ TILEOP void TPRelu(T0 dst, T1 src, T2 weight, T3 tmp)
         constexpr auto tmpTileW = (tmpSize + ALIGN_SIZE - 1) / ALIGN_SIZE * ALIGN_SIZE;
         auto tmpShape = (srcShape4 + SIZEOFBYTE - 1) / SIZEOFBYTE;
 
-        using DstTileDefine =
-            pto::Tile<pto::TileType::Vec, typename T0::Type, 1, dstTileW, pto::BLayout::RowMajor, -1, -1>;
-        using SrcTileDefine =
-            pto::Tile<pto::TileType::Vec, typename T1::Type, 1, srcTileW, pto::BLayout::RowMajor, -1, -1>;
+        using DstTileDefine = pto::Tile<pto::TileType::Vec, typename T0::Type, 1, dstTileW, pto::BLayout::RowMajor, -1,
+                                        -1>;
+        using SrcTileDefine = pto::Tile<pto::TileType::Vec, typename T1::Type, 1, srcTileW, pto::BLayout::RowMajor, -1,
+                                        -1>;
         using TmpTileDefine = pto::Tile<pto::TileType::Vec, uint8_t, 1, tmpTileW, pto::BLayout::RowMajor, -1, -1>;
         DstTileDefine dstTile(1, dstShape4);
         SrcTileDefine srcTile(1, srcShape4);
@@ -110,10 +110,10 @@ TILEOP void TPRelu(T0 dst, T1 src, T2 weight, T3 tmp)
         }
     } else if constexpr (axis == 3) {
         // For 3D input (N, C, L), weight is (C,)
-        using DstTileDefine =
-            pto::Tile<pto::TileType::Vec, typename T0::Type, 1, dstTileW, pto::BLayout::RowMajor, -1, -1>;
-        using SrcTileDefine =
-            pto::Tile<pto::TileType::Vec, typename T1::Type, 1, srcTileW, pto::BLayout::RowMajor, -1, -1>;
+        using DstTileDefine = pto::Tile<pto::TileType::Vec, typename T0::Type, 1, dstTileW, pto::BLayout::RowMajor, -1,
+                                        -1>;
+        using SrcTileDefine = pto::Tile<pto::TileType::Vec, typename T1::Type, 1, srcTileW, pto::BLayout::RowMajor, -1,
+                                        -1>;
         DstTileDefine dstTile(1, dstShape4);
         SrcTileDefine srcTile(1, srcShape4);
         auto weightAddr = (__ubuf__ typename T2::Type*)((uint64_t)(weight.GetAddr()));
@@ -134,10 +134,10 @@ TILEOP void TPRelu(T0 dst, T1 src, T2 weight, T3 tmp)
         }
     } else if constexpr (axis == 2) {
         // For 4D input (N, C, H, W), weight is (C,)
-        using DstTileDefine =
-            pto::Tile<pto::TileType::Vec, typename T0::Type, dstTileH, dstTileW, pto::BLayout::RowMajor, -1, -1>;
-        using SrcTileDefine =
-            pto::Tile<pto::TileType::Vec, typename T1::Type, srcTileH, srcTileW, pto::BLayout::RowMajor, -1, -1>;
+        using DstTileDefine = pto::Tile<pto::TileType::Vec, typename T0::Type, dstTileH, dstTileW,
+                                        pto::BLayout::RowMajor, -1, -1>;
+        using SrcTileDefine = pto::Tile<pto::TileType::Vec, typename T1::Type, srcTileH, srcTileW,
+                                        pto::BLayout::RowMajor, -1, -1>;
 
         DstTileDefine dstTile(dstShape3, dstShape4);
         SrcTileDefine srcTile(srcShape3, srcShape4);

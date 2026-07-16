@@ -27,9 +27,9 @@ constexpr float TANH_CLIP_VALUE = 20.0f;
 constexpr float TANH_TWO = 2.0f;
 
 template <typename LastUse, typename T, typename DstTile, typename SrcTile, typename TmpTile, typename CmpTile,
-    typename AddrUBTile>
+          typename AddrUBTile>
 TILEOP void TanhFP32(DstTile dstTile, SrcTile srcTile, TmpTile tmpTile, TmpTile tmpTile2, CmpTile cmpTile,
-    AddrUBTile startAddrUBTile)
+                     AddrUBTile startAddrUBTile)
 {
     pto::TMUL(tmpTile, srcTile, srcTile);
     SyncV();
@@ -86,9 +86,9 @@ TILEOP void TanhFP32(DstTile dstTile, SrcTile srcTile, TmpTile tmpTile, TmpTile 
 }
 
 template <typename LastUse, typename T, typename DstTile, typename SrcTile, typename TmpTile, typename CmpTile,
-    typename AddrUBTile>
+          typename AddrUBTile>
 TILEOP void TanhCast(DstTile dstTile, SrcTile srcTile, TmpTile tmpTile1, TmpTile tmpTile2, TmpTile tmpTile3,
-    TmpTile tmpTile4, CmpTile cmpTile, AddrUBTile startAddrUBTile)
+                     TmpTile tmpTile4, CmpTile cmpTile, AddrUBTile startAddrUBTile)
 {
     pto::TCVT(tmpTile1, srcTile, pto::RoundMode::CAST_NONE);
     SyncV();
@@ -152,7 +152,8 @@ TILEOP void TanhCast(DstTile dstTile, SrcTile srcTile, TmpTile tmpTile1, TmpTile
 
 #define OP_TILE_OP_TANH Ttanh
 template <typename LastUse = LastUse2Dim<0, 0>, typename T0, typename T1, typename T3>
-TILEOP void TTanh(T0 dst, T1 src, T3 tmp) {
+TILEOP void TTanh(T0 dst, T1 src, T3 tmp)
+{
     constexpr size_t expectSize = 5;
     const auto dstLayout = dst.GetLayout();
     const auto srcLayout = src.GetLayout();
@@ -185,10 +186,10 @@ TILEOP void TTanh(T0 dst, T1 src, T3 tmp) {
     constexpr auto srcTileH = TileOp::GetTensorTileShapeDim<T1, 3, expectSize>();
     constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T1, 4, expectSize>();
 
-    using DstTile =
-        pto::Tile<pto::TileType::Vec, typename T0::Type, dstTileH, dstTileW, pto::BLayout::RowMajor, -1, -1>;
-    using SrcTile =
-        pto::Tile<pto::TileType::Vec, typename T1::Type, srcTileH, srcTileW, pto::BLayout::RowMajor, -1, -1>;
+    using DstTile = pto::Tile<pto::TileType::Vec, typename T0::Type, dstTileH, dstTileW, pto::BLayout::RowMajor, -1,
+                              -1>;
+    using SrcTile = pto::Tile<pto::TileType::Vec, typename T1::Type, srcTileH, srcTileW, pto::BLayout::RowMajor, -1,
+                              -1>;
 
     DstTile dstTile(dstShape3, dstShape4);
     SrcTile srcTile(srcShape3, srcShape4);
@@ -202,8 +203,7 @@ TILEOP void TTanh(T0 dst, T1 src, T3 tmp) {
         constexpr auto ALIGN32FP32 = 8;
         constexpr auto tmpTileW = (srcTileW + ALIGN32FP32 - 1) / ALIGN32FP32 * ALIGN32FP32;
         constexpr auto cmpTileW = (srcTileW / 8 + alignUint8 - 1) / alignUint8 * alignUint8;
-        using TmpTile =
-            pto::Tile<pto::TileType::Vec, float, srcTileH, tmpTileW, pto::BLayout::RowMajor, -1, -1>;
+        using TmpTile = pto::Tile<pto::TileType::Vec, float, srcTileH, tmpTileW, pto::BLayout::RowMajor, -1, -1>;
         using CmpTile = pto::Tile<pto::TileType::Vec, uint8_t, srcTileH, cmpTileW, pto::BLayout::RowMajor, -1, -1>;
 
         auto tmpOffset = srcTileH * tmpTileW;
@@ -214,7 +214,8 @@ TILEOP void TTanh(T0 dst, T1 src, T3 tmp) {
         pto::TASSIGN(tmpTile1, (uint64_t)(tmp.GetAddr()));
         pto::TASSIGN(tmpTile2, (uint64_t)(tmp.GetAddr() + tmpOffset * sizeof(float)));
         pto::TASSIGN(cmpTile, (uint64_t)(tmp.GetAddr() + 2 * tmpOffset * sizeof(float)));
-        pto::TASSIGN(startAddrUBTile, (uint64_t)(tmp.GetAddr() + 2 * tmpOffset * sizeof(float) + cmpOffset * sizeof(uint8_t)));
+        pto::TASSIGN(startAddrUBTile,
+                     (uint64_t)(tmp.GetAddr() + 2 * tmpOffset * sizeof(float) + cmpOffset * sizeof(uint8_t)));
 
         for (LoopVar n0Index = 0; n0Index < dstShape0; ++n0Index) {
             for (LoopVar n1Index = 0; n1Index < dstShape1; ++n1Index) {
@@ -228,12 +229,12 @@ TILEOP void TTanh(T0 dst, T1 src, T3 tmp) {
                 }
             }
         }
-    } else if constexpr (std::is_same<typename T0::Type, half>::value || std::is_same<typename T0::Type, bfloat16_t>::value) {
+    } else if constexpr (std::is_same<typename T0::Type, half>::value ||
+                         std::is_same<typename T0::Type, bfloat16_t>::value) {
         constexpr auto ALIGN32FP32 = 8;
         constexpr auto tmpTileW = (srcTileW + ALIGN32FP32 - 1) / ALIGN32FP32 * ALIGN32FP32;
         constexpr auto cmpTileW = (srcTileW / 8 + alignUint8 - 1) / alignUint8 * alignUint8;
-        using TmpTile =
-            pto::Tile<pto::TileType::Vec, float, srcTileH, tmpTileW, pto::BLayout::RowMajor, -1, -1>;
+        using TmpTile = pto::Tile<pto::TileType::Vec, float, srcTileH, tmpTileW, pto::BLayout::RowMajor, -1, -1>;
         using CmpTile = pto::Tile<pto::TileType::Vec, uint8_t, srcTileH, cmpTileW, pto::BLayout::RowMajor, -1, -1>;
 
         auto tmpOffset = srcTileH * tmpTileW;
@@ -248,7 +249,8 @@ TILEOP void TTanh(T0 dst, T1 src, T3 tmp) {
         pto::TASSIGN(tmpTile3, (uint64_t)(tmp.GetAddr() + 2 * tmpOffset * sizeof(float)));
         pto::TASSIGN(tmpTile4, (uint64_t)(tmp.GetAddr() + 3 * tmpOffset * sizeof(float)));
         pto::TASSIGN(cmpTile, (uint64_t)(tmp.GetAddr() + 4 * tmpOffset * sizeof(float)));
-        pto::TASSIGN(startAddrUBTile, (uint64_t)(tmp.GetAddr() + 4 * tmpOffset * sizeof(float) + cmpOffset * sizeof(uint8_t)));
+        pto::TASSIGN(startAddrUBTile,
+                     (uint64_t)(tmp.GetAddr() + 4 * tmpOffset * sizeof(float) + cmpOffset * sizeof(uint8_t)));
 
         for (LoopVar n0Index = 0; n0Index < dstShape0; ++n0Index) {
             for (LoopVar n1Index = 0; n1Index < dstShape1; ++n1Index) {

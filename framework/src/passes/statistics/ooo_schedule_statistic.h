@@ -50,45 +50,45 @@ public:
     std::unordered_map<PipeType, uint64_t> pipeUsageCount = {
         {PipeType::PIPE_S, 0},    {PipeType::PIPE_V, 0},    {PipeType::PIPE_M, 0},  {PipeType::PIPE_MTE1, 0},
         {PipeType::PIPE_MTE2, 0}, {PipeType::PIPE_MTE3, 0}, {PipeType::PIPE_FIX, 0}};
-    std::unordered_map<MemoryType, uint64_t> bufferTotalUsage = {
-        {MemoryType::MEM_UB, 0},
-        {MemoryType::MEM_L1, 0},
-        {MemoryType::MEM_L0A, 0},
-        {MemoryType::MEM_L0B, 0},
-        {MemoryType::MEM_L0C, 0}};
-    std::unordered_map<MemoryType, uint64_t> bufferMaxUsage = {
-        {MemoryType::MEM_UB, 0},
-        {MemoryType::MEM_L1, 0},
-        {MemoryType::MEM_L0A, 0},
-        {MemoryType::MEM_L0B, 0},
-        {MemoryType::MEM_L0C, 0}};
-    std::unordered_map<MemoryType, uint64_t> bufferLastUsage = {
-        {MemoryType::MEM_UB, 0},
-        {MemoryType::MEM_L1, 0},
-        {MemoryType::MEM_L0A, 0},
-        {MemoryType::MEM_L0B, 0},
-        {MemoryType::MEM_L0C, 0}};
-    std::unordered_map<MemoryType, uint64_t> lastClock = {
-        {MemoryType::MEM_UB, 0},
-        {MemoryType::MEM_L1, 0},
-        {MemoryType::MEM_L0A, 0},
-        {MemoryType::MEM_L0B, 0},
-        {MemoryType::MEM_L0C, 0}};
+    std::unordered_map<MemoryType, uint64_t> bufferTotalUsage = {{MemoryType::MEM_UB, 0},
+                                                                 {MemoryType::MEM_L1, 0},
+                                                                 {MemoryType::MEM_L0A, 0},
+                                                                 {MemoryType::MEM_L0B, 0},
+                                                                 {MemoryType::MEM_L0C, 0}};
+    std::unordered_map<MemoryType, uint64_t> bufferMaxUsage = {{MemoryType::MEM_UB, 0},
+                                                               {MemoryType::MEM_L1, 0},
+                                                               {MemoryType::MEM_L0A, 0},
+                                                               {MemoryType::MEM_L0B, 0},
+                                                               {MemoryType::MEM_L0C, 0}};
+    std::unordered_map<MemoryType, uint64_t> bufferLastUsage = {{MemoryType::MEM_UB, 0},
+                                                                {MemoryType::MEM_L1, 0},
+                                                                {MemoryType::MEM_L0A, 0},
+                                                                {MemoryType::MEM_L0B, 0},
+                                                                {MemoryType::MEM_L0C, 0}};
+    std::unordered_map<MemoryType, uint64_t> lastClock = {{MemoryType::MEM_UB, 0},
+                                                          {MemoryType::MEM_L1, 0},
+                                                          {MemoryType::MEM_L0A, 0},
+                                                          {MemoryType::MEM_L0B, 0},
+                                                          {MemoryType::MEM_L0C, 0}};
     struct SpillInfo {
         MemoryType spillType{MemoryType::MEM_UNKNOWN}; // spill buffer类型
         uint64_t bufferCurrUsage{0};                   // spill时该pool的实时占用量(现场采自buffer pool)
         uint64_t bufferCapacity{0};                    // spill时该pool的容量
         uint64_t spillTensorSize{0};                   // spill的tensor的大小
-        int64_t triggerTensorSize{0};                 // 触发当前spill的tensor的大小
+        int64_t triggerTensorSize{0};                  // 触发当前spill的tensor的大小
         uint64_t allocOccupiedSize{0};                 // 当前被alloc占用的buffer大小
         uint64_t spillCopyoutSize{0};                  // spill到ddr的数据量
         int spillTensorMagic;                          // spill tensor的magic
     };
-    std::vector<SpillInfo> spillInfoVec;               // size为spill的次数
+    std::vector<SpillInfo> spillInfoVec; // size为spill的次数
     Json report;
+
 private:
     // memId → (memType, size); OnOpRetire/OnSpill only get memIds, look up here.
-    struct BufferMeta { MemoryType memType; uint64_t size; };
+    struct BufferMeta {
+        MemoryType memType;
+        uint64_t size;
+    };
     std::unordered_map<int, BufferMeta> bufferMeta_;
 };
 

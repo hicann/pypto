@@ -26,28 +26,28 @@ public:
     // vector size == 2
     // 对于ingraph outgraph color
     // colornodes等信息可以之后用一个单例管理起来，避免每个pass遍历图去重新收集这些信息，导致编译时间变长
-    static std::vector<std::vector<std::vector<int>>> GetInOutGraphs(
-        const std::vector<Operation*>& opList, int functionmagic = -1);
+    static std::vector<std::vector<std::vector<int>>> GetInOutGraphs(const std::vector<Operation*>& opList,
+                                                                     int functionmagic = -1);
 
     // 按序列获取OP之间的依赖图连边。返回的边，以源op和目标op在opList中的Index表示。
     // 读写关系通过tensor magic来判断。
-    static void GetInOutGraphs(
-        const std::vector<Operation*>& opList, std::vector<std::vector<int>>& inGraph,
-        std::vector<std::vector<int>>& outGraph, bool hasCtrlEdge = true);
+    static void GetInOutGraphs(const std::vector<Operation*>& opList, std::vector<std::vector<int>>& inGraph,
+                               std::vector<std::vector<int>>& outGraph, bool hasCtrlEdge = true);
 
-    static void GetInOutGraphs(
-        const std::vector<Operation*>& opList, std::unordered_map<Operation*, std::vector<Operation*>>& inGraph,
-        std::unordered_map<Operation*, std::vector<Operation*>>& outGraph, bool hasCtrlEdge = true);
+    static void GetInOutGraphs(const std::vector<Operation*>& opList,
+                               std::unordered_map<Operation*, std::vector<Operation*>>& inGraph,
+                               std::unordered_map<Operation*, std::vector<Operation*>>& outGraph,
+                               bool hasCtrlEdge = true);
 
     // 按序列获取OP之间的依赖图连边。返回的边，以源op和目标op在opList中的Index表示。
     // 读写关系通过每个tensor的memmap[subGraphId].memId来判断。
-    static void GetInOutGraphs(
-        const std::vector<Operation*>& opList, std::vector<std::vector<int>>& inGraph,
-        std::vector<std::vector<int>>& outGraph, int subGraphId, bool hasCtrlEdge = true);
+    static void GetInOutGraphs(const std::vector<Operation*>& opList, std::vector<std::vector<int>>& inGraph,
+                               std::vector<std::vector<int>>& outGraph, int subGraphId, bool hasCtrlEdge = true);
 
-    static void GetInOutGraphs(
-        const std::vector<Operation*>& opList, std::unordered_map<Operation*, std::vector<Operation*>>& inGraph,
-        std::unordered_map<Operation*, std::vector<Operation*>>& outGraph, int subGraphId, bool hasCtrlEdge = true);
+    static void GetInOutGraphs(const std::vector<Operation*>& opList,
+                               std::unordered_map<Operation*, std::vector<Operation*>>& inGraph,
+                               std::unordered_map<Operation*, std::vector<Operation*>>& outGraph, int subGraphId,
+                               bool hasCtrlEdge = true);
 
     static PipeType GetOpPipeType(const Operation* op);
 
@@ -55,10 +55,10 @@ public:
     static unsigned long ComputeOperationHash(const Operation* op);
 
     static void UpdateTensorConsProd(Function* funcPtr);
-    static void ClearInputConsProd(
-        Operation& op, Function* funcPtr, const std::unordered_set<LogicalTensorPtr>& incastSet);
-    static void ClearOutputConsProd(
-        Operation& op, Function* funcPtr, const std::unordered_set<LogicalTensorPtr>& outcastSet);
+    static void ClearInputConsProd(Operation& op, Function* funcPtr,
+                                   const std::unordered_set<LogicalTensorPtr>& incastSet);
+    static void ClearOutputConsProd(Operation& op, Function* funcPtr,
+                                    const std::unordered_set<LogicalTensorPtr>& outcastSet);
     static void EraseOpsBelongToFunc(std::set<Operation*, LogicalTensor::CompareOp>& ops, Function* funcPtr);
     static void PrintColorNode(Function& func);
 };

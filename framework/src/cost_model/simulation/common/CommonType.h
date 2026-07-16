@@ -81,30 +81,18 @@ inline NodeType ToNodeType(std::string& type)
 inline DataType ToDataType(std::string& name)
 {
     static std::unordered_map<std::string, DataType> type_map = {
-        {"DT_INT4", DataType::DT_INT4},
-        {"DT_INT8", DataType::DT_INT8},
-        {"DT_INT16", DataType::DT_INT16},
-        {"DT_INT32", DataType::DT_INT32},
-        {"DT_INT64", DataType::DT_INT64},
-        {"DT_FP8", DataType::DT_FP8},
-        {"DT_FP16", DataType::DT_FP16},
-        {"DT_FP32", DataType::DT_FP32},
-        {"DT_BF16", DataType::DT_BF16},
-        {"DT_HF4", DataType::DT_HF4},
-        {"DT_HF8", DataType::DT_HF8},
-        {"DT_UINT8", DataType::DT_UINT8},
-        {"DT_UINT16", DataType::DT_UINT16},
-        {"DT_UINT32", DataType::DT_UINT32},
-        {"DT_UINT64", DataType::DT_UINT64},
-        {"DT_BOOL", DataType::DT_BOOL},
-        {"DT_DOUBLE", DataType::DT_DOUBLE},
-        {"DT_FP8E5M2", DataType::DT_FP8E5M2},
-        {"DT_FP8E4M3", DataType::DT_FP8E4M3},
-        {"DT_FP8E8M0", DataType::DT_FP8E8M0},
-        {"DT_FP4_E2M1", DataType::DT_FP4_E2M1},
-        {"DT_FP4_E2M1X2", DataType::DT_FP4_E2M1X2},
-        {"DT_FP4_E1M2", DataType::DT_FP4_E1M2},
-        {"DT_FP4_E1M2X2", DataType::DT_FP4_E1M2X2}};
+        {"DT_INT4", DataType::DT_INT4},         {"DT_INT8", DataType::DT_INT8},
+        {"DT_INT16", DataType::DT_INT16},       {"DT_INT32", DataType::DT_INT32},
+        {"DT_INT64", DataType::DT_INT64},       {"DT_FP8", DataType::DT_FP8},
+        {"DT_FP16", DataType::DT_FP16},         {"DT_FP32", DataType::DT_FP32},
+        {"DT_BF16", DataType::DT_BF16},         {"DT_HF4", DataType::DT_HF4},
+        {"DT_HF8", DataType::DT_HF8},           {"DT_UINT8", DataType::DT_UINT8},
+        {"DT_UINT16", DataType::DT_UINT16},     {"DT_UINT32", DataType::DT_UINT32},
+        {"DT_UINT64", DataType::DT_UINT64},     {"DT_BOOL", DataType::DT_BOOL},
+        {"DT_DOUBLE", DataType::DT_DOUBLE},     {"DT_FP8E5M2", DataType::DT_FP8E5M2},
+        {"DT_FP8E4M3", DataType::DT_FP8E4M3},   {"DT_FP8E8M0", DataType::DT_FP8E8M0},
+        {"DT_FP4_E2M1", DataType::DT_FP4_E2M1}, {"DT_FP4_E2M1X2", DataType::DT_FP4_E2M1X2},
+        {"DT_FP4_E1M2", DataType::DT_FP4_E1M2}, {"DT_FP4_E1M2X2", DataType::DT_FP4_E1M2X2}};
     auto it = type_map.find(name);
     if (it == type_map.end()) {
         std::cout << "Unrecognized DataType" << name << std::endl;

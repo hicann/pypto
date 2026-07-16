@@ -107,9 +107,8 @@ void PmuCommon::InitPmuEventType(const ArchInfo& archInfo, std::vector<int64_t>&
     try {
         profPmuType = std::stoi(eventTypeStr);
     } catch (const std::exception& e) {
-        MACHINE_LOGW(
-            "Invalid PYPTO_PROF_PMU_EVENT_TYPE value [%s], use default PIPE_UTILIZATION. error: %s", eventTypeStr.c_str(),
-            e.what());
+        MACHINE_LOGW("Invalid PYPTO_PROF_PMU_EVENT_TYPE value [%s], use default PIPE_UTILIZATION. error: %s",
+                     eventTypeStr.c_str(), e.what());
     }
 
     if (archInfo == ArchInfo::DAV_2201) {

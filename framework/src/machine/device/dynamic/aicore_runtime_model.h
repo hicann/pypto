@@ -58,10 +58,11 @@ public:
         }
     }
 
-    virtual void SetParallelDevTask(
-        volatile ParallelDevTask* kernelParallDevTask, int parallelIdx, int64_t funcData, uint32_t devTaskId) = 0;
+    virtual void SetParallelDevTask(volatile ParallelDevTask* kernelParallDevTask, int parallelIdx, int64_t funcData,
+                                    uint32_t devTaskId) = 0;
 
-    virtual void SetParallelDevTaskSize(volatile ParallelDevTask* kernelParallDevTask, uint32_t front, uint32_t rear) = 0;
+    virtual void SetParallelDevTaskSize(volatile ParallelDevTask* kernelParallDevTask, uint32_t front,
+                                        uint32_t rear) = 0;
 
     virtual void SetParallelDevTaskCtxVersion(volatile KernelArgs* arg, uint32_t version) = 0;
 
@@ -110,8 +111,8 @@ public:
         return true;
     }
 
-    void SetParallelDevTask(
-        volatile ParallelDevTask* kernelParallDevTask, int parallelIdx, int64_t funcData, uint32_t devTaskId) override
+    void SetParallelDevTask(volatile ParallelDevTask* kernelParallDevTask, int parallelIdx, int64_t funcData,
+                            uint32_t devTaskId) override
     {
         kernelParallDevTask->ptrElements[parallelIdx % npu::tile_fwk::SCH_DEVTASK_MAX_PARALLELISM] = funcData;
         kernelParallDevTask->idElements[parallelIdx % npu::tile_fwk::SCH_DEVTASK_MAX_PARALLELISM] = devTaskId;
@@ -148,17 +149,14 @@ public:
 
 class EslModel : public ModelBase {
 public:
-    void Init() override
-    {
-        eslModel_.Init();
-    }
+    void Init() override { eslModel_.Init(); }
 
     void SetReadyQueue(int coreIdx, int phyId, uint64_t value) override
     {
         (void)phyId;
         uint64_t taskId = (value & 0xFFFFFFFF) - 1;
-        bool skipReplay =
-            value == 0 || taskId == AICORE_TASK_INIT || taskId == AICORE_TASK_STOP || taskId == AICORE_FUNC_STOP;
+        bool skipReplay = value == 0 || taskId == AICORE_TASK_INIT || taskId == AICORE_TASK_STOP ||
+                          taskId == AICORE_FUNC_STOP;
         bool matchReplay = skipReplay || eslModelReplayMgr_->ReplayMatch(taskId);
         if (matchReplay) {
             eslModel_.WriteEslReg(coreIdx, &value);
@@ -195,24 +193,24 @@ public:
         uint64_t valToSend = 0;
         eslModel_.WriteEslMem(reinterpret_cast<uint64_t>(&arg->shakeBuffer[0]), sizeof(uint64_t), &valToSend);
         valToSend = AICORE_SAY_GOODBYE;
-        eslModel_.WriteEslMem(
-            reinterpret_cast<uint64_t>(&arg->waveBufferCpuToCore[CPU_TO_CORE_SHAK_BUF_GOODBYE_INDEX]),
-            sizeof(uint64_t), &valToSend);
+        eslModel_.WriteEslMem(reinterpret_cast<uint64_t>(&arg->waveBufferCpuToCore[CPU_TO_CORE_SHAK_BUF_GOODBYE_INDEX]),
+                              sizeof(uint64_t), &valToSend);
     }
 
     bool TryHandShakeByGm(volatile KernelArgs* arg, int64_t dotStatus, int32_t& phyId) override
     {
         KernelArgs hostArgs;
-        RuntimeMemcpyDirect(&hostArgs, sizeof(KernelArgs), reinterpret_cast<uint8_t*>(PtrToValue((const volatile void*)arg)), sizeof(KernelArgs),
-                      RtMemcpyKind::DEVICE_TO_HOST);
+        RuntimeMemcpyDirect(&hostArgs, sizeof(KernelArgs),
+                            reinterpret_cast<uint8_t*>(PtrToValue((const volatile void*)arg)), sizeof(KernelArgs),
+                            RtMemcpyKind::DEVICE_TO_HOST);
         if ((hostArgs.shakeBuffer[0] & 0xFFFFFFFF) != AICORE_SAY_HELLO) {
             return false;
         }
         hostArgs.taskEntry.reserved[0] = static_cast<uint32_t>(dotStatus);
         phyId = static_cast<int32_t>((hostArgs.shakeBuffer[0] >> NUM_THIRTY_TWO) & AICORE_COREID_MASK);
         hostArgs.waveBufferCpuToCore[CPU_TO_CORE_SHAK_BUF_GOODBYE_INDEX] = 0;
-        RuntimeMemcpyDirect(reinterpret_cast<uint8_t*>(PtrToValue(arg)), sizeof(KernelArgs), &hostArgs, sizeof(KernelArgs),
-                      RtMemcpyKind::HOST_TO_DEVICE);
+        RuntimeMemcpyDirect(reinterpret_cast<uint8_t*>(PtrToValue(arg)), sizeof(KernelArgs), &hostArgs,
+                            sizeof(KernelArgs), RtMemcpyKind::HOST_TO_DEVICE);
         return true;
     }
 
@@ -223,12 +221,13 @@ public:
             arg = GetKernelArgsByCore(coreIdx, sharedBuffer);
         }
         int64_t valToSend = 0;
-        RuntimeMemcpyDirect(reinterpret_cast<uint8_t*>(PtrToValue(&arg->shakeBufferCpuToCore[CPU_TO_CORE_SHAK_BUF_COREFUNC_DATA_INDEX])),
-                      sizeof(valToSend), &valToSend, sizeof(valToSend), RtMemcpyKind::HOST_TO_DEVICE);
+        RuntimeMemcpyDirect(reinterpret_cast<uint8_t*>(
+                                PtrToValue(&arg->shakeBufferCpuToCore[CPU_TO_CORE_SHAK_BUF_COREFUNC_DATA_INDEX])),
+                            sizeof(valToSend), &valToSend, sizeof(valToSend), RtMemcpyKind::HOST_TO_DEVICE);
     }
 
-    void SetParallelDevTask(
-        volatile ParallelDevTask* kernelParallDevTask, int parallelIdx, int64_t funcData, uint32_t devTaskId) override
+    void SetParallelDevTask(volatile ParallelDevTask* kernelParallDevTask, int parallelIdx, int64_t funcData,
+                            uint32_t devTaskId) override
     {
         eslModel_.WriteEslMem(
             reinterpret_cast<uint64_t>(
@@ -266,17 +265,14 @@ public:
 
         int64_t i64Zero = 0;
         for (uint32_t i = 0; i < npu::tile_fwk::SCH_DEVTASK_MAX_PARALLELISM; ++i) {
-            eslModel_.WriteEslMem(
-                reinterpret_cast<uint64_t>(&arg->parallelDevTask.ptrElements[i]), sizeof(i64Zero), &i64Zero);
-            eslModel_.WriteEslMem(
-                reinterpret_cast<uint64_t>(&arg->parallelDevTask.idElements[i]), sizeof(u32Zero), &u32Zero);
+            eslModel_.WriteEslMem(reinterpret_cast<uint64_t>(&arg->parallelDevTask.ptrElements[i]), sizeof(i64Zero),
+                                  &i64Zero);
+            eslModel_.WriteEslMem(reinterpret_cast<uint64_t>(&arg->parallelDevTask.idElements[i]), sizeof(u32Zero),
+                                  &u32Zero);
         }
     }
 
-    void SetEslModelReplayManager(EslModelReplayManager* replayMgr)
-    {
-        eslModelReplayMgr_ = replayMgr;
-    }
+    void SetEslModelReplayManager(EslModelReplayManager* replayMgr) { eslModelReplayMgr_ = replayMgr; }
 
 private:
     EslAicoreHal eslModel_;
@@ -287,20 +283,11 @@ private:
 
 class CostModelAdapter : public ModelBase {
 public:
-    void SetActualModel(CostModel::AiCoreModel* actualModel)
-    {
-        actualModel_ = actualModel;
-    }
+    void SetActualModel(CostModel::AiCoreModel* actualModel) { actualModel_ = actualModel; }
 
-    void SetSendTask(std::function<void(int, uint64_t)> sendTask)
-    {
-        sendTask_ = std::move(sendTask);
-    }
+    void SetSendTask(std::function<void(int, uint64_t)> sendTask) { sendTask_ = std::move(sendTask); }
 
-    void SetGetTask(std::function<uint64_t(int)> getTask)
-    {
-        getTask_ = std::move(getTask);
-    }
+    void SetGetTask(std::function<uint64_t(int)> getTask) { getTask_ = std::move(getTask); }
 
     void SetReadyQueue(int coreIdx, int phyId, uint64_t value) override
     {
@@ -320,10 +307,7 @@ public:
         return getTask_ ? getTask_(coreIdx) : 0;
     }
 
-    void ResetShakeBuf(volatile KernelArgs* arg) override
-    {
-        (void)arg;
-    }
+    void ResetShakeBuf(volatile KernelArgs* arg) override { (void)arg; }
 
     bool TryHandShakeByGm(volatile KernelArgs* arg, int64_t dotStatus, int32_t& phyId) override
     {
@@ -341,8 +325,8 @@ public:
         (void)buffer;
     }
 
-    void SetParallelDevTask(
-        volatile ParallelDevTask* kernelParallDevTask, int parallelIdx, int64_t funcData, uint32_t devTaskId) override
+    void SetParallelDevTask(volatile ParallelDevTask* kernelParallDevTask, int parallelIdx, int64_t funcData,
+                            uint32_t devTaskId) override
     {
         (void)kernelParallDevTask;
         (void)parallelIdx;
@@ -363,10 +347,7 @@ public:
         (void)version;
     }
 
-    void ResetParallelDevTask(volatile KernelArgs* arg) override
-    {
-        (void)arg;
-    }
+    void ResetParallelDevTask(volatile KernelArgs* arg) override { (void)arg; }
 
     void InitCostModelDevTaskData(int coreIdx, int64_t funcData) override
     {

@@ -61,8 +61,8 @@ private:
     // 按color去判断是否需要插入alloc
     Status GenAllocNode(Function& function);
     Status AddAndCheckAlloc(Function& function);
-    Status UpdateTensorAllocMsg(
-        Operation& op, size_t i, std::unordered_map<int, TensorAllocMsg>& tensorAllocMsgMap) const;
+    Status UpdateTensorAllocMsg(Operation& op, size_t i,
+                                std::unordered_map<int, TensorAllocMsg>& tensorAllocMsgMap) const;
     Status FindTensorAllocMsg(Operation& op, std::unordered_map<int, TensorAllocMsg>& tensorAllocMsgMap) const;
     Status CreateAllocNode(const TensorAllocMsg& tensorAllocMsg, Function& function);
     Status GenAllocOpcode(const Opcode& allocOpcode, const TensorAllocMsg& tensorAllocMsg, Function& function);

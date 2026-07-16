@@ -1,5 +1,5 @@
 /**
-* Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
  * Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -45,7 +45,7 @@ enum class AclFunc {
 };
 
 const std::string kAclLibName = "libascendcl.so";
-const std::map<AclFunc, std::string> kAclFuncStrMap {
+const std::map<AclFunc, std::string> kAclFuncStrMap{
     {AclFunc::Init, "aclInit"},
     {AclFunc::Finalize, "aclFinalize"},
     {AclFunc::RtMemcpy, "aclrtMemcpy"},
@@ -66,6 +66,5 @@ const std::map<AclFunc, std::string> kAclFuncStrMap {
     {AclFunc::RtSynchronizeStream, "aclrtSynchronizeStream"},
     {AclFunc::RtFree, "aclrtFree"},
     {AclFunc::RtDestroyStream, "aclrtDestroyStream"},
-    {AclFunc::SysGetVersionStr, "aclsysGetVersionStr"}
-};
-}
+    {AclFunc::SysGetVersionStr, "aclsysGetVersionStr"}};
+} // namespace npu::tile_fwk

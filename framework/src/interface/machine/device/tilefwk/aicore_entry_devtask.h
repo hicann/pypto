@@ -15,16 +15,16 @@
 
 #pragma once
 
-INLINE void UpdateCacheDevTask(ExecuteContext *ctx, uint32_t parallelIdx, int64_t devTaskPtr)
+INLINE void UpdateCacheDevTask(ExecuteContext* ctx, uint32_t parallelIdx, int64_t devTaskPtr)
 {
-        __gm__ DynFuncHeader *header = (__gm__ DynFuncHeader *)devTaskPtr;
-        ctx->cachedDevTasks[parallelIdx].header = header;
-        ctx->cachedDevTasks[parallelIdx].seqNo = header->seqNo;
-        ctx->cachedDevTasks[parallelIdx].funcDataList = (__gm__ DynFuncData*)(header + 1);
-        ctx->cachedDevTasks[parallelIdx].cceBinary = (__gm__ npu::tile_fwk::DynFuncBin*)(header->cceBinary);
+    __gm__ DynFuncHeader* header = (__gm__ DynFuncHeader*)devTaskPtr;
+    ctx->cachedDevTasks[parallelIdx].header = header;
+    ctx->cachedDevTasks[parallelIdx].seqNo = header->seqNo;
+    ctx->cachedDevTasks[parallelIdx].funcDataList = (__gm__ DynFuncData*)(header + 1);
+    ctx->cachedDevTasks[parallelIdx].cceBinary = (__gm__ npu::tile_fwk::DynFuncBin*)(header->cceBinary);
 }
 
-INLINE volatile __gm__ ParallelDevTask* GetCoreFunctionData(ExecuteContext *ctx, __gm__ KernelArgs *args)
+INLINE volatile __gm__ ParallelDevTask* GetCoreFunctionData(ExecuteContext* ctx, __gm__ KernelArgs* args)
 {
     AICORE_TIMEOUT_CHECK_BEGIN(t0, loop_count);
     // kernel start , init prallelDevtask
@@ -32,9 +32,10 @@ INLINE volatile __gm__ ParallelDevTask* GetCoreFunctionData(ExecuteContext *ctx,
     while (true) {
         if (parallelDevTask->rear - parallelDevTask->front == 0) {
             dcci(parallelDevTask, SINGLE_CACHE_LINE, CACHELINE_OUT);
-            AICORE_TIMEOUT_CHECK_RETURN(t0, loop_count, AICORE_DEVICE_TASK_WAIT_TIME_OUT, STAGE_GET_PARALLEL_DEVTASK_TIMEOUT, nullptr);
+            AICORE_TIMEOUT_CHECK_RETURN(t0, loop_count, AICORE_DEVICE_TASK_WAIT_TIME_OUT,
+                                        STAGE_GET_PARALLEL_DEVTASK_TIMEOUT, nullptr);
 
-// The aicore received the task stop notification before receiving the leaftask.
+            // The aicore received the task stop notification before receiving the leaftask.
             if (GetLeafTaskId() == AICORE_TASK_STOP) {
                 SetStatus(args, STAGE_CORE_EXIT);
                 WaitWaveSignal(args);
@@ -48,7 +49,8 @@ INLINE volatile __gm__ ParallelDevTask* GetCoreFunctionData(ExecuteContext *ctx,
             uint32_t idx = i % npu::tile_fwk::SCH_DEVTASK_MAX_PARALLELISM;
             int64_t elemPtr = 0;
             do {
-                AICORE_TIMEOUT_CHECK_RETURN(t0, loop_count, AICORE_DEVICE_TASK_WAIT_TIME_OUT, STAGE_GET_PARALLEL_DEVTASK_TIMEOUT, nullptr);
+                AICORE_TIMEOUT_CHECK_RETURN(t0, loop_count, AICORE_DEVICE_TASK_WAIT_TIME_OUT,
+                                            STAGE_GET_PARALLEL_DEVTASK_TIMEOUT, nullptr);
 
                 // The aicore received the task stop notification before receiving the leaftask.
                 if (GetLeafTaskId() == AICORE_TASK_STOP) {
@@ -60,7 +62,7 @@ INLINE volatile __gm__ ParallelDevTask* GetCoreFunctionData(ExecuteContext *ctx,
                 dcci(&parallelDevTask->ptrElements[idx], SINGLE_CACHE_LINE, CACHELINE_OUT);
                 elemPtr = parallelDevTask->ptrElements[idx];
             } while (elemPtr == 0);
-            dcci((__gm__ void *)elemPtr, SINGLE_CACHE_LINE, CACHELINE_OUT);
+            dcci((__gm__ void*)elemPtr, SINGLE_CACHE_LINE, CACHELINE_OUT);
             UpdateCacheDevTask(ctx, idx, elemPtr);
         }
         return parallelDevTask;
@@ -69,7 +71,7 @@ INLINE volatile __gm__ ParallelDevTask* GetCoreFunctionData(ExecuteContext *ctx,
     return nullptr;
 }
 
-INLINE uint32_t RefreshParallelDevTaskByModifyFlag(__gm__ KernelArgs *args, ExecuteContext *ctx, uint32_t highRegValue)
+INLINE uint32_t RefreshParallelDevTaskByModifyFlag(__gm__ KernelArgs* args, ExecuteContext* ctx, uint32_t highRegValue)
 {
     uint32_t curLeafDevTaskId = npu::tile_fwk::DevTaskId(highRegValue);
     uint32_t mask = npu::tile_fwk::ParallelDevTaskModifyFlag(highRegValue);
@@ -85,7 +87,8 @@ INLINE uint32_t RefreshParallelDevTaskByModifyFlag(__gm__ KernelArgs *args, Exec
             uint32_t oldDevTaskId = ctx->cachedDevTasks[idx].seqNo;
             AICORE_TIMEOUT_CHECK_BEGIN(t0, loop_count);
             do {
-                AICORE_TIMEOUT_CHECK_RETURN(t0, loop_count, AICORE_GM_DCCI_TIMEOUT, STAGE_UPDATE_PARALLEL_DEVTASK_ID_TIMEOUT, AICORE_TASK_ABNORMAL_STOP);
+                AICORE_TIMEOUT_CHECK_RETURN(t0, loop_count, AICORE_GM_DCCI_TIMEOUT,
+                                            STAGE_UPDATE_PARALLEL_DEVTASK_ID_TIMEOUT, AICORE_TASK_ABNORMAL_STOP);
                 dcci(&ctx->parallelDevTask->idElements[idx], SINGLE_CACHE_LINE, CACHELINE_OUT);
                 newDevTaskId = ctx->parallelDevTask->idElements[idx];
             } while (newDevTaskId == oldDevTaskId);
@@ -93,21 +96,22 @@ INLINE uint32_t RefreshParallelDevTaskByModifyFlag(__gm__ KernelArgs *args, Exec
 
         // dcci read new devtask ptr
         int64_t newElemPtr;
-        __gm__ DynFuncHeader *oldHeader = ctx->cachedDevTasks[idx].header;
+        __gm__ DynFuncHeader* oldHeader = ctx->cachedDevTasks[idx].header;
         AICORE_TIMEOUT_CHECK_BEGIN(t0, loop_count);
         do {
-            AICORE_TIMEOUT_CHECK_RETURN(t0, loop_count, AICORE_GM_DCCI_TIMEOUT, STAGE_UPDATE_PARALLEL_DEVTASK_TIMEOUT, AICORE_TASK_ABNORMAL_STOP);
+            AICORE_TIMEOUT_CHECK_RETURN(t0, loop_count, AICORE_GM_DCCI_TIMEOUT, STAGE_UPDATE_PARALLEL_DEVTASK_TIMEOUT,
+                                        AICORE_TASK_ABNORMAL_STOP);
             dcci(&ctx->parallelDevTask->ptrElements[idx], SINGLE_CACHE_LINE, CACHELINE_OUT);
             newElemPtr = ctx->parallelDevTask->ptrElements[idx];
             if (newElemPtr != (int64_t)oldHeader) {
-                dcci((__gm__ void *)newElemPtr, SINGLE_CACHE_LINE, CACHELINE_OUT);
+                dcci((__gm__ void*)newElemPtr, SINGLE_CACHE_LINE, CACHELINE_OUT);
                 break;
             }
 
             if (newElemPtr) {
-                dcci((__gm__ void *)newElemPtr, SINGLE_CACHE_LINE, CACHELINE_OUT);
-            } 
-        } while (newElemPtr == 0 || (((__gm__ DynFuncHeader *)newElemPtr)->seqNo != newDevTaskId));
+                dcci((__gm__ void*)newElemPtr, SINGLE_CACHE_LINE, CACHELINE_OUT);
+            }
+        } while (newElemPtr == 0 || (((__gm__ DynFuncHeader*)newElemPtr)->seqNo != newDevTaskId));
         UpdateCacheDevTask(ctx, idx, newElemPtr);
         mask &= (mask - 1);
     }
@@ -115,7 +119,8 @@ INLINE uint32_t RefreshParallelDevTaskByModifyFlag(__gm__ KernelArgs *args, Exec
     return 0;
 }
 
-INLINE uint32_t RefreshParallelDevTask(__gm__ KernelArgs *args, ExecuteContext *ctx, __gm__ Metrics* metric, uint32_t &lastRegHighVal)
+INLINE uint32_t RefreshParallelDevTask(__gm__ KernelArgs* args, ExecuteContext* ctx, __gm__ Metrics* metric,
+                                       uint32_t& lastRegHighVal)
 {
     uint32_t newRegHighVal = GetRegHighValue(args, lastRegHighVal);
     if (newRegHighVal == 0) {
@@ -128,11 +133,10 @@ INLINE uint32_t RefreshParallelDevTask(__gm__ KernelArgs *args, ExecuteContext *
     }
 
     lastRegHighVal = newRegHighVal;
-    dcci((__gm__ void *)0, ENTIRE_DATA_CACHE, CACHELINE_OUT);
+    dcci((__gm__ void*)0, ENTIRE_DATA_CACHE, CACHELINE_OUT);
 
     // start new devtask
-    PerfTraceRecord(
-        ctx->SeqNo(), ctx->aicoreDevTaskMetric.devTaskMetric, PERF_TRACE_CORE_DEV_TASK_RCV_MODEL);
+    PerfTraceRecord(ctx->SeqNo(), ctx->aicoreDevTaskMetric.devTaskMetric, PERF_TRACE_CORE_DEV_TASK_RCV_MODEL);
     ctx->lastTaskFinishCycle = 0;
     (void)metric;
     return 0;

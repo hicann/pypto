@@ -338,8 +338,8 @@ StructuralHasher::ResultType StructuralHasher::HashNodeImpl(const NodePtr& node)
 
     ResultType fields_hash = std::apply(
         [&](auto&&... descs) {
-            return reflection::FieldIterator<NodeType, StructuralHasher, decltype(descs)...>::Visit(
-                *node, *this, descs...);
+            return reflection::FieldIterator<NodeType, StructuralHasher, decltype(descs)...>::Visit(*node, *this,
+                                                                                                    descs...);
         },
         descriptors);
 

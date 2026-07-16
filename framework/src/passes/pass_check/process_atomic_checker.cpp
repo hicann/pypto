@@ -37,8 +37,8 @@ Status ProcessAtomicChecker::DoPreCheck(Function& function)
     }
     for (const auto& op : function.Operations()) {
         if (ProcessPreCheck(op) != SUCCESS) {
-            APASS_LOG_ERROR_F(
-                Elements::Operation, "PreCheck for ProcessAtomic failed.%s", GetFormatBacktrace(op).c_str());
+            APASS_LOG_ERROR_F(Elements::Operation, "PreCheck for ProcessAtomic failed.%s",
+                              GetFormatBacktrace(op).c_str());
             return FAILED;
         }
     }
@@ -77,9 +77,9 @@ Status ProcessAtomicChecker::ProcessPreCheck(const Operation& op)
     }
     if (op.GetOpcode() == Opcode::OP_ATOMIC_RMW) {
         if (ValidateAtomicRMW(op) != SUCCESS) {
-            APASS_LOG_ERROR_F(
-                Elements::Operation, "Op[%d] validation failed; Please check the atomic rmw operation validity.%s",
-                op.GetOpMagic(), GetFormatBacktrace(op).c_str());
+            APASS_LOG_ERROR_F(Elements::Operation,
+                              "Op[%d] validation failed; Please check the atomic rmw operation validity.%s",
+                              op.GetOpMagic(), GetFormatBacktrace(op).c_str());
             return FAILED;
         }
     }
@@ -89,17 +89,16 @@ Status ProcessAtomicChecker::ProcessPreCheck(const Operation& op)
 Status ProcessAtomicChecker::CheckMulOpValidity(const Operation& op)
 {
     if (op.GetOOperands().size() != 1) {
-        APASS_LOG_ERROR_F(
-            Elements::Operation,
-            "Invalid op: [%d] has output num not equal to one; Please check if the output num is one.%s",
-            op.GetOpMagic(), GetFormatBacktrace(op).c_str());
+        APASS_LOG_ERROR_F(Elements::Operation,
+                          "Invalid op: [%d] has output num not equal to one; Please check if the output num is one.%s",
+                          op.GetOpMagic(), GetFormatBacktrace(op).c_str());
         return FAILED;
     }
     auto output = op.GetOOperands().front();
     if ((output->GetMemoryTypeOriginal() != MemoryType::MEM_L0C) || (*output->GetConsumers().begin() == nullptr)) {
-        APASS_LOG_ERROR_F(
-            Elements::Operation, "Op[%d] has invalid output tensor[%d]; Please check if the output tensor is vaild.%s",
-            op.GetOpMagic(), output->magic, GetFormatBacktrace(op).c_str());
+        APASS_LOG_ERROR_F(Elements::Operation,
+                          "Op[%d] has invalid output tensor[%d]; Please check if the output tensor is vaild.%s",
+                          op.GetOpMagic(), output->magic, GetFormatBacktrace(op).c_str());
         return FAILED;
     }
     return SUCCESS;
@@ -108,15 +107,14 @@ Status ProcessAtomicChecker::CheckMulOpValidity(const Operation& op)
 Status ProcessAtomicChecker::CheckReduceAccOpValidity(const Operation& op)
 {
     if (op.GetIOperands().size() < 1) {
-        APASS_LOG_ERROR_F(
-            Elements::Operation, "Op[%d] has input num less than 1; Please check the input num.%s", op.GetOpMagic(),
-            GetFormatBacktrace(op).c_str());
+        APASS_LOG_ERROR_F(Elements::Operation, "Op[%d] has input num less than 1; Please check the input num.%s",
+                          op.GetOpMagic(), GetFormatBacktrace(op).c_str());
         return FAILED;
     }
     if (op.GetOOperands().size() != 1) {
-        APASS_LOG_ERROR_F(
-            Elements::Operation, "Op[%d] has output num not equal to one; Please check if the output num for is one.%s",
-            op.GetOpMagic(), GetFormatBacktrace(op).c_str());
+        APASS_LOG_ERROR_F(Elements::Operation,
+                          "Op[%d] has output num not equal to one; Please check if the output num for is one.%s",
+                          op.GetOpMagic(), GetFormatBacktrace(op).c_str());
         return FAILED;
     }
     for (const auto& in : op.GetIOperands()) {
@@ -143,9 +141,8 @@ Status ProcessAtomicChecker::CheckReduceAccOpValidity(const Operation& op)
 Status ProcessAtomicChecker::ValidateAtomicRMW(const Operation& op)
 {
     if (op.GetIOperands().size() < 1) {
-        APASS_LOG_ERROR_F(
-            Elements::Operation, "Op[%d] has input producers num less than 1; Please check the input num.",
-            op.GetOpMagic());
+        APASS_LOG_ERROR_F(Elements::Operation,
+                          "Op[%d] has input producers num less than 1; Please check the input num.", op.GetOpMagic());
         return FAILED;
     }
     if (CheckAtomicRMWMemoryType(op) != SUCCESS) {
@@ -164,10 +161,9 @@ Status ProcessAtomicChecker::CheckAtomicRMWMemoryType(const Operation& op)
 {
     for (const auto& in : op.GetIOperands()) {
         if (in->GetMemoryTypeOriginal() != MemoryType::MEM_DEVICE_DDR) {
-            APASS_LOG_ERROR_F(
-                Elements::Operation,
-                "Op[%d] has non-DDR input tensor[%d]; Please check the memory type of the input tensor.",
-                op.GetOpMagic(), in->magic);
+            APASS_LOG_ERROR_F(Elements::Operation,
+                              "Op[%d] has non-DDR input tensor[%d]; Please check the memory type of the input tensor.",
+                              op.GetOpMagic(), in->magic);
             return FAILED;
         }
     }
@@ -188,9 +184,9 @@ Status ProcessAtomicChecker::CheckAtomicRMWShape(const Operation& op)
     auto& inputShape = op.GetIOperands().front()->GetShape();
     auto& outputShape = op.GetOOperands().front()->GetShape();
     if (outputShape.size() < inputShape.size()) {
-        APASS_LOG_ERROR_F(
-            Elements::Operation, "Op[%d] output shape size less than input shape size; Please check shape validity.",
-            op.GetOpMagic());
+        APASS_LOG_ERROR_F(Elements::Operation,
+                          "Op[%d] output shape size less than input shape size; Please check shape validity.",
+                          op.GetOpMagic());
         return FAILED;
     }
     for (size_t i = 0; i < inputShape.size(); ++i) {
@@ -209,17 +205,16 @@ Status ProcessAtomicChecker::CheckAtomicRMWOffset(const Operation& op)
 {
     auto assembleAttr = std::dynamic_pointer_cast<AssembleOpAttribute>(op.GetOpAttribute());
     if (assembleAttr == nullptr) {
-        APASS_LOG_ERROR_F(
-            Elements::Operation, "Op[%d] missing AssembleOpAttribute; Please check if offset attribute is set.",
-            op.GetOpMagic());
+        APASS_LOG_ERROR_F(Elements::Operation,
+                          "Op[%d] missing AssembleOpAttribute; Please check if offset attribute is set.",
+                          op.GetOpMagic());
         return FAILED;
     }
     auto& toOffset = assembleAttr->GetToOffset();
     for (size_t i = 0; i < toOffset.size(); ++i) {
         if (toOffset[i] < 0) {
-            APASS_LOG_ERROR_F(
-                Elements::Operation, "Op[%d] offset[%zu]=%ld is negative; Please check offset validity.",
-                op.GetOpMagic(), i, toOffset[i]);
+            APASS_LOG_ERROR_F(Elements::Operation, "Op[%d] offset[%zu]=%ld is negative; Please check offset validity.",
+                              op.GetOpMagic(), i, toOffset[i]);
             return FAILED;
         }
     }
@@ -230,11 +225,10 @@ Status ProcessAtomicChecker::CheckNoReduceAcc(Function& function)
 {
     for (const auto& op : function.Operations()) {
         if (op.GetOpcode() == Opcode::OP_REDUCE_ACC) {
-            APASS_LOG_ERROR_F(
-                Elements::Operation,
-                "Op[%d] OP_REDUCE_ACC still exists after ProcessAtomic pass; "
-                "Please check if the ReduceAcc was properly eliminated.%s",
-                op.GetOpMagic(), GetFormatBacktrace(op).c_str());
+            APASS_LOG_ERROR_F(Elements::Operation,
+                              "Op[%d] OP_REDUCE_ACC still exists after ProcessAtomic pass; "
+                              "Please check if the ReduceAcc was properly eliminated.%s",
+                              op.GetOpMagic(), GetFormatBacktrace(op).c_str());
             return FAILED;
         }
     }
@@ -245,11 +239,10 @@ Status ProcessAtomicChecker::CheckNoAtomicRMW(Function& function)
 {
     for (const auto& op : function.Operations()) {
         if (op.GetOpcode() == Opcode::OP_ATOMIC_RMW) {
-            APASS_LOG_ERROR_F(
-                Elements::Operation,
-                "Op[%d] OP_ATOMIC_RMW still exists after ProcessAtomic pass; "
-                "Please check if the AtomicRMW was properly eliminated.%s",
-                op.GetOpMagic(), GetFormatBacktrace(op).c_str());
+            APASS_LOG_ERROR_F(Elements::Operation,
+                              "Op[%d] OP_ATOMIC_RMW still exists after ProcessAtomic pass; "
+                              "Please check if the AtomicRMW was properly eliminated.%s",
+                              op.GetOpMagic(), GetFormatBacktrace(op).c_str());
             return FAILED;
         }
     }

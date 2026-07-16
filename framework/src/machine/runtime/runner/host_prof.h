@@ -51,7 +51,7 @@ private:
     static bool IsCacheOpInfoEnable(const AclRtStream stream);
     void BuildCacheTensorInfo(CacheTaskInfo* taskInfo) const;
     static void BuildTensor(const uint32_t tensorType, const RawTensorDataPtr& tensorInfo, MspfTensorData& tensorData);
-    static void BuildTensor(const uint32_t tensorType, const dynamic::DeviceTensorData &tensorInfo,
+    static void BuildTensor(const uint32_t tensorType, const dynamic::DeviceTensorData& tensorInfo,
                             MspfTensorData& tensorData);
     void GetIOTensor(const std::vector<npu::tile_fwk::dynamic::DeviceTensorData>& tensors);
     std::string opName_;

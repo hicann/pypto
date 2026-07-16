@@ -18,9 +18,8 @@
 using namespace tile_fwk::test_operation;
 namespace ScatterOperation {
 struct ScatterOpFuncArgs : public OpFuncArgs {
-    ScatterOpFuncArgs(
-        const std::vector<int64_t>& viewShape, const std::vector<int64_t> tileShape, int axis, Element& value,
-        ScatterMode reduce)
+    ScatterOpFuncArgs(const std::vector<int64_t>& viewShape, const std::vector<int64_t> tileShape, int axis,
+                      Element& value, ScatterMode reduce)
         : viewShape_(viewShape), tileShape_(tileShape), axis_(axis), value_(value), reduce_(reduce)
     {}
 
@@ -42,8 +41,8 @@ struct ScatterOpMetaData {
 
 // Tensor Scatter(const Tensor &src, const Tensor &idx, const Element &scalar, int axis, const std::string &reduce =
 // "None")
-static void ScatterOperationExeFunc2Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void ScatterOperationExeFunc2Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                         const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0], inputs[1]}, {outputs[0]})
     {
@@ -65,16 +64,14 @@ static void ScatterOperationExeFunc2Dims(
         {
             LOOP("LOOP_L1_sIdx", FunctionType::DYNAMIC_LOOP, sIdx, LoopRange(0, sloop, 1))
             {
-                auto tileTensor0 = View(
-                    inputs[0], {firstViewShape, secondViewShape},
-                    {std::min(src_firstDim - bIdx * firstViewShape, firstViewShape),
-                     std::min(src_secondDim - sIdx * secondViewShape, secondViewShape)},
-                    {bIdx * firstViewShape, sIdx * secondViewShape});
-                auto tileTensor1 = View(
-                    inputs[1], {firstViewShape, secondViewShape},
-                    {std::min(idx_firstDim - bIdx * firstViewShape, firstViewShape),
-                     std::min(idx_secondDim - sIdx * secondViewShape, secondViewShape)},
-                    {bIdx * firstViewShape, sIdx * secondViewShape});
+                auto tileTensor0 = View(inputs[0], {firstViewShape, secondViewShape},
+                                        {std::min(src_firstDim - bIdx * firstViewShape, firstViewShape),
+                                         std::min(src_secondDim - sIdx * secondViewShape, secondViewShape)},
+                                        {bIdx * firstViewShape, sIdx * secondViewShape});
+                auto tileTensor1 = View(inputs[1], {firstViewShape, secondViewShape},
+                                        {std::min(idx_firstDim - bIdx * firstViewShape, firstViewShape),
+                                         std::min(idx_secondDim - sIdx * secondViewShape, secondViewShape)},
+                                        {bIdx * firstViewShape, sIdx * secondViewShape});
 
                 TileShape::Current().SetVecTile(args->tileShape_);
                 auto res = Scatter(tileTensor0, tileTensor1, args->value_, args->axis_, args->reduce_);
@@ -84,8 +81,8 @@ static void ScatterOperationExeFunc2Dims(
     }
 }
 
-static void ScatterOperationExeFunc2DimsNoReduceOp(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void ScatterOperationExeFunc2DimsNoReduceOp(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                                   const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0], inputs[1]}, {outputs[0]})
     {
@@ -107,16 +104,14 @@ static void ScatterOperationExeFunc2DimsNoReduceOp(
         {
             LOOP("LOOP_L1_sIdx", FunctionType::DYNAMIC_LOOP, sIdx, LoopRange(0, sloop, 1))
             {
-                auto tileTensor0 = View(
-                    inputs[0], {firstViewShape, secondViewShape},
-                    {std::min(src_firstDim - bIdx * firstViewShape, firstViewShape),
-                     std::min(src_secondDim - sIdx * secondViewShape, secondViewShape)},
-                    {bIdx * firstViewShape, sIdx * secondViewShape});
-                auto tileTensor1 = View(
-                    inputs[1], {firstViewShape, secondViewShape},
-                    {std::min(idx_firstDim - bIdx * firstViewShape, firstViewShape),
-                     std::min(idx_secondDim - sIdx * secondViewShape, secondViewShape)},
-                    {bIdx * firstViewShape, sIdx * secondViewShape});
+                auto tileTensor0 = View(inputs[0], {firstViewShape, secondViewShape},
+                                        {std::min(src_firstDim - bIdx * firstViewShape, firstViewShape),
+                                         std::min(src_secondDim - sIdx * secondViewShape, secondViewShape)},
+                                        {bIdx * firstViewShape, sIdx * secondViewShape});
+                auto tileTensor1 = View(inputs[1], {firstViewShape, secondViewShape},
+                                        {std::min(idx_firstDim - bIdx * firstViewShape, firstViewShape),
+                                         std::min(idx_secondDim - sIdx * secondViewShape, secondViewShape)},
+                                        {bIdx * firstViewShape, sIdx * secondViewShape});
 
                 TileShape::Current().SetVecTile(args->tileShape_);
                 auto res = Scatter(tileTensor0, tileTensor1, args->value_, args->axis_);
@@ -126,8 +121,8 @@ static void ScatterOperationExeFunc2DimsNoReduceOp(
     }
 }
 
-static void ScatterOperationExeFunc3Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void ScatterOperationExeFunc3Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                         const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0], inputs[1]}, {outputs[0]})
     {
@@ -155,18 +150,16 @@ static void ScatterOperationExeFunc3Dims(
             {
                 LOOP("LOOP_L2_nIdx", FunctionType::DYNAMIC_LOOP, nIdx, LoopRange(0, nloop, 1))
                 {
-                    auto tileTensor0 = View(
-                        inputs[0], {firstViewShape, secondViewShape, thirdViewShape},
-                        {std::min(src_firstDim - bIdx * firstViewShape, firstViewShape),
-                         std::min(src_secondDim - sIdx * secondViewShape, secondViewShape),
-                         std::min(src_thirdDim - nIdx * thirdViewShape, thirdViewShape)},
-                        {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape});
-                    auto tileTensor1 = View(
-                        inputs[1], {firstViewShape, secondViewShape, thirdViewShape},
-                        {std::min(idx_firstDim - bIdx * firstViewShape, firstViewShape),
-                         std::min(idx_secondDim - sIdx * secondViewShape, secondViewShape),
-                         std::min(idx_thirdDim - nIdx * thirdViewShape, thirdViewShape)},
-                        {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape});
+                    auto tileTensor0 = View(inputs[0], {firstViewShape, secondViewShape, thirdViewShape},
+                                            {std::min(src_firstDim - bIdx * firstViewShape, firstViewShape),
+                                             std::min(src_secondDim - sIdx * secondViewShape, secondViewShape),
+                                             std::min(src_thirdDim - nIdx * thirdViewShape, thirdViewShape)},
+                                            {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape});
+                    auto tileTensor1 = View(inputs[1], {firstViewShape, secondViewShape, thirdViewShape},
+                                            {std::min(idx_firstDim - bIdx * firstViewShape, firstViewShape),
+                                             std::min(idx_secondDim - sIdx * secondViewShape, secondViewShape),
+                                             std::min(idx_thirdDim - nIdx * thirdViewShape, thirdViewShape)},
+                                            {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape});
 
                     TileShape::Current().SetVecTile(args->tileShape_);
                     auto res = Scatter(tileTensor0, tileTensor1, args->value_, args->axis_, args->reduce_);
@@ -177,8 +170,8 @@ static void ScatterOperationExeFunc3Dims(
     }
 }
 
-static void ScatterOperationExeFunc4Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void ScatterOperationExeFunc4Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                         const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0], inputs[1]}, {outputs[0]})
     {
@@ -208,29 +201,28 @@ static void ScatterOperationExeFunc4Dims(
                 {
                     LOOP("LOOP_L3_nIdx", FunctionType::DYNAMIC_LOOP, nIdx, LoopRange(0, nloop, 1))
                     {
-                        auto tileTensor0 = View(
-                            inputs[0], {firstViewShape, secondViewShape, thirdViewShape, fourthViewShape},
-                            {std::min(src_firstDim - bIdx * firstViewShape, firstViewShape),
-                             std::min(src_secondDim - sIdx * secondViewShape, secondViewShape),
-                             std::min(src_thirdDim - mIdx * thirdViewShape, thirdViewShape),
-                             std::min(src_fourthDim - nIdx * fourthViewShape, fourthViewShape)},
-                            {bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape,
-                             nIdx * fourthViewShape});
-                        auto tileTensor1 = View(
-                            inputs[1], {firstViewShape, secondViewShape, thirdViewShape, fourthViewShape},
-                            {std::min(idx_firstDim - bIdx * firstViewShape, firstViewShape),
-                             std::min(idx_secondDim - sIdx * secondViewShape, secondViewShape),
-                             std::min(idx_thirdDim - mIdx * thirdViewShape, thirdViewShape),
-                             std::min(idx_fourthDim - nIdx * fourthViewShape, fourthViewShape)},
-                            {bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape,
-                             nIdx * fourthViewShape});
+                        auto tileTensor0 = View(inputs[0],
+                                                {firstViewShape, secondViewShape, thirdViewShape, fourthViewShape},
+                                                {std::min(src_firstDim - bIdx * firstViewShape, firstViewShape),
+                                                 std::min(src_secondDim - sIdx * secondViewShape, secondViewShape),
+                                                 std::min(src_thirdDim - mIdx * thirdViewShape, thirdViewShape),
+                                                 std::min(src_fourthDim - nIdx * fourthViewShape, fourthViewShape)},
+                                                {bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape,
+                                                 nIdx * fourthViewShape});
+                        auto tileTensor1 = View(inputs[1],
+                                                {firstViewShape, secondViewShape, thirdViewShape, fourthViewShape},
+                                                {std::min(idx_firstDim - bIdx * firstViewShape, firstViewShape),
+                                                 std::min(idx_secondDim - sIdx * secondViewShape, secondViewShape),
+                                                 std::min(idx_thirdDim - mIdx * thirdViewShape, thirdViewShape),
+                                                 std::min(idx_fourthDim - nIdx * fourthViewShape, fourthViewShape)},
+                                                {bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape,
+                                                 nIdx * fourthViewShape});
                         TileShape::Current().SetVecTile(args->tileShape_);
                         auto res = Scatter(tileTensor0, tileTensor1, args->value_, args->axis_, args->reduce_);
-                        Assemble(
-                            res,
-                            {bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape,
-                             nIdx * fourthViewShape},
-                            outputs[0]);
+                        Assemble(res,
+                                 {bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape,
+                                  nIdx * fourthViewShape},
+                                 outputs[0]);
                     }
                 }
             }
@@ -240,12 +232,11 @@ static void ScatterOperationExeFunc4Dims(
 
 class ScatterOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac_param<ScatterOpMetaData> {};
 
-INSTANTIATE_TEST_SUITE_P(
-    TestScatter, ScatterOperationTest,
-    ::testing::ValuesIn(GetOpMetaData<ScatterOpMetaData>(
-        {ScatterOperationExeFunc2Dims, ScatterOperationExeFunc3Dims, ScatterOperationExeFunc4Dims,
-         ScatterOperationExeFunc2DimsNoReduceOp},
-        "Scatter")));
+INSTANTIATE_TEST_SUITE_P(TestScatter, ScatterOperationTest,
+                         ::testing::ValuesIn(GetOpMetaData<ScatterOpMetaData>(
+                             {ScatterOperationExeFunc2Dims, ScatterOperationExeFunc3Dims, ScatterOperationExeFunc4Dims,
+                              ScatterOperationExeFunc2DimsNoReduceOp},
+                             "Scatter")));
 
 const std::map<std::string, ScatterMode>& GetScatterModeMap()
 {

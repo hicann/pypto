@@ -42,14 +42,14 @@ public:
      * @param schedule The BspSchedule to be improved.
      * @return The status of the improvement operation.
      */
-    virtual ReturnStatus ImproveSchedule(BspSchedule<GraphT> &schedule) = 0;
+    virtual ReturnStatus ImproveSchedule(BspSchedule<GraphT>& schedule) = 0;
 
     /**
      * @brief Improve the given BspSchedule within the time limit.
      * @param schedule The BspSchedule to be improved.
      * @return The status of the improvement operation.
      */
-    virtual ReturnStatus ImproveScheduleWithTimeLimit(BspSchedule<GraphT> &schedule) = 0;
+    virtual ReturnStatus ImproveScheduleWithTimeLimit(BspSchedule<GraphT>& schedule) = 0;
 
 protected:
     unsigned timeLimitSeconds_; /**< The time limit in seconds for the improvement algorithm. */
@@ -58,12 +58,13 @@ protected:
 template <typename GraphT>
 class ComboScheduler : public Scheduler<GraphT> {
 public:
-    ComboScheduler(Scheduler<GraphT> &base, ImprovementScheduler<GraphT> &improvement)
-        : Scheduler<GraphT>(), baseScheduler_(base), improvementScheduler_(improvement) {}
+    ComboScheduler(Scheduler<GraphT>& base, ImprovementScheduler<GraphT>& improvement)
+        : Scheduler<GraphT>(), baseScheduler_(base), improvementScheduler_(improvement)
+    {}
 
     virtual ~ComboScheduler() = default;
 
-    virtual ReturnStatus ComputeSchedule(BspSchedule<GraphT> &schedule) override
+    virtual ReturnStatus ComputeSchedule(BspSchedule<GraphT>& schedule) override
     {
         ReturnStatus status = baseScheduler_.ComputeSchedule(schedule);
         if (status != ReturnStatus::OSP_SUCCESS and status != ReturnStatus::OSP_BEST_FOUND) {
@@ -74,9 +75,9 @@ public:
     }
 
 private:
-    Scheduler<GraphT> &baseScheduler_;
-    ImprovementScheduler<GraphT> &improvementScheduler_;
+    Scheduler<GraphT>& baseScheduler_;
+    ImprovementScheduler<GraphT>& improvementScheduler_;
 };
-}    // namespace osp
+} // namespace osp
 } // namespace npu::tile_fwk
 #endif // OSP_IMPROVEMENT_SCHEDULER_HPP

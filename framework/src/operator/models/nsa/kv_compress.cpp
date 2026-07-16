@@ -22,11 +22,11 @@ using namespace npu::tile_fwk;
 
 namespace npu::tile_fwk {
 
-void compressKv(
-    const Tensor& kvCache, const Tensor& krCache, const Tensor& cmpKvCache, const Tensor& cmpKrCache,
-    const Tensor& blockTable, Tensor& cmpCacheIndex, const Tensor& actSeqLen, const Tensor& mlpWk1,
-    const Tensor& mlpWk2, const Tensor& mlpCos, const Tensor& mlpSin, Tensor& cmpKvCacheOut, Tensor& cmpKrCacheOut,
-    Tensor& auxTensor, const int cmpBlockSize, const int cmpStride, const int rs, CmpAttnTile& tileConfig)
+void compressKv(const Tensor& kvCache, const Tensor& krCache, const Tensor& cmpKvCache, const Tensor& cmpKrCache,
+                const Tensor& blockTable, Tensor& cmpCacheIndex, const Tensor& actSeqLen, const Tensor& mlpWk1,
+                const Tensor& mlpWk2, const Tensor& mlpCos, const Tensor& mlpSin, Tensor& cmpKvCacheOut,
+                Tensor& cmpKrCacheOut, Tensor& auxTensor, const int cmpBlockSize, const int cmpStride, const int rs,
+                CmpAttnTile& tileConfig)
 {
     /* bellows are function params support
     kvCache: [blockNum * blockSize, n2 * dN], fp16/bf16
@@ -43,11 +43,10 @@ void compressKv(
     kvCacheCmpOut: [cmpBlockNum*blockSize, n2*dN], fp16/bf16
     krCacheCmpOut: [cmpBlockNum*blockSize, n2*dR], fp16/bf16
     */
-    FUNCTION(
-        "CompressKv",
-        {kvCache, krCache, cmpKvCache, cmpKrCache, blockTable, cmpCacheIndex, actSeqLen, mlpWk1, mlpWk2, mlpCos,
-         mlpSin},
-        {cmpKvCacheOut, cmpKrCacheOut, auxTensor})
+    FUNCTION("CompressKv",
+             {kvCache, krCache, cmpKvCache, cmpKrCache, blockTable, cmpCacheIndex, actSeqLen, mlpWk1, mlpWk2, mlpCos,
+              mlpSin},
+             {cmpKvCacheOut, cmpKrCacheOut, auxTensor})
     {
         auto kDtype = kvCache.GetStorage()->Datatype();
 
@@ -99,10 +98,10 @@ void compressKv(
             ELSE
             { // tableLoop == 2
                 auto blockIdx0 = GetTensorData(blockTable, {bIdx, blockStartIdx});
-                auto kNopeBlock0 =
-                    View(kvCache, {cmpBlockSize / 2, dN}, {(blockIdx0 + 1) * blockSize - cmpBlockSize / 2, 0});
-                auto kRopeBlock0 =
-                    View(krCache, {cmpBlockSize / 2, dR}, {(blockIdx0 + 1) * blockSize - cmpBlockSize / 2, 0});
+                auto kNopeBlock0 = View(kvCache, {cmpBlockSize / 2, dN},
+                                        {(blockIdx0 + 1) * blockSize - cmpBlockSize / 2, 0});
+                auto kRopeBlock0 = View(krCache, {cmpBlockSize / 2, dR},
+                                        {(blockIdx0 + 1) * blockSize - cmpBlockSize / 2, 0});
                 auto blockIdx1 = GetTensorData(blockTable, {bIdx, blockStartIdx + 1});
                 auto kNopeBlock1 = View(kvCache, {cmpBlockSize / 2, dN}, {blockIdx1 * blockSize, 0});
                 auto kRopeBlock1 = View(krCache, {cmpBlockSize / 2, dR}, {blockIdx1 * blockSize, 0});
@@ -132,8 +131,8 @@ void compressKv(
         {
             (void)bIdx;
             auto reshapeNR = Reshape(batchConcatNR, {b, cmpBlockSize * (dN + dR)});
-            batchMlpCompressResult =
-                BatchMlpCompress(reshapeNR, mlpWk1, mlpWk2, tileConfig.mlpCmpTile); // (b, n2, dN + dR)
+            batchMlpCompressResult = BatchMlpCompress(reshapeNR, mlpWk1, mlpWk2,
+                                                      tileConfig.mlpCmpTile); // (b, n2, dN + dR)
 
             TileShape::Current().SetVecTile(1, NUM_32, NUM_64);
         }
@@ -183,13 +182,13 @@ void compressKv(
             auto cmpKrCacheDim2 = Reshape(cmpKrCache, {cmpBlockNum * blockSize * n2, dR});
             TileShape::Current().SetVecTile(NUM_32, NUM_64);
             auto index = Reshape(View(cmpCacheIndex, {b, 1}, {0, s1 - 1}), {1, b});
-            cmpKvCacheOut =
-                Reshape(ScatterUpdate(cmpKvCacheDim2, index, batchNopeResult, 0), {cmpBlockNum, blockSize, 1, dN});
-            cmpKrCacheOut =
-                Reshape(ScatterUpdate(cmpKrCacheDim2, index, batchRopeResult, 0), {cmpBlockNum, blockSize, 1, dR});
+            cmpKvCacheOut = Reshape(ScatterUpdate(cmpKvCacheDim2, index, batchNopeResult, 0),
+                                    {cmpBlockNum, blockSize, 1, dN});
+            cmpKrCacheOut = Reshape(ScatterUpdate(cmpKrCacheDim2, index, batchRopeResult, 0),
+                                    {cmpBlockNum, blockSize, 1, dR});
             for (int i = 0; i < rs + rc - 1; i++) {
-                auto auxVector = npu::tile_fwk::Full(
-                    Element(DT_FP32, float(std::min(i + 1, rc) - std::max(i - rs, 0))), DT_FP32, {1, auxVecLen});
+                auto auxVector = npu::tile_fwk::Full(Element(DT_FP32, float(std::min(i + 1, rc) - std::max(i - rs, 0))),
+                                                     DT_FP32, {1, auxVecLen});
                 Assemble(auxVector, {i, 0}, auxTensor);
             }
         }

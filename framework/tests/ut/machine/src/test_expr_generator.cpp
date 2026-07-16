@@ -117,8 +117,8 @@ TEST_F(TestExprBatchGenerator, CheckExprDependCoreTest)
     RawSymbolicScalarPtr callee = RawSymbolicSymbol::Create("RUNTIME_GetInputData");
 
     std::vector<RawSymbolicScalarPtr> operands = {callee, arg1, arg2};
-    RawSymbolicScalarPtr getInputDataExpr =
-        std::make_shared<RawSymbolicExpression>(SymbolicOpcode::T_MOP_CALL, operands);
+    RawSymbolicScalarPtr getInputDataExpr = std::make_shared<RawSymbolicExpression>(SymbolicOpcode::T_MOP_CALL,
+                                                                                    operands);
     bool dependsCore = SymbolicExpressionTable::CheckExprDependCore(
         getInputDataExpr, valDependTensorMeta.tensorNameToDependCore, valDependTensorMeta.valDependMap);
     ASSERT_TRUE(dependsCore);
@@ -154,8 +154,8 @@ TEST_F(TestExprBatchGenerator, InsertWaitCoreStartLoopBesTest)
     RawSymbolicScalarPtr arg1 = RawSymbolicSymbol::Create(testTensorName);
     RawSymbolicScalarPtr arg2 = RawSymbolicImmediate::Create(0);
     std::vector<RawSymbolicScalarPtr> operands = {callee, arg1, arg2};
-    RawSymbolicScalarPtr getInputDataExpr =
-        std::make_shared<RawSymbolicExpression>(SymbolicOpcode::T_MOP_CALL, operands);
+    RawSymbolicScalarPtr getInputDataExpr = std::make_shared<RawSymbolicExpression>(SymbolicOpcode::T_MOP_CALL,
+                                                                                    operands);
 
     SymbolicExpressionTable exprTable;
     exprTable.AddPrimaryExpression(SymbolicScalar(getInputDataExpr));
@@ -190,8 +190,8 @@ TEST_F(TestExprBatchGenerator, BatchFileGeneration)
     }
 
     // Generate batch files
-    generator.GenerateBatchFile(
-        &exprTable, controlFlowOss, exprHeaderOss, "test_exp.h", expressions, exprSrcFiles, 1, 1);
+    generator.GenerateBatchFile(&exprTable, controlFlowOss, exprHeaderOss, "test_exp.h", expressions, exprSrcFiles, 1,
+                                1);
 
     // Check if batch files were created
     ASSERT_EQ(exprSrcFiles.size(), 2);
@@ -223,13 +223,11 @@ RawSymbolicScalarPtr ImmNode(int64_t v) { return RawSymbolicImmediate::Create(v)
 RawSymbolicScalarPtr SymNode(const std::string& n) { return RawSymbolicSymbol::Create(n); }
 RawSymbolicScalarPtr AddNode(const RawSymbolicScalarPtr& a, const RawSymbolicScalarPtr& b)
 {
-    return std::make_shared<RawSymbolicExpression>(
-        SymbolicOpcode::T_BOP_ADD, std::vector<RawSymbolicScalarPtr>{a, b});
+    return std::make_shared<RawSymbolicExpression>(SymbolicOpcode::T_BOP_ADD, std::vector<RawSymbolicScalarPtr>{a, b});
 }
 RawSymbolicScalarPtr MulNode(const RawSymbolicScalarPtr& a, const RawSymbolicScalarPtr& b)
 {
-    return std::make_shared<RawSymbolicExpression>(
-        SymbolicOpcode::T_BOP_MUL, std::vector<RawSymbolicScalarPtr>{a, b});
+    return std::make_shared<RawSymbolicExpression>(SymbolicOpcode::T_BOP_MUL, std::vector<RawSymbolicScalarPtr>{a, b});
 }
 std::string ReadFile(const std::string& path)
 {
@@ -282,8 +280,8 @@ TEST_F(TestExprBatchGenerator, FoldMultiDiffLockstep)
 {
     std::vector<RawSymbolicScalarPtr> exprs;
     for (int64_t i = 0; i < 4; i++) {
-        exprs.push_back(MulNode(AddNode(SymNode("a"), ImmNode(4 + i * 4)),
-                                AddNode(SymNode("b"), ImmNode(100 + i * 100))));
+        exprs.push_back(
+            MulNode(AddNode(SymNode("a"), ImmNode(4 + i * 4)), AddNode(SymNode("b"), ImmNode(100 + i * 100))));
     }
     std::string body = RunGen(testDir_, 11, exprs);
     EXPECT_EQ(Count(body, "for (int64_t sym_expr_loop_k_"), 1u);

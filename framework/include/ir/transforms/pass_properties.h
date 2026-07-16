@@ -42,10 +42,9 @@ inline const PassProperties kNormalizeStmtStructureProperties{
     {IRProperty::TypeChecked, IRProperty::NormalizedStmtStructure},
     {IRProperty::FlattenedSingleStmt}};
 
-inline const PassProperties kFlattenSingleStmtProperties{
-    {IRProperty::TypeChecked},
-    {IRProperty::TypeChecked, IRProperty::FlattenedSingleStmt},
-    {IRProperty::NormalizedStmtStructure}};
+inline const PassProperties kFlattenSingleStmtProperties{{IRProperty::TypeChecked},
+                                                         {IRProperty::TypeChecked, IRProperty::FlattenedSingleStmt},
+                                                         {IRProperty::NormalizedStmtStructure}};
 
 inline const PassProperties kOutlineIncoreScopesProperties{
     {IRProperty::TypeChecked, IRProperty::SSAForm}, {IRProperty::SplitIncoreOrch}, {}};

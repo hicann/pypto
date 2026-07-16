@@ -33,8 +33,8 @@ Status DuplicateOp::PreCheck(Function& function)
 
 Status DuplicateOp::RunOnFunction(Function& function)
 {
-    APASS_LOG_INFO_F(
-        Elements::Function, "===> Start %s for function [%s].", MODULE_NAME, function.GetRawName().c_str());
+    APASS_LOG_INFO_F(Elements::Function, "===> Start %s for function [%s].", MODULE_NAME,
+                     function.GetRawName().c_str());
     std::vector<Operation*> newOps;
     if (Process(function, newOps) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Function, "Process failed.");
@@ -93,16 +93,15 @@ Status DuplicateOp::ProcessGatherIn(Function& function, Operation& operation, st
             }
             auto dst = oOperand->Clone(function, true);
             if (dst == nullptr) {
-                APASS_LOG_ERROR_F(
-                    Elements::Tensor, "Clone OP_GATHER_IN_L1's oOperand[%d] failed; Please check if dst is nullptr.",
-                    oOperand->GetMagic());
+                APASS_LOG_ERROR_F(Elements::Tensor,
+                                  "Clone OP_GATHER_IN_L1's oOperand[%d] failed; Please check if dst is nullptr.",
+                                  oOperand->GetMagic());
                 return FAILED;
             }
             consumer->ReplaceInput(dst, oOperand);
             IRBuilder builder;
-            auto& newOp =
-                builder.CreateTensorOpStmt(function, Opcode::OP_GATHER_IN_L1, operation.GetIOperands(), {dst},
-                                              operation.GetSpan());
+            auto& newOp = builder.CreateTensorOpStmt(function, Opcode::OP_GATHER_IN_L1, operation.GetIOperands(), {dst},
+                                                     operation.GetSpan());
             newOp.SetScopeInfo(operation.GetScopeInfo());
             newOp.SetAttribute(OpAttributeKey::startOffset, operation.GetIntAttribute(OpAttributeKey::startOffset));
             newOps.push_back(&newOp);
@@ -149,8 +148,7 @@ Status DuplicateOp::ProcessView(Function& function, Operation& operation, std::v
             }
             consumer->ReplaceInput(dst, oOperand);
             IRBuilder builder;
-            auto& newOp =
-                builder.CreateTensorOpStmt(function, Opcode::OP_VIEW, {iOperand}, {dst}, operation.GetSpan());
+            auto& newOp = builder.CreateTensorOpStmt(function, Opcode::OP_VIEW, {iOperand}, {dst}, operation.GetSpan());
             newOp.SetScopeInfo(operation.GetScopeInfo());
             auto oriViewAttr = dynamic_cast<ViewOpAttribute*>(operation.GetOpAttribute().get());
             if (oriViewAttr != nullptr) {

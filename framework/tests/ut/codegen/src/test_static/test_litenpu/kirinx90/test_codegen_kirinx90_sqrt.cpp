@@ -19,80 +19,35 @@ using namespace npu::tile_fwk;
 
 class TestCodeGenKirinX90Sqrt : public CodegenTestLiteNPU {
 public:
-    TestCodeGenKirinX90Sqrt() : CodegenTestLiteNPU("KirinX90"){};
+    TestCodeGenKirinX90Sqrt() : CodegenTestLiteNPU("KirinX90") {};
 };
 
-TEST_F(TestCodeGenKirinX90Sqrt, test_Sqrt_fp16_001)
-{
-    TestCodeGenSqrt::Instance().test_Sqrt_fp16_001();
-}
+TEST_F(TestCodeGenKirinX90Sqrt, test_Sqrt_fp16_001) { TestCodeGenSqrt::Instance().test_Sqrt_fp16_001(); }
 
-TEST_F(TestCodeGenKirinX90Sqrt, DISABLED_test_Sqrt_fp16_002)
-{
-    TestCodeGenSqrt::Instance().test_Sqrt_fp16_002();
-}
+TEST_F(TestCodeGenKirinX90Sqrt, DISABLED_test_Sqrt_fp16_002) { TestCodeGenSqrt::Instance().test_Sqrt_fp16_002(); }
 
-TEST_F(TestCodeGenKirinX90Sqrt, DISABLED_test_Sqrt_fp32_003)
-{
-    TestCodeGenSqrt::Instance().test_Sqrt_fp32_003();
-}
+TEST_F(TestCodeGenKirinX90Sqrt, DISABLED_test_Sqrt_fp32_003) { TestCodeGenSqrt::Instance().test_Sqrt_fp32_003(); }
 
-TEST_F(TestCodeGenKirinX90Sqrt, DISABLED_test_Sqrt_fp32_004)
-{
-    TestCodeGenSqrt::Instance().test_Sqrt_fp32_004();
-}
+TEST_F(TestCodeGenKirinX90Sqrt, DISABLED_test_Sqrt_fp32_004) { TestCodeGenSqrt::Instance().test_Sqrt_fp32_004(); }
 
-TEST_F(TestCodeGenKirinX90Sqrt, DISABLED_test_Sqrt_fp16_005)
-{
-    TestCodeGenSqrt::Instance().test_Sqrt_fp16_005();
-}
+TEST_F(TestCodeGenKirinX90Sqrt, DISABLED_test_Sqrt_fp16_005) { TestCodeGenSqrt::Instance().test_Sqrt_fp16_005(); }
 
-TEST_F(TestCodeGenKirinX90Sqrt, DISABLED_test_Sqrt_fp32_006)
-{
-    TestCodeGenSqrt::Instance().test_Sqrt_fp32_006();
-}
+TEST_F(TestCodeGenKirinX90Sqrt, DISABLED_test_Sqrt_fp32_006) { TestCodeGenSqrt::Instance().test_Sqrt_fp32_006(); }
 
-TEST_F(TestCodeGenKirinX90Sqrt, DISABLED_test_Sqrt_fp16_007)
-{
-    TestCodeGenSqrt::Instance().test_Sqrt_fp16_007();
-}
+TEST_F(TestCodeGenKirinX90Sqrt, DISABLED_test_Sqrt_fp16_007) { TestCodeGenSqrt::Instance().test_Sqrt_fp16_007(); }
 
-TEST_F(TestCodeGenKirinX90Sqrt, DISABLED_test_Sqrt_fp32_008)
-{
-    TestCodeGenSqrt::Instance().test_Sqrt_fp32_008();
-}
+TEST_F(TestCodeGenKirinX90Sqrt, DISABLED_test_Sqrt_fp32_008) { TestCodeGenSqrt::Instance().test_Sqrt_fp32_008(); }
 
-TEST_F(TestCodeGenKirinX90Sqrt, DISABLED_test_Sqrt_fp16_009)
-{
-    TestCodeGenSqrt::Instance().test_Sqrt_fp16_009();
-}
+TEST_F(TestCodeGenKirinX90Sqrt, DISABLED_test_Sqrt_fp16_009) { TestCodeGenSqrt::Instance().test_Sqrt_fp16_009(); }
 
-TEST_F(TestCodeGenKirinX90Sqrt, DISABLED_test_Sqrt_fp32_010)
-{
-    TestCodeGenSqrt::Instance().test_Sqrt_fp32_010();
-}
+TEST_F(TestCodeGenKirinX90Sqrt, DISABLED_test_Sqrt_fp32_010) { TestCodeGenSqrt::Instance().test_Sqrt_fp32_010(); }
 
-TEST_F(TestCodeGenKirinX90Sqrt, DISABLED_test_Sqrt_fp16_011)
-{
-    TestCodeGenSqrt::Instance().test_Sqrt_fp16_011();
-}
+TEST_F(TestCodeGenKirinX90Sqrt, DISABLED_test_Sqrt_fp16_011) { TestCodeGenSqrt::Instance().test_Sqrt_fp16_011(); }
 
-TEST_F(TestCodeGenKirinX90Sqrt, DISABLED_test_Sqrt_fp32_012)
-{
-    TestCodeGenSqrt::Instance().test_Sqrt_fp32_012();
-}
+TEST_F(TestCodeGenKirinX90Sqrt, DISABLED_test_Sqrt_fp32_012) { TestCodeGenSqrt::Instance().test_Sqrt_fp32_012(); }
 
-TEST_F(TestCodeGenKirinX90Sqrt, DISABLED_test_Sqrt_fp16_013)
-{
-    TestCodeGenSqrt::Instance().test_Sqrt_fp16_013();
-}
+TEST_F(TestCodeGenKirinX90Sqrt, DISABLED_test_Sqrt_fp16_013) { TestCodeGenSqrt::Instance().test_Sqrt_fp16_013(); }
 
-TEST_F(TestCodeGenKirinX90Sqrt, DISABLED_test_Sqrt_fp32_014)
-{
-    TestCodeGenSqrt::Instance().test_Sqrt_fp32_014();
-}
+TEST_F(TestCodeGenKirinX90Sqrt, DISABLED_test_Sqrt_fp32_014) { TestCodeGenSqrt::Instance().test_Sqrt_fp32_014(); }
 
-TEST_F(TestCodeGenKirinX90Sqrt, DISABLED_test_Sqrt_fp16_015)
-{
-    TestCodeGenSqrt::Instance().test_Sqrt_fp16_015();
-}
+TEST_F(TestCodeGenKirinX90Sqrt, DISABLED_test_Sqrt_fp16_015) { TestCodeGenSqrt::Instance().test_Sqrt_fp16_015(); }

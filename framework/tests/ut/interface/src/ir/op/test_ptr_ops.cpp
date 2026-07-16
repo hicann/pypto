@@ -78,9 +78,9 @@ TEST_F(PtrOpsTest, AddPtr_WrongArgCount_Throws)
 TEST_F(PtrOpsTest, AddPtr_NonPtrFirst_Throws)
 {
     auto& reg = OpRegistry::GetInstance();
-    EXPECT_THROW(
-        (void)reg.Create("ptr.addptr", {MakeScalarVar("s", DataType::FP32), MakeScalarVar("off", DataType::INDEX)}, Sp()),
-        npu::tile_fwk::Error);
+    EXPECT_THROW((void)reg.Create("ptr.addptr",
+                                  {MakeScalarVar("s", DataType::FP32), MakeScalarVar("off", DataType::INDEX)}, Sp()),
+                 npu::tile_fwk::Error);
 }
 
 // ============================================================================
@@ -111,9 +111,9 @@ TEST_F(PtrOpsTest, MakeTensor_WrongArgCount_Throws)
 TEST_F(PtrOpsTest, MakeTensor_NonPtrFirst_Throws)
 {
     auto& reg = OpRegistry::GetInstance();
-    EXPECT_THROW(
-        (void)reg.Create("ptr.make_tensor", {MakeScalarVar("s", DataType::FP32), MakeIntTuple({16}), MakeIntTuple({1})}, Sp()),
-        npu::tile_fwk::Error);
+    EXPECT_THROW((void)reg.Create("ptr.make_tensor",
+                                  {MakeScalarVar("s", DataType::FP32), MakeIntTuple({16}), MakeIntTuple({1})}, Sp()),
+                 npu::tile_fwk::Error);
 }
 
 TEST_F(PtrOpsTest, MakeTensor_ShapeStrideMismatch_Throws)

@@ -228,7 +228,6 @@ TEST_F(OperationImplTest, Test_IndexAddUB_BF16)
     FUNCTION("TestIndxAdd") { result = IndexAddUB(self, src, index, axis, alpha); }
 }
 
-
 TEST_F(OperationImplTest, Test_IndexAddUB_INT16)
 {
     int scalar = 2;
@@ -631,34 +630,36 @@ TEST_F(OperationImplTest, Test_Tan_BF16)
     }
 }
 
-TEST_F(OperationImplTest, Test_Tanh_FP16) {
-    PROGRAM("Tanh") {
+TEST_F(OperationImplTest, Test_Tanh_FP16)
+{
+    PROGRAM("Tanh")
+    {
         std::vector<int64_t> shape = {128, 32};
         TileShape::Current().SetVecTile({128, 32});
         Tensor input_a(DT_FP16, shape, "A");
         auto output = Tensor(DT_FP16, shape, "res");
         config::SetBuildStatic(true);
-        FUNCTION("Tanh_FP16") {
-            output = Tanh(input_a);
-        }
+        FUNCTION("Tanh_FP16") { output = Tanh(input_a); }
     }
 }
 
-TEST_F(OperationImplTest, Test_Tanh_FP32) {
-    PROGRAM("Tanh") {
+TEST_F(OperationImplTest, Test_Tanh_FP32)
+{
+    PROGRAM("Tanh")
+    {
         std::vector<int64_t> shape = {128, 32};
         TileShape::Current().SetVecTile({128, 32});
         Tensor input_a(DT_FP32, shape, "A");
         auto output = Tensor(DT_FP32, shape, "res");
         config::SetBuildStatic(true);
-        FUNCTION("Tanh_FP32") {
-            output = Tanh(input_a);
-        }
+        FUNCTION("Tanh_FP32") { output = Tanh(input_a); }
     }
 }
 
-TEST_F(OperationImplTest, Test_Log1p_FP16) {
-    PROGRAM("Log1p") {
+TEST_F(OperationImplTest, Test_Log1p_FP16)
+{
+    PROGRAM("Log1p")
+    {
         std::vector<int64_t> shape = {128, 32};
         TileShape::Current().SetVecTile({128, 32});
         Tensor input_a(DT_FP16, shape, "A");
@@ -781,8 +782,8 @@ void TestNZFormatBatch(int bs, int m, int k, int n)
             std::vector<std::pair<Tensor, std::vector<int64_t>>> assembleVec;
             for (size_t index = 0; index < (size_t)bs; ++index) {
                 auto inputA = View(matA, {m, k}, {(int)index * m, 0});
-                auto inputB =
-                    isTransB ? View(matB, {n, k}, {(int)index * n, 0}) : View(matB, {k, n}, {(int)index * k, 0});
+                auto inputB = isTransB ? View(matB, {n, k}, {(int)index * n, 0}) :
+                                         View(matB, {k, n}, {(int)index * k, 0});
                 TileShape::Current().SetMatrixSize({m, k, n});
                 auto outTensor = npu::tile_fwk::Matrix::Matmul(outputType, inputA, inputB, false, isTransB);
                 std::vector<int64_t> pairSecond = {(int)index * m, 0};
@@ -850,9 +851,11 @@ TEST_F(OperationImplTest, test_Range_INT32)
     FUNCTION("TestRange") { result = Range(start, end, step); }
 }
 
-TEST_F(OperationImplTest, Test_Uniform_UINT32) {
+TEST_F(OperationImplTest, Test_Uniform_UINT32)
+{
     Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
-    PROGRAM("Uniform") {
+    PROGRAM("Uniform")
+    {
         std::vector<int64_t> shape = {128};
         TileShape::Current().SetVecTile({128});
         uint64_t key = 12345678901234;
@@ -860,16 +863,21 @@ TEST_F(OperationImplTest, Test_Uniform_UINT32) {
         uint64_t counter1 = 0;
         Tensor output(DT_FP32, shape, "res");
         config::SetBuildStatic(true);
-        FUNCTION("Uniform_UINT32") {
-            output = Uniform(Element(DT_UINT64, key), SymbolicScalar(static_cast<int64_t>(counter0)), Element(DT_UINT64, counter1), shape, Element(DT_UINT16, static_cast<uint16_t>(10)), DT_FP32);
+        FUNCTION("Uniform_UINT32")
+        {
+            output = Uniform(Element(DT_UINT64, key), SymbolicScalar(static_cast<int64_t>(counter0)),
+                             Element(DT_UINT64, counter1), shape, Element(DT_UINT16, static_cast<uint16_t>(10)),
+                             DT_FP32);
         }
     }
     Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
 }
 
-TEST_F(OperationImplTest, Test_Uniform_FP16) {
+TEST_F(OperationImplTest, Test_Uniform_FP16)
+{
     Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
-    PROGRAM("Uniform") {
+    PROGRAM("Uniform")
+    {
         std::vector<int64_t> shape = {128};
         TileShape::Current().SetVecTile({128});
         uint64_t key = 12345678901234;
@@ -877,16 +885,21 @@ TEST_F(OperationImplTest, Test_Uniform_FP16) {
         uint64_t counter1 = 0;
         Tensor output(DT_FP16, shape, "res");
         config::SetBuildStatic(true);
-        FUNCTION("Uniform_FP16") {
-            output = Uniform(Element(DT_UINT64, key), SymbolicScalar(static_cast<int64_t>(counter0)), Element(DT_UINT64, counter1), shape, Element(DT_UINT16, static_cast<uint16_t>(10)), DT_FP16);
+        FUNCTION("Uniform_FP16")
+        {
+            output = Uniform(Element(DT_UINT64, key), SymbolicScalar(static_cast<int64_t>(counter0)),
+                             Element(DT_UINT64, counter1), shape, Element(DT_UINT16, static_cast<uint16_t>(10)),
+                             DT_FP16);
         }
     }
     Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
 }
 
-TEST_F(OperationImplTest, Test_Uniform_BF16) {
+TEST_F(OperationImplTest, Test_Uniform_BF16)
+{
     Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
-    PROGRAM("Uniform") {
+    PROGRAM("Uniform")
+    {
         std::vector<int64_t> shape = {128};
         TileShape::Current().SetVecTile({128});
         uint64_t key = 12345678901234;
@@ -894,16 +907,21 @@ TEST_F(OperationImplTest, Test_Uniform_BF16) {
         uint64_t counter1 = 0;
         Tensor output(DT_BF16, shape, "res");
         config::SetBuildStatic(true);
-        FUNCTION("Uniform_BF16") {
-            output = Uniform(Element(DT_UINT64, key), SymbolicScalar(static_cast<int64_t>(counter0)), Element(DT_UINT64, counter1), shape, Element(DT_UINT16, static_cast<uint16_t>(10)), DT_BF16);
+        FUNCTION("Uniform_BF16")
+        {
+            output = Uniform(Element(DT_UINT64, key), SymbolicScalar(static_cast<int64_t>(counter0)),
+                             Element(DT_UINT64, counter1), shape, Element(DT_UINT16, static_cast<uint16_t>(10)),
+                             DT_BF16);
         }
     }
     Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
 }
 
-TEST_F(OperationImplTest, Test_Uniform_Rounds7) {
+TEST_F(OperationImplTest, Test_Uniform_Rounds7)
+{
     Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
-    PROGRAM("Uniform") {
+    PROGRAM("Uniform")
+    {
         std::vector<int64_t> shape = {128};
         TileShape::Current().SetVecTile({128});
         uint64_t key = 12345678901234;
@@ -911,16 +929,21 @@ TEST_F(OperationImplTest, Test_Uniform_Rounds7) {
         uint64_t counter1 = 0;
         Tensor output(DT_FP32, shape, "res");
         config::SetBuildStatic(true);
-        FUNCTION("Uniform_Rounds7") {
-            output = Uniform(Element(DT_UINT64, key), SymbolicScalar(static_cast<int64_t>(counter0)), Element(DT_UINT64, counter1), shape, Element(DT_UINT16, static_cast<uint16_t>(7)), DT_FP32);
+        FUNCTION("Uniform_Rounds7")
+        {
+            output = Uniform(Element(DT_UINT64, key), SymbolicScalar(static_cast<int64_t>(counter0)),
+                             Element(DT_UINT64, counter1), shape, Element(DT_UINT16, static_cast<uint16_t>(7)),
+                             DT_FP32);
         }
     }
     Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
 }
 
-TEST_F(OperationImplTest, Test_Uniform_FP16_Rounds7) {
+TEST_F(OperationImplTest, Test_Uniform_FP16_Rounds7)
+{
     Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
-    PROGRAM("Uniform") {
+    PROGRAM("Uniform")
+    {
         std::vector<int64_t> shape = {128};
         TileShape::Current().SetVecTile({128});
         uint64_t key = 12345678901234;
@@ -928,16 +951,21 @@ TEST_F(OperationImplTest, Test_Uniform_FP16_Rounds7) {
         uint64_t counter1 = 0;
         Tensor output(DT_FP16, shape, "res");
         config::SetBuildStatic(true);
-        FUNCTION("Uniform_FP16_Rounds7") {
-            output = Uniform(Element(DT_UINT64, key), SymbolicScalar(static_cast<int64_t>(counter0)), Element(DT_UINT64, counter1), shape, Element(DT_UINT16, static_cast<uint16_t>(7)), DT_FP16);
+        FUNCTION("Uniform_FP16_Rounds7")
+        {
+            output = Uniform(Element(DT_UINT64, key), SymbolicScalar(static_cast<int64_t>(counter0)),
+                             Element(DT_UINT64, counter1), shape, Element(DT_UINT16, static_cast<uint16_t>(7)),
+                             DT_FP16);
         }
     }
     Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
 }
 
-TEST_F(OperationImplTest, Test_Uniform_BF16_Rounds7) {
+TEST_F(OperationImplTest, Test_Uniform_BF16_Rounds7)
+{
     Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
-    PROGRAM("Uniform") {
+    PROGRAM("Uniform")
+    {
         std::vector<int64_t> shape = {128};
         TileShape::Current().SetVecTile({128});
         uint64_t key = 12345678901234;
@@ -945,16 +973,21 @@ TEST_F(OperationImplTest, Test_Uniform_BF16_Rounds7) {
         uint64_t counter1 = 0;
         Tensor output(DT_BF16, shape, "res");
         config::SetBuildStatic(true);
-        FUNCTION("Uniform_BF16_Rounds7") {
-            output = Uniform(Element(DT_UINT64, key), SymbolicScalar(static_cast<int64_t>(counter0)), Element(DT_UINT64, counter1), shape, Element(DT_UINT16, static_cast<uint16_t>(7)), DT_BF16);
+        FUNCTION("Uniform_BF16_Rounds7")
+        {
+            output = Uniform(Element(DT_UINT64, key), SymbolicScalar(static_cast<int64_t>(counter0)),
+                             Element(DT_UINT64, counter1), shape, Element(DT_UINT16, static_cast<uint16_t>(7)),
+                             DT_BF16);
         }
     }
     Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
 }
 
-TEST_F(OperationImplTest, Test_Uniform_LargeShape) {
+TEST_F(OperationImplTest, Test_Uniform_LargeShape)
+{
     Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
-    PROGRAM("Uniform") {
+    PROGRAM("Uniform")
+    {
         std::vector<int64_t> shape = {256};
         TileShape::Current().SetVecTile({128});
         uint64_t key = 9876543210;
@@ -962,8 +995,11 @@ TEST_F(OperationImplTest, Test_Uniform_LargeShape) {
         uint64_t counter1 = 200;
         Tensor output(DT_FP32, shape, "res");
         config::SetBuildStatic(true);
-        FUNCTION("Uniform_LargeShape") {
-            output = Uniform(Element(DT_UINT64, key), SymbolicScalar(static_cast<int64_t>(counter0)), Element(DT_UINT64, counter1), shape, Element(DT_UINT16, static_cast<uint16_t>(10)), DT_FP32);
+        FUNCTION("Uniform_LargeShape")
+        {
+            output = Uniform(Element(DT_UINT64, key), SymbolicScalar(static_cast<int64_t>(counter0)),
+                             Element(DT_UINT64, counter1), shape, Element(DT_UINT16, static_cast<uint16_t>(10)),
+                             DT_FP32);
         }
     }
     Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
@@ -1565,12 +1601,11 @@ TEST_F(OperationImplTest, Test_Conv1d_FP16_Bias)
     TileShape::Current().SetVecTile({16, 16, 16});
     Tensor fmap(DT_FP16, {1, 32, 64}, "fmap");
     Tensor weight(DT_FP16, {32, 32, 3}, "weight");
-    Tensor bias(
-        DT_FP16,
-        {
-            32,
-        },
-        "bias");
+    Tensor bias(DT_FP16,
+                {
+                    32,
+                },
+                "bias");
     Tensor result;
     Conv::ConvExtendParam convExtendParam;
     convExtendParam.biasTensor = bias;
@@ -1588,19 +1623,18 @@ TEST_F(OperationImplTest, Test_Conv3d_FP16_Bias)
     TileShape::Current().SetVecTile({16, 16, 2, 4, 16});
     Tensor fmap(DT_FP16, {1, 32, 2, 2, 64}, "fmap");
     Tensor weight(DT_FP16, {32, 32, 2, 3, 3}, "weight");
-    Tensor bias(
-        DT_FP16,
-        {
-            32,
-        },
-        "bias");
+    Tensor bias(DT_FP16,
+                {
+                    32,
+                },
+                "bias");
     Tensor result;
     Conv::ConvExtendParam convExtendParam;
     convExtendParam.biasTensor = bias;
     FUNCTION("TestConv")
     {
-        result = npu::tile_fwk::Conv::Conv(
-            DT_FP16, fmap, weight, {1, 1, 1}, {0, 0, 1, 1, 1, 1}, {1, 1, 1}, convExtendParam, 1);
+        result = npu::tile_fwk::Conv::Conv(DT_FP16, fmap, weight, {1, 1, 1}, {0, 0, 1, 1, 1, 1}, {1, 1, 1},
+                                           convExtendParam, 1);
     }
 }
 
@@ -1650,8 +1684,8 @@ TEST_F(OperationImplTest, Test_MatmulMX_Bias)
     extendParam.biasTensor = matBias;
     FUNCTION("TestMatmulMXBias")
     {
-        result = npu::tile_fwk::Matrix::MatmulMX(
-            DT_FP32, matA, scaleA, matB, scaleB, extendParam, false, false, false, false, false);
+        result = npu::tile_fwk::Matrix::MatmulMX(DT_FP32, matA, scaleA, matB, scaleB, extendParam, false, false, false,
+                                                 false, false);
     }
     Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
     Platform::Instance().ReloadMemoryPaths("2201");
@@ -1732,8 +1766,8 @@ TEST_F(OperationImplTest, Test_BatchMatmulMX_Bias_3D)
     extendParam.biasTensor = matBias;
     FUNCTION("TestBatchMatmulMXBias3D")
     {
-        result = npu::tile_fwk::Matrix::BatchMatmulMX(
-            DT_FP32, matA, scaleA, matB, scaleB, extendParam, false, false, false, false, false);
+        result = npu::tile_fwk::Matrix::BatchMatmulMX(DT_FP32, matA, scaleA, matB, scaleB, extendParam, false, false,
+                                                      false, false, false);
     }
     Platform::Instance().ReloadMemoryPaths("2201");
 }
@@ -1753,8 +1787,8 @@ TEST_F(OperationImplTest, Test_BatchMatmulMX_Bias_4D)
     extendParam.biasTensor = matBias;
     FUNCTION("TestBatchMatmulMXBias4D")
     {
-        result = npu::tile_fwk::Matrix::BatchMatmulMX(
-            DT_FP32, matA, scaleA, matB, scaleB, extendParam, false, false, false, false, false);
+        result = npu::tile_fwk::Matrix::BatchMatmulMX(DT_FP32, matA, scaleA, matB, scaleB, extendParam, false, false,
+                                                      false, false, false);
     }
     Platform::Instance().ReloadMemoryPaths("2201");
 }

@@ -27,8 +27,8 @@ class Function;
  * function (used by RootFunctionBuilder::ProcessTensorOp). Otherwise rebuild a plain
  * ir::TensorOpStmt (IR-only path).
  */
-ir::StmtPtr RebuildTensorOpStmt(
-    const ir::TensorOpStmtPtr& src, std::vector<ir::VarPtr> results, ir::VarPtr resultToken,
-    std::vector<ir::ExprPtr> args, std::vector<ir::VarPtr> tokens, ir::Span span, Function* targetFunc = nullptr);
+ir::StmtPtr RebuildTensorOpStmt(const ir::TensorOpStmtPtr& src, std::vector<ir::VarPtr> results, ir::VarPtr resultToken,
+                                std::vector<ir::ExprPtr> args, std::vector<ir::VarPtr> tokens, ir::Span span,
+                                Function* targetFunc = nullptr);
 
 } // namespace npu::tile_fwk

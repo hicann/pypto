@@ -101,8 +101,8 @@ TEST_F(DynamicReshapeUnalignImplaceTest, merge_two_dynamic_dim)
         }
     }
 
-    DevFuncRunner::Run(
-        Program::GetInstance().GetLastFunction(), DeviceLauncherConfig(q_real.GetStorage()->GetDataSize()));
+    DevFuncRunner::Run(Program::GetInstance().GetLastFunction(),
+                       DeviceLauncherConfig(q_real.GetStorage()->GetDataSize()));
     auto outs = npu::tile_fwk::ProgramData::GetInstance().GetOutputData(0);
     EXPECT_TRUE(resultCmp(golden, (float*)outs->data(), 0.001f));
 }
@@ -145,8 +145,8 @@ TEST_F(DynamicReshapeUnalignImplaceTest, test_exchange_dim)
         }
     }
 
-    DevFuncRunner::Run(
-        Program::GetInstance().GetLastFunction(), DeviceLauncherConfig(q_real.GetStorage()->GetDataSize()));
+    DevFuncRunner::Run(Program::GetInstance().GetLastFunction(),
+                       DeviceLauncherConfig(q_real.GetStorage()->GetDataSize()));
     auto outs = npu::tile_fwk::ProgramData::GetInstance().GetOutputData(0);
     EXPECT_TRUE(resultCmp(golden, (float*)outs->data(), 0.001f));
 }
@@ -188,8 +188,8 @@ TEST_F(DynamicReshapeUnalignImplaceTest, test_reshape_special)
         }
     }
 
-    DevFuncRunner::Run(
-        Program::GetInstance().GetLastFunction(), DeviceLauncherConfig(q_real.GetStorage()->GetDataSize()));
+    DevFuncRunner::Run(Program::GetInstance().GetLastFunction(),
+                       DeviceLauncherConfig(q_real.GetStorage()->GetDataSize()));
     auto outs = npu::tile_fwk::ProgramData::GetInstance().GetOutputData(0);
     EXPECT_TRUE(resultCmp(golden, (float*)outs->data(), 0.001f));
 }
@@ -233,22 +233,20 @@ TEST_F(DynamicReshapeUnalignImplaceTest, test_op_reshape_op)
         }
         // view + op
         int offSet = 32;
-        LOOP(
-            "L2", FunctionType::DYNAMIC_LOOP, loopIdx,
-            LoopRange((GetInputShape(addTmp, 0) * GetInputShape(addTmp, 1) + offSet - 1) / offSet))
+        LOOP("L2", FunctionType::DYNAMIC_LOOP, loopIdx,
+             LoopRange((GetInputShape(addTmp, 0) * GetInputShape(addTmp, 1) + offSet - 1) / offSet))
         {
             TileShape::Current().SetVecTile(4, 32);
-            Tensor tmp0 = View(
-                qReshape, {offSet, d},
-                {min(GetInputShape(addTmp, 0) * GetInputShape(addTmp, 1) - loopIdx * offSet, offSet), d},
-                {loopIdx * offSet, 0});
+            Tensor tmp0 = View(qReshape, {offSet, d},
+                               {min(GetInputShape(addTmp, 0) * GetInputShape(addTmp, 1) - loopIdx * offSet, offSet), d},
+                               {loopIdx * offSet, 0});
             Tensor tmp = Add(tmp0, Element(tmp0.GetStorage()->Datatype(), 0.01));
             Assemble(tmp, {loopIdx * offSet, 0}, out);
         }
     }
 
-    DevFuncRunner::Run(
-        Program::GetInstance().GetLastFunction(), DeviceLauncherConfig(q_real.GetStorage()->GetDataSize()));
+    DevFuncRunner::Run(Program::GetInstance().GetLastFunction(),
+                       DeviceLauncherConfig(q_real.GetStorage()->GetDataSize()));
     auto outs = npu::tile_fwk::ProgramData::GetInstance().GetOutputData(0);
     EXPECT_TRUE(resultCmp(golden, (float*)outs->data(), 0.001f));
 }
@@ -321,13 +319,12 @@ TEST_F(DynamicReshapeUnalignImplaceTest, test_src_op_dst_op)
             Assemble(tmp1, {0, indx, 0}, outSrc);
         }
         SymbolicScalar offSet = 32;
-        LOOP(
-            "destOp", FunctionType::DYNAMIC_LOOP, loopIdx,
-            LoopRange((GetInputShape(q, 0) * GetInputShape(q, 1) + offSet - 1) / offSet))
+        LOOP("destOp", FunctionType::DYNAMIC_LOOP, loopIdx,
+             LoopRange((GetInputShape(q, 0) * GetInputShape(q, 1) + offSet - 1) / offSet))
         {
-            Tensor tmp2 = View(
-                q_reshape, {offSet, m}, {min(GetInputShape(q, 0) * GetInputShape(q, 1) - loopIdx * offSet, offSet), m},
-                {loopIdx * offSet, 0});
+            Tensor tmp2 = View(q_reshape, {offSet, m},
+                               {min(GetInputShape(q, 0) * GetInputShape(q, 1) - loopIdx * offSet, offSet), m},
+                               {loopIdx * offSet, 0});
             TileShape::Current().SetVecTile(16, 16);
             auto tmp3 = Add(tmp2, Element(tmp2.GetStorage()->Datatype(), 0.01));
             Assemble(tmp3, {loopIdx * offSet, 0}, outDst);
@@ -335,8 +332,8 @@ TEST_F(DynamicReshapeUnalignImplaceTest, test_src_op_dst_op)
     }
 
     // excute
-    DevFuncRunner::Run(
-        Program::GetInstance().GetLastFunction(), DeviceLauncherConfig(qReal.GetStorage()->GetDataSize()));
+    DevFuncRunner::Run(Program::GetInstance().GetLastFunction(),
+                       DeviceLauncherConfig(qReal.GetStorage()->GetDataSize()));
     auto outputResult = npu::tile_fwk::ProgramData::GetInstance().GetOutputData(0);
     EXPECT_TRUE(resultCmp(outSrcGolden, (float*)outputResult->data(), 0.001f));
     auto outsumResult = npu::tile_fwk::ProgramData::GetInstance().GetOutputData(1);

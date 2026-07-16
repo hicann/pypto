@@ -402,8 +402,8 @@ TEST_F(CostModelTest, TestUnknownArchType)
 
 TEST_F(CostModelTest, TestCreateA5Cache)
 {
-    std::unique_ptr<CostModel::CacheMachineImpl> cacheImpl =
-        CostModel::PipeFactory::CreateCache(CostModel::CacheType::L2CACHE, "A5");
+    std::unique_ptr<CostModel::CacheMachineImpl> cacheImpl = CostModel::PipeFactory::CreateCache(
+        CostModel::CacheType::L2CACHE, "A5");
     CostModel::CachePacket packet;
     cacheImpl->Simulate(packet);
 }
@@ -446,7 +446,8 @@ TEST_F(CostModelTest, TestPipeFactoryCreateCacheUnknownArch)
 
 TEST_F(CostModelTest, TestPipeFactoryCreateCacheUnknownType)
 {
-    EXPECT_THROW(CostModel::PipeFactory::CreateCache(CostModel::CacheType::FUNCTION_CACHE, "A2A3"), std::invalid_argument);
+    EXPECT_THROW(CostModel::PipeFactory::CreateCache(CostModel::CacheType::FUNCTION_CACHE, "A2A3"),
+                 std::invalid_argument);
 }
 
 TEST_F(CostModelTest, TestCoreMachineDeadlock2)
@@ -771,8 +772,8 @@ TEST_F(CostModelTest, TestGetCyclesForPassSimulate)
 
 TEST_F(CostModelTest, TestGetCyclesForPassSo)
 {
-    typedef int64_t (*GetCyclesForPassFunc)(
-        const std::string& op, const std::vector<std::vector<int>>& shape, DataType dtype);
+    typedef int64_t (*GetCyclesForPassFunc)(const std::string& op, const std::vector<std::vector<int>>& shape,
+                                            DataType dtype);
     const std::string opCode = "L1_TO_L0A";
     std::vector<std::vector<int>> shape = {{1, 1, 1, 1}};
     DataType dtype = DataType::DT_INT4;
@@ -819,7 +820,8 @@ TEST_F(CostModelTest, TestCacheRequestName)
 
 TEST_F(CostModelTest, TestTileStringConstructor)
 {
-    std::string jsonStr = R"({"magic":42,"shape":[1,2,3],"offset":[0,1,2],"memorytype":{"tobe":"MEM_UB"},"nodetype":"LOCAL","rawtensor":{"symbol":"x","datatype":"DT_FP16","rawmagic":99,"rawshape":[4,5,6]}})";
+    std::string jsonStr =
+        R"({"magic":42,"shape":[1,2,3],"offset":[0,1,2],"memorytype":{"tobe":"MEM_UB"},"nodetype":"LOCAL","rawtensor":{"symbol":"x","datatype":"DT_FP16","rawmagic":99,"rawshape":[4,5,6]}})";
     CostModel::Tile tile(jsonStr);
     EXPECT_EQ(tile.magic, 42);
     EXPECT_EQ(tile.shape, std::vector<int>({1, 2, 3}));
@@ -1103,14 +1105,16 @@ TEST_F(CostModelTest, TestSubmitSingleFuncToCostModel)
 {
     npu::tile_fwk::CostModelAgent agent;
     std::string name = "TestSingleFunc";
-    auto newFunc = std::make_shared<npu::tile_fwk::Function>(npu::tile_fwk::Program::GetInstance(), name, name, nullptr);
+    auto newFunc = std::make_shared<npu::tile_fwk::Function>(npu::tile_fwk::Program::GetInstance(), name, name,
+                                                             nullptr);
     agent.SubmitSingleFuncToCostModel(newFunc.get());
 }
 
 TEST_F(CostModelTest, TestDebugSingleFunc)
 {
     npu::tile_fwk::CostModelAgent agent;
-    auto newFunc = std::make_shared<npu::tile_fwk::Function>(npu::tile_fwk::Program::GetInstance(), "root", "root", nullptr);
+    auto newFunc = std::make_shared<npu::tile_fwk::Function>(npu::tile_fwk::Program::GetInstance(), "root", "root",
+                                                             nullptr);
     config::SetSimConfig(KEY_DEBUG_SINGLE_FUNCNAME, "");
     agent.DebugSingleFunc(newFunc.get());
 }
@@ -1163,10 +1167,7 @@ public:
         cacheMachine->Build();
     }
 
-    void TearDown() override
-    {
-        delete cacheMachine;
-    }
+    void TearDown() override { delete cacheMachine; }
 
 protected:
     std::shared_ptr<CostModel::SimSys> sim;
@@ -1179,10 +1180,7 @@ TEST_F(CacheMachineTest, TestConstructor)
     EXPECT_EQ(cacheMachine->cacheType, CostModel::CacheType::L2CACHE);
 }
 
-TEST_F(CacheMachineTest, TestBuild)
-{
-    EXPECT_NE(cacheMachine->stats, nullptr);
-}
+TEST_F(CacheMachineTest, TestBuild) { EXPECT_NE(cacheMachine->stats, nullptr); }
 
 TEST_F(CacheMachineTest, TestInitQueueDelay)
 {
@@ -1316,8 +1314,7 @@ TEST_F(CacheMachineTest, TestProcessMSHR)
 
     sim->globalCycles = 300;
     cacheMachine->ProcessMSHR();
-    EXPECT_TRUE(cacheMachine->responseQueue.empty() == false ||
-                cacheMachine->responseQueue.size() == 0);
+    EXPECT_TRUE(cacheMachine->responseQueue.empty() == false || cacheMachine->responseQueue.size() == 0);
 }
 
 TEST_F(CacheMachineTest, TestProcessRespWithMachine)
@@ -1372,20 +1369,11 @@ TEST_F(CacheMachineTest, TestEvictLRU)
     EXPECT_TRUE(cacheMachine->cache.size() < sizeBefore || sizeBefore == 1);
 }
 
-TEST_F(CacheMachineTest, TestReport)
-{
-    EXPECT_NO_THROW(cacheMachine->Report());
-}
+TEST_F(CacheMachineTest, TestReport) { EXPECT_NO_THROW(cacheMachine->Report()); }
 
-TEST_F(CacheMachineTest, TestGetSim)
-{
-    EXPECT_EQ(cacheMachine->GetSim(), sim);
-}
+TEST_F(CacheMachineTest, TestGetSim) { EXPECT_EQ(cacheMachine->GetSim(), sim); }
 
-TEST_F(CacheMachineTest, TestReset)
-{
-    EXPECT_NO_THROW(cacheMachine->Reset());
-}
+TEST_F(CacheMachineTest, TestReset) { EXPECT_NO_THROW(cacheMachine->Reset()); }
 
 // ==================== Reporter UTs ====================
 
@@ -1960,7 +1948,8 @@ TEST_F(TraceLoggerTest, TestTraceLoggerAddEventBeginEnd)
     logger->SetProcessName("MachineView", logger->topMachineViewPid, 0);
     CostModel::Tid mvTid = CostModel::GetProcessID(CostModel::MachineType::AIC, 1);
     logger->SetThreadName("MVThread", logger->topMachineViewPid, mvTid);
-    CostModel::Event mvBegin = logger->AddEventBegin("MVOp", logger->topMachineViewPid, mvTid, 300, "TaskId:20 SeqNo:1 pSgId:3");
+    CostModel::Event mvBegin = logger->AddEventBegin("MVOp", logger->topMachineViewPid, mvTid, 300,
+                                                     "TaskId:20 SeqNo:1 pSgId:3");
     EXPECT_EQ(mvBegin.hint, "TaskId:20 SeqNo:1 pSgId:3");
     CostModel::Event mvEnd = logger->AddEventEnd(logger->topMachineViewPid, mvTid, 400);
     EXPECT_TRUE(logger->mTaskIDToDurationIndex.find(20) != logger->mTaskIDToDurationIndex.end());
@@ -1996,7 +1985,8 @@ TEST_F(TraceLoggerTest, TestTraceLoggerAddDuration)
 
 TEST_F(TraceLoggerTest, TestTraceLoggerAddFlow)
 {
-    logger->AddFlow("testFlow", CostModel::EventId{CostModel::PTid{1, 2}, 3}, CostModel::EventId{CostModel::PTid{4, 5}, 6});
+    logger->AddFlow("testFlow", CostModel::EventId{CostModel::PTid{1, 2}, 3},
+                    CostModel::EventId{CostModel::PTid{4, 5}, 6});
     EXPECT_EQ(logger->mFlows.size(), 1);
     EXPECT_EQ(logger->mFlows[0].name, "testFlow");
 
@@ -2126,9 +2116,12 @@ TEST_F(TraceLoggerTest, TestTraceLoggerToJson)
     bool hasThread = false;
     bool hasDuration = false;
     for (auto& item : j["traceEvents"]) {
-        if (item["name"] == "process_name") hasProcess = true;
-        if (item["name"] == "thread_name") hasThread = true;
-        if (item["ph"] == "X") hasDuration = true;
+        if (item["name"] == "process_name")
+            hasProcess = true;
+        if (item["name"] == "thread_name")
+            hasThread = true;
+        if (item["ph"] == "X")
+            hasDuration = true;
     }
     EXPECT_TRUE(hasProcess);
     EXPECT_TRUE(hasThread);
@@ -2193,7 +2186,8 @@ TEST_F(TraceLoggerTest, TestTraceLoggerLogCoreInfo)
 TEST_F(TraceLoggerTest, TestTraceLoggerToPipeTrace)
 {
     logger->mCoreInfoLogs[0] = CostModel::CoreInfoLog(0, "AIC");
-    logger->mCoreInfoLogs[0].pipeLogs["Pipe1"].push_back(CostModel::Json::object({{"tileOp", "Op1"}, {"execStart", 100}, {"execEnd", 200}}));
+    logger->mCoreInfoLogs[0].pipeLogs["Pipe1"].push_back(
+        CostModel::Json::object({{"tileOp", "Op1"}, {"execStart", 100}, {"execEnd", 200}}));
 
     std::string pipePath = "/tmp/pipe_trace_" + std::to_string(getpid()) + ".txt";
     std::ofstream ofs(pipePath);

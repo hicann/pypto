@@ -51,10 +51,9 @@ constexpr int32_t DIM_FIVE = 5;
 constexpr int32_t LAST_TWO_DIM = 2;
 constexpr int32_t UB_BLOCK_SIZE = 32;
 
-const std::unordered_set<Opcode> USE_LESS_OPS = {
-    Opcode::OP_NOP,         Opcode::OP_RESHAPE,      Opcode::OP_SHMEM_WAIT_UNTIL, Opcode::OP_VIEW,
-    Opcode::OP_ASSEMBLE,    Opcode::OP_BIND_TENSOR,  Opcode::OP_VIEW_TYPE,        Opcode::OP_HUB,
-    Opcode::OP_SHMEM_STORE};
+const std::unordered_set<Opcode> USE_LESS_OPS = {Opcode::OP_NOP,       Opcode::OP_RESHAPE,  Opcode::OP_SHMEM_WAIT_UNTIL,
+                                                 Opcode::OP_VIEW,      Opcode::OP_ASSEMBLE, Opcode::OP_BIND_TENSOR,
+                                                 Opcode::OP_VIEW_TYPE, Opcode::OP_HUB,      Opcode::OP_SHMEM_STORE};
 
 inline int BytesPerElement(DataType dataType) { return BytesOf(dataType); }
 
@@ -69,8 +68,8 @@ const std::unordered_set<Opcode> COPY_IN_OPS = {
     Opcode::OP_L1_COPY_IN_DMA, Opcode::OP_L1_COPY_UB, Opcode::OP_L0C_COPY_UB, Opcode::OP_UB_COPY_L1,
     Opcode::OP_UB_COPY_L1_ND};
 
-const std::unordered_set<CoreLocationType> CORE_INIT_CONFIGS_HARDWARE_ONE = {
-    CoreLocationType::AIC, CoreLocationType::AIV0};
+const std::unordered_set<CoreLocationType> CORE_INIT_CONFIGS_HARDWARE_ONE = {CoreLocationType::AIC,
+                                                                             CoreLocationType::AIV0};
 
 const std::unordered_set<CoreLocationType> CORE_INIT_CONFIGS_HARDWARE_TWO = {
     CoreLocationType::AIC, CoreLocationType::AIV0, CoreLocationType::AIV1};
@@ -100,14 +99,17 @@ struct SingleSpillCreatedOps {
     Operation* copyinOp{nullptr};
     LogicalTensorPtr gmTensor{nullptr};
 
-    void Record(Operation* copyout = nullptr,
-                Operation* alloc = nullptr,
-                Operation* copyin = nullptr,
-                LogicalTensorPtr gm = nullptr) {
-        if (copyout) copyoutOp = copyout;
-        if (alloc)   allocOp   = alloc;
-        if (copyin)  copyinOp  = copyin;
-        if (gm)      gmTensor  = gm;
+    void Record(Operation* copyout = nullptr, Operation* alloc = nullptr, Operation* copyin = nullptr,
+                LogicalTensorPtr gm = nullptr)
+    {
+        if (copyout)
+            copyoutOp = copyout;
+        if (alloc)
+            allocOp = alloc;
+        if (copyin)
+            copyinOp = copyin;
+        if (gm)
+            gmTensor = gm;
     }
 };
 
@@ -139,12 +141,10 @@ struct OpQueue {
     OpQueue() {}
     ~OpQueue() {}
 
-    void SetCompareFunc(std::function<bool(Operation*, Operation*)> func)
-    {
-        compareFunc = func;
-    }
+    void SetCompareFunc(std::function<bool(Operation*, Operation*)> func) { compareFunc = func; }
 
-    void Insert(Operation* op) {
+    void Insert(Operation* op)
+    {
         queue.push_back(op);
         if (compareFunc) {
             std::push_heap(queue.begin(), queue.end(), compareFunc);
@@ -168,7 +168,8 @@ struct OpQueue {
         return op;
     }
 
-    void DeleteOp(Operation* op) {
+    void DeleteOp(Operation* op)
+    {
         auto it = std::find(queue.begin(), queue.end(), op);
         if (it != queue.end()) {
             queue.erase(it);
@@ -230,14 +231,14 @@ public:
     uint64_t ShapeCeilAlign(std::vector<int64_t> shape, DataType dtype);
     const LogicalTensors& GetInOutOperandCached(Operation* op);
     void UpdateBufRefCount(Operation* op, LogicalTensorPtr tensor);
-    Status InitBufRefCount(std::vector<Operation*> &list);
-    bool IsOpAlloc(Operation *op);
+    Status InitBufRefCount(std::vector<Operation*>& list);
+    bool IsOpAlloc(Operation* op);
     Status CalcBufferSize(LogicalTensors tensors, std::map<MemoryType, int64_t>& bufferSize, std::set<int>& memIdMap);
     std::string DumpOpInfo(Operation& op);
     Status CheckOpBufferSize(Operation* op);
-    void UpdateAllocMap(Operation* op, std::map<int, Operation*> &allocMap);
+    void UpdateAllocMap(Operation* op, std::map<int, Operation*>& allocMap);
     Status CheckAllocOp(std::vector<Operation*> list);
-    Status Init(std::vector<Operation*> &opList);
+    Status Init(std::vector<Operation*>& opList);
 
     std::vector<Operation*>& GetViewOps(Operation* op) { return schedInfoMap[op].viewOps; }
     void SetIsRetired(Operation* op, bool isRetired) { schedInfoMap[op].isRetired = isRetired; }
@@ -251,8 +252,8 @@ public:
 
 CoreLocation ToCoreLocation(CoreLocationType c);
 
-void NotifySpill(ScheduleState& state, LogicalTensorPtr spillTensor, int spillMemId,
-    Operation* spillAllocOp, const SingleSpillCreatedOps& created);
+void NotifySpill(ScheduleState& state, LogicalTensorPtr spillTensor, int spillMemId, Operation* spillAllocOp,
+                 const SingleSpillCreatedOps& created);
 
 template <typename Scheduler>
 Status RunSchedulerMainLoop(Scheduler& self)

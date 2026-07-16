@@ -54,23 +54,20 @@ INLINE void TLoadConv2DDN2NZ(T& dst, U& src, const OffsetInfo& offsetInfo, const
     int64_t gmOffset = CalLoadOffsetNCHW<isFmap>(shapeInfo, offsetInfo);
     // conv2d 参数顺序调整：n, c, h, w, 0 (最后的0占位)
     // srcShapeInfo: {shape0(n), shape1(c), shape2(h), shape3(w), shape4(0)}
-    globalData srcGlobal(
-        (__gm__ typename U::Type*)(src.GetAddr() + gmOffset),
-        shapeDim4(srcShapeInfo.shape0, srcShapeInfo.shape1, srcShapeInfo.shape2, srcShapeInfo.shape3),
-        strideDim4(srcStrideN, srcStrideC, srcStrideH, srcStrideW));
+    globalData srcGlobal((__gm__ typename U::Type*)(src.GetAddr() + gmOffset),
+                         shapeDim4(srcShapeInfo.shape0, srcShapeInfo.shape1, srcShapeInfo.shape2, srcShapeInfo.shape3),
+                         strideDim4(srcStrideN, srcStrideC, srcStrideH, srcStrideW));
     if constexpr (isFmap) {
         constexpr auto bufferSize = stcDstShape0 * stcDstShape1 * stcDstShape2 * stcDstShape3 * BLOCK_ALIGN_BYTE;
-        using tileData = pto::ConvTile<
-            pto::TileType::Mat, typename T::Type, bufferSize, pto::Layout::NC1HWC0,
-            pto::ConvTileShape<-1, -1, -1, -1, c0Size>>;
+        using tileData = pto::ConvTile<pto::TileType::Mat, typename T::Type, bufferSize, pto::Layout::NC1HWC0,
+                                       pto::ConvTileShape<-1, -1, -1, -1, c0Size>>;
         tileData dstL1(dstShape0, dstShape1, dstShape2, dstShape3);
         pto::TASSIGN(dstL1, (uint64_t)dst.GetAddr());
         pto::TLOAD(dstL1, srcGlobal);
     } else {
         constexpr auto bufferSize = stcDstShape0 * stcDstShape1 * stcDstShape2 * BLOCK_ALIGN_BYTE;
-        using tileData = pto::ConvTile<
-            pto::TileType::Mat, typename T::Type, bufferSize, pto::Layout::FRACTAL_Z,
-            pto::ConvTileShape<-1, -1, -1, -1, 1>>;
+        using tileData = pto::ConvTile<pto::TileType::Mat, typename T::Type, bufferSize, pto::Layout::FRACTAL_Z,
+                                       pto::ConvTileShape<-1, -1, -1, -1, 1>>;
         tileData dstL1(dstShape0, dstShape1, dstShape2, dstShape3);
         pto::TASSIGN(dstL1, (uint64_t)dst.GetAddr());
         pto::TLOAD(dstL1, srcGlobal);
@@ -115,25 +112,23 @@ INLINE void TLoadConv3DDN2NZ(T& dst, U& src, const OffsetInfo& offsetInfo, const
     using globalData = pto::GlobalTensor<typename U::Type, shapeDim5, strideDim5, pto::Layout::NCDHW>;
     int64_t gmOffset = CalLoadOffsetNCDHW<isFmap>(shapeInfo, offsetInfo);
     globalData srcGlobal((__gm__ typename U::Type*)(src.GetAddr() + gmOffset),
-        shapeDim5(srcShapeInfo.shape0, srcShapeInfo.shape1, srcShapeInfo.shape2, srcShapeInfo.shape3,
-            srcShapeInfo.shape4),
-        strideDim5(srcStrideN, srcStrideC, srcStrideD, srcStrideH, srcStrideW));
+                         shapeDim5(srcShapeInfo.shape0, srcShapeInfo.shape1, srcShapeInfo.shape2, srcShapeInfo.shape3,
+                                   srcShapeInfo.shape4),
+                         strideDim5(srcStrideN, srcStrideC, srcStrideD, srcStrideH, srcStrideW));
     if constexpr (isFmap) {
         int64_t dstShape4 = GetConvShape<CONV_IDX_4>(dst);
         constexpr auto stcDstShape4 = Std::tuple_element<CONV_IDX_4, typename T::TileShape>::type::value;
-        constexpr auto bufferSize =
-            stcDstShape0 * stcDstShape1 * stcDstShape2 * stcDstShape3 * stcDstShape4 * BLOCK_ALIGN_BYTE;
-        using tileData = pto::ConvTile<
-            pto::TileType::Mat, typename T::Type, bufferSize, pto::Layout::NDC1HWC0,
-            pto::ConvTileShape<-1, -1, -1, -1, -1, c0Size>>;
+        constexpr auto bufferSize = stcDstShape0 * stcDstShape1 * stcDstShape2 * stcDstShape3 * stcDstShape4 *
+                                    BLOCK_ALIGN_BYTE;
+        using tileData = pto::ConvTile<pto::TileType::Mat, typename T::Type, bufferSize, pto::Layout::NDC1HWC0,
+                                       pto::ConvTileShape<-1, -1, -1, -1, -1, c0Size>>;
         tileData dstL1(dstShape0, dstShape1, dstShape2, dstShape3, dstShape4);
         pto::TASSIGN(dstL1, (uint64_t)dst.GetAddr());
         pto::TLOAD(dstL1, srcGlobal);
     } else {
         constexpr auto bufferSize = stcDstShape0 * stcDstShape1 * stcDstShape2 * BLOCK_ALIGN_BYTE;
-        using tileData = pto::ConvTile<
-            pto::TileType::Mat, typename T::Type, bufferSize, pto::Layout::FRACTAL_Z_3D,
-            pto::ConvTileShape<-1, -1, -1, -1, 1>>;
+        using tileData = pto::ConvTile<pto::TileType::Mat, typename T::Type, bufferSize, pto::Layout::FRACTAL_Z_3D,
+                                       pto::ConvTileShape<-1, -1, -1, -1, 1>>;
         tileData dstL1(dstShape0, dstShape1, dstShape2, dstShape3);
         pto::TASSIGN(dstL1, (uint64_t)dst.GetAddr());
         pto::TLOAD(dstL1, srcGlobal);

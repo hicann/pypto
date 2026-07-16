@@ -36,59 +36,123 @@ using namespace CostModel;
 
 static const std::unordered_map<std::string, PerfOpType> VEC_OPCODE_MAP = {
     // elem-binary: arithmetic
-    {"ADD", PERF_ELEM_BINARY}, {"SUB", PERF_ELEM_BINARY}, {"MUL", PERF_ELEM_BINARY},
-    {"DIV", PERF_ELEM_BINARY}, {"ADD_BRC", PERF_ELEM_BINARY}, {"SUB_BRC", PERF_ELEM_BINARY},
-    {"MUL_BRC", PERF_ELEM_BINARY}, {"DIV_BRC", PERF_ELEM_BINARY}, {"MAX_BRC", PERF_ELEM_BINARY},
-    {"MIN_BRC", PERF_ELEM_BINARY}, {"S_ADD", PERF_ELEM_BINARY}, {"S_SUB", PERF_ELEM_BINARY},
-    {"S_MUL", PERF_ELEM_BINARY}, {"S_DIV", PERF_ELEM_BINARY}, {"S_MAX", PERF_ELEM_BINARY},
-    {"S_MIN", PERF_ELEM_BINARY}, {"ADDS", PERF_ELEM_BINARY}, {"SUBS", PERF_ELEM_BINARY},
-    {"MULS", PERF_ELEM_BINARY}, {"DIVS", PERF_ELEM_BINARY}, {"MAXS", PERF_ELEM_BINARY},
-    {"MINS", PERF_ELEM_BINARY}, {"S_ADDS", PERF_ELEM_BINARY}, {"S_SUBS", PERF_ELEM_BINARY},
-    {"S_MULS", PERF_ELEM_BINARY}, {"S_DIVS", PERF_ELEM_BINARY}, {"S_MAXS", PERF_ELEM_BINARY},
-    {"S_MINS", PERF_ELEM_BINARY}, {"MAXIMUM", PERF_ELEM_BINARY}, {"MINIMUM", PERF_ELEM_BINARY},
+    {"ADD", PERF_ELEM_BINARY},
+    {"SUB", PERF_ELEM_BINARY},
+    {"MUL", PERF_ELEM_BINARY},
+    {"DIV", PERF_ELEM_BINARY},
+    {"ADD_BRC", PERF_ELEM_BINARY},
+    {"SUB_BRC", PERF_ELEM_BINARY},
+    {"MUL_BRC", PERF_ELEM_BINARY},
+    {"DIV_BRC", PERF_ELEM_BINARY},
+    {"MAX_BRC", PERF_ELEM_BINARY},
+    {"MIN_BRC", PERF_ELEM_BINARY},
+    {"S_ADD", PERF_ELEM_BINARY},
+    {"S_SUB", PERF_ELEM_BINARY},
+    {"S_MUL", PERF_ELEM_BINARY},
+    {"S_DIV", PERF_ELEM_BINARY},
+    {"S_MAX", PERF_ELEM_BINARY},
+    {"S_MIN", PERF_ELEM_BINARY},
+    {"ADDS", PERF_ELEM_BINARY},
+    {"SUBS", PERF_ELEM_BINARY},
+    {"MULS", PERF_ELEM_BINARY},
+    {"DIVS", PERF_ELEM_BINARY},
+    {"MAXS", PERF_ELEM_BINARY},
+    {"MINS", PERF_ELEM_BINARY},
+    {"S_ADDS", PERF_ELEM_BINARY},
+    {"S_SUBS", PERF_ELEM_BINARY},
+    {"S_MULS", PERF_ELEM_BINARY},
+    {"S_DIVS", PERF_ELEM_BINARY},
+    {"S_MAXS", PERF_ELEM_BINARY},
+    {"S_MINS", PERF_ELEM_BINARY},
+    {"MAXIMUM", PERF_ELEM_BINARY},
+    {"MINIMUM", PERF_ELEM_BINARY},
     {"POW", PERF_ELEM_BINARY},
     // elem-unary: math / transform
-    {"EXP", PERF_ELEM_UNARY}, {"SQRT", PERF_ELEM_UNARY}, {"RSQRT", PERF_ELEM_UNARY},
-    {"RECIPROCAL", PERF_ELEM_UNARY}, {"NEG", PERF_ELEM_UNARY}, {"LN", PERF_ELEM_UNARY},
-    {"EXPM1", PERF_ELEM_UNARY}, {"ABS", PERF_ELEM_UNARY}, {"FLOOR", PERF_ELEM_UNARY},
-    {"CEIL", PERF_ELEM_UNARY}, {"ROUND", PERF_ELEM_UNARY}, {"TRUNC", PERF_ELEM_UNARY},
-    {"SIGN", PERF_ELEM_UNARY}, {"SIGNBIT", PERF_ELEM_UNARY}, {"CAST", PERF_ELEM_UNARY},
-    {"CONVERT", PERF_ELEM_UNARY}, {"BITWISENOT", PERF_ELEM_UNARY}, {"LOGICALNOT", PERF_ELEM_UNARY},
-    {"ISFINITE", PERF_ELEM_UNARY}, {"LOGICALAND", PERF_ELEM_UNARY},
-    {"TRANSPOSE_VNCHWCONV", PERF_ELEM_UNARY}, {"BRCB", PERF_ELEM_UNARY},
+    {"EXP", PERF_ELEM_UNARY},
+    {"SQRT", PERF_ELEM_UNARY},
+    {"RSQRT", PERF_ELEM_UNARY},
+    {"RECIPROCAL", PERF_ELEM_UNARY},
+    {"NEG", PERF_ELEM_UNARY},
+    {"LN", PERF_ELEM_UNARY},
+    {"EXPM1", PERF_ELEM_UNARY},
+    {"ABS", PERF_ELEM_UNARY},
+    {"FLOOR", PERF_ELEM_UNARY},
+    {"CEIL", PERF_ELEM_UNARY},
+    {"ROUND", PERF_ELEM_UNARY},
+    {"TRUNC", PERF_ELEM_UNARY},
+    {"SIGN", PERF_ELEM_UNARY},
+    {"SIGNBIT", PERF_ELEM_UNARY},
+    {"CAST", PERF_ELEM_UNARY},
+    {"CONVERT", PERF_ELEM_UNARY},
+    {"BITWISENOT", PERF_ELEM_UNARY},
+    {"LOGICALNOT", PERF_ELEM_UNARY},
+    {"ISFINITE", PERF_ELEM_UNARY},
+    {"LOGICALAND", PERF_ELEM_UNARY},
+    {"TRANSPOSE_VNCHWCONV", PERF_ELEM_UNARY},
+    {"BRCB", PERF_ELEM_UNARY},
     // elem-relu: activation
-    {"RELU", PERF_ELEM_RELU}, {"HUB", PERF_ELEM_RELU},
+    {"RELU", PERF_ELEM_RELU},
+    {"HUB", PERF_ELEM_RELU},
     // elem-reduce: dimension reduction
-    {"ROWMAX", PERF_ELEM_REDUCE}, {"ROWSUM", PERF_ELEM_REDUCE},
-    {"ROWEXPMAX", PERF_ELEM_REDUCE}, {"ROWEXPSUM", PERF_ELEM_REDUCE},
-    {"ROWSUMLINE", PERF_ELEM_REDUCE}, {"ROWMAXLINE", PERF_ELEM_REDUCE},
-    {"ROWMINLINE", PERF_ELEM_REDUCE}, {"ROWMAX_SINGLE", PERF_ELEM_REDUCE},
-    {"ROWMIN_SINGLE", PERF_ELEM_REDUCE}, {"ROWSUM_SINGLE", PERF_ELEM_REDUCE},
-    {"REDUCE_ACC", PERF_ELEM_REDUCE}, {"CUM_SUM", PERF_ELEM_REDUCE},
-    {"PAIRMAX", PERF_ELEM_REDUCE}, {"PAIRMIN", PERF_ELEM_REDUCE},
+    {"ROWMAX", PERF_ELEM_REDUCE},
+    {"ROWSUM", PERF_ELEM_REDUCE},
+    {"ROWEXPMAX", PERF_ELEM_REDUCE},
+    {"ROWEXPSUM", PERF_ELEM_REDUCE},
+    {"ROWSUMLINE", PERF_ELEM_REDUCE},
+    {"ROWMAXLINE", PERF_ELEM_REDUCE},
+    {"ROWMINLINE", PERF_ELEM_REDUCE},
+    {"ROWMAX_SINGLE", PERF_ELEM_REDUCE},
+    {"ROWMIN_SINGLE", PERF_ELEM_REDUCE},
+    {"ROWSUM_SINGLE", PERF_ELEM_REDUCE},
+    {"REDUCE_ACC", PERF_ELEM_REDUCE},
+    {"CUM_SUM", PERF_ELEM_REDUCE},
+    {"PAIRMAX", PERF_ELEM_REDUCE},
+    {"PAIRMIN", PERF_ELEM_REDUCE},
     {"PAIRSUM", PERF_ELEM_REDUCE},
     // elem-sort: sort / topk
-    {"TOPK", PERF_ELEM_SORT}, {"TOPK_SORT", PERF_ELEM_SORT}, {"TOPK_MERGE", PERF_ELEM_SORT},
-    {"TOPK_EXTRACT", PERF_ELEM_SORT}, {"TILEDMRGSORT", PERF_ELEM_SORT},
-    {"BITSORT", PERF_ELEM_SORT}, {"MRGSORT", PERF_ELEM_SORT}, {"ARGSORT", PERF_ELEM_SORT},
-    {"SORT", PERF_ELEM_SORT}, {"EXTRACT", PERF_ELEM_SORT}, {"COMP_SWAP", PERF_ELEM_SORT},
+    {"TOPK", PERF_ELEM_SORT},
+    {"TOPK_SORT", PERF_ELEM_SORT},
+    {"TOPK_MERGE", PERF_ELEM_SORT},
+    {"TOPK_EXTRACT", PERF_ELEM_SORT},
+    {"TILEDMRGSORT", PERF_ELEM_SORT},
+    {"BITSORT", PERF_ELEM_SORT},
+    {"MRGSORT", PERF_ELEM_SORT},
+    {"ARGSORT", PERF_ELEM_SORT},
+    {"SORT", PERF_ELEM_SORT},
+    {"EXTRACT", PERF_ELEM_SORT},
+    {"COMP_SWAP", PERF_ELEM_SORT},
     {"MERGE", PERF_ELEM_SORT},
     // elem-select: compare / gather / scatter / concat / reshape-like-in-vec
-    {"CMP", PERF_ELEM_SELECT}, {"CMPS", PERF_ELEM_SELECT},
-    {"WHERE_TT", PERF_ELEM_SELECT}, {"WHERE_TS", PERF_ELEM_SELECT},
-    {"WHERE_ST", PERF_ELEM_SELECT}, {"WHERE_SS", PERF_ELEM_SELECT},
-    {"GATHER", PERF_ELEM_SELECT}, {"GATHER_FROM_UB", PERF_ELEM_SELECT},
-    {"GATHER_ELEMENT", PERF_ELEM_SELECT}, {"SCATTER", PERF_ELEM_SELECT},
-    {"SCATTER_ELEMENT", PERF_ELEM_SELECT}, {"SCATTER_UPDATE", PERF_ELEM_SELECT},
-    {"SCATTER_SCALAR", PERF_ELEM_SELECT}, {"INDEX_PUT", PERF_ELEM_SELECT},
-    {"INDEX_ADD", PERF_ELEM_SELECT}, {"INDEX_OUTCAST", PERF_ELEM_SELECT},
-    {"CONCAT", PERF_ELEM_SELECT}, {"DUPLICATE", PERF_ELEM_SELECT},
-    {"EXPAND", PERF_ELEM_SELECT}, {"ONEHOT", PERF_ELEM_SELECT},
-    {"COMPACT", PERF_ELEM_SELECT}, {"REGISTER_COPY", PERF_ELEM_SELECT},
-    {"VEC_DUP", PERF_ELEM_SELECT}, {"UB_TO_UB", PERF_ELEM_SELECT},
-    {"UB_COPY_ND2NZ", PERF_ELEM_SELECT}, {"FILLPAD", PERF_ELEM_SELECT},
-    {"MAX_POOL", PERF_ELEM_SELECT}, {"RANGE", PERF_ELEM_SELECT},
-    {"FUSED_OP", PERF_ELEM_SELECT}, {"CALL_NOT_EXPAND", PERF_ELEM_SELECT},
+    {"CMP", PERF_ELEM_SELECT},
+    {"CMPS", PERF_ELEM_SELECT},
+    {"WHERE_TT", PERF_ELEM_SELECT},
+    {"WHERE_TS", PERF_ELEM_SELECT},
+    {"WHERE_ST", PERF_ELEM_SELECT},
+    {"WHERE_SS", PERF_ELEM_SELECT},
+    {"GATHER", PERF_ELEM_SELECT},
+    {"GATHER_FROM_UB", PERF_ELEM_SELECT},
+    {"GATHER_ELEMENT", PERF_ELEM_SELECT},
+    {"SCATTER", PERF_ELEM_SELECT},
+    {"SCATTER_ELEMENT", PERF_ELEM_SELECT},
+    {"SCATTER_UPDATE", PERF_ELEM_SELECT},
+    {"SCATTER_SCALAR", PERF_ELEM_SELECT},
+    {"INDEX_PUT", PERF_ELEM_SELECT},
+    {"INDEX_ADD", PERF_ELEM_SELECT},
+    {"INDEX_OUTCAST", PERF_ELEM_SELECT},
+    {"CONCAT", PERF_ELEM_SELECT},
+    {"DUPLICATE", PERF_ELEM_SELECT},
+    {"EXPAND", PERF_ELEM_SELECT},
+    {"ONEHOT", PERF_ELEM_SELECT},
+    {"COMPACT", PERF_ELEM_SELECT},
+    {"REGISTER_COPY", PERF_ELEM_SELECT},
+    {"VEC_DUP", PERF_ELEM_SELECT},
+    {"UB_TO_UB", PERF_ELEM_SELECT},
+    {"UB_COPY_ND2NZ", PERF_ELEM_SELECT},
+    {"FILLPAD", PERF_ELEM_SELECT},
+    {"MAX_POOL", PERF_ELEM_SELECT},
+    {"RANGE", PERF_ELEM_SELECT},
+    {"FUSED_OP", PERF_ELEM_SELECT},
+    {"CALL_NOT_EXPAND", PERF_ELEM_SELECT},
 };
 
 int GetOpTypeIndex(const TileOpPtr& tileOp)
@@ -100,12 +164,11 @@ int GetOpTypeIndex(const TileOpPtr& tileOp)
         case CorePipeType::PIPE_CUBE:
             return PERF_MATMUL;
 
-        case CorePipeType::PIPE_VECTOR_ALU:
-            {
-                auto it = VEC_OPCODE_MAP.find(opcode);
-                if (it != VEC_OPCODE_MAP.end())
-                    return it->second;
-            }
+        case CorePipeType::PIPE_VECTOR_ALU: {
+            auto it = VEC_OPCODE_MAP.find(opcode);
+            if (it != VEC_OPCODE_MAP.end())
+                return it->second;
+        }
             return -1;
 
         case CorePipeType::PIPE_MTE_IN:
@@ -202,11 +265,11 @@ bool SimSys::IsWorkPipe(CostModel::Pid pid, CostModel::Tid tid, std::string& nam
 void SimSys::InitMachineStartSeq()
 {
     machineTypeSeq[MachineType::AIC] = 0;
-    machineTypeSeq[MachineType::AIV] =
-        config.deviceMachineNumber * config.aicpuMachineNumber * config.cubeMachineNumberPerAICPU;
+    machineTypeSeq[MachineType::AIV] = config.deviceMachineNumber * config.aicpuMachineNumber *
+                                       config.cubeMachineNumberPerAICPU;
     machineTypeSeq[MachineType::MIXAICORE] = 0;
-    machineTypeSeq[MachineType::DEVICE] =
-        config.deviceMachineNumber * config.aicpuMachineNumber * config.coreMachineNumberPerAICPU;
+    machineTypeSeq[MachineType::DEVICE] = config.deviceMachineNumber * config.aicpuMachineNumber *
+                                          config.coreMachineNumberPerAICPU;
     machineTypeSeq[MachineType::CPU] = machineTypeSeq[MachineType::DEVICE] + config.deviceMachineNumber;
     machineTypeSeq[MachineType::HUB] = machineTypeSeq[MachineType::CPU] + config.aicpuMachineNumber;
     machineTypeSeq[MachineType::PIPE] = 0;
@@ -257,8 +320,8 @@ void SimSys::BuildPipes(uint64_t index, std::shared_ptr<CoreMachine> coreMachine
         uint64_t pipeNum = coreMachine->GetPipeNum(static_cast<CorePipeType>(pipeType));
         for (uint64_t num = 0; num < pipeNum; num++) {
             int pipeSeq = machineTypeSeq[MachineType::PIPE]++;
-            auto pipeMachine =
-                std::make_shared<PipeMachine>(MachineType::PIPE, static_cast<CorePipeType>(pipeType), pipeId);
+            auto pipeMachine = std::make_shared<PipeMachine>(MachineType::PIPE, static_cast<CorePipeType>(pipeType),
+                                                             pipeId);
             pipeMachine->machineType = MachineType::PIPE;
             pipeMachine->machineId = GetProcessID(MachineType::PIPE, pipeSeq);
             pipeMachine->pipeImpl = GetPipeImpl(static_cast<CorePipeType>(pipeType));
@@ -366,9 +429,8 @@ void SimSys::BuildAICPU(DevicePtr device, uint64_t idInDevice)
     uint64_t aicNum = config.cubeMachineNumberPerAICPU;
     uint64_t aivNum = config.vecMachineNumberPerAICPU;
     uint64_t mixedCoreNum = 0;
-    ASSERT(
-        static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_CONFIG),
-        config.coreMachineNumberPerAICPU == (aicNum + aivNum))
+    ASSERT(static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_CONFIG),
+           config.coreMachineNumberPerAICPU == (aicNum + aivNum))
         << "[SIMULATION]: "
         << "The number of cores must be equal to the sum of the aic and aiv. Please reconfigure them.";
     if (config.cubeVecMixMode) {
@@ -444,8 +506,8 @@ void SimSys::BuildSystemStat()
     }
     stats->deviceMachineNum = uint64_t(machineGroup[int(MachineType::DEVICE)].size());
     stats->aicpuMachineNum = uint64_t(machineGroup[int(MachineType::CPU)].size());
-    stats->coreMachineNum =
-        uint64_t(machineGroup[int(MachineType::AIC)].size() + machineGroup[int(MachineType::AIV)].size());
+    stats->coreMachineNum = uint64_t(machineGroup[int(MachineType::AIC)].size() +
+                                     machineGroup[int(MachineType::AIV)].size());
     stats->cubeMachineNum = uint64_t(machineGroup[int(MachineType::AIC)].size());
     stats->vecMachineNum = uint64_t(machineGroup[int(MachineType::AIV)].size());
     stats->cvMixedCoreMachineNum = uint64_t(machineGroup[int(MachineType::MIXAICORE)].size());
@@ -517,8 +579,8 @@ void SimSys::AddMachine(std::shared_ptr<Machine> m)
 
 void SimSys::Step()
 {
-    SIMULATION_LOGI(
-        "[ModelTop][Step] ========== %lu ========== [ModelTop][Step]", static_cast<unsigned long>(globalCycles));
+    SIMULATION_LOGI("[ModelTop][Step] ========== %lu ========== [ModelTop][Step]",
+                    static_cast<unsigned long>(globalCycles));
     for (const auto& machine : machines) {
         machine->Step();
     }
@@ -555,9 +617,8 @@ bool SimSys::IsTerminate() const { return terminate; }
 void SimSys::ReportDeadlock(size_t machineId)
 {
     deadlock = true;
-    SIMULATION_LOGE(
-        CostModel::ForwardSimErrorScene::DEAD_LOCK, "[ReportDeadlock] Machine %zu is deadlock at cycle %lu", machineId,
-        static_cast<unsigned long>(globalCycles));
+    SIMULATION_LOGE(CostModel::ForwardSimErrorScene::DEAD_LOCK, "[ReportDeadlock] Machine %zu is deadlock at cycle %lu",
+                    machineId, static_cast<unsigned long>(globalCycles));
 }
 
 bool SimSys::IsDeadlock() const { return deadlock; }
@@ -582,8 +643,8 @@ std::string SimSys::GetFileName(const std::string& file)
     }
 }
 
-std::string SimSys::GetFileName(
-    const std::string& dir, const std::string& inputFile, const std::string& preFix, const std::string& suffix)
+std::string SimSys::GetFileName(const std::string& dir, const std::string& inputFile, const std::string& preFix,
+                                const std::string& suffix)
 {
     std::string filename = GetFileName(inputFile);
     std::string outFile = preFix + "_simulate." + suffix;
@@ -613,8 +674,8 @@ void SimSys::DrawTasks(const TaskMap& taskMap, std::string prefix)
     }
 }
 
-void SimSys::DebugDrawFunc(
-    FunctionPtr func, std::unordered_map<int, TilePtr>& tiles, std::unordered_map<int, TileOpPtr>& tileOps)
+void SimSys::DebugDrawFunc(FunctionPtr func, std::unordered_map<int, TilePtr>& tiles,
+                           std::unordered_map<int, TileOpPtr>& tileOps)
 {
     ModelVisualizer visualizer;
     visualizer.DebugFunction(func, tiles, tileOps, outdir);
@@ -693,9 +754,11 @@ void SimSys::OutputLogForPipeSwimLane(std::string prefix)
 
     SIMULATION_LOGW("Pipe SwimLane Graph Generated (PNG & HTML): %s", pipeDetailPath.c_str());
     std::string drawScriptPath = GetPyptoLibPath() + "/scripts/draw_pipe_swim_lane.py";
-    CHECK(static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH), npu::tile_fwk::IsPathExist(drawScriptPath))
+    CHECK(static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH),
+          npu::tile_fwk::IsPathExist(drawScriptPath))
         << "draw_pipe_swim_lane.py does not exist. drawScriptPath: " << drawScriptPath;
-    CHECK(static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH), npu::tile_fwk::IsPathExist(pipeDetailPath))
+    CHECK(static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH),
+          npu::tile_fwk::IsPathExist(pipeDetailPath))
         << "pipe.swim.json does not exist. pipeDetailPath: " << pipeDetailPath;
     std::string cmd = "python3 " + drawScriptPath + " " + pipeDetailPath;
     auto args = SplitString(cmd);
@@ -728,7 +791,8 @@ void SimSys::OutputLogForSwimLane(std::string prefix)
     }
     SIMULATION_LOGW("SwimLane Graph Generated (PNG): %s", outSwimPath.c_str());
     std::string drawScriptPath = GetPyptoLibPath() + "/scripts/print_swim_lane.py";
-    CHECK(static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH), npu::tile_fwk::IsPathExist(drawScriptPath))
+    CHECK(static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH),
+          npu::tile_fwk::IsPathExist(drawScriptPath))
         << "draw_pipe_swim_lane.py does not exist. drawScriptPath: " << drawScriptPath;
     CHECK(static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH), npu::tile_fwk::IsPathExist(outSwimPath))
         << "swim.json does not exist. outSwimPath: " << outSwimPath;
@@ -748,20 +812,21 @@ void SimSys::OutputLogForSwimLane(std::string prefix)
     SIMULATION_LOGI("program_json_path: %s", program_json_path.c_str());
     std::string label_type = "--label_type=1 --time_convert_denominator=1800"; // default 1.8GHz
     SIMULATION_LOGI("label_type: %s", label_type.c_str());
-    CHECK(static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH), npu::tile_fwk::IsPathExist(mergeScriptPath))
+    CHECK(static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH),
+          npu::tile_fwk::IsPathExist(mergeScriptPath))
         << "draw_pipe_swim_lane.py does not exist. drawScriptPath: " << mergeScriptPath;
     if (devicePtr->config.submitTopo) {
-        CHECK(
-            static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH), npu::tile_fwk::IsPathExist(topo_txt_path))
+        CHECK(static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH),
+              npu::tile_fwk::IsPathExist(topo_txt_path))
             << "dyn_topo.txt does not exist. topo_txt_path: " << topo_txt_path;
-        CHECK(
-            static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH),
-            npu::tile_fwk::IsPathExist(program_json_path))
+        CHECK(static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH),
+              npu::tile_fwk::IsPathExist(program_json_path))
             << "program.json does not exist. program_json_path: " << program_json_path;
         cmd = "python3 " + mergeScriptPath + " " + outSwimPath + " " + topo_txt_path + " " + program_json_path + " " +
               label_type;
     } else {
-        CHECK(static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH), npu::tile_fwk::IsPathExist(topoOutFile))
+        CHECK(static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH),
+              npu::tile_fwk::IsPathExist(topoOutFile))
             << "topo.json does not exist. topoOutFile: " << topoOutFile;
         SIMULATION_LOGW("devicePtr->config.submitTopo: %d", devicePtr->config.submitTopo);
         cmd = "python3 " + mergeScriptPath + " " + outSwimPath + " " + topoOutFile;
@@ -802,9 +867,8 @@ std::map<uint64_t, std::vector<uint64_t>> SimSys::ComputeTaskAmounts(const TaskM
     return computeAmountMap;
 }
 
-SimSys::LongestPathResult SimSys::ComputeLongestPaths(
-    const TaskMap& taskMap,
-    const std::map<uint64_t, std::vector<uint64_t>>& computeAmountMap)
+SimSys::LongestPathResult SimSys::ComputeLongestPaths(const TaskMap& taskMap,
+                                                      const std::map<uint64_t, std::vector<uint64_t>>& computeAmountMap)
 {
     const uint64_t NO_PRED = static_cast<uint64_t>(-1);
 
@@ -859,9 +923,8 @@ SimSys::LongestPathResult SimSys::ComputeLongestPaths(
     return {longestPath, chosenPred};
 }
 
-Json SimSys::FormatPerfMetricsJson(
-    const std::map<uint64_t, std::vector<uint64_t>>& longestPath,
-    const std::map<uint64_t, std::vector<uint64_t>>& chosenPred)
+Json SimSys::FormatPerfMetricsJson(const std::map<uint64_t, std::vector<uint64_t>>& longestPath,
+                                   const std::map<uint64_t, std::vector<uint64_t>>& chosenPred)
 {
     const uint64_t NO_PRED = static_cast<uint64_t>(-1);
     Json tileOpLongestPaths;

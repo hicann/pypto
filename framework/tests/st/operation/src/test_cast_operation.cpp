@@ -36,8 +36,8 @@ struct CastOpMetaData {
     nlohmann::json test_data_;
 };
 
-static void CastOperationExeFuncOneCut(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void CastOperationExeFuncOneCut(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                       const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0]})
     {
@@ -50,9 +50,9 @@ static void CastOperationExeFuncOneCut(
 
         LOOP("LOOP_L0_bIdx", FunctionType::DYNAMIC_LOOP, bIdx, LoopRange(0, bloop, 1))
         {
-            auto tileTensor0 = View(
-                inputs[0], {firstViewShape}, {std::min(firstDim - bIdx * firstViewShape, firstViewShape)},
-                {bIdx * firstViewShape});
+            auto tileTensor0 = View(inputs[0], {firstViewShape},
+                                    {std::min(firstDim - bIdx * firstViewShape, firstViewShape)},
+                                    {bIdx * firstViewShape});
             TileShape::Current().SetVecTile(args->tileShape_);
             auto res = Cast(tileTensor0, castDType, args->castMode_);
             Assemble(res, {bIdx * firstViewShape}, outputs[0]);
@@ -60,8 +60,8 @@ static void CastOperationExeFuncOneCut(
     }
 }
 
-static void CastOperationExeFuncDoubleCut(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void CastOperationExeFuncDoubleCut(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                          const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0]})
     {
@@ -79,11 +79,10 @@ static void CastOperationExeFuncDoubleCut(
         {
             LOOP("LOOP_L1_sIdx", FunctionType::DYNAMIC_LOOP, sIdx, LoopRange(0, sloop, 1))
             {
-                auto tileTensor0 = View(
-                    inputs[0], {firstViewShape, secondViewShape},
-                    {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                     std::min(secondDim - sIdx * secondViewShape, secondViewShape)},
-                    {bIdx * firstViewShape, sIdx * secondViewShape});
+                auto tileTensor0 = View(inputs[0], {firstViewShape, secondViewShape},
+                                        {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                         std::min(secondDim - sIdx * secondViewShape, secondViewShape)},
+                                        {bIdx * firstViewShape, sIdx * secondViewShape});
                 TileShape::Current().SetVecTile(args->tileShape_);
                 auto res = Cast(tileTensor0, castDType, args->castMode_);
                 Assemble(res, {bIdx * firstViewShape, sIdx * secondViewShape}, outputs[0]);
@@ -92,8 +91,8 @@ static void CastOperationExeFuncDoubleCut(
     }
 }
 
-static void CastOperationExeFuncTripleCut(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void CastOperationExeFuncTripleCut(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                          const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0]})
     {
@@ -116,12 +115,11 @@ static void CastOperationExeFuncTripleCut(
             {
                 LOOP("LOOP_L3_nIdx", FunctionType::DYNAMIC_LOOP, nIdx, LoopRange(0, nloop, 1))
                 {
-                    auto tileTensor = View(
-                        inputs[0], {firstViewShape, secondViewShape, thirdViewShape},
-                        {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                         std::min(secondDim - sIdx * secondViewShape, secondViewShape),
-                         std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape)},
-                        {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape});
+                    auto tileTensor = View(inputs[0], {firstViewShape, secondViewShape, thirdViewShape},
+                                           {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                            std::min(secondDim - sIdx * secondViewShape, secondViewShape),
+                                            std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape)},
+                                           {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape});
                     TileShape::Current().SetVecTile(args->tileShape_);
                     auto res = Cast(tileTensor, castDType, args->castMode_);
                     Assemble(res, {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape}, outputs[0]);
@@ -131,8 +129,8 @@ static void CastOperationExeFuncTripleCut(
     }
 }
 
-static void CastOperationExeFuncQuadrupleCut(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void CastOperationExeFuncQuadrupleCut(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                             const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0]})
     {
@@ -161,21 +159,20 @@ static void CastOperationExeFuncQuadrupleCut(
                 {
                     LOOP("LOOP_L3_nIdx", FunctionType::DYNAMIC_LOOP, nIdx, LoopRange(0, nloop, 1))
                     {
-                        Tensor tileTensor0 = View(
-                            inputs[0], {firstViewShape, secondViewShape, thirdViewShape, fourthViewShape},
-                            {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                             std::min(secondDim - sIdx * secondViewShape, secondViewShape),
-                             std::min(thirdDim - mIdx * thirdViewShape, thirdViewShape),
-                             std::min(fourthDim - nIdx * fourthViewShape, fourthViewShape)},
-                            {bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape,
-                             nIdx * fourthViewShape});
+                        Tensor tileTensor0 = View(inputs[0],
+                                                  {firstViewShape, secondViewShape, thirdViewShape, fourthViewShape},
+                                                  {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                                   std::min(secondDim - sIdx * secondViewShape, secondViewShape),
+                                                   std::min(thirdDim - mIdx * thirdViewShape, thirdViewShape),
+                                                   std::min(fourthDim - nIdx * fourthViewShape, fourthViewShape)},
+                                                  {bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape,
+                                                   nIdx * fourthViewShape});
                         TileShape::Current().SetVecTile(args->tileShape_);
                         auto res = Cast(tileTensor0, castDType, args->castMode_);
-                        Assemble(
-                            res,
-                            {bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape,
-                             nIdx * fourthViewShape},
-                            outputs[0]);
+                        Assemble(res,
+                                 {bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape,
+                                  nIdx * fourthViewShape},
+                                 outputs[0]);
                     }
                 }
             }
@@ -187,11 +184,9 @@ class CastOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac
 
 INSTANTIATE_TEST_SUITE_P(
     TestCast, CastOperationTest,
-    ::testing::ValuesIn(
-        GetOpMetaData<CastOpMetaData>(
-            {CastOperationExeFuncOneCut, CastOperationExeFuncDoubleCut, CastOperationExeFuncTripleCut,
-             CastOperationExeFuncQuadrupleCut},
-            "Cast")));
+    ::testing::ValuesIn(GetOpMetaData<CastOpMetaData>({CastOperationExeFuncOneCut, CastOperationExeFuncDoubleCut,
+                                                       CastOperationExeFuncTripleCut, CastOperationExeFuncQuadrupleCut},
+                                                      "Cast")));
 
 TEST_P(CastOperationTest, TestCast)
 {
@@ -199,9 +194,8 @@ TEST_P(CastOperationTest, TestCast)
     auto mode = static_cast<CastMode>(GetValueByName<int>(test_data, "mode"));
     auto args = CastOpFuncArgs(GetViewShape(test_data), GetTileShape(test_data), mode);
     auto testCase = CreateTestCaseDesc<CastOpMetaData>(GetParam(), &args);
-    std::vector<OpFunc> opFuncs = {
-        CastOperationExeFuncOneCut, CastOperationExeFuncDoubleCut, CastOperationExeFuncTripleCut,
-        CastOperationExeFuncQuadrupleCut};
+    std::vector<OpFunc> opFuncs = {CastOperationExeFuncOneCut, CastOperationExeFuncDoubleCut,
+                                   CastOperationExeFuncTripleCut, CastOperationExeFuncQuadrupleCut};
     testCase.opFunc = opFuncs[GetViewShape(test_data).size() - 1];
     TestExecutor::runTest(testCase);
 }

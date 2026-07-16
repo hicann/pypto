@@ -217,9 +217,8 @@ void TestMultiLoopAlignRead()
 #endif
 }
 
-template <
-    typename T = float16, typename wDtype = int8_t, bool splitK = false, bool nz = true, bool isSmooth = true,
-    bool usePrefetch = true>
+template <typename T = float16, typename wDtype = int8_t, bool splitK = false, bool nz = true, bool isSmooth = true,
+          bool usePrefetch = true>
 void TestGenslc(const SimpleParams& params, int topk_actual_len = 0, bool isGenSlc = false)
 {
     int n2 = params.n2;
@@ -287,9 +286,8 @@ void TestGenslc(const SimpleParams& params, int topk_actual_len = 0, bool isGenS
     }
 
 #ifdef BUILD_WITH_CANN
-    DevFuncRunner::Run(
-        Program::GetInstance().GetLastFunction(), {xData},
-        {trans0Data, reduce0Data, trans1Data, reduce1Data, topkIndData, topkValData, resZeroData});
+    DevFuncRunner::Run(Program::GetInstance().GetLastFunction(), {xData},
+                       {trans0Data, reduce0Data, trans1Data, reduce1Data, topkIndData, topkValData, resZeroData});
     if (isGenSlc) {
         std::cout << "trans0 ====== " << std::endl;
         EXPECT_TRUE(resultCmp<T>(trans0Golden, (T*)trans0Data->data(), 0.008f, NUM_16));

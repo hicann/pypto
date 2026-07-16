@@ -74,12 +74,12 @@ protected:
     ExprPtr LowerContinueGuardCondition(const ExprPtr& cond)
     {
         auto i = MakeVar("i");
-        auto if_cont = std::make_shared<IfStmt>(
-            cond, std::make_shared<ContinueStmt>(Sp()), std::nullopt, std::vector<VarPtr>{}, Sp());
+        auto if_cont = std::make_shared<IfStmt>(cond, std::make_shared<ContinueStmt>(Sp()), std::nullopt,
+                                                std::vector<VarPtr>{}, Sp());
         auto assign = std::make_shared<AssignStmt>(MakeVar("y"), i, Sp());
         auto body = std::make_shared<SeqStmts>(std::vector<StmtPtr>{if_cont, assign}, Sp());
-        auto for_stmt = std::make_shared<ForStmt>(
-            i, Int(0), Int(4), Int(1), std::vector<IterArgPtr>{}, body, std::vector<VarPtr>{}, Sp());
+        auto for_stmt = std::make_shared<ForStmt>(i, Int(0), Int(4), Int(1), std::vector<IterArgPtr>{}, body,
+                                                  std::vector<VarPtr>{}, Sp());
         auto result_func = RunOnFunc(MakeFunc("f", for_stmt));
         if (!result_func) {
             return nullptr;
@@ -136,8 +136,8 @@ TEST_F(LowerBreakContinuePassTest, TestNoBreakContinueNoChange)
     auto assign = std::make_shared<AssignStmt>(x, one, Sp());
     auto yield = std::make_shared<YieldStmt>(std::vector<ExprPtr>{}, Sp());
     auto forBody = std::make_shared<SeqStmts>(std::vector<StmtPtr>{assign, yield}, Sp());
-    auto forStmt =
-        std::make_shared<ForStmt>(i, zero, ten, one, std::vector<IterArgPtr>{}, forBody, std::vector<VarPtr>{}, Sp());
+    auto forStmt = std::make_shared<ForStmt>(i, zero, ten, one, std::vector<IterArgPtr>{}, forBody,
+                                             std::vector<VarPtr>{}, Sp());
     auto func = MakeFunc("f", forStmt);
 
     auto result_func = RunOnFunc(func);
@@ -164,8 +164,8 @@ TEST_F(LowerBreakContinuePassTest, TestForLoopWithBreak)
     auto assign = std::make_shared<AssignStmt>(x, i, Sp());
     auto yield = std::make_shared<YieldStmt>(std::vector<ExprPtr>{}, Sp());
     auto forBody = std::make_shared<SeqStmts>(std::vector<StmtPtr>{ifBreak, assign, yield}, Sp());
-    auto forStmt =
-        std::make_shared<ForStmt>(i, zero, ten, one, std::vector<IterArgPtr>{}, forBody, std::vector<VarPtr>{}, Sp());
+    auto forStmt = std::make_shared<ForStmt>(i, zero, ten, one, std::vector<IterArgPtr>{}, forBody,
+                                             std::vector<VarPtr>{}, Sp());
     auto func = MakeFunc("f", forStmt);
     auto prog = MakeProg(func);
     auto result = RunPass(prog);
@@ -187,15 +187,15 @@ TEST_F(LowerBreakContinuePassTest, TestWhileLoopWithBreak)
 {
     auto x = std::make_shared<Var>("x", Scalar(DataType::INT32), Sp());
     auto cond = std::make_shared<ConstBool>(true, Sp());
-    auto innerCond =
-        std::make_shared<Eq>(x, std::make_shared<ConstInt>(5, DataType::INT32, Sp()), DataType::BOOL, Sp());
+    auto innerCond = std::make_shared<Eq>(x, std::make_shared<ConstInt>(5, DataType::INT32, Sp()), DataType::BOOL,
+                                          Sp());
     auto brk = std::make_shared<BreakStmt>(Sp());
     auto ifBreak = std::make_shared<IfStmt>(innerCond, brk, std::nullopt, std::vector<VarPtr>{}, Sp());
     auto assign = std::make_shared<AssignStmt>(x, std::make_shared<ConstInt>(1, DataType::INT32, Sp()), Sp());
     auto yield = std::make_shared<YieldStmt>(std::vector<ExprPtr>{}, Sp());
     auto whileBody = std::make_shared<SeqStmts>(std::vector<StmtPtr>{ifBreak, assign, yield}, Sp());
-    auto whileStmt =
-        std::make_shared<WhileStmt>(cond, std::vector<IterArgPtr>{}, whileBody, std::vector<VarPtr>{}, Sp());
+    auto whileStmt = std::make_shared<WhileStmt>(cond, std::vector<IterArgPtr>{}, whileBody, std::vector<VarPtr>{},
+                                                 Sp());
     auto func = MakeFunc("f", whileStmt);
     auto prog = MakeProg(func);
     auto result = RunPass(prog);
@@ -222,8 +222,8 @@ TEST_F(LowerBreakContinuePassTest, TestForLoopWithBareBreak)
     auto one = std::make_shared<ConstInt>(1, DataType::INT32, Sp());
     auto brk = std::make_shared<BreakStmt>(Sp());
     auto forBody = brk;
-    auto forStmt =
-        std::make_shared<ForStmt>(i, zero, ten, one, std::vector<IterArgPtr>{}, forBody, std::vector<VarPtr>{}, Sp());
+    auto forStmt = std::make_shared<ForStmt>(i, zero, ten, one, std::vector<IterArgPtr>{}, forBody,
+                                             std::vector<VarPtr>{}, Sp());
     auto func = MakeFunc("f", forStmt);
     auto prog = MakeProg(func);
     auto result = RunPass(prog);
@@ -248,12 +248,12 @@ TEST_F(LowerBreakContinuePassTest, TestNestedForBreakInnerOnly)
     auto ifBreak = std::make_shared<IfStmt>(cond, brk, std::nullopt, std::vector<VarPtr>{}, Sp());
     auto innerYield = std::make_shared<YieldStmt>(std::vector<ExprPtr>{}, Sp());
     auto innerBody = std::make_shared<SeqStmts>(std::vector<StmtPtr>{ifBreak, innerYield}, Sp());
-    auto innerFor =
-        std::make_shared<ForStmt>(j, zero, ten, one, std::vector<IterArgPtr>{}, innerBody, std::vector<VarPtr>{}, Sp());
+    auto innerFor = std::make_shared<ForStmt>(j, zero, ten, one, std::vector<IterArgPtr>{}, innerBody,
+                                              std::vector<VarPtr>{}, Sp());
     auto outerYield = std::make_shared<YieldStmt>(std::vector<ExprPtr>{}, Sp());
     auto outerBody = std::make_shared<SeqStmts>(std::vector<StmtPtr>{innerFor, outerYield}, Sp());
-    auto outerFor =
-        std::make_shared<ForStmt>(i, zero, ten, one, std::vector<IterArgPtr>{}, outerBody, std::vector<VarPtr>{}, Sp());
+    auto outerFor = std::make_shared<ForStmt>(i, zero, ten, one, std::vector<IterArgPtr>{}, outerBody,
+                                              std::vector<VarPtr>{}, Sp());
     auto func = MakeFunc("f", outerFor);
     auto prog = MakeProg(func);
     auto result = RunPass(prog);
@@ -294,9 +294,8 @@ TEST_F(LowerBreakContinuePassTest, TestBareContinueWithIterArgsBecomesYield)
     auto i = MakeVar("i");
     auto iter_arg = std::make_shared<IterArg>("sum", Scalar(DataType::INT32), Int(0), Sp());
     auto ret_var = MakeVar("sum_out");
-    auto for_stmt = std::make_shared<ForStmt>(
-        i, Int(0), Int(10), Int(1), std::vector<IterArgPtr>{iter_arg}, std::make_shared<ContinueStmt>(Sp()),
-        std::vector<VarPtr>{ret_var}, Sp());
+    auto for_stmt = std::make_shared<ForStmt>(i, Int(0), Int(10), Int(1), std::vector<IterArgPtr>{iter_arg},
+                                              std::make_shared<ContinueStmt>(Sp()), std::vector<VarPtr>{ret_var}, Sp());
 
     auto result_func = RunOnFunc(MakeFunc("f", for_stmt));
     ASSERT_NE(result_func, nullptr);
@@ -312,9 +311,8 @@ TEST_F(LowerBreakContinuePassTest, TestBareContinueWithIterArgsBecomesYield)
 TEST_F(LowerBreakContinuePassTest, TestBareContinueWithoutIterArgsDropsLoopBody)
 {
     auto i = MakeVar("i");
-    auto for_stmt = std::make_shared<ForStmt>(
-        i, Int(0), Int(10), Int(1), std::vector<IterArgPtr>{}, std::make_shared<ContinueStmt>(Sp()),
-        std::vector<VarPtr>{}, Sp());
+    auto for_stmt = std::make_shared<ForStmt>(i, Int(0), Int(10), Int(1), std::vector<IterArgPtr>{},
+                                              std::make_shared<ContinueStmt>(Sp()), std::vector<VarPtr>{}, Sp());
 
     auto result_func = RunOnFunc(MakeFunc("f", for_stmt));
     ASSERT_NE(result_func, nullptr);
@@ -329,11 +327,11 @@ TEST_F(LowerBreakContinuePassTest, TestThenContinueWithPreStmtsAddsIterArgElseYi
     auto iter_arg = std::make_shared<IterArg>("sum", Scalar(DataType::INT32), Int(0), Sp());
     auto ret_var = MakeVar("sum_out");
     auto pre_assign = std::make_shared<AssignStmt>(MakeVar("tmp"), Int(2), Sp());
-    auto then_body =
-        std::make_shared<SeqStmts>(std::vector<StmtPtr>{pre_assign, std::make_shared<ContinueStmt>(Sp())}, Sp());
+    auto then_body = std::make_shared<SeqStmts>(std::vector<StmtPtr>{pre_assign, std::make_shared<ContinueStmt>(Sp())},
+                                                Sp());
     auto if_cont = std::make_shared<IfStmt>(Bool(true), then_body, std::nullopt, std::vector<VarPtr>{}, Sp());
-    auto for_stmt = std::make_shared<ForStmt>(
-        i, Int(0), Int(10), Int(1), std::vector<IterArgPtr>{iter_arg}, if_cont, std::vector<VarPtr>{ret_var}, Sp());
+    auto for_stmt = std::make_shared<ForStmt>(i, Int(0), Int(10), Int(1), std::vector<IterArgPtr>{iter_arg}, if_cont,
+                                              std::vector<VarPtr>{ret_var}, Sp());
 
     auto result_func = RunOnFunc(MakeFunc("f", for_stmt));
     ASSERT_NE(result_func, nullptr);
@@ -354,13 +352,13 @@ TEST_F(LowerBreakContinuePassTest, TestThenContinueWithPreStmtsMovesRemainingToE
 {
     auto i = MakeVar("i");
     auto pre_assign = std::make_shared<AssignStmt>(MakeVar("tmp"), Int(2), Sp());
-    auto then_body =
-        std::make_shared<SeqStmts>(std::vector<StmtPtr>{pre_assign, std::make_shared<ContinueStmt>(Sp())}, Sp());
+    auto then_body = std::make_shared<SeqStmts>(std::vector<StmtPtr>{pre_assign, std::make_shared<ContinueStmt>(Sp())},
+                                                Sp());
     auto if_cont = std::make_shared<IfStmt>(Bool(true), then_body, std::nullopt, std::vector<VarPtr>{}, Sp());
     auto trailing_assign = std::make_shared<AssignStmt>(MakeVar("after"), Int(3), Sp());
     auto body = std::make_shared<SeqStmts>(std::vector<StmtPtr>{if_cont, trailing_assign}, Sp());
-    auto for_stmt = std::make_shared<ForStmt>(
-        i, Int(0), Int(10), Int(1), std::vector<IterArgPtr>{}, body, std::vector<VarPtr>{}, Sp());
+    auto for_stmt = std::make_shared<ForStmt>(i, Int(0), Int(10), Int(1), std::vector<IterArgPtr>{}, body,
+                                              std::vector<VarPtr>{}, Sp());
 
     auto result_func = RunOnFunc(MakeFunc("f", for_stmt));
     ASSERT_NE(result_func, nullptr);
@@ -382,13 +380,13 @@ TEST_F(LowerBreakContinuePassTest, TestElseContinueAbsorbsRemainingStatementsAnd
     auto iter_arg = std::make_shared<IterArg>("sum", Scalar(DataType::INT32), Int(0), Sp());
     auto ret_var = MakeVar("sum_out");
     auto then_assign = std::make_shared<AssignStmt>(MakeVar("tmp"), i, Sp());
-    auto if_cont = std::make_shared<IfStmt>(
-        Bool(true), then_assign, std::make_optional<StmtPtr>(std::make_shared<ContinueStmt>(Sp())),
-        std::vector<VarPtr>{}, Sp());
+    auto if_cont = std::make_shared<IfStmt>(Bool(true), then_assign,
+                                            std::make_optional<StmtPtr>(std::make_shared<ContinueStmt>(Sp())),
+                                            std::vector<VarPtr>{}, Sp());
     auto trailing_assign = std::make_shared<AssignStmt>(MakeVar("after"), Int(3), Sp());
     auto body = std::make_shared<SeqStmts>(std::vector<StmtPtr>{if_cont, trailing_assign}, Sp());
-    auto for_stmt = std::make_shared<ForStmt>(
-        i, Int(0), Int(10), Int(1), std::vector<IterArgPtr>{iter_arg}, body, std::vector<VarPtr>{ret_var}, Sp());
+    auto for_stmt = std::make_shared<ForStmt>(i, Int(0), Int(10), Int(1), std::vector<IterArgPtr>{iter_arg}, body,
+                                              std::vector<VarPtr>{ret_var}, Sp());
 
     auto result_func = RunOnFunc(MakeFunc("f", for_stmt));
     ASSERT_NE(result_func, nullptr);
@@ -410,14 +408,14 @@ TEST_F(LowerBreakContinuePassTest, TestForBreakWithIterArgsPreservesOriginalRetu
     auto i = MakeVar("i");
     auto iter_arg = std::make_shared<IterArg>("sum", Scalar(DataType::INT32), Int(0), Sp());
     auto ret_var = MakeVar("sum_out");
-    auto if_break = std::make_shared<IfStmt>(
-        std::make_shared<Eq>(i, Int(4), DataType::BOOL, Sp()), std::make_shared<BreakStmt>(Sp()), std::nullopt,
-        std::vector<VarPtr>{}, Sp());
+    auto if_break = std::make_shared<IfStmt>(std::make_shared<Eq>(i, Int(4), DataType::BOOL, Sp()),
+                                             std::make_shared<BreakStmt>(Sp()), std::nullopt, std::vector<VarPtr>{},
+                                             Sp());
     auto new_sum = std::make_shared<Add>(iter_arg->iterVar_, i, DataType::INT32, Sp());
     auto yield = std::make_shared<YieldStmt>(std::vector<ExprPtr>{new_sum}, Sp());
     auto body = std::make_shared<SeqStmts>(std::vector<StmtPtr>{if_break, yield}, Sp());
-    auto for_stmt = std::make_shared<ForStmt>(
-        i, Int(0), Int(10), Int(1), std::vector<IterArgPtr>{iter_arg}, body, std::vector<VarPtr>{ret_var}, Sp());
+    auto for_stmt = std::make_shared<ForStmt>(i, Int(0), Int(10), Int(1), std::vector<IterArgPtr>{iter_arg}, body,
+                                              std::vector<VarPtr>{ret_var}, Sp());
 
     auto result_func = RunOnFunc(MakeFunc("f", for_stmt));
     ASSERT_NE(result_func, nullptr);
@@ -435,13 +433,13 @@ TEST_F(LowerBreakContinuePassTest, TestWhileBreakWithIterArgsBuildsOuterConditio
     auto iter_arg = std::make_shared<IterArg>("count", Scalar(DataType::INT32), Int(0), Sp());
     auto ret_var = MakeVar("count_out");
     auto cond = std::make_shared<Lt>(iter_arg->iterVar_, Int(10), DataType::BOOL, Sp());
-    auto if_break = std::make_shared<IfStmt>(
-        std::make_shared<Eq>(iter_arg->iterVar_, Int(4), DataType::BOOL, Sp()), std::make_shared<BreakStmt>(Sp()),
-        std::nullopt, std::vector<VarPtr>{}, Sp());
+    auto if_break = std::make_shared<IfStmt>(std::make_shared<Eq>(iter_arg->iterVar_, Int(4), DataType::BOOL, Sp()),
+                                             std::make_shared<BreakStmt>(Sp()), std::nullopt, std::vector<VarPtr>{},
+                                             Sp());
     auto yield = std::make_shared<YieldStmt>(std::vector<ExprPtr>{iter_arg->iterVar_}, Sp());
     auto body = std::make_shared<SeqStmts>(std::vector<StmtPtr>{if_break, yield}, Sp());
-    auto while_stmt =
-        std::make_shared<WhileStmt>(cond, std::vector<IterArgPtr>{iter_arg}, body, std::vector<VarPtr>{ret_var}, Sp());
+    auto while_stmt = std::make_shared<WhileStmt>(cond, std::vector<IterArgPtr>{iter_arg}, body,
+                                                  std::vector<VarPtr>{ret_var}, Sp());
 
     auto result_func = RunOnFunc(MakeFunc("f", while_stmt));
     ASSERT_NE(result_func, nullptr);
@@ -465,19 +463,18 @@ TEST_F(LowerBreakContinuePassTest, TestWhileBreakWithIterArgsBuildsOuterConditio
 TEST_F(LowerBreakContinuePassTest, TestMultipleBreakSitesAreLoweredRecursively)
 {
     auto i = MakeVar("i");
-    auto first_break = std::make_shared<IfStmt>(
-        std::make_shared<Eq>(i, Int(2), DataType::BOOL, Sp()), std::make_shared<BreakStmt>(Sp()), std::nullopt,
-        std::vector<VarPtr>{}, Sp());
-    auto second_break = std::make_shared<IfStmt>(
-        std::make_shared<Eq>(i, Int(6), DataType::BOOL, Sp()), std::make_shared<BreakStmt>(Sp()), std::nullopt,
-        std::vector<VarPtr>{}, Sp());
+    auto first_break = std::make_shared<IfStmt>(std::make_shared<Eq>(i, Int(2), DataType::BOOL, Sp()),
+                                                std::make_shared<BreakStmt>(Sp()), std::nullopt, std::vector<VarPtr>{},
+                                                Sp());
+    auto second_break = std::make_shared<IfStmt>(std::make_shared<Eq>(i, Int(6), DataType::BOOL, Sp()),
+                                                 std::make_shared<BreakStmt>(Sp()), std::nullopt, std::vector<VarPtr>{},
+                                                 Sp());
     auto body = std::make_shared<SeqStmts>(
-        std::vector<StmtPtr>{
-            first_break, std::make_shared<EvalStmt>(Int(1), Sp()), second_break,
-            std::make_shared<YieldStmt>(std::vector<ExprPtr>{}, Sp())},
+        std::vector<StmtPtr>{first_break, std::make_shared<EvalStmt>(Int(1), Sp()), second_break,
+                             std::make_shared<YieldStmt>(std::vector<ExprPtr>{}, Sp())},
         Sp());
-    auto for_stmt = std::make_shared<ForStmt>(
-        i, Int(0), Int(10), Int(1), std::vector<IterArgPtr>{}, body, std::vector<VarPtr>{}, Sp());
+    auto for_stmt = std::make_shared<ForStmt>(i, Int(0), Int(10), Int(1), std::vector<IterArgPtr>{}, body,
+                                              std::vector<VarPtr>{}, Sp());
 
     auto result_func = RunOnFunc(MakeFunc("f", for_stmt));
     ASSERT_NE(result_func, nullptr);
@@ -490,16 +487,16 @@ TEST_F(LowerBreakContinuePassTest, TestMultipleBreakSitesAreLoweredRecursively)
 TEST_F(LowerBreakContinuePassTest, TestOuterWhileRebuiltWhenOnlyNestedLoopChanges)
 {
     auto i = MakeVar("i");
-    auto inner_if = std::make_shared<IfStmt>(
-        Bool(true), std::make_shared<ContinueStmt>(Sp()), std::nullopt, std::vector<VarPtr>{}, Sp());
+    auto inner_if = std::make_shared<IfStmt>(Bool(true), std::make_shared<ContinueStmt>(Sp()), std::nullopt,
+                                             std::vector<VarPtr>{}, Sp());
     auto inner_body = std::make_shared<SeqStmts>(
         std::vector<StmtPtr>{inner_if, std::make_shared<YieldStmt>(std::vector<ExprPtr>{}, Sp())}, Sp());
-    auto inner_for = std::make_shared<ForStmt>(
-        i, Int(0), Int(3), Int(1), std::vector<IterArgPtr>{}, inner_body, std::vector<VarPtr>{}, Sp());
+    auto inner_for = std::make_shared<ForStmt>(i, Int(0), Int(3), Int(1), std::vector<IterArgPtr>{}, inner_body,
+                                               std::vector<VarPtr>{}, Sp());
     auto outer_body = std::make_shared<SeqStmts>(
         std::vector<StmtPtr>{inner_for, std::make_shared<YieldStmt>(std::vector<ExprPtr>{}, Sp())}, Sp());
-    auto outer_while =
-        std::make_shared<WhileStmt>(Bool(true), std::vector<IterArgPtr>{}, outer_body, std::vector<VarPtr>{}, Sp());
+    auto outer_while = std::make_shared<WhileStmt>(Bool(true), std::vector<IterArgPtr>{}, outer_body,
+                                                   std::vector<VarPtr>{}, Sp());
 
     auto result_func = RunOnFunc(MakeFunc("f", outer_while));
     ASSERT_NE(result_func, nullptr);

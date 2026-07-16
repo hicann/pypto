@@ -65,8 +65,8 @@ public:
             if (it != dispatcher.end()) {
                 it->second(cfgValue);
             } else {
-                SIMULATION_LOGE(CostModel::ExternalErrorScene::INVALID_CONFIG_NAME,
-                    "Invalid config name: %s", cfgName.c_str());
+                SIMULATION_LOGE(CostModel::ExternalErrorScene::INVALID_CONFIG_NAME, "Invalid config name: %s",
+                                cfgName.c_str());
             }
         }
     }

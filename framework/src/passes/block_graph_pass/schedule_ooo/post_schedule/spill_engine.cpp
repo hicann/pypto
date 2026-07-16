@@ -29,11 +29,14 @@ constexpr int32_t DEFAULT_LATENCY = 511;
 
 void SpillEngine::EmitInitDDRBuffer(const LogicalTensorPtr& t, DDRBufferKind kind)
 {
-    if (t == nullptr) return;
+    if (t == nullptr)
+        return;
     int memId = t->memoryrange.memId;
-    if (ddrKindMap_.count(memId) != 0) return;
+    if (ddrKindMap_.count(memId) != 0)
+        return;
     ddrKindMap_[memId] = kind;
-    if (!state_.HasObservers()) return;
+    if (!state_.HasObservers())
+        return;
     InitDDRBufferEvent event;
     event.clock = -1;
     event.memId = memId;
@@ -42,9 +45,13 @@ void SpillEngine::EmitInitDDRBuffer(const LogicalTensorPtr& t, DDRBufferKind kin
     event.dtype = t->Datatype();
     auto dynShape = t->GetDynValidShape();
     if (!dynShape.empty()) {
-        for (const auto& s : dynShape) { event.shape.push_back(s.Dump()); }
+        for (const auto& s : dynShape) {
+            event.shape.push_back(s.Dump());
+        }
     } else {
-        for (auto d : t->GetShape()) { event.shape.push_back(std::to_string(d)); }
+        for (auto d : t->GetShape()) {
+            event.shape.push_back(std::to_string(d));
+        }
     }
     for (auto* obs : state_.observers_) {
         obs->OnInitDDRBuffer(event);
@@ -81,19 +88,19 @@ bool SpillEngine::IsBelongSpillBlackList(Operation* spillOp, Operation* op)
     return false;
 }
 
-void SpillEngine::FindFilterLtags(Operation* allocOp, std::set<Operation*> &filterLtags)
+void SpillEngine::FindFilterLtags(Operation* allocOp, std::set<Operation*>& filterLtags)
 {
     auto dstOpList = state_.depManager.GetSuccessors(allocOp);
     for (auto dstOp : dstOpList) {
         if (COPY_IN_OPS.find(dstOp->GetOpcode()) == COPY_IN_OPS.end()) {
-            for (auto &inOp : state_.depManager.GetPredecessors(dstOp)) {
+            for (auto& inOp : state_.depManager.GetPredecessors(dstOp)) {
                 filterLtags.insert(inOp);
             }
             continue;
         }
-        for (auto &dstOpId : state_.depManager.GetSuccessors(dstOp)) {
+        for (auto& dstOpId : state_.depManager.GetSuccessors(dstOp)) {
             auto dstOp_level0 = dstOpId;
-            for (auto &inOp : state_.depManager.GetPredecessors(dstOp_level0)) {
+            for (auto& inOp : state_.depManager.GetPredecessors(dstOp_level0)) {
                 filterLtags.insert(inOp);
             }
         }
@@ -102,9 +109,9 @@ void SpillEngine::FindFilterLtags(Operation* allocOp, std::set<Operation*> &filt
 
 bool SpillEngine::CheckMachineAndL1(Operation* spillOp, Operation* allocOp)
 {
-    if (!spillOp->GetInputOperand(0) &&
-        allocOp->GetOutputOperand(0)->GetMemoryTypeOriginal() == MemoryType::MEM_L1) {
-        APASS_LOG_WARN_F(Elements::Tensor, "CheckMachineAndL1: spillOp %s has no inputOperand.", state_.GetOpInfo(spillOp).c_str());
+    if (!spillOp->GetInputOperand(0) && allocOp->GetOutputOperand(0)->GetMemoryTypeOriginal() == MemoryType::MEM_L1) {
+        APASS_LOG_WARN_F(Elements::Tensor, "CheckMachineAndL1: spillOp %s has no inputOperand.",
+                         state_.GetOpInfo(spillOp).c_str());
         return false;
     }
     if (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510 &&
@@ -120,22 +127,23 @@ bool SpillEngine::CheckMachineAndL1(Operation* spillOp, Operation* allocOp)
 
 LogicalTensorPtr SpillEngine::CreateLocalTensor(LogicalTensorPtr spillTensor)
 {
-    LogicalTensorPtr localTensor = irBuilder_.CreateTensorVar(
-        spillTensor->Datatype(), spillTensor->GetShape(), std::vector<SymbolicScalar>{}, spillTensor->Format());
+    LogicalTensorPtr localTensor = irBuilder_.CreateTensorVar(spillTensor->Datatype(), spillTensor->GetShape(),
+                                                              std::vector<SymbolicScalar>{}, spillTensor->Format());
     localTensor->SetMemoryTypeToBe(spillTensor->GetMemoryTypeOriginal());
     localTensor->SetMemoryTypeOriginal(spillTensor->GetMemoryTypeOriginal());
     localTensor->UpdateDynValidShape(spillTensor->GetDynValidShape());
     localTensor->tensor->rawshape = spillTensor->tensor->rawshape;
     int rawMagic = localTensor->GetRawTensor()->GetRawMagic();
     localTensor->memoryrange.memId = rawMagic;
-    state_.localBufferMap[rawMagic] =
-        std::make_shared<LocalBuffer>(rawMagic, localTensor->tensor->GetRawDataSize(), localTensor->GetMemoryTypeOriginal());
+    state_.localBufferMap[rawMagic] = std::make_shared<LocalBuffer>(rawMagic, localTensor->tensor->GetRawDataSize(),
+                                                                    localTensor->GetMemoryTypeOriginal());
     localTensor->offset = std::vector<int64_t>(localTensor->GetShape().size(), 0);
     APASS_LOG_DEBUG_F(Elements::Operation, "Create local tensor[%d].", localTensor->memoryrange.memId);
     return localTensor;
 }
 
-const std::vector<int64_t>& SpillEngine::GetLargerShape(const std::vector<int64_t> &shape1, const std::vector<int64_t> &shape2)
+const std::vector<int64_t>& SpillEngine::GetLargerShape(const std::vector<int64_t>& shape1,
+                                                        const std::vector<int64_t>& shape2)
 {
     for (size_t i = 0; i < shape1.size(); i++) {
         if (shape1[i] > shape2[i]) {
@@ -146,12 +154,11 @@ const std::vector<int64_t>& SpillEngine::GetLargerShape(const std::vector<int64_
 }
 
 LogicalTensorPtr SpillEngine::CreateGMTensor(LogicalTensorPtr spillTensor, LogicalTensorPtr actualSpillTensor,
-    int spillMemId, DataType gmDtype)
+                                             int spillMemId, DataType gmDtype)
 {
     DataType dtype = (gmDtype == DT_BOTTOM) ? spillTensor->Datatype() : gmDtype;
-    std::shared_ptr<RawTensor> gmRawTensor =
-        std::make_shared<RawTensor>(dtype,
-        GetLargerShape(spillTensor->tensor->rawshape, actualSpillTensor->tensor->rawshape),
+    std::shared_ptr<RawTensor> gmRawTensor = std::make_shared<RawTensor>(
+        dtype, GetLargerShape(spillTensor->tensor->rawshape, actualSpillTensor->tensor->rawshape),
         TileOpFormat::TILEOP_ND, "WorkspaceGm");
     LogicalTensorPtr gmTensor = irBuilder_.CreateTensorVar(
         gmRawTensor, spillTensor->GetOffset(), actualSpillTensor->GetShape(), std::vector<SymbolicScalar>{});
@@ -164,20 +171,19 @@ LogicalTensorPtr SpillEngine::CreateGMTensor(LogicalTensorPtr spillTensor, Logic
         APASS_LOG_ERROR_F(Elements::Tensor, "Cannot find Tensor[%d] in localBufferMap.", spillMemId);
         return nullptr;
     }
-    gmTensor->memoryrange =
-        TileRange(state_.workspaceOffset, state_.workspaceOffset + gmRawTensor->GetRawDataSize(), state_.workspaceMemId++);
+    gmTensor->memoryrange = TileRange(state_.workspaceOffset, state_.workspaceOffset + gmRawTensor->GetRawDataSize(),
+                                      state_.workspaceMemId++);
     state_.workspaceOffset += gmRawTensor->GetRawDataSize();
     EmitInitDDRBuffer(gmTensor, DDRBufferKind::SPILL_TEMP);
     APASS_LOG_DEBUG_F(Elements::Operation, "Spill: Create gm tensor[%d].", gmTensor->memoryrange.memId);
     return gmTensor;
 }
 
-LogicalTensorPtr SpillEngine::CreateParticalTensor(
-    LogicalTensorPtr iOperand, LogicalTensorPtr oriOperand, LogicalTensorPtr spillTensor,
-    std::vector<int64_t> toOffset)
+LogicalTensorPtr SpillEngine::CreateParticalTensor(LogicalTensorPtr iOperand, LogicalTensorPtr oriOperand,
+                                                   LogicalTensorPtr spillTensor, std::vector<int64_t> toOffset)
 {
-    LogicalTensorPtr particalTensor = irBuilder_.CreateTensorVar(
-        iOperand->Datatype(), iOperand->GetShape(), std::vector<SymbolicScalar>{}, iOperand->Format());
+    LogicalTensorPtr particalTensor = irBuilder_.CreateTensorVar(iOperand->Datatype(), iOperand->GetShape(),
+                                                                 std::vector<SymbolicScalar>{}, iOperand->Format());
     particalTensor->SetMemoryTypeToBe(oriOperand->GetMemoryTypeToBe());
     particalTensor->SetMemoryTypeOriginal(oriOperand->GetMemoryTypeOriginal());
     particalTensor->tensor = oriOperand->tensor;
@@ -190,8 +196,7 @@ LogicalTensorPtr SpillEngine::CreateParticalTensor(
 
 Operation* SpillEngine::CreateAllocOp(LogicalTensorPtr oOperand)
 {
-    Opcode opcode =
-        oOperand->GetMemoryTypeOriginal() == MemoryType::MEM_UB ? Opcode::OP_UB_ALLOC : Opcode::OP_L1_ALLOC;
+    Opcode opcode = oOperand->GetMemoryTypeOriginal() == MemoryType::MEM_UB ? Opcode::OP_UB_ALLOC : Opcode::OP_L1_ALLOC;
     Operation& allocOp = irBuilder_.CreateTensorOpStmt(function_, opcode, {}, {oOperand});
     allocOp.UpdateLatency(1);
     state_.tensorAllocMap[oOperand->memoryrange.memId] = &allocOp;
@@ -211,13 +216,11 @@ Operation* SpillEngine::CloneCopyinOp(Operation* spillOp, LogicalTensorPtr iOper
 }
 
 Operation* SpillEngine::CreateCopyinOp(LogicalTensorPtr iOperand, LogicalTensorPtr oOperand,
-    std::vector<OpImmediate> offset, bool isND2NZ)
+                                       std::vector<OpImmediate> offset, bool isND2NZ)
 {
     Operation& copyinOp = irBuilder_.CreateTensorOpStmt(function_, Opcode::OP_COPY_IN, {iOperand}, {oOperand});
     copyinOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(
-        offset,
-        oOperand->GetMemoryTypeOriginal(),
-        OpImmediate::Specified(oOperand->GetShape()),
+        offset, oOperand->GetMemoryTypeOriginal(), OpImmediate::Specified(oOperand->GetShape()),
         OpImmediate::Specified(oOperand->tensor->GetDynRawShape()),
         OpImmediate::Specified(oOperand->GetDynValidShape())));
     copyinOp.UpdateLatency(DEFAULT_LATENCY);
@@ -238,12 +241,11 @@ Operation* SpillEngine::CreateCopyinOp(LogicalTensorPtr iOperand, LogicalTensorP
 }
 
 Operation* SpillEngine::CreateCopyoutOp(Operation* spillOp, LogicalTensorPtr iOperand, LogicalTensorPtr oOperand,
-    std::vector<OpImmediate> offset)
+                                        std::vector<OpImmediate> offset)
 {
-    Operation &copyoutOp = irBuilder_.CreateTensorOpStmt(function_, Opcode::OP_COPY_OUT, {iOperand}, {oOperand});
+    Operation& copyoutOp = irBuilder_.CreateTensorOpStmt(function_, Opcode::OP_COPY_OUT, {iOperand}, {oOperand});
     copyoutOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(
-        iOperand->GetMemoryTypeOriginal(),
-        offset, OpImmediate::Specified(iOperand->GetShape()),
+        iOperand->GetMemoryTypeOriginal(), offset, OpImmediate::Specified(iOperand->GetShape()),
         OpImmediate::Specified(iOperand->GetRawTensor()->GetDynRawShape()),
         OpImmediate::Specified(iOperand->GetDynValidShape())));
     if (spillOp->HasAttribute(OpAttributeKey::scaleValue)) {
@@ -259,7 +261,7 @@ Operation* SpillEngine::CreateCopyoutOp(Operation* spillOp, LogicalTensorPtr iOp
     if (iOperand->GetMemoryTypeOriginal() == MemoryType::MEM_L0C) {
         copyoutOp.SetAttribute(OpAttributeKey::copyIsNZ, 0);
     } else if (Platform::Instance().GetSoc().GetNPUArch() != NPUArch::DAV_3510 &&
-        iOperand->GetMemoryTypeOriginal() == MemoryType::MEM_L1) {
+               iOperand->GetMemoryTypeOriginal() == MemoryType::MEM_L1) {
         copyoutOp.SetAttribute(OpAttributeKey::copyOutMode, static_cast<int64_t>(Matrix::CopyOutMode::ND2ND));
     }
     copyoutOp.UpdateLatency(DEFAULT_LATENCY);
@@ -281,13 +283,13 @@ Operation* SpillEngine::CreateReshapeOp(LogicalTensorPtr iOperand, LogicalTensor
 }
 
 Operation* SpillEngine::CreateAssembleOp(LogicalTensorPtr iOperand, LogicalTensorPtr oOperand,
-    std::vector<int64_t> toOffset, std::vector<SymbolicScalar> toDynOffset,
-    std::vector<SymbolicScalar> fromDynValidShape)
+                                         std::vector<int64_t> toOffset, std::vector<SymbolicScalar> toDynOffset,
+                                         std::vector<SymbolicScalar> fromDynValidShape)
 {
     Operation& assembleOp = irBuilder_.CreateTensorOpStmt(function_, Opcode::OP_ASSEMBLE, {iOperand}, {oOperand});
     assembleOp.UpdateLatency(1);
-    assembleOp.SetOpAttribute(std::make_shared<AssembleOpAttribute>(iOperand->GetMemoryTypeOriginal(),
-        toOffset, toDynOffset, fromDynValidShape));
+    assembleOp.SetOpAttribute(std::make_shared<AssembleOpAttribute>(iOperand->GetMemoryTypeOriginal(), toOffset,
+                                                                    toDynOffset, fromDynValidShape));
     bool isCube = true;
     if (iOperand->GetMemoryTypeOriginal() == MemoryType::MEM_UB) {
         isCube = false;
@@ -315,15 +317,17 @@ LogicalTensorPtr SpillEngine::GetSpillTensor(Operation* spillOp, int spillMemId)
     return nullptr;
 }
 
-Status SpillEngine::GetActualSpillForNd2nz(Operation* &spillOp, LogicalTensorPtr &spillTensor)
+Status SpillEngine::GetActualSpillForNd2nz(Operation*& spillOp, LogicalTensorPtr& spillTensor)
 {
     if (spillOp->GetOpcode() == Opcode::OP_UB_COPY_ND2NZ) {
         for (auto producer : spillOp->ProducerOps()) {
-            if (state_.schedInfoMap[producer].isAlloc) continue;
+            if (state_.schedInfoMap[producer].isAlloc)
+                continue;
             spillTensor = spillOp->GetInputOperand(0);
             spillOp = producer;
             if (spillTensor == nullptr) {
-                APASS_LOG_ERROR_F(Elements::Operation, "Get %s spill tensor failed.", state_.GetOpInfo(spillOp).c_str());
+                APASS_LOG_ERROR_F(Elements::Operation, "Get %s spill tensor failed.",
+                                  state_.GetOpInfo(spillOp).c_str());
                 return FAILED;
             }
         }
@@ -336,48 +340,47 @@ Status SpillEngine::GetActualSpillForNd2nz(Operation* &spillOp, LogicalTensorPtr
     return SUCCESS;
 }
 
-Status SpillEngine::GetActualSpill(Operation* op, Operation* &actualOp, LogicalTensorPtr &actualTensor)
+Status SpillEngine::GetActualSpill(Operation* op, Operation*& actualOp, LogicalTensorPtr& actualTensor)
 {
     auto iOperand = op->GetInputOperand(0);
     if (iOperand == nullptr) {
-        APASS_LOG_ERROR_F(Elements::Operation,
-            "SmallShape spill: producer %s has null input.", state_.GetOpInfo(op).c_str());
+        APASS_LOG_ERROR_F(Elements::Operation, "SmallShape spill: producer %s has null input.",
+                          state_.GetOpInfo(op).c_str());
         return FAILED;
     }
     auto iOperandMemType = iOperand->GetMemoryTypeOriginal();
     if (iOperandMemType != MemoryType::MEM_UB && iOperandMemType != MemoryType::MEM_L0C) {
-        APASS_LOG_ERROR_F(Elements::Operation,
-            "SmallShape spill: producer %s input memType is %s, expect UB/L0C.",
-            state_.GetOpInfo(op).c_str(), MemoryTypeToString(iOperandMemType).c_str());
+        APASS_LOG_ERROR_F(Elements::Operation, "SmallShape spill: producer %s input memType is %s, expect UB/L0C.",
+                          state_.GetOpInfo(op).c_str(), MemoryTypeToString(iOperandMemType).c_str());
         return FAILED;
     }
     actualOp = op;
     actualTensor = iOperand;
     if (iOperandMemType == MemoryType::MEM_UB) {
         Operation* prevOp = nullptr;
-        for (auto &preOp : state_.depManager.GetPredecessors(op)) {
+        for (auto& preOp : state_.depManager.GetPredecessors(op)) {
             if (!state_.schedInfoMap[preOp].isAlloc) {
                 prevOp = preOp;
             }
         }
         if (prevOp == nullptr || prevOp->GetOpcode() != Opcode::OP_UB_COPY_ND2NZ) {
             APASS_LOG_ERROR_F(Elements::Operation,
-                "SmallShape spill: UB-producer %s does not have UB_COPY_ND2NZ predecessor.",
-                state_.GetOpInfo(op).c_str());
+                              "SmallShape spill: UB-producer %s does not have UB_COPY_ND2NZ predecessor.",
+                              state_.GetOpInfo(op).c_str());
             return FAILED;
         }
         actualOp = prevOp;
         actualTensor = prevOp->GetInputOperand(0);
     }
     if (actualTensor == nullptr) {
-        APASS_LOG_ERROR_F(Elements::Operation,
-            "SmallShape spill: actualTensor is null for producer %s.", state_.GetOpInfo(op).c_str());
+        APASS_LOG_ERROR_F(Elements::Operation, "SmallShape spill: actualTensor is null for producer %s.",
+                          state_.GetOpInfo(op).c_str());
         return FAILED;
     }
     return SUCCESS;
 }
 
-void SpillEngine::CollectL0CConsumers(LogicalTensorPtr spillTensor, std::vector<Operation*> &consumers)
+void SpillEngine::CollectL0CConsumers(LogicalTensorPtr spillTensor, std::vector<Operation*>& consumers)
 {
     for (auto* consumer : spillTensor->GetConsumers()) {
         if (consumer == nullptr || state_.schedInfoMap[consumer].isRetired) {
@@ -386,7 +389,7 @@ void SpillEngine::CollectL0CConsumers(LogicalTensorPtr spillTensor, std::vector<
         auto output = consumer->GetOutputOperand(0);
         if (output == nullptr) {
             APASS_LOG_WARN_F(Elements::Operation, "L0C spill: skip consumer %s without output operand.",
-                state_.GetOpInfo(consumer).c_str());
+                             state_.GetOpInfo(consumer).c_str());
             continue;
         }
         auto outMem = output->GetMemoryTypeOriginal();
@@ -394,9 +397,8 @@ void SpillEngine::CollectL0CConsumers(LogicalTensorPtr spillTensor, std::vector<
             continue;
         }
         if (outMem != MemoryType::MEM_UB && outMem != MemoryType::MEM_L1) {
-            APASS_LOG_WARN_F(Elements::Operation,
-                "L0C spill: skip consumer %s with output memType %s.",
-                state_.GetOpInfo(consumer).c_str(), MemoryTypeToString(outMem).c_str());
+            APASS_LOG_WARN_F(Elements::Operation, "L0C spill: skip consumer %s with output memType %s.",
+                             state_.GetOpInfo(consumer).c_str(), MemoryTypeToString(outMem).c_str());
             continue;
         }
         consumers.push_back(consumer);
@@ -409,7 +411,7 @@ void SpillEngine::CollectL0CConsumers(LogicalTensorPtr spillTensor, std::vector<
 bool SpillEngine::IsMultiProducerTensor(LogicalTensorPtr tensor)
 {
     int producerCount = 0;
-    for (auto &producer : tensor->GetProducers()) {
+    for (auto& producer : tensor->GetProducers()) {
         if (producer->GetOpcodeStr().find("ALLOC") == std::string::npos) {
             producerCount++;
         }
@@ -417,8 +419,9 @@ bool SpillEngine::IsMultiProducerTensor(LogicalTensorPtr tensor)
     return producerCount > 1 ? true : false;
 }
 
-Status SpillEngine::GetPartialWriteReplayAttr(Operation* producerOp, std::vector<int64_t> &toOffset,
-    std::vector<SymbolicScalar> &toDynOffset, std::vector<SymbolicScalar> &fromDynValidShape) const
+Status SpillEngine::GetPartialWriteReplayAttr(Operation* producerOp, std::vector<int64_t>& toOffset,
+                                              std::vector<SymbolicScalar>& toDynOffset,
+                                              std::vector<SymbolicScalar>& fromDynValidShape) const
 {
     if (producerOp->GetOpcode() == Opcode::OP_ASSEMBLE) {
         auto attr = std::static_pointer_cast<AssembleOpAttribute>(producerOp->GetOpAttribute());
@@ -430,15 +433,14 @@ Status SpillEngine::GetPartialWriteReplayAttr(Operation* producerOp, std::vector
         toDynOffset = attr->GetToDynOffset();
         fromDynValidShape = attr->GetFromDynValidShape();
         return SUCCESS;
-    } else if (producerOp->GetOpcode() == Opcode::OP_L0C_TO_L1 ||
-        producerOp->GetOpcode() == Opcode::OP_L0C_COPY_UB) {
+    } else if (producerOp->GetOpcode() == Opcode::OP_L0C_TO_L1 || producerOp->GetOpcode() == Opcode::OP_L0C_COPY_UB) {
         auto attr = std::static_pointer_cast<CopyOpAttribute>(producerOp->GetOpAttribute());
         if (attr == nullptr) {
             APASS_LOG_ERROR_F(Elements::Operation, "Invalid CopyOpAttribute.");
             return FAILED;
         }
         auto iOperand = producerOp->GetInputOperand(0);
-        for (const auto &offsetImm : attr->GetToOffset()) {
+        for (const auto& offsetImm : attr->GetToOffset()) {
             if (!offsetImm.IsSpecified() || !offsetImm.GetSpecifiedValue().ConcreteValid()) {
                 APASS_LOG_ERROR_F(Elements::Operation, "L0C_TO_L1 replay only supports static concrete toOffset.");
                 return FAILED;
@@ -469,13 +471,13 @@ bool SpillEngine::IsUnusedTensor(Operation* spillOp)
 }
 
 void SpillEngine::UpdateOperationInput(Operation* targetOp, Operation* spillOp, LogicalTensorPtr newTensor,
-    int spillMemId)
+                                       int spillMemId)
 {
     for (size_t index = 0; index < targetOp->GetIOperands().size(); index++) {
         if (targetOp->GetIOperands()[index]->memoryrange.memId != spillMemId) {
             continue;
         }
-        for (auto &inOp : targetOp->GetIOperands()[index]->GetProducers()) {
+        for (auto& inOp : targetOp->GetIOperands()[index]->GetProducers()) {
             if (IsViewOp(*inOp)) {
                 Operation* op = SkipViewChain(inOp, true);
                 UpdateTensorInputForView(*op, spillOp, newTensor);
@@ -496,11 +498,13 @@ void SpillEngine::UpdateTensorInputForView(Operation& op, Operation* spillOp, Lo
             break;
         }
     }
-    if (!hit) return;
-    for (Operation* p = &op; p != nullptr && IsViewOp(*p); ) {
+    if (!hit)
+        return;
+    for (Operation* p = &op; p != nullptr && IsViewOp(*p);) {
         p->GetOutputOperand(0)->memoryrange.memId = tensor->memoryrange.memId;
         auto consumers = p->GetOutputOperand(0)->GetConsumers();
-        if (consumers.empty()) break;
+        if (consumers.empty())
+            break;
         p = *consumers.begin();
     }
 }
@@ -543,7 +547,7 @@ void SpillEngine::ReplaceTensorMemId(Operation* op, int oldMemId, int newMemId)
             std::replace(reqMemIds.begin(), reqMemIds.end(), oldMemId, newMemId);
         }
     }
-    for (auto &outTensor : op->GetOOperands()) {
+    for (auto& outTensor : op->GetOOperands()) {
         if (outTensor->memoryrange.memId == oldMemId) {
             outTensor->memoryrange.memId = newMemId;
             ReplaceViewOpChainMemId(outTensor, oldMemId, newMemId);
@@ -551,7 +555,7 @@ void SpillEngine::ReplaceTensorMemId(Operation* op, int oldMemId, int newMemId)
     }
 }
 
-void SpillEngine::UpdateOpInternalSubgraphID(Operation &op, Operation* srcOp)
+void SpillEngine::UpdateOpInternalSubgraphID(Operation& op, Operation* srcOp)
 {
     if (srcOp->GetInternalSubgraphID() != NOT_IN_SUBGRAPH) {
         op.UpdateInternalSubgraphID(srcOp->GetInternalSubgraphID());
@@ -575,26 +579,29 @@ Status SpillEngine::UpdateSpillOpDepend(Operation* spillOp, LogicalTensorPtr new
 
 Operation* SpillEngine::SkipViewChain(Operation* start, bool followProducers)
 {
-    if (start == nullptr) return nullptr;
+    if (start == nullptr)
+        return nullptr;
     Operation* op = start;
     Operation* lastView = nullptr;
     while (op != nullptr && IsViewOp(*op)) {
         lastView = op;
         if (followProducers) {
             const auto& nextOps = op->GetInputOperand(0)->GetProducers();
-            if (nextOps.size() != 1) break;
+            if (nextOps.size() != 1)
+                break;
             op = *nextOps.begin();
         } else {
             const auto& nextOps = op->GetOutputOperand(0)->GetConsumers();
-            if (nextOps.size() != 1) break;
+            if (nextOps.size() != 1)
+                break;
             op = *nextOps.begin();
         }
     }
     return lastView;
 }
 
-void SpillEngine::UpdateSuccessorDependencies(
-    Operation* succOp, Operation* spillOp, Operation* reloadCopyin, int spillMemId, int reloadMemId)
+void SpillEngine::UpdateSuccessorDependencies(Operation* succOp, Operation* spillOp, Operation* reloadCopyin,
+                                              int spillMemId, int reloadMemId)
 {
     auto& reqMemIds = state_.GetOpMemIds(succOp);
     if (std::count(reqMemIds.begin(), reqMemIds.end(), spillMemId) > 0) {
@@ -627,7 +634,7 @@ void SpillEngine::UpdatePredecessorAllocDependencies(Operation* succOp, Operatio
 }
 
 Status SpillEngine::UpdateSmallShapeDependAndBuf(std::vector<std::pair<Operation*, std::vector<int>>> opMemidMap,
-    int spillMemId, Operation* spillOp)
+                                                 int spillMemId, Operation* spillOp)
 {
     if (opMemidMap.size() != TWO_ISSUE) {
         APASS_LOG_ERROR_F(Elements::Tensor, "The number of elements in opMemidMap is invalid: %zu.", opMemidMap.size());
@@ -654,12 +661,13 @@ Status SpillEngine::UpdateSmallShapeDependAndBuf(std::vector<std::pair<Operation
     return SUCCESS;
 }
 
-void SpillEngine::CollectUBSceneOpsAndTensors(
-    Operation* producerOp, std::vector<Operation*>& opsToDelete, std::vector<LogicalTensorPtr>& tensorsToDelete)
+void SpillEngine::CollectUBSceneOpsAndTensors(Operation* producerOp, std::vector<Operation*>& opsToDelete,
+                                              std::vector<LogicalTensorPtr>& tensorsToDelete)
 {
     opsToDelete.push_back(producerOp);
     auto ubTensor2 = producerOp->GetInputOperand(0);
-    if (ubTensor2 == nullptr) return;
+    if (ubTensor2 == nullptr)
+        return;
     for (auto* op : ubTensor2->GetProducers()) {
         if (op != nullptr && op->GetOpcodeStr().find("UB_COPY_ND2NZ") != std::string::npos) {
             if (state_.depManager.GetSuccessors(op).size() > 1) {
@@ -669,17 +677,17 @@ void SpillEngine::CollectUBSceneOpsAndTensors(
     }
     tensorsToDelete.push_back(ubTensor2);
     for (auto* op : ubTensor2->GetProducers()) {
-        if (op != nullptr && (state_.schedInfoMap[op].isAlloc ||
-            op->GetOpcodeStr().find("UB_COPY_ND2NZ") != std::string::npos)) {
+        if (op != nullptr &&
+            (state_.schedInfoMap[op].isAlloc || op->GetOpcodeStr().find("UB_COPY_ND2NZ") != std::string::npos)) {
             opsToDelete.push_back(op);
-            APASS_LOG_DEBUG_F(Elements::Operation, "UB scene: collect %s[%d]",
-                op->GetOpcodeStr().c_str(), op->GetOpMagic());
+            APASS_LOG_DEBUG_F(Elements::Operation, "UB scene: collect %s[%d]", op->GetOpcodeStr().c_str(),
+                              op->GetOpMagic());
         }
     }
 }
 
-void SpillEngine::CollectProducerChainForDeletion(
-    LogicalTensorPtr spillTensor, std::vector<Operation*>& opsToDelete, std::vector<LogicalTensorPtr>& tensorsToDelete)
+void SpillEngine::CollectProducerChainForDeletion(LogicalTensorPtr spillTensor, std::vector<Operation*>& opsToDelete,
+                                                  std::vector<LogicalTensorPtr>& tensorsToDelete)
 {
     tensorsToDelete.push_back(spillTensor);
 
@@ -721,8 +729,7 @@ void SpillEngine::ReleaseDeletedOpBufRefs(Operation* op, const std::vector<Logic
     }
 }
 
-void SpillEngine::CleanupCollectedTensors(
-    const std::vector<LogicalTensorPtr>& tensorsToDelete)
+void SpillEngine::CleanupCollectedTensors(const std::vector<LogicalTensorPtr>& tensorsToDelete)
 {
     for (size_t i = 0; i < tensorsToDelete.size(); i++) {
         auto& tensor = tensorsToDelete[i];
@@ -731,13 +738,12 @@ void SpillEngine::CleanupCollectedTensors(
         state_.tensorAllocMap.erase(memId);
         state_.bufRefCount.erase(memId);
 
-        APASS_LOG_DEBUG_F(
-            Elements::Tensor, "Cleaned tensor[%d] scheduler.", memId);
+        APASS_LOG_DEBUG_F(Elements::Tensor, "Cleaned tensor[%d] scheduler.", memId);
     }
 }
 
-void SpillEngine::EraseOrphanedTensors(
-    const std::vector<LogicalTensorPtr>& tensorsToDelete, const std::vector<Operation*>& opsToDelete)
+void SpillEngine::EraseOrphanedTensors(const std::vector<LogicalTensorPtr>& tensorsToDelete,
+                                       const std::vector<Operation*>& opsToDelete)
 {
     for (auto& tensor : tensorsToDelete) {
         for (auto* op : opsToDelete) {
@@ -749,7 +755,7 @@ void SpillEngine::EraseOrphanedTensors(
     }
 }
 
-Status SpillEngine::SpillBuffer(int memId, Operation* spillAllocOp, SpillContext &ctx)
+Status SpillEngine::SpillBuffer(int memId, Operation* spillAllocOp, SpillContext& ctx)
 {
     Operation* spillOp = GetSpillOp(memId);
     if (spillOp == nullptr) {
@@ -761,7 +767,8 @@ Status SpillEngine::SpillBuffer(int memId, Operation* spillAllocOp, SpillContext
     }
     LogicalTensorPtr spillTensor = GetSpillTensor(spillOp, memId);
     if (spillTensor == nullptr) {
-        APASS_LOG_ERROR_F(Elements::Tensor, "Find %s spill tensor[%d] failed.", state_.GetOpInfo(spillOp).c_str(), memId);
+        APASS_LOG_ERROR_F(Elements::Tensor, "Find %s spill tensor[%d] failed.", state_.GetOpInfo(spillOp).c_str(),
+                          memId);
         return FAILED;
     }
     SingleSpillCreatedOps created;
@@ -770,7 +777,8 @@ Status SpillEngine::SpillBuffer(int memId, Operation* spillAllocOp, SpillContext
         return FAILED;
     }
     NotifySpill(state_, spillTensor, memId, spillAllocOp, created);
-    if (state_.bufferManagerMap[state_.schedInfoMap[spillAllocOp].coreLocation][state_.localBufferMap[memId]->memType].Free(memId) != SUCCESS) {
+    if (state_.bufferManagerMap[state_.schedInfoMap[spillAllocOp].coreLocation][state_.localBufferMap[memId]->memType]
+            .Free(memId) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "Free spill tensor[%d] failed!", memId);
         return FAILED;
     }
@@ -779,7 +787,7 @@ Status SpillEngine::SpillBuffer(int memId, Operation* spillAllocOp, SpillContext
 }
 
 Status SpillEngine::HandleSpillMode(int memId, Operation* spillOp, LogicalTensorPtr spillTensor,
-    Operation* spillAllocOp, SpillContext &ctx, SingleSpillCreatedOps& created)
+                                    Operation* spillAllocOp, SpillContext& ctx, SingleSpillCreatedOps& created)
 {
     APASS_LOG_DEBUG_F(Elements::Operation, "Begin spill %s, Tensor[%d]", state_.GetOpInfo(spillOp).c_str(), memId);
     if (spillOp->GetOpcodeStr().find("COPY_IN") != std::string::npos) {
@@ -788,7 +796,7 @@ Status SpillEngine::HandleSpillMode(int memId, Operation* spillOp, LogicalTensor
             return FAILED;
         }
     } else if (state_.localBufferMap[memId]->memType == MemoryType::MEM_L1 &&
-        Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510) {
+               Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510) {
         if (SpillL1BufferFor3510(memId, spillOp, spillTensor, spillAllocOp, ctx, created) != SUCCESS) {
             APASS_LOG_ERROR_F(Elements::Operation, "SpillL1BufferFor3510 failed!");
             return FAILED;
@@ -813,7 +821,7 @@ Status SpillEngine::HandleSpillMode(int memId, Operation* spillOp, LogicalTensor
 }
 
 Status SpillEngine::SpillBufferFromDDR(int memId, Operation* spillOp, LogicalTensorPtr spillTensor,
-    Operation* spillAllocOp, SpillContext &ctx, SingleSpillCreatedOps& created)
+                                       Operation* spillAllocOp, SpillContext& ctx, SingleSpillCreatedOps& created)
 {
     APASS_LOG_DEBUG_F(Elements::Operation, "---- SpillBufferFromDDR begin.");
     LogicalTensorPtr gmTensor = spillOp->GetInputOperand(0);
@@ -821,10 +829,8 @@ Status SpillEngine::SpillBufferFromDDR(int memId, Operation* spillOp, LogicalTen
     Operation* allocOp = CreateAllocOp(localTensor);
     Operation* copyinOp = CloneCopyinOp(spillOp, gmTensor, localTensor);
 
-    std::vector<std::pair<Operation*, std::vector<int>>> opMemidMap = {
-        {allocOp, {localTensor->memoryrange.memId}},
-        {copyinOp, {localTensor->memoryrange.memId}}
-    };
+    std::vector<std::pair<Operation*, std::vector<int>>> opMemidMap = {{allocOp, {localTensor->memoryrange.memId}},
+                                                                       {copyinOp, {localTensor->memoryrange.memId}}};
 
     if (UpdateScheduleStatus(opMemidMap, memId, spillAllocOp, localTensor, spillOp) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "UpdateScheduleStatus failed.");
@@ -837,7 +843,7 @@ Status SpillEngine::SpillBufferFromDDR(int memId, Operation* spillOp, LogicalTen
 }
 
 Status SpillEngine::SpillGeneralBuffer(int spillMemId, Operation* spillOp, LogicalTensorPtr spillTensor,
-    Operation* spillAllocOp, SpillContext &ctx, SingleSpillCreatedOps& created)
+                                       Operation* spillAllocOp, SpillContext& ctx, SingleSpillCreatedOps& created)
 {
     APASS_LOG_DEBUG_F(Elements::Operation, "---- SpillGeneralBuffer begin.");
     if (GetActualSpillForNd2nz(spillOp, spillTensor) != SUCCESS) {
@@ -848,20 +854,18 @@ Status SpillEngine::SpillGeneralBuffer(int spillMemId, Operation* spillOp, Logic
     LogicalTensorPtr gmTensor = CreateGMTensor(spillTensor, spillTensor, spillMemId);
     LogicalTensorPtr localTensor = CreateLocalTensor(spillTensor);
 
-    Operation *copyoutOp = CreateCopyoutOp(spillOp, spillTensor, gmTensor,
-        OpImmediate::Specified(gmTensor->GetOffset()));
-    Operation *allocOp = CreateAllocOp(localTensor);
-    Operation *copyinOp = CreateCopyinOp(gmTensor, localTensor, OpImmediate::Specified(gmTensor->GetOffset()));
+    Operation* copyoutOp = CreateCopyoutOp(spillOp, spillTensor, gmTensor,
+                                           OpImmediate::Specified(gmTensor->GetOffset()));
+    Operation* allocOp = CreateAllocOp(localTensor);
+    Operation* copyinOp = CreateCopyinOp(gmTensor, localTensor, OpImmediate::Specified(gmTensor->GetOffset()));
 
     if (UpdateCopyoutScheduleInfo(copyoutOp, spillTensor, spillMemId, spillOp) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "UpdateCopyoutScheduleInfo failed.");
         return FAILED;
     }
 
-    std::vector<std::pair<Operation*, std::vector<int>>> opMemidMap = {
-        {allocOp, {localTensor->memoryrange.memId}},
-        {copyinOp, {localTensor->memoryrange.memId}}
-    };
+    std::vector<std::pair<Operation*, std::vector<int>>> opMemidMap = {{allocOp, {localTensor->memoryrange.memId}},
+                                                                       {copyinOp, {localTensor->memoryrange.memId}}};
 
     if (UpdateScheduleStatus(opMemidMap, spillMemId, spillAllocOp, localTensor, spillOp) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "UpdateScheduleStatus failed.");
@@ -875,7 +879,8 @@ Status SpillEngine::SpillGeneralBuffer(int spillMemId, Operation* spillOp, Logic
 }
 
 Status SpillEngine::SpillMultiProducerBufferFor3510(int spillMemid, Operation* spillOp, LogicalTensorPtr spillTensor,
-    Operation* spillAllocOp, SpillContext &ctx, SingleSpillCreatedOps& created)
+                                                    Operation* spillAllocOp, SpillContext& ctx,
+                                                    SingleSpillCreatedOps& created)
 {
     APASS_LOG_DEBUG_F(Elements::Operation, "---- SpillMultiProducerBufferFor3510 begin.");
     Operation* actualTriggerOp = nullptr;
@@ -890,13 +895,11 @@ Status SpillEngine::SpillMultiProducerBufferFor3510(int spillMemid, Operation* s
         APASS_LOG_ERROR_F(Elements::Operation, "CopyoutParticalBuffer failed.");
         return FAILED;
     }
-    Operation *allocOp = CreateAllocOp(l1Tensor);
-    Operation *copyinOp = CreateCopyinOp(gmTensor, l1Tensor, OpImmediate::Specified(gmTensor->GetOffset()));
+    Operation* allocOp = CreateAllocOp(l1Tensor);
+    Operation* copyinOp = CreateCopyinOp(gmTensor, l1Tensor, OpImmediate::Specified(gmTensor->GetOffset()));
 
-    std::vector<std::pair<Operation*, std::vector<int>>> opMemidMap = {
-        {allocOp, {l1Tensor->memoryrange.memId}},
-        {copyinOp, {l1Tensor->memoryrange.memId}}
-    };
+    std::vector<std::pair<Operation*, std::vector<int>>> opMemidMap = {{allocOp, {l1Tensor->memoryrange.memId}},
+                                                                       {copyinOp, {l1Tensor->memoryrange.memId}}};
 
     if (!IsUnusedTensor(spillOp)) {
         if (UpdateScheduleStatus(opMemidMap, spillMemid, spillAllocOp, l1Tensor, spillOp) != SUCCESS) {
@@ -904,7 +907,8 @@ Status SpillEngine::SpillMultiProducerBufferFor3510(int spillMemid, Operation* s
             return FAILED;
         }
     } else {
-        if (UpdateNeedDeleteScheduleStatus(opMemidMap, spillMemid, spillAllocOp, spillTensor, spillOp, ctx) != SUCCESS) {
+        if (UpdateNeedDeleteScheduleStatus(opMemidMap, spillMemid, spillAllocOp, spillTensor, spillOp, ctx) !=
+            SUCCESS) {
             APASS_LOG_ERROR_F(Elements::Operation, "UpdateNeedDeleteScheduleStatus failed.");
             return FAILED;
         }
@@ -916,7 +920,7 @@ Status SpillEngine::SpillMultiProducerBufferFor3510(int spillMemid, Operation* s
 }
 
 Status SpillEngine::SpillL1BufferFor3510(int memId, Operation* spillOp, LogicalTensorPtr spillTensor,
-    Operation* spillAllocOp, SpillContext &ctx, SingleSpillCreatedOps& created)
+                                         Operation* spillAllocOp, SpillContext& ctx, SingleSpillCreatedOps& created)
 {
     if (IsMultiProducerTensor(spillTensor)) {
         if (SpillMultiProducerBufferFor3510(memId, spillOp, spillTensor, spillAllocOp, ctx, created) != SUCCESS) {
@@ -931,7 +935,7 @@ Status SpillEngine::SpillL1BufferFor3510(int memId, Operation* spillOp, LogicalT
         }
     } else {
         Operation* actualSpillOp = nullptr;
-        for (auto &preOp : state_.depManager.GetPredecessors(spillOp)) {
+        for (auto& preOp : state_.depManager.GetPredecessors(spillOp)) {
             if (!state_.schedInfoMap[preOp].isAlloc) {
                 actualSpillOp = preOp;
             }
@@ -949,7 +953,8 @@ Status SpillEngine::SpillL1BufferFor3510(int memId, Operation* spillOp, LogicalT
 }
 
 Status SpillEngine::SpillGeneralL1BufferFor3510(int memId, Operation* spillOp, LogicalTensorPtr spillTensor,
-    Operation* spillAllocOp, SpillContext &ctx, SingleSpillCreatedOps& created)
+                                                Operation* spillAllocOp, SpillContext& ctx,
+                                                SingleSpillCreatedOps& created)
 {
     APASS_LOG_DEBUG_F(Elements::Operation, "---- SpillGeneralL1BufferFor3510 begin.");
     Operation* actualOp = nullptr;
@@ -961,8 +966,8 @@ Status SpillEngine::SpillGeneralL1BufferFor3510(int memId, Operation* spillOp, L
     LogicalTensorPtr gmTensor = CreateGMTensor(actualSpillTensor, actualSpillTensor, memId, spillTensor->Datatype());
     LogicalTensorPtr localTensor = CreateLocalTensor(spillTensor);
 
-    Operation *copyoutOp =
-        CreateCopyoutOp(spillOp, actualSpillTensor, gmTensor, OpImmediate::Specified(gmTensor->GetOffset()));
+    Operation* copyoutOp = CreateCopyoutOp(spillOp, actualSpillTensor, gmTensor,
+                                           OpImmediate::Specified(gmTensor->GetOffset()));
     Operation* allocOp = CreateAllocOp(localTensor);
     auto attr = std::dynamic_pointer_cast<CopyOpAttribute>(spillOp->GetOpAttribute());
     if (attr == nullptr) {
@@ -971,16 +976,14 @@ Status SpillEngine::SpillGeneralL1BufferFor3510(int memId, Operation* spillOp, L
     }
     Operation* copyinOp = CreateCopyinOp(gmTensor, localTensor, attr->GetFromOffset());
 
-    if (UpdateCopyoutScheduleInfo(
-            copyoutOp, actualSpillTensor, actualSpillTensor->memoryrange.memId, actualOp) != SUCCESS) {
+    if (UpdateCopyoutScheduleInfo(copyoutOp, actualSpillTensor, actualSpillTensor->memoryrange.memId, actualOp) !=
+        SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "UpdateCopyoutScheduleInfo failed.");
         return FAILED;
     }
 
-    std::vector<std::pair<Operation*, std::vector<int>>> opMemidMap = {
-        {allocOp, {localTensor->memoryrange.memId}},
-        {copyinOp, {localTensor->memoryrange.memId}}
-    };
+    std::vector<std::pair<Operation*, std::vector<int>>> opMemidMap = {{allocOp, {localTensor->memoryrange.memId}},
+                                                                       {copyinOp, {localTensor->memoryrange.memId}}};
 
     if (UpdateScheduleStatus(opMemidMap, memId, spillAllocOp, localTensor, spillOp) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "UpdateScheduleStatus failed.");
@@ -994,14 +997,15 @@ Status SpillEngine::SpillGeneralL1BufferFor3510(int memId, Operation* spillOp, L
 }
 
 Status SpillEngine::SpillReshapeFromDDRFor3510(int memId, Operation* actualSpillOp, Operation* spillOp,
-    LogicalTensorPtr spillTensor, Operation* spillAllocOp, SpillContext &ctx, SingleSpillCreatedOps& created)
+                                               LogicalTensorPtr spillTensor, Operation* spillAllocOp, SpillContext& ctx,
+                                               SingleSpillCreatedOps& created)
 {
     APASS_LOG_DEBUG_F(Elements::Operation, "---- SpillReshapeFromDDRFor3510 begin.");
     LogicalTensorPtr preSpillTensor = spillOp->GetInputOperand(0);
     LogicalTensorPtr ddrTensor = actualSpillOp->GetInputOperand(0);
     LogicalTensorPtr reshapeTensor = CreateLocalTensor(spillTensor);
-    LogicalTensorPtr copyinTensor =
-        CreateParticalTensor(preSpillTensor, reshapeTensor, preSpillTensor, preSpillTensor->GetOffset());
+    LogicalTensorPtr copyinTensor = CreateParticalTensor(preSpillTensor, reshapeTensor, preSpillTensor,
+                                                         preSpillTensor->GetOffset());
 
     Operation* allocOp = CreateAllocOp(copyinTensor);
     Operation* copyinOp = CloneCopyinOp(actualSpillOp, ddrTensor, copyinTensor);
@@ -1010,8 +1014,7 @@ Status SpillEngine::SpillReshapeFromDDRFor3510(int memId, Operation* actualSpill
     std::vector<std::pair<Operation*, std::vector<int>>> opMemidMap = {
         {allocOp, {reshapeTensor->memoryrange.memId}},
         {copyinOp, {reshapeTensor->memoryrange.memId}},
-        {reshapeOp, {reshapeTensor->memoryrange.memId, reshapeTensor->memoryrange.memId}}
-    };
+        {reshapeOp, {reshapeTensor->memoryrange.memId, reshapeTensor->memoryrange.memId}}};
 
     if (UpdateScheduleStatus(opMemidMap, memId, spillAllocOp, reshapeTensor, spillOp) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "UpdateScheduleStatus failed.");
@@ -1024,7 +1027,8 @@ Status SpillEngine::SpillReshapeFromDDRFor3510(int memId, Operation* actualSpill
 }
 
 Status SpillEngine::SpillReshapeL1BufferFor3510(int spillMemId, Operation* actualSpillOp, Operation* spillOp,
-    LogicalTensorPtr spillTensor, Operation* spillAllocOp, SpillContext &ctx, SingleSpillCreatedOps& created)
+                                                LogicalTensorPtr spillTensor, Operation* spillAllocOp,
+                                                SpillContext& ctx, SingleSpillCreatedOps& created)
 {
     APASS_LOG_DEBUG_F(Elements::Operation, "---- SpillReshapeL1BufferFor3510 begin.");
     LogicalTensorPtr preSpillTensor = spillOp->GetInputOperand(0);
@@ -1034,12 +1038,14 @@ Status SpillEngine::SpillReshapeL1BufferFor3510(int spillMemId, Operation* actua
         APASS_LOG_ERROR_F(Elements::Operation, "GetActualSpill failed.");
         return FAILED;
     }
-    LogicalTensorPtr gmTensor =
-        CreateGMTensor(actualSpillTensor, actualSpillTensor, spillMemId, preSpillTensor->Datatype());
+    LogicalTensorPtr gmTensor = CreateGMTensor(actualSpillTensor, actualSpillTensor, spillMemId,
+                                               preSpillTensor->Datatype());
     LogicalTensorPtr reshapeTensor = CreateLocalTensor(spillTensor);
-    LogicalTensorPtr l1Tensor = CreateParticalTensor(preSpillTensor, reshapeTensor, preSpillTensor, preSpillTensor->GetOffset());
+    LogicalTensorPtr l1Tensor = CreateParticalTensor(preSpillTensor, reshapeTensor, preSpillTensor,
+                                                     preSpillTensor->GetOffset());
 
-    Operation* copyoutOp = CreateCopyoutOp(actualSpillOp, actualOp->GetInputOperand(0), gmTensor, OpImmediate::Specified(gmTensor->GetOffset()));
+    Operation* copyoutOp = CreateCopyoutOp(actualSpillOp, actualOp->GetInputOperand(0), gmTensor,
+                                           OpImmediate::Specified(gmTensor->GetOffset()));
 
     Operation* allocOp = CreateAllocOp(l1Tensor);
     auto attr = std::dynamic_pointer_cast<CopyOpAttribute>(actualSpillOp->GetOpAttribute());
@@ -1050,8 +1056,8 @@ Status SpillEngine::SpillReshapeL1BufferFor3510(int spillMemId, Operation* actua
     Operation* copyinOp = CreateCopyinOp(gmTensor, l1Tensor, attr->GetFromOffset());
     Operation* reshapeOp = CreateReshapeOp(l1Tensor, reshapeTensor);
 
-    if (UpdateCopyoutScheduleInfo(
-            copyoutOp, actualSpillTensor, actualSpillTensor->memoryrange.memId, actualSpillOp) != SUCCESS) {
+    if (UpdateCopyoutScheduleInfo(copyoutOp, actualSpillTensor, actualSpillTensor->memoryrange.memId, actualSpillOp) !=
+        SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "UpdateCopyoutScheduleInfo failed.");
         return FAILED;
     }
@@ -1059,8 +1065,7 @@ Status SpillEngine::SpillReshapeL1BufferFor3510(int spillMemId, Operation* actua
     std::vector<std::pair<Operation*, std::vector<int>>> opMemidMap = {
         {allocOp, {l1Tensor->memoryrange.memId}},
         {copyinOp, {l1Tensor->memoryrange.memId}},
-        {reshapeOp, {l1Tensor->memoryrange.memId, l1Tensor->memoryrange.memId}}
-    };
+        {reshapeOp, {l1Tensor->memoryrange.memId, l1Tensor->memoryrange.memId}}};
 
     if (UpdateScheduleStatus(opMemidMap, spillMemId, spillAllocOp, reshapeTensor, spillOp) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "UpdateScheduleStatus failed.");
@@ -1074,7 +1079,7 @@ Status SpillEngine::SpillReshapeL1BufferFor3510(int spillMemId, Operation* actua
 }
 
 Status SpillEngine::SpillL0CBuffer(int spillMemId, Operation* spillOp, LogicalTensorPtr spillTensor,
-    Operation* spillAllocOp, SpillContext &ctx, SingleSpillCreatedOps& created)
+                                   Operation* spillAllocOp, SpillContext& ctx, SingleSpillCreatedOps& created)
 {
     APASS_LOG_DEBUG_F(Elements::Operation, "---- SpillL0CBuffer begin.");
     std::vector<Operation*> consumers;
@@ -1085,7 +1090,7 @@ Status SpillEngine::SpillL0CBuffer(int spillMemId, Operation* spillOp, LogicalTe
         auto oOperand = consumer->GetOutputOperand(0);
         if (oOperand == nullptr) {
             APASS_LOG_ERROR_F(Elements::Operation, "L0C spill: consumer %s has no output operand.",
-                state_.GetOpInfo(consumer).c_str());
+                              state_.GetOpInfo(consumer).c_str());
             return FAILED;
         }
         dtypeGroups[oOperand->Datatype()].push_back(consumer);
@@ -1093,20 +1098,20 @@ Status SpillEngine::SpillL0CBuffer(int spillMemId, Operation* spillOp, LogicalTe
 
     auto emitGroup = [&](DataType dtype, const std::vector<Operation*>& groupConsumers) -> Status {
         LogicalTensorPtr gmTensor = CreateGMTensor(spillTensor, spillTensor, spillMemId, dtype);
-        Operation* copyoutOp =
-            CreateCopyoutOp(spillOp, spillTensor, gmTensor, OpImmediate::Specified(gmTensor->GetOffset()));
+        Operation* copyoutOp = CreateCopyoutOp(spillOp, spillTensor, gmTensor,
+                                               OpImmediate::Specified(gmTensor->GetOffset()));
         if (UpdateCopyoutScheduleInfo(copyoutOp, spillTensor, spillMemId, spillOp) != SUCCESS) {
             APASS_LOG_ERROR_F(Elements::Operation, "UpdateCopyoutScheduleInfo failed for dtype group.");
             return FAILED;
         }
         for (auto* consumer : groupConsumers) {
             auto oOperand = consumer->GetOutputOperand(0);
-            Operation* copyinOp =
-                CreateCopyinOp(gmTensor, oOperand, OpImmediate::Specified(gmTensor->GetOffset()), true);
+            Operation* copyinOp = CreateCopyinOp(gmTensor, oOperand, OpImmediate::Specified(gmTensor->GetOffset()),
+                                                 true);
             UpdateOpScheduleInfo(copyinOp, {oOperand->memoryrange.memId}, spillAllocOp);
             std::replace(state_.orderedOps.begin(), state_.orderedOps.end(), consumer, copyinOp);
-            APASS_LOG_DEBUG_F(Elements::Operation, "L0C spill: replace %s with %s.",
-                state_.GetOpInfo(consumer).c_str(), state_.GetOpInfo(copyinOp).c_str());
+            APASS_LOG_DEBUG_F(Elements::Operation, "L0C spill: replace %s with %s.", state_.GetOpInfo(consumer).c_str(),
+                              state_.GetOpInfo(copyinOp).c_str());
             consumer->SetAsDeleted();
             EraseSchedulerSideMaps(consumer);
         }
@@ -1129,26 +1134,28 @@ Status SpillEngine::SpillL0CBuffer(int spillMemId, Operation* spillOp, LogicalTe
 }
 
 Status SpillEngine::SpillMultiProducerBuffer(int spillMemid, Operation* spillOp, LogicalTensorPtr spillTensor,
-    Operation* spillAllocOp, SpillContext &ctx, SingleSpillCreatedOps& created)
+                                             Operation* spillAllocOp, SpillContext& ctx, SingleSpillCreatedOps& created)
 {
     APASS_LOG_DEBUG_F(Elements::Operation, "---- SpillMultiProducerBuffer begin.");
     LogicalTensorPtr gmTensor = CreateGMTensor(spillTensor, spillTensor, spillMemid);
     LogicalTensorPtr assembleTensor = CreateLocalTensor(spillTensor);
 
-    Operation *copyoutOp = CreateCopyoutOp(spillOp, spillTensor, gmTensor, OpImmediate::Specified(gmTensor->GetOffset()));
+    Operation* copyoutOp = CreateCopyoutOp(spillOp, spillTensor, gmTensor,
+                                           OpImmediate::Specified(gmTensor->GetOffset()));
 
-    if (UpdateCopyoutScheduleInfo(
-            copyoutOp, spillTensor, spillMemid, spillOp) != SUCCESS) {
+    if (UpdateCopyoutScheduleInfo(copyoutOp, spillTensor, spillMemid, spillOp) != SUCCESS) {
         return FAILED;
     }
     if (UpdateSpillOpDepend(spillOp, assembleTensor, spillMemid) != SUCCESS) {
         return FAILED;
     }
 
-    for (auto &op : spillTensor->GetProducers()) {
-        if (op->GetOpcode() != Opcode::OP_ASSEMBLE) continue;
-        for (auto &producer : op->ProducerOps()) {
-            if (state_.schedInfoMap[producer].isAlloc) producer->UpdateOutputOperand(0, spillTensor);
+    for (auto& op : spillTensor->GetProducers()) {
+        if (op->GetOpcode() != Opcode::OP_ASSEMBLE)
+            continue;
+        for (auto& producer : op->ProducerOps()) {
+            if (state_.schedInfoMap[producer].isAlloc)
+                producer->UpdateOutputOperand(0, spillTensor);
         }
     }
     Operation* allocOp = CreateAllocOp(assembleTensor);
@@ -1158,7 +1165,7 @@ Status SpillEngine::SpillMultiProducerBuffer(int spillMemid, Operation* spillOp,
     }
     Operation* wholeCopyinOp = nullptr;
     if (FillSpillAssembleBuffer(spillMemid, spillTensor, assembleTensor, copyoutOp, gmTensor, spillAllocOp,
-            wholeCopyinOp) != SUCCESS) {
+                                wholeCopyinOp) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "FillSpillAssembleBuffer failed.");
         return FAILED;
     }
@@ -1175,12 +1182,13 @@ Status SpillEngine::SpillMultiProducerBuffer(int spillMemid, Operation* spillOp,
 }
 
 Status SpillEngine::FillSpillAssembleBuffer(int spillMemid, LogicalTensorPtr spillTensor,
-    LogicalTensorPtr assembleTensor, Operation* copyoutOp, LogicalTensorPtr gmTensor, Operation* spillAllocOp,
-    Operation*& wholeCopyinOut)
+                                            LogicalTensorPtr assembleTensor, Operation* copyoutOp,
+                                            LogicalTensorPtr gmTensor, Operation* spillAllocOp,
+                                            Operation*& wholeCopyinOut)
 {
     wholeCopyinOut = nullptr;
     bool allRetired = true;
-    for (auto &op : spillTensor->GetProducers()) {
+    for (auto& op : spillTensor->GetProducers()) {
         if (state_.schedInfoMap[op].isAlloc) {
             continue;
         }
@@ -1195,7 +1203,7 @@ Status SpillEngine::FillSpillAssembleBuffer(int spillMemid, LogicalTensorPtr spi
         return InsertOps({{wholeCopyinOut, {assembleTensor->memoryrange.memId}}}, spillAllocOp, spillMemid);
     }
     std::vector<Operation*> replaceOps;
-    for (auto &op : spillTensor->GetProducers()) {
+    for (auto& op : spillTensor->GetProducers()) {
         if (state_.schedInfoMap[op].isAlloc) {
             continue;
         }
@@ -1205,15 +1213,15 @@ Status SpillEngine::FillSpillAssembleBuffer(int spillMemid, LogicalTensorPtr spi
             replaceOps.push_back(op);
         }
     }
-    for (auto &op : replaceOps) {
+    for (auto& op : replaceOps) {
         op->ReplaceOutput(assembleTensor, spillTensor);
     }
     return SUCCESS;
 }
 
-Status SpillEngine::CopyoutParticalBuffer(LogicalTensorPtr spillTensor, LogicalTensorPtr gmTensor, SpillContext &ctx)
+Status SpillEngine::CopyoutParticalBuffer(LogicalTensorPtr spillTensor, LogicalTensorPtr gmTensor, SpillContext& ctx)
 {
-    for (auto &op : spillTensor->GetProducers()) {
+    for (auto& op : spillTensor->GetProducers()) {
         if (state_.schedInfoMap[op].isAlloc) {
             continue;
         }
@@ -1228,9 +1236,9 @@ Status SpillEngine::CopyoutParticalBuffer(LogicalTensorPtr spillTensor, LogicalT
             APASS_LOG_ERROR_F(Elements::Tensor, "Op %s attribute is nullptr", state_.GetOpInfo(op).c_str());
             return FAILED;
         }
-        Operation *copyoutOp = CreateCopyoutOp(op, actualTensor, gmTensor, attr->GetToOffset());
-        if (UpdateCopyoutScheduleInfo(
-                copyoutOp, actualTensor, actualTensor->memoryrange.memId, actualOp, state_.schedInfoMap[op].isRetired) != SUCCESS) {
+        Operation* copyoutOp = CreateCopyoutOp(op, actualTensor, gmTensor, attr->GetToOffset());
+        if (UpdateCopyoutScheduleInfo(copyoutOp, actualTensor, actualTensor->memoryrange.memId, actualOp,
+                                      state_.schedInfoMap[op].isRetired) != SUCCESS) {
             APASS_LOG_ERROR_F(Elements::Operation, "UpdateCopyoutScheduleInfo failed.");
             return FAILED;
         }
@@ -1245,7 +1253,7 @@ Status SpillEngine::CopyoutParticalBuffer(LogicalTensorPtr spillTensor, LogicalT
 }
 
 Status SpillEngine::CreateParticalBuffer(int spillMemid, Operation* producerOp, LogicalTensorPtr assembleTensor,
-    Operation* copyoutOp, Operation* spillAllocOp)
+                                         Operation* copyoutOp, Operation* spillAllocOp)
 {
     LogicalTensorPtr gmTensor = copyoutOp->GetOutputOperand(0);
     LogicalTensorPtr spillTensor = copyoutOp->GetInputOperand(0);
@@ -1257,7 +1265,8 @@ Status SpillEngine::CreateParticalBuffer(int spillMemid, Operation* producerOp, 
         return FAILED;
     }
 
-    LogicalTensorPtr copyinTensor = CreateParticalTensor(producerOp->GetInputOperand(0), assembleTensor, producerOp->GetInputOperand(0), toOffset);
+    LogicalTensorPtr copyinTensor = CreateParticalTensor(producerOp->GetInputOperand(0), assembleTensor,
+                                                         producerOp->GetInputOperand(0), toOffset);
     Operation* copyinOp = CreateCopyinOp(gmTensor, copyinTensor, OpImmediate::Specified(toOffset));
     Operation* assembleOp = CreateAssembleOp(copyinTensor, assembleTensor, toOffset, toDynOffset, fromDynValidShape);
 
@@ -1266,10 +1275,11 @@ Status SpillEngine::CreateParticalBuffer(int spillMemid, Operation* producerOp, 
     copyinOp->SetAttr(OpAttributeKey::copyIsNZ, isNZ);
     assembleOp->SetAttr(OpAttributeKey::copyIsNZ, isNZ);
     UpdateOpScheduleInfo(copyinOp, {assembleTensor->memoryrange.memId}, spillAllocOp);
-    UpdateOpScheduleInfo(assembleOp, {assembleTensor->memoryrange.memId, assembleTensor->memoryrange.memId}, spillAllocOp);
+    UpdateOpScheduleInfo(assembleOp, {assembleTensor->memoryrange.memId, assembleTensor->memoryrange.memId},
+                         spillAllocOp);
     if (InsertOps({{copyinOp, {assembleTensor->memoryrange.memId}},
-        {assembleOp, {assembleTensor->memoryrange.memId, assembleTensor->memoryrange.memId}}},
-        spillAllocOp, spillMemid) != SUCCESS) {
+                   {assembleOp, {assembleTensor->memoryrange.memId, assembleTensor->memoryrange.memId}}},
+                  spillAllocOp, spillMemid) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "InsertOps failed.");
         return FAILED;
     }
@@ -1292,19 +1302,23 @@ void SpillEngine::EraseSchedulerSideMaps(Operation* op)
 int SpillEngine::GetBufNextUseTime(int curMemId)
 {
     for (size_t i = 0; i < state_.orderedOps.size(); i++) {
-        auto &op = state_.orderedOps[i];
-        if (state_.schedInfoMap[op].isRetired) continue;
-        auto &reqMemids = state_.GetOpMemIds(op);
-        if (std::find(reqMemids.begin(), reqMemids.end(), curMemId) == reqMemids.end()) continue;
+        auto& op = state_.orderedOps[i];
+        if (state_.schedInfoMap[op].isRetired)
+            continue;
+        auto& reqMemids = state_.GetOpMemIds(op);
+        if (std::find(reqMemids.begin(), reqMemids.end(), curMemId) == reqMemids.end())
+            continue;
 
         int opExecOrder = state_.schedInfoMap[op].execOrder;
         int minAlloc = INT_MAX;
         int allocCnt = 0;
         for (auto pre : state_.depManager.GetPredecessors(op)) {
-            if (state_.schedInfoMap[pre].isRetired) continue;
+            if (state_.schedInfoMap[pre].isRetired)
+                continue;
             if (state_.schedInfoMap[pre].isAlloc) {
                 int preOrder = state_.schedInfoMap[pre].execOrder;
-                if (preOrder < minAlloc) minAlloc = preOrder;
+                if (preOrder < minAlloc)
+                    minAlloc = preOrder;
                 allocCnt++;
             }
         }
@@ -1317,7 +1331,7 @@ int SpillEngine::GetBufNextUseTime(int curMemId)
 }
 
 Status SpillEngine::UpdateCopyoutScheduleInfo(Operation* op, LogicalTensorPtr spillTensor, int spillMemId,
-    Operation* spillOp, bool isRetired)
+                                              Operation* spillOp, bool isRetired)
 {
     state_.opReqMemIdsMap[op] = {spillMemId};
     state_.schedInfoMap[op].isRetired = isRetired;
@@ -1329,8 +1343,10 @@ Status SpillEngine::UpdateCopyoutScheduleInfo(Operation* op, LogicalTensorPtr sp
     UpdateOpInternalSubgraphID(*op, allocOp);
     int bufNextUseTime = state_.schedInfoMap[spillOp].execOrder;
     for (auto succOp : state_.depManager.GetSuccessors(spillOp)) {
-        if (!state_.schedInfoMap[succOp].isRetired) continue;
-        if (succOp == op) continue;
+        if (!state_.schedInfoMap[succOp].isRetired)
+            continue;
+        if (succOp == op)
+            continue;
         if (succOp->GetOpcodeStr().find("COPY_OUT") != std::string::npos) {
             bufNextUseTime = std::max(bufNextUseTime, state_.schedInfoMap[succOp].execOrder);
         }
@@ -1340,7 +1356,8 @@ Status SpillEngine::UpdateCopyoutScheduleInfo(Operation* op, LogicalTensorPtr sp
     return SUCCESS;
 }
 
-void SpillEngine::UpdateOpScheduleInfo(Operation* op, std::vector<int> memIds, Operation* AllocOp) {
+void SpillEngine::UpdateOpScheduleInfo(Operation* op, std::vector<int> memIds, Operation* AllocOp)
+{
     state_.schedInfoMap[op].pipeType = RescheduleUtils::GetOpPipeType(op);
     state_.schedInfoMap[op].isAlloc = op->GetOpcodeStr().find("ALLOC") != std::string::npos;
     state_.schedInfoMap[op].isRetired = false;
@@ -1351,8 +1368,8 @@ void SpillEngine::UpdateOpScheduleInfo(Operation* op, std::vector<int> memIds, O
     state_.numTotalIssues++;
 }
 
-Status SpillEngine::InsertOps(std::vector<std::pair<Operation*, std::vector<int>>> opMemidMap,
-    Operation* spillAllocOp, int memId)
+Status SpillEngine::InsertOps(std::vector<std::pair<Operation*, std::vector<int>>> opMemidMap, Operation* spillAllocOp,
+                              int memId)
 {
     if (memId == -1) {
         APASS_LOG_ERROR_F(Elements::Tensor, "MemId: %d illegal.", memId);
@@ -1363,9 +1380,10 @@ Status SpillEngine::InsertOps(std::vector<std::pair<Operation*, std::vector<int>
         APASS_LOG_ERROR_F(Elements::Tensor, "Get Tensor[%d] next use time failed.", memId);
         return FAILED;
     }
-    bufNextUseTime =
-        bufNextUseTime <= state_.schedInfoMap[spillAllocOp].execOrder ? state_.schedInfoMap[spillAllocOp].execOrder + 1 : bufNextUseTime;
-    for (auto &op : opMemidMap) {
+    bufNextUseTime = bufNextUseTime <= state_.schedInfoMap[spillAllocOp].execOrder ?
+                         state_.schedInfoMap[spillAllocOp].execOrder + 1 :
+                         bufNextUseTime;
+    for (auto& op : opMemidMap) {
         state_.schedInfoMap[op.first].execOrder = bufNextUseTime++;
         state_.InsertOrdered(op.first);
     }
@@ -1373,8 +1391,9 @@ Status SpillEngine::InsertOps(std::vector<std::pair<Operation*, std::vector<int>
 }
 
 Status SpillEngine::UpdateScheduleStatus(std::vector<std::pair<Operation*, std::vector<int>>> opMemidMap, int memId,
-    Operation* spillAllocOp, LogicalTensorPtr localTensor, Operation* spillOp) {
-    for (auto &[op, memid] : opMemidMap) {
+                                         Operation* spillAllocOp, LogicalTensorPtr localTensor, Operation* spillOp)
+{
+    for (auto& [op, memid] : opMemidMap) {
         UpdateOpScheduleInfo(op, memid, spillAllocOp);
     }
 
@@ -1394,9 +1413,11 @@ Status SpillEngine::UpdateScheduleStatus(std::vector<std::pair<Operation*, std::
     return SUCCESS;
 }
 
-Status SpillEngine::UpdateNeedDeleteScheduleStatus(std::vector<std::pair<Operation*, std::vector<int>>> opMemidMap, int memId,
-    Operation* spillAllocOp, LogicalTensorPtr spillTensor, Operation* spillOp, SpillContext &ctx) {
-    for (auto &[op, memid] : opMemidMap) {
+Status SpillEngine::UpdateNeedDeleteScheduleStatus(std::vector<std::pair<Operation*, std::vector<int>>> opMemidMap,
+                                                   int memId, Operation* spillAllocOp, LogicalTensorPtr spillTensor,
+                                                   Operation* spillOp, SpillContext& ctx)
+{
+    for (auto& [op, memid] : opMemidMap) {
         UpdateOpScheduleInfo(op, memid, spillAllocOp);
     }
 
@@ -1410,7 +1431,7 @@ Status SpillEngine::UpdateNeedDeleteScheduleStatus(std::vector<std::pair<Operati
     }
 
     int newMemid = -1;
-    for (auto &op : opMemidMap) {
+    for (auto& op : opMemidMap) {
         if (state_.schedInfoMap[op.first].isAlloc) {
             newMemid = op.first->GetOutputOperand(0)->memoryrange.memId;
         }
@@ -1423,7 +1444,8 @@ Status SpillEngine::UpdateNeedDeleteScheduleStatus(std::vector<std::pair<Operati
     return SUCCESS;
 }
 
-Status SpillEngine::UpdateRemainMemid(int oldMemId, int newMemId) {
+Status SpillEngine::UpdateRemainMemid(int oldMemId, int newMemId)
+{
     if (state_.bufRefCount.find(oldMemId) == state_.bufRefCount.end()) {
         APASS_LOG_ERROR_F(Elements::Tensor, "bufRefCount cannot find Tensor[%d]. ", oldMemId);
         return FAILED;
@@ -1439,8 +1461,8 @@ Status SpillEngine::UpdateRemainMemid(int oldMemId, int newMemId) {
     return SUCCESS;
 }
 
-size_t SpillEngine::CleanupCollectedOperations(
-    const std::vector<Operation*>& opsToDelete, const std::vector<LogicalTensorPtr>& tensorsToDelete)
+size_t SpillEngine::CleanupCollectedOperations(const std::vector<Operation*>& opsToDelete,
+                                               const std::vector<LogicalTensorPtr>& tensorsToDelete)
 {
     size_t deleteNum = 0;
     for (auto* op : opsToDelete) {
@@ -1458,14 +1480,14 @@ size_t SpillEngine::CleanupCollectedOperations(
             auto nextIt = state_.orderedOps.erase(it);
 
             for (auto adjustIt = nextIt; adjustIt != state_.orderedOps.end(); adjustIt++) {
-                if (state_.schedInfoMap.count(*adjustIt) > 0 && state_.schedInfoMap[*adjustIt].execOrder > deletedOrder) {
+                if (state_.schedInfoMap.count(*adjustIt) > 0 &&
+                    state_.schedInfoMap[*adjustIt].execOrder > deletedOrder) {
                     state_.schedInfoMap[*adjustIt].execOrder--;
                 }
             }
 
-            APASS_LOG_DEBUG_F(
-                Elements::Operation, "Deleted op %s at index %zu (order %d).", state_.GetOpInfo(op).c_str(), opIndex,
-                deletedOrder);
+            APASS_LOG_DEBUG_F(Elements::Operation, "Deleted op %s at index %zu (order %d).",
+                              state_.GetOpInfo(op).c_str(), opIndex, deletedOrder);
         }
         ReleaseDeletedOpBufRefs(op, tensorsToDelete);
         EraseSchedulerSideMaps(op);
@@ -1490,7 +1512,7 @@ size_t SpillEngine::CleanupCollectedOperations(
     return deleteNum;
 }
 
-Status SpillEngine::RemoveSmallShapeSpillResources(int spillMemId, LogicalTensorPtr spillTensor, SpillContext &ctx)
+Status SpillEngine::RemoveSmallShapeSpillResources(int spillMemId, LogicalTensorPtr spillTensor, SpillContext& ctx)
 {
     if (spillTensor == nullptr) {
         APASS_LOG_ERROR_F(Elements::Tensor, "spillTensor is null.");
@@ -1500,12 +1522,12 @@ Status SpillEngine::RemoveSmallShapeSpillResources(int spillMemId, LogicalTensor
     std::vector<Operation*> opsToDelete;
     std::vector<LogicalTensorPtr> tensorsToDelete;
     CollectProducerChainForDeletion(spillTensor, opsToDelete, tensorsToDelete);
-    APASS_LOG_DEBUG_F(
-        Elements::Operation, "Collected %zu ops and %zu tensors.", opsToDelete.size(), tensorsToDelete.size());
+    APASS_LOG_DEBUG_F(Elements::Operation, "Collected %zu ops and %zu tensors.", opsToDelete.size(),
+                      tensorsToDelete.size());
     for (auto deleteOp : opsToDelete) {
         if (state_.schedInfoMap[deleteOp].isAlloc) {
-            ctx.deleteAllocOps.push_back({deleteOp,
-                deleteOp->GetOutputOperand(0)->GetMemoryTypeOriginal(), state_.schedInfoMap[deleteOp].coreLocation});
+            ctx.deleteAllocOps.push_back({deleteOp, deleteOp->GetOutputOperand(0)->GetMemoryTypeOriginal(),
+                                          state_.schedInfoMap[deleteOp].coreLocation});
         }
     }
     auto deleteNum = CleanupCollectedOperations(opsToDelete, tensorsToDelete);
@@ -1521,9 +1543,8 @@ Status SpillEngine::RemoveSmallShapeSpillResources(int spillMemId, LogicalTensor
 
     ctx.deleteRetiredOpSize += deleteNum;
     ctx.deleteNotRetiredOpSize = static_cast<int>(opsToDelete.size() - deleteNum);
-    APASS_LOG_DEBUG_F(
-        Elements::Operation, "Deleted spill tensor[%d] and %zu ops (%zu tensors).", spillMemId, opsToDelete.size(),
-        tensorsToDelete.size());
+    APASS_LOG_DEBUG_F(Elements::Operation, "Deleted spill tensor[%d] and %zu ops (%zu tensors).", spillMemId,
+                      opsToDelete.size(), tensorsToDelete.size());
 
     return SUCCESS;
 }

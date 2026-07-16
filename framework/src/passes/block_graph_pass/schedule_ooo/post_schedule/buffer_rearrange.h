@@ -48,14 +48,13 @@ struct RearrangeScheme {
         APASS_LOG_DEBUG_F(Elements::Tensor, "Memory Rearange Scheme,  Span : [%lu, %lu], Cost : %lu", start, end, cost);
         for (auto memId : memIds) {
             if (moveFrom[memId] != moveTo[memId]) {
-                APASS_LOG_DEBUG_F(
-                    Elements::Tensor, "    |--- MemId : %d, Ori Span : [%lu, %lu], Size : %lu, Move From %lu to %lu",
-                    memId, moveFrom[memId], moveFrom[memId] + memSizeMap[memId], memSizeMap[memId], moveFrom[memId],
-                    moveTo[memId]);
+                APASS_LOG_DEBUG_F(Elements::Tensor,
+                                  "    |--- MemId : %d, Ori Span : [%lu, %lu], Size : %lu, Move From %lu to %lu", memId,
+                                  moveFrom[memId], moveFrom[memId] + memSizeMap[memId], memSizeMap[memId],
+                                  moveFrom[memId], moveTo[memId]);
             } else {
-                APASS_LOG_DEBUG_F(
-                    Elements::Tensor, "    |--- MemId : %d, Ori Span : [%lu, %lu], Size : %lu", memId, moveFrom[memId],
-                    moveFrom[memId] + memSizeMap[memId], memSizeMap[memId]);
+                APASS_LOG_DEBUG_F(Elements::Tensor, "    |--- MemId : %d, Ori Span : [%lu, %lu], Size : %lu", memId,
+                                  moveFrom[memId], moveFrom[memId] + memSizeMap[memId], memSizeMap[memId]);
             }
         }
     }

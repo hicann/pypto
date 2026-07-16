@@ -925,10 +925,9 @@ void RunMultiOutputAlignAxisReorderStatusTest(const std::vector<int64_t>& gmOutS
     EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {10, 1}, MemoryType::MEM_UB, "argmax_val"), true);
     EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {10, 1}, MemoryType::MEM_UB, "argmax_idx"), true);
     EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {10, 896}, MemoryType::MEM_UB, "argmax_tmp"), true);
-    EXPECT_EQ(
-        graph.AddOp(Opcode::OP_ROWARGMAXWITHVALUE_SINGLE, {"ub_in"},
-            {"argmax_val", "argmax_idx", "argmax_tmp"}, "argmax", true),
-        true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_ROWARGMAXWITHVALUE_SINGLE, {"ub_in"}, {"argmax_val", "argmax_idx", "argmax_tmp"},
+                          "argmax", true),
+              true);
     graph.GetOp("argmax")->SetAttribute(OP_ATTR_PREFIX + "AXIS", 1);
 
     EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {10, 1}, MemoryType::MEM_UB, "adds_out"), true);
@@ -984,8 +983,8 @@ TEST_F(TestAxisCombineMarker, multi_output_align_status3)
     EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 1}, MemoryType::MEM_UB, "val"), true);
     EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 1}, MemoryType::MEM_UB, "idx"), true);
     EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 896}, MemoryType::MEM_UB, "tmp"), true);
-    EXPECT_EQ(
-        graph.AddOp(Opcode::OP_ROWARGMAXWITHVALUE_SINGLE, {"sub_in"}, {"val", "idx", "tmp"}, "argmax", true), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_ROWARGMAXWITHVALUE_SINGLE, {"sub_in"}, {"val", "idx", "tmp"}, "argmax", true),
+              true);
     graph.GetOp("argmax")->SetAttribute(OP_ATTR_PREFIX + "AXIS", 1);
 
     EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 1}, MemoryType::MEM_UB, "adds_val"), true);

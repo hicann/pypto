@@ -45,8 +45,8 @@ protected:
     FunctionPtr MakeFunc(const std::string& name, const StmtPtr& body)
     {
         auto x = std::make_shared<Var>("x", Scalar(DataType::INT32), Sp());
-        return std::make_shared<Function>(
-            name, std::vector<VarPtr>{x}, std::vector<TypePtr>{Scalar(DataType::INT32)}, body, Sp());
+        return std::make_shared<Function>(name, std::vector<VarPtr>{x}, std::vector<TypePtr>{Scalar(DataType::INT32)},
+                                          body, Sp());
     }
 
     ProgramPtr MakeProg(const FunctionPtr& func)
@@ -169,8 +169,8 @@ TEST_F(ConstFoldSimplifyPassTest, TestSimplifyIfTrue)
     auto val2 = std::make_shared<ConstInt>(2, DataType::INT32, Sp());
     auto then_body = std::make_shared<AssignStmt>(x, val1, Sp());
     auto else_body = std::make_shared<AssignStmt>(x, val2, Sp());
-    auto ifStmt =
-        std::make_shared<IfStmt>(cond, then_body, std::optional<StmtPtr>(else_body), std::vector<VarPtr>{}, Sp());
+    auto ifStmt = std::make_shared<IfStmt>(cond, then_body, std::optional<StmtPtr>(else_body), std::vector<VarPtr>{},
+                                           Sp());
     auto func = MakeFunc("f", ifStmt);
     auto result = RunPass(MakeProg(func));
     auto result_func = result->GetFunction("f");
@@ -183,14 +183,13 @@ TEST_F(ConstFoldSimplifyPassTest, TestSimplifyIfTrue)
 
 TEST_F(ConstFoldSimplifyPassTest, TestSimplifyIfFalseWithElse)
 {
-    auto cond = std::make_shared<Eq>(
-        std::make_shared<ConstInt>(3, DataType::INT32, Sp()), std::make_shared<ConstInt>(4, DataType::INT32, Sp()),
-        DataType::BOOL, Sp());
+    auto cond = std::make_shared<Eq>(std::make_shared<ConstInt>(3, DataType::INT32, Sp()),
+                                     std::make_shared<ConstInt>(4, DataType::INT32, Sp()), DataType::BOOL, Sp());
     auto dst = std::make_shared<Var>("selected", Scalar(DataType::INT32), Sp());
     auto then_body = std::make_shared<AssignStmt>(dst, std::make_shared<ConstInt>(9, DataType::INT32, Sp()), Sp());
     auto else_body = std::make_shared<AssignStmt>(dst, std::make_shared<ConstInt>(4, DataType::INT32, Sp()), Sp());
-    auto ifStmt =
-        std::make_shared<IfStmt>(cond, then_body, std::optional<StmtPtr>(else_body), std::vector<VarPtr>{}, Sp());
+    auto ifStmt = std::make_shared<IfStmt>(cond, then_body, std::optional<StmtPtr>(else_body), std::vector<VarPtr>{},
+                                           Sp());
     auto result = RunPass(MakeProg(MakeFunc("f", ifStmt)));
     auto result_func = result->GetFunction("f");
     ASSERT_NE(result_func, nullptr);
@@ -228,8 +227,8 @@ TEST_F(ConstFoldSimplifyPassTest, TestFoldSameYieldBranches)
     auto ret = std::make_shared<Var>("ret", Scalar(DataType::INT32), Sp());
     auto then_yield = std::make_shared<YieldStmt>(std::vector<ExprPtr>{val}, Sp());
     auto else_yield = std::make_shared<YieldStmt>(std::vector<ExprPtr>{val}, Sp());
-    auto ifStmt =
-        std::make_shared<IfStmt>(cond, then_yield, std::optional<StmtPtr>(else_yield), std::vector<VarPtr>{ret}, Sp());
+    auto ifStmt = std::make_shared<IfStmt>(cond, then_yield, std::optional<StmtPtr>(else_yield),
+                                           std::vector<VarPtr>{ret}, Sp());
     auto func = MakeFunc("f", ifStmt);
     auto result = RunPass(MakeProg(func));
     auto result_func = result->GetFunction("f");
@@ -262,11 +261,11 @@ TEST_F(ConstFoldSimplifyPassTest, TestFoldSameYieldBranchesFromSeqBodiesAndVarCo
     auto thenYield = std::make_shared<YieldStmt>(std::vector<ExprPtr>{alias}, Sp());
     auto thenBody = std::make_shared<SeqStmts>(std::vector<StmtPtr>{thenYield}, Sp());
     auto elseAssign = std::make_shared<AssignStmt>(tmp, std::make_shared<ConstInt>(9, DataType::INT32, Sp()), Sp());
-    auto elseYield =
-        std::make_shared<YieldStmt>(std::vector<ExprPtr>{std::make_shared<ConstInt>(7, DataType::INT32, Sp())}, Sp());
+    auto elseYield = std::make_shared<YieldStmt>(
+        std::vector<ExprPtr>{std::make_shared<ConstInt>(7, DataType::INT32, Sp())}, Sp());
     auto elseBody = std::make_shared<SeqStmts>(std::vector<StmtPtr>{elseAssign, elseYield}, Sp());
-    auto ifStmt =
-        std::make_shared<IfStmt>(cond, thenBody, std::optional<StmtPtr>(elseBody), std::vector<VarPtr>{ret}, Sp());
+    auto ifStmt = std::make_shared<IfStmt>(cond, thenBody, std::optional<StmtPtr>(elseBody), std::vector<VarPtr>{ret},
+                                           Sp());
     auto body = std::make_shared<SeqStmts>(std::vector<StmtPtr>{aliasAssign, ifStmt}, Sp());
 
     auto result = RunPass(MakeProg(MakeFunc("f", body)));
@@ -284,22 +283,21 @@ TEST_F(ConstFoldSimplifyPassTest, TestFoldSameYieldBranchesFromSeqBodiesAndVarCo
 TEST_F(ConstFoldSimplifyPassTest, TestFoldSameYieldBranchesFromTupleGetItem)
 {
     auto cond = std::make_shared<Var>("c", Scalar(DataType::BOOL), Sp());
-    auto tupleType =
-        std::make_shared<TupleType>(std::vector<TypePtr>{Scalar(DataType::INT32), Scalar(DataType::INT32)});
+    auto tupleType = std::make_shared<TupleType>(
+        std::vector<TypePtr>{Scalar(DataType::INT32), Scalar(DataType::INT32)});
     auto tupleVar = std::make_shared<Var>("tuple_value", tupleType, Sp());
     auto ret = std::make_shared<Var>("ret", Scalar(DataType::INT32), Sp());
     auto tuple = std::make_shared<MakeTuple>(
-        std::vector<ExprPtr>{
-            std::make_shared<ConstInt>(3, DataType::INT32, Sp()),
-            std::make_shared<ConstInt>(11, DataType::INT32, Sp())},
+        std::vector<ExprPtr>{std::make_shared<ConstInt>(3, DataType::INT32, Sp()),
+                             std::make_shared<ConstInt>(11, DataType::INT32, Sp())},
         Sp());
     auto tupleAssign = std::make_shared<AssignStmt>(tupleVar, tuple, Sp());
     auto item = std::make_shared<GetItemExpr>(tupleVar, std::make_shared<ConstInt>(1, DataType::INDEX, Sp()), Sp());
     auto thenYield = std::make_shared<YieldStmt>(std::vector<ExprPtr>{item}, Sp());
-    auto elseYield =
-        std::make_shared<YieldStmt>(std::vector<ExprPtr>{std::make_shared<ConstInt>(11, DataType::INT32, Sp())}, Sp());
-    auto ifStmt =
-        std::make_shared<IfStmt>(cond, thenYield, std::optional<StmtPtr>(elseYield), std::vector<VarPtr>{ret}, Sp());
+    auto elseYield = std::make_shared<YieldStmt>(
+        std::vector<ExprPtr>{std::make_shared<ConstInt>(11, DataType::INT32, Sp())}, Sp());
+    auto ifStmt = std::make_shared<IfStmt>(cond, thenYield, std::optional<StmtPtr>(elseYield), std::vector<VarPtr>{ret},
+                                           Sp());
     auto body = std::make_shared<SeqStmts>(std::vector<StmtPtr>{tupleAssign, ifStmt}, Sp());
 
     auto result = RunPass(MakeProg(MakeFunc("f", body)));
@@ -316,12 +314,12 @@ TEST_F(ConstFoldSimplifyPassTest, TestDifferentYieldBranchesKeepIf)
 {
     auto cond = std::make_shared<Var>("c", Scalar(DataType::BOOL), Sp());
     auto ret = std::make_shared<Var>("ret", Scalar(DataType::INT32), Sp());
-    auto thenYield =
-        std::make_shared<YieldStmt>(std::vector<ExprPtr>{std::make_shared<ConstInt>(1, DataType::INT32, Sp())}, Sp());
-    auto elseYield =
-        std::make_shared<YieldStmt>(std::vector<ExprPtr>{std::make_shared<ConstInt>(2, DataType::INT32, Sp())}, Sp());
-    auto ifStmt =
-        std::make_shared<IfStmt>(cond, thenYield, std::optional<StmtPtr>(elseYield), std::vector<VarPtr>{ret}, Sp());
+    auto thenYield = std::make_shared<YieldStmt>(
+        std::vector<ExprPtr>{std::make_shared<ConstInt>(1, DataType::INT32, Sp())}, Sp());
+    auto elseYield = std::make_shared<YieldStmt>(
+        std::vector<ExprPtr>{std::make_shared<ConstInt>(2, DataType::INT32, Sp())}, Sp());
+    auto ifStmt = std::make_shared<IfStmt>(cond, thenYield, std::optional<StmtPtr>(elseYield), std::vector<VarPtr>{ret},
+                                           Sp());
 
     auto result = RunPass(MakeProg(MakeFunc("f", ifStmt)));
     auto result_func = result->GetFunction("f");
@@ -335,16 +333,14 @@ TEST_F(ConstFoldSimplifyPassTest, TestIfStmtRebuiltWhenBranchesFold)
 {
     auto cond = std::make_shared<Var>("c", Scalar(DataType::BOOL), Sp());
     auto x = std::make_shared<Var>("x", Scalar(DataType::INT32), Sp());
-    auto thenAdd = std::make_shared<Add>(
-        std::make_shared<ConstInt>(1, DataType::INT32, Sp()), std::make_shared<ConstInt>(2, DataType::INT32, Sp()),
-        DataType::INT32, Sp());
-    auto elseAdd = std::make_shared<Add>(
-        std::make_shared<ConstInt>(3, DataType::INT32, Sp()), std::make_shared<ConstInt>(4, DataType::INT32, Sp()),
-        DataType::INT32, Sp());
+    auto thenAdd = std::make_shared<Add>(std::make_shared<ConstInt>(1, DataType::INT32, Sp()),
+                                         std::make_shared<ConstInt>(2, DataType::INT32, Sp()), DataType::INT32, Sp());
+    auto elseAdd = std::make_shared<Add>(std::make_shared<ConstInt>(3, DataType::INT32, Sp()),
+                                         std::make_shared<ConstInt>(4, DataType::INT32, Sp()), DataType::INT32, Sp());
     auto thenBody = std::make_shared<AssignStmt>(x, thenAdd, Sp());
     auto elseBody = std::make_shared<AssignStmt>(x, elseAdd, Sp());
-    auto ifStmt =
-        std::make_shared<IfStmt>(cond, thenBody, std::optional<StmtPtr>(elseBody), std::vector<VarPtr>{}, Sp());
+    auto ifStmt = std::make_shared<IfStmt>(cond, thenBody, std::optional<StmtPtr>(elseBody), std::vector<VarPtr>{},
+                                           Sp());
 
     auto result = RunPass(MakeProg(MakeFunc("f", ifStmt)));
     auto result_func = result->GetFunction("f");
@@ -368,14 +364,13 @@ TEST_F(ConstFoldSimplifyPassTest, TestFoldSameYieldBranchesWithRebuiltYield)
 {
     auto cond = std::make_shared<Var>("c", Scalar(DataType::BOOL), Sp());
     auto ret = std::make_shared<Var>("ret", Scalar(DataType::INT32), Sp());
-    auto add = std::make_shared<Add>(
-        std::make_shared<ConstInt>(2, DataType::INT32, Sp()), std::make_shared<ConstInt>(5, DataType::INT32, Sp()),
-        DataType::INT32, Sp());
+    auto add = std::make_shared<Add>(std::make_shared<ConstInt>(2, DataType::INT32, Sp()),
+                                     std::make_shared<ConstInt>(5, DataType::INT32, Sp()), DataType::INT32, Sp());
     auto thenYield = std::make_shared<YieldStmt>(std::vector<ExprPtr>{add}, Sp());
-    auto elseYield =
-        std::make_shared<YieldStmt>(std::vector<ExprPtr>{std::make_shared<ConstInt>(7, DataType::INT32, Sp())}, Sp());
-    auto ifStmt =
-        std::make_shared<IfStmt>(cond, thenYield, std::optional<StmtPtr>(elseYield), std::vector<VarPtr>{ret}, Sp());
+    auto elseYield = std::make_shared<YieldStmt>(
+        std::vector<ExprPtr>{std::make_shared<ConstInt>(7, DataType::INT32, Sp())}, Sp());
+    auto ifStmt = std::make_shared<IfStmt>(cond, thenYield, std::optional<StmtPtr>(elseYield), std::vector<VarPtr>{ret},
+                                           Sp());
 
     auto result = RunPass(MakeProg(MakeFunc("f", ifStmt)));
     auto result_func = result->GetFunction("f");
@@ -395,8 +390,8 @@ TEST_F(ConstFoldSimplifyPassTest, TestSameYieldVarNamesFold)
     auto elseVar = std::make_shared<Var>("same", Scalar(DataType::INT32), Sp());
     auto thenYield = std::make_shared<YieldStmt>(std::vector<ExprPtr>{thenVar}, Sp());
     auto elseYield = std::make_shared<YieldStmt>(std::vector<ExprPtr>{elseVar}, Sp());
-    auto ifStmt =
-        std::make_shared<IfStmt>(cond, thenYield, std::optional<StmtPtr>(elseYield), std::vector<VarPtr>{ret}, Sp());
+    auto ifStmt = std::make_shared<IfStmt>(cond, thenYield, std::optional<StmtPtr>(elseYield), std::vector<VarPtr>{ret},
+                                           Sp());
 
     auto result = RunPass(MakeProg(MakeFunc("f", ifStmt)));
     auto result_func = result->GetFunction("f");
@@ -417,17 +412,17 @@ TEST_F(ConstFoldSimplifyPassTest, TestYieldBranchesWithNonConstTupleIndexKeepIf)
     auto idxVar = std::make_shared<Var>("idx", Scalar(DataType::INDEX), Sp());
     auto ret = std::make_shared<Var>("ret", Scalar(DataType::INT32), Sp());
     auto tuple = std::make_shared<MakeTuple>(
-        std::vector<ExprPtr>{
-            std::make_shared<ConstInt>(3, DataType::INT32, Sp()), std::make_shared<ConstInt>(11, DataType::INT32, Sp()),
-            std::make_shared<ConstInt>(19, DataType::INT32, Sp())},
+        std::vector<ExprPtr>{std::make_shared<ConstInt>(3, DataType::INT32, Sp()),
+                             std::make_shared<ConstInt>(11, DataType::INT32, Sp()),
+                             std::make_shared<ConstInt>(19, DataType::INT32, Sp())},
         Sp());
     auto tupleAssign = std::make_shared<AssignStmt>(tupleVar, tuple, Sp());
     auto item = std::make_shared<GetItemExpr>(tupleVar, idxVar, Sp());
     auto thenYield = std::make_shared<YieldStmt>(std::vector<ExprPtr>{item}, Sp());
-    auto elseYield =
-        std::make_shared<YieldStmt>(std::vector<ExprPtr>{std::make_shared<ConstInt>(19, DataType::INT32, Sp())}, Sp());
-    auto ifStmt =
-        std::make_shared<IfStmt>(cond, thenYield, std::optional<StmtPtr>(elseYield), std::vector<VarPtr>{ret}, Sp());
+    auto elseYield = std::make_shared<YieldStmt>(
+        std::vector<ExprPtr>{std::make_shared<ConstInt>(19, DataType::INT32, Sp())}, Sp());
+    auto ifStmt = std::make_shared<IfStmt>(cond, thenYield, std::optional<StmtPtr>(elseYield), std::vector<VarPtr>{ret},
+                                           Sp());
     std::vector<StmtPtr> stmts{tupleAssign};
     stmts.push_back(ifStmt);
 
@@ -445,14 +440,13 @@ TEST_F(ConstFoldSimplifyPassTest, TestNonYieldBranchPreventsSameYieldFold)
     auto cond = std::make_shared<Var>("c", Scalar(DataType::BOOL), Sp());
     auto ret = std::make_shared<Var>("ret", Scalar(DataType::INT32), Sp());
     auto x = std::make_shared<Var>("x", Scalar(DataType::INT32), Sp());
-    auto thenAdd = std::make_shared<Add>(
-        std::make_shared<ConstInt>(1, DataType::INT32, Sp()), std::make_shared<ConstInt>(2, DataType::INT32, Sp()),
-        DataType::INT32, Sp());
+    auto thenAdd = std::make_shared<Add>(std::make_shared<ConstInt>(1, DataType::INT32, Sp()),
+                                         std::make_shared<ConstInt>(2, DataType::INT32, Sp()), DataType::INT32, Sp());
     auto thenBody = std::make_shared<AssignStmt>(x, thenAdd, Sp());
-    auto elseYield =
-        std::make_shared<YieldStmt>(std::vector<ExprPtr>{std::make_shared<ConstInt>(3, DataType::INT32, Sp())}, Sp());
-    auto ifStmt =
-        std::make_shared<IfStmt>(cond, thenBody, std::optional<StmtPtr>(elseYield), std::vector<VarPtr>{ret}, Sp());
+    auto elseYield = std::make_shared<YieldStmt>(
+        std::vector<ExprPtr>{std::make_shared<ConstInt>(3, DataType::INT32, Sp())}, Sp());
+    auto ifStmt = std::make_shared<IfStmt>(cond, thenBody, std::optional<StmtPtr>(elseYield), std::vector<VarPtr>{ret},
+                                           Sp());
 
     auto result = RunPass(MakeProg(MakeFunc("f", ifStmt)));
     auto result_func = result->GetFunction("f");
@@ -472,8 +466,8 @@ TEST_F(ConstFoldSimplifyPassTest, TestReturnVarCountMismatchKeepsIf)
     auto val = std::make_shared<ConstInt>(1, DataType::INT32, Sp());
     auto thenYield = std::make_shared<YieldStmt>(std::vector<ExprPtr>{val}, Sp());
     auto elseYield = std::make_shared<YieldStmt>(std::vector<ExprPtr>{val}, Sp());
-    auto ifStmt = std::make_shared<IfStmt>(
-        cond, thenYield, std::optional<StmtPtr>(elseYield), std::vector<VarPtr>{ret0, ret1}, Sp());
+    auto ifStmt = std::make_shared<IfStmt>(cond, thenYield, std::optional<StmtPtr>(elseYield),
+                                           std::vector<VarPtr>{ret0, ret1}, Sp());
 
     auto result = RunPass(MakeProg(MakeFunc("f", ifStmt)));
     auto result_func = result->GetFunction("f");
@@ -487,8 +481,8 @@ TEST_F(ConstFoldSimplifyPassTest, TestNoElsePreventsSameYieldFold)
 {
     auto cond = std::make_shared<Var>("c", Scalar(DataType::BOOL), Sp());
     auto ret = std::make_shared<Var>("ret", Scalar(DataType::INT32), Sp());
-    auto thenYield =
-        std::make_shared<YieldStmt>(std::vector<ExprPtr>{std::make_shared<ConstInt>(1, DataType::INT32, Sp())}, Sp());
+    auto thenYield = std::make_shared<YieldStmt>(
+        std::vector<ExprPtr>{std::make_shared<ConstInt>(1, DataType::INT32, Sp())}, Sp());
     auto ifStmt = std::make_shared<IfStmt>(cond, thenYield, std::nullopt, std::vector<VarPtr>{ret}, Sp());
 
     auto result = RunPass(MakeProg(MakeFunc("f", ifStmt)));

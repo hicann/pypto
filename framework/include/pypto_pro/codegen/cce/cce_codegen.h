@@ -152,8 +152,8 @@ public:
      * Because set_validshape is guaranteed to precede any load/store that uses the
      * same tile, the entry is always present when load/store codegen queries it.
      */
-    void RegisterTileEmitShape(
-        const std::string& tile_cpp_name, const std::string& row_code, const std::string& col_code)
+    void RegisterTileEmitShape(const std::string& tile_cpp_name, const std::string& row_code,
+                               const std::string& col_code)
     {
         tile_emit_shape_[tile_cpp_name] = {row_code, col_code};
     }
@@ -319,7 +319,6 @@ private:
      */
     void EmitFullPhiIf(const ir::IfStmtPtr& op);
 
-
     /**
      * \brief Generate function body
      *
@@ -440,9 +439,9 @@ private:
     void EmitForYieldAssignments(const std::vector<std::string>& iter_arg_names);
     void RegisterForReturnVars(const ir::ForStmtPtr& op, const std::vector<std::string>& iter_arg_names);
 
-    void EmitForLoopWithHoisting(
-        const ir::ForStmtPtr& op, const std::string& loop_var_name, const std::vector<std::string>& iter_arg_names,
-        const std::string& start, const std::string& stop, const std::string& step);
+    void EmitForLoopWithHoisting(const ir::ForStmtPtr& op, const std::string& loop_var_name,
+                                 const std::vector<std::string>& iter_arg_names, const std::string& start,
+                                 const std::string& stop, const std::string& step);
 
     // --- Phase 6: GenerateSinglePrologue helpers ---
 
@@ -468,11 +467,11 @@ private:
      */
     void EmitSingleTileDeclarations(const ir::FunctionPtr& func);
 
-    void EmitSectionAwareTiles(
-        const std::vector<TileDef>& tile_defs, const std::vector<std::pair<ir::VarPtr, ir::VarPtr>>& deduped_aliases);
-    void EmitDedupedTileAliases(
-        const std::vector<TileDef>& tile_defs, const std::vector<std::pair<ir::VarPtr, ir::VarPtr>>& deduped_aliases,
-        std::optional<ir::SectionKind> section);
+    void EmitSectionAwareTiles(const std::vector<TileDef>& tile_defs,
+                               const std::vector<std::pair<ir::VarPtr, ir::VarPtr>>& deduped_aliases);
+    void EmitDedupedTileAliases(const std::vector<TileDef>& tile_defs,
+                                const std::vector<std::pair<ir::VarPtr, ir::VarPtr>>& deduped_aliases,
+                                std::optional<ir::SectionKind> section);
 
     // --- Phase 7: GenerateGlobalTensorTypeDeclaration helpers ---
 
@@ -485,38 +484,37 @@ private:
 
     std::string BuildDynamicNZTensorDimArg(const ir::TensorTypePtr& tensor_type, size_t axis);
 
-    std::string BuildDynamicNZShapeArg(
-        const ir::TensorTypePtr& tensor_type, size_t axis,
-        const std::optional<std::vector<ir::ExprPtr>>& access_shape);
+    std::string BuildDynamicNZShapeArg(const ir::TensorTypePtr& tensor_type, size_t axis,
+                                       const std::optional<std::vector<ir::ExprPtr>>& access_shape);
 
-    void AppendDynamicStrideGlobalTensorArgs(
-        std::ostringstream& global_instance, const std::string& shape_type_name, const std::string& stride_type_name,
-        const ir::TensorTypePtr& tensor_type, const std::vector<int64_t>& shape_dims,
-        const std::optional<std::vector<int>>& tile_dims, bool is_dn);
+    void AppendDynamicStrideGlobalTensorArgs(std::ostringstream& global_instance, const std::string& shape_type_name,
+                                             const std::string& stride_type_name, const ir::TensorTypePtr& tensor_type,
+                                             const std::vector<int64_t>& shape_dims,
+                                             const std::optional<std::vector<int>>& tile_dims, bool is_dn);
 
-    void EmitDynamicNZGlobalTensorDeclaration(
-        const std::string& var_name, const ir::TensorTypePtr& tensor_type,
-        const std::optional<std::string>& base_pointer, const std::optional<std::vector<ir::ExprPtr>>& access_shape,
-        const std::string& element_type, const std::string& shape_type_name, const std::string& stride_type_name,
-        const std::string& global_type_name);
+    void EmitDynamicNZGlobalTensorDeclaration(const std::string& var_name, const ir::TensorTypePtr& tensor_type,
+                                              const std::optional<std::string>& base_pointer,
+                                              const std::optional<std::vector<ir::ExprPtr>>& access_shape,
+                                              const std::string& element_type, const std::string& shape_type_name,
+                                              const std::string& stride_type_name, const std::string& global_type_name);
 
     /**
      * \brief Emit the full GlobalTensor declaration for an NZ-layout tensor (static or dynamic).
      */
-    void EmitNZGlobalTensorDeclaration(
-        const TensorDef& def, const std::string& var_name, const ir::TensorTypePtr& tensor_type);
+    void EmitNZGlobalTensorDeclaration(const TensorDef& def, const std::string& var_name,
+                                       const ir::TensorTypePtr& tensor_type);
 
-    std::string BuildGlobalTensorLayoutArg(
-        const std::string& stride_type_name, const std::vector<int64_t>& shape_dims, bool is_dn) const;
+    std::string BuildGlobalTensorLayoutArg(const std::string& stride_type_name, const std::vector<int64_t>& shape_dims,
+                                           bool is_dn) const;
 
     /**
      * \brief Emit the GlobalTensor instance declaration and register pointer/struct mappings.
      */
-    void EmitGlobalTensorInstance(
-        const std::string& var_name, const std::string& global_type_name, const std::string& shape_type_name,
-        const std::string& stride_type_name, const ir::TensorTypePtr& tensor_type,
-        const std::vector<int64_t>& shape_dims, const std::optional<std::vector<int>>& tile_dims, bool is_dn,
-        const std::string& base_pointer);
+    void EmitGlobalTensorInstance(const std::string& var_name, const std::string& global_type_name,
+                                  const std::string& shape_type_name, const std::string& stride_type_name,
+                                  const ir::TensorTypePtr& tensor_type, const std::vector<int64_t>& shape_dims,
+                                  const std::optional<std::vector<int>>& tile_dims, bool is_dn,
+                                  const std::string& base_pointer);
 
     /**
      * \brief Clear the emit-time tile shape map before body generation.
@@ -530,10 +528,10 @@ private:
     void PreScanValidShapes();
 
     // Dual-mode context for expression visitor pattern
-    std::string current_target_var_;        ///< INPUT: Assignment target variable name (for Call expressions)
-    std::string current_expr_value_;        ///< OUTPUT: Inline C++ value for scalar / tile expressions
-    ir::MakeTuplePtr current_tuple_;        ///< OUTPUT: underlying MakeTuple for tuple-typed expressions
-    std::vector<std::string> yield_buffer_; ///< Temporary storage for yielded values from loops
+    std::string current_target_var_;              ///< INPUT: Assignment target variable name (for Call expressions)
+    std::string current_expr_value_;              ///< OUTPUT: Inline C++ value for scalar / tile expressions
+    ir::MakeTuplePtr current_tuple_;              ///< OUTPUT: underlying MakeTuple for tuple-typed expressions
+    std::vector<std::string> yield_buffer_;       ///< Temporary storage for yielded values from loops
     const ir::IRDebugInfo* debug_info_ = nullptr; ///< Tuple/struct field names, captured at GenerateSingle entry
     std::map<std::string, std::string> tiling_headers_; ///< Tiling struct headers (filename -> content)
 
@@ -548,12 +546,13 @@ private:
     std::map<std::string, std::string> tile_addresses_; ///< tile_name ->TASSIGN address expression
 
     // Loop tile hoisting: declarations collected during loop body visit, emitted before outermost loop
-    int loop_depth_ = 0;                                     ///< Current for-loop nesting depth (0 = not in loop)
-    int if_depth_ = 0;                                       ///< Current if-stmt nesting depth (0 = not in if)
-    std::map<std::string, std::string> vf_tile_ptrs_;        ///< VF tile expr code ->hoisted vf_tile_ptr_N var (base + POST_UPDATE cursor)
-    std::vector<std::string> loop_hoisted_decls_;            ///< Lines to hoist before outermost loop/if
-    std::vector<std::string> section_hoisted_decls_;         ///< VF section decls hoisted before __VEC_SCOPE__ (pre mem_bar)
-    std::set<std::string> var_read_names_;                   ///< Var names read anywhere in the function body
+    int loop_depth_ = 0; ///< Current for-loop nesting depth (0 = not in loop)
+    int if_depth_ = 0;   ///< Current if-stmt nesting depth (0 = not in if)
+    std::map<std::string, std::string>
+        vf_tile_ptrs_; ///< VF tile expr code ->hoisted vf_tile_ptr_N var (base + POST_UPDATE cursor)
+    std::vector<std::string> loop_hoisted_decls_;    ///< Lines to hoist before outermost loop/if
+    std::vector<std::string> section_hoisted_decls_; ///< VF section decls hoisted before __VEC_SCOPE__ (pre mem_bar)
+    std::set<std::string> var_read_names_;           ///< Var names read anywhere in the function body
     std::unordered_map<std::string, int> var_read_counts_;   ///< Var name ->read count
     std::map<int, std::set<ir::PipeType>> cube_mutex_pipes_; ///< buf_id ->pipes in Cube section
     std::map<int, std::set<ir::PipeType>> vec_mutex_pipes_;  ///< buf_id ->pipes in Vec section
@@ -622,9 +621,8 @@ private:
      * Returns empty vector on failure.
      */
     std::vector<std::string> CollectTupleElemNames(const ir::ExprPtr& tuple_value);
-    std::string BuildDynamicTupleArrayDecl(
-        const ir::TypePtr& elem_type, const std::vector<std::string>& elem_names, const std::string& arr_name,
-        bool allow_struct_tuple) const;
+    std::string BuildDynamicTupleArrayDecl(const ir::TypePtr& elem_type, const std::vector<std::string>& elem_names,
+                                           const std::string& arr_name, bool allow_struct_tuple) const;
 
     /// Emit-time valid-shape map: tile C++ name -> (row code, col code).
     /// Populated when set_validshape is emitted; consumed by the following load or store.

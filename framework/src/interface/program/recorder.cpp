@@ -63,8 +63,8 @@ void RecordFunc::RecordDynFuncInner(
         << "Function graph type: " << GetFunctionTypeNameDict().Find(config::GetFunctionType());
 
 #if ENABLE_HIDDENLOOP
-    recordLoopFunc_ = std::make_unique<RecordLoopFunc>(
-        funcName + "_loop", FunctionType::DYNAMIC_LOOP, funcName + "_unused_hidden_record_func_loop_idx", LoopRange(1));
+    recordLoopFunc_ = std::make_unique<RecordLoopFunc>(funcName + "_loop", FunctionType::DYNAMIC_LOOP,
+                                                       funcName + "_unused_hidden_record_func_loop_idx", LoopRange(1));
 #endif
 
     Program::GetInstance().BeginFunction(funcName, config::GetFunctionType());
@@ -117,8 +117,8 @@ RecordFunc::RecordFunc(const std::string& name, const std::vector<std::reference
     if (config::GetFunctionType() == FunctionType::DYNAMIC) {
         RecordDynFuncInner(explicitOpArgs, {}, {});
     } else {
-        Program::GetInstance().BeginFunction(
-            funcName, config::GetFunctionType(), GraphType::TENSOR_GRAPH, explicitOpArgs);
+        Program::GetInstance().BeginFunction(funcName, config::GetFunctionType(), GraphType::TENSOR_GRAPH,
+                                             explicitOpArgs);
     }
 }
 
@@ -168,9 +168,9 @@ void RecordFunc::EndFunction()
                 Program::GetInstance().VerifyTensorGraph();
             }
             MergeAllFuncDupIocast(nullptr);
-            PassManager::Instance().RunPass(
-                Program::GetInstance(), *Program::GetInstance().GetFunctionByMagicName(PROGRAM_ENTRY_FUNCTION_NAME),
-                "FunctionUnroll");
+            PassManager::Instance().RunPass(Program::GetInstance(),
+                                            *Program::GetInstance().GetFunctionByMagicName(PROGRAM_ENTRY_FUNCTION_NAME),
+                                            "FunctionUnroll");
             Program::GetInstance().UpdateCompileTask();
         }
         Program::GetInstance().SetCurrentDynamicFunction(nullptr);
@@ -214,9 +214,9 @@ bool RecordFunc::Iterator::operator!=(const IteratorEnd& rhs)
     return result;
 }
 
-RecordLoopFunc::RecordLoopFunc(
-    const std::string& name, FunctionType funcType, const std::string& iterName, const LoopRange& range,
-    const std::set<int>& unrollList, bool submitBeforeLoop, bool parallel)
+RecordLoopFunc::RecordLoopFunc(const std::string& name, FunctionType funcType, const std::string& iterName,
+                               const LoopRange& range, const std::set<int>& unrollList, bool submitBeforeLoop,
+                               bool parallel)
     : name_(FUNCTION_PREFIX + name),
       iterName_(iterName),
       loopRange_(std::make_shared<LoopRange>(range)),
@@ -266,15 +266,14 @@ void RecordLoopFunc::BeginLoopFunction()
     auto currentStep = CurUnrollTimes() == 1 ? loopRange_->Step() : loopRange_->Step() * CurUnrollTimes();
     if (rangeOfEaceUnroll_.empty()) {
         auto newRangeEnd = (UnrollTimesSize() == 1 ? loopRange_->End() : loopRange_->End() / currentStep * currentStep);
-        std::shared_ptr<LoopRange> newRange =
-            std::make_shared<LoopRange>(loopRange_->Begin(), newRangeEnd, currentStep);
+        std::shared_ptr<LoopRange> newRange = std::make_shared<LoopRange>(loopRange_->Begin(), newRangeEnd,
+                                                                          currentStep);
         rangeOfEaceUnroll_.push_back(newRange);
     } else {
         auto prevRange = rangeOfEaceUnroll_.back();
-        auto newRangeEnd =
-            (UnrollTimesSize() == 1 ?
-                 loopRange_->End() :
-                 prevRange->End() + (loopRange_->End() - prevRange->End()) / currentStep * currentStep);
+        auto newRangeEnd = (UnrollTimesSize() == 1 ?
+                                loopRange_->End() :
+                                prevRange->End() + (loopRange_->End() - prevRange->End()) / currentStep * currentStep);
         std::shared_ptr<LoopRange> newRange = std::make_shared<LoopRange>(prevRange->End(), newRangeEnd, currentStep);
         rangeOfEaceUnroll_.push_back(newRange);
     }
@@ -282,8 +281,8 @@ void RecordLoopFunc::BeginLoopFunction()
     auto range = rangeOfEaceUnroll_.back();
     range->End().AsIntermediateVariable();
 
-    auto attr =
-        std::make_shared<DynloopFunctionAttribute>(iterName_, *range, *loopRange_, submitBeforeLoop_, parallel_);
+    auto attr = std::make_shared<DynloopFunctionAttribute>(iterName_, *range, *loopRange_, submitBeforeLoop_,
+                                                           parallel_);
     currentLoopFunc_->SetDynloopAttribute(attr);
     currentLoopFunc_->SetSpan(span_);
 }

@@ -103,11 +103,10 @@ public:
                     sheet.AddRowSeparator(1);
                 }
                 for (auto&& [memInfo, cnt] : dumpInfo.memReqCounter) {
-                    sheet.AddRow(
-                        isFirstLine ? rangeToString(i, lastEqual) : std::string{},
-                        isFirstLine2 ? rootFuncName : std::string{},
-                        isFirstLine2 ? sheet::Integer(dumpInfo.cnt) : std::string{}, GetCategoryName(memInfo.first),
-                        memInfo.second, cnt);
+                    sheet.AddRow(isFirstLine ? rangeToString(i, lastEqual) : std::string{},
+                                 isFirstLine2 ? rootFuncName : std::string{},
+                                 isFirstLine2 ? sheet::Integer(dumpInfo.cnt) : std::string{},
+                                 GetCategoryName(memInfo.first), memInfo.second, cnt);
                     isFirstLine = false;
                     isFirstLine2 = false;
                 }
@@ -119,9 +118,9 @@ public:
                 }
                 bool isFirstLine2 = true;
                 for (auto&& [memInfo, cnt] : windowInfo.aicpuMemInfo) {
-                    sheet.AddRow(
-                        isFirstLine ? rangeToString(i, lastEqual) : std::string{}, isFirstLine2 ? "N/A (Metadata)" : "",
-                        isFirstLine2 ? "N/A" : "", GetCategoryName(memInfo.first), memInfo.second, cnt);
+                    sheet.AddRow(isFirstLine ? rangeToString(i, lastEqual) : std::string{},
+                                 isFirstLine2 ? "N/A (Metadata)" : "", isFirstLine2 ? "N/A" : "",
+                                 GetCategoryName(memInfo.first), memInfo.second, cnt);
                     isFirstLine = false;
                     isFirstLine2 = false;
                 }
@@ -199,7 +198,7 @@ private:
     } statistics_;
 };
 
-#else  // DEBUG_MEM_DUMP_LEVEL >= DEBUG_MEM_DUMP_FULL: ^^^ true / false vvv
+#else // DEBUG_MEM_DUMP_LEVEL >= DEBUG_MEM_DUMP_FULL: ^^^ true / false vvv
 
 class DelayedDumper {
 public:

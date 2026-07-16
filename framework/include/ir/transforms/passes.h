@@ -123,9 +123,8 @@ namespace pass {
  * \param properties Optional property declarations
  * \return Pass that applies the transform to each function
  */
-Pass CreateFunctionPass(
-    std::function<FunctionPtr(const FunctionPtr&)> transform, const std::string& name = "",
-    const PassProperties& properties = {});
+Pass CreateFunctionPass(std::function<FunctionPtr(const FunctionPtr&)> transform, const std::string& name = "",
+                        const PassProperties& properties = {});
 
 /**
  * \brief Create a pass from a program-level transform function
@@ -135,9 +134,8 @@ Pass CreateFunctionPass(
  * \param properties Optional property declarations
  * \return Pass that applies the transform
  */
-Pass CreateProgramPass(
-    std::function<ProgramPtr(const ProgramPtr&)> transform, const std::string& name = "",
-    const PassProperties& properties = {});
+Pass CreateProgramPass(std::function<ProgramPtr(const ProgramPtr&)> transform, const std::string& name = "",
+                       const PassProperties& properties = {});
 
 /**
  * \brief Create an init memref pass

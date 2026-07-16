@@ -73,11 +73,11 @@ TEST_F(TestOspAlgorithms, UnionFind1)
 {
     std::vector<std::string> names({"a", "b", "c", "d", "e", "f"});
     UnionFindUniverse<std::string, unsigned, int> testUniverse;
-    for (const auto &name : names) {
+    for (const auto& name : names) {
         testUniverse.AddObject(name);
     }
 
-    for (auto &name : names) {
+    for (auto& name : names) {
         EXPECT_EQ(testUniverse.FindOriginByName(name), name);
     }
 
@@ -129,15 +129,15 @@ TEST_F(TestOspAlgorithms, UnionFind2)
     std::vector<std::string> names({"a", "b", "c", "d", "e", "f", "g", "h", "i"});
     UnionFindUniverse<std::string, unsigned, int> testUniverse;
 
-    for (auto &name : names) {
+    for (auto& name : names) {
         testUniverse.AddObject(name);
     }
 
-    for (auto &name : names) {
+    for (auto& name : names) {
         EXPECT_EQ(testUniverse.FindOriginByName(name), name);
     }
 
-    for (auto &name : names) {
+    for (auto& name : names) {
         EXPECT_EQ(testUniverse.FindOriginByName(name), name);
     }
 
@@ -216,27 +216,27 @@ TEST_F(TestOspAlgorithms, UnionFind3)
     std::vector<std::vector<std::string>> components = testUniverse.GetConnectedComponents();
     unsigned totalCompWeights = 0;
     unsigned totalElements = 0;
-    for (auto &comp : components) {
+    for (auto& comp : components) {
         totalCompWeights += testUniverse.GetWeightOfComponentByName(comp.at(0));
         totalElements += static_cast<unsigned>(comp.size());
-        for (auto &name : comp) {
-            EXPECT_TRUE(std::any_of(
-                names.cbegin(), names.cend(), [name](std::string other_name) { return name == other_name; }));
+        for (auto& name : comp) {
+            EXPECT_TRUE(std::any_of(names.cbegin(), names.cend(),
+                                    [name](std::string other_name) { return name == other_name; }));
         }
     }
 
     unsigned totalWeight = 0;
-    for (auto &wt : weights) {
+    for (auto& wt : weights) {
         totalWeight += wt;
     }
 
     EXPECT_EQ(totalElements, names.size());
     EXPECT_EQ(totalWeight, totalCompWeights);
 
-    for (auto &name : names) {
+    for (auto& name : names) {
         EXPECT_TRUE(std::any_of(components.cbegin(), components.cend(), [name](std::vector<std::string> comp) {
-            return std::any_of(
-                comp.cbegin(), comp.cend(), [name](std::string other_name) { return name == other_name; });
+            return std::any_of(comp.cbegin(), comp.cend(),
+                               [name](std::string other_name) { return name == other_name; });
         }));
     }
 }
@@ -260,7 +260,7 @@ TEST_F(TestOspAlgorithms, Divisors)
 {
     for (std::size_t num = 1U; num < 1000U; ++num) {
         const std::vector<std::size_t> divs = DivisorsList(num);
-        for (const std::size_t &div : divs) {
+        for (const std::size_t& div : divs) {
             EXPECT_EQ(num % div, 0U);
         }
 
@@ -360,12 +360,7 @@ TEST_F(TestOspAlgorithms, InPlaceInversePermutationChar)
 
 TEST_F(TestOspAlgorithms, Architecture)
 {
-    std::vector<std::vector<WorkType>> uniformSentCosts = {
-        {0, 1, 1, 1},
-        {1, 0, 1, 1},
-        {1, 1, 0, 1},
-        {1, 1, 1, 0}
-    };
+    std::vector<std::vector<WorkType>> uniformSentCosts = {{0, 1, 1, 1}, {1, 0, 1, 1}, {1, 1, 0, 1}, {1, 1, 1, 0}};
 
     BspArchitecture<GraphType> architecture;
     architecture.SetNumberOfProcessors(4);
@@ -429,9 +424,7 @@ TEST_F(TestOspAlgorithms, NoEdgesGraph)
 
 GraphType LineGraph()
 {
-    const std::set<std::pair<VertType, VertType>> edges({
-        {0, 1}, {1, 2}, {2, 3}, {3, 4}, {4, 5}, {5, 6}, {6, 7}
-    });
+    const std::set<std::pair<VertType, VertType>> edges({{0, 1}, {1, 2}, {2, 3}, {3, 4}, {4, 5}, {5, 6}, {6, 7}});
 
     return GraphType(8, edges);
 }
@@ -444,17 +437,17 @@ TEST_F(TestOspAlgorithms, TestLineGraph)
     EXPECT_EQ(graph.NumEdges(), 7);
 
     std::size_t cntr = 0;
-    for (const auto &vert : graph.Vertices()) {
+    for (const auto& vert : graph.Vertices()) {
         EXPECT_EQ(vert, cntr);
         ++cntr;
     }
     EXPECT_EQ(graph.NumVertices(), cntr);
 
-    for (const auto &vert : graph.Vertices()) {
+    for (const auto& vert : graph.Vertices()) {
         VertType notLast = static_cast<VertType>((vert != 7));
 
         EXPECT_EQ(graph.OutDegree(vert), notLast);
-        for (const auto &chld : graph.Children(vert)) {
+        for (const auto& chld : graph.Children(vert)) {
             EXPECT_EQ(chld, vert + notLast);
         }
         auto chldren = graph.Children(vert);
@@ -463,11 +456,11 @@ TEST_F(TestOspAlgorithms, TestLineGraph)
             EXPECT_EQ(*it, vert + notLast);
         }
     }
-    for (const auto &vert : graph.Vertices()) {
+    for (const auto& vert : graph.Vertices()) {
         VertType notFirst = static_cast<VertType>((vert != 0));
 
         EXPECT_EQ(graph.InDegree(vert), notFirst);
-        for (const auto &par : graph.Parents(vert)) {
+        for (const auto& par : graph.Parents(vert)) {
             EXPECT_EQ(par, vert - notFirst);
         }
         auto prnts = graph.Parents(vert);
@@ -477,16 +470,15 @@ TEST_F(TestOspAlgorithms, TestLineGraph)
         }
     }
 
-    for (const auto &vert : graph.Vertices()) {
+    for (const auto& vert : graph.Vertices()) {
         EXPECT_EQ(graph.VertexType(vert), 0);
     }
 }
 
 GraphType SimpleGraph()
 {
-    const std::vector<std::pair<VertType, VertType>> edges({
-        {0,  1}, {2,  3}, {6, 10}, {7,  9}, {0,  2}, {4,  6}, {1,  6}, {6,  7}, {5,  6}, {3,  7}, {1,  2}
-    });
+    const std::vector<std::pair<VertType, VertType>> edges(
+        {{0, 1}, {2, 3}, {6, 10}, {7, 9}, {0, 2}, {4, 6}, {1, 6}, {6, 7}, {5, 6}, {3, 7}, {1, 2}});
 
     return GraphType(11, edges);
 }
@@ -501,7 +493,7 @@ TEST_F(TestOspAlgorithms, Graph1)
     std::size_t cntr0{};
     std::size_t cntrChldEdges{};
     std::size_t cntrParEdges{};
-    for (const auto &vert : graph.Vertices()) {
+    for (const auto& vert : graph.Vertices()) {
         EXPECT_EQ(vert, cntr0++);
         cntrChldEdges += graph.OutDegree(vert);
         cntrParEdges += graph.InDegree(vert);
@@ -510,14 +502,13 @@ TEST_F(TestOspAlgorithms, Graph1)
     EXPECT_EQ(graph.NumEdges(), cntrChldEdges);
     EXPECT_EQ(graph.NumEdges(), cntrParEdges);
 
-    const std::vector<std::vector<std::size_t>> outEdges({
-        {1, 2}, {2, 6}, {3}, {7}, {6}, {6}, {7, 10}, {9}, {}, {}, {}
-    });
+    const std::vector<std::vector<std::size_t>> outEdges(
+        {{1, 2}, {2, 6}, {3}, {7}, {6}, {6}, {7, 10}, {9}, {}, {}, {}});
 
-    for (const auto &vert : graph.Vertices()) {
+    for (const auto& vert : graph.Vertices()) {
         EXPECT_EQ(graph.OutDegree(vert), outEdges[vert].size());
         std::size_t cntr = 0;
-        for (const auto &chld : graph.Children(vert)) {
+        for (const auto& chld : graph.Children(vert)) {
             EXPECT_EQ(chld, outEdges[vert][cntr++]);
         }
         auto chldrn = graph.Children(vert);
@@ -527,14 +518,13 @@ TEST_F(TestOspAlgorithms, Graph1)
         }
     }
 
-    const std::vector<std::vector<std::size_t>> inEdges({
-        {}, {0}, {0, 1}, {2}, {}, {}, {1, 4, 5}, {3, 6}, {}, {7}, {6}
-    });
+    const std::vector<std::vector<std::size_t>> inEdges(
+        {{}, {0}, {0, 1}, {2}, {}, {}, {1, 4, 5}, {3, 6}, {}, {7}, {6}});
 
-    for (const auto &vert : graph.Vertices()) {
+    for (const auto& vert : graph.Vertices()) {
         EXPECT_EQ(graph.InDegree(vert), inEdges[vert].size());
         std::size_t cntr = 0;
-        for (const auto &par : graph.Parents(vert)) {
+        for (const auto& par : graph.Parents(vert)) {
             EXPECT_EQ(par, inEdges[vert][cntr++]);
         }
         auto prnts = graph.Parents(vert);
@@ -544,7 +534,7 @@ TEST_F(TestOspAlgorithms, Graph1)
         }
     }
 
-    for (const auto &vert : graph.Vertices()) {
+    for (const auto& vert : graph.Vertices()) {
         EXPECT_EQ(graph.VertexType(vert), 0);
     }
 }
@@ -662,10 +652,7 @@ TEST_F(TestOspAlgorithms, ContractionMapValidity)
 
 TEST_F(TestOspAlgorithms, ContractionMapCoarsening)
 {
-    std::set<std::pair<VertexIdxT<GraphType>, VertexIdxT<GraphType>>> edges({
-        {0, 1},
-        {1, 2}
-    });
+    std::set<std::pair<VertexIdxT<GraphType>, VertexIdxT<GraphType>>> edges({{0, 1}, {1, 2}});
     GraphType graph(6, edges);
 
     GraphType coarseGraph1;
@@ -686,11 +673,11 @@ TEST_F(TestOspAlgorithms, ContractionMapCoarsening)
     EXPECT_EQ(coarseGraph1.InDegree(1), 1);
     EXPECT_EQ(coarseGraph1.InDegree(2), 0);
 
-    for (const auto &vert : coarseGraph1.Children(0)) {
+    for (const auto& vert : coarseGraph1.Children(0)) {
         EXPECT_EQ(vert, 1);
     }
 
-    for (const auto &vert : coarseGraph1.Parents(1)) {
+    for (const auto& vert : coarseGraph1.Parents(1)) {
         EXPECT_EQ(vert, 0);
     }
 }
@@ -760,10 +747,9 @@ TEST_F(TestOspAlgorithms, TestIntegralRange)
     EXPECT_EQ(start134, end257);
 }
 
-template<typename OtherGraphType>
-void testValidContractionMap(const GraphType &graph,
-                             const OtherGraphType &coarseGraph,
-                             const std::vector<VertexIdxT<GraphType>> &contractionMap)
+template <typename OtherGraphType>
+void testValidContractionMap(const GraphType& graph, const OtherGraphType& coarseGraph,
+                             const std::vector<VertexIdxT<GraphType>>& contractionMap)
 {
     EXPECT_EQ(contractionMap.size(), graph.NumVertices());
     EXPECT_TRUE(coarser_util::CheckValidContractionMap<GraphType>(contractionMap));
@@ -776,9 +762,8 @@ void testValidContractionMap(const GraphType &graph,
     std::vector<VertexIdxT<GraphType>> coarseVerts(coarseGraph.NumVertices());
     std::iota(coarseVerts.begin(), coarseVerts.end(), 0);
     const auto coarseTopOrder = GetTopOrder<OtherGraphType>(coarseGraph);
-    EXPECT_TRUE(std::is_permutation(
-        coarseTopOrder.cbegin(), coarseTopOrder.cend(),
-        coarseVerts.cbegin(), coarseVerts.cend()));
+    EXPECT_TRUE(
+        std::is_permutation(coarseTopOrder.cbegin(), coarseTopOrder.cend(), coarseVerts.cbegin(), coarseVerts.cend()));
     for (const auto vert : coarseGraph.Vertices()) {
         for (const auto chld : coarseGraph.Children(vert)) {
             EXPECT_GT(std::distance(std::find(coarseTopOrder.cbegin(), coarseTopOrder.cend(), vert),
@@ -820,7 +805,7 @@ GraphType SimpleGraphWithVertexTypes()
     return graph;
 }
 
-void testCoarseningAlgorithm(Coarser<GraphType, GraphType> &coarser)
+void testCoarseningAlgorithm(Coarser<GraphType, GraphType>& coarser)
 {
     GraphType graph = SimpleGraphWithVertexTypes();
 
@@ -901,20 +886,16 @@ TEST_F(TestOspAlgorithms, CoarsenSarkarML)
 
 TEST_F(TestOspAlgorithms, DagAdaptorSimpleGraph)
 {
-    const std::vector<std::vector<VertType>> outEdges({
-        {1, 2}, {2, 6}, {3}, {7}, {6}, {6}, {7, 10}, {9}, {}, {}, {}
-    });
+    const std::vector<std::vector<VertType>> outEdges({{1, 2}, {2, 6}, {3}, {7}, {6}, {6}, {7, 10}, {9}, {}, {}, {}});
 
-    const std::vector<std::vector<VertType>> inEdges({
-        {}, {0}, {0, 1}, {2}, {}, {}, {1, 4, 5}, {3, 6}, {}, {7}, {6}
-    });
+    const std::vector<std::vector<VertType>> inEdges({{}, {0}, {0, 1}, {2}, {}, {}, {1, 4, 5}, {3, 6}, {}, {7}, {6}});
 
     GraphAdapterType graph(outEdges, inEdges);
 
     std::size_t cntr0{};
     std::size_t cntrChldEdges{};
     std::size_t cntrParEdges{};
-    for (const auto &vert : graph.Vertices()) {
+    for (const auto& vert : graph.Vertices()) {
         EXPECT_EQ(vert, cntr0++);
         cntrChldEdges += graph.OutDegree(vert);
         cntrParEdges += graph.InDegree(vert);
@@ -922,39 +903,39 @@ TEST_F(TestOspAlgorithms, DagAdaptorSimpleGraph)
     EXPECT_EQ(graph.NumEdges(), cntrChldEdges);
     EXPECT_EQ(graph.NumEdges(), cntrParEdges);
 
-    for (const auto &vert : graph.Vertices()) {
+    for (const auto& vert : graph.Vertices()) {
         EXPECT_EQ(graph.InDegree(vert), inEdges[vert].size());
         std::size_t cntr = 0;
-        for (const auto &par : graph.Parents(vert)) {
+        for (const auto& par : graph.Parents(vert)) {
             EXPECT_EQ(par, inEdges[vert][cntr++]);
         }
         EXPECT_EQ(cntr, graph.InDegree(vert));
     }
 
-    for (const auto &vert : graph.Vertices()) {
+    for (const auto& vert : graph.Vertices()) {
         EXPECT_EQ(graph.OutDegree(vert), outEdges[vert].size());
         std::size_t cntr = 0;
-        for (const auto &chld : graph.Children(vert)) {
+        for (const auto& chld : graph.Children(vert)) {
             EXPECT_EQ(chld, outEdges[vert][cntr++]);
         }
         EXPECT_EQ(cntr, graph.OutDegree(vert));
     }
 
-    for (const auto &vert : graph.Vertices()) {
+    for (const auto& vert : graph.Vertices()) {
         EXPECT_EQ(graph.VertexType(vert), 0);
     }
 
     for (const auto vert : graph.Vertices()) {
-        graph.SetVertexWorkWeight(vert, 4*vert + 0);
-        graph.SetVertexCommWeight(vert, 4*vert + 1);
-        graph.SetVertexMemWeight(vert, 4*vert + 2);
-        graph.SetVertexType(vert, static_cast<VTypeType>(4*vert + 3));
+        graph.SetVertexWorkWeight(vert, 4 * vert + 0);
+        graph.SetVertexCommWeight(vert, 4 * vert + 1);
+        graph.SetVertexMemWeight(vert, 4 * vert + 2);
+        graph.SetVertexType(vert, static_cast<VTypeType>(4 * vert + 3));
     }
     for (const auto vert : graph.Vertices()) {
-        EXPECT_EQ(graph.VertexWorkWeight(vert), 4*vert + 0);
-        EXPECT_EQ(graph.VertexCommWeight(vert), 4*vert + 1);
-        EXPECT_EQ(graph.VertexMemWeight(vert), 4*vert + 2);
-        EXPECT_EQ(graph.VertexType(vert), static_cast<VTypeType>(4*vert + 3));
+        EXPECT_EQ(graph.VertexWorkWeight(vert), 4 * vert + 0);
+        EXPECT_EQ(graph.VertexCommWeight(vert), 4 * vert + 1);
+        EXPECT_EQ(graph.VertexMemWeight(vert), 4 * vert + 2);
+        EXPECT_EQ(graph.VertexType(vert), static_cast<VTypeType>(4 * vert + 3));
     }
 }
 

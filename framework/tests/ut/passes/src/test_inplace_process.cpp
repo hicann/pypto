@@ -95,9 +95,9 @@ TEST_F(InplaceProcessTest, CopyInDirectAssemble)
     G.AddOp(Opcode::OP_COPY_IN, {"a"}, {"a_ub"}, "Copy_In_a");
     auto copyInA = G.GetOp("Copy_In_a");
     std::vector<int64_t> offsetA = {0, 0};
-    auto attrCopyInA = std::make_shared<CopyOpAttribute>(
-        OpImmediate::Specified(offsetA), MemoryType::MEM_UB, OpImmediate::Specified(a_ub->GetShape()),
-        OpImmediate::Specified(a_ub->tensor->GetRawShape()));
+    auto attrCopyInA = std::make_shared<CopyOpAttribute>(OpImmediate::Specified(offsetA), MemoryType::MEM_UB,
+                                                         OpImmediate::Specified(a_ub->GetShape()),
+                                                         OpImmediate::Specified(a_ub->tensor->GetRawShape()));
     copyInA->SetOpAttribute(attrCopyInA);
 
     // b [16, 16] --> Copy_IN (0, 0) --> [16, 16]
@@ -107,9 +107,9 @@ TEST_F(InplaceProcessTest, CopyInDirectAssemble)
     G.AddOp(Opcode::OP_COPY_IN, {"b"}, {"b_ub"}, "Copy_In_b");
     auto copyInB = G.GetOp("Copy_In_b");
     std::vector<int64_t> offsetB = {0, 0};
-    auto attrCopyInB = std::make_shared<CopyOpAttribute>(
-        OpImmediate::Specified(offsetB), MemoryType::MEM_UB, OpImmediate::Specified(b_ub->GetShape()),
-        OpImmediate::Specified(b_ub->tensor->GetRawShape()));
+    auto attrCopyInB = std::make_shared<CopyOpAttribute>(OpImmediate::Specified(offsetB), MemoryType::MEM_UB,
+                                                         OpImmediate::Specified(b_ub->GetShape()),
+                                                         OpImmediate::Specified(b_ub->tensor->GetRawShape()));
     copyInB->SetOpAttribute(attrCopyInB);
 
     // a[16, 16] + b[16, 16] --> add_out[16, 16]
@@ -125,9 +125,9 @@ TEST_F(InplaceProcessTest, CopyInDirectAssemble)
     G.AddOp(Opcode::OP_COPY_IN, {"c"}, {"c1_ub"}, "Copy_In_C");
     auto copyInC = G.GetOp("Copy_In_C");
     std::vector<int64_t> offsetC = {0, NUM_16};
-    auto attrCopyInC = std::make_shared<CopyOpAttribute>(
-        OpImmediate::Specified(offsetC), MemoryType::MEM_UB, OpImmediate::Specified(c1_ub->GetShape()),
-        OpImmediate::Specified(c1_ub->tensor->GetRawShape()));
+    auto attrCopyInC = std::make_shared<CopyOpAttribute>(OpImmediate::Specified(offsetC), MemoryType::MEM_UB,
+                                                         OpImmediate::Specified(c1_ub->GetShape()),
+                                                         OpImmediate::Specified(c1_ub->tensor->GetRawShape()));
     copyInC->SetOpAttribute(attrCopyInC);
 
     // c1[16, 16]  --> Assemble(16, 0) --> [32, 16]
@@ -153,9 +153,9 @@ TEST_F(InplaceProcessTest, CopyInDirectAssemble)
     G.AddOp(Opcode::OP_COPY_OUT, {"exp_out"}, {"out"}, "Copy_Out");
     auto copyOut = G.GetOp("Copy_Out");
     std::vector<int64_t> offsetOut = {0, 0};
-    auto attrCopyOut = std::make_shared<CopyOpAttribute>(
-        MemoryType::MEM_UB, OpImmediate::Specified(offsetOut), OpImmediate::Specified(expOut->GetShape()),
-        OpImmediate::Specified(expOut->tensor->GetRawShape()));
+    auto attrCopyOut = std::make_shared<CopyOpAttribute>(MemoryType::MEM_UB, OpImmediate::Specified(offsetOut),
+                                                         OpImmediate::Specified(expOut->GetShape()),
+                                                         OpImmediate::Specified(expOut->tensor->GetRawShape()));
     copyOut->SetOpAttribute(attrCopyOut);
 
     G.SetInCast({"a", "b", "c"});
@@ -1087,27 +1087,27 @@ TEST_F(InplaceProcessTest, TestAssembleOnL1)
     // add op
     G.AddOp(Opcode::OP_COPY_IN, {"mat_a"}, {"mat_a_partial_0"}, "L1copyInA_0");
     auto L1copyInA_0 = G.GetOp("L1copyInA_0");
-    auto attrCopyInA_0 = std::make_shared<CopyOpAttribute>(
-        OpImmediate::Specified({256, 0}), MemoryType::MEM_L1, OpImmediate::Specified(mat_a->GetShape()),
-        OpImmediate::Specified(mat_a->tensor->GetRawShape()));
+    auto attrCopyInA_0 = std::make_shared<CopyOpAttribute>(OpImmediate::Specified({256, 0}), MemoryType::MEM_L1,
+                                                           OpImmediate::Specified(mat_a->GetShape()),
+                                                           OpImmediate::Specified(mat_a->tensor->GetRawShape()));
     L1copyInA_0->SetOpAttribute(attrCopyInA_0);
     G.AddOp(Opcode::OP_COPY_IN, {"mat_a"}, {"mat_a_partial_1"}, "L1copyInA_1");
     auto L1copyInA_1 = G.GetOp("L1copyInA_1");
-    auto attrCopyInA_1 = std::make_shared<CopyOpAttribute>(
-        OpImmediate::Specified({256, 64}), MemoryType::MEM_L1, OpImmediate::Specified(mat_a->GetShape()),
-        OpImmediate::Specified(mat_a->tensor->GetRawShape()));
+    auto attrCopyInA_1 = std::make_shared<CopyOpAttribute>(OpImmediate::Specified({256, 64}), MemoryType::MEM_L1,
+                                                           OpImmediate::Specified(mat_a->GetShape()),
+                                                           OpImmediate::Specified(mat_a->tensor->GetRawShape()));
     L1copyInA_1->SetOpAttribute(attrCopyInA_1);
     G.AddOp(Opcode::OP_COPY_IN, {"mat_a"}, {"mat_a_partial_2"}, "L1copyInA_2");
     auto L1copyInA_2 = G.GetOp("L1copyInA_2");
-    auto attrCopyInA_2 = std::make_shared<CopyOpAttribute>(
-        OpImmediate::Specified({512, 0}), MemoryType::MEM_L1, OpImmediate::Specified(mat_a->GetShape()),
-        OpImmediate::Specified(mat_a->tensor->GetRawShape()));
+    auto attrCopyInA_2 = std::make_shared<CopyOpAttribute>(OpImmediate::Specified({512, 0}), MemoryType::MEM_L1,
+                                                           OpImmediate::Specified(mat_a->GetShape()),
+                                                           OpImmediate::Specified(mat_a->tensor->GetRawShape()));
     L1copyInA_2->SetOpAttribute(attrCopyInA_2);
     G.AddOp(Opcode::OP_COPY_IN, {"mat_a"}, {"mat_a_partial_3"}, "L1copyInA_3");
     auto L1copyInA_3 = G.GetOp("L1copyInA_3");
-    auto attrCopyInA_3 = std::make_shared<CopyOpAttribute>(
-        OpImmediate::Specified({512, 64}), MemoryType::MEM_L1, OpImmediate::Specified(mat_a->GetShape()),
-        OpImmediate::Specified(mat_a->tensor->GetRawShape()));
+    auto attrCopyInA_3 = std::make_shared<CopyOpAttribute>(OpImmediate::Specified({512, 64}), MemoryType::MEM_L1,
+                                                           OpImmediate::Specified(mat_a->GetShape()),
+                                                           OpImmediate::Specified(mat_a->tensor->GetRawShape()));
     L1copyInA_3->SetOpAttribute(attrCopyInA_3);
 
     G.AddOp(Opcode::OP_ASSEMBLE, {"mat_a_partial_0"}, {"mat_a_L1"}, "assemble_A_0");
@@ -1129,9 +1129,9 @@ TEST_F(InplaceProcessTest, TestAssembleOnL1)
 
     G.AddOp(Opcode::OP_COPY_IN, {"mat_b"}, {"mat_b_L1"}, "L1_Copy_In_B");
     auto L1copyInB = G.GetOp("L1_Copy_In_B");
-    auto attrCopyInB = std::make_shared<CopyOpAttribute>(
-        OpImmediate::Specified({0, 0}), MemoryType::MEM_L1, OpImmediate::Specified(mat_b->GetShape()),
-        OpImmediate::Specified(mat_b->tensor->GetRawShape()));
+    auto attrCopyInB = std::make_shared<CopyOpAttribute>(OpImmediate::Specified({0, 0}), MemoryType::MEM_L1,
+                                                         OpImmediate::Specified(mat_b->GetShape()),
+                                                         OpImmediate::Specified(mat_b->tensor->GetRawShape()));
     L1copyInB->SetOpAttribute(attrCopyInB);
 
     G.AddOp(Opcode::OP_L1_TO_L0A, {"mat_a_L1"}, {"mat_a_L0"}, "L1_To_L0A");
@@ -1141,9 +1141,9 @@ TEST_F(InplaceProcessTest, TestAssembleOnL1)
 
     G.AddOp(Opcode::OP_COPY_OUT, {"mat_c_L0"}, {"mat_c"}, "L0C_Copy_out");
     auto copyOutOp = G.GetOp("L0C_Copy_out");
-    auto attrCopyOut = std::make_shared<CopyOpAttribute>(
-        OpImmediate::Specified({0, 0}), MemoryType::MEM_L0C, OpImmediate::Specified(mat_c->GetShape()),
-        OpImmediate::Specified(mat_c->tensor->GetRawShape()));
+    auto attrCopyOut = std::make_shared<CopyOpAttribute>(OpImmediate::Specified({0, 0}), MemoryType::MEM_L0C,
+                                                         OpImmediate::Specified(mat_c->GetShape()),
+                                                         OpImmediate::Specified(mat_c->tensor->GetRawShape()));
     copyOutOp->SetOpAttribute(attrCopyOut);
 
     // set incast and outcast

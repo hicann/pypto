@@ -27,9 +27,8 @@ void SetBoundary::InsertTemporaryCopyIn(Function& function, Operation& op) const
             // insert Copy_In before the op
             LogicalTensors operandGm;
             IRBuilder builder;
-            LogicalTensorPtr tensorGM =
-                builder.CreateTensorVar(input->Datatype(), input->shape, std::vector<SymbolicScalar>{},
-                    input->Format());
+            LogicalTensorPtr tensorGM = builder.CreateTensorVar(input->Datatype(), input->shape,
+                                                                std::vector<SymbolicScalar>{}, input->Format());
             GraphUtils::CopyDynStatus(tensorGM, input);
             tensorGM->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, true);
             tensorGM->SetMemoryTypeToBe(MemoryType::MEM_DEVICE_DDR);

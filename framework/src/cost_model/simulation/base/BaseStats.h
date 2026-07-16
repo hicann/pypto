@@ -25,9 +25,9 @@ namespace CostModel {
 class BaseStats {
 public:
     Reporter* rpt;
-    BaseStats() : rpt(nullptr){};
+    BaseStats() : rpt(nullptr) {};
     virtual ~BaseStats() = default;
-    explicit BaseStats(Reporter* r) : rpt(r){};
+    explicit BaseStats(Reporter* r) : rpt(r) {};
     virtual void Reset() = 0;
     virtual void Report(std::string& name) = 0;
 };

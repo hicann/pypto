@@ -17,15 +17,15 @@
 
 namespace npu::tile_fwk {
 
-void EntryRegistrarGroup::Append(EntryRegistrarNode *node)
+void EntryRegistrarGroup::Append(EntryRegistrarNode* node)
 {
     node->next = head;
     head = node;
 }
 
-void EntryRegistrarGroup::Init(void *data)
+void EntryRegistrarGroup::Init(void* data)
 {
-    for (EntryRegistrarNode *node = head; node != nullptr; node = node->next) {
+    for (EntryRegistrarNode* node = head; node != nullptr; node = node->next) {
         node->entry(data);
     }
 }

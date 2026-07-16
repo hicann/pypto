@@ -22,8 +22,8 @@
 template <typename T0, typename T1, unsigned tileH, unsigned tileW, unsigned dstTypeSize, int is_sum>
 TILEOP void CumOperationTool(T0 dst, T1 src, uint64_t tmpStride)
 {
-    using tmpTileDefine =
-        pto::Tile<pto::TileType::Vec, typename T0::Type, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
+    using tmpTileDefine = pto::Tile<pto::TileType::Vec, typename T0::Type, tileH, tileW, pto::BLayout::RowMajor, -1,
+                                    -1>;
     tmpTileDefine tmpDstTile(tileH, tileW), tmpSrcTile(tileH, tileW);
     pto::TASSIGN(tmpDstTile, (uint64_t)(dst.GetAddr() + tmpStride));
     pto::TASSIGN(tmpSrcTile, (uint64_t)(src.GetAddr() + tmpStride));
@@ -36,8 +36,8 @@ TILEOP void CumOperationTool(T0 dst, T1 src, uint64_t tmpStride)
 #else
         pipe_barrier(PIPE_ALL);
 #endif
-        using TileDefine =
-            pto::Tile<pto::TileType::Vec, typename T0::Type, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
+        using TileDefine = pto::Tile<pto::TileType::Vec, typename T0::Type, tileH, tileW, pto::BLayout::RowMajor, -1,
+                                     -1>;
         TileDefine src1Tile(tileH - i, tileW), src0Tile(tileH - i, tileW), dstTile(tileH - i, tileW);
         pto::TASSIGN(src0Tile, (uint64_t)(src.GetAddr() + tmpStride));
         pto::TASSIGN(src1Tile, (uint64_t)(src.GetAddr() + tmpStride + i * tileW * dstTypeSize));
@@ -57,9 +57,8 @@ TILEOP void CumOperationTool(T0 dst, T1 src, uint64_t tmpStride)
 }
 
 template <typename T0, int is_sum>
-TILEOP void CumOperationScalarTool(
-    __ubuf__ typename T0::Type* dstAddr, __ubuf__ typename T0::Type* srcAddr, uint64_t stride, uint64_t lastShape,
-    uint64_t idx)
+TILEOP void CumOperationScalarTool(__ubuf__ typename T0::Type* dstAddr, __ubuf__ typename T0::Type* srcAddr,
+                                   uint64_t stride, uint64_t lastShape, uint64_t idx)
 {
     if (is_sum) {
         for (LoopVar tmpIdx = 0; tmpIdx < lastShape - idx; tmpIdx++) {

@@ -19,7 +19,7 @@ using namespace npu::tile_fwk;
 
 class TestCodeGenKirinX90Assemble : public CodegenTestLiteNPU {
 public:
-    TestCodeGenKirinX90Assemble() : CodegenTestLiteNPU("KirinX90"){};
+    TestCodeGenKirinX90Assemble() : CodegenTestLiteNPU("KirinX90") {};
 };
 
 TEST_F(TestCodeGenKirinX90Assemble, test_assemble_fp16_001)

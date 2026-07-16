@@ -52,28 +52,24 @@ Status InferDynShapeChecker::DoPostCheck(Function& function)
             }
             std::shared_ptr<CopyOpAttribute> copyAttr = std::static_pointer_cast<CopyOpAttribute>(attr);
             if (copyAttr->GetToDynValidShape().empty()) {
-                APASS_LOG_ERROR_F(
-                    Elements::Operation, "Op %s[%d] has no dyn to shape attr.", op.GetOpcodeStr().c_str(),
-                    op.GetOpMagic());
+                APASS_LOG_ERROR_F(Elements::Operation, "Op %s[%d] has no dyn to shape attr.", op.GetOpcodeStr().c_str(),
+                                  op.GetOpMagic());
                 return FAILED;
             }
         }
         for (const auto& opOut : op.GetOOperands()) {
             if (opOut->GetDynValidShape().empty()) {
-                APASS_LOG_ERROR_F(
-                    Elements::Tensor, "Op %s[%d] output [%d] has no dynamic valid shape.", op.GetOpcodeStr().c_str(),
-                    op.GetOpMagic(), opOut->GetMagic());
+                APASS_LOG_ERROR_F(Elements::Tensor, "Op %s[%d] output [%d] has no dynamic valid shape.",
+                                  op.GetOpcodeStr().c_str(), op.GetOpMagic(), opOut->GetMagic());
                 return FAILED;
             }
-            //对多输出op的，不参与计算的临时Tensor不校验DynValidShape
+            // 对多输出op的，不参与计算的临时Tensor不校验DynValidShape
             if (opOut->GetConsumers().empty() && !function.IsFromOutCast(opOut)) {
                 continue;
             }
             if (!IsValidShapeInTensorShape(opOut)) {
-                APASS_LOG_ERROR_F(
-                    Elements::Tensor,
-                    "Op %s[%d] output [%d] dynamic valid shape is out of tensor shape.", op.GetOpcodeStr().c_str(),
-                    op.GetOpMagic(), opOut->GetMagic());
+                APASS_LOG_ERROR_F(Elements::Tensor, "Op %s[%d] output [%d] dynamic valid shape is out of tensor shape.",
+                                  op.GetOpcodeStr().c_str(), op.GetOpMagic(), opOut->GetMagic());
                 return FAILED;
             }
         }

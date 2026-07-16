@@ -19,8 +19,8 @@
 #include "securec.h"
 
 namespace npu::tile_fwk {
-std::string CodeGenOpNPU::PrintMatmulTileTensor(
-    bool zeroC, std::unordered_map<OperandType, std::string>& tensorWithMemType) const
+std::string CodeGenOpNPU::PrintMatmulTileTensor(bool zeroC,
+                                                std::unordered_map<OperandType, std::string>& tensorWithMemType) const
 {
     std::ostringstream oss;
     bool hasBias = tensorWithMemType.count(OperandType::BUF_BT);
@@ -36,9 +36,9 @@ std::string CodeGenOpNPU::PrintMatmulTileTensor(
     } else if (transMode == TransMode::CAST_ROUND) {
         transModeStr = "TransMode::CAST_ROUND";
     }
-    std::vector<std::string> paramList = {
-        tensorWithMemType[OperandType::BUF_L0C], tensorWithMemType[OperandType::BUF_L0A],
-        tensorWithMemType[OperandType::BUF_L0B]};
+    std::vector<std::string> paramList = {tensorWithMemType[OperandType::BUF_L0C],
+                                          tensorWithMemType[OperandType::BUF_L0A],
+                                          tensorWithMemType[OperandType::BUF_L0B]};
     oss << tileOpName;
     if (hasBias) {
         paramList.emplace_back(tensorWithMemType[OperandType::BUF_BT]);
@@ -119,7 +119,7 @@ std::string CodeGenOpNPU::GenCubeOp(bool zeroC) const
             << SymbolicExpressionTable::BuildExpression(nSymbol) << ", " << (zeroC ? "true" : "false") << ", " << uf
             << ", " << SymbolicExpressionTable::BuildExpression(l0cShapeDyn[ID0]) << ", "
             << SymbolicExpressionTable::BuildExpression(l0cShapeDyn[ID1]) << ");\n";
-    } else {                         // static function
+    } else { // static function
         int64_t m = shape[ID0][ID0];
         int64_t k = shape[ID1][ID1]; // NEXTNEXT assume A is not transposed for now
         int64_t n = shape[ID0][ID1];

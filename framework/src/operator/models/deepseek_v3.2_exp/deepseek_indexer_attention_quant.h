@@ -39,16 +39,18 @@ struct DiaQuantAttr {
     std::string layeroutKey = "PA_BSND";
 };
 
-void DeepSeekIndexerAttentionQuant(
-    const Tensor& tokenX, const Tensor& wDq, const Tensor& wUqQr, const Tensor& wUk, const Tensor& wDkvKr,
-    const Tensor& rmsnormGammaCq, const Tensor& rmsnormGammaCkv, const Tensor& cos, const Tensor& sin,
-    const Tensor& cacheIndex, Tensor& kvCache, Tensor& krCache, Tensor& kScaleCache, const Tensor& dequantScaleWUqQr,
-    const Tensor& wQb, const Tensor& wQbScale, const Tensor& wK, const Tensor& wProj, const Tensor& layernormGammaK,
-    const Tensor& layernormBetaK, const Tensor& hadamardQ, const Tensor& hadamardK, const Tensor& idxKCache,
-    const Tensor& idxKScaleCache, const Tensor& actualSeqLengthsKey, const Tensor& blockTable, Tensor& attentionOut,
-    DiaQuantAttr& attrs, const DSIASimpleParams& params, Tensor& debugQNopeOut, Tensor& debugQRopeOut,
-    Tensor& debugRmsNormOut, Tensor& debugRmsNormScaleOut, Tensor& debugQInt8Out, Tensor& debugQScaleOut,
-    Tensor& debugWeightsOut, Tensor& indexerTopkResTmp, Tensor& topkValueTmp, Tensor& topkTmpOut);
+void DeepSeekIndexerAttentionQuant(const Tensor& tokenX, const Tensor& wDq, const Tensor& wUqQr, const Tensor& wUk,
+                                   const Tensor& wDkvKr, const Tensor& rmsnormGammaCq, const Tensor& rmsnormGammaCkv,
+                                   const Tensor& cos, const Tensor& sin, const Tensor& cacheIndex, Tensor& kvCache,
+                                   Tensor& krCache, Tensor& kScaleCache, const Tensor& dequantScaleWUqQr,
+                                   const Tensor& wQb, const Tensor& wQbScale, const Tensor& wK, const Tensor& wProj,
+                                   const Tensor& layernormGammaK, const Tensor& layernormBetaK, const Tensor& hadamardQ,
+                                   const Tensor& hadamardK, const Tensor& idxKCache, const Tensor& idxKScaleCache,
+                                   const Tensor& actualSeqLengthsKey, const Tensor& blockTable, Tensor& attentionOut,
+                                   DiaQuantAttr& attrs, const DSIASimpleParams& params, Tensor& debugQNopeOut,
+                                   Tensor& debugQRopeOut, Tensor& debugRmsNormOut, Tensor& debugRmsNormScaleOut,
+                                   Tensor& debugQInt8Out, Tensor& debugQScaleOut, Tensor& debugWeightsOut,
+                                   Tensor& indexerTopkResTmp, Tensor& topkValueTmp, Tensor& topkTmpOut);
 
 } // namespace npu::tile_fwk
 

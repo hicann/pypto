@@ -38,8 +38,8 @@ struct DeviceSlotContext {
     }
 
 public:
-    void FillInputOutputSlot(
-        DeviceExecuteSlot* slotList, [[maybe_unused]] size_t slotSize, DevAscendProgram* devProg, DevStartArgs* args);
+    void FillInputOutputSlot(DeviceExecuteSlot* slotList, [[maybe_unused]] size_t slotSize, DevAscendProgram* devProg,
+                             DevStartArgs* args);
 
 private:
     Vector<DeviceExecuteSlot, WsMemCategory::VECTOR_SLOT_LIST> slotList_;

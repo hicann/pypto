@@ -106,49 +106,44 @@ public:
     IRBuilder& operator=(IRBuilder&&) = delete;
 
     /* create raw tensor with static shape */
-    std::shared_ptr<RawTensor> CreateRawTensor(
-        DataType t, Shape shape, TileOpFormat format = TileOpFormat::TILEOP_ND, std::string name = "");
+    std::shared_ptr<RawTensor> CreateRawTensor(DataType t, Shape shape, TileOpFormat format = TileOpFormat::TILEOP_ND,
+                                               std::string name = "");
 
     /* create raw tensor with dynamic shape */
-    std::shared_ptr<RawTensor> CreateRawTensor(
-        DataType t, std::vector<SymbolicScalar> shape, TileOpFormat format = TileOpFormat::TILEOP_ND,
-        std::string name = "");
+    std::shared_ptr<RawTensor> CreateRawTensor(DataType t, std::vector<SymbolicScalar> shape,
+                                               TileOpFormat format = TileOpFormat::TILEOP_ND, std::string name = "");
 
     /* create logical tensor with static shape */
-    LogicalTensorPtr CreateTensorVar(
-        DataType t, Shape shape, TileOpFormat format = TileOpFormat::TILEOP_ND, std::string name = "");
+    LogicalTensorPtr CreateTensorVar(DataType t, Shape shape, TileOpFormat format = TileOpFormat::TILEOP_ND,
+                                     std::string name = "");
 
     /* create logical tensor with dynamic shape */
-    LogicalTensorPtr CreateTensorVar(
-        DataType t, Shape shape, std::vector<SymbolicScalar> validShape, TileOpFormat format = TileOpFormat::TILEOP_ND,
-        std::string name = "");
+    LogicalTensorPtr CreateTensorVar(DataType t, Shape shape, std::vector<SymbolicScalar> validShape,
+                                     TileOpFormat format = TileOpFormat::TILEOP_ND, std::string name = "");
 
     /* create logical tensor from raw tensor */
-    LogicalTensorPtr CreateTensorVar(
-        std::shared_ptr<RawTensor> rawTensor, Offset offset, Shape shape, std::vector<SymbolicScalar> validShape = {});
+    LogicalTensorPtr CreateTensorVar(std::shared_ptr<RawTensor> rawTensor, Offset offset, Shape shape,
+                                     std::vector<SymbolicScalar> validShape = {});
 
     /* create logical tensor with static shape, associate with function */
-    LogicalTensorPtr CreateTensorVar(
-        Function& f, DataType t, Shape shape, TileOpFormat format = TileOpFormat::TILEOP_ND, std::string name = "");
+    LogicalTensorPtr CreateTensorVar(Function& f, DataType t, Shape shape,
+                                     TileOpFormat format = TileOpFormat::TILEOP_ND, std::string name = "");
 
     /* create logical tensor with dynamic shape, associate with function */
-    LogicalTensorPtr CreateTensorVar(
-        Function& f, DataType t, Shape shape, std::vector<SymbolicScalar> validShape,
-        TileOpFormat format = TileOpFormat::TILEOP_ND, std::string name = "");
+    LogicalTensorPtr CreateTensorVar(Function& f, DataType t, Shape shape, std::vector<SymbolicScalar> validShape,
+                                     TileOpFormat format = TileOpFormat::TILEOP_ND, std::string name = "");
 
     /* create logical tensor from raw tensor, associate with function */
-    LogicalTensorPtr CreateTensorVar(
-        Function& f, std::shared_ptr<RawTensor> rawTensor, Offset offset, Shape shape,
-        std::vector<SymbolicScalar> validShape = {});
+    LogicalTensorPtr CreateTensorVar(Function& f, std::shared_ptr<RawTensor> rawTensor, Offset offset, Shape shape,
+                                     std::vector<SymbolicScalar> validShape = {});
 
     /* create tensor operation statement */
-    Operation& CreateTensorOpStmt(
-        Function& f, const Opcode opCode, const LogicalTensors& iOperands, const LogicalTensors& oOperands,
-        ir::Span span = ir::Span::Unknown());
+    Operation& CreateTensorOpStmt(Function& f, const Opcode opCode, const LogicalTensors& iOperands,
+                                  const LogicalTensors& oOperands, ir::Span span = ir::Span::Unknown());
 
-    ir::TensorOpStmtPtr CreateTensorOpStmt(
-        std::vector<ir::VarPtr> result, ir::VarPtr result_token, std::string opcode, std::vector<ir::ExprPtr> args,
-        std::vector<ir::VarPtr> tokens, std::vector<std::pair<std::string, std::any>> attrs, ir::Span span);
+    ir::TensorOpStmtPtr CreateTensorOpStmt(std::vector<ir::VarPtr> result, ir::VarPtr result_token, std::string opcode,
+                                           std::vector<ir::ExprPtr> args, std::vector<ir::VarPtr> tokens,
+                                           std::vector<std::pair<std::string, std::any>> attrs, ir::Span span);
 
     /* create symbolic scalar */
     SymbolicScalar CreateConstInt(int64_t value);
@@ -163,40 +158,41 @@ public:
 
     ir::SeqStmtsPtr CreateSeqStmts(std::vector<ir::StmtPtr> stmts, ir::Span span);
 
-    ir::IfStmtPtr CreateIfStmt(
-        ir::ExprPtr cond, ir::StmtPtr thenBody, std::optional<ir::StmtPtr> elseBody, std::vector<ir::VarPtr> returnVars,
-        ir::Span span);
+    ir::IfStmtPtr CreateIfStmt(ir::ExprPtr cond, ir::StmtPtr thenBody, std::optional<ir::StmtPtr> elseBody,
+                               std::vector<ir::VarPtr> returnVars, ir::Span span);
 
     ir::YieldStmtPtr CreateYieldStmt(std::vector<ir::ExprPtr> values, ir::Span span);
 
     ir::ReturnStmtPtr CreateReturnStmt(std::vector<ir::ExprPtr> values, ir::Span span);
 
-    ir::ForStmtPtr CreateForStmt(
-        ir::VarPtr loopVar, ir::ExprPtr start, ir::ExprPtr stop, ir::ExprPtr step, std::vector<ir::IterArgPtr> iterArgs,
-        ir::StmtPtr body, std::vector<ir::VarPtr> returnVars, ir::Span span, std::vector<std::pair<std::string, std::any>> attrs = {});
+    ir::ForStmtPtr CreateForStmt(ir::VarPtr loopVar, ir::ExprPtr start, ir::ExprPtr stop, ir::ExprPtr step,
+                                 std::vector<ir::IterArgPtr> iterArgs, ir::StmtPtr body,
+                                 std::vector<ir::VarPtr> returnVars, ir::Span span,
+                                 std::vector<std::pair<std::string, std::any>> attrs = {});
 
     ir::IterArgPtr CreateIterArg(std::string name, ir::TypePtr type, ir::ExprPtr initValue, ir::Span span);
 
     ir::IterArgPtr CreateIterArg(ir::VarPtr var, ir::ExprPtr initValue);
 
-    ir::WhileStmtPtr CreateWhileStmt(
-        ir::ExprPtr cond, std::vector<ir::IterArgPtr> iterArgs, ir::StmtPtr body, std::vector<ir::VarPtr> returnVars,
-        ir::Span span);
+    ir::WhileStmtPtr CreateWhileStmt(ir::ExprPtr cond, std::vector<ir::IterArgPtr> iterArgs, ir::StmtPtr body,
+                                     std::vector<ir::VarPtr> returnVars, ir::Span span);
 
     ir::BreakStmtPtr CreateBreakStmt(std::vector<ir::ExprPtr> values, ir::Span span);
 
     ir::ContinueStmtPtr CreateContinueStmt(std::vector<ir::ExprPtr> values, ir::Span span);
 
-    ir::FunctionPtr CreateFunction(
-        std::string name, std::vector<ir::VarPtr> params, std::vector<ir::TypePtr> returnTypes, ir::StmtPtr body,
-        ir::Span span);
+    ir::FunctionPtr CreateFunction(std::string name, std::vector<ir::VarPtr> params,
+                                   std::vector<ir::TypePtr> returnTypes, ir::StmtPtr body, ir::Span span);
 
     ir::ProgramPtr CreateProgram(std::vector<ir::FunctionPtr> functions, std::string name, ir::Span span);
 
     ir::VarPtr CreateTokenVar(ir::Span span);
 
     void AddDependToken(SymbolicScalar scalar, ir::VarPtr token) { irContext_.AddDependToken(scalar.AsExpr(), token); }
-    std::vector<ir::VarPtr>& GetDependToken(SymbolicScalar scalar) { return irContext_.GetDependToken(scalar.AsExpr()); }
+    std::vector<ir::VarPtr>& GetDependToken(SymbolicScalar scalar)
+    {
+        return irContext_.GetDependToken(scalar.AsExpr());
+    }
 
     void AddDependToken(ir::ExprPtr expr, ir::VarPtr token) { irContext_.AddDependToken(expr, token); }
     std::vector<ir::VarPtr>& GetDependToken(ir::ExprPtr expr) { return irContext_.GetDependToken(expr); }

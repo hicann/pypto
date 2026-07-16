@@ -16,7 +16,8 @@ using namespace npu::tile_fwk::dynamic;
 
 class DeviceExecuteContextTest : public ::testing::Test {
 protected:
-    DeviceExecuteContextTest() {
+    DeviceExecuteContextTest()
+    {
         DevStartArgs args;
         context = new DeviceExecuteContext(&args);
     }
@@ -26,7 +27,8 @@ protected:
     struct DeviceExecuteContext* context;
 };
 
-TEST_F(DeviceExecuteContextTest, HandleParallelKey) {
+TEST_F(DeviceExecuteContextTest, HandleParallelKey)
+{
     void* result = context->CallRootFunctionStitch(RUNTIME_FUNCKEY_LOOP_BARRIER);
     EXPECT_EQ(result, nullptr);
     EXPECT_NE(context->parallelCtx.info.forId, 0);

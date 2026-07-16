@@ -62,8 +62,8 @@ TEST_F(TestDeviceRunner, test_set_pmu_event)
 TEST_F(TestDeviceRunner, test_ini_proflevel)
 {
     npu::tile_fwk::dynamic::SchThreadStatus status;
-    std::unique_ptr<npu::tile_fwk::dynamic::AiCoreManager> AiCoreManagerPtr =
-        std::make_unique<npu::tile_fwk::dynamic::AiCoreManager>(status);
+    std::unique_ptr<npu::tile_fwk::dynamic::AiCoreManager>
+        AiCoreManagerPtr = std::make_unique<npu::tile_fwk::dynamic::AiCoreManager>(status);
     AiCoreManagerPtr->aicNum_ = 0;
     AiCoreManagerPtr->aivNum_ = 1;
     AiCoreManagerPtr->aivStart_ = 0;
@@ -127,8 +127,8 @@ TEST_F(TestDeviceRunner, test_ini_proflevel)
 TEST_F(TestDeviceRunner, test_create_proflevel)
 {
     npu::tile_fwk::dynamic::SchThreadStatus status;
-    std::unique_ptr<npu::tile_fwk::dynamic::AiCoreManager> AiCoreManagerPtr =
-        std::make_unique<npu::tile_fwk::dynamic::AiCoreManager>(status);
+    std::unique_ptr<npu::tile_fwk::dynamic::AiCoreManager>
+        AiCoreManagerPtr = std::make_unique<npu::tile_fwk::dynamic::AiCoreManager>(status);
     npu::tile_fwk::dynamic::AiCoreProf prof(*AiCoreManagerPtr);
 
     ProfConfig config0;

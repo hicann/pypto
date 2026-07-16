@@ -21,16 +21,15 @@ using namespace npu::tile_fwk;
 using namespace npu::tile_fwk::dynamic;
 class InstrumentationTest : public ::testing::Test {
 protected:
-    void SetUp() override {
-    }
+    void SetUp() override {}
 
-    void TearDown() override {
-    }
+    void TearDown() override {}
 };
 
 HardBranchGroupDefine(oneCase);
 
-static int GetData(int n) {
+static int GetData(int n)
+{
     if (HardBranchTrue(oneCase)) {
         return n + 1;
     } else {
@@ -38,7 +37,8 @@ static int GetData(int n) {
     }
 }
 
-TEST_F(InstrumentationTest, HardBranch) {
+TEST_F(InstrumentationTest, HardBranch)
+{
     HardBranchManager manager;
     manager.AddGroup(HardBranchGroupCreate(oneCase));
     EXPECT_EQ(1, manager.Size());
@@ -54,8 +54,9 @@ TEST_F(InstrumentationTest, HardBranch) {
     EXPECT_EQ(0x11, v2);
 }
 
-TEST_F(InstrumentationTest, HardBranchManager) {
-    HardBranchManager &manager = HardBranchManager::GetInstance();
+TEST_F(InstrumentationTest, HardBranchManager)
+{
+    HardBranchManager& manager = HardBranchManager::GetInstance();
     manager.Placeholder();
     manager.AddGroup(HardBranchGroupCreate(oneCase));
     EXPECT_TRUE(manager.Size() == 1);

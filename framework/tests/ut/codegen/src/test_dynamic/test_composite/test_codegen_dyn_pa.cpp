@@ -61,9 +61,8 @@ void testPa(PaTileShapeConfig& tileConfig, int maxUnrollTimes = 1)
     Tensor actSeqs(DT_INT32, {b}, "actSeqs");
     Tensor paOut(DT_FP32, {b * nq * sq, dn}, "paOut");
 
-    PageAttention(
-        qNope, kNopeCache, vNopeCache, qRope, kRopeCache, blockTable, actSeqs, blockSize, softmaxScale, paOut,
-        tileConfig, maxUnrollTimes);
+    PageAttention(qNope, kNopeCache, vNopeCache, qRope, kRopeCache, blockTable, actSeqs, blockSize, softmaxScale, paOut,
+                  tileConfig, maxUnrollTimes);
 
     for (auto& ele : Program::GetInstance().GetFunctionMap()) {
         bool isRootExist = ele.second.get()->rootFunc_ != nullptr;

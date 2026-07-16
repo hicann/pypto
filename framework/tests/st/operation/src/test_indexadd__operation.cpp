@@ -18,8 +18,8 @@
 using namespace tile_fwk::test_operation;
 namespace {
 struct IndexAddOpFuncArgs : public OpFuncArgs {
-    IndexAddOpFuncArgs(
-        const std::vector<int64_t>& viewShape, const std::vector<int64_t> tileShape, int axis, Element& alpha)
+    IndexAddOpFuncArgs(const std::vector<int64_t>& viewShape, const std::vector<int64_t> tileShape, int axis,
+                       Element& alpha)
         : viewShape_(viewShape), tileShape_(tileShape), axis_(axis), alpha_(alpha)
     {
         this->inplaceInfo[0] = 0; // 表示第0个输出初始化为第0个输入的数据
@@ -41,8 +41,8 @@ struct IndexAddOpMetaData {
 };
 
 // void IndexAdd_(Tensor &self, const Tensor &src, const Tensor &indices, int axis, const Element &alpha)
-static void IndexAddOperationExeFunc1Dim(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void IndexAddOperationExeFunc1Dim(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                         const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0], inputs[1], inputs[2]}, {outputs[0]})
     {
@@ -71,8 +71,8 @@ static void IndexAddOperationExeFunc1Dim(
     }
 }
 
-static void IndexAddOperationExeFunc2Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void IndexAddOperationExeFunc2Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                          const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0], inputs[1], inputs[2]}, {outputs[0]})
     {
@@ -109,8 +109,8 @@ static void IndexAddOperationExeFunc2Dims(
     }
 }
 
-static void IndexAddOperationExeFunc3Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void IndexAddOperationExeFunc3Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                          const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0], inputs[1], inputs[2]}, {outputs[0]})
     {
@@ -141,8 +141,8 @@ static void IndexAddOperationExeFunc3Dims(
             {
                 LOOP("LOOP_L2_nIdx", FunctionType::DYNAMIC_LOOP, nIdx, LoopRange(0, nloop, 1))
                 {
-                    std::vector<SymbolicScalar> offset = {
-                        bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape};
+                    std::vector<SymbolicScalar> offset = {bIdx * firstViewShape, sIdx * secondViewShape,
+                                                          nIdx * thirdViewShape};
                     std::vector<SymbolicScalar> srcValidShape = {
                         std::min(src_firstDim - bIdx * firstViewShape, firstViewShape),
                         std::min(src_secondDim - sIdx * secondViewShape, secondViewShape),
@@ -157,8 +157,8 @@ static void IndexAddOperationExeFunc3Dims(
     }
 }
 
-static void IndexAddOperationExeFunc4Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void IndexAddOperationExeFunc4Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                          const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0], inputs[1], inputs[2]}, {outputs[0]})
     {
@@ -194,9 +194,8 @@ static void IndexAddOperationExeFunc4Dims(
                 {
                     LOOP("LOOP_L3_qIdx", FunctionType::DYNAMIC_LOOP, qIdx, LoopRange(0, qloop, 1))
                     {
-                        std::vector<SymbolicScalar> offset = {
-                            bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape,
-                            qIdx * forthViewShape};
+                        std::vector<SymbolicScalar> offset = {bIdx * firstViewShape, sIdx * secondViewShape,
+                                                              nIdx * thirdViewShape, qIdx * forthViewShape};
                         std::vector<SymbolicScalar> srcValidShape = {
                             std::min(src_firstDim - bIdx * firstViewShape, firstViewShape),
                             std::min(src_secondDim - sIdx * secondViewShape, secondViewShape),
@@ -213,8 +212,8 @@ static void IndexAddOperationExeFunc4Dims(
     }
 }
 
-static void IndexAddOperationExeFunc5Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void IndexAddOperationExeFunc5Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                          const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0], inputs[1], inputs[2]}, {outputs[0]})
     {
@@ -240,10 +239,9 @@ static void IndexAddOperationExeFunc5Dims(
         const int64_t thirdViewShape = viewShape[2];
         const int64_t forthViewShape = viewShape[3];
         const int64_t fifthViewShape = viewShape[4];
-        const int64_t loop[] = {
-            CeilDiv(src_firstDim, firstViewShape), CeilDiv(src_secondDim, secondViewShape),
-            CeilDiv(src_thirdDim, thirdViewShape), CeilDiv(src_forthDim, forthViewShape),
-            CeilDiv(src_fifthDim, fifthViewShape)};
+        const int64_t loop[] = {CeilDiv(src_firstDim, firstViewShape), CeilDiv(src_secondDim, secondViewShape),
+                                CeilDiv(src_thirdDim, thirdViewShape), CeilDiv(src_forthDim, forthViewShape),
+                                CeilDiv(src_fifthDim, fifthViewShape)};
         // self为GM输入，不进行view切分，其他两个输入支持axis轴view切分
         LOOP("LOOP_L0_bIdx", FunctionType::DYNAMIC_LOOP, bIdx, LoopRange(loop[0]))
         {
@@ -255,9 +253,9 @@ static void IndexAddOperationExeFunc5Dims(
                     {
                         LOOP("LOOP_L4_rIdx", FunctionType::DYNAMIC_LOOP, rIdx, LoopRange(loop[4]))
                         {
-                            std::vector<SymbolicScalar> offset = {
-                                bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape,
-                                qIdx * forthViewShape, rIdx * fifthViewShape};
+                            std::vector<SymbolicScalar> offset = {bIdx * firstViewShape, sIdx * secondViewShape,
+                                                                  nIdx * thirdViewShape, qIdx * forthViewShape,
+                                                                  rIdx * fifthViewShape};
                             std::vector<SymbolicScalar> srcValidShape = {
                                 std::min(src_firstDim - bIdx * firstViewShape, firstViewShape),
                                 std::min(src_secondDim - sIdx * secondViewShape, secondViewShape),
@@ -280,11 +278,10 @@ class IndexAdd_OperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_
 
 INSTANTIATE_TEST_SUITE_P(
     TestIndexAdd_, IndexAdd_OperationTest,
-    ::testing::ValuesIn(
-        GetOpMetaData<IndexAddOpMetaData>(
-            {IndexAddOperationExeFunc1Dim, IndexAddOperationExeFunc2Dims, IndexAddOperationExeFunc3Dims,
-             IndexAddOperationExeFunc4Dims, IndexAddOperationExeFunc5Dims},
-            "IndexAdd_")));
+    ::testing::ValuesIn(GetOpMetaData<IndexAddOpMetaData>({IndexAddOperationExeFunc1Dim, IndexAddOperationExeFunc2Dims,
+                                                           IndexAddOperationExeFunc3Dims, IndexAddOperationExeFunc4Dims,
+                                                           IndexAddOperationExeFunc5Dims},
+                                                          "IndexAdd_")));
 
 TEST_P(IndexAdd_OperationTest, TestIndexAdd_)
 {
@@ -310,9 +307,9 @@ TEST_P(IndexAdd_OperationTest, TestIndexAdd_)
     Element alp(npu::tile_fwk::DT_FP32, value);
     auto args = IndexAddOpFuncArgs(GetViewShape(test_data), GetTileShape(test_data), axis, alp);
     auto testCase = CreateTestCaseDesc<IndexAddOpMetaData>(GetParam(), &args);
-    std::vector<OpFunc> opFuncs = {
-        IndexAddOperationExeFunc1Dim, IndexAddOperationExeFunc2Dims, IndexAddOperationExeFunc3Dims,
-        IndexAddOperationExeFunc4Dims, IndexAddOperationExeFunc5Dims};
+    std::vector<OpFunc> opFuncs = {IndexAddOperationExeFunc1Dim, IndexAddOperationExeFunc2Dims,
+                                   IndexAddOperationExeFunc3Dims, IndexAddOperationExeFunc4Dims,
+                                   IndexAddOperationExeFunc5Dims};
     testCase.opFunc = opFuncs[GetViewShape(test_data).size() - 1];
     TestExecutor::runTest(testCase);
 }

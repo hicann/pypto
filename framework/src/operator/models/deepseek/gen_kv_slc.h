@@ -25,14 +25,13 @@ namespace npu::tile_fwk {
 struct KvSlcTileShapeConfig {
     std::array<int, TILE_VEC_DIMS> v0TileShape;
 };
-void KvSlcCompute(
-    Tensor& topK_indcies, Tensor& topK_tensor_shape, Tensor& kvNopeCache, Tensor& kRopeCache, Tensor& kvActSeqs,
-    int front, int near, int topk, int l_prime, int n2, Tensor& blockTable, int blockSize, Tensor& k_slcOut,
-    Tensor& v_slcOut, Tensor& kvSlcActSeqs, KvSlcTileShapeConfig& tileConfig, bool debug = false);
-void GenKvSlc(
-    Tensor& topK_indcies, Tensor& topK_tensor_shape, Tensor& kvNopeCache, Tensor& kRopeCache, Tensor& kvActSeqs,
-    int front, int near, int topk, int l_prime, int n2, Tensor& blockTable, int blockSize, Tensor& k_slcOut,
-    Tensor& v_slcOut, Tensor& kvSlcActSeqs, KvSlcTileShapeConfig& tileConfig);
+void KvSlcCompute(Tensor& topK_indcies, Tensor& topK_tensor_shape, Tensor& kvNopeCache, Tensor& kRopeCache,
+                  Tensor& kvActSeqs, int front, int near, int topk, int l_prime, int n2, Tensor& blockTable,
+                  int blockSize, Tensor& k_slcOut, Tensor& v_slcOut, Tensor& kvSlcActSeqs,
+                  KvSlcTileShapeConfig& tileConfig, bool debug = false);
+void GenKvSlc(Tensor& topK_indcies, Tensor& topK_tensor_shape, Tensor& kvNopeCache, Tensor& kRopeCache,
+              Tensor& kvActSeqs, int front, int near, int topk, int l_prime, int n2, Tensor& blockTable, int blockSize,
+              Tensor& k_slcOut, Tensor& v_slcOut, Tensor& kvSlcActSeqs, KvSlcTileShapeConfig& tileConfig);
 } // namespace npu::tile_fwk
 
 #endif // MLA_PROLOG

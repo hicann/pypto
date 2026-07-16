@@ -1,5 +1,5 @@
 /**
-* Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
  * Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -19,15 +19,16 @@
 #include "machine/runtime/context/device_launcher_context.h"
 
 namespace npu::tile_fwk::dynamic {
-int ExportedOperatorDeviceLaunchOnceWithDeviceTensorData(
-    ExportedOperator* op, const std::vector<DeviceTensorData>& inputList,
-    const std::vector<DeviceTensorData>& outputList,
-    DeviceStream aicoreStream, bool streamSynchronize, uint8_t* devCtrlCache, const DeviceLauncherConfig& config)
+int ExportedOperatorDeviceLaunchOnceWithDeviceTensorData(ExportedOperator* op,
+                                                         const std::vector<DeviceTensorData>& inputList,
+                                                         const std::vector<DeviceTensorData>& outputList,
+                                                         DeviceStream aicoreStream, bool streamSynchronize,
+                                                         uint8_t* devCtrlCache, const DeviceLauncherConfig& config)
 {
     RtStream aicoreStreamValue = reinterpret_cast<RtStream>(aicoreStream);
     return DeviceLauncher::DeviceLaunchOnceWithDeviceTensorData(
-        op->GetFunction(), inputList, outputList, aicoreStreamValue,
-        streamSynchronize, op, reinterpret_cast<DevControlFlowCache*>(devCtrlCache), config);
+        op->GetFunction(), inputList, outputList, aicoreStreamValue, streamSynchronize, op,
+        reinterpret_cast<DevControlFlowCache*>(devCtrlCache), config);
 }
 
 int DeviceSynchronize(DeviceStream aicpuStream)
@@ -49,14 +50,14 @@ void DeviceLauncherFini() { DeviceLauncherContext::Get().Finalize(); }
 
 void CopyDevToHost(const DeviceTensorData& devTensor, DeviceTensorData& hostTensor)
 {
-    DeviceMemoryUtils().CopyFromDev(
-        (uint8_t*)hostTensor.GetAddr(), (uint8_t*)devTensor.GetAddr(), devTensor.GetDataSize());
+    DeviceMemoryUtils().CopyFromDev((uint8_t*)hostTensor.GetAddr(), (uint8_t*)devTensor.GetAddr(),
+                                    devTensor.GetDataSize());
 }
 
 void CopyHostToDev(const DeviceTensorData& devTensor, DeviceTensorData& hostTensor)
 {
-    DeviceMemoryUtils().CopyToDev(
-        (uint8_t*)devTensor.GetAddr(), (uint8_t*)hostTensor.GetAddr(), devTensor.GetDataSize());
+    DeviceMemoryUtils().CopyToDev((uint8_t*)devTensor.GetAddr(), (uint8_t*)hostTensor.GetAddr(),
+                                  devTensor.GetDataSize());
 }
 
 uint8_t* CopyHostToDev(uint8_t* data, uint64_t size)
@@ -73,10 +74,7 @@ void GetCaptureInfo(RtStream aicoreStream, AclMdlRI& rtModel, bool& isCapture)
     (void)GetStreamCaptureInfo(aicoreStream, rtModel, isCapture);
 }
 
-void* RegisterKernelBinary(const std::vector<uint8_t>& kernelBinary)
-{
-    return RegisterKernelBin(kernelBinary);
-}
+void* RegisterKernelBinary(const std::vector<uint8_t>& kernelBinary) { return RegisterKernelBin(kernelBinary); }
 
 void UnregisterKernelBinary(void* hdl)
 {
@@ -96,4 +94,4 @@ ExportedOperator* ExportedOperatorBegin()
 }
 
 void ExportedOperatorEnd(ExportedOperator* op) { op->ResetFunction(Program::GetInstance().GetLastFunction()); }
-}
+} // namespace npu::tile_fwk::dynamic

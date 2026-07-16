@@ -105,8 +105,8 @@ public:
             pos = expectStr.find("+", pos + 2);
         }
 
-        std::string regexStr =
-            "\\[INFO \\] PYPTO\\(\\d+\\):\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}.\\d{3} " + expectStr + "\n";
+        std::string regexStr = "\\[INFO \\] PYPTO\\(\\d+\\):\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}.\\d{3} " +
+                               expectStr + "\n";
         std::regex logMsgRegex(regexStr);
         ret = std::regex_match(retStr, logMsgRegex);
         if (!ret) {
@@ -137,10 +137,10 @@ TEST_F(TestHostLog, test_tilefwk_log_case0)
 namespace {
 void FunctionWithNoReturn()
 {
-    PYPTO_HOST_LOG(
-        DLOG_ERROR, MACHINE, "In the year of %d assembled here the volunteers in the days when lands were few", 39);
-    PYPTO_HOST_SPLIT_LOG(
-        DLOG_ERROR, MACHINE, "In the year of %d assembled here the volunteers in the days when lands were few", 39);
+    PYPTO_HOST_LOG(DLOG_ERROR, MACHINE,
+                   "In the year of %d assembled here the volunteers in the days when lands were few", 39);
+    PYPTO_HOST_SPLIT_LOG(DLOG_ERROR, MACHINE,
+                         "In the year of %d assembled here the volunteers in the days when lands were few", 39);
     PYPTO_HOST_LOG_WITHOUT_LEVEL_CHECK(
         DLOG_INFO, MACHINE, "In the year of %d assembled here the volunteers in the days when lands were few", 39);
     std::ostringstream oss;
@@ -151,10 +151,10 @@ void FunctionWithNoReturn()
 }
 int FunctionWithReturn()
 {
-    PYPTO_HOST_LOG(
-        DLOG_ERROR, MACHINE, "In the year of %d assembled here the volunteers in the days when lands were few", 39);
-    PYPTO_HOST_SPLIT_LOG(
-        DLOG_ERROR, MACHINE, "In the year of %d assembled here the volunteers in the days when lands were few", 39);
+    PYPTO_HOST_LOG(DLOG_ERROR, MACHINE,
+                   "In the year of %d assembled here the volunteers in the days when lands were few", 39);
+    PYPTO_HOST_SPLIT_LOG(DLOG_ERROR, MACHINE,
+                         "In the year of %d assembled here the volunteers in the days when lands were few", 39);
     PYPTO_HOST_LOG_WITHOUT_LEVEL_CHECK(
         DLOG_INFO, MACHINE, "In the year of %d assembled here the volunteers in the days when lands were few", 39);
     std::ostringstream oss;
@@ -330,9 +330,8 @@ TEST_F(TestHostLog, test_log_construct_case0)
     int32_t int32_val2 = 567;
     uint32_t uint32_val = 432;
     CheckLogContent("-234,-234,+567,432", "%d,%+d,%+d,%u", int32_val, int32_val, int32_val2, uint32_val);
-    CheckLogContent(
-        "37777777426,0660,ffffff16,1B0,0xffffff16,0X1B0", "%o,%#o,%x,%X,%#x,%#X", int32_val, uint32_val, int32_val,
-        uint32_val, int32_val, uint32_val);
+    CheckLogContent("37777777426,0660,ffffff16,1B0,0xffffff16,0X1B0", "%o,%#o,%x,%X,%#x,%#X", int32_val, uint32_val,
+                    int32_val, uint32_val, int32_val, uint32_val);
 
     std::ostringstream oss1;
     oss1 << std::hex << &int32_val << "," << &uint32_val;
@@ -340,9 +339,8 @@ TEST_F(TestHostLog, test_log_construct_case0)
 
     int64_t int64_val = -789;
     uint64_t uint64_val = 987;
-    CheckLogContent(
-        "-789,987,fffffffffffffceb,3DB,0xfffffffffffffceb,0X3DB", "%ld,%lu,%lx,%lX,%#lx,%#lX", int64_val, uint64_val,
-        int64_val, uint64_val, int64_val, uint64_val);
+    CheckLogContent("-789,987,fffffffffffffceb,3DB,0xfffffffffffffceb,0X3DB", "%ld,%lu,%lx,%lX,%#lx,%#lX", int64_val,
+                    uint64_val, int64_val, uint64_val, int64_val, uint64_val);
 
     float float_val = 123.456f;
     CheckLogContent("123.456001,123.46, 123.45600", "%f,%.2f,%10.5f", float_val, float_val, float_val);

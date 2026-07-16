@@ -23,9 +23,9 @@ namespace npu {
 namespace tile_fwk {
 class DFSSortUtils {
 public:
-    static void DFSSortColor(
-        const int color, const std::vector<std::vector<int>>& inColor, const std::vector<std::vector<int>>& outColor,
-        std::unordered_map<int, int>& dfsColorOrder);
+    static void DFSSortColor(const int color, const std::vector<std::vector<int>>& inColor,
+                             const std::vector<std::vector<int>>& outColor,
+                             std::unordered_map<int, int>& dfsColorOrder);
 };
 } // namespace tile_fwk
 } // namespace npu

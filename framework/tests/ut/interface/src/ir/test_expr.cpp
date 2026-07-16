@@ -104,8 +104,7 @@ TEST_F(IRExprTest, TestTupleGetItemDynamicIndex)
     std::vector<ExprPtr> elements = {elem1, elem2};
     auto tuple = std::make_shared<MakeTuple>(elements, Span::Unknown());
 
-    auto idx = std::make_shared<Var>(
-        "i", std::make_shared<ScalarType>(DataType::INDEX), Span::Unknown());
+    auto idx = std::make_shared<Var>("i", std::make_shared<ScalarType>(DataType::INDEX), Span::Unknown());
     auto item = std::make_shared<GetItemExpr>(tuple, idx, Span::Unknown());
 
     auto resultType = As<ScalarType>(item->GetType());

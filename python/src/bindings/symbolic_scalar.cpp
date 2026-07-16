@@ -68,18 +68,14 @@ void BindSymbolicScalar(py::module_& m)
         .export_values();
 
     py::class_<SymbolicScalar>(m, "SymbolicScalar", py::dynamic_attr())
-        .def(
-            py::init([](int64_t value) { return SymbolicScalar(value); }), py::arg("value"),
-            "Create SymbolicScalar from integer value")
-        .def(
-            py::init([](std::string name) { return SymbolicScalar(name); }), py::arg("name"),
-            "Create SymbolicScalar from symbol name")
-        .def(
-            py::init([](std::string name, int64_t value) { return SymbolicScalar(name, value); }), py::arg("name"),
-            py::arg("value"), "Create SymbolicScalar from symbol name and integer value")
-        .def(
-            py::init([](ir::ExprPtr expr) { return SymbolicScalar::FromExpr(expr); }),
-            py::arg("expr"), "Create SymbolicScalar from expression")
+        .def(py::init([](int64_t value) { return SymbolicScalar(value); }), py::arg("value"),
+             "Create SymbolicScalar from integer value")
+        .def(py::init([](std::string name) { return SymbolicScalar(name); }), py::arg("name"),
+             "Create SymbolicScalar from symbol name")
+        .def(py::init([](std::string name, int64_t value) { return SymbolicScalar(name, value); }), py::arg("name"),
+             py::arg("value"), "Create SymbolicScalar from symbol name and integer value")
+        .def(py::init([](ir::ExprPtr expr) { return SymbolicScalar::FromExpr(expr); }), py::arg("expr"),
+             "Create SymbolicScalar from expression")
         .def("__str__", &SymbolicScalar::Dump)
         .def("__repr__", &SymbolicScalar::Dump)
         // clang-format off
@@ -109,57 +105,51 @@ void BindSymbolicScalar(py::module_& m)
         DEFINE_UNARY_OP("__neg__", -)
         DEFINE_UNARY_OP("__invert__", !)
         // clang-format on
-        .def(
-            "__bool__",
-            [](const SymbolicScalar& self) {
-                if (self.ConcreteValid()) {
-                    return self.Concrete() != 0;
-                }
-                throw py::value_error("Not concrete value.");
-            })
-        .def(
-            "__int__",
-            [](const SymbolicScalar& self) {
-                if (self.ConcreteValid()) {
-                    return self.Concrete();
-                }
-                throw py::value_error("Not concrete value.");
-            })
+        .def("__bool__",
+             [](const SymbolicScalar& self) {
+                 if (self.ConcreteValid()) {
+                     return self.Concrete() != 0;
+                 }
+                 throw py::value_error("Not concrete value.");
+             })
+        .def("__int__",
+             [](const SymbolicScalar& self) {
+                 if (self.ConcreteValid()) {
+                     return self.Concrete();
+                 }
+                 throw py::value_error("Not concrete value.");
+             })
         .def("is_concrete", &SymbolicScalar::ConcreteValid)
         .def("is_symbol", &SymbolicScalar::IsSymbol)
         .def("is_expression", &SymbolicScalar::IsExpression)
         .def("is_immediate", &SymbolicScalar::IsImmediate)
         .def("simplify", &SymbolicScalar::Simplify)
-        .def(
-            "min",
-            [](const SymbolicScalar& self, py::object& other) {
-                if (py::isinstance<py::int_>(other)) {
-                    return self.Min(other.cast<int64_t>());
-                } else if (py::isinstance<SymbolicScalar>(other)) {
-                    return self.Min(other.cast<SymbolicScalar>());
-                }
-                throw py::type_error("Invalid type.");
-            })
-        .def(
-            "max",
-            [](const SymbolicScalar& self, py::object& other) {
-                if (py::isinstance<py::int_>(other)) {
-                    return self.Max(other.cast<int64_t>());
-                } else if (py::isinstance<SymbolicScalar>(other)) {
-                    return self.Max(other.cast<SymbolicScalar>());
-                }
-                throw py::type_error("Invalid type.");
-            })
+        .def("min",
+             [](const SymbolicScalar& self, py::object& other) {
+                 if (py::isinstance<py::int_>(other)) {
+                     return self.Min(other.cast<int64_t>());
+                 } else if (py::isinstance<SymbolicScalar>(other)) {
+                     return self.Min(other.cast<SymbolicScalar>());
+                 }
+                 throw py::type_error("Invalid type.");
+             })
+        .def("max",
+             [](const SymbolicScalar& self, py::object& other) {
+                 if (py::isinstance<py::int_>(other)) {
+                     return self.Max(other.cast<int64_t>());
+                 } else if (py::isinstance<SymbolicScalar>(other)) {
+                     return self.Max(other.cast<SymbolicScalar>());
+                 }
+                 throw py::type_error("Invalid type.");
+             })
         .def("concrete", py::overload_cast<>(&SymbolicScalar::Concrete, py::const_))
         .def("as_variable", &SymbolicScalar::AsIntermediateVariable)
-        .def_static(
-            "tenary", [](const SymbolicScalar& cond, const SymbolicScalar& true_val,
-                         const SymbolicScalar& false_val) { return std::ternary(cond, true_val, false_val); })
+        .def_static("tenary", [](const SymbolicScalar& cond, const SymbolicScalar& true_val,
+                                 const SymbolicScalar& false_val) { return std::ternary(cond, true_val, false_val); })
         .def("as_expr", &SymbolicScalar::AsExpr)
         .def("as_var", &SymbolicScalar::AsVar)
-        .def_static(
-            "check", &SymbolicScalar::Check, py::arg("conds"),
-            "Satisfiability of the conjunction of conditions: SAT / UNSAT / UNKNOWN");
+        .def_static("check", &SymbolicScalar::Check, py::arg("conds"),
+                    "Satisfiability of the conjunction of conditions: SAT / UNSAT / UNKNOWN");
 
     py::implicitly_convertible<int64_t, SymbolicScalar>();
     py::implicitly_convertible<int, SymbolicScalar>();

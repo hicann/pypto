@@ -10,7 +10,8 @@
 
 /*!
  * \file test_string_utils_extended.cpp
- * \brief Extended unit tests for StringUtils (Trim, Split, EndsWith, BaseName, ToLower, ToUpper, AppendUniqueToken, DataCopy, DataSet, ToString)
+ * \brief Extended unit tests for StringUtils (Trim, Split, EndsWith, BaseName, ToLower, ToUpper, AppendUniqueToken,
+ * DataCopy, DataSet, ToString)
  */
 
 #include <string>

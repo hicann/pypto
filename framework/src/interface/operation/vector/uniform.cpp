@@ -26,9 +26,9 @@ namespace {
 const std::vector<NPUArch> UNIFORM_SUPPORTED_ARCHITECTURES = {NPUArch::DAV_3510};
 } // namespace
 
-LogicalTensorPtr TensorUniform(
-    Function& function, LogicalTensorPtr& result, const Element& key, const SymbolicScalar& counter0,
-    const Element& counter1, const Element& rounds, const std::vector<int64_t>& shape, DataType dtype)
+LogicalTensorPtr TensorUniform(Function& function, LogicalTensorPtr& result, const Element& key,
+                               const SymbolicScalar& counter0, const Element& counter1, const Element& rounds,
+                               const std::vector<int64_t>& shape, DataType dtype)
 {
     auto& op = function.AddOperation(Opcode::OP_UNIFORM, {}, {result});
     std::vector<Element> scalars = {key, counter1, rounds, Element(DT_INT32, static_cast<int32_t>(dtype))};
@@ -38,9 +38,9 @@ LogicalTensorPtr TensorUniform(
     return result;
 }
 
-static void TiledUniformBuildIn(
-    Function& function, const TileShape& tileShape, const LogicalTensorPtr& result, TileInfo& resultTileInfo,
-    uint64_t key, const SymbolicScalar& counter0, uint64_t counter1, uint16_t rounds, DataType dtype)
+static void TiledUniformBuildIn(Function& function, const TileShape& tileShape, const LogicalTensorPtr& result,
+                                TileInfo& resultTileInfo, uint64_t key, const SymbolicScalar& counter0,
+                                uint64_t counter1, uint16_t rounds, DataType dtype)
 {
     auto& vecTile = tileShape.GetVecTile();
 
@@ -50,8 +50,8 @@ static void TiledUniformBuildIn(
     int64_t tempByteSize = uint32BufferBytes;
 
     if (dtype == DT_FP16 || dtype == DT_BF16) {
-        int64_t uint32BufferLowBytes =
-            ((uint32BufferSize * BytesOf(DT_UINT32) + ALIGN_SIZE - 1) / ALIGN_SIZE) * ALIGN_SIZE;
+        int64_t uint32BufferLowBytes = ((uint32BufferSize * BytesOf(DT_UINT32) + ALIGN_SIZE - 1) / ALIGN_SIZE) *
+                                       ALIGN_SIZE;
         tempByteSize += uint32BufferLowBytes;
     }
 
@@ -68,18 +68,17 @@ static void TiledUniformBuildIn(
         uint64_t tileCounter1 = counter1;
 
         auto& op = function.AddOperation(Opcode::OP_UNIFORM, {}, {resultTile, tempTensor});
-        std::vector<Element> scalars = {
-            Element(DT_UINT64, key), Element(DT_UINT64, tileCounter1), Element(DT_UINT16, rounds),
-            Element(DT_INT32, static_cast<int32_t>(dtype))};
+        std::vector<Element> scalars = {Element(DT_UINT64, key), Element(DT_UINT64, tileCounter1),
+                                        Element(DT_UINT16, rounds), Element(DT_INT32, static_cast<int32_t>(dtype))};
         op.SetAttribute(OpAttributeKey::vectorScalar, scalars);
         op.SetAttribute(OpAttributeKey::dynScalar, tileCounter0);
         op.SetAttribute(OP_ATTR_PREFIX + "SHAPE", resultTileInfo.shape);
     }
 }
 
-void UniformOperationTileFunc(
-    Function& function, const TileShape& tileShape, [[maybe_unused]] const std::vector<LogicalTensorPtr>& iOperand,
-    const std::vector<LogicalTensorPtr>& oOperand, const Operation& op)
+void UniformOperationTileFunc(Function& function, const TileShape& tileShape,
+                              [[maybe_unused]] const std::vector<LogicalTensorPtr>& iOperand,
+                              const std::vector<LogicalTensorPtr>& oOperand, const Operation& op)
 {
     auto& vecTile = tileShape.GetVecTile();
     for (size_t i = 0; i < vecTile.size(); ++i) {
@@ -105,21 +104,18 @@ void UniformOperationTileFunc(
     TiledUniformBuildIn(function, tileShape, oOperand[0], resultTileInfo, key, counter0, counter1, rounds, dtype);
 }
 
-static Tensor RealUniform(
-    uint64_t key, const SymbolicScalar& counter0, uint64_t counter1, const std::vector<int64_t>& shape, uint16_t rounds,
-    DataType dtype)
+static Tensor RealUniform(uint64_t key, const SymbolicScalar& counter0, uint64_t counter1,
+                          const std::vector<int64_t>& shape, uint16_t rounds, DataType dtype)
 {
     DECLARE_TRACER();
 
     auto resTensor = Tensor(dtype, shape);
-    RETURN_CALL(
-        Uniform, *Program::GetInstance().GetCurrentFunction(), resTensor.GetStorage(), Element(DT_UINT64, key),
-        counter0, Element(DT_UINT64, counter1), Element(DT_UINT16, rounds), shape, dtype);
+    RETURN_CALL(Uniform, *Program::GetInstance().GetCurrentFunction(), resTensor.GetStorage(), Element(DT_UINT64, key),
+                counter0, Element(DT_UINT64, counter1), Element(DT_UINT16, rounds), shape, dtype);
 }
 
-Tensor Uniform(
-    const Element& key, const SymbolicScalar& counter0, const Element& counter1, const std::vector<int64_t>& shape,
-    const Element& rounds, DataType dtype)
+Tensor Uniform(const Element& key, const SymbolicScalar& counter0, const Element& counter1,
+               const std::vector<int64_t>& shape, const Element& rounds, DataType dtype)
 {
     DECLARE_TRACER();
     CheckSupportedNPUArch(UNIFORM_SUPPORTED_ARCHITECTURES, "Uniform");

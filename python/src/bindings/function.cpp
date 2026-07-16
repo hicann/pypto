@@ -36,16 +36,13 @@ void BindFunction(py::module_& m)
         .def("IsEager", &Function::IsEager, "Check if function is eager")
         .def("IsStatic", &Function::IsStatic, "Check if function is static")
         .def("IsExplicit", &Function::IsExplicit, "Check if function is explicit")
-        .def(
-            "IsFunctionType", py::overload_cast<FunctionType>(&Function::IsFunctionType, py::const_), py::arg("type"),
-            "Check if function is of given type")
-        .def(
-            "IsGraphType", py::overload_cast<GraphType>(&Function::IsGraphType, py::const_), py::arg("type"),
-            "Check if function has given graph type")
-        .def(
-            "IsFunctionTypeAndGraphType",
-            py::overload_cast<FunctionType, GraphType>(&Function::IsFunctionTypeAndGraphType, py::const_),
-            py::arg("func_type"), py::arg("graph_type"), "Check if function has given function type and graph type")
+        .def("IsFunctionType", py::overload_cast<FunctionType>(&Function::IsFunctionType, py::const_), py::arg("type"),
+             "Check if function is of given type")
+        .def("IsGraphType", py::overload_cast<GraphType>(&Function::IsGraphType, py::const_), py::arg("type"),
+             "Check if function has given graph type")
+        .def("IsFunctionTypeAndGraphType",
+             py::overload_cast<FunctionType, GraphType>(&Function::IsFunctionTypeAndGraphType, py::const_),
+             py::arg("func_type"), py::arg("graph_type"), "Check if function has given function type and graph type")
         .def("HasParent", &Function::HasParent, "Check if function has a parent")
         .def("GetRootFunction", &Function::GetRootFunction, py::return_value_policy::reference, "Get the root function")
         .def(
@@ -76,11 +73,10 @@ void BindFunction(py::module_& m)
         .def(
             "DumpJsonFile", [](Function& self, const std::string& fileName) { self.DumpJsonFile(fileName); },
             py::arg("file_name") = "", "Dump the function to a JSON file")
-        .def(
-            "__repr__",
-            [](const Function& self) {
-                return "<Function '" + self.GetRawName() + "' (magic: " + std::to_string(self.GetFuncMagic()) + ")>";
-            })
+        .def("__repr__",
+             [](const Function& self) {
+                 return "<Function '" + self.GetRawName() + "' (magic: " + std::to_string(self.GetFuncMagic()) + ")>";
+             })
         .def_property_readonly(
             "original_body", [](const Function& self) -> ir::SeqStmtsPtr { return self.originalBody_; },
             "Original function body statement");

@@ -82,8 +82,8 @@ protected:
         devProg->stitchFunctionsize = 100;
     }
 
-    DevAscendFunction* CreateDevAscendFunctionBuffer(
-        std::unique_ptr<uint8_t[]>& funcBuffer, uint8_t*& funcDataPtr, size_t kOpCount, size_t kFuncBufferSize)
+    DevAscendFunction* CreateDevAscendFunctionBuffer(std::unique_ptr<uint8_t[]>& funcBuffer, uint8_t*& funcDataPtr,
+                                                     size_t kOpCount, size_t kFuncBufferSize)
     {
         (void)kOpCount;
         funcBuffer = std::make_unique<uint8_t[]>(kFuncBufferSize);
@@ -100,8 +100,8 @@ protected:
         return devFunc;
     }
 
-    void SetupDevAscendFunctionData(
-        DevAscendFunction* devFunc, uint8_t* funcDataPtr, uint8_t* funcBuffer, size_t kOpCount)
+    void SetupDevAscendFunctionData(DevAscendFunction* devFunc, uint8_t* funcDataPtr, uint8_t* funcBuffer,
+                                    size_t kOpCount)
     {
         size_t currentOffset = sizeof(DevAscendFunction);
         auto alignUp = [&currentOffset](size_t alignment) {
@@ -140,9 +140,9 @@ protected:
         }
     }
 
-    DevAscendFunctionDuppedData* CreateDevAscendFunctionDuppedData(
-        std::unique_ptr<uint8_t[]>& duppedDataBuffer, uint8_t*& duppedDataPtr, DevAscendFunction* devFunc,
-        size_t kOpCount, size_t kDuppedDataBufferSize)
+    DevAscendFunctionDuppedData* CreateDevAscendFunctionDuppedData(std::unique_ptr<uint8_t[]>& duppedDataBuffer,
+                                                                   uint8_t*& duppedDataPtr, DevAscendFunction* devFunc,
+                                                                   size_t kOpCount, size_t kDuppedDataBufferSize)
     {
         duppedDataBuffer = std::make_unique<uint8_t[]>(kDuppedDataBufferSize);
         memset_s(duppedDataBuffer.get(), kDuppedDataBufferSize, 0, kDuppedDataBufferSize);
@@ -154,8 +154,8 @@ protected:
         duppedData->source_ = devFunc;
         duppedData->operationList_.size = kOpCount;
         duppedData->operationList_.predCountBase = static_cast<uint32_t>(duppedDataPtr - duppedDataBuffer.get());
-        duppedData->operationList_.stitchBase =
-            duppedData->operationList_.predCountBase + kOpCount * sizeof(predcount_t);
+        duppedData->operationList_.stitchBase = duppedData->operationList_.predCountBase +
+                                                kOpCount * sizeof(predcount_t);
         duppedData->operationList_.stitchCount = 1;
 
         predcount_t* predCounts = reinterpret_cast<predcount_t*>(duppedDataPtr);
@@ -178,8 +178,8 @@ protected:
         return duppedData;
     }
 
-    void SetupTestEnvironment(
-        DeviceTask& devTask, std::unique_ptr<int32_t[]>& opWrapListData, DevCceBinary* cceBinary, size_t kOpCount)
+    void SetupTestEnvironment(DeviceTask& devTask, std::unique_ptr<int32_t[]>& opWrapListData, DevCceBinary* cceBinary,
+                              size_t kOpCount)
     {
         opWrapListData = std::make_unique<int32_t[]>(kOpCount);
         for (size_t i = 0; i < kOpCount; i++) {
@@ -209,9 +209,9 @@ protected:
         EXPECT_EQ(lineCount, expectedLineCount);
     }
 
-    WrapInfoQueue* SetupWrapQueueForTest(
-        DynDeviceTask* dyntask, DeviceTaskContext& taskContext, CoreType coreType, uint32_t wrapVecId,
-        DevAscendFunction& devFunc, DevCceBinary* cceBinary, int* calleeList, uint16_t* opWrapOffsetList = nullptr)
+    WrapInfoQueue* SetupWrapQueueForTest(DynDeviceTask* dyntask, DeviceTaskContext& taskContext, CoreType coreType,
+                                         uint32_t wrapVecId, DevAscendFunction& devFunc, DevCceBinary* cceBinary,
+                                         int* calleeList, uint16_t* opWrapOffsetList = nullptr)
     {
         devFunc.wrapIdNum_ = 1;
         dyntask->dynFuncDataCacheList[0].devFunc = &devFunc;
@@ -229,14 +229,13 @@ protected:
         return taskContext.AllocWrapQueue(dyntask);
     }
 
-    void SetupBasicTaskContext(
-        DeviceTaskContext& taskContext, DevStartArgsBase& startArgs, DevAscendProgram* devProg,
-        std::unique_ptr<DynDeviceTask>& dyntask, DeviceWorkspaceAllocator& workspace,
-        std::unique_ptr<uint8_t[]>& controlFlowCacheBuf, size_t kControlFlowCacheSize)
+    void SetupBasicTaskContext(DeviceTaskContext& taskContext, DevStartArgsBase& startArgs, DevAscendProgram* devProg,
+                               std::unique_ptr<DynDeviceTask>& dyntask, DeviceWorkspaceAllocator& workspace,
+                               std::unique_ptr<uint8_t[]>& controlFlowCacheBuf, size_t kControlFlowCacheSize)
     {
         if (controlFlowCacheBuf != nullptr) {
-            devProg->controlFlowCache.cacheData =
-                DevRelocVector<uint8_t>(kControlFlowCacheSize, controlFlowCacheBuf.get());
+            devProg->controlFlowCache.cacheData = DevRelocVector<uint8_t>(kControlFlowCacheSize,
+                                                                          controlFlowCacheBuf.get());
             devProg->controlFlowCache.isRecording = true;
         }
         taskContext.InitAllocator(devProg, workspace, &startArgs);
@@ -406,8 +405,8 @@ TEST_F(TestDeviceTaskContext, test_build_ready_queue_dupped_data)
 
     std::unique_ptr<uint8_t[]> duppedDataBuffer;
     uint8_t* duppedDataPtr;
-    DevAscendFunctionDuppedData* duppedData =
-        CreateDevAscendFunctionDuppedData(duppedDataBuffer, duppedDataPtr, devFunc, kOpCount, kDuppedDataBufferSize);
+    DevAscendFunctionDuppedData* duppedData = CreateDevAscendFunctionDuppedData(
+        duppedDataBuffer, duppedDataPtr, devFunc, kOpCount, kDuppedDataBufferSize);
 
     devFunc->predInfo_.totalZeroPredAIV = 10;
     devFunc->predInfo_.totalZeroPredAIC = 10;
@@ -429,7 +428,7 @@ TEST_F(TestDeviceTaskContext, test_build_ready_queue_dupped_data)
     EXPECT_EQ(aicQueue->head_, 0);
     EXPECT_EQ(aicQueue->tail_, 10);
 
-	ReadyCoreFunctionQueue::ValueType aivQueueGold[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+    ReadyCoreFunctionQueue::ValueType aivQueueGold[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
     ReadyCoreFunctionQueue::ValueType aicQueueGold[] = {10, 11, 12, 13, 14, 15, 16, 17, 18, 19};
 
     EXPECT_TRUE(std::equal(aivQueue->begin(), aivQueue->end(), aivQueueGold));
@@ -440,8 +439,8 @@ TEST_F(TestDeviceTaskContext, test_build_ready_queue_dupped_data)
 
 namespace {
 
-void InitReadyQueueSlot(
-    ReadyCoreFunctionQueue& q, std::array<taskid_t, 4>& elemBuf, uint32_t head, uint32_t tail, taskid_t firstId)
+void InitReadyQueueSlot(ReadyCoreFunctionQueue& q, std::array<taskid_t, 4>& elemBuf, uint32_t head, uint32_t tail,
+                        taskid_t firstId)
 {
     new (&q) ReadyCoreFunctionQueue(elemBuf.size(), elemBuf.data());
     q.UnsafeEnqueue(&elemBuf[0], tail);
@@ -451,9 +450,8 @@ void InitReadyQueueSlot(
     }
 }
 
-void InitReadyQueueSlotMulti(
-    ReadyCoreFunctionQueue& q, std::array<taskid_t, 4>& elemBuf, uint32_t head, uint32_t tail,
-    const std::vector<taskid_t>& ids)
+void InitReadyQueueSlotMulti(ReadyCoreFunctionQueue& q, std::array<taskid_t, 4>& elemBuf, uint32_t head, uint32_t tail,
+                             const std::vector<taskid_t>& ids)
 {
     new (&q) ReadyCoreFunctionQueue(elemBuf.size(), elemBuf.data());
     q.UnsafeEnqueue(&elemBuf[0], tail);
@@ -464,9 +462,8 @@ void InitReadyQueueSlotMulti(
     }
 }
 
-void ControlFlowSetError(
-    struct DeviceExecuteContext* ctx, int64_t* symbolTable, RuntimeCallEntryType runtimeCallList[T_RUNTIME_CALL_MAX],
-    DevStartArgsBase* startArgsBase)
+void ControlFlowSetError(struct DeviceExecuteContext* ctx, int64_t* symbolTable,
+                         RuntimeCallEntryType runtimeCallList[T_RUNTIME_CALL_MAX], DevStartArgsBase* startArgsBase)
 {
     (void)symbolTable;
     (void)runtimeCallList;
@@ -667,8 +664,8 @@ TEST_F(TestDeviceTaskContext, test_dev_ascend_function_dupped_dump_topo)
 
     std::unique_ptr<uint8_t[]> duppedDataBuffer;
     uint8_t* duppedDataPtr;
-    DevAscendFunctionDuppedData* duppedData =
-        CreateDevAscendFunctionDuppedData(duppedDataBuffer, duppedDataPtr, devFunc, kOpCount, kDuppedDataBufferSize);
+    DevAscendFunctionDuppedData* duppedData = CreateDevAscendFunctionDuppedData(
+        duppedDataBuffer, duppedDataPtr, devFunc, kOpCount, kDuppedDataBufferSize);
 
     DevAscendFunctionDupped funcDupped;
     WsAllocation tinyAlloc;
@@ -723,15 +720,15 @@ TEST_F(TestDeviceTaskContext, test_process_wrap_queue_update_existing_wrap)
     std::unique_ptr<DynDeviceTask> dyntask;
     constexpr size_t kControlFlowCacheSize = 64 * 1024;
     auto controlFlowCacheBuf = std::make_unique<uint8_t[]>(kControlFlowCacheSize);
-    SetupBasicTaskContext(
-        taskContext, startArgs, &devProg, dyntask, workspace, controlFlowCacheBuf, kControlFlowCacheSize);
+    SetupBasicTaskContext(taskContext, startArgs, &devProg, dyntask, workspace, controlFlowCacheBuf,
+                          kControlFlowCacheSize);
 
     DevAscendFunction devFunc;
     DevCceBinary cceBinary[1] = {};
     int calleeList[1] = {0};
     uint16_t opWrapOffsetList[2] = {0};
-    WrapInfoQueue* wrapQueue =
-        SetupWrapQueueForTest(dyntask.get(), taskContext, CoreType::AIC, 0, devFunc, cceBinary, calleeList, opWrapOffsetList);
+    WrapInfoQueue* wrapQueue = SetupWrapQueueForTest(dyntask.get(), taskContext, CoreType::AIC, 0, devFunc, cceBinary,
+                                                     calleeList, opWrapOffsetList);
     ASSERT_NE(wrapQueue, nullptr);
 
     taskContext.ProcessWrapQueue(dyntask.get(), 1, 0, 0, wrapQueue);
@@ -751,15 +748,15 @@ TEST_F(TestDeviceTaskContext, test_process_wrap_queue_aiv0)
     std::unique_ptr<DynDeviceTask> dyntask;
     constexpr size_t kControlFlowCacheSize = 64 * 1024;
     auto controlFlowCacheBuf = std::make_unique<uint8_t[]>(kControlFlowCacheSize);
-    SetupBasicTaskContext(
-        taskContext, startArgs, &devProg, dyntask, workspace, controlFlowCacheBuf, kControlFlowCacheSize);
+    SetupBasicTaskContext(taskContext, startArgs, &devProg, dyntask, workspace, controlFlowCacheBuf,
+                          kControlFlowCacheSize);
 
     DevCceBinary cceBinary[1] = {};
     DevAscendFunction devFunc;
     int calleeList[1] = {0};
     uint16_t opWrapOffsetList[2] = {0};
-    WrapInfoQueue* wrapQueue =
-        SetupWrapQueueForTest(dyntask.get(), taskContext, CoreType::AIV, 0, devFunc, cceBinary, calleeList, opWrapOffsetList);
+    WrapInfoQueue* wrapQueue = SetupWrapQueueForTest(dyntask.get(), taskContext, CoreType::AIV, 0, devFunc, cceBinary,
+                                                     calleeList, opWrapOffsetList);
     ASSERT_NE(wrapQueue, nullptr);
 
     taskContext.ProcessWrapQueue(dyntask.get(), 1, 0, 0, wrapQueue);
@@ -781,15 +778,15 @@ TEST_F(TestDeviceTaskContext, test_process_wrap_queue_aiv1)
     std::unique_ptr<DynDeviceTask> dyntask;
     constexpr size_t kControlFlowCacheSize = 64 * 1024;
     auto controlFlowCacheBuf = std::make_unique<uint8_t[]>(kControlFlowCacheSize);
-    SetupBasicTaskContext(
-        taskContext, startArgs, &devProg, dyntask, workspace, controlFlowCacheBuf, kControlFlowCacheSize);
+    SetupBasicTaskContext(taskContext, startArgs, &devProg, dyntask, workspace, controlFlowCacheBuf,
+                          kControlFlowCacheSize);
 
     int calleeList[1] = {0};
     DevAscendFunction devFunc;
     DevCceBinary cceBinary[1] = {};
     uint16_t opWrapOffsetList[2] = {0};
-    WrapInfoQueue* wrapQueue =
-        SetupWrapQueueForTest(dyntask.get(), taskContext, CoreType::AIV, 1, devFunc, cceBinary, calleeList, opWrapOffsetList);
+    WrapInfoQueue* wrapQueue = SetupWrapQueueForTest(dyntask.get(), taskContext, CoreType::AIV, 1, devFunc, cceBinary,
+                                                     calleeList, opWrapOffsetList);
     ASSERT_NE(wrapQueue, nullptr);
 
     taskContext.ProcessWrapQueue(dyntask.get(), 1, 0, 0, wrapQueue);

@@ -19,7 +19,7 @@ namespace npu::tile_fwk {
 
 void LatencyEstimator::LaunchReadyIssue()
 {
-    for (auto &op : taskList) {
+    for (auto& op : taskList) {
         if (USE_LESS_OPS.find(op->GetOpcode()) != USE_LESS_OPS.end() && state_.depManager.GetPredecessors(op).empty()) {
             auto type = RescheduleUtils::GetOpPipeType(op);
             opQueues[type].Insert(op);
@@ -50,9 +50,8 @@ Status LatencyEstimator::FreeBuffer(Operation* op)
                     static_cast<long>(state_.localMemoryCurrentSize[state_.localBufferMap[memId]->memType]), memId,
                     static_cast<unsigned long>(freeMemSize));
             } else {
-                APASS_LOG_DEBUG_F(
-                    Elements::Operation, "FreeBuffer memType: %d, memId: %d free in spillblock",
-                    state_.localBufferMap[memId]->memType, memId);
+                APASS_LOG_DEBUG_F(Elements::Operation, "FreeBuffer memType: %d, memId: %d free in spillblock",
+                                  state_.localBufferMap[memId]->memType, memId);
             }
 
             if (state_.localMemoryCurrentSize[state_.localBufferMap[memId]->memType] >
@@ -112,8 +111,8 @@ Status LatencyEstimator::RetireIssueStage(uint64_t& commitCnt, int& nextCycle)
                 return FAILED;
             }
         } else {
-            APASS_LOG_DEBUG_F(
-                Elements::Operation, "EXECUTING[%d]: %s", pipe.curOpRetireCycle, state_.GetOpInfo(pipe.curOp).c_str());
+            APASS_LOG_DEBUG_F(Elements::Operation, "EXECUTING[%d]: %s", pipe.curOpRetireCycle,
+                              state_.GetOpInfo(pipe.curOp).c_str());
             if (nextCycle == -1 || nextCycle > pipe.curOpRetireCycle) {
                 nextCycle = pipe.curOpRetireCycle;
             }
@@ -136,12 +135,12 @@ Status LatencyEstimator::ExecuteAllocIssue(uint64_t& commitCnt, MemoryType memTy
         if (state_.localMemoryCurrentSize[memType] >= static_cast<long int>(needMemSize)) {
             APASS_LOG_DEBUG_F(Elements::Operation, "ALLOCATE: %s.", state_.GetOpInfo(op).c_str());
             state_.localMemoryCurrentSize[memType] -= needMemSize;
-            APASS_LOG_DEBUG_F(
-                Elements::Operation, "ExecuteAllocIssue memType: %d, currentSize %ld, memId: %d.", memType,
-                static_cast<long>(state_.localMemoryCurrentSize[memType]), memId);
-            if (state_.localMemoryCurrentSize[memType] > state_.localMemSize[memType] || state_.localMemoryCurrentSize[memType] < 0) {
-                APASS_LOG_ERROR_F(
-                    Elements::Tensor, "Allocate Tensor[%d] failed.", state_.GetInOutOperandCached(op)[0]->GetMagic());
+            APASS_LOG_DEBUG_F(Elements::Operation, "ExecuteAllocIssue memType: %d, currentSize %ld, memId: %d.",
+                              memType, static_cast<long>(state_.localMemoryCurrentSize[memType]), memId);
+            if (state_.localMemoryCurrentSize[memType] > state_.localMemSize[memType] ||
+                state_.localMemoryCurrentSize[memType] < 0) {
+                APASS_LOG_ERROR_F(Elements::Tensor, "Allocate Tensor[%d] failed.",
+                                  state_.GetInOutOperandCached(op)[0]->GetMagic());
                 return FAILED;
             }
             pipe.PopFront();
@@ -151,7 +150,8 @@ Status LatencyEstimator::ExecuteAllocIssue(uint64_t& commitCnt, MemoryType memTy
             }
         } else {
             canAlloc = false;
-            APASS_LOG_DEBUG_F(Elements::Tensor, "Cannot alloc Tensor[%d] ", state_.GetInOutOperandCached(op)[0]->GetMagic());
+            APASS_LOG_DEBUG_F(Elements::Tensor, "Cannot alloc Tensor[%d] ",
+                              state_.GetInOutOperandCached(op)[0]->GetMagic());
             break;
         }
     }
@@ -201,8 +201,8 @@ Status LatencyEstimator::SpillOnBlock()
     } else if (!allocIssueQueue[MemoryType::MEM_L1].Empty()) {
         spillMemType = MemoryType::MEM_L1;
     } else {
-        APASS_LOG_ERROR_F(
-            Elements::Operation, "Buffer[L0A/B/C] is Full. Please check tile shape and OOO spill failed info.");
+        APASS_LOG_ERROR_F(Elements::Operation,
+                          "Buffer[L0A/B/C] is Full. Please check tile shape and OOO spill failed info.");
         return FAILED;
     }
 
@@ -210,12 +210,14 @@ Status LatencyEstimator::SpillOnBlock()
     size_t needMemSize = state_.GetInOutOperandCached(op)[0]->tensor->GetRawDataSize();
     spillblockMemIds.insert(state_.GetInOutOperandCached(op)[0]->memoryrange.memId);
     state_.localMemoryCurrentSize[spillMemType] += static_cast<long int>(needMemSize);
-    if (state_.localMemoryCurrentSize[spillMemType] < 0 || state_.localMemoryCurrentSize[spillMemType] > state_.localMemSize[spillMemType]) {
+    if (state_.localMemoryCurrentSize[spillMemType] < 0 ||
+        state_.localMemoryCurrentSize[spillMemType] > state_.localMemSize[spillMemType]) {
         APASS_LOG_ERROR_F(Elements::Operation, "Buffer[%d] is valid. Please check", spillMemType);
         return FAILED;
     }
     APASS_LOG_DEBUG_F(Elements::Operation, "SpillOnBlock freeBuffer memType: %d, memId: %d, freeMemSize: %lu.",
-        spillMemType, state_.GetInOutOperandCached(op)[0]->memoryrange.memId, static_cast<unsigned long>(needMemSize));
+                      spillMemType, state_.GetInOutOperandCached(op)[0]->memoryrange.memId,
+                      static_cast<unsigned long>(needMemSize));
     return SUCCESS;
 }
 
@@ -255,7 +257,8 @@ void LatencyEstimator::InitMemWithoutAlloc()
         for (const auto& op : operations) {
             if (state_.IsOpAlloc(op) && op->GetOutputOperand(0)->memoryrange.memId == memId) {
                 taskList.push_back(op);
-                APASS_LOG_INFO_F(Elements::Operation, "Add alloc op %s for memId[%d]", state_.GetOpInfo(op).c_str(), memId);
+                APASS_LOG_INFO_F(Elements::Operation, "Add alloc op %s for memId[%d]", state_.GetOpInfo(op).c_str(),
+                                 memId);
             }
         }
     }
@@ -270,10 +273,7 @@ void LatencyEstimator::InitMemWithoutAlloc()
     }
 }
 
-Status LatencyEstimator::LatencyEstimatorMainLoop()
-{
-    return RunSchedulerMainLoop(*this);
-}
+Status LatencyEstimator::LatencyEstimatorMainLoop() { return RunSchedulerMainLoop(*this); }
 
 Status LatencyEstimator::PreMainLoop()
 {

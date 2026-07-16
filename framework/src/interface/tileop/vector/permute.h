@@ -23,8 +23,8 @@
 namespace permute_detail {
 
 template <int tileH, int tileW, typename dstType, typename srcType>
-TILEOP void LoadVecTile(
-    __ubuf__ dstType* dstPtr, __gm__ srcType* srcAddr, int64_t gmOff, int64_t innerDim, int64_t srcStride4)
+TILEOP void LoadVecTile(__ubuf__ dstType* dstPtr, __gm__ srcType* srcAddr, int64_t gmOff, int64_t innerDim,
+                        int64_t srcStride4)
 {
     using ActualSrcType = std::conditional_t<std::is_same_v<srcType, bool>, uint8_t, srcType>;
     using ActualDstType = std::conditional_t<std::is_same_v<dstType, bool>, uint8_t, dstType>;
@@ -33,18 +33,16 @@ TILEOP void LoadVecTile(
     using GlobalData = pto::GlobalTensor<ActualSrcType, ShapeDim5, StrideDim5>;
     using TileDefine = pto::Tile<pto::TileType::Vec, ActualDstType, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
     TileDefine dstTile(1, innerDim);
-    GlobalData srcGlobal((__gm__ ActualSrcType*)(srcAddr + gmOff),
-        pto::Shape(1, 1, 1, 1, innerDim), pto::Stride(0, 0, 0, 0, srcStride4));
+    GlobalData srcGlobal((__gm__ ActualSrcType*)(srcAddr + gmOff), pto::Shape(1, 1, 1, 1, innerDim),
+                         pto::Stride(0, 0, 0, 0, srcStride4));
     pto::TASSIGN(dstTile, (uint64_t)dstPtr);
     pto::TLOAD(dstTile, srcGlobal);
 }
 
-template <
-    int pad, int axis0, int axis1, int tileH, int tileW, typename dstType, typename srcType, typename SrcLayoutT,
-    typename DstLayoutT>
-TILEOP void PermuteDim2(
-    __ubuf__ dstType* dstAddr, __gm__ srcType* srcAddr, const SrcLayoutT& srcLayout, const DstLayoutT& dstLayout,
-    int64_t srcStride0, int64_t srcStride1, int64_t srcStride4)
+template <int pad, int axis0, int axis1, int tileH, int tileW, typename dstType, typename srcType, typename SrcLayoutT,
+          typename DstLayoutT>
+TILEOP void PermuteDim2(__ubuf__ dstType* dstAddr, __gm__ srcType* srcAddr, const SrcLayoutT& srcLayout,
+                        const DstLayoutT& dstLayout, int64_t srcStride0, int64_t srcStride1, int64_t srcStride4)
 {
     auto d0 = dstLayout.template GetShapeDim<0, 2>();
     auto d1 = dstLayout.template GetShapeDim<1, 2>();
@@ -60,12 +58,11 @@ TILEOP void PermuteDim2(
     wait_flag(PIPE_S, PIPE_MTE2, EVENT_ID7);
 }
 
-template <
-    int pad, int axis0, int axis1, int axis2, int tileH, int tileW, typename dstType, typename srcType,
-    typename SrcLayoutT, typename DstLayoutT>
-TILEOP void PermuteDim3(
-    __ubuf__ dstType* dstAddr, __gm__ srcType* srcAddr, const SrcLayoutT& srcLayout, const DstLayoutT& dstLayout,
-    int64_t srcStride0, int64_t srcStride1, int64_t srcStride2, int64_t srcStride3, int64_t srcStride4)
+template <int pad, int axis0, int axis1, int axis2, int tileH, int tileW, typename dstType, typename srcType,
+          typename SrcLayoutT, typename DstLayoutT>
+TILEOP void PermuteDim3(__ubuf__ dstType* dstAddr, __gm__ srcType* srcAddr, const SrcLayoutT& srcLayout,
+                        const DstLayoutT& dstLayout, int64_t srcStride0, int64_t srcStride1, int64_t srcStride2,
+                        int64_t srcStride3, int64_t srcStride4)
 {
     auto d0 = dstLayout.template GetShapeDim<0, 3>();
     auto d1 = dstLayout.template GetShapeDim<1, 3>();
@@ -88,12 +85,11 @@ TILEOP void PermuteDim3(
     wait_flag(PIPE_S, PIPE_MTE2, EVENT_ID7);
 }
 
-template <
-    int pad, int axis0, int axis1, int axis2, int axis3, int tileH, int tileW, typename dstType, typename srcType,
-    typename SrcLayoutT, typename DstLayoutT>
-TILEOP void PermuteDim4(
-    __ubuf__ dstType* dstAddr, __gm__ srcType* srcAddr, const SrcLayoutT& srcLayout, const DstLayoutT& dstLayout,
-    int64_t srcStride0, int64_t srcStride1, int64_t srcStride2, int64_t srcStride3, int64_t srcStride4)
+template <int pad, int axis0, int axis1, int axis2, int axis3, int tileH, int tileW, typename dstType, typename srcType,
+          typename SrcLayoutT, typename DstLayoutT>
+TILEOP void PermuteDim4(__ubuf__ dstType* dstAddr, __gm__ srcType* srcAddr, const SrcLayoutT& srcLayout,
+                        const DstLayoutT& dstLayout, int64_t srcStride0, int64_t srcStride1, int64_t srcStride2,
+                        int64_t srcStride3, int64_t srcStride4)
 {
     auto d0 = dstLayout.template GetShapeDim<0, 4>();
     auto d1 = dstLayout.template GetShapeDim<1, 4>();
@@ -122,12 +118,11 @@ TILEOP void PermuteDim4(
     wait_flag(PIPE_S, PIPE_MTE2, EVENT_ID7);
 }
 
-template <
-    int pad, int axis0, int axis1, int axis2, int axis3, int axis4, int tileH, int tileW, typename dstType,
-    typename srcType, typename SrcLayoutT, typename DstLayoutT>
-TILEOP void PermuteDim5(
-    __ubuf__ dstType* dstAddr, __gm__ srcType* srcAddr, const SrcLayoutT& srcLayout, const DstLayoutT& dstLayout,
-    int64_t srcStride0, int64_t srcStride1, int64_t srcStride2, int64_t srcStride3, int64_t srcStride4)
+template <int pad, int axis0, int axis1, int axis2, int axis3, int axis4, int tileH, int tileW, typename dstType,
+          typename srcType, typename SrcLayoutT, typename DstLayoutT>
+TILEOP void PermuteDim5(__ubuf__ dstType* dstAddr, __gm__ srcType* srcAddr, const SrcLayoutT& srcLayout,
+                        const DstLayoutT& dstLayout, int64_t srcStride0, int64_t srcStride1, int64_t srcStride2,
+                        int64_t srcStride3, int64_t srcStride4)
 {
     auto d0 = dstLayout.template GetShapeDim<0, 5>();
     auto d1 = dstLayout.template GetShapeDim<1, 5>();
@@ -163,17 +158,16 @@ TILEOP void PermuteDim5(
 }
 
 template <typename dstType, typename srcType>
-TILEOP void CopyElement(
-    __ubuf__ dstType* dstAddr, __gm__ srcType* srcAddr, int64_t dstOff, const int64_t* sc, int64_t ss0, int64_t ss1,
-    int64_t ss2, int64_t ss3, int64_t ss4)
+TILEOP void CopyElement(__ubuf__ dstType* dstAddr, __gm__ srcType* srcAddr, int64_t dstOff, const int64_t* sc,
+                        int64_t ss0, int64_t ss1, int64_t ss2, int64_t ss3, int64_t ss4)
 {
     auto gmOff = sc[0] * ss0 + sc[1] * ss1 + sc[2] * ss2 + sc[3] * ss3 + sc[4] * ss4;
     dstAddr[dstOff] = srcAddr[gmOff];
 }
 
 template <int axis0, int axis1, typename dstType, typename srcType, typename SrcLayoutT, typename DstLayoutT>
-TILEOP void PermuteEleDim2(
-    __ubuf__ dstType* dstAddr, __gm__ srcType* srcAddr, const SrcLayoutT& srcLayout, const DstLayoutT& dstLayout)
+TILEOP void PermuteEleDim2(__ubuf__ dstType* dstAddr, __gm__ srcType* srcAddr, const SrcLayoutT& srcLayout,
+                           const DstLayoutT& dstLayout)
 {
     auto ss0 = srcLayout.template GetStrideDim<0, 2>();
     auto ss1 = srcLayout.template GetStrideDim<1, 2>();
@@ -195,8 +189,8 @@ TILEOP void PermuteEleDim2(
 }
 
 template <int axis0, int axis1, int axis2, typename dstType, typename srcType, typename SrcLayoutT, typename DstLayoutT>
-TILEOP void PermuteEleDim3(
-    __ubuf__ dstType* dstAddr, __gm__ srcType* srcAddr, const SrcLayoutT& srcLayout, const DstLayoutT& dstLayout)
+TILEOP void PermuteEleDim3(__ubuf__ dstType* dstAddr, __gm__ srcType* srcAddr, const SrcLayoutT& srcLayout,
+                           const DstLayoutT& dstLayout)
 {
     auto ss0 = srcLayout.template GetStrideDim<0, 3>();
     auto ss1 = srcLayout.template GetStrideDim<1, 3>();
@@ -223,11 +217,10 @@ TILEOP void PermuteEleDim3(
     wait_flag(PIPE_S, PIPE_MTE2, EVENT_ID7);
 }
 
-template <
-    int axis0, int axis1, int axis2, int axis3, typename dstType, typename srcType, typename SrcLayoutT,
-    typename DstLayoutT>
-TILEOP void PermuteEleDim4(
-    __ubuf__ dstType* dstAddr, __gm__ srcType* srcAddr, const SrcLayoutT& srcLayout, const DstLayoutT& dstLayout)
+template <int axis0, int axis1, int axis2, int axis3, typename dstType, typename srcType, typename SrcLayoutT,
+          typename DstLayoutT>
+TILEOP void PermuteEleDim4(__ubuf__ dstType* dstAddr, __gm__ srcType* srcAddr, const SrcLayoutT& srcLayout,
+                           const DstLayoutT& dstLayout)
 {
     auto ss0 = srcLayout.template GetStrideDim<0, 4>();
     auto ss1 = srcLayout.template GetStrideDim<1, 4>();
@@ -260,11 +253,10 @@ TILEOP void PermuteEleDim4(
     wait_flag(PIPE_S, PIPE_MTE2, EVENT_ID7);
 }
 
-template <
-    int axis0, int axis1, int axis2, int axis3, int axis4, typename dstType, typename srcType, typename SrcLayoutT,
-    typename DstLayoutT>
-TILEOP void PermuteEleDim5(
-    __ubuf__ dstType* dstAddr, __gm__ srcType* srcAddr, const SrcLayoutT& srcLayout, const DstLayoutT& dstLayout)
+template <int axis0, int axis1, int axis2, int axis3, int axis4, typename dstType, typename srcType,
+          typename SrcLayoutT, typename DstLayoutT>
+TILEOP void PermuteEleDim5(__ubuf__ dstType* dstAddr, __gm__ srcType* srcAddr, const SrcLayoutT& srcLayout,
+                           const DstLayoutT& dstLayout)
 {
     auto ss0 = srcLayout.template GetStrideDim<0, 5>();
     auto ss1 = srcLayout.template GetStrideDim<1, 5>();
@@ -381,8 +373,8 @@ TILEOP void TPermuteElewise(T0 dst, T1 src, C0 srcCoordinate)
         auto c2 = Std::get<2>(srcCoordinate);
         auto c3 = Std::get<3>(srcCoordinate);
         srcAddr += c0 * ss0 + c1 * ss1 + c2 * ss2 + c3 * ss3;
-        permute_detail::PermuteEleDim4<axis0, axis1, axis2, axis3, dstType, srcType>(
-            dstAddr, srcAddr, srcLayout, dstLayout);
+        permute_detail::PermuteEleDim4<axis0, axis1, axis2, axis3, dstType, srcType>(dstAddr, srcAddr, srcLayout,
+                                                                                     dstLayout);
     } else if constexpr (dimCount == 5) {
         auto ss0 = srcLayout.template GetStrideDim<0, N>();
         auto ss1 = srcLayout.template GetStrideDim<1, N>();
@@ -390,8 +382,8 @@ TILEOP void TPermuteElewise(T0 dst, T1 src, C0 srcCoordinate)
         auto ss3 = srcLayout.template GetStrideDim<3, N>();
         auto ss4 = srcLayout.template GetStrideDim<4, N>();
         srcAddr += srcLayout.template GetGmOffset<C0, N>(srcCoordinate);
-        permute_detail::PermuteEleDim5<axis0, axis1, axis2, axis3, axis4, dstType, srcType>(
-            dstAddr, srcAddr, srcLayout, dstLayout);
+        permute_detail::PermuteEleDim5<axis0, axis1, axis2, axis3, axis4, dstType, srcType>(dstAddr, srcAddr, srcLayout,
+                                                                                            dstLayout);
     }
 }
 #endif

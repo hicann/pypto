@@ -129,8 +129,8 @@ public:
         size_t offset = 0;
         while (offset < count) {
             size_t copyLen = std::min(count - offset, MAX_DATA_LEN);
-            auto err =
-                memcpy_s(static_cast<char*>(dest) + offset, copyLen, static_cast<const char*>(src) + offset, copyLen);
+            auto err = memcpy_s(static_cast<char*>(dest) + offset, copyLen, static_cast<const char*>(src) + offset,
+                                copyLen);
             ASSERT(err == 0) << "errCode: " << err;
             offset += copyLen;
         }

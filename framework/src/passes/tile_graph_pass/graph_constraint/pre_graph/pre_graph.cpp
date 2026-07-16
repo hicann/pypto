@@ -40,7 +40,7 @@ void PreGraphProcess::UpdateCopyOpIsCube(Operation& op) const
             if (ioperand->GetMemoryTypeOriginal() == MemoryType::MEM_UB) {
                 hasUbInput = true;
                 break;
-            }   
+            }
         }
         if (hasUbInput) {
             op.SetAttribute(OpAttributeKey::isCube, false);
@@ -52,10 +52,10 @@ void PreGraphProcess::UpdateCopyOpIsCube(Operation& op) const
 
 enum class HubMergeType { AIV, AIC, HUB, NOMERGE };
 
-static void MakeSubgraphIdContinue(Function &function)
+static void MakeSubgraphIdContinue(Function& function)
 {
     std::set<int> subgraphIds;
-    for (auto &op : function.Operations()) {
+    for (auto& op : function.Operations()) {
         subgraphIds.insert(op.GetSubgraphID());
     }
     function.SetTotalSubGraphCount(subgraphIds.size());
@@ -65,12 +65,12 @@ static void MakeSubgraphIdContinue(Function &function)
         newIdMap[id] = newId;
         newId++;
     }
-    for (auto &op : function.Operations()) {
+    for (auto& op : function.Operations()) {
         op.UpdateSubgraphID(newIdMap[op.GetSubgraphID()]);
     }
 }
 
-static void DSUinit(std::vector<int> &parent, int num)
+static void DSUinit(std::vector<int>& parent, int num)
 {
     parent.resize(num);
     for (int i = 0; i < num; i++) {
@@ -78,7 +78,7 @@ static void DSUinit(std::vector<int> &parent, int num)
     }
 }
 
-static int DSUfind(std::vector<int> &parent, int i)
+static int DSUfind(std::vector<int>& parent, int i)
 {
     if (parent[i] != i) {
         parent[i] = DSUfind(parent, parent[i]);
@@ -86,7 +86,7 @@ static int DSUfind(std::vector<int> &parent, int i)
     return parent[i];
 }
 
-static void DSUunite(std::vector<int> &parent, int i, int j)
+static void DSUunite(std::vector<int>& parent, int i, int j)
 {
     i = DSUfind(parent, i);
     j = DSUfind(parent, j);
@@ -97,7 +97,7 @@ static void DSUunite(std::vector<int> &parent, int i, int j)
     }
 }
 
-static std::vector<HubMergeType> MarkSubgraphType(Function &function)
+static std::vector<HubMergeType> MarkSubgraphType(Function& function)
 {
     std::vector<bool> hasAIC(function.GetTotalSubGraphCount(), false);
     std::vector<bool> hasAIV(function.GetTotalSubGraphCount(), false);
@@ -105,7 +105,7 @@ static std::vector<HubMergeType> MarkSubgraphType(Function &function)
     std::vector<bool> hasAssemble(function.GetTotalSubGraphCount(), false);
     std::vector<bool> hasOthers(function.GetTotalSubGraphCount(), false);
     std::vector<HubMergeType> subgraphTypes(function.GetTotalSubGraphCount());
-    for (auto &op : function.Operations()) {
+    for (auto& op : function.Operations()) {
         int currSubgraphID = op.GetSubgraphID();
         if (op.HasAttr(OpAttributeKey::isCube) && op.GetBoolAttribute(OpAttributeKey::isCube)) {
             hasAIC[currSubgraphID] = true;
@@ -138,14 +138,14 @@ static std::vector<HubMergeType> MarkSubgraphType(Function &function)
     return subgraphTypes;
 }
 
-static Status HubSpecialProcess(Function &function)
+static Status HubSpecialProcess(Function& function)
 {
     std::vector<HubMergeType> subgraphTypes = MarkSubgraphType(function);
     std::unordered_map<int, bool> updateIsCube;
 
     std::vector<std::set<int>> subgraphInGraph(function.GetTotalSubGraphCount());
     std::vector<std::set<int>> subgraphOutGraph(function.GetTotalSubGraphCount());
-    for (auto &op : function.Operations()) {
+    for (auto& op : function.Operations()) {
         int currSubgraphID = op.GetSubgraphID();
         for (auto nextOp : op.ConsumerOps()) {
             int nextSubgraphID = nextOp->GetSubgraphID();
@@ -169,13 +169,13 @@ static Status HubSpecialProcess(Function &function)
             mergeCandidate = *(subgraphOutGraph[subgraphId].begin());
         }
         if (mergeCandidate == -1 || subgraphTypes[mergeCandidate] == HubMergeType::HUB ||
-                subgraphTypes[mergeCandidate] == HubMergeType::NOMERGE) {
+            subgraphTypes[mergeCandidate] == HubMergeType::NOMERGE) {
             continue;
         }
         DSUunite(parent, subgraphId, mergeCandidate);
         updateIsCube[subgraphId] = subgraphTypes[mergeCandidate] == HubMergeType::AIC;
     }
-    for (auto &op : function.Operations()) {
+    for (auto& op : function.Operations()) {
         int currSubgraphID = op.GetSubgraphID();
         op.UpdateSubgraphID(DSUfind(parent, currSubgraphID));
         if (updateIsCube.count(currSubgraphID) > 0) {
@@ -206,10 +206,12 @@ Status PreGraphProcess::RunOnFunction(Function& function)
     SetCopyAttr setCopyAttr;
     for (auto& op : opList) {
         bool* distCopyType = op.GetAttr<bool>(OpAttributeKey::isDistCopyOut);
-        if (IsCopyOut(op.GetOpcode()) && (op.GetOpAttribute() == nullptr) && op.GetOpcode() != Opcode::OP_RESHAPE_COPY_OUT && !(distCopyType && *distCopyType)) {
+        if (IsCopyOut(op.GetOpcode()) && (op.GetOpAttribute() == nullptr) &&
+            op.GetOpcode() != Opcode::OP_RESHAPE_COPY_OUT && !(distCopyType && *distCopyType)) {
             setCopyAttr.ProcessSpecialMTEOperation(op);
         }
-        if (IsCopyIn(op.GetOpcode()) && (op.GetOpAttribute() == nullptr) && op.GetOpcode() != Opcode::OP_RESHAPE_COPY_IN && !(distCopyType && !*distCopyType)) {
+        if (IsCopyIn(op.GetOpcode()) && (op.GetOpAttribute() == nullptr) &&
+            op.GetOpcode() != Opcode::OP_RESHAPE_COPY_IN && !(distCopyType && !*distCopyType)) {
             setCopyAttr.ProcessMoveInOperation(op);
         }
     }

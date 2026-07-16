@@ -57,8 +57,8 @@ TEST_F(TestCodegenDynScalar, TestScalarAdds)
             output = ScalarAddS(input, Element(DataType::DT_FP32, 127.0), true);
         }
     }
-    auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX +
+                                                                HIDDEN_FUNC_SUFFIX);
 
     std::string res = GenCodeByFunction(*function);
     std::string expect =
@@ -87,8 +87,8 @@ TEST_F(TestCodegenDynScalar, TestScalarDivs)
             output = ScalarDivS(input, Element(DataType::DT_FP32, 127.0), true);
         }
     }
-    auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX +
+                                                                HIDDEN_FUNC_SUFFIX);
 
     std::string res = GenCodeByFunction(*function);
     std::string expect =
@@ -117,8 +117,8 @@ TEST_F(TestCodegenDynScalar, TestAddsTileTensor)
     }
 
 #if ENABLE_HIDDENLOOP
-    auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX +
+                                                                HIDDEN_FUNC_SUFFIX);
 #else
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX);
 #endif

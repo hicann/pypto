@@ -62,13 +62,11 @@ private:
     Status ProcessInplaceOp(Function& function, Operation& op) const;
     Status ValidMeaninglessOp(const Operation& op) const;
     Status AdjustOffsetAndRawShape(LogicalTensorPtr& fromView, LogicalTensorPtr& toView) const;
-    void ReplaceRawTensor(
-        Function& function, std::shared_ptr<LogicalTensor> logicalTensor,
-        const std::shared_ptr<LogicalTensor> targetTensor, const Operation& op);
+    void ReplaceRawTensor(Function& function, std::shared_ptr<LogicalTensor> logicalTensor,
+                          const std::shared_ptr<LogicalTensor> targetTensor, const Operation& op);
     void ProcessHub(Function& function, Operation& op);
-    void ProcessHubAssembleChain(
-        Function& function, Operation& hubOp, Operation& assembleOp, std::shared_ptr<LogicalTensor> hubInput,
-        std::shared_ptr<LogicalTensor> hubOutput);
+    void ProcessHubAssembleChain(Function& function, Operation& hubOp, Operation& assembleOp,
+                                 std::shared_ptr<LogicalTensor> hubInput, std::shared_ptr<LogicalTensor> hubOutput);
     Status RefactorViewConnectForInplace(Function& function);
     std::unordered_map<DataType, int> viewTypeTable = {{DT_INT8, 1}, {DT_BF16, 2}, {DT_FP16, 2}, {DT_FP32, 4}};
     std::vector<int> visitedAssembleOp;

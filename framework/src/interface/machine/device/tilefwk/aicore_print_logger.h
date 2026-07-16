@@ -108,9 +108,8 @@ public:
                 if (tmp == nullptr) {
                     tmp = "<null>";
                 }
-                EncodeTyped(
-                    AicorePrint::DataType::String, reinterpret_cast<__gm__ const uint8_t*>(tmp), StringLength(tmp),
-                    *fmt, idx);
+                EncodeTyped(AicorePrint::DataType::String, reinterpret_cast<__gm__ const uint8_t*>(tmp),
+                            StringLength(tmp), *fmt, idx);
                 break;
             }
             case 'd':
@@ -232,8 +231,8 @@ public:
     }
 
     template <typename PtrT>
-    __aicore__ void EncodeTyped(
-        AicorePrint::DataType ty, [[maybe_unused]] PtrT val, short valLen, __gm__ const char* fmt, int fmtLen)
+    __aicore__ void EncodeTyped(AicorePrint::DataType ty, [[maybe_unused]] PtrT val, short valLen,
+                                __gm__ const char* fmt, int fmtLen)
     {
         short paddedFmtLen = fmtLen + 1;
         int64_t recordSize = 1 + sizeof(short) + valLen + sizeof(short) + paddedFmtLen + 1;
@@ -483,4 +482,3 @@ private:
     std::string lastTensorName_{};
 #endif
 };
-

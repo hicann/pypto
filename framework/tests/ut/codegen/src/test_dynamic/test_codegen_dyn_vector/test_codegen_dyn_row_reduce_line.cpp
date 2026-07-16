@@ -58,8 +58,8 @@ TEST_F(TestCodegenDynRowReduceLine, TestOperationRowSumLine)
             output = Sum(input_a, 1, true);
         }
     }
-    auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX +
+                                                                HIDDEN_FUNC_SUFFIX);
 
     std::string res = GenCodeByFunction(*function);
     std::string expect = R"!!!(TRowSumLine<3>(ubTensor_2, ubTensor_0, ubTensor_3);)!!!";
@@ -94,8 +94,8 @@ TEST_F(TestCodegenDynRowReduceLine, TestOperationRowSumSingleTileTensor)
     ProgramData::GetInstance().AppendOutputs({
         RawTensorData::CreateConstantTensor<float>(output, 0.001f),
     });
-    auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX +
+                                                                HIDDEN_FUNC_SUFFIX);
 
     std::string res = GenCodeByFunction(*function);
     std::string expect = R"!!!(TRowSumSingle<LastUse3Dim<0, 0, 0>>(ubTensor_7, ubTensor_4, ubTensor_8);)!!!";
@@ -123,8 +123,8 @@ TEST_F(TestCodegenDynRowReduceLine, TestOperationRowProdLine)
             output = Prod(input_a, 0, true);
         }
     }
-    auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX +
+                                                                HIDDEN_FUNC_SUFFIX);
     std::string res = GenCodeByFunction(*function);
     const std::string expect = R"(TRowProdLine<3>(ubTensor_17, ubTensor_14);)";
     CheckStringExist(expect, res);
@@ -158,8 +158,8 @@ TEST_F(TestCodegenDynRowReduceLine, TestOperationRowProdSingleTileTensor)
     ProgramData::GetInstance().AppendOutputs({
         RawTensorData::CreateConstantTensor<float>(output, 0.001f),
     });
-    auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX +
+                                                                HIDDEN_FUNC_SUFFIX);
 
     std::string res = GenCodeByFunction(*function);
     const std::string expect = R"(TRowProdSingle<LastUse3Dim<0, 0, 1>>(ubTensor_7, ubTensor_4, ubTensor_8);)";
@@ -189,8 +189,8 @@ TEST_F(TestCodegenDynRowReduceLine, TestOperationArgMaxReduceAxisTile)
             output = ArgMax(input_a, -1, true);
         }
     }
-    auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX +
+                                                                HIDDEN_FUNC_SUFFIX);
     std::string res = GenCodeByFunction(*function);
     const std::string expect = R"(TRowArgMaxWithValueSingle(ubTensor_2, ubTensor_3, ubTensor_0, ubTensor_4);)";
     CheckStringExist(expect, res);
@@ -219,8 +219,8 @@ TEST_F(TestCodegenDynRowReduceLine, TestOperationArgMinReduceAxisTile)
             output = ArgMin(input_a, -1, true);
         }
     }
-    auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX +
+                                                                HIDDEN_FUNC_SUFFIX);
 
     std::string res = GenCodeByFunction(*function);
     const std::string expect = R"(TRowArgMinWithValueSingle(ubTensor_2, ubTensor_3, ubTensor_0, ubTensor_4);)";
@@ -250,8 +250,8 @@ TEST_F(TestCodegenDynRowReduceLine, TestOperationArgMaxReduceAxisTileLine)
             output = ArgMax(input_a, 0, true);
         }
     }
-    auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX +
+                                                                HIDDEN_FUNC_SUFFIX);
     std::string res = GenCodeByFunction(*function);
     const std::string expect = R"(TRowArgMaxWithValueLine<3>(ubTensor_2, ubTensor_3, ubTensor_0, ubTensor_4);)";
     CheckStringExist(expect, res);
@@ -280,8 +280,8 @@ TEST_F(TestCodegenDynRowReduceLine, TestOperationArgMinReduceAxisTileLine)
             output = ArgMin(input_a, 0, true);
         }
     }
-    auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX +
+                                                                HIDDEN_FUNC_SUFFIX);
 
     std::string res = GenCodeByFunction(*function);
     const std::string expect = R"(TRowArgMinWithValueLine<3>(ubTensor_2, ubTensor_3, ubTensor_0, ubTensor_4);)";

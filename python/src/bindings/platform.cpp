@@ -23,15 +23,10 @@ namespace pypto {
 void BindPlatform(py::module_& m)
 {
     m.def("GetNPUArch", []() -> std::string {
-        auto npuArch = Platform::Instance().GetSoc().GetNPUArch();
-        return NPUArchToString(npuArch);
-    })
-    .def("SetNPUArch", [](const std::string& value) {
-        Platform::Instance().GetSoc().SetNPUArch(value);
-    });
+         auto npuArch = Platform::Instance().GetSoc().GetNPUArch();
+         return NPUArchToString(npuArch);
+     }).def("SetNPUArch", [](const std::string& value) { Platform::Instance().GetSoc().SetNPUArch(value); });
 
-    m.def("GetAICoreNum", []() -> size_t {
-        return Platform::Instance().GetSoc().GetAICoreNum();
-    });
+    m.def("GetAICoreNum", []() -> size_t { return Platform::Instance().GetSoc().GetAICoreNum(); });
 }
 } // namespace pypto

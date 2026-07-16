@@ -171,9 +171,8 @@ Json Process::ToSortIndexJson(int sortIndex) const
     return root;
 }
 
-void Duration::OutputContextSwitchTrace(
-    std::ofstream& os, std::map<Pid, Process>& mProcesses, std::map<PTid, Thread>& mThreads,
-    const uint64_t sysClockTicks)
+void Duration::OutputContextSwitchTrace(std::ofstream& os, std::map<Pid, Process>& mProcesses,
+                                        std::map<PTid, Thread>& mThreads, const uint64_t sysClockTicks)
 {
     string processInfo = to_string(start.tid);
     std::string subgraphName = "SUBGRAPH";
@@ -190,8 +189,8 @@ void Duration::OutputContextSwitchTrace(
     string cpuMgrTile = "cpumgr-idle-" + to_string(start.pid);
     string cpuSwitchTitle = subgraphName + "-" + to_string(start.tid);
 
-    string cpuWakeupInfo =
-        ": sched_wakeup: comm=" + subgraphName + " pid=" + processInfo + " prio=20 target_cpu=" + cpuIdx;
+    string cpuWakeupInfo = ": sched_wakeup: comm=" + subgraphName + " pid=" + processInfo +
+                           " prio=20 target_cpu=" + cpuIdx;
     string cpuSwitchInfo1 =
         ": sched_switch: prev_comm=cpumgr-idle-0 prev_pid=0 prev_prio=-2 prev_state=R+ ==> next_comm=" + subgraphName +
         " next_pid=" + processInfo + " next_prio=5";
@@ -219,9 +218,8 @@ void Duration::OutputContextSwitchTrace(
     os << cpuIdleInfo << std::endl;
 }
 
-void Duration::OutputBeginEndTrace(
-    std::ofstream& os, std::map<Pid, Process>& mProcesses, std::map<PTid, Thread>& mThreads,
-    const uint64_t sysClockTicks)
+void Duration::OutputBeginEndTrace(std::ofstream& os, std::map<Pid, Process>& mProcesses,
+                                   std::map<PTid, Thread>& mThreads, const uint64_t sysClockTicks)
 {
     string processInfo = to_string(start.pid);
     std::ostringstream cpuId;
@@ -299,8 +297,8 @@ void TraceLogger::SetThreadName(std::string name, CostModel::Pid pid, CostModel:
     };
 }
 
-Event TraceLogger::AddEventBegin(
-    std::string name, CostModel::Pid pid, CostModel::Tid tid, CostModel::TimeStamp timestamp, std::string hint)
+Event TraceLogger::AddEventBegin(std::string name, CostModel::Pid pid, CostModel::Tid tid,
+                                 CostModel::TimeStamp timestamp, std::string hint)
 {
     mEventIdPtr++;
     auto beginEvent = Event{
@@ -550,8 +548,8 @@ void TraceLogger::GetTotalMachineQueueSize(CostModel::TimeStamp interval)
     }
 }
 
-void TraceLogger::GetFunctionCacheSize(
-    TimeStamp interval, const std::pair<const PTid, std::vector<CounterEvent>>& threadCounter)
+void TraceLogger::GetFunctionCacheSize(TimeStamp interval,
+                                       const std::pair<const PTid, std::vector<CounterEvent>>& threadCounter)
 {
     int totalCount = 0;
     int hitCount = 0;
@@ -619,9 +617,8 @@ void TraceLogger::GetTotalFunctionCacheSize(TimeStamp interval)
             std::copy(threadCounter.second.begin(), threadCounter.second.end(), std::back_inserter(totalCounterVec));
         }
     }
-    sort(totalCounterVec.begin(), totalCounterVec.end(), [&](CounterEvent a, CounterEvent b) {
-        return a.timestamp < b.timestamp;
-    });
+    sort(totalCounterVec.begin(), totalCounterVec.end(),
+         [&](CounterEvent a, CounterEvent b) { return a.timestamp < b.timestamp; });
     Pid pid = sim->machines[0]->machineId;
     Tid tid = sim->machines[0]->functionCacheTid;
 
@@ -727,17 +724,16 @@ void TraceLogger::OutEachMachineQueueSize(std::ofstream& os, const uint64_t sysC
             std::ostringstream cyc1;
             cyc1 << std::fixed << std::setprecision(precision) << (double(count.timestamp) / sysClockTicks);
             std::string cycle = cyc1.str();
-            std::string workInfo =
-                ": clock_set_rate: " + queueName + " state=" + std::to_string(count.size) + " cpu_id=0";
+            std::string workInfo = ": clock_set_rate: " + queueName + " state=" + std::to_string(count.size) +
+                                   " cpu_id=0";
             os << std::setw(width) << std::left << title << std::setw(width) << std::right << cpuInfo;
             os << std::setw(width2) << std::right << cycle << workInfo << std::endl;
         }
     }
 }
 
-void TraceLogger::OutCounters(
-    std::ofstream& os, std::vector<CounterEvent>& counterQ, std::string prefix, std::string suffix,
-    const uint64_t sysClockTicks)
+void TraceLogger::OutCounters(std::ofstream& os, std::vector<CounterEvent>& counterQ, std::string prefix,
+                              std::string suffix, const uint64_t sysClockTicks)
 {
     std::string title = "queueCounter-0";
     for (auto& counter : counterQ) {
@@ -748,8 +744,8 @@ void TraceLogger::OutCounters(
             std::ostringstream cyc1;
             cyc1 << std::fixed << std::setprecision(precision) << (double(counter.timestamp) / sysClockTicks);
             std::string cycle = cyc1.str();
-            std::string workInfo =
-                ": tracing_mark_write: C|" + to_string(ptid.pid) + "|" + queueName + '|' + std::to_string(counter.size);
+            std::string workInfo = ": tracing_mark_write: C|" + to_string(ptid.pid) + "|" + queueName + '|' +
+                                   std::to_string(counter.size);
             os << std::setw(width) << std::left << title << std::setw(width) << std::right << cpuInfo;
             os << std::setw(width2) << std::right << cycle << workInfo << std::endl;
         } else {
@@ -758,8 +754,8 @@ void TraceLogger::OutCounters(
             std::ostringstream cyc1;
             cyc1 << std::fixed << std::setprecision(precision) << (double(counter.timestamp) / sysClockTicks);
             std::string cycle = cyc1.str();
-            std::string workInfo =
-                ": clock_set_rate: " + queueName + " state=" + std::to_string(counter.size) + " cpu_id=0";
+            std::string workInfo = ": clock_set_rate: " + queueName + " state=" + std::to_string(counter.size) +
+                                   " cpu_id=0";
             os << std::setw(width) << std::left << title << std::setw(width) << std::right << cpuInfo;
             os << std::setw(width2) << std::right << cycle << workInfo << std::endl;
         }
@@ -890,8 +886,8 @@ void TraceLogger::ToFilterTrace(std::ofstream& os, std::map<int, std::pair<std::
         auto machineType = GetMachineType(it.first);
         if (IsCoreMachine(machineType)) {
             coreTasks[it.second.coreIdx] = {MachineName(static_cast<MachineType>(machineType)), {}};
-            mCoreInfoLogs[it.second.coreIdx] =
-                CoreInfoLog(it.second.coreIdx, MachineName(static_cast<MachineType>(machineType)));
+            mCoreInfoLogs[it.second.coreIdx] = CoreInfoLog(it.second.coreIdx,
+                                                           MachineName(static_cast<MachineType>(machineType)));
         }
     }
 
@@ -966,8 +962,8 @@ void TraceLogger::ToPipeTrace(std::ofstream& os)
     os << res.dump(1) << std::endl;
 }
 
-void TraceLogger::ToCalendarGlobalJson(
-    std::ofstream& osCalendar, std::map<int, std::pair<std::string, std::vector<Json>>> coreTasks)
+void TraceLogger::ToCalendarGlobalJson(std::ofstream& osCalendar,
+                                       std::map<int, std::pair<std::string, std::vector<Json>>> coreTasks)
 {
     int numSupportedCounters = 1;
     int counterId = 0;

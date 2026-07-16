@@ -53,8 +53,8 @@ enum class ScalarCategory {
     FLOAT,
 };
 
-inline ScalarCategory GetNumericCategory(
-    const DataType& dtype, const std::string& opName, const Span& span = Span::Unknown())
+inline ScalarCategory GetNumericCategory(const DataType& dtype, const std::string& opName,
+                                         const Span& span = Span::Unknown())
 {
     if (dtype.IsFloat()) {
         return ScalarCategory::FLOAT;
@@ -67,9 +67,8 @@ inline ScalarCategory GetNumericCategory(
     return ScalarCategory::INT; // unreachable, suppress compiler warning
 }
 
-inline DataType PromoteSameCategoryDtype(
-    const DataType& leftDtype, const DataType& rightDtype, const std::string& opName,
-    const Span& span = Span::Unknown())
+inline DataType PromoteSameCategoryDtype(const DataType& leftDtype, const DataType& rightDtype,
+                                         const std::string& opName, const Span& span = Span::Unknown())
 {
     IRCHECK(!IsBoolDtype(leftDtype) && !IsBoolDtype(rightDtype))
         << "Operator '" << opName << "' does not accept bool dtype"
@@ -111,8 +110,8 @@ inline ExprPtr MaybeCast(const ExprPtr& expr, DataType targetDtype, const Span& 
     return std::make_shared<Cast>(expr, targetDtype, span);
 }
 
-inline BinaryOperands PromoteBinaryOperands(
-    const ExprPtr& left, const ExprPtr& right, const std::string& opName, const Span& span)
+inline BinaryOperands PromoteBinaryOperands(const ExprPtr& left, const ExprPtr& right, const std::string& opName,
+                                            const Span& span)
 {
     DataType leftDtype = GetScalarDtype(left, span);
     DataType rightDtype = GetScalarDtype(right, span);
@@ -120,8 +119,8 @@ inline BinaryOperands PromoteBinaryOperands(
     return {MaybeCast(left, promotedDtype, span), MaybeCast(right, promotedDtype, span), promotedDtype};
 }
 
-inline BinaryOperands PromoteIntBinaryOperands(
-    const ExprPtr& left, const ExprPtr& right, const std::string& opName, const Span& span)
+inline BinaryOperands PromoteIntBinaryOperands(const ExprPtr& left, const ExprPtr& right, const std::string& opName,
+                                               const Span& span)
 {
     DataType leftDtype = GetScalarDtype(left, span);
     DataType rightDtype = GetScalarDtype(right, span);

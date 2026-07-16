@@ -65,17 +65,13 @@ double MonitorManager::CalcPassStageTimeoutSec(int opSize)
     return CalcPassTimeoutSec(opSize, kPassStageTimeoutBaseSec);
 }
 
-std::string MonitorManager::FormatPassDurationForLog(double seconds)
-{
-    return FormatPassDuration(seconds);
-}
+std::string MonitorManager::FormatPassDurationForLog(double seconds) { return FormatPassDuration(seconds); }
 
-void MonitorManager::Initialize(
-    bool enable, int intervalSec, double timeoutSec, int totalTimeoutSec, bool passDetailEnable)
+void MonitorManager::Initialize(bool enable, int intervalSec, double timeoutSec, int totalTimeoutSec,
+                                bool passDetailEnable)
 {
     std::lock_guard<std::mutex> lock(mutex_);
-    this->SetCompilerMonitorOptions(
-        enable, intervalSec, timeoutSec, totalTimeoutSec, enable && passDetailEnable);
+    this->SetCompilerMonitorOptions(enable, intervalSec, timeoutSec, totalTimeoutSec, enable && passDetailEnable);
     if (initialized_) {
         return;
     }
@@ -294,8 +290,8 @@ void MonitorManager::TryEndPrepareStage()
     stageElapsedTotals_["Prepare"] += elapsed;
 
     if (currentStage_ == "Prepare" && enable_) {
-        double totalElapsedPrepare =
-            std::chrono::duration<double>(std::chrono::steady_clock::now() - totalStart_).count();
+        double totalElapsedPrepare = std::chrono::duration<double>(std::chrono::steady_clock::now() - totalStart_)
+                                         .count();
         std::string msg = "[Compiler Monitor] Stage: " + currentStage_ +
                           "(completed) | Stashed function: " + std::to_string(totalFunctionCount_) +
                           " | Stage elapsed: " + FormatElapsed(elapsed) +
@@ -354,10 +350,11 @@ void MonitorManager::PrintCompilationFinished()
             totalElapsed = stageTotal;
         }
 
-        std::string compilationMsg =
-            "[Compiler Monitor] Compilation finished " + std::to_string(currentFunctionIndex_) + "/" +
-            std::to_string(totalFunctionCount_ > 0 ? totalFunctionCount_ : 1) +
-            " | Total functions: " + std::to_string(totalFunctionCount_ > 0 ? totalFunctionCount_ : 1);
+        std::string compilationMsg = "[Compiler Monitor] Compilation finished " +
+                                     std::to_string(currentFunctionIndex_) + "/" +
+                                     std::to_string(totalFunctionCount_ > 0 ? totalFunctionCount_ : 1) +
+                                     " | Total functions: " +
+                                     std::to_string(totalFunctionCount_ > 0 ? totalFunctionCount_ : 1);
         (void)fprintf(stdout, "%s\n", compilationMsg.c_str());
         (void)fflush(stdout);
         COMPILER_LOGI("%s", compilationMsg.c_str());
@@ -367,10 +364,10 @@ void MonitorManager::PrintCompilationFinished()
         for (const auto& [stage, sec] : stageElapsedTotals_) {
             if (stage == "Pass" || stage == "CodeGen" || stage == STAGE_HOST_MACHINE) {
                 stageMsg << " " << ("[" + stage + "]:") << std::fixed << std::setprecision(1) << sec << "s"
-                          << " ";
+                         << " ";
             } else {
                 stageMsg << " " << ("[" + stage + "]:") << std::fixed << std::setprecision(1) << sec << "s  (sum over "
-                          << n << " functions)\n";
+                         << n << " functions)\n";
             }
         }
         std::string stageTimingMsg = "[Compiler Monitor] Stage timing (aggregated by stage):" + stageMsg.str();
@@ -378,8 +375,7 @@ void MonitorManager::PrintCompilationFinished()
         (void)fprintf(stdout, "%s\n", stageTimingMsg.c_str());
         (void)fflush(stdout);
 
-        std::string finalMsg =
-            "[Compiler Monitor] Monitoring stopped | Total elapsed: " + FormatElapsed(totalElapsed);
+        std::string finalMsg = "[Compiler Monitor] Monitoring stopped | Total elapsed: " + FormatElapsed(totalElapsed);
         COMPILER_LOGI("%s", finalMsg.c_str());
         (void)fprintf(stdout, "%s\n", finalMsg.c_str());
         (void)fflush(stdout);
@@ -435,13 +431,12 @@ std::string MonitorManager::BuildPassCompileTimingsForFunction(int functionIndex
     return detailMsg.str();
 }
 
-std::string MonitorManager::BuildPassFunctionHeaderLocked(
-    int functionIndex, const std::string& functionName, const std::string& strategy) const
+std::string MonitorManager::BuildPassFunctionHeaderLocked(int functionIndex, const std::string& functionName,
+                                                          const std::string& strategy) const
 {
     int totalFunctions = totalFunctionCount_ > 0 ? totalFunctionCount_ : 1;
     std::ostringstream oss;
-    oss << "  |__ [Compiler Monitor] Function: " << functionIndex << "/" << totalFunctions
-        << " | Pass timing detail";
+    oss << "  |__ [Compiler Monitor] Function: " << functionIndex << "/" << totalFunctions << " | Pass timing detail";
     if (!strategy.empty()) {
         oss << " | Strategy:[" << strategy << "]";
     }
@@ -449,9 +444,9 @@ std::string MonitorManager::BuildPassFunctionHeaderLocked(
     return oss.str();
 }
 
-std::string MonitorManager::BuildPassProgressLineLocked(
-    const std::string& passIdentifier, size_t passIndex, int functionOpSize, const std::string& status,
-    double elapsedSec, bool success) const
+std::string MonitorManager::BuildPassProgressLineLocked(const std::string& passIdentifier, size_t passIndex,
+                                                        int functionOpSize, const std::string& status,
+                                                        double elapsedSec, bool success) const
 {
     double passTimeoutSec = CalcPassTimeoutSec(functionOpSize, kSinglePassTimeoutBaseSec);
     bool passTimeoutEnabled = passTimeoutSec >= 0.0;
@@ -478,8 +473,8 @@ std::string MonitorManager::BuildPassProgressLineLocked(
     return oss.str();
 }
 
-void MonitorManager::SetCompilerMonitorOptions(
-    bool enable, int intervalSec, double timeoutSec, int totalTimeoutSec, bool passDetailEnable)
+void MonitorManager::SetCompilerMonitorOptions(bool enable, int intervalSec, double timeoutSec, int totalTimeoutSec,
+                                               bool passDetailEnable)
 {
     enable_ = enable;
     passDetailEnable_ = passDetailEnable;
@@ -592,8 +587,7 @@ void MonitorManager::PrintCurrentTotalElapsed(std::string strTemp)
     std::lock_guard<std::mutex> lock(mutex_);
     auto now = std::chrono::steady_clock::now();
     double totalElapsed = std::chrono::duration<double>(now - totalStart_).count();
-    std::string stageFinishMsg =
-        "[Compiler Monitor] " + strTemp + " | Total elapsed: " + FormatElapsed(totalElapsed);
+    std::string stageFinishMsg = "[Compiler Monitor] " + strTemp + " | Total elapsed: " + FormatElapsed(totalElapsed);
     (void)fprintf(stdout, "%s\n", stageFinishMsg.c_str());
     (void)fflush(stdout);
 }
@@ -646,9 +640,9 @@ std::unordered_map<std::string, double> MonitorManager::GetStageElapsedTotals() 
     return stageElapsedTotals_;
 }
 
-void MonitorManager::RecordPassCompileTime(
-    const std::string& strategy, const std::string& passIdentifier, size_t passIndex,
-    const std::string& functionName, int functionIndex, int functionOpSize, double elapsedSec, bool success)
+void MonitorManager::RecordPassCompileTime(const std::string& strategy, const std::string& passIdentifier,
+                                           size_t passIndex, const std::string& functionName, int functionIndex,
+                                           int functionOpSize, double elapsedSec, bool success)
 {
     std::string progressLine;
     bool passTimedOut = false;
@@ -657,13 +651,13 @@ void MonitorManager::RecordPassCompileTime(
         if (!enable_ || !initialized_) {
             return;
         }
-        PassCompileTiming timing{
-            functionIndex, functionName, functionOpSize, strategy, passIdentifier, passIndex, elapsedSec, success};
+        PassCompileTiming timing{functionIndex,  functionName, functionOpSize, strategy,
+                                 passIdentifier, passIndex,    elapsedSec,     success};
         passCompileTimings_.push_back(timing);
         passElapsedTotals_[strategy + "::" + passIdentifier] += elapsedSec;
         if (passDetailEnable_ && currentStage_ == STAGE_PASS) {
-            progressLine = BuildPassProgressLineLocked(
-                passIdentifier, passIndex, functionOpSize, "completed", elapsedSec, success);
+            progressLine = BuildPassProgressLineLocked(passIdentifier, passIndex, functionOpSize, "completed",
+                                                       elapsedSec, success);
             double passTimeoutSec = CalcPassTimeoutSec(functionOpSize, kSinglePassTimeoutBaseSec);
             passTimedOut = passTimeoutSec >= 0.0 && elapsedSec > passTimeoutSec;
         }
@@ -692,9 +686,8 @@ std::map<std::string, double> MonitorManager::GetPassElapsedTotals() const
     return passElapsedTotals_;
 }
 
-void MonitorManager::StartPassCompile(
-    const std::string& strategy, const std::string& passIdentifier, size_t passIndex,
-    const std::string& functionName, int functionIndex, int functionOpSize)
+void MonitorManager::StartPassCompile(const std::string& strategy, const std::string& passIdentifier, size_t passIndex,
+                                      const std::string& functionName, int functionIndex, int functionOpSize)
 {
     std::string progressLine;
     {
@@ -711,15 +704,15 @@ void MonitorManager::StartPassCompile(
         currentPass_.passIndex = passIndex;
         currentPass_.startTime = std::chrono::steady_clock::now();
         if (passDetailEnable_ && currentStage_ == STAGE_PASS) {
-            if (lastPassDetailFunctionIndex_ != functionIndex ||
-                lastPassDetailFunctionName_ != functionName || lastPassDetailStrategy_ != strategy) {
+            if (lastPassDetailFunctionIndex_ != functionIndex || lastPassDetailFunctionName_ != functionName ||
+                lastPassDetailStrategy_ != strategy) {
                 progressLine += BuildPassFunctionHeaderLocked(functionIndex, functionName, strategy);
                 lastPassDetailFunctionIndex_ = functionIndex;
                 lastPassDetailFunctionName_ = functionName;
                 lastPassDetailStrategy_ = strategy;
             }
-            progressLine += BuildPassProgressLineLocked(
-                passIdentifier, passIndex, functionOpSize, "running", 0.0, true);
+            progressLine += BuildPassProgressLineLocked(passIdentifier, passIndex, functionOpSize, "running", 0.0,
+                                                        true);
         }
     }
     if (!progressLine.empty()) {
@@ -730,9 +723,8 @@ void MonitorManager::StartPassCompile(
     }
 }
 
-void MonitorManager::EndPassCompile(
-    const std::string& strategy, const std::string& passIdentifier, size_t passIndex,
-    const std::string& functionName, int functionIndex)
+void MonitorManager::EndPassCompile(const std::string& strategy, const std::string& passIdentifier, size_t passIndex,
+                                    const std::string& functionName, int functionIndex)
 {
     std::lock_guard<std::mutex> lock(mutex_);
     if (!currentPass_.active) {
@@ -772,7 +764,7 @@ void MonitorManager::StartStage(const std::string& name, int rootFuncIndex, cons
     // 当启动 FuncToBin 或 hostmachine 子阶段时，移除 activeStages_ 中的 CodeGen
     if (name == STAGE_FUNC_TO_BIN || name == STAGE_HOST_MACHINE) {
         auto it = std::find_if(activeStages_.begin(), activeStages_.end(),
-            [](const ActiveStageInfo& info) { return info.stageName == "CodeGen"; });
+                               [](const ActiveStageInfo& info) { return info.stageName == "CodeGen"; });
         if (it != activeStages_.end()) {
             activeStages_.erase(it);
         }
@@ -811,9 +803,8 @@ void MonitorManager::EndStage(const std::string& name, int rootFuncIndex, const 
 
     auto it = activeStages_.rend();
     if (rootFuncIndex < 0) {
-        it = std::find_if(activeStages_.rbegin(), activeStages_.rend(), [&name](const ActiveStageInfo& info) {
-            return info.stageName == name;
-        });
+        it = std::find_if(activeStages_.rbegin(), activeStages_.rend(),
+                          [&name](const ActiveStageInfo& info) { return info.stageName == name; });
         if (it != activeStages_.rend()) {
             actualRootFuncIndex = it->rootFuncIndex;
             actualRootFuncName = it->rootFuncName;
@@ -840,15 +831,14 @@ void MonitorManager::EndStage(const std::string& name, int rootFuncIndex, const 
     if (it != activeStages_.rend()) {
         activeStages_.erase(std::prev(it.base()));
     }
-    EndStageInternal(
-        name, actualRootFuncIndex, actualRootFuncName, stageStartTime, rootFuncIndex, rootFuncOpSize,
-        actualFunctionIndex, actualFunctionName, actualFunctionOpSize);
+    EndStageInternal(name, actualRootFuncIndex, actualRootFuncName, stageStartTime, rootFuncIndex, rootFuncOpSize,
+                     actualFunctionIndex, actualFunctionName, actualFunctionOpSize);
 }
 
-void MonitorManager::EndStageInternal(
-    const std::string& name, int rootFuncIndex, const std::string& rootFuncName,
-    const std::chrono::steady_clock::time_point& startTime, int rootFuncIndexOriginal, int rootFuncOpSize,
-    int functionIndex, const std::string& functionName, int functionOpSize)
+void MonitorManager::EndStageInternal(const std::string& name, int rootFuncIndex, const std::string& rootFuncName,
+                                      const std::chrono::steady_clock::time_point& startTime, int rootFuncIndexOriginal,
+                                      int rootFuncOpSize, int functionIndex, const std::string& functionName,
+                                      int functionOpSize)
 {
     if (!initialized_ || !impl_ || !enable_) {
         return;
@@ -875,33 +865,33 @@ void MonitorManager::EndStageInternal(
     if (name == STAGE_FUNC_TO_BIN) {
         int pw = GetProgressWidth();
         stageFinishMsg = "[Compiler Monitor] " + PadLabel("Function(parallel): ") +
-                           PadRight(std::to_string(rootFuncIndex) + "/" + std::to_string(rootFuncCount_), pw) +
-                           " | Stage: " + PadStageName("CodeGen[" + name + "]") +
-                           "(completed) | Stage elapsed: " + PadElapsed(FormatElapsed(elapsed)) +
-                           " | Total elapsed: " + PadElapsed(FormatElapsed(totalElapsed)) + " | Func:[" +
-                           rootFuncName + "] Ops: " + FormatOpCount(rootFuncOpSize);
+                         PadRight(std::to_string(rootFuncIndex) + "/" + std::to_string(rootFuncCount_), pw) +
+                         " | Stage: " + PadStageName("CodeGen[" + name + "]") +
+                         "(completed) | Stage elapsed: " + PadElapsed(FormatElapsed(elapsed)) +
+                         " | Total elapsed: " + PadElapsed(FormatElapsed(totalElapsed)) + " | Func:[" + rootFuncName +
+                         "] Ops: " + FormatOpCount(rootFuncOpSize);
     } else if (name == STAGE_HOST_MACHINE) {
         int pw = GetProgressWidth();
         const int denom = std::max(hostMachineTotalSteps_, std::max(1, rootFuncIndex));
         const std::string& hostMachineStage = rootFuncName.empty() ? STAGE_HOST_MACHINE : rootFuncName;
         stageFinishMsg = "[Compiler Monitor] " + PadLabel("HostMachine: ") +
-                           PadRight(std::to_string(rootFuncIndex) + "/" + std::to_string(denom), pw) +
-                           " | Stage: " + PadStageName(hostMachineStage) +
-                           "(completed) | Stage elapsed: " + PadElapsed(FormatElapsed(elapsed)) +
-                           " | Total elapsed: " + PadElapsed(FormatElapsed(totalElapsed)) +
-                           " | Ops: " + FormatOpCount(rootFuncOpSize);
+                         PadRight(std::to_string(rootFuncIndex) + "/" + std::to_string(denom), pw) +
+                         " | Stage: " + PadStageName(hostMachineStage) +
+                         "(completed) | Stage elapsed: " + PadElapsed(FormatElapsed(elapsed)) +
+                         " | Total elapsed: " + PadElapsed(FormatElapsed(totalElapsed)) +
+                         " | Ops: " + FormatOpCount(rootFuncOpSize);
     } else if (name == "CodeGen") {
         stageFinishMsg = "[Compiler Monitor] Stage: " + name +
-                           "(completed) | Stage elapsed: " + PadElapsed(FormatElapsed(elapsed)) +
-                           " | Total elapsed: " + PadElapsed(FormatElapsed(totalElapsed));
+                         "(completed) | Stage elapsed: " + PadElapsed(FormatElapsed(elapsed)) +
+                         " | Total elapsed: " + PadElapsed(FormatElapsed(totalElapsed));
     } else {
         int pw = GetProgressWidth();
-        stageFinishMsg =
-            "[Compiler Monitor] " + PadLabel("Function: ") +
-            PadRight(std::to_string(functionIndex) + "/" + std::to_string(totalFunctionCount_), pw) +
-            " | Stage: " + PadStageName(name) + "(completed) | Stage elapsed: " + PadElapsed(FormatElapsed(elapsed)) +
-            " | Total elapsed: " + PadElapsed(FormatElapsed(totalElapsed)) + " | Func:[" + functionName +
-            "] Ops: " + FormatOpCount(functionOpSize);
+        stageFinishMsg = "[Compiler Monitor] " + PadLabel("Function: ") +
+                         PadRight(std::to_string(functionIndex) + "/" + std::to_string(totalFunctionCount_), pw) +
+                         " | Stage: " + PadStageName(name) +
+                         "(completed) | Stage elapsed: " + PadElapsed(FormatElapsed(elapsed)) +
+                         " | Total elapsed: " + PadElapsed(FormatElapsed(totalElapsed)) + " | Func:[" + functionName +
+                         "] Ops: " + FormatOpCount(functionOpSize);
     }
 
     (void)fprintf(stdout, "%s\n", stageFinishMsg.c_str());
@@ -911,14 +901,16 @@ void MonitorManager::EndStageInternal(
         double timeoutSec = CalcPassTimeoutSec(functionOpSize, kPassStageTimeoutBaseSec);
         if (timeoutSec >= 0.0 && elapsed > timeoutSec && !stageWarningPrinted) {
             int pw = GetProgressWidth();
-            std::string passTimeoutWarnMsg =
-                "[Compiler Monitor] | [** WARNING **] Function: " +
-                PadRight(std::to_string(functionIndex) + "/" + std::to_string(totalFunctionCount_), pw) +
-                " | Stage [Pass] elapsed [" + FormatPassDuration(elapsed) +
-                "] exceeded the pass stage time threshold [" + FormatPassDuration(timeoutSec) +
-                "] | Func:[" + functionName + "] | Number of op: " + FormatOpCount(functionOpSize) +
-                " | Standard: 200000 ops / 90.0s linear scaled" +
-                ", you can terminate the process by pressing Ctrl+C !!!";
+            std::string passTimeoutWarnMsg = "[Compiler Monitor] | [** WARNING **] Function: " +
+                                             PadRight(std::to_string(functionIndex) + "/" +
+                                                          std::to_string(totalFunctionCount_),
+                                                      pw) +
+                                             " | Stage [Pass] elapsed [" + FormatPassDuration(elapsed) +
+                                             "] exceeded the pass stage time threshold [" +
+                                             FormatPassDuration(timeoutSec) + "] | Func:[" + functionName +
+                                             "] | Number of op: " + FormatOpCount(functionOpSize) +
+                                             " | Standard: 200000 ops / 90.0s linear scaled" +
+                                             ", you can terminate the process by pressing Ctrl+C !!!";
             stageTimeoutFlag_[name] = true;
             (void)fprintf(stdout, "%s\n", passTimeoutWarnMsg.c_str());
             (void)fflush(stdout);
@@ -943,8 +935,7 @@ void MonitorManager::SetProcessingThresholdSec(int sec) { processingThresholdSec
 int MonitorManager::GetProgressWidth() const
 {
     auto digits = [](int n) { return static_cast<int>(std::to_string(std::max(n, 1)).size()); };
-    int maxDigits =
-        std::max({digits(totalFunctionCount_), digits(rootFuncCount_), digits(hostMachineTotalSteps_)});
+    int maxDigits = std::max({digits(totalFunctionCount_), digits(rootFuncCount_), digits(hostMachineTotalSteps_)});
     return 2 * maxDigits + 1;
 }
 

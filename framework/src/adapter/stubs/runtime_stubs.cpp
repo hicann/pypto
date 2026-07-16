@@ -18,13 +18,13 @@
 #include "securec.h"
 
 namespace npu::tile_fwk {
-constexpr uint64_t MAX_MALLOC_SIZE = 1024 * 1024 *1024;
+constexpr uint64_t MAX_MALLOC_SIZE = 1024 * 1024 * 1024;
 RtError StubMalloc(void** devPtr, uint64_t size, RtMemType type, const uint16_t moduleId)
 {
     ADAPTER_LOGD("Enter stub function of Malloc.");
     (void)type;
     (void)moduleId;
-    if (devPtr == nullptr || size == 0 ||size > MAX_MALLOC_SIZE) {
+    if (devPtr == nullptr || size == 0 || size > MAX_MALLOC_SIZE) {
         ADAPTER_LOGW("devPtr is null or size can not be support");
         return RT_SUCCESS;
     }
@@ -46,7 +46,7 @@ RtError StubMemset(void* devPtr, uint64_t destMax, uint32_t val, uint64_t cnt)
     return RT_SUCCESS;
 }
 
-RtError StubMemcpy(void *dst, uint64_t destMax, const void *src, uint64_t cnt, RtMemcpyKind kind)
+RtError StubMemcpy(void* dst, uint64_t destMax, const void* src, uint64_t cnt, RtMemcpyKind kind)
 {
     ADAPTER_LOGD("Enter stub function of Memcpy.");
     (void)kind;
@@ -144,8 +144,8 @@ RtError StubFuncGetByName(const RtBinHandle binHandle, const char_t* kernelName,
     return RT_SUCCESS;
 }
 
-RtError StubBinaryLoadFromFile(
-    const char_t* const binPath, const RtLoadBinaryConfig* const optionalCfg, RtBinHandle* handle)
+RtError StubBinaryLoadFromFile(const char_t* const binPath, const RtLoadBinaryConfig* const optionalCfg,
+                               RtBinHandle* handle)
 {
     (void)binPath;
     (void)optionalCfg;
@@ -206,8 +206,8 @@ RtError StubDevBinaryRegister(const RtDevBinary* bin, void** hdl)
     return RT_SUCCESS;
 }
 
-RtError StubFunctionRegister(
-    void* binHandle, const void* stubFunc, const char_t* stubName, const void* kernelInfoExt, uint32_t funcMode)
+RtError StubFunctionRegister(void* binHandle, const void* stubFunc, const char_t* stubName, const void* kernelInfoExt,
+                             uint32_t funcMode)
 {
     ADAPTER_LOGD("Enter stub function of FunctionRegister.");
     (void)binHandle;
@@ -218,8 +218,8 @@ RtError StubFunctionRegister(
     return RT_SUCCESS;
 }
 
-RtError StubKernelLaunch(
-    const void* stubFunc, uint32_t blockDim, void* args, uint32_t argsSize, RtSmDesc* smDesc, RtStream stm)
+RtError StubKernelLaunch(const void* stubFunc, uint32_t blockDim, void* args, uint32_t argsSize, RtSmDesc* smDesc,
+                         RtStream stm)
 {
     ADAPTER_LOGD("Enter stub function of KernelLaunch.");
     (void)stubFunc;
@@ -231,9 +231,8 @@ RtError StubKernelLaunch(
     return RT_SUCCESS;
 }
 
-RtError StubLaunchCpuKernel(
-    const RtFuncHandle funcHandle, uint32_t numBlocks, RtStream stm, const RtKernelLaunchCfg* cfg,
-    RtCpuKernelArgs* argsInfo)
+RtError StubLaunchCpuKernel(const RtFuncHandle funcHandle, uint32_t numBlocks, RtStream stm,
+                            const RtKernelLaunchCfg* cfg, RtCpuKernelArgs* argsInfo)
 {
     ADAPTER_LOGD("Enter stub function of LaunchCpuKernel.");
     (void)funcHandle;
@@ -244,9 +243,8 @@ RtError StubLaunchCpuKernel(
     return RT_SUCCESS;
 }
 
-RtError StubKernelLaunchWithHandleV2(
-    void* hdl, const uint64_t tilingKey, uint32_t numBlocks, RtArgsEx* argsInfo, RtSmDesc* smDesc, RtStream stm,
-    const RtTaskCfgInfo* cfgInfo)
+RtError StubKernelLaunchWithHandleV2(void* hdl, const uint64_t tilingKey, uint32_t numBlocks, RtArgsEx* argsInfo,
+                                     RtSmDesc* smDesc, RtStream stm, const RtTaskCfgInfo* cfgInfo)
 {
     ADAPTER_LOGD("Enter stub function of KernelLaunchWithHandleV2.");
     (void)hdl;
@@ -259,9 +257,9 @@ RtError StubKernelLaunchWithHandleV2(
     return RT_SUCCESS;
 }
 
-RtError StubAicpuKernelLaunchExWithArgs(
-    const uint32_t kernelType, const char_t* const opName, const uint32_t numBlocks, const RtAicpuArgsEx* argsInfo,
-    RtSmDesc* const smDesc, const RtStream stm, const uint32_t flags)
+RtError StubAicpuKernelLaunchExWithArgs(const uint32_t kernelType, const char_t* const opName, const uint32_t numBlocks,
+                                        const RtAicpuArgsEx* argsInfo, RtSmDesc* const smDesc, const RtStream stm,
+                                        const uint32_t flags)
 {
     ADAPTER_LOGD("Enter stub function of AicpuKernelLaunchExWithArgs.");
     (void)kernelType;

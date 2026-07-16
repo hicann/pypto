@@ -1,20 +1,20 @@
 /**
-* Copyright (c) 2026 Huawei Technologies Co., Ltd.
-* This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-* CANN Open Software License Agreement Version 2.0 (the "License").
-* Please refer to the License for details. You may not use this file except in compliance with the License.
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-* INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-* See LICENSE in the root of the software repository for the full text of the License.
-*/
+ * Copyright (c) 2026 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
 
 /*!
  * \file aicore_model_launcher.h
  * \brief DebugMode AicoreModel host simulation launcher
-*/
+ */
 
 #pragma once
- 	 
+
 #include <cstdint>
 #include <memory>
 #include <stdint.h>
@@ -59,10 +59,7 @@ struct AicoreModelMemoryUtils {
         return devPtr;
     }
 
-    void CopyFromDev(uint8_t* data, uint8_t* devPtr, uint64_t size)
-    {
-        MemcpyS(data, size, devPtr, size);
-    }
+    void CopyFromDev(uint8_t* data, uint8_t* devPtr, uint64_t size) { MemcpyS(data, size, devPtr, size); }
 
     template <typename T>
     T* CopyToDev(std::vector<T> data, uint8_t** cachedDevAddrHolder)
@@ -80,10 +77,7 @@ struct AicoreModelMemoryUtils {
         return devPtr;
     }
 
-    void CopyFromDev(RawTensorData& t) 
-    {
-        CopyFromDev(t.data(), t.GetDevPtr(), t.size());
-    }
+    void CopyFromDev(RawTensorData& t) { CopyFromDev(t.data(), t.GetDevPtr(), t.size()); }
 
     uint8_t* CopyToDev(RawTensorData& data)
     {
@@ -102,14 +96,16 @@ private:
 
 class AicoreModelLauncher {
 public:
-    static int AicoreModelLaunchOnceWithHostTensorData(
-        Function* function, const std::vector<DeviceTensorData>& inputList,
-        const std::vector<DeviceTensorData>& outputList, DevControlFlowCache* ctrlCache,
-        AicoreModelMemoryUtils& memUtils, const DeviceLauncherConfig& config = DeviceLauncherConfig());
+    static int AicoreModelLaunchOnceWithHostTensorData(Function* function,
+                                                       const std::vector<DeviceTensorData>& inputList,
+                                                       const std::vector<DeviceTensorData>& outputList,
+                                                       DevControlFlowCache* ctrlCache, AicoreModelMemoryUtils& memUtils,
+                                                       const DeviceLauncherConfig& config = DeviceLauncherConfig());
     static int AicoreModelRunOnce(Function* function, DevControlFlowCache* inputCtrlCache,
-        const DeviceLauncherConfig& config = DeviceLauncherConfig());
+                                  const DeviceLauncherConfig& config = DeviceLauncherConfig());
     static int AicoreModelLaunchDeviceTensorData(Function* function, const std::vector<DeviceTensorData>& inDevList,
-        const std::vector<DeviceTensorData>& outDevList, const DeviceLauncherConfig& config = DeviceLauncherConfig(),
-        DevControlFlowCache* ctrlCache = nullptr);
+                                                 const std::vector<DeviceTensorData>& outDevList,
+                                                 const DeviceLauncherConfig& config = DeviceLauncherConfig(),
+                                                 DevControlFlowCache* ctrlCache = nullptr);
 };
-}
+} // namespace npu::tile_fwk::dynamic

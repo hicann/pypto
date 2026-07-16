@@ -64,8 +64,8 @@ public:
             params_[index](args[currentIndex + 1]);
             ++currentIndex; // 跳过下一个参数
         } else {
-            SIMULATION_LOGE(CostModel::ExternalErrorScene::INVALID_CONFIG,
-                "Missing argument for %s", args[currentIndex].c_str());
+            SIMULATION_LOGE(CostModel::ExternalErrorScene::INVALID_CONFIG, "Missing argument for %s",
+                            args[currentIndex].c_str());
         }
     }
 
@@ -78,8 +78,8 @@ public:
                 ++currentIndex; // 跳过下一个参数
             }
         } else {
-            SIMULATION_LOGE(CostModel::ExternalErrorScene::INVALID_CONFIG,
-                "Unknown parameter: %s", args[currentIndex].c_str());
+            SIMULATION_LOGE(CostModel::ExternalErrorScene::INVALID_CONFIG, "Unknown parameter: %s",
+                            args[currentIndex].c_str());
         }
     }
 

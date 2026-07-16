@@ -35,9 +35,9 @@
 namespace pypto {
 namespace ir {
 
-TypePtr DeduceTensorReductionType(
-    [[maybe_unused]] const std::vector<ExprPtr>& args,
-    [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs, const std::string& op_name)
+TypePtr DeduceTensorReductionType([[maybe_unused]] const std::vector<ExprPtr>& args,
+                                  [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs,
+                                  const std::string& op_name)
 {
     // Reduction operations require exactly 1 argument (input tensor)
     CHECK(args.size() == 1) << "The operator " << op_name << " requires exactly 1 argument, but got " << args.size();

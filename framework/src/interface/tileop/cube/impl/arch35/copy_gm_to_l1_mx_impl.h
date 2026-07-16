@@ -29,16 +29,14 @@ INLINE void TLoadAMXImpl(TileData& dst, GlobalData& src, const Coord& coord)
     int64_t srcShape0 = GetShape<0>(src);
     int64_t srcShape1 = GetShape<1>(src);
     constexpr auto staticL1H = Std::tuple_element<shapeSize - SHAPE_DIM3, typename TileData::TileShape>::type::value;
-    constexpr auto staticL1W =
-        Std::tuple_element<shapeSize - SHAPE_DIM2, typename TileData::TileShape>::type::value * SHAPE_DIM2;
+    constexpr auto staticL1W = Std::tuple_element<shapeSize - SHAPE_DIM2, typename TileData::TileShape>::type::value *
+                               SHAPE_DIM2;
     using shapeDim2 = pto::Shape<1, 1, -1, -1, SHAPE_DIM2>;
     using strideDim3 = pto::Stride<-1, -1, -1, SHAPE_DIM2, 1>;
-    using tileData = pto::Tile<
-        pto::TileType::Mat, typename TileData::Type, staticL1H, staticL1W, pto::BLayout::RowMajor, -1, -1,
-        pto::SLayout::RowMajor, pto::TileConfig::alignedSize>;
-    static_assert(
-        mode == CopyInMode::ND2NZ || mode == CopyInMode::DN2NZ,
-        "ScaleA GM->L1 data movement only supports ND2NZ or DN2NZ mode.");
+    using tileData = pto::Tile<pto::TileType::Mat, typename TileData::Type, staticL1H, staticL1W,
+                               pto::BLayout::RowMajor, -1, -1, pto::SLayout::RowMajor, pto::TileConfig::alignedSize>;
+    static_assert(mode == CopyInMode::ND2NZ || mode == CopyInMode::DN2NZ,
+                  "ScaleA GM->L1 data movement only supports ND2NZ or DN2NZ mode.");
     if constexpr (mode == CopyInMode::ND2NZ) {
         int64_t gmOffset = offset1 * SHAPE_DIM2 + offset0 * srcShape1 * SHAPE_DIM2;
         using globalData = pto::GlobalTensor<typename GlobalData::Type, shapeDim2, strideDim3, pto::Layout::MX_A_ND>;
@@ -70,17 +68,15 @@ INLINE void TLoadBMXImpl(TileData& dst, GlobalData& src, const Coord& coord)
     int64_t dstShape1 = GetShape<1>(dst);
     int64_t srcShape0 = GetShape<0>(src);
     int64_t srcShape1 = GetShape<1>(src);
-    constexpr auto staticL1H =
-        Std::tuple_element<shapeSize - SHAPE_DIM3, typename TileData::TileShape>::type::value * SHAPE_DIM2;
+    constexpr auto staticL1H = Std::tuple_element<shapeSize - SHAPE_DIM3, typename TileData::TileShape>::type::value *
+                               SHAPE_DIM2;
     constexpr auto staticL1W = Std::tuple_element<shapeSize - SHAPE_DIM2, typename TileData::TileShape>::type::value;
     using shapeDim2 = pto::Shape<1, 1, -1, -1, SHAPE_DIM2>;
     using strideDim3 = pto::Stride<-1, -1, -1, SHAPE_DIM2, 1>;
-    using tileData = pto::Tile<
-        pto::TileType::Mat, typename TileData::Type, staticL1H, staticL1W, pto::BLayout::ColMajor, -1, -1,
-        pto::SLayout::ColMajor, pto::TileConfig::alignedSize>;
-    static_assert(
-        mode == CopyInMode::ND2NZ || mode == CopyInMode::DN2NZ,
-        "ScaleB GM->L1 data movement only supports ND2NZ or DN2NZ mode.");
+    using tileData = pto::Tile<pto::TileType::Mat, typename TileData::Type, staticL1H, staticL1W,
+                               pto::BLayout::ColMajor, -1, -1, pto::SLayout::ColMajor, pto::TileConfig::alignedSize>;
+    static_assert(mode == CopyInMode::ND2NZ || mode == CopyInMode::DN2NZ,
+                  "ScaleB GM->L1 data movement only supports ND2NZ or DN2NZ mode.");
     if constexpr (mode == CopyInMode::ND2NZ) {
         int64_t gmOffset = offset1 * SHAPE_DIM2 + offset0 * SHAPE_DIM2 * srcShape1;
         using globalData = pto::GlobalTensor<typename GlobalData::Type, shapeDim2, strideDim3, pto::Layout::MX_B_ND>;

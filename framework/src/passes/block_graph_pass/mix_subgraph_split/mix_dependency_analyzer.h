@@ -41,10 +41,9 @@ struct AnalyzerOutput {
     std::vector<InternalDependencyInfo> internalDeps;
     std::unordered_map<int, std::vector<SimpleTensorParam>> allIncasts;
     std::unordered_map<int, std::vector<SimpleTensorParam>> allOutcasts;
-    AnalyzerOutput(
-        const SubgraphToFunction& subFunc, const std::vector<InternalDependencyInfo>& deps,
-        const std::unordered_map<int, std::vector<SimpleTensorParam>> incasts,
-        const std::unordered_map<int, std::vector<SimpleTensorParam>> outcasts)
+    AnalyzerOutput(const SubgraphToFunction& subFunc, const std::vector<InternalDependencyInfo>& deps,
+                   const std::unordered_map<int, std::vector<SimpleTensorParam>> incasts,
+                   const std::unordered_map<int, std::vector<SimpleTensorParam>> outcasts)
         : subgraphToFunction(subFunc), internalDeps(deps), allIncasts(incasts), allOutcasts(outcasts)
     {}
 };
@@ -74,9 +73,8 @@ public:
     // 需要分析同类型的依赖有哪些
     // 最后转成控制边的依赖internalDeps
     // 先识别cube/vector, component先标上
-    void CollectInternalDependencies(
-        const std::unordered_map<int, std::set<int>>& dependencyClosure,
-        const std::vector<InternalComponentInfo>& components);
+    void CollectInternalDependencies(const std::unordered_map<int, std::set<int>>& dependencyClosure,
+                                     const std::vector<InternalComponentInfo>& components);
     // 6.消除冗余依赖
     // 将多余的依赖转换成普通的依赖
     // 可以优化一下，只消除了外部的
@@ -84,9 +82,8 @@ public:
     void EliminateRedundantDependencies();
 
     // 基于可达性移除冗余的外部依赖
-    void EliminateRedundantOuterDeps(
-        const std::vector<std::vector<bool>>& innerDeps,
-        std::unordered_map<int, std::vector<SimpleTensorParam>>& allTensors);
+    void EliminateRedundantOuterDeps(const std::vector<std::vector<bool>>& innerDeps,
+                                     std::unordered_map<int, std::vector<SimpleTensorParam>>& allTensors);
     // 基于可达性移除冗余的内部依赖
     void EliminateRedundantInnerDeps(std::vector<std::vector<bool>>& innerDeps);
     // 外部接口
@@ -110,8 +107,8 @@ private:
     void Reset();
     std::vector<std::vector<bool>> Transpose(const std::vector<std::vector<bool>>& matrix);
     bool IsTensorInComponentIncasts(int compId, const LogicalTensorPtr& tensor) const;
-    bool CheckDirectionAndCollectValid(
-        const std::vector<LogicalTensorPtr>& tensors, int src, int dst, bool& hasValid) const;
+    bool CheckDirectionAndCollectValid(const std::vector<LogicalTensorPtr>& tensors, int src, int dst,
+                                       bool& hasValid) const;
     void LogIllegalBidirectionalDependency(int comp1, int comp2, const AnalyzerInput& input) const;
     void FilterNonBoundaryTensors(Function* originalMixFunc);
     int maxComponent;

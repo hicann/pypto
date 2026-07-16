@@ -18,9 +18,8 @@
 using namespace tile_fwk::test_operation;
 namespace {
 struct BatchMatmulOpFuncArgs : public OpFuncArgs {
-    BatchMatmulOpFuncArgs(
-        const std::vector<int64_t>& viewShape, const std::vector<std::vector<int64_t>>& tileShape,
-        const MatmulTestCaseParam& param)
+    BatchMatmulOpFuncArgs(const std::vector<int64_t>& viewShape, const std::vector<std::vector<int64_t>>& tileShape,
+                          const MatmulTestCaseParam& param)
         : viewShape_(viewShape), tileShape_(tileShape), param_(param)
     {}
 
@@ -58,20 +57,20 @@ struct BatchMatmulTileParam {
     std::vector<int64_t> vecTileShape;
 };
 
-static void GetBatchMatmulTileParam(
-    const std::vector<Tensor>& inputs, const OpFuncArgs* opArgs, BatchMatmulTileParam& tileParam)
+static void GetBatchMatmulTileParam(const std::vector<Tensor>& inputs, const OpFuncArgs* opArgs,
+                                    BatchMatmulTileParam& tileParam)
 {
     auto args = static_cast<const BatchMatmulOpFuncArgs*>(opArgs);
     tileParam.transA = args->param_.transA;
     tileParam.transB = args->param_.transB;
     size_t inputDim = inputs[0].GetShape().size();
     const size_t DIM_OFFSET_2 = 2;
-    tileParam.mDim =
-        tileParam.transA ? inputs[0].GetShape()[inputDim - 1] : inputs[0].GetShape()[inputDim - DIM_OFFSET_2];
-    tileParam.kDim =
-        tileParam.transA ? inputs[0].GetShape()[inputDim - DIM_OFFSET_2] : inputs[0].GetShape()[inputDim - 1];
-    tileParam.nDim =
-        tileParam.transB ? inputs[1].GetShape()[inputDim - DIM_OFFSET_2] : inputs[1].GetShape()[inputDim - 1];
+    tileParam.mDim = tileParam.transA ? inputs[0].GetShape()[inputDim - 1] :
+                                        inputs[0].GetShape()[inputDim - DIM_OFFSET_2];
+    tileParam.kDim = tileParam.transA ? inputs[0].GetShape()[inputDim - DIM_OFFSET_2] :
+                                        inputs[0].GetShape()[inputDim - 1];
+    tileParam.nDim = tileParam.transB ? inputs[1].GetShape()[inputDim - DIM_OFFSET_2] :
+                                        inputs[1].GetShape()[inputDim - 1];
     tileParam.mView = args->viewShape_[inputDim - DIM_OFFSET_2];
     tileParam.nView = args->viewShape_[inputDim - 1UL];
 
@@ -110,8 +109,8 @@ static Tensor CallBatchMatmulOp(const Tensor& tensorA, const Tensor& tensorB, co
     }
 }
 
-static void BatchMatmulOperationExeFuncNoSplit(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void BatchMatmulOperationExeFuncNoSplit(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                               const OpFuncArgs* opArgs)
 {
     auto args = static_cast<const BatchMatmulOpFuncArgs*>(opArgs);
     BatchMatmulTileParam tileParam;
@@ -129,9 +128,9 @@ static void BatchMatmulOperationExeFuncNoSplit(
             tileParam.aOffset[inputDim - 1] = mIdx;
             Tensor tensorA = View(inputs[0], inputs[0].GetShape(), tileParam.aValidShape, tileParam.aOffset);
             Tensor tensorB = View(inputs[1], inputs[1].GetShape(), tileParam.bValidShape, tileParam.bOffset);
-            TileShape::Current().SetCubeTile(
-                {args->tileShape_[0][0], args->tileShape_[0][1]}, {args->tileShape_[1][0], args->tileShape_[1][1]},
-                {args->tileShape_[2][0], args->tileShape_[2][1]});
+            TileShape::Current().SetCubeTile({args->tileShape_[0][0], args->tileShape_[0][1]},
+                                             {args->tileShape_[1][0], args->tileShape_[1][1]},
+                                             {args->tileShape_[2][0], args->tileShape_[2][1]});
             if (args->param_.isAMatrixNz || args->param_.isBMatrixNz || args->param_.isCMatrixNz) {
                 TileShape::Current().SetMatrixSize({tileParam.mDim, tileParam.kDim, tileParam.nDim});
             }
@@ -140,8 +139,8 @@ static void BatchMatmulOperationExeFuncNoSplit(
     }
 }
 
-static void BatchMatmulOperationExeFuncSplitM(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void BatchMatmulOperationExeFuncSplitM(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                              const OpFuncArgs* opArgs)
 {
     auto args = static_cast<const BatchMatmulOpFuncArgs*>(opArgs);
     BatchMatmulTileParam tileParam;
@@ -150,9 +149,8 @@ static void BatchMatmulOperationExeFuncSplitM(
 
     FUNCTION("testMSplit", {inputs[0], inputs[1]}, {outputs[0]})
     {
-        LOOP(
-            "mLoop", FunctionType::DYNAMIC_LOOP, mIdx,
-            LoopRange(0, CeilDivSymbolicScalar(tileParam.mDim, tileParam.mView), 1))
+        LOOP("mLoop", FunctionType::DYNAMIC_LOOP, mIdx,
+             LoopRange(0, CeilDivSymbolicScalar(tileParam.mDim, tileParam.mView), 1))
         {
             if (tileParam.transA) {
                 tileParam.aOffset.insert(tileParam.aOffset.end(), {0, mIdx * tileParam.mView});
@@ -173,9 +171,9 @@ static void BatchMatmulOperationExeFuncSplitM(
             Tensor tensorB = View(inputs[1], inputs[1].GetShape(), tileParam.bValidShape, tileParam.bOffset);
 
             TileShape::Current().SetVecTile(tileParam.vecTileShape);
-            TileShape::Current().SetCubeTile(
-                {args->tileShape_[0][0], args->tileShape_[0][1]}, {args->tileShape_[1][0], args->tileShape_[1][1]},
-                {args->tileShape_[2][0], args->tileShape_[2][1]});
+            TileShape::Current().SetCubeTile({args->tileShape_[0][0], args->tileShape_[0][1]},
+                                             {args->tileShape_[1][0], args->tileShape_[1][1]},
+                                             {args->tileShape_[2][0], args->tileShape_[2][1]});
             if (args->param_.isAMatrixNz || args->param_.isBMatrixNz || args->param_.isCMatrixNz) {
                 TileShape::Current().SetMatrixSize({tileParam.mDim, tileParam.kDim, tileParam.nDim});
             }
@@ -186,8 +184,8 @@ static void BatchMatmulOperationExeFuncSplitM(
     }
 }
 
-static void BatchMatmulOperationExeFuncSplitN(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void BatchMatmulOperationExeFuncSplitN(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                              const OpFuncArgs* opArgs)
 {
     auto args = static_cast<const BatchMatmulOpFuncArgs*>(opArgs);
     BatchMatmulTileParam tileParam;
@@ -196,9 +194,8 @@ static void BatchMatmulOperationExeFuncSplitN(
 
     FUNCTION("testNSplit", {inputs[0], inputs[1]}, {outputs[0]})
     {
-        LOOP(
-            "nLoop", FunctionType::DYNAMIC_LOOP, nIdx,
-            LoopRange(0, CeilDivSymbolicScalar(tileParam.nDim, tileParam.nView), 1))
+        LOOP("nLoop", FunctionType::DYNAMIC_LOOP, nIdx,
+             LoopRange(0, CeilDivSymbolicScalar(tileParam.nDim, tileParam.nView), 1))
         {
             tileParam.aOffset.insert(tileParam.aOffset.end(), {0, 0});
             Tensor tensorA = View(inputs[0], inputs[0].GetShape(), tileParam.aValidShape, tileParam.aOffset);
@@ -216,9 +213,9 @@ static void BatchMatmulOperationExeFuncSplitN(
                     {tileParam.kDim, std::min(tileParam.nDim - nIdx * tileParam.nView, tileParam.nView)});
             }
             Tensor tensorB = View(inputs[1], tileParam.bViewShape, tileParam.bValidShape, tileParam.bOffset);
-            TileShape::Current().SetCubeTile(
-                {args->tileShape_[0][0], args->tileShape_[0][1]}, {args->tileShape_[1][0], args->tileShape_[1][1]},
-                {args->tileShape_[2][0], args->tileShape_[2][1]});
+            TileShape::Current().SetCubeTile({args->tileShape_[0][0], args->tileShape_[0][1]},
+                                             {args->tileShape_[1][0], args->tileShape_[1][1]},
+                                             {args->tileShape_[2][0], args->tileShape_[2][1]});
             TileShape::Current().SetVecTile(tileParam.vecTileShape);
             if (args->param_.isAMatrixNz || args->param_.isBMatrixNz || args->param_.isCMatrixNz) {
                 TileShape::Current().SetMatrixSize({tileParam.mDim, tileParam.kDim, tileParam.nDim});
@@ -230,8 +227,8 @@ static void BatchMatmulOperationExeFuncSplitN(
     }
 }
 
-static void BatchMatmulOperationExeFuncSplitMN(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void BatchMatmulOperationExeFuncSplitMN(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                               const OpFuncArgs* opArgs)
 {
     auto args = static_cast<const BatchMatmulOpFuncArgs*>(opArgs);
     BatchMatmulTileParam tileParam;
@@ -239,13 +236,11 @@ static void BatchMatmulOperationExeFuncSplitMN(
 
     FUNCTION("testMNSplit", {inputs[0], inputs[1]}, {outputs[0]})
     {
-        LOOP(
-            "mLoop", FunctionType::DYNAMIC_LOOP, mIdx,
-            LoopRange(0, CeilDivSymbolicScalar(tileParam.mDim, tileParam.mView), 1))
+        LOOP("mLoop", FunctionType::DYNAMIC_LOOP, mIdx,
+             LoopRange(0, CeilDivSymbolicScalar(tileParam.mDim, tileParam.mView), 1))
         {
-            LOOP(
-                "nLoop", FunctionType::DYNAMIC_LOOP, nIdx,
-                LoopRange(0, CeilDivSymbolicScalar(tileParam.nDim, tileParam.nView), 1))
+            LOOP("nLoop", FunctionType::DYNAMIC_LOOP, nIdx,
+                 LoopRange(0, CeilDivSymbolicScalar(tileParam.nDim, tileParam.nView), 1))
             {
                 if (tileParam.transA) {
                     tileParam.aViewShape.insert(tileParam.aViewShape.end(), {tileParam.kDim, tileParam.mView});
@@ -278,9 +273,9 @@ static void BatchMatmulOperationExeFuncSplitMN(
                 Tensor tensorB = View(inputs[1], tileParam.bViewShape, tileParam.bValidShape, tileParam.bOffset);
 
                 TileShape::Current().SetVecTile(tileParam.vecTileShape);
-                TileShape::Current().SetCubeTile(
-                    {args->tileShape_[0][0], args->tileShape_[0][1]}, {args->tileShape_[1][0], args->tileShape_[1][1]},
-                    {args->tileShape_[2][0], args->tileShape_[2][1]});
+                TileShape::Current().SetCubeTile({args->tileShape_[0][0], args->tileShape_[0][1]},
+                                                 {args->tileShape_[1][0], args->tileShape_[1][1]},
+                                                 {args->tileShape_[2][0], args->tileShape_[2][1]});
                 if (args->param_.isAMatrixNz || args->param_.isBMatrixNz || args->param_.isCMatrixNz) {
                     TileShape::Current().SetMatrixSize({tileParam.mDim, tileParam.kDim, tileParam.nDim});
                 }
@@ -292,8 +287,8 @@ static void BatchMatmulOperationExeFuncSplitMN(
     }
 }
 
-static void BatchMatmulOperationExeFunc(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void BatchMatmulOperationExeFunc(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                        const OpFuncArgs* opArgs)
 {
     ASSERT(inputs[0].GetShape().size() == inputs[1].GetShape().size());
     auto args = static_cast<const BatchMatmulOpFuncArgs*>(opArgs);
@@ -316,9 +311,9 @@ static void BatchMatmulOperationExeFunc(
 
 class BatchMatmulOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac_param<BatchMatmulOpMetaData> {};
 
-INSTANTIATE_TEST_SUITE_P(
-    TestBatchMatmul, BatchMatmulOperationTest,
-    ::testing::ValuesIn(GetOpMetaData<BatchMatmulOpMetaData>({BatchMatmulOperationExeFunc}, "BatchMatmul")));
+INSTANTIATE_TEST_SUITE_P(TestBatchMatmul, BatchMatmulOperationTest,
+                         ::testing::ValuesIn(GetOpMetaData<BatchMatmulOpMetaData>({BatchMatmulOperationExeFunc},
+                                                                                  "BatchMatmul")));
 
 TEST_P(BatchMatmulOperationTest, TestBatchMatmul)
 {
@@ -326,13 +321,12 @@ TEST_P(BatchMatmulOperationTest, TestBatchMatmul)
     auto test_data = GetParam().test_data_;
     testCase.inputTensors = GetMatmulTensors(test_data, "input_tensors");
     testCase.outputTensors = GetMatmulTensors(test_data, "output_tensors");
-    auto args =
-        BatchMatmulOpFuncArgs(GetViewShape(test_data), GetMatmulTileShape(test_data), GetMatmulParam(test_data));
+    auto args = BatchMatmulOpFuncArgs(GetViewShape(test_data), GetMatmulTileShape(test_data),
+                                      GetMatmulParam(test_data));
     testCase.args = &args;
     testCase.opFunc = GetParam().opFunc_;
-    testCase.inputPaths = {
-        GetGoldenDir() + "/" + testCase.inputTensors[0].GetStorage()->Symbol() + ".bin",
-        GetGoldenDir() + "/" + testCase.inputTensors[1].GetStorage()->Symbol() + ".bin"};
+    testCase.inputPaths = {GetGoldenDir() + "/" + testCase.inputTensors[0].GetStorage()->Symbol() + ".bin",
+                           GetGoldenDir() + "/" + testCase.inputTensors[1].GetStorage()->Symbol() + ".bin"};
     testCase.goldenPaths = {GetGoldenDir() + "/" + testCase.outputTensors[0].GetStorage()->Symbol() + ".bin"};
     TestExecutor::runTest(testCase);
 }
@@ -340,9 +334,9 @@ TEST_P(BatchMatmulOperationTest, TestBatchMatmul)
 class BatchMatmulVerifyOperationTest
     : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac_param<BatchMatmulOpMetaData> {};
 
-INSTANTIATE_TEST_SUITE_P(
-    TestBatchMatmulVerify, BatchMatmulVerifyOperationTest,
-    ::testing::ValuesIn(GetOpMetaData<BatchMatmulOpMetaData>({BatchMatmulOperationExeFunc}, "BatchMatmulVerify")));
+INSTANTIATE_TEST_SUITE_P(TestBatchMatmulVerify, BatchMatmulVerifyOperationTest,
+                         ::testing::ValuesIn(GetOpMetaData<BatchMatmulOpMetaData>({BatchMatmulOperationExeFunc},
+                                                                                  "BatchMatmulVerify")));
 
 TEST_P(BatchMatmulVerifyOperationTest, TestBatchMatmulVerify)
 {
@@ -350,13 +344,12 @@ TEST_P(BatchMatmulVerifyOperationTest, TestBatchMatmulVerify)
     auto test_data = GetParam().test_data_;
     testCase.outputTensors = GetMatmulTensors(test_data, "output_tensors");
     testCase.inputTensors = GetMatmulTensors(test_data, "input_tensors");
-    auto args =
-        BatchMatmulOpFuncArgs(GetViewShape(test_data), GetMatmulTileShape(test_data), GetMatmulParam(test_data));
+    auto args = BatchMatmulOpFuncArgs(GetViewShape(test_data), GetMatmulTileShape(test_data),
+                                      GetMatmulParam(test_data));
     testCase.args = &args;
     testCase.opFunc = GetParam().opFunc_;
-    testCase.inputPaths = {
-        GetGoldenDir() + "/" + testCase.inputTensors[0].GetStorage()->Symbol() + ".bin",
-        GetGoldenDir() + "/" + testCase.inputTensors[1].GetStorage()->Symbol() + ".bin"};
+    testCase.inputPaths = {GetGoldenDir() + "/" + testCase.inputTensors[0].GetStorage()->Symbol() + ".bin",
+                           GetGoldenDir() + "/" + testCase.inputTensors[1].GetStorage()->Symbol() + ".bin"};
     testCase.goldenPaths = {GetGoldenDir() + "/" + testCase.outputTensors[0].GetStorage()->Symbol() + ".bin"};
     TestFlowVerifier::runTest(testCase);
 }

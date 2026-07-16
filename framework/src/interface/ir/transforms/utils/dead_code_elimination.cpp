@@ -73,8 +73,8 @@ using RemovablePredicate = std::function<bool(const StmtPtr&)>;
 /// direct fields, not nested-body refs) are added to the live set; the
 /// nested body, if any, is recursed into separately so its own candidate
 /// assignments remain eligible for removal.
-void FindLiveRootsRecursiveImpl(
-    const std::vector<StmtPtr>& stmts, const RemovablePredicate& is_removable, std::unordered_set<const Var*>& live)
+void FindLiveRootsRecursiveImpl(const std::vector<StmtPtr>& stmts, const RemovablePredicate& is_removable,
+                                std::unordered_set<const Var*>& live)
 {
     auto collect_expr_refs = [&](const ExprPtr& expr) {
         if (!expr)
@@ -92,11 +92,14 @@ void FindLiveRootsRecursiveImpl(
         // Live-root: non-candidate leaf statements contribute their refs.
         // ContinueStmt/BreakStmt are always non-removable — their carried vars
         // must be considered live even when no other statement uses them.
-        bool is_leaf =
-            std::dynamic_pointer_cast<const AssignStmt>(stmt) || std::dynamic_pointer_cast<const EvalStmt>(stmt) ||
-            std::dynamic_pointer_cast<const ReturnStmt>(stmt) || std::dynamic_pointer_cast<const YieldStmt>(stmt) ||
-            std::dynamic_pointer_cast<const TensorOpStmt>(stmt) || std::dynamic_pointer_cast<const ScalarOpStmt>(stmt) ||
-            std::dynamic_pointer_cast<const ContinueStmt>(stmt) || std::dynamic_pointer_cast<const BreakStmt>(stmt);
+        bool is_leaf = std::dynamic_pointer_cast<const AssignStmt>(stmt) ||
+                       std::dynamic_pointer_cast<const EvalStmt>(stmt) ||
+                       std::dynamic_pointer_cast<const ReturnStmt>(stmt) ||
+                       std::dynamic_pointer_cast<const YieldStmt>(stmt) ||
+                       std::dynamic_pointer_cast<const TensorOpStmt>(stmt) ||
+                       std::dynamic_pointer_cast<const ScalarOpStmt>(stmt) ||
+                       std::dynamic_pointer_cast<const ContinueStmt>(stmt) ||
+                       std::dynamic_pointer_cast<const BreakStmt>(stmt);
         if (is_leaf && !is_removable(stmt)) {
             auto all_refs = CollectStmtVarRefs(stmt);
             live.insert(all_refs.begin(), all_refs.end());
@@ -132,9 +135,8 @@ void FindLiveRootsRecursiveImpl(
     }
 }
 
-std::vector<StmtPtr> FilterDeadCodeImpl(
-    const std::vector<StmtPtr>& stmts, const RemovablePredicate& is_removable,
-    const std::unordered_set<const Var*>& live)
+std::vector<StmtPtr> FilterDeadCodeImpl(const std::vector<StmtPtr>& stmts, const RemovablePredicate& is_removable,
+                                        const std::unordered_set<const Var*>& live)
 {
     std::vector<StmtPtr> result;
 
@@ -185,9 +187,9 @@ std::vector<StmtPtr> FilterDeadCodeImpl(
                 continue;
             }
             auto new_body = MakeSeqBody(filtered, for_stmt->span_);
-            auto new_for = std::make_shared<const ForStmt>(
-                for_stmt->loopVar_, for_stmt->start_, for_stmt->stop_, for_stmt->step_, for_stmt->iterArgs_, new_body,
-                for_stmt->returnVars_, for_stmt->span_, for_stmt->attrs_);
+            auto new_for = std::make_shared<const ForStmt>(for_stmt->loopVar_, for_stmt->start_, for_stmt->stop_,
+                                                           for_stmt->step_, for_stmt->iterArgs_, new_body,
+                                                           for_stmt->returnVars_, for_stmt->span_, for_stmt->attrs_);
             result.push_back(new_for);
         } else if (auto if_stmt = std::dynamic_pointer_cast<const IfStmt>(stmt)) {
             auto then_orig = FlattenBody(if_stmt->thenBody_);
@@ -203,8 +205,7 @@ std::vector<StmtPtr> FilterDeadCodeImpl(
             }
             // Drop no-op if-stmts: branches only yield, no return vars.
             bool then_all_yield = all_yield(filtered_then);
-            bool else_all_yield = !filtered_else.has_value()
-                || all_yield(FlattenBody(*filtered_else));
+            bool else_all_yield = !filtered_else.has_value() || all_yield(FlattenBody(*filtered_else));
             if (if_stmt->returnVars_.empty() && then_all_yield && else_all_yield) {
                 continue;
             }
@@ -234,8 +235,8 @@ std::vector<StmtPtr> FilterDeadCodeImpl(
                 continue;
             }
             auto new_body = MakeSeqBody(filtered, while_stmt->span_);
-            auto new_while = std::make_shared<const WhileStmt>(
-                while_stmt->condition_, while_stmt->iterArgs_, new_body, while_stmt->returnVars_, while_stmt->span_);
+            auto new_while = std::make_shared<const WhileStmt>(while_stmt->condition_, while_stmt->iterArgs_, new_body,
+                                                               while_stmt->returnVars_, while_stmt->span_);
             result.push_back(new_while);
         } else if (auto section_stmt = std::dynamic_pointer_cast<const SectionStmt>(stmt)) {
             std::vector<StmtPtr> original;
@@ -252,8 +253,8 @@ std::vector<StmtPtr> FilterDeadCodeImpl(
             auto new_body = filtered.empty() ?
                                 std::make_shared<const SeqStmts>(std::vector<StmtPtr>{}, section_stmt->span_) :
                                 MakeSeqBody(filtered, section_stmt->span_);
-            auto new_section =
-                std::make_shared<const SectionStmt>(section_stmt->sectionKind_, new_body, section_stmt->span_);
+            auto new_section = std::make_shared<const SectionStmt>(section_stmt->sectionKind_, new_body,
+                                                                   section_stmt->span_);
             result.push_back(new_section);
         } else {
             result.push_back(stmt);
@@ -323,58 +324,52 @@ std::vector<StmtPtr> EliminateDeadCode(const std::vector<StmtPtr>& stmts, const 
 
     std::vector<DefSite> def_sites;
 
-    std::function<void(const std::vector<StmtPtr>&)> collect_def_sites =
-        [&](const std::vector<StmtPtr>& stmts_vec) {
-            for (const auto& s : stmts_vec) {
-                if (auto assign = std::dynamic_pointer_cast<const AssignStmt>(s)) {
-                    def_sites.push_back({{assign->var_.get()},
-                                         CollectVarUses(assign->value_)});
-                } else if (auto tensor_op =
-                               std::dynamic_pointer_cast<const TensorOpStmt>(s)) {
-                    std::vector<const Var*> defs;
-                    for (const auto& r : tensor_op->result_) defs.push_back(r.get());
-                    if (tensor_op->result_token_) defs.push_back(tensor_op->result_token_.get());
-                    std::unordered_set<const Var*> uses;
-                    for (const auto& arg : tensor_op->args_) {
-                        auto arg_uses = CollectVarUses(arg);
-                        uses.insert(arg_uses.begin(), arg_uses.end());
-                    }
-                    for (const auto& r : tensor_op->tokens_) {
-                        uses.insert(r.get());
-                    }
-                    def_sites.push_back({std::move(defs), std::move(uses)});
-                } else if (auto scalar_op =
-                               std::dynamic_pointer_cast<const ScalarOpStmt>(s)) {
-                    std::unordered_set<const Var*> uses;
-                    for (const auto& arg : scalar_op->args_) {
-                        auto arg_uses = CollectVarUses(arg);
-                        uses.insert(arg_uses.begin(), arg_uses.end());
-                    }
-                    def_sites.push_back({{scalar_op->result_.get()}, std::move(uses)});
+    std::function<void(const std::vector<StmtPtr>&)> collect_def_sites = [&](const std::vector<StmtPtr>& stmts_vec) {
+        for (const auto& s : stmts_vec) {
+            if (auto assign = std::dynamic_pointer_cast<const AssignStmt>(s)) {
+                def_sites.push_back({{assign->var_.get()}, CollectVarUses(assign->value_)});
+            } else if (auto tensor_op = std::dynamic_pointer_cast<const TensorOpStmt>(s)) {
+                std::vector<const Var*> defs;
+                for (const auto& r : tensor_op->result_)
+                    defs.push_back(r.get());
+                if (tensor_op->result_token_)
+                    defs.push_back(tensor_op->result_token_.get());
+                std::unordered_set<const Var*> uses;
+                for (const auto& arg : tensor_op->args_) {
+                    auto arg_uses = CollectVarUses(arg);
+                    uses.insert(arg_uses.begin(), arg_uses.end());
                 }
-                // Recurse into control-flow bodies
-                if (auto for_s = std::dynamic_pointer_cast<const ForStmt>(s)) {
-                    collect_def_sites(FlattenBody(for_s->body_));
-                } else if (auto if_s =
-                               std::dynamic_pointer_cast<const IfStmt>(s)) {
-                    collect_def_sites(FlattenBody(if_s->thenBody_));
-                    if (if_s->elseBody_.has_value()) {
-                        collect_def_sites(FlattenBody(if_s->elseBody_.value()));
-                    }
-                } else if (auto while_s =
-                               std::dynamic_pointer_cast<const WhileStmt>(s)) {
-                    collect_def_sites(FlattenBody(while_s->body_));
-                } else if (auto sec_s =
-                               std::dynamic_pointer_cast<const SectionStmt>(s)) {
-                    if (auto seq =
-                            std::dynamic_pointer_cast<const SeqStmts>(sec_s->body_)) {
-                        collect_def_sites(seq->stmts_);
-                    } else if (sec_s->body_) {
-                        collect_def_sites({sec_s->body_});
-                    }
+                for (const auto& r : tensor_op->tokens_) {
+                    uses.insert(r.get());
+                }
+                def_sites.push_back({std::move(defs), std::move(uses)});
+            } else if (auto scalar_op = std::dynamic_pointer_cast<const ScalarOpStmt>(s)) {
+                std::unordered_set<const Var*> uses;
+                for (const auto& arg : scalar_op->args_) {
+                    auto arg_uses = CollectVarUses(arg);
+                    uses.insert(arg_uses.begin(), arg_uses.end());
+                }
+                def_sites.push_back({{scalar_op->result_.get()}, std::move(uses)});
+            }
+            // Recurse into control-flow bodies
+            if (auto for_s = std::dynamic_pointer_cast<const ForStmt>(s)) {
+                collect_def_sites(FlattenBody(for_s->body_));
+            } else if (auto if_s = std::dynamic_pointer_cast<const IfStmt>(s)) {
+                collect_def_sites(FlattenBody(if_s->thenBody_));
+                if (if_s->elseBody_.has_value()) {
+                    collect_def_sites(FlattenBody(if_s->elseBody_.value()));
+                }
+            } else if (auto while_s = std::dynamic_pointer_cast<const WhileStmt>(s)) {
+                collect_def_sites(FlattenBody(while_s->body_));
+            } else if (auto sec_s = std::dynamic_pointer_cast<const SectionStmt>(s)) {
+                if (auto seq = std::dynamic_pointer_cast<const SeqStmts>(sec_s->body_)) {
+                    collect_def_sites(seq->stmts_);
+                } else if (sec_s->body_) {
+                    collect_def_sites({sec_s->body_});
                 }
             }
-        };
+        }
+    };
 
     collect_def_sites(stmts);
 

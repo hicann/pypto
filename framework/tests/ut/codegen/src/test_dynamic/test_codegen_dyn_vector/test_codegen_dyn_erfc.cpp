@@ -50,8 +50,8 @@ TEST_F(TestCodegenDynErfc, ErfcFP32)
             output = Erfc(input_a);
         }
     }
-    auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX +
+                                                                HIDDEN_FUNC_SUFFIX);
     std::vector<SymbolicScalar> dynValidShape = {16, 16};
     std::string res = GenCodeByFunction(*function);
     std::string expect = R"(TErfc(ubTensor_2, ubTensor_3, ubTensor_0);)";

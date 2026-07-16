@@ -75,9 +75,8 @@ void TestSa(SaTileShapeConfig& tileConfig)
     Tensor saOut(dType, {batchSizeSym, s1Sym, nq, dn}, "saOut");
     RawTensorDataPtr saOutData = RawTensorData::CreateConstantTensorData<T>(saOutShape, dType, 0);
 
-    SparseFlashAttention(
-        qNope.tensor, qRope.tensor, kSlc.tensor, vSlc.tensor, actSeqs.tensor, nq, nkv, softmaxScale, topk, saOut,
-        tileConfig);
+    SparseFlashAttention(qNope.tensor, qRope.tensor, kSlc.tensor, vSlc.tensor, actSeqs.tensor, nq, nkv, softmaxScale,
+                         topk, saOut, tileConfig);
 
     // 读数据
     int saOutSize = std::accumulate(saOutShape.begin(), saOutShape.end(), 1, std::multiplies<>());

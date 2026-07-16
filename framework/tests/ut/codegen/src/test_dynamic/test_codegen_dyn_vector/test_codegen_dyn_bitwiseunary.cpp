@@ -39,8 +39,8 @@ TEST_F(TestCodegenDynBitwiseUnary, BitwiseNotLayout)
 {
     MockFuncDynUnaryConf config;
     config.dtype = DT_INT16;
-    auto function =
-        GenMockFuncDynUnary("BitwiseNot", config, [](Tensor& input, Tensor& output) { output = BitwiseNot(input); });
+    auto function = GenMockFuncDynUnary("BitwiseNot", config,
+                                        [](Tensor& input, Tensor& output) { output = BitwiseNot(input); });
 
     std::string res = GenCodeByFunction(*function);
     std::string expect = R"(TBitwiseNot(ubTensor_0, ubTensor_0);)";

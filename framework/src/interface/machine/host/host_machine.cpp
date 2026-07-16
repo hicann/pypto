@@ -71,7 +71,7 @@ private:
         execute = (ExecuteFunc)GetSymbol(compilerHandle, "Execute");
         simuExecute = (ExecuteFunc)GetSymbol(simuHandle, "ExecuteSimulation");
 
-        resetAllPasses = (void(*)())GetSymbol(progHandle, "ResetAllPasses");
+        resetAllPasses = (void (*)())GetSymbol(progHandle, "ResetAllPasses");
     }
 
     void* GetSymbol(void* handle, const char* sym)
@@ -190,7 +190,7 @@ void HostMachine::CompileFunction(Function* func) const
 void HostMachine::ResetAllPasses()
 {
     MACHINE_LOGI("ResetAllPasses called");
-    
+
     auto& backend = Backend::GetBackend();
     if (backend.resetAllPasses) {
         backend.resetAllPasses();
@@ -218,9 +218,8 @@ void HostMachine::SubTask(Function* function)
     std::lock_guard<std::mutex> lock(compileQueueMutex_);
     auto task = std::make_unique<MachineTask>(curTaskId_++, function);
     int function_done_idx = MonitorManager::Instance().GetAndIncrementNextFunctionIndex();
-    COMPILER_LOGI(
-        "Stashed function idx:%d begin compile, function name: %s .", function_done_idx,
-        function->GetMagicName().c_str());
+    COMPILER_LOGI("Stashed function idx:%d begin compile, function name: %s .", function_done_idx,
+                  function->GetMagicName().c_str());
     MonitorManager::Instance().SetCurrentFunctionName(function->GetMagicName());
     MonitorManager::Instance().SetCurrentFuncOpSize(static_cast<int>(function->GetOperationSize()));
     MonitorManager::Instance().SetFuncSumOpSize(function->GetOperationSize());
@@ -235,7 +234,7 @@ void HostMachine::WaitTaskFinish()
 {
     while (curTaskId_ != finishQueue_.Size()) {
         usleep(1000); // sleep 1000 us
-    }                 // wait all task finish
+    } // wait all task finish
     MACHINE_LOGD("Finish all host machine task count: %lu.", curTaskId_.load());
 
     /* reset counter */
@@ -257,13 +256,11 @@ void HostMachine::StashTask(Function* function)
     }
 
     std::lock_guard<std::mutex> lock(stashQueueMutex_);
-    stashedFuncQueue_.Push(std::make_tuple(
-        function, config::Duplicate(), ConfigManager::Instance().GetInternalConfig(),
-        ConfigManager::Instance().GetJsonData()));
+    stashedFuncQueue_.Push(std::make_tuple(function, config::Duplicate(), ConfigManager::Instance().GetInternalConfig(),
+                                           ConfigManager::Instance().GetJsonData()));
     MonitorManager::Instance().SetTotalFunctionCount(static_cast<int>(stashedFuncQueue_.Size()));
-    COMPILER_LOGI(
-        "Stashed function queue size:%lu, push function: %s .", stashedFuncQueue_.Size(),
-        function->GetMagicName().c_str());
+    COMPILER_LOGI("Stashed function queue size:%lu, push function: %s .", stashedFuncQueue_.Size(),
+                  function->GetMagicName().c_str());
 }
 
 void HostMachine::SubAllStashedTask()
@@ -295,8 +292,8 @@ std::string HostMachine::GetCacheKeyFromFunction(Function* function)
     if (function->BelongTo().GetLastFunction() != nullptr &&
         function->BelongTo().GetLastFunction()->GetFunctionType() == FunctionType::DYNAMIC) {
         cacheKey = function->BelongTo().GetLastFunction()->GetFunctionHash().Data();
-        OpInfoManager::GetInstance().GetOpFuncName() =
-            function->BelongTo().GetLastFunction()->GetMagicName() + cacheKey;
+        OpInfoManager::GetInstance().GetOpFuncName() = function->BelongTo().GetLastFunction()->GetMagicName() +
+                                                       cacheKey;
     } else {
         cacheKey = function->GetFunctionHash().Data();
     }

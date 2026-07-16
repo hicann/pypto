@@ -21,9 +21,8 @@ namespace {
 enum class BitwiseScalarOp { AND, OR, XOR };
 
 struct BitwiseScalarOpFuncArgs : public OpFuncArgs {
-    BitwiseScalarOpFuncArgs(
-        BitwiseScalarOp op, const Element& value, const std::vector<int64_t>& viewShape,
-        const std::vector<int64_t>& tileShape)
+    BitwiseScalarOpFuncArgs(BitwiseScalarOp op, const Element& value, const std::vector<int64_t>& viewShape,
+                            const std::vector<int64_t>& tileShape)
         : op_(op), value_(value), viewShape_(viewShape), tileShape_(tileShape)
     {}
 
@@ -56,8 +55,8 @@ static inline Tensor ApplyBitwiseScalarOp(BitwiseScalarOp op, const Tensor& t, c
     }
 }
 
-static void BitwiseScalarOpExeFunc2D(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void BitwiseScalarOpExeFunc2D(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                     const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0]})
     {
@@ -75,9 +74,8 @@ static void BitwiseScalarOpExeFunc2D(
             {
                 auto fullSize0 = std::min(firstDim - bIdx * firstViewShape, firstViewShape);
                 auto fullSize1 = std::min(secondDim - sIdx * secondViewShape, secondViewShape);
-                auto tileTensor0 = View(
-                    inputs[0], {firstViewShape, secondViewShape}, {fullSize0, fullSize1},
-                    {bIdx * firstViewShape, sIdx * secondViewShape});
+                auto tileTensor0 = View(inputs[0], {firstViewShape, secondViewShape}, {fullSize0, fullSize1},
+                                        {bIdx * firstViewShape, sIdx * secondViewShape});
                 TileShape::Current().SetVecTile(args->tileShape_);
                 auto res = ApplyBitwiseScalarOp(args->op_, tileTensor0, args->value_);
                 Assemble(res, {bIdx * firstViewShape, sIdx * secondViewShape}, outputs[0]);
@@ -86,8 +84,8 @@ static void BitwiseScalarOpExeFunc2D(
     }
 }
 
-static void BitwiseScalarOpExeFunc3D(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void BitwiseScalarOpExeFunc3D(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                     const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0]})
     {
@@ -111,9 +109,9 @@ static void BitwiseScalarOpExeFunc3D(
                     auto fullSize0 = std::min(firstDim - bIdx * firstViewShape, firstViewShape);
                     auto fullSize1 = std::min(secondDim - sIdx * secondViewShape, secondViewShape);
                     auto fullSize2 = std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape);
-                    auto tileTensor0 = View(
-                        inputs[0], {firstViewShape, secondViewShape, thirdViewShape}, {fullSize0, fullSize1, fullSize2},
-                        {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape});
+                    auto tileTensor0 = View(inputs[0], {firstViewShape, secondViewShape, thirdViewShape},
+                                            {fullSize0, fullSize1, fullSize2},
+                                            {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape});
                     TileShape::Current().SetVecTile(args->tileShape_);
                     auto res = ApplyBitwiseScalarOp(args->op_, tileTensor0, args->value_);
                     Assemble(res, {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape}, outputs[0]);
@@ -123,8 +121,8 @@ static void BitwiseScalarOpExeFunc3D(
     }
 }
 
-static void BitwiseScalarOpExeFunc4D(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void BitwiseScalarOpExeFunc4D(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                     const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0]})
     {
@@ -154,18 +152,17 @@ static void BitwiseScalarOpExeFunc4D(
                         auto fullSize1 = std::min(secondDim - sIdx * secondViewShape, secondViewShape);
                         auto fullSize2 = std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape);
                         auto fullSize3 = std::min(fourthDim - qIdx * fourthViewShape, fourthViewShape);
-                        auto tileTensor0 = View(
-                            inputs[0], {firstViewShape, secondViewShape, thirdViewShape, fourthViewShape},
-                            {fullSize0, fullSize1, fullSize2, fullSize3},
-                            {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape,
-                             qIdx * fourthViewShape});
+                        auto tileTensor0 = View(inputs[0],
+                                                {firstViewShape, secondViewShape, thirdViewShape, fourthViewShape},
+                                                {fullSize0, fullSize1, fullSize2, fullSize3},
+                                                {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape,
+                                                 qIdx * fourthViewShape});
                         TileShape::Current().SetVecTile(args->tileShape_);
                         auto res = ApplyBitwiseScalarOp(args->op_, tileTensor0, args->value_);
-                        Assemble(
-                            res,
-                            {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape,
-                             qIdx * fourthViewShape},
-                            outputs[0]);
+                        Assemble(res,
+                                 {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape,
+                                  qIdx * fourthViewShape},
+                                 outputs[0]);
                     }
                 }
             }
@@ -176,10 +173,10 @@ static void BitwiseScalarOpExeFunc4D(
 class BitwiseAndsOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac_param<BitwiseScalarOpMetaData> {
 };
 
-INSTANTIATE_TEST_SUITE_P(
-    TestBitwiseAnds, BitwiseAndsOperationTest,
-    ::testing::ValuesIn(tile_fwk::test_operation::GetOpMetaData<BitwiseScalarOpMetaData>(
-        {BitwiseScalarOpExeFunc2D, BitwiseScalarOpExeFunc3D, BitwiseScalarOpExeFunc4D}, "BitwiseAnds")));
+INSTANTIATE_TEST_SUITE_P(TestBitwiseAnds, BitwiseAndsOperationTest,
+                         ::testing::ValuesIn(tile_fwk::test_operation::GetOpMetaData<BitwiseScalarOpMetaData>(
+                             {BitwiseScalarOpExeFunc2D, BitwiseScalarOpExeFunc3D, BitwiseScalarOpExeFunc4D},
+                             "BitwiseAnds")));
 
 TEST_P(BitwiseAndsOperationTest, TestBitwiseAnds)
 {
@@ -187,9 +184,8 @@ TEST_P(BitwiseAndsOperationTest, TestBitwiseAnds)
     auto dtype = tile_fwk::test_operation::GetDataType(
         tile_fwk::test_operation::GetValueByName<std::string>(test_data, "scalar_type"));
     Element value(dtype, tile_fwk::test_operation::GetValueByName<float>(test_data, "scalar"));
-    auto args = BitwiseScalarOpFuncArgs(
-        BitwiseScalarOp::AND, value, tile_fwk::test_operation::GetViewShape(test_data),
-        tile_fwk::test_operation::GetTileShape(test_data));
+    auto args = BitwiseScalarOpFuncArgs(BitwiseScalarOp::AND, value, tile_fwk::test_operation::GetViewShape(test_data),
+                                        tile_fwk::test_operation::GetTileShape(test_data));
     auto testCase = tile_fwk::test_operation::CreateTestCaseDesc<BitwiseScalarOpMetaData>(GetParam(), &args);
     tile_fwk::test_operation::TestExecutor::runTest(testCase);
 }
@@ -197,10 +193,10 @@ TEST_P(BitwiseAndsOperationTest, TestBitwiseAnds)
 class BitwiseOrsOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac_param<BitwiseScalarOpMetaData> {
 };
 
-INSTANTIATE_TEST_SUITE_P(
-    TestBitwiseOrs, BitwiseOrsOperationTest,
-    ::testing::ValuesIn(tile_fwk::test_operation::GetOpMetaData<BitwiseScalarOpMetaData>(
-        {BitwiseScalarOpExeFunc2D, BitwiseScalarOpExeFunc3D, BitwiseScalarOpExeFunc4D}, "BitwiseOrs")));
+INSTANTIATE_TEST_SUITE_P(TestBitwiseOrs, BitwiseOrsOperationTest,
+                         ::testing::ValuesIn(tile_fwk::test_operation::GetOpMetaData<BitwiseScalarOpMetaData>(
+                             {BitwiseScalarOpExeFunc2D, BitwiseScalarOpExeFunc3D, BitwiseScalarOpExeFunc4D},
+                             "BitwiseOrs")));
 
 TEST_P(BitwiseOrsOperationTest, TestBitwiseOrs)
 {
@@ -208,9 +204,8 @@ TEST_P(BitwiseOrsOperationTest, TestBitwiseOrs)
     auto dtype = tile_fwk::test_operation::GetDataType(
         tile_fwk::test_operation::GetValueByName<std::string>(test_data, "scalar_type"));
     Element value(dtype, tile_fwk::test_operation::GetValueByName<float>(test_data, "scalar"));
-    auto args = BitwiseScalarOpFuncArgs(
-        BitwiseScalarOp::OR, value, tile_fwk::test_operation::GetViewShape(test_data),
-        tile_fwk::test_operation::GetTileShape(test_data));
+    auto args = BitwiseScalarOpFuncArgs(BitwiseScalarOp::OR, value, tile_fwk::test_operation::GetViewShape(test_data),
+                                        tile_fwk::test_operation::GetTileShape(test_data));
     auto testCase = tile_fwk::test_operation::CreateTestCaseDesc<BitwiseScalarOpMetaData>(GetParam(), &args);
     tile_fwk::test_operation::TestExecutor::runTest(testCase);
 }
@@ -218,10 +213,10 @@ TEST_P(BitwiseOrsOperationTest, TestBitwiseOrs)
 class BitwiseXorsOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac_param<BitwiseScalarOpMetaData> {
 };
 
-INSTANTIATE_TEST_SUITE_P(
-    TestBitwiseXors, BitwiseXorsOperationTest,
-    ::testing::ValuesIn(tile_fwk::test_operation::GetOpMetaData<BitwiseScalarOpMetaData>(
-        {BitwiseScalarOpExeFunc2D, BitwiseScalarOpExeFunc3D, BitwiseScalarOpExeFunc4D}, "BitwiseXors")));
+INSTANTIATE_TEST_SUITE_P(TestBitwiseXors, BitwiseXorsOperationTest,
+                         ::testing::ValuesIn(tile_fwk::test_operation::GetOpMetaData<BitwiseScalarOpMetaData>(
+                             {BitwiseScalarOpExeFunc2D, BitwiseScalarOpExeFunc3D, BitwiseScalarOpExeFunc4D},
+                             "BitwiseXors")));
 
 TEST_P(BitwiseXorsOperationTest, TestBitwiseXors)
 {
@@ -229,9 +224,8 @@ TEST_P(BitwiseXorsOperationTest, TestBitwiseXors)
     auto dtype = tile_fwk::test_operation::GetDataType(
         tile_fwk::test_operation::GetValueByName<std::string>(test_data, "scalar_type"));
     Element value(dtype, tile_fwk::test_operation::GetValueByName<float>(test_data, "scalar"));
-    auto args = BitwiseScalarOpFuncArgs(
-        BitwiseScalarOp::XOR, value, tile_fwk::test_operation::GetViewShape(test_data),
-        tile_fwk::test_operation::GetTileShape(test_data));
+    auto args = BitwiseScalarOpFuncArgs(BitwiseScalarOp::XOR, value, tile_fwk::test_operation::GetViewShape(test_data),
+                                        tile_fwk::test_operation::GetTileShape(test_data));
     auto testCase = tile_fwk::test_operation::CreateTestCaseDesc<BitwiseScalarOpMetaData>(GetParam(), &args);
     tile_fwk::test_operation::TestExecutor::runTest(testCase);
 }

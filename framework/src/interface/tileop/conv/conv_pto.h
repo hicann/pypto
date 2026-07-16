@@ -29,12 +29,11 @@
 // Copy data from DDR to L1
 template <CopyInMode mode, bool isConv3D, bool isFmap, typename T, typename U>
 TILEOP void TLoadConv(T& dst, U& src, const int64_t& offset0, const int64_t& offset1, const int64_t& offset2,
-    const int64_t& offset3, const int64_t& offset4, const int64_t& shape0, const int64_t& shape1,
-    const int64_t& shape2, const int64_t& shape3, const int64_t& shape4)
+                      const int64_t& offset3, const int64_t& offset4, const int64_t& shape0, const int64_t& shape1,
+                      const int64_t& shape2, const int64_t& shape3, const int64_t& shape4)
 {
-    static_assert(
-        T::FORMAT == Hardware::L1 && U::FORMAT == Hardware::GM,
-        "[TLoadConv Error]: Src format shoulde be GM and Dst format shoulde be L1");
+    static_assert(T::FORMAT == Hardware::L1 && U::FORMAT == Hardware::GM,
+                  "[TLoadConv Error]: Src format shoulde be GM and Dst format shoulde be L1");
     OffsetInfo offsetInfo = {offset0, offset1, offset2, offset3, offset4};
     ShapeInfo srcShapeInfo = {shape0, shape1, shape2, shape3, shape4};
     if constexpr (mode == CopyInMode::ND2NZ) {
@@ -47,15 +46,14 @@ TILEOP void TLoadConv(T& dst, U& src, const int64_t& offset0, const int64_t& off
 
 // Copy data from L0C to DDR
 template <CopyOutMode mode, bool isConv3D, typename T, typename U>
-TILEOP void TStoreConv(
-    T& dst, U& src, const int64_t& offset0, const int64_t& offset1, const int64_t& offset2, const int64_t& offset3,
-    const int64_t& offset4, const int64_t& realM, const int64_t& realN, const int64_t& realCutW, const int64_t& cutW)
+TILEOP void TStoreConv(T& dst, U& src, const int64_t& offset0, const int64_t& offset1, const int64_t& offset2,
+                       const int64_t& offset3, const int64_t& offset4, const int64_t& realM, const int64_t& realN,
+                       const int64_t& realCutW, const int64_t& cutW)
 {
     constexpr auto srcShapeSize = Std::tuple_size<typename U::Shape>::value;
     static_assert(srcShapeSize == SHAPE_DIM2, "L0C shape size should be 2 Dim");
-    static_assert(
-        T::FORMAT == Hardware::GM && U::FORMAT == Hardware::L0C,
-        "[TStoreConv Error]: Src format shoulde be L0C and Dst format shoulde be GM");
+    static_assert(T::FORMAT == Hardware::GM && U::FORMAT == Hardware::L0C,
+                  "[TStoreConv Error]: Src format shoulde be L0C and Dst format shoulde be GM");
     OffsetInfo offsetInfo = {offset0, offset1, offset2, offset3, offset4};
     if constexpr (mode == CopyOutMode::NZ2ND) {
     } else if constexpr (mode == CopyOutMode::NZ2DN) {

@@ -191,8 +191,8 @@ TEST_F(DynamicReshapeTest, test_dyn_reshape)
     });
 
     // excute
-    DevFuncRunner::Run(
-        Program::GetInstance().GetLastFunction(), DeviceLauncherConfig(q_real.GetStorage()->GetDataSize()));
+    DevFuncRunner::Run(Program::GetInstance().GetLastFunction(),
+                       DeviceLauncherConfig(q_real.GetStorage()->GetDataSize()));
 
     std::vector<float> golden(b * sq * d, exp(1.0f));
 
@@ -200,8 +200,7 @@ TEST_F(DynamicReshapeTest, test_dyn_reshape)
     EXPECT_TRUE(resultCmp(golden, (float*)outs->data(), 0.001f));
 }
 
-static void SetupDynReshape2ProgramData(
-    const Tensor& q_real, const Tensor& out_real, const std::vector<float>& golden)
+static void SetupDynReshape2ProgramData(const Tensor& q_real, const Tensor& out_real, const std::vector<float>& golden)
 {
     ProgramData::GetInstance().AppendInputs({
         RawTensorData::CreateConstantTensor<float>(q_real, 1.0),
@@ -276,8 +275,8 @@ TEST_F(DynamicReshapeTest, test_dyn_reshape2)
     BuildDynReshape2Function(q, out, sq, d);
     ExpectDynReshape2AssembleMem(q_real, out_real);
 
-    DevFuncRunner::Run(
-        Program::GetInstance().GetLastFunction(), DeviceLauncherConfig(q_real.GetStorage()->GetDataSize()));
+    DevFuncRunner::Run(Program::GetInstance().GetLastFunction(),
+                       DeviceLauncherConfig(q_real.GetStorage()->GetDataSize()));
     auto outs = ProgramData::GetInstance().GetOutputData(0);
     EXPECT_TRUE(resultCmp(golden, (float*)outs->data(), 0.001f));
 }
@@ -714,8 +713,8 @@ TEST_F(DynamicReshapeTest, test_merge)
     });
 
     // excute
-    DevFuncRunner::Run(
-        Program::GetInstance().GetLastFunction(), DeviceLauncherConfig(q_real.GetStorage()->GetDataSize()));
+    DevFuncRunner::Run(Program::GetInstance().GetLastFunction(),
+                       DeviceLauncherConfig(q_real.GetStorage()->GetDataSize()));
 
     std::vector<npu::tile_fwk::float16> golden(s * actD, initInputValue);
     for (int i = 0; i < s * actD; i++) {
@@ -774,8 +773,8 @@ TEST_F(DynamicReshapeTest, test_split)
     });
 
     // excute
-    DevFuncRunner::Run(
-        Program::GetInstance().GetLastFunction(), DeviceLauncherConfig(q_real.GetStorage()->GetDataSize()));
+    DevFuncRunner::Run(Program::GetInstance().GetLastFunction(),
+                       DeviceLauncherConfig(q_real.GetStorage()->GetDataSize()));
 
     std::vector<npu::tile_fwk::float16> golden(s * actD, initInputValue);
     for (int i = 0; i < s * actD; i++) {
@@ -836,8 +835,8 @@ TEST_F(DynamicReshapeTest, test_merge_and_split)
     });
 
     // excute
-    DevFuncRunner::Run(
-        Program::GetInstance().GetLastFunction(), DeviceLauncherConfig(q_real.GetStorage()->GetDataSize()));
+    DevFuncRunner::Run(Program::GetInstance().GetLastFunction(),
+                       DeviceLauncherConfig(q_real.GetStorage()->GetDataSize()));
 
     std::vector<npu::tile_fwk::float16> golden(s * actD, initInputValue);
     for (int i = 0; i < s * actD; i++) {
@@ -899,8 +898,8 @@ TEST_F(DynamicReshapeTest, test_split_and_merge)
     });
 
     // excute
-    DevFuncRunner::Run(
-        Program::GetInstance().GetLastFunction(), DeviceLauncherConfig(q_real.GetStorage()->GetDataSize()));
+    DevFuncRunner::Run(Program::GetInstance().GetLastFunction(),
+                       DeviceLauncherConfig(q_real.GetStorage()->GetDataSize()));
 
     std::vector<npu::tile_fwk::float16> golden(s * actD, initInputValue);
     for (int i = 0; i < s * actD; i++) {
@@ -958,8 +957,8 @@ TEST_F(DynamicReshapeTest, test_exchange_dim)
     });
 
     // excute
-    DevFuncRunner::Run(
-        Program::GetInstance().GetLastFunction(), DeviceLauncherConfig(q_real.GetStorage()->GetDataSize()));
+    DevFuncRunner::Run(Program::GetInstance().GetLastFunction(),
+                       DeviceLauncherConfig(q_real.GetStorage()->GetDataSize()));
 
     std::vector<npu::tile_fwk::float16> golden(s * actD, initInputValue);
     for (int i = 0; i < s * actD; i++) {
@@ -1017,8 +1016,8 @@ TEST_F(DynamicReshapeTest, test_special_reshape)
     });
 
     // excute
-    DevFuncRunner::Run(
-        Program::GetInstance().GetLastFunction(), DeviceLauncherConfig(q_real.GetStorage()->GetDataSize()));
+    DevFuncRunner::Run(Program::GetInstance().GetLastFunction(),
+                       DeviceLauncherConfig(q_real.GetStorage()->GetDataSize()));
 
     std::vector<npu::tile_fwk::float16> golden(s * actD, initInputValue);
     for (int i = 0; i < s * actD; i++) {

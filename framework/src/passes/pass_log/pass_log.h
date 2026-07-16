@@ -37,9 +37,8 @@ std::string EscapeShellArg(const std::string& arg);
 
 std::string BuildStrategyLogFolderName(const std::string& strategy, size_t strategyIndex);
 
-void LogPassRuntime(
-    const std::string& identifier, Program& program, Function& function,
-    const std::chrono::time_point<std::chrono::high_resolution_clock>& start);
+void LogPassRuntime(const std::string& identifier, Program& program, Function& function,
+                    const std::chrono::time_point<std::chrono::high_resolution_clock>& start);
 
 void ExtractPassLogByFunction(const Function& function, const std::string& strategy);
 
@@ -75,8 +74,8 @@ public:
             return;
         }
         ended_ = true;
-        auto us =
-            std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - start_).count();
+        auto us = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - start_)
+                      .count();
         PASS_LOGI("[%s][%s]: <========== end %s, cost time=%lld us.", module_, toString(opEnum_), tag_, (long long)us);
     }
 
@@ -134,8 +133,9 @@ private:
     PYPTO_HOST_LOG(DLOG_INFO, PASS, "[%s.%s]:" fmt, MODULE_NAME, toString(opEnum), ##__VA_ARGS__)
 #define APASS_LOG_WARN_F(opEnum, fmt, ...) \
     PYPTO_HOST_LOG(DLOG_WARN, PASS, "[%s.%s]:" fmt, MODULE_NAME, toString(opEnum), ##__VA_ARGS__)
-#define APASS_LOG_ERROR_F(opEnum, fmt, ...) \
-    PYPTO_HOST_LOGE_WITH_ERRCODE(PASS, InternalError::PASS_INNER_ERROR, "[%s.%s]:" fmt, MODULE_NAME, toString(opEnum), ##__VA_ARGS__)
+#define APASS_LOG_ERROR_F(opEnum, fmt, ...)                                                                            \
+    PYPTO_HOST_LOGE_WITH_ERRCODE(PASS, InternalError::PASS_INNER_ERROR, "[%s.%s]:" fmt, MODULE_NAME, toString(opEnum), \
+                                 ##__VA_ARGS__)
 #define APASS_LOG_ERROR_C(errCode, opEnum, fmt, ...) \
     PYPTO_HOST_LOGE_WITH_ERRCODE(PASS, errCode, "[%s.%s]:" fmt, MODULE_NAME, toString(opEnum), ##__VA_ARGS__)
 #define APASS_LOG_EVENT_F(opEnum, fmt, ...) \

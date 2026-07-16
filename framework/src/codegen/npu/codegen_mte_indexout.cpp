@@ -131,12 +131,10 @@ std::string CodeGenOpNPU::PrintIndexOutCastStatic(const PrintIndexOutCastParam& 
     std::ostringstream oss;
     std::vector<std::string> paramList;
     paramList.insert(paramList.end(), {dataTypeExpr[ID0], dataTypeExpr[ID2]});
-    paramList.insert(
-        paramList.end(), {std::to_string(src0OriginShape[ID0]), std::to_string(src0OriginShape[ID1]),
-                          std::to_string(src0OriginShape[ID3])});
-    paramList.insert(
-        paramList.end(),
-        {std::to_string(src0RawShape[ID1]), std::to_string(src0RawShape[ID2]), std::to_string(src0RawShape[ID3])});
+    paramList.insert(paramList.end(), {std::to_string(src0OriginShape[ID0]), std::to_string(src0OriginShape[ID1]),
+                                       std::to_string(src0OriginShape[ID3])});
+    paramList.insert(paramList.end(), {std::to_string(src0RawShape[ID1]), std::to_string(src0RawShape[ID2]),
+                                       std::to_string(src0RawShape[ID3])});
     paramList.emplace_back(std::to_string(src1OriginShape[ID0]));
     paramList.emplace_back(std::to_string(src1OriginShape[ID1]));
     paramList.emplace_back(std::to_string(src1RawShape[ID3]));
@@ -176,12 +174,10 @@ std::string CodeGenOpNPU::PrintIndexOutCastDynamic(const PrintIndexOutCastParam&
     std::vector<std::string> paramList;
     // template param
     paramList.insert(paramList.end(), {dataTypeExpr[ID0], dataTypeExpr[ID2]});
-    paramList.insert(
-        paramList.end(), {std::to_string(src0OriginShape[ID0]), std::to_string(src0OriginShape[ID1]),
-                          std::to_string(src0OriginShape[ID3])});
-    paramList.insert(
-        paramList.end(),
-        {std::to_string(src0RawShape[ID1]), std::to_string(src0RawShape[ID2]), std::to_string(src0RawShape[ID3])});
+    paramList.insert(paramList.end(), {std::to_string(src0OriginShape[ID0]), std::to_string(src0OriginShape[ID1]),
+                                       std::to_string(src0OriginShape[ID3])});
+    paramList.insert(paramList.end(), {std::to_string(src0RawShape[ID1]), std::to_string(src0RawShape[ID2]),
+                                       std::to_string(src0RawShape[ID3])});
     paramList.emplace_back(std::to_string(src1OriginShape[ID0]));
     paramList.emplace_back(std::to_string(src1OriginShape[ID1]));
     paramList.emplace_back(std::to_string(src1RawShape[ID3]));
@@ -226,9 +222,8 @@ std::string CodeGenOpNPU::PrintIndexOutCastDynamicUnaligned(const PrintIndexOutC
     std::vector<std::string> paramList;
     // template param
     paramList.insert(paramList.end(), {dataTypeExpr[ID0], dataTypeExpr[ID2]});
-    paramList.insert(
-        paramList.end(),
-        {std::to_string(src0RawShape[ID1]), std::to_string(src0RawShape[ID2]), std::to_string(src0RawShape[ID3])});
+    paramList.insert(paramList.end(), {std::to_string(src0RawShape[ID1]), std::to_string(src0RawShape[ID2]),
+                                       std::to_string(src0RawShape[ID3])});
     paramList.emplace_back(std::to_string(src1RawShape[ID3]));
     paramList.emplace_back(std::to_string(cacheModeFlag));
     paramList.emplace_back(param.blockSize);
@@ -240,10 +235,9 @@ std::string CodeGenOpNPU::PrintIndexOutCastDynamicUnaligned(const PrintIndexOutC
     std::string src0 = "(__ubuf__ " + dataTypeExpr[ID1] + "*)" + s0Var;
     std::string src1 = "(__ubuf__ " + dataTypeExpr[ID2] + "*)" + s1Var;
     paramList.insert(paramList.end(), {dst, src0, src1});
-    paramList.insert(
-        paramList.end(), {SymbolicExpressionTable::BuildExpression(src0ValidShape[ID0]),
-                          SymbolicExpressionTable::BuildExpression(src0ValidShape[ID1]),
-                          SymbolicExpressionTable::BuildExpression(src0ValidShape[ID3])});
+    paramList.insert(paramList.end(), {SymbolicExpressionTable::BuildExpression(src0ValidShape[ID0]),
+                                       SymbolicExpressionTable::BuildExpression(src0ValidShape[ID1]),
+                                       SymbolicExpressionTable::BuildExpression(src0ValidShape[ID3])});
     paramList.emplace_back(SymbolicExpressionTable::BuildExpression(src1ValidShape[ID0]));
     paramList.emplace_back(SymbolicExpressionTable::BuildExpression(src1ValidShape[ID1]));
     paramList.insert(paramList.end(), paramPack.paramList.begin(), paramPack.paramList.end());

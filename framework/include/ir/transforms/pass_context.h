@@ -78,8 +78,8 @@ class CallbackInstrument : public PassInstrument {
 public:
     using Callback = std::function<void(const Pass&, const ProgramPtr&)>;
 
-    explicit CallbackInstrument(
-        Callback before_pass = nullptr, Callback after_pass = nullptr, std::string name = "CallbackInstrument");
+    explicit CallbackInstrument(Callback before_pass = nullptr, Callback after_pass = nullptr,
+                                std::string name = "CallbackInstrument");
 
     void RunBeforePass(const Pass& pass, const ProgramPtr& program) override;
     void RunAfterPass(const Pass& pass, const ProgramPtr& program) override;
@@ -104,8 +104,8 @@ public:
      * \param instruments List of pass instruments
      * \param verification_level Verification level (default: Basic)
      */
-    explicit PassContext(
-        std::vector<PassInstrumentPtr> instruments, VerificationLevel verification_level = VerificationLevel::Basic);
+    explicit PassContext(std::vector<PassInstrumentPtr> instruments,
+                         VerificationLevel verification_level = VerificationLevel::Basic);
 
     /**
      * \brief Push this context onto the thread-local stack

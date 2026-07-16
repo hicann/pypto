@@ -24,9 +24,8 @@
 
 namespace npu::tile_fwk::dynamic {
 
-template <
-    typename T, WsMemCategory category = WsMemCategory::UNCLASSIFIED_VECTOR,
-    typename WsAllocator_T = WsMetadataAllocator>
+template <typename T, WsMemCategory category = WsMemCategory::UNCLASSIFIED_VECTOR,
+          typename WsAllocator_T = WsMetadataAllocator>
 class Vector {
 public:
     using value_type = T;
@@ -206,9 +205,8 @@ private:
     {
         static constexpr size_type MIN_CAPACITY = 8;
 
-        DEV_ASSERT_MSG(
-            DevDataErr::VECTOR_INDEX_OUT_OF_RANGE, capacityReq > capacity_,
-            "Unexpected ExpandCapacity call: capacityReq %u <= capacity_ %u", capacityReq, capacity_);
+        DEV_ASSERT_MSG(DevDataErr::VECTOR_INDEX_OUT_OF_RANGE, capacityReq > capacity_,
+                       "Unexpected ExpandCapacity call: capacityReq %u <= capacity_ %u", capacityReq, capacity_);
 
         size_type newCapacity = std::max(MIN_CAPACITY, capacityReq);
         newCapacity = std::max(newCapacity, capacity_ << 1); // multiplier: 2.0

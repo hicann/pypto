@@ -30,13 +30,11 @@ struct GenAttenTileShapeConfig {
     std::array<int, TILE_VEC_FOUR_DIMS> vec2TileShape; // vector op tileshape
 };
 
-void GenAttentionCompute(
-    Tensor& cmpAtten, Tensor& selAtten, Tensor& winAtten, Tensor& gatingScore, Tensor& attentionOut,
-    GenAttenTileShapeConfig& tileConfig);
+void GenAttentionCompute(Tensor& cmpAtten, Tensor& selAtten, Tensor& winAtten, Tensor& gatingScore,
+                         Tensor& attentionOut, GenAttenTileShapeConfig& tileConfig);
 
-void GenAttention(
-    Tensor& cmpAtten, Tensor& selAtten, Tensor& winAtten, Tensor& gatingScore, Tensor& attentionOut,
-    GenAttenTileShapeConfig& tileConfig);
+void GenAttention(Tensor& cmpAtten, Tensor& selAtten, Tensor& winAtten, Tensor& gatingScore, Tensor& attentionOut,
+                  GenAttenTileShapeConfig& tileConfig);
 } // namespace npu::tile_fwk
 
 #endif // MLA_PROLOG

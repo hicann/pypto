@@ -33,32 +33,28 @@ public:
 private:
     void ChangeOpSeq(PipeSync& ps, bool isAIV1);
     bool IsGroupMergeable(PipeSync& ps, size_t k, int groupNum);
-    bool IsMergeable(
-        std::unordered_set<Operation*>& moveFrontOp, size_t left, size_t right, PipeSync& ps, int groupNum);
+    bool IsMergeable(std::unordered_set<Operation*>& moveFrontOp, size_t left, size_t right, PipeSync& ps,
+                     int groupNum);
     void MoveOpsForMerge(const std::unordered_set<Operation*>& moveFrontOp, size_t left, size_t right, int groupNum);
     void FindPipeVIdx(std::vector<size_t>& pipeVIdx, AIVCore coreType);
     void AdjustUbCopyNd2NzOrder(PipeSync& ps);
     void ProcessGroupUbCopyOrder(PipeSync& ps, std::vector<Operation*>& group);
-    void CollectGroupIndices(
-        std::vector<Operation*>& group, std::vector<size_t>& ubCopyIndices, std::vector<size_t>& nonUbCopyIndices,
-        std::vector<size_t>& groupIndices);
-    void JudgeNeedMoveUbCopy(
-        PipeSync& ps, size_t ubCopyIdx, std::vector<size_t>& nonUbCopyIndices, std::vector<size_t>& needMoveFront,
-        std::vector<size_t>& needMoveBack);
-    void MoveUbCopyOp(
-        const std::vector<size_t>& needMoveFront, const std::vector<size_t>& needMoveBack,
-        const std::vector<size_t>& nonUbCopyIndices);
-    Status ProcessViewOrder(
-        Operation& op, std::vector<Operation*>& opLog, std::unordered_map<Operation*, Operation*>& changeMap);
-    Status ProcessAssembleOrder(
-        Operation& op, std::vector<Operation*>& opLog, std::unordered_map<Operation*, Operation*>& changeMap);
+    void CollectGroupIndices(std::vector<Operation*>& group, std::vector<size_t>& ubCopyIndices,
+                             std::vector<size_t>& nonUbCopyIndices, std::vector<size_t>& groupIndices);
+    void JudgeNeedMoveUbCopy(PipeSync& ps, size_t ubCopyIdx, std::vector<size_t>& nonUbCopyIndices,
+                             std::vector<size_t>& needMoveFront, std::vector<size_t>& needMoveBack);
+    void MoveUbCopyOp(const std::vector<size_t>& needMoveFront, const std::vector<size_t>& needMoveBack,
+                      const std::vector<size_t>& nonUbCopyIndices);
+    Status ProcessViewOrder(Operation& op, std::vector<Operation*>& opLog,
+                            std::unordered_map<Operation*, Operation*>& changeMap);
+    Status ProcessAssembleOrder(Operation& op, std::vector<Operation*>& opLog,
+                                std::unordered_map<Operation*, Operation*>& changeMap);
     Status ProcessViewAssembleOrder(std::vector<Operation*>& opLog, std::vector<Operation*>& opListNew);
     Status ProcessView(std::vector<Operation*>& opLogNew, std::pair<Operation*, Operation*> pair);
     Status ProcessAssemble(std::vector<Operation*>& opLogNew, std::pair<Operation*, Operation*> pair);
     Status ProcessViewAssemble(std::vector<Operation*>& opLogNew, std::pair<Operation*, Operation*> pair);
-    Status ReorderViewAssemble(
-        std::vector<Operation*>& opLog, std::vector<Operation*>& opListNew,
-        const std::unordered_map<Operation*, Operation*>& changeMap);
+    Status ReorderViewAssemble(std::vector<Operation*>& opLog, std::vector<Operation*>& opListNew,
+                               const std::unordered_map<Operation*, Operation*>& changeMap);
     Status InitAndValidateOps(PipeSync& ps);
     void LogOpList(const std::string& label);
     std::vector<std::vector<Operation*>> mergedOps;

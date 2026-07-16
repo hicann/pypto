@@ -174,13 +174,12 @@ const char* GetRetcodeMessage(int32_t retcode)
 void PyPTOExceptionInfoCallBack(AclRtExceptionInfo* exceptionInfo)
 {
     const char* errMsg = GetRetcodeMessage(static_cast<int32_t>(exceptionInfo->retcode));
-    const char *kernelName = "(Null)";
+    const char* kernelName = "(Null)";
     if (exceptionInfo->expandInfo.type == RtExceptionExpandType::AICORE) {
         kernelName = exceptionInfo->expandInfo.u.aicoreInfo.exceptionArgs.exceptionKernelInfo.kernelName;
     }
-    printf("[Error]: %s, device_id: %u, stream_id: %u, task_id: %u, retcode: %u, kernelName: %s\n",
-           errMsg, exceptionInfo->deviceid, exceptionInfo->streamid, exceptionInfo->taskid,
-           exceptionInfo->retcode, kernelName);
+    printf("[Error]: %s, device_id: %u, stream_id: %u, task_id: %u, retcode: %u, kernelName: %s\n", errMsg,
+           exceptionInfo->deviceid, exceptionInfo->streamid, exceptionInfo->taskid, exceptionInfo->retcode, kernelName);
     printf("        Rectify the fault based on the error information in the ascend log.\n");
     printf("PyPTO error: PyPTO Inner Error. Please rectify the fault based on the error information "
            "in the ascend log. (function PyPTOExceptionInfoCallBack)\n");

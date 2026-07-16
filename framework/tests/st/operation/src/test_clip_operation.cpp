@@ -62,8 +62,8 @@ std::vector<int> GetBroadCastOffsetRatio(const Tensor& self, const Tensor& other
     return result;
 }
 
-std::vector<SymbolicScalar> GetValidShape(
-    const Shape& originShapes, const Shape& viewShapes, const std::vector<SymbolicScalar> loopVars)
+std::vector<SymbolicScalar> GetValidShape(const Shape& originShapes, const Shape& viewShapes,
+                                          const std::vector<SymbolicScalar> loopVars)
 {
     if (loopVars.size() != viewShapes.size() || originShapes.size() != viewShapes.size()) {
         throw std::invalid_argument("Length of `originShapes`/`viewShapes`/`loopVars` should be the same!");
@@ -75,8 +75,8 @@ std::vector<SymbolicScalar> GetValidShape(
     return validShapes;
 }
 
-std::vector<SymbolicScalar> GetOffsets(
-    const Shape& viewShapes, const std::vector<SymbolicScalar> loopVars, std::vector<int> ratios = {})
+std::vector<SymbolicScalar> GetOffsets(const Shape& viewShapes, const std::vector<SymbolicScalar> loopVars,
+                                       std::vector<int> ratios = {})
 {
     if (loopVars.size() != viewShapes.size()) {
         throw std::invalid_argument("Length of `loopVars` and `viewShapes` should be the same!");
@@ -91,9 +91,8 @@ std::vector<SymbolicScalar> GetOffsets(
     return offsets;
 }
 
-Tensor BroadCastView(
-    const Tensor& needBroadCast, const Tensor& broadCasted, const Shape& viewShapes,
-    const std::vector<SymbolicScalar> loopVars)
+Tensor BroadCastView(const Tensor& needBroadCast, const Tensor& broadCasted, const Shape& viewShapes,
+                     const std::vector<SymbolicScalar> loopVars)
 {
     const Shape& tileViewShape = GetBroadCastViewShape(needBroadCast, broadCasted, viewShapes);
     const std::vector<int>& tile0OffsetRatio = GetBroadCastOffsetRatio(needBroadCast, broadCasted, viewShapes);
@@ -117,9 +116,8 @@ enum class TestType : int {
 };
 
 struct ClipOpFuncArgs : public OpFuncArgs {
-    ClipOpFuncArgs(
-        const std::vector<int64_t>& viewShape, const std::vector<int64_t>& tileShape, int type, const Element& min = {},
-        const Element& max = {}, bool isElement = false)
+    ClipOpFuncArgs(const std::vector<int64_t>& viewShape, const std::vector<int64_t>& tileShape, int type,
+                   const Element& min = {}, const Element& max = {}, bool isElement = false)
         : viewShape_(viewShape),
           tileShape_(tileShape),
           type_(static_cast<TestType>(type)),
@@ -175,9 +173,8 @@ Tensor ProcessElementModeClip(const Tensor& tileTensor0, const ClipOpFuncArgs* a
     return res;
 }
 
-Tensor ProcessTensorModeClip(
-    const Tensor& tileTensor0, const std::vector<Tensor>& inputs, const ClipOpFuncArgs* args,
-    const std::vector<SymbolicScalar> loopVars)
+Tensor ProcessTensorModeClip(const Tensor& tileTensor0, const std::vector<Tensor>& inputs, const ClipOpFuncArgs* args,
+                             const std::vector<SymbolicScalar> loopVars)
 {
     Tensor res;
     switch (args->type_) {
@@ -211,8 +208,8 @@ Tensor ProcessTensorModeClip(
     return res;
 }
 
-static void ClipOperationExeFuncDoubleCut(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void ClipOperationExeFuncDoubleCut(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                          const OpFuncArgs* opArgs)
 {
     auto inputRefs = AsRef(inputs);
     FUNCTION("main", inputRefs, {outputs[ID0]})
@@ -233,8 +230,8 @@ static void ClipOperationExeFuncDoubleCut(
             {
                 std::vector<SymbolicScalar> loopVars = {bIdx, sIdx};
                 std::vector<SymbolicScalar> offsets = GetOffsets(viewShapes, loopVars);
-                auto tileTensor0 =
-                    View(inputs[ID0], viewShapes, GetValidShape(inputs[ID0].GetShape(), viewShapes, loopVars), offsets);
+                auto tileTensor0 = View(inputs[ID0], viewShapes,
+                                        GetValidShape(inputs[ID0].GetShape(), viewShapes, loopVars), offsets);
                 TileShape::Current().SetVecTile(args->tileShape_);
                 Tensor res;
                 if (args->isElement_) {
@@ -248,8 +245,8 @@ static void ClipOperationExeFuncDoubleCut(
     }
 }
 
-static void ClipOperationExeFuncTripleCut(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void ClipOperationExeFuncTripleCut(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                          const OpFuncArgs* opArgs)
 {
     auto inputRefs = AsRef(inputs);
     FUNCTION("main", inputRefs, {outputs[ID0]})
@@ -275,8 +272,8 @@ static void ClipOperationExeFuncTripleCut(
                 {
                     std::vector<SymbolicScalar> loopVars = {bIdx, sIdx, nIdx};
                     std::vector<SymbolicScalar> offsets = GetOffsets(viewShapes, loopVars);
-                    Tensor tileTensor0 = View(
-                        inputs[ID0], viewShapes, GetValidShape(inputs[ID0].GetShape(), viewShapes, loopVars), offsets);
+                    Tensor tileTensor0 = View(inputs[ID0], viewShapes,
+                                              GetValidShape(inputs[ID0].GetShape(), viewShapes, loopVars), offsets);
                     TileShape::Current().SetVecTile(args->tileShape_);
                     Tensor res;
                     if (args->isElement_) {
@@ -291,8 +288,8 @@ static void ClipOperationExeFuncTripleCut(
     }
 }
 
-static void ClipOperationExeFuncQuadrupleCut(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void ClipOperationExeFuncQuadrupleCut(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                             const OpFuncArgs* opArgs)
 {
     auto inputRefs = AsRef(inputs);
     FUNCTION("main", inputRefs, {outputs[ID0]})
@@ -323,9 +320,8 @@ static void ClipOperationExeFuncQuadrupleCut(
                     {
                         std::vector<SymbolicScalar> loopVars = {bIdx, sIdx, nIdx, qIdx};
                         std::vector<SymbolicScalar> offsets = GetOffsets(viewShapes, loopVars);
-                        Tensor tileTensor0 = View(
-                            inputs[ID0], viewShapes, GetValidShape(inputs[ID0].GetShape(), viewShapes, loopVars),
-                            offsets);
+                        Tensor tileTensor0 = View(inputs[ID0], viewShapes,
+                                                  GetValidShape(inputs[ID0].GetShape(), viewShapes, loopVars), offsets);
                         TileShape::Current().SetVecTile(args->tileShape_);
                         Tensor res;
                         if (args->isElement_) {
@@ -343,11 +339,11 @@ static void ClipOperationExeFuncQuadrupleCut(
 
 class ClipOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac_param<ClipOpMetaData> {};
 
-INSTANTIATE_TEST_SUITE_P(
-    TestClip, ClipOperationTest,
-    ::testing::ValuesIn(
-        GetOpMetaData<ClipOpMetaData>(
-            {ClipOperationExeFuncDoubleCut, ClipOperationExeFuncTripleCut, ClipOperationExeFuncQuadrupleCut}, "Clip")));
+INSTANTIATE_TEST_SUITE_P(TestClip, ClipOperationTest,
+                         ::testing::ValuesIn(GetOpMetaData<ClipOpMetaData>({ClipOperationExeFuncDoubleCut,
+                                                                            ClipOperationExeFuncTripleCut,
+                                                                            ClipOperationExeFuncQuadrupleCut},
+                                                                           "Clip")));
 
 TEST_P(ClipOperationTest, TestClip)
 {

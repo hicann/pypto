@@ -143,8 +143,8 @@ public:
         }
 
         // Create the new function with versioned parameters
-        return std::make_shared<Function>(
-            func->name_, new_params_, func->returnTypes_, new_body, func->span_, func->funcType_, func->entry_);
+        return std::make_shared<Function>(func->name_, new_params_, func->returnTypes_, new_body, func->span_,
+                                          func->funcType_, func->entry_);
     }
 
 protected:
@@ -193,8 +193,7 @@ protected:
         // If no variables diverged, just return the updated if statement
         if (phi_vars.empty() && op->returnVars_.empty()) {
             current_version_ = versions_after_then; // Use then branch versions as default
-            return std::make_shared<IfStmt>(
-                new_condition, new_then, new_else, std::vector<VarPtr>{}, op->span_);
+            return std::make_shared<IfStmt>(new_condition, new_then, new_else, std::vector<VarPtr>{}, op->span_);
         }
 
         // Create return_vars and yields for phi nodes
@@ -202,9 +201,8 @@ protected:
         std::vector<ExprPtr> then_yields;
         std::vector<ExprPtr> else_yields;
 
-        BuildIfPhiOutputs(
-            phi_vars, versions_before, versions_after_then, versions_after_else, op->span_, return_vars, then_yields,
-            else_yields);
+        BuildIfPhiOutputs(phi_vars, versions_before, versions_after_then, versions_after_else, op->span_, return_vars,
+                          then_yields, else_yields);
         AppendExistingIfReturnVars(op->returnVars_, phi_vars, return_vars);
 
         // Append YieldStmt to branches
@@ -217,8 +215,8 @@ protected:
             else_with_yield = std::make_shared<YieldStmt>(else_yields, op->span_);
         }
 
-        return std::make_shared<IfStmt>(
-            new_condition, then_with_yield, std::make_optional(else_with_yield), return_vars, op->span_);
+        return std::make_shared<IfStmt>(new_condition, then_with_yield, std::make_optional(else_with_yield),
+                                        return_vars, op->span_);
     }
 
     // Override SectionStmt to isolate variable scope
@@ -250,8 +248,8 @@ protected:
         collector.Collect(op->body_);
 
         std::string loop_var_base = GetBaseName(op->loopVar_->name_);
-        auto loop_carried_vars = CollectLoopCarriedVars(
-            collector.assigned_vars, versions_before, op->iterArgs_, std::make_optional(loop_var_base));
+        auto loop_carried_vars = CollectLoopCarriedVars(collector.assigned_vars, versions_before, op->iterArgs_,
+                                                        std::make_optional(loop_var_base));
 
         // Create iter_args for loop-carried variables BEFORE visiting the body
         auto return_vars = AppendLoopCarriedIterArgs(loop_carried_vars, versions_before, new_iter_args, op->span_);
@@ -262,8 +260,8 @@ protected:
         // Create versioned loop variable
         int loop_var_version = NextVersion(loop_var_base);
         auto loop_var_type = SubstituteVarsInType(op->loopVar_->GetType());
-        auto new_loop_var = std::make_shared<Var>(
-            loop_var_base + "_" + std::to_string(loop_var_version), loop_var_type, op->loopVar_->span_);
+        auto new_loop_var = std::make_shared<Var>(loop_var_base + "_" + std::to_string(loop_var_version), loop_var_type,
+                                                  op->loopVar_->span_);
         current_version_[loop_var_base] = new_loop_var;
 
         RegisterIterArgsInCurrentScope(new_iter_args);
@@ -298,8 +296,8 @@ protected:
             final_body = ReplaceOrAppendYield(new_body, yield_values, op->span_);
         }
 
-        return std::make_shared<ForStmt>(
-            new_loop_var, new_start, new_stop, new_step, new_iter_args, final_body, return_vars, op->span_, op->attrs_);
+        return std::make_shared<ForStmt>(new_loop_var, new_start, new_stop, new_step, new_iter_args, final_body,
+                                         return_vars, op->span_, op->attrs_);
     }
 
     // Override WhileStmt to handle loop-carried variables
@@ -316,12 +314,12 @@ protected:
         // Also collect from condition (though unusual, it's possible)
         collector.Collect(std::make_shared<EvalStmt>(op->condition_, op->span_));
 
-        auto loop_carried_vars =
-            CollectLoopCarriedVars(collector.assigned_vars, versions_before, op->iterArgs_, std::nullopt);
+        auto loop_carried_vars = CollectLoopCarriedVars(collector.assigned_vars, versions_before, op->iterArgs_,
+                                                        std::nullopt);
 
         // Create iter_args for loop-carried variables BEFORE visiting the body
-        auto new_loop_carried_return_vars =
-            AppendLoopCarriedIterArgs(loop_carried_vars, versions_before, new_iter_args, op->span_);
+        auto new_loop_carried_return_vars = AppendLoopCarriedIterArgs(loop_carried_vars, versions_before, new_iter_args,
+                                                                      op->span_);
 
         // Enter loop scope
         EnterScope();
@@ -420,8 +418,8 @@ private:
         return versions_after_then;
     }
 
-    std::optional<StmtPtr> VisitElseBranch(
-        const std::optional<StmtPtr>& else_body, const VersionMap& versions_before, VersionMap& versions_after_else)
+    std::optional<StmtPtr> VisitElseBranch(const std::optional<StmtPtr>& else_body, const VersionMap& versions_before,
+                                           VersionMap& versions_after_else)
     {
         current_version_ = versions_before;
         if (!else_body.has_value()) {
@@ -436,9 +434,9 @@ private:
         return new_else;
     }
 
-    void AppendChangedPhiVars(
-        const VersionMap& versions_before, const VersionMap& source_versions, const VersionMap& other_versions,
-        std::set<std::string>& checked_vars, std::vector<std::string>& phi_vars) const
+    void AppendChangedPhiVars(const VersionMap& versions_before, const VersionMap& source_versions,
+                              const VersionMap& other_versions, std::set<std::string>& checked_vars,
+                              std::vector<std::string>& phi_vars) const
     {
         for (const auto& [base_name, var] : source_versions) {
             if (checked_vars.count(base_name)) {
@@ -466,9 +464,8 @@ private:
         }
     }
 
-    std::vector<std::string> CollectIfPhiVars(
-        const VersionMap& versions_before, const VersionMap& versions_after_then,
-        const VersionMap& versions_after_else) const
+    std::vector<std::string> CollectIfPhiVars(const VersionMap& versions_before, const VersionMap& versions_after_then,
+                                              const VersionMap& versions_after_else) const
     {
         std::vector<std::string> phi_vars;
         std::set<std::string> checked_vars;
@@ -478,10 +475,10 @@ private:
         return phi_vars;
     }
 
-    void BuildIfPhiOutputs(
-        const std::vector<std::string>& phi_vars, const VersionMap& versions_before,
-        const VersionMap& versions_after_then, const VersionMap& versions_after_else, const Span& span,
-        std::vector<VarPtr>& return_vars, std::vector<ExprPtr>& then_yields, std::vector<ExprPtr>& else_yields)
+    void BuildIfPhiOutputs(const std::vector<std::string>& phi_vars, const VersionMap& versions_before,
+                           const VersionMap& versions_after_then, const VersionMap& versions_after_else,
+                           const Span& span, std::vector<VarPtr>& return_vars, std::vector<ExprPtr>& then_yields,
+                           std::vector<ExprPtr>& else_yields)
     {
         for (const auto& base_name : phi_vars) {
             VarPtr then_var = versions_after_then.count(base_name) ? versions_after_then.at(base_name) :
@@ -498,9 +495,8 @@ private:
         }
     }
 
-    void AppendExistingIfReturnVars(
-        const std::vector<VarPtr>& existing_return_vars, const std::vector<std::string>& phi_vars,
-        std::vector<VarPtr>& return_vars)
+    void AppendExistingIfReturnVars(const std::vector<VarPtr>& existing_return_vars,
+                                    const std::vector<std::string>& phi_vars, std::vector<VarPtr>& return_vars)
     {
         for (const auto& existing_rv : existing_return_vars) {
             std::string base_name = GetBaseName(existing_rv->name_);
@@ -509,8 +505,8 @@ private:
             }
             int rv_version = NextVersion(base_name);
             auto rv_type = SubstituteVarsInType(existing_rv->GetType());
-            auto versioned_rv =
-                std::make_shared<Var>(base_name + "_" + std::to_string(rv_version), rv_type, existing_rv->span_);
+            auto versioned_rv = std::make_shared<Var>(base_name + "_" + std::to_string(rv_version), rv_type,
+                                                      existing_rv->span_);
             return_vars.push_back(versioned_rv);
             current_version_[base_name] = versioned_rv;
         }
@@ -528,9 +524,10 @@ private:
         return new_iter_args;
     }
 
-    std::vector<std::string> CollectLoopCarriedVars(
-        const std::set<std::string>& assigned_vars, const std::unordered_map<std::string, VarPtr>& versions_before,
-        const std::vector<IterArgPtr>& iter_args, const std::optional<std::string>& skipped_name) const
+    std::vector<std::string> CollectLoopCarriedVars(const std::set<std::string>& assigned_vars,
+                                                    const std::unordered_map<std::string, VarPtr>& versions_before,
+                                                    const std::vector<IterArgPtr>& iter_args,
+                                                    const std::optional<std::string>& skipped_name) const
     {
         std::vector<std::string> loop_carried_vars;
         for (const auto& assigned_name : assigned_vars) {
@@ -554,17 +551,16 @@ private:
         return loop_carried_vars;
     }
 
-    std::vector<VarPtr> AppendLoopCarriedIterArgs(
-        const std::vector<std::string>& loop_carried_vars,
-        const std::unordered_map<std::string, VarPtr>& versions_before, std::vector<IterArgPtr>& iter_args,
-        const Span& span)
+    std::vector<VarPtr> AppendLoopCarriedIterArgs(const std::vector<std::string>& loop_carried_vars,
+                                                  const std::unordered_map<std::string, VarPtr>& versions_before,
+                                                  std::vector<IterArgPtr>& iter_args, const Span& span)
     {
         std::vector<VarPtr> return_vars;
         for (const auto& base_name : loop_carried_vars) {
             auto init_var = versions_before.at(base_name);
             int ia_version = NextVersion(base_name);
-            auto iter_arg = std::make_shared<IterArg>(
-                base_name + "_iter_" + std::to_string(ia_version), init_var->GetType(), init_var, span);
+            auto iter_arg = std::make_shared<IterArg>(base_name + "_iter_" + std::to_string(ia_version),
+                                                      init_var->GetType(), init_var, span);
             iter_args.push_back(iter_arg);
 
             int rv_version = NextVersion(base_name);
@@ -617,9 +613,9 @@ private:
         return values;
     }
 
-    std::vector<ExprPtr> CollectYieldValues(
-        const StmtPtr& body, const std::unordered_map<std::string, VarPtr>& versions_after_body,
-        const std::vector<std::string>& loop_carried_vars)
+    std::vector<ExprPtr> CollectYieldValues(const StmtPtr& body,
+                                            const std::unordered_map<std::string, VarPtr>& versions_after_body,
+                                            const std::vector<std::string>& loop_carried_vars)
     {
         std::vector<ExprPtr> yield_values;
         if (auto yield_stmt = GetLastYieldStmt(body)) {
@@ -669,8 +665,8 @@ private:
                 return type;
             TileView new_tile_view = tv;
             new_tile_view.validShape = std::move(new_valid_shape);
-            return std::make_shared<TileType>(
-                tile_type->shape_, tile_type->dtype_, tile_type->memref_, std::make_optional(std::move(new_tile_view)));
+            return std::make_shared<TileType>(tile_type->shape_, tile_type->dtype_, tile_type->memref_,
+                                              std::make_optional(std::move(new_tile_view)));
         }
 
         // Handle PtrType: substitute Vars in base_ptr and offset (codegen-level fields)
@@ -681,8 +677,8 @@ private:
             ExprPtr new_offset{};
             if (ptr_type->offset.has_value())
                 new_offset = VisitExpr(*ptr_type->offset);
-            bool changed =
-                (new_base != *ptr_type->base_ptr) || (ptr_type->offset.has_value() && new_offset != *ptr_type->offset);
+            bool changed = (new_base != *ptr_type->base_ptr) ||
+                           (ptr_type->offset.has_value() && new_offset != *ptr_type->offset);
             if (!changed)
                 return type;
             auto result = std::make_shared<PtrType>(ptr_type->dtype_);
@@ -704,8 +700,8 @@ private:
                 return type;
             TensorView new_tv = tv;
             new_tv.ptr = new_ptr_expr;
-            return std::make_shared<TensorType>(
-                tensor_type->shape_, tensor_type->dtype_, tensor_type->memref_, std::make_optional(std::move(new_tv)));
+            return std::make_shared<TensorType>(tensor_type->shape_, tensor_type->dtype_, tensor_type->memref_,
+                                                std::make_optional(std::move(new_tv)));
         }
 
         return type;

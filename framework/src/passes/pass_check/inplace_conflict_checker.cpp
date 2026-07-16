@@ -46,9 +46,9 @@ Status InplaceConflictChecker::CheckIndexOutcastDisorderedCoverage(Function& fun
                 consumerOp->GetIOperands()[DST_TILE_INPUT_PARAM_INDEX]->GetMagic() != tensor->GetMagic()) {
                 continue;
             }
-            APASS_LOG_WARN_F(
-                Elements::Tensor, "Tensor[%d] is the dst of OP_INDEX_OUTCAST, it can't be input of other OP.",
-                tensor->GetMagic());
+            APASS_LOG_WARN_F(Elements::Tensor,
+                             "Tensor[%d] is the dst of OP_INDEX_OUTCAST, it can't be input of other OP.",
+                             tensor->GetMagic());
             return FAILED;
         }
     }

@@ -44,30 +44,32 @@ bool ScheduleState::ReplaceOpMemId(Operation* op, int oldMemId, int newMemId)
     return replaced;
 }
 
-Status ScheduleState::InitLocalBuffer(LogicalTensorPtr oOperand, int memId) {
+Status ScheduleState::InitLocalBuffer(LogicalTensorPtr oOperand, int memId)
+{
     if (oOperand->GetMemoryTypeOriginal() >= MemoryType::MEM_DEVICE_DDR) {
         return SUCCESS;
     }
     if (static_cast<uint64_t>(oOperand->tensor->GetRawDataSize()) !=
         ShapeCeilAlign(oOperand->tensor->rawshape, oOperand->tensor->datatype)) {
-        APASS_LOG_WARN_F(
-            Elements::Tensor,
-            "InitLocalBuffer Failed at ShapeCeilAlign! "
-            "Please ensure that the rawTensor[%d] shapes are aligned.",
-            oOperand->GetRawMagic());
+        APASS_LOG_WARN_F(Elements::Tensor,
+                         "InitLocalBuffer Failed at ShapeCeilAlign! "
+                         "Please ensure that the rawTensor[%d] shapes are aligned.",
+                         oOperand->GetRawMagic());
     }
     if (localBufferMap.find(memId) == localBufferMap.end()) {
-        localBufferMap[memId] = std::make_shared<LocalBuffer>(
-            memId, oOperand->tensor->GetRawDataSize(), oOperand->GetMemoryTypeOriginal());
+        localBufferMap[memId] = std::make_shared<LocalBuffer>(memId, oOperand->tensor->GetRawDataSize(),
+                                                              oOperand->GetMemoryTypeOriginal());
     } else {
-        localBufferMap[memId]->size =
-            std::max(localBufferMap[memId]->size, static_cast<uint64_t>(oOperand->tensor->GetRawDataSize()));
+        localBufferMap[memId]->size = std::max(localBufferMap[memId]->size,
+                                               static_cast<uint64_t>(oOperand->tensor->GetRawDataSize()));
     }
     return SUCCESS;
 }
 
-std::string ScheduleState::GetOpInfo(Operation* op) const {
-    if (op == nullptr) return "nullptr";
+std::string ScheduleState::GetOpInfo(Operation* op) const
+{
+    if (op == nullptr)
+        return "nullptr";
     return op->GetOpcodeStr() + "[" + std::to_string(op->GetOpMagic()) + "]";
 }
 
@@ -107,7 +109,8 @@ uint64_t ScheduleState::ShapeCeilAlign(std::vector<int64_t> shape, DataType dtyp
     return bytes;
 }
 
-const LogicalTensors& ScheduleState::GetInOutOperandCached(Operation* op) {
+const LogicalTensors& ScheduleState::GetInOutOperandCached(Operation* op)
+{
     auto it = inOutOperandsCache.find(op);
     if (it != inOutOperandsCache.end())
         return it->second;
@@ -136,15 +139,15 @@ void ScheduleState::UpdateBufRefCount(Operation* op, LogicalTensorPtr tensor)
     }
 }
 
-Status ScheduleState::InitBufRefCount(std::vector<Operation*> &list)
+Status ScheduleState::InitBufRefCount(std::vector<Operation*>& list)
 {
     bufRefCount.clear();
     depManager.ClearDependencies();
     localBufferMap.clear();
     inOutOperandsCache.clear();
     opReqMemIdsMap.clear();
-    for (const auto &op : list) {
-        for (auto &tensor : op->GetIOperands()) {
+    for (const auto& op : list) {
+        for (auto& tensor : op->GetIOperands()) {
             UpdateBufRefCount(op, tensor);
             int memId = tensor->memoryrange.memId;
             if (InitLocalBuffer(tensor, memId) == FAILED) {
@@ -164,14 +167,16 @@ Status ScheduleState::InitBufRefCount(std::vector<Operation*> &list)
     return SUCCESS;
 }
 
-bool ScheduleState::IsOpAlloc(Operation *op) {
+bool ScheduleState::IsOpAlloc(Operation* op)
+{
     if (op == nullptr) {
         return false;
     }
     return op->GetOpcodeStr().find("ALLOC") != std::string::npos;
 }
 
-Status ScheduleState::CalcBufferSize(LogicalTensors tensors, std::map<MemoryType, int64_t>& bufferSize, std::set<int>& memIdMap)
+Status ScheduleState::CalcBufferSize(LogicalTensors tensors, std::map<MemoryType, int64_t>& bufferSize,
+                                     std::set<int>& memIdMap)
 {
     for (auto tensor : tensors) {
         if (tensor->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR) {
@@ -179,11 +184,10 @@ Status ScheduleState::CalcBufferSize(LogicalTensors tensors, std::map<MemoryType
         }
         const auto& shape = tensor->tensor->GetRawShape();
         if (std::any_of(shape.begin(), shape.end(), [](int64_t d) { return d <= 0; })) {
-            APASS_LOG_ERROR_F(
-                Elements::Tensor,
-                "Dynamic axis detected in %s, "
-                "OoOSchedule requires static rawShape!",
-                tensor->Dump().c_str());
+            APASS_LOG_ERROR_F(Elements::Tensor,
+                              "Dynamic axis detected in %s, "
+                              "OoOSchedule requires static rawShape!",
+                              tensor->Dump().c_str());
             return FAILED;
         }
         if (memIdMap.find(tensor->memoryrange.memId) == memIdMap.end()) {
@@ -236,14 +240,12 @@ Status ScheduleState::CheckOpBufferSize(Operation* op)
             continue;
         }
         if (op->GetOpcodeStr().find("ALLOC") != std::string::npos) {
-            APASS_LOG_ERROR_C(
-                TensorErr::TENSOR_MEMORY_ALLOCATION, Elements::Operation,
-                "Alloc tensor [%d] size [%ld] exceeds %s size [%ld]! %s",
-                op->GetOutputOperand(0)->GetMagic(), bufferPair.second,
-                MemoryTypeToString(bufferPair.first).c_str(), localMemSize[bufferPair.first],
-                GetFormatBacktrace(*op).c_str());
-            APASS_LOG_ERROR_F(
-                Elements::Operation, "Tensor [%d] producer info:", op->GetOutputOperand(0)->GetMagic());
+            APASS_LOG_ERROR_C(TensorErr::TENSOR_MEMORY_ALLOCATION, Elements::Operation,
+                              "Alloc tensor [%d] size [%ld] exceeds %s size [%ld]! %s",
+                              op->GetOutputOperand(0)->GetMagic(), bufferPair.second,
+                              MemoryTypeToString(bufferPair.first).c_str(), localMemSize[bufferPair.first],
+                              GetFormatBacktrace(*op).c_str());
+            APASS_LOG_ERROR_F(Elements::Operation, "Tensor [%d] producer info:", op->GetOutputOperand(0)->GetMagic());
             for (auto producer : op->GetOutputOperand(0)->GetProducers()) {
                 if (producer == op) {
                     continue;
@@ -251,11 +253,10 @@ Status ScheduleState::CheckOpBufferSize(Operation* op)
                 APASS_LOG_ERROR_F(Elements::Operation, "      %s.", DumpOpInfo(*producer).c_str());
             }
         } else {
-            APASS_LOG_ERROR_C(
-                TensorErr::TENSOR_MEMORY_ALLOCATION, Elements::Operation,
-                "OP %s[%d] in/output total size [%ld] exceeds %s size [%ld]!",
-                op->GetOpcodeStr().c_str(), op->GetOpMagic(), bufferPair.second,
-                MemoryTypeToString(bufferPair.first).c_str(), localMemSize[bufferPair.first]);
+            APASS_LOG_ERROR_C(TensorErr::TENSOR_MEMORY_ALLOCATION, Elements::Operation,
+                              "OP %s[%d] in/output total size [%ld] exceeds %s size [%ld]!", op->GetOpcodeStr().c_str(),
+                              op->GetOpMagic(), bufferPair.second, MemoryTypeToString(bufferPair.first).c_str(),
+                              localMemSize[bufferPair.first]);
             APASS_LOG_ERROR_F(Elements::Operation, " %s.", DumpOpInfo(*op).c_str());
         }
         return FAILED;
@@ -263,7 +264,8 @@ Status ScheduleState::CheckOpBufferSize(Operation* op)
     return SUCCESS;
 }
 
-void ScheduleState::UpdateAllocMap(Operation* op, std::map<int, Operation*> &allocMap) {
+void ScheduleState::UpdateAllocMap(Operation* op, std::map<int, Operation*>& allocMap)
+{
     for (auto outTensor : op->GetOOperands()) {
         if (outTensor->GetMemoryTypeOriginal() >= MemoryType::MEM_DEVICE_DDR) {
             continue;
@@ -290,8 +292,7 @@ Status ScheduleState::CheckAllocOp(std::vector<Operation*> list)
     for (const auto& op : list) {
         if (IsOpAlloc(op)) {
             if (GetInOutOperandCached(op).size() != 1) {
-                APASS_LOG_ERROR_F(
-                    Elements::Operation, "%s InOutOperand size not equal to 1.", GetOpInfo(op).c_str());
+                APASS_LOG_ERROR_F(Elements::Operation, "%s InOutOperand size not equal to 1.", GetOpInfo(op).c_str());
                 return FAILED;
             }
             UpdateAllocMap(op, allocMap);
@@ -304,24 +305,23 @@ Status ScheduleState::CheckAllocOp(std::vector<Operation*> list)
     }
     for (auto allocEntry : allocMap) {
         if (!IsOpAlloc(allocEntry.second)) {
-            APASS_LOG_ERROR_F(
-                Elements::Tensor, "%s Tensor[%d] is missing Alloc.", GetOpInfo(allocEntry.second).c_str(),
-                allocEntry.first);
+            APASS_LOG_ERROR_F(Elements::Tensor, "%s Tensor[%d] is missing Alloc.", GetOpInfo(allocEntry.second).c_str(),
+                              allocEntry.first);
             return FAILED;
         }
     }
     return SUCCESS;
 }
 
-Status ScheduleState::Init(std::vector<Operation*> &opList) {
+Status ScheduleState::Init(std::vector<Operation*>& opList)
+{
     localMemSize = CommonUtils::GetLocalMemorySize();
     localMemoryCurrentSize = localMemSize;
     operations = opList;
     for (auto& op : operations) {
         if (CheckOpBufferSize(op) != SUCCESS) {
-            APASS_LOG_ERROR_F(
-                Elements::Operation, "%s[%d] checkOpBufferSize failed! %s", op->GetOpcodeStr().c_str(),
-                op->GetOpMagic(), GetFormatBacktrace(*op).c_str());
+            APASS_LOG_ERROR_F(Elements::Operation, "%s[%d] checkOpBufferSize failed! %s", op->GetOpcodeStr().c_str(),
+                              op->GetOpMagic(), GetFormatBacktrace(*op).c_str());
             return FAILED;
         }
     }
@@ -336,31 +336,40 @@ Status ScheduleState::Init(std::vector<Operation*> &opList) {
     return SUCCESS;
 }
 
-CoreLocationType ScheduleState::GetCoreLocation(Operation* op) const {
+CoreLocationType ScheduleState::GetCoreLocation(Operation* op) const
+{
     auto it = schedInfoMap.find(op);
-    if (it != schedInfoMap.end()) return it->second.coreLocation;
+    if (it != schedInfoMap.end())
+        return it->second.coreLocation;
     return CoreLocationType::UNKNOWN;
 }
 
-int ScheduleState::GetExecOrder(Operation* op) const {
+int ScheduleState::GetExecOrder(Operation* op) const
+{
     auto it = schedInfoMap.find(op);
-    if (it != schedInfoMap.end()) return it->second.execOrder;
+    if (it != schedInfoMap.end())
+        return it->second.execOrder;
     return -1;
 }
 
-bool ScheduleState::IsOpAllocInSchedInfo(Operation* op) const {
+bool ScheduleState::IsOpAllocInSchedInfo(Operation* op) const
+{
     auto it = schedInfoMap.find(op);
-    if (it != schedInfoMap.end()) return it->second.isAlloc;
+    if (it != schedInfoMap.end())
+        return it->second.isAlloc;
     return false;
 }
 
-bool ScheduleState::IsOpRetired(Operation* op) const {
+bool ScheduleState::IsOpRetired(Operation* op) const
+{
     auto it = schedInfoMap.find(op);
-    if (it != schedInfoMap.end()) return it->second.isRetired;
+    if (it != schedInfoMap.end())
+        return it->second.isRetired;
     return false;
 }
 
-void ScheduleState::InsertOrdered(Operation* insertOp) {
+void ScheduleState::InsertOrdered(Operation* insertOp)
+{
     int execOrder = schedInfoMap[insertOp].execOrder;
     auto it = orderedOps.begin();
     for (; it != orderedOps.end(); it++) {

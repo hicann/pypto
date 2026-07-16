@@ -57,8 +57,9 @@ public:
         []() {                                                                                                    \
             static_assert(std::is_base_of_v<::npu::tile_fwk::Pass, DerivedPass>);                                 \
             std::string passName = DerivedPass().GetName();                                                       \
-            ASSERT(FunctionErr::FUNCTION_GRAPH_STRUCTURE, passName == #DerivedPass) << "[PassRegistry][Manager][ERROR]: Pass class " << #DerivedPass     \
-                                             << " has incompatible name: " << passName;                           \
+            ASSERT(FunctionErr::FUNCTION_GRAPH_STRUCTURE, passName == #DerivedPass)                               \
+                << "[PassRegistry][Manager][ERROR]: Pass class " << #DerivedPass                                  \
+                << " has incompatible name: " << passName;                                                        \
         })
 } // namespace npu::tile_fwk
 #endif // PASSES_PASS_REG_H_

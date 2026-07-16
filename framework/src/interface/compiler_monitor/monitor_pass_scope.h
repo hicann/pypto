@@ -19,9 +19,8 @@ namespace npu::tile_fwk {
 
 class MonitorPassCompileScope {
 public:
-    MonitorPassCompileScope(
-        const std::string& strategy, const std::string& passIdentifier, size_t passIndex,
-        const std::string& functionName, int functionIndex, int functionOpSize)
+    MonitorPassCompileScope(const std::string& strategy, const std::string& passIdentifier, size_t passIndex,
+                            const std::string& functionName, int functionIndex, int functionOpSize)
         : strategy_(strategy),
           passIdentifier_(passIdentifier),
           passIndex_(passIndex),
@@ -30,8 +29,8 @@ public:
           functionOpSize_(functionOpSize),
           start_(std::chrono::high_resolution_clock::now())
     {
-        MonitorManager::Instance().StartPassCompile(
-            strategy_, passIdentifier_, passIndex_, functionName_, functionIndex_, functionOpSize_);
+        MonitorManager::Instance().StartPassCompile(strategy_, passIdentifier_, passIndex_, functionName_,
+                                                    functionIndex_, functionOpSize_);
     }
 
     ~MonitorPassCompileScope()
@@ -59,10 +58,10 @@ public:
         }
         finished_ = true;
         double elapsed = std::chrono::duration<double>(end - start_).count();
-        MonitorManager::Instance().RecordPassCompileTime(
-            strategy_, passIdentifier_, passIndex_, functionName_, functionIndex_, functionOpSize_, elapsed, success);
-        MonitorManager::Instance().EndPassCompile(
-            strategy_, passIdentifier_, passIndex_, functionName_, functionIndex_);
+        MonitorManager::Instance().RecordPassCompileTime(strategy_, passIdentifier_, passIndex_, functionName_,
+                                                         functionIndex_, functionOpSize_, elapsed, success);
+        MonitorManager::Instance().EndPassCompile(strategy_, passIdentifier_, passIndex_, functionName_,
+                                                  functionIndex_);
     }
 
 private:

@@ -292,7 +292,7 @@ public:
             return *st;
         }
 
-        ComputeGround(); // pin substituted symbols for concrete folding
+        ComputeGround();                   // pin substituted symbols for concrete folding
         for (const auto& c : conjuncts_) { // ground-false atom (incl. Div/Mod/Min/Max) => UNSAT
             if (auto v = EvalGroundExpr(c)) {
                 if (*v == 0) {

@@ -28,8 +28,8 @@ TEST_F(RuntimeDataTest, AllocateDeallocate)
     const uint64_t rawSize = 0xf;
     const uint64_t size = 0x10;
     const uint64_t count = 0x4;
-    EXPECT_EQ(
-        sizeof(RuntimeDataRingBufferHead) + size * count, RuntimeDataRingBufferHead::GetRingBufferSize(rawSize, count));
+    EXPECT_EQ(sizeof(RuntimeDataRingBufferHead) + size * count,
+              RuntimeDataRingBufferHead::GetRingBufferSize(rawSize, count));
 
     std::vector<uint8_t> buf(rawSize + sizeof(RuntimeDataRingBufferHead));
     auto& head = *reinterpret_cast<RuntimeDataRingBufferHead*>(buf.data());

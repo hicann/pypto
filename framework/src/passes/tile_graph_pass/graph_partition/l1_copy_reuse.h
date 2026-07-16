@@ -48,88 +48,75 @@ public:
     // matrix of a downstream cube op. Public+static so unit tests can assert side detection.
     static bool IsLeftMatrixCopy(const Operation& op);
     static bool IsRightMatrixCopy(const Operation& op);
-    static int GetModeBySetting(
-        const std::map<int64_t, int64_t>& setting,
-        const std::map<std::string, int64_t>& settingByFunc);
-    static std::vector<int> GetCopyIn(
-        const OperationsViewer& opOriList, int color, std::vector<std::vector<int>>& colorNode);
+    static int GetModeBySetting(const std::map<int64_t, int64_t>& setting,
+                                const std::map<std::string, int64_t>& settingByFunc);
+    static std::vector<int> GetCopyIn(const OperationsViewer& opOriList, int color,
+                                      std::vector<std::vector<int>>& colorNode);
     static void GetOriList(Function& func, std::vector<Operation*>& oriList);
 
 private:
     void GetOpHash(std::vector<uint64_t>& hashList, const std::string op, int idx);
-    void GetColorHash(
-        const Function& func, const OperationsViewer& opOriList, std::vector<uint64_t>& hashColor,
-        const std::vector<std::vector<int>>& colorNode);
+    void GetColorHash(const Function& func, const OperationsViewer& opOriList, std::vector<uint64_t>& hashColor,
+                      const std::vector<std::vector<int>>& colorNode);
     int GetMaxInColor(const std::vector<int>& nodes, const OperationsViewer& opOriList, int curColor);
     Status MergeDupL1CopyIn(Function& func, std::vector<std::vector<int>>& colorNode, int color);
     void MergeProcessIdUpdate(Function& func, std::vector<std::vector<int>>& colorNode, int color);
     std::vector<int> GetOpInputFeature(const OperationsViewer& opOriList, const int opIdx, const int ioperandIdx);
     void RemoveUselessViews(Function& func) const;
     Status GetDuplicateOps(std::vector<Operation*>& opOriList, const std::vector<int>& opIdx);
-    void TackleOp(
-        int i, Operation* op, std::vector<std::vector<int>>& replacedInputs,
-        std::vector<std::vector<int>>& replacedOutputs);
-    Status Phase1(
-        Function& func, int color, std::vector<std::vector<int>>& colorNode, std::vector<int>& colorCopyIn,
-        std::vector<uint64_t>& hashColor);
-    void GetL1ReuseOpOrder(
-        std::vector<std::pair<int, int>>& opOrder, std::map<uint64_t, int>& mgRem, std::vector<int>& numLRList,
-        std::vector<uint64_t>& hashColor, int color);
-    bool GetMergedL1(
-        int maxInColor, std::vector<int>& mergedNum, int maxMergeNum, int& tmpColor, int i,
-        std::map<std::vector<uint64_t>, int>& l1InputList, std::vector<uint64_t>& vec, std::vector<int>& colorCopyIn,
-        std::map<uint64_t, int>& mgRem, uint64_t idx);
+    void TackleOp(int i, Operation* op, std::vector<std::vector<int>>& replacedInputs,
+                  std::vector<std::vector<int>>& replacedOutputs);
+    Status Phase1(Function& func, int color, std::vector<std::vector<int>>& colorNode, std::vector<int>& colorCopyIn,
+                  std::vector<uint64_t>& hashColor);
+    void GetL1ReuseOpOrder(std::vector<std::pair<int, int>>& opOrder, std::map<uint64_t, int>& mgRem,
+                           std::vector<int>& numLRList, std::vector<uint64_t>& hashColor, int color);
+    bool GetMergedL1(int maxInColor, std::vector<int>& mergedNum, int maxMergeNum, int& tmpColor, int i,
+                     std::map<std::vector<uint64_t>, int>& l1InputList, std::vector<uint64_t>& vec,
+                     std::vector<int>& colorCopyIn, std::map<uint64_t, int>& mgRem, uint64_t idx);
     // Build the per-subgraph matrix-side list (0=auto, 1=left, 2=right) from the
     // global / by-func / by-label side settings, mirroring numLRList expansion.
-    Status BuildMatrixSideList(
-        const Function& func, const OperationsViewer& opOriList, std::vector<int>& numLRSideList,
-        const std::vector<uint64_t>& hashColor, int color);
+    Status BuildMatrixSideList(const Function& func, const OperationsViewer& opOriList, std::vector<int>& numLRSideList,
+                               const std::vector<uint64_t>& hashColor, int color);
     // Resolve the per-subgraph merge-count list (numLRList) from the global/func/label settings.
-    Status BuildMergeCountList(
-        const Function& func, const OperationsViewer& opOriList, std::vector<int>& numLRList,
-        const std::vector<uint64_t>& hashColor, int color);
+    Status BuildMergeCountList(const Function& func, const OperationsViewer& opOriList, std::vector<int>& numLRList,
+                               const std::vector<uint64_t>& hashColor, int color);
     // DEBUG-log one side-tagged subgraph's per-step outcome (merged on the requested side, or
     // no same-side partner yet / merge anchor). Aggregate numbers are summarised after the loop.
     void RecordSideMergeOutcome(int subgraphIdx, int side, int tmpColor);
     // Search colorNode[subgraphIdx] for a merge candidate, optionally restricted by
     // `filter` (e.g. left/right matrix). Sets tmpColor when a candidate is found.
-    Status FindMergeCandidate(
-        const OperationsViewer& opOriList, int subgraphIdx, int maxInColor, std::vector<int>& mergedNum,
-        std::vector<int>& numLRList, int& tmpColor, std::vector<std::vector<int>>& colorNode,
-        std::map<std::vector<uint64_t>, int>& l1InputList, std::vector<int>& colorCopyIn,
-        std::map<uint64_t, int>& mgRem, std::vector<uint64_t>& hashColor,
-        const std::function<bool(const Operation&)>& filter);
-    Status L1MergeProcess(
-        OperationsViewer& opOriList, std::vector<std::vector<int>>& colorNode, std::vector<uint64_t>& hashColor,
-        std::vector<int>& colorCopyIn, std::map<std::vector<uint64_t>, int>& l1InputList, int& tmpColor,
-        std::vector<int>& mergedNum, int& i, int side);
-    void CubeMergeProcess(
-        std::vector<std::vector<int>>& colorNode, OperationsViewer& opOriList, std::map<int, int>& hashMergeNumMap,
-        std::vector<int>& colorCopyIn);
-    Status SetNumFromConfig(
-        const Function& func, const std::map<int64_t, int64_t>& configMap,
-        const std::map<std::string, int64_t>& configMapByFunc, std::map<int, int>& resultMap,
-        const std::string& configName);
-    Status ApplyByFuncConfig(
-        int currentFuncMagic, const std::map<std::string, int64_t>& configMapByFunc,
-        std::map<int, int>& resultMap, const std::string& configName);
-    Status ApplyGlobalConfig(
-        const std::map<int64_t, int64_t>& configMap, std::map<int, int>& resultMap,
-        const std::string& configName);
-    void HashUpdate(
-        Function& func, int color, const std::vector<uint64_t>& hashColor, OperationsViewer& opOriList,
-        std::vector<std::vector<int>>& colorNode);
-    Status ApplySemanticLabelSettingsL1Reuse(
-        const OperationsViewer& opOriList, const std::map<std::string, int64_t>& labelMap, std::vector<int>& numLRList,
-        const std::vector<uint64_t>& hashColor, int color);
-    Status ApplySemanticLabelSettingsCubeNBuffer(
-        const OperationsViewer& opOriList, std::map<int, int>& hashMergeNumMap, const std::vector<uint64_t>& hashColor,
-        int color);
+    Status FindMergeCandidate(const OperationsViewer& opOriList, int subgraphIdx, int maxInColor,
+                              std::vector<int>& mergedNum, std::vector<int>& numLRList, int& tmpColor,
+                              std::vector<std::vector<int>>& colorNode,
+                              std::map<std::vector<uint64_t>, int>& l1InputList, std::vector<int>& colorCopyIn,
+                              std::map<uint64_t, int>& mgRem, std::vector<uint64_t>& hashColor,
+                              const std::function<bool(const Operation&)>& filter);
+    Status L1MergeProcess(OperationsViewer& opOriList, std::vector<std::vector<int>>& colorNode,
+                          std::vector<uint64_t>& hashColor, std::vector<int>& colorCopyIn,
+                          std::map<std::vector<uint64_t>, int>& l1InputList, int& tmpColor, std::vector<int>& mergedNum,
+                          int& i, int side);
+    void CubeMergeProcess(std::vector<std::vector<int>>& colorNode, OperationsViewer& opOriList,
+                          std::map<int, int>& hashMergeNumMap, std::vector<int>& colorCopyIn);
+    Status SetNumFromConfig(const Function& func, const std::map<int64_t, int64_t>& configMap,
+                            const std::map<std::string, int64_t>& configMapByFunc, std::map<int, int>& resultMap,
+                            const std::string& configName);
+    Status ApplyByFuncConfig(int currentFuncMagic, const std::map<std::string, int64_t>& configMapByFunc,
+                             std::map<int, int>& resultMap, const std::string& configName);
+    Status ApplyGlobalConfig(const std::map<int64_t, int64_t>& configMap, std::map<int, int>& resultMap,
+                             const std::string& configName);
+    void HashUpdate(Function& func, int color, const std::vector<uint64_t>& hashColor, OperationsViewer& opOriList,
+                    std::vector<std::vector<int>>& colorNode);
+    Status ApplySemanticLabelSettingsL1Reuse(const OperationsViewer& opOriList,
+                                             const std::map<std::string, int64_t>& labelMap,
+                                             std::vector<int>& numLRList, const std::vector<uint64_t>& hashColor,
+                                             int color);
+    Status ApplySemanticLabelSettingsCubeNBuffer(const OperationsViewer& opOriList, std::map<int, int>& hashMergeNumMap,
+                                                 const std::vector<uint64_t>& hashColor, int color);
     const std::vector<std::vector<int>>& inGraph_;
     std::unordered_map<int, int> replacedCopyMap_;
     std::unordered_map<int, int> tensormagic2Op_;
     std::unordered_map<uint64_t, std::vector<int>> hashMap_;
-    std::map<uint64_t, int> hashOrder_;  // Deterministic ordered map for compilation repeatability
+    std::map<uint64_t, int> hashOrder_; // Deterministic ordered map for compilation repeatability
     std::map<int64_t, int64_t> numLRMap_;
     std::map<int64_t, int64_t> numDBMap_;
     std::map<std::string, int64_t> numLRMapByFunc_;

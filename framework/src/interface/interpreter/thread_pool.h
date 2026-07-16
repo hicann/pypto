@@ -27,7 +27,7 @@ namespace util {
 
 class ThreadPool {
     struct Task {
-        Task(){};
+        Task() {};
         Task(void* ctx, void (*entry)(void*)) : ctx_(ctx), entry_(entry) {}
 
         void Run() { entry_(ctx_); }

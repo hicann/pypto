@@ -161,9 +161,9 @@ public:
         int cur_{0};
     };
 
-    explicit RecordLoopFunc(
-        const std::string& name, FunctionType funcType, const std::string& iterName, const LoopRange& range,
-        const std::set<int>& unrollList = {}, bool submitBeforeLoop = false, bool parallel = false);
+    explicit RecordLoopFunc(const std::string& name, FunctionType funcType, const std::string& iterName,
+                            const LoopRange& range, const std::set<int>& unrollList = {}, bool submitBeforeLoop = false,
+                            bool parallel = false);
     ~RecordLoopFunc();
 
     void BeginLoopFunction();
@@ -263,11 +263,11 @@ public:
 
     explicit RecordFunc(const std::string& name);
     RecordFunc(const std::string& name, const std::vector<std::reference_wrapper<const Tensor>>& explicitOpArgs);
-    RecordFunc(
-        const std::string& name, const std::vector<std::reference_wrapper<const Tensor>>& startArgsInputTensorList,
-        const std::vector<std::reference_wrapper<const Tensor>>& startArgsOutputTensorList,
-        const std::vector<std::pair<std::reference_wrapper<const Tensor>, std::reference_wrapper<const Tensor>>>&
-            inplaceArgs = {});
+    RecordFunc(const std::string& name,
+               const std::vector<std::reference_wrapper<const Tensor>>& startArgsInputTensorList,
+               const std::vector<std::reference_wrapper<const Tensor>>& startArgsOutputTensorList,
+               const std::vector<std::pair<std::reference_wrapper<const Tensor>, std::reference_wrapper<const Tensor>>>&
+                   inplaceArgs = {});
 
     void EndFunction();
 

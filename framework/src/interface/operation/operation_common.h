@@ -29,11 +29,13 @@ namespace npu::tile_fwk {
 #define CALL(n, ...) Tensor##n(__VA_ARGS__)
 #define RETURN_CALL(n, ...) return Tensor##n(__VA_ARGS__)
 
-#define CHECK_OP(cond)                                                           \
-    (cond) ? 0 :                                                                 \
-             npu::tile_fwk::Error(__func__, __FILE__, __LINE__) =                \
-                 npu::tile_fwk::ErrorMessage() << "CHECK FAILED: " #cond << "\n" \
-                                               << "location: " << pypto::ir::Span::Current().ToString() << "\n"
+#define CHECK_OP(cond)                                                                                                \
+    (cond) ?                                                                                                          \
+        0 :                                                                                                           \
+        npu::tile_fwk::Error(__func__, __FILE__, __LINE__) = npu::tile_fwk::ErrorMessage()                            \
+                                                             << "CHECK FAILED: " #cond << "\n"                        \
+                                                             << "location: " << pypto::ir::Span::Current().ToString() \
+                                                             << "\n"
 
 constexpr int32_t NUM_VALUE_0 = 0;
 constexpr int32_t NUM_VALUE_1 = 1;
@@ -86,28 +88,28 @@ void CheckTensorsDimConsistency(const std::vector<LogicalTensorPtr>& tensors, co
 void CheckTensorShapeSize(const LogicalTensorPtr& tensor, const std::string& opName);
 void CheckDstShapeSize(const std::vector<int64_t>& shape, const std::string& opName);
 void CheckTensorsShapeConsistencyOrBroadcast(const std::vector<LogicalTensorPtr>& tensors, const std::string& opName);
-void CheckTensorDataType(
-    const LogicalTensorPtr& tensor, const std::unordered_set<DataType>& supportedTypes, const std::string& opName);
+void CheckTensorDataType(const LogicalTensorPtr& tensor, const std::unordered_set<DataType>& supportedTypes,
+                         const std::string& opName);
 void CheckTensorDataType(DataType dtype, const std::unordered_set<DataType>& supportedTypes, const std::string& opName);
-void CheckTensorFormat(
-    const LogicalTensorPtr& tensor, const std::unordered_set<TileOpFormat>& unsupportedFormats, const std::string& opName);
+void CheckTensorFormat(const LogicalTensorPtr& tensor, const std::unordered_set<TileOpFormat>& unsupportedFormats,
+                       const std::string& opName);
 void CheckSupportedNPUArch(const std::vector<NPUArch>& supportedArches, const std::string& opName);
-void CheckTensorsDataTypeConsistency(
-    const LogicalTensorPtr& tensor1, const LogicalTensorPtr& tensor2, const std::string& opName);
+void CheckTensorsDataTypeConsistency(const LogicalTensorPtr& tensor1, const LogicalTensorPtr& tensor2,
+                                     const std::string& opName);
 void CheckTensorsDataTypeConsistency(const LogicalTensorPtr& tensor, const Element& element, const std::string& opName);
 void CheckTensorsDataTypeConsistency(const std::vector<LogicalTensorPtr>& tensors, const std::string& opName);
-void CheckTensorsFormatConsistency(
-    const LogicalTensorPtr& tensor1, const LogicalTensorPtr& tensor2, const std::string& opName);
+void CheckTensorsFormatConsistency(const LogicalTensorPtr& tensor1, const LogicalTensorPtr& tensor2,
+                                   const std::string& opName);
 void CheckTensorsFormatConsistency(const std::vector<LogicalTensorPtr>& tensors, const std::string& opName);
-void CheckBinaryInputTensors(
-    const LogicalTensorPtr& tensor1, const LogicalTensorPtr& tensor2, const std::string& opName);
+void CheckBinaryInputTensors(const LogicalTensorPtr& tensor1, const LogicalTensorPtr& tensor2,
+                             const std::string& opName);
 
-const std::unordered_set<DataType>& GetSupportedDataTypesByArch(
-    const std::unordered_set<DataType>& a2a3Types, const std::unordered_set<DataType>& a5Types);
+const std::unordered_set<DataType>& GetSupportedDataTypesByArch(const std::unordered_set<DataType>& a2a3Types,
+                                                                const std::unordered_set<DataType>& a5Types);
 
-using TiledFuncType = std::function<void(
-    Function& function, const TileShape& tileShape, const std::vector<LogicalTensorPtr>& iOperand,
-    const std::vector<LogicalTensorPtr>& oOperand, const Operation& op)>;
+using TiledFuncType = std::function<void(Function& function, const TileShape& tileShape,
+                                         const std::vector<LogicalTensorPtr>& iOperand,
+                                         const std::vector<LogicalTensorPtr>& oOperand, const Operation& op)>;
 class TiledFuncRegistry {
 private:
     TiledFuncRegistry() = default;
@@ -147,9 +149,8 @@ enum class AIVCore;
 class OpSyncQueue {
 public:
     OpSyncQueue() {}
-    OpSyncQueue(
-        PipeType pipeId, PipeType trigPipeId, CoreType coreType, CoreType tirgCoreType, int evid, AIVCore setAivCore,
-        AIVCore waitAivCore)
+    OpSyncQueue(PipeType pipeId, PipeType trigPipeId, CoreType coreType, CoreType tirgCoreType, int evid,
+                AIVCore setAivCore, AIVCore waitAivCore)
         : pipeId_(pipeId),
           trigPipeId_(trigPipeId),
           coreType_(coreType),

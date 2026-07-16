@@ -58,20 +58,28 @@ void InferDynShape::RecordStaticValidShapeOnL0CCopyUB(Function& function)
 {
     // 不强制排序: 仅做 op 属性快照, 与遍历顺序无关, 避免对 InferShape 的 op 顺序产生副作用。
     for (auto& op : function.Operations(false)) {
-        if (op.GetOpcode() != Opcode::OP_L0C_COPY_UB) continue;
-        if (op.GetOOperands().empty()) continue;
+        if (op.GetOpcode() != Opcode::OP_L0C_COPY_UB)
+            continue;
+        if (op.GetOOperands().empty())
+            continue;
         auto ubOut = op.GetOutputOperand(0);
-        if (ubOut == nullptr) continue;
+        if (ubOut == nullptr)
+            continue;
         const auto& valid = ubOut->GetDynValidShape();
-        if (valid.empty()) continue;
+        if (valid.empty())
+            continue;
         std::vector<int64_t> staticVals;
         staticVals.reserve(valid.size());
         bool allConcrete = true;
         for (const auto& s : valid) {
-            if (!s.ConcreteValid()) { allConcrete = false; break; }
+            if (!s.ConcreteValid()) {
+                allConcrete = false;
+                break;
+            }
             staticVals.push_back(s.Concrete());
         }
-        if (!allConcrete) continue;
+        if (!allConcrete)
+            continue;
         op.SetAttribute(OpAttributeKey::staticValidShape, staticVals);
     }
 }

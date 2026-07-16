@@ -36,10 +36,7 @@ namespace ir {
 
 using namespace test_helpers;
 
-static ExprPtr MakeDim(int64_t val)
-{
-    return std::make_shared<ConstInt>(val, DataType::INT64, Sp());
-}
+static ExprPtr MakeDim(int64_t val) { return std::make_shared<ConstInt>(val, DataType::INT64, Sp()); }
 
 // ============================================================================
 // BroadcastShapes
@@ -288,25 +285,13 @@ TEST_F(TypeInferenceTest, DimensionsEqual_SamePtr_True)
 // IsBroadcastable
 // ============================================================================
 
-TEST_F(TypeInferenceTest, IsBroadcastable_Equal_True)
-{
-    EXPECT_TRUE(IsBroadcastable(MakeDim(8), MakeDim(8)));
-}
+TEST_F(TypeInferenceTest, IsBroadcastable_Equal_True) { EXPECT_TRUE(IsBroadcastable(MakeDim(8), MakeDim(8))); }
 
-TEST_F(TypeInferenceTest, IsBroadcastable_SourceOne_True)
-{
-    EXPECT_TRUE(IsBroadcastable(MakeDim(1), MakeDim(64)));
-}
+TEST_F(TypeInferenceTest, IsBroadcastable_SourceOne_True) { EXPECT_TRUE(IsBroadcastable(MakeDim(1), MakeDim(64))); }
 
-TEST_F(TypeInferenceTest, IsBroadcastable_TargetOne_True)
-{
-    EXPECT_TRUE(IsBroadcastable(MakeDim(64), MakeDim(1)));
-}
+TEST_F(TypeInferenceTest, IsBroadcastable_TargetOne_True) { EXPECT_TRUE(IsBroadcastable(MakeDim(64), MakeDim(1))); }
 
-TEST_F(TypeInferenceTest, IsBroadcastable_Incompatible_False)
-{
-    EXPECT_FALSE(IsBroadcastable(MakeDim(3), MakeDim(5)));
-}
+TEST_F(TypeInferenceTest, IsBroadcastable_Incompatible_False) { EXPECT_FALSE(IsBroadcastable(MakeDim(3), MakeDim(5))); }
 
 // ============================================================================
 // RequireTileScalarArgs

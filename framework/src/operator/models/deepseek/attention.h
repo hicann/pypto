@@ -23,14 +23,14 @@
 
 namespace npu::tile_fwk {
 
-void Attention(
-    const Tensor& tokenX, const Tensor& wDq, const Tensor& wUqQr, const Tensor& wUk, const Tensor& wDkvKr,
-    const Tensor& gammaCq, const Tensor& gammaCkv, const Tensor& sin, const Tensor& cos, const Tensor& cacheIndex,
-    Tensor& kvCache, Tensor& krCache, Tensor& qNopeOut, Tensor& qRopeOut, Tensor& kvCacheOut, Tensor& krCacheOut,
-    const MlaQuantInputs& quantInputs, const RoPETileShapeConfigNew& ropeConfig, /*---*/
-    Tensor& blockTable, Tensor& actSeqs, Tensor& paOut, int blockSize, float softmaxScale,
-    PaTileShapeConfig& paTileConfig,                                             /*---*/
-    Tensor& weightUV, Tensor& weightO, Tensor& weightOScaleW, Tensor& postOut, float epsilonCq = 1e-5f,
-    float epsilonCkv = 1e-5f, std::string cacheMode = "BNSD");
+void Attention(const Tensor& tokenX, const Tensor& wDq, const Tensor& wUqQr, const Tensor& wUk, const Tensor& wDkvKr,
+               const Tensor& gammaCq, const Tensor& gammaCkv, const Tensor& sin, const Tensor& cos,
+               const Tensor& cacheIndex, Tensor& kvCache, Tensor& krCache, Tensor& qNopeOut, Tensor& qRopeOut,
+               Tensor& kvCacheOut, Tensor& krCacheOut, const MlaQuantInputs& quantInputs,
+               const RoPETileShapeConfigNew& ropeConfig, /*---*/
+               Tensor& blockTable, Tensor& actSeqs, Tensor& paOut, int blockSize, float softmaxScale,
+               PaTileShapeConfig& paTileConfig, /*---*/
+               Tensor& weightUV, Tensor& weightO, Tensor& weightOScaleW, Tensor& postOut, float epsilonCq = 1e-5f,
+               float epsilonCkv = 1e-5f, std::string cacheMode = "BNSD");
 
 } // namespace npu::tile_fwk

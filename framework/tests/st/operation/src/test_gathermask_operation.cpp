@@ -18,8 +18,8 @@
 using namespace tile_fwk::test_operation;
 namespace {
 struct GatherMaskOpFuncArgs : public OpFuncArgs {
-    GatherMaskOpFuncArgs(
-        const uint8_t& patternMode, const std::vector<int64_t>& viewShape, const std::vector<int64_t> tileShape)
+    GatherMaskOpFuncArgs(const uint8_t& patternMode, const std::vector<int64_t>& viewShape,
+                         const std::vector<int64_t> tileShape)
         : patternMode_(patternMode), viewShape_(viewShape), tileShape_(tileShape)
     {}
 
@@ -37,8 +37,8 @@ struct GatherMaskOpMetaData {
     nlohmann::json test_data_;
 };
 
-[[maybe_unused]] static void GatherMaskOperationExeFuncCut(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+[[maybe_unused]] static void GatherMaskOperationExeFuncCut(const std::vector<Tensor>& inputs,
+                                                           std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0]})
     {
@@ -49,9 +49,9 @@ struct GatherMaskOpMetaData {
 
         LOOP("LOOP_L0_bIdx", FunctionType::DYNAMIC_LOOP, bIdx, LoopRange(0, bloop, 1))
         {
-            auto tileTensor0 = View(
-                inputs[0], {firstViewShape}, {std::min(firstDim - bIdx * firstViewShape, firstViewShape)},
-                {bIdx * firstViewShape});
+            auto tileTensor0 = View(inputs[0], {firstViewShape},
+                                    {std::min(firstDim - bIdx * firstViewShape, firstViewShape)},
+                                    {bIdx * firstViewShape});
             TileShape::Current().SetVecTile(args->tileShape_);
             auto res = GatherMask(tileTensor0, args->patternMode_);
             Assemble(res, {bIdx * firstViewShape}, outputs[0]);
@@ -59,8 +59,8 @@ struct GatherMaskOpMetaData {
     }
 }
 
-static void GatherMaskOperationExeFuncDoubleCut(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void GatherMaskOperationExeFuncDoubleCut(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                                const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0]})
     {
@@ -76,11 +76,10 @@ static void GatherMaskOperationExeFuncDoubleCut(
         {
             LOOP("LOOP_L1_sIdx", FunctionType::DYNAMIC_LOOP, sIdx, LoopRange(0, sloop, 1))
             {
-                auto tileTensor0 = View(
-                    inputs[0], {firstViewShape, secondViewShape},
-                    {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                     std::min(secondDim - sIdx * secondViewShape, secondViewShape)},
-                    {bIdx * firstViewShape, sIdx * secondViewShape});
+                auto tileTensor0 = View(inputs[0], {firstViewShape, secondViewShape},
+                                        {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                         std::min(secondDim - sIdx * secondViewShape, secondViewShape)},
+                                        {bIdx * firstViewShape, sIdx * secondViewShape});
                 TileShape::Current().SetVecTile(args->tileShape_);
                 auto res = GatherMask(tileTensor0, args->patternMode_);
                 Assemble(res, {bIdx * firstViewShape, sIdx * secondViewShape}, outputs[0]);
@@ -89,8 +88,8 @@ static void GatherMaskOperationExeFuncDoubleCut(
     }
 }
 
-static void GatherMaskOperationExeFuncTripleCut(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void GatherMaskOperationExeFuncTripleCut(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                                const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0]})
     {
@@ -111,12 +110,11 @@ static void GatherMaskOperationExeFuncTripleCut(
             {
                 LOOP("LOOP_L2_nIdx", FunctionType::DYNAMIC_LOOP, nIdx, LoopRange(0, nloop, 1))
                 {
-                    auto tileTensor0 = View(
-                        inputs[0], {firstViewShape, secondViewShape, thirdViewShape},
-                        {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                         std::min(secondDim - sIdx * secondViewShape, secondViewShape),
-                         std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape)},
-                        {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape});
+                    auto tileTensor0 = View(inputs[0], {firstViewShape, secondViewShape, thirdViewShape},
+                                            {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                             std::min(secondDim - sIdx * secondViewShape, secondViewShape),
+                                             std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape)},
+                                            {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape});
                     TileShape::Current().SetVecTile(args->tileShape_);
                     auto res = GatherMask(tileTensor0, args->patternMode_);
                     Assemble(res, {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape}, outputs[0]);
@@ -126,8 +124,8 @@ static void GatherMaskOperationExeFuncTripleCut(
     }
 }
 
-static void GatherMaskOperationExeFuncQuadrupleCut(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void GatherMaskOperationExeFuncQuadrupleCut(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                                   const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0]})
     {
@@ -153,21 +151,20 @@ static void GatherMaskOperationExeFuncQuadrupleCut(
                 {
                     LOOP("LOOP_L3_qIdx", FunctionType::DYNAMIC_LOOP, qIdx, LoopRange(0, qloop, 1))
                     {
-                        auto tileTensor0 = View(
-                            inputs[0], {firstViewShape, secondViewShape, thirdViewShape, fourthViewShape},
-                            {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                             std::min(secondDim - sIdx * secondViewShape, secondViewShape),
-                             std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape),
-                             std::min(fourthDim - qIdx * fourthViewShape, fourthViewShape)},
-                            {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape,
-                             qIdx * fourthViewShape});
+                        auto tileTensor0 = View(inputs[0],
+                                                {firstViewShape, secondViewShape, thirdViewShape, fourthViewShape},
+                                                {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                                 std::min(secondDim - sIdx * secondViewShape, secondViewShape),
+                                                 std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape),
+                                                 std::min(fourthDim - qIdx * fourthViewShape, fourthViewShape)},
+                                                {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape,
+                                                 qIdx * fourthViewShape});
                         TileShape::Current().SetVecTile(args->tileShape_);
                         auto res = GatherMask(tileTensor0, args->patternMode_);
-                        Assemble(
-                            res,
-                            {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape,
-                             qIdx * fourthViewShape},
-                            outputs[0]);
+                        Assemble(res,
+                                 {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape,
+                                  qIdx * fourthViewShape},
+                                 outputs[0]);
                     }
                 }
             }
@@ -177,12 +174,11 @@ static void GatherMaskOperationExeFuncQuadrupleCut(
 
 class GatherMaskOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac_param<GatherMaskOpMetaData> {};
 
-INSTANTIATE_TEST_SUITE_P(
-    TestGatherMask, GatherMaskOperationTest,
-    ::testing::ValuesIn(GetOpMetaData<GatherMaskOpMetaData>(
-        {GatherMaskOperationExeFuncDoubleCut, GatherMaskOperationExeFuncTripleCut,
-         GatherMaskOperationExeFuncQuadrupleCut},
-        "GatherMask")));
+INSTANTIATE_TEST_SUITE_P(TestGatherMask, GatherMaskOperationTest,
+                         ::testing::ValuesIn(GetOpMetaData<GatherMaskOpMetaData>(
+                             {GatherMaskOperationExeFuncDoubleCut, GatherMaskOperationExeFuncTripleCut,
+                              GatherMaskOperationExeFuncQuadrupleCut},
+                             "GatherMask")));
 
 TEST_P(GatherMaskOperationTest, TestGatherMask)
 {

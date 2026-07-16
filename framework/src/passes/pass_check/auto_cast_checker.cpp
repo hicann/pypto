@@ -35,18 +35,14 @@ Status AutoCastChecker::DoDefaultEnabledPreCheck(Function& function)
         int inputNum = static_cast<int>(op->GetIOperands().size());
         if (inputNum != 1) {
             APASS_LOG_ERROR_C(OperationErr::OP_INVALID_OPERAND_COUNT, Elements::Operation,
-                             "CAST op %d has %d input tensor, which should be 1.",
-                             op->GetOpMagic(),
-                             inputNum);
+                              "CAST op %d has %d input tensor, which should be 1.", op->GetOpMagic(), inputNum);
             return FAILED;
         }
 
         int outputNum = static_cast<int>(op->GetOOperands().size());
         if (outputNum != 1) {
             APASS_LOG_ERROR_C(OperationErr::OP_INVALID_OPERAND_COUNT, Elements::Operation,
-                             "CAST op %d has %d output tensor, which should be 1.",
-                             op->GetOpMagic(),
-                             outputNum);
+                              "CAST op %d has %d output tensor, which should be 1.", op->GetOpMagic(), outputNum);
             return FAILED;
         }
     }
@@ -66,15 +62,13 @@ Status AutoCastChecker::DoPostCheck(Function& function)
         auto iOperands = op->GetIOperands();
         for (const auto& iop : iOperands) {
             if (!supportBF16 && iop->Datatype() == DataType::DT_BF16) {
-                APASS_LOG_ERROR_F(
-                    Elements::Operation, "Exist unsupported BF16 compute between op %d and tensor %d", opMagic,
-                    iop->GetMagic());
+                APASS_LOG_ERROR_F(Elements::Operation, "Exist unsupported BF16 compute between op %d and tensor %d",
+                                  opMagic, iop->GetMagic());
                 return FAILED;
             }
             if (!supportFP16 && iop->Datatype() == DataType::DT_FP16) {
-                APASS_LOG_ERROR_F(
-                    Elements::Operation, "Exist unsupported FP16 compute between op %d and tensor %d", opMagic,
-                    iop->GetMagic());
+                APASS_LOG_ERROR_F(Elements::Operation, "Exist unsupported FP16 compute between op %d and tensor %d",
+                                  opMagic, iop->GetMagic());
                 return FAILED;
             }
         }
@@ -82,15 +76,13 @@ Status AutoCastChecker::DoPostCheck(Function& function)
         auto oOperands = op->GetOOperands();
         for (const auto& oop : oOperands) {
             if (!supportBF16 && oop->Datatype() == DataType::DT_BF16) {
-                APASS_LOG_ERROR_F(
-                    Elements::Operation, "Exist unsupported BF16 compute between op %d and tensor %d", opMagic,
-                    oop->GetMagic());
+                APASS_LOG_ERROR_F(Elements::Operation, "Exist unsupported BF16 compute between op %d and tensor %d",
+                                  opMagic, oop->GetMagic());
                 return FAILED;
             }
             if (!supportFP16 && oop->Datatype() == DataType::DT_FP16) {
-                APASS_LOG_ERROR_F(
-                    Elements::Operation, "Exist unsupported FP16 compute between op %d and tensor %d", opMagic,
-                    oop->GetMagic());
+                APASS_LOG_ERROR_F(Elements::Operation, "Exist unsupported FP16 compute between op %d and tensor %d",
+                                  opMagic, oop->GetMagic());
                 return FAILED;
             }
         }

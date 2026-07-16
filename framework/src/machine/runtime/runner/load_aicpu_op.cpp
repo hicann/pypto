@@ -104,7 +104,7 @@ void LoadAicpuOp::CustomAiCpuSoLoad()
 }
 
 int LoadAicpuOp::AicpuKernelLaunch([[maybe_unused]] void* funcHandle, [[maybe_unused]] const RtStream& stream,
-    [[maybe_unused]] DeviceKernelArgs* kArgs, [[maybe_unused]] const uint32_t& blockDim)
+                                   [[maybe_unused]] DeviceKernelArgs* kArgs, [[maybe_unused]] const uint32_t& blockDim)
 {
 #ifdef BUILD_WITH_NEW_CANN
     RtFuncHandle aicpuFuncHandle = static_cast<RtFuncHandle>(funcHandle);
@@ -126,7 +126,7 @@ int LoadAicpuOp::AicpuKernelLaunch([[maybe_unused]] void* funcHandle, [[maybe_un
 }
 
 int LoadAicpuOp::LaunchCustomOp([[maybe_unused]] RtStream stream, [[maybe_unused]] DeviceKernelArgs* kArgs,
-    [[maybe_unused]] std::string& OpType) const
+                                [[maybe_unused]] std::string& OpType) const
 {
 #ifdef BUILD_WITH_NEW_CANN
     ASSERT(DevCommonErr::PARAM_INVALID, customBinHandle_ != nullptr) << "customBinHandle cannot be null";
@@ -167,9 +167,8 @@ int LoadAicpuOp::GetBuiltInOpBinHandle()
         RtFuncHandle funcHandle;
         ret = RuntimeFuncGetByName(binHandle, BuiltInFunName[i].c_str(), &funcHandle);
         if (ret != 0) {
-            MACHINE_LOGE(
-                RtErr::RT_GET_FUNC_FAILED, "Get BuiltIn FuncName[%s] funcHandle failed ret[%d]",
-                BuiltInFunName[i].c_str(), ret);
+            MACHINE_LOGE(RtErr::RT_GET_FUNC_FAILED, "Get BuiltIn FuncName[%s] funcHandle failed ret[%d]",
+                         BuiltInFunName[i].c_str(), ret);
             return ret;
         }
         builtInFuncMap_[BuiltInFunName[i]] = funcHandle;
@@ -179,7 +178,8 @@ int LoadAicpuOp::GetBuiltInOpBinHandle()
 }
 
 int LoadAicpuOp::LaunchBuiltInOp([[maybe_unused]] RtStream stream, [[maybe_unused]] DeviceKernelArgs* kArgs,
-    [[maybe_unused]] const int& aicpuNum, [[maybe_unused]] const std::string& funcName) const
+                                 [[maybe_unused]] const int& aicpuNum,
+                                 [[maybe_unused]] const std::string& funcName) const
 {
 #ifdef BUILD_WITH_NEW_CANN
     RtFuncHandle funcHandle;

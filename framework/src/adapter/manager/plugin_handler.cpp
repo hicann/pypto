@@ -1,5 +1,5 @@
 /**
-* Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
  * Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -20,12 +20,9 @@
 namespace npu::tile_fwk {
 PluginHandler::PluginHandler() : handler_(nullptr) {}
 
-PluginHandler::~PluginHandler()
-{
-    CloseHandler();
-}
+PluginHandler::~PluginHandler() { CloseHandler(); }
 
-bool PluginHandler::OpenHandler(const std::string &libName)
+bool PluginHandler::OpenHandler(const std::string& libName)
 {
     handler_ = dlopen(libName.c_str(), RTLD_NOW | RTLD_GLOBAL);
     if (handler_ == nullptr) {
@@ -45,10 +42,10 @@ void PluginHandler::CloseHandler()
 
 void* PluginHandler::GetFunction(const std::string& funcName) const
 {
-    void *func = dlsym(handler_, funcName.c_str());
+    void* func = dlsym(handler_, funcName.c_str());
     if (func == nullptr) {
         ADAPTER_LOGI("Failed to load symbol[%s] from library, error: %s", funcName.c_str(), dlerror());
     }
     return func;
 }
-}
+} // namespace npu::tile_fwk

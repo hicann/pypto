@@ -54,9 +54,9 @@ void ConnectionMatrix::SetConnectivity(const std::unordered_set<Operation*>& pro
     for (Operation* producer : producers) {
         if (producer != &op) {
             bitmap.Or(GetBitMap(*producer));
-            APASS_LOG_DEBUG_F(
-                Elements::Function, "SetConnectivity for op %s %d and op %s %d.", producer->GetOpcodeStr().c_str(),
-                producer->opmagic, op.GetOpcodeStr().c_str(), op.opmagic);
+            APASS_LOG_DEBUG_F(Elements::Function, "SetConnectivity for op %s %d and op %s %d.",
+                              producer->GetOpcodeStr().c_str(), producer->opmagic, op.GetOpcodeStr().c_str(),
+                              op.opmagic);
         }
     }
 }
@@ -74,9 +74,8 @@ bool ConnectionMatrix::IsConnected(const Operation& a, const Operation& b) const
 bool ConnectionMatrix::IsConnected(uint64_t indexA, uint64_t indexB) const
 {
     if (indexA >= size_ || indexB >= size_) {
-        APASS_LOG_WARN_F(
-            Elements::Function, "Func ConnectionMatrix::IsConnected invalid index: indexA %lu, indexB, %lu.", indexA,
-            indexB);
+        APASS_LOG_WARN_F(Elements::Function,
+                         "Func ConnectionMatrix::IsConnected invalid index: indexA %lu, indexB, %lu.", indexA, indexB);
         return false;
     }
     return GetBitMap(indexB).GetBit(static_cast<size_t>(indexA));

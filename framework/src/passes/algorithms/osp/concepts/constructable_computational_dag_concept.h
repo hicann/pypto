@@ -9,9 +9,9 @@
  */
 
 /*!
-* \file constructable_computational_dag_concept.h
-* \brief
-*/
+ * \file constructable_computational_dag_concept.h
+ * \brief
+ */
 
 #ifndef OSP_CONSTRUCTABLE_COMPUTATIONAL_DAG_CONCEPT_H
 #define OSP_CONSTRUCTABLE_COMPUTATIONAL_DAG_CONCEPT_H
@@ -42,11 +42,9 @@ template <typename T, typename = void>
 struct IsConstructableCdagVertex : std::false_type {};
 
 template <typename T>
-struct IsConstructableCdagVertex<T,
-                                 std::void_t<decltype(std::declval<T>().AddVertex(
-                                     std::declval<VWorkwT<T>>(),
-                                     std::declval<VCommwT<T>>(),
-                                     std::declval<VMemwT<T>>()))>>
+struct IsConstructableCdagVertex<
+    T, std::void_t<decltype(std::declval<T>().AddVertex(std::declval<VWorkwT<T>>(), std::declval<VCommwT<T>>(),
+                                                        std::declval<VMemwT<T>>()))>>
     : std::conjunction<std::is_constructible<T, VertexIdxT<T>>> {};
 
 template <typename T>
@@ -56,8 +54,8 @@ inline constexpr bool isConstructableCdagV = IsConstructableCdagVertex<T>::value
  * @brief Helper trait to check if a graph can be directly constructed from a vertex count and a set of edges.
  */
 template <typename T>
-inline constexpr bool isDirectConstructableCdagV
-    = std::is_constructible<T, VertexIdxT<T>, std::set<std::pair<VertexIdxT<T>, VertexIdxT<T>>>>::value;
-}    // namespace osp
-}    // namespace npu::tile_fwk
+inline constexpr bool isDirectConstructableCdagV = std::is_constructible<
+    T, VertexIdxT<T>, std::set<std::pair<VertexIdxT<T>, VertexIdxT<T>>>>::value;
+} // namespace osp
+} // namespace npu::tile_fwk
 #endif // OSP_CONSTRUCTABLE_COMPUTATIONAL_DAG_CONCEPT_HPP

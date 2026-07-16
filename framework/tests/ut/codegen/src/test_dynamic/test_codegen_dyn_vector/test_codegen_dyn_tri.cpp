@@ -53,8 +53,8 @@ TEST_F(TestCodegenDynTri, TestTriU)
             output = TriU(inputSrc, diagonal);
         }
     }
-    auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX +
+                                                                HIDDEN_FUNC_SUFFIX);
     std::string res = GenCodeByFunction(*function);
     std::string expect = R"!!!(TTriUL<1>(ubTensor_2, ubTensor_0, (int)((RUNTIME_COA_GET_PARAM(37))));
 )!!!";

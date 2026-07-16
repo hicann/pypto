@@ -1,12 +1,12 @@
 /**
-* Copyright (c) 2026 Huawei Technologies Co., Ltd.
-* This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-* CANN Open Software License Agreement Version 2.0 (the "License").
-* Please refer to the License for details. You may not use this file except in compliance with the License.
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-* INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-* See LICENSE in the root of the software repository for the full text of the License.
-*/
+ * Copyright (c) 2026 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
 
 #include "machine/runtime/launcher/device_launcher_driver_gate.h"
 
@@ -102,13 +102,12 @@ void RunDriverVersionCheck()
     if (MeetsMinAscendDriverMajorMinor(major, minor)) {
         return;
     }
-    MACHINE_LOGE(
-        DevCommonErr::PARAM_INVALID,
-        "Ascend driver version \"%s\" is below required %d.%d for onboard; kernel launch aborted.", ver.c_str(),
-        kMinAscendDriverMajor, kMinAscendDriverMinor);
+    MACHINE_LOGE(DevCommonErr::PARAM_INVALID,
+                 "Ascend driver version \"%s\" is below required %d.%d for onboard; kernel launch aborted.",
+                 ver.c_str(), kMinAscendDriverMajor, kMinAscendDriverMinor);
     ASSERT(DevCommonErr::PARAM_INVALID, false)
-        << "Ascend driver package version " << ver << " is not supported for onboard (need >= "
-        << kMinAscendDriverMajor << "." << kMinAscendDriverMinor << ").";
+        << "Ascend driver package version " << ver << " is not supported for onboard (need >= " << kMinAscendDriverMajor
+        << "." << kMinAscendDriverMinor << ").";
 }
 
 void SetSysGetVersionStrHookForTest(SysGetVersionStrFn hook)
@@ -116,20 +115,11 @@ void SetSysGetVersionStrHookForTest(SysGetVersionStrFn hook)
     gSysGetVersionStrImpl = hook != nullptr ? hook : AclSysGetVersionStr;
 }
 
-void ClearSysGetVersionStrHookForTest()
-{
-    gSysGetVersionStrImpl = AclSysGetVersionStr;
-}
+void ClearSysGetVersionStrHookForTest() { gSysGetVersionStrImpl = AclSysGetVersionStr; }
 
-void ResetOnceFlagForTest()
-{
-    new (&gDriverVersionGateOnce) std::once_flag();
-}
+void ResetOnceFlagForTest() { new (&gDriverVersionGateOnce) std::once_flag(); }
 
-void EnsureDriverVersionForOnboardOnce()
-{
-    std::call_once(gDriverVersionGateOnce, RunDriverVersionCheck);
-}
+void EnsureDriverVersionForOnboardOnce() { std::call_once(gDriverVersionGateOnce, RunDriverVersionCheck); }
 
 } // namespace AscendDriverVersionGate
 } // namespace npu::tile_fwk::dynamic

@@ -40,29 +40,19 @@ namespace osp {
 template <typename GraphT, typename CostModel = LazyCommunicationCost<GraphT>>
 class GreedyMetaScheduler : public Scheduler<GraphT> {
     Serial<GraphT> serialScheduler_;
-    std::vector<Scheduler<GraphT> *> schedulers_;
+    std::vector<Scheduler<GraphT>*> schedulers_;
 
 public:
-
     GreedyMetaScheduler() : Scheduler<GraphT>() {}
     ~GreedyMetaScheduler() override = default;
 
-    void AddSerialScheduler()
-    {
-        schedulers_.push_back(&serialScheduler_);
-    }
+    void AddSerialScheduler() { schedulers_.push_back(&serialScheduler_); }
 
-    void AddScheduler(Scheduler<GraphT> &s)
-    {
-        schedulers_.push_back(&s);
-    }
+    void AddScheduler(Scheduler<GraphT>& s) { schedulers_.push_back(&s); }
 
-    void ResetScheduler()
-    {
-        schedulers_.clear();
-    }
+    void ResetScheduler() { schedulers_.clear(); }
 
-    ReturnStatus ComputeSchedule(BspSchedule<GraphT> &schedule) override
+    ReturnStatus ComputeSchedule(BspSchedule<GraphT>& schedule) override
     {
         if (schedule.GetInstance().GetArchitecture().NumberOfProcessors() == 1) {
             serialScheduler_.ComputeSchedule(schedule);
@@ -72,7 +62,7 @@ public:
         VWorkwT<GraphT> bestScheduleCost = std::numeric_limits<VWorkwT<GraphT>>::max();
         BspSchedule<GraphT> currentSchedule(schedule.GetInstance());
 
-        for (Scheduler<GraphT> *scheduler : schedulers_) {
+        for (Scheduler<GraphT>* scheduler : schedulers_) {
             scheduler->ComputeSchedule(currentSchedule);
             const VWorkwT<GraphT> scheduleCost = CostModel()(currentSchedule);
             if (scheduleCost < bestScheduleCost) {
@@ -84,6 +74,6 @@ public:
         return ReturnStatus::OSP_SUCCESS;
     }
 };
-}    // namespace osp
+} // namespace osp
 } // namespace npu::tile_fwk
 #endif // OSP_GREEDY_META_SCHEDULER_HPP

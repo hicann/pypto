@@ -84,9 +84,8 @@ public:
     template <typename... Args>
     T* Create(Args&&... args)
     {
-        DEV_ASSERT_MSG(
-            DevDataErr::ITEM_POOL_FREE_LIST_INVALID, freeListHeadIndex_ != ITEM_POOL_INVALID_INDEX,
-            "Available items: %zu/%zu", freeCount_, count_);
+        DEV_ASSERT_MSG(DevDataErr::ITEM_POOL_FREE_LIST_INVALID, freeListHeadIndex_ != ITEM_POOL_INVALID_INDEX,
+                       "Available items: %zu/%zu", freeCount_, count_);
         ItemBlock* item = &ItemAt(freeListHeadIndex_);
         freeListHeadIndex_ = item->freeListNextIndex;
         item->freeListNextIndex = ITEM_POOL_NON_FREE_INDEX;
@@ -108,9 +107,8 @@ public:
     {
         item->~T();
         ItemBlock* block = (ItemBlock*)item;
-        DEV_ASSERT_MSG(
-            DevDataErr::ITEM_POOL_FREE_LIST_INVALID, block->freeListNextIndex == ITEM_POOL_NON_FREE_INDEX,
-            "Double free detected in ItemPool");
+        DEV_ASSERT_MSG(DevDataErr::ITEM_POOL_FREE_LIST_INVALID, block->freeListNextIndex == ITEM_POOL_NON_FREE_INDEX,
+                       "Double free detected in ItemPool");
         AppendFreeList(block);
         freeCount_++;
     }
@@ -121,16 +119,15 @@ public:
 
     size_t FreeItemNum() const { return freeCount_; }
 
-    void RestoreMetaData(const ItemPoolMeta &meta) {
+    void RestoreMetaData(const ItemPoolMeta& meta)
+    {
         count_ = meta.count;
         freeCount_ = meta.freeCount;
         freeListHeadIndex_ = meta.freeListHeadIndex;
         return;
     }
 
-    ItemPoolMeta GetMetaData() const {
-        return {count_, freeCount_, freeListHeadIndex_};
-    }
+    ItemPoolMeta GetMetaData() const { return {count_, freeCount_, freeListHeadIndex_}; }
 
 private:
     inline void AppendFreeList(ItemBlock* block)
@@ -141,9 +138,8 @@ private:
 
     inline ItemBlock& ItemAt(ItemPoolIter index)
     {
-        DEV_ASSERT_MSG(
-            DevDataErr::ITEM_POOL_INDEX_OUT_OF_RANGE, index >= 0 && static_cast<size_t>(index) < count_,
-            "Index %" PRId64 " out of range [0, %zu)", index, count_);
+        DEV_ASSERT_MSG(DevDataErr::ITEM_POOL_INDEX_OUT_OF_RANGE, index >= 0 && static_cast<size_t>(index) < count_,
+                       "Index %" PRId64 " out of range [0, %zu)", index, count_);
         return allocation_.As<ItemBlock>()[index];
     }
 

@@ -72,8 +72,8 @@ public:
 
     static constexpr auto GetFieldDescriptors()
     {
-        return std::tuple_cat(
-            IRNode::GetFieldDescriptors(), std::make_tuple(reflection::UsualField(&Expr::type_, "type")));
+        return std::tuple_cat(IRNode::GetFieldDescriptors(),
+                              std::make_tuple(reflection::UsualField(&Expr::type_, "type")));
     }
 };
 
@@ -112,12 +112,11 @@ public:
     void SetAttrType(const std::string& key) const
     {
         // Compile-time check: only allow specific types
-        static_assert(
-            std::is_same_v<T, bool> || std::is_same_v<T, int> || std::is_same_v<T, std::string> ||
-                std::is_same_v<T, double> || std::is_same_v<T, DataType> || std::is_same_v<T, MemorySpace> ||
-                std::is_same_v<T, std::vector<int>> || std::is_same_v<T, std::vector<std::string>>,
-            "SetAttrType only accepts: bool, int, std::string, double, DataType, MemorySpace, "
-            "std::vector<int>, std::vector<std::string>");
+        static_assert(std::is_same_v<T, bool> || std::is_same_v<T, int> || std::is_same_v<T, std::string> ||
+                          std::is_same_v<T, double> || std::is_same_v<T, DataType> || std::is_same_v<T, MemorySpace> ||
+                          std::is_same_v<T, std::vector<int>> || std::is_same_v<T, std::vector<std::string>>,
+                      "SetAttrType only accepts: bool, int, std::string, double, DataType, MemorySpace, "
+                      "std::vector<int>, std::vector<std::string>");
 
         attrs_.emplace(key, std::type_index(typeid(T)));
     }
@@ -215,7 +214,8 @@ public:
     [[nodiscard]] ObjectKind GetKind() const override { return ObjectKind::Var; }
     [[nodiscard]] std::string TypeName() const override { return "Var"; }
 
-    virtual std::shared_ptr<const Var> Clone() const {
+    virtual std::shared_ptr<const Var> Clone() const
+    {
         static thread_local int cloneCounter = 0;
         return std::make_shared<const Var>(name_ + "_clone_" + std::to_string(++cloneCounter), type_, span_);
     }
@@ -227,8 +227,8 @@ public:
      */
     static constexpr auto GetFieldDescriptors()
     {
-        return std::tuple_cat(
-            Expr::GetFieldDescriptors(), std::make_tuple(reflection::IgnoreField(&Var::name_, "name")));
+        return std::tuple_cat(Expr::GetFieldDescriptors(),
+                              std::make_tuple(reflection::IgnoreField(&Var::name_, "name")));
     }
 };
 
@@ -299,9 +299,8 @@ public:
      */
     static constexpr auto GetFieldDescriptors()
     {
-        return std::make_tuple(
-            reflection::UsualField(&IterArg::initValue_, "initValue"),
-            reflection::UsualField(&IterArg::iterVar_, "iterVar"));
+        return std::make_tuple(reflection::UsualField(&IterArg::initValue_, "initValue"),
+                               reflection::UsualField(&IterArg::iterVar_, "iterVar"));
     }
 };
 
@@ -349,9 +348,8 @@ public:
         : Expr(std::move(span)), name_(std::move(name)), args_(std::move(args)), kwargs_(std::move(kwargs))
     {}
 
-    Call(
-        std::string name, std::vector<ExprPtr> args, std::vector<std::pair<std::string, std::any>> kwargs, TypePtr type,
-        Span span)
+    Call(std::string name, std::vector<ExprPtr> args, std::vector<std::pair<std::string, std::any>> kwargs,
+         TypePtr type, Span span)
         : Expr(std::move(span), std::move(type)),
           name_(std::move(name)),
           args_(std::move(args)),
@@ -405,9 +403,8 @@ public:
     {
         return std::tuple_cat(
             Expr::GetFieldDescriptors(),
-            std::make_tuple(
-                reflection::UsualField(&Call::name_, "name"), reflection::UsualField(&Call::args_, "args"),
-                reflection::UsualField(&Call::kwargs_, "kwargs")));
+            std::make_tuple(reflection::UsualField(&Call::name_, "name"), reflection::UsualField(&Call::args_, "args"),
+                            reflection::UsualField(&Call::kwargs_, "kwargs")));
     }
 };
 
@@ -441,8 +438,8 @@ public:
      */
     static constexpr auto GetFieldDescriptors()
     {
-        return std::tuple_cat(
-            Expr::GetFieldDescriptors(), std::make_tuple(reflection::UsualField(&MakeTuple::elements_, "elements")));
+        return std::tuple_cat(Expr::GetFieldDescriptors(),
+                              std::make_tuple(reflection::UsualField(&MakeTuple::elements_, "elements")));
     }
 };
 
@@ -478,10 +475,9 @@ public:
 
     static constexpr auto GetFieldDescriptors()
     {
-        return std::tuple_cat(
-            Expr::GetFieldDescriptors(), std::make_tuple(
-                                             reflection::UsualField(&GetItemExpr::value_, "value"),
-                                             reflection::UsualField(&GetItemExpr::slice_, "slice")));
+        return std::tuple_cat(Expr::GetFieldDescriptors(),
+                              std::make_tuple(reflection::UsualField(&GetItemExpr::value_, "value"),
+                                              reflection::UsualField(&GetItemExpr::slice_, "slice")));
     }
 };
 

@@ -29,8 +29,8 @@ namespace npu::tile_fwk {
 // Op 分类
 // =============================================================================
 
-const std::unordered_set<Opcode> InferTensorFormat::kPassThroughOps = {
-    Opcode::OP_VIEW, Opcode::OP_VIEW_TYPE, Opcode::OP_RESHAPE};
+const std::unordered_set<Opcode> InferTensorFormat::kPassThroughOps = {Opcode::OP_VIEW, Opcode::OP_VIEW_TYPE,
+                                                                       Opcode::OP_RESHAPE};
 
 // =============================================================================
 // Format 查询
@@ -73,8 +73,8 @@ int InferTensorFormat::GetOpGroupValue(Operation* op)
     return 1;
 }
 
-int InferTensorFormat::GetTransDataGroupValue(const std::shared_ptr<LogicalTensor>& srcTensor, 
-        const std::shared_ptr<LogicalTensor>& fakeDstTensor, Operation* relatedOp)
+int InferTensorFormat::GetTransDataGroupValue(const std::shared_ptr<LogicalTensor>& srcTensor,
+                                              const std::shared_ptr<LogicalTensor>& fakeDstTensor, Operation* relatedOp)
 {
     int group = GetOpGroupValue(relatedOp);
     if (group != 1 || srcTensor == nullptr) {
@@ -86,7 +86,7 @@ int InferTensorFormat::GetTransDataGroupValue(const std::shared_ptr<LogicalTenso
             return group;
         }
     }
-    if (srcTensor != fakeDstTensor){
+    if (srcTensor != fakeDstTensor) {
         for (auto* consumer : fakeDstTensor->GetConsumers()) {
             group = GetOpGroupValue(consumer);
             if (group != 1) {
@@ -103,10 +103,8 @@ bool InferTensorFormat::IsSupportedTransData(TileOpFormat srcFormat, TileOpForma
         return true;
     }
     if (srcFormat == TileOpFormat::TILEOP_ND) {
-        return targetFormat == TileOpFormat::TILEOP_NC1HWC0 ||
-               targetFormat == TileOpFormat::TILEOP_FRACTAL_Z ||
-               targetFormat == TileOpFormat::TILEOP_NDC1HWC0 ||
-               targetFormat == TileOpFormat::TILEOP_FRACTAL_Z_3D;
+        return targetFormat == TileOpFormat::TILEOP_NC1HWC0 || targetFormat == TileOpFormat::TILEOP_FRACTAL_Z ||
+               targetFormat == TileOpFormat::TILEOP_NDC1HWC0 || targetFormat == TileOpFormat::TILEOP_FRACTAL_Z_3D;
     }
     return (srcFormat == TileOpFormat::TILEOP_NC1HWC0 || srcFormat == TileOpFormat::TILEOP_NDC1HWC0) &&
            targetFormat == TileOpFormat::TILEOP_ND;
@@ -148,12 +146,14 @@ int InferTensorFormat::FindInputPosition(const Operation& op, const std::shared_
     return -1;
 }
 
-void InferTensorFormat::ApplyTransDataVecTile(const std::shared_ptr<LogicalTensor>& srcTensor, TileOpFormat targetFormat)
+void InferTensorFormat::ApplyTransDataVecTile(const std::shared_ptr<LogicalTensor>& srcTensor,
+                                              TileOpFormat targetFormat)
 {
     int64_t c0 = srcTensor->Datatype() == DataType::DT_FP32 ? 8 : 16;
     TileOpFormat srcFormat = srcTensor->GetRawTensor()->format;
     VecTile oriVectile = TileShape::Current().GetVecTile();
-    ASSERT(DistributedErrorCode::INVALID_TILE_SHAPE, oriVectile.tile.back() % c0 == 0) << "The last dimension of `tile_shape` should be 32-byte aligned.";
+    ASSERT(DistributedErrorCode::INVALID_TILE_SHAPE, oriVectile.tile.back() % c0 == 0)
+        << "The last dimension of `tile_shape` should be 32-byte aligned.";
     if (oriVectile.tile.size() == NUM3) {
         oriVectile.tile.insert(oriVectile.tile.begin() + NUM2, 1);
         TileShape::Current().SetVecTile(oriVectile);
@@ -175,9 +175,10 @@ void InferTensorFormat::ApplyTransDataVecTile(const std::shared_ptr<LogicalTenso
     }
 }
 
-std::shared_ptr<LogicalTensor> InferTensorFormat::InsertTransDataOp(
-    Function& function, const std::shared_ptr<LogicalTensor>& srcTensor, const std::shared_ptr<LogicalTensor>& fakeDstTensor,
-    Operation* relatedOp, TileOpFormat targetFormat)
+std::shared_ptr<LogicalTensor> InferTensorFormat::InsertTransDataOp(Function& function,
+                                                                    const std::shared_ptr<LogicalTensor>& srcTensor,
+                                                                    const std::shared_ptr<LogicalTensor>& fakeDstTensor,
+                                                                    Operation* relatedOp, TileOpFormat targetFormat)
 {
     int group_value = GetTransDataGroupValue(srcTensor, fakeDstTensor, relatedOp);
     ApplyTransDataVecTile(srcTensor, targetFormat);
@@ -186,14 +187,14 @@ std::shared_ptr<LogicalTensor> InferTensorFormat::InsertTransDataOp(
     return result;
 }
 
-Status InferTensorFormat::EnsureTensorFormat(
-    Function& function, std::shared_ptr<LogicalTensor>& tensor, Operation* relatedOp, TileOpFormat targetFormat)
+Status InferTensorFormat::EnsureTensorFormat(Function& function, std::shared_ptr<LogicalTensor>& tensor,
+                                             Operation* relatedOp, TileOpFormat targetFormat)
 {
     if (tensor == nullptr) {
-        APASS_LOG_ERROR_F(
-            Elements::Operation, "Null tensor when ensuring format %d for op [%s][%d].",
-            static_cast<int>(targetFormat), relatedOp == nullptr ? "UNKNOWN" : relatedOp->GetOpcodeStr().c_str(),
-            relatedOp == nullptr ? -1 : relatedOp->GetOpMagic());
+        APASS_LOG_ERROR_F(Elements::Operation, "Null tensor when ensuring format %d for op [%s][%d].",
+                          static_cast<int>(targetFormat),
+                          relatedOp == nullptr ? "UNKNOWN" : relatedOp->GetOpcodeStr().c_str(),
+                          relatedOp == nullptr ? -1 : relatedOp->GetOpMagic());
         return FAILED;
     }
     TileOpFormat current = tensor->Format();
@@ -201,32 +202,27 @@ Status InferTensorFormat::EnsureTensorFormat(
         return SUCCESS;
     }
     if (!IsSupportedTransData(current, targetFormat)) {
-        APASS_LOG_ERROR_F(
-            Elements::Operation,
-            "Unsupported format conversion: src=%d dst=%d for op [%s][%d].",
-            static_cast<int>(current), static_cast<int>(targetFormat),
-            relatedOp == nullptr ? "UNKNOWN" : relatedOp->GetOpcodeStr().c_str(),
-            relatedOp == nullptr ? -1 : relatedOp->GetOpMagic());
+        APASS_LOG_ERROR_F(Elements::Operation, "Unsupported format conversion: src=%d dst=%d for op [%s][%d].",
+                          static_cast<int>(current), static_cast<int>(targetFormat),
+                          relatedOp == nullptr ? "UNKNOWN" : relatedOp->GetOpcodeStr().c_str(),
+                          relatedOp == nullptr ? -1 : relatedOp->GetOpMagic());
         return FAILED;
     }
     std::shared_ptr<LogicalTensor> newTensor = nullptr;
-    if (relatedOp->GetOpcode() == Opcode::OP_FAKE_TRANS){
+    if (relatedOp->GetOpcode() == Opcode::OP_FAKE_TRANS) {
         newTensor = InsertTransDataOp(function, tensor, relatedOp->GetOOperands()[0], relatedOp, targetFormat);
     } else {
         newTensor = InsertTransDataOp(function, tensor, tensor, relatedOp, targetFormat);
     }
     if (newTensor == nullptr) {
-        APASS_LOG_ERROR_F(
-            Elements::Operation,
-            "Insert TransData failed: tensor[%d] src=%d dst=%d for op [%s][%d].",
-            tensor->GetMagic(), static_cast<int>(current), static_cast<int>(targetFormat),
-            relatedOp == nullptr ? "UNKNOWN" : relatedOp->GetOpcodeStr().c_str(),
-            relatedOp == nullptr ? -1 : relatedOp->GetOpMagic());
+        APASS_LOG_ERROR_F(Elements::Operation, "Insert TransData failed: tensor[%d] src=%d dst=%d for op [%s][%d].",
+                          tensor->GetMagic(), static_cast<int>(current), static_cast<int>(targetFormat),
+                          relatedOp == nullptr ? "UNKNOWN" : relatedOp->GetOpcodeStr().c_str(),
+                          relatedOp == nullptr ? -1 : relatedOp->GetOpMagic());
         return FAILED;
     }
     APASS_LOG_DEBUG_F(
-        Elements::Operation,
-        "Inserted TransData: tensor[%d] (fmt=%d) -> tensor[%d] (fmt=%d) for op [%s][%d].",
+        Elements::Operation, "Inserted TransData: tensor[%d] (fmt=%d) -> tensor[%d] (fmt=%d) for op [%s][%d].",
         tensor->GetMagic(), static_cast<int>(current), newTensor->GetMagic(), static_cast<int>(newTensor->Format()),
         relatedOp == nullptr ? "UNKNOWN" : relatedOp->GetOpcodeStr().c_str(),
         relatedOp == nullptr ? -1 : relatedOp->GetOpMagic());
@@ -237,30 +233,29 @@ Status InferTensorFormat::EnsureTensorFormat(
 Status InferTensorFormat::GetFakeTransFormat(const Operation& op, const std::string& attrName, TileOpFormat& format)
 {
     if (!op.HasAttr(attrName)) {
-        APASS_LOG_ERROR_F(
-            Elements::Operation, "OP_FAKE_TRANS[%d] missing attribute [%s].",
-            op.GetOpMagic(), attrName.c_str());
+        APASS_LOG_ERROR_F(Elements::Operation, "OP_FAKE_TRANS[%d] missing attribute [%s].", op.GetOpMagic(),
+                          attrName.c_str());
         return FAILED;
     }
     int64_t value = op.GetIntAttribute(attrName);
     if (!IsValidTileOpFormat(value)) {
-        APASS_LOG_ERROR_F(
-            Elements::Operation, "OP_FAKE_TRANS[%d] attribute [%s] has invalid format value [%ld].",
-            op.GetOpMagic(), attrName.c_str(), value);
+        APASS_LOG_ERROR_F(Elements::Operation, "OP_FAKE_TRANS[%d] attribute [%s] has invalid format value [%ld].",
+                          op.GetOpMagic(), attrName.c_str(), value);
         return FAILED;
     }
     format = static_cast<TileOpFormat>(value);
     return SUCCESS;
 }
 
-Status InferTensorFormat::ResolveFakeTransOp(
-    Function& function, Operation& op, const std::shared_ptr<LogicalTensor>& inputTensor,
-    std::unordered_map<int, bool>& visitedTensors, std::queue<std::shared_ptr<LogicalTensor>>& worklist)
+Status InferTensorFormat::ResolveFakeTransOp(Function& function, Operation& op,
+                                             const std::shared_ptr<LogicalTensor>& inputTensor,
+                                             std::unordered_map<int, bool>& visitedTensors,
+                                             std::queue<std::shared_ptr<LogicalTensor>>& worklist)
 {
     if (op.GetIOperands().size() != 1 || op.GetOOperands().size() != 1) {
-        APASS_LOG_ERROR_F(
-            Elements::Operation, "OP_FAKE_TRANS[%d] expects 1 input and 1 output, got %zu inputs and %zu outputs.",
-            op.GetOpMagic(), op.GetIOperands().size(), op.GetOOperands().size());
+        APASS_LOG_ERROR_F(Elements::Operation,
+                          "OP_FAKE_TRANS[%d] expects 1 input and 1 output, got %zu inputs and %zu outputs.",
+                          op.GetOpMagic(), op.GetIOperands().size(), op.GetOOperands().size());
         return FAILED;
     }
 
@@ -281,9 +276,8 @@ Status InferTensorFormat::ResolveFakeTransOp(
     auto consumers = fakeOutput->GetConsumers();
     for (auto* consumer : consumers) {
         if (consumer == nullptr) {
-            APASS_LOG_ERROR_F(
-                Elements::Operation, "Null consumer for OP_FAKE_TRANS[%d] output tensor [%d].",
-                op.GetOpMagic(), fakeOutput->GetMagic());
+            APASS_LOG_ERROR_F(Elements::Operation, "Null consumer for OP_FAKE_TRANS[%d] output tensor [%d].",
+                              op.GetOpMagic(), fakeOutput->GetMagic());
             return FAILED;
         }
         consumer->ReplaceInput(finalTensor, fakeOutput);
@@ -300,10 +294,9 @@ Status InferTensorFormat::ResolveFakeTransOp(
 // 输出 format 推导
 // =============================================================================
 
-void InferTensorFormat::DetermineOutputFormat(
-    const Function& function, const Operation& op, const std::string& arch,
-    std::unordered_map<int, bool>& visitedTensors,
-    std::queue<std::shared_ptr<LogicalTensor>>& worklist)
+void InferTensorFormat::DetermineOutputFormat(const Function& function, const Operation& op, const std::string& arch,
+                                              std::unordered_map<int, bool>& visitedTensors,
+                                              std::queue<std::shared_ptr<LogicalTensor>>& worklist)
 {
     Opcode opcode = op.GetOpcode();
 
@@ -329,9 +322,9 @@ void InferTensorFormat::DetermineOutputFormat(
     }
 }
 
-void InferTensorFormat::EnqueueTensorIfNeeded(
-    const std::shared_ptr<LogicalTensor>& tensor, std::unordered_map<int, bool>& visitedTensors,
-    std::queue<std::shared_ptr<LogicalTensor>>& worklist)
+void InferTensorFormat::EnqueueTensorIfNeeded(const std::shared_ptr<LogicalTensor>& tensor,
+                                              std::unordered_map<int, bool>& visitedTensors,
+                                              std::queue<std::shared_ptr<LogicalTensor>>& worklist)
 {
     if (tensor == nullptr) {
         return;
@@ -343,18 +336,18 @@ void InferTensorFormat::EnqueueTensorIfNeeded(
     }
 }
 
-void InferTensorFormat::EnqueueFunctionInputs(
-    const Function& function, std::unordered_map<int, bool>& visitedTensors,
-    std::queue<std::shared_ptr<LogicalTensor>>& worklist)
+void InferTensorFormat::EnqueueFunctionInputs(const Function& function, std::unordered_map<int, bool>& visitedTensors,
+                                              std::queue<std::shared_ptr<LogicalTensor>>& worklist)
 {
     for (const auto& tensor : function.GetIncast()) {
         EnqueueTensorIfNeeded(tensor, visitedTensors, worklist);
     }
 }
 
-TileOpFormat InferTensorFormat::ResolveRequiredInputFormat(
-    const Function& function, const Operation& consumer, const std::shared_ptr<LogicalTensor>& tensor,
-    const std::string& arch, int inputPos, std::unordered_set<int>& assembledOutputs)
+TileOpFormat InferTensorFormat::ResolveRequiredInputFormat(const Function& function, const Operation& consumer,
+                                                           const std::shared_ptr<LogicalTensor>& tensor,
+                                                           const std::string& arch, int inputPos,
+                                                           std::unordered_set<int>& assembledOutputs)
 {
     TileOpFormat required = GetRequiredInputFormat(consumer.GetOpcode(), arch, static_cast<size_t>(inputPos));
     if (consumer.GetOpcode() != Opcode::OP_ASSEMBLE || consumer.GetOOperands().empty()) {
@@ -373,9 +366,8 @@ TileOpFormat InferTensorFormat::ResolveRequiredInputFormat(
     return tensor->Format();
 }
 
-Status InferTensorFormat::EnsureConsumerInputFormat(
-    Function& function, Operation& consumer, const std::shared_ptr<LogicalTensor>& tensor,
-    TileOpFormat required)
+Status InferTensorFormat::EnsureConsumerInputFormat(Function& function, Operation& consumer,
+                                                    const std::shared_ptr<LogicalTensor>& tensor, TileOpFormat required)
 {
     auto actualTensor = tensor;
     if (actualTensor->Format() == required) {
@@ -390,10 +382,11 @@ Status InferTensorFormat::EnsureConsumerInputFormat(
     return SUCCESS;
 }
 
-void InferTensorFormat::MarkConsumerInputProcessed(
-    const Function& function, const Operation& consumer, const std::string& arch,
-    std::unordered_map<int, int>& processedInputs, std::unordered_map<int, bool>& visitedTensors,
-    std::queue<std::shared_ptr<LogicalTensor>>& worklist)
+void InferTensorFormat::MarkConsumerInputProcessed(const Function& function, const Operation& consumer,
+                                                   const std::string& arch,
+                                                   std::unordered_map<int, int>& processedInputs,
+                                                   std::unordered_map<int, bool>& visitedTensors,
+                                                   std::queue<std::shared_ptr<LogicalTensor>>& worklist)
 {
     int opMagic = consumer.GetOpMagic();
     processedInputs[opMagic]++;
@@ -402,11 +395,12 @@ void InferTensorFormat::MarkConsumerInputProcessed(
     }
 }
 
-Status InferTensorFormat::ProcessConsumerFormat(
-    Function& function, Operation* consumer, const std::shared_ptr<LogicalTensor>& tensor,
-    const std::string& arch, std::unordered_map<int, int>& processedInputs,
-    std::unordered_map<int, bool>& visitedTensors, std::unordered_set<int>& assembledOutputs,
-    std::queue<std::shared_ptr<LogicalTensor>>& worklist)
+Status InferTensorFormat::ProcessConsumerFormat(Function& function, Operation* consumer,
+                                                const std::shared_ptr<LogicalTensor>& tensor, const std::string& arch,
+                                                std::unordered_map<int, int>& processedInputs,
+                                                std::unordered_map<int, bool>& visitedTensors,
+                                                std::unordered_set<int>& assembledOutputs,
+                                                std::queue<std::shared_ptr<LogicalTensor>>& worklist)
 {
     if (consumer == nullptr) {
         APASS_LOG_ERROR_F(Elements::Operation, "Null consumer for tensor [%d].", tensor->GetMagic());
@@ -418,9 +412,8 @@ Status InferTensorFormat::ProcessConsumerFormat(
 
     int pos = FindInputPosition(*consumer, tensor);
     if (pos < 0) {
-        APASS_LOG_ERROR_F(
-            Elements::Operation, "Tensor [%d] not in consumer [%d] inputs.",
-            tensor->GetMagic(), consumer->GetOpMagic());
+        APASS_LOG_ERROR_F(Elements::Operation, "Tensor [%d] not in consumer [%d] inputs.", tensor->GetMagic(),
+                          consumer->GetOpMagic());
         return FAILED;
     }
     if (consumer->GetOpcode() == Opcode::OP_FAKE_TRANS) {
@@ -435,15 +428,16 @@ Status InferTensorFormat::ProcessConsumerFormat(
     return SUCCESS;
 }
 
-Status InferTensorFormat::ProcessTensorConsumers(
-    Function& function, const std::shared_ptr<LogicalTensor>& tensor, const std::string& arch,
-    std::unordered_map<int, int>& processedInputs, std::unordered_map<int, bool>& visitedTensors,
-    std::unordered_set<int>& assembledOutputs, std::queue<std::shared_ptr<LogicalTensor>>& worklist)
+Status InferTensorFormat::ProcessTensorConsumers(Function& function, const std::shared_ptr<LogicalTensor>& tensor,
+                                                 const std::string& arch, std::unordered_map<int, int>& processedInputs,
+                                                 std::unordered_map<int, bool>& visitedTensors,
+                                                 std::unordered_set<int>& assembledOutputs,
+                                                 std::queue<std::shared_ptr<LogicalTensor>>& worklist)
 {
     auto consumers = tensor->GetConsumers();
     for (auto* consumer : consumers) {
-        if (ProcessConsumerFormat(function, consumer, tensor, arch, processedInputs, visitedTensors,
-            assembledOutputs, worklist) != SUCCESS) {
+        if (ProcessConsumerFormat(function, consumer, tensor, arch, processedInputs, visitedTensors, assembledOutputs,
+                                  worklist) != SUCCESS) {
             return FAILED;
         }
     }
@@ -470,7 +464,7 @@ Status InferTensorFormat::DeriveFormats(Function& function)
         auto tensor = worklist.front();
         worklist.pop();
         if (ProcessTensorConsumers(function, tensor, arch, processedInputs, visitedTensors, assembledOutputs,
-            worklist) != SUCCESS) {
+                                   worklist) != SUCCESS) {
             return FAILED;
         }
     }
@@ -484,19 +478,17 @@ Status InferTensorFormat::DeriveFormats(Function& function)
 
 Status InferTensorFormat::RunOnFunction(Function& function)
 {
-    APASS_LOG_INFO_F(
-        Elements::Function, "Start InferTensorFormat for function [%s].", function.GetRawName().c_str());
+    APASS_LOG_INFO_F(Elements::Function, "Start InferTensorFormat for function [%s].", function.GetRawName().c_str());
 
     Status status = DeriveFormats(function);
     if (status != SUCCESS) {
-        APASS_LOG_ERROR_F(
-            Elements::Function, "InferTensorFormat failed for function [%s].", function.GetRawName().c_str());
+        APASS_LOG_ERROR_F(Elements::Function, "InferTensorFormat failed for function [%s].",
+                          function.GetRawName().c_str());
         return FAILED;
     }
     function.EraseOperations(true, false);
 
-    APASS_LOG_INFO_F(
-        Elements::Function, "End InferTensorFormat for function [%s].", function.GetRawName().c_str());
+    APASS_LOG_INFO_F(Elements::Function, "End InferTensorFormat for function [%s].", function.GetRawName().c_str());
     return SUCCESS;
 }
 

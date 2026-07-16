@@ -38,10 +38,7 @@ namespace ir {
 using namespace test_helpers;
 
 // MakeShapeTuple is just an alias for MakeOffsetsTuple in this context
-static ExprPtr MakeShapeTuple(std::vector<int64_t> dims)
-{
-    return MakeOffsetsTuple(dims);
-}
+static ExprPtr MakeShapeTuple(std::vector<int64_t> dims) { return MakeOffsetsTuple(dims); }
 
 // ============================================================================
 // elementwise.cpp: tensor.add (binary), tensor.add_scalar (tensor+scalar)
@@ -86,15 +83,16 @@ TEST_F(TensorOpsElemwiseTest, TensorAdd_DtypePromotion)
 TEST_F(TensorOpsElemwiseTest, TensorAdd_WrongArgCount_Throws)
 {
     auto& reg = OpRegistry::GetInstance();
-    EXPECT_THROW((void)reg.Create("tensor.add", {MakeTensorVar("a", {16}, DataType::FP32)}, Sp()), npu::tile_fwk::Error);
+    EXPECT_THROW((void)reg.Create("tensor.add", {MakeTensorVar("a", {16}, DataType::FP32)}, Sp()),
+                 npu::tile_fwk::Error);
 }
 
 TEST_F(TensorOpsElemwiseTest, TensorAdd_NonTensorArg_Throws)
 {
     auto& reg = OpRegistry::GetInstance();
-    EXPECT_THROW(
-        (void)reg.Create("tensor.add", {MakeScalarVar("s", DataType::FP32), MakeTensorVar("b", {16}, DataType::FP32)}, Sp()),
-        npu::tile_fwk::Error);
+    EXPECT_THROW((void)reg.Create("tensor.add",
+                                  {MakeScalarVar("s", DataType::FP32), MakeTensorVar("b", {16}, DataType::FP32)}, Sp()),
+                 npu::tile_fwk::Error);
 }
 
 TEST_F(TensorOpsElemwiseTest, TensorAddScalar_ReturnsTensorType)
@@ -113,7 +111,8 @@ TEST_F(TensorOpsElemwiseTest, TensorAddScalar_NonScalarSecond_Throws)
 {
     auto& reg = OpRegistry::GetInstance();
     EXPECT_THROW(
-        (void)reg.Create("tensor.add_scalar", {MakeTensorVar("a", {16}, DataType::FP32), MakeTensorVar("b", {16}, DataType::FP32)}, Sp()),
+        (void)reg.Create("tensor.add_scalar",
+                         {MakeTensorVar("a", {16}, DataType::FP32), MakeTensorVar("b", {16}, DataType::FP32)}, Sp()),
         npu::tile_fwk::Error);
 }
 
@@ -251,7 +250,8 @@ TEST_F(TensorOpsUnaryTest, TensorCast_ChangesDtype)
 TEST_F(TensorOpsUnaryTest, TensorCast_MissingTargetType_Throws)
 {
     auto& reg = OpRegistry::GetInstance();
-    EXPECT_THROW((void)reg.Create("tensor.cast", {MakeTensorVar("t", {8}, DataType::FP32)}, Sp()), npu::tile_fwk::Error);
+    EXPECT_THROW((void)reg.Create("tensor.cast", {MakeTensorVar("t", {8}, DataType::FP32)}, Sp()),
+                 npu::tile_fwk::Error);
 }
 
 // ============================================================================
@@ -264,9 +264,9 @@ TEST_F(TensorOpsMatmulTest, Matmul_2Dx2D_ReturnsCorrectShape)
 {
     auto& reg = OpRegistry::GetInstance();
     std::vector<std::pair<std::string, std::any>> kwargs = {{"a_trans", false}, {"b_trans", false}};
-    auto call = reg.Create(
-        "tensor.matmul", {MakeTensorVar("a", {16, 32}, DataType::FP16), MakeTensorVar("b", {32, 64}, DataType::FP16)},
-        kwargs, Sp());
+    auto call = reg.Create("tensor.matmul",
+                           {MakeTensorVar("a", {16, 32}, DataType::FP16), MakeTensorVar("b", {32, 64}, DataType::FP16)},
+                           kwargs, Sp());
     auto rt = As<TensorType>(call->GetType());
     ASSERT_NE(rt, nullptr);
     EXPECT_EQ(rt->shape_.size(), 2u);
@@ -276,9 +276,9 @@ TEST_F(TensorOpsMatmulTest, Matmul_WithTranspose_ReturnsCorrectShape)
 {
     auto& reg = OpRegistry::GetInstance();
     std::vector<std::pair<std::string, std::any>> kwargs = {{"a_trans", true}, {"b_trans", false}};
-    auto call = reg.Create(
-        "tensor.matmul", {MakeTensorVar("a", {32, 16}, DataType::FP16), MakeTensorVar("b", {32, 64}, DataType::FP16)},
-        kwargs, Sp());
+    auto call = reg.Create("tensor.matmul",
+                           {MakeTensorVar("a", {32, 16}, DataType::FP16), MakeTensorVar("b", {32, 64}, DataType::FP16)},
+                           kwargs, Sp());
     auto rt = As<TensorType>(call->GetType());
     ASSERT_NE(rt, nullptr);
     EXPECT_EQ(rt->shape_.size(), 2u);
@@ -288,9 +288,9 @@ TEST_F(TensorOpsMatmulTest, Matmul_VectorDot_ReturnsScalarTensor)
 {
     auto& reg = OpRegistry::GetInstance();
     std::vector<std::pair<std::string, std::any>> kwargs = {{"a_trans", false}, {"b_trans", false}};
-    auto call = reg.Create(
-        "tensor.matmul", {MakeTensorVar("a", {32}, DataType::FP32), MakeTensorVar("b", {32}, DataType::FP32)},
-        kwargs, Sp());
+    auto call = reg.Create("tensor.matmul",
+                           {MakeTensorVar("a", {32}, DataType::FP32), MakeTensorVar("b", {32}, DataType::FP32)}, kwargs,
+                           Sp());
     auto rt = As<TensorType>(call->GetType());
     ASSERT_NE(rt, nullptr);
     EXPECT_EQ(rt->shape_.size(), 0u);
@@ -302,8 +302,8 @@ TEST_F(TensorOpsMatmulTest, Matmul_Batched3D_ReturnsBatchedShape)
     std::vector<std::pair<std::string, std::any>> kwargs = {{"a_trans", false}, {"b_trans", false}};
     auto call = reg.Create(
         "tensor.matmul",
-        {MakeTensorVar("a", {4, 16, 32}, DataType::FP16), MakeTensorVar("b", {4, 32, 64}, DataType::FP16)},
-        kwargs, Sp());
+        {MakeTensorVar("a", {4, 16, 32}, DataType::FP16), MakeTensorVar("b", {4, 32, 64}, DataType::FP16)}, kwargs,
+        Sp());
     auto rt = As<TensorType>(call->GetType());
     ASSERT_NE(rt, nullptr);
     EXPECT_EQ(rt->shape_.size(), 3u);
@@ -313,7 +313,8 @@ TEST_F(TensorOpsMatmulTest, Matmul_WrongArgCount_Throws)
 {
     auto& reg = OpRegistry::GetInstance();
     std::vector<std::pair<std::string, std::any>> kwargs = {{"a_trans", false}, {"b_trans", false}};
-    EXPECT_THROW((void)reg.Create("tensor.matmul", {MakeTensorVar("a", {16, 32}, DataType::FP16)}, kwargs, Sp()), npu::tile_fwk::Error);
+    EXPECT_THROW((void)reg.Create("tensor.matmul", {MakeTensorVar("a", {16, 32}, DataType::FP16)}, kwargs, Sp()),
+                 npu::tile_fwk::Error);
 }
 
 // ============================================================================
@@ -357,7 +358,9 @@ TEST_F(TensorOpsMemoryTest, TensorView_ReturnsTensorWithNewShape)
 TEST_F(TensorOpsMemoryTest, TensorView_WrongArgCount_Throws)
 {
     auto& reg = OpRegistry::GetInstance();
-    EXPECT_THROW((void)reg.Create("tensor.view", {MakeTensorVar("t", {64}, DataType::FP32), MakeShapeTuple({32})}, Sp()), npu::tile_fwk::Error);
+    EXPECT_THROW(
+        (void)reg.Create("tensor.view", {MakeTensorVar("t", {64}, DataType::FP32), MakeShapeTuple({32})}, Sp()),
+        npu::tile_fwk::Error);
 }
 
 TEST_F(TensorOpsMemoryTest, TensorAssemble_ReturnsTargetType)
@@ -413,7 +416,8 @@ TEST_F(TensorOpsReductionTest, TensorRowMax_NonTensor_Throws)
 {
     auto& reg = OpRegistry::GetInstance();
     std::vector<std::pair<std::string, std::any>> kwargs = {{"axis", int(0)}, {"keep_dim", true}};
-    EXPECT_THROW((void)reg.Create("tensor.row_max", {MakeScalarVar("s", DataType::FP32)}, kwargs, Sp()), npu::tile_fwk::Error);
+    EXPECT_THROW((void)reg.Create("tensor.row_max", {MakeScalarVar("s", DataType::FP32)}, kwargs, Sp()),
+                 npu::tile_fwk::Error);
 }
 
 // ============================================================================

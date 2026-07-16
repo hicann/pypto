@@ -62,17 +62,15 @@ TEST_F(OpConversionRegistryTest, TestRegisterCustomUsesLatestConverter)
     int call_count = 0;
     Registry().RegisterCustom(
         "test.custom_op",
-        [&call_count, this](
-            const std::vector<ExprPtr>&, const std::vector<std::pair<std::string, std::any>>&,
-            const Span&) -> ConversionResult {
+        [&call_count, this](const std::vector<ExprPtr>&, const std::vector<std::pair<std::string, std::any>>&,
+                            const Span&) -> ConversionResult {
             ++call_count;
             return ConversionResult{Int(1)};
         });
     Registry().RegisterCustom(
         "test.custom_op",
-        [&call_count, this](
-            const std::vector<ExprPtr>&, const std::vector<std::pair<std::string, std::any>>&,
-            const Span&) -> ConversionResult {
+        [&call_count, this](const std::vector<ExprPtr>&, const std::vector<std::pair<std::string, std::any>>&,
+                            const Span&) -> ConversionResult {
             ++call_count;
             return ConversionResult{Int(2)};
         });

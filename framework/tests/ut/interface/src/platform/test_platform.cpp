@@ -39,8 +39,8 @@ const std::string l1Size = "l1_size";
 const std::string ubSize = "ub_size";
 const std::string aic = "AIC";
 const std::string aiv = "AIV";
-const std::string INI_PATH =
-    "/../../../framework/tests/ut/machine/stubs/compiler/data/platform_config/Ascend910_9572.ini";
+const std::string
+    INI_PATH = "/../../../framework/tests/ut/machine/stubs/compiler/data/platform_config/Ascend910_9572.ini";
 
 class TestPlatform : public testing::Test {
 public:

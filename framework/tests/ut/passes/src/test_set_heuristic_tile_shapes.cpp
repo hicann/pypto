@@ -40,9 +40,8 @@ void RunPassAndVerifySuccess(Function& function)
     EXPECT_EQ(status, SUCCESS);
 }
 
-void PushInOutCasts(Function& function,
-    const std::vector<std::shared_ptr<LogicalTensor>>& inCasts,
-    const std::vector<std::shared_ptr<LogicalTensor>>& outCasts)
+void PushInOutCasts(Function& function, const std::vector<std::shared_ptr<LogicalTensor>>& inCasts,
+                    const std::vector<std::shared_ptr<LogicalTensor>>& outCasts)
 {
     for (auto& t : inCasts)
         function.inCasts_.push_back(t);
@@ -57,27 +56,22 @@ struct GatherMatmulSetup {
     std::shared_ptr<LogicalTensor> matmulOut;
 };
 
-GatherMatmulSetup SetupGatherInL1WithMatmul(
-    Function& function,
-    std::shared_ptr<LogicalTensor> input,
-    std::shared_ptr<LogicalTensor> offsets,
-    std::shared_ptr<LogicalTensor> blockTable,
-    const std::vector<int64_t>& shapeOut,
-    const std::vector<int64_t>& matmulBShape,
-    const std::vector<int64_t>& matmulOutShape,
-    bool isB, bool isTrans,
-    bool matmulUsesGatherAsFirstInput = true)
+GatherMatmulSetup SetupGatherInL1WithMatmul(Function& function, std::shared_ptr<LogicalTensor> input,
+                                            std::shared_ptr<LogicalTensor> offsets,
+                                            std::shared_ptr<LogicalTensor> blockTable,
+                                            const std::vector<int64_t>& shapeOut,
+                                            const std::vector<int64_t>& matmulBShape,
+                                            const std::vector<int64_t>& matmulOutShape, bool isB, bool isTrans,
+                                            bool matmulUsesGatherAsFirstInput = true)
 {
-    auto gatherOut =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapeOut, CreateTestConstIntVector(shapeOut));
-    auto matmulBIn =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulBShape, CreateTestConstIntVector(matmulBShape));
-    auto matmulOut =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulOutShape, CreateTestConstIntVector(matmulOutShape));
-                
+    auto gatherOut = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapeOut, CreateTestConstIntVector(shapeOut));
+    auto matmulBIn = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulBShape,
+                                                                CreateTestConstIntVector(matmulBShape));
+    auto matmulOut = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulOutShape,
+                                                                CreateTestConstIntVector(matmulOutShape));
+
     Operation& gatherOp = PassOperationUtils::AddOperation(
-        function, Opcode::OP_GATHER_IN_L1, {input, offsets, blockTable}, {gatherOut},
-        [isB, isTrans](Operation& op) {
+        function, Opcode::OP_GATHER_IN_L1, {input, offsets, blockTable}, {gatherOut}, [isB, isTrans](Operation& op) {
             op.SetAttribute("isB", isB);
             op.SetAttribute("isTrans", isTrans);
             op.SetAttribute(OpAttributeKey::startOffset, 0);
@@ -124,8 +118,8 @@ public:
 
 TEST_F(TestSetHeuristicTileShapes, TestCube)
 {
-    auto currFunctionPtr = std::make_shared<Function>(
-        Program::GetInstance(), "TestSetHeuristicTileShapes", "TestSetHeuristicTileShapes", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestSetHeuristicTileShapes",
+                                                      "TestSetHeuristicTileShapes", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     // Prepare the graph
@@ -133,15 +127,15 @@ TEST_F(TestSetHeuristicTileShapes, TestCube)
     std::vector<int64_t> inputBShape = {128, 64};
     std::vector<int64_t> outputCShape = {64, 64};
 
-    auto inputA =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inputAShape, CreateTestConstIntVector(inputAShape));
-    auto inputB =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inputBShape, CreateTestConstIntVector(inputBShape));
-    auto outputC =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, outputCShape, CreateTestConstIntVector(outputCShape));
+    auto inputA = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inputAShape,
+                                                             CreateTestConstIntVector(inputAShape));
+    auto inputB = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inputBShape,
+                                                             CreateTestConstIntVector(inputBShape));
+    auto outputC = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, outputCShape,
+                                                              CreateTestConstIntVector(outputCShape));
 
-    auto& matmulOp =
-        PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_A_MUL_B, {inputA, inputB}, {outputC});
+    auto& matmulOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_A_MUL_B, {inputA, inputB},
+                                                      {outputC});
 
     PushInOutCasts(*currFunctionPtr, {inputA, inputB}, {outputC});
 
@@ -157,8 +151,8 @@ TEST_F(TestSetHeuristicTileShapes, TestCube)
 }
 TEST_F(TestSetHeuristicTileShapes, TestGatherInL1TileSetting)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestGatherInL1", "TestGatherInL1", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestGatherInL1", "TestGatherInL1",
+                                                      nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     std::vector<int64_t> shapeA = {128, 64};
@@ -171,22 +165,22 @@ TEST_F(TestSetHeuristicTileShapes, TestGatherInL1TileSetting)
     auto inputA = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapeA, CreateTestConstIntVector(shapeA));
     auto inputB = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapeB, CreateTestConstIntVector(shapeB));
     inputB->UpdateDynValidShape({IRBuilder().CreateConstInt(1), IRBuilder().CreateConstInt(128)});
-    auto offsets =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_INT32, shapeOffsets, CreateTestConstIntVector(shapeOffsets));
+    auto offsets = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_INT32, shapeOffsets,
+                                                              CreateTestConstIntVector(shapeOffsets));
     offsets->UpdateDynValidShape({IRBuilder().CreateConstInt(1), IRBuilder().CreateConstInt(128)});
-    auto gatherOut =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, outputShape, CreateTestConstIntVector(outputShape));
-    auto matmulBIn =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulBShape, CreateTestConstIntVector(matmulBShape));
-    auto matmulOut =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulOutShape, CreateTestConstIntVector(matmulOutShape));
+    auto gatherOut = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, outputShape,
+                                                                CreateTestConstIntVector(outputShape));
+    auto matmulBIn = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulBShape,
+                                                                CreateTestConstIntVector(matmulBShape));
+    auto matmulOut = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulOutShape,
+                                                                CreateTestConstIntVector(matmulOutShape));
 
-    auto& gatherOp = PassOperationUtils::AddOperation(
-        *currFunctionPtr, Opcode::OP_GATHER_IN_L1, {inputA, offsets, inputB}, {gatherOut}, [](Operation& op) {
-            op.SetAttribute("isB", false);
-            op.SetAttribute("isTrans", false);
-            op.SetAttribute(OpAttributeKey::startOffset, 0);
-        });
+    auto& gatherOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_GATHER_IN_L1,
+                                                      {inputA, offsets, inputB}, {gatherOut}, [](Operation& op) {
+                                                          op.SetAttribute("isB", false);
+                                                          op.SetAttribute("isTrans", false);
+                                                          op.SetAttribute(OpAttributeKey::startOffset, 0);
+                                                      });
 
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_A_MUL_B, {gatherOut, matmulBIn}, {matmulOut});
 
@@ -208,8 +202,8 @@ TEST_F(TestSetHeuristicTileShapes, TestGatherInL1TileSetting)
 
 TEST_F(TestSetHeuristicTileShapes, TestTileFilteringWithMatmul)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestTileFilter", "TestTileFilter", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestTileFilter", "TestTileFilter",
+                                                      nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     std::vector<int64_t> assembleInput = {16, 128};
@@ -217,17 +211,17 @@ TEST_F(TestSetHeuristicTileShapes, TestTileFilteringWithMatmul)
     std::vector<int64_t> matmulB = {128, 64};
     std::vector<int64_t> matmulOutput = {128, 64};
 
-    auto assembleIn =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, assembleInput, CreateTestConstIntVector(assembleInput));
-    auto assembleOut =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, assembleOutput, CreateTestConstIntVector(assembleOutput));
+    auto assembleIn = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, assembleInput,
+                                                                 CreateTestConstIntVector(assembleInput));
+    auto assembleOut = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, assembleOutput,
+                                                                  CreateTestConstIntVector(assembleOutput));
     auto matmulBIn = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulB, CreateTestConstIntVector(matmulB));
-    auto matmulOut =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulOutput, CreateTestConstIntVector(matmulOutput));
+    auto matmulOut = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulOutput,
+                                                                CreateTestConstIntVector(matmulOutput));
 
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {assembleIn}, {assembleOut});
-    auto& matmulOp =
-        PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_A_MUL_B, {assembleOut, matmulBIn}, {matmulOut});
+    auto& matmulOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_A_MUL_B, {assembleOut, matmulBIn},
+                                                      {matmulOut});
 
     PushInOutCasts(*currFunctionPtr, {assembleIn, matmulBIn}, {matmulOut});
 
@@ -243,8 +237,8 @@ TEST_F(TestSetHeuristicTileShapes, TestTileFilteringWithMatmul)
 
 TEST_F(TestSetHeuristicTileShapes, TestTransposeVariants)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestTranspose", "TestTranspose", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestTranspose", "TestTranspose",
+                                                      nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     std::vector<int64_t> shapeA = {32, 128};
@@ -255,8 +249,8 @@ TEST_F(TestSetHeuristicTileShapes, TestTransposeVariants)
     auto inputB = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapeBT, CreateTestConstIntVector(shapeBT));
     auto output = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, outputC, CreateTestConstIntVector(outputC));
 
-    auto& matmulOp =
-        PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_A_MUL_BT, {inputA, inputB}, {output});
+    auto& matmulOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_A_MUL_BT, {inputA, inputB},
+                                                      {output});
     matmulOp.SetAttribute(Matrix::A_MUL_B_TRANS_A, false);
     matmulOp.SetAttribute(Matrix::A_MUL_B_TRANS_B, true);
 
@@ -274,8 +268,8 @@ TEST_F(TestSetHeuristicTileShapes, TestTransposeVariants)
 
 TEST_F(TestSetHeuristicTileShapes, TestEmptyTileFallback)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestEmptyFallback", "TestEmptyFallback", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestEmptyFallback", "TestEmptyFallback",
+                                                      nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     std::vector<int64_t> shapeA = {4, 8};
@@ -302,8 +296,8 @@ TEST_F(TestSetHeuristicTileShapes, TestEmptyTileFallback)
 
 TEST_F(TestSetHeuristicTileShapes, TestReshapeChainWithMatmulEnd)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestReshapeMatmulEnd", "TestReshapeMatmulEnd", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestReshapeMatmulEnd",
+                                                      "TestReshapeMatmulEnd", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     std::vector<int64_t> inputShape = {1024, 64};
@@ -313,18 +307,18 @@ TEST_F(TestSetHeuristicTileShapes, TestReshapeChainWithMatmulEnd)
     std::vector<int64_t> matmulOutShape = {512, 64};
 
     auto input = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inputShape, CreateTestConstIntVector(inputShape));
-    auto reshape1Out =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshape1Shape, CreateTestConstIntVector(reshape1Shape));
-    auto reshape2Out =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshape2Shape, CreateTestConstIntVector(reshape2Shape));
-    auto matmulB =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulBShape, CreateTestConstIntVector(matmulBShape));
-    auto matmulOut =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulOutShape, CreateTestConstIntVector(matmulOutShape));
+    auto reshape1Out = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshape1Shape,
+                                                                  CreateTestConstIntVector(reshape1Shape));
+    auto reshape2Out = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshape2Shape,
+                                                                  CreateTestConstIntVector(reshape2Shape));
+    auto matmulB = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulBShape,
+                                                              CreateTestConstIntVector(matmulBShape));
+    auto matmulOut = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulOutShape,
+                                                                CreateTestConstIntVector(matmulOutShape));
 
     auto& reshape1Op = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {input}, {reshape1Out});
-    auto& reshape2Op =
-        PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {reshape1Out}, {reshape2Out});
+    auto& reshape2Op = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {reshape1Out},
+                                                        {reshape2Out});
 
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_A_MUL_B, {reshape2Out, matmulB}, {matmulOut});
 
@@ -347,8 +341,8 @@ TEST_F(TestSetHeuristicTileShapes, TestReshapeChainWithMatmulEnd)
 
 TEST_F(TestSetHeuristicTileShapes, TestReshapeChainWithMatmulStart)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestReshapeMatmulStart", "TestReshapeMatmulStart", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestReshapeMatmulStart",
+                                                      "TestReshapeMatmulStart", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     std::vector<int64_t> matmulAShape = {1024, 128};
@@ -358,25 +352,25 @@ TEST_F(TestSetHeuristicTileShapes, TestReshapeChainWithMatmulStart)
     std::vector<int64_t> reshape2Shape = {512, 128};
     std::vector<int64_t> expOutShape = {512, 128};
 
-    auto matmulA =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulAShape, CreateTestConstIntVector(matmulAShape));
-    auto matmulB =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulBShape, CreateTestConstIntVector(matmulBShape));
-    auto matmulOut =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulOutShape, CreateTestConstIntVector(matmulOutShape));
-    auto reshape1Out =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshape1Shape, CreateTestConstIntVector(reshape1Shape));
-    auto reshape2Out =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshape2Shape, CreateTestConstIntVector(reshape2Shape));
-    auto expOut =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, expOutShape, CreateTestConstIntVector(expOutShape));
+    auto matmulA = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulAShape,
+                                                              CreateTestConstIntVector(matmulAShape));
+    auto matmulB = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulBShape,
+                                                              CreateTestConstIntVector(matmulBShape));
+    auto matmulOut = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulOutShape,
+                                                                CreateTestConstIntVector(matmulOutShape));
+    auto reshape1Out = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshape1Shape,
+                                                                  CreateTestConstIntVector(reshape1Shape));
+    auto reshape2Out = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshape2Shape,
+                                                                  CreateTestConstIntVector(reshape2Shape));
+    auto expOut = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, expOutShape,
+                                                             CreateTestConstIntVector(expOutShape));
 
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_A_MUL_B, {matmulA, matmulB}, {matmulOut});
 
-    auto& reshape1Op =
-        PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {matmulOut}, {reshape1Out});
-    auto& reshape2Op =
-        PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {reshape1Out}, {reshape2Out});
+    auto& reshape1Op = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {matmulOut},
+                                                        {reshape1Out});
+    auto& reshape2Op = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {reshape1Out},
+                                                        {reshape2Out});
 
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {reshape2Out}, {expOut});
 
@@ -399,8 +393,8 @@ TEST_F(TestSetHeuristicTileShapes, TestReshapeChainWithMatmulStart)
 
 TEST_F(TestSetHeuristicTileShapes, TestMatmulWithAddAfter)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestMatmulAddAfter", "TestMatmulAddAfter", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestMatmulAddAfter",
+                                                      "TestMatmulAddAfter", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     std::vector<int64_t> matmulAShape = {32, 128};
@@ -410,18 +404,18 @@ TEST_F(TestSetHeuristicTileShapes, TestMatmulWithAddAfter)
     std::vector<int64_t> viewOutShape = {32, 64};
     std::vector<int64_t> addOutShape = {32, 64};
 
-    auto matmulA =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulAShape, CreateTestConstIntVector(matmulAShape));
-    auto matmulB =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulBShape, CreateTestConstIntVector(matmulBShape));
-    auto matmulOut =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulOutShape, CreateTestConstIntVector(matmulOutShape));
-    auto viewIn =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, viewInShape, CreateTestConstIntVector(viewInShape));
-    auto viewOut =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, viewOutShape, CreateTestConstIntVector(viewOutShape));
-    auto addOut =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, addOutShape, CreateTestConstIntVector(addOutShape));
+    auto matmulA = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulAShape,
+                                                              CreateTestConstIntVector(matmulAShape));
+    auto matmulB = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulBShape,
+                                                              CreateTestConstIntVector(matmulBShape));
+    auto matmulOut = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulOutShape,
+                                                                CreateTestConstIntVector(matmulOutShape));
+    auto viewIn = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, viewInShape,
+                                                             CreateTestConstIntVector(viewInShape));
+    auto viewOut = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, viewOutShape,
+                                                              CreateTestConstIntVector(viewOutShape));
+    auto addOut = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, addOutShape,
+                                                             CreateTestConstIntVector(addOutShape));
 
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_A_MUL_B, {matmulA, matmulB}, {matmulOut});
 
@@ -442,8 +436,8 @@ TEST_F(TestSetHeuristicTileShapes, TestMatmulWithAddAfter)
 
 TEST_F(TestSetHeuristicTileShapes, TestAddBeforeMatmul)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestAddBeforeMatmul", "TestAddBeforeMatmul", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestAddBeforeMatmul",
+                                                      "TestAddBeforeMatmul", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     std::vector<int64_t> view1InShape = {32, 128};
@@ -454,20 +448,20 @@ TEST_F(TestSetHeuristicTileShapes, TestAddBeforeMatmul)
     std::vector<int64_t> matmulBShape = {128, 64};
     std::vector<int64_t> matmulOutShape = {32, 64};
 
-    auto view1In =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, view1InShape, CreateTestConstIntVector(view1InShape));
-    auto view1Out =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, view1OutShape, CreateTestConstIntVector(view1OutShape));
-    auto view2In =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, view2InShape, CreateTestConstIntVector(view2InShape));
-    auto view2Out =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, view2OutShape, CreateTestConstIntVector(view2OutShape));
-    auto addOut =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, addOutShape, CreateTestConstIntVector(addOutShape));
-    auto matmulB =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulBShape, CreateTestConstIntVector(matmulBShape));
-    auto matmulOut =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulOutShape, CreateTestConstIntVector(matmulOutShape));
+    auto view1In = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, view1InShape,
+                                                              CreateTestConstIntVector(view1InShape));
+    auto view1Out = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, view1OutShape,
+                                                               CreateTestConstIntVector(view1OutShape));
+    auto view2In = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, view2InShape,
+                                                              CreateTestConstIntVector(view2InShape));
+    auto view2Out = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, view2OutShape,
+                                                               CreateTestConstIntVector(view2OutShape));
+    auto addOut = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, addOutShape,
+                                                             CreateTestConstIntVector(addOutShape));
+    auto matmulB = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulBShape,
+                                                              CreateTestConstIntVector(matmulBShape));
+    auto matmulOut = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulOutShape,
+                                                                CreateTestConstIntVector(matmulOutShape));
 
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {view1In}, {view1Out});
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {view2In}, {view2Out});
@@ -498,16 +492,16 @@ TEST_F(TestSetHeuristicTileShapes, TestMoveOperations)
     std::vector<int64_t> convertedShape = {64, 128};
     std::vector<int64_t> outputShape = {64, 128};
 
-    auto matmulA =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulAShape, CreateTestConstIntVector(matmulAShape));
-    auto matmulB =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulBShape, CreateTestConstIntVector(matmulBShape));
-    auto matmulOut =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulOutShape, CreateTestConstIntVector(matmulOutShape));
-    auto converted =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, convertedShape, CreateTestConstIntVector(convertedShape));
-    auto output =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, outputShape, CreateTestConstIntVector(outputShape));
+    auto matmulA = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulAShape,
+                                                              CreateTestConstIntVector(matmulAShape));
+    auto matmulB = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulBShape,
+                                                              CreateTestConstIntVector(matmulBShape));
+    auto matmulOut = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulOutShape,
+                                                                CreateTestConstIntVector(matmulOutShape));
+    auto converted = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, convertedShape,
+                                                                CreateTestConstIntVector(convertedShape));
+    auto output = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, outputShape,
+                                                             CreateTestConstIntVector(outputShape));
 
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_A_MUL_B, {matmulA, matmulB}, {matmulOut});
 
@@ -534,8 +528,8 @@ TEST_F(TestSetHeuristicTileShapes, TestMoveOperations)
 
 TEST_F(TestSetHeuristicTileShapes, TestMinimalShapeFinding)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestMinimalShape", "TestMinimalShape", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestMinimalShape", "TestMinimalShape",
+                                                      nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     std::vector<int64_t> view1Input = {256, 128};
@@ -550,13 +544,13 @@ TEST_F(TestSetHeuristicTileShapes, TestMinimalShapeFinding)
 
     auto input1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, view1Input, CreateTestConstIntVector(view1Input));
     auto ub1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, view1Output, CreateTestConstIntVector(view1Output));
-    auto ub2 =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, assembleOutput, CreateTestConstIntVector(assembleOutput));
+    auto ub2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, assembleOutput,
+                                                          CreateTestConstIntVector(assembleOutput));
     auto ub3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, view2Output, CreateTestConstIntVector(view2Output));
     auto matmulAIn = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulA, CreateTestConstIntVector(matmulA));
     auto matmulBIn = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulB, CreateTestConstIntVector(matmulB));
-    auto matmulOut =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulOutput, CreateTestConstIntVector(matmulOutput));
+    auto matmulOut = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulOutput,
+                                                                CreateTestConstIntVector(matmulOutput));
 
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {input1}, {ub1});
 
@@ -564,8 +558,8 @@ TEST_F(TestSetHeuristicTileShapes, TestMinimalShapeFinding)
 
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {ub2}, {ub3});
 
-    auto& matmulOp =
-        PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_A_MUL_B, {matmulAIn, matmulBIn}, {matmulOut});
+    auto& matmulOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_A_MUL_B, {matmulAIn, matmulBIn},
+                                                      {matmulOut});
 
     PushInOutCasts(*currFunctionPtr, {input1, matmulAIn, matmulBIn}, {matmulOut});
 
@@ -581,8 +575,8 @@ TEST_F(TestSetHeuristicTileShapes, TestMinimalShapeFinding)
 
 TEST_F(TestSetHeuristicTileShapes, TestMatmulTransposeAT)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestMatmulTransposeAT", "TestMatmulTransposeAT", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestMatmulTransposeAT",
+                                                      "TestMatmulTransposeAT", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     std::vector<int64_t> shapeA = {128, 64};
@@ -593,8 +587,8 @@ TEST_F(TestSetHeuristicTileShapes, TestMatmulTransposeAT)
     auto inputB = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapeB, CreateTestConstIntVector(shapeB));
     auto output = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, outputC, CreateTestConstIntVector(outputC));
 
-    Operation& matmulOp =
-        PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_AT_MUL_B, {inputA, inputB}, {output});
+    Operation& matmulOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_AT_MUL_B, {inputA, inputB},
+                                                           {output});
 
     PushInOutCasts(*currFunctionPtr, {inputA, inputB}, {output});
 
@@ -618,8 +612,8 @@ TEST_F(TestSetHeuristicTileShapes, TestMatmulTransposeAT)
 
 TEST_F(TestSetHeuristicTileShapes, TestMatmulTransposeBoth)
 {
-    auto currFunctionPtr = std::make_shared<Function>(
-        Program::GetInstance(), "TestMatmulTransposeBoth", "TestMatmulTransposeBoth", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestMatmulTransposeBoth",
+                                                      "TestMatmulTransposeBoth", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     std::vector<int64_t> shapeA = {128, 64};
@@ -630,8 +624,8 @@ TEST_F(TestSetHeuristicTileShapes, TestMatmulTransposeBoth)
     auto inputB = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapeB, CreateTestConstIntVector(shapeB));
     auto output = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, outputC, CreateTestConstIntVector(outputC));
 
-    Operation& matmulOp =
-        PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_AT_MUL_BT, {inputA, inputB}, {output});
+    Operation& matmulOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_AT_MUL_BT, {inputA, inputB},
+                                                           {output});
 
     PushInOutCasts(*currFunctionPtr, {inputA, inputB}, {output});
 
@@ -668,8 +662,8 @@ TEST_F(TestSetHeuristicTileShapes, TestMulaccOperations)
     auto inputC = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapeC, CreateTestConstIntVector(shapeC));
     auto output = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, outputD, CreateTestConstIntVector(outputD));
 
-    Operation& mulaccOp =
-        PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_A_MULACC_B, {inputA, inputB, inputC}, {output});
+    Operation& mulaccOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_A_MULACC_B,
+                                                           {inputA, inputB, inputC}, {output});
 
     PushInOutCasts(*currFunctionPtr, {inputA, inputB, inputC}, {output});
 
@@ -696,15 +690,15 @@ TEST_F(TestSetHeuristicTileShapes, TestShapeAndTypeSetting_GatherMK)
     std::vector<int64_t> matmulOutShape = {128, 32};
 
     auto input = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapeIn, CreateTestConstIntVector(shapeIn));
-    auto offsets =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_INT32, shapeOffsets, CreateTestConstIntVector(shapeOffsets));
+    auto offsets = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_INT32, shapeOffsets,
+                                                              CreateTestConstIntVector(shapeOffsets));
     offsets->UpdateDynValidShape({IRBuilder().CreateConstInt(1), IRBuilder().CreateConstInt(128)});
-    auto blockTable =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapeBlockTable, CreateTestConstIntVector(shapeBlockTable));
+    auto blockTable = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapeBlockTable,
+                                                                 CreateTestConstIntVector(shapeBlockTable));
     blockTable->UpdateDynValidShape({IRBuilder().CreateConstInt(1), IRBuilder().CreateConstInt(128)});
 
-    auto setup = SetupGatherInL1WithMatmul(*currFunctionPtr, input, offsets, blockTable,
-        shapeOut, matmulBShape, matmulOutShape, false, false);
+    auto setup = SetupGatherInL1WithMatmul(*currFunctionPtr, input, offsets, blockTable, shapeOut, matmulBShape,
+                                           matmulOutShape, false, false);
 
     RunPassAndVerifySuccess(*currFunctionPtr);
 
@@ -733,15 +727,15 @@ TEST_F(TestSetHeuristicTileShapes, TestShapeAndTypeSetting_GatherKM)
     std::vector<int64_t> matmulOutShape = {64, 32};
 
     auto input = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapeIn, CreateTestConstIntVector(shapeIn));
-    auto offsets =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_INT32, shapeOffsets, CreateTestConstIntVector(shapeOffsets));
+    auto offsets = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_INT32, shapeOffsets,
+                                                              CreateTestConstIntVector(shapeOffsets));
     offsets->UpdateDynValidShape({IRBuilder().CreateConstInt(1), IRBuilder().CreateConstInt(64)});
-    auto blockTable =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapeBlockTable, CreateTestConstIntVector(shapeBlockTable));
+    auto blockTable = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapeBlockTable,
+                                                                 CreateTestConstIntVector(shapeBlockTable));
     blockTable->UpdateDynValidShape({IRBuilder().CreateConstInt(1), IRBuilder().CreateConstInt(64)});
 
-    auto setup = SetupGatherInL1WithMatmul(*currFunctionPtr, input, offsets, blockTable,
-        shapeOut, matmulBShape, matmulOutShape, false, false);
+    auto setup = SetupGatherInL1WithMatmul(*currFunctionPtr, input, offsets, blockTable, shapeOut, matmulBShape,
+                                           matmulOutShape, false, false);
 
     RunPassAndVerifySuccess(*currFunctionPtr);
 
@@ -770,15 +764,15 @@ TEST_F(TestSetHeuristicTileShapes, TestShapeAndTypeSetting_GatherKN)
     std::vector<int64_t> matmulOutShape = {128, 32};
 
     auto input = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapeIn, CreateTestConstIntVector(shapeIn));
-    auto offsets =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_INT32, shapeOffsets, CreateTestConstIntVector(shapeOffsets));
+    auto offsets = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_INT32, shapeOffsets,
+                                                              CreateTestConstIntVector(shapeOffsets));
     offsets->UpdateDynValidShape({IRBuilder().CreateConstInt(1), IRBuilder().CreateConstInt(64)});
-    auto blockTable =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapeBlockTable, CreateTestConstIntVector(shapeBlockTable));
+    auto blockTable = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapeBlockTable,
+                                                                 CreateTestConstIntVector(shapeBlockTable));
     blockTable->UpdateDynValidShape({IRBuilder().CreateConstInt(1), IRBuilder().CreateConstInt(64)});
 
-    auto setup = SetupGatherInL1WithMatmul(*currFunctionPtr, input, offsets, blockTable,
-        shapeOut, matmulAShape, matmulOutShape, false, false, false);
+    auto setup = SetupGatherInL1WithMatmul(*currFunctionPtr, input, offsets, blockTable, shapeOut, matmulAShape,
+                                           matmulOutShape, false, false, false);
 
     RunPassAndVerifySuccess(*currFunctionPtr);
 
@@ -809,15 +803,15 @@ TEST_F(TestSetHeuristicTileShapes, TestShapeAndTypeSetting_GatherNK)
     std::vector<int64_t> matmulOutShape = {128, 64};
 
     auto input = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapeIn, CreateTestConstIntVector(shapeIn));
-    auto offsets =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_INT32, shapeOffsets, CreateTestConstIntVector(shapeOffsets));
+    auto offsets = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_INT32, shapeOffsets,
+                                                              CreateTestConstIntVector(shapeOffsets));
     offsets->UpdateDynValidShape({IRBuilder().CreateConstInt(1), IRBuilder().CreateConstInt(32)});
-    auto blockTable =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapeBlockTable, CreateTestConstIntVector(shapeBlockTable));
+    auto blockTable = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapeBlockTable,
+                                                                 CreateTestConstIntVector(shapeBlockTable));
     blockTable->UpdateDynValidShape({IRBuilder().CreateConstInt(1), IRBuilder().CreateConstInt(32)});
 
-    auto setup = SetupGatherInL1WithMatmul(*currFunctionPtr, input, offsets, blockTable,
-        shapeOut, matmulAShape, matmulOutShape, true, true, false);
+    auto setup = SetupGatherInL1WithMatmul(*currFunctionPtr, input, offsets, blockTable, shapeOut, matmulAShape,
+                                           matmulOutShape, true, true, false);
 
     RunPassAndVerifySuccess(*currFunctionPtr);
 
@@ -840,18 +834,18 @@ static void CreateGatherL1InputTensors(LogicalTensorPtr* input, LogicalTensorPtr
     std::vector<int64_t> shapeBlockTable = {1, 1024};
 
     *input = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapeIn, CreateTestConstIntVector(shapeIn));
-    *offsets =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_INT32, shapeOffsets, CreateTestConstIntVector(shapeOffsets));
+    *offsets = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_INT32, shapeOffsets,
+                                                          CreateTestConstIntVector(shapeOffsets));
     (*offsets)->UpdateDynValidShape({IRBuilder().CreateConstInt(1), IRBuilder().CreateConstInt(1024)});
-    *blockTable =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapeBlockTable, CreateTestConstIntVector(shapeBlockTable));
+    *blockTable = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapeBlockTable,
+                                                             CreateTestConstIntVector(shapeBlockTable));
     (*blockTable)->UpdateDynValidShape({IRBuilder().CreateConstInt(1), IRBuilder().CreateConstInt(1024)});
 }
 
 TEST_F(TestSetHeuristicTileShapes, TestGatherInL1MemoryLimit)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestGatherL1Mem", "TestGatherL1Mem", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestGatherL1Mem", "TestGatherL1Mem",
+                                                      nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     LogicalTensorPtr input;
@@ -863,8 +857,8 @@ TEST_F(TestSetHeuristicTileShapes, TestGatherInL1MemoryLimit)
     std::vector<int64_t> matmulBShape = {1024, 512};
     std::vector<int64_t> matmulOutShape = {1024, 512};
 
-    auto setup = SetupGatherInL1WithMatmul(*currFunctionPtr, input, offsets, blockTable,
-        shapeOut, matmulBShape, matmulOutShape, false, false);
+    auto setup = SetupGatherInL1WithMatmul(*currFunctionPtr, input, offsets, blockTable, shapeOut, matmulBShape,
+                                           matmulOutShape, false, false);
 
     RunPassAndVerifySuccess(*currFunctionPtr);
 
@@ -889,8 +883,8 @@ TEST_F(TestSetHeuristicTileShapes, TestGatherInL1MemoryLimit)
 
 TEST_F(TestSetHeuristicTileShapes, TestShapeAndTypeSetting_TypeDetermination)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestTypeDetermination", "TestTypeDetermination", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestTypeDetermination",
+                                                      "TestTypeDetermination", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     std::vector<int64_t> shapeA = {128, 64};
@@ -924,8 +918,8 @@ TEST_F(TestSetHeuristicTileShapes, TestShapeAndTypeSetting_TypeDetermination)
 
 TEST_F(TestSetHeuristicTileShapes, TestBackwardTraversal_ReshapeChain)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestReshapeChain", "TestReshapeChain", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestReshapeChain", "TestReshapeChain",
+                                                      nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     std::vector<int64_t> shape1 = {128, 64};
@@ -937,16 +931,16 @@ TEST_F(TestSetHeuristicTileShapes, TestBackwardTraversal_ReshapeChain)
     auto tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
     auto tensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
     auto tensor3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape3, CreateTestConstIntVector(shape3));
-    auto matmulB =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulBShape, CreateTestConstIntVector(matmulBShape));
-    auto matmulOut =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulOutShape, CreateTestConstIntVector(matmulOutShape));
+    auto matmulB = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulBShape,
+                                                              CreateTestConstIntVector(matmulBShape));
+    auto matmulOut = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulOutShape,
+                                                                CreateTestConstIntVector(matmulOutShape));
 
     auto& reshape1Op = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {tensor1}, {tensor2});
     auto& reshape2Op = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {tensor2}, {tensor3});
 
-    auto& matmulOp =
-        PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_A_MUL_B, {tensor3, matmulB}, {matmulOut});
+    auto& matmulOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_A_MUL_B, {tensor3, matmulB},
+                                                      {matmulOut});
 
     PushInOutCasts(*currFunctionPtr, {tensor1, matmulB}, {matmulOut});
 
@@ -971,8 +965,8 @@ TEST_F(TestSetHeuristicTileShapes, TestBackwardTraversal_ReshapeChain)
 
 TEST_F(TestSetHeuristicTileShapes, TestBackwardTraversal_ViewChain)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestViewChain", "TestViewChain", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestViewChain", "TestViewChain",
+                                                      nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     std::vector<int64_t> shapeA = {256, 128};
@@ -983,19 +977,19 @@ TEST_F(TestSetHeuristicTileShapes, TestBackwardTraversal_ViewChain)
 
     auto tensorA = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapeA, CreateTestConstIntVector(shapeA));
     auto tensorB = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapeB, CreateTestConstIntVector(shapeB));
-    auto reshapeOut =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshapeOutShape, CreateTestConstIntVector(reshapeOutShape));
-    auto matmulB =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulBShape, CreateTestConstIntVector(matmulBShape));
-    auto matmulOut =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulOutShape, CreateTestConstIntVector(matmulOutShape));
+    auto reshapeOut = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshapeOutShape,
+                                                                 CreateTestConstIntVector(reshapeOutShape));
+    auto matmulB = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulBShape,
+                                                              CreateTestConstIntVector(matmulBShape));
+    auto matmulOut = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulOutShape,
+                                                                CreateTestConstIntVector(matmulOutShape));
 
     auto& viewOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {tensorA}, {tensorB});
 
     auto& reshapeOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {tensorB}, {reshapeOut});
 
-    auto& matmulOp =
-        PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_A_MUL_B, {reshapeOut, matmulB}, {matmulOut});
+    auto& matmulOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_A_MUL_B, {reshapeOut, matmulB},
+                                                      {matmulOut});
 
     PushInOutCasts(*currFunctionPtr, {tensorA, matmulB}, {matmulOut});
 
@@ -1023,8 +1017,8 @@ TEST_F(TestSetHeuristicTileShapes, TestBackwardTraversal_ViewChain)
 
 TEST_F(TestSetHeuristicTileShapes, TestBackwardTraversal_MultipleProducers)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestMultipleProducers", "TestMultipleProducers", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestMultipleProducers",
+                                                      "TestMultipleProducers", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     std::vector<int64_t> view1InShape = {128, 64};
@@ -1035,27 +1029,27 @@ TEST_F(TestSetHeuristicTileShapes, TestBackwardTraversal_MultipleProducers)
     std::vector<int64_t> matmulBShape = {64, 32};
     std::vector<int64_t> matmulOutShape = {128, 32};
 
-    auto view1In =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, view1InShape, CreateTestConstIntVector(view1InShape));
-    auto view1Out =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, view1OutShape, CreateTestConstIntVector(view1OutShape));
-    auto view2In =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, view2InShape, CreateTestConstIntVector(view2InShape));
-    auto view2Out =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, view2OutShape, CreateTestConstIntVector(view2OutShape));
+    auto view1In = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, view1InShape,
+                                                              CreateTestConstIntVector(view1InShape));
+    auto view1Out = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, view1OutShape,
+                                                               CreateTestConstIntVector(view1OutShape));
+    auto view2In = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, view2InShape,
+                                                              CreateTestConstIntVector(view2InShape));
+    auto view2Out = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, view2OutShape,
+                                                               CreateTestConstIntVector(view2OutShape));
     auto tensorOut = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapeOut, CreateTestConstIntVector(shapeOut));
-    auto matmulB =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulBShape, CreateTestConstIntVector(matmulBShape));
-    auto matmulOut =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulOutShape, CreateTestConstIntVector(matmulOutShape));
+    auto matmulB = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulBShape,
+                                                              CreateTestConstIntVector(matmulBShape));
+    auto matmulOut = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulOutShape,
+                                                                CreateTestConstIntVector(matmulOutShape));
 
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {view1In}, {view1Out});
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {view2In}, {view2Out});
 
     auto& addOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ADD, {view1Out, view2Out}, {tensorOut});
 
-    auto& matmulOp =
-        PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_A_MUL_B, {tensorOut, matmulB}, {matmulOut});
+    auto& matmulOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_A_MUL_B, {tensorOut, matmulB},
+                                                      {matmulOut});
 
     PushInOutCasts(*currFunctionPtr, {view1In, view2In, matmulB}, {matmulOut});
 
@@ -1088,16 +1082,16 @@ TEST_F(TestSetHeuristicTileShapes, TestBackwardTraversal_2DShapes)
     auto tensor2D = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2D, CreateTestConstIntVector(shape2D));
     auto tensor1D = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1D, CreateTestConstIntVector(shape1D));
     auto tensorOut = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapeOut, CreateTestConstIntVector(shapeOut));
-    auto matmulB =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulBShape, CreateTestConstIntVector(matmulBShape));
-    auto matmulOut =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulOutShape, CreateTestConstIntVector(matmulOutShape));
+    auto matmulB = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulBShape,
+                                                              CreateTestConstIntVector(matmulBShape));
+    auto matmulOut = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulOutShape,
+                                                                CreateTestConstIntVector(matmulOutShape));
 
     auto& reshape1Op = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {tensor2D}, {tensor1D});
     auto& reshape2Op = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {tensor1D}, {tensorOut});
 
-    auto& matmulOp =
-        PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_A_MUL_B, {tensorOut, matmulB}, {matmulOut});
+    auto& matmulOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_A_MUL_B, {tensorOut, matmulB},
+                                                      {matmulOut});
 
     PushInOutCasts(*currFunctionPtr, {tensor2D, matmulB}, {matmulOut});
 
@@ -1133,16 +1127,16 @@ TEST_F(TestSetHeuristicTileShapes, TestBackwardTraversal_AssembleOp)
     auto tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
     auto tensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
     auto tensorOut = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapeOut, CreateTestConstIntVector(shapeOut));
-    auto matmulB =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulBShape, CreateTestConstIntVector(matmulBShape));
-    auto matmulOut =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulOutShape, CreateTestConstIntVector(matmulOutShape));
+    auto matmulB = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulBShape,
+                                                              CreateTestConstIntVector(matmulBShape));
+    auto matmulOut = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulOutShape,
+                                                                CreateTestConstIntVector(matmulOutShape));
 
-    auto& assembleOp =
-        PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {tensor1, tensor2}, {tensorOut});
+    auto& assembleOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {tensor1, tensor2},
+                                                        {tensorOut});
 
-    auto& matmulOp =
-        PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_A_MUL_B, {tensorOut, matmulB}, {matmulOut});
+    auto& matmulOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_A_MUL_B, {tensorOut, matmulB},
+                                                      {matmulOut});
 
     PushInOutCasts(*currFunctionPtr, {tensor1, tensor2, matmulB}, {matmulOut});
 
@@ -1163,16 +1157,16 @@ TEST_F(TestSetHeuristicTileShapes, TestBackwardTraversal_AssembleOp)
 
 TEST_F(TestSetHeuristicTileShapes, TestForwardBroadcast_ReshapeChain)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestForwardReshape", "TestForwardReshape", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestForwardReshape",
+                                                      "TestForwardReshape", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     std::vector<int64_t> inputShape = {128, 64};
     std::vector<int64_t> reshape1 = {8192};
     std::vector<int64_t> reshape2 = {64, 128};
 
-    auto inputTensor =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inputShape, CreateTestConstIntVector(inputShape));
+    auto inputTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inputShape,
+                                                                  CreateTestConstIntVector(inputShape));
     auto ub1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshape1, CreateTestConstIntVector(reshape1));
     auto ub2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshape2, CreateTestConstIntVector(reshape2));
 
@@ -1186,8 +1180,8 @@ TEST_F(TestSetHeuristicTileShapes, TestForwardBroadcast_ReshapeChain)
 
 TEST_F(TestSetHeuristicTileShapes, TestForwardBroadcast_ElementwiseAdd)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestForwardAdd", "TestForwardAdd", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestForwardAdd", "TestForwardAdd",
+                                                      nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     std::vector<int64_t> view1InShape = {128, 64};
@@ -1196,14 +1190,14 @@ TEST_F(TestSetHeuristicTileShapes, TestForwardBroadcast_ElementwiseAdd)
     std::vector<int64_t> view2OutShape = {128, 64};
     std::vector<int64_t> shapeOut = {128, 64};
 
-    auto view1In =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, view1InShape, CreateTestConstIntVector(view1InShape));
-    auto view1Out =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, view1OutShape, CreateTestConstIntVector(view1OutShape));
-    auto view2In =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, view2InShape, CreateTestConstIntVector(view2InShape));
-    auto view2Out =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, view2OutShape, CreateTestConstIntVector(view2OutShape));
+    auto view1In = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, view1InShape,
+                                                              CreateTestConstIntVector(view1InShape));
+    auto view1Out = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, view1OutShape,
+                                                               CreateTestConstIntVector(view1OutShape));
+    auto view2In = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, view2InShape,
+                                                              CreateTestConstIntVector(view2InShape));
+    auto view2Out = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, view2OutShape,
+                                                               CreateTestConstIntVector(view2OutShape));
     auto tensorOut = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapeOut, CreateTestConstIntVector(shapeOut));
 
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {view1In}, {view1Out});
@@ -1217,20 +1211,20 @@ TEST_F(TestSetHeuristicTileShapes, TestForwardBroadcast_ElementwiseAdd)
 
 TEST_F(TestSetHeuristicTileShapes, TestForwardBroadcast_ViewToExp)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestForwardViewExp", "TestForwardViewExp", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestForwardViewExp",
+                                                      "TestForwardViewExp", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     std::vector<int64_t> inputShape = {256, 128};
     std::vector<int64_t> viewShape = {256, 32, 4};
     std::vector<int64_t> outputShape = {256, 32, 4};
 
-    auto inputTensor =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inputShape, CreateTestConstIntVector(inputShape));
-    auto viewTensor =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, viewShape, CreateTestConstIntVector(viewShape));
-    auto outputTensor =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, outputShape, CreateTestConstIntVector(outputShape));
+    auto inputTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inputShape,
+                                                                  CreateTestConstIntVector(inputShape));
+    auto viewTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, viewShape,
+                                                                 CreateTestConstIntVector(viewShape));
+    auto outputTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, outputShape,
+                                                                   CreateTestConstIntVector(outputShape));
 
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {inputTensor}, {viewTensor});
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {viewTensor}, {outputTensor});
@@ -1242,8 +1236,8 @@ TEST_F(TestSetHeuristicTileShapes, TestForwardBroadcast_ViewToExp)
 
 TEST_F(TestSetHeuristicTileShapes, TestForwardBroadcast_MultipleConsumers)
 {
-    auto currFunctionPtr = std::make_shared<Function>(
-        Program::GetInstance(), "TestForwardMultiConsumer", "TestForwardMultiConsumer", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestForwardMultiConsumer",
+                                                      "TestForwardMultiConsumer", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     std::vector<int64_t> inputShape = {128, 64};
@@ -1251,12 +1245,12 @@ TEST_F(TestSetHeuristicTileShapes, TestForwardBroadcast_MultipleConsumers)
     std::vector<int64_t> reshape2Shape = {128, 64};
     std::vector<int64_t> addShape = {8192};
 
-    auto inputTensor =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inputShape, CreateTestConstIntVector(inputShape));
-    auto reshape1Tensor =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshape1Shape, CreateTestConstIntVector(reshape1Shape));
-    auto reshape2Tensor =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshape2Shape, CreateTestConstIntVector(reshape2Shape));
+    auto inputTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inputShape,
+                                                                  CreateTestConstIntVector(inputShape));
+    auto reshape1Tensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshape1Shape,
+                                                                     CreateTestConstIntVector(reshape1Shape));
+    auto reshape2Tensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshape2Shape,
+                                                                     CreateTestConstIntVector(reshape2Shape));
     auto addTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, addShape, CreateTestConstIntVector(addShape));
 
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {inputTensor}, {reshape1Tensor});
@@ -1270,8 +1264,8 @@ TEST_F(TestSetHeuristicTileShapes, TestForwardBroadcast_MultipleConsumers)
 
 TEST_F(TestSetHeuristicTileShapes, TestForwardBroadcast_2DTo1D)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestForward2DTo1D", "TestForward2DTo1D", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestForward2DTo1D", "TestForward2DTo1D",
+                                                      nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     std::vector<int64_t> shape2D = {256, 128};
@@ -1292,8 +1286,8 @@ TEST_F(TestSetHeuristicTileShapes, TestForwardBroadcast_2DTo1D)
 
 TEST_F(TestSetHeuristicTileShapes, TestForwardBroadcast_MatmulToReshape)
 {
-    auto currFunctionPtr = std::make_shared<Function>(
-        Program::GetInstance(), "TestForwardMatmulReshape", "TestForwardMatmulReshape", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestForwardMatmulReshape",
+                                                      "TestForwardMatmulReshape", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     std::vector<int64_t> shapeA = {128, 64};
@@ -1303,10 +1297,10 @@ TEST_F(TestSetHeuristicTileShapes, TestForwardBroadcast_MatmulToReshape)
 
     auto inputA = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapeA, CreateTestConstIntVector(shapeA));
     auto inputB = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapeB, CreateTestConstIntVector(shapeB));
-    auto matmulOut =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulOutShape, CreateTestConstIntVector(matmulOutShape));
-    auto reshapeOut =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshapeOutShape, CreateTestConstIntVector(reshapeOutShape));
+    auto matmulOut = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, matmulOutShape,
+                                                                CreateTestConstIntVector(matmulOutShape));
+    auto reshapeOut = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshapeOutShape,
+                                                                 CreateTestConstIntVector(reshapeOutShape));
 
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_A_MUL_B, {inputA, inputB}, {matmulOut});
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {matmulOut}, {reshapeOut});

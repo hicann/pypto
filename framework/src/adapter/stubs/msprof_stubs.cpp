@@ -1,5 +1,5 @@
 /**
-* Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
  * Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ uint64_t StubProfSysCycleTime(void)
     return 0;
 }
 
-uint64_t StubProfGetHashId(const char *hashInfo, size_t length)
+uint64_t StubProfGetHashId(const char* hashInfo, size_t length)
 {
     ADAPTER_LOGD("Enter stub function of MsprofGetHashId.");
     (void)hashInfo;
@@ -31,7 +31,7 @@ uint64_t StubProfGetHashId(const char *hashInfo, size_t length)
     return 0;
 }
 
-int32_t StubProfReportApi(uint32_t nonPersistantFlag, const struct MspfApi *api)
+int32_t StubProfReportApi(uint32_t nonPersistantFlag, const struct MspfApi* api)
 {
     ADAPTER_LOGD("Enter stub function of MsprofReportApi.");
     (void)nonPersistantFlag;
@@ -64,4 +64,4 @@ int32_t StubProfRegisterCallback(uint32_t moduleId, MspfCommandHandleFunc handle
     (void)handle;
     return 0;
 }
-}
+} // namespace npu::tile_fwk

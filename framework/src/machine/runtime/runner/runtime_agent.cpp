@@ -44,16 +44,15 @@ bool GetPgMask(uint64_t& valid, int32_t& deviceId)
     deviceId = GetLogDeviceId();
     uint64_t aicore_bitmap[AICORE_MAP_BUFF_LEN] = {0};
     int32_t size_n = static_cast<int32_t>(sizeof(uint64_t)) * AICORE_MAP_BUFF_LEN;
-    auto ret = HalGetDeviceInfoByBuff(
-        static_cast<uint32_t>(deviceId), MODULE_TYPE_AI_CORE, INFO_TYPE_OCCUPY,
-        reinterpret_cast<void*>(&aicore_bitmap[0]), &size_n);
+    auto ret = HalGetDeviceInfoByBuff(static_cast<uint32_t>(deviceId), MODULE_TYPE_AI_CORE, INFO_TYPE_OCCUPY,
+                                      reinterpret_cast<void*>(&aicore_bitmap[0]), &size_n);
     if (ret != HAL_ERROR_NONE) {
         return false;
     }
     valid = aicore_bitmap[0];
     return true;
 }
-}
+} // namespace
 
 int RuntimeAgent::GetAicoreRegInfo(std::vector<int64_t>& aic, std::vector<int64_t>& aiv, const int addrType)
 {
@@ -76,13 +75,12 @@ int RuntimeAgent::GetAicoreRegInfo(std::vector<int64_t>& aic, std::vector<int64_
     struct AddrMapOutPara outMapPara;
     inMapPara.devid = deviceId;
     inMapPara.addr_type = addrType;
-    auto ret = HalMemCtl(
-        0, reinterpret_cast<void*>(&inMapPara), sizeof(struct AddrMapInPara), reinterpret_cast<void*>(&outMapPara),
-        nullptr);
+    auto ret = HalMemCtl(0, reinterpret_cast<void*>(&inMapPara), sizeof(struct AddrMapInPara),
+                         reinterpret_cast<void*>(&outMapPara), nullptr);
     if (ret != HAL_ERROR_NONE) {
-        MACHINE_LOGE(
-            HostLauncherErr::MAP_REG_ADDR_FAILED, "Map reg addr fail, maybe others are using current device. (ret=%d, DEVICE_ID=%d).",
-            ret, deviceId);
+        MACHINE_LOGE(HostLauncherErr::MAP_REG_ADDR_FAILED,
+                     "Map reg addr fail, maybe others are using current device. (ret=%d, DEVICE_ID=%d).", ret,
+                     deviceId);
         return ret;
     }
     for (uint32_t i = 0; i < DAV_2201::MAX_CORE; i++) {
@@ -148,4 +146,3 @@ void RuntimeAgent::GetAicoreRegInfoForDAV3510(std::vector<int64_t>& regs, std::v
     }
 }
 } // namespace npu::tile_fwk
-

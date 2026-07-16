@@ -123,12 +123,10 @@ public:
     SymbolicScalar operator()(const SymbolicScalar& arg0) const;
     SymbolicScalar operator()(const SymbolicScalar& arg0, const SymbolicScalar& arg1) const;
     SymbolicScalar operator()(const SymbolicScalar& arg0, const SymbolicScalar& arg1, const SymbolicScalar& arg2) const;
-    SymbolicScalar operator()(
-        const SymbolicScalar& arg0, const SymbolicScalar& arg1, const SymbolicScalar& arg2,
-        const SymbolicScalar& arg3) const;
-    SymbolicScalar operator()(
-        const SymbolicScalar& arg0, const SymbolicScalar& arg1, const SymbolicScalar& arg2, const SymbolicScalar& arg3,
-        const SymbolicScalar& arg4) const;
+    SymbolicScalar operator()(const SymbolicScalar& arg0, const SymbolicScalar& arg1, const SymbolicScalar& arg2,
+                              const SymbolicScalar& arg3) const;
+    SymbolicScalar operator()(const SymbolicScalar& arg0, const SymbolicScalar& arg1, const SymbolicScalar& arg2,
+                              const SymbolicScalar& arg3, const SymbolicScalar& arg4) const;
     SymbolicScalar operator()(const std::vector<SymbolicScalar>& argList) const;
 
     friend std::ostream& operator<<(std::ostream& os, const SymbolicScalar& val) { return os << val.Dump(); }
@@ -164,23 +162,24 @@ class SymbolicScalarTracker {
 public:
     typedef SymbolicScalar ValueType;
 
-    static ValueType Value(uint64_t value, const std::string &name) {
+    static ValueType Value(uint64_t value, const std::string& name)
+    {
         std::string symbolName = name + "(" + std::to_string(value) + ")";
         SymbolicScalar result(symbolName);
-        auto &symbolDict = SymbolicScalarTracker::GetSymbolDict();
+        auto& symbolDict = SymbolicScalarTracker::GetSymbolDict();
         symbolDict[symbolName] = value;
         return result;
     }
 
-    static std::unordered_map<std::string, ScalarImmediateType> &GetSymbolDict();
+    static std::unordered_map<std::string, ScalarImmediateType>& GetSymbolDict();
 };
 
 } // namespace npu::tile_fwk
 
 namespace std {
 #define SYMBOLIC_SCALAR_DEFINE(name, bfn)                                                           \
-    static inline npu::tile_fwk::SymbolicScalar bfn(                                                \
-        const npu::tile_fwk::SymbolicScalar lhs, const npu::tile_fwk::SymbolicScalar rhs)           \
+    static inline npu::tile_fwk::SymbolicScalar bfn(const npu::tile_fwk::SymbolicScalar lhs,        \
+                                                    const npu::tile_fwk::SymbolicScalar rhs)        \
     {                                                                                               \
         return lhs.name(rhs);                                                                       \
     }                                                                                               \
@@ -198,12 +197,12 @@ SYMBOLIC_SCALAR_DEFINE(Min, min)
 SYMBOLIC_SCALAR_DEFINE(Max, max)
 #undef SYMBOLIC_SCALAR_DEFINE
 
-#define SYMBOLIC_SCALAR_DEFINE_TRI(name, bfn)                                              \
-    static inline npu::tile_fwk::SymbolicScalar bfn(                                       \
-        const npu::tile_fwk::SymbolicScalar cond, const npu::tile_fwk::SymbolicScalar lhs, \
-        const npu::tile_fwk::SymbolicScalar rhs)                                           \
-    {                                                                                      \
-        return cond.name(lhs, rhs);                                                        \
+#define SYMBOLIC_SCALAR_DEFINE_TRI(name, bfn)                                                 \
+    static inline npu::tile_fwk::SymbolicScalar bfn(const npu::tile_fwk::SymbolicScalar cond, \
+                                                    const npu::tile_fwk::SymbolicScalar lhs,  \
+                                                    const npu::tile_fwk::SymbolicScalar rhs)  \
+    {                                                                                         \
+        return cond.name(lhs, rhs);                                                           \
     }
 SYMBOLIC_SCALAR_DEFINE_TRI(Ternary, ternary)
 #undef SYMBOLIC_SCALAR_DEFINE_TRI

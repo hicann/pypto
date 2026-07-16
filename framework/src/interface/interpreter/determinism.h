@@ -61,9 +61,8 @@ private:
 
 class TraceCopy {
 public:
-    TraceCopy(
-        bool isCopyOut, const std::shared_ptr<TraceRawTensorMemory>& rawTensor, const std::vector<int64_t>& offset,
-        const std::vector<int64_t>& shape, bool isAtomicAdd = false)
+    TraceCopy(bool isCopyOut, const std::shared_ptr<TraceRawTensorMemory>& rawTensor,
+              const std::vector<int64_t>& offset, const std::vector<int64_t>& shape, bool isAtomicAdd = false)
         : isCopyOut_(isCopyOut), rawTensor_(rawTensor), offset_(offset), shape_(shape), isAtomicAdd_(isAtomicAdd)
     {}
 
@@ -90,8 +89,8 @@ private:
 class TraceLeafTaskUid {
 public:
     TraceLeafTaskUid() = default;
-    TraceLeafTaskUid(
-        int64_t deviceTaskIndex, int64_t dupIndex, int64_t rootIndex, int64_t operationIndex, int64_t leafIndex)
+    TraceLeafTaskUid(int64_t deviceTaskIndex, int64_t dupIndex, int64_t rootIndex, int64_t operationIndex,
+                     int64_t leafIndex)
         : deviceTaskIndex_(deviceTaskIndex),
           dupIndex_(dupIndex),
           rootIndex_(rootIndex),
@@ -253,9 +252,9 @@ private:
 static constexpr int INVALID_TRACE_TASK_DEPEND_INDEX = -1;
 class TraceDependGraph {
 public:
-    TraceDependGraph(
-        const std::vector<std::shared_ptr<TraceLeafTask>>& leafTaskList,
-        const std::map<TraceLeafTaskUid, int>& leafTaskDependIndexDict, const std::vector<std::vector<int>>& reachDict)
+    TraceDependGraph(const std::vector<std::shared_ptr<TraceLeafTask>>& leafTaskList,
+                     const std::map<TraceLeafTaskUid, int>& leafTaskDependIndexDict,
+                     const std::vector<std::vector<int>>& reachDict)
         : leafTaskList_(leafTaskList), leafTaskDependIndexDict_(leafTaskDependIndexDict), reachDict_(reachDict)
     {}
 

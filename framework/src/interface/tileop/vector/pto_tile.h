@@ -87,18 +87,15 @@ public:
     using Type = pto::GlobalTensor<Dtype, pto::Shape<-1, -1, -1, -1, -1>, pto::Stride<-1, -1, -1, -1, -1>>;
 
     __aicore__ inline PtoGlobal(__gm__ typename T::Type* addr, const Shape& shape, const Stride& stride)
-        : data_(
-              (__gm__ Dtype*)(addr),
-              pto::Shape(
-                  GetTupleElement<Shape, DIM_1ST, 1, need_mask>(shape),
-                  GetTupleElement<Shape, DIM_2ND, 1, need_mask>(shape),
-                  GetTupleElement<Shape, DIM_3RD, 1, need_mask>(shape), GetTupleElement<Shape, DIM_4TH>(shape),
-                  GetTupleElement<Shape, DIM_5TH>(shape)),
-              pto::Stride(
-                  GetTupleElement<Stride, DIM_1ST, 0, need_mask>(stride),
-                  GetTupleElement<Stride, DIM_2ND, 0, need_mask>(stride),
-                  GetTupleElement<Stride, DIM_3RD, 0, need_mask>(stride), GetTupleElement<Stride, DIM_4TH, 0>(stride),
-                  GetTupleElement<Stride, DIM_5TH, 0>(stride)))
+        : data_((__gm__ Dtype*)(addr),
+                pto::Shape(GetTupleElement<Shape, DIM_1ST, 1, need_mask>(shape),
+                           GetTupleElement<Shape, DIM_2ND, 1, need_mask>(shape),
+                           GetTupleElement<Shape, DIM_3RD, 1, need_mask>(shape), GetTupleElement<Shape, DIM_4TH>(shape),
+                           GetTupleElement<Shape, DIM_5TH>(shape)),
+                pto::Stride(GetTupleElement<Stride, DIM_1ST, 0, need_mask>(stride),
+                            GetTupleElement<Stride, DIM_2ND, 0, need_mask>(stride),
+                            GetTupleElement<Stride, DIM_3RD, 0, need_mask>(stride),
+                            GetTupleElement<Stride, DIM_4TH, 0>(stride), GetTupleElement<Stride, DIM_5TH, 0>(stride)))
     {}
 
     __aicore__ inline PtoGlobal(const Shape& shape, const Stride& stride) : PtoGlobal(0x0, shape, stride) {}
@@ -205,7 +202,7 @@ struct PtoTileDimConfig<T, true, false> {
 };
 
 template <typename T, pto::BLayout Layout = pto::BLayout::RowMajor, bool Mergeable = false,
-           typename DtypeOverride = void, bool MergeAll = true>
+          typename DtypeOverride = void, bool MergeAll = true>
 class PtoTile {
 private:
     static constexpr auto size = Std::tuple_size<typename T::Shape>::value;
@@ -240,9 +237,8 @@ public:
     }
 
     __aicore__ inline PtoTile(const T& tensor)
-        : PtoTile(
-              tensor.GetLayout().template GetShapeDim<DIM_4TH, MAX_DIMS>(),
-              tensor.GetLayout().template GetShapeDim<DIM_5TH, MAX_DIMS>())
+        : PtoTile(tensor.GetLayout().template GetShapeDim<DIM_4TH, MAX_DIMS>(),
+                  tensor.GetLayout().template GetShapeDim<DIM_5TH, MAX_DIMS>())
     {}
 
     __aicore__ inline Type& Data() { return data_; }

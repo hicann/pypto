@@ -27,20 +27,11 @@ public:
     void TearDown() override {}
 };
 
-TEST_F(TestSerialization, VersionString)
-{
-    EXPECT_EQ(T_VERSION, "2.0");
-}
+TEST_F(TestSerialization, VersionString) { EXPECT_EQ(T_VERSION, "2.0"); }
 
-TEST_F(TestSerialization, FieldKind)
-{
-    EXPECT_EQ(T_FIELD_KIND, "kind");
-}
+TEST_F(TestSerialization, FieldKind) { EXPECT_EQ(T_FIELD_KIND, "kind"); }
 
-TEST_F(TestSerialization, FieldRawtensor)
-{
-    EXPECT_EQ(T_FIELD_RAWTENSOR, "rawtensor");
-}
+TEST_F(TestSerialization, FieldRawtensor) { EXPECT_EQ(T_FIELD_RAWTENSOR, "rawtensor"); }
 
 TEST_F(TestSerialization, KindValues)
 {

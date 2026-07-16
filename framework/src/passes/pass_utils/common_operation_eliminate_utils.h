@@ -42,33 +42,30 @@ public:
 private:
     static const std::unordered_set<Opcode>& GetSkipEliminateOpcodes();
     void SortedProducer(std::vector<Operation*>& sortedProducers) const;
-    void CollectProducerInfo(
-        const std::vector<Operation*>& sortedProducers, const LogicalTensorPtr& curTensor,
-        std::vector<std::string>& opStrList, std::stringstream& ss) const;
+    void CollectProducerInfo(const std::vector<Operation*>& sortedProducers, const LogicalTensorPtr& curTensor,
+                             std::vector<std::string>& opStrList, std::stringstream& ss) const;
     unsigned long ComputeHash(const std::vector<Operation*>& producers, LogicalTensorPtr curTensor) const;
     std::unordered_map<LogicalTensorPtr, std::vector<Operation*>> GetTensorProducers(
         Function& function, std::vector<LogicalTensorPtr>& sequence);
     void UpdateConnection(LogicalTensorPtr oldTensor, LogicalTensorPtr newTensor);
     uint32_t GetTensorCoreFlag(const LogicalTensorPtr& tensor) const;
-    void CollectSubgraphIds(
-        const std::set<Operation*, LogicalTensor::CompareOp>& ops, std::unordered_set<int>& subgraphIds) const;
-    void UpdateInternalTensorCoreFlag(
-        const LogicalTensorPtr& tensor, std::unordered_map<int, uint32_t>& subgraphCoreFlags) const;
+    void CollectSubgraphIds(const std::set<Operation*, LogicalTensor::CompareOp>& ops,
+                            std::unordered_set<int>& subgraphIds) const;
+    void UpdateInternalTensorCoreFlag(const LogicalTensorPtr& tensor,
+                                      std::unordered_map<int, uint32_t>& subgraphCoreFlags) const;
     std::unordered_set<int> GetMixSubgraphIds(Function& function) const;
     bool WouldExposeMixInternalTensorAfterMerge(const LogicalTensorPtr& oldTensor, const LogicalTensorPtr& newTensor,
-        const std::unordered_set<int>& mixSubgraphIds) const;
+                                                const std::unordered_set<int>& mixSubgraphIds) const;
     std::pair<LogicalTensorPtr, std::vector<Operation*>> TensorHashExist(
         const LogicalTensorPtr orderedTensor, std::unordered_set<Operation*>& cacheProducers,
         const std::unordered_map<LogicalTensorPtr, std::vector<Operation*>>& tensorProducerMap);
-    bool TensorProducersMerge(
-        Function& function, const LogicalTensorPtr orderedTensor, std::unordered_set<Operation*>& cacheProducers,
-        const std::unordered_map<LogicalTensorPtr, std::vector<Operation*>>& tensorProducerMap);
-    void UpdateView(
-        ViewOpAttribute* viewOpAttribute, const std::shared_ptr<LogicalTensor> oldTensor,
-        const std::shared_ptr<LogicalTensor> newTensor) const;
-    void UpdateCopy(
-        CopyOpAttribute* copyOpAttribute, const std::shared_ptr<LogicalTensor> oldTensor,
-        const std::shared_ptr<LogicalTensor> newTensor) const;
+    bool TensorProducersMerge(Function& function, const LogicalTensorPtr orderedTensor,
+                              std::unordered_set<Operation*>& cacheProducers,
+                              const std::unordered_map<LogicalTensorPtr, std::vector<Operation*>>& tensorProducerMap);
+    void UpdateView(ViewOpAttribute* viewOpAttribute, const std::shared_ptr<LogicalTensor> oldTensor,
+                    const std::shared_ptr<LogicalTensor> newTensor) const;
+    void UpdateCopy(CopyOpAttribute* copyOpAttribute, const std::shared_ptr<LogicalTensor> oldTensor,
+                    const std::shared_ptr<LogicalTensor> newTensor) const;
 
     std::unordered_map<uint64_t, std::pair<LogicalTensorPtr, std::vector<Operation*>>> hashCache_;
     std::unordered_set<int> mixSubgraphIds_;

@@ -37,11 +37,11 @@
 static constexpr int MAX_AICPU_NUM = 8;
 static constexpr int MAX_EVENT_NUM = 2;
 
-#define DEV_ATRACE(fmt, ...)                                                             \
-    do {                                                                                 \
-        char buf[MAX_MSG_LEN];                                                           \
-        sprintf_s(buf, MAX_MSG_LEN, fmt, ##__VA_ARGS__);               \
-        npu::tile_fwk::dynamic::DeviceTrace::GetInstance().SubmitTraceMsg(buf);          \
+#define DEV_ATRACE(fmt, ...)                                                    \
+    do {                                                                        \
+        char buf[MAX_MSG_LEN];                                                  \
+        sprintf_s(buf, MAX_MSG_LEN, fmt, ##__VA_ARGS__);                        \
+        npu::tile_fwk::dynamic::DeviceTrace::GetInstance().SubmitTraceMsg(buf); \
     } while (false)
 #ifdef __DEVICE__
 #include "trace/atrace_types.h"

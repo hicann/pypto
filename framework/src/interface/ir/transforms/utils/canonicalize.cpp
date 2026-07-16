@@ -134,9 +134,9 @@ SeqStmtsPtr CanonicalizeSeqStmts(const SeqStmtsPtr& seq, const std::vector<size_
             result[idx] = CanonicalizeLoopImpl(
                 forStmt, suffix,
                 [&forStmt](const std::vector<IterArgPtr>& ia, const SeqStmtsPtr& body, const std::vector<VarPtr>& rv) {
-                    return std::make_shared<const ForStmt>(
-                        forStmt->loopVar_, forStmt->start_, forStmt->stop_, forStmt->step_, ia, body, rv,
-                        forStmt->span_, forStmt->attrs_);
+                    return std::make_shared<const ForStmt>(forStmt->loopVar_, forStmt->start_, forStmt->stop_,
+                                                           forStmt->step_, ia, body, rv, forStmt->span_,
+                                                           forStmt->attrs_);
                 });
         } else if (auto whileStmt = std::dynamic_pointer_cast<const WhileStmt>(stmts[idx])) {
             result[idx] = CanonicalizeLoopImpl(

@@ -1,5 +1,5 @@
 /**
-* Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
  * Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -28,65 +28,68 @@
 #include "adapter/stubs/runtime_stubs.h"
 
 namespace npu::tile_fwk {
-RtError RuntimeMalloc(void **devPtr, uint64_t size, RtMemType type, const uint16_t moduleId)
+RtError RuntimeMalloc(void** devPtr, uint64_t size, RtMemType type, const uint16_t moduleId)
 {
 #ifdef BUILD_WITH_CANN
-    void *func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::Malloc);
+    void* func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::Malloc);
     if (func != nullptr) {
-        rtError_t(*runtimeFunc)(void**, uint64_t, rtMemType_t, const uint16_t) =
-            reinterpret_cast<rtError_t(*)(void**, uint64_t, rtMemType_t, const uint16_t)>(func);
+        rtError_t (*runtimeFunc)(
+            void**, uint64_t, rtMemType_t,
+            const uint16_t) = reinterpret_cast<rtError_t (*)(void**, uint64_t, rtMemType_t, const uint16_t)>(func);
         return runtimeFunc(devPtr, size, static_cast<rtMemType_t>(type), moduleId);
     }
 #endif
     return StubMalloc(devPtr, size, type, moduleId);
 }
 
-RtError RuntimeMemset(void *devPtr, uint64_t destMax, uint32_t val, uint64_t cnt)
+RtError RuntimeMemset(void* devPtr, uint64_t destMax, uint32_t val, uint64_t cnt)
 {
 #ifdef BUILD_WITH_CANN
-    void *func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::Memset);
+    void* func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::Memset);
     if (func != nullptr) {
-        rtError_t(*runtimeFunc)(void*, uint64_t, uint32_t, uint64_t) =
-            reinterpret_cast<rtError_t(*)(void*, uint64_t, uint32_t, uint64_t)>(func);
+        rtError_t (*runtimeFunc)(void*, uint64_t, uint32_t,
+                                 uint64_t) = reinterpret_cast<rtError_t (*)(void*, uint64_t, uint32_t, uint64_t)>(func);
         return runtimeFunc(devPtr, destMax, val, cnt);
     }
 #endif
     return StubMemset(devPtr, destMax, val, cnt);
 }
 
-RtError RuntimeMemcpyDirect(void *dst, uint64_t destMax, const void *src, uint64_t cnt, RtMemcpyKind kind)
+RtError RuntimeMemcpyDirect(void* dst, uint64_t destMax, const void* src, uint64_t cnt, RtMemcpyKind kind)
 {
 #ifdef BUILD_WITH_CANN
-    void *func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::MemCopy);
+    void* func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::MemCopy);
     if (func != nullptr) {
-        rtError_t(*runtimeFunc)(void *, uint64_t, const void *, uint64_t, rtMemcpyKind_t) =
-            reinterpret_cast<rtError_t(*)(void *, uint64_t, const void *, uint64_t, rtMemcpyKind_t)>(func);
+        rtError_t (*runtimeFunc)(void*, uint64_t, const void*, uint64_t,
+                                 rtMemcpyKind_t) = reinterpret_cast<rtError_t (*)(void*, uint64_t, const void*,
+                                                                                  uint64_t, rtMemcpyKind_t)>(func);
         return runtimeFunc(dst, destMax, src, cnt, static_cast<rtMemcpyKind_t>(kind));
     }
 #endif
     return StubMemcpy(dst, destMax, src, cnt, kind);
 }
 
-RtError RuntimeMemcpyDirectAsync(void *dst, uint64_t destMax, const void *src, uint64_t cnt, RtMemcpyKind kind,
+RtError RuntimeMemcpyDirectAsync(void* dst, uint64_t destMax, const void* src, uint64_t cnt, RtMemcpyKind kind,
                                  RtStream stm)
 {
 #ifdef BUILD_WITH_CANN
-    void *func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::MemCopyAsync);
+    void* func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::MemCopyAsync);
     if (func != nullptr) {
-        rtError_t(*runtimeFunc)(void*, uint64_t, const void *, uint64_t, rtMemcpyKind_t, rtStream_t) =
-            reinterpret_cast<rtError_t(*)(void*, uint64_t, const void *, uint64_t, rtMemcpyKind_t, rtStream_t)>(func);
+        rtError_t (*runtimeFunc)(void*, uint64_t, const void*, uint64_t, rtMemcpyKind_t,
+                                 rtStream_t) = reinterpret_cast<rtError_t (*)(void*, uint64_t, const void*, uint64_t,
+                                                                              rtMemcpyKind_t, rtStream_t)>(func);
         return runtimeFunc(dst, destMax, src, cnt, static_cast<rtMemcpyKind_t>(kind), stm);
     }
 #endif
     return StubMemcpyAsync(dst, destMax, src, cnt, kind, stm);
 }
 
-RtError RuntimeFree(void *devPtr)
+RtError RuntimeFree(void* devPtr)
 {
 #ifdef BUILD_WITH_CANN
-    void *func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::Free);
+    void* func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::Free);
     if (func != nullptr) {
-        rtError_t(*runtimeFunc)(void*) = reinterpret_cast<rtError_t(*)(void*)>(func);
+        rtError_t (*runtimeFunc)(void*) = reinterpret_cast<rtError_t (*)(void*)>(func);
         return runtimeFunc(devPtr);
     }
 #endif
@@ -96,21 +99,21 @@ RtError RuntimeFree(void *devPtr)
 RtError RuntimeSetDevice(int32_t devId)
 {
 #ifdef BUILD_WITH_CANN
-    void *func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::SetDevice);
+    void* func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::SetDevice);
     if (func != nullptr) {
-        rtError_t(*runtimeFunc)(int32_t) = reinterpret_cast<rtError_t(*)(int32_t)>(func);
+        rtError_t (*runtimeFunc)(int32_t) = reinterpret_cast<rtError_t (*)(int32_t)>(func);
         return runtimeFunc(devId);
     }
 #endif
     return StubSetDevice(devId);
 }
 
-RtError RuntimeGetDevice(int32_t *devId)
+RtError RuntimeGetDevice(int32_t* devId)
 {
 #ifdef BUILD_WITH_CANN
-    void *func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::GetDevice);
+    void* func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::GetDevice);
     if (func != nullptr) {
-        rtError_t(*runtimeFunc)(int32_t*) = reinterpret_cast<rtError_t(*)(int32_t*)>(func);
+        rtError_t (*runtimeFunc)(int32_t*) = reinterpret_cast<rtError_t (*)(int32_t*)>(func);
         return runtimeFunc(devId);
     }
 #endif
@@ -120,100 +123,103 @@ RtError RuntimeGetDevice(int32_t *devId)
 RtError RuntimeGetSocSpec(const char* label, const char* key, char* val, const uint32_t maxLen)
 {
 #ifdef BUILD_WITH_CANN
-    void *func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::GetSocSpec);
+    void* func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::GetSocSpec);
     if (func != nullptr) {
-        rtError_t(*runtimeFunc)(const char*, const char*, char*, const uint32_t) =
-            reinterpret_cast<rtError_t(*)(const char*, const char*, char*, const uint32_t)>(func);
+        rtError_t (*runtimeFunc)(
+            const char*, const char*, char*,
+            const uint32_t) = reinterpret_cast<rtError_t (*)(const char*, const char*, char*, const uint32_t)>(func);
         return runtimeFunc(label, key, val, maxLen);
     }
 #endif
     return StubGetSocSpec(label, key, val, maxLen);
 }
 
-RtError RuntimeGetSocVersion(char_t *ver, const uint32_t maxLen)
+RtError RuntimeGetSocVersion(char_t* ver, const uint32_t maxLen)
 {
 #ifdef BUILD_WITH_CANN
-    void *func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::GetSocVersion);
+    void* func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::GetSocVersion);
     if (func != nullptr) {
-        rtError_t(*runtimeFunc)(char_t*, const uint32_t) =
-            reinterpret_cast<rtError_t(*)(char_t*, const uint32_t)>(func);
+        rtError_t (*runtimeFunc)(char_t*,
+                                 const uint32_t) = reinterpret_cast<rtError_t (*)(char_t*, const uint32_t)>(func);
         return runtimeFunc(ver, maxLen);
     }
 #endif
     return StubGetSocVersion(ver, maxLen);
 }
 
-RtError RuntimeGetAiCpuCount(uint32_t *aiCpuCnt)
+RtError RuntimeGetAiCpuCount(uint32_t* aiCpuCnt)
 {
 #ifdef BUILD_WITH_CANN
-    void *func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::GetAiCpuCount);
+    void* func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::GetAiCpuCount);
     if (func != nullptr) {
-        rtError_t(*runtimeFunc)(uint32_t*) = reinterpret_cast<rtError_t(*)(uint32_t*)>(func);
+        rtError_t (*runtimeFunc)(uint32_t*) = reinterpret_cast<rtError_t (*)(uint32_t*)>(func);
         return runtimeFunc(aiCpuCnt);
     }
 #endif
     return StubGetAiCpuCount(aiCpuCnt);
 }
 
-RtError RuntimeGetL2CacheOffset(uint32_t deviceId, uint64_t *offset)
+RtError RuntimeGetL2CacheOffset(uint32_t deviceId, uint64_t* offset)
 {
 #ifdef BUILD_WITH_CANN
-    void *func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::GetL2CacheOffset);
+    void* func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::GetL2CacheOffset);
     if (func != nullptr) {
-        rtError_t(*runtimeFunc)(uint32_t, uint64_t*) =
-            reinterpret_cast<rtError_t(*)(uint32_t, uint64_t*)>(func);
+        rtError_t (*runtimeFunc)(uint32_t, uint64_t*) = reinterpret_cast<rtError_t (*)(uint32_t, uint64_t*)>(func);
         return runtimeFunc(deviceId, offset);
     }
 #endif
     return StubGetL2CacheOffset(deviceId, offset);
 }
 
-RtError RuntimeGetLogicDevIdByUserDevId(const int32_t userDevId, int32_t * const logicDevId)
+RtError RuntimeGetLogicDevIdByUserDevId(const int32_t userDevId, int32_t* const logicDevId)
 {
 #ifdef BUILD_WITH_CANN
-    void *func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::GetLogicDevIdByUserDevId);
+    void* func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::GetLogicDevIdByUserDevId);
     if (func != nullptr) {
-        rtError_t(*runtimeFunc)(const int32_t, int32_t* const) =
-            reinterpret_cast<rtError_t(*)(const int32_t, int32_t* const)>(func);
+        rtError_t (*runtimeFunc)(const int32_t,
+                                 int32_t* const) = reinterpret_cast<rtError_t (*)(const int32_t, int32_t* const)>(func);
         return runtimeFunc(userDevId, logicDevId);
     }
 #endif
     return StubGetLogicDevIdByUserDevId(userDevId, logicDevId);
 }
 
-RtError RuntimeFuncGetByName(const RtBinHandle binHandle, const char_t *kernelName, RtFuncHandle *funcHandle)
+RtError RuntimeFuncGetByName(const RtBinHandle binHandle, const char_t* kernelName, RtFuncHandle* funcHandle)
 {
 #ifdef BUILD_WITH_CANN
-    void *func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::FuncGetByName);
+    void* func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::FuncGetByName);
     if (func != nullptr) {
-        rtError_t(*runtimeFunc)(const rtBinHandle, const char_t*, rtFuncHandle*) =
-            reinterpret_cast<rtError_t(*)(const rtBinHandle, const char_t*, rtFuncHandle*)>(func);
+        rtError_t (*runtimeFunc)(
+            const rtBinHandle, const char_t*,
+            rtFuncHandle*) = reinterpret_cast<rtError_t (*)(const rtBinHandle, const char_t*, rtFuncHandle*)>(func);
         return runtimeFunc(binHandle, kernelName, funcHandle);
     }
 #endif
     return StubFuncGetByName(binHandle, kernelName, funcHandle);
 }
 
-RtError RuntimeBinaryLoadFromFile(const char_t * const binPath, const RtLoadBinaryConfig * const optionalCfg,
-                                  RtBinHandle *handle)
+RtError RuntimeBinaryLoadFromFile(const char_t* const binPath, const RtLoadBinaryConfig* const optionalCfg,
+                                  RtBinHandle* handle)
 {
 #ifdef BUILD_WITH_CANN
-    void *func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::BinaryLoadFromFile);
+    void* func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::BinaryLoadFromFile);
     if (func != nullptr) {
-        rtError_t(*runtimeFunc)(const char_t* const, const rtLoadBinaryConfig_t* const, rtBinHandle*) =
-            reinterpret_cast<rtError_t(*)(const char_t* const, const rtLoadBinaryConfig_t* const, rtBinHandle*)>(func);
+        rtError_t (*runtimeFunc)(
+            const char_t* const, const rtLoadBinaryConfig_t* const,
+            rtBinHandle*) = reinterpret_cast<rtError_t (*)(const char_t* const, const rtLoadBinaryConfig_t* const,
+                                                           rtBinHandle*)>(func);
         return runtimeFunc(binPath, reinterpret_cast<const rtLoadBinaryConfig_t*>(optionalCfg), handle);
     }
 #endif
     return StubBinaryLoadFromFile(binPath, optionalCfg, handle);
 }
 
-RtError RuntimeStreamCreate(RtStream *stm, int32_t priority)
+RtError RuntimeStreamCreate(RtStream* stm, int32_t priority)
 {
 #ifdef BUILD_WITH_CANN
-    void *func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::StreamCreate);
+    void* func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::StreamCreate);
     if (func != nullptr) {
-        rtError_t(*runtimeFunc)(rtStream_t*, int32_t) = reinterpret_cast<rtError_t(*)(rtStream_t*, int32_t)>(func);
+        rtError_t (*runtimeFunc)(rtStream_t*, int32_t) = reinterpret_cast<rtError_t (*)(rtStream_t*, int32_t)>(func);
         return runtimeFunc(stm, priority);
     }
 #endif
@@ -223,9 +229,9 @@ RtError RuntimeStreamCreate(RtStream *stm, int32_t priority)
 RtError RuntimeStreamDestroy(RtStream stm)
 {
 #ifdef BUILD_WITH_CANN
-    void *func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::StreamDestroy);
+    void* func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::StreamDestroy);
     if (func != nullptr) {
-        rtError_t(*runtimeFunc)(rtStream_t) = reinterpret_cast<rtError_t(*)(rtStream_t)>(func);
+        rtError_t (*runtimeFunc)(rtStream_t) = reinterpret_cast<rtError_t (*)(rtStream_t)>(func);
         return runtimeFunc(stm);
     }
 #endif
@@ -235,10 +241,9 @@ RtError RuntimeStreamDestroy(RtStream stm)
 RtError RuntimeStreamAddToModel(RtStream stm, RtModel captureMdl)
 {
 #ifdef BUILD_WITH_CANN
-    void *func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::StreamAddToModel);
+    void* func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::StreamAddToModel);
     if (func != nullptr) {
-        rtError_t(*runtimeFunc)(rtStream_t, rtModel_t) =
-            reinterpret_cast<rtError_t(*)(rtStream_t, rtModel_t)>(func);
+        rtError_t (*runtimeFunc)(rtStream_t, rtModel_t) = reinterpret_cast<rtError_t (*)(rtStream_t, rtModel_t)>(func);
         return runtimeFunc(stm, captureMdl);
     }
 #endif
@@ -248,75 +253,77 @@ RtError RuntimeStreamAddToModel(RtStream stm, RtModel captureMdl)
 RtError RuntimeStreamSynchronize(RtStream stm)
 {
 #ifdef BUILD_WITH_CANN
-    void *func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::StreamSynchronize);
+    void* func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::StreamSynchronize);
     if (func != nullptr) {
-        rtError_t(*runtimeFunc)(rtStream_t) = reinterpret_cast<rtError_t(*)(rtStream_t)>(func);
+        rtError_t (*runtimeFunc)(rtStream_t) = reinterpret_cast<rtError_t (*)(rtStream_t)>(func);
         return runtimeFunc(stm);
     }
 #endif
     return StubStreamSynchronize(stm);
 }
 
-RtError RuntimeDevBinaryUnRegister(void *handle)
+RtError RuntimeDevBinaryUnRegister(void* handle)
 {
 #ifdef BUILD_WITH_CANN
-    void *func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::DevBinaryUnRegister);
+    void* func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::DevBinaryUnRegister);
     if (func != nullptr) {
-        rtError_t(*runtimeFunc)(void*) = reinterpret_cast<rtError_t(*)(void*)>(func);
+        rtError_t (*runtimeFunc)(void*) = reinterpret_cast<rtError_t (*)(void*)>(func);
         return runtimeFunc(handle);
     }
 #endif
     return StubDevBinaryUnRegister(handle);
 }
 
-RtError RuntimeRegisterAllKernel(const RtDevBinary *bin, void **hdl)
+RtError RuntimeRegisterAllKernel(const RtDevBinary* bin, void** hdl)
 {
 #ifdef BUILD_WITH_CANN
-    void *func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::RegisterAllKernel);
+    void* func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::RegisterAllKernel);
     if (func != nullptr) {
-        rtError_t(*runtimeFunc)(const rtDevBinary_t*, void**) =
-            reinterpret_cast<rtError_t(*)(const rtDevBinary_t*, void**)>(func);
+        rtError_t (*runtimeFunc)(const rtDevBinary_t*,
+                                 void**) = reinterpret_cast<rtError_t (*)(const rtDevBinary_t*, void**)>(func);
         return runtimeFunc(reinterpret_cast<const rtDevBinary_t*>(bin), hdl);
     }
 #endif
     return StubRegisterAllKernel(bin, hdl);
 }
 
-RtError RuntimeDevBinaryRegister(const RtDevBinary *bin, void **hdl)
+RtError RuntimeDevBinaryRegister(const RtDevBinary* bin, void** hdl)
 {
 #ifdef BUILD_WITH_CANN
-    void *func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::DevBinaryRegister);
+    void* func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::DevBinaryRegister);
     if (func != nullptr) {
-        rtError_t(*runtimeFunc)(const rtDevBinary_t*, void**) =
-            reinterpret_cast<rtError_t(*)(const rtDevBinary_t*, void**)>(func);
+        rtError_t (*runtimeFunc)(const rtDevBinary_t*,
+                                 void**) = reinterpret_cast<rtError_t (*)(const rtDevBinary_t*, void**)>(func);
         return runtimeFunc(reinterpret_cast<const rtDevBinary_t*>(bin), hdl);
     }
 #endif
     return StubDevBinaryRegister(bin, hdl);
 }
 
-RtError RuntimeFunctionRegister(void *binHandle, const void *stubFunc, const char_t *stubName,
-                                const void *kernelInfoExt, uint32_t funcMode)
+RtError RuntimeFunctionRegister(void* binHandle, const void* stubFunc, const char_t* stubName,
+                                const void* kernelInfoExt, uint32_t funcMode)
 {
 #ifdef BUILD_WITH_CANN
-    void *func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::FunctionRegister);
+    void* func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::FunctionRegister);
     if (func != nullptr) {
-        rtError_t(*runtimeFunc)(void*, const void*, const char_t*, const void*, uint32_t) =
-            reinterpret_cast<rtError_t(*)(void*, const void*, const char_t*, const void*, uint32_t)>(func);
+        rtError_t (*runtimeFunc)(
+            void*, const void*, const char_t*, const void*,
+            uint32_t) = reinterpret_cast<rtError_t (*)(void*, const void*, const char_t*, const void*, uint32_t)>(func);
         return runtimeFunc(binHandle, stubFunc, stubName, kernelInfoExt, funcMode);
     }
 #endif
     return StubFunctionRegister(binHandle, stubFunc, stubName, kernelInfoExt, funcMode);
 }
 
-RtError RuntimeKernelLaunch(const void *stubFunc, uint32_t blockDim, void *args, uint32_t argsSize,
-                            RtSmDesc *smDesc, RtStream stm)
+RtError RuntimeKernelLaunch(const void* stubFunc, uint32_t blockDim, void* args, uint32_t argsSize, RtSmDesc* smDesc,
+                            RtStream stm)
 {
 #ifdef BUILD_WITH_CANN
-    void *func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::KernelLaunch);
+    void* func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::KernelLaunch);
     if (func != nullptr) {
-        rtError_t(*runtimeFunc)(const void*, uint32_t, void*, uint32_t, rtSmDesc_t*, rtStream_t) =
-            reinterpret_cast<rtError_t(*)(const void*, uint32_t, void*, uint32_t, rtSmDesc_t*, rtStream_t)>(func);
+        rtError_t (*runtimeFunc)(const void*, uint32_t, void*, uint32_t, rtSmDesc_t*,
+                                 rtStream_t) = reinterpret_cast<rtError_t (*)(const void*, uint32_t, void*, uint32_t,
+                                                                              rtSmDesc_t*, rtStream_t)>(func);
         return runtimeFunc(stubFunc, blockDim, args, argsSize, reinterpret_cast<rtSmDesc_t*>(smDesc), stm);
     }
 #endif
@@ -324,55 +331,69 @@ RtError RuntimeKernelLaunch(const void *stubFunc, uint32_t blockDim, void *args,
 }
 
 RtError RuntimeLaunchCpuKernel(const RtFuncHandle funcHandle, uint32_t numBlocks, RtStream stm,
-    const RtKernelLaunchCfg *cfg, RtCpuKernelArgs *argsInfo)
+                               const RtKernelLaunchCfg* cfg, RtCpuKernelArgs* argsInfo)
 {
 #ifdef BUILD_WITH_CANN
-    void *func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::LaunchCpuKernel);
+    void* func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::LaunchCpuKernel);
     if (func != nullptr) {
-        rtError_t(*runtimeFunc)(const rtFuncHandle, uint32_t, rtStream_t, const rtKernelLaunchCfg_t*, rtCpuKernelArgs_t*) =
-            reinterpret_cast<rtError_t(*)(const rtFuncHandle, uint32_t, rtStream_t, const rtKernelLaunchCfg_t*, rtCpuKernelArgs_t*)>(func);
-        return runtimeFunc(funcHandle, numBlocks, stm, reinterpret_cast<const rtKernelLaunchCfg_t*>(cfg), reinterpret_cast<rtCpuKernelArgs_t*>(argsInfo));
+        rtError_t (*runtimeFunc)(
+            const rtFuncHandle, uint32_t, rtStream_t, const rtKernelLaunchCfg_t*,
+            rtCpuKernelArgs_t*) = reinterpret_cast<rtError_t (*)(const rtFuncHandle, uint32_t, rtStream_t,
+                                                                 const rtKernelLaunchCfg_t*, rtCpuKernelArgs_t*)>(func);
+        return runtimeFunc(funcHandle, numBlocks, stm, reinterpret_cast<const rtKernelLaunchCfg_t*>(cfg),
+                           reinterpret_cast<rtCpuKernelArgs_t*>(argsInfo));
     }
 #endif
     return StubLaunchCpuKernel(funcHandle, numBlocks, stm, cfg, argsInfo);
 }
 
-RtError RuntimeKernelLaunchWithHandleV2(void *hdl, const uint64_t tilingKey, uint32_t numBlocks,
-                                        RtArgsEx *argsInfo, RtSmDesc *smDesc, RtStream stm,
-                                        const RtTaskCfgInfo *cfgInfo)
+RtError RuntimeKernelLaunchWithHandleV2(void* hdl, const uint64_t tilingKey, uint32_t numBlocks, RtArgsEx* argsInfo,
+                                        RtSmDesc* smDesc, RtStream stm, const RtTaskCfgInfo* cfgInfo)
 {
 #ifdef BUILD_WITH_CANN
-    void *func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::KernelLaunchWithHandleV2);
+    void* func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::KernelLaunchWithHandleV2);
     if (func != nullptr) {
-        rtError_t(*runtimeFunc)(void*, const uint64_t, uint32_t, rtArgsEx_t*, rtSmDesc_t*, rtStream_t, const rtTaskCfgInfo_t*) =
-            reinterpret_cast<rtError_t(*)(void*, const uint64_t, uint32_t, rtArgsEx_t*, rtSmDesc_t*, rtStream_t, const rtTaskCfgInfo_t*)>(func);
-        return runtimeFunc(hdl, tilingKey, numBlocks, reinterpret_cast<rtArgsEx_t*>(argsInfo), reinterpret_cast<rtSmDesc_t*>(smDesc), stm, reinterpret_cast<const rtTaskCfgInfo_t*>(cfgInfo));
+        rtError_t (*runtimeFunc)(
+            void*, const uint64_t, uint32_t, rtArgsEx_t*, rtSmDesc_t*, rtStream_t,
+            const rtTaskCfgInfo_t*) = reinterpret_cast<rtError_t (*)(void*, const uint64_t, uint32_t, rtArgsEx_t*,
+                                                                     rtSmDesc_t*, rtStream_t, const rtTaskCfgInfo_t*)>(
+            func);
+        return runtimeFunc(hdl, tilingKey, numBlocks, reinterpret_cast<rtArgsEx_t*>(argsInfo),
+                           reinterpret_cast<rtSmDesc_t*>(smDesc), stm,
+                           reinterpret_cast<const rtTaskCfgInfo_t*>(cfgInfo));
     }
 #endif
     return StubKernelLaunchWithHandleV2(hdl, tilingKey, numBlocks, argsInfo, smDesc, stm, cfgInfo);
 }
 
-RtError RuntimeAicpuKernelLaunchExWithArgs(const uint32_t kernelType, const char_t * const opName,
-                                           const uint32_t numBlocks, const RtAicpuArgsEx *argsInfo,
-                                           RtSmDesc * const smDesc, const RtStream stm, const uint32_t flags)
+RtError RuntimeAicpuKernelLaunchExWithArgs(const uint32_t kernelType, const char_t* const opName,
+                                           const uint32_t numBlocks, const RtAicpuArgsEx* argsInfo,
+                                           RtSmDesc* const smDesc, const RtStream stm, const uint32_t flags)
 {
 #ifdef BUILD_WITH_CANN
-    void *func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::AicpuKernelLaunchExWithArgs);
+    void* func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::AicpuKernelLaunchExWithArgs);
     if (func != nullptr) {
-        rtError_t(*runtimeFunc)(const uint32_t, const char_t* const, const uint32_t, const rtAicpuArgsEx_t*, rtSmDesc_t* const, const rtStream_t, const uint32_t) =
-            reinterpret_cast<rtError_t(*)(const uint32_t, const char_t* const, const uint32_t, const rtAicpuArgsEx_t*, rtSmDesc_t* const, const rtStream_t, const uint32_t)>(func);
-        return runtimeFunc(kernelType, opName, numBlocks, reinterpret_cast<const rtAicpuArgsEx_t*>(argsInfo), reinterpret_cast<rtSmDesc_t*>(smDesc), stm, flags);
+        rtError_t (*runtimeFunc)(
+            const uint32_t, const char_t* const, const uint32_t, const rtAicpuArgsEx_t*, rtSmDesc_t* const,
+            const rtStream_t,
+            const uint32_t) = reinterpret_cast<rtError_t (*)(const uint32_t, const char_t* const, const uint32_t,
+                                                             const rtAicpuArgsEx_t*, rtSmDesc_t* const,
+                                                             const rtStream_t, const uint32_t)>(func);
+        return runtimeFunc(kernelType, opName, numBlocks, reinterpret_cast<const rtAicpuArgsEx_t*>(argsInfo),
+                           reinterpret_cast<rtSmDesc_t*>(smDesc), stm, flags);
     }
 #endif
     return StubAicpuKernelLaunchExWithArgs(kernelType, opName, numBlocks, argsInfo, smDesc, stm, flags);
 }
 
-RtError RuntimeGeExceptionRegInfo(RtExceptionInfo* exceptionInfo, RtExceptionRegInfo* execptionReg) {
+RtError RuntimeGeExceptionRegInfo(RtExceptionInfo* exceptionInfo, RtExceptionRegInfo* execptionReg)
+{
 #ifdef BUILD_WITH_CANN
-    void *func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::GetExceptionRegInfo);
+    void* func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::GetExceptionRegInfo);
     if (func != nullptr) {
-        rtError_t(*runtimeFunc)(RtExceptionInfo*, RtExceptionErrRegInfo**, uint32_t*) =
-            reinterpret_cast<rtError_t(*)(RtExceptionInfo*, RtExceptionErrRegInfo**, uint32_t*)>(func);
+        rtError_t (*runtimeFunc)(
+            RtExceptionInfo*, RtExceptionErrRegInfo**,
+            uint32_t*) = reinterpret_cast<rtError_t (*)(RtExceptionInfo*, RtExceptionErrRegInfo**, uint32_t*)>(func);
         return runtimeFunc(exceptionInfo, &(execptionReg->errRegInfo), &execptionReg->coreNum);
     }
 #else
@@ -410,4 +431,4 @@ static_assert(sizeof(RtLoadBinaryOption) == sizeof(rtLoadBinaryOption_t));
 static_assert(sizeof(RtLoadBinaryConfig) == sizeof(rtLoadBinaryConfig_t));
 static_assert(sizeof(RtArgsSizeInfo) == sizeof(rtArgsSizeInfo_t));
 #endif
-}
+} // namespace npu::tile_fwk

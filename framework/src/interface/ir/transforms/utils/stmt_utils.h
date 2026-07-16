@@ -32,8 +32,7 @@ std::unordered_set<const Var*> CollectStmtVarRefs(const StmtPtr& stmt);
 /// Collect all Var references from a list of stmts.
 /// If skip_iter_updates, skip YieldStmt/BreakStmt/ContinueStmt
 /// (their values are iter_arg updates, not uses).
-std::unordered_set<const Var*> CollectStmtVarRefs(const std::vector<StmtPtr>& stmts,
-                                                   bool skip_iter_updates = false);
+std::unordered_set<const Var*> CollectStmtVarRefs(const std::vector<StmtPtr>& stmts, bool skip_iter_updates = false);
 
 /// Flatten a SeqStmtsPtr body to its stmts vector (returns empty if null).
 const std::vector<StmtPtr>& FlattenBody(const SeqStmtsPtr& body);
@@ -44,8 +43,8 @@ bool StmtsEqual(const std::vector<StmtPtr>& a, const std::vector<StmtPtr>& b);
 /// Build a SeqStmts from a vector of stmts.
 SeqStmtsPtr MakeSeqBody(const std::vector<StmtPtr>& stmts, const Span& span);
 
-}  // namespace utils
-}  // namespace ir
-}  // namespace pypto
+} // namespace utils
+} // namespace ir
+} // namespace pypto
 
-#endif  // PYPTO_IR_TRANSFORMS_UTILS_STMT_UTILS_H_
+#endif // PYPTO_IR_TRANSFORMS_UTILS_STMT_UTILS_H_

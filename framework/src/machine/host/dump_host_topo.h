@@ -10,7 +10,7 @@
 
 /*!
  * \file dump_host_topo.h
- * \brief 
+ * \brief
  */
 
 #ifndef DUMP_HOST_TOPO_H
@@ -26,8 +26,7 @@
 namespace npu::tile_fwk {
 namespace topo_dump {
 
-void DumpSlotMapping(const TensorSlotManager& slotManager,
-                     const std::unordered_map<int, int>& slotIdxMapping,
+void DumpSlotMapping(const TensorSlotManager& slotManager, const std::unordered_map<int, int>& slotIdxMapping,
                      const IncastOutcastLink& inoutLink);
 
 class StaticTopoCsvWriter {
@@ -46,7 +45,6 @@ private:
     std::string path_;
 };
 
-
 class SlotCellTableCsvWriter {
 public:
     explicit SlotCellTableCsvWriter(bool fillContent);
@@ -56,11 +54,8 @@ public:
     SlotCellTableCsvWriter& operator=(const SlotCellTableCsvWriter&) = delete;
 
     bool Enabled() const;
-    void WritePartial(int slotIdx,
-                      const dynamic::DevCellMatchTableDesc& desc,
-                      size_t outcastCount);
-    void WriteFullCover(int slotIdx, uint64_t rootHash, int funcKey,
-                        const dynamic::DevCellMatchTableDesc& desc);
+    void WritePartial(int slotIdx, const dynamic::DevCellMatchTableDesc& desc, size_t outcastCount);
+    void WriteFullCover(int slotIdx, uint64_t rootHash, int funcKey, const dynamic::DevCellMatchTableDesc& desc);
 
 private:
     std::ofstream ofs_;

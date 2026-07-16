@@ -151,9 +151,8 @@ void TestKvSlcAttn(const NSAV1SimpleParams& params, SATileShapeConfig& saTileCon
     });
 
     // 4. 计算接口
-    SelectedAttention(
-        topkIndices, kvNopeCache, kRopeCache, kvCacheActSeq, blockTable, qNope, qRope, attenOut, n1, n2, softmaxScale,
-        front, near, topk, blockSize, cmpBlockSize, slcBlockSize, saTileConfig);
+    SelectedAttention(topkIndices, kvNopeCache, kRopeCache, kvCacheActSeq, blockTable, qNope, qRope, attenOut, n1, n2,
+                      softmaxScale, front, near, topk, blockSize, cmpBlockSize, slcBlockSize, saTileConfig);
 
 #ifndef AC_ENABLE_FRAMEWORK_WITHOUT_CANN
     // 5. 更新输入输出list

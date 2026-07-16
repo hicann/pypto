@@ -31,11 +31,10 @@ constexpr const unsigned OP_MAGIC4 = 4;
 class TestCodegenDynUna : public CodegenTestBase {
 public:
     TestCodegenDynUna()
-        : CodegenTestBase(
-              {.compileStage = CS_EXECUTE_GRAPH,
-               .setTileTensor = true,
-               .tileTensorValue = true,
-               .resetTileTensorOnTearDown = true})
+        : CodegenTestBase({.compileStage = CS_EXECUTE_GRAPH,
+                           .setTileTensor = true,
+                           .tileTensorValue = true,
+                           .resetTileTensorOnTearDown = true})
     {}
 };
 
@@ -64,8 +63,8 @@ TEST_F(TestCodegenDynUna, TestAbsDynamic)
             output = Abs(input_a);
         }
     }
-    auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX +
+                                                                HIDDEN_FUNC_SUFFIX);
 
     std::string res = GenCodeByFunction(*function);
     std::string expect =
@@ -111,8 +110,8 @@ TEST_F(TestCodegenDynUna, TestAtanFP32)
             output = Atan(input);
         }
     }
-    auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX +
+                                                                HIDDEN_FUNC_SUFFIX);
 
     const std::string res = GenCodeByFunction(*function);
     std::string expect = R"!!!(TAtan(ubTensor_2, ubTensor_3, ubTensor_0);
@@ -143,8 +142,8 @@ TEST_F(TestCodegenDynUna, TestPadDynamic)
             output = Pad(input, {0, 6, 0, 8}, "constant", Element(DT_FP32, 2.0));
         }
     }
-    auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX +
+                                                                HIDDEN_FUNC_SUFFIX);
 
     const std::string res = GenCodeByFunction(*function);
     std::string expect = R"!!!(TPad<pto::PadValueCustom((float)2.f)>(ubTensor_2, ubTensor_0);)!!!";
@@ -174,8 +173,8 @@ TEST_F(TestCodegenDynUna, TestPadDynamicFP16)
             output = Pad(input, {0, 6, 0, 8}, "constant", Element(DT_FP16, std::numeric_limits<float>::infinity()));
         }
     }
-    auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX +
+                                                                HIDDEN_FUNC_SUFFIX);
 
     const std::string res = GenCodeByFunction(*function);
     std::string expect = R"!!!(TPad<pto::PadValue::Max>(ubTensor_2, ubTensor_0);)!!!";
@@ -205,8 +204,8 @@ TEST_F(TestCodegenDynUna, TestFillPadDynamicBF16)
             output = FillPad(input, "constant", Element(DT_BF16, 0.0f));
         }
     }
-    auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX +
+                                                                HIDDEN_FUNC_SUFFIX);
 
     const std::string res = GenCodeByFunction(*function);
     std::string expect = R"!!!(TFillPad<pto::PadValueCustom((bfloat16_t)0.f)>(ubTensor_2, ubTensor_0);)!!!";
@@ -236,8 +235,8 @@ TEST_F(TestCodegenDynUna, TestFillPadDynamic)
             output = FillPad(input, "constant", Element(DT_FP32, 0.0f));
         }
     }
-    auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX +
+                                                                HIDDEN_FUNC_SUFFIX);
 
     const std::string res = GenCodeByFunction(*function);
     std::string expect = R"!!!(TFillPad<pto::PadValueCustom((float)0.f)>(ubTensor_2, ubTensor_0);)!!!";

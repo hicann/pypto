@@ -26,7 +26,6 @@
 #include "machine/utils/dynamic/dev_encode_program.h"
 #include "machine/utils/dynamic/dev_encode_program_ctrlflow_cache.h"
 
-
 namespace npu::tile_fwk::dynamic {
 
 CtrlFlowCacheManager& CtrlFlowCacheManager::Instance()
@@ -50,28 +49,28 @@ uint8_t* CtrlFlowCacheManager::FindOrBuildDevCache(KernelBinary* kernel, std::ve
     return devCache;
 }
 
-DevControlFlowCache* CtrlFlowCacheManager::GetHostCtrlFlowCache(
-    KernelBinary* kernel, std::vector<DeviceTensorData>& tensors, uint8_t* devCache,
-    std::vector<uint8_t>& hostCache)
+DevControlFlowCache* CtrlFlowCacheManager::GetHostCtrlFlowCache(KernelBinary* kernel,
+                                                                std::vector<DeviceTensorData>& tensors,
+                                                                uint8_t* devCache, std::vector<uint8_t>& hostCache)
 {
     DevControlFlowCache* ctrlCache = FindHostCtrlFlowCache(kernel, tensors, hostCache);
     if (ctrlCache == nullptr && devCache != nullptr) {
-        auto devProg =
-            reinterpret_cast<DevAscendProgram*>(kernel->GetFunction()->GetDyndevAttribute()->devProgBinary.data());
+        auto devProg = reinterpret_cast<DevAscendProgram*>(
+            kernel->GetFunction()->GetDyndevAttribute()->devProgBinary.data());
         size_t ctrlCacheSize = devProg->ctrlFlowCacheSize;
         std::vector<uint8_t> hostCacheVec;
         hostCacheVec.resize(ctrlCacheSize);
         AclModeGuard guard(AclMdlRICaptureMode::RELAXED);
-        RuntimeMemcpy(
-            hostCacheVec.data(), ctrlCacheSize, devCache, ctrlCacheSize, RtMemcpyKind::DEVICE_TO_HOST);
+        RuntimeMemcpy(hostCacheVec.data(), ctrlCacheSize, devCache, ctrlCacheSize, RtMemcpyKind::DEVICE_TO_HOST);
         AddHostCtrlFlowCache(kernel, tensors, std::move(hostCacheVec));
         ctrlCache = FindHostCtrlFlowCache(kernel, tensors, hostCache);
     }
     return ctrlCache;
 }
 
-DevControlFlowCache* CtrlFlowCacheManager::FindHostCtrlFlowCache(
-    KernelBinary* kernel, std::vector<DeviceTensorData>& tensors, std::vector<uint8_t>& hostCache)
+DevControlFlowCache* CtrlFlowCacheManager::FindHostCtrlFlowCache(KernelBinary* kernel,
+                                                                 std::vector<DeviceTensorData>& tensors,
+                                                                 std::vector<uint8_t>& hostCache)
 {
     int64_t hash = ControlFlowCache::Hash(tensors);
     for (auto& cache : kernel->GetHostCtrlFlowCaches()) {
@@ -83,8 +82,8 @@ DevControlFlowCache* CtrlFlowCacheManager::FindHostCtrlFlowCache(
     return nullptr;
 }
 
-void CtrlFlowCacheManager::AddHostCtrlFlowCache(
-    KernelBinary* kernel, std::vector<DeviceTensorData>& tensors, std::vector<uint8_t>&& hostCache)
+void CtrlFlowCacheManager::AddHostCtrlFlowCache(KernelBinary* kernel, std::vector<DeviceTensorData>& tensors,
+                                                std::vector<uint8_t>&& hostCache)
 {
     kernel->GetHostCtrlFlowCaches().emplace_back(tensors, std::move(hostCache));
 }

@@ -47,13 +47,13 @@ void SetupMemoryDrivenEncodeTest(uint32_t stitchNumMax, uint64_t maxWorkspaceKb 
         config::SetRuntimeOption(MAX_WORKSPACE_KB, static_cast<long>(maxWorkspaceKb));
     }
     TileShape::Current().SetVecTile(kMemoryDrivenTileSize, kMemoryDrivenTileSize);
-    TileShape::Current().SetCubeTile(
-        {kMemoryDrivenTileSize, kMemoryDrivenTileSize}, {kMemoryDrivenTileSize, kMemoryDrivenTileSize},
-        {kMemoryDrivenTileSize, kMemoryDrivenTileSize});
+    TileShape::Current().SetCubeTile({kMemoryDrivenTileSize, kMemoryDrivenTileSize},
+                                     {kMemoryDrivenTileSize, kMemoryDrivenTileSize},
+                                     {kMemoryDrivenTileSize, kMemoryDrivenTileSize});
 }
 
-void BuildSimpleLoopFunction(
-    const char* funcName, const char* loopName, const Tensor& t0, const Tensor& t1, Tensor& out)
+void BuildSimpleLoopFunction(const char* funcName, const char* loopName, const Tensor& t0, const Tensor& t1,
+                             Tensor& out)
 {
     FUNCTION(funcName, {t0, t1}, {out})
     {
@@ -67,8 +67,8 @@ void BuildSimpleLoopFunction(
 
 DevAscendProgram* GetLastDevProg()
 {
-    std::shared_ptr<DyndevFunctionAttribute> funcDynDev =
-        Program::GetInstance().GetLastFunction()->GetDyndevAttribute();
+    std::shared_ptr<DyndevFunctionAttribute>
+        funcDynDev = Program::GetInstance().GetLastFunction()->GetDyndevAttribute();
     EXPECT_NE(funcDynDev, nullptr);
     if (funcDynDev == nullptr) {
         return nullptr;
@@ -84,8 +84,7 @@ uint64_t ComputeWorkspaceStitchMin(DevAscendProgram* devProg)
     auto dyndev = func->GetDyndevAttribute();
     const uint64_t progAddr = reinterpret_cast<uint64_t>(devProg);
     devProg->RelocProgram(0, progAddr);
-    const auto flex = CollectWorkspaceDesc(
-        func, *devProg, dyndev->constructAssembleNeedAllocRuntimeSlots);
+    const auto flex = CollectWorkspaceDesc(func, *devProg, dyndev->constructAssembleNeedAllocRuntimeSlots);
     devProg->RelocProgram(progAddr, 0);
     const uint64_t aicoreSpilled = flex.maxLeafPerCoreSpilledMem * static_cast<uint64_t>(GetPlatformMaxAicoreNum());
     const uint64_t debugTotal = devProg->memBudget.debug.dumpTensor + devProg->memBudget.debug.leafDump;
@@ -109,8 +108,8 @@ uint32_t TensorStitchDepthK(const DevAscendProgram* devProg, uint32_t configured
     return configuredStitchNumMax;
 }
 
-RuntimeWorkspaceConfig MakeNonMemoryDrivenCfg(
-    uint32_t stitchNumMax, uint32_t parallelism = 1, uint64_t aicoreSpilled = 0, uint64_t debugTotal = 0)
+RuntimeWorkspaceConfig MakeNonMemoryDrivenCfg(uint32_t stitchNumMax, uint32_t parallelism = 1,
+                                              uint64_t aicoreSpilled = 0, uint64_t debugTotal = 0)
 {
     RuntimeWorkspaceConfig cfg;
     cfg.stitchNumMax = stitchNumMax;
@@ -122,28 +121,28 @@ RuntimeWorkspaceConfig MakeNonMemoryDrivenCfg(
     return cfg;
 }
 
-WorkspaceDesc ResolvedWorkspaceAtStitchDepth(
-    const WorkspaceDesc& baseDesc, uint32_t stitchDepthK, uint32_t parallelism = 1,
-    uint64_t aicoreSpilled = 0, uint64_t debugTotal = 0)
+WorkspaceDesc ResolvedWorkspaceAtStitchDepth(const WorkspaceDesc& baseDesc, uint32_t stitchDepthK,
+                                             uint32_t parallelism = 1, uint64_t aicoreSpilled = 0,
+                                             uint64_t debugTotal = 0)
 {
     WorkspaceDesc desc = baseDesc;
     (void)ResolveStitchDepthConfig(desc, MakeNonMemoryDrivenCfg(stitchDepthK, parallelism, aicoreSpilled, debugTotal));
     return desc;
 }
 
-uint64_t EncodedWorkspaceBytesAtStitchDepth(
-    const WorkspaceDesc& baseDesc, uint32_t stitchDepthK, uint32_t parallelism = 1,
-    uint64_t aicoreSpilled = 0, uint64_t debugTotal = 0)
+uint64_t EncodedWorkspaceBytesAtStitchDepth(const WorkspaceDesc& baseDesc, uint32_t stitchDepthK,
+                                            uint32_t parallelism = 1, uint64_t aicoreSpilled = 0,
+                                            uint64_t debugTotal = 0)
 {
     WorkspaceDesc desc = baseDesc;
-    const StitchDepthConfig depth =
-        ResolveStitchDepthConfig(desc, MakeNonMemoryDrivenCfg(stitchDepthK, parallelism, aicoreSpilled, debugTotal));
+    const StitchDepthConfig depth = ResolveStitchDepthConfig(
+        desc, MakeNonMemoryDrivenCfg(stitchDepthK, parallelism, aicoreSpilled, debugTotal));
     return depth.encodedWorkspaceSize;
 }
 
-WorkspaceDesc MakeLinearBudgetDesc(
-    uint64_t maxStaticOutcastMem, uint64_t totalExclusiveOutcastSlot, uint64_t totalAssembleOutcastSlot,
-    uint64_t rootInnerSpilledRawMem, uint64_t rootExclusiveRawMem = 0)
+WorkspaceDesc MakeLinearBudgetDesc(uint64_t maxStaticOutcastMem, uint64_t totalExclusiveOutcastSlot,
+                                   uint64_t totalAssembleOutcastSlot, uint64_t rootInnerSpilledRawMem,
+                                   uint64_t rootExclusiveRawMem = 0)
 {
     WorkspaceDesc desc;
     desc.maxStaticOutcastMem = maxStaticOutcastMem;
@@ -157,9 +156,9 @@ WorkspaceDesc MakeLinearBudgetDesc(
     return desc;
 }
 
-uint32_t BruteForceDeriveEffectiveStitchNum(
-    uint64_t cap, const WorkspaceDesc& desc, uint32_t parallelism, uint64_t aicoreSpilled, uint64_t debugTotal,
-    uint32_t searchLimit = UINT32_MAX)
+uint32_t BruteForceDeriveEffectiveStitchNum(uint64_t cap, const WorkspaceDesc& desc, uint32_t parallelism,
+                                            uint64_t aicoreSpilled, uint64_t debugTotal,
+                                            uint32_t searchLimit = UINT32_MAX)
 {
     uint32_t maxFit = 1;
     for (uint32_t k = 1; k <= searchLimit; ++k) {
@@ -170,21 +169,20 @@ uint32_t BruteForceDeriveEffectiveStitchNum(
         }
     }
     uint32_t minK = maxFit;
-    while (minK > 1 &&
-           EncodedWorkspaceBytesAtStitchDepth(desc, minK, parallelism, aicoreSpilled, debugTotal) ==
-               EncodedWorkspaceBytesAtStitchDepth(desc, minK - 1, parallelism, aicoreSpilled, debugTotal)) {
+    while (minK > 1 && EncodedWorkspaceBytesAtStitchDepth(desc, minK, parallelism, aicoreSpilled, debugTotal) ==
+                           EncodedWorkspaceBytesAtStitchDepth(desc, minK - 1, parallelism, aicoreSpilled, debugTotal)) {
         --minK;
     }
     return minK;
 }
 
-StitchDepthConfig ResolveMemoryDrivenDepth(
-    WorkspaceDesc& desc, const RuntimeWorkspaceConfig& baseCfg, uint64_t maxWorkspaceBytes)
+StitchDepthConfig ResolveMemoryDrivenDepth(WorkspaceDesc& desc, const RuntimeWorkspaceConfig& baseCfg,
+                                           uint64_t maxWorkspaceBytes)
 {
     RuntimeWorkspaceConfig cfg = baseCfg;
     cfg.maxWorkspaceBytes = maxWorkspaceBytes;
-    cfg.workspaceStitchMin = TensorWorkspaceBytesAtMinimumStitchDepth(
-        desc, cfg.parallelism, cfg.aicoreSpilled, cfg.debugTotal);
+    cfg.workspaceStitchMin = TensorWorkspaceBytesAtMinimumStitchDepth(desc, cfg.parallelism, cfg.aicoreSpilled,
+                                                                      cfg.debugTotal);
     return ResolveStitchDepthConfig(desc, cfg);
 }
 
@@ -238,8 +236,8 @@ TEST_F(TestDevEncode, test_dev_encode_program)
         }
     }
 
-    std::shared_ptr<DyndevFunctionAttribute> funcDynDev =
-        Program::GetInstance().GetLastFunction()->GetDyndevAttribute();
+    std::shared_ptr<DyndevFunctionAttribute>
+        funcDynDev = Program::GetInstance().GetLastFunction()->GetDyndevAttribute();
     ASSERT_NE(funcDynDev, nullptr);
     DevAscendProgram* devProg = reinterpret_cast<DevAscendProgram*>(funcDynDev->devProgBinary.data());
     ASSERT_NE(devProg, nullptr);
@@ -259,8 +257,8 @@ TEST_F(TestDevEncode, test_dev_encode_program)
     devProg->controlFlowCache.isRecording = false;
     uint64_t contextWorkspaceAddr = devProg->controlFlowCache.contextWorkspaceAddr;
     devProg->controlFlowCache.IncastOutcastAddrReloc(contextWorkspaceAddr, 0, nullptr);
-    devProg->controlFlowCache.RuntimeAddrRelocWorkspace(
-        contextWorkspaceAddr, 0, nullptr, nullptr, nullptr, devProg->GetParallelism());
+    devProg->controlFlowCache.RuntimeAddrRelocWorkspace(contextWorkspaceAddr, 0, nullptr, nullptr, nullptr,
+                                                        devProg->GetParallelism());
     devProg->controlFlowCache.RuntimeAddrRelocProgram(reinterpret_cast<uint64_t>(devProg), 0);
     devProg->controlFlowCache.TaskAddrRelocWorkspace(contextWorkspaceAddr, 0, nullptr);
     devProg->controlFlowCache.TaskAddrRelocProgramAndCtrlCache(
@@ -322,8 +320,7 @@ static DevAscendProgram* BuildAndGetDevProgForExpectedMaxCachedNum()
             Assemble(temp, {i * s, 0}, out);
         }
     }
-    std::shared_ptr<DyndevFunctionAttribute> dynDev =
-        Program::GetInstance().GetLastFunction()->GetDyndevAttribute();
+    std::shared_ptr<DyndevFunctionAttribute> dynDev = Program::GetInstance().GetLastFunction()->GetDyndevAttribute();
     EXPECT_NE(dynDev, nullptr);
     if (dynDev == nullptr) {
         return nullptr;
@@ -345,8 +342,7 @@ TEST_F(TestDevEncode, test_max_stitch_function_num)
     EXPECT_EQ(devProg1->stitchMaxFunctionNum, kConfiguredStitchNumMax);
     const uint32_t outcastDepth = OutcastCacheDepthFromPool(devProg1);
     EXPECT_EQ(outcastDepth, kConfiguredStitchNumMax);
-    const uint32_t expectedPool =
-        devProg1->slotSize * (outcastDepth + 1) * devProg1->GetParallelism();
+    const uint32_t expectedPool = devProg1->slotSize * (outcastDepth + 1) * devProg1->GetParallelism();
     EXPECT_EQ(devProg1->memBudget.tensor.runtimeOutcastPoolSize, expectedPool);
 }
 
@@ -391,8 +387,8 @@ TEST_F(TestDevEncode, test_memory_driven_runtime_outcast_cache_depth)
     Tensor t1(DT_FP32, {s, s}, "t1");
     Tensor out(DT_FP32, {kMemoryDrivenLoopCount * s, s}, "out");
     BuildSimpleLoopFunction("memory_driven_outcast_depth", "memory_driven_outcast_depth_L0", t0, t1, out);
-    std::shared_ptr<DyndevFunctionAttribute> funcDynDev =
-        Program::GetInstance().GetLastFunction()->GetDyndevAttribute();
+    std::shared_ptr<DyndevFunctionAttribute>
+        funcDynDev = Program::GetInstance().GetLastFunction()->GetDyndevAttribute();
     ASSERT_NE(funcDynDev, nullptr);
     DevAscendProgram* devProg = GetLastDevProg();
     ASSERT_NE(devProg, nullptr);
@@ -403,16 +399,15 @@ TEST_F(TestDevEncode, test_memory_driven_runtime_outcast_cache_depth)
     EXPECT_LE(outcastDepth, kForPool);
     EXPECT_EQ(outcastDepth, kForPool);
     EXPECT_EQ(devProg->memBudget.tensor.runtimeOutcastPoolSize,
-        devProg->slotSize * (outcastDepth + 1) * devProg->GetParallelism());
+              devProg->slotSize * (outcastDepth + 1) * devProg->GetParallelism());
 
     const uint64_t totalOutcastSlots = devProg->memBudget.tensor.BoundaryAndInnerTemporalOutcastSlotNum();
     EXPECT_GE(totalOutcastSlots, static_cast<uint64_t>(std::max(outcastDepth, 2u)));
     EXPECT_GT(devProg->memBudget.tensor.devTaskBoundaryOutcastNum, 0u);
     EXPECT_LE(devProg->memBudget.tensor.devTaskInnerTemporalOutcastNum,
-        devProg->memBudget.tensor.slottableOutcastSlotSize * kEff);
-    EXPECT_EQ(
-        devProg->controlFlowCache.runtimeBackup.workspace.tensorAllocators[0].slottedOutcastsBlockList.size(),
-        devProg->GetCtrlFlowCacheSlottedOutcastBlockCount(devProg->slotSize));
+              devProg->memBudget.tensor.slottableOutcastSlotSize * kEff);
+    EXPECT_EQ(devProg->controlFlowCache.runtimeBackup.workspace.tensorAllocators[0].slottedOutcastsBlockList.size(),
+              devProg->GetCtrlFlowCacheSlottedOutcastBlockCount(devProg->slotSize));
 }
 
 TEST_F(TestDevEncode, test_memory_driven_unroll_from_name)
@@ -434,8 +429,8 @@ TEST_F(TestDevEncode, test_memory_driven_unroll_from_name)
             Assemble(temp, {i * s, 0}, out);
         }
     }
-    std::shared_ptr<DyndevFunctionAttribute> funcDynDev =
-        Program::GetInstance().GetLastFunction()->GetDyndevAttribute();
+    std::shared_ptr<DyndevFunctionAttribute>
+        funcDynDev = Program::GetInstance().GetLastFunction()->GetDyndevAttribute();
     ASSERT_NE(funcDynDev, nullptr);
     DevAscendProgram* devProg = GetLastDevProg();
     ASSERT_NE(devProg, nullptr);
@@ -479,8 +474,8 @@ TEST_F(TestDevEncode, test_init_wrap_info)
         Assemble(temp, {0, 0}, out);
     }
 
-    std::shared_ptr<DyndevFunctionAttribute> funcDynDev =
-        Program::GetInstance().GetLastFunction()->GetDyndevAttribute();
+    std::shared_ptr<DyndevFunctionAttribute>
+        funcDynDev = Program::GetInstance().GetLastFunction()->GetDyndevAttribute();
     ASSERT_NE(funcDynDev, nullptr);
     DevAscendProgram* devProg = reinterpret_cast<DevAscendProgram*>(funcDynDev->devProgBinary.data());
     ASSERT_NE(devProg, nullptr);
@@ -489,8 +484,8 @@ TEST_F(TestDevEncode, test_init_wrap_info)
     devProg->controlFlowCache.isRecording = false;
     uint64_t contextWorkspaceAddr = devProg->controlFlowCache.contextWorkspaceAddr;
     devProg->controlFlowCache.IncastOutcastAddrReloc(contextWorkspaceAddr, 0, nullptr);
-    devProg->controlFlowCache.RuntimeAddrRelocWorkspace(
-        contextWorkspaceAddr, 0, nullptr, nullptr, nullptr, devProg->GetParallelism());
+    devProg->controlFlowCache.RuntimeAddrRelocWorkspace(contextWorkspaceAddr, 0, nullptr, nullptr, nullptr,
+                                                        devProg->GetParallelism());
     devProg->controlFlowCache.RuntimeAddrRelocProgram(reinterpret_cast<uint64_t>(devProg), 0);
     devProg->controlFlowCache.TaskAddrRelocWorkspace(contextWorkspaceAddr, 0, nullptr);
     devProg->controlFlowCache.TaskAddrRelocProgramAndCtrlCache(
@@ -562,14 +557,12 @@ TEST_F(TestDevEncode, test_workspace_budget_calculator_resolve_depth)
 TEST_F(TestDevEncode, test_workspace_budget_calculator_outcast_cache_depth)
 {
     WorkspaceDesc desc8 = MakeLinearBudgetDesc(4096, 1, 0, 4096, 0);
-    const StitchDepthConfig depth8 =
-        ResolveStitchDepthConfig(desc8, MakeNonMemoryDrivenCfg(8));
+    const StitchDepthConfig depth8 = ResolveStitchDepthConfig(desc8, MakeNonMemoryDrivenCfg(8));
     EXPECT_EQ(depth8.kEff, 8u);
     EXPECT_EQ(depth8.outcastCacheDepth, 8u);
 
     WorkspaceDesc desc64 = MakeLinearBudgetDesc(4096, 1, 0, 4096, 0);
-    StitchDepthConfig depth64 =
-        ResolveStitchDepthConfig(desc64, MakeNonMemoryDrivenCfg(64));
+    StitchDepthConfig depth64 = ResolveStitchDepthConfig(desc64, MakeNonMemoryDrivenCfg(64));
     EXPECT_EQ(depth64.outcastCacheDepth, 64u);
 
     WorkspaceDesc descMd = MakeLinearBudgetDesc(4096, 1, 0, 4096, 0);
@@ -596,8 +589,7 @@ TEST_F(TestDevEncode, test_runtime_outcast_pool_depth_capped_at_max_stitch)
     EXPECT_GT(depthMd.outcastCacheDepth, depthMd.runtimeOutcastPoolDepth);
 
     WorkspaceDesc desc64 = MakeLinearBudgetDesc(4096, 1, 0, 4096, 0);
-    const StitchDepthConfig depth64 =
-        ResolveStitchDepthConfig(desc64, MakeNonMemoryDrivenCfg(64));
+    const StitchDepthConfig depth64 = ResolveStitchDepthConfig(desc64, MakeNonMemoryDrivenCfg(64));
     EXPECT_EQ(depth64.runtimeOutcastPoolDepth, depth64.outcastCacheDepth);
     EXPECT_EQ(depth64.runtimeOutcastPoolDepth, 64u);
 }
@@ -622,17 +614,17 @@ TEST_F(TestDevEncode, test_memory_driven_k_eff_from_memory_cap)
     cfg.maxWorkspaceBytes = 40ULL * 1024 * 1024;
     cfg.workspaceStitchMin = TensorWorkspaceBytesAtMinimumStitchDepth(desc, cfg.parallelism, 0, 0);
 
-    const uint32_t expectedK = BruteForceDeriveEffectiveStitchNum(
-        cfg.maxWorkspaceBytes, desc, cfg.parallelism, cfg.aicoreSpilled, cfg.debugTotal);
+    const uint32_t expectedK = BruteForceDeriveEffectiveStitchNum(cfg.maxWorkspaceBytes, desc, cfg.parallelism,
+                                                                  cfg.aicoreSpilled, cfg.debugTotal);
     const StitchDepthConfig depth = ResolveStitchDepthConfig(desc, cfg);
     EXPECT_EQ(depth.memoryDrivenWorkspace, 1u);
     EXPECT_EQ(depth.kEff, expectedK);
     EXPECT_GT(depth.kEff, cfg.stitchNumMax);
     EXPECT_EQ(depth.outcastCacheDepth, depth.kEff);
     EXPECT_EQ(depth.runtimeOutcastPoolDepth,
-        depth.kEff > static_cast<uint32_t>(npu::tile_fwk::dynamic::MAX_STITCH_FUNC_NUM)
-            ? static_cast<uint32_t>(npu::tile_fwk::dynamic::MAX_STITCH_FUNC_NUM)
-            : depth.kEff);
+              depth.kEff > static_cast<uint32_t>(npu::tile_fwk::dynamic::MAX_STITCH_FUNC_NUM) ?
+                  static_cast<uint32_t>(npu::tile_fwk::dynamic::MAX_STITCH_FUNC_NUM) :
+                  depth.kEff);
     EXPECT_LE(depth.runtimeOutcastPoolDepth, static_cast<uint32_t>(npu::tile_fwk::dynamic::MAX_STITCH_FUNC_NUM));
     EXPECT_EQ(depth.stitchMaxFunctionNum, depth.kEff);
 }
@@ -663,8 +655,7 @@ TEST_F(TestDevEncode, test_memory_driven_ctrlflow_backup_decoupled_from_stitch_n
     const uint64_t requiredSlotBlocks = desc.devTaskBoundaryOutcastNum + desc.devTaskInnerTemporalOutcastNum;
     const uint64_t totalSlot = desc.totalExclusiveOutcastSlot + desc.totalAssembleOutcastSlot;
     const uint32_t estimatedStitching = cfg.stitchNumMax * profile.unroll;
-    const uint32_t legacyBackupDepth =
-        estimatedStitching < depth.kEff ? estimatedStitching : depth.kEff;
+    const uint32_t legacyBackupDepth = estimatedStitching < depth.kEff ? estimatedStitching : depth.kEff;
     const uint64_t legacyBackupCount = EstimateCtrlFlowCacheSlottedBlockCount(totalSlot, legacyBackupDepth);
     EXPECT_LT(legacyBackupCount, requiredSlotBlocks);
 
@@ -693,8 +684,7 @@ TEST_F(TestDevEncode, test_derive_k_eff_matches_brute_force)
         cfg.parallelism = parallelism;
         cfg.aicoreSpilled = aicoreSpilled;
         cfg.debugTotal = debugTotal;
-        const uint32_t expected = BruteForceDeriveEffectiveStitchNum(
-            cap, desc, parallelism, aicoreSpilled, debugTotal);
+        const uint32_t expected = BruteForceDeriveEffectiveStitchNum(cap, desc, parallelism, aicoreSpilled, debugTotal);
         const StitchDepthConfig depth = ResolveMemoryDrivenDepth(descCopy, cfg, cap);
         EXPECT_EQ(depth.kEff, expected) << "cap=" << cap;
     }
@@ -753,8 +743,7 @@ TEST_F(TestDevEncode, test_workspace_flex_io_outcast_skips_assemble_mark)
 
     const uint64_t progAddr = reinterpret_cast<uint64_t>(devProg);
     devProg->RelocProgram(0, progAddr);
-    const WorkspaceDesc flex = CollectWorkspaceDesc(
-        func, *devProg, dyndev->constructAssembleNeedAllocRuntimeSlots);
+    const WorkspaceDesc flex = CollectWorkspaceDesc(func, *devProg, dyndev->constructAssembleNeedAllocRuntimeSlots);
     devProg->RelocProgram(progAddr, 0);
 
     EXPECT_EQ(flex.totalAssembleOutcastSlot, dyndev->inoutLink.assembleSlotIndexList.size());
@@ -767,4 +756,3 @@ TEST_F(TestDevEncode, test_workspace_flex_io_outcast_skips_assemble_mark)
     EXPECT_EQ(flexWs.totalAssembleOutcastSlot, dyndev->inoutLink.assembleSlotIndexList.size());
     EXPECT_LT(flexWs.devTaskBoundaryOutcastNum, devProg->slotSize * stitchNumMax);
 }
-

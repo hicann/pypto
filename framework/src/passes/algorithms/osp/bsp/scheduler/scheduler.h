@@ -36,7 +36,6 @@ enum class ReturnStatus { OSP_SUCCESS, OSP_BEST_FOUND, OSP_ERROR };
 template <typename GraphT>
 class Scheduler {
 public:
-
     Scheduler() = default;
     virtual ~Scheduler() = default;
 
@@ -50,8 +49,8 @@ public:
      * @return ReturnStatus::OSP_SUCCESS if a schedule was successfully computed,
      *         ReturnStatus::OSP_ERROR if an error occurred, or other status codes as appropriate.
      */
-    virtual ReturnStatus ComputeSchedule(BspSchedule<GraphT> &schedule) = 0;
+    virtual ReturnStatus ComputeSchedule(BspSchedule<GraphT>& schedule) = 0;
 };
-}    // namespace osp
+} // namespace osp
 } // namespace npu::tile_fwk
 #endif // OSP_SCHEDULER_HPP

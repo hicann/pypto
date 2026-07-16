@@ -56,15 +56,16 @@ TEST_F(DebugOpsTest, DumpTensor_FullWindow_ReturnsUnknown)
 TEST_F(DebugOpsTest, DumpTensor_WrongArgCount_Throws)
 {
     auto& reg = OpRegistry::GetInstance();
-    EXPECT_THROW((void)reg.Create("debug.dump_tensor", {MakeTensorVar("t", {16}, DataType::FP16)}, Sp()), npu::tile_fwk::Error);
+    EXPECT_THROW((void)reg.Create("debug.dump_tensor", {MakeTensorVar("t", {16}, DataType::FP16)}, Sp()),
+                 npu::tile_fwk::Error);
 }
 
 TEST_F(DebugOpsTest, DumpTensor_NonTensorFirst_Throws)
 {
     auto& reg = OpRegistry::GetInstance();
-    EXPECT_THROW(
-        (void)reg.Create("debug.dump_tensor", {MakeScalarVar("s", DataType::FP32), MakeIntTuple({0}), MakeIntTuple({16})}, Sp()),
-        npu::tile_fwk::Error);
+    EXPECT_THROW((void)reg.Create("debug.dump_tensor",
+                                  {MakeScalarVar("s", DataType::FP32), MakeIntTuple({0}), MakeIntTuple({16})}, Sp()),
+                 npu::tile_fwk::Error);
 }
 
 // ============================================================================
@@ -141,14 +142,16 @@ TEST_F(DebugOpsTest, Printf_ArgCountMismatch_Throws)
 {
     auto& reg = OpRegistry::GetInstance();
     std::vector<std::pair<std::string, std::any>> kwargs = {{"format", std::string("%d %d")}};
-    EXPECT_THROW((void)reg.Create("debug.printf", {MakeScalarVar("x", DataType::INT32)}, kwargs, Sp()), npu::tile_fwk::Error);
+    EXPECT_THROW((void)reg.Create("debug.printf", {MakeScalarVar("x", DataType::INT32)}, kwargs, Sp()),
+                 npu::tile_fwk::Error);
 }
 
 TEST_F(DebugOpsTest, Printf_FloatConversionWithInt_Throws)
 {
     auto& reg = OpRegistry::GetInstance();
     std::vector<std::pair<std::string, std::any>> kwargs = {{"format", std::string("%f")}};
-    EXPECT_THROW((void)reg.Create("debug.printf", {MakeScalarVar("x", DataType::INT32)}, kwargs, Sp()), npu::tile_fwk::Error);
+    EXPECT_THROW((void)reg.Create("debug.printf", {MakeScalarVar("x", DataType::INT32)}, kwargs, Sp()),
+                 npu::tile_fwk::Error);
 }
 
 // ============================================================================
@@ -158,8 +161,8 @@ TEST_F(DebugOpsTest, Printf_FloatConversionWithInt_Throws)
 TEST_F(DebugOpsTest, Assert_BoolCondition_ReturnsUnknown)
 {
     auto& reg = OpRegistry::GetInstance();
-    std::vector<std::pair<std::string, std::any>> kwargs = {
-        {"condition_text", std::string("x > 0")}, {"format", std::string("")}};
+    std::vector<std::pair<std::string, std::any>> kwargs = {{"condition_text", std::string("x > 0")},
+                                                            {"format", std::string("")}};
     auto call = reg.Create("debug.assert", {MakeScalarVar("c", DataType::BOOL)}, kwargs, Sp());
     EXPECT_NE(As<UnknownType>(call->GetType()), nullptr);
 }
@@ -167,25 +170,28 @@ TEST_F(DebugOpsTest, Assert_BoolCondition_ReturnsUnknown)
 TEST_F(DebugOpsTest, Assert_WithFormatArgs_ReturnsUnknown)
 {
     auto& reg = OpRegistry::GetInstance();
-    std::vector<std::pair<std::string, std::any>> kwargs = {
-        {"condition_text", std::string("x > 0")}, {"format", std::string("x=%d")}};
-    auto call = reg.Create("debug.assert", {MakeScalarVar("c", DataType::BOOL), MakeScalarVar("x", DataType::INT32)}, kwargs, Sp());
+    std::vector<std::pair<std::string, std::any>> kwargs = {{"condition_text", std::string("x > 0")},
+                                                            {"format", std::string("x=%d")}};
+    auto call = reg.Create("debug.assert", {MakeScalarVar("c", DataType::BOOL), MakeScalarVar("x", DataType::INT32)},
+                           kwargs, Sp());
     EXPECT_NE(As<UnknownType>(call->GetType()), nullptr);
 }
 
 TEST_F(DebugOpsTest, Assert_NonBoolCondition_Throws)
 {
     auto& reg = OpRegistry::GetInstance();
-    std::vector<std::pair<std::string, std::any>> kwargs = {
-        {"condition_text", std::string("x > 0")}, {"format", std::string("")}};
-    EXPECT_THROW((void)reg.Create("debug.assert", {MakeScalarVar("c", DataType::INT32)}, kwargs, Sp()), npu::tile_fwk::Error);
+    std::vector<std::pair<std::string, std::any>> kwargs = {{"condition_text", std::string("x > 0")},
+                                                            {"format", std::string("")}};
+    EXPECT_THROW((void)reg.Create("debug.assert", {MakeScalarVar("c", DataType::INT32)}, kwargs, Sp()),
+                 npu::tile_fwk::Error);
 }
 
 TEST_F(DebugOpsTest, Assert_MissingConditionText_Throws)
 {
     auto& reg = OpRegistry::GetInstance();
     std::vector<std::pair<std::string, std::any>> kwargs = {{"format", std::string("")}};
-    EXPECT_THROW((void)reg.Create("debug.assert", {MakeScalarVar("c", DataType::BOOL)}, kwargs, Sp()), npu::tile_fwk::Error);
+    EXPECT_THROW((void)reg.Create("debug.assert", {MakeScalarVar("c", DataType::BOOL)}, kwargs, Sp()),
+                 npu::tile_fwk::Error);
 }
 
 // ============================================================================

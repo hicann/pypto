@@ -30,9 +30,9 @@ inline uint64_t MemSizeAlign(const uint64_t bytes, const uint32_t aligns = 512U)
     const uint64_t alignSize = (aligns == 0U) ? sizeof(uintptr_t) : aligns;
     return (((bytes + alignSize) - 1U) / alignSize) * alignSize;
 }
-}
+} // namespace
 
-RtError NormalizedRtMemcpy(void *dst, uint64_t destMax, const void *src, uint64_t cnt, RtMemcpyKind kind)
+RtError NormalizedRtMemcpy(void* dst, uint64_t destMax, const void* src, uint64_t cnt, RtMemcpyKind kind)
 {
     std::optional<dynamic::AclModeGuard> captureRelaxGuard;
     if (dynamic::DeviceLauncher::IsCaptureMode()) {
@@ -81,8 +81,7 @@ void* MemoryBlock::Allocate(uint64_t alignSize)
             }
 
             usedSize += alignSize;
-            MACHINE_LOGI(
-                "Allocate in 1GB block: ptr=%p, chunkSize=%zu, alignSize=%lu.", usePtr, chunkSize, alignSize);
+            MACHINE_LOGI("Allocate in 1GB block: ptr=%p, chunkSize=%zu, alignSize=%lu.", usePtr, chunkSize, alignSize);
             return usePtr;
         }
     }
@@ -226,7 +225,7 @@ void DevMemoryPool::PutSentinelAddr(uint8_t* baseAddr, uint64_t baseSize)
     if (needMemCheck_) {
         uint8_t* sentinelAddr = baseAddr + baseSize;
         if (NormalizedRtMemcpy(sentinelAddr, SENTINEL_MEM_SIZE, sentinelVec_.data(), SENTINEL_MEM_SIZE,
-                                          RtMemcpyKind::HOST_TO_DEVICE) != 0) {
+                               RtMemcpyKind::HOST_TO_DEVICE) != 0) {
             MACHINE_LOGW("Memory copy sentinel value failed! Do not check memory.");
             return;
         }
@@ -293,7 +292,7 @@ bool DevMemoryPool::CheckSentinel(uint8_t* baseAddr, bool remove)
     for (auto sentinelAddr : sentinelVec) {
         MACHINE_LOGI("Check Sentinel: baseAddr=%p, sentinelAddr=%p.", baseAddr, sentinelAddr);
         if (NormalizedRtMemcpy(sentinelVal.data(), SENTINEL_MEM_SIZE, sentinelAddr, SENTINEL_MEM_SIZE,
-                                          RtMemcpyKind::DEVICE_TO_HOST) != 0) {
+                               RtMemcpyKind::DEVICE_TO_HOST) != 0) {
             MACHINE_LOGW("Memory copy D2H failed! Do not check memory.");
             break;
         }
@@ -357,9 +356,8 @@ void DevMemoryPool::PrintPoolStatus() const
         used += blk->usedSize;
 
         double rate = blk->blockSize ? (double)blk->usedSize * 100.0 / blk->blockSize : 0;
-        MACHINE_LOGI(
-            "Block[%lu] %s | Addr: %p | Used: %.1f%% | Fragments: %lu", i, blk->isHuge1G ? "1G" : "2M",
-            blk->baseAddr, rate, blk->freeMap.size());
+        MACHINE_LOGI("Block[%lu] %s | Addr: %p | Used: %.1f%% | Fragments: %lu", i, blk->isHuge1G ? "1G" : "2M",
+                     blk->baseAddr, rate, blk->freeMap.size());
     }
     MACHINE_LOGI("Summary: 1G x %lu, 2M x %lu | Used/Total: %lu/%lu MB", cnt1G, cnt2M, used >> 20, total >> 20);
 }

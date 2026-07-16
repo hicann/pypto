@@ -34,26 +34,24 @@ private:
     Status ChangeOpSeq(Function* subGraphFunc, bool isAIV1);
     bool NeedAdjustSetFlag(Function* subGraphFunc, Operation* vecTileOp0, Operation* vecTileOp1, Operation* setFlag);
     bool NeedAdjustWaitFlag(Function* subGraphFunc, Operation* vecTileOp0, Operation* vecTileOp1, Operation* waitFlag);
-    Status AdjustSetWaitFlag(
-        Function* subGraphFunc, std::vector<Operation*>& setFlagList, std::vector<Operation*>& waitFlagList,
-        size_t vecTileOp0Idx, size_t vecTileOp1Idx, int groupNum);
+    Status AdjustSetWaitFlag(Function* subGraphFunc, std::vector<Operation*>& setFlagList,
+                             std::vector<Operation*>& waitFlagList, size_t vecTileOp0Idx, size_t vecTileOp1Idx,
+                             int groupNum);
     void GenPipeOpMap(Function* subGraphFunc);
     void FindPipeVIdx(std::vector<size_t>& pipeVIdx, AIVCore coreType);
-    bool IsMergeable(
-        size_t left, size_t right, std::vector<Operation*>& setFlagList, std::vector<Operation*>& waitFlagList);
-    bool NeedAdjustOpSeq(
-        Function* subGraphFunc, const std::vector<Operation*>& setFlagList, const std::vector<Operation*>& waitFlagList,
-        size_t left, size_t right);
+    bool IsMergeable(size_t left, size_t right, std::vector<Operation*>& setFlagList,
+                     std::vector<Operation*>& waitFlagList);
+    bool NeedAdjustOpSeq(Function* subGraphFunc, const std::vector<Operation*>& setFlagList,
+                         const std::vector<Operation*>& waitFlagList, size_t left, size_t right);
     void AddVecTileopsToGroup(int& groupNum, size_t left, size_t right);
-    size_t MoveOpsForMerge(
-        size_t vecTileOp0Idx, size_t vecTileOp1Idx, int groupNum, std::vector<Operation*>& setFlagList,
-        std::vector<Operation*>& waitFlagList);
-    Status UpdatePipeVTime(
-        Operation* vecTileOp1, int groupNum, size_t mergedSize, int& curVFStartTime, int& curVecTileOp1EndTime);
-    Status UpdateSetPipeTime(
-        Function* subGraphFunc, std::vector<Operation*>& setFlagList, const int& curVecTileOp1EndTime);
-    Status UpdateWaitPipeTime(
-        Function* subGraphFunc, std::vector<Operation*>& waitFlagList, const int& curVFStartTime, int& maxMoveBackDist);
+    size_t MoveOpsForMerge(size_t vecTileOp0Idx, size_t vecTileOp1Idx, int groupNum,
+                           std::vector<Operation*>& setFlagList, std::vector<Operation*>& waitFlagList);
+    Status UpdatePipeVTime(Operation* vecTileOp1, int groupNum, size_t mergedSize, int& curVFStartTime,
+                           int& curVecTileOp1EndTime);
+    Status UpdateSetPipeTime(Function* subGraphFunc, std::vector<Operation*>& setFlagList,
+                             const int& curVecTileOp1EndTime);
+    Status UpdateWaitPipeTime(Function* subGraphFunc, std::vector<Operation*>& waitFlagList, const int& curVFStartTime,
+                              int& maxMoveBackDist);
     Status MoveBackPipeVOps(int groupNum, const int& maxMoveBackDist);
     void LogOpList(const std::string& label);
     std::vector<Operation*> opList_;

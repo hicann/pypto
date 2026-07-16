@@ -68,16 +68,16 @@ void BindControllerSetTile(py::module_& m)
         [](const std::vector<int64_t>& mvec, const std::vector<int64_t>& kvec, const std::vector<int64_t>& nvec,
            bool enableSplitK) {
             if (mvec.size() > MAX_M_DIM_SIZE) {
-                throw py::value_error(
-                    "Parameter 'm' must have exactly " + std::to_string(MAX_M_DIM_SIZE) + " elements");
+                throw py::value_error("Parameter 'm' must have exactly " + std::to_string(MAX_M_DIM_SIZE) +
+                                      " elements");
             }
             if (kvec.size() > MAX_K_DIM_SIZE) {
-                throw py::value_error(
-                    "Parameter 'k' must have exactly " + std::to_string(MAX_K_DIM_SIZE) + " elements");
+                throw py::value_error("Parameter 'k' must have exactly " + std::to_string(MAX_K_DIM_SIZE) +
+                                      " elements");
             }
             if (nvec.size() > MAX_N_DIM_SIZE) {
-                throw py::value_error(
-                    "Parameter 'n' must have exactly " + std::to_string(MAX_N_DIM_SIZE) + " elements");
+                throw py::value_error("Parameter 'n' must have exactly " + std::to_string(MAX_N_DIM_SIZE) +
+                                      " elements");
             }
 
             std::array<int64_t, MAX_M_DIM_SIZE> marr = {0};
@@ -97,10 +97,9 @@ void BindControllerSetTile(py::module_& m)
     });
     py::class_<Conv::TileL1Info>(m, "TileL1Info")
         .def(py::init<>())
-        .def(
-            py::init<int64_t, int64_t, int64_t, int64_t, int64_t, int64_t, int64_t, int64_t>(), py::arg("tileHin"),
-            py::arg("tileHout"), py::arg("tileWin"), py::arg("tileWout"), py::arg("tileCinFmap"),
-            py::arg("tileCinWeight"), py::arg("tileN"), py::arg("tileBatch"))
+        .def(py::init<int64_t, int64_t, int64_t, int64_t, int64_t, int64_t, int64_t, int64_t>(), py::arg("tileHin"),
+             py::arg("tileHout"), py::arg("tileWin"), py::arg("tileWout"), py::arg("tileCinFmap"),
+             py::arg("tileCinWeight"), py::arg("tileN"), py::arg("tileBatch"))
         .def_readwrite("tileHin", &Conv::TileL1Info::tileHin)
         .def_readwrite("tileHout", &Conv::TileL1Info::tileHout)
         .def_readwrite("tileWin", &Conv::TileL1Info::tileWin)
@@ -111,9 +110,8 @@ void BindControllerSetTile(py::module_& m)
         .def_readwrite("tileBatch", &Conv::TileL1Info::tileBatch);
     py::class_<Conv::TileL0Info>(m, "TileL0Info")
         .def(py::init<>())
-        .def(
-            py::init<int64_t, int64_t, int64_t, int64_t>(), py::arg("tileH"), py::arg("tileW"), py::arg("tileK"),
-            py::arg("tileN"))
+        .def(py::init<int64_t, int64_t, int64_t, int64_t>(), py::arg("tileH"), py::arg("tileW"), py::arg("tileK"),
+             py::arg("tileN"))
         .def_readwrite("tileH", &Conv::TileL0Info::tileH)
         .def_readwrite("tileW", &Conv::TileL0Info::tileW)
         .def_readwrite("tileK", &Conv::TileL0Info::tileK)
@@ -146,27 +144,22 @@ void BindControllerFunction(py::module_& m)
     });
     py::class_<RecordFunc>(m, "RecordFunc")
         .def(py::init<const std::string&>(), py::arg("name"))
-        .def(
-            py::init<const std::string&, const std::vector<std::reference_wrapper<const Tensor>>&>(), py::arg("name"),
-            py::arg("explicit_op_args"))
-        .def(
-            py::init<
-                const std::string&, const ref_tensors&, const ref_tensors&,
-                const std::vector<
-                    std::pair<std::reference_wrapper<const Tensor>, std::reference_wrapper<const Tensor>>>&>(),
-            py::arg("name"), py::arg("inputs"), py::arg("outputs"), py::arg("in_place_args"))
+        .def(py::init<const std::string&, const std::vector<std::reference_wrapper<const Tensor>>&>(), py::arg("name"),
+             py::arg("explicit_op_args"))
+        .def(py::init<const std::string&, const ref_tensors&, const ref_tensors&,
+                      const std::vector<
+                          std::pair<std::reference_wrapper<const Tensor>, std::reference_wrapper<const Tensor>>>&>(),
+             py::arg("name"), py::arg("inputs"), py::arg("outputs"), py::arg("in_place_args"))
         .def("EndFunction", &RecordFunc::EndFunction)
         .def("__iter__", [](RecordFunc& c) {
             // Return Python iterator from C++ begin/end
             return py::make_iterator(c.begin(), c.end());
         });
     py::class_<RecordLoopFunc>(m, "RecordLoopFunc")
-        .def(
-            py::init<
-                const std::string&, FunctionType, const std::string&, const LoopRange&, const std::set<int>&, bool,
-                bool>(),
-            py::arg("name"), py::arg("func_type"), py::arg("iter_name"), py::arg("loop_range"), py::arg("unroll_List"),
-            py::arg("submit_before_loop"), py::arg("parallel"))
+        .def(py::init<const std::string&, FunctionType, const std::string&, const LoopRange&, const std::set<int>&,
+                      bool, bool>(),
+             py::arg("name"), py::arg("func_type"), py::arg("iter_name"), py::arg("loop_range"), py::arg("unroll_List"),
+             py::arg("submit_before_loop"), py::arg("parallel"))
         .def("__iter__", [](RecordLoopFunc& c) {
             // Return Python iterator from C++ begin/end
             return py::make_iterator(c.begin(), c.end());
@@ -176,25 +169,21 @@ void BindControllerFunction(py::module_& m)
 void BindControllerLoop(py::module_& m)
 {
     py::class_<RecordIfBranch>(m, "RecordIfBranch")
-        .def(
-            py::init<SymbolicScalar, const std::string&, int>(), py::arg("cond"), py::arg("file") = "",
-            py::arg("line") = 0)
+        .def(py::init<SymbolicScalar, const std::string&, int>(), py::arg("cond"), py::arg("file") = "",
+             py::arg("line") = 0)
         .def("__bool__", py::overload_cast<>(&RecordIfBranch::operator bool, py::const_));
     py::class_<LoopRange>(m, "LoopRange")
-        .def(
-            py::init<
-                const SymbolicScalar& /* rangeBegin */, const SymbolicScalar& /* rangeEnd */,
-                const SymbolicScalar& /* rangeStep */>())
+        .def(py::init<const SymbolicScalar& /* rangeBegin */, const SymbolicScalar& /* rangeEnd */,
+                      const SymbolicScalar& /* rangeStep */>())
         .def(py::init<const SymbolicScalar& /* rangeBegin */, const SymbolicScalar& /* rangeEnd */>())
         .def(py::init<const SymbolicScalar& /* rangeEnd */>())
         .def(py::init<std::int64_t>()) // C++ Implicit conversion int64_t -> SymbolicScalar
         .def("Dump", (std::string(LoopRange::*)()) & LoopRange::Dump)
-        .def(
-            "Begin", (SymbolicScalar& (LoopRange::*)())& LoopRange::Begin,
-            py::return_value_policy::reference_internal)
-        .def("End", (SymbolicScalar& (LoopRange::*)())& LoopRange::End, py::return_value_policy::reference_internal)
-        .def(
-            "Step", (SymbolicScalar& (LoopRange::*)())& LoopRange::Step, py::return_value_policy::reference_internal);
+        .def("Begin", (SymbolicScalar & (LoopRange::*)()) & LoopRange::Begin,
+             py::return_value_policy::reference_internal)
+        .def("End", (SymbolicScalar & (LoopRange::*)()) & LoopRange::End, py::return_value_policy::reference_internal)
+        .def("Step", (SymbolicScalar & (LoopRange::*)()) & LoopRange::Step,
+             py::return_value_policy::reference_internal);
 
     m.def("IsLoopBegin", &IsLoopBegin, py::arg("symbol"), py::arg("begin"));
     m.def("IsLoopEnd", &IsLoopEnd, py::arg("symbol"), py::arg("end"));
@@ -261,8 +250,8 @@ static bool IsFuncHashOrderFormat(const std::string& key)
     return true;
 }
 
-static void SplitByFuncAndLabel(
-    const py::dict& dict_value, std::map<std::string, int64_t>& func_map, std::map<std::string, int64_t>& label_map)
+static void SplitByFuncAndLabel(const py::dict& dict_value, std::map<std::string, int64_t>& func_map,
+                                std::map<std::string, int64_t>& label_map)
 {
     for (auto dict_item : dict_value) {
         if (py::isinstance<py::str>(dict_item.first)) {
@@ -294,9 +283,8 @@ static void ClassifyKeys(const py::dict& dict_value, bool& has_int, bool& has_st
     }
 }
 
-static void HandleStrOnlyKeys(
-    const std::string& key, const py::dict& dict_value, bool has_func, bool has_label,
-    std::map<std::string, std::any>& cpp_values)
+static void HandleStrOnlyKeys(const std::string& key, const py::dict& dict_value, bool has_func, bool has_label,
+                              std::map<std::string, std::any>& cpp_values)
 {
     cpp_values[key] = std::map<int64_t, int64_t>();
     if (has_func && has_label) {
@@ -319,8 +307,8 @@ static void HandleStrOnlyKeys(
     }
 }
 
-static void HandleMixedKeys(
-    const std::string& key, const py::dict& dict_value, std::map<std::string, std::any>& cpp_values)
+static void HandleMixedKeys(const std::string& key, const py::dict& dict_value,
+                            std::map<std::string, std::any>& cpp_values)
 {
     std::map<int64_t, int64_t> int_map;
     std::map<std::string, int64_t> func_map, label_map;
@@ -346,8 +334,7 @@ static void HandleMixedKeys(
     }
 }
 
-void ConvertPyDict(
-    const std::string& key, const py::object& value, std::map<std::string, std::any>& cpp_values)
+void ConvertPyDict(const std::string& key, const py::object& value, std::map<std::string, std::any>& cpp_values)
 {
     py::dict dict_value = py::cast<py::dict>(value);
     bool has_int = false, has_str = false, has_func = false, has_label = false;
@@ -463,7 +450,8 @@ py::object AnyToPyObject(const std::any& val)
         {typeid(double), [](const std::any& a) { return py::cast(AnyCast<double>(a)); }},
         {typeid(std::string), [](const std::any& a) { return py::cast(AnyCast<std::string>(a)); }},
         {typeid(std::vector<int64_t>), [](const std::any& a) { return py::cast(AnyCast<std::vector<int64_t>>(a)); }},
-        {typeid(std::vector<std::string>), [](const std::any& a) { return py::cast(AnyCast<std::vector<std::string>>(a)); }},
+        {typeid(std::vector<std::string>),
+         [](const std::any& a) { return py::cast(AnyCast<std::vector<std::string>>(a)); }},
         {typeid(std::vector<double>), [](const std::any& a) { return py::cast(AnyCast<std::vector<double>>(a)); }},
         {typeid(std::map<int64_t, int64_t>),
          [](const std::any& a) { return py::cast(AnyCast<std::map<int64_t, int64_t>>(a)); }},
@@ -490,21 +478,20 @@ void BindControllerScopeClasses(py::module_& m)
                 return AnyToPyObject(scope.GetAnyConfig(key));
             },
             py::arg("key"))
-        .def(
-            "GetAllConfig",
-            [](const ConfigScope& scope) -> py::dict {
-                py::dict result;
-                auto config_map = scope.GetAllConfig();
+        .def("GetAllConfig",
+             [](const ConfigScope& scope) -> py::dict {
+                 py::dict result;
+                 auto config_map = scope.GetAllConfig();
 
-                for (const auto& [key, val] : config_map) {
-                    try {
-                        result[py::str(key)] = AnyToPyObject(val);
-                    } catch (const py::type_error& e) {
-                        py::print("Warning: Skipping key '", key, "' -", e.what());
-                    }
-                }
-                return result;
-            })
+                 for (const auto& [key, val] : config_map) {
+                     try {
+                         result[py::str(key)] = AnyToPyObject(val);
+                     } catch (const py::type_error& e) {
+                         py::print("Warning: Skipping key '", key, "' -", e.what());
+                     }
+                 }
+                 return result;
+             })
         .def("HasConfig", &ConfigScope::HasConfig, py::arg("key"))
         .def(
             "Type",
@@ -514,11 +501,9 @@ void BindControllerScopeClasses(py::module_& m)
 
     py::class_<CubeTile>(m, "CubeTile")
         .def(py::init<>())
-        .def(
-            py::init<
-                const std::array<int64_t, MAX_M_DIM_SIZE>&, const std::array<int64_t, MAX_K_DIM_SIZE>&,
-                const std::array<int64_t, MAX_N_DIM_SIZE>&, bool>(),
-            py::arg("m"), py::arg("k"), py::arg("n"), py::arg("enableSplitK") = false)
+        .def(py::init<const std::array<int64_t, MAX_M_DIM_SIZE>&, const std::array<int64_t, MAX_K_DIM_SIZE>&,
+                      const std::array<int64_t, MAX_N_DIM_SIZE>&, bool>(),
+             py::arg("m"), py::arg("k"), py::arg("n"), py::arg("enableSplitK") = false)
         .def_readwrite("m", &CubeTile::m)
         .def_readwrite("k", &CubeTile::k)
         .def_readwrite("n", &CubeTile::n)
@@ -530,9 +515,8 @@ void BindControllerScopeClasses(py::module_& m)
 
     py::class_<ConvTile>(m, "ConvTile")
         .def(py::init<>())
-        .def(
-            py::init<const Conv::TileL1Info&, const Conv::TileL0Info&, bool>(), py::arg("tileL1Info"),
-            py::arg("tileL0Info") = Conv::TileL0Info(), py::arg("setL0Tile") = false)
+        .def(py::init<const Conv::TileL1Info&, const Conv::TileL0Info&, bool>(), py::arg("tileL1Info"),
+             py::arg("tileL0Info") = Conv::TileL0Info(), py::arg("setL0Tile") = false)
         .def_readwrite("tileL1Info", &ConvTile::tileL1Info)
         .def_readwrite("tileL0Info", &ConvTile::tileL0Info)
         .def_readwrite("setL0Tile", &ConvTile::setL0Tile)

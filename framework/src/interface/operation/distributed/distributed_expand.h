@@ -26,19 +26,17 @@
 
 namespace npu::tile_fwk {
 namespace Distributed {
-inline void CreateTileOp(
-    const TileShape& tileShape, const std::function<void(int32_t, int32_t, int32_t, int32_t, int32_t)>& callback)
+inline void CreateTileOp(const TileShape& tileShape,
+                         const std::function<void(int32_t, int32_t, int32_t, int32_t, int32_t)>& callback)
 {
     const auto& tileRow = tileShape.GetDistTileRow();
     const auto& tileCol = tileShape.GetDistTileCol();
     int32_t rowCount = tileRow[1] + (tileRow[2] == 0 ? 0 : 1);
     int32_t colCount = tileCol[1] + (tileCol[2] == 0 ? 0 : 1);
     CHECK(DistributedErrorCode::INVALID_TILE_DIM, tileRow[0] > 0)
-        << "Invalid tiling strategy of the row axis: the first number must be greater than 0, but got "
-        << tileRow[0];
+        << "Invalid tiling strategy of the row axis: the first number must be greater than 0, but got " << tileRow[0];
     CHECK(DistributedErrorCode::INVALID_TILE_DIM, (tileCol[0] > 0))
-        << "Invalid tiling strategy of the col axis: the first number must be greater than 0, but got "
-        << tileCol[0];
+        << "Invalid tiling strategy of the col axis: the first number must be greater than 0, but got " << tileCol[0];
 
     int32_t tileIndex = 0;
     for (int32_t rowIndex = 0; rowIndex < rowCount; rowIndex++) {
@@ -51,30 +49,30 @@ inline void CreateTileOp(
     }
 }
 
-void TiledShmemPut(
-    Function& function, const TileShape& tileShape, const std::vector<std::shared_ptr<LogicalTensor>>& iOperand,
-    const std::vector<std::shared_ptr<LogicalTensor>>& oOperand, const Operation& op);
-void TiledShmemStore(
-    Function& function, const TileShape& tileShape, const std::vector<std::shared_ptr<LogicalTensor>>& iOperand,
-    const std::vector<std::shared_ptr<LogicalTensor>>& oOperand, const Operation& op);
-void TiledShmemGet(
-    Function& function, const TileShape& tileShape, const std::vector<std::shared_ptr<LogicalTensor>>& iOperand,
-    const std::vector<std::shared_ptr<LogicalTensor>>& oOperand, const Operation& op);
-void TiledShmemLoad(
-    Function& function, const TileShape& tileShape, const std::vector<std::shared_ptr<LogicalTensor>>& iOperand,
-    const std::vector<std::shared_ptr<LogicalTensor>>& oOperand, const Operation& op);
-void TiledShmemSignal(
-    Function& function, const TileShape& tileShape, const std::vector<std::shared_ptr<LogicalTensor>>& iOperand,
-    const std::vector<std::shared_ptr<LogicalTensor>>& oOperand, const Operation& op);
-void TiledShmemWaitUntil(
-    Function& function, const TileShape& tileShape, const std::vector<std::shared_ptr<LogicalTensor>>& iOperand,
-    const std::vector<std::shared_ptr<LogicalTensor>>& oOperand, const Operation& op);
-void TiledShmemSet(
-    Function& function, const TileShape& tileShape, const std::vector<std::shared_ptr<LogicalTensor>>& iOperand,
-    const std::vector<std::shared_ptr<LogicalTensor>>& oOperand, const Operation& op);
-void TiledShmemBindTensor(
-    Function& function, const TileShape& tileShape, const std::vector<std::shared_ptr<LogicalTensor>>& iOperand,
-    const std::vector<std::shared_ptr<LogicalTensor>>& oOperand, const Operation& op);
+void TiledShmemPut(Function& function, const TileShape& tileShape,
+                   const std::vector<std::shared_ptr<LogicalTensor>>& iOperand,
+                   const std::vector<std::shared_ptr<LogicalTensor>>& oOperand, const Operation& op);
+void TiledShmemStore(Function& function, const TileShape& tileShape,
+                     const std::vector<std::shared_ptr<LogicalTensor>>& iOperand,
+                     const std::vector<std::shared_ptr<LogicalTensor>>& oOperand, const Operation& op);
+void TiledShmemGet(Function& function, const TileShape& tileShape,
+                   const std::vector<std::shared_ptr<LogicalTensor>>& iOperand,
+                   const std::vector<std::shared_ptr<LogicalTensor>>& oOperand, const Operation& op);
+void TiledShmemLoad(Function& function, const TileShape& tileShape,
+                    const std::vector<std::shared_ptr<LogicalTensor>>& iOperand,
+                    const std::vector<std::shared_ptr<LogicalTensor>>& oOperand, const Operation& op);
+void TiledShmemSignal(Function& function, const TileShape& tileShape,
+                      const std::vector<std::shared_ptr<LogicalTensor>>& iOperand,
+                      const std::vector<std::shared_ptr<LogicalTensor>>& oOperand, const Operation& op);
+void TiledShmemWaitUntil(Function& function, const TileShape& tileShape,
+                         const std::vector<std::shared_ptr<LogicalTensor>>& iOperand,
+                         const std::vector<std::shared_ptr<LogicalTensor>>& oOperand, const Operation& op);
+void TiledShmemSet(Function& function, const TileShape& tileShape,
+                   const std::vector<std::shared_ptr<LogicalTensor>>& iOperand,
+                   const std::vector<std::shared_ptr<LogicalTensor>>& oOperand, const Operation& op);
+void TiledShmemBindTensor(Function& function, const TileShape& tileShape,
+                          const std::vector<std::shared_ptr<LogicalTensor>>& iOperand,
+                          const std::vector<std::shared_ptr<LogicalTensor>>& oOperand, const Operation& op);
 
 } // namespace Distributed
 } // namespace npu::tile_fwk

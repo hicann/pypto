@@ -121,8 +121,8 @@ struct AttentionW {
 
 class DeepseekAttention {
 public:
-    DeepseekAttention(
-        std::map<std::string, std::variant<bool, int, float, std::string>> config, AttentionW aw, const int inLayerIdx);
+    DeepseekAttention(std::map<std::string, std::variant<bool, int, float, std::string>> config, AttentionW aw,
+                      const int inLayerIdx);
     Tensor Attention(Tensor q, Tensor kv, Tensor attenMask);
     Tensor AttentionPost(Tensor attenRes);
     Tensor AttentionPost2(Tensor attenRes);
@@ -130,19 +130,18 @@ public:
     std::tuple<Tensor, Tensor> QkvPreCv(Tensor hiddenStates);
     std::vector<Tensor> QkvPre2(Tensor hiddenStates, bool isQuant = false);
     std::tuple<Tensor, Tensor> QkvPreFp32(Tensor hiddenStates);
-    Tensor Forward(
-        Tensor hiddenStates, Tensor attenMask, Tensor positionIds, Tensor cos, Tensor sin, Tensor kvLen,
-        Tensor pastKeyStates, const RoPETileShapeConfig& ropeTileShapeConfig);
-    std::tuple<Tensor, Tensor> AtentionPreForward(
-        Tensor hiddenStates, Tensor attenMask, Tensor positionIds, Tensor cos, Tensor sin, Tensor kvLen,
-        Tensor pastKeyStates, const RoPETileShapeConfig& ropeTileShapeConfig);
-    std::tuple<Tensor, Tensor> AtentionPreForwardCv(
-        Tensor hiddenStates, Tensor attenMask, Tensor positionIds, Tensor cos, Tensor sin, Tensor kvLen,
-        Tensor pastKeyStates, const RoPETileShapeConfig& ropeTileShapeConfig);
+    Tensor Forward(Tensor hiddenStates, Tensor attenMask, Tensor positionIds, Tensor cos, Tensor sin, Tensor kvLen,
+                   Tensor pastKeyStates, const RoPETileShapeConfig& ropeTileShapeConfig);
+    std::tuple<Tensor, Tensor> AtentionPreForward(Tensor hiddenStates, Tensor attenMask, Tensor positionIds, Tensor cos,
+                                                  Tensor sin, Tensor kvLen, Tensor pastKeyStates,
+                                                  const RoPETileShapeConfig& ropeTileShapeConfig);
+    std::tuple<Tensor, Tensor> AtentionPreForwardCv(Tensor hiddenStates, Tensor attenMask, Tensor positionIds,
+                                                    Tensor cos, Tensor sin, Tensor kvLen, Tensor pastKeyStates,
+                                                    const RoPETileShapeConfig& ropeTileShapeConfig);
     std::tuple<Tensor, Tensor> MlaPrologAbForward(Tensor hiddenStates, Tensor qPeRope, bool isQuant = false);
-    std::vector<Tensor> MlaPrologFoward(
-        Tensor hiddenStates, Tensor positionIds, Tensor cos, Tensor sin, Tensor kvLen, Tensor pastKeyStates,
-        const RoPETileShapeConfig& ropeTileShapeConfig, bool isQuant = false);
+    std::vector<Tensor> MlaPrologFoward(Tensor hiddenStates, Tensor positionIds, Tensor cos, Tensor sin, Tensor kvLen,
+                                        Tensor pastKeyStates, const RoPETileShapeConfig& ropeTileShapeConfig,
+                                        bool isQuant = false);
 
 private:
     int layerIdx = 0;
@@ -188,9 +187,8 @@ public:
 
     Tensor Forward(Tensor x);
     Tensor Forward(Tensor x, Tensor ffnWeight1, Tensor ffnWeight2, Tensor ffnWeight3);
-    Tensor ForwardWithQuant(
-        Tensor x, Tensor ffnWeight1, Tensor ffnWeight2, Tensor ffnWeight3, Tensor ffnwight1Scale, Tensor ffnwight2Scale,
-        Tensor ffnwight3Scale);
+    Tensor ForwardWithQuant(Tensor x, Tensor ffnWeight1, Tensor ffnWeight2, Tensor ffnWeight3, Tensor ffnwight1Scale,
+                            Tensor ffnwight2Scale, Tensor ffnwight3Scale);
 
 private:
     int hiddenSize = 0;
@@ -232,9 +230,8 @@ public:
     explicit DeepseekV2MoE(std::map<std::string, std::variant<bool, int, float, std::string>> config)
         : expert(std::get<int>(config["hiddenSize"]), std::get<int>(config["moeIntermediateSize"])),
           moeGate(config),
-          sharedExpert(
-              std::get<int>(config["hiddenSize"]),
-              std::get<int>(config["moeIntermediateSize"]) * std::get<int>(config["nSharedExperts"]))
+          sharedExpert(std::get<int>(config["hiddenSize"]),
+                       std::get<int>(config["moeIntermediateSize"]) * std::get<int>(config["nSharedExperts"]))
     {
         numExpertsPerTok = std::get<int>(config["numExpertsPerTok"]);
         epSize = 1;
@@ -242,18 +239,15 @@ public:
         epRank = 0;
     }
 
-    Tensor MoeInfer(
-        Tensor x, Tensor topkIds, Tensor topkWeight, Tensor ffnWeight1, Tensor ffnWeight2, Tensor ffnWeight3,
-        int nRoutedExperts);
-    Tensor MoeInferSingleMlp(
-        Tensor x, Tensor topkIds, Tensor topkWeight, Tensor ffnWeight1, Tensor ffnWeight2, Tensor ffnWeight3,
-        int nRoutedExperts);
-    Tensor MoeInferSingleMlpQuant(
-        Tensor x, Tensor topkIds, Tensor topkWeight, Tensor ffnWeight1, Tensor ffnWeight2, Tensor ffnWeight3,
-        Tensor ffnwight1Scale, Tensor ffnwight2Scale, Tensor ffnwight3Scale, int nRoutedExperts);
-    Tensor MoeInfer(
-        Tensor x, Tensor topkIds, Tensor topkWeight, Tensor ffnWeight1, Tensor ffnWeight2, Tensor ffnWeight3,
-        Tensor& idxs, Tensor& sortedTokens, Tensor& outs, int nRoutedExperts);
+    Tensor MoeInfer(Tensor x, Tensor topkIds, Tensor topkWeight, Tensor ffnWeight1, Tensor ffnWeight2,
+                    Tensor ffnWeight3, int nRoutedExperts);
+    Tensor MoeInferSingleMlp(Tensor x, Tensor topkIds, Tensor topkWeight, Tensor ffnWeight1, Tensor ffnWeight2,
+                             Tensor ffnWeight3, int nRoutedExperts);
+    Tensor MoeInferSingleMlpQuant(Tensor x, Tensor topkIds, Tensor topkWeight, Tensor ffnWeight1, Tensor ffnWeight2,
+                                  Tensor ffnWeight3, Tensor ffnwight1Scale, Tensor ffnwight2Scale,
+                                  Tensor ffnwight3Scale, int nRoutedExperts);
+    Tensor MoeInfer(Tensor x, Tensor topkIds, Tensor topkWeight, Tensor ffnWeight1, Tensor ffnWeight2,
+                    Tensor ffnWeight3, Tensor& idxs, Tensor& sortedTokens, Tensor& outs, int nRoutedExperts);
     Tensor MoeInfer(Tensor x, Tensor topkIds, Tensor topkWeight, int nRoutedExperts = 256);
     Tensor Forward(Tensor hiddenStates);
 

@@ -29,42 +29,30 @@ struct KlHyperTotalCommCostFunction {
     using KlGainUpdateInfo = KlUpdateInfo<VertexType>;
 
     constexpr static unsigned windowRange_ = 2 * windowSize + 1;
-    KlActiveSchedule<GraphT, CostT> *activeSchedule_;
-    CompatibleProcessorRange<GraphT> *procRange_;
-    const GraphT *graph_;
-    const BspInstance<GraphT> *instance_;
+    KlActiveSchedule<GraphT, CostT>* activeSchedule_;
+    CompatibleProcessorRange<GraphT>* procRange_;
+    const GraphT* graph_;
+    const BspInstance<GraphT>* instance_;
 
     CostT commMultiplier_ = 1;
     CostT maxCommWeight_ = 0;
 
     LambdaVectorContainer<VertexType> nodeLambdaMap_;
 
-    inline CostT GetCommMultiplier()
-    {
-        return commMultiplier_;
-    }
+    inline CostT GetCommMultiplier() { return commMultiplier_; }
 
-    inline CostT GetMaxCommWeight()
-    {
-        return maxCommWeight_;
-    }
+    inline CostT GetMaxCommWeight() { return maxCommWeight_; }
 
-    inline CostT GetMaxCommWeightMultiplied()
-    {
-        return maxCommWeight_ * commMultiplier_;
-    }
+    inline CostT GetMaxCommWeightMultiplied() { return maxCommWeight_ * commMultiplier_; }
 
-    const std::string Name() const
-    {
-        return "hyper_total_comm_cost";
-    }
+    const std::string Name() const { return "hyper_total_comm_cost"; }
 
     inline bool IsCompatible(VertexType node, unsigned proc)
     {
         return activeSchedule_->GetInstance().IsCompatible(node, proc);
     }
 
-    void Initialize(KlActiveSchedule<GraphT, CostT> &sched, CompatibleProcessorRange<GraphT> &pRange)
+    void Initialize(KlActiveSchedule<GraphT, CostT>& sched, CompatibleProcessorRange<GraphT>& pRange)
     {
         activeSchedule_ = &sched;
         procRange_ = &pRange;
@@ -78,10 +66,7 @@ struct KlHyperTotalCommCostFunction {
 
     using PreMoveCommDataT = EmptyStruct;
 
-    inline EmptyStruct GetPreMoveCommData(const KlMove &)
-    {
-        return EmptyStruct();
-    }
+    inline EmptyStruct GetPreMoveCommData(const KlMove&) { return EmptyStruct(); }
 
     CostT ComputeScheduleCost()
     {
@@ -98,18 +83,17 @@ struct KlHyperTotalCommCostFunction {
 
             nodeLambdaMap_.ResetNode(vertex);
 
-            for (const auto &target : instance_->GetComputationalDag().Children(vertex)) {
+            for (const auto& target : instance_->GetComputationalDag().Children(vertex)) {
                 const unsigned targetProc = activeSchedule_->AssignedProcessor(target);
                 if (nodeLambdaMap_.IncreaseProcCount(vertex, targetProc)) {
                     // is 0 if targetProc == vertexProc
-                    commCosts += vCommCost
-                                 * instance_->CommunicationCosts(vertexProc, targetProc);
+                    commCosts += vCommCost * instance_->CommunicationCosts(vertexProc, targetProc);
                 }
             }
         }
 
-        return workCosts + commCosts * commMultiplier_
-               + static_cast<VCommwT<GraphT>>(activeSchedule_->NumSteps() - 1) * instance_->SynchronisationCosts();
+        return workCosts + commCosts * commMultiplier_ +
+               static_cast<VCommwT<GraphT>>(activeSchedule_->NumSteps() - 1) * instance_->SynchronisationCosts();
     }
 
     CostT ComputeScheduleCostTest()
@@ -124,19 +108,19 @@ struct KlHyperTotalCommCostFunction {
             const unsigned vertexProc = activeSchedule_->AssignedProcessor(vertex);
             const CostT vCommCost = graph_->VertexCommWeight(vertex);
             for (const auto lambdaprocMultPair : nodeLambdaMap_.IterateProcEntries(vertex)) {
-                const auto &lambdaProc = lambdaprocMultPair.first;
+                const auto& lambdaProc = lambdaprocMultPair.first;
                 commCosts += vCommCost * instance_->CommunicationCosts(vertexProc, lambdaProc);
             }
         }
 
-        return workCosts + commCosts * commMultiplier_
-               + static_cast<VCommwT<GraphT>>(activeSchedule_->NumSteps() - 1) * instance_->SynchronisationCosts();
+        return workCosts + commCosts * commMultiplier_ +
+               static_cast<VCommwT<GraphT>>(activeSchedule_->NumSteps() - 1) * instance_->SynchronisationCosts();
     }
 
-    inline void UpdateDatastructureAfterMove(const KlMove &move, const unsigned startStep, const unsigned endStep)
+    inline void UpdateDatastructureAfterMove(const KlMove& move, const unsigned startStep, const unsigned endStep)
     {
         if (move.toProc_ != move.fromProc_) {
-            for (const auto &source : instance_->GetComputationalDag().Parents(move.node_)) {
+            for (const auto& source : instance_->GetComputationalDag().Parents(move.node_)) {
                 const unsigned sourceStep = activeSchedule_->AssignedSuperstep(source);
                 if (sourceStep < startStep || sourceStep > endStep) {
                     continue;
@@ -146,13 +130,13 @@ struct KlHyperTotalCommCostFunction {
         }
     }
 
-    inline void UpdateSourceAfterMove(const KlMove &move, VertexType source)
+    inline void UpdateSourceAfterMove(const KlMove& move, VertexType source)
     {
         nodeLambdaMap_.DecreaseProcCount(source, move.fromProc_);
         nodeLambdaMap_.IncreaseProcCount(source, move.toProc_);
     }
 
-    void MarkForFullRecompute(VertexType target, std::map<VertexType, KlGainUpdateInfo> &maxGainRecompute)
+    void MarkForFullRecompute(VertexType target, std::map<VertexType, KlGainUpdateInfo>& maxGainRecompute)
     {
         if (maxGainRecompute.find(target) != maxGainRecompute.end()) {
             maxGainRecompute[target].fullUpdate_ = true;
@@ -163,20 +147,24 @@ struct KlHyperTotalCommCostFunction {
 
     template <typename ThreadDataT>
     bool IsValidAffinityTarget(VertexType target, unsigned startStep, unsigned endStep, VertexType excludeNode,
-                               ThreadDataT &threadData)
+                               ThreadDataT& threadData)
     {
         const unsigned targetStep = activeSchedule_->AssignedSuperstep(target);
-        if (targetStep < startStep || targetStep > endStep) return false;
-        if (target == excludeNode) return false;
-        if (not threadData.affinityTable_.IsSelected(target)) return false;
-        if (threadData.lockManager_.IsLocked(target)) return false;
+        if (targetStep < startStep || targetStep > endStep)
+            return false;
+        if (target == excludeNode)
+            return false;
+        if (not threadData.affinityTable_.IsSelected(target))
+            return false;
+        if (threadData.lockManager_.IsLocked(target))
+            return false;
         return true;
     }
 
     template <typename AffinityTableT>
-    void UpdateChildAffinityFromStep(const KlMove &move, VertexType target, unsigned targetStep,
-                                     unsigned targetProc, unsigned targetStartIdx, unsigned endStep,
-                                     const CostT &penalty, const CostT &reward, AffinityTableT &affinityTable)
+    void UpdateChildAffinityFromStep(const KlMove& move, VertexType target, unsigned targetStep, unsigned targetProc,
+                                     unsigned targetStartIdx, unsigned endStep, const CostT& penalty,
+                                     const CostT& reward, AffinityTableT& affinityTable)
     {
         if (move.fromStep_ < targetStep + (move.fromProc_ == targetProc)) {
             const unsigned diff = targetStep - move.fromStep_;
@@ -207,38 +195,36 @@ struct KlHyperTotalCommCostFunction {
     }
 
     template <typename AffinityTableT>
-    void UpdateChildAffinityToStep(const KlMove &move, VertexType target, unsigned targetStep,
-                                   unsigned targetProc, unsigned targetStartIdx, unsigned endStep,
-                                   const CostT &penalty, const CostT &reward, AffinityTableT &affinityTable);
+    void UpdateChildAffinityToStep(const KlMove& move, VertexType target, unsigned targetStep, unsigned targetProc,
+                                   unsigned targetStartIdx, unsigned endStep, const CostT& penalty, const CostT& reward,
+                                   AffinityTableT& affinityTable);
 
     template <typename AffinityTableT>
-    void UpdateChildLambdaAffinity(const KlMove &move, VertexType target, unsigned targetStep,
-                                   unsigned targetProc, unsigned targetStartIdx, unsigned endStep,
-                                   AffinityTableT &affinityTable);
+    void UpdateChildLambdaAffinity(const KlMove& move, VertexType target, unsigned targetStep, unsigned targetProc,
+                                   unsigned targetStartIdx, unsigned endStep, AffinityTableT& affinityTable);
 
     template <typename ThreadDataT>
-    void ApplyAffinityToRange(VertexType target, unsigned proc, unsigned startStep, unsigned endStep,
-                              CostT commAff, ThreadDataT &threadData)
+    void ApplyAffinityToRange(VertexType target, unsigned proc, unsigned startStep, unsigned endStep, CostT commAff,
+                              ThreadDataT& threadData)
     {
         const unsigned targetStep = activeSchedule_->AssignedSuperstep(target);
-        auto &affinityRow = threadData.affinityTable_.At(target)[proc];
+        auto& affinityRow = threadData.affinityTable_.At(target)[proc];
         for (unsigned idx = StartIdx(targetStep, startStep); idx < EndIdx(targetStep, endStep); idx++) {
             affinityRow[idx] += commAff;
         }
     }
 
     template <typename ThreadDataT>
-    void AdjustLambdaForAllProcs(VertexType target, unsigned sourceProc, CostT commGain,
-                                 unsigned startStep, unsigned endStep, CostT sign,
-                                 std::map<VertexType, KlGainUpdateInfo> &maxGainRecompute,
-                                 ThreadDataT &threadData)
+    void AdjustLambdaForAllProcs(VertexType target, unsigned sourceProc, CostT commGain, unsigned startStep,
+                                 unsigned endStep, CostT sign, std::map<VertexType, KlGainUpdateInfo>& maxGainRecompute,
+                                 ThreadDataT& threadData)
     {
         const unsigned targetProc = activeSchedule_->AssignedProcessor(target);
         MarkForFullRecompute(target, maxGainRecompute);
         const unsigned targetStep = activeSchedule_->AssignedSuperstep(target);
         const unsigned targetStartIdx = StartIdx(targetStep, startStep);
         const unsigned targetWindowBound = EndIdx(targetStep, endStep);
-        auto &affinityTableTarget = threadData.affinityTable_.At(target);
+        auto& affinityTableTarget = threadData.affinityTable_.At(target);
         const CostT commAff = sign * instance_->CommunicationCosts(sourceProc, targetProc) * commGain;
         for (const unsigned p : procRange_->CompatibleProcessorsVertex(target)) {
             if (p == targetProc) {
@@ -251,14 +237,13 @@ struct KlHyperTotalCommCostFunction {
     }
 
     template <typename ThreadDataT>
-    void UpdateSourceLambdaFromProc(const KlMove &move, VertexType source, unsigned sourceProc,
-                                    unsigned startStep, unsigned endStep,
-                                    std::map<VertexType, KlGainUpdateInfo> &maxGainRecompute,
-                                    ThreadDataT &threadData)
+    void UpdateSourceLambdaFromProc(const KlMove& move, VertexType source, unsigned sourceProc, unsigned startStep,
+                                    unsigned endStep, std::map<VertexType, KlGainUpdateInfo>& maxGainRecompute,
+                                    ThreadDataT& threadData)
     {
         if (nodeLambdaMap_.HasNoProcEntry(source, move.fromProc_)) {
             const CostT commGain = graph_->VertexCommWeight(source) * commMultiplier_;
-            for (const auto &target : instance_->GetComputationalDag().Children(source)) {
+            for (const auto& target : instance_->GetComputationalDag().Children(source)) {
                 if (!IsValidAffinityTarget(target, startStep, endStep, move.node_, threadData)) {
                     continue;
                 }
@@ -270,13 +255,13 @@ struct KlHyperTotalCommCostFunction {
             }
         } else if (nodeLambdaMap_.GetProcEntry(source, move.fromProc_) == 1) {
             const CostT commGain = graph_->VertexCommWeight(source) * commMultiplier_;
-            for (const auto &target : instance_->GetComputationalDag().Children(source)) {
+            for (const auto& target : instance_->GetComputationalDag().Children(source)) {
                 if (!IsValidAffinityTarget(target, startStep, endStep, move.node_, threadData)) {
                     continue;
                 }
                 if (activeSchedule_->AssignedProcessor(target) == move.fromProc_) {
-                    AdjustLambdaForAllProcs(target, sourceProc, commGain, startStep, endStep, -1,
-                                            maxGainRecompute, threadData);
+                    AdjustLambdaForAllProcs(target, sourceProc, commGain, startStep, endStep, -1, maxGainRecompute,
+                                            threadData);
                     break;
                 }
             }
@@ -284,20 +269,19 @@ struct KlHyperTotalCommCostFunction {
     }
 
     template <typename ThreadDataT>
-    void UpdateSourceLambdaToProc(const KlMove &move, VertexType source, unsigned sourceProc,
-                                  unsigned startStep, unsigned endStep,
-                                  std::map<VertexType, KlGainUpdateInfo> &maxGainRecompute,
-                                  ThreadDataT &threadData);
+    void UpdateSourceLambdaToProc(const KlMove& move, VertexType source, unsigned sourceProc, unsigned startStep,
+                                  unsigned endStep, std::map<VertexType, KlGainUpdateInfo>& maxGainRecompute,
+                                  ThreadDataT& threadData);
 
     template <typename AffinityTableT>
-    void UpdateSourceAffinityFromStep(const KlMove &move, VertexType source, unsigned sourceStep,
-                                      unsigned sourceProc, unsigned sourceStartIdx, unsigned endStep,
-                                      const CostT &penalty, const CostT &reward, AffinityTableT &affinityTableSource);
+    void UpdateSourceAffinityFromStep(const KlMove& move, VertexType source, unsigned sourceStep, unsigned sourceProc,
+                                      unsigned sourceStartIdx, unsigned endStep, const CostT& penalty,
+                                      const CostT& reward, AffinityTableT& affinityTableSource);
 
     template <typename AffinityTableT>
-    void UpdateSourceAffinityToStep(const KlMove &move, VertexType source, unsigned sourceStep,
-                                    unsigned sourceProc, unsigned sourceStartIdx, unsigned endStep,
-                                    const CostT &penalty, const CostT &reward, AffinityTableT &affinityTableSource)
+    void UpdateSourceAffinityToStep(const KlMove& move, VertexType source, unsigned sourceStep, unsigned sourceProc,
+                                    unsigned sourceStartIdx, unsigned endStep, const CostT& penalty,
+                                    const CostT& reward, AffinityTableT& affinityTableSource)
     {
         if (move.toStep_ < sourceStep + (move.toProc_ != sourceProc)) {
             const unsigned diff = sourceStep - move.toStep_;
@@ -327,20 +311,19 @@ struct KlHyperTotalCommCostFunction {
     }
 
     template <typename AffinityTableT>
-    void UpdateSourceLambdaCommCost(const KlMove &move, VertexType source, unsigned sourceProc,
-                                    unsigned sourceStartIdx, unsigned endStep, unsigned sourceStep,
-                                    AffinityTableT &affinityTableSource)
+    void UpdateSourceLambdaCommCost(const KlMove& move, VertexType source, unsigned sourceProc, unsigned sourceStartIdx,
+                                    unsigned endStep, unsigned sourceStep, AffinityTableT& affinityTableSource)
     {
         const unsigned windowBound = EndIdx(sourceStep, endStep);
 
         if (nodeLambdaMap_.HasNoProcEntry(source, move.fromProc_)) {
             const CostT commGain = graph_->VertexCommWeight(source) * commMultiplier_;
             for (const unsigned p : procRange_->CompatibleProcessorsVertex(source)) {
-                if (p == sourceProc) continue;
-                const CostT commCost = ChangeCommCost(
-                    instance_->CommunicationCosts(p, move.fromProc_),
-                    instance_->CommunicationCosts(sourceProc, move.fromProc_),
-                    commGain);
+                if (p == sourceProc)
+                    continue;
+                const CostT commCost = ChangeCommCost(instance_->CommunicationCosts(p, move.fromProc_),
+                                                      instance_->CommunicationCosts(sourceProc, move.fromProc_),
+                                                      commGain);
                 for (unsigned idx = sourceStartIdx; idx < windowBound; idx++) {
                     affinityTableSource[p][idx] -= commCost;
                 }
@@ -350,11 +333,11 @@ struct KlHyperTotalCommCostFunction {
         if (nodeLambdaMap_.GetProcEntry(source, move.toProc_) == 1) {
             const CostT commGain = graph_->VertexCommWeight(source) * commMultiplier_;
             for (const unsigned p : procRange_->CompatibleProcessorsVertex(source)) {
-                if (p == sourceProc) continue;
-                const CostT commCost = ChangeCommCost(
-                    instance_->CommunicationCosts(p, move.toProc_),
-                    instance_->CommunicationCosts(sourceProc, move.toProc_),
-                    commGain);
+                if (p == sourceProc)
+                    continue;
+                const CostT commCost = ChangeCommCost(instance_->CommunicationCosts(p, move.toProc_),
+                                                      instance_->CommunicationCosts(sourceProc, move.toProc_),
+                                                      commGain);
                 for (unsigned idx = sourceStartIdx; idx < windowBound; idx++) {
                     affinityTableSource[p][idx] += commCost;
                 }
@@ -363,18 +346,19 @@ struct KlHyperTotalCommCostFunction {
     }
 
     template <typename ThreadDataT>
-    void UpdateChildrenCommAffinity(const KlMove &move, ThreadDataT &threadData,
-                                    const CostT &penalty, const CostT &reward,
-                                    std::map<VertexType, KlGainUpdateInfo> &maxGainRecompute,
-                                    std::vector<VertexType> &newNodes)
+    void UpdateChildrenCommAffinity(const KlMove& move, ThreadDataT& threadData, const CostT& penalty,
+                                    const CostT& reward, std::map<VertexType, KlGainUpdateInfo>& maxGainRecompute,
+                                    std::vector<VertexType>& newNodes)
     {
         const unsigned startStep = threadData.startStep_;
         const unsigned endStep = threadData.endStep_;
 
-        for (const auto &target : instance_->GetComputationalDag().Children(move.node_)) {
+        for (const auto& target : instance_->GetComputationalDag().Children(move.node_)) {
             const unsigned targetStep = activeSchedule_->AssignedSuperstep(target);
-            if (targetStep < startStep || targetStep > endStep) continue;
-            if (threadData.lockManager_.IsLocked(target)) continue;
+            if (targetStep < startStep || targetStep > endStep)
+                continue;
+            if (threadData.lockManager_.IsLocked(target))
+                continue;
 
             if (not threadData.affinityTable_.IsSelected(target)) {
                 newNodes.push_back(target);
@@ -385,12 +369,12 @@ struct KlHyperTotalCommCostFunction {
 
             const unsigned targetProc = activeSchedule_->AssignedProcessor(target);
             const unsigned targetStartIdx = StartIdx(targetStep, startStep);
-            auto &affinityTable = threadData.affinityTable_.At(target);
+            auto& affinityTable = threadData.affinityTable_.At(target);
 
-            UpdateChildAffinityFromStep(move, target, targetStep, targetProc,
-                                        targetStartIdx, endStep, penalty, reward, affinityTable);
-            UpdateChildAffinityToStep(move, target, targetStep, targetProc,
-                                      targetStartIdx, endStep, penalty, reward, affinityTable);
+            UpdateChildAffinityFromStep(move, target, targetStep, targetProc, targetStartIdx, endStep, penalty, reward,
+                                        affinityTable);
+            UpdateChildAffinityToStep(move, target, targetStep, targetProc, targetStartIdx, endStep, penalty, reward,
+                                      affinityTable);
 
             if (move.toProc_ != move.fromProc_) {
                 UpdateChildLambdaAffinity(move, target, targetStep, targetProc, targetStartIdx, endStep, affinityTable);
@@ -399,15 +383,14 @@ struct KlHyperTotalCommCostFunction {
     }
 
     template <typename ThreadDataT>
-    void UpdateParentsCommAffinity(const KlMove &move, ThreadDataT &threadData,
-                                   const CostT &penalty, const CostT &reward,
-                                   std::map<VertexType, KlGainUpdateInfo> &maxGainRecompute,
-                                   std::vector<VertexType> &newNodes)
+    void UpdateParentsCommAffinity(const KlMove& move, ThreadDataT& threadData, const CostT& penalty,
+                                   const CostT& reward, std::map<VertexType, KlGainUpdateInfo>& maxGainRecompute,
+                                   std::vector<VertexType>& newNodes)
     {
         const unsigned startStep = threadData.startStep_;
         const unsigned endStep = threadData.endStep_;
 
-        for (const auto &source : instance_->GetComputationalDag().Parents(move.node_)) {
+        for (const auto& source : instance_->GetComputationalDag().Parents(move.node_)) {
             if (move.toProc_ != move.fromProc_) {
                 const unsigned sourceProc = activeSchedule_->AssignedProcessor(source);
                 UpdateSourceLambdaFromProc(move, source, sourceProc, startStep, endStep, maxGainRecompute, threadData);
@@ -415,8 +398,10 @@ struct KlHyperTotalCommCostFunction {
             }
 
             const unsigned sourceStep = activeSchedule_->AssignedSuperstep(source);
-            if (sourceStep < startStep || sourceStep > endStep) continue;
-            if (threadData.lockManager_.IsLocked(source)) continue;
+            if (sourceStep < startStep || sourceStep > endStep)
+                continue;
+            if (threadData.lockManager_.IsLocked(source))
+                continue;
 
             if (not threadData.affinityTable_.IsSelected(source)) {
                 newNodes.push_back(source);
@@ -427,27 +412,24 @@ struct KlHyperTotalCommCostFunction {
 
             const unsigned sourceProc = activeSchedule_->AssignedProcessor(source);
             const unsigned sourceStartIdx = StartIdx(sourceStep, startStep);
-            auto &affinityTableSource = threadData.affinityTable_.At(source);
+            auto& affinityTableSource = threadData.affinityTable_.At(source);
 
-            UpdateSourceAffinityFromStep(move, source, sourceStep, sourceProc,
-                                         sourceStartIdx, endStep, penalty, reward, affinityTableSource);
-            UpdateSourceAffinityToStep(move, source, sourceStep, sourceProc,
-                                       sourceStartIdx, endStep, penalty, reward, affinityTableSource);
+            UpdateSourceAffinityFromStep(move, source, sourceStep, sourceProc, sourceStartIdx, endStep, penalty, reward,
+                                         affinityTableSource);
+            UpdateSourceAffinityToStep(move, source, sourceStep, sourceProc, sourceStartIdx, endStep, penalty, reward,
+                                       affinityTableSource);
 
             if (move.toProc_ != move.fromProc_) {
-                UpdateSourceLambdaCommCost(move, source, sourceProc,
-                                           sourceStartIdx, endStep, sourceStep, affinityTableSource);
+                UpdateSourceLambdaCommCost(move, source, sourceProc, sourceStartIdx, endStep, sourceStep,
+                                           affinityTableSource);
             }
         }
     }
 
     template <typename ThreadDataT>
-    void UpdateNodeCommAffinity(const KlMove &move,
-                                ThreadDataT &threadData,
-                                const CostT &penalty,
-                                const CostT &reward,
-                                std::map<VertexType, KlGainUpdateInfo> &maxGainRecompute,
-                                std::vector<VertexType> &newNodes)
+    void UpdateNodeCommAffinity(const KlMove& move, ThreadDataT& threadData, const CostT& penalty, const CostT& reward,
+                                std::map<VertexType, KlGainUpdateInfo>& maxGainRecompute,
+                                std::vector<VertexType>& newNodes)
     {
         UpdateChildrenCommAffinity(move, threadData, penalty, reward, maxGainRecompute, newNodes);
         UpdateParentsCommAffinity(move, threadData, penalty, reward, maxGainRecompute, newNodes);
@@ -463,47 +445,41 @@ struct KlHyperTotalCommCostFunction {
         return nodeStep + windowSize <= endStep ? windowRange_ : windowRange_ - (nodeStep + windowSize - endStep);
     }
 
-    inline CostT ChangeCommCost(const VCommwT<GraphT> &pTargetCommCost,
-                                const VCommwT<GraphT> &nodeTargetCommCost,
-                                const CostT &commGain)
+    inline CostT ChangeCommCost(const VCommwT<GraphT>& pTargetCommCost, const VCommwT<GraphT>& nodeTargetCommCost,
+                                const CostT& commGain)
     {
-        return pTargetCommCost > nodeTargetCommCost ? (pTargetCommCost - nodeTargetCommCost) * commGain
-                                                    : (nodeTargetCommCost - pTargetCommCost) * commGain * -1.0;
+        return pTargetCommCost > nodeTargetCommCost ? (pTargetCommCost - nodeTargetCommCost) * commGain :
+                                                      (nodeTargetCommCost - pTargetCommCost) * commGain * -1.0;
     }
 
     template <typename AffinityTableT>
-    void ComputeChildCommAffinity(VertexType node, AffinityTableT &affinityTableNode,
-                                  const CostT &penalty, const CostT &reward,
-                                  unsigned nodeStep, unsigned nodeProc,
-                                  unsigned nodeStartIdx, unsigned windowBound);
+    void ComputeChildCommAffinity(VertexType node, AffinityTableT& affinityTableNode, const CostT& penalty,
+                                  const CostT& reward, unsigned nodeStep, unsigned nodeProc, unsigned nodeStartIdx,
+                                  unsigned windowBound);
     template <typename AffinityTableT>
-    void ComputeLambdaProcAffinity(VertexType node, AffinityTableT &affinityTableNode,
-                                   unsigned nodeProc, unsigned nodeStartIdx, unsigned windowBound);
-
-    template <typename AffinityTableT>
-    void ComputeParentStepAffinity(VertexType node, AffinityTableT &affinityTableNode,
-                                   const CostT &penalty, const CostT &reward,
-                                   unsigned nodeStep, unsigned nodeProc,
-                                   unsigned sourceStep, unsigned sourceProc,
+    void ComputeLambdaProcAffinity(VertexType node, AffinityTableT& affinityTableNode, unsigned nodeProc,
                                    unsigned nodeStartIdx, unsigned windowBound);
 
     template <typename AffinityTableT>
-    void ComputeParentLambdaAffinity(VertexType node, AffinityTableT &affinityTableNode,
-                                     VertexType source, unsigned nodeProc, unsigned sourceProc,
-                                     unsigned nodeStartIdx, unsigned windowBound);
+    void ComputeParentStepAffinity(VertexType node, AffinityTableT& affinityTableNode, const CostT& penalty,
+                                   const CostT& reward, unsigned nodeStep, unsigned nodeProc, unsigned sourceStep,
+                                   unsigned sourceProc, unsigned nodeStartIdx, unsigned windowBound);
 
     template <typename AffinityTableT>
-    void ComputeParentCommAffinity(VertexType node, AffinityTableT &affinityTableNode,
-                                   const CostT &penalty, const CostT &reward,
-                                   unsigned nodeStep, unsigned nodeProc,
-                                   unsigned nodeStartIdx, unsigned windowBound);
+    void ComputeParentLambdaAffinity(VertexType node, AffinityTableT& affinityTableNode, VertexType source,
+                                     unsigned nodeProc, unsigned sourceProc, unsigned nodeStartIdx,
+                                     unsigned windowBound);
 
     template <typename AffinityTableT>
-    void ComputeCommAffinity(VertexType node, AffinityTableT &affinityTableNode,
-                             const CostT &penalty, const CostT &reward,
-                             const unsigned startStep, const unsigned endStep);
+    void ComputeParentCommAffinity(VertexType node, AffinityTableT& affinityTableNode, const CostT& penalty,
+                                   const CostT& reward, unsigned nodeStep, unsigned nodeProc, unsigned nodeStartIdx,
+                                   unsigned windowBound);
+
+    template <typename AffinityTableT>
+    void ComputeCommAffinity(VertexType node, AffinityTableT& affinityTableNode, const CostT& penalty,
+                             const CostT& reward, const unsigned startStep, const unsigned endStep);
 };
-}    // namespace osp
+} // namespace osp
 } // namespace npu::tile_fwk
 #include "kl_hyper_total_comm_cost.tpp"
 #endif // OSP_KL_HYPER_TOTAL_COMM_COST_HPP

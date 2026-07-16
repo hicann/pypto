@@ -126,9 +126,9 @@ TEST_F(TestDynamicDeviceRunner, test_dump_device_perf)
     metr->taskCount = 1;
     metr->tasks[0] = taskStat;
     metr->aicoreDevTaskInfo[0].cnt = 1;
-    metr->aicoreDevTaskInfo[0].aicoreEveryDevTypeTimeStamp[0].type=0;
-    metr->aicoreDevTaskInfo[0].aicoreEveryDevTypeTimeStamp[0].devTaskIdx=0;
-    metr->aicoreDevTaskInfo[0].aicoreEveryDevTypeTimeStamp[0].aicoreDevTimeStamp=1;
+    metr->aicoreDevTaskInfo[0].aicoreEveryDevTypeTimeStamp[0].type = 0;
+    metr->aicoreDevTaskInfo[0].aicoreEveryDevTypeTimeStamp[0].devTaskIdx = 0;
+    metr->aicoreDevTaskInfo[0].aicoreEveryDevTypeTimeStamp[0].aicoreDevTimeStamp = 1;
     metr->turnNum = 1;
 
     auto aicpuMetPer = std::make_unique<MetricPerf>();

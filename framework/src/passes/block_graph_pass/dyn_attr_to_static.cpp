@@ -80,10 +80,9 @@ struct CoaInfo {
         if (ParseParamOffset(coaExpr, match)) {
             macroType = CoaType::PARAM_OFFSET;
             if (SToIParamShapeAndOffset(match) != SUCCESS) {
-                APASS_LOG_ERROR_F(
-                    Elements::Operation,
-                    "ParseCoaString failed to convert indices, CoaType::PARAM_OFFSET, input coaExpr %s.",
-                    coaExpr.c_str());
+                APASS_LOG_ERROR_F(Elements::Operation,
+                                  "ParseCoaString failed to convert indices, CoaType::PARAM_OFFSET, input coaExpr %s.",
+                                  coaExpr.c_str());
                 return FAILED;
             }
         } else if (ParseParamValidShape(coaExpr, match)) {
@@ -98,9 +97,9 @@ struct CoaInfo {
         } else if (ParseParam(coaExpr, match)) {
             macroType = CoaType::PARAM;
             if (SToIWrapper(match[INPUT_PARAM_POS_ONE].str(), idx) != SUCCESS) {
-                APASS_LOG_ERROR_F(
-                    Elements::Operation, "ParseCoaString failed to convert indices, CoaType::PARAM, input coaExpr %s.",
-                    coaExpr.c_str());
+                APASS_LOG_ERROR_F(Elements::Operation,
+                                  "ParseCoaString failed to convert indices, CoaType::PARAM, input coaExpr %s.",
+                                  coaExpr.c_str());
                 return FAILED;
             }
         } else if (coaExpr.find(MAYBE_CONST_POSTFIX) != std::string::npos) {
@@ -116,8 +115,8 @@ struct CoaInfo {
                 return FAILED;
             }
         } else {
-            APASS_LOG_ERROR_F(
-                Elements::Operation, "ParseCoaString input coaExpr %s is not recognized.", coaExpr.c_str());
+            APASS_LOG_ERROR_F(Elements::Operation, "ParseCoaString input coaExpr %s is not recognized.",
+                              coaExpr.c_str());
             return FAILED;
         }
         return SUCCESS;
@@ -162,7 +161,7 @@ struct IsConstMetric {
     static constexpr int kNotConst_ = 2;
     static constexpr int kConstButNotStatic_ = 3;
 
-    int isConst = 1;    // not const = 2; const = 1; const but not static = 3;
+    int isConst = 1;                   // not const = 2; const = 1; const but not static = 3;
     int attrValue = kAttrValueUninit_; // static >= 0; else -1.
 
     void MarkNotConst() { isConst = kNotConst_; }
@@ -200,16 +199,16 @@ Status SToIWrapper(const std::string str, int& result)
     return FAILED;
 }
 
-void DynAttrToStatic::RefSpecifiedValue(
-    std::vector<SymbolicScalar>& oriList, std::vector<std::reference_wrapper<SymbolicScalar>>& newList) const
+void DynAttrToStatic::RefSpecifiedValue(std::vector<SymbolicScalar>& oriList,
+                                        std::vector<std::reference_wrapper<SymbolicScalar>>& newList) const
 {
     for (auto& value : oriList) {
         newList.push_back(std::reference_wrapper<SymbolicScalar>(value));
     }
 }
 
-void DynAttrToStatic::FilterSpecifiedValue(
-    std::vector<OpImmediate>& oriList, std::vector<std::reference_wrapper<SymbolicScalar>>& newList) const
+void DynAttrToStatic::FilterSpecifiedValue(std::vector<OpImmediate>& oriList,
+                                           std::vector<std::reference_wrapper<SymbolicScalar>>& newList) const
 {
     for (auto& value : oriList) {
         if (value.IsSpecified()) {
@@ -279,8 +278,8 @@ Status DynAttrToStatic::GetCallee(const Operation& callop, Function*& callFunc)
     auto callopAttr = std::static_pointer_cast<CallOpAttribute>(callop.GetOpAttribute());
     callFunc = Program::GetInstance().GetFunctionByMagicName(callopAttr->GetCalleeMagicName());
     if (callFunc == nullptr) {
-        APASS_LOG_ERROR_F(
-            Elements::Operation, "Get callee function %s failed.", callopAttr->GetCalleeMagicName().c_str());
+        APASS_LOG_ERROR_F(Elements::Operation, "Get callee function %s failed.",
+                          callopAttr->GetCalleeMagicName().c_str());
         return FAILED;
     }
     return SUCCESS;
@@ -294,16 +293,14 @@ Status DynAttrToStatic::BuildLeafToCaller(Function* func)
         for (auto callop : func->GetCallopList()) {
             Function* nextFunc = nullptr;
             if (GetCallee(*callop, nextFunc) != SUCCESS) {
-                APASS_LOG_ERROR_F(
-                    Elements::Operation, "BuildLeafToCaller at %s, %s[%d] GetCallee failed.%s",
-                    func->GetRawName().c_str(), callop->GetOpcodeStr().c_str(), callop->GetOpMagic(),
-                    GetFormatBacktrace(callop).c_str());
+                APASS_LOG_ERROR_F(Elements::Operation, "BuildLeafToCaller at %s, %s[%d] GetCallee failed.%s",
+                                  func->GetRawName().c_str(), callop->GetOpcodeStr().c_str(), callop->GetOpMagic(),
+                                  GetFormatBacktrace(callop).c_str());
                 return FAILED;
             }
             if (BuildLeafToCaller(nextFunc) != SUCCESS) {
-                APASS_LOG_ERROR_F(
-                    Elements::Operation, "BuildLeafToCaller at %s, nextFunc at %s failed", func->GetRawName().c_str(),
-                    nextFunc->GetRawName().c_str());
+                APASS_LOG_ERROR_F(Elements::Operation, "BuildLeafToCaller at %s, nextFunc at %s failed",
+                                  func->GetRawName().c_str(), nextFunc->GetRawName().c_str());
                 return FAILED;
             }
         }
@@ -315,24 +312,22 @@ Status DynAttrToStatic::BuildLeafToCaller(Function* func)
         for (auto callop : func->GetCallopList()) {
             Function* leafFunc = nullptr;
             if (GetCallee(*callop, leafFunc) != SUCCESS) {
-                APASS_LOG_ERROR_F(
-                    Elements::Operation, "BuildLeafToCaller at %s, %s[%d] GetCallee failed.%s",
-                    func->GetRawName().c_str(), callop->GetOpcodeStr().c_str(), callop->GetOpMagic(),
-                    GetFormatBacktrace(callop).c_str());
+                APASS_LOG_ERROR_F(Elements::Operation, "BuildLeafToCaller at %s, %s[%d] GetCallee failed.%s",
+                                  func->GetRawName().c_str(), callop->GetOpcodeStr().c_str(), callop->GetOpMagic(),
+                                  GetFormatBacktrace(callop).c_str());
                 return FAILED;
             }
             leaf2Caller[leafFunc].push_back(callop);
         }
         return SUCCESS;
     }
-    APASS_LOG_ERROR_F(
-        Elements::Operation, "BuildLeafToCaller at %s entered unexpected function type %d.", func->GetRawName().c_str(),
-        static_cast<int>(func->GetFunctionType()));
+    APASS_LOG_ERROR_F(Elements::Operation, "BuildLeafToCaller at %s entered unexpected function type %d.",
+                      func->GetRawName().c_str(), static_cast<int>(func->GetFunctionType()));
     return FAILED;
 }
 
-Status DynAttrToStatic::BuildNewCoa(
-    std::reference_wrapper<SymbolicScalar>& dynScalar, std::vector<std::vector<SymbolicScalar>>& callopArglistOneDim)
+Status DynAttrToStatic::BuildNewCoa(std::reference_wrapper<SymbolicScalar>& dynScalar,
+                                    std::vector<std::vector<SymbolicScalar>>& callopArglistOneDim)
 {
     constexpr int kNonImmediateSentinel = -2; // sentinel for non-immediate callop attr
     // 1. 拆解dynScalar到对应的COA表达式
@@ -378,9 +373,8 @@ Status DynAttrToStatic::BuildNewCoa(
     }
 
     // 3. 刷新新的COA宏
-    APASS_LOG_INFO_F(
-        Elements::Operation, "BuildNewCoa update dynScalar[%s] with isConst=%d, value=%d.", dynParamExpr.c_str(),
-        branchMode, attrValue);
+    APASS_LOG_INFO_F(Elements::Operation, "BuildNewCoa update dynScalar[%s] with isConst=%d, value=%d.",
+                     dynParamExpr.c_str(), branchMode, attrValue);
     dynScalar.get() = coaExpr.BuildMaybeConstCoa(branchMode, attrValue);
     return SUCCESS;
 }
@@ -388,8 +382,8 @@ Status DynAttrToStatic::BuildNewCoa(
 inline int GetCoaIndex(const DynParamInfo& paramInfo)
 {
     if (paramInfo.type == DynParamInfoType::VALID_SHAPE) {
-        return (
-            (paramInfo.tensorBaseAddrCoaIndex + 1) + VALID_SHAPE_INDEX_ORDER * paramInfo.dimSize + paramInfo.dimIndex);
+        return ((paramInfo.tensorBaseAddrCoaIndex + 1) + VALID_SHAPE_INDEX_ORDER * paramInfo.dimSize +
+                paramInfo.dimIndex);
     }
     if (paramInfo.type == DynParamInfoType::OFFSET) {
         return ((paramInfo.tensorBaseAddrCoaIndex + 1) + OFFSET_INDEX_ORDER * paramInfo.dimSize + paramInfo.dimIndex);
@@ -430,9 +424,8 @@ void ReplaceCommonSymbol(Function* leafFunc, std::vector<std::vector<SymbolicSca
             if (index2BaseSymbol.find(index2GroupId[coaIdx]) == index2BaseSymbol.end()) {
                 leafFunc->GetMutableDynParam(symbolStr).isBaseParam = true;
                 index2BaseSymbol[index2GroupId[coaIdx]] = symbolStr;
-                APASS_LOG_INFO_F(
-                    Elements::Operation, "Mark coaIndex[%d] groupId[%zu] symbolStr[%s] as baseParam", coaIdx,
-                    index2GroupId[coaIdx], symbolStr.c_str());
+                APASS_LOG_INFO_F(Elements::Operation, "Mark coaIndex[%d] groupId[%zu] symbolStr[%s] as baseParam",
+                                 coaIdx, index2GroupId[coaIdx], symbolStr.c_str());
             } else {
                 leafFunc->GetMutableDynParam(symbolStr).replacedSymbol = index2BaseSymbol[index2GroupId[coaIdx]];
                 APASS_LOG_INFO_F(
@@ -504,9 +497,9 @@ Status DynAttrToStatic::TryRemoveDynAttr(Function* leafFunc, std::vector<Operati
         std::vector<std::reference_wrapper<SymbolicScalar>> dynScalarList = GetOpDynamicAttributeList(op);
         for (auto dynScalar : dynScalarList) {
             if (BuildNewCoa(dynScalar, callopArglistOneDim) != SUCCESS) {
-                APASS_LOG_ERROR_F(
-                    Elements::Operation, "TryRemoveDynAttr failed to execute BuildNewCoa for op [%d][%s].",
-                    op.GetOpMagic(), op.GetOpcodeStr().c_str());
+                APASS_LOG_ERROR_F(Elements::Operation,
+                                  "TryRemoveDynAttr failed to execute BuildNewCoa for op [%d][%s].", op.GetOpMagic(),
+                                  op.GetOpcodeStr().c_str());
                 return FAILED;
             }
         }
@@ -598,9 +591,8 @@ Status DynAttrToStatic::RunOnFunction(Function& function)
     // 2. 遍历leaf2Caller，尝试为每个leaf消除动态attributes
     for (const auto& pair : leaf2Caller) {
         if (TryRemoveDynAttr(pair.first, pair.second) != SUCCESS) {
-            APASS_LOG_ERROR_F(
-                Elements::Operation, "Failed to call TryRemoveDynAttr for leafFunc %s.",
-                pair.first->GetRawName().c_str());
+            APASS_LOG_ERROR_F(Elements::Operation, "Failed to call TryRemoveDynAttr for leafFunc %s.",
+                              pair.first->GetRawName().c_str());
             return FAILED;
         }
     }
@@ -618,11 +610,10 @@ Status DynAttrToStatic::GetTileFunction(Function* function, std::unordered_set<F
 Status DynAttrToStatic::DumpFunctionJson(Function& function, const std::string& logFolder, bool beforeFunction)
 {
     DumpFunctionUtils utils;
-    return utils.DumpTileFunctionsJson(
-        function, logFolder, beforeFunction,
-        [this](Function& f, const std::string& folder, bool before) {
-            return Pass::DumpFunctionJson(f, folder, before);
-        });
+    return utils.DumpTileFunctionsJson(function, logFolder, beforeFunction,
+                                       [this](Function& f, const std::string& folder, bool before) {
+                                           return Pass::DumpFunctionJson(f, folder, before);
+                                       });
 }
 
 Status DynAttrToStatic::PrintFunction(Function& function, const std::string& logFolder, bool beforeFunction)
@@ -630,9 +621,7 @@ Status DynAttrToStatic::PrintFunction(Function& function, const std::string& log
     DumpFunctionUtils utils;
     return utils.PrintTileFunctions(
         function, logFolder, beforeFunction,
-        [this](Function& f, const std::string& folder, bool before) {
-            return Pass::PrintFunction(f, folder, before);
-        });
+        [this](Function& f, const std::string& folder, bool before) { return Pass::PrintFunction(f, folder, before); });
 }
 } // namespace tile_fwk
 } // namespace npu

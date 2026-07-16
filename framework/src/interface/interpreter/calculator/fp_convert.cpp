@@ -76,15 +76,12 @@ static uint8_t EncodeE4M3NormalMagnitude(float absv, int sign)
         mant = 0;
         stored_exp += 1;
     }
-    if (stored_exp > 0xf ||
-        (stored_exp == 0xf && mant >= 0x7)) {
+    if (stored_exp > 0xf || (stored_exp == 0xf && mant >= 0x7)) {
         return static_cast<uint8_t>((sign << 0x7) | 0x7E);
     }
     if (stored_exp == 0xf) {
-        return static_cast<uint8_t>(
-            (sign << 0x7) |
-            (static_cast<uint8_t>(0xf) << 0x3) |
-            static_cast<uint8_t>(mant & 0x7));
+        return static_cast<uint8_t>((sign << 0x7) | (static_cast<uint8_t>(0xf) << 0x3) |
+                                    static_cast<uint8_t>(mant & 0x7));
     }
     if (stored_exp <= 0) {
         return EncodeE4M3SubnormalFromAbsTimes512(absv / kE4M3EncodeMinSubnormal, sign);
@@ -98,9 +95,9 @@ static uint8_t EncodeE4M3NormalMagnitude(float absv, int sign)
 static torch::Tensor Fp8E4M3ToFloat32(const torch::Tensor& self)
 {
     auto x = self.to(torch::kInt32);
-    auto sign =
-        1.0f -
-        (torch::bitwise_and(torch::bitwise_right_shift(x, at::Scalar(7)), at::Scalar(1))).to(torch::kFloat32) * 2.0f;
+    auto sign = 1.0f -
+                (torch::bitwise_and(torch::bitwise_right_shift(x, at::Scalar(7)), at::Scalar(1))).to(torch::kFloat32) *
+                    2.0f;
     auto exp_bits = torch::bitwise_and(torch::bitwise_right_shift(x, at::Scalar(3)), at::Scalar(0xF));
     auto mant_bits = torch::bitwise_and(x, at::Scalar(0x7));
 
@@ -129,9 +126,9 @@ static torch::Tensor Fp8E4M3ToFloat32(const torch::Tensor& self)
 static torch::Tensor Fp8E5M2ToFloat32(const torch::Tensor& self)
 {
     auto x = self.to(torch::kInt32);
-    auto sign =
-        1.0f -
-        (torch::bitwise_and(torch::bitwise_right_shift(x, at::Scalar(7)), at::Scalar(1))).to(torch::kFloat32) * 2.0f;
+    auto sign = 1.0f -
+                (torch::bitwise_and(torch::bitwise_right_shift(x, at::Scalar(7)), at::Scalar(1))).to(torch::kFloat32) *
+                    2.0f;
     auto exp_bits = torch::bitwise_and(torch::bitwise_right_shift(x, at::Scalar(2)), at::Scalar(0x1F));
     auto mant_bits = torch::bitwise_and(x, at::Scalar(0x3));
 
@@ -172,9 +169,9 @@ static torch::Tensor Fp8E8M0ToFloat32(const torch::Tensor& self)
 static torch::Tensor Hf8ToFloat32(const torch::Tensor& self)
 {
     auto x = self.to(torch::kInt32);
-    auto sign =
-        1.0f -
-        (torch::bitwise_and(torch::bitwise_right_shift(x, at::Scalar(7)), at::Scalar(1))).to(torch::kFloat32) * 2.0f;
+    auto sign = 1.0f -
+                (torch::bitwise_and(torch::bitwise_right_shift(x, at::Scalar(7)), at::Scalar(1))).to(torch::kFloat32) *
+                    2.0f;
     auto lower7 = torch::bitwise_and(x, at::Scalar(0x7F));
     auto out = torch::zeros_like(self, torch::TensorOptions().dtype(torch::kFloat32));
 
@@ -331,9 +328,7 @@ static inline uint8_t EncodeFloatToHf8(float v)
         }
         int mv = clampInt(mvRaw, 0, 0x7);
         uint8_t e = EncodeHf8Exponent(exponent, 1);
-        return static_cast<uint8_t>(
-            (sign << 0x7) | (0b001 << 0x4) |
-            ((e & 0x1) << 0x3) | mv);
+        return static_cast<uint8_t>((sign << 0x7) | (0b001 << 0x4) | ((e & 0x1) << 0x3) | mv);
     }
     if (std::abs(exponent) <= 0x3) {
         int mvRaw = static_cast<int>(std::round(mant * 8.0f));
@@ -343,9 +338,7 @@ static inline uint8_t EncodeFloatToHf8(float v)
         }
         int mv = clampInt(mvRaw, 0, 0x7);
         uint8_t e = EncodeHf8Exponent(exponent, 2);
-        return static_cast<uint8_t>(
-            (sign << 0x7) | (0b01 << 0x5) |
-            ((e & 0x3) << 0x3) | mv);
+        return static_cast<uint8_t>((sign << 0x7) | (0b01 << 0x5) | ((e & 0x3) << 0x3) | mv);
     }
     if (std::abs(exponent) <= 0x7) {
         int mvRaw = static_cast<int>(std::round(mant * 4.0f));
@@ -355,9 +348,7 @@ static inline uint8_t EncodeFloatToHf8(float v)
         }
         int mv = clampInt(mvRaw, 0, 0x3);
         uint8_t e = EncodeHf8Exponent(exponent, 3);
-        return static_cast<uint8_t>(
-            (sign << 0x7) | (0b10 << 0x5) |
-            ((e & 0x7) << 0x2) | mv);
+        return static_cast<uint8_t>((sign << 0x7) | (0b10 << 0x5) | ((e & 0x7) << 0x2) | mv);
     }
     int mvRaw = static_cast<int>(std::round(mant * 2.0f));
     if (mvRaw >= 0x2) {
@@ -366,9 +357,7 @@ static inline uint8_t EncodeFloatToHf8(float v)
     }
     int mv = clampInt(mvRaw, 0, 1);
     uint8_t e = EncodeHf8Exponent(exponent, 4);
-    return static_cast<uint8_t>(
-        (sign << 0x7) | (0b11 << 0x5) |
-        ((e & 0xF) << 0x1) | mv);
+    return static_cast<uint8_t>((sign << 0x7) | (0b11 << 0x5) | ((e & 0xF) << 0x1) | mv);
 }
 
 static torch::Tensor Float32ToFp8E4M3(const torch::Tensor& self)

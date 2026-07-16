@@ -19,80 +19,35 @@ using namespace npu::tile_fwk;
 
 class TestCodeGenKirin9030Abs : public CodegenTestLiteNPU {
 public:
-    TestCodeGenKirin9030Abs() : CodegenTestLiteNPU("Kirin9030"){};
+    TestCodeGenKirin9030Abs() : CodegenTestLiteNPU("Kirin9030") {};
 };
 
-TEST_F(TestCodeGenKirin9030Abs, test_Abs_fp16_001)
-{
-    TestCodeGenAbs::Instance().test_Abs_fp16_001();
-}
+TEST_F(TestCodeGenKirin9030Abs, test_Abs_fp16_001) { TestCodeGenAbs::Instance().test_Abs_fp16_001(); }
 
-TEST_F(TestCodeGenKirin9030Abs, DISABLED_test_Abs_fp16_002)
-{
-    TestCodeGenAbs::Instance().test_Abs_fp16_002();
-}
+TEST_F(TestCodeGenKirin9030Abs, DISABLED_test_Abs_fp16_002) { TestCodeGenAbs::Instance().test_Abs_fp16_002(); }
 
-TEST_F(TestCodeGenKirin9030Abs, DISABLED_test_Abs_fp32_003)
-{
-    TestCodeGenAbs::Instance().test_Abs_fp32_003();
-}
+TEST_F(TestCodeGenKirin9030Abs, DISABLED_test_Abs_fp32_003) { TestCodeGenAbs::Instance().test_Abs_fp32_003(); }
 
-TEST_F(TestCodeGenKirin9030Abs, DISABLED_test_Abs_fp32_004)
-{
-    TestCodeGenAbs::Instance().test_Abs_fp32_004();
-}
+TEST_F(TestCodeGenKirin9030Abs, DISABLED_test_Abs_fp32_004) { TestCodeGenAbs::Instance().test_Abs_fp32_004(); }
 
-TEST_F(TestCodeGenKirin9030Abs, DISABLED_test_Abs_fp16_005)
-{
-    TestCodeGenAbs::Instance().test_Abs_fp16_005();
-}
+TEST_F(TestCodeGenKirin9030Abs, DISABLED_test_Abs_fp16_005) { TestCodeGenAbs::Instance().test_Abs_fp16_005(); }
 
-TEST_F(TestCodeGenKirin9030Abs, DISABLED_test_Abs_fp32_006)
-{
-    TestCodeGenAbs::Instance().test_Abs_fp32_006();
-}
+TEST_F(TestCodeGenKirin9030Abs, DISABLED_test_Abs_fp32_006) { TestCodeGenAbs::Instance().test_Abs_fp32_006(); }
 
-TEST_F(TestCodeGenKirin9030Abs, DISABLED_test_Abs_fp16_007)
-{
-    TestCodeGenAbs::Instance().test_Abs_fp16_007();
-}
+TEST_F(TestCodeGenKirin9030Abs, DISABLED_test_Abs_fp16_007) { TestCodeGenAbs::Instance().test_Abs_fp16_007(); }
 
-TEST_F(TestCodeGenKirin9030Abs, DISABLED_test_Abs_fp32_008)
-{
-    TestCodeGenAbs::Instance().test_Abs_fp32_008();
-}
+TEST_F(TestCodeGenKirin9030Abs, DISABLED_test_Abs_fp32_008) { TestCodeGenAbs::Instance().test_Abs_fp32_008(); }
 
-TEST_F(TestCodeGenKirin9030Abs, DISABLED_test_Abs_fp16_009)
-{
-    TestCodeGenAbs::Instance().test_Abs_fp16_009();
-}
+TEST_F(TestCodeGenKirin9030Abs, DISABLED_test_Abs_fp16_009) { TestCodeGenAbs::Instance().test_Abs_fp16_009(); }
 
-TEST_F(TestCodeGenKirin9030Abs, DISABLED_test_Abs_fp32_010)
-{
-    TestCodeGenAbs::Instance().test_Abs_fp32_010();
-}
+TEST_F(TestCodeGenKirin9030Abs, DISABLED_test_Abs_fp32_010) { TestCodeGenAbs::Instance().test_Abs_fp32_010(); }
 
-TEST_F(TestCodeGenKirin9030Abs, DISABLED_test_Abs_fp16_011)
-{
-    TestCodeGenAbs::Instance().test_Abs_fp16_011();
-}
+TEST_F(TestCodeGenKirin9030Abs, DISABLED_test_Abs_fp16_011) { TestCodeGenAbs::Instance().test_Abs_fp16_011(); }
 
-TEST_F(TestCodeGenKirin9030Abs, DISABLED_test_Abs_fp32_012)
-{
-    TestCodeGenAbs::Instance().test_Abs_fp32_012();
-}
+TEST_F(TestCodeGenKirin9030Abs, DISABLED_test_Abs_fp32_012) { TestCodeGenAbs::Instance().test_Abs_fp32_012(); }
 
-TEST_F(TestCodeGenKirin9030Abs, DISABLED_test_Abs_fp16_013)
-{
-    TestCodeGenAbs::Instance().test_Abs_fp16_013();
-}
+TEST_F(TestCodeGenKirin9030Abs, DISABLED_test_Abs_fp16_013) { TestCodeGenAbs::Instance().test_Abs_fp16_013(); }
 
-TEST_F(TestCodeGenKirin9030Abs, DISABLED_test_Abs_fp32_014)
-{
-    TestCodeGenAbs::Instance().test_Abs_fp32_014();
-}
+TEST_F(TestCodeGenKirin9030Abs, DISABLED_test_Abs_fp32_014) { TestCodeGenAbs::Instance().test_Abs_fp32_014(); }
 
-TEST_F(TestCodeGenKirin9030Abs, DISABLED_test_Abs_fp16_015)
-{
-    TestCodeGenAbs::Instance().test_Abs_fp16_015();
-}
+TEST_F(TestCodeGenKirin9030Abs, DISABLED_test_Abs_fp16_015) { TestCodeGenAbs::Instance().test_Abs_fp16_015(); }

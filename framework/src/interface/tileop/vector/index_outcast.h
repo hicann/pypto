@@ -18,9 +18,8 @@
 #include "utils/layout.h"
 #include "utils/tile_tensor.h"
 
-template <
-    typename T0, typename T1, typename T2, int srcrawShape1, int srcTileH, int srcTileW, int src1SAligned,
-    typename DstDtype, typename SrcDtype, typename IdxDtype>
+template <typename T0, typename T1, typename T2, int srcrawShape1, int srcTileH, int srcTileW, int src1SAligned,
+          typename DstDtype, typename SrcDtype, typename IdxDtype>
 TILEOP void TIndexOutcastMode2(T0 dst, T1 src, T2 src1, unsigned b, unsigned s, unsigned srcShape3, unsigned srcShape4)
 {
     set_flag(PIPE_MTE2, PIPE_S, EVENT_ID7);
@@ -40,8 +39,8 @@ TILEOP void TIndexOutcastMode2(T0 dst, T1 src, T2 src1, unsigned b, unsigned s, 
             int64_t targetRow = static_cast<int64_t>(*dstIdx);
             if (targetRow >= 0) {
                 __gm__ DstDtype* curDst = dstBase + targetRow * srcShape4;
-                using SrcTileDefine =
-                    pto::Tile<pto::TileType::Vec, SrcDtype, srcTileH, srcTileW, pto::BLayout::RowMajor, -1, -1>;
+                using SrcTileDefine = pto::Tile<pto::TileType::Vec, SrcDtype, srcTileH, srcTileW,
+                                                pto::BLayout::RowMajor, -1, -1>;
                 SrcTileDefine srcTile(srcShape3, srcShape4);
                 pto::TASSIGN(srcTile, reinterpret_cast<uint64_t>(curSrc));
                 using ShapeDim5 = pto::Shape<-1, -1, -1, -1, -1>;
@@ -127,13 +126,13 @@ TILEOP void TIndexOutcast(T0 dst, T1 src, T2 src1, C coordinate)
                 if constexpr (cacheMode == 1) {
                     auto blockCount = curValue / blockSize;
                     auto index = curValue % blockSize;
-                    __gm__ DstDtype* newDst =
-                        dstBase + blockCount * blockSize * dstShape4 + index * 32 / sizeof(DstDtype);
+                    __gm__ DstDtype* newDst = dstBase + blockCount * blockSize * dstShape4 +
+                                              index * 32 / sizeof(DstDtype);
                     set_flag(PIPE_S, PIPE_MTE3, EVENT_ID7);
                     wait_flag(PIPE_S, PIPE_MTE3, EVENT_ID7);
 
-                    using SrcTileDefine =
-                        pto::Tile<pto::TileType::Vec, SrcDtype, srcTileH, srcTileW, pto::BLayout::RowMajor, -1, -1>;
+                    using SrcTileDefine = pto::Tile<pto::TileType::Vec, SrcDtype, srcTileH, srcTileW,
+                                                    pto::BLayout::RowMajor, -1, -1>;
                     SrcTileDefine srcTile(srcShape3, srcShape4);
                     pto::TASSIGN(srcTile, reinterpret_cast<uint64_t>(srcPtr));
                     using ShapeDim = pto::Shape<-1, -1, -1, -1, -1>;
@@ -147,8 +146,8 @@ TILEOP void TIndexOutcast(T0 dst, T1 src, T2 src1, C coordinate)
                     set_flag(PIPE_S, PIPE_MTE3, EVENT_ID7);
                     wait_flag(PIPE_S, PIPE_MTE3, EVENT_ID7);
 
-                    using SrcTileDefine =
-                        pto::Tile<pto::TileType::Vec, SrcDtype, srcTileH, srcTileW, pto::BLayout::RowMajor, -1, -1>;
+                    using SrcTileDefine = pto::Tile<pto::TileType::Vec, SrcDtype, srcTileH, srcTileW,
+                                                    pto::BLayout::RowMajor, -1, -1>;
                     SrcTileDefine srcTile(srcShape3, srcShape4);
                     pto::TASSIGN(srcTile, reinterpret_cast<uint64_t>(srcPtr));
                     using ShapeDim5 = pto::Shape<-1, -1, -1, -1, -1>;

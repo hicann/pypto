@@ -10,18 +10,55 @@
 
 // Binary-mode TPRINT implementation using AscendC::printf (replaces pto-isa's _DEBUG-guarded TPRINT).
 #pragma once
-template <typename V> __aicore__ inline const __gm__ char* __pypto_dtype_name() { return "unknown"; }
-template <> __aicore__ inline const __gm__ char* __pypto_dtype_name<float>() { return "float32"; }
-template <> __aicore__ inline const __gm__ char* __pypto_dtype_name<half>() { return "float16"; }
-template <> __aicore__ inline const __gm__ char* __pypto_dtype_name<int32_t>() { return "int32"; }
-template <> __aicore__ inline const __gm__ char* __pypto_dtype_name<uint32_t>() { return "uint32"; }
-template <> __aicore__ inline const __gm__ char* __pypto_dtype_name<int16_t>() { return "int16"; }
-template <> __aicore__ inline const __gm__ char* __pypto_dtype_name<uint16_t>() { return "uint16"; }
-template <> __aicore__ inline const __gm__ char* __pypto_dtype_name<int8_t>() { return "int8"; }
-template <> __aicore__ inline const __gm__ char* __pypto_dtype_name<uint8_t>() { return "uint8"; }
+template <typename V>
+__aicore__ inline const __gm__ char* __pypto_dtype_name()
+{
+    return "unknown";
+}
+template <>
+__aicore__ inline const __gm__ char* __pypto_dtype_name<float>()
+{
+    return "float32";
+}
+template <>
+__aicore__ inline const __gm__ char* __pypto_dtype_name<half>()
+{
+    return "float16";
+}
+template <>
+__aicore__ inline const __gm__ char* __pypto_dtype_name<int32_t>()
+{
+    return "int32";
+}
+template <>
+__aicore__ inline const __gm__ char* __pypto_dtype_name<uint32_t>()
+{
+    return "uint32";
+}
+template <>
+__aicore__ inline const __gm__ char* __pypto_dtype_name<int16_t>()
+{
+    return "int16";
+}
+template <>
+__aicore__ inline const __gm__ char* __pypto_dtype_name<uint16_t>()
+{
+    return "uint16";
+}
+template <>
+__aicore__ inline const __gm__ char* __pypto_dtype_name<int8_t>()
+{
+    return "int8";
+}
+template <>
+__aicore__ inline const __gm__ char* __pypto_dtype_name<uint8_t>()
+{
+    return "uint8";
+}
 
 template <typename V>
-__aicore__ inline void __pypto_print_val(V val) {
+__aicore__ inline void __pypto_print_val(V val)
+{
     if constexpr (std::is_same_v<V, float>) {
         AscendC::printf("%f ", val);
     } else if constexpr (std::is_same_v<V, half>) {
@@ -43,24 +80,28 @@ __aicore__ inline void __pypto_print_val(V val) {
 }
 
 template <typename T>
-__aicore__ inline void __pypto_tprint(T& src) {
+__aicore__ inline void __pypto_tprint(T& src)
+{
     pipe_barrier(PIPE_ALL);
     if constexpr (pto::is_global<T>::value) {
         using ElemType = typename T::RawDType;
         int n[5], s[5];
-        for (int d = 0; d < 5; d++) { n[d] = src.GetShape(d); s[d] = src.GetStride(d); }
-        auto *dataPtr = src.data();
+        for (int d = 0; d < 5; d++) {
+            n[d] = src.GetShape(d);
+            s[d] = src.GetStride(d);
+        }
+        auto* dataPtr = src.data();
         if constexpr (T::layout == pto::Layout::ND || T::layout == pto::Layout::DN) {
             AscendC::printf("=== [dump_tensor] dtype: %s, Layout: %s, shape=[%d,%d,%d,%d,%d] ===\n",
-                            __pypto_dtype_name<ElemType>(),
-                            T::layout == pto::Layout::ND ? "ND" : "DN", n[0], n[1], n[2], n[3], n[4]);
+                            __pypto_dtype_name<ElemType>(), T::layout == pto::Layout::ND ? "ND" : "DN", n[0], n[1],
+                            n[2], n[3], n[4]);
             for (int i0 = 0; i0 < n[0]; ++i0)
                 for (int i1 = 0; i1 < n[1]; ++i1)
                     for (int i2 = 0; i2 < n[2]; ++i2) {
                         AscendC::printf("  Batch [%d, %d, %d]:\n", i0, i1, i2);
                         for (int r = 0; r < n[3]; ++r) {
                             for (int c = 0; c < n[4]; ++c) {
-                                int64_t off = (int64_t)i0*s[0] + i1*s[1] + i2*s[2] + r*s[3] + c*s[4];
+                                int64_t off = (int64_t)i0 * s[0] + i1 * s[1] + i2 * s[2] + r * s[3] + c * s[4];
                                 __pypto_print_val(dataPtr[off]);
                             }
                             AscendC::printf("\n");
@@ -75,7 +116,7 @@ __aicore__ inline void __pypto_tprint(T& src) {
                 for (int c = 0; c < logical_cols; ++c) {
                     int br = r / n[3], ir = r % n[3];
                     int bc = c / n[4], ic = c % n[4];
-                    int64_t off = (int64_t)br*s[2] + bc*s[1] + ir*s[3] + ic*s[4];
+                    int64_t off = (int64_t)br * s[2] + bc * s[1] + ir * s[3] + ic * s[4];
                     __pypto_print_val(dataPtr[off]);
                 }
                 AscendC::printf("\n");
@@ -86,8 +127,7 @@ __aicore__ inline void __pypto_tprint(T& src) {
         int validRows = src.GetValidRow();
         int validCols = src.GetValidCol();
         AscendC::printf("=== [dump_tile] dtype: %s, shape=[%d,%d], valid=[%d,%d], Layout: %s ===\n",
-                        __pypto_dtype_name<DType>(),
-                        T::Rows, T::Cols, validRows, validCols,
+                        __pypto_dtype_name<DType>(), T::Rows, T::Cols, validRows, validCols,
                         pto::GetLayoutName(T::BFractal, T::SFractal));
         for (int r = 0; r < T::Rows; ++r) {
             for (int c = 0; c < T::Cols; ++c) {

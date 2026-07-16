@@ -196,8 +196,8 @@ std::vector<ExprPtr> ExtractShape(const TypePtr& type)
     return {};
 }
 
-TileScalarTypes RequireTileScalarArgs(
-    const std::vector<ExprPtr>& args, const std::string& op_name, size_t expected_args)
+TileScalarTypes RequireTileScalarArgs(const std::vector<ExprPtr>& args, const std::string& op_name,
+                                      size_t expected_args)
 {
     CHECK(args.size() == expected_args) << "The operator " << op_name << " requires exactly " << expected_args
                                         << " arguments, but got " << args.size();
@@ -213,9 +213,9 @@ TileScalarTypes RequireTileScalarArgs(
     return {tile_type, scalar_type};
 }
 
-TypePtr DeduceBlockOutTileType(
-    const std::vector<ExprPtr>& args, [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs,
-    const std::string& op_name, size_t expected_args)
+TypePtr DeduceBlockOutTileType(const std::vector<ExprPtr>& args,
+                               [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs,
+                               const std::string& op_name, size_t expected_args)
 {
     CHECK(args.size() == expected_args) << "The operator " << op_name << " requires exactly " << expected_args
                                         << " arguments, but got " << args.size();

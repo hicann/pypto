@@ -67,8 +67,8 @@ uint64_t GetScaleAttrOrDefault(const Operation* op)
                0;
 }
 
-
-bool HasMXScaleValue(const ExecuteOperationContext* ctx) {
+bool HasMXScaleValue(const ExecuteOperationContext* ctx)
+{
     if (ctx->ioperandDataViewList->size() <= SCALE_B_INDEX) {
         return false;
     }
@@ -83,9 +83,9 @@ bool HasMXScaleValue(const ExecuteOperationContext* ctx) {
     return false;
 }
 
-MatMulParam BuildMatMulParam(const ExecuteOperationContext* ctx, bool hasMXScale,
-                            LogicalTensorDataPtr bias, LogicalTensorDataPtr aScale, LogicalTensorDataPtr bScale,
-                            LogicalTensorDataPtr scalePtr) {
+MatMulParam BuildMatMulParam(const ExecuteOperationContext* ctx, bool hasMXScale, LogicalTensorDataPtr bias,
+                             LogicalTensorDataPtr aScale, LogicalTensorDataPtr bScale, LogicalTensorDataPtr scalePtr)
+{
     bool transAScale = hasMXScale && ctx->op->HasAttr(Matrix::A_MUL_B_SCALE_A_COPY_IN_MODE) &&
                        ctx->op->GetIntAttribute(Matrix::A_MUL_B_SCALE_A_COPY_IN_MODE) == DN2NZ_MODE;
     bool transBScale = hasMXScale && ctx->op->HasAttr(Matrix::A_MUL_B_SCALE_B_COPY_IN_MODE) &&
@@ -101,8 +101,8 @@ MatMulParam BuildMatMulParam(const ExecuteOperationContext* ctx, bool hasMXScale
     uint64_t scale = GetScaleAttrOrDefault(ctx->op);
     int relu = GetIntAttrOrDefault(ctx->op, Matrix::A_MUL_B_RELU_ATTR);
 
-    MatMulParam param = {transA, transB, transAScale, transBScale, kStep, scale,
-                         relu, nullptr, nullptr, nullptr, nullptr};
+    MatMulParam param = {transA, transB,  transAScale, transBScale, kStep,  scale,
+                         relu,   nullptr, nullptr,     nullptr,     nullptr};
 
     // 为每个可能的临时对象分配堆内存，由调用者负责清理
     if (scalePtr != nullptr) {
@@ -124,7 +124,8 @@ MatMulParam BuildMatMulParam(const ExecuteOperationContext* ctx, bool hasMXScale
     return param;
 }
 
-void CleanupMatMulParam(MatMulParam& param) {
+void CleanupMatMulParam(MatMulParam& param)
+{
     // 清理动态分配的内存
     if (param.scalePtr) {
         delete param.scalePtr;
@@ -166,8 +167,8 @@ void ExecuteOpAMulB(ExecuteOperationContext* ctx)
         // scaled_mm interface: [A, B, scale_a, scale_b, (optional) bias]
         biasIndex = BIAS_WITH_SCALE_INDEX;
     }
-    auto bias =
-        (hasBias && ctx->ioperandDataViewList->size() > biasIndex) ? ctx->ioperandDataViewList->at(biasIndex) : nullptr;
+    auto bias = (hasBias && ctx->ioperandDataViewList->size() > biasIndex) ? ctx->ioperandDataViewList->at(biasIndex) :
+                                                                             nullptr;
     // scaled_mm interface without acc op: [A, B, scale_a, scale_b]
     // scaled_mm interface with acc op: [A, B, acc, scale_a, scale_b]
     size_t indexAScale = isAccOp ? SCALE_A_INDEX_ACC : SCALE_A_INDEX;
@@ -194,9 +195,8 @@ void ExecuteOpAMulB(ExecuteOperationContext* ctx)
         } break;
         case Opcode::OP_A_MULACC_B: {
             auto acc = ctx->ioperandDataViewList->at(2);
-            ASSERT(
-                ExecuteOperationScene::AMULACC_ACC_DTYPE_UNSUPPORTED,
-                lhs->GetDataType() != DataType::DT_INT8 || acc->GetDataType() != DataType::DT_FP32)
+            ASSERT(ExecuteOperationScene::AMULACC_ACC_DTYPE_UNSUPPORTED,
+                   lhs->GetDataType() != DataType::DT_INT8 || acc->GetDataType() != DataType::DT_FP32)
                 << "pass customized part, cannot restore the computation logic.";
             calc::AccMatMul(ret, lhs, rhs, acc, param);
         } break;
@@ -237,9 +237,9 @@ void ExecuteL1ToL0(ExecuteOperationContext* ctx)
     bool isMx = false;
     if (ctx->op->HasAttr(Matrix::A_MUL_B_COPY_IN_MODE)) {
         trans = (ctx->op->GetIntAttribute(Matrix::A_MUL_B_COPY_IN_MODE) ==
-            static_cast<int64_t>(Matrix::CopyInMode::DN2NZ)) ?
-            true :
-            false;
+                 static_cast<int64_t>(Matrix::CopyInMode::DN2NZ)) ?
+                    true :
+                    false;
         isMx = true;
     }
     auto copyin = std::static_pointer_cast<CopyOpAttribute>(ctx->op->GetOpAttribute()); // 获取attr
@@ -276,9 +276,8 @@ void ExecuteL0CToL1(ExecuteOperationContext* ctx)
     auto copyin = std::static_pointer_cast<CopyOpAttribute>(ctx->op->GetOpAttribute()); // 获取attr
     ASSERT(ExecuteOperationScene::CTX_INPUT_VIEW_NULL, oper != nullptr);
     ASSERT(ExecuteOperationScene::CTX_OUTPUT_VIEW_NULL, ret != nullptr);
-    ASSERT(
-        ExecuteOperationScene::L0C_TO_L1_SHAPE_NOT_2D,
-        oper->GetShape().size() == SHAPE_DIM2 && ret->GetShape().size() == SHAPE_DIM2);
+    ASSERT(ExecuteOperationScene::L0C_TO_L1_SHAPE_NOT_2D,
+           oper->GetShape().size() == SHAPE_DIM2 && ret->GetShape().size() == SHAPE_DIM2);
     bool quantFlag = oper->GetDataType() == DataType::DT_INT32 && ret->GetDataType() == DataType::DT_FP16;
     uint64_t scale = (ctx->op->HasAttr(Matrix::A_MUL_B_SCALE_ATTR)) ?
                          ctx->op->GetElementAttribute(Matrix::A_MUL_B_SCALE_ATTR).GetUnsignedData() :

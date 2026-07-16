@@ -37,9 +37,9 @@ bool NeedInferShape(const Operation* op)
     return true;
 }
 
-void TopoProgramUtils::TopoProgram(
-    const std::vector<Operation*>& opList, const std::vector<std::vector<size_t>>& opInGraph,
-    const std::vector<std::vector<size_t>>& opOutGraph, bool isParamIndex)
+void TopoProgramUtils::TopoProgram(const std::vector<Operation*>& opList,
+                                   const std::vector<std::vector<size_t>>& opInGraph,
+                                   const std::vector<std::vector<size_t>>& opOutGraph, bool isParamIndex)
 {
     std::queue<size_t> procOpQueue;
     std::vector<size_t> inDegree(opList.size(), 0);

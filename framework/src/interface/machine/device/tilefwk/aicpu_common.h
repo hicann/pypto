@@ -51,7 +51,7 @@ constexpr int FUNC_ID_BATCH = 0x7FF;
 const uint64_t SHARED_BUFFER_SIZE = 512;
 const uint64_t PMU_BUFFER_SIZE = 4096;
 const uint64_t DEVICE_QUEUE_SIZE = 512;
-const uint64_t PRINT_BUFFER_SIZE = 131072;  // 128KB
+const uint64_t PRINT_BUFFER_SIZE = 131072; // 128KB
 
 constexpr const int DEV_SHAPE_DIM_NUM_2 = 2;
 constexpr const int DEV_SHAPE_DIM_NUM_3 = 3;
@@ -138,17 +138,17 @@ struct DeviceArgs {
     uint32_t nrAiv{0};
     uint32_t nrAicpu{0};
     uint32_t nrValidAic{0};
-    uint64_t opaque{0};                    // store device global data, must be init with zero
-    uint64_t devQueueAddr;                 // pcie/XLink mem, used between host and device, `DEVICE_QUEUE_SIZE`
-    uint64_t sharedBuffer;                 // SHARED_BUFFER_SIZE per core, aics first
-    uint64_t coreRegAddr;                  // core reg addr, uint64_t per core, aic first
-    uint64_t corePmuRegAddr;               // pmu reg addr, uint64_t per core, aic first
-    uint64_t corePmuAddr;                  // pmu data addr, PAGE_SIZE per core, aic first
-    uint64_t pmuEventAddr;                 // pmu event addr
-    uint64_t taskType : 4;                 // initial task type
-    uint64_t machineConfig : 8;            // machine config
-    uint64_t taskId : 52;                  // initial task id
-    uint64_t taskData;                     // initial task data
+    uint64_t opaque{0};         // store device global data, must be init with zero
+    uint64_t devQueueAddr;      // pcie/XLink mem, used between host and device, `DEVICE_QUEUE_SIZE`
+    uint64_t sharedBuffer;      // SHARED_BUFFER_SIZE per core, aics first
+    uint64_t coreRegAddr;       // core reg addr, uint64_t per core, aic first
+    uint64_t corePmuRegAddr;    // pmu reg addr, uint64_t per core, aic first
+    uint64_t corePmuAddr;       // pmu data addr, PAGE_SIZE per core, aic first
+    uint64_t pmuEventAddr;      // pmu event addr
+    uint64_t taskType : 4;      // initial task type
+    uint64_t machineConfig : 8; // machine config
+    uint64_t taskId : 52;       // initial task id
+    uint64_t taskData;          // initial task data
     uint64_t taskWastTime{0};
     uint64_t aicpuSoBin{0};                // server so Bin
     uint64_t aicpuSoLen{0};                // server so len
@@ -190,7 +190,8 @@ struct DeviceArgs {
 const uint64_t AICORE_REG_SAY_HELLO = 0xF000000080000000;
 constexpr uint32_t REG_HIGH_DTASKID_SHIFT = 32;
 enum class TASK_POS : size_t { LOW_REG = 0, HIGH_REG = 1, ALL_REG = 2, REG_POS_BUTT = 3 };
-constexpr uint32_t MAX_SYNC_EVENT_NUM = 48; // the max set/wait insts in a mix subgraph leaffunction is 48, can set larger manually
+constexpr uint32_t
+    MAX_SYNC_EVENT_NUM = 48; // the max set/wait insts in a mix subgraph leaffunction is 48, can set larger manually
 
 struct TaskStat {
     int16_t seqNo;
@@ -268,16 +269,14 @@ struct MetricPerf {
     DevTaskPerf devTaskPerfs[npu::tile_fwk::dynamic::MAX_USED_AICPU_NUM][npu::tile_fwk::dynamic::DEVTASK_PERF_TYPE_NUM];
 };
 
-inline const char* AicorePerfTraceName[] = {
-    "BEGIN",
-    "INIT",
-    "DEV_TASK_RCV_MODEL",
-    "DEV_TASK_WAIT_RCV_FIRST_LEAF_TASK",
-    "DEV_TASK_ALL_LEAF_TASK_EXEC",
-    "DEV_TASK_WAIT_SYNC_STOP_NOTIFY",
-    "WAIT_ALL_DEV_TASK_LEAF_TASK_EXEC_FINISH",
-    "WAIT_EXIT_NOTIFY"};
-
+inline const char* AicorePerfTraceName[] = {"BEGIN",
+                                            "INIT",
+                                            "DEV_TASK_RCV_MODEL",
+                                            "DEV_TASK_WAIT_RCV_FIRST_LEAF_TASK",
+                                            "DEV_TASK_ALL_LEAF_TASK_EXEC",
+                                            "DEV_TASK_WAIT_SYNC_STOP_NOTIFY",
+                                            "WAIT_ALL_DEV_TASK_LEAF_TASK_EXEC_FINISH",
+                                            "WAIT_EXIT_NOTIFY"};
 
 // use ring buffer to control parallel multi devtask
 struct ParallelDevTask {

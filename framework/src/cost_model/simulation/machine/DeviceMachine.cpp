@@ -90,9 +90,8 @@ void DeviceMachine::SubmitDeviceTask()
             PushReadyQueue(task->machineType, taskId);
         }
     }
-    SIMULATION_LOGW(
-        "[Cycle: %lu][Device %lu] submit a new device task to AICPUs, size = %zu", GetSim()->GetCycles(), machineId,
-        taskMap.size());
+    SIMULATION_LOGW("[Cycle: %lu][Device %lu] submit a new device task to AICPUs, size = %zu", GetSim()->GetCycles(),
+                    machineId, taskMap.size());
 }
 
 // Device Init
@@ -149,8 +148,8 @@ bool DeviceMachine::IsTerminate()
     if (sim->config.calendarMode != static_cast<uint64_t>(CalendarMode::DEVICE)) {
         return true;
     }
-    bool readyQueueIsEmpty =
-        std::all_of(readyQueues.begin(), readyQueues.end(), [](const auto& pair) { return pair.second.empty(); });
+    bool readyQueueIsEmpty = std::all_of(readyQueues.begin(), readyQueues.end(),
+                                         [](const auto& pair) { return pair.second.empty(); });
     return readyQueueIsEmpty && readySet.empty() && taskMap.empty() && taskMapQueue.empty();
 }
 
@@ -201,9 +200,8 @@ void DeviceMachine::BuildLeafFunctionTasks()
     }
     taskMapQueue.push_back(taskM);
     GetSim()->ProcessTaskMap(taskM);
-    SIMULATION_LOGI(
-        "[Cycle: %lu][DeviceMachine][BuildLeafFunctionTasks] Machine %lu  build subtasks done",
-        static_cast<unsigned long>(GetSim()->GetCycles()), static_cast<unsigned long>(machineId));
+    SIMULATION_LOGI("[Cycle: %lu][DeviceMachine][BuildLeafFunctionTasks] Machine %lu  build subtasks done",
+                    static_cast<unsigned long>(GetSim()->GetCycles()), static_cast<unsigned long>(machineId));
 }
 
 void DeviceMachine::BuildSubtasksFromRootFuncTopo()
@@ -253,9 +251,8 @@ void DeviceMachine::BuildSubtasksFromRootFuncTopo()
     taskMapQueue.push_back(taskM);
     GetSim()->ProcessTaskMap(taskM);
 
-    SIMULATION_LOGI(
-        "[Cycle: %lu][DeviceMachine][build_subtasks_from_topo] Machine %lu  build subtasks done",
-        static_cast<unsigned long>(GetSim()->GetCycles()), static_cast<unsigned long>(machineId));
+    SIMULATION_LOGI("[Cycle: %lu][DeviceMachine][build_subtasks_from_topo] Machine %lu  build subtasks done",
+                    static_cast<unsigned long>(GetSim()->GetCycles()), static_cast<unsigned long>(machineId));
 }
 
 void DeviceMachine::BuildSubTasksFromTopoJson()
@@ -274,9 +271,8 @@ void DeviceMachine::BuildSubTasksFromTopoJson()
     for (auto& taskM : taskMapQueue) {
         GetSim()->ProcessTaskMap(taskM, std::to_string(cnt));
         cnt++;
-        SIMULATION_LOGI(
-            "[Cycle: %lu][DeviceMachine] taskMap Size: %zu", static_cast<unsigned long>(GetSim()->GetCycles()),
-            taskM.size());
+        SIMULATION_LOGI("[Cycle: %lu][DeviceMachine] taskMap Size: %zu",
+                        static_cast<unsigned long>(GetSim()->GetCycles()), taskM.size());
     }
     return;
 }
@@ -371,8 +367,8 @@ void DeviceMachine::PrintFunctionOutputTile(FunctionPtr func, std::shared_ptr<Ti
     }
 }
 
-void DeviceMachine::CalculateFunctionTileGolden(
-    FunctionPtr func, std::shared_ptr<TileState> local, std::shared_ptr<TileState> global, int esgId)
+void DeviceMachine::CalculateFunctionTileGolden(FunctionPtr func, std::shared_ptr<TileState> local,
+                                                std::shared_ptr<TileState> global, int esgId)
 {
     auto cache = GetSim()->functionCache.cache;
     for (const auto& op : func->tileOps) {

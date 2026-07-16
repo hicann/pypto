@@ -101,9 +101,8 @@ enum class TileType {
 struct TileShape {
     TileShape();
 
-    TileShape(
-        const std::vector<int64_t>& vTile, const CubeTile& cTile, const ConvTile& cvTile, const DistTile& dTile,
-        const std::vector<int64_t>& mSize);
+    TileShape(const std::vector<int64_t>& vTile, const CubeTile& cTile, const ConvTile& cvTile, const DistTile& dTile,
+              const std::vector<int64_t>& mSize);
 
     /**
      * \brief Set the Vec Tile
@@ -134,9 +133,8 @@ struct TileShape {
      * \param k
      * \param n
      */
-    void SetCubeTile(
-        const std::array<int64_t, MAX_M_DIM_SIZE>& m, const std::array<int64_t, MAX_K_DIM_SIZE>& k,
-        const std::array<int64_t, MAX_N_DIM_SIZE>& n, bool enableSplitK = false);
+    void SetCubeTile(const std::array<int64_t, MAX_M_DIM_SIZE>& m, const std::array<int64_t, MAX_K_DIM_SIZE>& k,
+                     const std::array<int64_t, MAX_N_DIM_SIZE>& n, bool enableSplitK = false);
 
     /**
      * \brief Get the Cube Tile
@@ -151,9 +149,8 @@ struct TileShape {
      * \param tileL0Info
      * \param setL0Tile
      */
-    void SetConvTile(
-        const npu::tile_fwk::Conv::TileL1Info& tileL1Info, const npu::tile_fwk::Conv::TileL0Info& tileL0Info,
-        bool setL0Tile = false);
+    void SetConvTile(const npu::tile_fwk::Conv::TileL1Info& tileL1Info,
+                     const npu::tile_fwk::Conv::TileL0Info& tileL0Info, bool setL0Tile = false);
 
     /**
      * \brief Get the Conv Tile
@@ -168,9 +165,8 @@ struct TileShape {
      * \param col
      * \param rank
      */
-    void SetDistTile(
-        const std::array<int, MAX_DIST_DIM_SIZE>& row, const std::array<int, MAX_DIST_DIM_SIZE>& col,
-        const std::array<int, MAX_DIST_DIM_SIZE>& rank);
+    void SetDistTile(const std::array<int, MAX_DIST_DIM_SIZE>& row, const std::array<int, MAX_DIST_DIM_SIZE>& col,
+                     const std::array<int, MAX_DIST_DIM_SIZE>& rank);
 
     /**
      * \brief Get the Dist Tile

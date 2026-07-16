@@ -9,9 +9,9 @@
  */
 
 /*!
-* \file directed_graph_edge_desc_concept.h
-* \brief
-*/
+ * \file directed_graph_edge_desc_concept.h
+ * \brief
+ */
 
 #ifndef OSP_DIRECTED_GRAPH_EDGE_DESC_CONCEPT_H
 #define OSP_DIRECTED_GRAPH_EDGE_DESC_CONCEPT_H
@@ -29,7 +29,7 @@ namespace osp {
  * @brief Default implementation to get the source vertex of an edge.
  */
 template <typename GraphT>
-inline VertexIdxT<GraphT> Source(const DirectedEdge<GraphT> &edge, const GraphT &)
+inline VertexIdxT<GraphT> Source(const DirectedEdge<GraphT>& edge, const GraphT&)
 {
     return edge.source_;
 }
@@ -38,7 +38,7 @@ inline VertexIdxT<GraphT> Source(const DirectedEdge<GraphT> &edge, const GraphT 
  * @brief Default implementation to get the target vertex of an edge.
  */
 template <typename GraphT>
-inline VertexIdxT<GraphT> Target(const DirectedEdge<GraphT> &edge, const GraphT &)
+inline VertexIdxT<GraphT> Target(const DirectedEdge<GraphT>& edge, const GraphT&)
 {
     return edge.target_;
 }
@@ -47,7 +47,7 @@ inline VertexIdxT<GraphT> Target(const DirectedEdge<GraphT> &edge, const GraphT 
  * @brief Get a view of all edges in the graph.
  */
 template <typename GraphT>
-inline EdgeView<GraphT> Edges(const GraphT &graph)
+inline EdgeView<GraphT> Edges(const GraphT& graph)
 {
     return EdgeView<GraphT>(graph);
 }
@@ -56,7 +56,7 @@ inline EdgeView<GraphT> Edges(const GraphT &graph)
  * @brief Get a view of outgoing edges from a vertex.
  */
 template <typename GraphT>
-inline OutEdgeView<GraphT> OutEdges(VertexIdxT<GraphT> u, const GraphT &graph)
+inline OutEdgeView<GraphT> OutEdges(VertexIdxT<GraphT> u, const GraphT& graph)
 {
     return OutEdgeView<GraphT>(graph, u);
 }
@@ -65,10 +65,10 @@ inline OutEdgeView<GraphT> OutEdges(VertexIdxT<GraphT> u, const GraphT &graph)
  * @brief Get a view of incoming edges to a vertex.
  */
 template <typename GraphT>
-inline InEdgeView<GraphT> InEdges(VertexIdxT<GraphT> v, const GraphT &graph)
+inline InEdgeView<GraphT> InEdges(VertexIdxT<GraphT> v, const GraphT& graph)
 {
     return InEdgeView<GraphT>(graph, v);
 }
-}    // namespace osp
-}    // namespace npu::tile_fwk
+} // namespace osp
+} // namespace npu::tile_fwk
 #endif // OSP_DIRECTED_GRAPH_EDGE_DESC_CONCEPT_HPP

@@ -20,8 +20,8 @@ namespace npu::tile_fwk {
 static constexpr int NUM_64 = 64;
 static constexpr int NUM_128 = 128;
 
-Tensor FlashAttentionNew(
-    const Tensor& q, const Tensor& k, const Tensor& v, const Tensor& m, const Tensor& l, const AttentionDims& atDims)
+Tensor FlashAttentionNew(const Tensor& q, const Tensor& k, const Tensor& v, const Tensor& m, const Tensor& l,
+                         const AttentionDims& atDims)
 {
     (void)m;
     (void)l;

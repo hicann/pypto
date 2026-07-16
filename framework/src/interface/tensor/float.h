@@ -60,9 +60,8 @@ class Float {
         return (exp == BitOf(expBit)) && (frac != 0);
     }
 
-    static_assert(
-        sizeof(TBase) * static_cast<uint32_t>(FloatExp::bitOfByte) >= signBit + expBit + fracBit,
-        "Invalid bit for float");
+    static_assert(sizeof(TBase) * static_cast<uint32_t>(FloatExp::bitOfByte) >= signBit + expBit + fracBit,
+                  "Invalid bit for float");
 
     static constexpr uint32_t BitOf(uint32_t n) { return (1 << n) - 1; }
 
@@ -104,10 +103,11 @@ class Float {
             v32 += roundingBias;
             return (v32 >> floatToBf16FracShift);
         }
-        uint32_t sign =
-            (v32 >> (static_cast<uint32_t>(FloatExp::fp32ExpBit) + static_cast<uint32_t>(FloatExp::fp32FracBit))) & 0x1;
-        uint32_t exp32 =
-            (v32 >> static_cast<uint32_t>(FloatExp::fp32FracBit)) & BitOf(static_cast<uint32_t>(FloatExp::fp32ExpBit));
+        uint32_t sign = (v32 >>
+                         (static_cast<uint32_t>(FloatExp::fp32ExpBit) + static_cast<uint32_t>(FloatExp::fp32FracBit))) &
+                        0x1;
+        uint32_t exp32 = (v32 >> static_cast<uint32_t>(FloatExp::fp32FracBit)) &
+                         BitOf(static_cast<uint32_t>(FloatExp::fp32ExpBit));
         uint32_t frac32 = v32 & BitOf(static_cast<uint32_t>(FloatExp::fp32FracBit));
 
         uint32_t exp = 0;
@@ -122,8 +122,8 @@ class Float {
              */
             exp = 0;
             frac = 0;
-        } else if (
-            exp32 < static_cast<uint32_t>(FloatExp::fp32ExpZero) + 1 - static_cast<uint32_t>(FloatExp::expZero)) {
+        } else if (exp32 <
+                   static_cast<uint32_t>(FloatExp::fp32ExpZero) + 1 - static_cast<uint32_t>(FloatExp::expZero)) {
             /*  Subnormal number:
              *      format: 0bS X...X 0...0 == 0bS 0...1 0...00
              *                  (fp32)            (fp)
@@ -142,9 +142,8 @@ class Float {
                          static_cast<uint32_t>(FloatExp::fp32ExpZero) - static_cast<uint32_t>(FloatExp::expZero) + 1 -
                          fracBit;
             frac = BaseFromFp32DivRound((1 << static_cast<uint32_t>(FloatExp::fp32FracBit)) | frac32, shift);
-        } else if (
-            exp32 <
-            static_cast<uint32_t>(FloatExp::fp32ExpZero) + BitOf(expBit) - static_cast<uint32_t>(FloatExp::expZero)) {
+        } else if (exp32 < static_cast<uint32_t>(FloatExp::fp32ExpZero) + BitOf(expBit) -
+                               static_cast<uint32_t>(FloatExp::expZero)) {
             /*  Normal number:
              *      format: 0bS X...X 0...0 == 0bS 1...1 0...00
              *                  (fp32)             (fp)
@@ -194,8 +193,8 @@ class Float {
                  *          shiftFrac = (fp32FracBit - 1) - (leadingBit - 1)
                  *          EEEE = fp32ExpZero + -(expZero - 1) - shift
                  */
-                uint32_t leadingBit =
-                    sizeof(unsigned int) * static_cast<uint32_t>(FloatExp::bitOfByte) - __builtin_clz(frac) - 1;
+                uint32_t leadingBit = sizeof(unsigned int) * static_cast<uint32_t>(FloatExp::bitOfByte) -
+                                      __builtin_clz(frac) - 1;
                 uint32_t rest = frac ^ (1 << leadingBit);
                 uint32_t shiftExp = (fracBit - 1) - (leadingBit - 1);
                 uint32_t shiftFrac = (static_cast<uint32_t>(FloatExp::fp32FracBit) - 1) - (leadingBit - 1);
@@ -232,10 +231,9 @@ class Float {
 
     static void PrintMetadata()
     {
-        printf(
-            "expBit=%d fracBit=%d expZero=%d fp32ExpBit=%d fp32FracBit=%d fp32ExpZero=%d\n", expBit, fracBit,
-            static_cast<uint32_t>(FloatExp::expZero), static_cast<uint32_t>(FloatExp::fp32ExpBit),
-            static_cast<uint32_t>(FloatExp::fp32FracBit), static_cast<uint32_t>(FloatExp::fp32ExpZero));
+        printf("expBit=%d fracBit=%d expZero=%d fp32ExpBit=%d fp32FracBit=%d fp32ExpZero=%d\n", expBit, fracBit,
+               static_cast<uint32_t>(FloatExp::expZero), static_cast<uint32_t>(FloatExp::fp32ExpBit),
+               static_cast<uint32_t>(FloatExp::fp32FracBit), static_cast<uint32_t>(FloatExp::fp32ExpZero));
     }
 
 public:

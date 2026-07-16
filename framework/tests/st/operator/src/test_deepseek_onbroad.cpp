@@ -28,8 +28,8 @@ TEST_F(MoeInferOnbroadTest, test_deepseekMoEInfer)
     RuntimeSetDevice(GetDeviceIdByEnvVar());
 
     int32_t nRoutedExperts = 256;
-    int b = 16;                                                                // 32
-    int s = 1;                                                                 // 1, optimize set_tile
+    int b = 16; // 32
+    int s = 1;  // 1, optimize set_tile
     int h = std::get<int>(deepseekConfig1["hiddenSize"]);
     int numExpertsPerTok = std::get<int>(deepseekConfig1["numExpertsPerTok"]); // 8
     std::cout << "Test_deepseekAttention  b,s,h: " << b << ", " << s << ", " << h << std::endl;
@@ -55,12 +55,12 @@ TEST_F(MoeInferOnbroadTest, test_deepseekMoEInfer)
     uint8_t* sortedTokensPtr = allocDevAddr(b * s * numExpertsPerTok * h * sizeof(float));
     uint8_t* idxsPtr = allocDevAddr(b * s * numExpertsPerTok * sizeof(float));
 
-    void* ffnWeight1Ptr = readToDev<npu::tile_fwk::float16>(
-        GetGoldenDir() + "/ffnWeight1.bin", h * h * 3 * sizeof(npu::tile_fwk::float16));
-    void* ffnWeight2Ptr = readToDev<npu::tile_fwk::float16>(
-        GetGoldenDir() + "/ffnWeight2.bin", h * h * 3 * sizeof(npu::tile_fwk::float16));
-    void* ffnWeight3Ptr = readToDev<npu::tile_fwk::float16>(
-        GetGoldenDir() + "/ffnWeight3.bin", h * h * 3 * sizeof(npu::tile_fwk::float16));
+    void* ffnWeight1Ptr = readToDev<npu::tile_fwk::float16>(GetGoldenDir() + "/ffnWeight1.bin",
+                                                            h * h * 3 * sizeof(npu::tile_fwk::float16));
+    void* ffnWeight2Ptr = readToDev<npu::tile_fwk::float16>(GetGoldenDir() + "/ffnWeight2.bin",
+                                                            h * h * 3 * sizeof(npu::tile_fwk::float16));
+    void* ffnWeight3Ptr = readToDev<npu::tile_fwk::float16>(GetGoldenDir() + "/ffnWeight3.bin",
+                                                            h * h * 3 * sizeof(npu::tile_fwk::float16));
     Tensor ffnWeight1(DataType::DT_FP16, {h, h * 3}, (uint8_t*)ffnWeight1Ptr, "ffnWeight1");
     Tensor ffnWeight2(DataType::DT_FP16, {h, h * 3}, (uint8_t*)ffnWeight2Ptr, "ffnWeight2");
     Tensor ffnWeight3(DataType::DT_FP16, {h, h * 3}, (uint8_t*)ffnWeight3Ptr, "ffnWeight3");
@@ -83,13 +83,11 @@ TEST_F(MoeInferOnbroadTest, test_deepseekMoEInfer)
         Tensor topkWeight = Tensor(DataType::DT_FP32, topKShape, (uint8_t*)topkWeightPtr, "topkWeight");
 
         config::SetBuildStatic(true);
-        FUNCTION(
-            "MOE_INFER_F",
-            {hiddenStates, topkIdx, topkWeight, ffnWeight1, ffnWeight2, ffnWeight3, idxs, sortedTokens, outs, finalout})
+        FUNCTION("MOE_INFER_F", {hiddenStates, topkIdx, topkWeight, ffnWeight1, ffnWeight2, ffnWeight3, idxs,
+                                 sortedTokens, outs, finalout})
         {
-            finalout = deepseekMoEInfer.MoeInfer(
-                hiddenStates, topkIdx, topkWeight, ffnWeight1, ffnWeight2, ffnWeight3, idxs, sortedTokens, outs,
-                nRoutedExperts);
+            finalout = deepseekMoEInfer.MoeInfer(hiddenStates, topkIdx, topkWeight, ffnWeight1, ffnWeight2, ffnWeight3,
+                                                 idxs, sortedTokens, outs, nRoutedExperts);
         }
     }
     DevFuncRunner::Run(Program::GetInstance().GetLastFunction());
@@ -104,14 +102,11 @@ TEST_F(MoeInferOnbroadTest, test_deepseekMoEInfer)
     std::vector<float> devOutsTensor(b * s * numExpertsPerTok * h);
     std::vector<float> devFinalWeight(hiddenStatesSize);
 
-    CopyFromTensor(
-        (uint8_t*)devIdxs.data(), (uint8_t*)idxsPtr, b * s * numExpertsPerTok * sizeof(float));
-    CopyFromTensor(
-        (uint8_t*)devSortedTokens.data(), (uint8_t*)sortedTokensPtr, b * s * numExpertsPerTok * h * sizeof(float));
-    CopyFromTensor(
-        (uint8_t*)devOutsTensor.data(), (uint8_t*)outsPtr, b * s * numExpertsPerTok * h * sizeof(float));
-    CopyFromTensor(
-        (uint8_t*)devFinalWeight.data(), (uint8_t*)outputPtr, hiddenStatesSize * sizeof(float));
+    CopyFromTensor((uint8_t*)devIdxs.data(), (uint8_t*)idxsPtr, b * s * numExpertsPerTok * sizeof(float));
+    CopyFromTensor((uint8_t*)devSortedTokens.data(), (uint8_t*)sortedTokensPtr,
+                   b * s * numExpertsPerTok * h * sizeof(float));
+    CopyFromTensor((uint8_t*)devOutsTensor.data(), (uint8_t*)outsPtr, b * s * numExpertsPerTok * h * sizeof(float));
+    CopyFromTensor((uint8_t*)devFinalWeight.data(), (uint8_t*)outputPtr, hiddenStatesSize * sizeof(float));
 
     // 真值比对
     readInput(GetGoldenDir() + "/idxs.bin", goldenIdxs);
@@ -143,8 +138,8 @@ TEST_F(MoeInferOnbroadTest, test_deepseekMoEInfer_singleout)
     RuntimeSetDevice(GetDeviceIdByEnvVar());
 
     int32_t nRoutedExperts = 256;
-    int b = 4;                                                                 // 32
-    int s = 1;                                                                 // 1, optimize set_tile
+    int b = 4; // 32
+    int s = 1; // 1, optimize set_tile
     int h = 256;
     int numExpertsPerTok = std::get<int>(deepseekConfig1["numExpertsPerTok"]); // 8
     std::cout << "Test_deepseekAttention  b,s,h: " << b << ", " << s << ", " << h << std::endl;
@@ -258,7 +253,8 @@ TEST_F(MoeInferOnbroadTest, test_deepseekMoEInfer_singleout_singlemlp)
         config::SetBuildStatic(true);
         FUNCTION("MOE_INFER_F", {hiddenStates, topkIdx, topkWeight, ffnWeight1, ffnWeight2, ffnWeight3, finalOut})
         {
-            finalOut = deepseekMoEInfer.MoeInferSingleMlp(hiddenStates, topkIdx, topkWeight, ffnWeight1, ffnWeight2, ffnWeight3, nRoutedExperts);
+            finalOut = deepseekMoEInfer.MoeInferSingleMlp(hiddenStates, topkIdx, topkWeight, ffnWeight1, ffnWeight2,
+                                                          ffnWeight3, nRoutedExperts);
         }
     }
     DevFuncRunner::Run(Program::GetInstance().GetLastFunction());
@@ -334,13 +330,12 @@ TEST_F(MoeInferOnbroadTest, test_deepseekMoEInfer_singleout_singlemlp_withquant)
         Tensor topkWeight = Tensor(DT_FP32, topKShape, (uint8_t*)topkWeightPtr, "topkWeight");
 
         config::SetBuildStatic(true);
-        FUNCTION(
-            "MOE_INFER_F", {hiddenStates, topkIdx, topkWeight, ffnWeight1, ffnWeight2, ffnWeight3, ffnwight1Scale,
-                            ffnwight2Scale, ffnwight3Scale, finalout})
+        FUNCTION("MOE_INFER_F", {hiddenStates, topkIdx, topkWeight, ffnWeight1, ffnWeight2, ffnWeight3, ffnwight1Scale,
+                                 ffnwight2Scale, ffnwight3Scale, finalout})
         {
-            finalout = deepseekMoEInfer.MoeInferSingleMlpQuant(
-                hiddenStates, topkIdx, topkWeight, ffnWeight1, ffnWeight2, ffnWeight3, ffnwight1Scale, ffnwight2Scale,
-                ffnwight3Scale, nRoutedExperts);
+            finalout = deepseekMoEInfer.MoeInferSingleMlpQuant(hiddenStates, topkIdx, topkWeight, ffnWeight1,
+                                                               ffnWeight2, ffnWeight3, ffnwight1Scale, ffnwight2Scale,
+                                                               ffnwight3Scale, nRoutedExperts);
         }
     }
     DevFuncRunner::Run(Program::GetInstance().GetLastFunction());
@@ -348,8 +343,7 @@ TEST_F(MoeInferOnbroadTest, test_deepseekMoEInfer_singleout_singlemlp_withquant)
     std::vector<float> goldenFinalWeight(hiddenStatesSize);
     std::vector<float> devFinalWeight(hiddenStatesSize);
 
-    CopyFromTensor(
-        (uint8_t*)devFinalWeight.data(), (uint8_t*)outputPtr, hiddenStatesSize * sizeof(float));
+    CopyFromTensor((uint8_t*)devFinalWeight.data(), (uint8_t*)outputPtr, hiddenStatesSize * sizeof(float));
 
     // 真值比对
     readInput(GetGoldenDir() + "/final_out.bin", goldenFinalWeight);

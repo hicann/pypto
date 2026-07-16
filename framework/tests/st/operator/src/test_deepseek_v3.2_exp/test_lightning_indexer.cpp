@@ -114,17 +114,15 @@ void TestLightningIndexer(LightningIndexerConfigs& tileConfig)
     std::vector<RawTensorDataPtr> outputDataList = {topkResData, firstMmData, mmData, topkValueData};
 
     std::set<int> unrollList = {32, 16, 8, 4, 1};
-    FUNCTION(
-        "LightningIndexer", {query, qScale, key, kScale, weights, actSeq, blockTable},
-        {topkRes, firstMm, mmOut, topkValue})
+    FUNCTION("LightningIndexer", {query, qScale, key, kScale, weights, actSeq, blockTable},
+             {topkRes, firstMm, mmOut, topkValue})
     {
-        LightningIndexerImpl(
-            query, qScale, key, kScale, weights, actSeq, blockTable, selectedCount, topkRes, tileConfig, unrollList,
-            &firstMm, &mmOut, &topkValue);
+        LightningIndexerImpl(query, qScale, key, kScale, weights, actSeq, blockTable, selectedCount, topkRes,
+                             tileConfig, unrollList, &firstMm, &mmOut, &topkValue);
     }
 
-    DevFuncRunner::Run(
-        Program::GetInstance().GetLastFunction(), inputDataList, outputDataList, DeviceLauncherConfig(0));
+    DevFuncRunner::Run(Program::GetInstance().GetLastFunction(), inputDataList, outputDataList,
+                       DeviceLauncherConfig(0));
     constexpr float PRE_TAIL = 1e-4f;
     constexpr int TOPK_COUNT = 100;
     constexpr float ratio = 5e-3f;
@@ -143,7 +141,7 @@ void TestLightningIndexer(LightningIndexerConfigs& tileConfig)
 TEST_F(LightningIndexerSTest, lightning_indexer_quant_4_b_2_s1_64k_s2)
 {
     LightningIndexerConfigs config;
-    config.s1Tile = 2;                              // s1Tile = s1
+    config.s1Tile = 2; // s1Tile = s1
     config.topkTile = 8192;
     config.c1Tile = {128, 128, 128, 128, 128, 128}; // (m, M), (k, K), (n, N)
     config.c2Tile = {64, 64, 128, 128, 128, 128};   // (m, M), (k, K), (n, N)

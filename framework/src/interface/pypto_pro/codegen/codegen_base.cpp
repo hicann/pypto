@@ -37,8 +37,8 @@ std::string CodegenBase::TryGetVarName(const ir::ExprPtr& expr) const
 
 namespace {
 
-std::string BuildBinaryExprString(
-    const CodegenBase& codegen, const ir::ExprPtr& left, const std::string& op, const ir::ExprPtr& right)
+std::string BuildBinaryExprString(const CodegenBase& codegen, const ir::ExprPtr& left, const std::string& op,
+                                  const ir::ExprPtr& right)
 {
     return "(" + codegen.GenerateExprString(left) + " " + op + " " + codegen.GenerateExprString(right) + ")";
 }

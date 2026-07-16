@@ -39,12 +39,12 @@ void TestCodegenDynCumSumBody(int axis)
     std::vector<int64_t> vecTileShape = {5, 9};
     std::vector<int64_t> shape{12, 14};
 
-    auto function = GenMockFuncDynUnary(
-        "CumSum", {shape, vecTileShape}, [axis](Tensor& input, Tensor& output) { output = CumSum(input, axis); });
+    auto function = GenMockFuncDynUnary("CumSum", {shape, vecTileShape},
+                                        [axis](Tensor& input, Tensor& output) { output = CumSum(input, axis); });
 
     std::string res = GenCodeByFunction(*function);
-    std::string expect =
-        axis == 0 ? "TCumOperation<3, 1>(ubTensor_2, ubTensor_0);" : "TCumOperation<3, 1>(ubTensor_7, ubTensor_2);";
+    std::string expect = axis == 0 ? "TCumOperation<3, 1>(ubTensor_2, ubTensor_0);" :
+                                     "TCumOperation<3, 1>(ubTensor_7, ubTensor_2);";
     CheckStringExist(expect, res);
 }
 

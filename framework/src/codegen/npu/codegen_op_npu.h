@@ -38,9 +38,8 @@ namespace npu::tile_fwk {
 struct CodeGenOpNPUCtx : public CodeGenOpCtx {
     std::shared_ptr<ForBlockManager> forBlockManager{nullptr};
 
-    CodeGenOpNPUCtx(
-        std::shared_ptr<SymbolManager> sm, Function& tf, Function& sf, const Operation& op, bool isMainBlk = false,
-        bool isDynAligned = false, std::shared_ptr<ForBlockManager> fbm = nullptr)
+    CodeGenOpNPUCtx(std::shared_ptr<SymbolManager> sm, Function& tf, Function& sf, const Operation& op,
+                    bool isMainBlk = false, bool isDynAligned = false, std::shared_ptr<ForBlockManager> fbm = nullptr)
         : CodeGenOpCtx(std::move(sm), tf, sf, op, isMainBlk, isDynAligned), forBlockManager(std::move(fbm))
     {}
 };
@@ -118,8 +117,8 @@ public:
 
     std::string GenRangeOp() const;
     std::string GenUniformOp() const;
-    std::string PrintRangeTileTensor(
-        const std::string& startVal, const std::string& stepVal, const std::string& tileIdxExpr) const;
+    std::string PrintRangeTileTensor(const std::string& startVal, const std::string& stepVal,
+                                     const std::string& tileIdxExpr) const;
     std::string GenL0CToUBTileTensor() const;
 
     std::string GenScatterElementSOp() const;
@@ -205,21 +204,22 @@ protected:
 
     int64_t GetConvCopyInMode() const;
     std::string GetConvCopyOutMode() const;
-    std::string GenMemL1CopyInConvNZ2NZ(
-        const std::string& dstTensor, const std::string& srcTensor, const std::string& copyInModeStr) const;
-    void GetDynamicOffsetExpr(
-        const std::vector<SymbolicScalar>& dynOffset, bool isConv3D, std::vector<std::string>& gmOffsetExpr,
-        std::vector<int64_t>& staticOffsets) const;
-    void GetNZ2NZDynamicOffsetExpr(
-        const std::vector<SymbolicScalar>& dynOffset, bool isConv3D, bool isFmap,
-        std::vector<std::string>& gmOffsetExpr, std::vector<std::string>& staticOffsets) const;
-    std::vector<std::string> BuildCopyInParamList(
-        const std::string& dstTensor, const std::string& srcTensor, const std::vector<std::string>& gmOffsetExpr,
-        const std::vector<int64_t>& staticOffsets, const std::vector<std::string>& srcShape, bool isConv3D) const;
-    std::vector<std::string> BuildCopyOutParamList(
-        const std::string& dstTensor, const std::string& srcTensor, const std::vector<std::string>& gmOffsetExpr,
-        const std::vector<int64_t>& staticOffsets, const std::string& realM, const std::string& realN,
-        const std::string& realCutW, const std::string& cutW) const;
+    std::string GenMemL1CopyInConvNZ2NZ(const std::string& dstTensor, const std::string& srcTensor,
+                                        const std::string& copyInModeStr) const;
+    void GetDynamicOffsetExpr(const std::vector<SymbolicScalar>& dynOffset, bool isConv3D,
+                              std::vector<std::string>& gmOffsetExpr, std::vector<int64_t>& staticOffsets) const;
+    void GetNZ2NZDynamicOffsetExpr(const std::vector<SymbolicScalar>& dynOffset, bool isConv3D, bool isFmap,
+                                   std::vector<std::string>& gmOffsetExpr,
+                                   std::vector<std::string>& staticOffsets) const;
+    std::vector<std::string> BuildCopyInParamList(const std::string& dstTensor, const std::string& srcTensor,
+                                                  const std::vector<std::string>& gmOffsetExpr,
+                                                  const std::vector<int64_t>& staticOffsets,
+                                                  const std::vector<std::string>& srcShape, bool isConv3D) const;
+    std::vector<std::string> BuildCopyOutParamList(const std::string& dstTensor, const std::string& srcTensor,
+                                                   const std::vector<std::string>& gmOffsetExpr,
+                                                   const std::vector<int64_t>& staticOffsets, const std::string& realM,
+                                                   const std::string& realN, const std::string& realCutW,
+                                                   const std::string& cutW) const;
 
     std::string GenTemplateParamsForPutAndGet() const;
     std::string GenTemplateParamsForLoad() const;
@@ -267,9 +267,8 @@ protected:
             value = AnyCast<T>(it->second);
             return true;
         }
-        CODEGEN_LOGE(
-            GenCodeErr::DATA_TYPE_MISMATCHED, "Type of attribute %s from PASS is mismatch: %s != %s", key.c_str(),
-            it->second.type().name(), typeid(T).name());
+        CODEGEN_LOGE(GenCodeErr::DATA_TYPE_MISMATCHED, "Type of attribute %s from PASS is mismatch: %s != %s",
+                     key.c_str(), it->second.type().name(), typeid(T).name());
         return false;
     }
 
@@ -289,10 +288,10 @@ protected:
 
     std::string GetLastUse() const;
 
-    virtual TileTensor BuildTileTensor(
-        int paramIdx, const std::string& usingType, const TileTensorShape& tileTensorShape = {});
-    virtual void UpdateTileTensorShapeAndStride(
-        int paramIdx, TileTensor& tileTensor, bool isSpillToGm, const TileTensorShape& tileTensorShape = {});
+    virtual TileTensor BuildTileTensor(int paramIdx, const std::string& usingType,
+                                       const TileTensorShape& tileTensorShape = {});
+    virtual void UpdateTileTensorShapeAndStride(int paramIdx, TileTensor& tileTensor, bool isSpillToGm,
+                                                const TileTensorShape& tileTensorShape = {});
     std::vector<std::string> BuildStride(const std::vector<int64_t>& input);
 
     std::string GenMemCopyVar(bool isCopyLocalToGM, bool isSpillToGm = false, unsigned uf = 0) const;
@@ -368,13 +367,13 @@ protected:
     std::string PrintMemCopyWithL0C(const PrintMemCopyWithL0CParam& param) const;
     std::string PrintMemCopyWithL0CStatic(const PrintMemCopyWithL0CParam& param) const;
     std::string PrintMemCopyWithL0CDynamic(const PrintMemCopyWithL0CParam& param) const;
-    std::string PrintL0CCopyOutDynamicUnalign(
-        const PrintMemCopyWithL0CParam& param, std::vector<std::string>& gmShapeExpr,
-        std::vector<std::string>& gmOffsetExpr) const;
+    std::string PrintL0CCopyOutDynamicUnalign(const PrintMemCopyWithL0CParam& param,
+                                              std::vector<std::string>& gmShapeExpr,
+                                              std::vector<std::string>& gmOffsetExpr) const;
     std::string PrintMemCopyWithL0CTileTensor(const PrintMemCopyWithL0CParam& param) const;
 
-    std::pair<std::string, std::string> GetOuterInnerValueStr(
-        unsigned gmIdx, const std::vector<int64_t>& gmShape, bool isSpillingToGM = false) const;
+    std::pair<std::string, std::string> GetOuterInnerValueStr(unsigned gmIdx, const std::vector<int64_t>& gmShape,
+                                                              bool isSpillingToGM = false) const;
     std::string PrintMemCopyWithL1(const PrintMemCopyWithL1Param& param) const;
     std::string PrintMemCopyWithL1Static(const PrintMemCopyWithL1Param& param) const;
     std::string PrintMemCopyWithL1Dynamic(const PrintMemCopyWithL1Param& param) const;
@@ -448,9 +447,8 @@ protected:
 
     std::string PrintExpandDynamicUnaligned(const PrintUnaryParam& param, std::vector<int> expandAxes) const;
     std::string PrintExpandLayout(std::vector<int> expandAxes) const;
-    std::string PrintExpand(
-        const std::string& s0Var, const std::string& dVar, const std::string& srcDtypeStr,
-        const std::string& dstDtypeStr) const;
+    std::string PrintExpand(const std::string& s0Var, const std::string& dVar, const std::string& srcDtypeStr,
+                            const std::string& dstDtypeStr) const;
     std::string PrintOneHot(const PrintUnaryParam& param) const;
     std::string PrintOneHotLayout() const;
     std::string PrintUnaryOpWithTmpBuff() const;
@@ -458,8 +456,8 @@ protected:
     std::string PrintRoundLayout() const;
     std::string PrintUnaryOpWithTmpTwoBuff() const;
 
-    DynamicParamPackMTE PrepareDynamicShapeInfoForMTE(
-        int dynShapeIdx, int ShapeDim = SHAPE_DIM4, bool isGmSpill = false) const;
+    DynamicParamPackMTE PrepareDynamicShapeInfoForMTE(int dynShapeIdx, int ShapeDim = SHAPE_DIM4,
+                                                      bool isGmSpill = false) const;
 
     std::string PrintReduceLastAxis(const PrintUnaryTmpBuffParam& param) const;
     std::string PrintReduceLastAxisDynamicUnalign(const PrintUnaryTmpBuffParam& param) const;
@@ -480,8 +478,8 @@ protected:
     std::string PrintVectorScalarOpDynamicUnalign(const PrintUnaryParam& param) const;
     std::string PrintMemL1ToL0TileTensor() const;
     std::string PrintMatmulTileTensor(bool isAcc) const;
-    std::string PrintMatmulTileTensor(
-        bool isAcc, std::unordered_map<OperandType, std::string>& tensorWithMemType) const;
+    std::string PrintMatmulTileTensor(bool isAcc,
+                                      std::unordered_map<OperandType, std::string>& tensorWithMemType) const;
     std::string PrintTmove() const;
     std::string PrintL0CToL1TileTensor() const;
 
@@ -525,8 +523,8 @@ protected:
     void InitAICPUOpsMap();
 
     std::string PrintCoord(size_t dim, const std::string& coord) const;
-    std::pair<std::string, std::string> PrintDstSrcCoordFromAttr(
-        int dstIdx = ToUnderlying(MISOIdx::DST_IDX), int srcIdx = ToUnderlying(MISOIdx::SRC0_IDX)) const;
+    std::pair<std::string, std::string> PrintDstSrcCoordFromAttr(int dstIdx = ToUnderlying(MISOIdx::DST_IDX),
+                                                                 int srcIdx = ToUnderlying(MISOIdx::SRC0_IDX)) const;
     template <typename T>
     void FillParamWithFullInput(std::vector<std::string>& paramList, const std::vector<T>& input) const
     {

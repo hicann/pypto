@@ -29,8 +29,8 @@ namespace tile_fwk {
 
 LogicalTensorPtr AutoCast::CreateFp32TensorLike(const LogicalTensorPtr& tensor)
 {
-    return irBuilder_.CreateTensorVar(
-        DataType::DT_FP32, tensor->GetShape(), tensor->GetDynValidShape(), tensor->Format());
+    return irBuilder_.CreateTensorVar(DataType::DT_FP32, tensor->GetShape(), tensor->GetDynValidShape(),
+                                      tensor->Format());
 }
 
 Status AutoCast::GetInOutConnectedTensor(Function& function)
@@ -161,9 +161,8 @@ bool AutoCast::SupportFP16(Operation* op)
     return true;
 }
 
-void AutoCast::InsertCastOp(
-    Function& function, LogicalTensorPtr src, LogicalTensorPtr tgt, const TileShape& tileShape,
-    const Operation::ScopeInfo& scopeInfo)
+void AutoCast::InsertCastOp(Function& function, LogicalTensorPtr src, LogicalTensorPtr tgt, const TileShape& tileShape,
+                            const Operation::ScopeInfo& scopeInfo)
 {
     Operation& newCast = irBuilder_.CreateTensorOpStmt(function, Opcode::OP_CAST, {src}, {tgt});
     newCast.SetAttribute(OP_ATTR_PREFIX + "mode", CastMode::CAST_NONE);

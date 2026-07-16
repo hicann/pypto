@@ -30,9 +30,9 @@ namespace npu::tile_fwk {
  * output:
  * attentionOut: [b, s1, n2, g, v_dim] fp32
  */
-void SlcAttnCompute(
-    const Tensor& qNope, const Tensor& qRope, const Tensor& kSlc, const Tensor& vSlc, const Tensor& kvSlcActSeqs,
-    int nQ, int nKv, float softmaxScale, Tensor& attentionOut, SaTileShapeConfig tileConfig)
+void SlcAttnCompute(const Tensor& qNope, const Tensor& qRope, const Tensor& kSlc, const Tensor& vSlc,
+                    const Tensor& kvSlcActSeqs, int nQ, int nKv, float softmaxScale, Tensor& attentionOut,
+                    SaTileShapeConfig tileConfig)
 {
     auto dtype = qNope.GetStorage()->Datatype();
     int dN = qNope.GetShape()[1];
@@ -82,8 +82,8 @@ void SlcAttnCompute(
                     Tensor miUpdate(DT_FP32, {curGTile, 1}, "miUpdate");
 
                     SymbolicScalar curOffset = bIdx * s1N2GSym + s1Idx * nQ + n2Idx * group + gIdx * curGTile;
-                    std::vector<SymbolicScalar> oiOffset = {
-                        bIdx, s1Idx, n2Idx * group + gIdx * curGTile, 0}; // 按最终结果(B,S1,N1,D)进行assemble
+                    std::vector<SymbolicScalar> oiOffset = {bIdx, s1Idx, n2Idx * group + gIdx * curGTile,
+                                                            0}; // 按最终结果(B,S1,N1,D)进行assemble
 
                     LOOP("LOOP_L4_s2_SA", FunctionType::DYNAMIC_LOOP, s2Idx, LoopRange(0, bnPerBatch, 1), PowersOf2(1))
                     {
@@ -98,16 +98,15 @@ void SlcAttnCompute(
                         Assemble(qn, {0, 0}, qi);
                         Assemble(qr, {0, dN}, qi);
 
-                        auto kj = View(
-                            kSlc, {curS2Tile, dN + dR}, {std::min(curSeq - s2Idx * curS2Tile, curS2Tile), dN + dR},
-                            {curKvOffset, 0}); // kSlc已经合并了rope和nope
-                        auto vj = View(
-                            vSlc, {curS2Tile, dN}, {std::min(curSeq - s2Idx * curS2Tile, curS2Tile), dN},
-                            {curKvOffset, 0});
+                        auto kj = View(kSlc, {curS2Tile, dN + dR},
+                                       {std::min(curSeq - s2Idx * curS2Tile, curS2Tile), dN + dR},
+                                       {curKvOffset, 0}); // kSlc已经合并了rope和nope
+                        auto vj = View(vSlc, {curS2Tile, dN}, {std::min(curSeq - s2Idx * curS2Tile, curS2Tile), dN},
+                                       {curKvOffset, 0});
 
                         // C1
-                        TileShape::Current().SetCubeTile(
-                            {c1Tile[0], c1Tile[1]}, {c1Tile[2], c1Tile[3]}, {c1Tile[4], c1Tile[5]});
+                        TileShape::Current().SetCubeTile({c1Tile[0], c1Tile[1]}, {c1Tile[2], c1Tile[3]},
+                                                         {c1Tile[4], c1Tile[5]});
                         config::SetSemanticLabel("Sa_QkMM");
                         TileShape::Current().SetMatrixSize({qi.GetShape()[0], 0, kj.GetShape()[0]});
                         auto sij = Matrix::Matmul(DataType::DT_FP32, qi, kj, false, true);
@@ -117,17 +116,17 @@ void SlcAttnCompute(
                         TileShape::Current().SetVecTile(v1Tile[0], v1Tile[1]);
                         auto sijScale = Mul(sij, Element(sij.GetStorage()->Datatype(), softmaxScale));
                         auto tildaMij = Amax(sijScale, -1, true); // (curGTile, curS2Tile) -> (curGTile, 1)
-                        auto tsub =
-                            Sub(sijScale, tildaMij); // (curGTile, curS2Tile), (curGTile, 1) -> (curGTile, curS2Tile)
-                        auto tildaPij = Exp(tsub);   // (curGTile, curS2Tile) -> (curGTile, curS2Tile)
+                        auto tsub = Sub(sijScale,
+                                        tildaMij); // (curGTile, curS2Tile), (curGTile, 1) -> (curGTile, curS2Tile)
+                        auto tildaPij = Exp(tsub); // (curGTile, curS2Tile) -> (curGTile, curS2Tile)
                         auto tildaPijF16 = Cast(tildaPij, dtype);
                         auto tildaLij = Sum(tildaPij, -1, true);
 
                         IF(IsLoopBegin(s2Idx, 0))
                         {
                             // C2
-                            TileShape::Current().SetCubeTile(
-                                {c2Tile[0], c2Tile[1]}, {c2Tile[2], c2Tile[3]}, {c2Tile[4], c2Tile[5]});
+                            TileShape::Current().SetCubeTile({c2Tile[0], c2Tile[1]}, {c2Tile[2], c2Tile[3]},
+                                                             {c2Tile[4], c2Tile[5]});
                             config::SetSemanticLabel("Sa_KvMm");
                             TileShape::Current().SetMatrixSize(
                                 {tildaPijF16.GetShape()[0], tildaPijF16.GetShape()[1], vj.GetShape()[1]});
@@ -139,9 +138,8 @@ void SlcAttnCompute(
                                 config::SetSemanticLabel("Sa_KvVec2");
                                 oiUpdate = Div(oiTmp, tildaLij);
                                 TileShape::Current().SetVecTile(1, 1, v2Tile[0], v2Tile[1]);
-                                auto oiUpdate4Dim =
-                                    Add(Reshape(oiUpdate, {1, 1, curGTile, dN}),
-                                        Element(oiUpdate.GetStorage()->Datatype(), float(0)));
+                                auto oiUpdate4Dim = Add(Reshape(oiUpdate, {1, 1, curGTile, dN}),
+                                                        Element(oiUpdate.GetStorage()->Datatype(), float(0)));
                                 Assemble(oiUpdate4Dim, oiOffset, attentionOut);
                             }
                             ELSE
@@ -168,8 +166,8 @@ void SlcAttnCompute(
                             auto liNew = Add(t6, t5);
 
                             auto q3 = Mul(oi, t2);
-                            TileShape::Current().SetCubeTile(
-                                {c2Tile[0], c2Tile[1]}, {c2Tile[2], c2Tile[3]}, {c2Tile[4], c2Tile[5]});
+                            TileShape::Current().SetCubeTile({c2Tile[0], c2Tile[1]}, {c2Tile[2], c2Tile[3]},
+                                                             {c2Tile[4], c2Tile[5]});
                             config::SetSemanticLabel("Sa_UpdateMM2");
                             TileShape::Current().SetMatrixSize(
                                 {tildaPijF16.GetShape()[0], tildaPijF16.GetShape()[1], vj.GetShape()[1]});
@@ -181,9 +179,8 @@ void SlcAttnCompute(
                             { // PATH1
                                 oiUpdate = Div(oiTmp, liNew);
                                 TileShape::Current().SetVecTile(1, 1, v2Tile[0], v2Tile[1]);
-                                auto oiUpdate4Dim =
-                                    Add(Reshape(oiUpdate, {1, 1, curGTile, dN}),
-                                        Element(oiUpdate.GetStorage()->Datatype(), float(0)));
+                                auto oiUpdate4Dim = Add(Reshape(oiUpdate, {1, 1, curGTile, dN}),
+                                                        Element(oiUpdate.GetStorage()->Datatype(), float(0)));
                                 Assemble(oiUpdate4Dim, oiOffset, attentionOut);
                             }
                             ELSE
@@ -200,9 +197,9 @@ void SlcAttnCompute(
     }
 }
 
-void SlcAttn(
-    const Tensor& qNope, const Tensor& qRope, const Tensor& kSlc, const Tensor& vSlc, const Tensor& kvSlcActSeqs,
-    int nQ, int nKv, float softmaxScale, Tensor& attentionOut, SaTileShapeConfig tileConfig)
+void SlcAttn(const Tensor& qNope, const Tensor& qRope, const Tensor& kSlc, const Tensor& vSlc,
+             const Tensor& kvSlcActSeqs, int nQ, int nKv, float softmaxScale, Tensor& attentionOut,
+             SaTileShapeConfig tileConfig)
 {
     FUNCTION("SA_MAIN", {qNope, qRope, kSlc, vSlc, kvSlcActSeqs}, {attentionOut})
     {

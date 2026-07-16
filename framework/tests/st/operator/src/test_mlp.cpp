@@ -83,15 +83,15 @@ TEST_F(MlpTest, test_16_7168_tileop)
 
             // up_proj
             // [b*s, n*d] [n*d, n*d*3] => [b*s, n*d*3]
-            auto up =
-                Matrix::Matmul(DataType::DT_FP32, castRes, Cast(ffnweigth2, DataType::DT_FP16), false, false, true);
+            auto up = Matrix::Matmul(DataType::DT_FP32, castRes, Cast(ffnweigth2, DataType::DT_FP16), false, false,
+                                     true);
             swish = Mul(swish, up);
             auto swish_fp16 = Cast(swish, DataType::DT_FP16);
 
             // down_proj
             // [b*s, n*d*3] [n*d, n*d*3]^T => [b*s, n*d]
-            output =
-                Matrix::Matmul(DataType::DT_FP32, swish_fp16, Cast(ffnweigth3, DataType::DT_FP16), false, true, true);
+            output = Matrix::Matmul(DataType::DT_FP32, swish_fp16, Cast(ffnweigth3, DataType::DT_FP16), false, true,
+                                    true);
         }
     }
     DevFuncRunner::Run(Program::GetInstance().GetLastFunction());

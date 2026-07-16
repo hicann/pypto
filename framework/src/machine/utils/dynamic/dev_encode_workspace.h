@@ -32,21 +32,20 @@ void CalcWorkspaceConfig(WorkspaceDesc& wsDesc);
 void CalcWorkspacePlatform(WorkspaceDesc& wsDesc);
 
 RuntimeWorkspaceConfig LoadRuntimeWorkspaceConfig(uint32_t maxUnrollTimes);
-WorkspaceDesc CollectWorkspaceDesc(
-    Function* func, DevAscendProgram& devProg, const std::unordered_set<int>& constructAssembleNeedAllocSlots);
+WorkspaceDesc CollectWorkspaceDesc(Function* func, DevAscendProgram& devProg,
+                                   const std::unordered_set<int>& constructAssembleNeedAllocSlots);
 
 // Size-only encode: host-side devEncodeList (fillContent=false devProg has invalid Data() pointers).
-WorkspaceDesc CollectWorkspaceDescFromHostEncodeList(
-    Function* func, const DyndevFunctionAttribute& dyndevAttr,
-    const std::unordered_set<int>& constructAssembleNeedAllocSlots);
+WorkspaceDesc CollectWorkspaceDescFromHostEncodeList(Function* func, const DyndevFunctionAttribute& dyndevAttr,
+                                                     const std::unordered_set<int>& constructAssembleNeedAllocSlots);
 
 void ValidateMaxWorkspaceOrThrow(uint64_t maxWorkspaceBytes, uint64_t workspaceStitchMin);
-void ApplyStitchDepthConfig(
-    DevAscendProgram* devProg, WorkspaceDesc& wsDesc, const StitchDepthConfig& config, uint64_t totalSlot);
+void ApplyStitchDepthConfig(DevAscendProgram* devProg, WorkspaceDesc& wsDesc, const StitchDepthConfig& config,
+                            uint64_t totalSlot);
 void ApplyTensorWorkspaceResult(DevAscendProgram* devProg, const WorkspaceDesc& wsDesc);
-void LogWorkspaceEncodeSummary(
-    int kMin, uint32_t stitchNumMax, const DevAscendProgram& devProg,
-    const StitchDepthConfig& depthConfig, uint64_t maxWorkspaceBytes, uint64_t workspaceStitchMin);
+void LogWorkspaceEncodeSummary(int kMin, uint32_t stitchNumMax, const DevAscendProgram& devProg,
+                               const StitchDepthConfig& depthConfig, uint64_t maxWorkspaceBytes,
+                               uint64_t workspaceStitchMin);
 
 uint64_t CalcGeneralMetadataSlotWorkspace(DevAscendProgram* devProg);
 uint64_t CalcGeneralMetadataSlabWorkspace(DevAscendProgram* devProg);

@@ -51,13 +51,12 @@ void FunctionClone::CopyInferParamIndexInfo()
         DynParamInfo copiedInfo = info;
         cloneFunc->InsertDynParam(dim, copiedInfo);
     }
-    APASS_LOG_DEBUG_F(
-        Elements::Function, "Copied %zu dyn param entries to function: %s", originalDynParamTable.size(),
-        cloneFunc->GetRawName().c_str());
+    APASS_LOG_DEBUG_F(Elements::Function, "Copied %zu dyn param entries to function: %s", originalDynParamTable.size(),
+                      cloneFunc->GetRawName().c_str());
 }
 
-Function* FunctionClone::CloneFunctionByComponent(
-    const InternalComponentInfo& component, uint64_t newProgramID, size_t idx)
+Function* FunctionClone::CloneFunctionByComponent(const InternalComponentInfo& component, uint64_t newProgramID,
+                                                  size_t idx)
 {
     // 创建新的function名称
     std::string leafName = originalMixFunc->GetRawName() + "_leaf" + std::to_string(idx);
@@ -74,8 +73,8 @@ Function* FunctionClone::CloneFunctionByComponent(
 
     ProcessOperations(component);
     // 验证顺序正确性
-    APASS_LOG_DEBUG_F(
-        Elements::Function, "Leaf function %s has %zu ops in original order", leafName.c_str(), programOps.size());
+    APASS_LOG_DEBUG_F(Elements::Function, "Leaf function %s has %zu ops in original order", leafName.c_str(),
+                      programOps.size());
     cloneFunc->SetProgramOp(programOps);
     // 创建并设置LeafFuncAttribute
     auto leafAttr = std::make_shared<LeafFuncAttribute>();
@@ -90,13 +89,11 @@ Function* FunctionClone::CloneFunctionByComponent(
     CopyInferParamIndexInfo();
     // 设置每个新建leaf function继承originalMixFuncisUnderDynamicFunction属性
     bool isUnderDynamicFunction = originalMixFunc->IsUnderDynamicFunction();
-    APASS_LOG_DEBUG_F(
-        Elements::Function, "Original mix function isUnderDynamicFunction: %s for programID=%d",
-        isUnderDynamicFunction ? "true" : "false", originalMixFunc->GetProgramId());
+    APASS_LOG_DEBUG_F(Elements::Function, "Original mix function isUnderDynamicFunction: %s for programID=%d",
+                      isUnderDynamicFunction ? "true" : "false", originalMixFunc->GetProgramId());
     cloneFunc->SetUnderDynamicFunction(isUnderDynamicFunction);
-    APASS_LOG_DEBUG_F(
-        Elements::Function, "Set isUnderDynamicFunction=%s for leaf function programID=%d",
-        isUnderDynamicFunction ? "true" : "false", cloneFunc->GetProgramId());
+    APASS_LOG_DEBUG_F(Elements::Function, "Set isUnderDynamicFunction=%s for leaf function programID=%d",
+                      isUnderDynamicFunction ? "true" : "false", cloneFunc->GetProgramId());
 
     auto* resultFunc = cloneFunc.get();
     return resultFunc;

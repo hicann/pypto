@@ -34,17 +34,14 @@ DevicePerf::~DevicePerf()
     ReleasePerfData();
 }
 
-void DevicePerf::InitAndStartDumpThread(const DeviceArgs &args)
+void DevicePerf::InitAndStartDumpThread(const DeviceArgs& args)
 {
     args_ = args;
     InitPerfData();
     StartMachinePerfTraceDumpThread();
 }
 
-uint32_t DevicePerf::GetPerfDataSize() const
-{
-    return args_.nrAic + args_.nrAiv + AICPU_NUM_OF_RUN_AICPU_TASKS;
-}
+uint32_t DevicePerf::GetPerfDataSize() const { return args_.nrAic + args_.nrAiv + AICPU_NUM_OF_RUN_AICPU_TASKS; }
 
 void DevicePerf::InitPerfData()
 {
@@ -119,10 +116,10 @@ bool DevicePerf::RunPrepare() const
     if (config::GetDebugOption<int64_t>(CFG_RUNTIME_DBEUG_MODE) == CFG_DEBUG_ALL || ENABLE_PERF_TRACE) {
         for (uint32_t i = 0; i < GetPerfDataSize(); i++) {
             ret = RuntimeMemcpyDirect(
-                (reinterpret_cast<uint8_t*>(args_.sharedBuffer + sizeof(uint64_t) * SHAK_BUF_DFX_DATA_INDEX)) +
-                    i * SHARED_BUFFER_SIZE,
-                    sizeof(uint64_t), reinterpret_cast<const uint8_t*>(&perfData_[i]), sizeof(uint64_t),
-                    RtMemcpyKind::HOST_TO_DEVICE) == RT_SUCCESS;
+                      (reinterpret_cast<uint8_t*>(args_.sharedBuffer + sizeof(uint64_t) * SHAK_BUF_DFX_DATA_INDEX)) +
+                          i * SHARED_BUFFER_SIZE,
+                      sizeof(uint64_t), reinterpret_cast<const uint8_t*>(&perfData_[i]), sizeof(uint64_t),
+                      RtMemcpyKind::HOST_TO_DEVICE) == RT_SUCCESS;
         }
     }
     return ret;
@@ -175,4 +172,4 @@ void DevicePerf::MachinePerfTraceDumpThread()
     MACHINE_LOGD("Dump thread final dump");
     dynamic::DumpDevTaskPerfData(args_, perfData_, true);
 }
-}
+} // namespace npu::tile_fwk

@@ -50,8 +50,8 @@ TEST_F(TestCodegenDynVdup, TestDynVdupUnaligned)
             output = npu::tile_fwk::Full(src, DataType::DT_FP32, shape);
         }
     }
-    auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX +
+                                                                HIDDEN_FUNC_SUFFIX);
 
     (void)GenCodeByFunction(*function);
 }
@@ -74,8 +74,8 @@ TEST_F(TestCodegenDynVdup, TestDynVdupInt16)
             output = npu::tile_fwk::Full(src, DataType::DT_INT16, shape);
         }
     }
-    auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX +
+                                                                HIDDEN_FUNC_SUFFIX);
 
     (void)GenCodeByFunction(*function);
 }
@@ -98,8 +98,8 @@ TEST_F(TestCodegenDynVdup, TestDynVdupUInt16)
             output = npu::tile_fwk::Full(src, DataType::DT_UINT16, shape);
         }
     }
-    auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX +
+                                                                HIDDEN_FUNC_SUFFIX);
 
     (void)GenCodeByFunction(*function);
 }
@@ -122,8 +122,8 @@ TEST_F(TestCodegenDynVdup, TestDynVdupUInt32)
             output = npu::tile_fwk::Full(src, DataType::DT_UINT32, shape);
         }
     }
-    auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX +
+                                                                HIDDEN_FUNC_SUFFIX);
 
     (void)GenCodeByFunction(*function);
 }

@@ -36,8 +36,8 @@ struct AtanOpMetaData {
     nlohmann::json test_data_;
 };
 
-static void AtanOperationExeFunc2Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void AtanOperationExeFunc2Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                      const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0]})
     {
@@ -50,9 +50,7 @@ static void AtanOperationExeFunc2Dims(
             LOOP("LOOP_L0_bIdx", FunctionType::DYNAMIC_LOOP, bIdx, LoopRange(loop[0]))
             {
                 std::vector<SymbolicScalar> offset = {bIdx * firstViewShape};
-                std::vector<SymbolicScalar> validShape = {
-                    std::min(firstDim - bIdx * firstViewShape, firstViewShape)
-                };
+                std::vector<SymbolicScalar> validShape = {std::min(firstDim - bIdx * firstViewShape, firstViewShape)};
                 auto viewTensor = View(inputs[0], args->viewShape_, validShape, offset);
                 TileShape::Current().SetVecTile(args->tileShape_);
                 auto res = Atan(viewTensor);
@@ -74,8 +72,7 @@ static void AtanOperationExeFunc2Dims(
                     std::vector<SymbolicScalar> offset = {bIdx * firstViewShape, sIdx * secondViewShape};
                     std::vector<SymbolicScalar> validShape = {
                         std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                        std::min(secondDim - sIdx * secondViewShape, secondViewShape)
-                    };
+                        std::min(secondDim - sIdx * secondViewShape, secondViewShape)};
                     auto tileTensor = View(inputs[0], args->viewShape_, validShape, offset);
                     TileShape::Current().SetVecTile(args->tileShape_);
                     auto res = Atan(tileTensor);
@@ -86,8 +83,8 @@ static void AtanOperationExeFunc2Dims(
     }
 }
 
-static void AtanOperationExeFunc3Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void AtanOperationExeFunc3Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                      const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0]})
     {
@@ -108,14 +105,13 @@ static void AtanOperationExeFunc3Dims(
             {
                 LOOP("LOOP_L2_nIdx", FunctionType::DYNAMIC_LOOP, nIdx, LoopRange(0, nloop, 1))
                 {
-                    std::vector<SymbolicScalar> offset =
-                        {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape};
-                    auto tileTensor = View(
-                        inputs[0], args->viewShape_,
-                        {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                         std::min(secondDim - sIdx * secondViewShape, secondViewShape),
-                         std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape)},
-                        offset);
+                    std::vector<SymbolicScalar> offset = {bIdx * firstViewShape, sIdx * secondViewShape,
+                                                          nIdx * thirdViewShape};
+                    auto tileTensor = View(inputs[0], args->viewShape_,
+                                           {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                            std::min(secondDim - sIdx * secondViewShape, secondViewShape),
+                                            std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape)},
+                                           offset);
                     TileShape::Current().SetVecTile(args->tileShape_);
                     auto res = Atan(tileTensor);
                     Assemble(res, offset, outputs[0]);
@@ -125,8 +121,8 @@ static void AtanOperationExeFunc3Dims(
     }
 }
 
-static void AtanOperationExeFunc4Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void AtanOperationExeFunc4Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                      const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0]})
     {
@@ -152,19 +148,14 @@ static void AtanOperationExeFunc4Dims(
                 {
                     LOOP("LOOP_L3_nIdx", FunctionType::DYNAMIC_LOOP, nIdx, LoopRange(0, nloop, 1))
                     {
-                        std::vector<SymbolicScalar> offset = {
-                            bIdx * firstViewShape,
-                            sIdx * secondViewShape,
-                            mIdx * thirdViewShape,
-                            nIdx * fourthViewShape
-                        };
-                        Tensor tileTensor0 = View(
-                            inputs[0], args->viewShape_,
-                            {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                             std::min(secondDim - sIdx * secondViewShape, secondViewShape),
-                             std::min(thirdDim - mIdx * thirdViewShape, thirdViewShape),
-                             std::min(fourthDim - nIdx * fourthViewShape, fourthViewShape)},
-                            offset);
+                        std::vector<SymbolicScalar> offset = {bIdx * firstViewShape, sIdx * secondViewShape,
+                                                              mIdx * thirdViewShape, nIdx * fourthViewShape};
+                        Tensor tileTensor0 = View(inputs[0], args->viewShape_,
+                                                  {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                                   std::min(secondDim - sIdx * secondViewShape, secondViewShape),
+                                                   std::min(thirdDim - mIdx * thirdViewShape, thirdViewShape),
+                                                   std::min(fourthDim - nIdx * fourthViewShape, fourthViewShape)},
+                                                  offset);
                         TileShape::Current().SetVecTile(args->tileShape_);
                         auto res = Atan(tileTensor0);
                         Assemble(res, offset, outputs[0]);
@@ -177,11 +168,10 @@ static void AtanOperationExeFunc4Dims(
 
 class AtanOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac_param<AtanOpMetaData> {};
 
-INSTANTIATE_TEST_SUITE_P(
-    TestAtan, AtanOperationTest,
-    ::testing::ValuesIn(GetOpMetaData<AtanOpMetaData>(
-        {AtanOperationExeFunc2Dims, AtanOperationExeFunc3Dims, AtanOperationExeFunc4Dims},
-        "Atan")));
+INSTANTIATE_TEST_SUITE_P(TestAtan, AtanOperationTest,
+                         ::testing::ValuesIn(GetOpMetaData<AtanOpMetaData>(
+                             {AtanOperationExeFunc2Dims, AtanOperationExeFunc3Dims, AtanOperationExeFunc4Dims},
+                             "Atan")));
 
 TEST_P(AtanOperationTest, TestAtan)
 {

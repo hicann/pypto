@@ -132,9 +132,8 @@ TEST_F(DynamicFFNTest, TestOnbroadDynamicFFNQuant)
     readInput(GetGoldenDir() + "/ffnScale3.bin", ffnScale3Data);
     readInput(GetGoldenDir() + "/final_out.bin", golden);
 
-    DynamicFFNQuant(
-        hiddenStates, hiddenStatesScale, ffnWeight1, ffnWeight2, ffnWeight3, ffnScale1, ffnScale2, ffnScale3, ffnout,
-        BASIC_BATCH);
+    DynamicFFNQuant(hiddenStates, hiddenStatesScale, ffnWeight1, ffnWeight2, ffnWeight3, ffnScale1, ffnScale2,
+                    ffnScale3, ffnout, BASIC_BATCH);
 
     ProgramData::GetInstance().AppendInputs({
         RawTensorData::CreateTensor<int8_t>(hiddenStates, hiddenStatesData),

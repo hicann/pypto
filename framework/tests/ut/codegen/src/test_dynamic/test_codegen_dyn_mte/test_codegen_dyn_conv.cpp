@@ -39,12 +39,11 @@ constexpr int64_t COPY_OUT_MODE_NZ2DN = 3;
 class TestCodegenDynConv : public CodegenTestBase {
 public:
     TestCodegenDynConv()
-        : CodegenTestBase(
-              {.compileStage = CS_CODEGEN_INSTRUCTION,
-               .setTileTensor = true,
-               .tileTensorValue = true,
-               .setIdGen = true,
-               .resetTileTensorOnTearDown = true})
+        : CodegenTestBase({.compileStage = CS_CODEGEN_INSTRUCTION,
+                           .setTileTensor = true,
+                           .tileTensorValue = true,
+                           .setIdGen = true,
+                           .resetTileTensorOnTearDown = true})
     {}
 };
 
@@ -68,8 +67,8 @@ std::vector<int64_t> GetDstL1ShapeDN2NZ(const std::vector<int64_t>& gmShape, boo
         if (isFmap) {
             dstL1Shape = {gmShape[0], gmShape[2], CeilDiv(gmShape[1], k0), gmShape[3], gmShape[4], k0};
         } else {
-            dstL1Shape = {
-                CeilDiv(gmShape[1], k0) * gmShape[2] * gmShape[3] * gmShape[4], CeilDiv(gmShape[0], N0), N0, k0};
+            dstL1Shape = {CeilDiv(gmShape[1], k0) * gmShape[2] * gmShape[3] * gmShape[4], CeilDiv(gmShape[0], N0), N0,
+                          k0};
         }
     } else {
         if (isFmap) {
@@ -100,20 +99,19 @@ std::vector<int64_t> GetOffsetForCopyInNZ2NZ(bool isFmap, bool isConv3D)
     return {0, 0, 0, 0};
 }
 
-void SetConvL1CopyInOpAttr(
-    Operation& op, const std::vector<int64_t>& offset, const std::vector<int64_t>& gmShape,
-    const std::vector<int64_t>& dstL1Shape)
+void SetConvL1CopyInOpAttr(Operation& op, const std::vector<int64_t>& offset, const std::vector<int64_t>& gmShape,
+                           const std::vector<int64_t>& dstL1Shape)
 {
-    auto copyAttr = std::make_shared<CopyOpAttribute>(
-        OpImmediate::Specified(offset), MemoryType::MEM_L1, OpImmediate::Specified(gmShape),
-        OpImmediate::Specified(gmShape), OpImmediate::Specified(dstL1Shape));
+    auto copyAttr = std::make_shared<CopyOpAttribute>(OpImmediate::Specified(offset), MemoryType::MEM_L1,
+                                                      OpImmediate::Specified(gmShape), OpImmediate::Specified(gmShape),
+                                                      OpImmediate::Specified(dstL1Shape));
     op.SetOpAttribute(copyAttr);
     op.SetAttribute(OpAttributeKey::srcGmConvValidShape, SymbolicScalar::FromConcrete(gmShape));
 }
 
-std::string TestConvL1CopyInBody(
-    const std::string& funcName, const std::vector<int64_t>& gmShape, bool isFmap = true,
-    int64_t copyInMode = COPY_IN_MODE_DN2NZ, bool isConv3D = false, DataType dtype = DataType::DT_FP16)
+std::string TestConvL1CopyInBody(const std::string& funcName, const std::vector<int64_t>& gmShape, bool isFmap = true,
+                                 int64_t copyInMode = COPY_IN_MODE_DN2NZ, bool isConv3D = false,
+                                 DataType dtype = DataType::DT_FP16)
 {
     auto function = GetFunctionConv(funcName);
     auto gmTensor = CreateConvTensor(*function, dtype, gmShape, MemoryType::MEM_DEVICE_DDR);
@@ -160,8 +158,8 @@ TEST_F(TestCodegenDynConv, L1CopyInTileTensorWeightConv2D)
 
 TEST_F(TestCodegenDynConv, L1CopyInTileTensorFmapConv3D)
 {
-    std::string res =
-        TestConvL1CopyInBody("L1CopyInTileTensorFmapConv3D", {1, 16, 1, 1, 16}, true, COPY_IN_MODE_DN2NZ, true);
+    std::string res = TestConvL1CopyInBody("L1CopyInTileTensorFmapConv3D", {1, 16, 1, 1, 16}, true, COPY_IN_MODE_DN2NZ,
+                                           true);
     std::string expect =
         R"!!!(TLoadConv<CopyInMode::DN2NZ, 1, 1>(l1Tensor_0, gmTensor_1, 0, 0, 0, 0, 0, 1, 16, 1, 1, 16);
 )!!!";
@@ -170,8 +168,8 @@ TEST_F(TestCodegenDynConv, L1CopyInTileTensorFmapConv3D)
 
 TEST_F(TestCodegenDynConv, L1CopyInTileTensorWeightConv3D)
 {
-    std::string res =
-        TestConvL1CopyInBody("L1CopyInTileTensorWeightConv3D", {1, 16, 1, 1, 1}, false, COPY_IN_MODE_DN2NZ, true);
+    std::string res = TestConvL1CopyInBody("L1CopyInTileTensorWeightConv3D", {1, 16, 1, 1, 1}, false,
+                                           COPY_IN_MODE_DN2NZ, true);
     std::string expect =
         R"!!!(TLoadConv<CopyInMode::DN2NZ, 1, 0>(l1Tensor_0, gmTensor_1, 0, 0, 0, 0, 0, 1, 16, 1, 1, 1);
 )!!!";
@@ -180,8 +178,8 @@ TEST_F(TestCodegenDynConv, L1CopyInTileTensorWeightConv3D)
 
 TEST_F(TestCodegenDynConv, L1CopyInNZ2NZFmapConv2D)
 {
-    std::string res =
-        TestConvL1CopyInBody("L1CopyInNZ2NZFmapConv2D", {1, 1, 16, 16, 16}, true, COPY_IN_MODE_NZ2NZ, false);
+    std::string res = TestConvL1CopyInBody("L1CopyInNZ2NZFmapConv2D", {1, 1, 16, 16, 16}, true, COPY_IN_MODE_NZ2NZ,
+                                           false);
     std::string expect =
         R"!!!(TLoadConv<CopyInMode::NZ2NZ, 0, 1>(l1Tensor_0, gmTensor_1, 0, 0, 0, 0, 0, 1, 1, 16, 16, 16);
 )!!!";
@@ -190,8 +188,8 @@ TEST_F(TestCodegenDynConv, L1CopyInNZ2NZFmapConv2D)
 
 TEST_F(TestCodegenDynConv, L1CopyInNZ2NZFmapConv3D)
 {
-    std::string res =
-        TestConvL1CopyInBody("L1CopyInNZ2NZFmapConv3D", {1, 1, 1, 16, 16, 16}, true, COPY_IN_MODE_NZ2NZ, true);
+    std::string res = TestConvL1CopyInBody("L1CopyInNZ2NZFmapConv3D", {1, 1, 1, 16, 16, 16}, true, COPY_IN_MODE_NZ2NZ,
+                                           true);
     std::string expect =
         R"!!!(TLoadConv<CopyInMode::NZ2NZ, 1, 1>(l1Tensor_0, gmTensor_1, 0, 0, 0, 0, 0, 1, 1, 1, 16, 16);
 )!!!";
@@ -200,8 +198,8 @@ TEST_F(TestCodegenDynConv, L1CopyInNZ2NZFmapConv3D)
 
 TEST_F(TestCodegenDynConv, L1CopyInNZ2NZWeightConv2D)
 {
-    std::string res =
-        TestConvL1CopyInBody("L1CopyInNZ2NZWeightConv2D", {1, 1, 16, 16}, false, COPY_IN_MODE_NZ2NZ, false);
+    std::string res = TestConvL1CopyInBody("L1CopyInNZ2NZWeightConv2D", {1, 1, 16, 16}, false, COPY_IN_MODE_NZ2NZ,
+                                           false);
     std::string expect =
         R"!!!(TLoadConv<CopyInMode::NZ2NZ, 0, 0>(l1Tensor_0, gmTensor_1, 0, 0, 0, 0, 0, 1, 1, 16, 16, 0);
 )!!!";
@@ -217,10 +215,11 @@ TEST_F(TestCodegenDynConv, L1CopyInNZ2NZWeightConv3D)
     EXPECT_EQ(res, expect);
 }
 
-std::string TestConvL0COutBody(
-    const std::string& funcName, const std::vector<int64_t>& l0cShape, const std::vector<SymbolicScalar>& l0cValidShape,
-    std::vector<int64_t>& gmShape, int64_t copyOutMode = COPY_OUT_MODE_NZ2DN, bool isConv3D = false,
-    DataType dtype = DataType::DT_FP32, int64_t cutW = 16, SymbolicScalar dynValidCutW = SymbolicScalar(16))
+std::string TestConvL0COutBody(const std::string& funcName, const std::vector<int64_t>& l0cShape,
+                               const std::vector<SymbolicScalar>& l0cValidShape, std::vector<int64_t>& gmShape,
+                               int64_t copyOutMode = COPY_OUT_MODE_NZ2DN, bool isConv3D = false,
+                               DataType dtype = DataType::DT_FP32, int64_t cutW = 16,
+                               SymbolicScalar dynValidCutW = SymbolicScalar(16))
 {
     std::vector<int64_t> offset = {0, 0, 0, 0};
     if (isConv3D) {
@@ -238,9 +237,9 @@ std::string TestConvL0COutBody(
     op.SetAttribute("REAL_CUT_W", dynValidCutW);
     op.SetAttribute(OpAttributeKey::l0cValidMN, l0cValidShape);
     op.SetAttribute(OpAttributeKey::gmTensorParamIdxInCall, 0);
-    op.SetOpAttribute(std::make_shared<CopyOpAttribute>(
-        MEM_L1, OpImmediate::Specified(offset), OpImmediate::Specified(gmShape), OpImmediate::Specified(gmShape),
-        shapeImme));
+    op.SetOpAttribute(std::make_shared<CopyOpAttribute>(MEM_L1, OpImmediate::Specified(offset),
+                                                        OpImmediate::Specified(gmShape),
+                                                        OpImmediate::Specified(gmShape), shapeImme));
 
     return GenCodeByFunction(*function);
 }
@@ -249,10 +248,10 @@ TEST_F(TestCodegenDynConv, L0COutTileTensorConv2D)
 {
     std::vector<int64_t> l0cShape = {32, 16};
     std::vector<int64_t> gmShape = {1, 16, 2, 32};
-    std::string res = TestConvL0COutBody("L0COutTileTensorConv2D", l0cShape,
-            SymbolicScalar::FromConcrete(l0cShape), gmShape);
-    std::string expect =
-        R"!!!(TStoreConv<CopyOutMode::NZ2DN, 0>(gmTensor_9, l0cTensor_10, 0, 0, 0, 0, 0, 32, 16, 16, 16);)!!!";
+    std::string res = TestConvL0COutBody("L0COutTileTensorConv2D", l0cShape, SymbolicScalar::FromConcrete(l0cShape),
+                                         gmShape);
+    std::string
+        expect = R"!!!(TStoreConv<CopyOutMode::NZ2DN, 0>(gmTensor_9, l0cTensor_10, 0, 0, 0, 0, 0, 32, 16, 16, 16);)!!!";
     CheckStringExist(expect, res);
 }
 
@@ -262,8 +261,8 @@ TEST_F(TestCodegenDynConv, L0COutTileTensorConv2DTailTensor)
     std::vector<SymbolicScalar> l0cValidShape = {16, 16};
     std::vector<int64_t> gmShape = {1, 32, 2, 32};
     std::string res = TestConvL0COutBody("L0COutTileTensorConv2D", l0cShape, l0cValidShape, gmShape);
-    std::string expect =
-        R"!!!(TStoreConv<CopyOutMode::NZ2DN, 0>(gmTensor_9, l0cTensor_10, 0, 0, 0, 0, 0, 16, 16, 16, 16);)!!!";
+    std::string
+        expect = R"!!!(TStoreConv<CopyOutMode::NZ2DN, 0>(gmTensor_9, l0cTensor_10, 0, 0, 0, 0, 0, 16, 16, 16, 16);)!!!";
     CheckStringExist(expect, res);
 }
 
@@ -271,10 +270,10 @@ TEST_F(TestCodegenDynConv, L0COutTileTensorConv3D)
 {
     std::vector<int64_t> l0cShape = {32, 16};
     std::vector<int64_t> gmShape = {1, 16, 1, 2, 32};
-    std::string res = TestConvL0COutBody("L0COutTileTensorConv3D", l0cShape,
-        SymbolicScalar::FromConcrete(l0cShape), gmShape, COPY_OUT_MODE_NZ2DN, true);
-    std::string expect =
-        R"!!!(TStoreConv<CopyOutMode::NZ2DN, 1>(gmTensor_9, l0cTensor_10, 0, 0, 0, 0, 0, 32, 16, 16, 16);)!!!";
+    std::string res = TestConvL0COutBody("L0COutTileTensorConv3D", l0cShape, SymbolicScalar::FromConcrete(l0cShape),
+                                         gmShape, COPY_OUT_MODE_NZ2DN, true);
+    std::string
+        expect = R"!!!(TStoreConv<CopyOutMode::NZ2DN, 1>(gmTensor_9, l0cTensor_10, 0, 0, 0, 0, 0, 32, 16, 16, 16);)!!!";
     CheckStringExist(expect, res);
 }
 
@@ -282,10 +281,10 @@ TEST_F(TestCodegenDynConv, L0COutNZ2NZConv2D)
 {
     std::vector<int64_t> l0cShape = {16, 16};
     std::vector<int64_t> gmShape = {16, 16};
-    std::string res = TestConvL0COutBody("L0COutNZ2NZConv2D", l0cShape,
-        SymbolicScalar::FromConcrete(l0cShape), gmShape, COPY_OUT_MODE_NZ2NZ, false);
-    std::string expect =
-        R"!!!(TStoreConv<CopyOutMode::NZ2NZ, 0>(gmTensor_9, l0cTensor_10, 0, 0, 0, 0, 0, 16, 16, 16, 16);)!!!";
+    std::string res = TestConvL0COutBody("L0COutNZ2NZConv2D", l0cShape, SymbolicScalar::FromConcrete(l0cShape), gmShape,
+                                         COPY_OUT_MODE_NZ2NZ, false);
+    std::string
+        expect = R"!!!(TStoreConv<CopyOutMode::NZ2NZ, 0>(gmTensor_9, l0cTensor_10, 0, 0, 0, 0, 0, 16, 16, 16, 16);)!!!";
     CheckStringExist(expect, res);
 }
 
@@ -293,10 +292,10 @@ TEST_F(TestCodegenDynConv, L0COutNZ2NZConv3D)
 {
     std::vector<int64_t> l0cShape = {16, 16};
     std::vector<int64_t> gmShape = {16, 16};
-    std::string res = TestConvL0COutBody("L0COutNZ2NZConv3D", l0cShape,
-        SymbolicScalar::FromConcrete(l0cShape), gmShape, COPY_OUT_MODE_NZ2NZ, true);
-    std::string expect =
-        R"!!!(TStoreConv<CopyOutMode::NZ2NZ, 1>(gmTensor_9, l0cTensor_10, 0, 0, 0, 0, 0, 16, 16, 16, 16);)!!!";
+    std::string res = TestConvL0COutBody("L0COutNZ2NZConv3D", l0cShape, SymbolicScalar::FromConcrete(l0cShape), gmShape,
+                                         COPY_OUT_MODE_NZ2NZ, true);
+    std::string
+        expect = R"!!!(TStoreConv<CopyOutMode::NZ2NZ, 1>(gmTensor_9, l0cTensor_10, 0, 0, 0, 0, 0, 16, 16, 16, 16);)!!!";
     CheckStringExist(expect, res);
 }
 

@@ -22,10 +22,7 @@ double DividePerfCounter(uint64_t dividend, uint64_t divisor)
     return divisor > 0 ? static_cast<double>(dividend) / divisor : 0.0;
 }
 
-double PercentPerfCounter(uint64_t dividend, uint64_t divisor)
-{
-    return DividePerfCounter(dividend, divisor) * 100.0;
-}
+double PercentPerfCounter(uint64_t dividend, uint64_t divisor) { return DividePerfCounter(dividend, divisor) * 100.0; }
 
 PerfCacheMetrics BuildPerfCacheMetrics(uint64_t refs, uint64_t misses)
 {
@@ -79,10 +76,7 @@ std::string FormatNumber(uint64_t n)
     return ret < 0 ? std::string() : std::string(buf);
 }
 
-pid_t GetCurrentTid()
-{
-    return static_cast<pid_t>(syscall(__NR_gettid));
-}
+pid_t GetCurrentTid() { return static_cast<pid_t>(syscall(__NR_gettid)); }
 
 } // namespace
 
@@ -97,15 +91,9 @@ PerfEventGroup::~PerfEventGroup()
     }
 }
 
-int PerfEventGroup::GetNrEvent() const
-{
-    return nrEvent_;
-}
+int PerfEventGroup::GetNrEvent() const { return nrEvent_; }
 
-int PerfEventGroup::GetValidEventCount() const
-{
-    return validEventCount_;
-}
+int PerfEventGroup::GetValidEventCount() const { return validEventCount_; }
 
 int PerfEventGroup::AddEvent(int type, uint64_t config, const char* name)
 {
@@ -131,7 +119,8 @@ int PerfEventGroup::AddEvent(int type, uint64_t config, const char* name)
     int fd = syscall(__NR_perf_event_open, &pe, tid_, -1, groupFd_, 0);
     if (fd < 0) {
         DEV_WARN("[AICPU_PMU] Failed to register event '%s' (type=%d, config=%lu, errno=%d), "
-                 "event will be marked as unavailable", name, type, config, errno);
+                 "event will be marked as unavailable",
+                 name, type, config, errno);
         events_[nrEvent_++] = {type, config, -1, name, false};
         return -1;
     }
@@ -203,22 +192,23 @@ AicpuPerfEventSampler::AicpuPerfEventSampler() : events(GetCurrentTid())
     TryAddEvent(PERF_TYPE_HARDWARE, PERF_COUNT_HW_INSTRUCTIONS, "instructions");
     TryAddEvent(PERF_TYPE_HARDWARE, PERF_COUNT_HW_BRANCH_INSTRUCTIONS, "branch_inst");
     TryAddEvent(PERF_TYPE_HARDWARE, PERF_COUNT_HW_BRANCH_MISSES, "branch_miss");
-    TryAddCacheEvent(PERF_COUNT_HW_CACHE_L1D, PERF_COUNT_HW_CACHE_OP_READ,
-                     PERF_COUNT_HW_CACHE_RESULT_ACCESS, "l1d_cache_refs");
-    TryAddCacheEvent(PERF_COUNT_HW_CACHE_L1D, PERF_COUNT_HW_CACHE_OP_READ,
-                     PERF_COUNT_HW_CACHE_RESULT_MISS, "l1d_cache_misses");
-    TryAddCacheEvent(PERF_COUNT_HW_CACHE_LL, PERF_COUNT_HW_CACHE_OP_READ,
-                     PERF_COUNT_HW_CACHE_RESULT_ACCESS, "ll_cache_refs");
-    TryAddCacheEvent(PERF_COUNT_HW_CACHE_LL, PERF_COUNT_HW_CACHE_OP_READ,
-                     PERF_COUNT_HW_CACHE_RESULT_MISS, "ll_cache_misses");
+    TryAddCacheEvent(PERF_COUNT_HW_CACHE_L1D, PERF_COUNT_HW_CACHE_OP_READ, PERF_COUNT_HW_CACHE_RESULT_ACCESS,
+                     "l1d_cache_refs");
+    TryAddCacheEvent(PERF_COUNT_HW_CACHE_L1D, PERF_COUNT_HW_CACHE_OP_READ, PERF_COUNT_HW_CACHE_RESULT_MISS,
+                     "l1d_cache_misses");
+    TryAddCacheEvent(PERF_COUNT_HW_CACHE_LL, PERF_COUNT_HW_CACHE_OP_READ, PERF_COUNT_HW_CACHE_RESULT_ACCESS,
+                     "ll_cache_refs");
+    TryAddCacheEvent(PERF_COUNT_HW_CACHE_LL, PERF_COUNT_HW_CACHE_OP_READ, PERF_COUNT_HW_CACHE_RESULT_MISS,
+                     "ll_cache_misses");
 
     if (events.GetValidEventCount() > 0) {
-        DEV_INFO("[AICPU_PMU] Registered %d/%d PMU events successfully",
-                 events.GetValidEventCount(), events.GetNrEvent());
+        DEV_INFO("[AICPU_PMU] Registered %d/%d PMU events successfully", events.GetValidEventCount(),
+                 events.GetNrEvent());
     } else {
         DEV_WARN("[AICPU_PMU] PMU events unavailable (errno=%d). "
                  "Possible causes: container restrictions or missing capabilities. "
-                 "Fallback to time-only mode.", errno);
+                 "Fallback to time-only mode.",
+                 errno);
         pmuAvailable = false;
     }
 }

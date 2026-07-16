@@ -138,8 +138,8 @@ private:
  */
 class FunctionPassImpl : public PassImpl {
 public:
-    FunctionPassImpl(
-        std::function<FunctionPtr(const FunctionPtr&)> transform, std::string name, PassProperties properties)
+    FunctionPassImpl(std::function<FunctionPtr(const FunctionPtr&)> transform, std::string name,
+                     PassProperties properties)
         : transform_(std::move(transform)), name_(std::move(name)), properties_(properties)
     {}
 
@@ -177,14 +177,14 @@ private:
 // Factory functions for utility passes
 namespace pass {
 
-Pass CreateProgramPass(
-    std::function<ProgramPtr(const ProgramPtr&)> transform, const std::string& name, const PassProperties& properties)
+Pass CreateProgramPass(std::function<ProgramPtr(const ProgramPtr&)> transform, const std::string& name,
+                       const PassProperties& properties)
 {
     return Pass(std::make_shared<ProgramPassImpl>(std::move(transform), name, properties));
 }
 
-Pass CreateFunctionPass(
-    std::function<FunctionPtr(const FunctionPtr&)> transform, const std::string& name, const PassProperties& properties)
+Pass CreateFunctionPass(std::function<FunctionPtr(const FunctionPtr&)> transform, const std::string& name,
+                        const PassProperties& properties)
 {
     return Pass(std::make_shared<FunctionPassImpl>(std::move(transform), name, properties));
 }
@@ -225,8 +225,8 @@ Pass Canonicalize()
             auto body = CanonicalizeSeqStmts(func->body_);
             if (body == func->body_)
                 return func;
-            return std::make_shared<const Function>(
-                func->name_, func->params_, func->returnTypes_, body, func->span_, func->funcType_, func->entry_);
+            return std::make_shared<const Function>(func->name_, func->params_, func->returnTypes_, body, func->span_,
+                                                    func->funcType_, func->entry_);
         },
         "Canonicalize");
 }
@@ -247,9 +247,8 @@ Pass MergeStmtsIntoIf()
             auto mergedBody = MergeStmtsIntoIfStmt(seq, externalVarNames);
             if (mergedBody == func->body_)
                 return func;
-            return std::make_shared<const Function>(
-                func->name_, func->params_, func->returnTypes_, mergedBody, func->span_, func->funcType_,
-                func->entry_);
+            return std::make_shared<const Function>(func->name_, func->params_, func->returnTypes_, mergedBody,
+                                                    func->span_, func->funcType_, func->entry_);
         },
         "MergeStmtsIntoIf");
 }

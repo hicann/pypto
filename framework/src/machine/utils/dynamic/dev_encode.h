@@ -18,8 +18,8 @@
 #include "machine/utils/dynamic/dev_encode_program.h"
 
 namespace npu::tile_fwk::dynamic {
-void EncodeDevAscendFunction(
-    Function* dyndev, const EncodeDevAscendFunctionParam& param, uint64_t& offset, DevAscendFunction* base);
+void EncodeDevAscendFunction(Function* dyndev, const EncodeDevAscendFunctionParam& param, uint64_t& offset,
+                             DevAscendFunction* base);
 
 void EncodeDevAscendProgram(Function* func, uint64_t& offset, DevAscendProgram* base);
 } // namespace npu::tile_fwk::dynamic

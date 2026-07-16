@@ -134,13 +134,12 @@ struct BreakControlState {
     std::vector<VarPtr> return_vars;
 };
 
-BreakControlState MakeBreakControlState(
-    const std::vector<IterArgPtr>& original_iter_args, const std::vector<VarPtr>& original_return_vars,
-    const Span& span)
+BreakControlState MakeBreakControlState(const std::vector<IterArgPtr>& original_iter_args,
+                                        const std::vector<VarPtr>& original_return_vars, const Span& span)
 {
     auto flag_type = std::make_shared<ScalarType>(DataType::BOOL);
-    auto iter_arg =
-        std::make_shared<IterArg>("_can_continue", flag_type, std::make_shared<ConstBool>(true, span), span);
+    auto iter_arg = std::make_shared<IterArg>("_can_continue", flag_type, std::make_shared<ConstBool>(true, span),
+                                              span);
     auto return_var = std::make_shared<Var>("_can_continue_final", flag_type, span);
 
     std::vector<IterArgPtr> iter_args = {iter_arg};
@@ -172,8 +171,8 @@ BreakControlState MakeBreakControlState(
 ///   }
 ///
 /// For loops with iter_args, the else branch yields current iter_arg values.
-std::vector<StmtPtr> LowerContinueInStmtList(
-    const std::vector<StmtPtr>& stmts, const std::vector<IterArgPtr>& iter_args);
+std::vector<StmtPtr> LowerContinueInStmtList(const std::vector<StmtPtr>& stmts,
+                                             const std::vector<IterArgPtr>& iter_args);
 
 std::vector<ExprPtr> MakeIterArgYieldValues(const std::vector<IterArgPtr>& iter_args)
 {
@@ -210,8 +209,8 @@ StmtPtr LowerContinueInStmt(const StmtPtr& stmt, const std::vector<IterArgPtr>& 
             std::vector<StmtPtr> pre_stmts(then_stmts.begin(), then_stmts.end() - 1);
             auto lowered_pre = LowerContinueInStmtList(pre_stmts, iter_args);
             StmtPtr new_then_body = MakeSeqOrSingle(std::move(lowered_pre), if_stmt->span_);
-            return std::make_shared<IfStmt>(
-                if_stmt->condition_, std::move(new_then_body), std::nullopt, if_stmt->returnVars_, if_stmt->span_);
+            return std::make_shared<IfStmt>(if_stmt->condition_, std::move(new_then_body), std::nullopt,
+                                            if_stmt->returnVars_, if_stmt->span_);
         }
 
         // Check if else-body has a continue
@@ -232,8 +231,8 @@ StmtPtr LowerContinueInStmt(const StmtPtr& stmt, const std::vector<IterArgPtr>& 
             new_else = LowerContinueInStmt(*if_stmt->elseBody_, iter_args);
         }
         if (new_then != if_stmt->thenBody_ || new_else != if_stmt->elseBody_) {
-            return std::make_shared<IfStmt>(
-                if_stmt->condition_, std::move(new_then), std::move(new_else), if_stmt->returnVars_, if_stmt->span_);
+            return std::make_shared<IfStmt>(if_stmt->condition_, std::move(new_then), std::move(new_else),
+                                            if_stmt->returnVars_, if_stmt->span_);
         }
         return stmt;
     }
@@ -249,9 +248,9 @@ StmtPtr LowerContinueInStmt(const StmtPtr& stmt, const std::vector<IterArgPtr>& 
     return stmt;
 }
 
-std::vector<StmtPtr> BuildThenContinueWithPreStmts(
-    const IfStmtPtr& if_stmt, std::vector<StmtPtr> pre_stmts, std::vector<StmtPtr> lowered_remaining,
-    const std::vector<IterArgPtr>& iter_args)
+std::vector<StmtPtr> BuildThenContinueWithPreStmts(const IfStmtPtr& if_stmt, std::vector<StmtPtr> pre_stmts,
+                                                   std::vector<StmtPtr> lowered_remaining,
+                                                   const std::vector<IterArgPtr>& iter_args)
 {
     std::vector<StmtPtr> result;
     auto lowered_pre = LowerContinueInStmtList(pre_stmts, iter_args);
@@ -259,20 +258,20 @@ std::vector<StmtPtr> BuildThenContinueWithPreStmts(
 
     if (!lowered_remaining.empty()) {
         StmtPtr else_body = MakeSeqOrSingle(std::move(lowered_remaining), if_stmt->span_);
-        result.push_back(std::make_shared<IfStmt>(
-            if_stmt->condition_, std::move(then_body), std::make_optional(std::move(else_body)), std::vector<VarPtr>{},
-            if_stmt->span_));
+        result.push_back(std::make_shared<IfStmt>(if_stmt->condition_, std::move(then_body),
+                                                  std::make_optional(std::move(else_body)), std::vector<VarPtr>{},
+                                                  if_stmt->span_));
         return result;
     }
 
-    result.push_back(std::make_shared<IfStmt>(
-        if_stmt->condition_, std::move(then_body), MakeIterArgYieldStmt(iter_args, if_stmt->span_),
-        std::vector<VarPtr>{}, if_stmt->span_));
+    result.push_back(std::make_shared<IfStmt>(if_stmt->condition_, std::move(then_body),
+                                              MakeIterArgYieldStmt(iter_args, if_stmt->span_), std::vector<VarPtr>{},
+                                              if_stmt->span_));
     return result;
 }
 
-std::vector<StmtPtr> BuildBareThenContinue(
-    const IfStmtPtr& if_stmt, std::vector<StmtPtr> lowered_remaining, const std::vector<IterArgPtr>& iter_args)
+std::vector<StmtPtr> BuildBareThenContinue(const IfStmtPtr& if_stmt, std::vector<StmtPtr> lowered_remaining,
+                                           const std::vector<IterArgPtr>& iter_args)
 {
     std::vector<StmtPtr> result;
     auto else_body = MakeIterArgYieldStmt(iter_args, if_stmt->span_);
@@ -281,23 +280,22 @@ std::vector<StmtPtr> BuildBareThenContinue(
         if (!iter_args.empty()) {
             StmtPtr guard_body = std::make_shared<YieldStmt>(MakeIterArgYieldValues(iter_args), if_stmt->span_);
             ExprPtr negated_cond = NegateCondition(if_stmt->condition_, if_stmt->span_);
-            result.push_back(std::make_shared<IfStmt>(
-                std::move(negated_cond), std::move(guard_body), std::move(else_body), std::vector<VarPtr>{},
-                if_stmt->span_));
+            result.push_back(std::make_shared<IfStmt>(std::move(negated_cond), std::move(guard_body),
+                                                      std::move(else_body), std::vector<VarPtr>{}, if_stmt->span_));
         }
         return result;
     }
 
     StmtPtr guard_body = MakeSeqOrSingle(std::move(lowered_remaining), if_stmt->span_);
     ExprPtr negated_cond = NegateCondition(if_stmt->condition_, if_stmt->span_);
-    result.push_back(std::make_shared<IfStmt>(
-        std::move(negated_cond), std::move(guard_body), std::move(else_body), if_stmt->returnVars_, if_stmt->span_));
+    result.push_back(std::make_shared<IfStmt>(std::move(negated_cond), std::move(guard_body), std::move(else_body),
+                                              if_stmt->returnVars_, if_stmt->span_));
     return result;
 }
 
-std::optional<std::vector<StmtPtr>> LowerThenContinuePattern(
-    const IfStmtPtr& if_stmt, const std::vector<StmtPtr>& stmts, size_t stmt_index,
-    const std::vector<IterArgPtr>& iter_args)
+std::optional<std::vector<StmtPtr>> LowerThenContinuePattern(const IfStmtPtr& if_stmt,
+                                                             const std::vector<StmtPtr>& stmts, size_t stmt_index,
+                                                             const std::vector<IterArgPtr>& iter_args)
 {
     auto then_stmts = FlattenToStmtList(if_stmt->thenBody_);
     bool then_ends_with_continue = !then_stmts.empty() && As<ContinueStmt>(then_stmts.back()) != nullptr;
@@ -314,9 +312,9 @@ std::optional<std::vector<StmtPtr>> LowerThenContinuePattern(
     return BuildBareThenContinue(if_stmt, std::move(lowered_remaining), iter_args);
 }
 
-std::optional<std::vector<StmtPtr>> LowerElseContinuePattern(
-    const IfStmtPtr& if_stmt, const std::vector<StmtPtr>& stmts, size_t stmt_index,
-    const std::vector<IterArgPtr>& iter_args)
+std::optional<std::vector<StmtPtr>> LowerElseContinuePattern(const IfStmtPtr& if_stmt,
+                                                             const std::vector<StmtPtr>& stmts, size_t stmt_index,
+                                                             const std::vector<IterArgPtr>& iter_args)
 {
     if (!if_stmt->elseBody_.has_value())
         return std::nullopt;
@@ -335,9 +333,9 @@ std::optional<std::vector<StmtPtr>> LowerElseContinuePattern(
 
     StmtPtr then_body = MakeSeqOrSingle(std::move(lowered_body), if_stmt->span_);
     std::vector<StmtPtr> result;
-    result.push_back(std::make_shared<IfStmt>(
-        if_stmt->condition_, std::move(then_body), MakeIterArgYieldStmt(iter_args, if_stmt->span_),
-        if_stmt->returnVars_, if_stmt->span_));
+    result.push_back(std::make_shared<IfStmt>(if_stmt->condition_, std::move(then_body),
+                                              MakeIterArgYieldStmt(iter_args, if_stmt->span_), if_stmt->returnVars_,
+                                              if_stmt->span_));
     return result;
 }
 
@@ -350,8 +348,8 @@ std::vector<StmtPtr> LowerBareContinue(const StmtPtr& stmt, const std::vector<It
     return result;
 }
 
-std::vector<StmtPtr> LowerContinueInStmtList(
-    const std::vector<StmtPtr>& stmts, const std::vector<IterArgPtr>& iter_args)
+std::vector<StmtPtr> LowerContinueInStmtList(const std::vector<StmtPtr>& stmts,
+                                             const std::vector<IterArgPtr>& iter_args)
 {
     std::vector<StmtPtr> result;
 
@@ -396,8 +394,9 @@ std::vector<StmtPtr> LowerContinueInStmtList(
 ///
 /// No-break case:  result_exprs = [ConstBool(false), trailing_yield_values...]
 /// Break found:    result_exprs = Var(s) produced by the innermost break IfStmt
-static std::pair<std::vector<StmtPtr>, std::vector<ExprPtr>> LowerBreakToValue(
-    const std::vector<StmtPtr>& stmts, const std::vector<IterArgPtr>& iter_args, int& var_counter, const Span& span)
+static std::pair<std::vector<StmtPtr>, std::vector<ExprPtr>> LowerBreakToValue(const std::vector<StmtPtr>& stmts,
+                                                                               const std::vector<IterArgPtr>& iter_args,
+                                                                               int& var_counter, const Span& span)
 {
     for (size_t i = 0; i < stmts.size(); ++i) {
         const auto& stmt = stmts[i];
@@ -440,9 +439,8 @@ static std::pair<std::vector<StmtPtr>, std::vector<ExprPtr>> LowerBreakToValue(
         result_vars.push_back(r_brk);
         result_exprs.push_back(r_brk);
         for (size_t j = 0; j < iter_args.size(); ++j) {
-            auto r_ia = std::make_shared<Var>(
-                "_cont_ia" + std::to_string(var_counter++) + "_" + std::to_string(j), iter_args[j]->iterVar_->GetType(),
-                span);
+            auto r_ia = std::make_shared<Var>("_cont_ia" + std::to_string(var_counter++) + "_" + std::to_string(j),
+                                              iter_args[j]->iterVar_->GetType(), span);
             result_vars.push_back(r_ia);
             result_exprs.push_back(r_ia);
         }
@@ -460,9 +458,9 @@ static std::pair<std::vector<StmtPtr>, std::vector<ExprPtr>> LowerBreakToValue(
         StmtPtr else_body = MakeSeqOrSingle(std::move(rest_stmts), span);
 
         // Value-producing IfStmt for this break site
-        auto inner_if = std::make_shared<IfStmt>(
-            std::move(break_cond), std::move(then_body), std::optional<StmtPtr>(std::move(else_body)),
-            std::move(result_vars), span);
+        auto inner_if = std::make_shared<IfStmt>(std::move(break_cond), std::move(then_body),
+                                                 std::optional<StmtPtr>(std::move(else_body)), std::move(result_vars),
+                                                 span);
 
         std::vector<StmtPtr> new_stmts = std::move(pre_stmts);
         new_stmts.push_back(inner_if);
@@ -534,31 +532,28 @@ ForStmtPtr LowerBreakInFor(const ForStmtPtr& op)
     std::vector<VarPtr> guard_vars;
     std::vector<ExprPtr> for_yield_exprs;
 
-    auto guard_brk =
-        std::make_shared<Var>("_guard_brk_" + std::to_string(var_counter++), break_control.flag_type, span);
+    auto guard_brk = std::make_shared<Var>("_guard_brk_" + std::to_string(var_counter++), break_control.flag_type,
+                                           span);
     guard_vars.push_back(guard_brk);
     for_yield_exprs.push_back(guard_brk);
     for (size_t i = 0; i < op->iterArgs_.size(); ++i) {
-        auto g = std::make_shared<Var>(
-            "_guard_ia" + std::to_string(var_counter++) + "_" + std::to_string(i),
-            op->iterArgs_[i]->iterVar_->GetType(), span);
+        auto g = std::make_shared<Var>("_guard_ia" + std::to_string(var_counter++) + "_" + std::to_string(i),
+                                       op->iterArgs_[i]->iterVar_->GetType(), span);
         guard_vars.push_back(g);
         for_yield_exprs.push_back(g);
     }
 
     // Guard: if (_can_continue) { then_body } else { else_body }
     // No NOT needed — _can_continue is already false when break was taken
-    auto guard_if = std::make_shared<IfStmt>(
-        break_control.iter_arg->iterVar_, std::move(then_body), std::optional<StmtPtr>(std::move(else_body)),
-        std::move(guard_vars), span);
+    auto guard_if = std::make_shared<IfStmt>(break_control.iter_arg->iterVar_, std::move(then_body),
+                                             std::optional<StmtPtr>(std::move(else_body)), std::move(guard_vars), span);
 
     // For loop body: [guard_if, yield(for_yield_exprs)] — the trailing yield feeds scf.for's scf.yield
     auto for_body = std::make_shared<SeqStmts>(
         std::vector<StmtPtr>{guard_if, std::make_shared<YieldStmt>(for_yield_exprs, span)}, span);
 
-    return std::make_shared<ForStmt>(
-        op->loopVar_, op->start_, op->stop_, op->step_, std::move(break_control.iter_args), for_body,
-        std::move(break_control.return_vars), span, op->attrs_);
+    return std::make_shared<ForStmt>(op->loopVar_, op->start_, op->stop_, op->step_, std::move(break_control.iter_args),
+                                     for_body, std::move(break_control.return_vars), span, op->attrs_);
 }
 
 /// Lower break in a while loop using a do-region original-condition check.
@@ -611,30 +606,27 @@ WhileStmtPtr LowerBreakInWhile(const WhileStmtPtr& op)
     // Outer result vars: [_outer_cont, _outer_ia0, ...] — one per (1 + N iter_args)
     std::vector<VarPtr> outer_vars;
     std::vector<ExprPtr> outer_exprs;
-    auto outer_cont =
-        std::make_shared<Var>("_outer_cont_" + std::to_string(var_counter++), break_control.flag_type, span);
+    auto outer_cont = std::make_shared<Var>("_outer_cont_" + std::to_string(var_counter++), break_control.flag_type,
+                                            span);
     outer_vars.push_back(outer_cont);
     outer_exprs.push_back(outer_cont);
     for (size_t i = 0; i < op->iterArgs_.size(); ++i) {
-        auto ov = std::make_shared<Var>(
-            "_outer_ia" + std::to_string(var_counter++) + "_" + std::to_string(i),
-            op->iterArgs_[i]->iterVar_->GetType(), span);
+        auto ov = std::make_shared<Var>("_outer_ia" + std::to_string(var_counter++) + "_" + std::to_string(i),
+                                        op->iterArgs_[i]->iterVar_->GetType(), span);
         outer_vars.push_back(ov);
         outer_exprs.push_back(ov);
     }
 
     // Outer if: if (orig_cond) { then_body } else { else_body } → produces outer_vars
-    auto outer_if = std::make_shared<IfStmt>(
-        op->condition_, std::move(then_body), std::optional<StmtPtr>(std::move(else_body)), std::move(outer_vars),
-        span);
+    auto outer_if = std::make_shared<IfStmt>(op->condition_, std::move(then_body),
+                                             std::optional<StmtPtr>(std::move(else_body)), std::move(outer_vars), span);
 
     // New body: [outer_if, trailing_yield(outer_exprs)] — trailing yield feeds scf.while scf.yield
     auto new_body = std::make_shared<SeqStmts>(
         std::vector<StmtPtr>{outer_if, std::make_shared<YieldStmt>(outer_exprs, span)}, span);
 
-    return std::make_shared<WhileStmt>(
-        std::move(new_condition), std::move(break_control.iter_args), new_body, std::move(break_control.return_vars),
-        span);
+    return std::make_shared<WhileStmt>(std::move(new_condition), std::move(break_control.iter_args), new_body,
+                                       std::move(break_control.return_vars), span);
 }
 
 // ============================================================================
@@ -656,24 +648,22 @@ protected:
         if (!has_break && !has_continue) {
             if (new_body == op->body_)
                 return op;
-            return std::make_shared<ForStmt>(
-                op->loopVar_, op->start_, op->stop_, op->step_, op->iterArgs_, std::move(new_body), op->returnVars_,
-                op->span_, op->attrs_);
+            return std::make_shared<ForStmt>(op->loopVar_, op->start_, op->stop_, op->step_, op->iterArgs_,
+                                             std::move(new_body), op->returnVars_, op->span_, op->attrs_);
         }
 
         // Create a working copy with recursed body (use ForStmtPtr = shared_ptr<const ForStmt>)
-        ForStmtPtr working = std::make_shared<ForStmt>(
-            op->loopVar_, op->start_, op->stop_, op->step_, op->iterArgs_, std::move(new_body), op->returnVars_,
-            op->span_, op->attrs_);
+        ForStmtPtr working = std::make_shared<ForStmt>(op->loopVar_, op->start_, op->stop_, op->step_, op->iterArgs_,
+                                                       std::move(new_body), op->returnVars_, op->span_, op->attrs_);
 
         // Lower continue first (simpler transformation)
         if (has_continue) {
             auto body_stmts = FlattenToStmtList(working->body_);
             auto lowered = LowerContinueInStmtList(body_stmts, working->iterArgs_);
             auto lowered_body = MakeSeqOrSingle(std::move(lowered), working->span_);
-            working = ForStmtPtr(std::make_shared<ForStmt>(
-                working->loopVar_, working->start_, working->stop_, working->step_, working->iterArgs_,
-                std::move(lowered_body), working->returnVars_, working->span_, working->attrs_));
+            working = ForStmtPtr(std::make_shared<ForStmt>(working->loopVar_, working->start_, working->stop_,
+                                                           working->step_, working->iterArgs_, std::move(lowered_body),
+                                                           working->returnVars_, working->span_, working->attrs_));
         }
 
         // Lower break (adds iter_arg, wraps body)
@@ -694,20 +684,20 @@ protected:
         if (!has_break && !has_continue) {
             if (new_body == op->body_)
                 return op;
-            return std::make_shared<WhileStmt>(
-                op->condition_, op->iterArgs_, std::move(new_body), op->returnVars_, op->span_);
+            return std::make_shared<WhileStmt>(op->condition_, op->iterArgs_, std::move(new_body), op->returnVars_,
+                                               op->span_);
         }
 
-        WhileStmtPtr working =
-            std::make_shared<WhileStmt>(op->condition_, op->iterArgs_, std::move(new_body), op->returnVars_, op->span_);
+        WhileStmtPtr working = std::make_shared<WhileStmt>(op->condition_, op->iterArgs_, std::move(new_body),
+                                                           op->returnVars_, op->span_);
 
         if (has_continue) {
             auto body_stmts = FlattenToStmtList(working->body_);
             auto lowered = LowerContinueInStmtList(body_stmts, working->iterArgs_);
             auto lowered_body = MakeSeqOrSingle(std::move(lowered), working->span_);
-            working = WhileStmtPtr(std::make_shared<WhileStmt>(
-                working->condition_, working->iterArgs_, std::move(lowered_body), working->returnVars_,
-                working->span_));
+            working = WhileStmtPtr(std::make_shared<WhileStmt>(working->condition_, working->iterArgs_,
+                                                               std::move(lowered_body), working->returnVars_,
+                                                               working->span_));
         }
 
         if (has_break) {
@@ -738,9 +728,8 @@ FunctionPtr LowerBreakContinueImpl(const FunctionPtr& func)
     if (new_body == func->body_)
         return func;
 
-    return std::make_shared<Function>(
-        func->name_, func->params_, func->returnTypes_, std::move(new_body), func->span_, func->funcType_,
-        func->entry_);
+    return std::make_shared<Function>(func->name_, func->params_, func->returnTypes_, std::move(new_body), func->span_,
+                                      func->funcType_, func->entry_);
 }
 
 namespace pass {

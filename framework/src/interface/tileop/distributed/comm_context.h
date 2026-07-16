@@ -20,7 +20,7 @@
 
 namespace TileOp {
 struct CommContext {
-    uint64_t rankId = 0;    // 当前卡rankId
+    uint64_t rankId = 0; // 当前卡rankId
     uint64_t rankNum = 0;
     int64_t startIndex = 0; // 每个win区起始Index
     int64_t statusIndex = -1;

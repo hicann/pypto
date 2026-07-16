@@ -19,90 +19,39 @@ using namespace npu::tile_fwk;
 
 class TestCodeGenKirin9030Neg : public CodegenTestLiteNPU {
 public:
-    TestCodeGenKirin9030Neg() : CodegenTestLiteNPU("Kirin9030"){};
+    TestCodeGenKirin9030Neg() : CodegenTestLiteNPU("Kirin9030") {};
 };
 
-TEST_F(TestCodeGenKirin9030Neg, test_Neg_fp16_001)
-{
-    TestCodeGenNeg::Instance().test_Neg_fp16_001();
-}
+TEST_F(TestCodeGenKirin9030Neg, test_Neg_fp16_001) { TestCodeGenNeg::Instance().test_Neg_fp16_001(); }
 
-TEST_F(TestCodeGenKirin9030Neg, DISABLED_test_Neg_fp16_002)
-{
-    TestCodeGenNeg::Instance().test_Neg_fp16_002();
-}
+TEST_F(TestCodeGenKirin9030Neg, DISABLED_test_Neg_fp16_002) { TestCodeGenNeg::Instance().test_Neg_fp16_002(); }
 
-TEST_F(TestCodeGenKirin9030Neg, DISABLED_test_Neg_fp32_003)
-{
-    TestCodeGenNeg::Instance().test_Neg_fp32_003();
-}
+TEST_F(TestCodeGenKirin9030Neg, DISABLED_test_Neg_fp32_003) { TestCodeGenNeg::Instance().test_Neg_fp32_003(); }
 
-TEST_F(TestCodeGenKirin9030Neg, DISABLED_test_Neg_fp32_004)
-{
-    TestCodeGenNeg::Instance().test_Neg_fp32_004();
-}
+TEST_F(TestCodeGenKirin9030Neg, DISABLED_test_Neg_fp32_004) { TestCodeGenNeg::Instance().test_Neg_fp32_004(); }
 
-TEST_F(TestCodeGenKirin9030Neg, DISABLED_test_Neg_fp16_005)
-{
-    TestCodeGenNeg::Instance().test_Neg_fp16_005();
-}
+TEST_F(TestCodeGenKirin9030Neg, DISABLED_test_Neg_fp16_005) { TestCodeGenNeg::Instance().test_Neg_fp16_005(); }
 
-TEST_F(TestCodeGenKirin9030Neg, DISABLED_test_Neg_fp32_006)
-{
-    TestCodeGenNeg::Instance().test_Neg_fp32_006();
-}
+TEST_F(TestCodeGenKirin9030Neg, DISABLED_test_Neg_fp32_006) { TestCodeGenNeg::Instance().test_Neg_fp32_006(); }
 
-TEST_F(TestCodeGenKirin9030Neg, DISABLED_test_Neg_fp16_007)
-{
-    TestCodeGenNeg::Instance().test_Neg_fp16_007();
-}
+TEST_F(TestCodeGenKirin9030Neg, DISABLED_test_Neg_fp16_007) { TestCodeGenNeg::Instance().test_Neg_fp16_007(); }
 
-TEST_F(TestCodeGenKirin9030Neg, DISABLED_test_Neg_fp32_008)
-{
-    TestCodeGenNeg::Instance().test_Neg_fp32_008();
-}
+TEST_F(TestCodeGenKirin9030Neg, DISABLED_test_Neg_fp32_008) { TestCodeGenNeg::Instance().test_Neg_fp32_008(); }
 
-TEST_F(TestCodeGenKirin9030Neg, DISABLED_test_Neg_fp16_009)
-{
-    TestCodeGenNeg::Instance().test_Neg_fp16_009();
-}
+TEST_F(TestCodeGenKirin9030Neg, DISABLED_test_Neg_fp16_009) { TestCodeGenNeg::Instance().test_Neg_fp16_009(); }
 
-TEST_F(TestCodeGenKirin9030Neg, DISABLED_test_Neg_fp32_010)
-{
-    TestCodeGenNeg::Instance().test_Neg_fp32_010();
-}
+TEST_F(TestCodeGenKirin9030Neg, DISABLED_test_Neg_fp32_010) { TestCodeGenNeg::Instance().test_Neg_fp32_010(); }
 
-TEST_F(TestCodeGenKirin9030Neg, DISABLED_test_Neg_fp16_011)
-{
-    TestCodeGenNeg::Instance().test_Neg_fp16_011();
-}
+TEST_F(TestCodeGenKirin9030Neg, DISABLED_test_Neg_fp16_011) { TestCodeGenNeg::Instance().test_Neg_fp16_011(); }
 
-TEST_F(TestCodeGenKirin9030Neg, DISABLED_test_Neg_fp32_012)
-{
-    TestCodeGenNeg::Instance().test_Neg_fp32_012();
-}
+TEST_F(TestCodeGenKirin9030Neg, DISABLED_test_Neg_fp32_012) { TestCodeGenNeg::Instance().test_Neg_fp32_012(); }
 
-TEST_F(TestCodeGenKirin9030Neg, DISABLED_test_Neg_fp16_013)
-{
-    TestCodeGenNeg::Instance().test_Neg_fp16_013();
-}
+TEST_F(TestCodeGenKirin9030Neg, DISABLED_test_Neg_fp16_013) { TestCodeGenNeg::Instance().test_Neg_fp16_013(); }
 
-TEST_F(TestCodeGenKirin9030Neg, DISABLED_test_Neg_fp32_014)
-{
-    TestCodeGenNeg::Instance().test_Neg_fp32_014();
-}
+TEST_F(TestCodeGenKirin9030Neg, DISABLED_test_Neg_fp32_014) { TestCodeGenNeg::Instance().test_Neg_fp32_014(); }
 
-TEST_F(TestCodeGenKirin9030Neg, DISABLED_test_Neg_fp16_015)
-{
-    TestCodeGenNeg::Instance().test_Neg_fp16_015();
-}
+TEST_F(TestCodeGenKirin9030Neg, DISABLED_test_Neg_fp16_015) { TestCodeGenNeg::Instance().test_Neg_fp16_015(); }
 
-TEST_F(TestCodeGenKirin9030Neg, DISABLED_test_Neg_int16_016)
-{
-    TestCodeGenNeg::Instance().test_Neg_int16_016();
-}
+TEST_F(TestCodeGenKirin9030Neg, DISABLED_test_Neg_int16_016) { TestCodeGenNeg::Instance().test_Neg_int16_016(); }
 
-TEST_F(TestCodeGenKirin9030Neg, DISABLED_test_Neg_int32_017)
-{
-    TestCodeGenNeg::Instance().test_Neg_int32_017();
-}
+TEST_F(TestCodeGenKirin9030Neg, DISABLED_test_Neg_int32_017) { TestCodeGenNeg::Instance().test_Neg_int32_017(); }

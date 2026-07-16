@@ -31,9 +31,8 @@ public:
     TestCodegenDynVnchwconv() : CodegenTestBase({.compileStage = CS_EXECUTE_GRAPH}) {}
 };
 
-void TestDynVnchwconvBody(
-    std::vector<int64_t> shape, std::vector<int64_t> outShape, std::vector<int> transposeShape,
-    std::vector<int64_t> tileShape, std::string funcName)
+void TestDynVnchwconvBody(std::vector<int64_t> shape, std::vector<int64_t> outShape, std::vector<int> transposeShape,
+                          std::vector<int64_t> tileShape, std::string funcName)
 {
     TileShape::Current().SetVecTile(tileShape);
     Tensor input(DT_FP32, shape, "input");
@@ -48,8 +47,8 @@ void TestDynVnchwconvBody(
         }
     }
 
-    auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX +
+                                                                HIDDEN_FUNC_SUFFIX);
 
     (void)GenCodeByFunction(*function);
 }

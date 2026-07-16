@@ -93,11 +93,7 @@ int GetGlobalLogThreshold()
 const std::unordered_map<LogLevel, int>& CanonicalLevelMap()
 {
     static const std::unordered_map<LogLevel, int> kMap = {
-        {LogLevel::kDebug, 0},
-        {LogLevel::kInfo, 1},
-        {LogLevel::kWarn, 2},
-        {LogLevel::kError, 3},
-        {LogLevel::kEvent, 5},
+        {LogLevel::kDebug, 0}, {LogLevel::kInfo, 1}, {LogLevel::kWarn, 2}, {LogLevel::kError, 3}, {LogLevel::kEvent, 5},
     };
     return kMap;
 }
@@ -132,10 +128,7 @@ LogContext& GetLogContext()
     return context;
 }
 
-bool ShouldWriteLevel(LogLevel level)
-{
-    return ToCanonicalLevel(level) >= GetGlobalLogThreshold();
-}
+bool ShouldWriteLevel(LogLevel level) { return ToCanonicalLevel(level) >= GetGlobalLogThreshold(); }
 
 const char* LevelToString(LogLevel level)
 {
@@ -222,7 +215,7 @@ bool FormatLogMessage(const char* fmt, va_list args, LogFormatScratch& scratch)
 void EmitLogLineToOutputs(LogLevel level, const char* msgPtr)
 {
     std::time_t now = std::time(nullptr);
-    std::tm localTm {};
+    std::tm localTm{};
     (void)localtime_r(&now, &localTm);
     char timeBuf[32] = {0};
     (void)std::strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%d %H:%M:%S", &localTm);
@@ -260,10 +253,7 @@ void WriteLine(LogLevel level, const char* fmt, va_list args)
 }
 } // namespace
 
-const std::string& LogFilePath()
-{
-    return GetLogContext().logFilePath;
-}
+const std::string& LogFilePath() { return GetLogContext().logFilePath; }
 
 void SetLogFilePath(const std::string& path)
 {

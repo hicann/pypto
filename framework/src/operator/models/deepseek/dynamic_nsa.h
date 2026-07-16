@@ -24,21 +24,18 @@
 #include "operator/models/deepseek/deepseek_mla.h"
 
 namespace npu::tile_fwk {
-void GenSlc(
-    const Tensor& x, Tensor& trans0res, Tensor& reduce0res, Tensor& trans1res, Tensor& reduce1res, Tensor& topkInd,
-    Tensor& topkVal, Tensor& out, int actualLen, int l_prime = 64, int d = 16, int front = 1, int near = 2,
-    int topk = 16);
+void GenSlc(const Tensor& x, Tensor& trans0res, Tensor& reduce0res, Tensor& trans1res, Tensor& reduce1res,
+            Tensor& topkInd, Tensor& topkVal, Tensor& out, int actualLen, int l_prime = 64, int d = 16, int front = 1,
+            int near = 2, int topk = 16);
 
-void GenSlcV2(
-    const Tensor& x, Tensor& out, int validSize, int l_prime = 64, int d = 16, int front = 1, int near = 2,
-    int topk = 16);
+void GenSlcV2(const Tensor& x, Tensor& out, int validSize, int l_prime = 64, int d = 16, int front = 1, int near = 2,
+              int topk = 16);
 
-void GenTopkIndicesFun(
-    const Tensor& x, Tensor& trans0res, Tensor& reduce0res, Tensor& trans1res, Tensor& reduce1res, Tensor& topkInd,
-    Tensor& topkVal, Tensor& out, int actualLen, int front = 1, int near = 2);
+void GenTopkIndicesFun(const Tensor& x, Tensor& trans0res, Tensor& reduce0res, Tensor& trans1res, Tensor& reduce1res,
+                       Tensor& topkInd, Tensor& topkVal, Tensor& out, int actualLen, int front = 1, int near = 2);
 
-std::vector<Tensor> GenTopkIndices(
-    const Tensor& tmpOut, int s_slc, int actualTopk, SymbolicScalar validSize, bool isDyn);
+std::vector<Tensor> GenTopkIndices(const Tensor& tmpOut, int s_slc, int actualTopk, SymbolicScalar validSize,
+                                   bool isDyn);
 
 } // namespace npu::tile_fwk
 

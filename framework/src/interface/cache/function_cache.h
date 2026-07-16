@@ -50,7 +50,7 @@ struct ReadyCoreFunctionCache {
 
 using HashKey = FunctionHash;
 struct CacheHeader {
-    uint64_t coreFunctionNum;      // CoreFunction的个数，通过此值可以分配xxOffset的内存
+    uint64_t coreFunctionNum; // CoreFunction的个数，通过此值可以分配xxOffset的内存
     uint64_t virtualFunctionNum{0};
     uint64_t readyCoreFunctionNum; // 对应ReadyCoreFunctionCache -> ReadyCoreFunction个数
     uint64_t programFuncionNum;    // 同构后function个数，对应CoreFunctionBinCache -> CoreFunctionBin个数

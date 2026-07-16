@@ -69,8 +69,8 @@ Operation& GetWhereOp(Function* function, Opcode opCode, const LogicalTensors& i
     return op;
 }
 
-void TestWhereBody(
-    const Opcode opCode, const std::string& caseName, const std::string& expect, bool isSupportTileTensor = false)
+void TestWhereBody(const Opcode opCode, const std::string& caseName, const std::string& expect,
+                   bool isSupportTileTensor = false)
 {
     if (isSupportTileTensor) {
         config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
@@ -83,8 +83,8 @@ void TestWhereBody(
     auto localTensorResult = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape});
     auto localTensorTmp = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape});
 
-    auto& op = GetWhereOp(
-        function, opCode, {localTensorResult, localTensorCond, localTensorTmp, localTensorInput, localTensorOther});
+    auto& op = GetWhereOp(function, opCode,
+                          {localTensorResult, localTensorCond, localTensorTmp, localTensorInput, localTensorOther});
 
     std::string res = GenOpCodeFromOp(*function, op);
     EXPECT_EQ(res, expect);

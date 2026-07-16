@@ -112,18 +112,16 @@ public:
             return true;
         }
         if (!lhs.has_value() || !rhs.has_value()) {
-            return IRAssert(
-                {lhs.has_value() ? *lhs : IRNodePtr(), rhs.has_value() ? *rhs : IRNodePtr(),
-                 lhs.has_value() ? "has value" : "nullopt", rhs.has_value() ? "has value" : "nullopt"},
-                "Optional field presence mismatch");
+            return IRAssert({lhs.has_value() ? *lhs : IRNodePtr(), rhs.has_value() ? *rhs : IRNodePtr(),
+                             lhs.has_value() ? "has value" : "nullopt", rhs.has_value() ? "has value" : "nullopt"},
+                            "Optional field presence mismatch");
         }
         if (!*lhs && !*rhs) {
             return true;
         }
         if (!*lhs || !*rhs) {
-            return IRAssert(
-                {*lhs, *rhs, *lhs ? "has value" : "nullptr", *rhs ? "has value" : "nullptr"},
-                "Optional field nullptr mismatch");
+            return IRAssert({*lhs, *rhs, *lhs ? "has value" : "nullptr", *rhs ? "has value" : "nullptr"},
+                            "Optional field nullptr mismatch");
         }
         return Equal(*lhs, *rhs);
     }
@@ -160,8 +158,8 @@ public:
     }
 
     template <typename MapType, typename EntryChecker, typename KeyFormatter>
-    ResultType VisitIRNodeMapFieldImpl(
-        const MapType& lhs, const MapType& rhs, EntryChecker&& check_entry, KeyFormatter&& format_key)
+    ResultType VisitIRNodeMapFieldImpl(const MapType& lhs, const MapType& rhs, EntryChecker&& check_entry,
+                                       KeyFormatter&& format_key)
     {
         if (lhs.size() != rhs.size()) {
             return IRAssert({}, "Map size mismatch (", lhs.size(), " items != ", rhs.size(), " items)");
@@ -199,8 +197,8 @@ public:
     }
 
     template <typename KeyType, typename ValueType, typename Compare>
-    ResultType VisitIRNodeMapField(
-        const std::map<KeyType, ValueType, Compare>& lhs, const std::map<KeyType, ValueType, Compare>& rhs)
+    ResultType VisitIRNodeMapField(const std::map<KeyType, ValueType, Compare>& lhs,
+                                   const std::map<KeyType, ValueType, Compare>& rhs)
     {
         return VisitIRNodeMapFieldImpl(
             lhs, rhs,
@@ -215,8 +213,8 @@ public:
     }
 
     template <typename ValueType>
-    ResultType VisitIRNodeMapField(
-        const std::map<std::string, ValueType>& lhs, const std::map<std::string, ValueType>& rhs)
+    ResultType VisitIRNodeMapField(const std::map<std::string, ValueType>& lhs,
+                                   const std::map<std::string, ValueType>& rhs)
     {
         return VisitIRNodeMapFieldImpl(
             lhs, rhs,
@@ -280,8 +278,8 @@ public:
     ResultType VisitLeafField(const FunctionType& lhs, const FunctionType& rhs)
     {
         if (lhs != rhs) {
-            return IRAssert(
-                {}, "FunctionType mismatch (", FunctionTypeToString(lhs), " != ", FunctionTypeToString(rhs), ")");
+            return IRAssert({}, "FunctionType mismatch (", FunctionTypeToString(lhs), " != ", FunctionTypeToString(rhs),
+                            ")");
         }
         return true;
     }
@@ -289,24 +287,23 @@ public:
     [[nodiscard]] ResultType VisitLeafField(const SectionKind& lhs, const SectionKind& rhs)
     {
         if (lhs != rhs) {
-            return IRAssert(
-                {}, "SectionKind mismatch (", SectionKindToString(lhs), " != ", SectionKindToString(rhs), ")");
+            return IRAssert({}, "SectionKind mismatch (", SectionKindToString(lhs), " != ", SectionKindToString(rhs),
+                            ")");
         }
         return true;
     }
 
     // Compare kwargs (vector of pairs to preserve order)
-    ResultType VisitLeafField(
-        const std::vector<std::pair<std::string, std::any>>& lhs,
-        const std::vector<std::pair<std::string, std::any>>& rhs)
+    ResultType VisitLeafField(const std::vector<std::pair<std::string, std::any>>& lhs,
+                              const std::vector<std::pair<std::string, std::any>>& rhs)
     {
         if (lhs.size() != rhs.size()) {
             return IRAssert({}, "Kwargs size mismatch (", lhs.size(), " != ", rhs.size(), ")");
         }
         for (size_t i = 0; i < lhs.size(); ++i) {
             if (lhs[i].first != rhs[i].first) {
-                return IRAssert(
-                    {}, "Kwargs key mismatch at index ", i, " ('", lhs[i].first, "' != '", rhs[i].first, "')");
+                return IRAssert({}, "Kwargs key mismatch at index ", i, " ('", lhs[i].first, "' != '", rhs[i].first,
+                                "')");
             }
             // Compare std::any values by type and content
             const auto& lhs_val = lhs[i].second;
@@ -317,29 +314,23 @@ public:
             // Type-specific comparison
             bool values_equal = true;
             if (lhs_val.type() == typeid(int)) {
-                values_equal =
-                    (AnyCast<int>(lhs_val, "comparing kwarg: " + lhs[i].first) ==
-                     AnyCast<int>(rhs_val, "comparing kwarg: " + lhs[i].first));
+                values_equal = (AnyCast<int>(lhs_val, "comparing kwarg: " + lhs[i].first) ==
+                                AnyCast<int>(rhs_val, "comparing kwarg: " + lhs[i].first));
             } else if (lhs_val.type() == typeid(bool)) {
-                values_equal =
-                    (AnyCast<bool>(lhs_val, "comparing kwarg: " + lhs[i].first) ==
-                     AnyCast<bool>(rhs_val, "comparing kwarg: " + lhs[i].first));
+                values_equal = (AnyCast<bool>(lhs_val, "comparing kwarg: " + lhs[i].first) ==
+                                AnyCast<bool>(rhs_val, "comparing kwarg: " + lhs[i].first));
             } else if (lhs_val.type() == typeid(std::string)) {
-                values_equal =
-                    (AnyCast<std::string>(lhs_val, "comparing kwarg: " + lhs[i].first) ==
-                     AnyCast<std::string>(rhs_val, "comparing kwarg: " + lhs[i].first));
+                values_equal = (AnyCast<std::string>(lhs_val, "comparing kwarg: " + lhs[i].first) ==
+                                AnyCast<std::string>(rhs_val, "comparing kwarg: " + lhs[i].first));
             } else if (lhs_val.type() == typeid(double)) {
-                values_equal = AreDoublesEquivalent(
-                    AnyCast<double>(lhs_val, "comparing kwarg: " + lhs[i].first),
-                    AnyCast<double>(rhs_val, "comparing kwarg: " + lhs[i].first));
+                values_equal = AreDoublesEquivalent(AnyCast<double>(lhs_val, "comparing kwarg: " + lhs[i].first),
+                                                    AnyCast<double>(rhs_val, "comparing kwarg: " + lhs[i].first));
             } else if (lhs_val.type() == typeid(DataType)) {
-                values_equal =
-                    (AnyCast<DataType>(lhs_val, "comparing kwarg: " + lhs[i].first) ==
-                     AnyCast<DataType>(rhs_val, "comparing kwarg: " + lhs[i].first));
+                values_equal = (AnyCast<DataType>(lhs_val, "comparing kwarg: " + lhs[i].first) ==
+                                AnyCast<DataType>(rhs_val, "comparing kwarg: " + lhs[i].first));
             } else if (lhs_val.type() == typeid(std::vector<int>)) {
-                values_equal =
-                    (AnyCast<std::vector<int>>(lhs_val, "comparing kwarg: " + lhs[i].first) ==
-                     AnyCast<std::vector<int>>(rhs_val, "comparing kwarg: " + lhs[i].first));
+                values_equal = (AnyCast<std::vector<int>>(lhs_val, "comparing kwarg: " + lhs[i].first) ==
+                                AnyCast<std::vector<int>>(rhs_val, "comparing kwarg: " + lhs[i].first));
             }
             if (!values_equal) {
                 return IRAssert({}, "Kwargs value mismatch for key '", lhs[i].first, "'");
@@ -351,8 +342,8 @@ public:
     ResultType VisitLeafField(const MemorySpace& lhs, const MemorySpace& rhs)
     {
         if (lhs != rhs) {
-            return IRAssert(
-                {}, "MemorySpace mismatch (", MemorySpaceToString(lhs), " != ", MemorySpaceToString(rhs), ")");
+            return IRAssert({}, "MemorySpace mismatch (", MemorySpaceToString(lhs), " != ", MemorySpaceToString(rhs),
+                            ")");
         }
         return true;
     }
@@ -693,9 +684,8 @@ bool StructuralEqualImpl<AssertMode>::EqualType(const TypePtr& lhs, const TypePt
             return true;
         }
         if (lhs_scalar->dtype_ != rhs_scalar->dtype_) {
-            return IRAssert(
-                {}, "ScalarType dtype mismatch (", lhs_scalar->dtype_.ToString(), " != ", rhs_scalar->dtype_.ToString(),
-                ")");
+            return IRAssert({}, "ScalarType dtype mismatch (", lhs_scalar->dtype_.ToString(),
+                            " != ", rhs_scalar->dtype_.ToString(), ")");
         }
         return true;
     } else if (auto lhs_tensor = As<TensorType>(lhs)) {
@@ -704,14 +694,12 @@ bool StructuralEqualImpl<AssertMode>::EqualType(const TypePtr& lhs, const TypePt
             return IRAssert({}, "Type cast failed for TensorType");
         }
         if (lhs_tensor->dtype_ != rhs_tensor->dtype_) {
-            return IRAssert(
-                {}, "TensorType dtype mismatch (", lhs_tensor->dtype_.ToString(), " != ", rhs_tensor->dtype_.ToString(),
-                ")");
+            return IRAssert({}, "TensorType dtype mismatch (", lhs_tensor->dtype_.ToString(),
+                            " != ", rhs_tensor->dtype_.ToString(), ")");
         }
         if (lhs_tensor->shape_.size() != rhs_tensor->shape_.size()) {
-            return IRAssert(
-                {}, "TensorType shape rank mismatch (", lhs_tensor->shape_.size(), " != ", rhs_tensor->shape_.size(),
-                ")");
+            return IRAssert({}, "TensorType shape rank mismatch (", lhs_tensor->shape_.size(),
+                            " != ", rhs_tensor->shape_.size(), ")");
         }
         for (size_t i = 0; i < lhs_tensor->shape_.size(); ++i) {
             if (!Equal(lhs_tensor->shape_[i], rhs_tensor->shape_[i]))
@@ -725,13 +713,13 @@ bool StructuralEqualImpl<AssertMode>::EqualType(const TypePtr& lhs, const TypePt
         }
         // Compare dtype
         if (lhs_tile->dtype_ != rhs_tile->dtype_) {
-            return IRAssert(
-                {}, "TileType dtype mismatch (", lhs_tile->dtype_.ToString(), " != ", rhs_tile->dtype_.ToString(), ")");
+            return IRAssert({}, "TileType dtype mismatch (", lhs_tile->dtype_.ToString(),
+                            " != ", rhs_tile->dtype_.ToString(), ")");
         }
         // Compare shape size and dimensions
         if (lhs_tile->shape_.size() != rhs_tile->shape_.size()) {
-            return IRAssert(
-                {}, "TileType shape rank mismatch (", lhs_tile->shape_.size(), " != ", rhs_tile->shape_.size(), ")");
+            return IRAssert({}, "TileType shape rank mismatch (", lhs_tile->shape_.size(),
+                            " != ", rhs_tile->shape_.size(), ")");
         }
         for (size_t i = 0; i < lhs_tile->shape_.size(); ++i) {
             if (!Equal(lhs_tile->shape_[i], rhs_tile->shape_[i]))
@@ -746,9 +734,8 @@ bool StructuralEqualImpl<AssertMode>::EqualType(const TypePtr& lhs, const TypePt
             const auto& rhs_tv = rhs_tile->tileView_.value();
             // Compare valid_shape
             if (lhs_tv.validShape.size() != rhs_tv.validShape.size()) {
-                return IRAssert(
-                    {}, "TileView valid_shape size mismatch (", lhs_tv.validShape.size(),
-                    " != ", rhs_tv.validShape.size(), ")");
+                return IRAssert({}, "TileView valid_shape size mismatch (", lhs_tv.validShape.size(),
+                                " != ", rhs_tv.validShape.size(), ")");
             }
             for (size_t i = 0; i < lhs_tv.validShape.size(); ++i) {
                 if (!Equal(lhs_tv.validShape[i], rhs_tv.validShape[i]))
@@ -756,8 +743,8 @@ bool StructuralEqualImpl<AssertMode>::EqualType(const TypePtr& lhs, const TypePt
             }
             // Compare stride
             if (lhs_tv.stride.size() != rhs_tv.stride.size()) {
-                return IRAssert(
-                    {}, "TileView stride size mismatch (", lhs_tv.stride.size(), " != ", rhs_tv.stride.size(), ")");
+                return IRAssert({}, "TileView stride size mismatch (", lhs_tv.stride.size(),
+                                " != ", rhs_tv.stride.size(), ")");
             }
             for (size_t i = 0; i < lhs_tv.stride.size(); ++i) {
                 if (!Equal(lhs_tv.stride[i], rhs_tv.stride[i]))
@@ -794,8 +781,8 @@ bool StructuralEqualImpl<AssertMode>::EqualType(const TypePtr& lhs, const TypePt
             return IRAssert({}, "Type cast failed for TupleType");
         }
         if (lhs_tuple->types_.size() != rhs_tuple->types_.size()) {
-            return IRAssert(
-                {}, "TupleType size mismatch (", lhs_tuple->types_.size(), " != ", rhs_tuple->types_.size(), ")");
+            return IRAssert({}, "TupleType size mismatch (", lhs_tuple->types_.size(), " != ", rhs_tuple->types_.size(),
+                            ")");
         }
         for (size_t i = 0; i < lhs_tuple->types_.size(); ++i) {
             if (!EqualType(lhs_tuple->types_[i], rhs_tuple->types_[i]))
@@ -821,45 +808,41 @@ bool StructuralEqualImpl<AssertMode>::EqualVar(const VarPtr& lhs, const VarPtr& 
         // Case 1: already mapped to the same variable
         if (lhs_it != lhs_to_rhs_var_map_.end() && rhs_it != rhs_to_lhs_var_map_.end()) {
             if (lhs_it->second != rhs || rhs_it->second != lhs) {
-                return IRAssert(
-                    {std::static_pointer_cast<const IRNode>(lhs), std::static_pointer_cast<const IRNode>(rhs),
-                     "var " + lhs->name_, "var " + rhs->name_},
-                    "Variable mapping inconsistent (without auto-mapping)");
+                return IRAssert({std::static_pointer_cast<const IRNode>(lhs),
+                                 std::static_pointer_cast<const IRNode>(rhs), "var " + lhs->name_, "var " + rhs->name_},
+                                "Variable mapping inconsistent (without auto-mapping)");
             }
             return true;
         }
         // Case 2: different variables
         if (lhs.get() != rhs.get()) {
-            return IRAssert(
-                {std::static_pointer_cast<const IRNode>(lhs), std::static_pointer_cast<const IRNode>(rhs),
-                 "var " + lhs->name_, "var " + rhs->name_},
-                "Variable pointer mismatch (without auto-mapping)");
+            return IRAssert({std::static_pointer_cast<const IRNode>(lhs), std::static_pointer_cast<const IRNode>(rhs),
+                             "var " + lhs->name_, "var " + rhs->name_},
+                            "Variable pointer mismatch (without auto-mapping)");
         }
         return true;
     }
 
     if (!EqualType(lhs->GetType(), rhs->GetType())) {
-        return IRAssert(
-            {}, "Variable type mismatch (", lhs->GetType()->TypeName(), " != ", rhs->GetType()->TypeName(), ")");
+        return IRAssert({}, "Variable type mismatch (", lhs->GetType()->TypeName(), " != ", rhs->GetType()->TypeName(),
+                        ")");
     }
 
     auto it = lhs_to_rhs_var_map_.find(lhs);
     if (it != lhs_to_rhs_var_map_.end()) {
         if (it->second != rhs) {
-            return IRAssert(
-                {std::static_pointer_cast<const IRNode>(lhs), std::static_pointer_cast<const IRNode>(rhs)},
-                "Variable mapping inconsistent ('", lhs->name_, "' cannot map to both '", it->second->name_, "' and '",
-                rhs->name_, "')");
+            return IRAssert({std::static_pointer_cast<const IRNode>(lhs), std::static_pointer_cast<const IRNode>(rhs)},
+                            "Variable mapping inconsistent ('", lhs->name_, "' cannot map to both '", it->second->name_,
+                            "' and '", rhs->name_, "')");
         }
         return true;
     }
 
     auto rhs_it = rhs_to_lhs_var_map_.find(rhs);
     if (rhs_it != rhs_to_lhs_var_map_.end() && rhs_it->second != lhs) {
-        return IRAssert(
-            {std::static_pointer_cast<const IRNode>(lhs), std::static_pointer_cast<const IRNode>(rhs)},
-            "Variable mapping inconsistent ('", rhs->name_, "' is already mapped from '", rhs_it->second->name_,
-            "', cannot map from '", lhs->name_, "')");
+        return IRAssert({std::static_pointer_cast<const IRNode>(lhs), std::static_pointer_cast<const IRNode>(rhs)},
+                        "Variable mapping inconsistent ('", rhs->name_, "' is already mapped from '",
+                        rhs_it->second->name_, "', cannot map from '", lhs->name_, "')");
     }
 
     lhs_to_rhs_var_map_[lhs] = rhs;
@@ -871,9 +854,8 @@ template <bool AssertMode>
 bool StructuralEqualImpl<AssertMode>::EqualMemRef(const MemRefPtr& lhs, const MemRefPtr& rhs)
 {
     if (!MemRef::SameAllocation(lhs, rhs)) {
-        return IRAssert(
-            {std::static_pointer_cast<const IRNode>(lhs), std::static_pointer_cast<const IRNode>(rhs)},
-            "MemRef base mismatch");
+        return IRAssert({std::static_pointer_cast<const IRNode>(lhs), std::static_pointer_cast<const IRNode>(rhs)},
+                        "MemRef base mismatch");
     }
     return true;
 }
@@ -888,10 +870,9 @@ bool StructuralEqualImpl<AssertMode>::EqualIterArg(const IterArgPtr& lhs, const 
 
     // 2. Compare the initial value
     if (!Equal(lhs->initValue_, rhs->initValue_)) {
-        return IRAssert(
-            {std::static_pointer_cast<const IRNode>(lhs->initValue_),
-             std::static_pointer_cast<const IRNode>(rhs->initValue_)},
-            "IterArg initValue mismatch");
+        return IRAssert({std::static_pointer_cast<const IRNode>(lhs->initValue_),
+                         std::static_pointer_cast<const IRNode>(rhs->initValue_)},
+                        "IterArg initValue mismatch");
     }
 
     return true;

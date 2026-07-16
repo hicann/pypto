@@ -105,15 +105,14 @@ std::vector<std::string> BuildMpiCandidatePaths()
     if (!mpiHome.empty()) {
         DISTRIBUTED_LOGI("Searching MPI libraries in MPI_HOME: %s", mpiHome.c_str());
 
-        std::vector<std::string> mpiHomePaths = {
-            mpiHome + "/lib/libmpi.so",
-            mpiHome + "/lib/libmpich.so",
-            mpiHome + "/lib/libmpich.so.12",
-            mpiHome + "/lib64/libmpi.so",
-            mpiHome + "/lib64/libmpich.so",
-            mpiHome + "/lib64/libmpich.so.12",
-            mpiHome + "/lib/aarch64-linux-gnu/libmpi.so",
-            mpiHome + "/lib/x86_64-linux-gnu/libmpi.so"};
+        std::vector<std::string> mpiHomePaths = {mpiHome + "/lib/libmpi.so",
+                                                 mpiHome + "/lib/libmpich.so",
+                                                 mpiHome + "/lib/libmpich.so.12",
+                                                 mpiHome + "/lib64/libmpi.so",
+                                                 mpiHome + "/lib64/libmpich.so",
+                                                 mpiHome + "/lib64/libmpich.so.12",
+                                                 mpiHome + "/lib/aarch64-linux-gnu/libmpi.so",
+                                                 mpiHome + "/lib/x86_64-linux-gnu/libmpi.so"};
         candidates.insert(candidates.end(), mpiHomePaths.begin(), mpiHomePaths.end());
     }
 
@@ -166,8 +165,8 @@ void* GetLibHandle()
             }
         }
 
-        DISTRIBUTED_LOGE(
-            DistributedErrorCode::UNKNOW_ERROR, "Failed to load MPI library from common candidate paths/names");
+        DISTRIBUTED_LOGE(DistributedErrorCode::UNKNOW_ERROR,
+                         "Failed to load MPI library from common candidate paths/names");
         return static_cast<void*>(nullptr);
     }();
     return handle;
@@ -199,8 +198,8 @@ auto GetFunction(const std::string& funcName) -> FuncType
 
     auto func = dlsym(handle, funcName.c_str());
     if (!func) {
-        DISTRIBUTED_LOGE(
-            DistributedErrorCode::UNKNOW_ERROR, "Failed to find function %s: %s", funcName.c_str(), dlerror());
+        DISTRIBUTED_LOGE(DistributedErrorCode::UNKNOW_ERROR, "Failed to find function %s: %s", funcName.c_str(),
+                         dlerror());
         return nullptr;
     }
     return FunctionConverter<FuncType>::Convert(func);
@@ -261,9 +260,8 @@ void TestFrameworkInit(OpTestParam& testParam, HcomTestParam& hcomTestParam, int
     }
     mpiBcast(&hcomTestParam.rootInfo, HCOMM_ROOT_INFO_BYTES, MPI_CHAR, hcomTestParam.rootRank, MPI_COMM_WORLD);
     mpiBarrier(MPI_COMM_WORLD);
-    CHECK(
-        HcommCommInitRootInfo(testParam.rankSize, &hcomTestParam.rootInfo, testParam.rankId, &hcomTestParam.hcclComm) ==
-        0)
+    CHECK(HcommCommInitRootInfo(testParam.rankSize, &hcomTestParam.rootInfo, testParam.rankId,
+                                &hcomTestParam.hcclComm) == 0)
         << "HcommCommInitRootInfo failed";
 
     CHECK(HcommGetCommName(hcomTestParam.hcclComm, testParam.group) == 0) << "HcommGetCommName failed";
@@ -322,8 +320,8 @@ void TestFrameworkInit2Groups(OpTestParam& testParam, HcomTestParam& hcomTestPar
     testParam.rankId = subRankId;
     testParam.rankSize = subRankSize;
     hcomTestParam.hcclComm = subComm;
-    DISTRIBUTED_LOGI(
-        "Init SubGroup: %s, SubRank: %d, SubSize: %d", testParam.group, testParam.rankId, testParam.rankSize);
+    DISTRIBUTED_LOGI("Init SubGroup: %s, SubRank: %d, SubSize: %d", testParam.group, testParam.rankId,
+                     testParam.rankSize);
     return;
 }
 

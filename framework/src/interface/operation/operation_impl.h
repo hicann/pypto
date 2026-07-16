@@ -29,10 +29,9 @@ class Function;
 class Operation;
 using LogicalTensorPtr = std::shared_ptr<LogicalTensor>;
 
-void ExpandOperationInto(
-    Function& function, const TileShape& tileShape, Opcode opCode,
-    const std::vector<std::shared_ptr<LogicalTensor>>& iOperand,
-    const std::vector<std::shared_ptr<LogicalTensor>>& oOperand, const Operation& op);
+void ExpandOperationInto(Function& function, const TileShape& tileShape, Opcode opCode,
+                         const std::vector<std::shared_ptr<LogicalTensor>>& iOperand,
+                         const std::vector<std::shared_ptr<LogicalTensor>>& oOperand, const Operation& op);
 
 namespace Matrix {
 const size_t M_INDEX = 0;
@@ -71,10 +70,9 @@ struct MatmulTensorInfo {
     MemoryType memType;
     bool transFlag;
 
-    MatmulTensorInfo(
-        const std::string& nameIn, DataType dtypeIn, const std::vector<int64_t>& shapeIn,
-        const std::vector<int64_t>& offsetIn, NodeType nodeTypeIn, TileOpFormat formatIn, MemoryType memTypeIn,
-        bool transFlagIn = false)
+    MatmulTensorInfo(const std::string& nameIn, DataType dtypeIn, const std::vector<int64_t>& shapeIn,
+                     const std::vector<int64_t>& offsetIn, NodeType nodeTypeIn, TileOpFormat formatIn,
+                     MemoryType memTypeIn, bool transFlagIn = false)
         : name(nameIn),
           dtype(dtypeIn),
           shape(shapeIn),
@@ -133,9 +131,8 @@ struct MatmulGraphNodes {
     MatmulGraphNodes(LogicalTensorPtr aTensorIn, LogicalTensorPtr bTensorIn, LogicalTensorPtr gmAccumulationTensorIn)
         : aTensorPtr(aTensorIn), bTensorPtr(bTensorIn), gmAccumulationTensorPtr(gmAccumulationTensorIn) {};
 
-    MatmulGraphNodes(
-        LogicalTensorPtr aTensorIn, LogicalTensorPtr aScaleTensorIn, LogicalTensorPtr bTensorIn,
-        LogicalTensorPtr bScaleTensorIn)
+    MatmulGraphNodes(LogicalTensorPtr aTensorIn, LogicalTensorPtr aScaleTensorIn, LogicalTensorPtr bTensorIn,
+                     LogicalTensorPtr bScaleTensorIn)
         : aTensorPtr(aTensorIn),
           aScaleTensorPtr(aScaleTensorIn),
           bTensorPtr(bTensorIn),
@@ -179,9 +176,8 @@ struct MatmulAttrParam {
     }
 };
 
-void ConstructTileGraph(
-    Function& function, const TileShape& tileShape, const std::vector<LogicalTensorPtr>& operandVec,
-    const LogicalTensorPtr& cTensorPtr, const Operation& op);
+void ConstructTileGraph(Function& function, const TileShape& tileShape, const std::vector<LogicalTensorPtr>& operandVec,
+                        const LogicalTensorPtr& cTensorPtr, const Operation& op);
 } // namespace Matrix
 
 namespace Conv {
@@ -252,7 +248,7 @@ public:
     static const std::string copyOutMode;
     static const std::string isFmap;
     static const std::string isConv3D;
-    static const std::string cutW; // L0C M方向(hw合轴)的w大小
+    static const std::string cutW;     // L0C M方向(hw合轴)的w大小
     static const std::string realCutW; // L0C M方向(hw合轴)的w的validshape
 };
 
@@ -289,9 +285,8 @@ struct ConvAttrParam {
 
     ConvAttrParam() = default;
 
-    ConvAttrParam(
-        std::vector<int64_t> paddingsList, std::vector<int64_t> stridesList, std::vector<int64_t> dilationsList,
-        int64_t groupsValue)
+    ConvAttrParam(std::vector<int64_t> paddingsList, std::vector<int64_t> stridesList,
+                  std::vector<int64_t> dilationsList, int64_t groupsValue)
     {
         paddings = paddingsList;
         strides = stridesList;
@@ -388,9 +383,8 @@ struct ConvIterInfo {
     int64_t wStride = 0;
 };
 
-void ConstructTileGraph(
-    Function& function, const TileShape& tileShape, const std::vector<LogicalTensorPtr>& operandVec,
-    const LogicalTensorPtr& cTensorPtr, const Operation& op);
+void ConstructTileGraph(Function& function, const TileShape& tileShape, const std::vector<LogicalTensorPtr>& operandVec,
+                        const LogicalTensorPtr& cTensorPtr, const Operation& op);
 
 } // namespace Conv
 } // namespace npu::tile_fwk

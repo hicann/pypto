@@ -40,23 +40,22 @@
 namespace pypto {
 namespace ir {
 
-TypePtr DeduceBlockGetBlockIdxType(
-    [[maybe_unused]] const std::vector<ExprPtr>& args,
-    [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs, const std::string& op_name)
+TypePtr DeduceBlockGetBlockIdxType([[maybe_unused]] const std::vector<ExprPtr>& args,
+                                   [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs,
+                                   const std::string& op_name)
 {
     CHECK(args.size() == 0) << "The operator " << op_name << " requires no arguments, but got " << args.size();
 
     return std::make_shared<ScalarType>(DataType::INDEX);
 }
 
-TypePtr DeduceBlockCreateTileType(
-    [[maybe_unused]] const std::vector<ExprPtr>& args,
-    [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs, const std::string& op_name)
+TypePtr DeduceBlockCreateTileType([[maybe_unused]] const std::vector<ExprPtr>& args,
+                                  [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs,
+                                  const std::string& op_name)
 {
     // make_tile signature: (shape)
     // TileType requires static compile-time constant shapes
-    CHECK(args.size() == 0x2)
-        << "The operator " << op_name << " requires exactly 2 argument, but got " << args.size();
+    CHECK(args.size() == 0x2) << "The operator " << op_name << " requires exactly 2 argument, but got " << args.size();
 
     // Extract dtype attribute
     DataType dtype = GetOpKwarg<DataType>(kwargs, "dtype");
@@ -118,8 +117,8 @@ TypePtr DeduceBlockCreateTileType(
     // If explicit memref kwargs are provided (addr + size + id), attach a MemRef to the TileType.
     // This allows the PTO codegen to emit pto.alloc_tile with base_addr directly from the IR,
     // without requiring the init_memref pass.
-    MemorySpace target_memory =
-        GetOpKwarg<MemorySpace>(kwargs, "target_memory", std::optional<MemorySpace>(MemorySpace::Vec));
+    MemorySpace target_memory = GetOpKwarg<MemorySpace>(kwargs, "target_memory",
+                                                        std::optional<MemorySpace>(MemorySpace::Vec));
 
     bool has_memref = false;
     for (const auto& kwarg : kwargs) {
@@ -140,9 +139,8 @@ TypePtr DeduceBlockCreateTileType(
     return std::make_shared<TileType>(tile_shape, dtype, std::nullopt, tile_view, hw_info);
 }
 
-TypePtr DeduceGetValType(
-    [[maybe_unused]] const std::vector<ExprPtr>& args,
-    [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
+TypePtr DeduceGetValType([[maybe_unused]] const std::vector<ExprPtr>& args,
+                         [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
 {
     CHECK(args.size() == 0x2) << "getval requires exactly 2 arguments, but got " << args.size();
 
@@ -150,7 +148,7 @@ TypePtr DeduceGetValType(
     auto offset_type = As<ScalarType>(args[1]->GetType());
     CHECK(offset_type) << "getval requires offset to be ScalarType, but got " << args[1]->GetType()->TypeName();
     CHECK(offset_type->dtype_.IsInt()) << "getval offset must have integer dtype, but got "
-                                      << offset_type->dtype_.ToString();
+                                       << offset_type->dtype_.ToString();
 
     if (auto tile_type = As<TileType>(first_type)) {
         return std::make_shared<ScalarType>(tile_type->dtype_);
@@ -161,9 +159,8 @@ TypePtr DeduceGetValType(
     return std::make_shared<ScalarType>(tensor_type->dtype_);
 }
 
-TypePtr DeduceSetValType(
-    [[maybe_unused]] const std::vector<ExprPtr>& args,
-    [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
+TypePtr DeduceSetValType([[maybe_unused]] const std::vector<ExprPtr>& args,
+                         [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
 {
     CHECK(args.size() == 0x3) << "setval requires exactly 3 arguments, but got " << args.size();
 
@@ -171,7 +168,7 @@ TypePtr DeduceSetValType(
     auto offset_type = As<ScalarType>(args[1]->GetType());
     CHECK(offset_type) << "setval requires offset to be ScalarType, but got " << args[1]->GetType()->TypeName();
     CHECK(offset_type->dtype_.IsInt()) << "setval offset must have integer dtype, but got "
-                                      << offset_type->dtype_.ToString();
+                                       << offset_type->dtype_.ToString();
     auto value_type = As<ScalarType>(args[2]->GetType());
     CHECK(value_type) << "setval requires value to be ScalarType, but got " << args[2]->GetType()->TypeName();
 

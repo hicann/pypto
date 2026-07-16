@@ -131,7 +131,7 @@ void TestSa(SaTileShapeConfig& tileConfig, SaConfig config)
 }
 
 TEST_F(DynamicSATest, slc_attn_fp16)
-{                          // 测试项：fp16, flash小块
+{ // 测试项：fp16, flash小块
     SaTileShapeConfig tileConfig;
     const int gTile = 128; // for gLoop split
     const int sTile = 128; // for s2Loop split
@@ -146,7 +146,7 @@ TEST_F(DynamicSATest, slc_attn_fp16)
 }
 
 TEST_F(DynamicSATest, slc_attn_mtp_s1_2_fp16)
-{                          // 测试项：fp16, s1=2, g切分, flash大块
+{ // 测试项：fp16, s1=2, g切分, flash大块
     SaTileShapeConfig tileConfig;
     const int gTile = 64;  // for gLoop split
     const int sTile = 512; // for s2Loop split
@@ -161,7 +161,7 @@ TEST_F(DynamicSATest, slc_attn_mtp_s1_2_fp16)
 }
 
 TEST_F(DynamicSATest, slc_attn_bf16_b48_s1_perf)
-{                           // 测试项：性能用例，bf16, b=48, s1=1
+{ // 测试项：性能用例，bf16, b=48, s1=1
     SaTileShapeConfig tileConfig;
     const int gTile = 128;  // for gLoop split
     const int sTile = 1024; // for s2Loop split

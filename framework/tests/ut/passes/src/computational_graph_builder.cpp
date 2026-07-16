@@ -20,14 +20,14 @@
 namespace npu {
 namespace tile_fwk {
 
-bool ComputationalGraphBuilder::AddTensor(
-    DataType dataType, const std::vector<int64_t>& tileShape, const std::string& name)
+bool ComputationalGraphBuilder::AddTensor(DataType dataType, const std::vector<int64_t>& tileShape,
+                                          const std::string& name)
 {
     if (tensors_.count(name) > 0) {
         return false;
     }
-    auto tensor = npu::tile_fwk::IRBuilder().CreateTensorVar(
-        dataType, tileShape, CreateTestConstIntVector(tileShape), TileOpFormat::TILEOP_ND, name);
+    auto tensor = npu::tile_fwk::IRBuilder().CreateTensorVar(dataType, tileShape, CreateTestConstIntVector(tileShape),
+                                                             TileOpFormat::TILEOP_ND, name);
     if (tensor == nullptr) {
         return false;
     }
@@ -36,9 +36,8 @@ bool ComputationalGraphBuilder::AddTensor(
     return true;
 }
 
-bool ComputationalGraphBuilder::AddTensor(
-    DataType dataType, const std::vector<int64_t>& tileShape, MemoryType memType, const std::string& name,
-    int subGraphID)
+bool ComputationalGraphBuilder::AddTensor(DataType dataType, const std::vector<int64_t>& tileShape, MemoryType memType,
+                                          const std::string& name, int subGraphID)
 {
     (void)subGraphID;
     if (!AddTensor(dataType, tileShape, name)) {
@@ -51,8 +50,8 @@ bool ComputationalGraphBuilder::AddTensor(
     return true;
 }
 
-bool ComputationalGraphBuilder::AddTensors(
-    DataType dataType, const std::vector<int64_t>& tileShape, const std::vector<std::string>& names)
+bool ComputationalGraphBuilder::AddTensors(DataType dataType, const std::vector<int64_t>& tileShape,
+                                           const std::vector<std::string>& names)
 {
     for (auto& name : names) {
         if (!AddTensor(dataType, tileShape, name)) {
@@ -62,9 +61,9 @@ bool ComputationalGraphBuilder::AddTensors(
     return true;
 }
 
-bool ComputationalGraphBuilder::AddTensors(
-    DataType dataType, const std::vector<int64_t>& tileShape, const std::vector<MemoryType>& memTypes,
-    const std::vector<std::string>& names, int subGraphID)
+bool ComputationalGraphBuilder::AddTensors(DataType dataType, const std::vector<int64_t>& tileShape,
+                                           const std::vector<MemoryType>& memTypes,
+                                           const std::vector<std::string>& names, int subGraphID)
 {
     if (memTypes.size() != names.size()) {
         return false;
@@ -77,9 +76,9 @@ bool ComputationalGraphBuilder::AddTensors(
     return true;
 }
 
-bool ComputationalGraphBuilder::AddOp(
-    Opcode opcode, const std::vector<std::string>& ioperands, const std::vector<std::string>& ooperands,
-    const std::string& name, bool updateFunctionMap)
+bool ComputationalGraphBuilder::AddOp(Opcode opcode, const std::vector<std::string>& ioperands,
+                                      const std::vector<std::string>& ooperands, const std::string& name,
+                                      bool updateFunctionMap)
 {
     if (operations_.count(name) > 0) {
         return false;
@@ -103,23 +102,23 @@ bool ComputationalGraphBuilder::AddOp(
     Operation& op = builder.CreateTensorOpStmt(*function, opcode, itensors, otensors);
     if (op.GetOpcode() == Opcode::OP_COPY_IN) {
         auto shapeImme = OpImmediate::Specified(itensors[0]->GetShape());
-        op.SetOpAttribute(std::make_shared<CopyOpAttribute>(
-            OpImmediate::Specified({0, 0}), otensors[0]->GetMemoryTypeOriginal(), shapeImme, shapeImme,
-            std::vector<OpImmediate>()));
+        op.SetOpAttribute(std::make_shared<CopyOpAttribute>(OpImmediate::Specified({0, 0}),
+                                                            otensors[0]->GetMemoryTypeOriginal(), shapeImme, shapeImme,
+                                                            std::vector<OpImmediate>()));
     } else if (op.GetOpcode() == Opcode::OP_COPY_OUT) {
         auto shapeImme = OpImmediate::Specified(itensors[0]->GetShape());
-        op.SetOpAttribute(std::make_shared<CopyOpAttribute>(
-            itensors[0]->GetMemoryTypeOriginal(), OpImmediate::Specified({0, 0}), shapeImme, shapeImme));
+        op.SetOpAttribute(std::make_shared<CopyOpAttribute>(itensors[0]->GetMemoryTypeOriginal(),
+                                                            OpImmediate::Specified({0, 0}), shapeImme, shapeImme));
     }
     operations_[name] = &op;
     operationMagics_[name] = op.GetOpMagic();
     return true;
 }
 
-bool ComputationalGraphBuilder::AddOps(
-    const std::vector<Opcode>& opcodes, const std::vector<std::vector<std::string>>& ioperandss,
-    const std::vector<std::vector<std::string>>& ooperandss, const std::vector<std::string>& names,
-    bool updateFunctionMap)
+bool ComputationalGraphBuilder::AddOps(const std::vector<Opcode>& opcodes,
+                                       const std::vector<std::vector<std::string>>& ioperandss,
+                                       const std::vector<std::vector<std::string>>& ooperandss,
+                                       const std::vector<std::string>& names, bool updateFunctionMap)
 {
     if (opcodes.size() != ioperandss.size() || opcodes.size() != ooperandss.size() || opcodes.size() != names.size()) {
         return false;

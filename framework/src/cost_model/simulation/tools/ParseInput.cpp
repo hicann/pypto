@@ -34,8 +34,8 @@ void ParseInput::ParseJson(std::shared_ptr<CostModel::SimSys> sim, const std::st
 {
     std::ifstream input(jsonPath);
     if (!input.is_open()) {
-        SIMULATION_LOGE(CostModel::ExternalErrorScene::FILE_OPEN_FAILED,
-            "Error: fail to open file: %s", jsonPath.c_str());
+        SIMULATION_LOGE(CostModel::ExternalErrorScene::FILE_OPEN_FAILED, "Error: fail to open file: %s",
+                        jsonPath.c_str());
         return;
     }
     Json j;
@@ -170,7 +170,8 @@ bool ParseInput::FilterOpcode(std::string& opcode)
     return false;
 }
 
-void ParseInput::BuildTile(npu::tile_fwk::Function &func, std::shared_ptr<npu::tile_fwk::LogicalTensor> logicalTensor, TilePtr tile)
+void ParseInput::BuildTile(npu::tile_fwk::Function& func, std::shared_ptr<npu::tile_fwk::LogicalTensor> logicalTensor,
+                           TilePtr tile)
 {
     tile->magic = logicalTensor->magic;
     for (auto& s : logicalTensor->shape) {
@@ -278,8 +279,8 @@ void ParseInput::GetTileAllocSeq(const std::vector<Operation*>& operationList, F
     func->hasSchedule = fullCover;
 }
 
-void ParseInput::BuildFunction(
-    std::shared_ptr<CostModel::SimSys> sim, npu::tile_fwk::Function* parentFunc, FunctionPtr func)
+void ParseInput::BuildFunction(std::shared_ptr<CostModel::SimSys> sim, npu::tile_fwk::Function* parentFunc,
+                               FunctionPtr func)
 {
     std::unordered_map<int, int> tileMagicIdMap;
     tileMagicIdMap.clear();
@@ -377,7 +378,8 @@ void ParseInput::BuildFunction(
         func->tileOps.emplace_back(tileOp);
         func->tileOpMap[tileOp->magic] = tileOp;
     }
-    ASSERT(npu::tile_fwk::InternalError::SIM_INNER_ERROR,
+    ASSERT(
+        npu::tile_fwk::InternalError::SIM_INNER_ERROR,
         hasCall || func->opSequenceAfterOOO_.size() == 0 || (func->tileOps.size() == func->opSequenceAfterOOO_.size()))
         << "[SIMULATION]: "
         << "hasCall=" << hasCall << " func->opSequenceAfterOOO_.size=" << func->opSequenceAfterOOO_.size()
@@ -481,12 +483,12 @@ void ParseInput::CheckFunction(npu::tile_fwk::Function* parentFunc, FunctionPtr 
     CheckInOutCast(func);
 }
 
-void ParseInput::ParseFunction(
-    std::shared_ptr<CostModel::SimSys> sim, std::vector<npu::tile_fwk::Function*>& inputFuncs, bool topoFromRootFunc)
+void ParseInput::ParseFunction(std::shared_ptr<CostModel::SimSys> sim,
+                               std::vector<npu::tile_fwk::Function*>& inputFuncs, bool topoFromRootFunc)
 {
     if (topoFromRootFunc) {
         sim->enableExpectValue = true;
-        ASSERT(npu::tile_fwk::InternalError::SIM_INNER_ERROR, inputFuncs.size() == 1) 
+        ASSERT(npu::tile_fwk::InternalError::SIM_INNER_ERROR, inputFuncs.size() == 1)
             << "[SIMULATION]: inputFuncs.size is not equals to 1."
             << "inputFuncs.size=" << inputFuncs.size();
         for (const auto& rootFunction : inputFuncs) {
@@ -582,8 +584,7 @@ void ParseInput::ParseJsonConfig(const std::string& path, std::vector<std::strin
 {
     std::ifstream file(path);
     if (!file.is_open()) {
-        SIMULATION_LOGE(CostModel::ExternalErrorScene::FILE_OPEN_FAILED,
-            "Error: fail to open file: %s", path.c_str());
+        SIMULATION_LOGE(CostModel::ExternalErrorScene::FILE_OPEN_FAILED, "Error: fail to open file: %s", path.c_str());
         return;
     }
     Json j;
@@ -599,8 +600,7 @@ void ParseInput::ParseConfig(const std::string& path, std::vector<std::string>& 
 {
     std::ifstream file(path);
     if (!file.is_open()) {
-        SIMULATION_LOGE(CostModel::ExternalErrorScene::FILE_OPEN_FAILED,
-            "Error: fail to open file: %s", path.c_str());
+        SIMULATION_LOGE(CostModel::ExternalErrorScene::FILE_OPEN_FAILED, "Error: fail to open file: %s", path.c_str());
         return;
     }
     std::string line;
@@ -609,8 +609,8 @@ void ParseInput::ParseConfig(const std::string& path, std::vector<std::string>& 
         if (pos != std::string::npos) {
             cfg.emplace_back(line);
         } else {
-            SIMULATION_LOGE(CostModel::ExternalErrorScene::FILE_CONTENT_ERROR,
-                "Parse Config File Error: %s", line.c_str());
+            SIMULATION_LOGE(CostModel::ExternalErrorScene::FILE_CONTENT_ERROR, "Parse Config File Error: %s",
+                            line.c_str());
         }
     }
     file.close();
@@ -620,8 +620,8 @@ void ParseInput::ParseCalendarJson(std::shared_ptr<CostModel::SimSys> sim, const
 {
     std::ifstream jsonInput(jsonPath);
     if (!jsonInput.is_open()) {
-        SIMULATION_LOGE(CostModel::ExternalErrorScene::FILE_OPEN_FAILED,
-            "Error: fail to open file: %s", jsonPath.c_str());
+        SIMULATION_LOGE(CostModel::ExternalErrorScene::FILE_OPEN_FAILED, "Error: fail to open file: %s",
+                        jsonPath.c_str());
         return;
     }
     Json calendarJson;
@@ -642,7 +642,7 @@ void ParseInput::ParseCalendarJson(std::shared_ptr<CostModel::SimSys> sim, const
                     {task["taskId"].get<int>(), std::stoull(task["functionHash"].get<std::string>())});
                 taskId = task["taskId"].get<int>();
                 if (sim->config.calendarMode == static_cast<uint64_t>(CalendarMode::GLOBAL_COUNTER)) {
-                    ASSERT(npu::tile_fwk::InternalError::SIM_INNER_ERROR, waitVector.size() == 1) 
+                    ASSERT(npu::tile_fwk::InternalError::SIM_INNER_ERROR, waitVector.size() == 1)
                         << "[SIMULATION]: task has two wait in calendar global counter."
                         << "waitVector.size=" << waitVector.size();
                     sim->taskFirstSetMap[taskId] = waitVector[0].second + 1;
@@ -667,8 +667,7 @@ void ParseInput::ParseFixedLatencyTask(std::shared_ptr<CostModel::SimSys> sim, s
 {
     std::ifstream jsonInput(path);
     if (!jsonInput.is_open()) {
-        SIMULATION_LOGE(CostModel::ExternalErrorScene::FILE_OPEN_FAILED,
-            "Error: fail to open file: %s", path.c_str());
+        SIMULATION_LOGE(CostModel::ExternalErrorScene::FILE_OPEN_FAILED, "Error: fail to open file: %s", path.c_str());
         return;
     }
     Json fixedLatencyTask;
@@ -724,8 +723,7 @@ void ParseInput::ParseTopoJson(std::string path, std::deque<TaskMap>& taskMapQue
 {
     std::ifstream jsonInput(path);
     if (!jsonInput.is_open()) {
-        SIMULATION_LOGE(CostModel::ExternalErrorScene::FILE_OPEN_FAILED,
-            "Error: fail to open file: %s", path.c_str());
+        SIMULATION_LOGE(CostModel::ExternalErrorScene::FILE_OPEN_FAILED, "Error: fail to open file: %s", path.c_str());
         return;
     }
     Json topoJson;
@@ -760,13 +758,12 @@ void ParseInput::ParseTopoJson(std::string path, std::deque<TaskMap>& taskMapQue
     }
 }
 
-void ParseInput::ParseReplayInfoJson(
-    const std::string& path, std::unordered_map<uint64_t, std::deque<ReplayTaskEntry>>& replayTasksInfoMap)
+void ParseInput::ParseReplayInfoJson(const std::string& path,
+                                     std::unordered_map<uint64_t, std::deque<ReplayTaskEntry>>& replayTasksInfoMap)
 {
     std::ifstream file(path);
     if (!file.is_open()) {
-        SIMULATION_LOGE(CostModel::ExternalErrorScene::FILE_OPEN_FAILED,
-            "Error: fail to open file: %s", path.c_str());
+        SIMULATION_LOGE(CostModel::ExternalErrorScene::FILE_OPEN_FAILED, "Error: fail to open file: %s", path.c_str());
         return;
     }
     Json j;

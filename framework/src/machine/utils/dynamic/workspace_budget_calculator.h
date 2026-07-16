@@ -37,8 +37,8 @@ struct StitchDepthConfig {
 
 uint64_t EstimateCtrlFlowCacheSlottedBlockCount(uint64_t totalSlot, uint32_t outcastCacheDepth);
 
-uint64_t TensorWorkspaceBytesAtMinimumStitchDepth(
-    const WorkspaceDesc& desc, uint32_t parallelism, uint64_t aicoreSpilled, uint64_t debugTotal);
+uint64_t TensorWorkspaceBytesAtMinimumStitchDepth(const WorkspaceDesc& desc, uint32_t parallelism,
+                                                  uint64_t aicoreSpilled, uint64_t debugTotal);
 
 StitchDepthConfig ResolveStitchDepthConfig(WorkspaceDesc& desc, const RuntimeWorkspaceConfig& runtimeCfg);
 

@@ -149,8 +149,8 @@ TEST_F(FunctionWithPass, TestContinuous)
     EXPECT_EQ(TestContinuous(tensors_3d_irregular), false);
 
     // 测试用例 5: 2D 矩形，有重叠
-    std::vector<std::pair<std::vector<int64_t>, std::vector<int64_t>>> tensors_2d_overlap = {
-        {{2, 2}, {1, 1}}, {{2, 2}, {2, 2}}};
+    std::vector<std::pair<std::vector<int64_t>, std::vector<int64_t>>> tensors_2d_overlap = {{{2, 2}, {1, 1}},
+                                                                                             {{2, 2}, {2, 2}}};
     EXPECT_EQ(TestContinuous(tensors_2d_overlap), false);
 
     // 测试用例 6: 3D 立方体，有缝隙
@@ -739,7 +739,7 @@ TEST_F(FunctionWithPass, fp16ToUInt8_Negative)
 {
     uint16_t fpVal = 0xBC00; // -1.0 in fp16
     float result = npu::tile_fwk::float16::FromBase(fpVal);
-    EXPECT_EQ(result, -1);   // 负数转换为uint8_t应为0
+    EXPECT_EQ(result, -1); // 负数转换为uint8_t应为0
 }
 
 TEST_F(FunctionWithPass, fp16ToUInt8_Zero)
@@ -798,10 +798,10 @@ TEST_F(FunctionWithPass, Constructor)
 
 TEST_F(FunctionWithPass, GetSymbolicCalcBinary)
 {
-    EXPECT_EQ(
-        RawSymbolicExpression::GetSymbolicCalcBinary(SymbolicOpcode::T_BOP_ADD), &RawSymbolicExpression::CalcBopAdd);
-    EXPECT_EQ(
-        RawSymbolicExpression::GetSymbolicCalcBinary(SymbolicOpcode::T_BOP_SUB), &RawSymbolicExpression::CalcBopSub);
+    EXPECT_EQ(RawSymbolicExpression::GetSymbolicCalcBinary(SymbolicOpcode::T_BOP_ADD),
+              &RawSymbolicExpression::CalcBopAdd);
+    EXPECT_EQ(RawSymbolicExpression::GetSymbolicCalcBinary(SymbolicOpcode::T_BOP_SUB),
+              &RawSymbolicExpression::CalcBopSub);
     // 类似地测试其他操作码
 }
 

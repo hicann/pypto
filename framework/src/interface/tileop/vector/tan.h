@@ -23,8 +23,12 @@
 #include "utils/tile_tensor.h"
 #include <type_traits>
 
-template <typename LastUse, typename DstTile, typename SrcTile, typename TmpTile, typename TmpInt32Tile, typename Tmp2Tile, typename Tmp3Tile, typename Tmp4Tile, typename Tmp5Tile, typename Tmp6Tile, typename Tmp7Tile, typename Tmp8Tile>
-TILEOP void TanImpl(DstTile dstTile, SrcTile srcTile, TmpTile tmpTile, TmpInt32Tile tmpInt32Tile, Tmp2Tile tmp2Tile, Tmp3Tile tmp3Tile, Tmp4Tile tmp4Tile, Tmp5Tile tmp5Tile, Tmp6Tile tmp6Tile, Tmp7Tile tmp7Tile, Tmp8Tile tmp8Tile)
+template <typename LastUse, typename DstTile, typename SrcTile, typename TmpTile, typename TmpInt32Tile,
+          typename Tmp2Tile, typename Tmp3Tile, typename Tmp4Tile, typename Tmp5Tile, typename Tmp6Tile,
+          typename Tmp7Tile, typename Tmp8Tile>
+TILEOP void TanImpl(DstTile dstTile, SrcTile srcTile, TmpTile tmpTile, TmpInt32Tile tmpInt32Tile, Tmp2Tile tmp2Tile,
+                    Tmp3Tile tmp3Tile, Tmp4Tile tmp4Tile, Tmp5Tile tmp5Tile, Tmp6Tile tmp6Tile, Tmp7Tile tmp7Tile,
+                    Tmp8Tile tmp8Tile)
 {
     constexpr auto n1 = Std::tuple_element<DIM_1ST, LastUse>::type::value;
     constexpr auto n2 = Std::tuple_element<DIM_2ND, LastUse>::type::value;
@@ -203,8 +207,12 @@ TILEOP void TanImpl(DstTile dstTile, SrcTile srcTile, TmpTile tmpTile, TmpInt32T
 #endif
 }
 
-template <typename LastUse, typename DstTile, typename SrcTile, typename TmpTile, typename TmpFp32Tile, typename TmpInt32Tile, typename Tmp2Tile, typename Tmp3Tile, typename Tmp4Tile, typename Tmp5Tile, typename Tmp6Tile, typename Tmp7Tile, typename Tmp8Tile>
-TILEOP void TanHalfImpl(DstTile dstTile, SrcTile srcTile, TmpTile tmpTile, TmpFp32Tile tmpFp32Tile, TmpInt32Tile tmpInt32Tile, Tmp2Tile tmp2Tile, Tmp3Tile tmp3Tile, Tmp4Tile tmp4Tile, Tmp5Tile tmp5Tile, Tmp6Tile tmp6Tile, Tmp7Tile tmp7Tile, Tmp8Tile tmp8Tile)
+template <typename LastUse, typename DstTile, typename SrcTile, typename TmpTile, typename TmpFp32Tile,
+          typename TmpInt32Tile, typename Tmp2Tile, typename Tmp3Tile, typename Tmp4Tile, typename Tmp5Tile,
+          typename Tmp6Tile, typename Tmp7Tile, typename Tmp8Tile>
+TILEOP void TanHalfImpl(DstTile dstTile, SrcTile srcTile, TmpTile tmpTile, TmpFp32Tile tmpFp32Tile,
+                        TmpInt32Tile tmpInt32Tile, Tmp2Tile tmp2Tile, Tmp3Tile tmp3Tile, Tmp4Tile tmp4Tile,
+                        Tmp5Tile tmp5Tile, Tmp6Tile tmp6Tile, Tmp7Tile tmp7Tile, Tmp8Tile tmp8Tile)
 {
     constexpr auto n1 = Std::tuple_element<DIM_1ST, LastUse>::type::value;
     constexpr auto n2 = Std::tuple_element<DIM_2ND, LastUse>::type::value;
@@ -213,7 +221,9 @@ TILEOP void TanHalfImpl(DstTile dstTile, SrcTile srcTile, TmpTile tmpTile, TmpFp
 #ifdef __DAV_V220
     pipe_barrier(PIPE_V);
 #endif
-    TanImpl<LastUse, TmpFp32Tile, TmpFp32Tile, TmpFp32Tile, TmpInt32Tile, Tmp2Tile, Tmp3Tile, Tmp4Tile, Tmp5Tile, Tmp6Tile, Tmp7Tile, Tmp8Tile>(tmpFp32Tile, tmpFp32Tile, tmpFp32Tile, tmpInt32Tile, tmp2Tile, tmp3Tile, tmp4Tile, tmp5Tile, tmp6Tile, tmp7Tile, tmp8Tile);
+    TanImpl<LastUse, TmpFp32Tile, TmpFp32Tile, TmpFp32Tile, TmpInt32Tile, Tmp2Tile, Tmp3Tile, Tmp4Tile, Tmp5Tile,
+            Tmp6Tile, Tmp7Tile, Tmp8Tile>(tmpFp32Tile, tmpFp32Tile, tmpFp32Tile, tmpInt32Tile, tmp2Tile, tmp3Tile,
+                                          tmp4Tile, tmp5Tile, tmp6Tile, tmp7Tile, tmp8Tile);
 #ifdef __DAV_V220
     pipe_barrier(PIPE_V);
 #endif
@@ -264,28 +274,20 @@ TILEOP void Ttan(T0 dst, T1 src, T2 tmp)
     constexpr auto tmpTileW = (srcTileW + ALIGN32HALF - 1) / ALIGN32HALF * ALIGN32HALF;
     constexpr auto tmpTileW32Bit = (srcTileW + ALIGN32FLOAT - 1) / ALIGN32FLOAT * ALIGN32FLOAT;
 
-    using DstTile =
-        pto::Tile<pto::TileType::Vec, typename T0::Type, dstTileH, dstTileW, pto::BLayout::RowMajor, -1, -1>;
-    using SrcTile =
-        pto::Tile<pto::TileType::Vec, typename T1::Type, srcTileH, srcTileW, pto::BLayout::RowMajor, -1, -1>;
-    using TmpFp32Tile =
-        pto::Tile<pto::TileType::Vec, float, srcTileH, tmpTileW32Bit, pto::BLayout::RowMajor, -1, -1>;
-    using TmpInt32Tile =
-        pto::Tile<pto::TileType::Vec, int32_t, srcTileH, tmpTileW32Bit, pto::BLayout::RowMajor, -1, -1>;
-    using Tmp2Tile =
-        pto::Tile<pto::TileType::Vec, float, srcTileH, tmpTileW32Bit, pto::BLayout::RowMajor, -1, -1>;
-    using Tmp3Tile =
-        pto::Tile<pto::TileType::Vec, float, srcTileH, tmpTileW32Bit, pto::BLayout::RowMajor, -1, -1>;
-    using Tmp4Tile =
-        pto::Tile<pto::TileType::Vec, float, srcTileH, tmpTileW32Bit, pto::BLayout::RowMajor, -1, -1>;
-    using Tmp5Tile =
-        pto::Tile<pto::TileType::Vec, float, srcTileH, tmpTileW32Bit, pto::BLayout::RowMajor, -1, -1>;
-    using Tmp6Tile =
-        pto::Tile<pto::TileType::Vec, float, srcTileH, tmpTileW32Bit, pto::BLayout::RowMajor, -1, -1>;
-    using Tmp7Tile =
-        pto::Tile<pto::TileType::Vec, float, srcTileH, tmpTileW32Bit, pto::BLayout::RowMajor, -1, -1>;
-    using Tmp8Tile =
-        pto::Tile<pto::TileType::Vec, float, srcTileH, tmpTileW32Bit, pto::BLayout::RowMajor, -1, -1>;
+    using DstTile = pto::Tile<pto::TileType::Vec, typename T0::Type, dstTileH, dstTileW, pto::BLayout::RowMajor, -1,
+                              -1>;
+    using SrcTile = pto::Tile<pto::TileType::Vec, typename T1::Type, srcTileH, srcTileW, pto::BLayout::RowMajor, -1,
+                              -1>;
+    using TmpFp32Tile = pto::Tile<pto::TileType::Vec, float, srcTileH, tmpTileW32Bit, pto::BLayout::RowMajor, -1, -1>;
+    using TmpInt32Tile = pto::Tile<pto::TileType::Vec, int32_t, srcTileH, tmpTileW32Bit, pto::BLayout::RowMajor, -1,
+                                   -1>;
+    using Tmp2Tile = pto::Tile<pto::TileType::Vec, float, srcTileH, tmpTileW32Bit, pto::BLayout::RowMajor, -1, -1>;
+    using Tmp3Tile = pto::Tile<pto::TileType::Vec, float, srcTileH, tmpTileW32Bit, pto::BLayout::RowMajor, -1, -1>;
+    using Tmp4Tile = pto::Tile<pto::TileType::Vec, float, srcTileH, tmpTileW32Bit, pto::BLayout::RowMajor, -1, -1>;
+    using Tmp5Tile = pto::Tile<pto::TileType::Vec, float, srcTileH, tmpTileW32Bit, pto::BLayout::RowMajor, -1, -1>;
+    using Tmp6Tile = pto::Tile<pto::TileType::Vec, float, srcTileH, tmpTileW32Bit, pto::BLayout::RowMajor, -1, -1>;
+    using Tmp7Tile = pto::Tile<pto::TileType::Vec, float, srcTileH, tmpTileW32Bit, pto::BLayout::RowMajor, -1, -1>;
+    using Tmp8Tile = pto::Tile<pto::TileType::Vec, float, srcTileH, tmpTileW32Bit, pto::BLayout::RowMajor, -1, -1>;
 
     DstTile dstTile(dstShape3, dstShape4);
     SrcTile srcTile(srcShape3, srcShape4);
@@ -319,10 +321,16 @@ TILEOP void Ttan(T0 dst, T1 src, T2 tmp)
                 pto::TASSIGN(srcTile, (uint64_t)(src.GetAddr() + srcOffset * srcTypeSize));
 
                 if constexpr (std::is_same<typename T1::Type, float>::value) {
-                    TanImpl<LastUse, DstTile, SrcTile, TmpFp32Tile, TmpInt32Tile, Tmp2Tile, Tmp3Tile, Tmp4Tile, Tmp5Tile, Tmp6Tile, Tmp7Tile, Tmp8Tile>(dstTile, srcTile, tmpFp32Tile, tmpInt32Tile, tmp2Tile, tmp3Tile, tmp4Tile, tmp5Tile, tmp6Tile, tmp7Tile, tmp8Tile);
+                    TanImpl<LastUse, DstTile, SrcTile, TmpFp32Tile, TmpInt32Tile, Tmp2Tile, Tmp3Tile, Tmp4Tile,
+                            Tmp5Tile, Tmp6Tile, Tmp7Tile, Tmp8Tile>(dstTile, srcTile, tmpFp32Tile, tmpInt32Tile,
+                                                                    tmp2Tile, tmp3Tile, tmp4Tile, tmp5Tile, tmp6Tile,
+                                                                    tmp7Tile, tmp8Tile);
                 } else if constexpr (std::is_same<typename T1::Type, half>::value ||
                                      std::is_same<typename T1::Type, bfloat16_t>::value) {
-                    TanHalfImpl<LastUse, DstTile, SrcTile, TmpFp32Tile, TmpFp32Tile, TmpInt32Tile, Tmp2Tile, Tmp3Tile, Tmp4Tile, Tmp5Tile, Tmp6Tile, Tmp7Tile, Tmp8Tile>(dstTile, srcTile, tmpFp32Tile, tmpFp32Tile, tmpInt32Tile, tmp2Tile, tmp3Tile, tmp4Tile, tmp5Tile, tmp6Tile, tmp7Tile, tmp8Tile);
+                    TanHalfImpl<LastUse, DstTile, SrcTile, TmpFp32Tile, TmpFp32Tile, TmpInt32Tile, Tmp2Tile, Tmp3Tile,
+                                Tmp4Tile, Tmp5Tile, Tmp6Tile, Tmp7Tile, Tmp8Tile>(
+                        dstTile, srcTile, tmpFp32Tile, tmpFp32Tile, tmpInt32Tile, tmp2Tile, tmp3Tile, tmp4Tile,
+                        tmp5Tile, tmp6Tile, tmp7Tile, tmp8Tile);
                 }
             }
         }

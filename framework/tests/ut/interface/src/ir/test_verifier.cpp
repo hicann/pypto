@@ -41,9 +41,8 @@ static TypePtr Scalar(DataType dt) { return std::make_shared<ScalarType>(dt); }
 static TypePtr Tensor2D(DataType dt)
 {
     return std::make_shared<TensorType>(
-        std::vector<ExprPtr>{
-            std::make_shared<ConstInt>(int64_t(16), DataType::INT64, Span::Unknown()),
-            std::make_shared<ConstInt>(int64_t(32), DataType::INT64, Span::Unknown())},
+        std::vector<ExprPtr>{std::make_shared<ConstInt>(int64_t(16), DataType::INT64, Span::Unknown()),
+                             std::make_shared<ConstInt>(int64_t(32), DataType::INT64, Span::Unknown())},
         dt);
 }
 static Span Sp() { return Span("test_verifier", 1, 1); }
@@ -218,11 +217,10 @@ TEST_F(VerifierSSATest, ForStmt_MissingYield_ReportsError)
     auto ret_var = std::make_shared<Var>("sum_out", Scalar(DataType::INT32), Sp());
 
     // Body without YieldStmt
-    auto noop = std::make_shared<AssignStmt>(
-        std::make_shared<Var>("tmp", Scalar(DataType::INT32), Sp()), zero, Sp());
+    auto noop = std::make_shared<AssignStmt>(std::make_shared<Var>("tmp", Scalar(DataType::INT32), Sp()), zero, Sp());
 
-    auto for_stmt = std::make_shared<ForStmt>(
-        i, zero, ten, one, std::vector<IterArgPtr>{iter_arg}, noop, std::vector<VarPtr>{ret_var}, Sp());
+    auto for_stmt = std::make_shared<ForStmt>(i, zero, ten, one, std::vector<IterArgPtr>{iter_arg}, noop,
+                                              std::vector<VarPtr>{ret_var}, Sp());
     auto program = MakeProgram("f", for_stmt);
     auto diags = v.Verify(program);
     EXPECT_GE(diags.size(), 1u);
@@ -239,11 +237,10 @@ TEST_F(VerifierSSATest, IfStmt_MissingElseYield_ReportsError)
 
     auto then_yield = std::make_shared<YieldStmt>(std::vector<ExprPtr>{val}, Sp());
     // else body without yield
-    auto else_noop = std::make_shared<AssignStmt>(
-        std::make_shared<Var>("tmp", Scalar(DataType::INT32), Sp()), val, Sp());
+    auto else_noop = std::make_shared<AssignStmt>(std::make_shared<Var>("tmp", Scalar(DataType::INT32), Sp()), val,
+                                                  Sp());
 
-    auto if_stmt = std::make_shared<IfStmt>(
-        cond, then_yield, else_noop, std::vector<VarPtr>{ret_var}, Sp());
+    auto if_stmt = std::make_shared<IfStmt>(cond, then_yield, else_noop, std::vector<VarPtr>{ret_var}, Sp());
     auto program = MakeProgram("f", if_stmt);
     auto diags = v.Verify(program);
     EXPECT_GE(diags.size(), 1u);
@@ -259,11 +256,10 @@ TEST_F(VerifierSSATest, WhileStmt_MissingYield_ReportsError)
     auto iter_arg = std::make_shared<IterArg>("cnt", Scalar(DataType::INT32), zero, Sp());
     auto ret_var = std::make_shared<Var>("cnt_out", Scalar(DataType::INT32), Sp());
 
-    auto noop = std::make_shared<AssignStmt>(
-        std::make_shared<Var>("tmp", Scalar(DataType::INT32), Sp()), zero, Sp());
+    auto noop = std::make_shared<AssignStmt>(std::make_shared<Var>("tmp", Scalar(DataType::INT32), Sp()), zero, Sp());
 
-    auto while_stmt = std::make_shared<WhileStmt>(
-        cond, std::vector<IterArgPtr>{iter_arg}, noop, std::vector<VarPtr>{ret_var}, Sp());
+    auto while_stmt = std::make_shared<WhileStmt>(cond, std::vector<IterArgPtr>{iter_arg}, noop,
+                                                  std::vector<VarPtr>{ret_var}, Sp());
     auto program = MakeProgram("f", while_stmt);
     auto diags = v.Verify(program);
     EXPECT_GE(diags.size(), 1u);
@@ -287,8 +283,8 @@ TEST_F(VerifierTypeCheckTest, ForStmt_NonScalarStart_ReportsError)
     auto yield = std::make_shared<YieldStmt>(std::vector<ExprPtr>{}, Sp());
 
     // start is a tensor — should be scalar
-    auto for_stmt = std::make_shared<ForStmt>(
-        i, tensor_val, ten, one, std::vector<IterArgPtr>{}, yield, std::vector<VarPtr>{}, Sp());
+    auto for_stmt = std::make_shared<ForStmt>(i, tensor_val, ten, one, std::vector<IterArgPtr>{}, yield,
+                                              std::vector<VarPtr>{}, Sp());
     auto program = MakeProgram("f", for_stmt);
     auto diags = v.Verify(program);
     EXPECT_GE(diags.size(), 1u);
@@ -316,8 +312,8 @@ TEST_F(VerifierTypeCheckTest, WhileStmt_NonScalarCondition_ReportsError)
     auto tensor_cond = std::make_shared<Var>("c", Tensor2D(DataType::FP32), Sp());
     auto yield = std::make_shared<YieldStmt>(std::vector<ExprPtr>{}, Sp());
 
-    auto while_stmt = std::make_shared<WhileStmt>(
-        tensor_cond, std::vector<IterArgPtr>{}, yield, std::vector<VarPtr>{}, Sp());
+    auto while_stmt = std::make_shared<WhileStmt>(tensor_cond, std::vector<IterArgPtr>{}, yield, std::vector<VarPtr>{},
+                                                  Sp());
     auto program = MakeProgram("f", while_stmt);
     auto diags = v.Verify(program);
     EXPECT_GE(diags.size(), 1u);
@@ -338,8 +334,8 @@ TEST_F(VerifierTypeCheckTest, ForStmt_SizeMismatch_ReportsError)
     // Yield with 0 values but iter_args has 1
     auto yield = std::make_shared<YieldStmt>(std::vector<ExprPtr>{}, Sp());
 
-    auto for_stmt = std::make_shared<ForStmt>(
-        i, zero, ten, one, std::vector<IterArgPtr>{iter_arg}, yield, std::vector<VarPtr>{ret_var}, Sp());
+    auto for_stmt = std::make_shared<ForStmt>(i, zero, ten, one, std::vector<IterArgPtr>{iter_arg}, yield,
+                                              std::vector<VarPtr>{ret_var}, Sp());
     auto program = MakeProgram("f", for_stmt);
     auto diags = v.Verify(program);
     EXPECT_GE(diags.size(), 1u);
@@ -366,18 +362,18 @@ TEST_F(VerifierTypeCheckTest, ScalarType_DtypeMismatch_ReportsError)
     auto zero = std::make_shared<ConstInt>(int64_t(0), DataType::INT32, Sp());
     auto ten = std::make_shared<ConstInt>(int64_t(10), DataType::INT32, Sp());
     auto one = std::make_shared<ConstInt>(int64_t(1), DataType::INT32, Sp());
-    
+
     // iter_arg is INT32, but yield is FP32 - both ScalarType but different dtype
     auto iter_arg = std::make_shared<IterArg>("acc", Scalar(DataType::INT32), zero, Sp());
     auto ret_var = std::make_shared<Var>("acc_out", Scalar(DataType::INT32), Sp());
     auto float_val = std::make_shared<ConstFloat>(1.0, DataType::FP32, Sp());
     auto yield = std::make_shared<YieldStmt>(std::vector<ExprPtr>{float_val}, Sp());
 
-    auto for_stmt = std::make_shared<ForStmt>(
-        i, zero, ten, one, std::vector<IterArgPtr>{iter_arg}, yield, std::vector<VarPtr>{ret_var}, Sp());
+    auto for_stmt = std::make_shared<ForStmt>(i, zero, ten, one, std::vector<IterArgPtr>{iter_arg}, yield,
+                                              std::vector<VarPtr>{ret_var}, Sp());
     auto program = MakeProgram("f", for_stmt);
     auto diags = v.Verify(program);
-    
+
     // Should report DTYPE_MISMATCH error
     EXPECT_GE(diags.size(), 1u);
     bool found_dtype_error = false;
@@ -400,8 +396,7 @@ TEST_F(VerifierTypeCheckTest, IfStmt_YieldTypeMismatch_ReportsError)
     auto else_yield = std::make_shared<YieldStmt>(
         std::vector<ExprPtr>{std::make_shared<ConstFloat>(3.14, DataType::FP32, Sp())}, Sp());
 
-    auto if_stmt = std::make_shared<IfStmt>(
-        cond, then_yield, else_yield, std::vector<VarPtr>{ret_var}, Sp());
+    auto if_stmt = std::make_shared<IfStmt>(cond, then_yield, else_yield, std::vector<VarPtr>{ret_var}, Sp());
     auto diags = VerifyWithTypeCheck(if_stmt);
     EXPECT_TRUE(HasErrorCode(diags, static_cast<int>(typecheck::ErrorType::DTYPE_MISMATCH)));
 }
@@ -412,14 +407,15 @@ TEST_F(VerifierTypeCheckTest, IfStmt_YieldSizeMismatch_ReportsError)
     auto ret_var1 = std::make_shared<Var>("result1", Scalar(DataType::INT32), Sp());
     auto ret_var2 = std::make_shared<Var>("result2", Scalar(DataType::INT32), Sp());
 
-    auto then_yield = std::make_shared<YieldStmt>(std::vector<ExprPtr>{
-        std::make_shared<ConstInt>(int64_t(1), DataType::INT32, Sp()),
-        std::make_shared<ConstInt>(int64_t(2), DataType::INT32, Sp())}, Sp());
-    auto else_yield = std::make_shared<YieldStmt>(std::vector<ExprPtr>{
-        std::make_shared<ConstInt>(int64_t(3), DataType::INT32, Sp())}, Sp());
+    auto then_yield = std::make_shared<YieldStmt>(
+        std::vector<ExprPtr>{std::make_shared<ConstInt>(int64_t(1), DataType::INT32, Sp()),
+                             std::make_shared<ConstInt>(int64_t(2), DataType::INT32, Sp())},
+        Sp());
+    auto else_yield = std::make_shared<YieldStmt>(
+        std::vector<ExprPtr>{std::make_shared<ConstInt>(int64_t(3), DataType::INT32, Sp())}, Sp());
 
-    auto if_stmt = std::make_shared<IfStmt>(
-        cond, then_yield, else_yield, std::vector<VarPtr>{ret_var1, ret_var2}, Sp());
+    auto if_stmt = std::make_shared<IfStmt>(cond, then_yield, else_yield, std::vector<VarPtr>{ret_var1, ret_var2},
+                                            Sp());
     auto diags = VerifyWithTypeCheck(if_stmt);
     EXPECT_TRUE(HasErrorCode(diags, static_cast<int>(typecheck::ErrorType::SIZE_MISMATCH)));
 }
@@ -433,26 +429,27 @@ TEST_F(VerifierTypeCheckTest, TensorType_ShapeValueMismatch_ReportsError)
     auto zero = std::make_shared<ConstInt>(int64_t(0), DataType::INT32, Sp());
     auto ten = std::make_shared<ConstInt>(int64_t(10), DataType::INT32, Sp());
     auto one = std::make_shared<ConstInt>(int64_t(1), DataType::INT32, Sp());
-    
+
     // iter_arg is TensorType with shape [16, 32]
     auto dim16 = std::make_shared<ConstInt>(int64_t(16), DataType::INDEX, Sp());
     auto dim32 = std::make_shared<ConstInt>(int64_t(32), DataType::INDEX, Sp());
     auto tensor_type1 = std::make_shared<TensorType>(std::vector<ExprPtr>{dim16, dim32}, DataType::FP32);
-    auto iter_arg = std::make_shared<IterArg>("tensor", tensor_type1, std::make_shared<ConstFloat>(0.0, DataType::FP32, Sp()), Sp());
-    
+    auto iter_arg = std::make_shared<IterArg>("tensor", tensor_type1,
+                                              std::make_shared<ConstFloat>(0.0, DataType::FP32, Sp()), Sp());
+
     // yield is TensorType with shape [16, 64] - different second dimension
     auto dim64 = std::make_shared<ConstInt>(int64_t(64), DataType::INDEX, Sp());
     auto tensor_type2 = std::make_shared<TensorType>(std::vector<ExprPtr>{dim16, dim64}, DataType::FP32);
     auto yield_val = std::make_shared<Var>("yield_tensor", tensor_type2, Sp());
     auto yield = std::make_shared<YieldStmt>(std::vector<ExprPtr>{yield_val}, Sp());
-    
+
     auto ret_var = std::make_shared<Var>("result", tensor_type1, Sp());
 
-    auto for_stmt = std::make_shared<ForStmt>(
-        i, zero, ten, one, std::vector<IterArgPtr>{iter_arg}, yield, std::vector<VarPtr>{ret_var}, Sp());
+    auto for_stmt = std::make_shared<ForStmt>(i, zero, ten, one, std::vector<IterArgPtr>{iter_arg}, yield,
+                                              std::vector<VarPtr>{ret_var}, Sp());
     auto program = MakeProgram("f", for_stmt);
     auto diags = v.Verify(program);
-    
+
     // Should report SHAPE_VALUE_MISMATCH error
     EXPECT_GE(diags.size(), 1u);
     bool found_shape_error = false;
@@ -474,13 +471,15 @@ TEST_F(VerifierTypeCheckTest, ForStmt_NonScalarRange_ReportsError)
     auto tensor_val = std::make_shared<Var>("t", Tensor2D(DataType::FP32), Sp());
     auto yield = std::make_shared<YieldStmt>(std::vector<ExprPtr>{}, Sp());
 
-    EXPECT_TRUE(HasErrorCode(VerifyWithTypeCheck(std::make_shared<ForStmt>(
-        i, zero, tensor_val, one, std::vector<IterArgPtr>{}, yield, std::vector<VarPtr>{}, Sp())),
-        static_cast<int>(typecheck::ErrorType::FOR_RANGE_MUST_BE_SCALAR)));
+    EXPECT_TRUE(
+        HasErrorCode(VerifyWithTypeCheck(std::make_shared<ForStmt>(i, zero, tensor_val, one, std::vector<IterArgPtr>{},
+                                                                   yield, std::vector<VarPtr>{}, Sp())),
+                     static_cast<int>(typecheck::ErrorType::FOR_RANGE_MUST_BE_SCALAR)));
 
-    EXPECT_TRUE(HasErrorCode(VerifyWithTypeCheck(std::make_shared<ForStmt>(
-        i, zero, ten, tensor_val, std::vector<IterArgPtr>{}, yield, std::vector<VarPtr>{}, Sp())),
-        static_cast<int>(typecheck::ErrorType::FOR_RANGE_MUST_BE_SCALAR)));
+    EXPECT_TRUE(
+        HasErrorCode(VerifyWithTypeCheck(std::make_shared<ForStmt>(i, zero, ten, tensor_val, std::vector<IterArgPtr>{},
+                                                                   yield, std::vector<VarPtr>{}, Sp())),
+                     static_cast<int>(typecheck::ErrorType::FOR_RANGE_MUST_BE_SCALAR)));
 }
 
 TEST_F(VerifierTypeCheckTest, WhileStmt_IterArgYieldTypeMismatch_ReportsError)
@@ -492,8 +491,8 @@ TEST_F(VerifierTypeCheckTest, WhileStmt_IterArgYieldTypeMismatch_ReportsError)
     auto yield = std::make_shared<YieldStmt>(
         std::vector<ExprPtr>{std::make_shared<ConstFloat>(1.0, DataType::FP32, Sp())}, Sp());
 
-    auto while_stmt = std::make_shared<WhileStmt>(
-        cond, std::vector<IterArgPtr>{iter_arg}, yield, std::vector<VarPtr>{ret_var}, Sp());
+    auto while_stmt = std::make_shared<WhileStmt>(cond, std::vector<IterArgPtr>{iter_arg}, yield,
+                                                  std::vector<VarPtr>{ret_var}, Sp());
     auto diags = VerifyWithTypeCheck(while_stmt);
     EXPECT_TRUE(HasErrorCode(diags, static_cast<int>(typecheck::ErrorType::DTYPE_MISMATCH)));
 }
@@ -503,11 +502,12 @@ TEST_F(VerifierTypeCheckTest, IfStmt_ValidBranches_NoError)
     auto cond = std::make_shared<Var>("c", Scalar(DataType::BOOL), Sp());
     auto yield = std::make_shared<YieldStmt>(std::vector<ExprPtr>{}, Sp());
 
-    EXPECT_EQ(VerifyWithTypeCheck(
-        std::make_shared<IfStmt>(cond, yield, std::nullopt, std::vector<VarPtr>{}, Sp())).size(), 0u);
+    EXPECT_EQ(
+        VerifyWithTypeCheck(std::make_shared<IfStmt>(cond, yield, std::nullopt, std::vector<VarPtr>{}, Sp())).size(),
+        0u);
 
-    EXPECT_EQ(VerifyWithTypeCheck(
-        std::make_shared<IfStmt>(cond, yield, yield, std::vector<VarPtr>{}, Sp())).size(), 0u);
+    EXPECT_EQ(VerifyWithTypeCheck(std::make_shared<IfStmt>(cond, yield, yield, std::vector<VarPtr>{}, Sp())).size(),
+              0u);
 }
 
 // ============================================================================
@@ -552,8 +552,8 @@ TEST_F(VerifierNoNestedCallTest, CallInForRange_ReportsError)
     auto call_expr = std::make_shared<Call>("op", std::vector<ExprPtr>{}, Sp());
 
     auto verify_for = [&](const ExprPtr& start, const ExprPtr& stop, const ExprPtr& step) {
-        auto for_stmt = std::make_shared<ForStmt>(
-            i, start, stop, step, std::vector<IterArgPtr>{}, yield, std::vector<VarPtr>{}, Sp());
+        auto for_stmt = std::make_shared<ForStmt>(i, start, stop, step, std::vector<IterArgPtr>{}, yield,
+                                                  std::vector<VarPtr>{}, Sp());
         auto diags = VerifyWithNoNestedCall(for_stmt);
         EXPECT_FALSE(diags.empty());
     };
@@ -570,8 +570,8 @@ TEST_F(VerifierNoNestedCallTest, CallInWhileCondition_ReportsError)
 
     auto call_cond = std::make_shared<Call>("cond_op", std::vector<ExprPtr>{}, Sp());
     auto yield = std::make_shared<YieldStmt>(std::vector<ExprPtr>{}, Sp());
-    auto while_stmt = std::make_shared<WhileStmt>(
-        call_cond, std::vector<IterArgPtr>{}, yield, std::vector<VarPtr>{}, Sp());
+    auto while_stmt = std::make_shared<WhileStmt>(call_cond, std::vector<IterArgPtr>{}, yield, std::vector<VarPtr>{},
+                                                  Sp());
     auto program = MakeProgram("f", while_stmt);
     auto diags = v.Verify(program);
     EXPECT_GE(diags.size(), 1u);

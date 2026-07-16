@@ -51,8 +51,8 @@ public:
 
 TEST_F(L1CopyInReuseTest, TwoCopyIn)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestL1CopyInReuse", "TestL1CopyInReuse", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestL1CopyInReuse", "TestL1CopyInReuse",
+                                                      nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     // Prepare the graph
@@ -133,8 +133,8 @@ void InitGraphBuilder(ComputationalGraphBuilder& G, std::vector<int64_t> tileSha
     EXPECT_EQ(G.SetOutCast({"outcast"}), true);
 }
 
-void BuildParallelAssembleSource(
-    ComputationalGraphBuilder& G, const std::string& prefix, int branchNum, std::vector<std::string>& gmTensors)
+void BuildParallelAssembleSource(ComputationalGraphBuilder& G, const std::string& prefix, int branchNum,
+                                 std::vector<std::string>& gmTensors)
 {
     std::vector<int64_t> tileShape{16, 16};
     std::string input = prefix + "In";
@@ -173,9 +173,9 @@ void BuildParallelAssembleSource(
     }
 }
 
-void BuildParallelMatmulBranch(
-    ComputationalGraphBuilder& G, const std::vector<std::string>& gmTensorsA, const std::vector<std::string>& gmTensorsB,
-    int branchIndex, std::vector<std::string>& outcasts)
+void BuildParallelMatmulBranch(ComputationalGraphBuilder& G, const std::vector<std::string>& gmTensorsA,
+                               const std::vector<std::string>& gmTensorsB, int branchIndex,
+                               std::vector<std::string>& outcasts)
 {
     std::vector<int64_t> tileShape{16, 16};
     std::string branchId = std::to_string(branchIndex);
@@ -320,7 +320,7 @@ TEST_F(L1CopyInReuseTest, TestParallelAssembleEnableParallelMatmulL1ReuseMerge)
     constexpr int branchNum = 4;
 
     auto func = std::make_shared<Function>(Program::GetInstance(), "TestGraphPartitionCoeL1Reuse",
-        "TestGraphPartitionCoeL1Reuse", nullptr);
+                                           "TestGraphPartitionCoeL1Reuse", nullptr);
     ComputationalGraphBuilder graph(func.get());
     BuildParallelMatmulGraph(graph, branchNum);
 
@@ -360,8 +360,7 @@ TEST_F(L1CopyInReuseTest, TestParallelAssembleEnableParallelMatmulL1ReuseMerge)
 static size_t RunMatmulSideMerge(int branchNum, int64_t side, int mergeCount = 0)
 {
     int count = mergeCount > 0 ? mergeCount : branchNum;
-    auto func = std::make_shared<Function>(
-        Program::GetInstance(), "TestL1ReuseSide", "TestL1ReuseSide", nullptr);
+    auto func = std::make_shared<Function>(Program::GetInstance(), "TestL1ReuseSide", "TestL1ReuseSide", nullptr);
     ComputationalGraphBuilder graph(func.get());
     BuildParallelMatmulGraph(graph, branchNum);
 
@@ -384,24 +383,18 @@ static size_t RunMatmulSideMerge(int branchNum, int64_t side, int mergeCount = 0
 // In this graph every branch shares both the A and B GM tensors after COE dedup, so
 // biasing the merge towards the left(L0A) matrix still finds the shared-A copy-in and
 // merges all branches into a single subgraph.
-TEST_F(L1CopyInReuseTest, TestL1ReuseSideLeftMatmulMerge)
-{
-    EXPECT_EQ(RunMatmulSideMerge(4, 1), 1UL);
-}
+TEST_F(L1CopyInReuseTest, TestL1ReuseSideLeftMatmulMerge) { EXPECT_EQ(RunMatmulSideMerge(4, 1), 1UL); }
 
 // Symmetric to the left case: biasing towards the right(L0B) matrix finds the shared-B
 // copy-in and merges all branches into a single subgraph.
-TEST_F(L1CopyInReuseTest, TestL1ReuseSideRightMatmulMerge)
-{
-    EXPECT_EQ(RunMatmulSideMerge(4, 2), 1UL);
-}
+TEST_F(L1CopyInReuseTest, TestL1ReuseSideRightMatmulMerge) { EXPECT_EQ(RunMatmulSideMerge(4, 2), 1UL); }
 
 // Partial merge: with a merge count (2) smaller than the branch count (4), the side-preferred
 // subgraphs merge in groups rather than all into one, so the final subgraph count stays > 1
 // (and <= branchNum). This exercises the per-group anchor + capacity-limited merge path.
 TEST_F(L1CopyInReuseTest, TestL1ReuseSidePartialMerge)
 {
-    size_t merged = RunMatmulSideMerge(4, 2, 2);  // side=right, merge count=2
+    size_t merged = RunMatmulSideMerge(4, 2, 2); // side=right, merge count=2
     EXPECT_GT(merged, 1UL);
     EXPECT_LE(merged, 4UL);
 }
@@ -418,7 +411,7 @@ TEST_F(L1CopyInReuseTest, TestL1ReuseSideHardRestrictNonMatmul)
     const int subGraphNum = 20;
     InitGraphBuilder(G, tileShape, subGraphNum);
     Function* function = G.GetFunction();
-    function->paramConfigs_.cubeNBufferSetting = {{-1, 1}};  // skip the cube-nbuffer merge
+    function->paramConfigs_.cubeNBufferSetting = {{-1, 1}}; // skip the cube-nbuffer merge
     // global side=left (1) packed into the -1 entry's value: 1 * L1_REUSE_SIDE_BASE + 2.
     function->paramConfigs_.cubeL1ReuseSetting = {{-1, 1 * L1_REUSE_SIDE_BASE + 2}};
     function->SetTotalSubGraphCount(subGraphNum);
@@ -666,10 +659,9 @@ TEST_F(L1CopyInReuseTest, TestGeneralizationL1CopyIn)
     function->paramConfigs_.cubeL1ReuseSetting = {{1, 2}, {-1, 2}};
     function->SetTotalSubGraphCount(subGraphNum);
     PassManager& passManager = PassManager::Instance();
-    passManager.RegisterStrategy(
-        "myStrategy", {
-                          {"L1CopyInReuseMerge", PassName::L1_COPY_IN_REUSE_MERGE},
-                      });
+    passManager.RegisterStrategy("myStrategy", {
+                                                   {"L1CopyInReuseMerge", PassName::L1_COPY_IN_REUSE_MERGE},
+                                               });
     auto ret = passManager.RunPass(Program::GetInstance(), *function, "myStrategy");
     // L1CopyInReuseMerge LCRM;
     EXPECT_EQ(ret, SUCCESS);
@@ -775,7 +767,6 @@ TEST_F(L1CopyInReuseTest, ByFuncL1ReuseDefaultOneNoMerge)
     EXPECT_EQ(LCRM.RunOnFunction(*function), SUCCESS);
     EXPECT_EQ(function->GetTotalSubGraphCount(), subGraphNum);
 }
-
 
 } // namespace tile_fwk
 } // namespace npu

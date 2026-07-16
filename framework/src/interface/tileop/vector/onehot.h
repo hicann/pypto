@@ -23,8 +23,8 @@ PTO_INST void TZEROS(TileData& dst, int shape3, int shape4)
 {
     static_assert(TileData::isRowMajor, "layout of dst must be pto::BLayout::RowMajor.");
     if constexpr (std::is_same_v<typename TileData::DType, int64_t>) {
-        using DstTileType =
-            pto::Tile<TileData::Loc, int32_t, TileData::Rows, TileData::Cols * 2, pto::BLayout::RowMajor, -1, -1>;
+        using DstTileType = pto::Tile<TileData::Loc, int32_t, TileData::Rows, TileData::Cols * 2,
+                                      pto::BLayout::RowMajor, -1, -1>;
         DstTileType dstTile(shape3, shape4 * 2);
         pto::TASSIGN(dstTile, (uint64_t)dst.data());
         pto::TEXPANDS(dstTile, 0);

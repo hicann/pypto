@@ -72,9 +72,8 @@ void CoreMachine::SetCalendar()
             counterSetQueue.Enqueue(calendarSecondSet);
         }
 
-        SIMULATION_LOGI(
-            "[Cycle: %lu][CoreMachine][SetCalendar] task id %lu SetCalendar pass!!!",
-            static_cast<unsigned long>(GetSim()->GetCycles()), static_cast<unsigned long>(executingTaskId));
+        SIMULATION_LOGI("[Cycle: %lu][CoreMachine][SetCalendar] task id %lu SetCalendar pass!!!",
+                        static_cast<unsigned long>(GetSim()->GetCycles()), static_cast<unsigned long>(executingTaskId));
     }
 }
 
@@ -202,18 +201,16 @@ bool CoreMachine::IsTerminate()
         return false;
     }
 
-    return (
-        !executingTask && submissionQueue.IsTerminate() && completionQueue.IsTerminate() &&
-        outcastReferenceQueue.IsTerminate() && incastReferenceQueue.IsTerminate() && releaseQueue.IsTerminate() &&
-        cacheRespQueue.IsTerminate() && counterSetQueue.IsTerminate());
+    return (!executingTask && submissionQueue.IsTerminate() && completionQueue.IsTerminate() &&
+            outcastReferenceQueue.IsTerminate() && incastReferenceQueue.IsTerminate() && releaseQueue.IsTerminate() &&
+            cacheRespQueue.IsTerminate() && counterSetQueue.IsTerminate());
 }
 
 void CoreMachine::PushCompletion(uint64_t taskId)
 {
-    SIMULATION_LOGI(
-        "[Cycle: %lu][CoreMachine%lu][PushCompletion] push task %lu in completion queue",
-        static_cast<unsigned long>(GetSim()->GetCycles()), static_cast<unsigned long>(machineId),
-        static_cast<unsigned long>(taskId));
+    SIMULATION_LOGI("[Cycle: %lu][CoreMachine%lu][PushCompletion] push task %lu in completion queue",
+                    static_cast<unsigned long>(GetSim()->GetCycles()), static_cast<unsigned long>(machineId),
+                    static_cast<unsigned long>(taskId));
 
     stats->completedTaskNum++;
     // not push packet in calendar mode
@@ -226,8 +223,7 @@ void CoreMachine::PushCompletion(uint64_t taskId)
     packet.currentType = machineType;
     packet.cycleInfo.taskExecuteStartCycle = executionStartCycle;
     packet.cycleInfo.taskExecuteEndCycle = GetSim()->GetCycles();
-    auto devicePtr = std::dynamic_pointer_cast<DeviceMachine>(
-        GetSim()->machineGroup[int(MachineType::DEVICE)][0]);
+    auto devicePtr = std::dynamic_pointer_cast<DeviceMachine>(GetSim()->machineGroup[int(MachineType::DEVICE)][0]);
     if (devicePtr != nullptr) {
         auto it = devicePtr->savedTaskMap.find(taskId);
         if (it != devicePtr->savedTaskMap.end() && it->second != nullptr) {
@@ -284,21 +280,18 @@ void CoreMachine::ProcessDeviceTaskPacket(const TaskPack& packet)
 {
     auto functionHash = packet.task.functionHash;
 
-    SIMULATION_LOGI(
-        "[Cycle: %lu][CoreMachine][ReceivePacket] get task %lu from parent machine",
-        static_cast<unsigned long>(GetSim()->GetCycles()), static_cast<unsigned long>(packet.taskId));
+    SIMULATION_LOGI("[Cycle: %lu][CoreMachine][ReceivePacket] get task %lu from parent machine",
+                    static_cast<unsigned long>(GetSim()->GetCycles()), static_cast<unsigned long>(packet.taskId));
 
     bool hit = sim->functionCache.Lookup(functionHash, machineId, functionCacheTid);
     if (!hit) {
-        SIMULATION_LOGI(
-            "[Cycle: %lu][CoreMachine][ReceivePacket] Function Cache Miss",
-            static_cast<unsigned long>(GetSim()->GetCycles()));
+        SIMULATION_LOGI("[Cycle: %lu][CoreMachine][ReceivePacket] Function Cache Miss",
+                        static_cast<unsigned long>(GetSim()->GetCycles()));
     }
     FunctionPtr function = sim->functionCache.GetFunction(functionHash);
-    SIMULATION_LOGI(
-        "[Cycle: %lu][CoreMachine][ReceivePacket] CoreMachine: %lu Receive Function:%s",
-        static_cast<unsigned long>(GetSim()->GetCycles()), static_cast<unsigned long>(machineId),
-        function->funcName.c_str());
+    SIMULATION_LOGI("[Cycle: %lu][CoreMachine][ReceivePacket] CoreMachine: %lu Receive Function:%s",
+                    static_cast<unsigned long>(GetSim()->GetCycles()), static_cast<unsigned long>(machineId),
+                    function->funcName.c_str());
 
     std::string logLabel = packet.task.taskPtr->GetTaskName();
     logLabel += (" (" + packet.task.taskPtr->GetColorLabel(config.logLabelMode) + ")");
@@ -332,9 +325,8 @@ void CoreMachine::ProcessDeviceTaskPacket(const TaskPack& packet)
 
 void CoreMachine::InitCore()
 {
-    SIMULATION_LOGI(
-        "[Cycle: %lu][CoreMachine][InitCore] ******Init Cost Model ******",
-        static_cast<unsigned long>(GetSim()->GetCycles()));
+    SIMULATION_LOGI("[Cycle: %lu][CoreMachine][InitCore] ******Init Cost Model ******",
+                    static_cast<unsigned long>(GetSim()->GetCycles()));
 
     scheduler.sim = GetSim();
     totalOperations = 0;
@@ -355,9 +347,8 @@ void CoreMachine::GenDependence(std::shared_ptr<CostModel::Function> func)
     if (exectingFixLatencyTask) {
         return;
     }
-    SIMULATION_LOGI(
-        "[Cycle: %lu][CoreMachine][GenDependence] ***** Generate Dependence ******",
-        static_cast<unsigned long>(GetSim()->GetCycles()));
+    SIMULATION_LOGI("[Cycle: %lu][CoreMachine][GenDependence] ***** Generate Dependence ******",
+                    static_cast<unsigned long>(GetSim()->GetCycles()));
     // The function can be called multiple times.
     // Therefore, we need to build new TilePtr and TileOpPtr.
     for (auto tensor : func->tiles) {
@@ -439,11 +430,10 @@ void CoreMachine::GenDependence(std::shared_ptr<CostModel::Function> func)
     }
     totalOperations = tileOps.size();
 
-    SIMULATION_LOGI(
-        "[Cycle: %lu][CoreMachine][GenDependence] Tile Number:", static_cast<unsigned long>(GetSim()->GetCycles()));
-    SIMULATION_LOGI(
-        "[Cycle: %lu][CoreMachine][GenDependence] Operation Number:%zu",
-        static_cast<unsigned long>(GetSim()->GetCycles()), tileOps.size());
+    SIMULATION_LOGI("[Cycle: %lu][CoreMachine][GenDependence] Tile Number:",
+                    static_cast<unsigned long>(GetSim()->GetCycles()));
+    SIMULATION_LOGI("[Cycle: %lu][CoreMachine][GenDependence] Operation Number:%zu",
+                    static_cast<unsigned long>(GetSim()->GetCycles()), tileOps.size());
 }
 
 void CoreMachine::SortTileAndTileOp(FunctionPtr func)
@@ -451,9 +441,8 @@ void CoreMachine::SortTileAndTileOp(FunctionPtr func)
     if (exectingFixLatencyTask) {
         return;
     }
-    SIMULATION_LOGI(
-        "[Cycle: %lu][CoreMachine][SortTileAndTileOp] ****** Sort Tile Alloc ******",
-        static_cast<unsigned long>(GetSim()->GetCycles()));
+    SIMULATION_LOGI("[Cycle: %lu][CoreMachine][SortTileAndTileOp] ****** Sort Tile Alloc ******",
+                    static_cast<unsigned long>(GetSim()->GetCycles()));
 
     if (func->hasSchedule) {
         tileAllocSequence = func->tileAllocSequence;
@@ -570,10 +559,9 @@ void CoreMachine::IssueTileOp()
             bufferSize[buffer] += tile->SizeinBytes();
             aliveBuffer[buffer].insert(magic);
             if (bufferSize[buffer] > GetSim()->GetBufferThreshold(buffer)) {
-                SIMULATION_LOGI(
-                    "[Cycle: %lu][CoreMachine][IssueTileOp] MachineId:%lu Buffer %s exceeds limit!!!",
-                    static_cast<unsigned long>(GetSim()->GetCycles()), static_cast<unsigned long>(machineId),
-                    CorePipeName(buffer).c_str());
+                SIMULATION_LOGI("[Cycle: %lu][CoreMachine][IssueTileOp] MachineId:%lu Buffer %s exceeds limit!!!",
+                                static_cast<unsigned long>(GetSim()->GetCycles()),
+                                static_cast<unsigned long>(machineId), CorePipeName(buffer).c_str());
             }
             logInfo = tile->Dump();
         } else {
@@ -589,9 +577,9 @@ void CoreMachine::IssueTileOp()
         numTileopSentToPipe[qid][pipeIndexSelect]++;
         selectedMachine->SubmitTask(packet);
         noIssue = false;
-        SIMULATION_LOGI(
-            "[Cycle: %lu][CoreMachine][IssueTileOp] MachineId:%lu ISSUE %s",
-            static_cast<unsigned long>(GetSim()->GetCycles()), static_cast<unsigned long>(machineId), logInfo.c_str());
+        SIMULATION_LOGI("[Cycle: %lu][CoreMachine][IssueTileOp] MachineId:%lu ISSUE %s",
+                        static_cast<unsigned long>(GetSim()->GetCycles()), static_cast<unsigned long>(machineId),
+                        logInfo.c_str());
 
         if (freePipeNum > 0 && !readyQueues[qid].Empty()) {
             coreNextNeedStep = true;
@@ -632,9 +620,9 @@ void CoreMachine::RetirePipeCompletion(std::shared_ptr<PipeMachine> pipeMachine,
         leafPipeExecuteTime[pipeMachine->pipeType] += tileop->exeInfo.latency;
         logInfo = tileop->Dump();
     }
-    SIMULATION_LOGI(
-        "[Cycle: %lu][CoreMachine][RetireTileOp] MachineId:%lu retire: %s",
-        static_cast<unsigned long>(GetSim()->GetCycles()), static_cast<unsigned long>(machineId), logInfo.c_str());
+    SIMULATION_LOGI("[Cycle: %lu][CoreMachine][RetireTileOp] MachineId:%lu retire: %s",
+                    static_cast<unsigned long>(GetSim()->GetCycles()), static_cast<unsigned long>(machineId),
+                    logInfo.c_str());
 }
 
 void CoreMachine::RetireTileOp()
@@ -657,9 +645,8 @@ void CoreMachine::RetireTileOp()
                 allEmpty = false;
                 int magic = packet.pipeMsg.magic;
                 RetirePipeCompletion(pipeMachine, magic);
-            } else if (
-                pipeMachine->executingTask || !pipeMachine->completionQueue.IsTerminate() ||
-                (getPacket && !taskIdEqual) || !pipeMachine->submissionQueue.IsTerminate()) {
+            } else if (pipeMachine->executingTask || !pipeMachine->completionQueue.IsTerminate() ||
+                       (getPacket && !taskIdEqual) || !pipeMachine->submissionQueue.IsTerminate()) {
                 noExecution = false;
                 allEmpty = false;
             }
@@ -693,9 +680,8 @@ void CoreMachine::RunAtEnd()
         }
     } else if (executingTask && exectingFixLatencyTask) {
         if (fixedLatencyTaskEndCycle <= GetSim()->GetCycles()) {
-            SIMULATION_LOGI(
-                "[Cycle: %lu][CoreMachine:%lu][CheckDeadlock] Completed!!!!!",
-                static_cast<unsigned long>(GetSim()->GetCycles()), static_cast<unsigned long>(machineId));
+            SIMULATION_LOGI("[Cycle: %lu][CoreMachine:%lu][CheckDeadlock] Completed!!!!!",
+                            static_cast<unsigned long>(GetSim()->GetCycles()), static_cast<unsigned long>(machineId));
             LoggerRecordTaskEnd();
             exectingFixLatencyTask = false;
             SetMachineExecuting(false);
@@ -746,17 +732,14 @@ void CoreMachine::AnalysisDeadlock(std::set<int>& unissuedTileMagics)
     for (auto& readyQ : readyQueues) {
         if (!readyQ.Empty()) {
             int front = readyQ.Front();
-            SIMULATION_LOGW(
-                "[AnalysisDeadlock] ReadyQ[%s] size: %zu, front: %s", CorePipeName(readyQ.iqType).c_str(),
-                readyQ.readyQueue.size(), tiles[front]->Dump().c_str());
+            SIMULATION_LOGW("[AnalysisDeadlock] ReadyQ[%s] size: %zu, front: %s", CorePipeName(readyQ.iqType).c_str(),
+                            readyQ.readyQueue.size(), tiles[front]->Dump().c_str());
         }
     }
-    SIMULATION_LOGW(
-        "[Cycle: %lu][CoreMachine][AnalysisDeadlock] ERROR: DEADLOCK!!! [MachineID: %lu]",
-        static_cast<unsigned long>(GetSim()->GetCycles()), static_cast<unsigned long>(machineId));
-    SIMULATION_LOGW(
-        "[Cycle: %lu][CoreMachine][AnalysisDeadlock] DeadLock Task: %lu",
-        static_cast<unsigned long>(GetSim()->GetCycles()), static_cast<unsigned long>(executingTaskId));
+    SIMULATION_LOGW("[Cycle: %lu][CoreMachine][AnalysisDeadlock] ERROR: DEADLOCK!!! [MachineID: %lu]",
+                    static_cast<unsigned long>(GetSim()->GetCycles()), static_cast<unsigned long>(machineId));
+    SIMULATION_LOGW("[Cycle: %lu][CoreMachine][AnalysisDeadlock] DeadLock Task: %lu",
+                    static_cast<unsigned long>(GetSim()->GetCycles()), static_cast<unsigned long>(executingTaskId));
 
     GetSim()->DebugDrawFunc(sim->functionCache.GetFunction(executingFunctionHash), tiles, tileOps);
 }
@@ -776,25 +759,21 @@ void CoreMachine::CheckDeadlock()
         }
     }
     if (unissuedTileOps > 0) {
-        SIMULATION_LOGW(
-            "[Cycle: %lu][CoreMachine][CheckDeadlock] Total Tile Operations %zu",
-            static_cast<unsigned long>(GetSim()->GetCycles()), tileOps.size());
+        SIMULATION_LOGW("[Cycle: %lu][CoreMachine][CheckDeadlock] Total Tile Operations %zu",
+                        static_cast<unsigned long>(GetSim()->GetCycles()), tileOps.size());
 
-        SIMULATION_LOGW(
-            "[Cycle: %lu][CoreMachine][CheckDeadlock] Retired Tile Operations %lu",
-            static_cast<unsigned long>(GetSim()->GetCycles()), static_cast<unsigned long>(retiredTileOps));
+        SIMULATION_LOGW("[Cycle: %lu][CoreMachine][CheckDeadlock] Retired Tile Operations %lu",
+                        static_cast<unsigned long>(GetSim()->GetCycles()), static_cast<unsigned long>(retiredTileOps));
 
-        SIMULATION_LOGW(
-            "[Cycle: %lu][CoreMachine][CheckDeadlock] Unissued Tile Operations %lu",
-            static_cast<unsigned long>(GetSim()->GetCycles()), static_cast<unsigned long>(unissuedTileOps));
+        SIMULATION_LOGW("[Cycle: %lu][CoreMachine][CheckDeadlock] Unissued Tile Operations %lu",
+                        static_cast<unsigned long>(GetSim()->GetCycles()), static_cast<unsigned long>(unissuedTileOps));
 
         AnalysisDeadlock(unissuedTileMagics);
         GetSim()->ReportDeadlock(machineId);
         return;
     }
-    SIMULATION_LOGI(
-        "[Cycle: %lu][CoreMachine][CheckDeadlock] Completed!!!!!!!!!!!!!!!",
-        static_cast<unsigned long>(GetSim()->GetCycles()));
+    SIMULATION_LOGI("[Cycle: %lu][CoreMachine][CheckDeadlock] Completed!!!!!!!!!!!!!!!",
+                    static_cast<unsigned long>(GetSim()->GetCycles()));
     if (executingTask && GetSim() && GetSim()->GetLogger()) {
         LoggerRecordTaskEnd();
     }
@@ -828,9 +807,8 @@ void CoreMachine::CheckOperationReady(int magic)
         // In this scenario, the issue occurs twice.
         tileop->exeInfo.issued = true;
         readyQueues[static_cast<int>(tileop->pipeType)].Insert(magic);
-        SIMULATION_LOGI(
-            "[Cycle: %lu][CoreMachine][CheckOperationReady] MachineId: %lu",
-            static_cast<unsigned long>(GetSim()->GetCycles()), static_cast<unsigned long>(machineId));
+        SIMULATION_LOGI("[Cycle: %lu][CoreMachine][CheckOperationReady] MachineId: %lu",
+                        static_cast<unsigned long>(GetSim()->GetCycles()), static_cast<unsigned long>(machineId));
     }
 }
 
@@ -960,9 +938,8 @@ void CoreMachine::PrintRelativeCycleInfo(FunctionPtr func, std::shared_ptr<Task>
         auto& tileOp = func->tileOpMap[opMagic];
         std::string info = tileOp->Dump(true);
         info += (" Task[" + std::to_string(task->taskId) + "]-r");
-        LoggerRecordTileOp(
-            info, tileOp->exeInfo.exePipeId, tileOp->exeInfo.cycleInfo.relativeStartCycle,
-            tileOp->exeInfo.cycleInfo.relativeEndCycle);
+        LoggerRecordTileOp(info, tileOp->exeInfo.exePipeId, tileOp->exeInfo.cycleInfo.relativeStartCycle,
+                           tileOp->exeInfo.cycleInfo.relativeEndCycle);
         LoggerRecordTileOpFlow(tileOp);
     }
 
@@ -982,18 +959,16 @@ bool ReadyQueue::Empty() const { return readyQueue.empty(); }
 
 int ReadyQueue::Front()
 {
-    ASSERT(npu::tile_fwk::InternalError::SIM_INNER_ERROR, !readyQueue.empty())
-        << "[SIMULATION]: "
-        << "readyQueue is empty";
+    ASSERT(npu::tile_fwk::InternalError::SIM_INNER_ERROR, !readyQueue.empty()) << "[SIMULATION]: "
+                                                                               << "readyQueue is empty";
     int idx = readyQueue.front();
     return idx;
 }
 
 int ReadyQueue::Pop()
 {
-    ASSERT(npu::tile_fwk::InternalError::SIM_INNER_ERROR, !readyQueue.empty())
-        << "[SIMULATION]: "
-        << "readyQueue is empty";
+    ASSERT(npu::tile_fwk::InternalError::SIM_INNER_ERROR, !readyQueue.empty()) << "[SIMULATION]: "
+                                                                               << "readyQueue is empty";
     int idx = readyQueue.front();
     readyQueue.pop_front();
     return idx;

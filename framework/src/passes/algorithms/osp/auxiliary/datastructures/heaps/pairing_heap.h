@@ -42,24 +42,21 @@ template <typename Key, typename Value, typename Compare>
 class PairingHeap {
 public:
     PairingHeap() = default;
-    ~PairingHeap()
-    {
-        Clear();
-    }
+    ~PairingHeap() { Clear(); }
 
     /**
      * @brief Copy constructor.
      * @param other The PairingHeap to copy from.
      */
-    PairingHeap(const PairingHeap &other) : numElements_(other.numElements_), comp_(other.comp_)
+    PairingHeap(const PairingHeap& other) : numElements_(other.numElements_), comp_(other.comp_)
     {
         root_ = nullptr;
         if (!other.root_) {
             return;
         }
 
-        std::unordered_map<const Node *, Node *> oldToNew;
-        std::vector<const Node *> q;
+        std::unordered_map<const Node*, Node*> oldToNew;
+        std::vector<const Node*> q;
         q.reserve(other.numElements_);
 
         // Create root
@@ -70,14 +67,14 @@ public:
 
         size_t head = 0;
         while (head < q.size()) {
-            const Node *oldParent = q[head++];
-            Node *newParent = oldToNew[oldParent];
+            const Node* oldParent = q[head++];
+            Node* newParent = oldToNew[oldParent];
 
             if (oldParent->child_) {
-                const Node *oldChild = oldParent->child_;
+                const Node* oldChild = oldParent->child_;
 
                 // First child
-                Node *newChild = new Node{oldChild->key_, oldChild->value_};
+                Node* newChild = new Node{oldChild->key_, oldChild->value_};
                 newParent->child_ = newChild;
                 newChild->prevOrParent_ = newParent;
                 nodeMap_[newChild->key_] = newChild;
@@ -85,7 +82,7 @@ public:
                 q.push_back(oldChild);
 
                 // Siblings
-                Node *prevNewSibling = newChild;
+                Node* prevNewSibling = newChild;
                 while (oldChild->nextSibling_) {
                     oldChild = oldChild->nextSibling_;
                     newChild = new Node{oldChild->key_, oldChild->value_};
@@ -108,7 +105,7 @@ public:
      * @param other The PairingHeap to assign from.
      * @return Reference to this heap.
      */
-    PairingHeap &operator=(const PairingHeap &other)
+    PairingHeap& operator=(const PairingHeap& other)
     {
         if (this != &other) {
             PairingHeap temp(other);
@@ -123,53 +120,44 @@ public:
     /**
      * @brief Move constructor.
      */
-    PairingHeap(PairingHeap &&) = default;
+    PairingHeap(PairingHeap&&) = default;
 
     /**
      * @brief Move assignment operator.
      */
-    PairingHeap &operator=(PairingHeap &&) = default;
+    PairingHeap& operator=(PairingHeap&&) = default;
 
     /**
      * @brief Checks if the heap is empty.
      * @return True if the heap is empty, false otherwise.
      */
-    [[nodiscard]] bool IsEmpty() const noexcept
-    {
-        return root_ == nullptr;
-    }
+    [[nodiscard]] bool IsEmpty() const noexcept { return root_ == nullptr; }
 
     /**
      * @brief Returns the number of elements in the heap.
      * @return The number of elements.
      */
-    [[nodiscard]] size_t size() const noexcept
-    {
-        return numElements_;
-    }
+    [[nodiscard]] size_t size() const noexcept { return numElements_; }
 
     /**
      * @brief Checks if a key exists in the heap.
      * @param key The key to check.
      * @return True if the key exists, false otherwise.
      */
-    [[nodiscard]] bool Contains(const Key &key) const noexcept
-    {
-        return nodeMap_.count(key);
-    }
+    [[nodiscard]] bool Contains(const Key& key) const noexcept { return nodeMap_.count(key); }
 
     /**
      * @brief Inserts a new key-value pair into the heap.
      * @param key The key to insert.
      * @param value The value associated with the key.
      */
-    void Push(const Key &key, const Value &value)
+    void Push(const Key& key, const Value& value)
     {
-        Node *newNode = new Node{key, value};
+        Node* newNode = new Node{key, value};
         const auto pair = nodeMap_.emplace(key, newNode);
-        const bool &success = pair.second;
+        const bool& success = pair.second;
         if (!success) {
-            delete newNode;    // Avoid memory leak if key already exists
+            delete newNode; // Avoid memory leak if key already exists
             APASS_LOG_ERROR_F(Elements::Config, "Key already exists in the heap.");
             throw std::invalid_argument("Key already exists in the heap.");
         }
@@ -181,9 +169,11 @@ public:
      * @brief Returns the key with the minimum (or maximum) value depending on Compare.
      * @return The key at the top of the heap.
      */
-    [[nodiscard]] const Key &Top() const
+    [[nodiscard]] const Key& Top() const
     {
-        if (IsEmpty()) { APASS_LOG_ERROR_F(Elements::Config, "Heap is empty."); }
+        if (IsEmpty()) {
+            APASS_LOG_ERROR_F(Elements::Config, "Heap is empty.");
+        }
         return root_->key_;
     }
 
@@ -198,7 +188,7 @@ public:
             throw std::runtime_error("Heap is empty.");
         }
 
-        Node *oldRoot = root_;
+        Node* oldRoot = root_;
         Key topKey = oldRoot->key_;
 
         root_ = MultipassMerge(oldRoot->child_);
@@ -215,7 +205,7 @@ public:
      * @param key The key whose value to update.
      * @param newValue The new value.
      */
-    void Update(const Key &key, const Value &newValue)
+    void Update(const Key& key, const Value& newValue)
     {
         auto it = nodeMap_.find(key);
         if (it == nodeMap_.end()) {
@@ -223,16 +213,16 @@ public:
             throw std::invalid_argument("Key does not exist in the heap.");
         }
 
-        Node *node = it->second;
+        Node* node = it->second;
         const Value oldValue = node->value_;
 
-        if (comp_(newValue, oldValue)) {    // Decrease key
+        if (comp_(newValue, oldValue)) { // Decrease key
             node->value_ = newValue;
             if (node != root_) {
                 Cut(node);
                 root_ = Meld(root_, node);
             }
-        } else if (comp_(oldValue, newValue)) {    // Increase key
+        } else if (comp_(oldValue, newValue)) { // Increase key
             node->value_ = newValue;
             if (node != root_) {
                 Cut(node);
@@ -242,7 +232,7 @@ public:
                 }
                 root_ = Meld(root_, node);
             } else {
-                Node *oldRoot = root_;
+                Node* oldRoot = root_;
                 root_ = MultipassMerge(oldRoot->child_);
                 oldRoot->child_ = nullptr;
                 root_ = Meld(root_, oldRoot);
@@ -256,14 +246,14 @@ public:
      * @brief Removes an arbitrary key from the heap.
      * @param key The key to remove.
      */
-    void Erase(const Key &key)
+    void Erase(const Key& key)
     {
         auto it = nodeMap_.find(key);
         if (it == nodeMap_.end()) {
             APASS_LOG_ERROR_F(Elements::Config, "Key does not exist in the heap.");
             throw std::invalid_argument("Key does not exist in the heap.");
         }
-        Node *nodeToErase = it->second;
+        Node* nodeToErase = it->second;
 
         if (nodeToErase == root_) {
             Pop();
@@ -286,7 +276,7 @@ public:
      * @param key The key to look up.
      * @return The value associated with the key.
      */
-    [[nodiscard]] const Value &GetValue(const Key &key) const
+    [[nodiscard]] const Value& GetValue(const Key& key) const
     {
         auto it = nodeMap_.find(key);
         if (it == nodeMap_.end()) {
@@ -301,19 +291,21 @@ public:
      */
     void Clear()
     {
-        if (!root_) { return; }
+        if (!root_) {
+            return;
+        }
 
-        std::vector<Node *> toVisit;
+        std::vector<Node*> toVisit;
         if (numElements_ > 0) {
             toVisit.reserve(numElements_);
         }
         toVisit.push_back(root_);
 
         while (!toVisit.empty()) {
-            Node *current = toVisit.back();
+            Node* current = toVisit.back();
             toVisit.pop_back();
 
-            Node *child = current->child_;
+            Node* child = current->child_;
             while (child) {
                 toVisit.push_back(child);
                 child = child->nextSibling_;
@@ -342,13 +334,13 @@ public:
             topKeys.reserve(limit);
         }
 
-        const Value &topValue = root_->value_;
-        std::vector<const Node *> q;
+        const Value& topValue = root_->value_;
+        std::vector<const Node*> q;
         q.push_back(root_);
         size_t head = 0;
 
         while (head < q.size()) {
-            const Node *current = q[head++];
+            const Node* current = q[head++];
 
             if (comp_(topValue, current->value_)) {
                 continue;
@@ -359,7 +351,7 @@ public:
                 return topKeys;
             }
 
-            Node *child = current->child_;
+            Node* child = current->child_;
             while (child) {
                 q.push_back(child);
                 child = child->nextSibling_;
@@ -372,18 +364,18 @@ private:
     struct Node {
         Key key_;
         Value value_;
-        Node *child_ = nullptr;           // Leftmost child
-        Node *nextSibling_ = nullptr;     // Sibling to the right
-        Node *prevOrParent_ = nullptr;    // If leftmost child, parent; otherwise, left sibling.
+        Node* child_ = nullptr;        // Leftmost child
+        Node* nextSibling_ = nullptr;  // Sibling to the right
+        Node* prevOrParent_ = nullptr; // If leftmost child, parent; otherwise, left sibling.
     };
 
-    Node *root_ = nullptr;
-    std::unordered_map<Key, Node *> nodeMap_;
+    Node* root_ = nullptr;
+    std::unordered_map<Key, Node*> nodeMap_;
     size_t numElements_ = 0;
     Compare comp_;
 
     // Melds two heaps together.
-    Node *Meld(Node *heap1, Node *heap2)
+    Node* Meld(Node* heap1, Node* heap2)
     {
         if (!heap1) {
             return heap2;
@@ -408,16 +400,16 @@ private:
     }
 
     // Merges a list of sibling heaps using a two-pass strategy.
-    Node *MultipassMerge(Node *firstSibling)
+    Node* MultipassMerge(Node* firstSibling)
     {
         if (!firstSibling) {
             return nullptr;
         }
 
-        std::vector<Node *> heapList;
-        Node *current = firstSibling;
+        std::vector<Node*> heapList;
+        Node* current = firstSibling;
         while (current) {
-            Node *next = current->nextSibling_;
+            Node* next = current->nextSibling_;
             current->nextSibling_ = nullptr;
             current->prevOrParent_ = nullptr;
             heapList.push_back(current);
@@ -430,7 +422,7 @@ private:
 
         constexpr size_t kPairSize = 2; // Number of sibling heaps to merge in each pair
         // Merge pairs from left to right
-        std::vector<Node *> mergedHeaps;
+        std::vector<Node*> mergedHeaps;
         mergedHeaps.reserve((heapList.size() + 1) / kPairSize);
         for (size_t i = 0; i + 1 < heapList.size(); i += kPairSize) {
             mergedHeaps.push_back(Meld(heapList[i], heapList[i + 1]));
@@ -440,7 +432,7 @@ private:
         }
 
         // Merge resulting heaps from right to left
-        Node *finalHeap = mergedHeaps.back();
+        Node* finalHeap = mergedHeaps.back();
         for (auto it = mergedHeaps.rbegin() + 1; it != mergedHeaps.rend(); ++it) {
             finalHeap = Meld(finalHeap, *it);
         }
@@ -449,15 +441,15 @@ private:
     }
 
     // Cuts a node from its parent and siblings.
-    void Cut(Node *node)
+    void Cut(Node* node)
     {
         if (node == root_) {
             return;
         }
 
-        if (node->prevOrParent_->child_ == node) {    // is leftmost child
+        if (node->prevOrParent_->child_ == node) { // is leftmost child
             node->prevOrParent_->child_ = node->nextSibling_;
-        } else {    // is not leftmost child
+        } else { // is not leftmost child
             node->prevOrParent_->nextSibling_ = node->nextSibling_;
         }
         if (node->nextSibling_) {
@@ -473,6 +465,6 @@ private:
  */
 template <typename Key, typename Value>
 using MaxPairingHeap = PairingHeap<Key, Value, std::greater<Value>>;
-}    // namespace osp
+} // namespace osp
 } // namespace npu::tile_fwk
 #endif // OSP_PAIRING_HEAP_H

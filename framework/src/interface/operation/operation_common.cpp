@@ -119,7 +119,8 @@ void CheckTensorsDimConsistency(const std::vector<LogicalTensorPtr>& tensors, co
     CHECK(VectorErrorCode::ERR_RUNTIME_NULLPTR, tensors[0] != nullptr) << opName << ": tensors[0] is nullptr.";
     auto firstDim = tensors[0]->shape.size();
     for (size_t i = 1; i < tensors.size(); ++i) {
-        CHECK(VectorErrorCode::ERR_RUNTIME_NULLPTR, tensors[i] != nullptr) << opName << ": tensors[" << i << "] is nullptr.";
+        CHECK(VectorErrorCode::ERR_RUNTIME_NULLPTR, tensors[i] != nullptr)
+            << opName << ": tensors[" << i << "] is nullptr.";
         CHECK(VectorErrorCode::ERR_PARAM_SHAPE_DIM_UNSUPPORTED, tensors[i]->shape.size() == firstDim)
             << "Tensor dim inconsistent, tensor[0] dim: " << firstDim << ", tensor[" << i
             << "] dim: " << tensors[i]->shape.size() << " for op: " << opName;
@@ -188,12 +189,12 @@ void CheckTensorsShapeConsistencyOrBroadcast(const std::vector<LogicalTensorPtr>
     }
     CHECK(VectorErrorCode::ERR_RUNTIME_NULLPTR, tensors[0] != nullptr) << opName << ": tensors[0] is nullptr.";
     for (size_t i = 1; i < tensors.size(); ++i) {
-        CHECK(VectorErrorCode::ERR_RUNTIME_NULLPTR, tensors[i] != nullptr) << opName << ": tensors[" << i << "] is nullptr.";
+        CHECK(VectorErrorCode::ERR_RUNTIME_NULLPTR, tensors[i] != nullptr)
+            << opName << ": tensors[" << i << "] is nullptr.";
         Shape shape0 = tensors[0]->shape;
         Shape shapeI = tensors[i]->shape;
-        CHECK(
-            VectorErrorCode::ERR_PARAM_INVALID,
-            shape0 == shapeI || IsShapeConsistentOrBroadcastCompatible(shape0, shapeI))
+        CHECK(VectorErrorCode::ERR_PARAM_INVALID,
+              shape0 == shapeI || IsShapeConsistentOrBroadcastCompatible(shape0, shapeI))
             << "Tensor shape must be consistent or broadcast compatible"
             << ", tensor[0] shape: " << StringUtils::ToString(shape0) << ", tensor[" << i
             << "] shape: " << StringUtils::ToString(shapeI) << " for op: " << opName;
@@ -207,16 +208,16 @@ void CheckTensorDataType(DataType dtype, const std::unordered_set<DataType>& sup
         << "Data type " << DataType2String(dtype) << " is not in supported types for op: " << opName;
 }
 
-void CheckTensorDataType(
-    const LogicalTensorPtr& tensor, const std::unordered_set<DataType>& supportedTypes, const std::string& opName)
+void CheckTensorDataType(const LogicalTensorPtr& tensor, const std::unordered_set<DataType>& supportedTypes,
+                         const std::string& opName)
 {
     CHECK(VectorErrorCode::ERR_RUNTIME_NULLPTR, tensor != nullptr) << opName << ": tensor is nullptr.";
     auto dtype = tensor->Datatype();
     CheckTensorDataType(dtype, supportedTypes, opName);
 }
 
-void CheckTensorFormat(
-    const LogicalTensorPtr& tensor, const std::unordered_set<TileOpFormat>& unsupportedFormats, const std::string& opName)
+void CheckTensorFormat(const LogicalTensorPtr& tensor, const std::unordered_set<TileOpFormat>& unsupportedFormats,
+                       const std::string& opName)
 {
     CHECK(VectorErrorCode::ERR_RUNTIME_NULLPTR, tensor != nullptr) << opName << ": tensor is nullptr.";
     auto format = tensor->Format();
@@ -243,8 +244,8 @@ void CheckSupportedNPUArch(const std::vector<NPUArch>& supportedArches, const st
         << opName << ": this interface only supports architecture: " << oss.str();
 }
 
-void CheckTensorsDataTypeConsistency(
-    const LogicalTensorPtr& tensor1, const LogicalTensorPtr& tensor2, const std::string& opName)
+void CheckTensorsDataTypeConsistency(const LogicalTensorPtr& tensor1, const LogicalTensorPtr& tensor2,
+                                     const std::string& opName)
 {
     CHECK(VectorErrorCode::ERR_RUNTIME_NULLPTR, tensor1 != nullptr) << opName << ": tensor1 is nullptr.";
     CHECK(VectorErrorCode::ERR_RUNTIME_NULLPTR, tensor2 != nullptr) << opName << ": tensor2 is nullptr.";
@@ -273,15 +274,16 @@ void CheckTensorsDataTypeConsistency(const std::vector<LogicalTensorPtr>& tensor
     CHECK(VectorErrorCode::ERR_RUNTIME_NULLPTR, tensors[0] != nullptr) << opName << ": tensors[0] is nullptr.";
     auto firstDtype = tensors[0]->Datatype();
     for (size_t i = 1; i < tensors.size(); ++i) {
-        CHECK(VectorErrorCode::ERR_RUNTIME_NULLPTR, tensors[i] != nullptr) << opName << ": tensors[" << i << "] is nullptr.";
+        CHECK(VectorErrorCode::ERR_RUNTIME_NULLPTR, tensors[i] != nullptr)
+            << opName << ": tensors[" << i << "] is nullptr.";
         CHECK(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED, tensors[i]->Datatype() == firstDtype)
             << "Tensor data type inconsistent, tensor0 dtype: " << DataType2String(firstDtype) << ", tensor" << i
             << " dtype: " << DataType2String(tensors[i]->Datatype()) << " for op: " << opName;
     }
 }
 
-void CheckTensorsFormatConsistency(
-    const LogicalTensorPtr& tensor1, const LogicalTensorPtr& tensor2, const std::string& opName)
+void CheckTensorsFormatConsistency(const LogicalTensorPtr& tensor1, const LogicalTensorPtr& tensor2,
+                                   const std::string& opName)
 {
     CHECK(VectorErrorCode::ERR_RUNTIME_NULLPTR, tensor1 != nullptr) << opName << ": tensor1 is nullptr.";
     CHECK(VectorErrorCode::ERR_RUNTIME_NULLPTR, tensor2 != nullptr) << opName << ": tensor2 is nullptr.";
@@ -300,15 +302,16 @@ void CheckTensorsFormatConsistency(const std::vector<LogicalTensorPtr>& tensors,
     CHECK(VectorErrorCode::ERR_RUNTIME_NULLPTR, tensors[0] != nullptr) << opName << ": tensors[0] is nullptr.";
     auto firstFormat = tensors[0]->Format();
     for (size_t i = 1; i < tensors.size(); ++i) {
-        CHECK(VectorErrorCode::ERR_RUNTIME_NULLPTR, tensors[i] != nullptr) << opName << ": tensors[" << i << "] is nullptr.";
+        CHECK(VectorErrorCode::ERR_RUNTIME_NULLPTR, tensors[i] != nullptr)
+            << opName << ": tensors[" << i << "] is nullptr.";
         CHECK(VectorErrorCode::ERR_PARAM_INVALID, tensors[i]->Format() == firstFormat)
             << "Tensor format inconsistent, tensor0 format: " << std::to_string(firstFormat) << ", tensor" << i
             << " format: " << std::to_string(tensors[i]->Format()) << " for op: " << opName;
     }
 }
 
-void CheckBinaryInputTensors(
-    const LogicalTensorPtr& tensor1, const LogicalTensorPtr& tensor2, const std::string& opName)
+void CheckBinaryInputTensors(const LogicalTensorPtr& tensor1, const LogicalTensorPtr& tensor2,
+                             const std::string& opName)
 {
     // Check tensor1's properties
     CheckTensorDimRange(tensor1, MIN_TENSOR_DIM, MAX_TENSOR_DIM, opName);
@@ -322,8 +325,8 @@ void CheckBinaryInputTensors(
     CheckTensorsShapeConsistencyOrBroadcast({tensor1, tensor2}, opName);
     CheckTensorsFormatConsistency(tensor1, tensor2, opName);
 }
-const std::unordered_set<DataType>& GetSupportedDataTypesByArch(
-    const std::unordered_set<DataType>& a2a3Types, const std::unordered_set<DataType>& a5Types)
+const std::unordered_set<DataType>& GetSupportedDataTypesByArch(const std::unordered_set<DataType>& a2a3Types,
+                                                                const std::unordered_set<DataType>& a5Types)
 {
     bool isA5Architecture = (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510);
     return isA5Architecture ? a5Types : a2a3Types;

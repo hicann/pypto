@@ -104,19 +104,16 @@ TEST_F(ArbitrationTest, CalculateArbitLevelFromArbitScheNum_AllBranches)
 
     // arbitScheNum == scheCpuNum: 取决于 same-cluster 计数
     std::atomic<uint64_t> cpumaskSameCluster{CPUMASK_3_IN_CLUSTER};
-    EXPECT_EQ(CalculateArbitLevelFromArbitScheNum(scheCpuNum, 3, cpumaskSameCluster),
-        ARBIT_A2A3_SAME_CLUSTER);
+    EXPECT_EQ(CalculateArbitLevelFromArbitScheNum(scheCpuNum, 3, cpumaskSameCluster), ARBIT_A2A3_SAME_CLUSTER);
 
     std::atomic<uint64_t> cpumaskCross{CPUMASK_2_IN_CLUSTER};
-    EXPECT_EQ(CalculateArbitLevelFromArbitScheNum(scheCpuNum, 3, cpumaskCross),
-        ARBIT_A2A3_CROSS_CLUSTER);
+    EXPECT_EQ(CalculateArbitLevelFromArbitScheNum(scheCpuNum, 3, cpumaskCross), ARBIT_A2A3_CROSS_CLUSTER);
 
     // arbitScheNum != scheCpuNum: 与 cpumask 无关
     std::atomic<uint64_t> cpumaskAny{0};
-    EXPECT_EQ(CalculateArbitLevelFromArbitScheNum(scheCpuNum, DAV2201_DUAL_SCHE_NUM, cpumaskAny),
-        ARBIT_A2A3_DUAL_SCHE);
+    EXPECT_EQ(CalculateArbitLevelFromArbitScheNum(scheCpuNum, DAV2201_DUAL_SCHE_NUM, cpumaskAny), ARBIT_A2A3_DUAL_SCHE);
     EXPECT_EQ(CalculateArbitLevelFromArbitScheNum(scheCpuNum, DAV2201_SINGLE_SCHE_NUM, cpumaskAny),
-        ARBIT_A2A3_SINGLE_SCHE);
+              ARBIT_A2A3_SINGLE_SCHE);
 
     EXPECT_EQ(CalculateArbitLevelFromArbitScheNum(scheCpuNum, 0, cpumaskAny), ARBIT_FAILED);
     EXPECT_EQ(CalculateArbitLevelFromArbitScheNum(scheCpuNum, 99, cpumaskAny), ARBIT_FAILED);
@@ -218,7 +215,8 @@ TEST_F(ArbitrationTest, WaitForCpuMaskReady_arbitrationCpumask_ReturnsOk)
     std::atomic<uint64_t> cpumask{0b111};
     std::atomic<uint64_t> arbitrationCpumask{0};
 
-    EXPECT_EQ(WaitForCpuMaskReadyForArbitration(ArchInfo::DAV_3510, 2, cpumask, false, &arbitrationCpumask), DEVICE_MACHINE_OK);
+    EXPECT_EQ(WaitForCpuMaskReadyForArbitration(ArchInfo::DAV_3510, 2, cpumask, false, &arbitrationCpumask),
+              DEVICE_MACHINE_OK);
     EXPECT_EQ(arbitrationCpumask.load(), 0b111u);
 }
 
@@ -227,7 +225,8 @@ TEST_F(ArbitrationTest, WaitForCpuMaskReady_arbitrationCpumaskConsistent)
     std::atomic<uint64_t> cpumask{(1ULL << 4) | (1ULL << 5) | (1ULL << 6)}; // die0 cluster: bit 4,5,6
     std::atomic<uint64_t> arbitrationCpumask{0};
 
-    EXPECT_EQ(WaitForCpuMaskReadyForArbitration(ArchInfo::DAV_3510, 2, cpumask, false, &arbitrationCpumask), DEVICE_MACHINE_OK);
+    EXPECT_EQ(WaitForCpuMaskReadyForArbitration(ArchInfo::DAV_3510, 2, cpumask, false, &arbitrationCpumask),
+              DEVICE_MACHINE_OK);
     EXPECT_EQ(arbitrationCpumask.load(), cpumask.load());
 }
 
@@ -285,8 +284,9 @@ TEST_F(ArbitrationTest, AllocThreadIdxForDav2201Impl_NonDeviceShortCircuits)
     int curThreadIdx = -1;
     int arbitratedScheNum = 0;
 
-    EXPECT_EQ(AllocThreadIdxForDav2201Impl(&devArgs, 6, curThreadIdx, threadIdx, cpumask,
-        arbitratedScheNum, globalArbitrationLevel), DEVICE_MACHINE_OK);
+    EXPECT_EQ(AllocThreadIdxForDav2201Impl(&devArgs, 6, curThreadIdx, threadIdx, cpumask, arbitratedScheNum,
+                                           globalArbitrationLevel),
+              DEVICE_MACHINE_OK);
     // 短路分支：threadIdx 递增，仲裁状态不变
     EXPECT_EQ(curThreadIdx, 1);
     EXPECT_EQ(threadIdx.load(), 1);
@@ -394,8 +394,9 @@ TEST_F(ArbitrationTest, WaitForCtrlDecision_NonDav2201_ReturnsOkImmediately)
     int curThreadIdx = 0;
     int arbitratedScheNum = 3;
 
-    EXPECT_EQ(WaitForCtrlDecision(ArchInfo::DAV_3510, curThreadIdx, arbitratedScheNum,
-        ctrlWaitLevel, ctrlRound, scheRound), DEVICE_MACHINE_OK);
+    EXPECT_EQ(
+        WaitForCtrlDecision(ArchInfo::DAV_3510, curThreadIdx, arbitratedScheNum, ctrlWaitLevel, ctrlRound, scheRound),
+        DEVICE_MACHINE_OK);
     EXPECT_EQ(ctrlWaitLevel.load(), CTRL_WAIT_UNSET);
     EXPECT_EQ(curThreadIdx, 0);
     EXPECT_EQ(arbitratedScheNum, 3);
@@ -411,8 +412,9 @@ TEST_F(ArbitrationTest, WaitForCtrlDecision_Dav2201_CtrlReady_ReturnsOk)
     int curThreadIdx = 0;
     int arbitratedScheNum = 3;
 
-    EXPECT_EQ(WaitForCtrlDecision(ArchInfo::DAV_2201, curThreadIdx, arbitratedScheNum,
-        ctrlWaitLevel, ctrlRound, scheRound), DEVICE_MACHINE_OK);
+    EXPECT_EQ(
+        WaitForCtrlDecision(ArchInfo::DAV_2201, curThreadIdx, arbitratedScheNum, ctrlWaitLevel, ctrlRound, scheRound),
+        DEVICE_MACHINE_OK);
     EXPECT_EQ(ctrlWaitLevel.load(), CTRL_WAIT_OK);
     EXPECT_EQ(curThreadIdx, 0);
     EXPECT_EQ(arbitratedScheNum, 3);
@@ -428,8 +430,9 @@ TEST_F(ArbitrationTest, WaitForCtrlDecision_Dav2201_AlreadyPublishedOk)
     int curThreadIdx = 1;
     int arbitratedScheNum = 3;
 
-    EXPECT_EQ(WaitForCtrlDecision(ArchInfo::DAV_2201, curThreadIdx, arbitratedScheNum,
-        ctrlWaitLevel, ctrlRound, scheRound), DEVICE_MACHINE_OK);
+    EXPECT_EQ(
+        WaitForCtrlDecision(ArchInfo::DAV_2201, curThreadIdx, arbitratedScheNum, ctrlWaitLevel, ctrlRound, scheRound),
+        DEVICE_MACHINE_OK);
     EXPECT_EQ(curThreadIdx, 1);
     EXPECT_EQ(arbitratedScheNum, 3);
 }
@@ -444,8 +447,9 @@ TEST_F(ArbitrationTest, WaitForCtrlDecision_Dav2201_AlreadyPublishedDropped)
     int curThreadIdx = 3; // == scheNum(3) → 被丢弃
     int arbitratedScheNum = 3;
 
-    EXPECT_EQ(WaitForCtrlDecision(ArchInfo::DAV_2201, curThreadIdx, arbitratedScheNum,
-        ctrlWaitLevel, ctrlRound, scheRound), DEVICE_MACHINE_OK);
+    EXPECT_EQ(
+        WaitForCtrlDecision(ArchInfo::DAV_2201, curThreadIdx, arbitratedScheNum, ctrlWaitLevel, ctrlRound, scheRound),
+        DEVICE_MACHINE_OK);
     EXPECT_EQ(curThreadIdx, -1);
     EXPECT_EQ(arbitratedScheNum, 2);
 }
@@ -460,8 +464,9 @@ TEST_F(ArbitrationTest, WaitForCtrlDecision_Dav2201_AlreadyPublishedDropped_Surv
     int curThreadIdx = 1;
     int arbitratedScheNum = 3;
 
-    EXPECT_EQ(WaitForCtrlDecision(ArchInfo::DAV_2201, curThreadIdx, arbitratedScheNum,
-        ctrlWaitLevel, ctrlRound, scheRound), DEVICE_MACHINE_OK);
+    EXPECT_EQ(
+        WaitForCtrlDecision(ArchInfo::DAV_2201, curThreadIdx, arbitratedScheNum, ctrlWaitLevel, ctrlRound, scheRound),
+        DEVICE_MACHINE_OK);
     EXPECT_EQ(curThreadIdx, 1);
     EXPECT_EQ(arbitratedScheNum, 2);
 }

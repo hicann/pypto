@@ -42,14 +42,11 @@ public:
         config::SetHostConfig(KEY_STRATEGY, "ReduceCopyTestStrategy");
         Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
     }
-    void TearDown() override
-    {
-        Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
-    }
+    void TearDown() override { Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN); }
 };
 
-void BuildMatmulAddBranch(
-    ComputationalGraphBuilder& G, int brId, std::vector<std::string>& incasts, std::vector<std::string>& outcasts)
+void BuildMatmulAddBranch(ComputationalGraphBuilder& G, int brId, std::vector<std::string>& incasts,
+                          std::vector<std::string>& outcasts)
 {
     std::vector<int64_t> tileShape{16, 16};
     std::string br = std::to_string(brId);
@@ -128,8 +125,8 @@ TEST_F(ReduceCopyTest, TestCase0)
     EXPECT_EQ(function->GetTotalSubGraphCount(), Num2);
 }
 
-void BuildConnectMatmul(
-    ComputationalGraphBuilder& G, int brId, std::vector<std::string>& incasts, std::vector<std::string>& outcasts)
+void BuildConnectMatmul(ComputationalGraphBuilder& G, int brId, std::vector<std::string>& incasts,
+                        std::vector<std::string>& outcasts)
 {
     std::vector<int64_t> tileShape{16, 16};
     const int Num50 = 50;
@@ -173,8 +170,8 @@ void BuildConnectMatmul(
     }
 }
 
-void BuildConnectVector(
-    ComputationalGraphBuilder& G, int brId, std::vector<std::string>& incasts, std::vector<std::string>& outcasts)
+void BuildConnectVector(ComputationalGraphBuilder& G, int brId, std::vector<std::string>& incasts,
+                        std::vector<std::string>& outcasts)
 {
     std::vector<int64_t> tileShape{16, 16};
     std::string br = std::to_string(brId);

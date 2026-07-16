@@ -60,8 +60,8 @@ inCast{8,8}->view->outCast{8,8}
 */
 TEST_F(TestDeadOperationEliminatePass, DeadOperationEliminateUTest1)
 {
-    auto currFunctionPtr = std::make_shared<Function>(
-        Program::GetInstance(), "TestDeadOperationEliminate", "TestDeadOperationEliminate", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestDeadOperationEliminate",
+                                                      "TestDeadOperationEliminate", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     // Prepare the graph

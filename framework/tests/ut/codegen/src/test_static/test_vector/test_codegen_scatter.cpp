@@ -28,11 +28,10 @@ namespace npu::tile_fwk {
 class TestCodegenScatter : public CodegenTestBase {
 public:
     TestCodegenScatter()
-        : CodegenTestBase(
-              {.compileStage = CS_EXECUTE_GRAPH,
-               .setTileTensor = true,
-               .tileTensorValue = false,
-               .resetTileTensorOnTearDown = true})
+        : CodegenTestBase({.compileStage = CS_EXECUTE_GRAPH,
+                           .setTileTensor = true,
+                           .tileTensorValue = false,
+                           .resetTileTensorOnTearDown = true})
     {}
 };
 

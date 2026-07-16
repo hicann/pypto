@@ -32,21 +32,21 @@ void GraphUtils::SetDynShape(Operation* newOp, const std::vector<std::vector<Sym
     }
 }
 
-Operation& GraphUtils::AddDynOperation(
-    Function& function, const Opcode opCode, LogicalTensors iOperands, const LogicalTensors& oOperands,
-    const std::vector<std::vector<SymbolicScalar>>& outDynShape)
+Operation& GraphUtils::AddDynOperation(Function& function, const Opcode opCode, LogicalTensors iOperands,
+                                       const LogicalTensors& oOperands,
+                                       const std::vector<std::vector<SymbolicScalar>>& outDynShape)
 {
-    auto& newOp = PassOperationUtils::AddOperation(function, opCode, std::move(iOperands), oOperands, nullptr, ir::Span::Unknown(), false);
+    auto& newOp = PassOperationUtils::AddOperation(function, opCode, std::move(iOperands), oOperands, nullptr,
+                                                   ir::Span::Unknown(), false);
     SetDynShape(&newOp, outDynShape);
     return newOp;
 }
 
-Operation& GraphUtils::AddAssembleOperation(
-    Function& function, const AssembleOp& assemble, const std::vector<std::vector<SymbolicScalar>>& outDynShape)
+Operation& GraphUtils::AddAssembleOperation(Function& function, const AssembleOp& assemble,
+                                            const std::vector<std::vector<SymbolicScalar>>& outDynShape)
 {
     IRBuilder builder;
-    auto& newOp = builder.CreateTensorOpStmt(
-        function, Opcode::OP_ASSEMBLE, {assemble.input}, {assemble.output});
+    auto& newOp = builder.CreateTensorOpStmt(function, Opcode::OP_ASSEMBLE, {assemble.input}, {assemble.output});
     if (assemble.originOp != nullptr) {
         newOp.SetScopeInfo(assemble.originOp->GetScopeInfo());
         newOp.CopyAttrFrom(*assemble.originOp, "");
@@ -56,11 +56,12 @@ Operation& GraphUtils::AddAssembleOperation(
     return newOp;
 }
 
-Operation& GraphUtils::AddReshapeOperation(
-    Function& function, const LogicalTensorPtr iOperand, const LogicalTensorPtr& oOperand, const ReshapeOp& reshapeOp,
-    const std::vector<SymbolicScalar>& outDynShape)
+Operation& GraphUtils::AddReshapeOperation(Function& function, const LogicalTensorPtr iOperand,
+                                           const LogicalTensorPtr& oOperand, const ReshapeOp& reshapeOp,
+                                           const std::vector<SymbolicScalar>& outDynShape)
 {
-    auto& newOp = PassOperationUtils::AddOperation(function, Opcode::OP_RESHAPE, {iOperand}, {oOperand}, nullptr, ir::Span::Unknown(), false);
+    auto& newOp = PassOperationUtils::AddOperation(function, Opcode::OP_RESHAPE, {iOperand}, {oOperand}, nullptr,
+                                                   ir::Span::Unknown(), false);
     if (reshapeOp.originOpPtr != nullptr) {
         newOp.SetScopeInfo(reshapeOp.originOpPtr->GetScopeInfo());
         newOp.CopyAttrFrom(*reshapeOp.originOpPtr, "");

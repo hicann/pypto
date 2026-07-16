@@ -60,10 +60,9 @@ void CalcOperatorInfo(Function& function, json& report)
 
     // 非静态场景下 无法计算size 直接返回
     if (function.GetFunctionType() != FunctionType::STATIC) {
-        APASS_LOG_INFO_F(
-            Elements::Function,
-            "PeakMemory can't be calculated; because functiontype is not static, name %s, hash %lu.",
-            function.GetMagicName().c_str(), function.GetFunctionHash().GetHash());
+        APASS_LOG_INFO_F(Elements::Function,
+                         "PeakMemory can't be calculated; because functiontype is not static, name %s, hash %lu.",
+                         function.GetMagicName().c_str(), function.GetFunctionHash().GetHash());
         return;
     }
     uint64_t totalCopySize = 0;
@@ -88,8 +87,8 @@ void CalcOperatorInfo(Function& function, json& report)
     }
 
     // 写出memoryMetric和copyMetric
-    report["peakMemory"] = {
-        {"peakMemoryUsage", memoryMetric.GetMaxSize()}, {"peakMemoryUsageOps", *memoryMetric.GetMaxNodes()}};
+    report["peakMemory"] = {{"peakMemoryUsage", memoryMetric.GetMaxSize()},
+                            {"peakMemoryUsageOps", *memoryMetric.GetMaxNodes()}};
     report["copyDataCount"] = totalCopySize;
 }
 
@@ -114,9 +113,8 @@ void CalcTensorInfo(Function& function, json& report)
     report["maxproducerTensors"] = *producerMetric.GetMaxNodes();
 }
 
-void GetOpConnectionMap(
-    Function& function, std::vector<std::vector<int>>& inMap, std::vector<std::vector<int>>& outMap,
-    std::vector<bool>& actualMagic)
+void GetOpConnectionMap(Function& function, std::vector<std::vector<int>>& inMap, std::vector<std::vector<int>>& outMap,
+                        std::vector<bool>& actualMagic)
 {
     // 找到最大的magic编号
     MetricData magicNum;
@@ -158,9 +156,8 @@ void TraversePathUp(const int parent, const std::vector<std::vector<int>>& outMa
     }
 }
 
-void CalcGraphMetrics(
-    const std::vector<std::vector<int>>& inMap, const std::vector<std::vector<int>>& outMap,
-    const std::vector<bool>& actualVertex, json& report)
+void CalcGraphMetrics(const std::vector<std::vector<int>>& inMap, const std::vector<std::vector<int>>& outMap,
+                      const std::vector<bool>& actualVertex, json& report)
 {
     MetricData inDegreeMetric;
     MetricData outDegreeMetric;
@@ -203,8 +200,8 @@ void CalShapeInt(Operation* copyin, std::vector<OpImmediate>& shape, std::vector
     for (auto s : shape) {
         SymbolicScalar& value = s.GetSpecifiedValue();
         if (value.Raw()->Kind() != SymbolicScalarKind::T_SCALAR_SYMBOLIC_IMMEDIATE) {
-            APASS_LOG_WARN_F(
-                Elements::Operation, "%d COPYIN Shape is dynamic, CalShapeInt not support!", copyin->GetOpMagic());
+            APASS_LOG_WARN_F(Elements::Operation, "%d COPYIN Shape is dynamic, CalShapeInt not support!",
+                             copyin->GetOpMagic());
             continueFlag = true;
             return;
         }
@@ -218,8 +215,8 @@ void CalOffsetInt(Operation* copyin, std::vector<OpImmediate>& offset, std::vect
     for (auto o : offset) {
         SymbolicScalar& value = o.GetSpecifiedValue();
         if (value.Raw()->Kind() != SymbolicScalarKind::T_SCALAR_SYMBOLIC_IMMEDIATE) {
-            APASS_LOG_WARN_F(
-                Elements::Operation, "%d COPYIN Offset is dynamic, CalOffsetInt not support!", copyin->GetOpMagic());
+            APASS_LOG_WARN_F(Elements::Operation, "%d COPYIN Offset is dynamic, CalOffsetInt not support!",
+                             copyin->GetOpMagic());
             continueFlag = true;
             return;
         }
@@ -239,13 +236,12 @@ Status CalRedundantCopy(Function& function, json& report)
         for (auto& consumer : tensor->GetConsumers()) {
             if (consumer->GetOpcodeStr().find("COPY_IN") != std::string::npos) {
                 if (consumer->GetOpAttribute() == nullptr) {
-                    APASS_LOG_ERROR_F(
-                        Elements::Operation, "%d COPYIN op attr is nullptr, CalRedundantCopy failed!",
-                        consumer->GetOpMagic());
+                    APASS_LOG_ERROR_F(Elements::Operation, "%d COPYIN op attr is nullptr, CalRedundantCopy failed!",
+                                      consumer->GetOpMagic());
                     return FAILED;
                 }
-                std::shared_ptr<CopyOpAttribute> attr =
-                    std::static_pointer_cast<CopyOpAttribute>(consumer->GetOpAttribute());
+                std::shared_ptr<CopyOpAttribute> attr = std::static_pointer_cast<CopyOpAttribute>(
+                    consumer->GetOpAttribute());
                 auto shape = attr->GetShape();
                 auto offset = attr->GetCopyInAttr().first;
                 auto dstMemType = attr->GetCopyInAttr().second;
@@ -330,18 +326,17 @@ Status CheckTileShapeAIC(Operation* op, std::vector<int>& res)
     auto kL0 = tileSize.k[0];
     auto nL0 = tileSize.n[0];
     if (op->GetIOperands().size() != CUDE_IOPERAND_NUM2 && op->GetIOperands().size() != CUDE_IOPERAND_NUM3) {
-        APASS_LOG_WARN_F(
-            Elements::Operation,
-            "Cube operation %d %s ioperands size is %zu, should be 2 or 3, CheckTileShapeAIC failed!", op->GetOpMagic(),
-            op->GetOpcodeStr().c_str(), op->GetIOperands().size());
+        APASS_LOG_WARN_F(Elements::Operation,
+                         "Cube operation %d %s ioperands size is %zu, should be 2 or 3, CheckTileShapeAIC failed!",
+                         op->GetOpMagic(), op->GetOpcodeStr().c_str(), op->GetIOperands().size());
         return FAILED;
     }
     auto TensorA = op->GetIOperands()[0];
     auto TensorB = op->GetIOperands()[1];
     if (TensorA->GetShape().size() != NUM2 || TensorB->GetShape().size() != NUM2) {
-        APASS_LOG_WARN_F(
-            Elements::Operation, "Cube operation %d %s input tensor shape size is not 2, CheckTileShapeAIC failed!",
-            op->GetOpMagic(), op->GetOpcodeStr().c_str());
+        APASS_LOG_WARN_F(Elements::Operation,
+                         "Cube operation %d %s input tensor shape size is not 2, CheckTileShapeAIC failed!",
+                         op->GetOpMagic(), op->GetOpcodeStr().c_str());
         return FAILED;
     }
     bool L1A = false;

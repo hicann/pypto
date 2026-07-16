@@ -64,46 +64,46 @@ public:
     void SetHalfwayStrategy()
     {
         PassManager& passManager = PassManager::Instance();
-        passManager.RegisterStrategy(
-            "AssignMemoryTypeTestStrategy", {
-                                                {"RemoveRedundantReshape", PassName::REMOVE_REDUNDANT_RESHAPE},
-                                                {"InferMemoryConflict", PassName::INFER_MEMORY_CONFLICT},
-                                                {"ExpandFunction", PassName::EXPAND_FUNCTION},
-                                                {"DuplicateOp", PassName::DUPLICATE_OP},
-                                                {"MergeViewAssemble", PassName::MERGE_VIEW_ASSEMBLE},
-                                            });
+        passManager.RegisterStrategy("AssignMemoryTypeTestStrategy",
+                                     {
+                                         {"RemoveRedundantReshape", PassName::REMOVE_REDUNDANT_RESHAPE},
+                                         {"InferMemoryConflict", PassName::INFER_MEMORY_CONFLICT},
+                                         {"ExpandFunction", PassName::EXPAND_FUNCTION},
+                                         {"DuplicateOp", PassName::DUPLICATE_OP},
+                                         {"MergeViewAssemble", PassName::MERGE_VIEW_ASSEMBLE},
+                                     });
         ConfigManager::Instance();
     }
 
     void SetTestStrategy()
     {
         PassManager& passManager = PassManager::Instance();
-        passManager.RegisterStrategy(
-            "AssignMemoryTypeTestStrategy", {
-                                                {"InferMemoryConflict", PassName::INFER_MEMORY_CONFLICT},
-                                                {"ExpandFunction", PassName::EXPAND_FUNCTION},
-                                                {"AssignMemoryType", PassName::ASSIGN_MEMORY_TYPE},
-                                            });
+        passManager.RegisterStrategy("AssignMemoryTypeTestStrategy",
+                                     {
+                                         {"InferMemoryConflict", PassName::INFER_MEMORY_CONFLICT},
+                                         {"ExpandFunction", PassName::EXPAND_FUNCTION},
+                                         {"AssignMemoryType", PassName::ASSIGN_MEMORY_TYPE},
+                                     });
         ConfigManager::Instance();
     }
 
     void SetFullTestStrategy()
     {
         PassManager& passManager = PassManager::Instance();
-        passManager.RegisterStrategy(
-            "AssignMemoryTypeTestStrategy", {
-                                                {"RemoveRedundantReshape", PassName::REMOVE_REDUNDANT_RESHAPE},
-                                                {"AutoCast", PassName::AUTO_CAST},
-                                                {"InferMemoryConflict", PassName::INFER_MEMORY_CONFLICT},
-                                                {"RemoveUndrivenView", PassName::REMOVE_UNDRIVEN_VIEW},
-                                                {"ExpandFunction", PassName::EXPAND_FUNCTION},
-                                                {"MergeViewAssemble", PassName::MERGE_VIEW_ASSEMBLE},
-                                                {"SplitReshape", PassName::SPLIT_RESHAPE},
-                                                {"SplitRawTensor", PassName::SPLIT_RAW_TENSOR},
-                                                {"SplitLargeFanoutTensor", PassName::SPLIT_LARGE_FANOUT_TENSOR},
-                                                {"DuplicateOp", PassName::DUPLICATE_OP},
-                                                {"AssignMemoryType", PassName::ASSIGN_MEMORY_TYPE},
-                                            });
+        passManager.RegisterStrategy("AssignMemoryTypeTestStrategy",
+                                     {
+                                         {"RemoveRedundantReshape", PassName::REMOVE_REDUNDANT_RESHAPE},
+                                         {"AutoCast", PassName::AUTO_CAST},
+                                         {"InferMemoryConflict", PassName::INFER_MEMORY_CONFLICT},
+                                         {"RemoveUndrivenView", PassName::REMOVE_UNDRIVEN_VIEW},
+                                         {"ExpandFunction", PassName::EXPAND_FUNCTION},
+                                         {"MergeViewAssemble", PassName::MERGE_VIEW_ASSEMBLE},
+                                         {"SplitReshape", PassName::SPLIT_RESHAPE},
+                                         {"SplitRawTensor", PassName::SPLIT_RAW_TENSOR},
+                                         {"SplitLargeFanoutTensor", PassName::SPLIT_LARGE_FANOUT_TENSOR},
+                                         {"DuplicateOp", PassName::DUPLICATE_OP},
+                                         {"AssignMemoryType", PassName::ASSIGN_MEMORY_TYPE},
+                                     });
         ConfigManager::Instance();
     }
 
@@ -137,8 +137,8 @@ public:
         EXPECT_NE(inputMemOri, outputMemOri) << "OP_CONVERT input should have different memory type from output.";
     }
 
-    int CountAndCheckNewOps(
-        Function& function, const std::vector<int64_t>& beforeMagic, const std::vector<Opcode>& targetOpcodes)
+    int CountAndCheckNewOps(Function& function, const std::vector<int64_t>& beforeMagic,
+                            const std::vector<Opcode>& targetOpcodes)
     {
         int convertNum = 0;
         for (const auto& op : function.Operations()) {
@@ -173,8 +173,8 @@ public:
 
 TEST_F(AssignMemoryTypeTest, AddReshape)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TILE_AddReshape", "TILE_AddReshape", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TILE_AddReshape", "TILE_AddReshape",
+                                                      nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     Program::GetInstance().InsertFuncToFunctionMap("TILE_AddReshape", currFunctionPtr);
@@ -195,31 +195,38 @@ TEST_F(AssignMemoryTypeTest, AddReshape)
     // Prepare the graph
     std::vector<int64_t> shape = {16, 32};
     std::vector<int64_t> shape1 = {32, 16};
-    std::shared_ptr<LogicalTensor> input_tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    std::shared_ptr<LogicalTensor> input_tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, shape, CreateTestConstIntVector(shape));
     input_tensor1->SetMemoryTypeBoth(MEM_DEVICE_DDR);
     input_tensor1->SetMagic(tensorMagic0);
 
-    std::shared_ptr<LogicalTensor> input_tensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    std::shared_ptr<LogicalTensor> input_tensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, shape, CreateTestConstIntVector(shape));
     input_tensor2->SetMemoryTypeBoth(MEM_UNKNOWN);
     input_tensor2->SetMagic(tensorMagic1);
 
-    std::shared_ptr<LogicalTensor> view_output1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    std::shared_ptr<LogicalTensor> view_output1 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, shape, CreateTestConstIntVector(shape));
     view_output1->SetMemoryTypeBoth(MEM_UNKNOWN);
     view_output1->SetMagic(tensorMagic6);
 
-    std::shared_ptr<LogicalTensor> view_output2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    std::shared_ptr<LogicalTensor> view_output2 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, shape, CreateTestConstIntVector(shape));
     view_output2->SetMemoryTypeBoth(MEM_UNKNOWN);
     view_output2->SetMagic(tensorMagic2);
 
-    std::shared_ptr<LogicalTensor> add_output = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    std::shared_ptr<LogicalTensor> add_output = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, shape, CreateTestConstIntVector(shape));
     add_output->SetMemoryTypeBoth(MEM_UNKNOWN);
     add_output->SetMagic(tensorMagic3);
 
-    std::shared_ptr<LogicalTensor> reshape_output = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
+    std::shared_ptr<LogicalTensor> reshape_output = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, shape1, CreateTestConstIntVector(shape1));
     reshape_output->SetMemoryTypeBoth(MEM_UNKNOWN);
     reshape_output->SetMagic(tensorMagic4);
 
-    std::shared_ptr<LogicalTensor> assemble_output = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
+    std::shared_ptr<LogicalTensor> assemble_output = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, shape1, CreateTestConstIntVector(shape1));
     assemble_output->SetMemoryTypeBoth(MEM_UNKNOWN);
     assemble_output->SetMagic(tensorMagic5);
 
@@ -231,13 +238,16 @@ TEST_F(AssignMemoryTypeTest, AddReshape)
     view_op2.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
     view_op2.opmagic = opMagic3;
 
-    auto& add_op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_ADD, {view_output1, view_output2}, {add_output});
+    auto& add_op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_ADD, {view_output1, view_output2},
+                                                  {add_output});
     add_op.opmagic = opMagic1;
 
-    auto& reshape_op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_RESHAPE, {add_output}, {reshape_output});
+    auto& reshape_op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_RESHAPE, {add_output},
+                                                      {reshape_output});
     reshape_op.opmagic = opMagic4;
 
-    auto& assemble_op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_ASSEMBLE, {reshape_output}, {assemble_output});
+    auto& assemble_op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_ASSEMBLE, {reshape_output},
+                                                       {assemble_output});
     assemble_op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
     assemble_op.opmagic = opMagic2;
 
@@ -307,7 +317,7 @@ TEST_F(AssignMemoryTypeTest, TestVecToCubeV2)
         {
             config::SetPassStrategy("AssignMemoryTypeTestStrategy");
             TileShape::Current().SetVecTile(NUM_128, NUM_128);
-            Tensor addRes = Add(input1, input2);                              // 256 * 128
+            Tensor addRes = Add(input1, input2); // 256 * 128
             TileShape::Current().SetCubeTile({NUM_32, NUM_32}, {NUM_128, NUM_128}, {NUM_64, NUM_64});
             Tensor mmRes = Matrix::Matmul(out.GetDataType(), addRes, weight); // (256 * 128) @ (128 * 64) = (256 * 64)
             TileShape::Current().SetVecTile(NUM_128, NUM_128);
@@ -372,8 +382,8 @@ TEST_F(AssignMemoryTypeTest, TestCubeToCube)
             TileShape::Current().SetCubeTile({NUM_128, NUM_128}, {NUM_128, NUM_128}, {NUM_64, NUM_64});
             Tensor kUpdate = Matrix::Matmul(out.GetDataType(), inputK, weight); // (256 * 128) @ (128 * 64) = (256 * 64)
             TileShape::Current().SetCubeTile({NUM_128, NUM_128}, {NUM_64, NUM_64}, {NUM_128, NUM_128});
-            Tensor QKT = Matrix::Matmul(
-                out.GetDataType(), qUpdate, kUpdate, false, true); // (256 * 64) @ (64 * 256) = (256 * 256)
+            Tensor QKT = Matrix::Matmul(out.GetDataType(), qUpdate, kUpdate, false,
+                                        true); // (256 * 64) @ (64 * 256) = (256 * 256)
             TileShape::Current().SetVecTile(NUM_64, NUM_64);
             out = Sub(QKT, Element(DataType::DT_FP32, F_3));
         }
@@ -422,14 +432,14 @@ TEST_F(AssignMemoryTypeTest, TestCubeToCubeV2)
             TileShape::Current().SetCubeTile({NUM_128, NUM_128}, {NUM_128, NUM_128}, {NUM_64, NUM_64});
             Tensor kUpdate = Matrix::Matmul(out.GetDataType(), inputK, weight); // (256 * 128) @ (128 * 64) = (256 * 64)
             TileShape::Current().SetCubeTile({NUM_128, NUM_128}, {NUM_64, NUM_64}, {NUM_128, NUM_128});
-            Tensor QKT = Matrix::Matmul(
-                out.GetDataType(), qUpdate, kUpdate, false, true); // (256 * 64) @ (64 * 256) = (256 * 256)
+            Tensor QKT = Matrix::Matmul(out.GetDataType(), qUpdate, kUpdate, false,
+                                        true); // (256 * 64) @ (64 * 256) = (256 * 256)
             TileShape::Current().SetVecTile(NUM_64, NUM_64);
             out = Add(QKT, Element(DataType::DT_FP32, F_1));
         }
 
-        originFunction =
-            Program::GetInstance().GetFunctionByRawName("TENSOR_TestCubeToCubeV2"); // Tensor_{Function名字}
+        originFunction = Program::GetInstance().GetFunctionByRawName(
+            "TENSOR_TestCubeToCubeV2"); // Tensor_{Function名字}
         ASSERT_NE(originFunction, nullptr) << "当前函数指针为空";
         std::vector<int64_t> beforeMagic;
         for (const auto& op : originFunction->Operations()) {
@@ -444,8 +454,8 @@ TEST_F(AssignMemoryTypeTest, TestCubeToCubeV2)
         assignMemoryType.RunOnFunction(*originFunction);
         assignMemoryType.PostCheck(*originFunction);
         // ================== Verify Pass Effect ==================
-        int convertNum = CountAndCheckNewOps(
-            *originFunction, beforeMagic, {Opcode::OP_CONVERT, Opcode::OP_VIEW, Opcode::OP_ASSEMBLE});
+        int convertNum = CountAndCheckNewOps(*originFunction, beforeMagic,
+                                             {Opcode::OP_CONVERT, Opcode::OP_VIEW, Opcode::OP_ASSEMBLE});
         constexpr int expextedConvertNum = 0;
         EXPECT_EQ(convertNum, expextedConvertNum) << "0 operations should be Convert";
     }
@@ -499,9 +509,8 @@ TEST_F(AssignMemoryTypeTest, TestCubeToVec)
             if (op.GetOpcode() == Opcode::OP_VIEW) {
                 ++afterViewNum;
                 auto viewOpAttr = std::dynamic_pointer_cast<ViewOpAttribute>(op.GetOpAttribute());
-                EXPECT_TRUE(
-                    viewOpAttr->GetTo() == MemoryType::MEM_L1 || viewOpAttr->GetTo() == MemoryType::MEM_UB ||
-                    viewOpAttr->GetTo() == MemoryType::MEM_L0A || viewOpAttr->GetTo() == MemoryType::MEM_L0B)
+                EXPECT_TRUE(viewOpAttr->GetTo() == MemoryType::MEM_L1 || viewOpAttr->GetTo() == MemoryType::MEM_UB ||
+                            viewOpAttr->GetTo() == MemoryType::MEM_L0A || viewOpAttr->GetTo() == MemoryType::MEM_L0B)
                     << "View to either l1, ub, l0a or l0b";
             }
         }
@@ -533,31 +542,40 @@ void GetInvalidPatternGraph(std::shared_ptr<Function>& currFunctionPtr)
     std::vector<int64_t> shape1 = {32, 16};
     std::vector<int64_t> shape2 = {8, 32};
     std::vector<int64_t> shape3 = {32, 8};
-    std::shared_ptr<LogicalTensor> input_cast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
+    std::shared_ptr<LogicalTensor> input_cast = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, shape1, CreateTestConstIntVector(shape1));
     input_cast->SetMagic(tensorMagic0);
 
-    std::shared_ptr<LogicalTensor> input_tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    std::shared_ptr<LogicalTensor> input_tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, shape, CreateTestConstIntVector(shape));
     input_tensor1->SetMagic(tensorMagic1);
 
-    std::shared_ptr<LogicalTensor> view_output1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
+    std::shared_ptr<LogicalTensor> view_output1 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, shape2, CreateTestConstIntVector(shape2));
     view_output1->SetMagic(tensorMagic2);
 
-    std::shared_ptr<LogicalTensor> view_output2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
+    std::shared_ptr<LogicalTensor> view_output2 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, shape2, CreateTestConstIntVector(shape2));
     view_output2->SetMagic(tensorMagic3);
 
-    std::shared_ptr<LogicalTensor> reshape_output1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape3, CreateTestConstIntVector(shape3));
+    std::shared_ptr<LogicalTensor> reshape_output1 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, shape3, CreateTestConstIntVector(shape3));
     reshape_output1->SetMagic(tensorMagic4);
 
-    std::shared_ptr<LogicalTensor> reshape_output2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape3, CreateTestConstIntVector(shape3));
+    std::shared_ptr<LogicalTensor> reshape_output2 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, shape3, CreateTestConstIntVector(shape3));
     reshape_output2->SetMagic(tensorMagic5);
 
-    std::shared_ptr<LogicalTensor> assemble_output = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
+    std::shared_ptr<LogicalTensor> assemble_output = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, shape1, CreateTestConstIntVector(shape1));
     assemble_output->SetMagic(tensorMagic6);
 
-    std::shared_ptr<LogicalTensor> output_cast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
+    std::shared_ptr<LogicalTensor> output_cast = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, shape1, CreateTestConstIntVector(shape1));
     output_cast->SetMagic(tensorMagic7);
 
-    auto& reshape_op0 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_RESHAPE, {input_cast}, {input_tensor1});
+    auto& reshape_op0 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_RESHAPE, {input_cast},
+                                                       {input_tensor1});
     reshape_op0.opmagic = opMagic0;
 
     auto& view_op1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {input_tensor1}, {view_output1});
@@ -568,21 +586,26 @@ void GetInvalidPatternGraph(std::shared_ptr<Function>& currFunctionPtr)
     view_op2.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{8, 0}));
     view_op2.opmagic = opMagic2;
 
-    auto& reshape_op1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_RESHAPE, {view_output1}, {reshape_output1});
+    auto& reshape_op1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_RESHAPE, {view_output1},
+                                                       {reshape_output1});
     reshape_op1.opmagic = opMagic3;
 
-    auto& reshape_op2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_RESHAPE, {view_output2}, {reshape_output2});
+    auto& reshape_op2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_RESHAPE, {view_output2},
+                                                       {reshape_output2});
     reshape_op2.opmagic = opMagic4;
 
-    auto& assemble_op1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_ASSEMBLE, {reshape_output1}, {assemble_output});
+    auto& assemble_op1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_ASSEMBLE, {reshape_output1},
+                                                        {assemble_output});
     assemble_op1.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
     assemble_op1.opmagic = opMagic5;
 
-    auto& assemble_op2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_ASSEMBLE, {reshape_output2}, {assemble_output});
+    auto& assemble_op2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_ASSEMBLE, {reshape_output2},
+                                                        {assemble_output});
     assemble_op2.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{8, 0}));
     assemble_op2.opmagic = opMagic6;
 
-    auto& view_op3 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {assemble_output}, {output_cast});
+    auto& view_op3 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {assemble_output},
+                                                    {output_cast});
     view_op3.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
     view_op3.opmagic = opMagic7;
 
@@ -626,8 +649,8 @@ void CallAndVerify(std::shared_ptr<Function>& currFunctionPtr, const MemoryType 
 
 TEST_F(AssignMemoryTypeTest, InValidOpPattern)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "InValidOpPattern", "InValidOpPattern", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "InValidOpPattern", "InValidOpPattern",
+                                                      nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     Program::GetInstance().InsertFuncToFunctionMap("InValidOpPattern", currFunctionPtr);
@@ -657,40 +680,49 @@ void GetViewReshapeGraph(std::shared_ptr<Function>& currFunctionPtr)
     std::vector<int64_t> shape1 = {32, 16};
     std::vector<int64_t> shape2 = {1, 32};
     std::vector<int64_t> shape3 = {8, 32};
-    std::shared_ptr<LogicalTensor> input_cast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    std::shared_ptr<LogicalTensor> input_cast = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, shape, CreateTestConstIntVector(shape));
     input_cast->SetMagic(tensorMagic0);
 
-    std::shared_ptr<LogicalTensor> transpose_out = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
+    std::shared_ptr<LogicalTensor> transpose_out = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, shape1, CreateTestConstIntVector(shape1));
     transpose_out->SetMagic(tensorMagic1);
 
-    std::shared_ptr<LogicalTensor> view_output1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
+    std::shared_ptr<LogicalTensor> view_output1 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, shape1, CreateTestConstIntVector(shape1));
     view_output1->SetMagic(tensorMagic2);
 
-    std::shared_ptr<LogicalTensor> reshape_output = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    std::shared_ptr<LogicalTensor> reshape_output = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, shape, CreateTestConstIntVector(shape));
     reshape_output->SetMagic(tensorMagic3);
 
-    std::shared_ptr<LogicalTensor> view_output2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
+    std::shared_ptr<LogicalTensor> view_output2 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, shape2, CreateTestConstIntVector(shape2));
     view_output2->SetMagic(tensorMagic4);
 
-    std::shared_ptr<LogicalTensor> output_cast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape3, CreateTestConstIntVector(shape3));
+    std::shared_ptr<LogicalTensor> output_cast = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, shape3, CreateTestConstIntVector(shape3));
     output_cast->SetMagic(tensorMagic5);
 
-    auto& transpose_op =
-        IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_TRANSPOSE_VNCHWCONV, {input_cast}, {transpose_out});
+    auto& transpose_op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_TRANSPOSE_VNCHWCONV, {input_cast},
+                                                        {transpose_out});
     transpose_op.opmagic = opMagic0;
 
     auto& view_op1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {transpose_out}, {view_output1});
     view_op1.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
     view_op1.opmagic = opMagic1;
 
-    auto& reshape_op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_RESHAPE, {view_output1}, {reshape_output});
+    auto& reshape_op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_RESHAPE, {view_output1},
+                                                      {reshape_output});
     reshape_op.opmagic = opMagic2;
 
-    auto& view_op2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {reshape_output}, {view_output2});
+    auto& view_op2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {reshape_output},
+                                                    {view_output2});
     view_op2.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
     view_op2.opmagic = opMagic3;
 
-    auto& expand_op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_EXPAND, {view_output2}, {output_cast});
+    auto& expand_op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_EXPAND, {view_output2},
+                                                     {output_cast});
     expand_op.opmagic = opMagic4;
 }
 TEST_F(AssignMemoryTypeTest, ViewReshape)
@@ -705,42 +737,45 @@ TEST_F(AssignMemoryTypeTest, ViewReshape)
 }
 void L1DataMoveGraph(std::shared_ptr<Function>& currFunctionPtr)
 {
-    std::shared_ptr<LogicalTensor> input_cast1 =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 64}, CreateTestConstIntVector(std::vector<int64_t>{32, 64}));
-    std::shared_ptr<LogicalTensor> input_cast2 =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{64, 16}, CreateTestConstIntVector(std::vector<int64_t>{64, 16}));
-    std::shared_ptr<LogicalTensor> op_view_L1_out1 =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 64}, CreateTestConstIntVector(std::vector<int64_t>{32, 64}));
-    std::shared_ptr<LogicalTensor> op_view_L1_out2 =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{64, 16}, CreateTestConstIntVector(std::vector<int64_t>{64, 16}));
-    std::shared_ptr<LogicalTensor> view_out1 =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 32}, CreateTestConstIntVector(std::vector<int64_t>{32, 32}));
-    std::shared_ptr<LogicalTensor> view_out2 =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 32}, CreateTestConstIntVector(std::vector<int64_t>{32, 32}));
-    std::shared_ptr<LogicalTensor> view_out3 =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 16}, CreateTestConstIntVector(std::vector<int64_t>{32, 16}));
-    std::shared_ptr<LogicalTensor> view_out4 =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 16}, CreateTestConstIntVector(std::vector<int64_t>{32, 16}));
-    std::shared_ptr<LogicalTensor> l0a_out1 =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 32}, CreateTestConstIntVector(std::vector<int64_t>{32, 32}));
-    std::shared_ptr<LogicalTensor> l0a_out2 =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 32}, CreateTestConstIntVector(std::vector<int64_t>{32, 32}));
-    std::shared_ptr<LogicalTensor> l0b_out1 =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 16}, CreateTestConstIntVector(std::vector<int64_t>{32, 16}));
-    std::shared_ptr<LogicalTensor> l0b_out2 =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 16}, CreateTestConstIntVector(std::vector<int64_t>{32, 16}));
-    std::shared_ptr<LogicalTensor> a_mul_b_out1 =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 16}, CreateTestConstIntVector(std::vector<int64_t>{32, 16}));
-    std::shared_ptr<LogicalTensor> a_mul_b_out2 =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 16}, CreateTestConstIntVector(std::vector<int64_t>{32, 16}));
-    // std::shared_ptr<LogicalTensor> output_cast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
-    auto& view_L1_op1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {input_cast1}, {op_view_L1_out1});
+    std::shared_ptr<LogicalTensor> input_cast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{32, 64}, CreateTestConstIntVector(std::vector<int64_t>{32, 64}));
+    std::shared_ptr<LogicalTensor> input_cast2 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{64, 16}, CreateTestConstIntVector(std::vector<int64_t>{64, 16}));
+    std::shared_ptr<LogicalTensor> op_view_L1_out1 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{32, 64}, CreateTestConstIntVector(std::vector<int64_t>{32, 64}));
+    std::shared_ptr<LogicalTensor> op_view_L1_out2 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{64, 16}, CreateTestConstIntVector(std::vector<int64_t>{64, 16}));
+    std::shared_ptr<LogicalTensor> view_out1 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{32, 32}, CreateTestConstIntVector(std::vector<int64_t>{32, 32}));
+    std::shared_ptr<LogicalTensor> view_out2 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{32, 32}, CreateTestConstIntVector(std::vector<int64_t>{32, 32}));
+    std::shared_ptr<LogicalTensor> view_out3 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{32, 16}, CreateTestConstIntVector(std::vector<int64_t>{32, 16}));
+    std::shared_ptr<LogicalTensor> view_out4 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{32, 16}, CreateTestConstIntVector(std::vector<int64_t>{32, 16}));
+    std::shared_ptr<LogicalTensor> l0a_out1 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{32, 32}, CreateTestConstIntVector(std::vector<int64_t>{32, 32}));
+    std::shared_ptr<LogicalTensor> l0a_out2 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{32, 32}, CreateTestConstIntVector(std::vector<int64_t>{32, 32}));
+    std::shared_ptr<LogicalTensor> l0b_out1 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{32, 16}, CreateTestConstIntVector(std::vector<int64_t>{32, 16}));
+    std::shared_ptr<LogicalTensor> l0b_out2 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{32, 16}, CreateTestConstIntVector(std::vector<int64_t>{32, 16}));
+    std::shared_ptr<LogicalTensor> a_mul_b_out1 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{32, 16}, CreateTestConstIntVector(std::vector<int64_t>{32, 16}));
+    std::shared_ptr<LogicalTensor> a_mul_b_out2 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{32, 16}, CreateTestConstIntVector(std::vector<int64_t>{32, 16}));
+    // std::shared_ptr<LogicalTensor> output_cast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape,
+    // CreateTestConstIntVector(shape));
+    auto& view_L1_op1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {input_cast1},
+                                                       {op_view_L1_out1});
     std::vector<int> newoffset{0, 0};
     auto viewAttribute = std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0});
     viewAttribute->SetToType(MemoryType::MEM_L1);
     view_L1_op1.SetOpAttribute(viewAttribute);
 
-    auto& view_L1_op2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {input_cast2}, {op_view_L1_out2});
+    auto& view_L1_op2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {input_cast2},
+                                                       {op_view_L1_out2});
     view_L1_op2.SetOpAttribute(viewAttribute);
 
     auto& view_op1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {op_view_L1_out1}, {view_out1});
@@ -815,36 +850,36 @@ TEST_F(AssignMemoryTypeTest, L1DataMove)
 
 void AssignViewTensorWithAttr(std::shared_ptr<Function>& currFunctionPtr)
 {
-    std::shared_ptr<LogicalTensor> view_in1 =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 64}, CreateTestConstIntVector(std::vector<int64_t>{32, 64}));
-    std::shared_ptr<LogicalTensor> tensor1 =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 64}, CreateTestConstIntVector(std::vector<int64_t>{32, 64}));
-    std::shared_ptr<LogicalTensor> tensor2 =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 64}, CreateTestConstIntVector(std::vector<int64_t>{32, 64}));
-    std::shared_ptr<LogicalTensor> view_out1 =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 64}, CreateTestConstIntVector(std::vector<int64_t>{32, 64}));
-    std::shared_ptr<LogicalTensor> view_in2 =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 64}, CreateTestConstIntVector(std::vector<int64_t>{32, 64}));
-    std::shared_ptr<LogicalTensor> tensor3 =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 64}, CreateTestConstIntVector(std::vector<int64_t>{32, 64}));
-    std::shared_ptr<LogicalTensor> tensor4 =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 64}, CreateTestConstIntVector(std::vector<int64_t>{32, 64}));
-    std::shared_ptr<LogicalTensor> view_out2 =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 64}, CreateTestConstIntVector(std::vector<int64_t>{32, 64}));
-    std::shared_ptr<LogicalTensor> view_in3 =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 64}, CreateTestConstIntVector(std::vector<int64_t>{32, 64}));
-    std::shared_ptr<LogicalTensor> tensor5 =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 64}, CreateTestConstIntVector(std::vector<int64_t>{32, 64}));
-    std::shared_ptr<LogicalTensor> view_out3 =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 64}, CreateTestConstIntVector(std::vector<int64_t>{32, 64}));
-    std::shared_ptr<LogicalTensor> view_in4 =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 64}, CreateTestConstIntVector(std::vector<int64_t>{32, 64}));
-    std::shared_ptr<LogicalTensor> tensor6 =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 64}, CreateTestConstIntVector(std::vector<int64_t>{32, 64}));
-    std::shared_ptr<LogicalTensor> view_out4 =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 64}, CreateTestConstIntVector(std::vector<int64_t>{32, 64}));
-    std::shared_ptr<LogicalTensor> output =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 64}, CreateTestConstIntVector(std::vector<int64_t>{32, 64}));
+    std::shared_ptr<LogicalTensor> view_in1 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{32, 64}, CreateTestConstIntVector(std::vector<int64_t>{32, 64}));
+    std::shared_ptr<LogicalTensor> tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{32, 64}, CreateTestConstIntVector(std::vector<int64_t>{32, 64}));
+    std::shared_ptr<LogicalTensor> tensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{32, 64}, CreateTestConstIntVector(std::vector<int64_t>{32, 64}));
+    std::shared_ptr<LogicalTensor> view_out1 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{32, 64}, CreateTestConstIntVector(std::vector<int64_t>{32, 64}));
+    std::shared_ptr<LogicalTensor> view_in2 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{32, 64}, CreateTestConstIntVector(std::vector<int64_t>{32, 64}));
+    std::shared_ptr<LogicalTensor> tensor3 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{32, 64}, CreateTestConstIntVector(std::vector<int64_t>{32, 64}));
+    std::shared_ptr<LogicalTensor> tensor4 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{32, 64}, CreateTestConstIntVector(std::vector<int64_t>{32, 64}));
+    std::shared_ptr<LogicalTensor> view_out2 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{32, 64}, CreateTestConstIntVector(std::vector<int64_t>{32, 64}));
+    std::shared_ptr<LogicalTensor> view_in3 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{32, 64}, CreateTestConstIntVector(std::vector<int64_t>{32, 64}));
+    std::shared_ptr<LogicalTensor> tensor5 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{32, 64}, CreateTestConstIntVector(std::vector<int64_t>{32, 64}));
+    std::shared_ptr<LogicalTensor> view_out3 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{32, 64}, CreateTestConstIntVector(std::vector<int64_t>{32, 64}));
+    std::shared_ptr<LogicalTensor> view_in4 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{32, 64}, CreateTestConstIntVector(std::vector<int64_t>{32, 64}));
+    std::shared_ptr<LogicalTensor> tensor6 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{32, 64}, CreateTestConstIntVector(std::vector<int64_t>{32, 64}));
+    std::shared_ptr<LogicalTensor> view_out4 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{32, 64}, CreateTestConstIntVector(std::vector<int64_t>{32, 64}));
+    std::shared_ptr<LogicalTensor> output = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{32, 64}, CreateTestConstIntVector(std::vector<int64_t>{32, 64}));
 
     auto& view_op1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {view_in1}, {tensor1});
     auto viewAttribute1 = std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0});
@@ -879,7 +914,8 @@ void AssignViewTensorWithAttr(std::shared_ptr<Function>& currFunctionPtr)
     viewAttribute8->SetToType(MemoryType::MEM_L0B);
     view_op8.SetOpAttribute(viewAttribute7);
 
-    IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_A_MUL_B, {view_out3, view_out4, view_out1, view_out2}, {output});
+    IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_A_MUL_B, {view_out3, view_out4, view_out1, view_out2},
+                                   {output});
 
     currFunctionPtr->inCasts_.push_back(view_in1);
     currFunctionPtr->inCasts_.push_back(view_in2);
@@ -890,8 +926,8 @@ void AssignViewTensorWithAttr(std::shared_ptr<Function>& currFunctionPtr)
 
 TEST_F(AssignMemoryTypeTest, TestViewWithAttr)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestViewWithAttr", "TestViewWithAttr", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestViewWithAttr", "TestViewWithAttr",
+                                                      nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
     Program::GetInstance().InsertFuncToFunctionMap("TestViewWithAttr", currFunctionPtr);
 
@@ -930,9 +966,8 @@ TEST_F(AssignMemoryTypeTest, TestViewWithAttr)
 
 TEST_F(AssignMemoryTypeTest, TestPostcheckFailWhenTensorMemUnknown)
 {
-    auto currFunctionPtr = std::make_shared<Function>(
-        Program::GetInstance(), "TestPostcheckFailWhenTensorMemUnknown", "TestPostcheckFailWhenTensorMemUnknown",
-        nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestPostcheckFailWhenTensorMemUnknown",
+                                                      "TestPostcheckFailWhenTensorMemUnknown", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
     Program::GetInstance().InsertFuncToFunctionMap("TestPostcheckFailWhenTensorMemUnknown", currFunctionPtr);
     AssignViewTensorWithAttr(currFunctionPtr);
@@ -1055,9 +1090,8 @@ int CountL0c2l1Num(Function* originFunction)
             if (op.GetIOperands().front()->GetMemoryTypeOriginal() == MemoryType::MEM_L0C &&
                 op.GetOOperands().front()->GetMemoryTypeOriginal() == MemoryType::MEM_L1) {
                 l0c2l1Count++;
-                EXPECT_TRUE(
-                    (*op.ProducerOps().begin())->GetOpcode() == Opcode::OP_A_MUL_B ||
-                    (*op.ProducerOps().begin())->GetOpcode() == Opcode::OP_A_MULACC_B);
+                EXPECT_TRUE((*op.ProducerOps().begin())->GetOpcode() == Opcode::OP_A_MUL_B ||
+                            (*op.ProducerOps().begin())->GetOpcode() == Opcode::OP_A_MULACC_B);
             }
         }
     }
@@ -1122,8 +1156,8 @@ TEST_F(AssignMemoryTypeTest, TestL0C2L1EqualShape)
             outC2 = Matrix::Matmul(outC2.GetDataType(), inputA2, inputB2); // (128 * 64) @ (64 * 16) = (128 * 16)
         }
 
-        originFunction =
-            Program::GetInstance().GetFunctionByRawName("TENSOR_TestL0C2L1EqualShape"); // Tensor_{Function名字}
+        originFunction = Program::GetInstance().GetFunctionByRawName(
+            "TENSOR_TestL0C2L1EqualShape"); // Tensor_{Function名字}
         ASSERT_NE(originFunction, nullptr) << "当前函数指针为空";
         EXPECT_EQ(CountL0c2l1Num(originFunction), 2);
     }
@@ -1190,8 +1224,8 @@ TEST_F(AssignMemoryTypeTest, TestL0C2L1LargeToSmall)
             outC2 = Matrix::Matmul(outC2.GetDataType(), inputA2, inputB2); // (128 * 64) @ (64 * 32) = (128 * 32)
         }
 
-        originFunction =
-            Program::GetInstance().GetFunctionByRawName("TENSOR_TestL0C2L1LargeToSmall"); // Tensor_{Function名字}
+        originFunction = Program::GetInstance().GetFunctionByRawName(
+            "TENSOR_TestL0C2L1LargeToSmall"); // Tensor_{Function名字}
         ASSERT_NE(originFunction, nullptr) << "当前函数指针为空";
         EXPECT_EQ(CountL0c2l1Num(originFunction), 4);
     }
@@ -1222,8 +1256,8 @@ TEST_F(AssignMemoryTypeTest, TestL0C2L1SmallToLarge)
             outC2 = Matrix::Matmul(outC2.GetDataType(), inputA2, inputB2); // (128 * 64) @ (64 * 32) = (128 * 32)
         }
 
-        originFunction =
-            Program::GetInstance().GetFunctionByRawName("TENSOR_TestL0C2L1SmallToLarge"); // Tensor_{Function名字}
+        originFunction = Program::GetInstance().GetFunctionByRawName(
+            "TENSOR_TestL0C2L1SmallToLarge"); // Tensor_{Function名字}
         ASSERT_NE(originFunction, nullptr) << "当前函数指针为空";
         EXPECT_EQ(CountL0c2l1Num(originFunction), 4);
     }
@@ -1254,8 +1288,8 @@ TEST_F(AssignMemoryTypeTest, TestL0C2L1Dim0Mismatch)
             outC2 = Matrix::Matmul(outC2.GetDataType(), inputA2, inputB2); // (128 * 64) @ (64 * 16) = (128 * 16)
         }
 
-        originFunction =
-            Program::GetInstance().GetFunctionByRawName("TENSOR_TestL0C2L1Dim0Mismatch"); // Tensor_{Function名字}
+        originFunction = Program::GetInstance().GetFunctionByRawName(
+            "TENSOR_TestL0C2L1Dim0Mismatch"); // Tensor_{Function名字}
         ASSERT_NE(originFunction, nullptr) << "当前函数指针为空";
         EXPECT_EQ(CountL0c2l1Num(originFunction), 0);
     }
@@ -1275,11 +1309,14 @@ void ConstructL0C2L1GraphWithNonImmediateValidShape(std::shared_ptr<Function>& c
     auto inputB2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP16, shapeC1, CreateTestConstIntVector(shapeC1));
     auto outputC2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP16, shapeC2, CreateTestConstIntVector(shapeC2));
 
-    auto matmul1Output = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP16, shapeC1, CreateTestConstIntVector(shapeC1));
+    auto matmul1Output = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP16, shapeC1,
+                                                                    CreateTestConstIntVector(shapeC1));
     auto viewL1Output = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP16, shapeC1, CreateTestConstIntVector(shapeC1));
-    auto viewL0AOutput = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP16, shapeC1, CreateTestConstIntVector(shapeC1));
+    auto viewL0AOutput = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP16, shapeC1,
+                                                                    CreateTestConstIntVector(shapeC1));
 
-    auto& matmul1Op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_A_MUL_B, {inputA1, inputB1}, {matmul1Output});
+    auto& matmul1Op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_A_MUL_B, {inputA1, inputB1},
+                                                     {matmul1Output});
     matmul1Op.opmagic = 1001;
 
     auto& viewL1Op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {matmul1Output}, {viewL1Output});
@@ -1288,13 +1325,15 @@ void ConstructL0C2L1GraphWithNonImmediateValidShape(std::shared_ptr<Function>& c
     viewL1Op.SetOpAttribute(viewL1Attr);
     viewL1Op.opmagic = 1002;
 
-    auto& viewL0AOp = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {viewL1Output}, {viewL0AOutput});
+    auto& viewL0AOp = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {viewL1Output},
+                                                     {viewL0AOutput});
     auto viewL0AAttr = std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0});
     viewL0AAttr->SetToType(MemoryType::MEM_L0A);
     viewL0AOp.SetOpAttribute(viewL0AAttr);
     viewL0AOp.opmagic = 1003;
 
-    auto& matmul2Op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_A_MUL_B, {inputA2, viewL0AOutput}, {outputC2});
+    auto& matmul2Op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_A_MUL_B, {inputA2, viewL0AOutput},
+                                                     {outputC2});
     matmul2Op.opmagic = 1004;
 
     currFunctionPtr->inCasts_.push_back(inputA1);
@@ -1312,9 +1351,8 @@ void ConstructL0C2L1GraphWithNonImmediateValidShape(std::shared_ptr<Function>& c
 // 当tensor存在非立即数dynValidShape时，直接走L0C2L1通道进行后续矩阵乘会有精度问题，当前走DDR规避
 TEST_F(AssignMemoryTypeTest, TestL0C2L1WithNonImmediateValidShape)
 {
-    auto currFunctionPtr = std::make_shared<Function>(
-        Program::GetInstance(), "TestL0C2L1WithNonImmediateValidShape",
-        "TestL0C2L1WithNonImmediateValidShape", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestL0C2L1WithNonImmediateValidShape",
+                                                      "TestL0C2L1WithNonImmediateValidShape", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
     Program::GetInstance().InsertFuncToFunctionMap("TestL0C2L1WithNonImmediateValidShape", currFunctionPtr);
 
@@ -1370,8 +1408,8 @@ TEST_F(AssignMemoryTypeTest, TestL0C2L1UnsupportDataType)
             outC2 = Matrix::Matmul(outC2.GetDataType(), inputA2, inputB2); // (128 * 64) @ (64 * 16) = (128 * 16)
         }
 
-        originFunction =
-            Program::GetInstance().GetFunctionByRawName("TENSOR_TestL0C2L1UnsupportDataType"); // Tensor_{Function名字}
+        originFunction = Program::GetInstance().GetFunctionByRawName(
+            "TENSOR_TestL0C2L1UnsupportDataType"); // Tensor_{Function名字}
         ASSERT_NE(originFunction, nullptr) << "当前函数指针为空";
         EXPECT_EQ(CountL0c2l1Num(originFunction), 0);
     }
@@ -1402,8 +1440,8 @@ TEST_F(AssignMemoryTypeTest, TestL0C2L1UnsupportDataShape)
             outC2 = Matrix::Matmul(outC2.GetDataType(), inputA2, inputB2); // (128 * 64) @ (64 * 16) = (128 * 16)
         }
 
-        originFunction =
-            Program::GetInstance().GetFunctionByRawName("TENSOR_TestL0C2L1UnsupportDataShape"); // Tensor_{Function名字}
+        originFunction = Program::GetInstance().GetFunctionByRawName(
+            "TENSOR_TestL0C2L1UnsupportDataShape"); // Tensor_{Function名字}
         ASSERT_NE(originFunction, nullptr) << "当前函数指针为空";
         EXPECT_EQ(CountL0c2l1Num(originFunction), 0);
     }
@@ -1468,9 +1506,8 @@ TEST_F(AssignMemoryTypeTest, TestCascadingAssembleViewNoDDR2L0C)
         Function* originFunction = nullptr;
 
         config::SetBuildStatic(true);
-        FUNCTION(
-            "TestCascadingAssembleViewNoDDR2L0C",
-            {inputA11, inputB11, inputA12, inputB12, inputA13, inputB13, inputA14, inputB14, inputB2, outC2})
+        FUNCTION("TestCascadingAssembleViewNoDDR2L0C",
+                 {inputA11, inputB11, inputA12, inputB12, inputA13, inputB13, inputA14, inputB14, inputB2, outC2})
         {
             TileShape::Current().SetCubeTile({NUM_128, NUM_128}, {NUM_128, NUM_128}, {NUM_128, NUM_128});
             Tensor C11 = Matrix::Matmul(outC2.GetDataType(), inputA11, inputB11); // (16, 32) @ (32, 64) = (16, 64)
@@ -1494,9 +1531,8 @@ TEST_F(AssignMemoryTypeTest, TestCascadingAssembleViewNoDDR2L0C)
             "TENSOR_TestCascadingAssembleViewNoDDR2L0C"); // Tensor_{Function名字}
         ASSERT_NE(originFunction, nullptr) << "当前函数指针为空";
         AssignMemoryType assignMemoryType;
-        EXPECT_EQ(
-            assignMemoryType.PostCheck(*originFunction),
-            SUCCESS); // postcheck中包含对DDR到L0C的不合理通路校验，直接调用
+        EXPECT_EQ(assignMemoryType.PostCheck(*originFunction),
+                  SUCCESS); // postcheck中包含对DDR到L0C的不合理通路校验，直接调用
     }
 }
 
@@ -1539,9 +1575,8 @@ void MultiDataLoadCheck(Function* func)
             EXPECT_TRUE(op.iOperand.front()->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR);
         }
         if (op.GetOpcode() == Opcode::OP_VIEW) {
-            EXPECT_FALSE(
-                op.iOperand.front()->GetMemoryTypeOriginal() == MemoryType::MEM_UB &&
-                op.oOperand.front()->GetMemoryTypeOriginal() == MemoryType::MEM_L1);
+            EXPECT_FALSE(op.iOperand.front()->GetMemoryTypeOriginal() == MemoryType::MEM_UB &&
+                         op.oOperand.front()->GetMemoryTypeOriginal() == MemoryType::MEM_L1);
         }
     }
 }
@@ -1603,7 +1638,8 @@ TEST_F(AssignMemoryTypeTest, TestMultiDataLoad2)
     MultiDataLoadCheck(func);
 }
 
-TEST_F(AssignMemoryTypeTest, TestMatmulL0COutputToL1ToL0A) {
+TEST_F(AssignMemoryTypeTest, TestMatmulL0COutputToL1ToL0A)
+{
     /*
      * Before:
      *   A_MUL_B1(l0a_in, l0b_in) -> l0c_out1(MEM_L0C) -> L1_TO_L0A -> l0a_mid(MEM_L0A) -> A_MUL_B2 -> l0c_out2
@@ -1630,7 +1666,7 @@ TEST_F(AssignMemoryTypeTest, TestMatmulL0COutputToL1ToL0A) {
     G.SetInCast({"l0a_in", "l0b_in", "l0b_in2"});
     G.SetOutCast({"l0c_out2"});
 
-    Function *func = G.GetFunction();
+    Function* func = G.GetFunction();
     size_t beforeOpCount = func->Operations().size();
     AssignMemoryType assignMemoryType;
     EXPECT_EQ(assignMemoryType.RunOnFunction(*func), SUCCESS);
@@ -1638,7 +1674,7 @@ TEST_F(AssignMemoryTypeTest, TestMatmulL0COutputToL1ToL0A) {
     auto opList = func->Operations();
     int convertNum = 0;
     bool foundL1ToL0A = false;
-    for (const auto &op : opList) {
+    for (const auto& op : opList) {
         if (op.GetOpcode() == Opcode::OP_CONVERT) {
             convertNum++;
             auto input = op.GetIOperands().front();
@@ -1659,7 +1695,8 @@ TEST_F(AssignMemoryTypeTest, TestMatmulL0COutputToL1ToL0A) {
     EXPECT_EQ(opList.size(), beforeOpCount + 1) << "should have exactly 1 more op after insertion";
 }
 
-TEST_F(AssignMemoryTypeTest, TestAmulBInputInvalidProducer) {
+TEST_F(AssignMemoryTypeTest, TestAmulBInputInvalidProducer)
+{
     ComputationalGraphBuilder G;
     Shape s{NUM_128, NUM_128};
     G.AddTensor(DataType::DT_FP32, s, MemoryType::MEM_DEVICE_DDR, "input");
@@ -1668,7 +1705,7 @@ TEST_F(AssignMemoryTypeTest, TestAmulBInputInvalidProducer) {
     G.AddOp(Opcode::OP_ADD, {"input"}, {"temp"}, "add_op");
     G.AddOp(Opcode::OP_A_MUL_B, {"temp"}, {"output"}, "a_mul_b_op");
 
-    Function *func = G.GetFunction();
+    Function* func = G.GetFunction();
     AssignMemoryType assignMemoryType;
 
     EXPECT_EQ(assignMemoryType.PreCheck(*func), FAILED);
@@ -1741,14 +1778,16 @@ TEST_F(AssignMemoryTypeTest, TestTobeMapOrdering)
     std::vector<int64_t> shape = {NUM_256, NUM_128};
     std::vector<int64_t> shape1 = {NUM_128, NUM_64};
     std::vector<int64_t> shape2 = {NUM_64, NUM_256};
-    PROGRAM("AssignMemoryTest") {
+    PROGRAM("AssignMemoryTest")
+    {
         Tensor inputA(DataType::DT_FP32, shape, "A");
         Tensor inputB(DataType::DT_FP32, shape, "B");
         Tensor weight(DataType::DT_FP32, shape1, "weight");
         Tensor out(DataType::DT_FP32, shape2, "output");
         SetFullTestStrategy();
         config::SetBuildStatic(true);
-        FUNCTION("TestTobeMapOrdering", {inputA, inputB, weight, out}) {
+        FUNCTION("TestTobeMapOrdering", {inputA, inputB, weight, out})
+        {
             TileShape::Current().SetCubeTile({NUM_256, NUM_256}, {NUM_128, NUM_128}, {NUM_64, NUM_64});
             Tensor mmRes = Matrix::Matmul(out.GetDataType(), inputA, weight);
             Tensor reshapeRes = Reshape(mmRes, shape2);
@@ -1762,7 +1801,7 @@ TEST_F(AssignMemoryTypeTest, TestTobeMapOrdering)
         Function* originFunction = Program::GetInstance().GetFunctionByRawName("TENSOR_TestTobeMapOrdering");
         ASSERT_NE(originFunction, nullptr) << "Function pointer is null";
         std::vector<std::pair<uint64_t, uint64_t>> tensorOpMagicPairs;
-        for (const auto &op : originFunction->Operations()) {
+        for (const auto& op : originFunction->Operations()) {
             if (op.GetOpcode() != Opcode::OP_VIEW) {
                 continue;
             }
@@ -1777,9 +1816,9 @@ TEST_F(AssignMemoryTypeTest, TestTobeMapOrdering)
             for (size_t j = i + 1; j < tensorOpMagicPairs.size(); ++j) {
                 if (tensorOpMagicPairs[i].second < tensorOpMagicPairs[j].second) {
                     ASSERT_LE(tensorOpMagicPairs[i].first, tensorOpMagicPairs[j].first)
-                        << "TobeMap ordering violation: OpMagic " << tensorOpMagicPairs[i].second
-                        << " (TensorMagic " << tensorOpMagicPairs[i].first << ") < OpMagic "
-                        << tensorOpMagicPairs[j].second << " (TensorMagic " << tensorOpMagicPairs[j].first << ")";
+                        << "TobeMap ordering violation: OpMagic " << tensorOpMagicPairs[i].second << " (TensorMagic "
+                        << tensorOpMagicPairs[i].first << ") < OpMagic " << tensorOpMagicPairs[j].second
+                        << " (TensorMagic " << tensorOpMagicPairs[j].first << ")";
                 }
             }
         }
@@ -1790,7 +1829,8 @@ TEST_F(AssignMemoryTypeTest, TestOverSizeUb)
 {
     config::SetHostConfig(KEY_STRATEGY, "TestOverSizeUb");
     std::vector<int64_t> shape = {NUM_256, NUM_256};
-    PROGRAM("TestOverSizeUb") {
+    PROGRAM("TestOverSizeUb")
+    {
         Tensor input1(DataType::DT_FP32, shape, "input1");
         Tensor input2(DataType::DT_FP32, shape, "input2");
         Tensor input3(DataType::DT_FP32, shape, "input3");
@@ -1798,7 +1838,8 @@ TEST_F(AssignMemoryTypeTest, TestOverSizeUb)
         Tensor output(DataType::DT_FP32, shape, "output");
         SetFullTestStrategy();
         config::SetBuildStatic(true);
-        FUNCTION("TestOverSizeUb", {input1, input2, input3, input4, output}) {
+        FUNCTION("TestOverSizeUb", {input1, input2, input3, input4, output})
+        {
             TileShape::Current().SetCubeTile({NUM_256, NUM_256}, {NUM_128, NUM_128}, {NUM_64, NUM_64});
             Tensor mmRes = Matrix::Matmul(input4.GetDataType(), input1, input2);
             Assemble(mmRes, {0, 0}, input4);
@@ -1808,7 +1849,7 @@ TEST_F(AssignMemoryTypeTest, TestOverSizeUb)
         Function* originFunction = Program::GetInstance().GetFunctionByRawName("TENSOR_TestOverSizeUb");
         ASSERT_NE(originFunction, nullptr) << "Function pointer is null";
         int beforeViewNum = 0;
-        for (const auto &op : originFunction->Operations()) {
+        for (const auto& op : originFunction->Operations()) {
             if (op.GetOpcode() == Opcode::OP_VIEW) {
                 beforeViewNum++;
             }
@@ -1816,7 +1857,7 @@ TEST_F(AssignMemoryTypeTest, TestOverSizeUb)
         AssignMemoryType assignMemoryType;
         EXPECT_EQ(assignMemoryType.RunOnFunction(*originFunction), SUCCESS);
         int afterViewNum = 0;
-        for (const auto &op : originFunction->Operations()) {
+        for (const auto& op : originFunction->Operations()) {
             if (op.GetOpcode() == Opcode::OP_VIEW) {
                 afterViewNum++;
             }
@@ -1882,8 +1923,7 @@ TEST_F(AssignMemoryTypeTest, TestL0C2UBSmallToLarge)
             if (op.GetOpcode() == Opcode::OP_CONVERT) {
                 auto input = op.GetIOperands().front();
                 auto output = op.GetOOperands().front();
-                if (input->GetMemoryTypeOriginal() == MEM_L0C &&
-                    output->GetMemoryTypeOriginal() == MEM_UB) {
+                if (input->GetMemoryTypeOriginal() == MEM_L0C && output->GetMemoryTypeOriginal() == MEM_UB) {
                     hasL0C2UB = true;
                 }
             }
@@ -1959,13 +1999,14 @@ TEST_F(AssignMemoryTypeTest, TestUB2L1SmallToLarge)
         FUNCTION("TestUB2L1SmallToLarge", {inputA1, inputA2, inputB1, inputB2, out})
         {
             // 1. Vector 操作: Add 输出 UB
-            TileShape::Current().SetVecTile(16, 32);  // vec_tile_shapes = (16, 32)
-            Tensor add1 = Add(inputA1, inputA2);      // (32, 64) UB
-            Tensor add2 = Add(inputB1, inputB2);      // (64, 64) UB
+            TileShape::Current().SetVecTile(16, 32); // vec_tile_shapes = (16, 32)
+            Tensor add1 = Add(inputA1, inputA2);     // (32, 64) UB
+            Tensor add2 = Add(inputB1, inputB2);     // (64, 64) UB
 
             // 2. Cube 操作: MatMul 需要 L1 输入，触发 UB->L1 转换
-            TileShape::Current().SetCubeTile({32, 32}, {64, 64}, {64, 64});  // cube_tile_shapes = ([32,32], [64,64], [64,64])
-            Tensor result = Matrix::Matmul(out.GetDataType(), add1, add2);    // (32, 64) @ (64, 64) = (32, 64)
+            TileShape::Current().SetCubeTile({32, 32}, {64, 64},
+                                             {64, 64}); // cube_tile_shapes = ([32,32], [64,64], [64,64])
+            Tensor result = Matrix::Matmul(out.GetDataType(), add1, add2); // (32, 64) @ (64, 64) = (32, 64)
             out = result;
         }
         originFunction = Program::GetInstance().GetFunctionByRawName("TENSOR_TestUB2L1SmallToLarge");
@@ -1984,8 +2025,7 @@ TEST_F(AssignMemoryTypeTest, TestUB2L1SmallToLarge)
             if (op.GetOpcode() == Opcode::OP_CONVERT) {
                 auto input = op.GetIOperands().front();
                 auto output = op.GetOOperands().front();
-                if (input->GetMemoryTypeOriginal() == MEM_UB &&
-                    output->GetMemoryTypeOriginal() == MEM_L1) {
+                if (input->GetMemoryTypeOriginal() == MEM_UB && output->GetMemoryTypeOriginal() == MEM_L1) {
                     hasUB2L1 = true;
                 }
             }
@@ -2022,8 +2062,7 @@ TEST_F(AssignMemoryTypeTest, TestHf8CastRightMatmulUB2L1)
             TileShape::Current().SetCubeTile({NUM_8, NUM_8}, {NUM_32, NUM_32}, {NUM_32, NUM_32});
             out = Matrix::Matmul(out.GetDataType(), leftMatrix, castRightMatrix, false, true);
         }
-        originFunction =
-            Program::GetInstance().GetFunctionByRawName("TENSOR_TestHf8CastRightMatmulUB2L1");
+        originFunction = Program::GetInstance().GetFunctionByRawName("TENSOR_TestHf8CastRightMatmulUB2L1");
         ASSERT_NE(originFunction, nullptr) << "Function pointer is null";
 
         bool hasUb2L1 = false;
@@ -2050,27 +2089,21 @@ TEST_F(AssignMemoryTypeTest, TestHf8CastRightMatmulUB2L1)
 
 void BuildConvertDynShapeGraph(std::shared_ptr<Function>& currFunctionPtr)
 {
-    currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestConvertDynShape", "TestConvertDynShape", nullptr);
+    currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestConvertDynShape", "TestConvertDynShape",
+                                                 nullptr);
     Program::GetInstance().InsertFuncToFunctionMap("TestConvertDynShape", currFunctionPtr);
 
     std::vector<int64_t> shape = {16, 32};
     std::vector<int64_t> shape1 = {32, 16};
     std::vector<SymbolicScalar> dynShape = {IRBuilder().CreateConstInt(6), IRBuilder().CreateConstInt(6)};
-    std::shared_ptr<LogicalTensor> input_tensor1 =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, dynShape);
-    std::shared_ptr<LogicalTensor> input_tensor2 =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, dynShape);
-    std::shared_ptr<LogicalTensor> view_output1 =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, dynShape);
-    std::shared_ptr<LogicalTensor> view_output2 =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, dynShape);
-    std::shared_ptr<LogicalTensor> add_output =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, dynShape);
-    std::shared_ptr<LogicalTensor> reshape_output =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, dynShape);
-    std::shared_ptr<LogicalTensor> assem_output =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, dynShape);
+    std::shared_ptr<LogicalTensor> input_tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, dynShape);
+    std::shared_ptr<LogicalTensor> input_tensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, dynShape);
+    std::shared_ptr<LogicalTensor> view_output1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, dynShape);
+    std::shared_ptr<LogicalTensor> view_output2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, dynShape);
+    std::shared_ptr<LogicalTensor> add_output = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, dynShape);
+    std::shared_ptr<LogicalTensor> reshape_output = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1,
+                                                                                               dynShape);
+    std::shared_ptr<LogicalTensor> assem_output = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, dynShape);
 
     auto& view_op1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {input_tensor1}, {view_output1});
     view_op1.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
@@ -2078,7 +2111,8 @@ void BuildConvertDynShapeGraph(std::shared_ptr<Function>& currFunctionPtr)
     view_op2.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
     IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_ADD, {view_output1, view_output2}, {add_output});
     IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_RESHAPE, {add_output}, {reshape_output});
-    auto& assemble_op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_ASSEMBLE, {reshape_output}, {assem_output});
+    auto& assemble_op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_ASSEMBLE, {reshape_output},
+                                                       {assem_output});
     assemble_op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
 
     currFunctionPtr->inCasts_.push_back(input_tensor1);
@@ -2105,13 +2139,12 @@ TEST_F(AssignMemoryTypeTest, TestConvertOpsHaveDynValidShape)
             const auto& out_shape = output->GetDynValidShape();
             ASSERT_EQ(in_shape.size(), out_shape.size()) << "Size mismatch";
             for (size_t i = 0; i < in_shape.size(); ++i) {
-                EXPECT_EQ(in_shape[i].Dump(), out_shape[i].Dump())
-                    << "Mismatch at dimension " << i;
+                EXPECT_EQ(in_shape[i].Dump(), out_shape[i].Dump()) << "Mismatch at dimension " << i;
             }
         }
     }
 }
-}
+} // namespace tile_fwk
 
 struct VecDupViewMatmulGraph {
     LogicalTensorPtr vecDupOutput;
@@ -2160,8 +2193,8 @@ TEST_F(AssignMemoryTypeTest, ReshapeOutputUsesUbWithMixedViewConsumers)
     EXPECT_EQ(viewOpAttr->GetTo(), MemoryType::MEM_L1);
 }
 
-static void BuildVecDupViewMatmulNoAssembleGraph(
-    std::shared_ptr<Function>& currFunctionPtr, VecDupViewMatmulGraph& graph)
+static void BuildVecDupViewMatmulNoAssembleGraph(std::shared_ptr<Function>& currFunctionPtr,
+                                                 VecDupViewMatmulGraph& graph)
 {
     std::vector<int64_t> shape = {32, 16};
     std::vector<int64_t> shapeB = {16, 16};
@@ -2176,13 +2209,13 @@ static void BuildVecDupViewMatmulNoAssembleGraph(
     graph.matmulOutput->SetMagic(103);
     auto& vecDupOp = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VEC_DUP, {}, {graph.vecDupOutput});
     vecDupOp.opmagic = 2001;
-    auto& viewOp =
-        IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {graph.vecDupOutput}, {graph.viewOutput});
+    auto& viewOp = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {graph.vecDupOutput},
+                                                  {graph.viewOutput});
     viewOp.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
     viewOp.opmagic = 2002;
     graph.viewOp = &viewOp;
-    auto& matmulOp = IRBuilder().CreateTensorOpStmt(
-        *currFunctionPtr, Opcode::OP_A_MUL_B, {graph.viewOutput, graph.inputB}, {graph.matmulOutput});
+    auto& matmulOp = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_A_MUL_B,
+                                                    {graph.viewOutput, graph.inputB}, {graph.matmulOutput});
     matmulOp.opmagic = 2003;
     currFunctionPtr->inCasts_.push_back(graph.inputB);
     currFunctionPtr->outCasts_.push_back(graph.matmulOutput);
@@ -2190,8 +2223,8 @@ static void BuildVecDupViewMatmulNoAssembleGraph(
 
 TEST_F(AssignMemoryTypeTest, VecDupViewMatmulNoAssemble)
 {
-    auto currFunctionPtr = std::make_shared<Function>(
-        Program::GetInstance(), "VecDupViewMatmulNoAssemble", "VecDupViewMatmulNoAssemble", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "VecDupViewMatmulNoAssemble",
+                                                      "VecDupViewMatmulNoAssemble", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
     Program::GetInstance().InsertFuncToFunctionMap("VecDupViewMatmulNoAssemble", currFunctionPtr);
 
@@ -2233,9 +2266,8 @@ TEST_F(AssignMemoryTypeTest, VecDupViewMatmulNoAssemble)
 
 TEST_F(AssignMemoryTypeTest, DdrViewMatmulNoAssemble)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(
-            Program::GetInstance(), "DdrViewMatmulNoAssemble", "DdrViewMatmulNoAssemble", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "DdrViewMatmulNoAssemble",
+                                                      "DdrViewMatmulNoAssemble", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
     Program::GetInstance().InsertFuncToFunctionMap("DdrViewMatmulNoAssemble", currFunctionPtr);
     std::vector<int64_t> shapeA = {32, 16};
@@ -2252,8 +2284,8 @@ TEST_F(AssignMemoryTypeTest, DdrViewMatmulNoAssemble)
     auto& viewOp = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {inputA}, {viewOutput});
     viewOp.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
     viewOp.opmagic = 2012;
-    auto& matmulOp =
-        IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_A_MUL_B, {viewOutput, inputB}, {matmulOutput});
+    auto& matmulOp = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_A_MUL_B, {viewOutput, inputB},
+                                                    {matmulOutput});
     matmulOp.opmagic = 2013;
     currFunctionPtr->inCasts_.push_back(inputA);
     currFunctionPtr->inCasts_.push_back(inputB);
@@ -2302,26 +2334,26 @@ TEST_F(AssignMemoryTypeTest, ViewTypeReusesForwardViewRequirement)
 
     // inA/inB/inC -> VIEW[16138/16010/15881]
     G.AddOp(Opcode::OP_VIEW, {"inA"}, {"t1792"}, "view16138");
-    G.GetOp("view16138")->SetOpAttribute(
-        std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}, MemoryType::MEM_UNKNOWN));
+    G.GetOp("view16138")
+        ->SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}, MemoryType::MEM_UNKNOWN));
     G.AddOp(Opcode::OP_VIEW, {"inB"}, {"t1793"}, "view16010");
-    G.GetOp("view16010")->SetOpAttribute(
-        std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}, MemoryType::MEM_UNKNOWN));
+    G.GetOp("view16010")
+        ->SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}, MemoryType::MEM_UNKNOWN));
     G.AddOp(Opcode::OP_VIEW, {"inC"}, {"t1794"}, "view15881");
-    G.GetOp("view15881")->SetOpAttribute(
-        std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}, MemoryType::MEM_UNKNOWN));
+    G.GetOp("view15881")
+        ->SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}, MemoryType::MEM_UNKNOWN));
     // VIEW* -> GATHER_IN_UB[10211] -> t1795
     G.AddOp(Opcode::OP_GATHER_IN_UB, {"t1792", "t1793", "t1794"}, {"t1795"}, "gather10211");
     // t1795 -> VIEW[16394] -> t3280
     G.AddOp(Opcode::OP_VIEW, {"t1795"}, {"t3280"}, "view16394");
-    G.GetOp("view16394")->SetOpAttribute(
-        std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}, MemoryType::MEM_UNKNOWN));
+    G.GetOp("view16394")
+        ->SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}, MemoryType::MEM_UNKNOWN));
     // t3280 -> VIEW_TYPE[12343] -> t3281
     G.AddOp(Opcode::OP_VIEW_TYPE, {"t3280"}, {"t3281"}, "viewtype12343");
     // t3281 -> VIEW[12726] -> t3536
     G.AddOp(Opcode::OP_VIEW, {"t3281"}, {"t3536"}, "view12726");
-    G.GetOp("view12726")->SetOpAttribute(
-        std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}, MemoryType::MEM_UNKNOWN));
+    G.GetOp("view12726")
+        ->SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}, MemoryType::MEM_UNKNOWN));
     // t3536 -> ADDS[12727] -> t3537
     G.AddOp(Opcode::OP_ADDS, {"t3536"}, {"t3537"}, "adds12727");
     // t3537 -> ASSEMBLE[19009] -> t8307（后接 outcast）
@@ -2382,8 +2414,8 @@ TEST_F(AssignMemoryTypeTest, TestL0C2UBAssembleDirectPathNotDdrFallback)
             out = Add(ab, inputC);
         }
 
-        originFunction =
-            Program::GetInstance().GetFunctionByRawName("TENSOR_TestL0C2UBAssembleDirectPathNotDdrFallback");
+        originFunction = Program::GetInstance().GetFunctionByRawName(
+            "TENSOR_TestL0C2UBAssembleDirectPathNotDdrFallback");
         ASSERT_NE(originFunction, nullptr) << "Function pointer is null";
         EXPECT_EQ(CountMemoryPath(originFunction, MemoryType::MEM_L0C, MemoryType::MEM_DEVICE_DDR), 0);
         EXPECT_GE(CountMemoryPath(originFunction, MemoryType::MEM_L0C, MemoryType::MEM_UB), 1);
@@ -2421,8 +2453,8 @@ TEST_F(AssignMemoryTypeTest, TestUB2L1AssembleDirectPathNotDdrFallback)
             out = Matrix::Matmul(out.GetDataType(), add1, add2);
         }
 
-        originFunction =
-            Program::GetInstance().GetFunctionByRawName("TENSOR_TestUB2L1AssembleDirectPathNotDdrFallback");
+        originFunction = Program::GetInstance().GetFunctionByRawName(
+            "TENSOR_TestUB2L1AssembleDirectPathNotDdrFallback");
         ASSERT_NE(originFunction, nullptr) << "Function pointer is null";
         EXPECT_EQ(CountMemoryPath(originFunction, MemoryType::MEM_UB, MemoryType::MEM_DEVICE_DDR), 0);
         EXPECT_GE(CountMemoryPath(originFunction, MemoryType::MEM_UB, MemoryType::MEM_L1), 1);
@@ -2440,8 +2472,8 @@ TEST_F(AssignMemoryTypeTest, PermuteViewTransDataForceDdr)
     Shape shape{NUM_1, NUM_16, NUM_32, NUM_32};
     G.AddTensors(DataType::DT_FP16, shape, {"incast", "permute_out", "view_out", "outcast", "ub_temp"});
     G.AddOps({Opcode::OP_PERMUTE, Opcode::OP_VIEW, Opcode::OP_NCHW2NC1HWC0},
-             {{"incast"}, {"permute_out"}, {"view_out"}},
-             {{"permute_out"}, {"view_out"}, {"outcast", "ub_temp"}}, {"permute", "view", "transdata"});
+             {{"incast"}, {"permute_out"}, {"view_out"}}, {{"permute_out"}, {"view_out"}, {"outcast", "ub_temp"}},
+             {"permute", "view", "transdata"});
     G.GetOp("permute")->SetAttribute(OpAttributeKey::perm, std::vector<int>{0, 2, 1, 3});
     G.GetOp("view")->SetOpAttribute(std::make_shared<ViewOpAttribute>(Offset{0, 0, 0, 0}));
     G.GetOp("transdata")->SetAttribute(OpAttributeKey::transDataOffset, CreateTestConstIntVector({0, 0, 0, 0}));
@@ -2474,11 +2506,11 @@ TEST_F(AssignMemoryTypeTest, PermuteViewRegisterCopyAssembleTransDataForceDdr)
     Shape shape{NUM_1, NUM_16, NUM_32, NUM_32};
     G.AddTensors(DataType::DT_FP16, shape,
                  {"incast", "permute_out", "view_out", "rc_out", "asm_out", "outcast", "ub_temp"});
-    G.AddOps({Opcode::OP_PERMUTE, Opcode::OP_VIEW, Opcode::OP_REGISTER_COPY, Opcode::OP_ASSEMBLE,
-              Opcode::OP_NCHW2NC1HWC0},
-             {{"incast"}, {"permute_out"}, {"view_out"}, {"rc_out"}, {"asm_out"}},
-             {{"permute_out"}, {"view_out"}, {"rc_out"}, {"asm_out"}, {"outcast", "ub_temp"}},
-             {"permute", "view", "reg_copy", "assemble", "transdata"});
+    G.AddOps(
+        {Opcode::OP_PERMUTE, Opcode::OP_VIEW, Opcode::OP_REGISTER_COPY, Opcode::OP_ASSEMBLE, Opcode::OP_NCHW2NC1HWC0},
+        {{"incast"}, {"permute_out"}, {"view_out"}, {"rc_out"}, {"asm_out"}},
+        {{"permute_out"}, {"view_out"}, {"rc_out"}, {"asm_out"}, {"outcast", "ub_temp"}},
+        {"permute", "view", "reg_copy", "assemble", "transdata"});
     G.GetOp("permute")->SetAttribute(OpAttributeKey::perm, std::vector<int>{0, 2, 1, 3});
     G.GetOp("view")->SetOpAttribute(std::make_shared<ViewOpAttribute>(Offset{0, 0, 0, 0}));
     G.GetOp("assemble")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(Offset{0, 0, 0, 0}));
@@ -2505,9 +2537,10 @@ TEST_F(AssignMemoryTypeTest, PermuteViewRegisterCopyAssembleTransDataForceDdr)
         EXPECT_EQ(op.GetIOperands().front()->GetMemoryTypeOriginal(), MemoryType::MEM_UB);
         EXPECT_EQ(op.GetOOperands().front()->GetMemoryTypeOriginal(), MemoryType::MEM_DEVICE_DDR);
     }
-    EXPECT_EQ(newAssembleCount, 1) << "Should insert assemble(UB->DDR) before view for permute->view->rc->asm->transData";
+    EXPECT_EQ(newAssembleCount, 1)
+        << "Should insert assemble(UB->DDR) before view for permute->view->rc->asm->transData";
     EXPECT_EQ(G.GetTensor("permute_out")->GetMemoryTypeOriginal(), MemoryType::MEM_UB);
     EXPECT_EQ(G.GetTensor("view_out")->GetMemoryTypeOriginal(), MemoryType::MEM_UB);
 }
 
-} // namespace npu::tile_fwk
+} // namespace npu

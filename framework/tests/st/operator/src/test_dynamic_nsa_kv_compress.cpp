@@ -127,9 +127,8 @@ void TestCmpKv(CmpAttnTile& tileConfig)
         RawTensorData::CreateTensor<float>(auxTensor, auxTensorGolden),
     });
 
-    compressKv(
-        kvCache, krCache, cmpKvCache, cmpKrCache, blockTable, cmpCacheIndex, actSeqLen, mlpWk1, mlpWk2, mlpCos, mlpSin,
-        cmpKvCache, cmpKrCache, auxTensor, cmpBlockSize, cmpStride, rs, tileConfig);
+    compressKv(kvCache, krCache, cmpKvCache, cmpKrCache, blockTable, cmpCacheIndex, actSeqLen, mlpWk1, mlpWk2, mlpCos,
+               mlpSin, cmpKvCache, cmpKrCache, auxTensor, cmpBlockSize, cmpStride, rs, tileConfig);
 
     DevFuncRunner::Run(Program::GetInstance().GetLastFunction());
     auto actualCmpKvCacheOutput = npu::tile_fwk::ProgramData::GetInstance().GetOutputData(0);
@@ -212,8 +211,8 @@ void TestAuxTensor()
             (void)bIdx;
             TileShape::Current().SetVecTile(1, auxVecLen);
             for (int i = 0; i < rs + rc - 1; i++) {
-                auto auxVector =
-                    npu::tile_fwk::Full(Element(dType, float(min(i + 1, rc) - max(i - rs, 0))), dType, {1, auxVecLen});
+                auto auxVector = npu::tile_fwk::Full(Element(dType, float(min(i + 1, rc) - max(i - rs, 0))), dType,
+                                                     {1, auxVecLen});
                 Assemble(auxVector, {i, 0}, auxTensor);
             }
         }

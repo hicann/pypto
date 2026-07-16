@@ -1,5 +1,5 @@
 /**
-* Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
  * Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@
 #include "tilefwk/pypto_fwk_log.h"
 
 namespace npu::tile_fwk {
-AclError StubAclInit(const char *configPath)
+AclError StubAclInit(const char* configPath)
 {
     ADAPTER_LOGD("Enter stub function of AclInit.");
     (void)configPath;
@@ -30,7 +30,7 @@ AclError StubAclFinalize()
     return ACLRT_SUCCESS;
 }
 
-AclError StubRtMemcpy(void *dst, size_t destMax, const void *src, size_t count, AclRtMemcpyKind kind)
+AclError StubRtMemcpy(void* dst, size_t destMax, const void* src, size_t count, AclRtMemcpyKind kind)
 {
     ADAPTER_LOGD("Enter stub function of AclRtMemcpy.");
     (void)dst;
@@ -41,7 +41,7 @@ AclError StubRtMemcpy(void *dst, size_t destMax, const void *src, size_t count, 
     return ACLRT_SUCCESS;
 }
 
-AclError StubRtMalloc(void **devPtr, size_t size, AclRtMemMallocPolicy policy)
+AclError StubRtMalloc(void** devPtr, size_t size, AclRtMemMallocPolicy policy)
 {
     ADAPTER_LOGD("Enter stub function of AclRtMalloc.");
     (void)devPtr;
@@ -50,7 +50,7 @@ AclError StubRtMalloc(void **devPtr, size_t size, AclRtMemMallocPolicy policy)
     return ACLRT_SUCCESS;
 }
 
-AclError StubRtFree(void *devPtr)
+AclError StubRtFree(void* devPtr)
 {
     ADAPTER_LOGD("Enter stub function of AclRtFree.");
     (void)devPtr;
@@ -71,7 +71,7 @@ AclError StubRtResetDevice(int32_t deviceId)
     return ACLRT_SUCCESS;
 }
 
-AclError StubRtCreateEvent(AclRtEvent *event)
+AclError StubRtCreateEvent(AclRtEvent* event)
 {
     ADAPTER_LOGD("Enter stub function of AclRtCreateEvent.");
     (void)event;
@@ -86,7 +86,7 @@ AclError StubRtRecordEvent(AclRtEvent event, AclRtStream stream)
     return ACLRT_SUCCESS;
 }
 
-AclError StubRtCreateEventExWithFlag(AclRtEvent *event, uint32_t flag)
+AclError StubRtCreateEventExWithFlag(AclRtEvent* event, uint32_t flag)
 {
     ADAPTER_LOGD("Enter stub function of AclRtCreateEventExWithFlag.");
     (void)event;
@@ -102,7 +102,7 @@ AclError StubRtStreamWaitEvent(AclRtStream stream, AclRtEvent event)
     return ACLRT_SUCCESS;
 }
 
-AclError StubRtGetStreamResLimit(AclRtStream stream, AclRtDevResLimitType type, uint32_t *value)
+AclError StubRtGetStreamResLimit(AclRtStream stream, AclRtDevResLimitType type, uint32_t* value)
 {
     ADAPTER_LOGD("Enter stub function of AclRtGetStreamResLimit.");
     (void)stream;
@@ -113,7 +113,7 @@ AclError StubRtGetStreamResLimit(AclRtStream stream, AclRtDevResLimitType type, 
     return ACLRT_SUCCESS;
 }
 
-AclError StubRtGetStreamAttribute(AclRtStream stream, AclRtStreamAttr stmAttrType, AclRtStreamAttrValue *value)
+AclError StubRtGetStreamAttribute(AclRtStream stream, AclRtStreamAttr stmAttrType, AclRtStreamAttrValue* value)
 {
     ADAPTER_LOGD("Enter stub function of AclRtGetStreamAttribute.");
     (void)stream;
@@ -124,7 +124,7 @@ AclError StubRtGetStreamAttribute(AclRtStream stream, AclRtStreamAttr stmAttrTyp
     return ACLRT_SUCCESS;
 }
 
-AclError StubRtCacheLastTaskOpInfo(const void * const infoPtr, size_t infoSize)
+AclError StubRtCacheLastTaskOpInfo(const void* const infoPtr, size_t infoSize)
 {
     ADAPTER_LOGD("Enter stub function of AclRtCacheLastTaskOpInfo.");
     (void)infoPtr;
@@ -139,7 +139,7 @@ AclError StubRtSetExceptionInfoCallback(AclRtExceptionInfoCallback callback)
     return ACLRT_SUCCESS;
 }
 
-AclError StubRtCreateStream(AclRtStream *stream)
+AclError StubRtCreateStream(AclRtStream* stream)
 {
     ADAPTER_LOGD("Enter stub function of AclRtCreateStream.");
     (void)stream;
@@ -160,7 +160,7 @@ AclError StubRtDestroyStream(AclRtStream stream)
     return ACLRT_SUCCESS;
 }
 
-AclError StubMdlRICaptureGetInfo(AclRtStream stream, AclMdlRICaptureStatus *status, AclMdlRI *modelRI)
+AclError StubMdlRICaptureGetInfo(AclRtStream stream, AclMdlRICaptureStatus* status, AclMdlRI* modelRI)
 {
     ADAPTER_LOGD("Enter stub function of AclMdlRICaptureGetInfo.");
     (void)stream;
@@ -169,14 +169,14 @@ AclError StubMdlRICaptureGetInfo(AclRtStream stream, AclMdlRICaptureStatus *stat
     return ACLRT_SUCCESS;
 }
 
-AclError StubMdlRICaptureThreadExchangeMode(AclMdlRICaptureMode *mode)
+AclError StubMdlRICaptureThreadExchangeMode(AclMdlRICaptureMode* mode)
 {
     ADAPTER_LOGD("Enter stub function of AclMdlRICaptureThreadExchangeMode.");
     (void)mode;
     return ACLRT_SUCCESS;
 }
 
-AclError StubSysGetVersionStr(const char *pkgName, char *versionStr)
+AclError StubSysGetVersionStr(const char* pkgName, char* versionStr)
 {
     ADAPTER_LOGD("Enter stub function of AclSysGetVersionStr.");
     (void)pkgName;
@@ -185,4 +185,4 @@ AclError StubSysGetVersionStr(const char *pkgName, char *versionStr)
     }
     return ACLRT_SUCCESS;
 }
-}
+} // namespace npu::tile_fwk

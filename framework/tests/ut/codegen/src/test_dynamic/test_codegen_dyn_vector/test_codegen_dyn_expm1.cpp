@@ -44,8 +44,8 @@ public:
 TEST_F(TestCodegenDynExpm1, TestDynOpExpm1)
 {
     std::vector<int64_t> shape = {64, 64};
-    auto function =
-        GenMockFuncDynUnary("TestDynOpExpm1", {shape}, [](Tensor& input, Tensor& output) { output = Expm1(input); });
+    auto function = GenMockFuncDynUnary("TestDynOpExpm1", {shape},
+                                        [](Tensor& input, Tensor& output) { output = Expm1(input); });
     std::string res = GenCodeByFunction(*function);
     std::string expect =
         R"!!!(TExpm1(ubTensor_0, ubTensor_3, ubTensor_0);

@@ -95,8 +95,8 @@ void HostProf::HostProfReportBasicInfo(const uint64_t& endTime, const uint32_t b
     nodeBasicInfo.data.nodeBasicInfo.taskType = taskType;
     nodeBasicInfo.data.nodeBasicInfo.blockDim = blockDim;
     nodeBasicInfo.data.nodeBasicInfo.opFlag = true;
-    auto ret = MspfReportCompactInfo(
-        static_cast<uint32_t>(true), &nodeBasicInfo, static_cast<uint32_t>(sizeof(MspfCompactInfo)));
+    auto ret = MspfReportCompactInfo(static_cast<uint32_t>(true), &nodeBasicInfo,
+                                     static_cast<uint32_t>(sizeof(MspfCompactInfo)));
     if (ret != 0) {
         MACHINE_LOGW("Compact node[%s] basic info failed", opName_.c_str());
     }
@@ -127,8 +127,7 @@ void HostProf::HostProfReportTensorInfo(const uint64_t& endTime) const
         return;
     }
     uint32_t iONums = inputsSize_ + oDeviceTensorData_.size();
-    MACHINE_LOGD(
-        "Op [%s] with inputs[%u], outputs[%zu]", opName_.c_str(), inputsSize_, oDeviceTensorData_.size());
+    MACHINE_LOGD("Op [%s] with inputs[%u], outputs[%zu]", opName_.c_str(), inputsSize_, oDeviceTensorData_.size());
     uint32_t groupNums = iONums / MSPF_GE_TENSOR_DATA_NUM;
     uint32_t modulus = iONums % MSPF_GE_TENSOR_DATA_NUM;
     for (uint32_t i = 0; i < groupNums; i++) {
@@ -167,22 +166,23 @@ void HostProf::PackTensorInfo(MspfTensorInfo* profTensorData, const uint32_t gro
     if (inputsSize_ > iOIdx) {
         iOTensor = &iDeviceTensorData_[iOIdx];
         profTensorData->tensorData[modId].tensorType = MSPF_GE_TENSOR_TYPE_INPUT;
-        profTensorData->tensorData[modId].format = iOTensor->Format() == TileOpFormat::TILEOP_NZ ? kFormatNz : kFormatNd;
+        profTensorData->tensorData[modId].format = iOTensor->Format() == TileOpFormat::TILEOP_NZ ? kFormatNz :
+                                                                                                   kFormatNd;
         profTensorData->tensorData[modId].dataType = static_cast<uint32_t>(DataType2CannType(iOTensor->GetDataType()));
         iOtensorInfo << "Input " << iOIdx << " shape: ";
     } else {
         auto outputIdx = iOIdx - inputsSize_;
         iOTensor = &oDeviceTensorData_[outputIdx];
         profTensorData->tensorData[modId].tensorType = MSPF_GE_TENSOR_TYPE_OUTPUT;
-        profTensorData->tensorData[modId].format = iOTensor->Format() == TileOpFormat::TILEOP_NZ ? kFormatNz : kFormatNd;
+        profTensorData->tensorData[modId].format = iOTensor->Format() == TileOpFormat::TILEOP_NZ ? kFormatNz :
+                                                                                                   kFormatNd;
         profTensorData->tensorData[modId].dataType = static_cast<uint32_t>(DataType2CannType(iOTensor->GetDataType()));
         iOtensorInfo << "output " << outputIdx << " shape: ";
     }
     size_t shapeLen = iOTensor->GetShape().size();
     if (shapeLen > MSPF_GE_TENSOR_DATA_SHAPE_LEN) {
-        MACHINE_LOGW(
-            "Op [%s] tensor[%u] size[%zu] len over [%d]", opName_.c_str(), iOIdx, shapeLen,
-            MSPF_GE_TENSOR_DATA_SHAPE_LEN);
+        MACHINE_LOGW("Op [%s] tensor[%u] size[%zu] len over [%d]", opName_.c_str(), iOIdx, shapeLen,
+                     MSPF_GE_TENSOR_DATA_SHAPE_LEN);
         shapeLen = MSPF_GE_TENSOR_DATA_SHAPE_LEN;
     }
 
@@ -213,7 +213,7 @@ void HostProf::BuildTensor(const uint32_t tensorType, const RawTensorDataPtr& te
     }
 }
 
-void HostProf::BuildTensor(const uint32_t tensorType, const dynamic::DeviceTensorData &tensorInfo,
+void HostProf::BuildTensor(const uint32_t tensorType, const dynamic::DeviceTensorData& tensorInfo,
                            MspfTensorData& tensorData)
 {
     tensorData.tensorType = tensorType;
@@ -256,7 +256,8 @@ void HostProf::BuildCacheTensorInfo(CacheTaskInfo* taskInfo) const
         for (size_t i = 0; i < oDeviceTensorData_.size(); ++i) {
             BuildTensor(MSPF_GE_TENSOR_TYPE_OUTPUT, oDeviceTensorData_.at(i), taskInfo->tensorData[i + inputSize]);
         }
-        MACHINE_LOGD("Assemble output tensor from device data, output tensor size is [%zu].", oDeviceTensorData_.size());
+        MACHINE_LOGD("Assemble output tensor from device data, output tensor size is [%zu].",
+                     oDeviceTensorData_.size());
     }
 }
 
@@ -275,8 +276,8 @@ bool HostProf::IsCacheOpInfoEnable(const AclRtStream stream)
     return static_cast<bool>(value.cacheOpInfoSwitch);
 }
 
-void HostProf::HostProfReportCacheTaskInfo(
-    const AclRtStream stream, const uint32_t numBlocks, const uint32_t taskType) const
+void HostProf::HostProfReportCacheTaskInfo(const AclRtStream stream, const uint32_t numBlocks,
+                                           const uint32_t taskType) const
 {
     if (!IsCacheOpInfoEnable(stream)) {
         MACHINE_LOGD("Op cache for AclGraph is disabled.");
@@ -315,14 +316,14 @@ void HostProf::HostProfReportCacheTaskInfo(
     if (AclRtCacheLastTaskOpInfo(buffer, bufferSize) != ACLRT_SUCCESS) {
         MACHINE_LOGW("Report op info cache failed for op[%s, %s].", opName_.c_str(), kOpType.c_str());
     } else {
-        MACHINE_LOGI(
-            "Report op[%s, %s] info cache, task type[%u], numBlocks[%u], attrId[%lu] size[%zu]", opName_.c_str(),
-            kOpType.c_str(), taskType, numBlocks, taskInfo->attrId, bufferSize);
+        MACHINE_LOGI("Report op[%s, %s] info cache, task type[%u], numBlocks[%u], attrId[%lu] size[%zu]",
+                     opName_.c_str(), kOpType.c_str(), taskType, numBlocks, taskInfo->attrId, bufferSize);
     }
     free(buffer);
 }
 
-void HostProf::GetIOTensor(const std::vector<npu::tile_fwk::dynamic::DeviceTensorData>& tensors) {
+void HostProf::GetIOTensor(const std::vector<npu::tile_fwk::dynamic::DeviceTensorData>& tensors)
+{
     auto directions = profFunction_->GetDyndevAttribute()->startArgsDirectionList;
     iDeviceTensorData_.clear();
     oDeviceTensorData_.clear();
@@ -336,7 +337,7 @@ void HostProf::GetIOTensor(const std::vector<npu::tile_fwk::dynamic::DeviceTenso
         } else if (directions[idx] == ParamDirection ::OUT) {
             oDeviceTensorData_.emplace_back(tensors[idx]);
         }
-    }  
+    }
 }
 
 void HostProf::SetProfFunction(Function* function, const std::vector<npu::tile_fwk::dynamic::DeviceTensorData>& tensors)

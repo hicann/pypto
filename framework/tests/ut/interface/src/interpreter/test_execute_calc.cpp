@@ -44,8 +44,8 @@ public:
 TEST_F(CalcCommonTest, UnalignedReshape)
 {
     // 创建 Function 和 Operation,构造一个虚拟的ExecuteOperationContext
-    auto func =
-        std::make_shared<Function>(Program::GetInstance(), "TestUnalignedReshape", "TestUnalignedReshape", nullptr);
+    auto func = std::make_shared<Function>(Program::GetInstance(), "TestUnalignedReshape", "TestUnalignedReshape",
+                                           nullptr);
     std::vector<int64_t> inputShape = {2, 2};
     std::vector<int64_t> outputShape = {3, 3};
     auto inputTensor = std::make_shared<LogicalTensor>(*func, DT_FP32, inputShape);
@@ -76,8 +76,8 @@ TEST_F(CalcCommonTest, UnalignedReshape)
 // ExecuteOpReshape 内对输入/输出先做 View(validShape)，本例实际执行 [2] -> [2,1] 的 calc::Reshape。
 TEST_F(CalcCommonTest, UnalignedReshapeTriggerPaddingBranch)
 {
-    auto func = std::make_shared<Function>(
-        Program::GetInstance(), "TestUnalignedReshapeTriggerPadding", "TestUnalignedReshapeTriggerPadding", nullptr);
+    auto func = std::make_shared<Function>(Program::GetInstance(), "TestUnalignedReshapeTriggerPadding",
+                                           "TestUnalignedReshapeTriggerPadding", nullptr);
 
     std::vector<int64_t> inputShape = {4};
     std::vector<int64_t> outputShape = {2, 2};
@@ -91,14 +91,14 @@ TEST_F(CalcCommonTest, UnalignedReshapeTriggerPaddingBranch)
     Tensor inputTensorData(DT_FP32, inputRawShape);
     std::vector<float> inputVals = {1.0f, 2.0f};
     auto inputData = RawTensorData::CreateTensor<float>(inputTensorData, inputVals);
-    auto inputDataView =
-        std::make_shared<LogicalTensorData>(inputData, inputShape, std::vector<int64_t>{2}, std::vector<int64_t>{0});
+    auto inputDataView = std::make_shared<LogicalTensorData>(inputData, inputShape, std::vector<int64_t>{2},
+                                                             std::vector<int64_t>{0});
 
     Tensor outputTensorData(DT_FP32, outputRawShape);
     auto outputData = RawTensorData::CreateConstantTensor(outputTensorData, 0.0f);
     std::vector<int64_t> outputValidShape = {2, 1};
-    auto outputDataView =
-        std::make_shared<LogicalTensorData>(outputData, outputShape, outputValidShape, std::vector<int64_t>{0, 0});
+    auto outputDataView = std::make_shared<LogicalTensorData>(outputData, outputShape, outputValidShape,
+                                                              std::vector<int64_t>{0, 0});
 
     auto inoutDataPair = std::make_shared<FunctionIODataPair>();
     FunctionFrame frame(func.get(), nullptr, nullptr, inoutDataPair, 0);
@@ -124,8 +124,8 @@ TEST_F(CalcCommonTest, UnalignedReshapeTriggerPaddingBranch)
 // 测试 ExecuteOpAssemble，验证 toOffset 生效且仅覆盖目标子区域
 TEST_F(CalcCommonTest, ExecuteOpAssembleWithOffsetBasic)
 {
-    auto func =
-        std::make_shared<Function>(Program::GetInstance(), "TestAssembleWithOffset", "TestAssembleWithOffset", nullptr);
+    auto func = std::make_shared<Function>(Program::GetInstance(), "TestAssembleWithOffset", "TestAssembleWithOffset",
+                                           nullptr);
 
     std::vector<int64_t> inShape = {2, 2};
     std::vector<int64_t> outShape = {3, 4};
@@ -170,8 +170,8 @@ TEST_F(CalcCommonTest, ExecuteOpAssembleWithOffsetBasic)
 // 测试 OP_VEC_DUP 在 scalar 为极大 double 时对 FP32 类型输出进行 32 位饱和截断
 TEST_F(CalcCommonTest, VecDupClampFp32FromLargeDouble)
 {
-    auto func =
-        std::make_shared<Function>(Program::GetInstance(), "TestVecDupClampFp32", "TestVecDupClampFp32", nullptr);
+    auto func = std::make_shared<Function>(Program::GetInstance(), "TestVecDupClampFp32", "TestVecDupClampFp32",
+                                           nullptr);
 
     std::vector<int64_t> outputShape = {2, 2};
     auto outputTensor = std::make_shared<LogicalTensor>(*func, DT_FP32, outputShape);
@@ -216,8 +216,8 @@ TEST_F(CalcCommonTest, ExecuteOpGatherInL1Basic)
     auto pageTableTensor = std::make_shared<LogicalTensor>(*func, DT_INT64, pageTableShape);
     auto outputTensor = std::make_shared<LogicalTensor>(*func, DT_FP32, paramsShape);
 
-    auto& gatherOp =
-        func->AddOperation(Opcode::OP_GATHER_IN_L1, {paramsTensor, indicesTensor, pageTableTensor}, {outputTensor});
+    auto& gatherOp = func->AddOperation(Opcode::OP_GATHER_IN_L1, {paramsTensor, indicesTensor, pageTableTensor},
+                                        {outputTensor});
 
     int64_t blockSize = 2;
     gatherOp.SetAttribute("op_attr_blocksize", blockSize);
@@ -273,8 +273,8 @@ TEST_F(CalcCommonTest, ExecutePrintCsvOpenFailed)
     setenv("TILE_FWK_OUTPUT_DIR", outputRoot.c_str(), 1);
     config::Reset();
 
-    auto func =
-        std::make_shared<Function>(Program::GetInstance(), "TestPrintCsvOpenFailed", "TestPrintCsvOpenFailed", nullptr);
+    auto func = std::make_shared<Function>(Program::GetInstance(), "TestPrintCsvOpenFailed", "TestPrintCsvOpenFailed",
+                                           nullptr);
     std::vector<int64_t> shape = {2, 2};
     auto inputTensor = std::make_shared<LogicalTensor>(*func, DT_FP32, shape);
     auto& printOp = func->AddOperation(Opcode::OP_PRINT, {inputTensor}, {});
@@ -470,8 +470,8 @@ TEST_F(CalcCommonTest, ExecuteOpOneHotBasic)
 // 测试 ExecuteOpTransposeMoveOut，在无 CopyOpAttribute 时走默认转置分支
 TEST_F(CalcCommonTest, ExecuteOpTransposeMoveOutBasic)
 {
-    auto func =
-        std::make_shared<Function>(Program::GetInstance(), "TestTransposeMoveOut", "TestTransposeMoveOut", nullptr);
+    auto func = std::make_shared<Function>(Program::GetInstance(), "TestTransposeMoveOut", "TestTransposeMoveOut",
+                                           nullptr);
 
     // 输入 2x3，输出 3x2，转置轴为 (0, 1)
     std::vector<int64_t> inShape = {2, 3};
@@ -673,8 +673,8 @@ TEST_F(CalcCommonTest, ExecuteOpLogicalAndBasic)
 // 测试 ExecuteOpBinary 中 lhs 的 producer 为 OP_BRCB 时触发 BRCB 分支
 TEST_F(CalcCommonTest, ExecuteOpBinaryWithLhsFromBrcb)
 {
-    auto func = std::make_shared<Function>(
-        Program::GetInstance(), "TestBinaryWithLhsFromBrcb", "TestBinaryWithLhsFromBrcb", nullptr);
+    auto func = std::make_shared<Function>(Program::GetInstance(), "TestBinaryWithLhsFromBrcb",
+                                           "TestBinaryWithLhsFromBrcb", nullptr);
 
     std::vector<int64_t> shape = {4, 1};
     auto brcbInputTensor = std::make_shared<LogicalTensor>(*func, DT_FP32, shape);
@@ -722,8 +722,8 @@ TEST_F(CalcCommonTest, ExecuteOpBinaryWithLhsFromBrcb)
 // 测试 ExecuteOpBinary 中 3D BRCB 输入：物理 shape 尾轴为 block pad，需 view 成尾轴=1 再广播
 TEST_F(CalcCommonTest, ExecuteOpBinaryWithRhsFromBrcb3D)
 {
-    auto func = std::make_shared<Function>(
-        Program::GetInstance(), "TestBinaryWithRhsFromBrcb3D", "TestBinaryWithRhsFromBrcb3D", nullptr);
+    auto func = std::make_shared<Function>(Program::GetInstance(), "TestBinaryWithRhsFromBrcb3D",
+                                           "TestBinaryWithRhsFromBrcb3D", nullptr);
 
     // BRCB FP32 pad: last dim 8 (=32/sizeof(float)); logical broadcast dim is 1
     std::vector<int64_t> lhsShape = {1, 4, 128};
@@ -989,8 +989,8 @@ TEST_F(CalcCommonTest, ExecuteOpIndexPutBasic)
     auto outputTensor = std::make_shared<LogicalTensor>(*func, DT_FP32, selfShape);
 
     // 传入两个 index tensor，对应 2 个维度
-    auto& indexPutOp = func->AddOperation(
-        Opcode::OP_INDEX_PUT, {selfTensor, valuesTensor, rowIndexTensor, colIndexTensor}, {outputTensor});
+    auto& indexPutOp = func->AddOperation(Opcode::OP_INDEX_PUT,
+                                          {selfTensor, valuesTensor, rowIndexTensor, colIndexTensor}, {outputTensor});
     indexPutOp.SetAttribute(OpAttributeKey::accumulate, false);
 
     Tensor selfDataTensor(DT_FP32, selfShape);
@@ -1041,8 +1041,8 @@ TEST_F(CalcCommonTest, ExecuteOpIndexPutBasic)
 // 测试 ExecuteOpTopkExtract，验证从打包的 [value, index, ...] 中提取 top-k 值
 TEST_F(CalcCommonTest, ExecuteOpTopkExtractValueBasic)
 {
-    auto func =
-        std::make_shared<Function>(Program::GetInstance(), "TestTopkExtractValue", "TestTopkExtractValue", nullptr);
+    auto func = std::make_shared<Function>(Program::GetInstance(), "TestTopkExtractValue", "TestTopkExtractValue",
+                                           nullptr);
 
     // 输入 shape: {1, 6}，数据按 [v0, i0, v1, i1, v2, i2] 打包
     std::vector<int64_t> inShape = {1, 6};
@@ -1088,8 +1088,8 @@ TEST_F(CalcCommonTest, ExecuteOpTopkExtractValueBasic)
 // 测试 ExecuteOpTopkExtract，提取 indices
 TEST_F(CalcCommonTest, ExecuteOpTopkExtractIndexBasic)
 {
-    auto func =
-        std::make_shared<Function>(Program::GetInstance(), "TestTopkExtractIndex", "TestTopkExtractIndex", nullptr);
+    auto func = std::make_shared<Function>(Program::GetInstance(), "TestTopkExtractIndex", "TestTopkExtractIndex",
+                                           nullptr);
 
     std::vector<int64_t> inShape = {1, 6};
     std::vector<int64_t> outShape = {1, 2}; // k = 2

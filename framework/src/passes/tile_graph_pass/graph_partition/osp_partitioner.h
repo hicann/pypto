@@ -30,32 +30,31 @@
 
 namespace npu::tile_fwk {
 namespace osp {
-template <typename GraphT> class BspArchitecture;
-template <typename GraphT> class BspInstance;
-}  // namespace osp
+template <typename GraphT>
+class BspArchitecture;
+template <typename GraphT>
+class BspInstance;
+} // namespace osp
 
-template<typename WorkType>
+template <typename WorkType>
 struct ArchParameters {
-    WorkType commCost_  = 1;
+    WorkType commCost_ = 1;
     WorkType synchCost_ = 8000;
     double commCorrectionFactor_ = 0.01;
     WorkType partitionWorkUpperBound_ = std::numeric_limits<WorkType>::max();
     WorkType partitionWorkLowerBound_ = std::numeric_limits<WorkType>::lowest();
 };
 
-enum class OspMode {
-    SARKAR      = 1,
-    MERKLEBSP   = 2
-};
+enum class OspMode { SARKAR = 1, MERKLEBSP = 2 };
 
 class OspPartitioner : public SuperNodeGraphBuilder {
 public:
-    OspPartitioner(OspMode mode) : SuperNodeGraphBuilder(GraphUtils::IsCVMixPlatform()), ospMode_(mode) { };
-    OspPartitioner(OspMode mode, bool useCVMixPartition) : SuperNodeGraphBuilder(useCVMixPartition), ospMode_(mode) { };
+    OspPartitioner(OspMode mode) : SuperNodeGraphBuilder(GraphUtils::IsCVMixPlatform()), ospMode_(mode) {};
+    OspPartitioner(OspMode mode, bool useCVMixPartition) : SuperNodeGraphBuilder(useCVMixPartition), ospMode_(mode) {};
     ~OspPartitioner() = default;
 
-    Status SetParameter(const Function &function);
-    Status PartitionGraph(Function &function);
+    Status SetParameter(const Function& function);
+    Status PartitionGraph(Function& function);
 
 private:
     using VertType = int32_t;
@@ -68,21 +67,11 @@ private:
 
     // Core/Vertex type translation maps
     const std::unordered_map<OpCoreType, VTypeType> ospCoreTypeMapSplit{
-        {OpCoreType::AIC,       0U},
-        {OpCoreType::AIV,       1U},
-        {OpCoreType::AICPU,     2U},
-        {OpCoreType::ANY,       3U},
-        {OpCoreType::HUB,       4U},
-        {OpCoreType::GMATOMIC,  5U}
-    };
+        {OpCoreType::AIC, 0U}, {OpCoreType::AIV, 1U}, {OpCoreType::AICPU, 2U},
+        {OpCoreType::ANY, 3U}, {OpCoreType::HUB, 4U}, {OpCoreType::GMATOMIC, 5U}};
     const std::unordered_map<OpCoreType, VTypeType> ospCoreTypeMapMix{
-        {OpCoreType::AIC,       0U},
-        {OpCoreType::AIV,       0U},
-        {OpCoreType::AICPU,     1U},
-        {OpCoreType::ANY,       2U},
-        {OpCoreType::HUB,       3U},
-        {OpCoreType::GMATOMIC,  4U}
-    };
+        {OpCoreType::AIC, 0U}, {OpCoreType::AIV, 0U}, {OpCoreType::AICPU, 1U},
+        {OpCoreType::ANY, 2U}, {OpCoreType::HUB, 3U}, {OpCoreType::GMATOMIC, 4U}};
 
     // Parameters
     ArchParameters<WorkType> archParameters_;
@@ -92,33 +81,33 @@ private:
     Status BuildSuperNodeGraph() override;
 
     // Construction of OSP instance
-    Status ConstructDagCVSplit(GraphType &graph);
-    Status ConstructDagCVMix(GraphType &graph);
-    Status ConstructDag(GraphType &graph);
-    void ConstructBspArchCVSplit(osp::BspArchitecture<GraphType> &bspArch);
-    Status ConstructBspArchCVMix(osp::BspArchitecture<GraphType> &bspArch);
-    Status ConstructBspInstance(osp::BspInstance<GraphType> &bspInst);
+    Status ConstructDagCVSplit(GraphType& graph);
+    Status ConstructDagCVMix(GraphType& graph);
+    Status ConstructDag(GraphType& graph);
+    void ConstructBspArchCVSplit(osp::BspArchitecture<GraphType>& bspArch);
+    Status ConstructBspArchCVMix(osp::BspArchitecture<GraphType>& bspArch);
+    Status ConstructBspInstance(osp::BspInstance<GraphType>& bspInst);
 
     // Construction Helpers
-    void SetVertexCommMemWeight(GraphType &graph, int32_t vertex);
+    void SetVertexCommMemWeight(GraphType& graph, int32_t vertex);
     VTypeType GetOspCoreTypeSplit(OpCoreType coreType);
     VTypeType GetOspCoreTypeMix(OpCoreType coreType);
 
     // Run OSP Partition
-    Status RunOspPartition(Function &function);
-    Status UpdatePartitionResult(Function &function, std::vector<VertType> &vertexContractionMap);
+    Status RunOspPartition(Function& function);
+    Status UpdatePartitionResult(Function& function, std::vector<VertType>& vertexContractionMap);
 
     // Algorithms
-    Status RunSarkar(const GraphType &graph, CoarseGraphType &coarseGraph, std::vector<VertType> &vertexContractionMap);
-    Status RunMerkleBsp(const osp::BspInstance<GraphType> &bspInst, std::vector<VertType> &vertexContractionMap);
+    Status RunSarkar(const GraphType& graph, CoarseGraphType& coarseGraph, std::vector<VertType>& vertexContractionMap);
+    Status RunMerkleBsp(const osp::BspInstance<GraphType>& bspInst, std::vector<VertType>& vertexContractionMap);
 
     // Helpers
     uint64_t CombineHash(const uint64_t h1, const uint64_t h2) const override;
-    uint64_t CombineNeighborHashes(uint64_t baseHash, const std::vector<int32_t> &neighbors,
-                                   const std::vector<uint64_t> &hashSource);
-    void BuildNodeHashValues(const std::vector<uint64_t> &opHashList);
+    uint64_t CombineNeighborHashes(uint64_t baseHash, const std::vector<int32_t>& neighbors,
+                                   const std::vector<uint64_t>& hashSource);
+    void BuildNodeHashValues(const std::vector<uint64_t>& opHashList);
     Status BuildHashValues() override;
 };
 
-}  // namespace npu::tile_fwk
-#endif  // PASS_OSP_PARTITIONER_H
+} // namespace npu::tile_fwk
+#endif // PASS_OSP_PARTITIONER_H

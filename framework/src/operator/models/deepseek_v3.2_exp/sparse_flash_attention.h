@@ -21,13 +21,13 @@
 
 namespace npu::tile_fwk {
 
-void SparseFlashAttentionCompute(
-    const Tensor& qNope, const Tensor& qRope, const Tensor& kSlc, const Tensor& vSlc, const Tensor& kvSlcActSeqs,
-    int nQ, int nKv, float softmaxScale, int topk, Tensor& attentionOut, SaTileShapeConfig tileConfig = {});
+void SparseFlashAttentionCompute(const Tensor& qNope, const Tensor& qRope, const Tensor& kSlc, const Tensor& vSlc,
+                                 const Tensor& kvSlcActSeqs, int nQ, int nKv, float softmaxScale, int topk,
+                                 Tensor& attentionOut, SaTileShapeConfig tileConfig = {});
 
-void SparseFlashAttention(
-    const Tensor& qNope, const Tensor& qRope, const Tensor& kSlc, const Tensor& vSlc, const Tensor& kvSlcActSeqs,
-    int nQ, int nKv, float softmaxScale, int topk, Tensor& attentionOut, SaTileShapeConfig tileConfig = {});
+void SparseFlashAttention(const Tensor& qNope, const Tensor& qRope, const Tensor& kSlc, const Tensor& vSlc,
+                          const Tensor& kvSlcActSeqs, int nQ, int nKv, float softmaxScale, int topk,
+                          Tensor& attentionOut, SaTileShapeConfig tileConfig = {});
 } // namespace npu::tile_fwk
 
 #endif // SELECTED_ATTENTION

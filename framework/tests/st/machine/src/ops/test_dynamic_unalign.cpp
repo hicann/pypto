@@ -378,9 +378,9 @@ TEST_F(DynamicUnalignTest, test_unary_unalign)
         int offset = bidx * sq * d;
         std::fill(golden.begin() + offset, golden.begin() + offset + actSeqsData[bidx] * d, exp(1.0));
     }
-    ProgramData::GetInstance().AppendInputs(
-        {RawTensorData::CreateConstantTensor<float>(q, 1.0), RawTensorData::CreateTensor<int32_t>(actSeqs, actSeqsData),
-         RawTensorData::CreateConstantTensor<float>(out, 0.001f)});
+    ProgramData::GetInstance().AppendInputs({RawTensorData::CreateConstantTensor<float>(q, 1.0),
+                                             RawTensorData::CreateTensor<int32_t>(actSeqs, actSeqsData),
+                                             RawTensorData::CreateConstantTensor<float>(out, 0.001f)});
 
     ProgramData::GetInstance().AppendGoldens({
         RawTensorData::CreateTensor<float>(out, golden),

@@ -464,8 +464,8 @@ TEST_F(FunctionTest, TestRoPE)
     config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
 
     RoPETileShapeConfig ropeTileConfig{
-        {64, 64},         // for cos/sin->cast
-        {1, 64, 64},      // for gather,unsqueeze
+        {64, 64},    // for cos/sin->cast
+        {1, 64, 64}, // for gather,unsqueeze
         {1, 64, 1, 64},
         {1, 64, 1, 32, 2} // for transpose
     };
@@ -497,8 +497,8 @@ TEST_F(FunctionTest, TestRoPEDeepseekV3)
     config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
 
     RoPETileShapeConfig ropeTileConfig{
-        {64, 64},         // for cos/sin->cast
-        {1, 64, 64},      // for gather,unsqueeze
+        {64, 64},    // for cos/sin->cast
+        {1, 64, 64}, // for gather,unsqueeze
         {1, 64, 1, 64},
         {1, 64, 1, 32, 2} // for transpose
     };
@@ -721,8 +721,8 @@ TEST_F(FunctionTest, Test_deepseekAttention_pre)
     ConfigManager::Instance();
     FUNCTION("A")
     {
-        res = deepseekAttention.AtentionPreForward(
-            hidden_states, atten_mask, position_ids, cos, sin, kv_len, past_key_states, ropeTileConfig);
+        res = deepseekAttention.AtentionPreForward(hidden_states, atten_mask, position_ids, cos, sin, kv_len,
+                                                   past_key_states, ropeTileConfig);
     }
 }
 
@@ -801,8 +801,8 @@ TEST_F(FunctionTest, Test_deepseekMoEInfer_singleout)
     config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
 
     int32_t nRoutedExperts = 256;
-    int b = 4;                                                                 // 32
-    int s = 1;                                                                 // 1, optimize set_tile
+    int b = 4; // 32
+    int s = 1; // 1, optimize set_tile
     int h = 256;
     int numExpertsPerTok = std::get<int>(deepseekConfig1["numExpertsPerTok"]); // 8
 
@@ -826,8 +826,8 @@ TEST_F(FunctionTest, Test_deepseekMoEInfer_singleout)
 
     FUNCTION("MOE_INFER_F")
     {
-        finalout = deepseekMoEInfer.MoeInfer(
-            hiddenStates, topkIdx, topkWeight, ffnWeight1, ffnWeight2, ffnWeight3, nRoutedExperts);
+        finalout = deepseekMoEInfer.MoeInfer(hiddenStates, topkIdx, topkWeight, ffnWeight1, ffnWeight2, ffnWeight3,
+                                             nRoutedExperts);
     }
 }
 
@@ -836,8 +836,8 @@ TEST_F(FunctionTest, test_deepseekMoEInfer_singleout_2)
     config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
 
     int32_t nRoutedExperts = 256;
-    int b = 4;                                                                 // 32
-    int s = 1;                                                                 // 1, optimize set_tile
+    int b = 4; // 32
+    int s = 1; // 1, optimize set_tile
     int h = std::get<int>(deepseekConfig1["hiddenSize"]);
     int numExpertsPerTok = std::get<int>(deepseekConfig1["numExpertsPerTok"]); // 8
 
@@ -866,9 +866,8 @@ TEST_F(FunctionTest, test_deepseekMoEInfer_singleout_2)
 
     FUNCTION("MOE_INFER_F")
     {
-        finalout = deepseekMoEInfer.MoeInfer(
-            hiddenStates, topkIdx, topkWeight, ffnWeight1, ffnWeight2, ffnWeight3, idxs, sortedTokens, outs,
-            nRoutedExperts);
+        finalout = deepseekMoEInfer.MoeInfer(hiddenStates, topkIdx, topkWeight, ffnWeight1, ffnWeight2, ffnWeight3,
+                                             idxs, sortedTokens, outs, nRoutedExperts);
     }
 }
 
@@ -904,8 +903,8 @@ TEST_F(FunctionTest, test_deepseekMoEInfer_singleout_singlemlp)
 
     FUNCTION("MOE_INFER_F")
     {
-        finalout = deepseekMoEInfer.MoeInferSingleMlp(
-            hiddenStates, topkIdx, topkWeight, ffnWeight1, ffnWeight2, ffnWeight3, nRoutedExperts);
+        finalout = deepseekMoEInfer.MoeInferSingleMlp(hiddenStates, topkIdx, topkWeight, ffnWeight1, ffnWeight2,
+                                                      ffnWeight3, nRoutedExperts);
     }
 }
 
@@ -944,9 +943,9 @@ TEST_F(FunctionTest, test_deepseekMoEInfer_singleout_singlemlp_withquant)
 
     FUNCTION("MOE_INFER_F")
     {
-        finalout = deepseekMoEInfer.MoeInferSingleMlpQuant(
-            hiddenStates, topkIdx, topkWeight, ffnWeight1, ffnWeight2, ffnWeight3, ffnwight1Scale, ffnwight2Scale,
-            ffnwight3Scale, nRoutedExperts);
+        finalout = deepseekMoEInfer.MoeInferSingleMlpQuant(hiddenStates, topkIdx, topkWeight, ffnWeight1, ffnWeight2,
+                                                           ffnWeight3, ffnwight1Scale, ffnwight2Scale, ffnwight3Scale,
+                                                           nRoutedExperts);
     }
 }
 
@@ -957,8 +956,8 @@ TEST_F(FunctionTest, Test_ScalarOp)
     std::vector<int64_t> shape = {128, 32};
     TileShape::Current().SetVecTile({128, 32});
     Tensor input_a(DT_FP32, shape, "A");
-    auto output = Tensor(
-        DT_FP32, shape, "res"); // std::make_tuple(Tensor(DT_FP32, shape, "res"), Tensor(DT_FP32, shape, "resDics"));
+    auto output = Tensor(DT_FP32, shape,
+                         "res"); // std::make_tuple(Tensor(DT_FP32, shape, "res"), Tensor(DT_FP32, shape, "resDics"));
     config::SetBuildStatic(true);
     FUNCTION("ScalarAddS")
     {
@@ -1034,9 +1033,8 @@ TEST_F(FunctionTest, dynamic_pa_low_lantency)
     Tensor actSeqs(DT_INT32, {b}, "actSeqs");
     Tensor paOut(DT_FP32, {b * nq * sq, dn}, "paOut");
 
-    PageAttention(
-        qNope, kNopeCache, vNopeCache, qRope, kRopeCache, blockTable, actSeqs, blockSize, softmaxScale, paOut,
-        tileConfig);
+    PageAttention(qNope, kNopeCache, vNopeCache, qRope, kRopeCache, blockTable, actSeqs, blockSize, softmaxScale, paOut,
+                  tileConfig);
 
     auto mainFunc = Program::GetInstance().GetFunctionByMagicName("TENSOR_main_2");
     EXPECT_NE(mainFunc, nullptr);
@@ -1090,9 +1088,8 @@ TEST_F(FunctionTest, dynamic_pa_low_lantency)
 #endif
 }
 
-template <
-    typename T = npu::tile_fwk::float16, bool codegen = true, typename wDtype = int8_t, bool splitK = false,
-    bool nz = true, bool isSmooth = true, bool usePrefetch = true>
+template <typename T = npu::tile_fwk::float16, bool codegen = true, typename wDtype = int8_t, bool splitK = false,
+          bool nz = true, bool isSmooth = true, bool usePrefetch = true>
 void TestMlaPrologV2(const SimpleParams& params)
 {
     if constexpr (codegen) {
@@ -1180,9 +1177,9 @@ void TestMlaPrologV2(const SimpleParams& params)
         }
     }
     config::SetPassConfig("PVC2_OOO", "InferMemoryConflict", KEY_DISABLE_PASS, true);
-    MlaProlog(
-        x, wDq, wUqQr, wUk, wDkvKr, gamma_cq, gamma_ckv, sin, cos, kv_len, kv_cache, kr_cache, quantInputs, ropeConfig,
-        output_q, output_q_rope, output_kv_cache, output_kr_cache, 1e-5f, 1e-5f, params.cacheMode, splitK, isSmooth);
+    MlaProlog(x, wDq, wUqQr, wUk, wDkvKr, gamma_cq, gamma_ckv, sin, cos, kv_len, kv_cache, kr_cache, quantInputs,
+              ropeConfig, output_q, output_q_rope, output_kv_cache, output_kr_cache, 1e-5f, 1e-5f, params.cacheMode,
+              splitK, isSmooth);
 }
 
 TEST_F(FunctionTest, low_PAND)

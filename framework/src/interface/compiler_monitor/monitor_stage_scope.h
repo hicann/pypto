@@ -23,9 +23,12 @@ public:
     }
 
     MonitorStageScope(const std::string& stageName, int rootFuncIndex, const std::string& rootFuncName,
-        int rootFuncOpSize)
-        : stageName_(stageName), rootFuncIndex_(rootFuncIndex), rootFuncName_(rootFuncName),
-        rootFuncOpSize_(rootFuncOpSize), isRootFunc_(true)
+                      int rootFuncOpSize)
+        : stageName_(stageName),
+          rootFuncIndex_(rootFuncIndex),
+          rootFuncName_(rootFuncName),
+          rootFuncOpSize_(rootFuncOpSize),
+          isRootFunc_(true)
     {
         MonitorManager::Instance().StartStage(stageName_, rootFuncIndex_, rootFuncName_, rootFuncOpSize_);
     }

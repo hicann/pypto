@@ -20,26 +20,26 @@
 
 namespace npu::tile_fwk::dynamic {
 constexpr int MAX_LAUNCH_SCHEDULE_AICPU_NUM = 6;
-constexpr uint32_t MAX_SCHEDULE_AICPU_NUM = 5; // 真正负责调度aicore的最大aicpu个数
-constexpr uint32_t MAX_CONTROL_FLOW_AICPU_NUM = 1;    // contral flow aicpu数量
+constexpr uint32_t MAX_SCHEDULE_AICPU_NUM = 5;     // 真正负责调度aicore的最大aicpu个数
+constexpr uint32_t MAX_CONTROL_FLOW_AICPU_NUM = 1; // contral flow aicpu数量
 constexpr uint32_t MAX_USED_AICPU_NUM = MAX_SCHEDULE_AICPU_NUM + MAX_CONTROL_FLOW_AICPU_NUM;
 constexpr uint32_t FREQ_DAV_2201 = 50;
 constexpr uint32_t FREQ_DAV_3510 = 1000;
 
-#define PERF_TRACES                           \
-    X(BEGIN)                                  \
-    X(ALLOC_THREAD_ID)                        \
-    X(INIT)                                   \
-    X(CORE_HAND_SHAKE)                        \
-    XDEVTASK(DEV_TASK_BUILD)                  \
-    XDEVTASK(DEV_TASK_RCV)                    \
+#define PERF_TRACES                         \
+    X(BEGIN)                                \
+    X(ALLOC_THREAD_ID)                      \
+    X(INIT)                                 \
+    X(CORE_HAND_SHAKE)                      \
+    XDEVTASK(DEV_TASK_BUILD)                \
+    XDEVTASK(DEV_TASK_RCV)                  \
     XDEVTASK(DEV_TASK_SEND_FIRST_LEAF_TASK) \
-    XDEVTASK(DEV_TASK_SCHED_EXEC)             \
-    XDEVTASK(DEV_TASK_SYNC_CORE_STOP)         \
-    XDEVTASK(DEV_TASK_RSP)                    \
-    X(WAIT_ALL_DEV_TASK_FINISH)               \
-    X(WAIT_CORE_EXIT)                         \
-    X(EXIT)                                   \
+    XDEVTASK(DEV_TASK_SCHED_EXEC)           \
+    XDEVTASK(DEV_TASK_SYNC_CORE_STOP)       \
+    XDEVTASK(DEV_TASK_RSP)                  \
+    X(WAIT_ALL_DEV_TASK_FINISH)             \
+    X(WAIT_CORE_EXIT)                       \
+    X(EXIT)                                 \
     X(MAX)
 
 enum PerfTraceType {

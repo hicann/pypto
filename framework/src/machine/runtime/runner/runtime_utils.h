@@ -1,5 +1,5 @@
 /**
-* Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * Copyright (c) 2025 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
  * Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -28,24 +28,24 @@
     npu::tile_fwk::MemcpySWithCheck((dest), (destMax), (src), (count), __func__, __FILE__, __LINE__)
 #define RuntimeMemcpy(dst, destMax, src, cnt, kind) \
     npu::tile_fwk::RuntimeMemcpyWithCheck((dst), (destMax), (src), (cnt), (kind), __func__, __FILE__, __LINE__)
-#define RuntimeMemcpyAsync(dst, destMax, src, cnt, kind, stm) \
-    npu::tile_fwk::RuntimeMemcpyAsyncWithCheck((dst), (destMax), (src), (cnt), (kind), (stm), \
-                                                __func__, __FILE__, __LINE__)
+#define RuntimeMemcpyAsync(dst, destMax, src, cnt, kind, stm)                                                     \
+    npu::tile_fwk::RuntimeMemcpyAsyncWithCheck((dst), (destMax), (src), (cnt), (kind), (stm), __func__, __FILE__, \
+                                               __LINE__)
 
 namespace npu::tile_fwk {
-inline void MemcpySWithCheck(void *dest, size_t destMax, const void *src, size_t count,
-                              const char *func, const char *file, int line)
+inline void MemcpySWithCheck(void* dest, size_t destMax, const void* src, size_t count, const char* func,
+                             const char* file, int line)
 {
     const errno_t ret = memcpy_s(dest, destMax, src, count);
     if (ret != EOK) {
         MACHINE_LOGE(DevCommonErr::MEMCPY_FAILED,
-                     "memcpy_s failed: func=%s, file=%s:%d, ret=%d, dest=%p, destMax=%zu, src=%p, count=%zu",
-                     func, file, line, ret, dest, destMax, src, count);
+                     "memcpy_s failed: func=%s, file=%s:%d, ret=%d, dest=%p, destMax=%zu, src=%p, count=%zu", func,
+                     file, line, ret, dest, destMax, src, count);
         MACHINE_ASSERT(false) << "memcpy_s failed, ret=" << ret;
     }
 }
 
-inline void CheckCaptureRelaxedBeforeMemcpy(const char *api, const char *func, const char *file, int line)
+inline void CheckCaptureRelaxedBeforeMemcpy(const char* api, const char* func, const char* file, int line)
 {
     if (!RuntimeCaptureContext::IsCaptureMode()) {
         return;
@@ -53,8 +53,7 @@ inline void CheckCaptureRelaxedBeforeMemcpy(const char *api, const char *func, c
     AclMdlRICaptureMode currentMode = AclMdlRICaptureMode::GLOBAL;
     const bool queryOk = RuntimeCaptureContext::QueryThreadCaptureMode(currentMode);
     if (!queryOk) {
-        MACHINE_LOGE(RtErr::RT_MEMCPY_FAILED,
-                     "cannot query ACL capture thread mode before %s, func=%s, file=%s:%d",
+        MACHINE_LOGE(RtErr::RT_MEMCPY_FAILED, "cannot query ACL capture thread mode before %s, func=%s, file=%s:%d",
                      api, func, file, line);
         MACHINE_ASSERT(false) << api << ": cannot query ACL capture thread mode";
     }
@@ -70,29 +69,28 @@ inline void CheckCaptureRelaxedBeforeMemcpy(const char *api, const char *func, c
     }
 }
 
-inline void RuntimeMemcpyWithCheck(void *dst, uint64_t destMax, const void *src, uint64_t cnt, RtMemcpyKind kind,
-                                    const char *func, const char *file, int line)
+inline void RuntimeMemcpyWithCheck(void* dst, uint64_t destMax, const void* src, uint64_t cnt, RtMemcpyKind kind,
+                                   const char* func, const char* file, int line)
 {
     CheckCaptureRelaxedBeforeMemcpy("RuntimeMemcpy", func, file, line);
     const RtError ret = RuntimeMemcpyDirect(dst, destMax, src, cnt, kind);
     if (ret != RT_SUCCESS) {
         MACHINE_LOGE(RtErr::RT_MEMCPY_FAILED,
-                     "RuntimeMemcpy failed: func=%s, file=%s:%d, ret=%d, kind=%d, size=%lu, dst=%p, src=%p",
-                     func, file, line, static_cast<int>(ret), static_cast<int>(kind), cnt, dst, src);
+                     "RuntimeMemcpy failed: func=%s, file=%s:%d, ret=%d, kind=%d, size=%lu, dst=%p, src=%p", func, file,
+                     line, static_cast<int>(ret), static_cast<int>(kind), cnt, dst, src);
         MACHINE_ASSERT(false) << "RuntimeMemcpy failed, ret=" << static_cast<int>(ret);
     }
 }
 
-inline void RuntimeMemcpyAsyncWithCheck(void *dst, uint64_t destMax, const void *src, uint64_t cnt,
-                                         RtMemcpyKind kind, RtStream stm,
-                                         const char *func, const char *file, int line)
+inline void RuntimeMemcpyAsyncWithCheck(void* dst, uint64_t destMax, const void* src, uint64_t cnt, RtMemcpyKind kind,
+                                        RtStream stm, const char* func, const char* file, int line)
 {
     CheckCaptureRelaxedBeforeMemcpy("RuntimeMemcpyAsync", func, file, line);
     const RtError ret = RuntimeMemcpyDirectAsync(dst, destMax, src, cnt, kind, stm);
     if (ret != RT_SUCCESS) {
         MACHINE_LOGE(RtErr::RT_MEMCPY_FAILED,
-                     "RuntimeMemcpyAsync failed: func=%s, file=%s:%d, ret=%d, kind=%d, size=%lu, dst=%p, src=%p",
-                     func, file, line, static_cast<int>(ret), static_cast<int>(kind), cnt, dst, src);
+                     "RuntimeMemcpyAsync failed: func=%s, file=%s:%d, ret=%d, kind=%d, size=%lu, dst=%p, src=%p", func,
+                     file, line, static_cast<int>(ret), static_cast<int>(kind), cnt, dst, src);
         MACHINE_ASSERT(false) << "RuntimeMemcpyAsync failed, ret=" << static_cast<int>(ret);
     }
 }
@@ -161,7 +159,7 @@ inline void CopyFromTensor(uint8_t* hostDstAddr, const uint8_t* devSrcAddr, cons
     RuntimeMemcpy(hostDstAddr, size, devSrcAddr, size, RtMemcpyKind::DEVICE_TO_HOST);
 #else
     RuntimeMemcpyAsync(hostDstAddr, size, devSrcAddr, size, RtMemcpyKind::DEVICE_TO_HOST,
-        GetStreamContext().GetAiCoreStream());
+                       GetStreamContext().GetAiCoreStream());
     RuntimeStreamSynchronize(GetStreamContext().GetAiCoreStream());
 #endif
 }
@@ -219,4 +217,4 @@ inline bool GetStreamCaptureInfo(RtStream aicoreStream, AclMdlRI& rtModel, bool&
 int GetCfgBlockdim();
 
 uint32_t GetProcessId();
-}
+} // namespace npu::tile_fwk

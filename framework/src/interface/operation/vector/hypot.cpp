@@ -23,9 +23,8 @@ namespace npu::tile_fwk {
 /**
  * @brief Hypot
  */
-void TiledHypotOperationImpl(
-    Function& function, const TileShape& tileShape, size_t cur, Input& input1, Input& input2,
-    const LogicalTensorPtr& result, TileInfo& resultTileInfo)
+void TiledHypotOperationImpl(Function& function, const TileShape& tileShape, size_t cur, Input& input1, Input& input2,
+                             const LogicalTensorPtr& result, TileInfo& resultTileInfo)
 {
     if (cur == result->shape.size()) {
         auto inputTile1 = input1.tensor.GetStorage()->View(function, input1.tileInfo.shape, input1.tileInfo.offset);
@@ -58,9 +57,8 @@ void TiledHypotOperationImpl(
     }
 }
 
-void TiledHypotOperation(
-    Function& function, const TileShape& tileShape, LogicalTensorPtr operand1, LogicalTensorPtr operand2,
-    const LogicalTensorPtr& result)
+void TiledHypotOperation(Function& function, const TileShape& tileShape, LogicalTensorPtr operand1,
+                         LogicalTensorPtr operand2, const LogicalTensorPtr& result)
 {
     auto broadcastOperand = [&](LogicalTensorPtr& operand, LogicalTensorPtr& other) {
         auto dstShape = result->shape;
@@ -127,9 +125,9 @@ Tensor Hypot(const Tensor& self, const Tensor& other)
     RETURN_CALL(HypotOperation, *Program::GetInstance().GetCurrentFunction(), self, other);
 }
 
-void HypotOperationTileFunc(
-    Function& function, const TileShape& tileShape, const std::vector<LogicalTensorPtr>& iOperand,
-    const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
+void HypotOperationTileFunc(Function& function, const TileShape& tileShape,
+                            const std::vector<LogicalTensorPtr>& iOperand,
+                            const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
 {
     BinaryOperationOperandCheck(iOperand, oOperand);
     TiledHypotOperation(function, tileShape, iOperand[0], iOperand[1], oOperand[0]);

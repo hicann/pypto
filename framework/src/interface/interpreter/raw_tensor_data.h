@@ -118,7 +118,7 @@ struct RawTensorData {
     }
 
     static std::vector<int64_t> ShapeToStride(const std::vector<int64_t>& shape)
-    {   
+    {
         ASSERT(ControlFlowScene::INVALID_TENSOR_SHAPE, !shape.empty())
             << "ShapeToStride: empty shape is not allowed" << shape;
         std::vector<int64_t> stride;
@@ -151,9 +151,7 @@ struct RawTensorData {
         data_->resize(bytes);
     }
 
-    RawTensorData(std::shared_ptr<StorageData> data,
-                  DataType dataType,
-                  const std::vector<int64_t>& shape)
+    RawTensorData(std::shared_ptr<StorageData> data, DataType dataType, const std::vector<int64_t>& shape)
         : data_(data),
           dataType_(dataType),
           shape_(shape),
@@ -317,7 +315,7 @@ struct RawTensorData {
         }
     }
 
-template <typename T>
+    template <typename T>
     static std::shared_ptr<RawTensorData> CreateConstantTensor(const Tensor& t, T value)
     {
         auto tensorData = std::make_shared<RawTensorData>(t.GetDataType(), t.GetShape());
@@ -357,8 +355,8 @@ template <typename T>
     }
 
     template <typename T>
-    static std::shared_ptr<RawTensorData> CreateTensorData(
-        const Shape& shape, DataType dType, const std::vector<T>& values)
+    static std::shared_ptr<RawTensorData> CreateTensorData(const Shape& shape, DataType dType,
+                                                           const std::vector<T>& values)
     {
         auto tensorData = std::make_shared<RawTensorData>(dType, shape);
         T* data = reinterpret_cast<T*>(tensorData->data());
@@ -409,21 +407,13 @@ template <typename T>
         return static_cast<size_t>((nelem + 1) / 0x2);
     }
 
-    size_t GetShmOffset() const {
-        return shmOffset_;
-    }
+    size_t GetShmOffset() const { return shmOffset_; }
 
-    void SetShmOffset(size_t offset) {
-        shmOffset_ = offset;
-    }
+    void SetShmOffset(size_t offset) { shmOffset_ = offset; }
 
-    bool IsShmTensor() {
-        return isShmTensor_;
-    }
+    bool IsShmTensor() { return isShmTensor_; }
 
-    void SetAsShmTensor() {
-        isShmTensor_ = true;
-    }
+    void SetAsShmTensor() { isShmTensor_ = true; }
 
 private:
     uint8_t* devPtr_{nullptr};
@@ -448,9 +438,8 @@ struct LogicalTensorData {
         : LogicalTensorData(data, data->GetShape(), data->GetShape(), std::vector<int64_t>(data->GetShape().size(), 0))
     {}
 
-    LogicalTensorData(
-        RawTensorDataPtr data, const std::vector<int64_t>& shape, const std::vector<int64_t>& validShape,
-        const std::vector<int64_t>& offset)
+    LogicalTensorData(RawTensorDataPtr data, const std::vector<int64_t>& shape, const std::vector<int64_t>& validShape,
+                      const std::vector<int64_t>& offset)
         : data_(data),
           shape_(shape),
           validShape_(validShape),
@@ -503,13 +492,9 @@ struct LogicalTensorData {
         return offset;
     }
 
-    size_t GetShmStorageOffset() {
-        return data_->GetShmOffset();
-    }
+    size_t GetShmStorageOffset() { return data_->GetShmOffset(); }
 
-    bool IsShmTensor() {
-        return data_->IsShmTensor();
-    }
+    bool IsShmTensor() { return data_->IsShmTensor(); }
 
     int ViewIndexToDataIndex(int viewIndex) const
     {
@@ -572,17 +557,17 @@ struct LogicalTensorData {
         return std::make_shared<LogicalTensorData>(tensorData);
     }
 
-    static std::shared_ptr<LogicalTensorData> CreateEmpty(
-        DataType dataType, const std::vector<int64_t>& shape, const std::vector<int64_t>& validShape,
-        const std::vector<int64_t>& rawShape)
+    static std::shared_ptr<LogicalTensorData> CreateEmpty(DataType dataType, const std::vector<int64_t>& shape,
+                                                          const std::vector<int64_t>& validShape,
+                                                          const std::vector<int64_t>& rawShape)
     {
         auto tensorData = std::make_shared<RawTensorData>(dataType, rawShape);
-        return std::make_shared<LogicalTensorData>(
-            tensorData, shape, validShape, std::vector<int64_t>(shape.size(), 0));
+        return std::make_shared<LogicalTensorData>(tensorData, shape, validShape,
+                                                   std::vector<int64_t>(shape.size(), 0));
     }
 
-    std::shared_ptr<LogicalTensorData> View(
-        const std::vector<int64_t>& viewShape, const std::vector<int64_t>& viewOffset)
+    std::shared_ptr<LogicalTensorData> View(const std::vector<int64_t>& viewShape,
+                                            const std::vector<int64_t>& viewOffset)
     {
         return std::make_shared<LogicalTensorData>(GetData(), viewShape, viewShape, viewOffset);
     }
@@ -641,8 +626,8 @@ private:
 using LogicalTensorDataPtr = std::shared_ptr<LogicalTensorData>;
 
 template <>
-inline std::shared_ptr<RawTensorData> RawTensorData::CreateTensor<uint8_t>(
-    const Tensor& t, const std::vector<uint8_t>& values)
+inline std::shared_ptr<RawTensorData> RawTensorData::CreateTensor<uint8_t>(const Tensor& t,
+                                                                           const std::vector<uint8_t>& values)
 {
     auto tensorData = std::make_shared<RawTensorData>(t.GetDataType(), t.GetShape());
     uint8_t* data = reinterpret_cast<uint8_t*>(tensorData->data());
@@ -691,17 +676,17 @@ struct ProgramData {
         }
     }
 
-    void PrepareData(
-        const std::vector<RawTensorDataPtr> inputDataList, const std::vector<RawTensorDataPtr> outputDataList,
-        const std::vector<RawTensorDataPtr> goldenDataList)
+    void PrepareData(const std::vector<RawTensorDataPtr> inputDataList,
+                     const std::vector<RawTensorDataPtr> outputDataList,
+                     const std::vector<RawTensorDataPtr> goldenDataList)
     {
         AppendInputs(inputDataList);
         AppendOutputs(outputDataList);
         AppendGoldens(goldenDataList);
     }
 
-    void CopyTo(
-        std::vector<std::shared_ptr<LogicalTensorData>>& dataViewList, const std::vector<RawTensorDataPtr>& dataList)
+    void CopyTo(std::vector<std::shared_ptr<LogicalTensorData>>& dataViewList,
+                const std::vector<RawTensorDataPtr>& dataList)
     {
         for (auto data : dataList) {
             if (data) {

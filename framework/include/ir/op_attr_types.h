@@ -35,29 +35,46 @@
 #define PYPTO_ENUM_FE_7(ACTION, ctx, x, ...) ACTION(ctx, x) PYPTO_ENUM_EXPAND(PYPTO_ENUM_FE_6(ACTION, ctx, __VA_ARGS__))
 #define PYPTO_ENUM_FE_8(ACTION, ctx, x, ...) ACTION(ctx, x) PYPTO_ENUM_EXPAND(PYPTO_ENUM_FE_7(ACTION, ctx, __VA_ARGS__))
 #define PYPTO_ENUM_FE_9(ACTION, ctx, x, ...) ACTION(ctx, x) PYPTO_ENUM_EXPAND(PYPTO_ENUM_FE_8(ACTION, ctx, __VA_ARGS__))
-#define PYPTO_ENUM_FE_10(ACTION, ctx, x, ...) ACTION(ctx, x) PYPTO_ENUM_EXPAND(PYPTO_ENUM_FE_9(ACTION, ctx, __VA_ARGS__))
-#define PYPTO_ENUM_FE_11(ACTION, ctx, x, ...) ACTION(ctx, x) PYPTO_ENUM_EXPAND(PYPTO_ENUM_FE_10(ACTION, ctx, __VA_ARGS__))
-#define PYPTO_ENUM_FE_12(ACTION, ctx, x, ...) ACTION(ctx, x) PYPTO_ENUM_EXPAND(PYPTO_ENUM_FE_11(ACTION, ctx, __VA_ARGS__))
-#define PYPTO_ENUM_FE_13(ACTION, ctx, x, ...) ACTION(ctx, x) PYPTO_ENUM_EXPAND(PYPTO_ENUM_FE_12(ACTION, ctx, __VA_ARGS__))
-#define PYPTO_ENUM_FE_14(ACTION, ctx, x, ...) ACTION(ctx, x) PYPTO_ENUM_EXPAND(PYPTO_ENUM_FE_13(ACTION, ctx, __VA_ARGS__))
-#define PYPTO_ENUM_FE_15(ACTION, ctx, x, ...) ACTION(ctx, x) PYPTO_ENUM_EXPAND(PYPTO_ENUM_FE_14(ACTION, ctx, __VA_ARGS__))
-#define PYPTO_ENUM_FE_16(ACTION, ctx, x, ...) ACTION(ctx, x) PYPTO_ENUM_EXPAND(PYPTO_ENUM_FE_15(ACTION, ctx, __VA_ARGS__))
-#define PYPTO_ENUM_FE_17(ACTION, ctx, x, ...) ACTION(ctx, x) PYPTO_ENUM_EXPAND(PYPTO_ENUM_FE_16(ACTION, ctx, __VA_ARGS__))
-#define PYPTO_ENUM_FE_18(ACTION, ctx, x, ...) ACTION(ctx, x) PYPTO_ENUM_EXPAND(PYPTO_ENUM_FE_17(ACTION, ctx, __VA_ARGS__))
-#define PYPTO_ENUM_FE_19(ACTION, ctx, x, ...) ACTION(ctx, x) PYPTO_ENUM_EXPAND(PYPTO_ENUM_FE_18(ACTION, ctx, __VA_ARGS__))
-#define PYPTO_ENUM_FE_20(ACTION, ctx, x, ...) ACTION(ctx, x) PYPTO_ENUM_EXPAND(PYPTO_ENUM_FE_19(ACTION, ctx, __VA_ARGS__))
-#define PYPTO_ENUM_FE_21(ACTION, ctx, x, ...) ACTION(ctx, x) PYPTO_ENUM_EXPAND(PYPTO_ENUM_FE_20(ACTION, ctx, __VA_ARGS__))
-#define PYPTO_ENUM_FE_22(ACTION, ctx, x, ...) ACTION(ctx, x) PYPTO_ENUM_EXPAND(PYPTO_ENUM_FE_21(ACTION, ctx, __VA_ARGS__))
-#define PYPTO_ENUM_FE_23(ACTION, ctx, x, ...) ACTION(ctx, x) PYPTO_ENUM_EXPAND(PYPTO_ENUM_FE_22(ACTION, ctx, __VA_ARGS__))
-#define PYPTO_ENUM_FE_24(ACTION, ctx, x, ...) ACTION(ctx, x) PYPTO_ENUM_EXPAND(PYPTO_ENUM_FE_23(ACTION, ctx, __VA_ARGS__))
+#define PYPTO_ENUM_FE_10(ACTION, ctx, x, ...) \
+    ACTION(ctx, x) PYPTO_ENUM_EXPAND(PYPTO_ENUM_FE_9(ACTION, ctx, __VA_ARGS__))
+#define PYPTO_ENUM_FE_11(ACTION, ctx, x, ...) \
+    ACTION(ctx, x) PYPTO_ENUM_EXPAND(PYPTO_ENUM_FE_10(ACTION, ctx, __VA_ARGS__))
+#define PYPTO_ENUM_FE_12(ACTION, ctx, x, ...) \
+    ACTION(ctx, x) PYPTO_ENUM_EXPAND(PYPTO_ENUM_FE_11(ACTION, ctx, __VA_ARGS__))
+#define PYPTO_ENUM_FE_13(ACTION, ctx, x, ...) \
+    ACTION(ctx, x) PYPTO_ENUM_EXPAND(PYPTO_ENUM_FE_12(ACTION, ctx, __VA_ARGS__))
+#define PYPTO_ENUM_FE_14(ACTION, ctx, x, ...) \
+    ACTION(ctx, x) PYPTO_ENUM_EXPAND(PYPTO_ENUM_FE_13(ACTION, ctx, __VA_ARGS__))
+#define PYPTO_ENUM_FE_15(ACTION, ctx, x, ...) \
+    ACTION(ctx, x) PYPTO_ENUM_EXPAND(PYPTO_ENUM_FE_14(ACTION, ctx, __VA_ARGS__))
+#define PYPTO_ENUM_FE_16(ACTION, ctx, x, ...) \
+    ACTION(ctx, x) PYPTO_ENUM_EXPAND(PYPTO_ENUM_FE_15(ACTION, ctx, __VA_ARGS__))
+#define PYPTO_ENUM_FE_17(ACTION, ctx, x, ...) \
+    ACTION(ctx, x) PYPTO_ENUM_EXPAND(PYPTO_ENUM_FE_16(ACTION, ctx, __VA_ARGS__))
+#define PYPTO_ENUM_FE_18(ACTION, ctx, x, ...) \
+    ACTION(ctx, x) PYPTO_ENUM_EXPAND(PYPTO_ENUM_FE_17(ACTION, ctx, __VA_ARGS__))
+#define PYPTO_ENUM_FE_19(ACTION, ctx, x, ...) \
+    ACTION(ctx, x) PYPTO_ENUM_EXPAND(PYPTO_ENUM_FE_18(ACTION, ctx, __VA_ARGS__))
+#define PYPTO_ENUM_FE_20(ACTION, ctx, x, ...) \
+    ACTION(ctx, x) PYPTO_ENUM_EXPAND(PYPTO_ENUM_FE_19(ACTION, ctx, __VA_ARGS__))
+#define PYPTO_ENUM_FE_21(ACTION, ctx, x, ...) \
+    ACTION(ctx, x) PYPTO_ENUM_EXPAND(PYPTO_ENUM_FE_20(ACTION, ctx, __VA_ARGS__))
+#define PYPTO_ENUM_FE_22(ACTION, ctx, x, ...) \
+    ACTION(ctx, x) PYPTO_ENUM_EXPAND(PYPTO_ENUM_FE_21(ACTION, ctx, __VA_ARGS__))
+#define PYPTO_ENUM_FE_23(ACTION, ctx, x, ...) \
+    ACTION(ctx, x) PYPTO_ENUM_EXPAND(PYPTO_ENUM_FE_22(ACTION, ctx, __VA_ARGS__))
+#define PYPTO_ENUM_FE_24(ACTION, ctx, x, ...) \
+    ACTION(ctx, x) PYPTO_ENUM_EXPAND(PYPTO_ENUM_FE_23(ACTION, ctx, __VA_ARGS__))
 
-#define PYPTO_ENUM_GET_MACRO(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21, _22, _23, _24, NAME, ...) NAME
+#define PYPTO_ENUM_GET_MACRO(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, \
+                             _20, _21, _22, _23, _24, NAME, ...)                                                       \
+    NAME
 
-#define PYPTO_FOR_EACH(action, ctx, ...)                                                                              \
-    PYPTO_ENUM_EXPAND(PYPTO_ENUM_GET_MACRO(                                                                           \
-        _0, __VA_ARGS__, PYPTO_ENUM_FE_24, PYPTO_ENUM_FE_23, PYPTO_ENUM_FE_22, PYPTO_ENUM_FE_21, PYPTO_ENUM_FE_20,   \
-        PYPTO_ENUM_FE_19, PYPTO_ENUM_FE_18, PYPTO_ENUM_FE_17, PYPTO_ENUM_FE_16, PYPTO_ENUM_FE_15, PYPTO_ENUM_FE_14,  \
-        PYPTO_ENUM_FE_13, PYPTO_ENUM_FE_12, PYPTO_ENUM_FE_11, PYPTO_ENUM_FE_10, PYPTO_ENUM_FE_9, PYPTO_ENUM_FE_8,    \
+#define PYPTO_FOR_EACH(action, ctx, ...)                                                                            \
+    PYPTO_ENUM_EXPAND(PYPTO_ENUM_GET_MACRO(                                                                         \
+        _0, __VA_ARGS__, PYPTO_ENUM_FE_24, PYPTO_ENUM_FE_23, PYPTO_ENUM_FE_22, PYPTO_ENUM_FE_21, PYPTO_ENUM_FE_20,  \
+        PYPTO_ENUM_FE_19, PYPTO_ENUM_FE_18, PYPTO_ENUM_FE_17, PYPTO_ENUM_FE_16, PYPTO_ENUM_FE_15, PYPTO_ENUM_FE_14, \
+        PYPTO_ENUM_FE_13, PYPTO_ENUM_FE_12, PYPTO_ENUM_FE_11, PYPTO_ENUM_FE_10, PYPTO_ENUM_FE_9, PYPTO_ENUM_FE_8,   \
         PYPTO_ENUM_FE_7, PYPTO_ENUM_FE_6, PYPTO_ENUM_FE_5, PYPTO_ENUM_FE_4, PYPTO_ENUM_FE_3, PYPTO_ENUM_FE_2,       \
         PYPTO_ENUM_FE_1)(action, ctx, __VA_ARGS__))
 
@@ -82,16 +99,16 @@
     case EnumName::v:                     \
         return #EnumName "::" #v;
 
-#define PYPTO_DECLARE_ENUM(EnumName, ...)                                                                             \
-    enum class EnumName { PYPTO_FOR_EACH(PYPTO_ENUM_DECL_VALUE, _, __VA_ARGS__) };                                    \
-                                                                                                                        \
-    inline const char* EnumToString(EnumName v)                                                                       \
-    {                                                                                                                 \
-        switch (v) {                                                                                                  \
-            PYPTO_FOR_EACH(PYPTO_ENUM_DECL_CASE, EnumName, __VA_ARGS__)                                               \
-            default:                                                                                                  \
-                return "UNKNOWN";                                                                                     \
-        }                                                                                                             \
+#define PYPTO_DECLARE_ENUM(EnumName, ...)                                          \
+    enum class EnumName { PYPTO_FOR_EACH(PYPTO_ENUM_DECL_VALUE, _, __VA_ARGS__) }; \
+                                                                                   \
+    inline const char* EnumToString(EnumName v)                                    \
+    {                                                                              \
+        switch (v) {                                                               \
+            PYPTO_FOR_EACH(PYPTO_ENUM_DECL_CASE, EnumName, __VA_ARGS__)            \
+            default:                                                               \
+                return "UNKNOWN";                                                  \
+        }                                                                          \
     }
 
 namespace pypto {
@@ -147,7 +164,8 @@ PYPTO_DECLARE_ENUM(DuplicatePos, LOWEST, HIGHEST)
 
 PYPTO_DECLARE_ENUM(CastLayout, ZERO, ONE, TWO, THREE)
 
-PYPTO_DECLARE_ENUM(VFRoundMode, CAST_ROUND, CAST_RINT, CAST_FLOOR, CAST_CEIL, CAST_TRUNC, CAST_RNA, CAST_ODD, CAST_HYBRID)
+PYPTO_DECLARE_ENUM(VFRoundMode, CAST_ROUND, CAST_RINT, CAST_FLOOR, CAST_CEIL, CAST_TRUNC, CAST_RNA, CAST_ODD,
+                   CAST_HYBRID)
 
 PYPTO_DECLARE_ENUM(SaturateMode, OFF, ON)
 
@@ -161,10 +179,8 @@ PYPTO_DECLARE_ENUM(PackPart, LOWER, UPPER)
 
 PYPTO_DECLARE_ENUM(MaskWidth, B32, B16)
 
-PYPTO_DECLARE_ENUM(LoadDist,
-    NORM, BRC, BRC_B8, BRC_B16, BRC_B32, US, US_B8, US_B16, DS, DS_B8, DS_B16,
-    UNPK, UNPK_B8, UNPK_B16, UNPK_B32, UNPK4, BLK, E2B, E2B_B16, E2B_B32,
-    DINTLV_B8, DINTLV_B16, DINTLV_B32)
+PYPTO_DECLARE_ENUM(LoadDist, NORM, BRC, BRC_B8, BRC_B16, BRC_B32, US, US_B8, US_B16, DS, DS_B8, DS_B16, UNPK, UNPK_B8,
+                   UNPK_B16, UNPK_B32, UNPK4, BLK, E2B, E2B_B16, E2B_B32, DINTLV_B8, DINTLV_B16, DINTLV_B32)
 
 PYPTO_DECLARE_ENUM(StoreDist, NORM, NORM_B16, FIRST_ELEMENT, PACK, PACK4, INTLV, INTLV_B32)
 
@@ -172,7 +188,8 @@ PYPTO_DECLARE_ENUM(DataCopyMode, NORM, DATA_BLOCK_LOAD, DATA_BLOCK_COPY)
 
 PYPTO_DECLARE_ENUM(IndexOrder, INCREASE_ORDER, DECREASE_ORDER)
 
-PYPTO_DECLARE_ENUM(MemBarMode, VST_VLD, VLD_VST, VST_VST, VST_LD, VST_ST, VLD_ST, ST_VLD, ST_VST, LD_VST, VV_ALL, VS_ALL, SV_ALL)
+PYPTO_DECLARE_ENUM(MemBarMode, VST_VLD, VLD_VST, VST_VST, VST_LD, VST_ST, VLD_ST, ST_VLD, ST_VST, LD_VST, VV_ALL,
+                   VS_ALL, SV_ALL)
 
 PYPTO_DECLARE_ENUM(MaskLoadDist, NORM, US, DS)
 

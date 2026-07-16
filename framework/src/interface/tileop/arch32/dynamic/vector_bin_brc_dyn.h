@@ -48,15 +48,13 @@ TILEOP void T_BIN_BRC(__ubuf__ T* dst, __ubuf__ T* src0, __ubuf__ T* src1, __ubu
 
     if (repeatStride < 256 && T0 < 256) {
         for (uint8_t i = 0; i < numRepeatPerLine; i++) {
-            V_BIN_BRC_FUNC(
-                dst + i * elementsPerRepeat, src0 + i * elementsPerRepeat, sourceData, T0, dstBlockStride,
-                src0BlockStride, 0, repeatStride, repeatStride, 1);
+            V_BIN_BRC_FUNC(dst + i * elementsPerRepeat, src0 + i * elementsPerRepeat, sourceData, T0, dstBlockStride,
+                           src0BlockStride, 0, repeatStride, repeatStride, 1);
         }
         if (numRemainPerLine > 0) {
             SetContinuousMask(numRemainPerLine);
-            V_BIN_BRC_FUNC(
-                dst + numRepeatPerLine * elementsPerRepeat, src0 + numRepeatPerLine * elementsPerRepeat, sourceData, T0,
-                dstBlockStride, src0BlockStride, 0, repeatStride, repeatStride, 1);
+            V_BIN_BRC_FUNC(dst + numRepeatPerLine * elementsPerRepeat, src0 + numRepeatPerLine * elementsPerRepeat,
+                           sourceData, T0, dstBlockStride, src0BlockStride, 0, repeatStride, repeatStride, 1);
             set_vector_mask(-1, -1);
         }
     } else {
@@ -66,27 +64,24 @@ TILEOP void T_BIN_BRC(__ubuf__ T* dst, __ubuf__ T* src0, __ubuf__ T* src1, __ubu
             for (int j = 0; j < T0; j++) {
                 if (numRepeatStride) {
                     for (int k = 0; k < numRepeatStride; k++) {
-                        V_BIN_BRC_FUNC(
-                            dst + j * DS + k * elementsPerRepeat * REPEAT_MAX,
-                            src0 + j * SS0 + k * elementsPerRepeat * REPEAT_MAX, sourceData, REPEAT_MAX, dstBlockStride,
-                            src0BlockStride, 0, 8, 8, 1);
+                        V_BIN_BRC_FUNC(dst + j * DS + k * elementsPerRepeat * REPEAT_MAX,
+                                       src0 + j * SS0 + k * elementsPerRepeat * REPEAT_MAX, sourceData, REPEAT_MAX,
+                                       dstBlockStride, src0BlockStride, 0, 8, 8, 1);
                     }
                 }
                 if (remainStrideAfterLoop) {
-                    V_BIN_BRC_FUNC(
-                        dst + j * DS + numRepeatStride * elementsPerRepeat * REPEAT_MAX,
-                        src0 + j * SS0 + numRepeatStride * elementsPerRepeat * REPEAT_MAX, sourceData,
-                        remainStrideAfterLoop, dstBlockStride, src0BlockStride, 0, 8, 8, 1);
+                    V_BIN_BRC_FUNC(dst + j * DS + numRepeatStride * elementsPerRepeat * REPEAT_MAX,
+                                   src0 + j * SS0 + numRepeatStride * elementsPerRepeat * REPEAT_MAX, sourceData,
+                                   remainStrideAfterLoop, dstBlockStride, src0BlockStride, 0, 8, 8, 1);
                 }
             }
         }
         if (numRemainPerLine > 0) {
             SetContinuousMask(numRemainPerLine);
             for (int j = 0; j < T0; j++) {
-                V_BIN_BRC_FUNC(
-                    dst + j * DS + numRepeatPerLine * elementsPerRepeat,
-                    src0 + j * SS0 + numRepeatPerLine * elementsPerRepeat, sourceData, 1, dstBlockStride,
-                    src0BlockStride, 0, 8, 8, 1);
+                V_BIN_BRC_FUNC(dst + j * DS + numRepeatPerLine * elementsPerRepeat,
+                               src0 + j * SS0 + numRepeatPerLine * elementsPerRepeat, sourceData, 1, dstBlockStride,
+                               src0BlockStride, 0, 8, 8, 1);
             }
             set_vector_mask(-1, -1);
         }
@@ -94,11 +89,10 @@ TILEOP void T_BIN_BRC(__ubuf__ T* dst, __ubuf__ T* src0, __ubuf__ T* src1, __ubu
 }
 
 // dim3
-template <
-    typename T, unsigned DS0, unsigned DS1, unsigned S0S0, unsigned S0S1, unsigned S1S0, unsigned S1S1,
-    bool isInputForceCombineAxis>
-TILEOP void T_BIN_BRC(
-    __ubuf__ T* dst, __ubuf__ T* src0, __ubuf__ T* src1, __ubuf__ T* tmp, unsigned T0, unsigned T1, unsigned T2)
+template <typename T, unsigned DS0, unsigned DS1, unsigned S0S0, unsigned S0S1, unsigned S1S0, unsigned S1S1,
+          bool isInputForceCombineAxis>
+TILEOP void T_BIN_BRC(__ubuf__ T* dst, __ubuf__ T* src0, __ubuf__ T* src1, __ubuf__ T* tmp, unsigned T0, unsigned T1,
+                      unsigned T2)
 {
     static_assert((DS1 * sizeof(T)) % BLOCK_SIZE == 0);
     static_assert((S0S1 * sizeof(T)) % BLOCK_SIZE == 0);
@@ -112,12 +106,10 @@ TILEOP void T_BIN_BRC(
 }
 
 // dim4
-template <
-    typename T, unsigned DS0, unsigned DS1, unsigned DS2, unsigned S0S0, unsigned S0S1, unsigned S0S2, unsigned S1S0,
-    unsigned S1S1, unsigned S1S2, bool isInputForceCombineAxis>
-TILEOP void T_BIN_BRC(
-    __ubuf__ T* dst, __ubuf__ T* src0, __ubuf__ T* src1, __ubuf__ T* tmp, unsigned T0, unsigned T1, unsigned T2,
-    unsigned T3)
+template <typename T, unsigned DS0, unsigned DS1, unsigned DS2, unsigned S0S0, unsigned S0S1, unsigned S0S2,
+          unsigned S1S0, unsigned S1S1, unsigned S1S2, bool isInputForceCombineAxis>
+TILEOP void T_BIN_BRC(__ubuf__ T* dst, __ubuf__ T* src0, __ubuf__ T* src1, __ubuf__ T* tmp, unsigned T0, unsigned T1,
+                      unsigned T2, unsigned T3)
 {
     static_assert((DS2 * sizeof(T)) % BLOCK_SIZE == 0);
     static_assert((S0S2 * sizeof(T)) % BLOCK_SIZE == 0);

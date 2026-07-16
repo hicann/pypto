@@ -27,8 +27,8 @@ namespace npu {
 namespace tile_fwk {
 Status InferDiscontinuousInput::RunOnFunction(Function& function)
 {
-    APASS_LOG_INFO_F(
-        Elements::Function, "===> Start InferDiscontinuousInput for function [%s].", function.GetRawName().c_str());
+    APASS_LOG_INFO_F(Elements::Function, "===> Start InferDiscontinuousInput for function [%s].",
+                     function.GetRawName().c_str());
     Init(function);
     if (InferFromIncast(function) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Function, "Infer INCAST and OUTCAST address failed.");
@@ -44,16 +44,16 @@ Status InferDiscontinuousInput::RunOnFunction(Function& function)
             return FAILED;
         }
     }
-    
-    APASS_LOG_INFO_F(
-        Elements::Function, "===> End InferDiscontinuousInput for function [%s].", function.GetRawName().c_str());
+
+    APASS_LOG_INFO_F(Elements::Function, "===> End InferDiscontinuousInput for function [%s].",
+                     function.GetRawName().c_str());
     return SUCCESS;
 }
 
 std::vector<std::pair<LogicalTensorPtr, Operation*>> GetInplacedTileTensors(LogicalTensorPtr targetTensor)
 {
-    std::unordered_set<Opcode> inplaceNodes{
-        Opcode::OP_VIEW, Opcode::OP_ASSEMBLE, Opcode::OP_RESHAPE, Opcode::OP_INDEX_OUTCAST};
+    std::unordered_set<Opcode> inplaceNodes{Opcode::OP_VIEW, Opcode::OP_ASSEMBLE, Opcode::OP_RESHAPE,
+                                            Opcode::OP_INDEX_OUTCAST};
     std::vector<std::pair<LogicalTensorPtr, Operation*>> inplacedTensor;
     for (auto& producer : targetTensor->GetProducers()) {
         if (inplaceNodes.count(producer->GetOpcode()) == 0) {
@@ -97,9 +97,9 @@ inline bool VecEqual(Offset& vec1, Offset& vec2)
     return true;
 }
 
-inline bool PerfectOffsetOverlap(
-    std::vector<int>& rawTensorIds, std::vector<Shape>& rawShapes, std::vector<Shape>& shapes,
-    std::vector<Offset>& offsets, std::vector<Offset>& offsetTos)
+inline bool PerfectOffsetOverlap(std::vector<int>& rawTensorIds, std::vector<Shape>& rawShapes,
+                                 std::vector<Shape>& shapes, std::vector<Offset>& offsets,
+                                 std::vector<Offset>& offsetTos)
 {
     std::unordered_map<int, Offset> rawIdToRawOffset;
     std::unordered_map<int, int64_t> rawEmptySize;
@@ -155,7 +155,8 @@ inline bool IsTraceableView(Operation* cur)
     return true;
 }
 
-inline bool NoViewConflict(Function& function, const std::vector<std::pair<LogicalTensorPtr, Operation*>>& inplaceTensors)
+inline bool NoViewConflict(Function& function,
+                           const std::vector<std::pair<LogicalTensorPtr, Operation*>>& inplaceTensors)
 {
     std::vector<Operation*> viewOps(inplaceTensors.size(), nullptr);
     for (size_t i = 0; i < inplaceTensors.size(); i++) {
@@ -199,8 +200,8 @@ inline std::vector<size_t> GetInputTileConflict(
             assembleCheck = false;
             break;
         }
-        std::shared_ptr<AssembleOpAttribute> attr =
-            std::dynamic_pointer_cast<AssembleOpAttribute>(pr.second->GetOpAttribute());
+        std::shared_ptr<AssembleOpAttribute> attr = std::dynamic_pointer_cast<AssembleOpAttribute>(
+            pr.second->GetOpAttribute());
         if (attr == nullptr) {
             assembleCheck = false;
             break;
@@ -289,18 +290,18 @@ void InferDiscontinuousInput::InsertViewOp(Function& function, LogicalTensorPtr 
 {
     auto& insertViewOp = irBuilder_.CreateTensorOpStmt(function, Opcode::OP_VIEW, {iOperand}, {oOperand});
     newOps.push_back(&insertViewOp);
-    insertViewOp.SetOpAttribute(std::make_shared<ViewOpAttribute>(
-        iOperand->GetOffset(), oOperand->GetMemoryTypeOriginal(), iOperand->GetDynOffset(),
-        iOperand->GetDynValidShape()));
+    insertViewOp.SetOpAttribute(
+        std::make_shared<ViewOpAttribute>(iOperand->GetOffset(), oOperand->GetMemoryTypeOriginal(),
+                                          iOperand->GetDynOffset(), iOperand->GetDynValidShape()));
     APASS_LOG_DEBUG_F(Elements::Operation, "Insert view op [%d].", insertViewOp.GetOpMagic());
 }
 void InferDiscontinuousInput::InsertAssembleOp(Function& function, LogicalTensorPtr iOperand, LogicalTensorPtr oOperand)
 {
     auto& insertAssembleOp = irBuilder_.CreateTensorOpStmt(function, Opcode::OP_ASSEMBLE, {iOperand}, {oOperand});
     newOps.push_back(&insertAssembleOp);
-    insertAssembleOp.SetOpAttribute(std::make_shared<AssembleOpAttribute>(
-        iOperand->GetMemoryTypeOriginal(), oOperand->GetOffset(), oOperand->GetDynOffset(),
-        oOperand->GetDynValidShape()));
+    insertAssembleOp.SetOpAttribute(
+        std::make_shared<AssembleOpAttribute>(iOperand->GetMemoryTypeOriginal(), oOperand->GetOffset(),
+                                              oOperand->GetDynOffset(), oOperand->GetDynValidShape()));
     APASS_LOG_DEBUG_F(Elements::Operation, "Insert assemble op [%d].", insertAssembleOp.GetOpMagic());
 }
 
@@ -308,11 +309,11 @@ void InferDiscontinuousInput::InsertCopyOp(Function& function, LogicalTensorPtr 
 {
     if ((iOperand->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR) &&
         (oOperand->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR)) {
-        std::shared_ptr<RawTensor> newRawTensor =
-            std::make_shared<RawTensor>(iOperand->Datatype(), iOperand->GetShape(), iOperand->Format());
+        std::shared_ptr<RawTensor> newRawTensor = std::make_shared<RawTensor>(iOperand->Datatype(),
+                                                                              iOperand->GetShape(), iOperand->Format());
         Offset newOffset(iOperand->GetShape().size(), 0);
-        LogicalTensorPtr newTensor =
-            irBuilder_.CreateTensorVar(newRawTensor, newOffset, iOperand->GetShape(), iOperand->GetDynValidShape());
+        LogicalTensorPtr newTensor = irBuilder_.CreateTensorVar(newRawTensor, newOffset, iOperand->GetShape(),
+                                                                iOperand->GetDynValidShape());
         newTensor->SetMemoryTypeOriginal(MemoryType::MEM_UB, true);
         newTensor->SetMemoryTypeToBe(MemoryType::MEM_UB);
         InsertViewOp(function, iOperand, newTensor);
@@ -329,11 +330,11 @@ void InferDiscontinuousInput::InsertCopyOp(Function& function, LogicalTensorPtr 
         InsertAssembleOp(function, iOperand, oOperand);
         return;
     }
-    std::shared_ptr<RawTensor> newRawTensor =
-        std::make_shared<RawTensor>(iOperand->Datatype(), iOperand->GetShape(), iOperand->Format());
+    std::shared_ptr<RawTensor> newRawTensor = std::make_shared<RawTensor>(iOperand->Datatype(), iOperand->GetShape(),
+                                                                          iOperand->Format());
     Offset newOffset(iOperand->GetShape().size(), 0);
-    LogicalTensorPtr newTensor =
-        irBuilder_.CreateTensorVar(newRawTensor, newOffset, iOperand->GetShape(), iOperand->GetDynValidShape());
+    LogicalTensorPtr newTensor = irBuilder_.CreateTensorVar(newRawTensor, newOffset, iOperand->GetShape(),
+                                                            iOperand->GetDynValidShape());
     newTensor->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, true);
     newTensor->SetMemoryTypeToBe(MemoryType::MEM_DEVICE_DDR);
     InsertAssembleOp(function, iOperand, newTensor);
@@ -392,11 +393,11 @@ Status InferDiscontinuousInput::InsertTensorCopy(Function& function)
                 }
             }
             insertedNodes[inputTensor].insert(inplaceNode.second);
-            std::shared_ptr<RawTensor> newRawTensor =
-                std::make_shared<RawTensor>(inputTensor->Datatype(), inputTensor->GetShape(), inputTensor->Format());
+            std::shared_ptr<RawTensor> newRawTensor = std::make_shared<RawTensor>(
+                inputTensor->Datatype(), inputTensor->GetShape(), inputTensor->Format());
             Offset newOffset(inputTensor->GetShape().size(), 0);
-            LogicalTensorPtr newTensor =
-                irBuilder_.CreateTensorVar(newRawTensor, newOffset, inputTensor->GetShape(), inputTensor->GetDynValidShape());
+            LogicalTensorPtr newTensor = irBuilder_.CreateTensorVar(newRawTensor, newOffset, inputTensor->GetShape(),
+                                                                    inputTensor->GetDynValidShape());
             LogicalTensorPtr customTensor = inplaceNode.second->GetOOperands()[0];
             newTensor->SetMemoryTypeOriginal(customTensor->GetMemoryTypeOriginal(), true);
             newTensor->SetMemoryTypeToBe(newTensor->GetMemoryTypeOriginal());

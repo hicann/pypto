@@ -120,7 +120,7 @@ void Rename(const std::string& src, const std::string& dst)
     }
 }
 
-std::vector<uint8_t> ReadFile(const std::string& path, bool *isSuccess)
+std::vector<uint8_t> ReadFile(const std::string& path, bool* isSuccess)
 {
     if (isSuccess != nullptr) {
         *isSuccess = false;

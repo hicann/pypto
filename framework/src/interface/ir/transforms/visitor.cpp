@@ -252,19 +252,22 @@ void IRVisitor::VisitStmt_(const EvalStmtPtr& op)
     VisitExpr(op->expr_);
 }
 
-void IRVisitor::VisitStmt_(const BreakStmtPtr& op) {
-    for (auto &v : op->value_) {
+void IRVisitor::VisitStmt_(const BreakStmtPtr& op)
+{
+    for (auto& v : op->value_) {
         VisitExpr(v);
     }
 }
 
-void IRVisitor::VisitStmt_(const ContinueStmtPtr& op) {
-    for (auto &v : op->value_) {
+void IRVisitor::VisitStmt_(const ContinueStmtPtr& op)
+{
+    for (auto& v : op->value_) {
         VisitExpr(v);
     }
 }
 
-void IRVisitor::VisitStmt_(const ScalarOpStmtPtr& op) {
+void IRVisitor::VisitStmt_(const ScalarOpStmtPtr& op)
+{
     VisitExpr(op->result_);
     if (op->result_token_) {
         VisitExpr(op->result_token_);
@@ -274,7 +277,8 @@ void IRVisitor::VisitStmt_(const ScalarOpStmtPtr& op) {
     }
 }
 
-void IRVisitor::VisitStmt_(const TensorOpStmtPtr& op) {
+void IRVisitor::VisitStmt_(const TensorOpStmtPtr& op)
+{
     for (auto v : op->result_) {
         VisitExpr(v);
     }

@@ -348,7 +348,7 @@ TEST_F(AutoCastTest, UnsupportedFP16Output)
     EXPECT_EQ(G.AddTensor(DataType::DT_FP32, {16, 16}, "t1"), true);
     EXPECT_EQ(G.AddTensor(DataType::DT_FP16, {16, 16}, "t2"), true);
     std::vector<Opcode> opCodes;
-    opCodes.push_back(Opcode::OP_MOD);                       // 关键：FP16不支持的OP
+    opCodes.push_back(Opcode::OP_MOD); // 关键：FP16不支持的OP
     std::vector<std::vector<std::string>> ioperands{{"t1"}};
     std::vector<std::vector<std::string>> ooperands{{"t2"}}; // t2是FP16输出
     std::vector<std::string> opNames{"Mod"};

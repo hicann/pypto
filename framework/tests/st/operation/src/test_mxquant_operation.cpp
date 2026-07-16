@@ -20,9 +20,8 @@ namespace {
 constexpr int64_t QUANT_MX_SCALE_GROUP_COLS = 64;
 
 struct QuantMXOpFuncArgs : public OpFuncArgs {
-    QuantMXOpFuncArgs(
-        const std::vector<int64_t>& viewShape, const std::vector<int64_t>& tileShape, DataType quantDtype,
-        DequantScaleRoundingMode mode, bool performanceMode)
+    QuantMXOpFuncArgs(const std::vector<int64_t>& viewShape, const std::vector<int64_t>& tileShape, DataType quantDtype,
+                      DequantScaleRoundingMode mode, bool performanceMode)
         : viewShape_(viewShape),
           tileShape_(tileShape),
           quantDtype_(quantDtype),
@@ -46,8 +45,8 @@ struct QuantMXOpMetaData {
     nlohmann::json test_data_;
 };
 
-static void QuantMXOperationExeFunc1D(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void QuantMXOperationExeFunc1D(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                      const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0], outputs[1]})
     {
@@ -59,9 +58,8 @@ static void QuantMXOperationExeFunc1D(
         LOOP("LOOP_L0_bIdx", FunctionType::DYNAMIC_LOOP, bIdx, LoopRange(0, firstLoop, 1))
         {
             std::vector<SymbolicScalar> offset = {bIdx * firstViewShape};
-            auto viewTensor = View(
-                inputs[0], args->viewShape_, {std::min(firstDim - bIdx * firstViewShape, firstViewShape)},
-                offset);
+            auto viewTensor = View(inputs[0], args->viewShape_,
+                                   {std::min(firstDim - bIdx * firstViewShape, firstViewShape)}, offset);
             TileShape::Current().SetVecTile(args->tileShape_);
             auto res = QuantMX(viewTensor, args->quantDtype_, args->mode_, -1, args->performanceMode_);
             std::vector<SymbolicScalar> scaleOffset = {offset[0] / QUANT_MX_SCALE_GROUP_COLS, 0};
@@ -71,8 +69,8 @@ static void QuantMXOperationExeFunc1D(
     }
 }
 
-static void QuantMXOperationExeFunc2D(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void QuantMXOperationExeFunc2D(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                      const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0], outputs[1]})
     {
@@ -89,11 +87,10 @@ static void QuantMXOperationExeFunc2D(
             LOOP("LOOP_L1_sIdx", FunctionType::DYNAMIC_LOOP, sIdx, LoopRange(0, secondLoop, 1))
             {
                 std::vector<SymbolicScalar> offset = {bIdx * firstViewShape, sIdx * secondViewShape};
-                auto viewTensor = View(
-                    inputs[0], args->viewShape_,
-                    {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                     std::min(secondDim - sIdx * secondViewShape, secondViewShape)},
-                    offset);
+                auto viewTensor = View(inputs[0], args->viewShape_,
+                                       {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                        std::min(secondDim - sIdx * secondViewShape, secondViewShape)},
+                                       offset);
                 TileShape::Current().SetVecTile(args->tileShape_);
                 auto res = QuantMX(viewTensor, args->quantDtype_, args->mode_, -1, args->performanceMode_);
                 std::vector<SymbolicScalar> scaleOffset = {offset[0], offset[1] / QUANT_MX_SCALE_GROUP_COLS, 0};
@@ -104,8 +101,8 @@ static void QuantMXOperationExeFunc2D(
     }
 }
 
-static void QuantMXOperationExeFunc3D(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void QuantMXOperationExeFunc3D(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                      const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0], outputs[1]})
     {
@@ -126,18 +123,17 @@ static void QuantMXOperationExeFunc3D(
             {
                 LOOP("LOOP_L2_nIdx", FunctionType::DYNAMIC_LOOP, nIdx, LoopRange(0, thirdLoop, 1))
                 {
-                    std::vector<SymbolicScalar> offset = {
-                        bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape};
-                    auto viewTensor = View(
-                        inputs[0], args->viewShape_,
-                        {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                         std::min(secondDim - sIdx * secondViewShape, secondViewShape),
-                         std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape)},
-                        offset);
+                    std::vector<SymbolicScalar> offset = {bIdx * firstViewShape, sIdx * secondViewShape,
+                                                          nIdx * thirdViewShape};
+                    auto viewTensor = View(inputs[0], args->viewShape_,
+                                           {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                            std::min(secondDim - sIdx * secondViewShape, secondViewShape),
+                                            std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape)},
+                                           offset);
                     TileShape::Current().SetVecTile(args->tileShape_);
                     auto res = QuantMX(viewTensor, args->quantDtype_, args->mode_, -1, args->performanceMode_);
-                    std::vector<SymbolicScalar> scaleOffset = {
-                        offset[0], offset[1], offset[2] / QUANT_MX_SCALE_GROUP_COLS, 0};
+                    std::vector<SymbolicScalar> scaleOffset = {offset[0], offset[1],
+                                                               offset[2] / QUANT_MX_SCALE_GROUP_COLS, 0};
                     Assemble(std::get<0>(res), offset, outputs[0]);
                     Assemble(std::get<1>(res), scaleOffset, outputs[1]);
                 }
@@ -146,8 +142,8 @@ static void QuantMXOperationExeFunc3D(
     }
 }
 
-static void QuantMXOperationExeFunc4D(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void QuantMXOperationExeFunc4D(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                      const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0], outputs[1]})
     {
@@ -173,22 +169,18 @@ static void QuantMXOperationExeFunc4D(
                 {
                     LOOP("LOOP_L3_nIdx", FunctionType::DYNAMIC_LOOP, nIdx, LoopRange(0, fourthLoop, 1))
                     {
-                        std::vector<SymbolicScalar> offset = {
-                            bIdx * firstViewShape,
-                            sIdx * secondViewShape,
-                            mIdx * thirdViewShape,
-                            nIdx * fourthViewShape};
-                        auto viewTensor = View(
-                            inputs[0], args->viewShape_,
-                            {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                             std::min(secondDim - sIdx * secondViewShape, secondViewShape),
-                             std::min(thirdDim - mIdx * thirdViewShape, thirdViewShape),
-                             std::min(fourthDim - nIdx * fourthViewShape, fourthViewShape)},
-                            offset);
+                        std::vector<SymbolicScalar> offset = {bIdx * firstViewShape, sIdx * secondViewShape,
+                                                              mIdx * thirdViewShape, nIdx * fourthViewShape};
+                        auto viewTensor = View(inputs[0], args->viewShape_,
+                                               {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                                std::min(secondDim - sIdx * secondViewShape, secondViewShape),
+                                                std::min(thirdDim - mIdx * thirdViewShape, thirdViewShape),
+                                                std::min(fourthDim - nIdx * fourthViewShape, fourthViewShape)},
+                                               offset);
                         TileShape::Current().SetVecTile(args->tileShape_);
                         auto res = QuantMX(viewTensor, args->quantDtype_, args->mode_, -1, args->performanceMode_);
-                        std::vector<SymbolicScalar> scaleOffset = {
-                            offset[0], offset[1], offset[2], offset[3] / QUANT_MX_SCALE_GROUP_COLS, 0};
+                        std::vector<SymbolicScalar> scaleOffset = {offset[0], offset[1], offset[2],
+                                                                   offset[3] / QUANT_MX_SCALE_GROUP_COLS, 0};
                         Assemble(std::get<0>(res), offset, outputs[0]);
                         Assemble(std::get<1>(res), scaleOffset, outputs[1]);
                     }
@@ -202,11 +194,9 @@ class QuantMXOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Ai
 
 INSTANTIATE_TEST_SUITE_P(
     TestQuantMX, QuantMXOperationTest,
-    ::testing::ValuesIn(
-        GetOpMetaData<QuantMXOpMetaData, 1>(
-            {QuantMXOperationExeFunc1D, QuantMXOperationExeFunc2D, QuantMXOperationExeFunc3D,
-             QuantMXOperationExeFunc4D},
-            "QuantMX")));
+    ::testing::ValuesIn(GetOpMetaData<QuantMXOpMetaData, 1>({QuantMXOperationExeFunc1D, QuantMXOperationExeFunc2D,
+                                                             QuantMXOperationExeFunc3D, QuantMXOperationExeFunc4D},
+                                                            "QuantMX")));
 
 TEST_P(QuantMXOperationTest, TestQuantMX)
 {

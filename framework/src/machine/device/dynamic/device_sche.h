@@ -73,7 +73,8 @@ public:
         schThreadStatus.Init();
     }
 
-    void SetDevSchedSyncMode(uint8_t devScheSyncMode) {
+    void SetDevSchedSyncMode(uint8_t devScheSyncMode)
+    {
         devScheSyncMode_ = devScheSyncMode;
         DEV_INFO("Current front setted devSchedSynMode is %s", devScheSyncMode == 1 ? "SynMode" : "AsyncMode");
     }
@@ -82,11 +83,10 @@ public:
     {
         int ret = 0;
         if (args->nrAic == 0 || args->nrValidAic == 0 || args->nrAicpu < args->scheCpuNum) {
-            DEV_ERROR(
-                DevCommonErr::PARAM_INVALID,
-                "#sche.thread.init: Device machine run invalid args: aicNum=%u, blockdim=%u, launchAicpuNum=%u, "
-                "launchScheAicpuNum=%u",
-                args->nrAic, args->nrValidAic, args->nrAicpu, args->scheCpuNum);
+            DEV_ERROR(DevCommonErr::PARAM_INVALID,
+                      "#sche.thread.init: Device machine run invalid args: aicNum=%u, blockdim=%u, launchAicpuNum=%u, "
+                      "launchScheAicpuNum=%u",
+                      args->nrAic, args->nrValidAic, args->nrAicpu, args->scheCpuNum);
             return DEVICE_MACHINE_ERROR;
         }
 
@@ -136,35 +136,40 @@ struct DynMachineManager {
     };
 
     static int AllocThreadIdxForDav3510(DeviceArgs* devArgs, int cpu, int& curThreadIdx, std::atomic<int>& threadIdx,
-        std::atomic<uint64_t>& cpumask, std::atomic<int>& arbitrationLevel, std::atomic<uint64_t>& arbitrationCpumask)
+                                        std::atomic<uint64_t>& cpumask, std::atomic<int>& arbitrationLevel,
+                                        std::atomic<uint64_t>& arbitrationCpumask)
     {
         return AllocThreadIdxForDav3510Impl(devArgs, cpu, curThreadIdx, threadIdx, cpumask, arbitrationLevel,
-            arbitrationCpumask);
+                                            arbitrationCpumask);
     }
 
     static int AllocThreadIdxForDav2201(DeviceArgs* devArgs, int cpu, int& curThreadIdx, std::atomic<int>& threadIdx,
-        std::atomic<uint64_t>& cpumask, int& arbitratedScheNum, std::atomic<int>& arbitrationLevel)
+                                        std::atomic<uint64_t>& cpumask, int& arbitratedScheNum,
+                                        std::atomic<int>& arbitrationLevel)
     {
-        return AllocThreadIdxForDav2201Impl(devArgs, cpu, curThreadIdx, threadIdx, cpumask, arbitratedScheNum, arbitrationLevel);
+        return AllocThreadIdxForDav2201Impl(devArgs, cpu, curThreadIdx, threadIdx, cpumask, arbitratedScheNum,
+                                            arbitrationLevel);
     }
 
-    static int AllocThreadIdx(DeviceArgs* devArgs, int& curThreadIdx, std::atomic<int>& threadIdx, 
-        std::atomic<uint64_t>& cpumask, int& arbitratedScheNum, std::atomic<int>& arbitrationLevel, std::atomic<int>& simCpuId,
-        std::atomic<uint64_t>& arbitrationCpumask)
+    static int AllocThreadIdx(DeviceArgs* devArgs, int& curThreadIdx, std::atomic<int>& threadIdx,
+                              std::atomic<uint64_t>& cpumask, int& arbitratedScheNum,
+                              std::atomic<int>& arbitrationLevel, std::atomic<int>& simCpuId,
+                              std::atomic<uint64_t>& arbitrationCpumask)
     {
         int ret = npu::tile_fwk::dynamic::DEVICE_MACHINE_OK;
 
 #ifdef __DEVICE__
         int cpu = sched_getcpu();
-        (void) simCpuId;
+        (void)simCpuId;
 #else
         int cpu = ++simCpuId;
 #endif
         if (devArgs->archInfo == ArchInfo::DAV_3510) {
             ret = AllocThreadIdxForDav3510(devArgs, cpu, curThreadIdx, threadIdx, cpumask, arbitrationLevel,
-                arbitrationCpumask);
+                                           arbitrationCpumask);
         } else if (devArgs->archInfo == ArchInfo::DAV_2201) {
-            ret = AllocThreadIdxForDav2201(devArgs, cpu, curThreadIdx, threadIdx, cpumask, arbitratedScheNum, arbitrationLevel);
+            ret = AllocThreadIdxForDav2201(devArgs, cpu, curThreadIdx, threadIdx, cpumask, arbitratedScheNum,
+                                           arbitrationLevel);
         } else {
             curThreadIdx = ++threadIdx;
         }
@@ -205,16 +210,15 @@ struct DynMachineManager {
         UNUSED(entry);
 
         DeviceArgs* devArgs = PtrToPtr<int64_t, DeviceArgs>(kargs->cfgdata);
-        DEV_INFO("DeviceMode=%s, isDeviceMode=%d, stage=%s, threadIdx=%d", IsDeviceMode() ? "device" : "sim", IsDeviceMode(), "RunSche.before", threadIdx);
+        DEV_INFO("DeviceMode=%s, isDeviceMode=%d, stage=%s, threadIdx=%d", IsDeviceMode() ? "device" : "sim",
+                 IsDeviceMode(), "RunSche.before", threadIdx);
         DEV_INFO("ThreadScheEnter idx=%d", threadIdx);
 
-        DEV_INFO(
-            "TaskType=%d, threadIdx=%d, aicNum=%u, aivNum=%u, aicpuNum=%u, validAicNum=%u.",
-            static_cast<int>(devArgs->taskType), threadIdx, devArgs->nrAic, devArgs->nrAiv, devArgs->nrAicpu,
-            devArgs->nrValidAic);
-        DEV_INFO(
-            "devQueueAddr=%#lx, sharedBuffer=%#lx, coreRegAddr=%#lx, corePmuAdr=%#lx.", devArgs->devQueueAddr,
-            devArgs->sharedBuffer, devArgs->coreRegAddr, devArgs->corePmuAddr);
+        DEV_INFO("TaskType=%d, threadIdx=%d, aicNum=%u, aivNum=%u, aicpuNum=%u, validAicNum=%u.",
+                 static_cast<int>(devArgs->taskType), threadIdx, devArgs->nrAic, devArgs->nrAiv, devArgs->nrAicpu,
+                 devArgs->nrValidAic);
+        DEV_INFO("devQueueAddr=%#lx, sharedBuffer=%#lx, coreRegAddr=%#lx, corePmuAdr=%#lx.", devArgs->devQueueAddr,
+                 devArgs->sharedBuffer, devArgs->coreRegAddr, devArgs->corePmuAddr);
         DEV_TRACE_DEBUG(schema::ScheEvent(threadIdx, schema::ThreadStart()));
 
         devArgs->toSubMachineConfig = kargs->toSubMachineConfig;
@@ -222,8 +226,8 @@ struct DynMachineManager {
         int schedIdx = threadIdx - SCHE_THREAD_START_IDX;
         schMachine_.SetStachSchduleContext(schedIdx, &localContext);
         DevAscendProgram* devProg = reinterpret_cast<DevAscendProgram*>(kargs->cfgdata);
-        DevStartArgs* devStartArgs =
-            reinterpret_cast<DevStartArgs*>(devProg->GetRuntimeDataList()->GetRuntimeDataCurrent());
+        DevStartArgs* devStartArgs = reinterpret_cast<DevStartArgs*>(
+            devProg->GetRuntimeDataList()->GetRuntimeDataCurrent());
         schMachine_.SetDevSchedSyncMode(kargs->schedSyncMode);
         int ret = schMachine_.RunThread(threadIdx, devStartArgs, devArgs, schedIdx, arbitratedScheNum);
 
@@ -231,7 +235,7 @@ struct DynMachineManager {
         return ret;
     }
 
-    void RunSchInit(DeviceArgs *args)
+    void RunSchInit(DeviceArgs* args)
     {
         if (initSch_.load()) {
             return;
@@ -251,13 +255,14 @@ struct DynMachineManager {
         simCpuId_.store(0);
     }
 
-    void RunSchPost(DevAscendProgram *devProg)
+    void RunSchPost(DevAscendProgram* devProg)
     {
         ReleaseRuntimeDataRingBuffer(devProg);
         DEV_INFO("All schedule exited, destroy the machine.");
     }
 
-    int SyncSchExit(DevAscendProgram* devProg, const DeviceArgs& devArgs, int ret, DevStartArgs* runtimeDataCurrent, int arbitratedScheNum)
+    int SyncSchExit(DevAscendProgram* devProg, const DeviceArgs& devArgs, int ret, DevStartArgs* runtimeDataCurrent,
+                    int arbitratedScheNum)
     {
         if (++schExitNum_ == devArgs.nrAicpu) {
             scheFinishRound_.fetch_add(1, std::memory_order_acq_rel);
@@ -376,10 +381,12 @@ struct DynMachineManager {
         }
     }
 
-    static int WaitForCtrlAndRingBuffer(DevAscendProgram* devProg, ArchInfo archInfo, int& threadIdx, int& arbitratedScheNum, std::atomic<int>& ctrlWaitLevel,
-        std::atomic<uint64_t>& ctrlRound, std::atomic<uint64_t>& scheRound)
+    static int WaitForCtrlAndRingBuffer(DevAscendProgram* devProg, ArchInfo archInfo, int& threadIdx,
+                                        int& arbitratedScheNum, std::atomic<int>& ctrlWaitLevel,
+                                        std::atomic<uint64_t>& ctrlRound, std::atomic<uint64_t>& scheRound)
     {
-        int ctrlDecisionRet = WaitForCtrlDecision(archInfo, threadIdx, arbitratedScheNum, ctrlWaitLevel, ctrlRound, scheRound);
+        int ctrlDecisionRet = WaitForCtrlDecision(archInfo, threadIdx, arbitratedScheNum, ctrlWaitLevel, ctrlRound,
+                                                  scheRound);
         if (ctrlDecisionRet != DEVICE_MACHINE_OK) {
             DeviceTrace::GetInstance().ReportTraceMsg();
             return ctrlDecisionRet;
@@ -395,11 +402,14 @@ struct DynMachineManager {
         return DEVICE_MACHINE_OK;
     }
 
-    static void UpdateScheNumForCtrl(DevStartArgs* runtimeDataCurrent, int scheAiCpuNum) {
+    static void UpdateScheNumForCtrl(DevStartArgs* runtimeDataCurrent, int scheAiCpuNum)
+    {
         runtimeDataCurrent->devCtrlState.arbitratedScehNum.store(scheAiCpuNum);
     }
 
-    static void ResetDroppedThreadTaskQueues(DevStartArgs* runtimeDataCurrent, uint32_t scheCpuNum, int arbitratedScheNum) {
+    static void ResetDroppedThreadTaskQueues(DevStartArgs* runtimeDataCurrent, uint32_t scheCpuNum,
+                                             int arbitratedScheNum)
+    {
         for (size_t i = arbitratedScheNum; i < scheCpuNum; i++) {
             runtimeDataCurrent->deviceRuntimeDataDesc.taskQueueList[i].ResetEmpty();
         }
@@ -414,30 +424,32 @@ struct DynMachineManager {
         int threadIdx = -1;
         RunSchInit(&devArgs);
         int arbitratedScheNum = devArgs.scheCpuNum;
-        if (AllocThreadIdx(&devArgs, threadIdx, globalThreadIdx_, cpumask_, arbitratedScheNum, arbitrationLevel_, simCpuId_,
-            arbitrationCpumask_) != DEVICE_MACHINE_OK) {
-            DEV_ERROR(
-                ThreadErr::THREAD_CPU_ALLOC_FAILED, "#sche.thread.init: Current cpu[%d] alloc thread failed.",
-                sched_getcpu());
+        if (AllocThreadIdx(&devArgs, threadIdx, globalThreadIdx_, cpumask_, arbitratedScheNum, arbitrationLevel_,
+                           simCpuId_, arbitrationCpumask_) != DEVICE_MACHINE_OK) {
+            DEV_ERROR(ThreadErr::THREAD_CPU_ALLOC_FAILED, "#sche.thread.init: Current cpu[%d] alloc thread failed.",
+                      sched_getcpu());
             DEV_ATRACE("Schedule Current cpu[%d] alloc thread failed", sched_getcpu());
             DeviceTrace::GetInstance().ReportTraceMsg();
             return npu::tile_fwk::dynamic::DEVICE_MACHINE_ERROR;
         }
         if (threadIdx != -1) {
             int waitCtrlRet = WaitForCtrlAndRingBuffer(devProg, devArgs.archInfo, threadIdx, arbitratedScheNum,
-                        ctrlWaitLevel_, ctrlStartRound_, scheFinishRound_);
+                                                       ctrlWaitLevel_, ctrlStartRound_, scheFinishRound_);
             if (waitCtrlRet != DEVICE_MACHINE_OK) {
-                DEV_ERROR(SchedErr::WAIT_CTRL_TIMEOUT, 
-                "#sche.wait: WaitForCtrlAndRingBuffer failed: arbitratedScheNum=%d, ctrlStartRound=%lu, scheFinishRound=%lu,"
-                "cpumask=%lu, arbitrationLevel=%d", arbitratedScheNum, ctrlStartRound_.load(), scheFinishRound_.load(),
-                cpumask_.load(), arbitrationLevel_.load());
+                DEV_ERROR(SchedErr::WAIT_CTRL_TIMEOUT,
+                          "#sche.wait: WaitForCtrlAndRingBuffer failed: arbitratedScheNum=%d, ctrlStartRound=%lu, "
+                          "scheFinishRound=%lu,"
+                          "cpumask=%lu, arbitrationLevel=%d",
+                          arbitratedScheNum, ctrlStartRound_.load(), scheFinishRound_.load(), cpumask_.load(),
+                          arbitrationLevel_.load());
                 return waitCtrlRet;
             }
         }
         PerfMtTrace(PERF_TRACE_ALLOC_THREAD_ID, threadIdx);
         PerfMtTrace(PERF_TRACE_BEGIN, threadIdx, beginTime);
         int ret = DEVICE_MACHINE_OK;
-        DevStartArgs* runtimeDataCurrent = reinterpret_cast<DevStartArgs*>(devProg->GetRuntimeDataList()->GetRuntimeDataCurrent());
+        DevStartArgs* runtimeDataCurrent = reinterpret_cast<DevStartArgs*>(
+            devProg->GetRuntimeDataList()->GetRuntimeDataCurrent());
         if (threadIdx != -1 && threadIdx <= arbitratedScheNum) {
             DEV_INFO("SchedThreadEnter idx=%d round=%d", threadIdx, (int)kargs->parameter.globalRound);
             UpdateScheNumForCtrl(runtimeDataCurrent, arbitratedScheNum);
@@ -462,9 +474,8 @@ struct DynMachineManager {
                 return EntrySplittedStreamSche(kargs, entry);
                 break;
             default:
-                DEV_ERROR(
-                    DevCommonErr::PARAM_INVALID, "#dev.entry.invalid_mode: Invalid run mode: %d\n",
-                    (int)kargs->parameter.runMode);                
+                DEV_ERROR(DevCommonErr::PARAM_INVALID, "#dev.entry.invalid_mode: Invalid run mode: %d\n",
+                          (int)kargs->parameter.runMode);
                 break;
         }
         return DEVICE_MACHINE_INVALID_RUN_MODE;
@@ -472,9 +483,9 @@ struct DynMachineManager {
 
     int LastFinishThreadIdx_{0};
     std::atomic<uint64_t> cpumask_{0};
-    std::atomic<uint64_t> arbitrationCpumask_{0};  // 仲裁线程在 WaitForCpuMaskReadyForArbitration 中写入，
-                                                // 所有线程在仲裁完成后通过 PerformArbitrationDav3510 的
-                                                // globalArbitrationLevel release-acquire 保证 happens-before 后读取
+    std::atomic<uint64_t> arbitrationCpumask_{0}; // 仲裁线程在 WaitForCpuMaskReadyForArbitration 中写入，
+                                                  // 所有线程在仲裁完成后通过 PerformArbitrationDav3510 的
+                                                  // globalArbitrationLevel release-acquire 保证 happens-before 后读取
     std::atomic<uint32_t> schExitNum_{0};
     std::atomic<int> arbitrationLevel_{ARBIT_UNSET};
     std::atomic<int> ctrlWaitLevel_{CTRL_WAIT_UNSET};
@@ -502,9 +513,8 @@ struct DynMachineManager {
             while (unlikely(!devProg->runtimeDataRingBufferInited)) {
                 RuntimeYield(0);
 
-                __PYPTO_TIMEOUT_CHECK(SchedErr::RINGBUFFER_WAIT_TIMEOUT,
-                    return DEVICE_MACHINE_ERROR,
-                    "#sche.wait: RingBuffer init.");
+                __PYPTO_TIMEOUT_CHECK(SchedErr::RINGBUFFER_WAIT_TIMEOUT, return DEVICE_MACHINE_ERROR,
+                                      "#sche.wait: RingBuffer init.");
             }
             RuntimeDataRingBufferHead* ringBufferHead = devProg->GetRuntimeDataList();
             start = GetCycles();
@@ -512,9 +522,8 @@ struct DynMachineManager {
             while (unlikely(ringBufferHead->Empty())) {
                 RuntimeYield(0);
 
-                __PYPTO_TIMEOUT_CHECK(SchedErr::RINGBUFFER_WAIT_TIMEOUT,
-                    return DEVICE_MACHINE_ERROR,
-                    "#sche.wait: RingBuffer data.");
+                __PYPTO_TIMEOUT_CHECK(SchedErr::RINGBUFFER_WAIT_TIMEOUT, return DEVICE_MACHINE_ERROR,
+                                      "#sche.wait: RingBuffer data.");
             }
 
             return DEVICE_MACHINE_OK;

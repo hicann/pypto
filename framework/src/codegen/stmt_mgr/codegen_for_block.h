@@ -65,8 +65,8 @@ public:
 
     bool IsInLoop() { return isInLoop_; }
 
-    void AddTensorInLoopBody(
-        const std::string& tensorFullDim, const TileTensor& tileTensor, const Operation& oper, Opcode opCode);
+    void AddTensorInLoopBody(const std::string& tensorFullDim, const TileTensor& tileTensor, const Operation& oper,
+                             Opcode opCode);
 
     void AddOpInLoopBody(std::string& op)
     {
@@ -84,8 +84,8 @@ private:
     void PrintSetAddrs(std::ostringstream& os) const;
     void PrintSetAddrSingle(std::ostringstream& os, const std::string& tensor, const std::string& offset) const;
     void PrintTileOps(std::ostringstream& os) const;
-    void UpdateTensorOffsetInLoop(
-        Opcode opCode, int tensorMagic, const Operation& oper, const std::string& tensorNameInLoop);
+    void UpdateTensorOffsetInLoop(Opcode opCode, int tensorMagic, const Operation& oper,
+                                  const std::string& tensorNameInLoop);
     OffsetInLoop BuildOffsetInLoop(int tensorMagic, const Operation& oper);
 
     std::shared_ptr<SymbolManager> sm_;

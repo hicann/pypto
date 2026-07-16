@@ -1,5 +1,5 @@
 /**
-* Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
  * Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -23,20 +23,17 @@
 #include "tilefwk/pypto_fwk_log.h"
 
 namespace npu::tile_fwk {
-template<typename EnumType>
+template <typename EnumType>
 class CannAdapter {
 public:
-    CannAdapter() : isInit_(false)
-    {
-        functions_.fill(nullptr);
-    }
+    CannAdapter() : isInit_(false) { functions_.fill(nullptr); }
     ~CannAdapter()
     {
         libHandler_.CloseHandler();
         functions_.fill(nullptr);
         isInit_ = false;
     }
-    bool Initialize(const std::string &libName, const std::map<EnumType, std::string> &funcNameMap)
+    bool Initialize(const std::string& libName, const std::map<EnumType, std::string>& funcNameMap)
     {
         if (isInit_) {
             return true;
@@ -49,7 +46,7 @@ public:
         isInit_ = true;
         return true;
     }
-    void *GetFunction(const EnumType func) const
+    void* GetFunction(const EnumType func) const
     {
         if (func < static_cast<EnumType>(0) || func >= EnumType::Bottom) {
             return nullptr;
@@ -58,10 +55,11 @@ public:
     }
 
 private:
-    void InitFunctions(const std::map<EnumType, std::string> &funcNameMap) {
+    void InitFunctions(const std::map<EnumType, std::string>& funcNameMap)
+    {
         functions_.fill(nullptr);
-        for (const std::pair<const EnumType, std::string> &item : funcNameMap) {
-            void *func = libHandler_.GetFunction(item.second);
+        for (const std::pair<const EnumType, std::string>& item : funcNameMap) {
+            void* func = libHandler_.GetFunction(item.second);
             if (func == nullptr) {
                 ADAPTER_LOGI("Fail to load function[%s]", item.second.c_str());
                 continue;
@@ -74,4 +72,4 @@ private:
     PluginHandler libHandler_;
     std::array<void*, static_cast<size_t>(EnumType::Bottom)> functions_;
 };
-}
+} // namespace npu::tile_fwk

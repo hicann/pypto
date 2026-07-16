@@ -27,8 +27,7 @@ LogicalTensors ExprsToLogicalTensors(const std::vector<ir::ExprPtr>& exprs)
         if (!expr) {
             continue;
         }
-        out.push_back(
-            std::const_pointer_cast<LogicalTensor>(std::static_pointer_cast<const LogicalTensor>(expr)));
+        out.push_back(std::const_pointer_cast<LogicalTensor>(std::static_pointer_cast<const LogicalTensor>(expr)));
     }
     return out;
 }
@@ -48,17 +47,16 @@ LogicalTensors VarsToLogicalTensors(const std::vector<ir::VarPtr>& vars)
 
 } // namespace
 
-ir::StmtPtr RebuildTensorOpStmt(
-    const ir::TensorOpStmtPtr& src, std::vector<ir::VarPtr> results, ir::VarPtr resultToken,
-    std::vector<ir::ExprPtr> args, std::vector<ir::VarPtr> tokens, ir::Span span, Function* targetFunc)
+ir::StmtPtr RebuildTensorOpStmt(const ir::TensorOpStmtPtr& src, std::vector<ir::VarPtr> results, ir::VarPtr resultToken,
+                                std::vector<ir::ExprPtr> args, std::vector<ir::VarPtr> tokens, ir::Span span,
+                                Function* targetFunc)
 {
     ir::Span outSpan = span.IsUnknown() ? src->span_ : span;
 
     auto srcOp = std::dynamic_pointer_cast<const Operation>(src);
     if (srcOp == nullptr) {
-        return std::make_shared<const ir::TensorOpStmt>(
-            std::move(results), std::move(resultToken), src->opcode_, std::move(args), std::move(tokens), src->attrs_,
-            outSpan);
+        return std::make_shared<const ir::TensorOpStmt>(std::move(results), std::move(resultToken), src->opcode_,
+                                                        std::move(args), std::move(tokens), src->attrs_, outSpan);
     }
 
     FE_ASSERT(srcOp->BelongTo() != nullptr)

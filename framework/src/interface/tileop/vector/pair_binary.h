@@ -135,25 +135,22 @@ TILEOP void InnerPairBinaryCompute(T0 dst, T1 src0, T2 src1)
         size_t src1Stride1 = 0;
         size_t src1Stride2 = 0;
 
-        if constexpr (
-            (reduceAxisIndex == shapeSize - 1 && reduceAxisIndex >= 2) ||
-            (reduceAxisIndex < shapeSize - 1 && reduceAxisIndex >= 1)) {
+        if constexpr ((reduceAxisIndex == shapeSize - 1 && reduceAxisIndex >= 2) ||
+                      (reduceAxisIndex < shapeSize - 1 && reduceAxisIndex >= 1)) {
             dstShape0 = dstLayout.template GetShapeDim<0, shapeSize>();
             dstStride0 = dstLayout.template GetStrideDim<0, shapeSize>();
             src0Stride0 = src0Layout.template GetStrideDim<0, shapeSize>();
             src1Stride0 = src1Layout.template GetStrideDim<0, shapeSize>();
         }
-        if constexpr (
-            (reduceAxisIndex == shapeSize - 1 && reduceAxisIndex >= 3) ||
-            (reduceAxisIndex < shapeSize - 1 && reduceAxisIndex >= 2)) {
+        if constexpr ((reduceAxisIndex == shapeSize - 1 && reduceAxisIndex >= 3) ||
+                      (reduceAxisIndex < shapeSize - 1 && reduceAxisIndex >= 2)) {
             dstShape1 = dstLayout.template GetShapeDim<1, shapeSize>();
             dstStride1 = dstLayout.template GetStrideDim<1, shapeSize>();
             src0Stride1 = src0Layout.template GetStrideDim<1, shapeSize>();
             src1Stride1 = src1Layout.template GetStrideDim<1, shapeSize>();
         }
-        if constexpr (
-            (reduceAxisIndex == shapeSize - 1 && reduceAxisIndex >= 4) ||
-            (reduceAxisIndex < shapeSize - 1 && reduceAxisIndex >= 3)) {
+        if constexpr ((reduceAxisIndex == shapeSize - 1 && reduceAxisIndex >= 4) ||
+                      (reduceAxisIndex < shapeSize - 1 && reduceAxisIndex >= 3)) {
             dstShape2 = dstLayout.template GetShapeDim<2, shapeSize>();
             dstStride2 = dstLayout.template GetStrideDim<2, shapeSize>();
             src0Stride2 = src0Layout.template GetStrideDim<2, shapeSize>();
@@ -183,12 +180,12 @@ TILEOP void InnerPairBinaryCompute(T0 dst, T1 src0, T2 src1)
         auto src0Shape4 = GetWidthValidSize<reduceAxisIndex, shapeSize, T1>(src0);
         auto src1Shape4 = GetWidthValidSize<reduceAxisIndex, shapeSize, T2>(src1);
 
-        using DstTileDefine =
-            pto::Tile<pto::TileType::Vec, typename T0::Type, dstTileH, dstTileW, pto::BLayout::RowMajor, -1, -1>;
-        using Src0TileDefine =
-            pto::Tile<pto::TileType::Vec, typename T0::Type, src0TileH, src0TileW, pto::BLayout::RowMajor, -1, -1>;
-        using Src1TileDefine =
-            pto::Tile<pto::TileType::Vec, typename T0::Type, src1TileH, src1TileW, pto::BLayout::RowMajor, -1, -1>;
+        using DstTileDefine = pto::Tile<pto::TileType::Vec, typename T0::Type, dstTileH, dstTileW,
+                                        pto::BLayout::RowMajor, -1, -1>;
+        using Src0TileDefine = pto::Tile<pto::TileType::Vec, typename T0::Type, src0TileH, src0TileW,
+                                         pto::BLayout::RowMajor, -1, -1>;
+        using Src1TileDefine = pto::Tile<pto::TileType::Vec, typename T0::Type, src1TileH, src1TileW,
+                                         pto::BLayout::RowMajor, -1, -1>;
 
         for (LoopVar n0Index = 0; n0Index < dstShape0; ++n0Index) {
             for (LoopVar n1Index = 0; n1Index < dstShape1; ++n1Index) {
@@ -209,7 +206,8 @@ TILEOP void InnerPairBinaryCompute(T0 dst, T1 src0, T2 src1)
     }
 }
 
-template <PairBinaryOp op, int reduceAxisIndex, typename T0, typename T1, typename T2, typename T3, typename T4, typename T5>
+template <PairBinaryOp op, int reduceAxisIndex, typename T0, typename T1, typename T2, typename T3, typename T4,
+          typename T5>
 TILEOP void InnerPairArgBinaryCompute(T0 dstValue, T1 dstIndex, T2 src0Value, T3 src0Index, T4 src1Value, T5 src1Index)
 {
     constexpr auto shapeSize = Std::tuple_size<typename T0::Shape>::value;
@@ -234,25 +232,22 @@ TILEOP void InnerPairArgBinaryCompute(T0 dstValue, T1 dstIndex, T2 src0Value, T3
         size_t src1Stride1 = 0;
         size_t src1Stride2 = 0;
 
-        if constexpr (
-            (reduceAxisIndex == shapeSize - 1 && reduceAxisIndex >= 2) ||
-            (reduceAxisIndex < shapeSize - 1 && reduceAxisIndex >= 1)) {
+        if constexpr ((reduceAxisIndex == shapeSize - 1 && reduceAxisIndex >= 2) ||
+                      (reduceAxisIndex < shapeSize - 1 && reduceAxisIndex >= 1)) {
             dstShape0 = dstLayout.template GetShapeDim<0, shapeSize>();
             dstStride0 = dstLayout.template GetStrideDim<0, shapeSize>();
             src0Stride0 = src0Layout.template GetStrideDim<0, shapeSize>();
             src1Stride0 = src1Layout.template GetStrideDim<0, shapeSize>();
         }
-        if constexpr (
-            (reduceAxisIndex == shapeSize - 1 && reduceAxisIndex >= 3) ||
-            (reduceAxisIndex < shapeSize - 1 && reduceAxisIndex >= 2)) {
+        if constexpr ((reduceAxisIndex == shapeSize - 1 && reduceAxisIndex >= 3) ||
+                      (reduceAxisIndex < shapeSize - 1 && reduceAxisIndex >= 2)) {
             dstShape1 = dstLayout.template GetShapeDim<1, shapeSize>();
             dstStride1 = dstLayout.template GetStrideDim<1, shapeSize>();
             src0Stride1 = src0Layout.template GetStrideDim<1, shapeSize>();
             src1Stride1 = src1Layout.template GetStrideDim<1, shapeSize>();
         }
-        if constexpr (
-            (reduceAxisIndex == shapeSize - 1 && reduceAxisIndex >= 4) ||
-            (reduceAxisIndex < shapeSize - 1 && reduceAxisIndex >= 3)) {
+        if constexpr ((reduceAxisIndex == shapeSize - 1 && reduceAxisIndex >= 4) ||
+                      (reduceAxisIndex < shapeSize - 1 && reduceAxisIndex >= 3)) {
             dstShape2 = dstLayout.template GetShapeDim<2, shapeSize>();
             dstStride2 = dstLayout.template GetStrideDim<2, shapeSize>();
             src0Stride2 = src0Layout.template GetStrideDim<2, shapeSize>();
@@ -282,18 +277,18 @@ TILEOP void InnerPairArgBinaryCompute(T0 dstValue, T1 dstIndex, T2 src0Value, T3
         auto src0Shape4 = GetWidthValidSize<reduceAxisIndex, shapeSize, T2>(src0Value);
         auto src1Shape4 = GetWidthValidSize<reduceAxisIndex, shapeSize, T4>(src1Value);
 
-        using DstValueTileDefine =
-            pto::Tile<pto::TileType::Vec, typename T0::Type, dstTileH, dstTileW, pto::BLayout::RowMajor, -1, -1>;
-        using DstIndexTileDefine =
-            pto::Tile<pto::TileType::Vec, typename T1::Type, dstTileH, dstTileW, pto::BLayout::RowMajor, -1, -1>;
-        using Src0ValueTileDefine =
-            pto::Tile<pto::TileType::Vec, typename T2::Type, src0TileH, src0TileW, pto::BLayout::RowMajor, -1, -1>;
-        using Src0IndexTileDefine =
-            pto::Tile<pto::TileType::Vec, typename T3::Type, src0TileH, src0TileW, pto::BLayout::RowMajor, -1, -1>;
-        using Src1ValueTileDefine =
-            pto::Tile<pto::TileType::Vec, typename T4::Type, src1TileH, src1TileW, pto::BLayout::RowMajor, -1, -1>;
-        using Src1IndexTileDefine =
-            pto::Tile<pto::TileType::Vec, typename T5::Type, src1TileH, src1TileW, pto::BLayout::RowMajor, -1, -1>;
+        using DstValueTileDefine = pto::Tile<pto::TileType::Vec, typename T0::Type, dstTileH, dstTileW,
+                                             pto::BLayout::RowMajor, -1, -1>;
+        using DstIndexTileDefine = pto::Tile<pto::TileType::Vec, typename T1::Type, dstTileH, dstTileW,
+                                             pto::BLayout::RowMajor, -1, -1>;
+        using Src0ValueTileDefine = pto::Tile<pto::TileType::Vec, typename T2::Type, src0TileH, src0TileW,
+                                              pto::BLayout::RowMajor, -1, -1>;
+        using Src0IndexTileDefine = pto::Tile<pto::TileType::Vec, typename T3::Type, src0TileH, src0TileW,
+                                              pto::BLayout::RowMajor, -1, -1>;
+        using Src1ValueTileDefine = pto::Tile<pto::TileType::Vec, typename T4::Type, src1TileH, src1TileW,
+                                              pto::BLayout::RowMajor, -1, -1>;
+        using Src1IndexTileDefine = pto::Tile<pto::TileType::Vec, typename T5::Type, src1TileH, src1TileW,
+                                              pto::BLayout::RowMajor, -1, -1>;
 
         for (LoopVar n0Index = 0; n0Index < dstShape0; ++n0Index) {
             for (LoopVar n1Index = 0; n1Index < dstShape1; ++n1Index) {
@@ -314,10 +309,12 @@ TILEOP void InnerPairArgBinaryCompute(T0 dstValue, T1 dstIndex, T2 src0Value, T3
                     pto::TASSIGN(src1ValueTile, (uint64_t)(src1Value.GetAddr() + src1Offset * src1TypeSize));
                     pto::TASSIGN(src1IndexTile, (uint64_t)(src1Index.GetAddr() + src1Offset * src1TypeSize));
                     if constexpr (op == PairBinaryOp::ARGMAX) {
-                        pto::TPARTARGMAX(dstValueTile, src0ValueTile, src1ValueTile, dstIndexTile, src0IndexTile, src1IndexTile);
-                        
+                        pto::TPARTARGMAX(dstValueTile, src0ValueTile, src1ValueTile, dstIndexTile, src0IndexTile,
+                                         src1IndexTile);
+
                     } else {
-                        pto::TPARTARGMIN(dstValueTile, src0ValueTile, src1ValueTile, dstIndexTile, src0IndexTile, src1IndexTile);
+                        pto::TPARTARGMIN(dstValueTile, src0ValueTile, src1ValueTile, dstIndexTile, src0IndexTile,
+                                         src1IndexTile);
                     }
                 }
             }

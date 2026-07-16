@@ -16,7 +16,7 @@
 #ifndef PASS_OSP_CDAG_VERTEX_IMPL_H
 #define PASS_OSP_CDAG_VERTEX_IMPL_H
 
-#include <cstddef>    // for std::size_t
+#include <cstddef> // for std::size_t
 
 namespace npu::tile_fwk {
 namespace osp {
@@ -36,13 +36,14 @@ struct CDagVertexImpl {
 
     CDagVertexImpl() = default;
 
-    CDagVertexImpl(const CDagVertexImpl &other) = default;
-    CDagVertexImpl(CDagVertexImpl &&other) noexcept = default;
-    CDagVertexImpl &operator=(const CDagVertexImpl &other) = default;
-    CDagVertexImpl &operator=(CDagVertexImpl &&other) noexcept = default;
+    CDagVertexImpl(const CDagVertexImpl& other) = default;
+    CDagVertexImpl(CDagVertexImpl&& other) noexcept = default;
+    CDagVertexImpl& operator=(const CDagVertexImpl& other) = default;
+    CDagVertexImpl& operator=(CDagVertexImpl&& other) noexcept = default;
 
     CDagVertexImpl(VertexIdxT vertexIdx, WorkwT workW, CommwT commW, MemwT memW, VertexTypeT vertexT)
-        : id_(vertexIdx), workWeight_(workW), commWeight_(commW), memWeight_(memW), vertexType_(vertexT) {}
+        : id_(vertexIdx), workWeight_(workW), commWeight_(commW), memWeight_(memW), vertexType_(vertexT)
+    {}
 
     VertexIdxT id_ = 0;
 
@@ -62,6 +63,6 @@ using CDagVertexImplInt = CDagVertexImpl<std::size_t, int, int, int, unsigned>;
  * @brief A vertex implementation with unsigned weights. Indexed by std::size_t. Node types are unsigned.
  */
 using CDagVertexImplUnsigned = CDagVertexImpl<std::size_t, unsigned, unsigned, unsigned, unsigned>;
-}    // namespace osp
-}    // namespace npu::tile_fwk
-#endif    // PASS_OSP_CDAG_VERTEX_IMPL_HPP
+} // namespace osp
+} // namespace npu::tile_fwk
+#endif // PASS_OSP_CDAG_VERTEX_IMPL_HPP

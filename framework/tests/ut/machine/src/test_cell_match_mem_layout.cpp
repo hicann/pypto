@@ -205,19 +205,16 @@ TEST_F(CellMatchDynamicTest, OpIdBoundaryCheck)
 
     uint64_t taskId = (1ULL << CELL_MATCH_META_TAGID_SHIFT32) | MakeTaskID(2, 10);
 
-    CellMatchAddOpId(
-        cellMatchTable, cellMemBase, taskId, desc.GetCacheOpMaxCount(CELL_MATCH_OP_TYPE_ATOMIC_WRITE),
-        CELL_MATCH_OP_TYPE_ATOMIC_WRITE, desc);
-    uint64_t retrieved = CellMatchGetOpId(
-        cellMatchTable, cellMemBase, CELL_MATCH_OP_TYPE_ATOMIC_WRITE,
-        desc.GetCacheOpMaxCount(CELL_MATCH_OP_TYPE_ATOMIC_WRITE), desc);
+    CellMatchAddOpId(cellMatchTable, cellMemBase, taskId, desc.GetCacheOpMaxCount(CELL_MATCH_OP_TYPE_ATOMIC_WRITE),
+                     CELL_MATCH_OP_TYPE_ATOMIC_WRITE, desc);
+    uint64_t retrieved = CellMatchGetOpId(cellMatchTable, cellMemBase, CELL_MATCH_OP_TYPE_ATOMIC_WRITE,
+                                          desc.GetCacheOpMaxCount(CELL_MATCH_OP_TYPE_ATOMIC_WRITE), desc);
     EXPECT_EQ(retrieved, taskId);
 
-    CellMatchAddOpId(
-        cellMatchTable, cellMemBase, taskId, desc.GetCacheOpMaxCount(CELL_MATCH_OP_TYPE_READ), CELL_MATCH_OP_TYPE_READ,
-        desc);
-    retrieved = CellMatchGetOpId(
-        cellMatchTable, cellMemBase, CELL_MATCH_OP_TYPE_READ, desc.GetCacheOpMaxCount(CELL_MATCH_OP_TYPE_READ), desc);
+    CellMatchAddOpId(cellMatchTable, cellMemBase, taskId, desc.GetCacheOpMaxCount(CELL_MATCH_OP_TYPE_READ),
+                     CELL_MATCH_OP_TYPE_READ, desc);
+    retrieved = CellMatchGetOpId(cellMatchTable, cellMemBase, CELL_MATCH_OP_TYPE_READ,
+                                 desc.GetCacheOpMaxCount(CELL_MATCH_OP_TYPE_READ), desc);
     EXPECT_EQ(retrieved, taskId);
 }
 

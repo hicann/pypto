@@ -95,13 +95,11 @@ struct QuantIndexerPrologAttr {
     std::string layeroutKey = "PA_BSND";
 };
 
-void QuantLightningIndexerPrologCompute(
-    const QuantIndexerPrologInput& inputs, QuantIndexerPrologOutput& outputs, QuantIndexerPrologAttr& attrs,
-    const QuantIndexerConfigs& configs);
+void QuantLightningIndexerPrologCompute(const QuantIndexerPrologInput& inputs, QuantIndexerPrologOutput& outputs,
+                                        QuantIndexerPrologAttr& attrs, const QuantIndexerConfigs& configs);
 
-void QuantLightningIndexerProlog(
-    const QuantIndexerPrologInput& inputs, QuantIndexerPrologOutput& outputs, QuantIndexerPrologAttr& attrs,
-    const QuantIndexerConfigs& configs);
+void QuantLightningIndexerProlog(const QuantIndexerPrologInput& inputs, QuantIndexerPrologOutput& outputs,
+                                 QuantIndexerPrologAttr& attrs, const QuantIndexerConfigs& configs);
 
 } // namespace npu::tile_fwk
 

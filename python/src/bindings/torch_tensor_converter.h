@@ -25,9 +25,8 @@ namespace pypto {
 
 class TorchTensorConverter {
 public:
-    static int Convert(
-        py::sequence& tensors, py::sequence& tensor_defs,
-        std::vector<npu::tile_fwk::dynamic::DeviceTensorData>& tensors_data);
+    static int Convert(py::sequence& tensors, py::sequence& tensor_defs,
+                       std::vector<npu::tile_fwk::dynamic::DeviceTensorData>& tensors_data);
 };
 
 size_t ValidateInputs(py::sequence& tensors, py::sequence& tensorDefs);

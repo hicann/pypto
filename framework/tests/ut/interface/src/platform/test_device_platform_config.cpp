@@ -38,10 +38,7 @@ public:
     static void SetUpTestCase() {}
     static void TearDownTestCase() {}
     void SetUp() override {}
-    void TearDown() override
-    {
-        CleanupTempConfig();
-    }
+    void TearDown() override { CleanupTempConfig(); }
 
 private:
     void CleanupTempConfig()

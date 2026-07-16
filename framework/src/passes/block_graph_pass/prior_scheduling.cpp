@@ -50,9 +50,8 @@ std::vector<int> FordBellman(int wholeGraphTopologySize, const std::vector<std::
     return subgrDepthVector;
 }
 
-void FillGraphTopologyInfo(
-    std::map<int, std::set<int>>& subgrChild, std::map<int, std::set<int>>& subgrParent,
-    std::map<int, int>& subgrChildNum, std::map<int, int>& subgrParentNum, Function& function)
+void FillGraphTopologyInfo(std::map<int, std::set<int>>& subgrChild, std::map<int, std::set<int>>& subgrParent,
+                           std::map<int, int>& subgrChildNum, std::map<int, int>& subgrParentNum, Function& function)
 {
     auto wholeGraphTopology = function.rootFunc_->topoInfo_.topology_;
     int wholeGraphTopologySize = int(wholeGraphTopology.size());
@@ -77,9 +76,8 @@ void FillGraphTopologyInfo(
     }
 }
 
-void FindSubgrDepth(
-    std::map<int, int>& subgrChildNum, std::map<int, int>& subgrParentNum, std::vector<int>& subgrDepthVector,
-    Function& function)
+void FindSubgrDepth(std::map<int, int>& subgrChildNum, std::map<int, int>& subgrParentNum,
+                    std::vector<int>& subgrDepthVector, Function& function)
 {
     auto wholeGraphTopology = function.rootFunc_->topoInfo_.topology_;
     int wholeGraphTopologySize = int(wholeGraphTopology.size());
@@ -112,9 +110,9 @@ void FindSubgrDepth(
     lastVertices.clear();
 }
 
-void DefineLevels(
-    std::map<int, int>& subgrChildNum, std::map<int, int>& subgrParentNum, std::vector<int>& subgrDepthVector,
-    std::map<int, std::vector<std::pair<int, std::pair<int, int>>>>& levels, int& levelSize)
+void DefineLevels(std::map<int, int>& subgrChildNum, std::map<int, int>& subgrParentNum,
+                  std::vector<int>& subgrDepthVector,
+                  std::map<int, std::vector<std::pair<int, std::pair<int, int>>>>& levels, int& levelSize)
 {
     // Define levels and deps inside level
     for (size_t idx = 0; idx < subgrDepthVector.size(); idx++) {
@@ -135,11 +133,10 @@ void DefineLevels(
     levelSize = levels.size();
 }
 
-void SortPriorities(
-    std::map<int, std::set<int>>& subgrChild, std::map<int, std::set<int>>& subgrParent,
-    std::map<int, std::vector<std::pair<int, std::pair<int, int>>>>& levels,
-    std::map<int, std::map<int, std::pair<int, int>>>& levelsMap,
-    std::map<int, std::vector<std::pair<int, int>>>& priorities)
+void SortPriorities(std::map<int, std::set<int>>& subgrChild, std::map<int, std::set<int>>& subgrParent,
+                    std::map<int, std::vector<std::pair<int, std::pair<int, int>>>>& levels,
+                    std::map<int, std::map<int, std::pair<int, int>>>& levelsMap,
+                    std::map<int, std::vector<std::pair<int, int>>>& priorities)
 {
     std::map<int, std::vector<std::pair<int, std::pair<int, int>>>> levelsTmp;
     for (auto& level : levels) {
@@ -155,16 +152,14 @@ void SortPriorities(
                     subgrChild.erase(elem);
                 }
             }
-            std::sort(
-                levelsTmp[level.first].begin(), levelsTmp[level.first].end(),
-                [](const std::pair<int, std::pair<int, int>>& x, const std::pair<int, std::pair<int, int>>& y) {
-                    return x.second.second > y.second.second;
-                }); // Sort by parents
-            std::sort(
-                levelsTmp[level.first].begin(), levelsTmp[level.first].end(),
-                [](const std::pair<int, std::pair<int, int>>& x, const std::pair<int, std::pair<int, int>>& y) {
-                    return x.second.first > y.second.first;
-                }); // Sort by childs
+            std::sort(levelsTmp[level.first].begin(), levelsTmp[level.first].end(),
+                      [](const std::pair<int, std::pair<int, int>>& x, const std::pair<int, std::pair<int, int>>& y) {
+                          return x.second.second > y.second.second;
+                      }); // Sort by parents
+            std::sort(levelsTmp[level.first].begin(), levelsTmp[level.first].end(),
+                      [](const std::pair<int, std::pair<int, int>>& x, const std::pair<int, std::pair<int, int>>& y) {
+                          return x.second.first > y.second.first;
+                      }); // Sort by childs
 
             for (auto& elemPrior : levelsTmp[level.first]) {
                 priorities[level.first].push_back(std::make_pair(elemPrior.first, prior));
@@ -172,25 +167,22 @@ void SortPriorities(
             }
             levelsTmp.clear();
         }
-        std::sort(
-            priorities[level.first].begin(), priorities[level.first].end(),
-            [](const std::pair<int, int>& x, const std::pair<int, int>& y) {
-                return x.second < y.second;
-            }); // Sort by priorities
+        std::sort(priorities[level.first].begin(), priorities[level.first].end(),
+                  [](const std::pair<int, int>& x, const std::pair<int, int>& y) {
+                      return x.second < y.second;
+                  }); // Sort by priorities
     }
 }
 
-void DefinePriorities(
-    std::map<int, std::set<int>>& subgrChild, std::map<int, std::set<int>>& subgrParent,
-    std::map<int, std::vector<std::pair<int, std::pair<int, int>>>>& levels,
-    std::map<int, std::vector<std::pair<int, int>>>& priorities)
+void DefinePriorities(std::map<int, std::set<int>>& subgrChild, std::map<int, std::set<int>>& subgrParent,
+                      std::map<int, std::vector<std::pair<int, std::pair<int, int>>>>& levels,
+                      std::map<int, std::vector<std::pair<int, int>>>& priorities)
 {
     // Define priority of nodes inside level-0
-    std::sort(
-        levels[0].begin(), levels[0].end(),
-        [](const std::pair<int, std::pair<int, int>>& x, const std::pair<int, std::pair<int, int>>& y) {
-            return x.second.second > y.second.second;
-        });
+    std::sort(levels[0].begin(), levels[0].end(),
+              [](const std::pair<int, std::pair<int, int>>& x, const std::pair<int, std::pair<int, int>>& y) {
+                  return x.second.second > y.second.second;
+              });
     int zeroLevelIndex = 0;
     for (auto& elem : levels[0]) {
         priorities[0].push_back(std::make_pair(elem.first, zeroLevelIndex));
@@ -210,8 +202,8 @@ void DefinePriorities(
     levels.clear();
 }
 
-void SetAbsolutePrioritiesAndChangeOutGraphs(
-    std::map<int, std::vector<std::pair<int, int>>>& priorities, Function& function)
+void SetAbsolutePrioritiesAndChangeOutGraphs(std::map<int, std::vector<std::pair<int, int>>>& priorities,
+                                             Function& function)
 {
     // Set absolute prioritties
     std::map<int, int> prioritiesNew;
@@ -232,11 +224,10 @@ void SetAbsolutePrioritiesAndChangeOutGraphs(
     prioritiesNew.clear();
 
     for (auto& elem : subgOutGraphTmp) {
-        std::sort(
-            subgOutGraphTmp[elem.first].begin(), subgOutGraphTmp[elem.first].end(),
-            [](const std::pair<int, int>& x, const std::pair<int, int>& y) {
-                return x.second < y.second;
-            }); // Sort by priorities
+        std::sort(subgOutGraphTmp[elem.first].begin(), subgOutGraphTmp[elem.first].end(),
+                  [](const std::pair<int, int>& x, const std::pair<int, int>& y) {
+                      return x.second < y.second;
+                  }); // Sort by priorities
     }
 
     // Change outGrapgs of subgraphs
@@ -299,9 +290,9 @@ void UpdateReadySubGraphId(Function& function, const std::vector<std::pair<int, 
     }
 }
 
-void ChangeReadyTasksPriorities(
-    std::map<int, int>& subgrParentNum, std::vector<int>& subgrDepthVector,
-    std::map<int, std::vector<std::pair<int, int>>>& priorities, int levelSize, Function& function)
+void ChangeReadyTasksPriorities(std::map<int, int>& subgrParentNum, std::vector<int>& subgrDepthVector,
+                                std::map<int, std::vector<std::pair<int, int>>>& priorities, int levelSize,
+                                Function& function)
 {
     // Processing ready-to-run not last level nodes
     int lastLevelIntermediateSize = priorities[priorities.size() - 1].size();
@@ -322,8 +313,8 @@ void ChangeReadyTasksPriorities(
     size_t lastLevelSize = LastLevelMap.size();
     std::vector<std::pair<int, int>> LastLevelVector;
     for (size_t i = 0; i < lastLevelSize; i++) {
-        LastLevelVector.push_back(std::make_pair(
-            priorities[priorities.size() - 1][i].first, LastLevelMap[priorities[priorities.size() - 1][i].first]));
+        LastLevelVector.push_back(std::make_pair(priorities[priorities.size() - 1][i].first,
+                                                 LastLevelMap[priorities[priorities.size() - 1][i].first]));
     }
     UpdateReadySubGraphId(function, LastLevelVector);
 }

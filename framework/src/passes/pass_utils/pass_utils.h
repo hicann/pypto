@@ -48,8 +48,8 @@ inline std::map<std::string, std::set<int>> BuildLabelToColorsMap(const Operatio
 
 class FunctionUtils {
 public:
-    static void RelinkOperationInput(
-        Operation* op, const size_t inputIndex, const Operation* targetOp, const size_t outputIndex);
+    static void RelinkOperationInput(Operation* op, const size_t inputIndex, const Operation* targetOp,
+                                     const size_t outputIndex);
 
     static bool IsContinuous(const std::vector<std::shared_ptr<LogicalTensor>>& tensors);
 
@@ -70,8 +70,8 @@ public:
         oss << "{";
         auto it = container.begin();
         oss << *it;
-        std::for_each(
-            std::next(it), container.end(), [&oss, &delimiter](const auto& elem) { oss << delimiter << elem; });
+        std::for_each(std::next(it), container.end(),
+                      [&oss, &delimiter](const auto& elem) { oss << delimiter << elem; });
         oss << "}";
         return oss.str();
     }
@@ -114,7 +114,7 @@ public:
         }
         return {result, false};
     }
-    
+
     static int GetTensorSubgraphID(const LogicalTensorPtr& tensor);
     static int GetTensorSubgraphID(const LogicalTensor* tensor);
 

@@ -40,8 +40,8 @@ public:
 TEST_F(TestCodegenDynCalcInteger, TestDynOpCeil)
 {
     MockFuncDynUnaryConf config;
-    auto function =
-        GenMockFuncDynUnary("TestDynOpCeil", config, [](Tensor& input, Tensor& output) { output = Ceil(input); });
+    auto function = GenMockFuncDynUnary("TestDynOpCeil", config,
+                                        [](Tensor& input, Tensor& output) { output = Ceil(input); });
 
     std::string res = GenCodeByFunction(*function);
     std::string expect =
@@ -53,8 +53,8 @@ TEST_F(TestCodegenDynCalcInteger, TestDynOpCeil)
 TEST_F(TestCodegenDynCalcInteger, TestDynOpFloor)
 {
     MockFuncDynUnaryConf config;
-    auto function =
-        GenMockFuncDynUnary("TestDynOpFloor", config, [](Tensor& input, Tensor& output) { output = Floor(input); });
+    auto function = GenMockFuncDynUnary("TestDynOpFloor", config,
+                                        [](Tensor& input, Tensor& output) { output = Floor(input); });
 
     std::string res = GenCodeByFunction(*function);
     std::string expect =
@@ -66,8 +66,8 @@ TEST_F(TestCodegenDynCalcInteger, TestDynOpFloor)
 TEST_F(TestCodegenDynCalcInteger, TestDynOpTrunc)
 {
     MockFuncDynUnaryConf config;
-    auto function =
-        GenMockFuncDynUnary("TestDynOpTrunc", config, [](Tensor& input, Tensor& output) { output = Trunc(input); });
+    auto function = GenMockFuncDynUnary("TestDynOpTrunc", config,
+                                        [](Tensor& input, Tensor& output) { output = Trunc(input); });
 
     std::string res = GenCodeByFunction(*function);
     std::string expect =

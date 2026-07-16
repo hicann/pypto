@@ -35,8 +35,8 @@ struct HypotOpMetaData {
     nlohmann::json test_data_;
 };
 
-static void HypotOperationExeFunc2Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void HypotOperationExeFunc2Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                       const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0], inputs[1]}, {outputs[0]})
     {
@@ -57,39 +57,34 @@ static void HypotOperationExeFunc2Dims(
                 Tensor tileTensor1;
                 IF(inputs[0].GetShape()[1] != broadcastFlag && inputs[1].GetShape()[1] == broadcastFlag)
                 {
-                    tileTensor0 = View(
-                        inputs[0], {firstViewShape, secondViewShape},
-                        {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                         std::min(secondDim - sIdx * secondViewShape, secondViewShape)},
-                        {bIdx * firstViewShape, sIdx * secondViewShape});
-                    tileTensor1 = View(
-                        inputs[1], {firstViewShape, 1}, {std::min(firstDim - bIdx * firstViewShape, firstViewShape), 1},
-                        {bIdx * firstViewShape, 0});
+                    tileTensor0 = View(inputs[0], {firstViewShape, secondViewShape},
+                                       {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                        std::min(secondDim - sIdx * secondViewShape, secondViewShape)},
+                                       {bIdx * firstViewShape, sIdx * secondViewShape});
+                    tileTensor1 = View(inputs[1], {firstViewShape, 1},
+                                       {std::min(firstDim - bIdx * firstViewShape, firstViewShape), 1},
+                                       {bIdx * firstViewShape, 0});
                 }
                 ELSE IF(inputs[0].GetShape()[0] != broadcastFlag && inputs[1].GetShape()[0] == broadcastFlag)
                 {
-                    tileTensor0 = View(
-                        inputs[0], {firstViewShape, secondViewShape},
-                        {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                         std::min(secondDim - sIdx * secondViewShape, secondViewShape)},
-                        {bIdx * firstViewShape, sIdx * secondViewShape});
-                    tileTensor1 = View(
-                        inputs[1], {1, secondViewShape},
-                        {1, std::min(secondDim - sIdx * secondViewShape, secondViewShape)},
-                        {0, sIdx * secondViewShape});
+                    tileTensor0 = View(inputs[0], {firstViewShape, secondViewShape},
+                                       {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                        std::min(secondDim - sIdx * secondViewShape, secondViewShape)},
+                                       {bIdx * firstViewShape, sIdx * secondViewShape});
+                    tileTensor1 = View(inputs[1], {1, secondViewShape},
+                                       {1, std::min(secondDim - sIdx * secondViewShape, secondViewShape)},
+                                       {0, sIdx * secondViewShape});
                 }
                 ELSE
                 {
-                    tileTensor0 = View(
-                        inputs[0], {firstViewShape, secondViewShape},
-                        {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                         std::min(secondDim - sIdx * secondViewShape, secondViewShape)},
-                        {bIdx * firstViewShape, sIdx * secondViewShape});
-                    tileTensor1 = View(
-                        inputs[1], {firstViewShape, secondViewShape},
-                        {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                         std::min(secondDim - sIdx * secondViewShape, secondViewShape)},
-                        {bIdx * firstViewShape, sIdx * secondViewShape});
+                    tileTensor0 = View(inputs[0], {firstViewShape, secondViewShape},
+                                       {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                        std::min(secondDim - sIdx * secondViewShape, secondViewShape)},
+                                       {bIdx * firstViewShape, sIdx * secondViewShape});
+                    tileTensor1 = View(inputs[1], {firstViewShape, secondViewShape},
+                                       {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                        std::min(secondDim - sIdx * secondViewShape, secondViewShape)},
+                                       {bIdx * firstViewShape, sIdx * secondViewShape});
                 }
                 TileShape::Current().SetVecTile(args->tileShape_);
                 auto res = Hypot(tileTensor0, tileTensor1);
@@ -99,8 +94,8 @@ static void HypotOperationExeFunc2Dims(
     }
 }
 
-static void HypotOperationExeFunc3Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void HypotOperationExeFunc3Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                       const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0], inputs[1]}, {outputs[0]})
     {
@@ -122,18 +117,16 @@ static void HypotOperationExeFunc3Dims(
             {
                 LOOP("LOOP_L2_nIdx", FunctionType::DYNAMIC_LOOP, nIdx, LoopRange(0, nloop, 1))
                 {
-                    auto tileTensor0 = View(
-                        inputs[0], {firstViewShape, secondViewShape, thirdViewShape},
-                        {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                         std::min(secondDim - sIdx * secondViewShape, secondViewShape),
-                         std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape)},
-                        {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape});
-                    auto tileTensor1 = View(
-                        inputs[1], {firstViewShape, secondViewShape, thirdViewShape},
-                        {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                         std::min(secondDim - sIdx * secondViewShape, secondViewShape),
-                         std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape)},
-                        {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape});
+                    auto tileTensor0 = View(inputs[0], {firstViewShape, secondViewShape, thirdViewShape},
+                                            {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                             std::min(secondDim - sIdx * secondViewShape, secondViewShape),
+                                             std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape)},
+                                            {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape});
+                    auto tileTensor1 = View(inputs[1], {firstViewShape, secondViewShape, thirdViewShape},
+                                            {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                             std::min(secondDim - sIdx * secondViewShape, secondViewShape),
+                                             std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape)},
+                                            {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape});
                     TileShape::Current().SetVecTile(args->tileShape_);
                     auto res = Hypot(tileTensor0, tileTensor1);
                     Assemble(res, {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape}, outputs[0]);
@@ -143,8 +136,8 @@ static void HypotOperationExeFunc3Dims(
     }
 }
 
-static void HypotOperationExeFunc4Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void HypotOperationExeFunc4Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                       const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0], inputs[1]}, {outputs[0]})
     {
@@ -176,14 +169,14 @@ static void HypotOperationExeFunc4Dims(
                         Tensor tileTensor1;
                         IF(inputs[1].GetShape()[2] == broadcastFlag && inputs[0].GetShape()[2] != broadcastFlag)
                         {
-                            tileTensor0 = View(
-                                inputs[0], {firstViewShape, secondViewShape, thirdViewShape, fourthViewShape},
-                                {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                                 std::min(secondDim - sIdx * secondViewShape, secondViewShape),
-                                 std::min(thirdDim - mIdx * thirdViewShape, thirdViewShape),
-                                 std::min(fourthDim - nIdx * fourthViewShape, fourthViewShape)},
-                                {bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape,
-                                 nIdx * fourthViewShape});
+                            tileTensor0 = View(inputs[0],
+                                               {firstViewShape, secondViewShape, thirdViewShape, fourthViewShape},
+                                               {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                                std::min(secondDim - sIdx * secondViewShape, secondViewShape),
+                                                std::min(thirdDim - mIdx * thirdViewShape, thirdViewShape),
+                                                std::min(fourthDim - nIdx * fourthViewShape, fourthViewShape)},
+                                               {bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape,
+                                                nIdx * fourthViewShape});
                             tileTensor1 = View(
                                 inputs[1], {firstViewShape, secondViewShape, 1, fourthViewShape},
                                 {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
@@ -193,30 +186,29 @@ static void HypotOperationExeFunc4Dims(
                         }
                         ELSE
                         {
-                            tileTensor0 = View(
-                                inputs[0], {firstViewShape, secondViewShape, thirdViewShape, fourthViewShape},
-                                {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                                 std::min(secondDim - sIdx * secondViewShape, secondViewShape),
-                                 std::min(thirdDim - mIdx * thirdViewShape, thirdViewShape),
-                                 std::min(fourthDim - nIdx * fourthViewShape, fourthViewShape)},
-                                {bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape,
-                                 nIdx * fourthViewShape});
-                            tileTensor1 = View(
-                                inputs[1], {firstViewShape, secondViewShape, thirdViewShape, fourthViewShape},
-                                {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                                 std::min(secondDim - sIdx * secondViewShape, secondViewShape),
-                                 std::min(thirdDim - mIdx * thirdViewShape, thirdViewShape),
-                                 std::min(fourthDim - nIdx * fourthViewShape, fourthViewShape)},
-                                {bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape,
-                                 nIdx * fourthViewShape});
+                            tileTensor0 = View(inputs[0],
+                                               {firstViewShape, secondViewShape, thirdViewShape, fourthViewShape},
+                                               {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                                std::min(secondDim - sIdx * secondViewShape, secondViewShape),
+                                                std::min(thirdDim - mIdx * thirdViewShape, thirdViewShape),
+                                                std::min(fourthDim - nIdx * fourthViewShape, fourthViewShape)},
+                                               {bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape,
+                                                nIdx * fourthViewShape});
+                            tileTensor1 = View(inputs[1],
+                                               {firstViewShape, secondViewShape, thirdViewShape, fourthViewShape},
+                                               {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                                std::min(secondDim - sIdx * secondViewShape, secondViewShape),
+                                                std::min(thirdDim - mIdx * thirdViewShape, thirdViewShape),
+                                                std::min(fourthDim - nIdx * fourthViewShape, fourthViewShape)},
+                                               {bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape,
+                                                nIdx * fourthViewShape});
                         }
                         TileShape::Current().SetVecTile(args->tileShape_);
                         auto res = Hypot(tileTensor0, tileTensor1);
-                        Assemble(
-                            res,
-                            {bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape,
-                             nIdx * fourthViewShape},
-                            outputs[0]);
+                        Assemble(res,
+                                 {bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape,
+                                  nIdx * fourthViewShape},
+                                 outputs[0]);
                     }
                 }
             }
@@ -226,10 +218,10 @@ static void HypotOperationExeFunc4Dims(
 
 class HypotOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac_param<HypotOpMetaData> {};
 
-INSTANTIATE_TEST_SUITE_P(
-    TestHypot, HypotOperationTest,
-    ::testing::ValuesIn(GetOpMetaData<HypotOpMetaData>(
-        {HypotOperationExeFunc2Dims, HypotOperationExeFunc3Dims, HypotOperationExeFunc4Dims}, "Hypot")));
+INSTANTIATE_TEST_SUITE_P(TestHypot, HypotOperationTest,
+                         ::testing::ValuesIn(GetOpMetaData<HypotOpMetaData>(
+                             {HypotOperationExeFunc2Dims, HypotOperationExeFunc3Dims, HypotOperationExeFunc4Dims},
+                             "Hypot")));
 
 TEST_P(HypotOperationTest, TestHypot)
 {

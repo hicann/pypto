@@ -130,8 +130,8 @@ TEST_F(IRPrinterTest, TestPrecedenceAddSubChildNeedsParens)
     auto one = std::make_shared<ConstInt>(1, DataType::INT32, Sp());
     auto two = std::make_shared<ConstInt>(2, DataType::INT32, Sp());
     auto three = std::make_shared<ConstInt>(3, DataType::INT32, Sp());
-    auto mul =
-        std::make_shared<Mul>(std::make_shared<Add>(one, two, DataType::INT32, Sp()), three, DataType::INT32, Sp());
+    auto mul = std::make_shared<Mul>(std::make_shared<Add>(one, two, DataType::INT32, Sp()), three, DataType::INT32,
+                                     Sp());
     EXPECT_NE(Print(mul).find("("), std::string::npos);
 }
 
@@ -140,8 +140,8 @@ TEST_F(IRPrinterTest, TestPrecedencePowRightAssoc)
     auto two = std::make_shared<ConstInt>(2, DataType::INT32, Sp());
     auto three = std::make_shared<ConstInt>(3, DataType::INT32, Sp());
     auto four = std::make_shared<ConstInt>(4, DataType::INT32, Sp());
-    auto outer =
-        std::make_shared<Pow>(two, std::make_shared<Pow>(three, four, DataType::INT32, Sp()), DataType::INT32, Sp());
+    auto outer = std::make_shared<Pow>(two, std::make_shared<Pow>(three, four, DataType::INT32, Sp()), DataType::INT32,
+                                       Sp());
     EXPECT_EQ(Print(outer), "2 ** 3 ** 4");
 }
 
@@ -150,8 +150,8 @@ TEST_F(IRPrinterTest, TestPrecedencePowLeftNeedsParens)
     auto two = std::make_shared<ConstInt>(2, DataType::INT32, Sp());
     auto three = std::make_shared<ConstInt>(3, DataType::INT32, Sp());
     auto four = std::make_shared<ConstInt>(4, DataType::INT32, Sp());
-    auto outer =
-        std::make_shared<Pow>(std::make_shared<Pow>(two, three, DataType::INT32, Sp()), four, DataType::INT32, Sp());
+    auto outer = std::make_shared<Pow>(std::make_shared<Pow>(two, three, DataType::INT32, Sp()), four, DataType::INT32,
+                                       Sp());
     EXPECT_NE(Print(outer).find("("), std::string::npos);
 }
 
@@ -181,8 +181,8 @@ TEST_F(IRPrinterTest, TestSamePrecedenceLeftAssocNeedsParens)
     auto one = std::make_shared<ConstInt>(1, DataType::INT32, Sp());
     auto two = std::make_shared<ConstInt>(2, DataType::INT32, Sp());
     auto three = std::make_shared<ConstInt>(3, DataType::INT32, Sp());
-    auto outer =
-        std::make_shared<Sub>(one, std::make_shared<Sub>(two, three, DataType::INT32, Sp()), DataType::INT32, Sp());
+    auto outer = std::make_shared<Sub>(one, std::make_shared<Sub>(two, three, DataType::INT32, Sp()), DataType::INT32,
+                                       Sp());
     EXPECT_NE(Print(outer).find("("), std::string::npos);
 }
 
@@ -199,22 +199,21 @@ TEST_F(IRPrinterTest, TestPrintTypes)
     auto off = std::make_shared<ConstInt>(0, DataType::INT64, Sp());
     MemRefPtr memref = std::make_shared<MemRef>(MemorySpace::DDR, off, 128, Sp());
     auto tensor = std::make_shared<TensorType>(
-        std::vector<ExprPtr>{
-            std::make_shared<ConstInt>(4, DataType::INT64, Sp()), std::make_shared<ConstInt>(8, DataType::INT64, Sp())},
+        std::vector<ExprPtr>{std::make_shared<ConstInt>(4, DataType::INT64, Sp()),
+                             std::make_shared<ConstInt>(8, DataType::INT64, Sp())},
         DataType::FP32, memref);
     auto tensorStr = PrintType(tensor);
     EXPECT_NE(tensorStr.find("Tensor"), std::string::npos);
     EXPECT_NE(tensorStr.find("FP32"), std::string::npos);
 
     // TileType without memref
-    auto tile = std::make_shared<TileType>(
-        std::vector<ExprPtr>{std::make_shared<ConstInt>(4, DataType::INT64, Sp())}, DataType::FP32);
+    auto tile = std::make_shared<TileType>(std::vector<ExprPtr>{std::make_shared<ConstInt>(4, DataType::INT64, Sp())},
+                                           DataType::FP32);
     EXPECT_NE(PrintType(tile).find("Tile"), std::string::npos);
 
     // TileType with memref
-    auto tileMr = std::make_shared<TileType>(
-        std::vector<ExprPtr>{std::make_shared<ConstInt>(4, DataType::INT64, Sp())}, DataType::FP32,
-        std::optional<MemRefPtr>(memref));
+    auto tileMr = std::make_shared<TileType>(std::vector<ExprPtr>{std::make_shared<ConstInt>(4, DataType::INT64, Sp())},
+                                             DataType::FP32, std::optional<MemRefPtr>(memref));
     auto tileMrStr = PrintType(tileMr);
     EXPECT_NE(tileMrStr.find("Tile"), std::string::npos);
     EXPECT_NE(tileMrStr.find("MemRef"), std::string::npos);
@@ -331,21 +330,20 @@ TEST_F(IRPrinterTest, TestPrintForStmt)
     auto ia2 = std::make_shared<IterArg>("acc2", Scalar(DataType::INT32), init2, Sp());
     auto rv1 = Var_("out1");
     auto rv2 = Var_("out2");
-    auto body = std::make_shared<YieldStmt>(
-        std::vector<ExprPtr>{
-            std::make_shared<ConstInt>(1, DataType::INT32, Sp()), std::make_shared<ConstInt>(2, DataType::INT32, Sp())},
-        Sp());
-    auto forStr = Print(std::make_shared<ForStmt>(
-        i, start, stop, step, std::vector<IterArgPtr>{ia1, ia2}, body, std::vector<VarPtr>{rv1, rv2}, Sp()));
+    auto body = std::make_shared<YieldStmt>(std::vector<ExprPtr>{std::make_shared<ConstInt>(1, DataType::INT32, Sp()),
+                                                                 std::make_shared<ConstInt>(2, DataType::INT32, Sp())},
+                                            Sp());
+    auto forStr = Print(std::make_shared<ForStmt>(i, start, stop, step, std::vector<IterArgPtr>{ia1, ia2}, body,
+                                                  std::vector<VarPtr>{rv1, rv2}, Sp()));
     EXPECT_NE(forStr.find("for"), std::string::npos);
     EXPECT_NE(forStr.find("acc1"), std::string::npos);
     EXPECT_NE(forStr.find("acc2"), std::string::npos);
 
     // For without iterArgs
-    auto simpleBody =
-        std::make_shared<AssignStmt>(Var_("x"), std::make_shared<ConstInt>(1, DataType::INT32, Sp()), Sp());
-    auto simpleFor = Print(std::make_shared<ForStmt>(
-        i, start, stop, step, std::vector<IterArgPtr>{}, simpleBody, std::vector<VarPtr>{}, Sp()));
+    auto simpleBody = std::make_shared<AssignStmt>(Var_("x"), std::make_shared<ConstInt>(1, DataType::INT32, Sp()),
+                                                   Sp());
+    auto simpleFor = Print(std::make_shared<ForStmt>(i, start, stop, step, std::vector<IterArgPtr>{}, simpleBody,
+                                                     std::vector<VarPtr>{}, Sp()));
     EXPECT_NE(simpleFor.find("for"), std::string::npos);
     EXPECT_EQ(simpleFor.find("init_values"), std::string::npos);
 }
@@ -366,10 +364,10 @@ TEST_F(IRPrinterTest, TestPrintWhileStmt)
     auto init = std::make_shared<ConstInt>(0, DataType::INT32, Sp());
     auto ia = std::make_shared<IterArg>("acc", Scalar(DataType::INT32), init, Sp());
     auto rv = Var_("out");
-    auto yieldBody =
-        std::make_shared<YieldStmt>(std::vector<ExprPtr>{std::make_shared<ConstInt>(1, DataType::INT32, Sp())}, Sp());
-    auto whileStr =
-        Print(std::make_shared<WhileStmt>(cond, std::vector<IterArgPtr>{ia}, yieldBody, std::vector<VarPtr>{rv}, Sp()));
+    auto yieldBody = std::make_shared<YieldStmt>(
+        std::vector<ExprPtr>{std::make_shared<ConstInt>(1, DataType::INT32, Sp())}, Sp());
+    auto whileStr = Print(
+        std::make_shared<WhileStmt>(cond, std::vector<IterArgPtr>{ia}, yieldBody, std::vector<VarPtr>{rv}, Sp()));
     EXPECT_NE(whileStr.find("while_"), std::string::npos);
     EXPECT_NE(whileStr.find("acc"), std::string::npos);
 
@@ -378,11 +376,11 @@ TEST_F(IRPrinterTest, TestPrintWhileStmt)
     auto ia2 = std::make_shared<IterArg>("b", Scalar(DataType::INT32), init2, Sp());
     auto rv2 = Var_("out2");
     auto multiBody = std::make_shared<YieldStmt>(
-        std::vector<ExprPtr>{
-            std::make_shared<ConstInt>(1, DataType::INT32, Sp()), std::make_shared<ConstInt>(2, DataType::INT32, Sp())},
+        std::vector<ExprPtr>{std::make_shared<ConstInt>(1, DataType::INT32, Sp()),
+                             std::make_shared<ConstInt>(2, DataType::INT32, Sp())},
         Sp());
-    auto multiStr = Print(std::make_shared<WhileStmt>(
-        cond, std::vector<IterArgPtr>{ia, ia2}, multiBody, std::vector<VarPtr>{rv, rv2}, Sp()));
+    auto multiStr = Print(std::make_shared<WhileStmt>(cond, std::vector<IterArgPtr>{ia, ia2}, multiBody,
+                                                      std::vector<VarPtr>{rv, rv2}, Sp()));
     EXPECT_NE(multiStr.find("while_"), std::string::npos);
     EXPECT_NE(multiStr.find("b"), std::string::npos);
 }
@@ -398,15 +396,15 @@ TEST_F(IRPrinterTest, TestPrintFunction)
 
     // Basic function
     auto body = std::make_shared<AssignStmt>(x, std::make_shared<ConstInt>(42, DataType::INT32, Sp()), Sp());
-    auto funcStr = Print(std::make_shared<Function>(
-        "f", std::vector<VarPtr>{x}, std::vector<TypePtr>{Scalar(DataType::INT32)}, body, Sp()));
+    auto funcStr = Print(std::make_shared<Function>("f", std::vector<VarPtr>{x},
+                                                    std::vector<TypePtr>{Scalar(DataType::INT32)}, body, Sp()));
     EXPECT_NE(funcStr.find("def f"), std::string::npos);
     EXPECT_NE(funcStr.find("@ir.function"), std::string::npos);
 
     // Multi params
     auto yield = std::make_shared<YieldStmt>(std::vector<ExprPtr>{}, Sp());
-    auto multiParam =
-        Print(std::make_shared<Function>("g", std::vector<VarPtr>{x, y}, std::vector<TypePtr>{}, yield, Sp()));
+    auto multiParam = Print(
+        std::make_shared<Function>("g", std::vector<VarPtr>{x, y}, std::vector<TypePtr>{}, yield, Sp()));
     EXPECT_NE(multiParam.find("x"), std::string::npos);
     EXPECT_NE(multiParam.find("y"), std::string::npos);
 
@@ -424,25 +422,24 @@ TEST_F(IRPrinterTest, TestPrintFunctionBodies)
 
     // Yield body → return
     auto val = std::make_shared<ConstInt>(42, DataType::INT32, Sp());
-    auto yieldFunc = Print(std::make_shared<Function>(
-        "f", std::vector<VarPtr>{x}, std::vector<TypePtr>{Scalar(DataType::INT32)},
-        std::make_shared<YieldStmt>(std::vector<ExprPtr>{val}, Sp()), Sp()));
+    auto yieldFunc = Print(
+        std::make_shared<Function>("f", std::vector<VarPtr>{x}, std::vector<TypePtr>{Scalar(DataType::INT32)},
+                                   std::make_shared<YieldStmt>(std::vector<ExprPtr>{val}, Sp()), Sp()));
     EXPECT_NE(yieldFunc.find("return 42"), std::string::npos);
 
     // SeqStmts body with yield at end → return
     auto a1 = std::make_shared<AssignStmt>(x, std::make_shared<ConstInt>(1, DataType::INT32, Sp()), Sp());
     auto a2 = std::make_shared<AssignStmt>(x, std::make_shared<ConstInt>(2, DataType::INT32, Sp()), Sp());
-    auto yieldStmt =
-        std::make_shared<YieldStmt>(std::vector<ExprPtr>{std::make_shared<ConstInt>(3, DataType::INT32, Sp())}, Sp());
-    auto seqFunc = Print(std::make_shared<Function>(
-        "f", std::vector<VarPtr>{x}, std::vector<TypePtr>{Scalar(DataType::INT32)},
-        std::make_shared<SeqStmts>(std::vector<StmtPtr>{a1, a2, yieldStmt}, Sp()), Sp()));
+    auto yieldStmt = std::make_shared<YieldStmt>(
+        std::vector<ExprPtr>{std::make_shared<ConstInt>(3, DataType::INT32, Sp())}, Sp());
+    auto seqFunc = Print(
+        std::make_shared<Function>("f", std::vector<VarPtr>{x}, std::vector<TypePtr>{Scalar(DataType::INT32)},
+                                   std::make_shared<SeqStmts>(std::vector<StmtPtr>{a1, a2, yieldStmt}, Sp()), Sp()));
     EXPECT_NE(seqFunc.find("return 3"), std::string::npos);
 
     // Empty SeqStmts body → pass
-    auto emptyFunc = Print(std::make_shared<Function>(
-        "f", std::vector<VarPtr>{x}, std::vector<TypePtr>{}, std::make_shared<SeqStmts>(std::vector<StmtPtr>{}, Sp()),
-        Sp()));
+    auto emptyFunc = Print(std::make_shared<Function>("f", std::vector<VarPtr>{x}, std::vector<TypePtr>{},
+                                                      std::make_shared<SeqStmts>(std::vector<StmtPtr>{}, Sp()), Sp()));
     EXPECT_NE(emptyFunc.find("pass"), std::string::npos);
 }
 
@@ -467,8 +464,8 @@ TEST_F(IRPrinterTest, TestPrintIfWithSeqStmtsBody)
     auto cond = std::make_shared<ConstBool>(true, Sp());
     auto x = Var_("x");
     auto retVar = Var_("out");
-    auto yield =
-        std::make_shared<YieldStmt>(std::vector<ExprPtr>{std::make_shared<ConstInt>(2, DataType::INT32, Sp())}, Sp());
+    auto yield = std::make_shared<YieldStmt>(std::vector<ExprPtr>{std::make_shared<ConstInt>(2, DataType::INT32, Sp())},
+                                             Sp());
 
     // If with SeqStmts body (no else)
     auto a1 = std::make_shared<AssignStmt>(x, std::make_shared<ConstInt>(1, DataType::INT32, Sp()), Sp());
@@ -479,12 +476,11 @@ TEST_F(IRPrinterTest, TestPrintIfWithSeqStmtsBody)
 
     // If with SeqStmts then + else
     auto a2 = std::make_shared<AssignStmt>(x, std::make_shared<ConstInt>(3, DataType::INT32, Sp()), Sp());
-    auto yield2 =
-        std::make_shared<YieldStmt>(std::vector<ExprPtr>{std::make_shared<ConstInt>(4, DataType::INT32, Sp())}, Sp());
+    auto yield2 = std::make_shared<YieldStmt>(
+        std::vector<ExprPtr>{std::make_shared<ConstInt>(4, DataType::INT32, Sp())}, Sp());
     auto elseBody = std::make_shared<SeqStmts>(std::vector<StmtPtr>{a2, yield2}, Sp());
-    EXPECT_NE(
-        Print(std::make_shared<IfStmt>(cond, thenBody, elseBody, std::vector<VarPtr>{retVar}, Sp())).find("else"),
-        std::string::npos);
+    EXPECT_NE(Print(std::make_shared<IfStmt>(cond, thenBody, elseBody, std::vector<VarPtr>{retVar}, Sp())).find("else"),
+              std::string::npos);
 }
 
 TEST_F(IRPrinterTest, TestPrintForWithSeqStmtsBody)
@@ -498,11 +494,11 @@ TEST_F(IRPrinterTest, TestPrintForWithSeqStmtsBody)
     auto rv = Var_("sum_out");
     auto x = Var_("x");
     auto a1 = std::make_shared<AssignStmt>(x, std::make_shared<ConstInt>(1, DataType::INT32, Sp()), Sp());
-    auto yield =
-        std::make_shared<YieldStmt>(std::vector<ExprPtr>{std::make_shared<ConstInt>(2, DataType::INT32, Sp())}, Sp());
+    auto yield = std::make_shared<YieldStmt>(std::vector<ExprPtr>{std::make_shared<ConstInt>(2, DataType::INT32, Sp())},
+                                             Sp());
     auto body = std::make_shared<SeqStmts>(std::vector<StmtPtr>{a1, yield}, Sp());
-    auto forStr = Print(std::make_shared<ForStmt>(
-        i, start, stop, step, std::vector<IterArgPtr>{ia}, body, std::vector<VarPtr>{rv}, Sp()));
+    auto forStr = Print(std::make_shared<ForStmt>(i, start, stop, step, std::vector<IterArgPtr>{ia}, body,
+                                                  std::vector<VarPtr>{rv}, Sp()));
     EXPECT_NE(forStr.find("for"), std::string::npos);
     EXPECT_NE(forStr.find("yield_"), std::string::npos);
 }
@@ -512,22 +508,21 @@ TEST_F(IRPrinterTest, TestPrintWhileWithSeqStmtsBody)
     auto cond = std::make_shared<ConstBool>(true, Sp());
     auto x = Var_("x");
     auto a1 = std::make_shared<AssignStmt>(x, std::make_shared<ConstInt>(1, DataType::INT32, Sp()), Sp());
-    auto yield =
-        std::make_shared<YieldStmt>(std::vector<ExprPtr>{std::make_shared<ConstInt>(2, DataType::INT32, Sp())}, Sp());
+    auto yield = std::make_shared<YieldStmt>(std::vector<ExprPtr>{std::make_shared<ConstInt>(2, DataType::INT32, Sp())},
+                                             Sp());
     auto body = std::make_shared<SeqStmts>(std::vector<StmtPtr>{a1, yield}, Sp());
 
     // Without iterArgs
-    EXPECT_NE(
-        Print(std::make_shared<WhileStmt>(cond, std::vector<IterArgPtr>{}, body, std::vector<VarPtr>{}, Sp()))
-            .find("while"),
-        std::string::npos);
+    EXPECT_NE(Print(std::make_shared<WhileStmt>(cond, std::vector<IterArgPtr>{}, body, std::vector<VarPtr>{}, Sp()))
+                  .find("while"),
+              std::string::npos);
 
     // With iterArgs
     auto init = std::make_shared<ConstInt>(0, DataType::INT32, Sp());
     auto ia = std::make_shared<IterArg>("acc", Scalar(DataType::INT32), init, Sp());
     auto rv = Var_("out");
-    auto whileStr =
-        Print(std::make_shared<WhileStmt>(cond, std::vector<IterArgPtr>{ia}, body, std::vector<VarPtr>{rv}, Sp()));
+    auto whileStr = Print(
+        std::make_shared<WhileStmt>(cond, std::vector<IterArgPtr>{ia}, body, std::vector<VarPtr>{rv}, Sp()));
     EXPECT_NE(whileStr.find("while_"), std::string::npos);
 }
 
@@ -567,9 +562,8 @@ TEST_F(IRPrinterTest, TestPrintIfWithEmptySeqStmtsBody)
 {
     auto cond = std::make_shared<ConstBool>(true, Sp());
     auto emptyBody = std::make_shared<SeqStmts>(std::vector<StmtPtr>{}, Sp());
-    EXPECT_NE(
-        Print(std::make_shared<IfStmt>(cond, emptyBody, std::nullopt, std::vector<VarPtr>{}, Sp())).find("pass"),
-        std::string::npos);
+    EXPECT_NE(Print(std::make_shared<IfStmt>(cond, emptyBody, std::nullopt, std::vector<VarPtr>{}, Sp())).find("pass"),
+              std::string::npos);
 }
 
 // ============================================================================
@@ -591,9 +585,9 @@ TEST_F(IRPrinterTest, TestPrintTensorOpStmt)
     auto res = Var_("res");
     auto tok = Var_("tok");
     auto arg = std::make_shared<ConstInt>(1, DataType::INT32, Sp());
-    auto stmt = std::make_shared<TensorOpStmt>(
-        std::vector<VarPtr>{res}, tok, "matmul", std::vector<ExprPtr>{arg}, std::vector<VarPtr>{},
-        std::vector<std::pair<std::string, std::any>>{}, Sp());
+    auto stmt = std::make_shared<TensorOpStmt>(std::vector<VarPtr>{res}, tok, "matmul", std::vector<ExprPtr>{arg},
+                                               std::vector<VarPtr>{}, std::vector<std::pair<std::string, std::any>>{},
+                                               Sp());
     auto str = Print(stmt);
     EXPECT_EQ(str, "res, tok = matmul(1)");
 }
@@ -604,9 +598,9 @@ TEST_F(IRPrinterTest, TestPrintTensorOpStmtMultiResult)
     auto r2 = Var_("r2");
     auto tok = Var_("tok");
     auto arg = std::make_shared<ConstInt>(1, DataType::INT32, Sp());
-    auto stmt = std::make_shared<TensorOpStmt>(
-        std::vector<VarPtr>{r1, r2}, tok, "split", std::vector<ExprPtr>{arg}, std::vector<VarPtr>{},
-        std::vector<std::pair<std::string, std::any>>{}, Sp());
+    auto stmt = std::make_shared<TensorOpStmt>(std::vector<VarPtr>{r1, r2}, tok, "split", std::vector<ExprPtr>{arg},
+                                               std::vector<VarPtr>{}, std::vector<std::pair<std::string, std::any>>{},
+                                               Sp());
     auto str = Print(stmt);
     EXPECT_EQ(str, "[r1, r2], tok = split(1)");
 }
@@ -617,9 +611,9 @@ TEST_F(IRPrinterTest, TestPrintTensorOpStmtWithTokensAndAttrs)
     auto tok = Var_("tok");
     auto arg = std::make_shared<ConstInt>(1, DataType::INT32, Sp());
     auto t1 = Var_("t1");
-    auto stmt = std::make_shared<TensorOpStmt>(
-        std::vector<VarPtr>{res}, tok, "op", std::vector<ExprPtr>{arg}, std::vector<VarPtr>{t1},
-        std::vector<std::pair<std::string, std::any>>{{"axis", 0}}, Sp());
+    auto stmt = std::make_shared<TensorOpStmt>(std::vector<VarPtr>{res}, tok, "op", std::vector<ExprPtr>{arg},
+                                               std::vector<VarPtr>{t1},
+                                               std::vector<std::pair<std::string, std::any>>{{"axis", 0}}, Sp());
     auto str = Print(stmt);
     EXPECT_EQ(str, "res, tok = op(1, tokens=[t1], attrs=[axis=0])");
 }

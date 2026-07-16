@@ -90,11 +90,11 @@ struct IndexerPrologOutputGolden {
     std::vector<T> kCacheOutGolden;
 };
 
-void LightningIndexerPrologCompute(
-    const IndexerPrologInput& inputs, IndexerPrologOutput& outputs, const IndexerShapeParams& params);
+void LightningIndexerPrologCompute(const IndexerPrologInput& inputs, IndexerPrologOutput& outputs,
+                                   const IndexerShapeParams& params);
 
-void LightningIndexerProlog(
-    const IndexerPrologInput& inputs, IndexerPrologOutput& outputs, const IndexerShapeParams& params);
+void LightningIndexerProlog(const IndexerPrologInput& inputs, IndexerPrologOutput& outputs,
+                            const IndexerShapeParams& params);
 
 } // namespace npu::tile_fwk
 

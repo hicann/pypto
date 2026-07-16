@@ -19,13 +19,10 @@ using namespace npu::tile_fwk;
 
 class TestCodeGenKirin9030Maximum : public CodegenTestLiteNPU {
 public:
-    TestCodeGenKirin9030Maximum() : CodegenTestLiteNPU("Kirin9030"){};
+    TestCodeGenKirin9030Maximum() : CodegenTestLiteNPU("Kirin9030") {};
 };
 
-TEST_F(TestCodeGenKirin9030Maximum, test_maximum_int16_001)
-{
-    TestCodeGenMaximum::Instance().test_maximum_int16_001();
-}
+TEST_F(TestCodeGenKirin9030Maximum, test_maximum_int16_001) { TestCodeGenMaximum::Instance().test_maximum_int16_001(); }
 
 TEST_F(TestCodeGenKirin9030Maximum, DISABLED_test_maximum_int16_002)
 {

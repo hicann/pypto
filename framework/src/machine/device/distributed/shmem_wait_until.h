@@ -81,9 +81,9 @@ public:
         queue_[rear_] = task;
         rear_ = (rear_ + 1) & AICPU_TASK_ARRAY_SIZE_MOD;
         if (rear_ == front_) {
-            DEV_ERROR(
-                DistributedErrorCode::AICPU_TASK_NUM_EXCEED_LIMIT,
-                "ctrl.task.pre.task.enqueue#: SignalTileOp queue is full, capacity = %lu", AICPU_TASK_ARRAY_SIZE - 1);
+            DEV_ERROR(DistributedErrorCode::AICPU_TASK_NUM_EXCEED_LIMIT,
+                      "ctrl.task.pre.task.enqueue#: SignalTileOp queue is full, capacity = %lu",
+                      AICPU_TASK_ARRAY_SIZE - 1);
             return dynamic::DEVICE_MACHINE_ERROR;
         }
         return dynamic::DEVICE_MACHINE_OK;
@@ -159,9 +159,8 @@ public:
     {
         SignalTileOp* task = FindTask(taskId, cachePtr_[parallelIdx]);
         if (task == nullptr) {
-            DEV_ERROR(
-                DistributedErrorCode::AICPU_TASKID_NOT_IN_MAP,
-                "ctrl.task.pre.task.enqueue#: taskId=%lu not found, parallelIdx=%u", taskId, parallelIdx);
+            DEV_ERROR(DistributedErrorCode::AICPU_TASKID_NOT_IN_MAP,
+                      "ctrl.task.pre.task.enqueue#: taskId=%lu not found, parallelIdx=%u", taskId, parallelIdx);
             return dynamic::DEVICE_MACHINE_ERROR;
         }
         if (taskStat != nullptr) {
@@ -184,13 +183,13 @@ public:
         uint32_t bufferStride;
     };
 
-    static inline PrepareResult CalculateTaskAddress(
-        uint64_t taskId, const npu::tile_fwk::dynamic::DevRelocVector<int32_t>& aicpuCode,
-        npu::tile_fwk::DynFuncData* funcDataList, int64_t* hcclContextAddr)
+    static inline PrepareResult CalculateTaskAddress(uint64_t taskId,
+                                                     const npu::tile_fwk::dynamic::DevRelocVector<int32_t>& aicpuCode,
+                                                     npu::tile_fwk::DynFuncData* funcDataList, int64_t* hcclContextAddr)
     {
         AicpuParamInfo paramInfo = DecodeAicpuCode(aicpuCode);
-        TensorInfo info =
-            ShmemWaitUntilImpl::GetTensorInfo(taskId, aicpuCode, funcDataList, hcclContextAddr, paramInfo);
+        TensorInfo info = ShmemWaitUntilImpl::GetTensorInfo(taskId, aicpuCode, funcDataList, hcclContextAddr,
+                                                            paramInfo);
 
         uint32_t tileIndex = 0;
         uint32_t viewIndexAccum = 0;
@@ -215,20 +214,19 @@ public:
         }
         tileIndex += viewIndexAccum * paramInfo.viewTileNum;
 
-        int32_t* addr =
-            reinterpret_cast<int32_t*>(info.rawAddr) +
-            CalcLinearOffset(paramInfo.totalTileNum, info.offset[OWNER_RANK_ID_INDEX], tileIndex) * paramInfo.bufferStride;
+        int32_t* addr = reinterpret_cast<int32_t*>(info.rawAddr) +
+                        CalcLinearOffset(paramInfo.totalTileNum, info.offset[OWNER_RANK_ID_INDEX], tileIndex) *
+                            paramInfo.bufferStride;
 
-        return PrepareResult{
-            addr,
-            info.rawAddr,
-            info.vaddr,
-            info.offset[OWNER_RANK_ID_INDEX],
-            static_cast<uint32_t>(info.expectedSum),
-            static_cast<uint32_t>(info.resetSignal),
-            paramInfo.totalTileNum,
-            tileIndex,
-            paramInfo.bufferStride};
+        return PrepareResult{addr,
+                             info.rawAddr,
+                             info.vaddr,
+                             info.offset[OWNER_RANK_ID_INDEX],
+                             static_cast<uint32_t>(info.expectedSum),
+                             static_cast<uint32_t>(info.resetSignal),
+                             paramInfo.totalTileNum,
+                             tileIndex,
+                             paramInfo.bufferStride};
     }
 
     static inline void BuildHashTable(ShmemWaitUntilCache* cache, uint32_t taskCount)
@@ -242,9 +240,9 @@ public:
         }
     }
 
-    static inline int32_t PrepareTask(
-        uint64_t taskId, const npu::tile_fwk::dynamic::DevRelocVector<int32_t>& aicpuCode, SignalTileOp* targetArray,
-        uint32_t taskIndex, npu::tile_fwk::DynFuncData* funcDataList, int64_t* hcclContextAddr)
+    static inline int32_t PrepareTask(uint64_t taskId, const npu::tile_fwk::dynamic::DevRelocVector<int32_t>& aicpuCode,
+                                      SignalTileOp* targetArray, uint32_t taskIndex,
+                                      npu::tile_fwk::DynFuncData* funcDataList, int64_t* hcclContextAddr)
     {
         auto result = CalculateTaskAddress(taskId, aicpuCode, funcDataList, hcclContextAddr);
 
@@ -253,12 +251,11 @@ public:
         targetArray[taskIndex].resetSignal_ = result.resetSignal;
         targetArray[taskIndex].taskId_ = taskId;
 
-        DEV_DEBUG(
-            "PrepareTask taskId=%lu, baseAddr=0x%lx, actualAddr=0x%lx, ownerRank=%u, actual rawShape=[%lu, %u],"
-            "actual offset=[%u, %u], buffer maxTileNum=%lu, bufferStride=%u",
-            taskId, result.rawAddr, reinterpret_cast<uint64_t>(result.addr), result.ownerRankId,
-            GetRankNum(hcclContextAddr, result.vaddr), result.totalTileNum, result.ownerRankId, result.tileIndex,
-            TileOp::Distributed::DecodeShmemAddrMaxTileNum(result.vaddr), result.bufferStride);
+        DEV_DEBUG("PrepareTask taskId=%lu, baseAddr=0x%lx, actualAddr=0x%lx, ownerRank=%u, actual rawShape=[%lu, %u],"
+                  "actual offset=[%u, %u], buffer maxTileNum=%lu, bufferStride=%u",
+                  taskId, result.rawAddr, reinterpret_cast<uint64_t>(result.addr), result.ownerRankId,
+                  GetRankNum(hcclContextAddr, result.vaddr), result.totalTileNum, result.ownerRankId, result.tileIndex,
+                  TileOp::Distributed::DecodeShmemAddrMaxTileNum(result.vaddr), result.bufferStride);
 
         return dynamic::DEVICE_MACHINE_OK;
     }
@@ -270,9 +267,9 @@ public:
 private:
     ShmemWaitUntilCache* cachePtr_[SCH_DEVTASK_MAX_PARALLELISM] = {};
 
-    static TensorInfo GetTensorInfo(
-        uint64_t taskId, const npu::tile_fwk::dynamic::DevRelocVector<int32_t>& aicpuCode,
-        npu::tile_fwk::DynFuncData* funcDataList, int64_t* hcclContextAddr, const AicpuParamInfo& paramInfo);
+    static TensorInfo GetTensorInfo(uint64_t taskId, const npu::tile_fwk::dynamic::DevRelocVector<int32_t>& aicpuCode,
+                                    npu::tile_fwk::DynFuncData* funcDataList, int64_t* hcclContextAddr,
+                                    const AicpuParamInfo& paramInfo);
 };
 
 } // namespace npu::tile_fwk::Distributed

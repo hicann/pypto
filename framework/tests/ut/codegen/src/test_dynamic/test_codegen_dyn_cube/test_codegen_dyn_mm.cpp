@@ -40,13 +40,13 @@ TEST_F(TestCodegenDynMM, TestDynMatmulTileTensor)
     std::vector<SymbolicScalar> dynValidShape = {64, 64};
     auto localTensorA = CreateLogicalTensor({*function, DataType::DT_FP16, MemoryType::MEM_L0A, shape, dynValidShape});
     auto localTensorB = CreateLogicalTensor({*function, DataType::DT_FP16, MemoryType::MEM_L0B, shape, dynValidShape});
-    auto localTensorBias =
-        CreateLogicalTensor({*function, DataType::DT_FP16, MemoryType::MEM_BT, shapeBias, dynValidShape});
-    auto localOutTensor =
-        CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_L0C, shape, dynValidShape});
+    auto localTensorBias = CreateLogicalTensor(
+        {*function, DataType::DT_FP16, MemoryType::MEM_BT, shapeBias, dynValidShape});
+    auto localOutTensor = CreateLogicalTensor(
+        {*function, DataType::DT_FP32, MemoryType::MEM_L0C, shape, dynValidShape});
 
-    auto& op =
-        function->AddOperation(Opcode::OP_A_MUL_B, {localTensorA, localTensorB, localTensorBias}, {localOutTensor});
+    auto& op = function->AddOperation(Opcode::OP_A_MUL_B, {localTensorA, localTensorB, localTensorBias},
+                                      {localOutTensor});
     op.SetAttribute(OP_ATTR_PREFIX + "has_bias", true);
 
     std::string res = GenOpCodeFromOp(*function, op);
@@ -65,17 +65,17 @@ TEST_F(TestCodegenDynMM, TestMatmulMXTileTensor)
     std::vector<int64_t> mxShape = {64, 64};
     std::vector<int64_t> shapeBias = {1, 64};
     std::vector<SymbolicScalar> dynValidShape = {64, 64};
-    auto localTensorAMX =
-        CreateLogicalTensor({*function, DataType::DT_FP16, MemoryType::MEM_L0AMX, mxShape, dynValidShape});
-    auto localTensorBMX =
-        CreateLogicalTensor({*function, DataType::DT_FP16, MemoryType::MEM_L0BMX, mxShape, dynValidShape});
-    auto localTensorBias =
-        CreateLogicalTensor({*function, DataType::DT_FP16, MemoryType::MEM_BT, shapeBias, dynValidShape});
-    auto localOutTensor =
-        CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_L0C, mxShape, dynValidShape});
+    auto localTensorAMX = CreateLogicalTensor(
+        {*function, DataType::DT_FP16, MemoryType::MEM_L0AMX, mxShape, dynValidShape});
+    auto localTensorBMX = CreateLogicalTensor(
+        {*function, DataType::DT_FP16, MemoryType::MEM_L0BMX, mxShape, dynValidShape});
+    auto localTensorBias = CreateLogicalTensor(
+        {*function, DataType::DT_FP16, MemoryType::MEM_BT, shapeBias, dynValidShape});
+    auto localOutTensor = CreateLogicalTensor(
+        {*function, DataType::DT_FP32, MemoryType::MEM_L0C, mxShape, dynValidShape});
 
-    auto& op =
-        function->AddOperation(Opcode::OP_A_MUL_B, {localTensorAMX, localTensorBMX, localTensorBias}, {localOutTensor});
+    auto& op = function->AddOperation(Opcode::OP_A_MUL_B, {localTensorAMX, localTensorBMX, localTensorBias},
+                                      {localOutTensor});
     op.SetAttribute(OP_ATTR_PREFIX + "has_bias", true);
 
     std::string res = GenOpCodeFromOp(*function, op);

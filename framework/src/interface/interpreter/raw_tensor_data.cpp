@@ -28,8 +28,8 @@ struct LogicalTensorDataHead {
     uint32_t padding[LOGICAL_TENSOR_DATA_HEAD_PADDING_SIZE] = {0};
 };
 
-std::string LogicalTensorData::DumpRange(
-    int idxBegin, int idxEnd, const std::vector<ElementDump>* elementDumpList) const
+std::string LogicalTensorData::DumpRange(int idxBegin, int idxEnd,
+                                         const std::vector<ElementDump>* elementDumpList) const
 {
     std::vector<bool> elementDiffPrevList(idxEnd - idxBegin, false);
 
@@ -83,7 +83,8 @@ std::string LogicalTensorData::DumpCoord(int row) const
     for (size_t k = 0; k < GetShape().size() - 1; k++) {
         int dim = GetShape().size() - 2 - k;
         int dimLength = GetShape()[dim];
-        ASSERT(ExecuteOperationScene::INVALID_TENSOR_SHAPE, dimLength != 0) << "Shape dimension " << dim << " must not be zero";
+        ASSERT(ExecuteOperationScene::INVALID_TENSOR_SHAPE, dimLength != 0)
+            << "Shape dimension " << dim << " must not be zero";
         coord[dim] = coordDim % dimLength;
         coordDim /= dimLength;
     }
@@ -104,8 +105,7 @@ std::string LogicalTensorData::DumpData(int indent, const std::vector<ElementDum
     oss << DumpType() << " {\n";
     int rowSize = 1;
     for (size_t k = 0; k < GetShape().size() - 1; k++) {
-        ASSERT(ExecuteOperationScene::INVALID_TENSOR_SHAPE, 
-               GetShape()[k] > 0 && rowSize <= INT_MAX / GetShape()[k]) 
+        ASSERT(ExecuteOperationScene::INVALID_TENSOR_SHAPE, GetShape()[k] > 0 && rowSize <= INT_MAX / GetShape()[k])
             << "Tensor shape multiplication overflow at dimension " << k;
         rowSize *= GetShape()[k];
     }
@@ -302,8 +302,8 @@ std::shared_ptr<LogicalTensorData> LogicalTensorData::Load(const std::string& fi
             }
             auto data = std::make_shared<RawTensorData>(static_cast<DataType>(head.dataType), shape);
             if (fread(data->data(), 1, data->size(), fdata) == data->size()) {
-                dataView =
-                    std::make_shared<LogicalTensorData>(data, shape, shape, std::vector<int64_t>(shape.size(), 0));
+                dataView = std::make_shared<LogicalTensorData>(data, shape, shape,
+                                                               std::vector<int64_t>(shape.size(), 0));
             }
         }
         fclose(fdata);

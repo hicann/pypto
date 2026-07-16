@@ -38,8 +38,8 @@ struct ErfcOpMetaData {
     nlohmann::json test_data_;
 };
 
-static void ErfcOperationExeFunc1Dim(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void ErfcOperationExeFunc1Dim(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                     const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0]})
     {
@@ -50,9 +50,9 @@ static void ErfcOperationExeFunc1Dim(
 
         LOOP("LOOP_L0_bIdx", FunctionType::DYNAMIC_LOOP, bIdx, LoopRange(0, bloop, 1))
         {
-            auto tileTensor = View(
-                inputs[0], {firstViewShape}, {std::min(firstDim - bIdx * firstViewShape, firstViewShape)},
-                {bIdx * firstViewShape});
+            auto tileTensor = View(inputs[0], {firstViewShape},
+                                   {std::min(firstDim - bIdx * firstViewShape, firstViewShape)},
+                                   {bIdx * firstViewShape});
             TileShape::Current().SetVecTile(args->tileShape_);
             auto res = Erfc(tileTensor);
             Assemble(res, {bIdx * firstViewShape}, outputs[0]);
@@ -60,8 +60,8 @@ static void ErfcOperationExeFunc1Dim(
     }
 }
 
-static void ErfcOperationExeFunc2Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void ErfcOperationExeFunc2Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                      const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0]})
     {
@@ -77,11 +77,10 @@ static void ErfcOperationExeFunc2Dims(
         {
             LOOP("LOOP_L1_sIdx", FunctionType::DYNAMIC_LOOP, sIdx, LoopRange(0, sloop, 1))
             {
-                auto tileTensor = View(
-                    inputs[0], {firstViewShape, secondViewShape},
-                    {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                     std::min(secondDim - sIdx * secondViewShape, secondViewShape)},
-                    {bIdx * firstViewShape, sIdx * secondViewShape});
+                auto tileTensor = View(inputs[0], {firstViewShape, secondViewShape},
+                                       {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                        std::min(secondDim - sIdx * secondViewShape, secondViewShape)},
+                                       {bIdx * firstViewShape, sIdx * secondViewShape});
                 TileShape::Current().SetVecTile(args->tileShape_);
                 auto res = Erfc(tileTensor);
                 Assemble(res, {bIdx * firstViewShape, sIdx * secondViewShape}, outputs[0]);
@@ -90,8 +89,8 @@ static void ErfcOperationExeFunc2Dims(
     }
 }
 
-static void ErfcOperationExeFunc3Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void ErfcOperationExeFunc3Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                      const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0]})
     {
@@ -112,12 +111,11 @@ static void ErfcOperationExeFunc3Dims(
             {
                 LOOP("LOOP_L2_nIdx", FunctionType::DYNAMIC_LOOP, nIdx, LoopRange(0, nloop, 1))
                 {
-                    auto tileTensor = View(
-                        inputs[0], {firstViewShape, secondViewShape, thirdViewShape},
-                        {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                         std::min(secondDim - sIdx * secondViewShape, secondViewShape),
-                         std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape)},
-                        {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape});
+                    auto tileTensor = View(inputs[0], {firstViewShape, secondViewShape, thirdViewShape},
+                                           {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                            std::min(secondDim - sIdx * secondViewShape, secondViewShape),
+                                            std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape)},
+                                           {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape});
                     TileShape::Current().SetVecTile(args->tileShape_);
                     auto res = Erfc(tileTensor);
                     Assemble(res, {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape}, outputs[0]);
@@ -127,8 +125,8 @@ static void ErfcOperationExeFunc3Dims(
     }
 }
 
-static void ErfcOperationExeFunc4Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void ErfcOperationExeFunc4Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                      const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0]})
     {
@@ -155,21 +153,20 @@ static void ErfcOperationExeFunc4Dims(
                 {
                     LOOP("LOOP_L3_nIdx", FunctionType::DYNAMIC_LOOP, nIdx, LoopRange(0, nloop, 1))
                     {
-                        Tensor tileTensor0 = View(
-                            inputs[0], {firstViewShape, secondViewShape, thirdViewShape, fourthViewShape},
-                            {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                             std::min(secondDim - sIdx * secondViewShape, secondViewShape),
-                             std::min(thirdDim - mIdx * thirdViewShape, thirdViewShape),
-                             std::min(fourthDim - nIdx * fourthViewShape, fourthViewShape)},
-                            {bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape,
-                             nIdx * fourthViewShape});
+                        Tensor tileTensor0 = View(inputs[0],
+                                                  {firstViewShape, secondViewShape, thirdViewShape, fourthViewShape},
+                                                  {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                                   std::min(secondDim - sIdx * secondViewShape, secondViewShape),
+                                                   std::min(thirdDim - mIdx * thirdViewShape, thirdViewShape),
+                                                   std::min(fourthDim - nIdx * fourthViewShape, fourthViewShape)},
+                                                  {bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape,
+                                                   nIdx * fourthViewShape});
                         TileShape::Current().SetVecTile(args->tileShape_);
                         auto res = Erfc(tileTensor0);
-                        Assemble(
-                            res,
-                            {bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape,
-                             nIdx * fourthViewShape},
-                            outputs[0]);
+                        Assemble(res,
+                                 {bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape,
+                                  nIdx * fourthViewShape},
+                                 outputs[0]);
                     }
                 }
             }
@@ -177,8 +174,8 @@ static void ErfcOperationExeFunc4Dims(
     }
 }
 
-static void ErfcOperationExeFunc5Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void ErfcOperationExeFunc5Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                      const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0]})
     {
@@ -222,11 +219,10 @@ static void ErfcOperationExeFunc5Dims(
                                  nIdx * fourthViewShape, kIdx * fifthViewShape});
                             TileShape::Current().SetVecTile(args->tileShape_);
                             auto res = Erfc(tileTensor0);
-                            Assemble(
-                                res,
-                                {bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape,
-                                 nIdx * fourthViewShape, kIdx * fifthViewShape},
-                                outputs[0]);
+                            Assemble(res,
+                                     {bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape,
+                                      nIdx * fourthViewShape, kIdx * fifthViewShape},
+                                     outputs[0]);
                         }
                     }
                 }
@@ -237,12 +233,11 @@ static void ErfcOperationExeFunc5Dims(
 
 class ErfcOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac_param<ErfcOpMetaData> {};
 
-INSTANTIATE_TEST_SUITE_P(
-    TestErfc, ErfcOperationTest,
-    ::testing::ValuesIn(GetOpMetaData<ErfcOpMetaData, 1>(
-        {ErfcOperationExeFunc1Dim, ErfcOperationExeFunc2Dims, ErfcOperationExeFunc3Dims, ErfcOperationExeFunc4Dims,
-         ErfcOperationExeFunc5Dims},
-        "Erfc")));
+INSTANTIATE_TEST_SUITE_P(TestErfc, ErfcOperationTest,
+                         ::testing::ValuesIn(GetOpMetaData<ErfcOpMetaData, 1>(
+                             {ErfcOperationExeFunc1Dim, ErfcOperationExeFunc2Dims, ErfcOperationExeFunc3Dims,
+                              ErfcOperationExeFunc4Dims, ErfcOperationExeFunc5Dims},
+                             "Erfc")));
 
 TEST_P(ErfcOperationTest, TestErfc)
 {

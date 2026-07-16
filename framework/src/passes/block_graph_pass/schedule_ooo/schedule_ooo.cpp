@@ -66,8 +66,8 @@ void OoOSchedule::SortTaskList(std::vector<Operation*>& opList, std::vector<Oper
     taskList = std::move(newTaskList);
 }
 
-void OoOSchedule::CollectStatistic(
-    OoOScheduleStatistic& oooHealthCheck, Function& function, std::pair<uint64_t, Function*>& program)
+void OoOSchedule::CollectStatistic(OoOScheduleStatistic& oooHealthCheck, Function& function,
+                                   std::pair<uint64_t, Function*>& program)
 {
     if (passDfxconfigs_.healthCheck) {
         oooHealthCheck.SetOutputPrefix(GetDumpFilePrefix(function, false, program.second, program.first));
@@ -75,9 +75,8 @@ void OoOSchedule::CollectStatistic(
     }
 }
 
-Status OoOSchedule::NonMixSchedule(
-    std::vector<Operation*>& opList, Function& function, std::pair<uint64_t, Function*>& program,
-    int64_t& maxWorkeSpaceSize)
+Status OoOSchedule::NonMixSchedule(std::vector<Operation*>& opList, Function& function,
+                                   std::pair<uint64_t, Function*>& program, int64_t& maxWorkeSpaceSize)
 {
     // 直接对oplist进行GenSpill和mainLoop
     APASS_LOG_INFO_F(Elements::Operation, "=============== START NonMixSchedule ===============");
@@ -112,8 +111,8 @@ Status OoOSchedule::NonMixSchedule(
     return SUCCESS;
 }
 
-Status OoOSchedule::BuildMemIdToAllocIdx(
-    const std::vector<Operation*>& opList, std::unordered_map<uint64_t, size_t>& memIdToAllocIdx)
+Status OoOSchedule::BuildMemIdToAllocIdx(const std::vector<Operation*>& opList,
+                                         std::unordered_map<uint64_t, size_t>& memIdToAllocIdx)
 {
     for (size_t i = 0; i < opList.size(); i++) {
         Operation* op = opList[i];
@@ -129,21 +128,19 @@ Status OoOSchedule::BuildMemIdToAllocIdx(
     return SUCCESS;
 }
 
-bool OoOSchedule::MoveAllocBeforeOp(
-    std::vector<Operation*>& opList, size_t allocIdx, int targetIdx,
-    std::unordered_map<uint64_t, size_t>& memIdToAllocIdx, uint64_t memId)
+bool OoOSchedule::MoveAllocBeforeOp(std::vector<Operation*>& opList, size_t allocIdx, int targetIdx,
+                                    std::unordered_map<uint64_t, size_t>& memIdToAllocIdx, uint64_t memId)
 {
     if (allocIdx >= opList.size()) {
-        APASS_LOG_ERROR_F(
-            Elements::Operation, "ModifyAllocOrder: allocIdx %zu out of range (size %zu).", allocIdx, opList.size());
+        APASS_LOG_ERROR_F(Elements::Operation, "ModifyAllocOrder: allocIdx %zu out of range (size %zu).", allocIdx,
+                          opList.size());
         return false;
     }
     if (allocIdx > static_cast<size_t>(targetIdx)) {
         Operation* allocOp = opList[allocIdx];
-        APASS_LOG_DEBUG_F(
-            Elements::Operation, "Move %s[%d] from index[%zu] to index[%d] before %s[%d]",
-            allocOp->GetOpcodeStr().c_str(), allocOp->GetOpMagic(), allocIdx, targetIdx,
-            opList[targetIdx]->GetOpcodeStr().c_str(), opList[targetIdx]->GetOpMagic());
+        APASS_LOG_DEBUG_F(Elements::Operation, "Move %s[%d] from index[%zu] to index[%d] before %s[%d]",
+                          allocOp->GetOpcodeStr().c_str(), allocOp->GetOpMagic(), allocIdx, targetIdx,
+                          opList[targetIdx]->GetOpcodeStr().c_str(), opList[targetIdx]->GetOpMagic());
         opList.erase(opList.begin() + allocIdx);
         opList.insert(opList.begin() + targetIdx, allocOp);
 
@@ -189,18 +186,18 @@ Status OoOSchedule::ModifyAllocOrder(std::vector<Operation*>& opList)
     return SUCCESS;
 }
 
-std::vector<ScheduleUnit> OoOSchedule::BuildScheduleUnits(
-    const std::vector<TaskNode>& taskNodeList, const std::vector<std::pair<int, int>>& cyclePairs,
-    std::vector<Operation*>& opList)
+std::vector<ScheduleUnit> OoOSchedule::BuildScheduleUnits(const std::vector<TaskNode>& taskNodeList,
+                                                          const std::vector<std::pair<int, int>>& cyclePairs,
+                                                          std::vector<Operation*>& opList)
 {
     std::vector<ScheduleUnit> scheduleUnits;
     std::unordered_set<int> pairedIndices;
 
     for (const auto& pair : cyclePairs) {
-        auto it1 = std::find_if(
-            taskNodeList.begin(), taskNodeList.end(), [&](const TaskNode& n) { return n.idx == pair.first; });
-        auto it2 = std::find_if(
-            taskNodeList.begin(), taskNodeList.end(), [&](const TaskNode& n) { return n.idx == pair.second; });
+        auto it1 = std::find_if(taskNodeList.begin(), taskNodeList.end(),
+                                [&](const TaskNode& n) { return n.idx == pair.first; });
+        auto it2 = std::find_if(taskNodeList.begin(), taskNodeList.end(),
+                                [&](const TaskNode& n) { return n.idx == pair.second; });
         if (it1 != taskNodeList.end() && it2 != taskNodeList.end()) {
             ScheduleUnit unit;
             unit.mergedOps.insert(unit.mergedOps.end(), it1->opList_.begin(), it1->opList_.end());
@@ -224,9 +221,8 @@ std::vector<ScheduleUnit> OoOSchedule::BuildScheduleUnits(
         }
     }
 
-    std::sort(scheduleUnits.begin(), scheduleUnits.end(), [](const ScheduleUnit& a, const ScheduleUnit& b) {
-        return a.earliestStartTime < b.earliestStartTime;
-    });
+    std::sort(scheduleUnits.begin(), scheduleUnits.end(),
+              [](const ScheduleUnit& a, const ScheduleUnit& b) { return a.earliestStartTime < b.earliestStartTime; });
 
     return scheduleUnits;
 }
@@ -238,9 +234,8 @@ std::string GetOpInfo(Operation* op)
     return op->GetOpcodeStr() + "[" + std::to_string(op->GetOpMagic()) + "]";
 }
 
-Status OoOSchedule::MixSchedule(
-    std::vector<Operation*>& opList, Function& function, std::pair<uint64_t, Function*>& program,
-    int64_t& maxWorkeSpaceSize)
+Status OoOSchedule::MixSchedule(std::vector<Operation*>& opList, Function& function,
+                                std::pair<uint64_t, Function*>& program, int64_t& maxWorkeSpaceSize)
 {
     APASS_LOG_INFO_F(Elements::Operation, "=============== START MixSchedule ===============");
     TaskSplitter splitter;
@@ -296,13 +291,12 @@ Status OoOSchedule::MixSchedule(
 }
 
 Status OoOSchedule::EstimateTaskLatencyAndSchedule(TaskSplitter& splitter, std::vector<Operation*>& opList,
-    const std::string& schedMode)
+                                                   const std::string& schedMode)
 {
-    static const std::unordered_map<TargetCoreType, std::string> targetToString{
-        {TargetCoreType::AIC, "AIC"},
-        {TargetCoreType::AIV0, "AIV0"},
-        {TargetCoreType::AIV1, "AIV1"},
-        {TargetCoreType::UNKNOWN, "UNKNOWN"}};
+    static const std::unordered_map<TargetCoreType, std::string> targetToString{{TargetCoreType::AIC, "AIC"},
+                                                                                {TargetCoreType::AIV0, "AIV0"},
+                                                                                {TargetCoreType::AIV1, "AIV1"},
+                                                                                {TargetCoreType::UNKNOWN, "UNKNOWN"}};
 
     splitter.SplitGraph(opList);
     for (auto& taskNode : splitter.GetTaskGraph().tasks) {
@@ -316,37 +310,33 @@ Status OoOSchedule::EstimateTaskLatencyAndSchedule(TaskSplitter& splitter, std::
     APASS_LOG_DEBUG_F(Elements::Operation, "============>after schedule");
     for (size_t i = 0; i < splitter.GetTaskGraph().tasks.size(); i++) {
         auto& t = splitter.GetTaskGraph().tasks[i];
-        APASS_LOG_DEBUG_F(
-            Elements::Operation, "i: %zu =======eval task %d on %s: starttime %d - %d.", i, t.idx,
-            targetToString.at(t.targetCoreType).c_str(), t.startTime, t.endTime);
+        APASS_LOG_DEBUG_F(Elements::Operation, "i: %zu =======eval task %d on %s: starttime %d - %d.", i, t.idx,
+                          targetToString.at(t.targetCoreType).c_str(), t.startTime, t.endTime);
     }
     for (size_t i = 0; i < splitter.GetTaskGraph().tasks.size(); i++) {
         auto& t = splitter.GetTaskGraph().tasks[i];
-        APASS_LOG_DEBUG_F(
-            Elements::Operation, "i: %zu =======task %d out task %s.", i, t.idx, IntVecToStr(t.outTasks).c_str());
+        APASS_LOG_DEBUG_F(Elements::Operation, "i: %zu =======task %d out task %s.", i, t.idx,
+                          IntVecToStr(t.outTasks).c_str());
     }
     splitter.MarkInternalSubgraphID();
     return SUCCESS;
 }
 
-Status OoOSchedule::BuildMixedScheduleOps(
-    TaskSplitter& splitter, std::vector<Operation*>& opList, std::unordered_map<Operation*, CoreLocationType>& opCoreMap)
+Status OoOSchedule::BuildMixedScheduleOps(TaskSplitter& splitter, std::vector<Operation*>& opList,
+                                          std::unordered_map<Operation*, CoreLocationType>& opCoreMap)
 {
-    static const std::unordered_map<TargetCoreType, std::string> targetToString{
-        {TargetCoreType::AIC, "AIC"},
-        {TargetCoreType::AIV0, "AIV0"},
-        {TargetCoreType::AIV1, "AIV1"},
-        {TargetCoreType::UNKNOWN, "UNKNOWN"}};
+    static const std::unordered_map<TargetCoreType, std::string> targetToString{{TargetCoreType::AIC, "AIC"},
+                                                                                {TargetCoreType::AIV0, "AIV0"},
+                                                                                {TargetCoreType::AIV1, "AIV1"},
+                                                                                {TargetCoreType::UNKNOWN, "UNKNOWN"}};
     auto taskNodeList = splitter.GetTaskGraph().tasks;
-    std::sort(taskNodeList.begin(), taskNodeList.end(), [](const TaskNode& a, const TaskNode& b) {
-        return a.startTime < b.startTime;
-    });
+    std::sort(taskNodeList.begin(), taskNodeList.end(),
+              [](const TaskNode& a, const TaskNode& b) { return a.startTime < b.startTime; });
     APASS_LOG_DEBUG_F(Elements::Operation, "============>after sort BuildMixedScheduleOps");
     for (size_t i = 0; i < taskNodeList.size(); i++) {
-        APASS_LOG_DEBUG_F(
-            Elements::Operation, "i: %zu task %d on %s: starttime %d - %d.", i, taskNodeList[i].idx,
-            targetToString.at(taskNodeList[i].targetCoreType).c_str(), taskNodeList[i].startTime,
-            taskNodeList[i].endTime);
+        APASS_LOG_DEBUG_F(Elements::Operation, "i: %zu task %d on %s: starttime %d - %d.", i, taskNodeList[i].idx,
+                          targetToString.at(taskNodeList[i].targetCoreType).c_str(), taskNodeList[i].startTime,
+                          taskNodeList[i].endTime);
         for (auto op : taskNodeList[i].opList_) {
             APASS_LOG_DEBUG_F(Elements::Operation, "op : %s", GetOpInfo(op).c_str());
         }
@@ -368,8 +358,8 @@ Status OoOSchedule::BuildMixedScheduleOps(
     return SUCCESS;
 }
 
-Status OoOSchedule::UpdateOpCoreMap(
-    const TaskNode& taskNode, std::unordered_map<Operation*, CoreLocationType>& opCoreMap)
+Status OoOSchedule::UpdateOpCoreMap(const TaskNode& taskNode,
+                                    std::unordered_map<Operation*, CoreLocationType>& opCoreMap)
 {
     for (auto op : taskNode.opList_) {
         if (taskNode.targetCoreType == TargetCoreType::UNKNOWN) {
@@ -381,8 +371,8 @@ Status OoOSchedule::UpdateOpCoreMap(
     return SUCCESS;
 }
 
-Status OoOSchedule::SortAndLatencyEstimate(
-    std::vector<Operation*>& opList, std::vector<Operation*>& taskOpList, int& latency)
+Status OoOSchedule::SortAndLatencyEstimate(std::vector<Operation*>& opList, std::vector<Operation*>& taskOpList,
+                                           int& latency)
 {
     APASS_LOG_INFO_F(Elements::Operation, "=======>start SortAndLatencyEstimate");
     SortTaskList(opList, taskOpList);
@@ -471,8 +461,8 @@ void OoOSchedule::CollectMemoryTrace(MemoryTracer& tracer, Function& function, s
 }
 
 // PostRun is skipped on FAILED — flush trace inline; mirror dump if dumpGraph is on.
-void OoOSchedule::FlushMemoryTraceOnFailure(
-    MemoryTracer& tracer, Function& function, std::pair<uint64_t, Function*>& program)
+void OoOSchedule::FlushMemoryTraceOnFailure(MemoryTracer& tracer, Function& function,
+                                            std::pair<uint64_t, Function*>& program)
 {
     auto prefix = GetDumpFilePrefix(function, false, program.second, program.first);
     tracer.SetOutputPrefix(prefix);

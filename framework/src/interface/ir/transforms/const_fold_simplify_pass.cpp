@@ -51,8 +51,8 @@ static DataType GetDType(const ExprPtr& expr)
 // ---------------------------------------------------------------------------
 // Helper: resolve Var through a value map to find the underlying ConstInt
 // ---------------------------------------------------------------------------
-static std::optional<int64_t> ResolveToConst(
-    const ExprPtr& expr, const std::unordered_map<std::string, ExprPtr>& var_vals)
+static std::optional<int64_t> ResolveToConst(const ExprPtr& expr,
+                                             const std::unordered_map<std::string, ExprPtr>& var_vals)
 {
     if (!expr)
         return std::nullopt;
@@ -86,8 +86,8 @@ static std::optional<int64_t> ResolveToConst(
     return std::nullopt;
 }
 
-static bool IsSameExpr(
-    const ExprPtr& a, const ExprPtr& b, const std::unordered_map<std::string, ExprPtr>& var_vals = {})
+static bool IsSameExpr(const ExprPtr& a, const ExprPtr& b,
+                       const std::unordered_map<std::string, ExprPtr>& var_vals = {})
 {
     if (!a || !b)
         return false;
@@ -280,8 +280,8 @@ public:
 
     StmtPtr MakeEmptySeq(const Span& span) { return std::make_shared<SeqStmts>(std::vector<StmtPtr>{}, span); }
 
-    std::optional<StmtPtr> SimplifyConstCondition(
-        const ExprPtr& cond, const StmtPtr& then_body, const std::optional<StmtPtr>& else_body, const Span& span)
+    std::optional<StmtPtr> SimplifyConstCondition(const ExprPtr& cond, const StmtPtr& then_body,
+                                                  const std::optional<StmtPtr>& else_body, const Span& span)
     {
         // Resolve through Vars and tuple accesses so a compile-time-constant condition
         // (e.g. a bool field of a make_tuple threaded through helpers) prunes the dead
@@ -322,8 +322,8 @@ public:
         return {};
     }
 
-    bool HaveSameYieldValues(
-        const std::vector<ExprPtr>& then_vals, const std::vector<ExprPtr>& else_vals, size_t expected_count)
+    bool HaveSameYieldValues(const std::vector<ExprPtr>& then_vals, const std::vector<ExprPtr>& else_vals,
+                             size_t expected_count)
     {
         if (then_vals.size() != expected_count || else_vals.size() != expected_count) {
             return false;
@@ -346,8 +346,8 @@ public:
         return std::make_shared<SeqStmts>(std::move(assigns), span);
     }
 
-    std::optional<StmtPtr> TryFoldSameYieldBranches(
-        const IfStmtPtr& op, const StmtPtr& then_body, const std::optional<StmtPtr>& else_body)
+    std::optional<StmtPtr> TryFoldSameYieldBranches(const IfStmtPtr& op, const StmtPtr& then_body,
+                                                    const std::optional<StmtPtr>& else_body)
     {
         if (!else_body || op->returnVars_.empty()) {
             return std::nullopt;
@@ -400,8 +400,8 @@ static FunctionPtr TransformConstFoldAndSimplify(const FunctionPtr& func)
     auto new_body = mutator.VisitStmt(func->body_);
     if (new_body.get() == func->body_.get())
         return func;
-    return std::make_shared<Function>(
-        func->name_, func->params_, func->returnTypes_, new_body, func->span_, func->funcType_, func->entry_);
+    return std::make_shared<Function>(func->name_, func->params_, func->returnTypes_, new_body, func->span_,
+                                      func->funcType_, func->entry_);
 }
 
 namespace pass {

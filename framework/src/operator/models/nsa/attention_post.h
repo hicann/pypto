@@ -40,8 +40,8 @@ struct PostTensors {
 
 void PostCompute(Tensor& input, PostTensors& postTensors, const PostTileConfig& tileConfig, Tensor& postOut);
 
-void AttentionPostStandalone(
-    Tensor& input, PostTensors& postTensors, const PostTileConfig& tileConfig, Tensor& postOut);
+void AttentionPostStandalone(Tensor& input, PostTensors& postTensors, const PostTileConfig& tileConfig,
+                             Tensor& postOut);
 
 } // namespace npu::tile_fwk
 

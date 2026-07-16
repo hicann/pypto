@@ -109,9 +109,8 @@ void Program::CreateInitFunction()
 
 void Program::CreateCallerCalleeLink(Function* caller, Function* callee)
 {
-    FE_ASSERT(
-        FeError::INVALID_TYPE,
-        caller->IsGraphType(GraphType::TENSOR_GRAPH) && callee->IsGraphType(GraphType::TENSOR_GRAPH))
+    FE_ASSERT(FeError::INVALID_TYPE,
+              caller->IsGraphType(GraphType::TENSOR_GRAPH) && callee->IsGraphType(GraphType::TENSOR_GRAPH))
         << "caller graphType: " << GetGraphTypeNameDict().Find(caller->GetGraphType())
         << ", callee graphType: " << GetGraphTypeNameDict().Find(callee->GetGraphType());
     // add callop
@@ -177,47 +176,53 @@ void SetParamConfig(Function* currentFuncPtr)
     std::shared_ptr<ConfigScope> currentScope = ConfigManagerNg::GetInstance().CurrentScope();
     currentFuncPtr->paramConfigs_.sgPgLowerBound = currentScope->GetPassConfig<int>(SG_PG_LOWER_BOUND);
     currentFuncPtr->paramConfigs_.sgParallelNum = currentScope->GetPassConfig<int>(SG_PARALLEL_NUM);
-    currentFuncPtr->paramConfigs_.sgPartitionAlgorithm =
-        currentScope->GetPassConfig<std::string>(SG_PARTITION_ALGORITHM);
+    currentFuncPtr->paramConfigs_.sgPartitionAlgorithm = currentScope->GetPassConfig<std::string>(
+        SG_PARTITION_ALGORITHM);
     currentFuncPtr->paramConfigs_.sgMgCopyInUpperBound = currentScope->GetPassConfig<int>(MG_COPYIN_UPPER_BOUND);
     currentFuncPtr->paramConfigs_.machineConfig_ = currentScope->GetRuntimeConfig<uint8_t>(DEVICE_SCHED_MODE);
-    currentFuncPtr->paramConfigs_.cubeL1ReuseSetting =
-        currentScope->GetPassConfig<std::map<int64_t, int64_t>>(CUBE_L1_REUSE_SETTING);
-    currentFuncPtr->paramConfigs_.cubeNBufferSetting =
-        currentScope->GetPassConfig<std::map<int64_t, int64_t>>(CUBE_NBUFFER_SETTING);
-    currentFuncPtr->paramConfigs_.vecNBufferSetting =
-        currentScope->GetPassConfig<std::map<int64_t, int64_t>>(VEC_NBUFFER_SETTING);
+    currentFuncPtr->paramConfigs_.cubeL1ReuseSetting = currentScope->GetPassConfig<std::map<int64_t, int64_t>>(
+        CUBE_L1_REUSE_SETTING);
+    currentFuncPtr->paramConfigs_.cubeNBufferSetting = currentScope->GetPassConfig<std::map<int64_t, int64_t>>(
+        CUBE_NBUFFER_SETTING);
+    currentFuncPtr->paramConfigs_.vecNBufferSetting = currentScope->GetPassConfig<std::map<int64_t, int64_t>>(
+        VEC_NBUFFER_SETTING);
     currentFuncPtr->paramConfigs_.autoMixPartition = currentScope->GetPassConfig<int>(AUTO_MIX_PARTITION);
     currentFuncPtr->paramConfigs_.oooSchedMode = currentScope->GetPassConfig<std::string>(OOO_SCHED_MODE);
     // Function-granularity setting
     if (currentScope->HasConfig("pass.cube_l1_reuse_setting_by_func")) {
-        currentFuncPtr->paramConfigs_.cubeL1ReuseSettingByFunc =
-            currentScope->GetPassConfig<std::map<std::string, int64_t>>("cube_l1_reuse_setting_by_func");
+        currentFuncPtr->paramConfigs_.cubeL1ReuseSettingByFunc = currentScope
+                                                                     ->GetPassConfig<std::map<std::string, int64_t>>(
+                                                                         "cube_l1_reuse_setting_by_func");
     }
     if (currentScope->HasConfig("pass.cube_nbuffer_setting_by_func")) {
-        currentFuncPtr->paramConfigs_.cubeNBufferSettingByFunc =
-            currentScope->GetPassConfig<std::map<std::string, int64_t>>("cube_nbuffer_setting_by_func");
+        currentFuncPtr->paramConfigs_.cubeNBufferSettingByFunc = currentScope
+                                                                     ->GetPassConfig<std::map<std::string, int64_t>>(
+                                                                         "cube_nbuffer_setting_by_func");
     }
     if (currentScope->HasConfig("pass.vec_nbuffer_setting_by_func")) {
-        currentFuncPtr->paramConfigs_.vecNBufferSettingByFunc =
-            currentScope->GetPassConfig<std::map<std::string, int64_t>>("vec_nbuffer_setting_by_func");
+        currentFuncPtr->paramConfigs_.vecNBufferSettingByFunc = currentScope
+                                                                    ->GetPassConfig<std::map<std::string, int64_t>>(
+                                                                        "vec_nbuffer_setting_by_func");
     }
     // Semantic label settings
     if (currentScope->HasConfig("pass.cube_l1_reuse_setting_by_label")) {
-        currentFuncPtr->paramConfigs_.cubeL1ReuseSettingByLabel =
-            currentScope->GetPassConfig<std::map<std::string, int64_t>>("cube_l1_reuse_setting_by_label");
+        currentFuncPtr->paramConfigs_.cubeL1ReuseSettingByLabel = currentScope
+                                                                      ->GetPassConfig<std::map<std::string, int64_t>>(
+                                                                          "cube_l1_reuse_setting_by_label");
     }
     if (currentScope->HasConfig("pass.cube_nbuffer_setting_by_label")) {
-        currentFuncPtr->paramConfigs_.cubeNBufferSettingByLabel =
-            currentScope->GetPassConfig<std::map<std::string, int64_t>>("cube_nbuffer_setting_by_label");
+        currentFuncPtr->paramConfigs_.cubeNBufferSettingByLabel = currentScope
+                                                                      ->GetPassConfig<std::map<std::string, int64_t>>(
+                                                                          "cube_nbuffer_setting_by_label");
     }
     if (currentScope->HasConfig("pass.vec_nbuffer_setting_by_label")) {
-        currentFuncPtr->paramConfigs_.vecNBufferSettingByLabel =
-            currentScope->GetPassConfig<std::map<std::string, int64_t>>("vec_nbuffer_setting_by_label");
+        currentFuncPtr->paramConfigs_.vecNBufferSettingByLabel = currentScope
+                                                                     ->GetPassConfig<std::map<std::string, int64_t>>(
+                                                                         "vec_nbuffer_setting_by_label");
     }
     currentFuncPtr->paramConfigs_.mgVecParallelLb = currentScope->GetPassConfig<int>(MG_VEC_PARALLEL_LB);
-    currentFuncPtr->paramConfigs_.copyOutResolveCoalescing =
-        currentScope->GetPassConfig<int>(COPYOUT_RESOLVE_COALESCING);
+    currentFuncPtr->paramConfigs_.copyOutResolveCoalescing = currentScope->GetPassConfig<int>(
+        COPYOUT_RESOLVE_COALESCING);
     currentFuncPtr->paramConfigs_.combineAxis = currentScope->GetOperationConfig<bool>(KEY_COMBINE_AXIS);
 }
 
@@ -242,9 +247,9 @@ void Program::EndHiddenLoop(Function* func, bool generateCall)
 #endif
 
 // Start a new function and push it to the functions vector
-bool Program::BeginFunction(
-    const std::string& funcName, const FunctionType funcType, const GraphType graphType,
-    const std::vector<std::reference_wrapper<const Tensor>>& explicitOpArgs, bool isHiddenFunction)
+bool Program::BeginFunction(const std::string& funcName, const FunctionType funcType, const GraphType graphType,
+                            const std::vector<std::reference_wrapper<const Tensor>>& explicitOpArgs,
+                            bool isHiddenFunction)
 {
     // set soc version from python jit codegen_options
     std::string socVersion = config::GetCodeGenOption<std::string>(PLATFORM_SOC_VERSION);
@@ -293,10 +298,9 @@ bool Program::BeginFunction(
 
 #if ENABLE_HIDDENLOOP
     // Begin new hidden loop for the new function
-    BeginHiddenLoop(
-        currentFunctionPtr_, FunctionType::DYNAMIC_LOOP_PATH,
-        currentFunctionPtr_->GetRawName() + "_hiddenfunc" +
-            std::to_string(currentFunctionPtr_->GetCallopList().size()));
+    BeginHiddenLoop(currentFunctionPtr_, FunctionType::DYNAMIC_LOOP_PATH,
+                    currentFunctionPtr_->GetRawName() + "_hiddenfunc" +
+                        std::to_string(currentFunctionPtr_->GetCallopList().size()));
 #endif
     return true;
 }
@@ -356,13 +360,11 @@ void Program::HandleTaskSubmission(Function* result)
             } else {
                 FE_LOGI("Empty function: %s, skip stashing and removed", result->GetRawName().c_str());
                 auto& scopes = GetTensorSlotManager()->scopeList;
-                scopes.erase(
-                    std::remove_if(
-                        scopes.begin(), scopes.end(),
-                        [result](const std::shared_ptr<TensorSlotScope>& scope) {
-                            return scope->tensorFunc == result;
-                        }),
-                    scopes.end());
+                scopes.erase(std::remove_if(scopes.begin(), scopes.end(),
+                                            [result](const std::shared_ptr<TensorSlotScope>& scope) {
+                                                return scope->tensorFunc == result;
+                                            }),
+                             scopes.end());
             }
         } else {
             MonitorManager::Instance().SetTotalFunctionCount(1);
@@ -390,9 +392,8 @@ std::tuple<Function*, Operation*, bool> Program::EndFunction(const std::string& 
     }
     currentFunctionPtr_->SetUnderDynamicFunction(Program::GetInstance().GetCurrentDynamicFunction() != nullptr);
     if (currentFunctionPtr_->IsStatic() && funcName != currentFunctionPtr_->GetRawName()) {
-        FE_LOGE(
-            FeError::NOT_EXIST, "Function name not match current: %s != %s", currentFunctionPtr_->GetRawName().c_str(),
-            funcName.c_str());
+        FE_LOGE(FeError::NOT_EXIST, "Function name not match current: %s != %s",
+                currentFunctionPtr_->GetRawName().c_str(), funcName.c_str());
         return std::make_tuple(nullptr, nullptr, false);
     }
 
@@ -411,10 +412,9 @@ std::tuple<Function*, Operation*, bool> Program::EndFunction(const std::string& 
 
 #if ENABLE_HIDDENLOOP
     // Begin new hidden loop for parent function
-    BeginHiddenLoop(
-        result, FunctionType::DYNAMIC_LOOP,
-        currentFunctionPtr_->GetRawName() + "_hiddenfunc" +
-            std::to_string(currentFunctionPtr_->GetCallopList().size()));
+    BeginHiddenLoop(result, FunctionType::DYNAMIC_LOOP,
+                    currentFunctionPtr_->GetRawName() + "_hiddenfunc" +
+                        std::to_string(currentFunctionPtr_->GetCallopList().size()));
 #endif
 
     return std::make_tuple(result, callop, hit);
@@ -433,16 +433,14 @@ void Program::PopStackAndUpdateCurrent()
 }
 
 // Add an operation to the current function and insert operands into the TensorMap
-Operation& Program::AddOperation(
-    const std::string& opName, const std::vector<std::shared_ptr<LogicalTensor>>& iOperand,
-    const std::vector<std::shared_ptr<LogicalTensor>>& oOperand)
+Operation& Program::AddOperation(const std::string& opName, const std::vector<std::shared_ptr<LogicalTensor>>& iOperand,
+                                 const std::vector<std::shared_ptr<LogicalTensor>>& oOperand)
 {
     return AddOperation(FindOpcode(opName), iOperand, oOperand);
 }
 
-Operation& Program::AddOperation(
-    const Opcode opCode, const std::vector<std::shared_ptr<LogicalTensor>>& iOperand,
-    const std::vector<std::shared_ptr<LogicalTensor>>& oOperand)
+Operation& Program::AddOperation(const Opcode opCode, const std::vector<std::shared_ptr<LogicalTensor>>& iOperand,
+                                 const std::vector<std::shared_ptr<LogicalTensor>>& oOperand)
 {
     // Add the operation to the current function
     FE_ASSERT(currentFunctionMagicName_ != PROGRAM_ENTRY_FUNCTION_NAME) << "No active function to add operation.";
@@ -696,8 +694,8 @@ void Program::VerifyTensorGraph()
     ProgramData::GetInstance().CopyToGoldenDataViewList(goldenDataViewList);
 
     auto& flowVerifier = FlowVerifier::GetInstance();
-    flowVerifier.VerifyTensorGraph(
-        func, inputDataViewList, outputDataViewList, goldenDataViewList, GetTensorSlotManager());
+    flowVerifier.VerifyTensorGraph(func, inputDataViewList, outputDataViewList, goldenDataViewList,
+                                   GetTensorSlotManager());
     FE_LOGI("VerifyTensorGraph end.");
     ProgramData::GetInstance().Reset();
 }

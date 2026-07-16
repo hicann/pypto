@@ -37,13 +37,11 @@ private:
     Status RunOnFunction(Function& function) override;
     Status Init(Function& function);
     Status ForwardPropagation(Function& function);
-    Status UpdateForwardTensor(
-        Function& function, const LogicalTensorPtr& curTensor, Operation* consumer,
-        std::queue<LogicalTensorPtr>& curTensors);
+    Status UpdateForwardTensor(Function& function, const LogicalTensorPtr& curTensor, Operation* consumer,
+                               std::queue<LogicalTensorPtr>& curTensors);
     Status BackwardPropagation(Function& function);
-    Status UpdateBackwardTensor(
-        Function& function, const LogicalTensorPtr& curTensor, Operation* producer,
-        std::queue<LogicalTensorPtr>& curTensors);
+    Status UpdateBackwardTensor(Function& function, const LogicalTensorPtr& curTensor, Operation* producer,
+                                std::queue<LogicalTensorPtr>& curTensors);
     Status InsertPrecededCopys(Function& function);
     Status InsertPostCopys(Function& function);
     Status InsertCopys(Function& function);
@@ -59,14 +57,14 @@ private:
     bool CheckRawShapeConflict(const LogicalTensorPtr& inTensor, const LogicalTensorPtr& outTensor);
     bool IsValidTileShape(const Operation& op) const;
     bool ShouldSkipOutcastInput(const LogicalTensorPtr& inputTensor, Function& function);
-    Status HandleReshapeBackward(
-        Function& function, const LogicalTensorPtr& curTensor, const LogicalTensorPtr& inputTensor, Operation* producer,
-        const LogicalTensorPtr& reshapeOutput, bool& needSkip);
-    Status HandleConflictBackward(
-        Function& function, const LogicalTensorPtr& curTensor, const LogicalTensorPtr& inputTensor, Operation* producer,
-        const LogicalTensorPtr& reshapeOutput);
-    Status MatchReshapePattern(
-        Function& function, const LogicalTensorPtr& reshapeInput, const LogicalTensorPtr& reshapeOut, bool& matched);
+    Status HandleReshapeBackward(Function& function, const LogicalTensorPtr& curTensor,
+                                 const LogicalTensorPtr& inputTensor, Operation* producer,
+                                 const LogicalTensorPtr& reshapeOutput, bool& needSkip);
+    Status HandleConflictBackward(Function& function, const LogicalTensorPtr& curTensor,
+                                  const LogicalTensorPtr& inputTensor, Operation* producer,
+                                  const LogicalTensorPtr& reshapeOutput);
+    Status MatchReshapePattern(Function& function, const LogicalTensorPtr& reshapeInput,
+                               const LogicalTensorPtr& reshapeOut, bool& matched);
     bool CheckReshapeContext(const LogicalTensorPtr& reshapeInput, const LogicalTensorPtr& reshapeOut);
 
     std::set<Operation*> preregcopys;

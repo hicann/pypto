@@ -45,9 +45,8 @@ protected:
 
     ExprPtr Int(int64_t value) { return std::make_shared<ConstInt>(value, DataType::INT32, Sp()); }
 
-    FunctionPtr MakeFunc(
-        const std::string& name, const std::vector<VarPtr>& params, const StmtPtr& body,
-        const std::vector<TypePtr>& ret_types = {})
+    FunctionPtr MakeFunc(const std::string& name, const std::vector<VarPtr>& params, const StmtPtr& body,
+                         const std::vector<TypePtr>& ret_types = {})
     {
         return std::make_shared<Function>(name, params, ret_types, body, Sp());
     }
@@ -86,8 +85,8 @@ TEST_F(ConvertToSSAPassTest, TestForLoopOuterVarBecomesIterArg)
     auto assign_x = std::make_shared<AssignStmt>(x, add, Sp());
     auto yield = std::make_shared<YieldStmt>(std::vector<ExprPtr>{}, Sp());
     auto forBody = std::make_shared<SeqStmts>(std::vector<StmtPtr>{assign_x, yield}, Sp());
-    auto forStmt =
-        std::make_shared<ForStmt>(i, zero, ten, one, std::vector<IterArgPtr>{}, forBody, std::vector<VarPtr>{}, Sp());
+    auto forStmt = std::make_shared<ForStmt>(i, zero, ten, one, std::vector<IterArgPtr>{}, forBody,
+                                             std::vector<VarPtr>{}, Sp());
     auto outerBody = std::make_shared<SeqStmts>(std::vector<StmtPtr>{init_x, forStmt}, Sp());
     auto func = MakeFunc("f", {}, outerBody);
     auto result = RunPass(MakeProg(func));
@@ -177,8 +176,8 @@ TEST_F(ConvertToSSAPassTest, TestIfWithoutPhiKeepsReturnVarsEmpty)
     auto x = MakeVar("x");
     auto local = MakeVar("local");
     auto assign = std::make_shared<AssignStmt>(local, Int(1), Sp());
-    auto if_stmt = std::make_shared<IfStmt>(
-        std::make_shared<ConstBool>(true, Sp()), assign, std::nullopt, std::vector<VarPtr>{}, Sp());
+    auto if_stmt = std::make_shared<IfStmt>(std::make_shared<ConstBool>(true, Sp()), assign, std::nullopt,
+                                            std::vector<VarPtr>{}, Sp());
 
     auto result_func = RunOnFunc(MakeFunc("f", {x}, if_stmt));
     ASSERT_NE(result_func, nullptr);
@@ -193,8 +192,8 @@ TEST_F(ConvertToSSAPassTest, TestIfExistingReturnVarWithoutPhiIsVersioned)
 {
     auto y = MakeVar("y");
     auto noop = std::make_shared<EvalStmt>(Int(0), Sp());
-    auto if_stmt = std::make_shared<IfStmt>(
-        std::make_shared<ConstBool>(true, Sp()), noop, std::nullopt, std::vector<VarPtr>{y}, Sp());
+    auto if_stmt = std::make_shared<IfStmt>(std::make_shared<ConstBool>(true, Sp()), noop, std::nullopt,
+                                            std::vector<VarPtr>{y}, Sp());
 
     auto result_func = RunOnFunc(MakeFunc("f", {y}, if_stmt));
     ASSERT_NE(result_func, nullptr);
@@ -215,9 +214,8 @@ TEST_F(ConvertToSSAPassTest, TestIfExistingReturnVarNotDuplicatedWhenPhiAlreadyC
     auto x = MakeVar("x");
     auto then_assign = std::make_shared<AssignStmt>(x, Int(1), Sp());
     auto else_assign = std::make_shared<AssignStmt>(x, Int(2), Sp());
-    auto if_stmt = std::make_shared<IfStmt>(
-        std::make_shared<ConstBool>(true, Sp()), then_assign, std::optional<StmtPtr>(else_assign),
-        std::vector<VarPtr>{x}, Sp());
+    auto if_stmt = std::make_shared<IfStmt>(std::make_shared<ConstBool>(true, Sp()), then_assign,
+                                            std::optional<StmtPtr>(else_assign), std::vector<VarPtr>{x}, Sp());
 
     auto result_func = RunOnFunc(MakeFunc("f", {x}, if_stmt));
     ASSERT_NE(result_func, nullptr);
@@ -232,9 +230,8 @@ TEST_F(ConvertToSSAPassTest, TestIfElseOnlyAssignmentUsesBeforeVersionForThenYie
     auto x = MakeVar("x");
     auto then_noop = std::make_shared<EvalStmt>(Int(0), Sp());
     auto else_assign = std::make_shared<AssignStmt>(x, Int(2), Sp());
-    auto if_stmt = std::make_shared<IfStmt>(
-        std::make_shared<ConstBool>(true, Sp()), then_noop, std::optional<StmtPtr>(else_assign), std::vector<VarPtr>{},
-        Sp());
+    auto if_stmt = std::make_shared<IfStmt>(std::make_shared<ConstBool>(true, Sp()), then_noop,
+                                            std::optional<StmtPtr>(else_assign), std::vector<VarPtr>{}, Sp());
 
     auto result_func = RunOnFunc(MakeFunc("f", {x}, if_stmt));
     ASSERT_NE(result_func, nullptr);
@@ -255,16 +252,15 @@ TEST_F(ConvertToSSAPassTest, TestIfMergesPhiValuesWithExistingBranchYields)
     auto x = MakeVar("x");
     auto z = MakeVar("z");
     auto then_body = std::make_shared<SeqStmts>(
-        std::vector<StmtPtr>{
-            std::make_shared<AssignStmt>(x, Int(1), Sp()), std::make_shared<YieldStmt>(std::vector<ExprPtr>{z}, Sp())},
+        std::vector<StmtPtr>{std::make_shared<AssignStmt>(x, Int(1), Sp()),
+                             std::make_shared<YieldStmt>(std::vector<ExprPtr>{z}, Sp())},
         Sp());
     auto else_body = std::make_shared<SeqStmts>(
-        std::vector<StmtPtr>{
-            std::make_shared<AssignStmt>(x, Int(2), Sp()), std::make_shared<YieldStmt>(std::vector<ExprPtr>{z}, Sp())},
+        std::vector<StmtPtr>{std::make_shared<AssignStmt>(x, Int(2), Sp()),
+                             std::make_shared<YieldStmt>(std::vector<ExprPtr>{z}, Sp())},
         Sp());
-    auto if_stmt = std::make_shared<IfStmt>(
-        std::make_shared<ConstBool>(true, Sp()), then_body, std::optional<StmtPtr>(else_body), std::vector<VarPtr>{z},
-        Sp());
+    auto if_stmt = std::make_shared<IfStmt>(std::make_shared<ConstBool>(true, Sp()), then_body,
+                                            std::optional<StmtPtr>(else_body), std::vector<VarPtr>{z}, Sp());
 
     auto result_func = RunOnFunc(MakeFunc("f", {x, z}, if_stmt));
     ASSERT_NE(result_func, nullptr);
@@ -316,8 +312,8 @@ TEST_F(ConvertToSSAPassTest, TestForLoopSkipsExistingIterArgAndPreservesReturnVa
     auto assign_acc = std::make_shared<AssignStmt>(acc_iter->iterVar_, add, Sp());
     auto yield = std::make_shared<YieldStmt>(std::vector<ExprPtr>{acc_iter->iterVar_}, Sp());
     auto for_body = std::make_shared<SeqStmts>(std::vector<StmtPtr>{assign_acc, yield}, Sp());
-    auto for_stmt = std::make_shared<ForStmt>(
-        i, Int(0), Int(10), Int(1), std::vector<IterArgPtr>{acc_iter}, for_body, std::vector<VarPtr>{acc_out}, Sp());
+    auto for_stmt = std::make_shared<ForStmt>(i, Int(0), Int(10), Int(1), std::vector<IterArgPtr>{acc_iter}, for_body,
+                                              std::vector<VarPtr>{acc_out}, Sp());
 
     auto result_func = RunOnFunc(MakeFunc("f", {}, for_stmt));
     ASSERT_NE(result_func, nullptr);
@@ -341,8 +337,8 @@ TEST_F(ConvertToSSAPassTest, TestForLoopAppendsYieldToSeqBodyWithoutTrailingYiel
     auto assign_x = std::make_shared<AssignStmt>(x, i, Sp());
     auto assign_y = std::make_shared<AssignStmt>(y, Int(1), Sp());
     auto for_body = std::make_shared<SeqStmts>(std::vector<StmtPtr>{assign_x, assign_y}, Sp());
-    auto for_stmt = std::make_shared<ForStmt>(
-        i, Int(0), Int(10), Int(1), std::vector<IterArgPtr>{}, for_body, std::vector<VarPtr>{}, Sp());
+    auto for_stmt = std::make_shared<ForStmt>(i, Int(0), Int(10), Int(1), std::vector<IterArgPtr>{}, for_body,
+                                              std::vector<VarPtr>{}, Sp());
     auto body = std::make_shared<SeqStmts>(std::vector<StmtPtr>{init_x, for_stmt}, Sp());
 
     auto result_func = RunOnFunc(MakeFunc("f", {}, body));
@@ -364,8 +360,8 @@ TEST_F(ConvertToSSAPassTest, TestForLoopSkipsLoopVarAndLocalAssignments)
     auto assign_i = std::make_shared<AssignStmt>(i, Int(1), Sp());
     auto assign_local = std::make_shared<AssignStmt>(local, i, Sp());
     auto for_body = std::make_shared<SeqStmts>(std::vector<StmtPtr>{assign_i, assign_local}, Sp());
-    auto for_stmt = std::make_shared<ForStmt>(
-        i, Int(0), Int(10), Int(1), std::vector<IterArgPtr>{}, for_body, std::vector<VarPtr>{}, Sp());
+    auto for_stmt = std::make_shared<ForStmt>(i, Int(0), Int(10), Int(1), std::vector<IterArgPtr>{}, for_body,
+                                              std::vector<VarPtr>{}, Sp());
 
     auto result_func = RunOnFunc(MakeFunc("f", {}, for_stmt));
     ASSERT_NE(result_func, nullptr);
@@ -381,8 +377,8 @@ TEST_F(ConvertToSSAPassTest, TestForLoopAppendsYieldToSingleStmtBody)
     auto i = MakeVar("i");
     auto init_x = std::make_shared<AssignStmt>(x, Int(0), Sp());
     auto assign_x = std::make_shared<AssignStmt>(x, i, Sp());
-    auto for_stmt = std::make_shared<ForStmt>(
-        i, Int(0), Int(10), Int(1), std::vector<IterArgPtr>{}, assign_x, std::vector<VarPtr>{}, Sp());
+    auto for_stmt = std::make_shared<ForStmt>(i, Int(0), Int(10), Int(1), std::vector<IterArgPtr>{}, assign_x,
+                                              std::vector<VarPtr>{}, Sp());
     auto body = std::make_shared<SeqStmts>(std::vector<StmtPtr>{init_x, for_stmt}, Sp());
 
     auto result_func = RunOnFunc(MakeFunc("f", {}, body));
@@ -401,8 +397,8 @@ TEST_F(ConvertToSSAPassTest, TestWhileLoopPreservesExistingIterArgsAndReturnVars
     auto count_out = MakeVar("count_out");
     auto cond = std::make_shared<Lt>(count_iter->iterVar_, Int(10), DataType::BOOL, Sp());
     auto yield = std::make_shared<YieldStmt>(std::vector<ExprPtr>{count_iter->iterVar_}, Sp());
-    auto while_stmt = std::make_shared<WhileStmt>(
-        cond, std::vector<IterArgPtr>{count_iter}, yield, std::vector<VarPtr>{count_out}, Sp());
+    auto while_stmt = std::make_shared<WhileStmt>(cond, std::vector<IterArgPtr>{count_iter}, yield,
+                                                  std::vector<VarPtr>{count_out}, Sp());
 
     auto result_func = RunOnFunc(MakeFunc("f", {}, while_stmt));
     ASSERT_NE(result_func, nullptr);
@@ -424,8 +420,8 @@ TEST_F(ConvertToSSAPassTest, TestTileTypeValidShapeVarsAreSubstituted)
     auto stride = Int(1);
     auto start = Int(0);
     TileView tile_view(std::vector<ExprPtr>{m}, std::vector<ExprPtr>{stride}, start);
-    auto tile_type = std::make_shared<TileType>(
-        std::vector<ExprPtr>{m}, DataType::FP32, std::optional<MemRefPtr>{}, std::make_optional(tile_view));
+    auto tile_type = std::make_shared<TileType>(std::vector<ExprPtr>{m}, DataType::FP32, std::optional<MemRefPtr>{},
+                                                std::make_optional(tile_view));
     auto tile = MakeVar("tile", tile_type);
     auto body = std::make_shared<AssignStmt>(tile, m, Sp());
 
@@ -470,8 +466,8 @@ TEST_F(ConvertToSSAPassTest, TestTensorViewPtrVarIsSubstituted)
 {
     auto ptr = MakeVar("ptr", std::make_shared<PtrType>(DataType::FP32));
     TensorView tensor_view(std::vector<ExprPtr>{Int(1)}, TensorLayout::ND, ptr);
-    auto tensor_type = std::make_shared<TensorType>(
-        std::vector<ExprPtr>{Int(4)}, DataType::FP32, std::optional<MemRefPtr>{}, std::make_optional(tensor_view));
+    auto tensor_type = std::make_shared<TensorType>(std::vector<ExprPtr>{Int(4)}, DataType::FP32,
+                                                    std::optional<MemRefPtr>{}, std::make_optional(tensor_view));
     auto tensor = MakeVar("tensor", tensor_type);
     auto body = std::make_shared<AssignStmt>(tensor, ptr, Sp());
 

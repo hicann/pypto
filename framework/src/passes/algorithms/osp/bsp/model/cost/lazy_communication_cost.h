@@ -24,47 +24,39 @@
 namespace npu::tile_fwk {
 namespace osp {
 template <typename GraphT>
-void ComputeLazyCommunicationCosts(const BspInstance<GraphT> &instance,
-                                   unsigned numberOfSupersteps,
-                                   const std::vector<unsigned> &nodeToProcessorAssignment,
-                                   const std::vector<unsigned> &nodeToSuperstepAssignment,
-                                   const unsigned staleness,
-                                   std::vector<std::vector<VCommwT<GraphT>>> &rec,
-                                   std::vector<std::vector<VCommwT<GraphT>>> &send)
+void ComputeLazyCommunicationCosts(const BspInstance<GraphT>& instance, unsigned numberOfSupersteps,
+                                   const std::vector<unsigned>& nodeToProcessorAssignment,
+                                   const std::vector<unsigned>& nodeToSuperstepAssignment, const unsigned staleness,
+                                   std::vector<std::vector<VCommwT<GraphT>>>& rec,
+                                   std::vector<std::vector<VCommwT<GraphT>>>& send)
 {
-    for (const auto &node : instance.Vertices()) {
+    for (const auto& node : instance.Vertices()) {
         std::vector<unsigned> stepNeeded(instance.NumberOfProcessors(), numberOfSupersteps);
-        for (const auto &target : instance.GetComputationalDag().Children(node)) {
+        for (const auto& target : instance.GetComputationalDag().Children(node)) {
             if (nodeToProcessorAssignment[node] != nodeToProcessorAssignment[target]) {
-                stepNeeded[nodeToProcessorAssignment[target]]
-                    = std::min(stepNeeded[nodeToProcessorAssignment[target]], nodeToSuperstepAssignment[target]);
+                stepNeeded[nodeToProcessorAssignment[target]] = std::min(stepNeeded[nodeToProcessorAssignment[target]],
+                                                                         nodeToSuperstepAssignment[target]);
             }
         }
 
         for (unsigned proc = 0; proc < instance.NumberOfProcessors(); proc++) {
             if (stepNeeded[proc] < numberOfSupersteps) {
-                send[nodeToProcessorAssignment[node]][stepNeeded[proc] - staleness]
-                    += instance.SendCosts(nodeToProcessorAssignment[node], proc)
-                       * instance.GetComputationalDag().VertexCommWeight(node);
-                rec[proc][stepNeeded[proc] - staleness] += instance.SendCosts(nodeToProcessorAssignment[node], proc)
-                                                           * instance.GetComputationalDag().VertexCommWeight(node);
+                send[nodeToProcessorAssignment[node]]
+                    [stepNeeded[proc] - staleness] += instance.SendCosts(nodeToProcessorAssignment[node], proc) *
+                                                      instance.GetComputationalDag().VertexCommWeight(node);
+                rec[proc][stepNeeded[proc] - staleness] += instance.SendCosts(nodeToProcessorAssignment[node], proc) *
+                                                           instance.GetComputationalDag().VertexCommWeight(node);
             }
         }
     }
 }
 
 template <typename GraphT>
-void ComputeLazyCommunicationCosts(const BspSchedule<GraphT> &schedule,
-                                   std::vector<std::vector<VCommwT<GraphT>>> &rec,
-                                   std::vector<std::vector<VCommwT<GraphT>>> &send)
+void ComputeLazyCommunicationCosts(const BspSchedule<GraphT>& schedule, std::vector<std::vector<VCommwT<GraphT>>>& rec,
+                                   std::vector<std::vector<VCommwT<GraphT>>>& send)
 {
-    ComputeLazyCommunicationCosts(schedule.GetInstance(),
-                                  schedule.NumberOfSupersteps(),
-                                  schedule.AssignedProcessors(),
-                                  schedule.AssignedSupersteps(),
-                                  schedule.GetStaleness(),
-                                  rec,
-                                  send);
+    ComputeLazyCommunicationCosts(schedule.GetInstance(), schedule.NumberOfSupersteps(), schedule.AssignedProcessors(),
+                                  schedule.AssignedSupersteps(), schedule.GetStaleness(), rec, send);
 }
 
 /**
@@ -75,15 +67,15 @@ template <typename GraphT>
 struct LazyCommunicationCost {
     using CostType = VWorkwT<GraphT>;
 
-    CostType operator()(const BspSchedule<GraphT> &schedule) const
+    CostType operator()(const BspSchedule<GraphT>& schedule) const
     {
-        const auto &numberOfProcessors = schedule.GetInstance().NumberOfProcessors();
-        const auto &numberOfSupersteps = schedule.NumberOfSupersteps();
+        const auto& numberOfProcessors = schedule.GetInstance().NumberOfProcessors();
+        const auto& numberOfSupersteps = schedule.NumberOfSupersteps();
 
-        std::vector<std::vector<VCommwT<GraphT>>> rec(
-            numberOfProcessors, std::vector<VCommwT<GraphT>>(numberOfSupersteps, 0));
-        std::vector<std::vector<VCommwT<GraphT>>> send(
-            numberOfProcessors, std::vector<VCommwT<GraphT>>(numberOfSupersteps, 0));
+        std::vector<std::vector<VCommwT<GraphT>>> rec(numberOfProcessors,
+                                                      std::vector<VCommwT<GraphT>>(numberOfSupersteps, 0));
+        std::vector<std::vector<VCommwT<GraphT>>> send(numberOfProcessors,
+                                                       std::vector<VCommwT<GraphT>>(numberOfSupersteps, 0));
 
         ComputeLazyCommunicationCosts(schedule, rec, send);
         const auto maxCommPerStep = cost_helpers::ComputeMaxCommPerStep(schedule, rec, send);
@@ -101,6 +93,6 @@ struct LazyCommunicationCost {
         return commCosts + cost_helpers::ComputeWorkCosts(schedule);
     }
 };
-}    // namespace osp
+} // namespace osp
 } // namespace npu::tile_fwk
 #endif // OSP_LAZY_COMMUNICATION_COST_H

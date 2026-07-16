@@ -24,8 +24,8 @@ template <size_t N = 0, typename... Tps>
 [host, aicore] inline void tuple_static_assert()
 {
     static_assert(N < TILEOP_STD_TUPLE_STACK_DEEP, "Index overflow, the index must be smaller than 64!");
-    static_assert(
-        sizeof...(Tps) <= TILEOP_STD_TUPLE_STACK_DEEP, "The number of template elements must be smaller than 64!");
+    static_assert(sizeof...(Tps) <= TILEOP_STD_TUPLE_STACK_DEEP,
+                  "The number of template elements must be smaller than 64!");
 }
 
 template <typename... Tps>
@@ -45,9 +45,8 @@ class tuple<Tp, Tps...> : public tuple<Tps...> {
 public:
     [ host, aicore ] inline tuple() : tuple<Tps...>(), value_() { tuple_static_assert<0, Tp, Tps...>(); }
 
-    template <
-        typename Constraints = tuple_constraints<Tp, Tps...>,
-        enable_if_t<Constraints::variadic_copy_constructible, int> = 0>
+    template <typename Constraints = tuple_constraints<Tp, Tps...>,
+              enable_if_t<Constraints::variadic_copy_constructible, int> = 0>
     [host, aicore] inline tuple(const Tp& val, const Tps&... params) : tuple<Tps...>(params...), value_(val)
     {
         tuple_static_assert<0, Tp, Tps...>();

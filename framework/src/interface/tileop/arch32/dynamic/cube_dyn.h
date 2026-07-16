@@ -44,25 +44,22 @@ INLINE T CeilDiv(T num_1, T num_2)
     return (num_1 + num_2 - 1) / num_2;
 }
 
-#define RT_OPERATION_OP_L1_COPY_IN(                                                                               \
-    l1Addr, l1Dtype, l1Shape0, l1Shape1, l1ValidShape0, l1ValidShape1, l1Stride0, l1Stride1, gmAddr, gmDtype,     \
-    gmShape0, gmShape1, gmOffset0, gmOffset1, copyInMode)                                                         \
-    do {                                                                                                          \
-        constexpr CopyInMode mode = static_cast<CopyInMode>(copyInMode);                                          \
-        if (mode == CopyInMode::NZ2NZ) {                                                                          \
-            DynL1CopyInNZ2NZ<gmDtype, l1Dtype>(                                                                   \
-                l1Addr, gmAddr, l1ValidShape0, l1ValidShape1, gmShape0, gmShape1, gmOffset0, gmOffset1, gmShape0, \
-                gmShape1, 0);                                                                                     \
-        } else {                                                                                                  \
-            DynL1CopyIn<gmDtype, l1Dtype, mode>(                                                                  \
-                l1Addr, gmAddr, l1ValidShape0, l1ValidShape1, gmShape0, gmShape1, gmOffset0, gmOffset1, 0);       \
-        }                                                                                                         \
+#define RT_OPERATION_OP_L1_COPY_IN(l1Addr, l1Dtype, l1Shape0, l1Shape1, l1ValidShape0, l1ValidShape1, l1Stride0,     \
+                                   l1Stride1, gmAddr, gmDtype, gmShape0, gmShape1, gmOffset0, gmOffset1, copyInMode) \
+    do {                                                                                                             \
+        constexpr CopyInMode mode = static_cast<CopyInMode>(copyInMode);                                             \
+        if (mode == CopyInMode::NZ2NZ) {                                                                             \
+            DynL1CopyInNZ2NZ<gmDtype, l1Dtype>(l1Addr, gmAddr, l1ValidShape0, l1ValidShape1, gmShape0, gmShape1,     \
+                                               gmOffset0, gmOffset1, gmShape0, gmShape1, 0);                         \
+        } else {                                                                                                     \
+            DynL1CopyIn<gmDtype, l1Dtype, mode>(l1Addr, gmAddr, l1ValidShape0, l1ValidShape1, gmShape0, gmShape1,    \
+                                                gmOffset0, gmOffset1, 0);                                            \
+        }                                                                                                            \
     } while (0)
 
 template <typename GMT, typename L1T, CopyInMode mode = CopyInMode::ND2NZ>
-TILEOP void DynL1CopyIn(
-    __cbuf__ L1T* dst, __gm__ GMT* src, unsigned TShape0, unsigned TShape1, unsigned GmShape0, unsigned GmShape1,
-    unsigned GmOffset0, unsigned GmOffset1, int reserved)
+TILEOP void DynL1CopyIn(__cbuf__ L1T* dst, __gm__ GMT* src, unsigned TShape0, unsigned TShape1, unsigned GmShape0,
+                        unsigned GmShape1, unsigned GmOffset0, unsigned GmOffset1, int reserved)
 {
     if (TShape0 == 0 || TShape1 == 0) {
         return;
@@ -87,9 +84,9 @@ TILEOP void DynL1CopyIn(
         if constexpr (std::is_same<GMT, uint64_t>::value) {
             // The value 8 means that the input is of type scale_tensor with uint64_t data type, and it needs to be
             // copied in 8 chunks, each 1 byte in size.
-            copy_gm_to_cbuf_multi_nd2nz_b8(
-                (__cbuf__ int8_t*)dst, (__gm__ int8_t*)src, 0, ndNum, nValue, dValue * 8, srcNdMatrixStride,
-                srcDValue * 8, dstNzC0Stride, dstNzNStride, dstNzMatrixStride);
+            copy_gm_to_cbuf_multi_nd2nz_b8((__cbuf__ int8_t*)dst, (__gm__ int8_t*)src, 0, ndNum, nValue, dValue * 8,
+                                           srcNdMatrixStride, srcDValue * 8, dstNzC0Stride, dstNzNStride,
+                                           dstNzMatrixStride);
             return;
         }
     }
@@ -97,28 +94,25 @@ TILEOP void DynL1CopyIn(
     if constexpr (std::is_same<GMT, int8_t>::value) {
         constexpr uint16_t c0Size = BLOCK_ALIGN_BYTE / sizeof(GMT);
         dstNzC0Stride = CeilAlign<uint16_t>(TShape0, c0Size); // int8场景需要按32元素个数对齐
-        copy_gm_to_cbuf_multi_nd2nz_b8(
-            (__cbuf__ L1T*)dst, (__gm__ GMT*)src, 0, ndNum, nValue, dValue, srcNdMatrixStride, srcDValue, dstNzC0Stride,
-            dstNzNStride, dstNzMatrixStride);
+        copy_gm_to_cbuf_multi_nd2nz_b8((__cbuf__ L1T*)dst, (__gm__ GMT*)src, 0, ndNum, nValue, dValue,
+                                       srcNdMatrixStride, srcDValue, dstNzC0Stride, dstNzNStride, dstNzMatrixStride);
     }
 
     if constexpr (std::is_same<GMT, half>::value || std::is_same<GMT, bfloat16_t>::value) {
-        copy_gm_to_cbuf_multi_nd2nz_b16(
-            (__cbuf__ L1T*)dst, (__gm__ GMT*)src, 0, ndNum, nValue, dValue, srcNdMatrixStride, srcDValue, dstNzC0Stride,
-            dstNzNStride, dstNzMatrixStride);
+        copy_gm_to_cbuf_multi_nd2nz_b16((__cbuf__ L1T*)dst, (__gm__ GMT*)src, 0, ndNum, nValue, dValue,
+                                        srcNdMatrixStride, srcDValue, dstNzC0Stride, dstNzNStride, dstNzMatrixStride);
     }
 
     if constexpr (std::is_same<GMT, float>::value || std::is_same<GMT, int32_t>::value) {
-        copy_gm_to_cbuf_multi_nd2nz_b32s(
-            (__cbuf__ L1T*)dst, (__gm__ GMT*)src, 0, ndNum, nValue, dValue, srcNdMatrixStride, srcDValue, dstNzC0Stride,
-            dstNzNStride, dstNzMatrixStride);
+        copy_gm_to_cbuf_multi_nd2nz_b32s((__cbuf__ L1T*)dst, (__gm__ GMT*)src, 0, ndNum, nValue, dValue,
+                                         srcNdMatrixStride, srcDValue, dstNzC0Stride, dstNzNStride, dstNzMatrixStride);
     }
 }
 
 template <typename GMT, typename L1T>
-TILEOP void DynL1CopyInNZ2NZ(
-    __cbuf__ L1T* dst, __gm__ GMT* src, unsigned TShape0, unsigned TShape1, unsigned GmShape0, unsigned GmShape1,
-    unsigned GmOffset0, unsigned GmOffset1, unsigned curH, unsigned curW, int reserved)
+TILEOP void DynL1CopyInNZ2NZ(__cbuf__ L1T* dst, __gm__ GMT* src, unsigned TShape0, unsigned TShape1, unsigned GmShape0,
+                             unsigned GmShape1, unsigned GmOffset0, unsigned GmOffset1, unsigned curH, unsigned curW,
+                             int reserved)
 {
     if (TShape0 == 0 || TShape1 == 0) {
         return;
@@ -142,20 +136,19 @@ TILEOP void DynL1CopyInNZ2NZ(
         for (int32_t nIdx = 0; nIdx < static_cast<int32_t>(TShape1 / c0Size); ++nIdx) {
             int64_t dstOffsetStep = nIdx * c0Size * TShape0;
             int64_t srcOffsetStep = nIdx * c0Size * curH + srcOffset;
-            copy_gm_to_cbuf(
-                dst + dstOffsetStep, src + srcOffsetStep, 0, nBurst, lenBurst, srcStride, dstStride, PAD_NONE);
+            copy_gm_to_cbuf(dst + dstOffsetStep, src + srcOffsetStep, 0, nBurst, lenBurst, srcStride, dstStride,
+                            PAD_NONE);
         }
     } else {
         copy_gm_to_cbuf(dst, src + srcOffset, 0, nBurst, lenBurst, srcStride, dstStride, PAD_NONE);
     }
 }
 
-#define RT_OPERATION_OP_L1_TO_L0A(                                                                                    \
-    l0aAddr, l0aDtype, l0aShape0, l0aShape1, l0aValidShape0, l0aValidShape1, l0aStride0, l0aStride1, l1Addr, l1Dtype, \
-    l1Shape0, l1Shape1, l1ValidShape0, l1ValidShape1, l1Stride0, l1Stride1, l1Offset0, l1Offset1, reluMode,           \
-    scaleValue)                                                                                                       \
-    DynL1ToL0A<l1Dtype, l1Offset0, l1Offset1>(                                                                        \
-        l0aAddr, l1Addr, l0aValidShape0, l0aValidShape1, l1ValidShape0, l1ValidShape1);
+#define RT_OPERATION_OP_L1_TO_L0A(l0aAddr, l0aDtype, l0aShape0, l0aShape1, l0aValidShape0, l0aValidShape1, l0aStride0, \
+                                  l0aStride1, l1Addr, l1Dtype, l1Shape0, l1Shape1, l1ValidShape0, l1ValidShape1,       \
+                                  l1Stride0, l1Stride1, l1Offset0, l1Offset1, reluMode, scaleValue)                    \
+    DynL1ToL0A<l1Dtype, l1Offset0, l1Offset1>(l0aAddr, l1Addr, l0aValidShape0, l0aValidShape1, l1ValidShape0,          \
+                                              l1ValidShape1);
 
 template <typename T, unsigned Offset0, unsigned Offset1>
 TILEOP void DynL1ToL0A(__ca__ T* dst, __cbuf__ T* src, unsigned dstM, unsigned dstK, unsigned srcM, unsigned srcK)
@@ -176,8 +169,8 @@ TILEOP void DynL1ToL0A(__ca__ T* dst, __cbuf__ T* src, unsigned dstM, unsigned d
         dstK = CeilAlign<uint16_t>(dstK, BLOCK_CUBE_M_N);
         // LOAD3DV2 param: dstAddr, srcAddr, stepK, stepM, posK, posM, strideW, strideH, Wk, Hk, dilationW, dilationH,
         // filterW, filterH, transpose, fmatrixCtrl, sizeChannel
-        img2colv2_cbuf_to_ca(
-            dst, src, dstK, dstM, Offset1, Offset0, 1, 1, 1, 1, 1, 1, false, false, false, false, srcK);
+        img2colv2_cbuf_to_ca(dst, src, dstK, dstM, Offset1, Offset0, 1, 1, 1, 1, 1, 1, false, false, false, false,
+                             srcK);
         return;
     }
 
@@ -200,12 +193,11 @@ TILEOP void DynL1ToL0A(__ca__ T* dst, __cbuf__ T* src, unsigned dstM, unsigned d
     }
 }
 
-#define RT_OPERATION_OP_L1_TO_L0_AT(                                                                                  \
-    l0aAddr, l0aDtype, l0aShape0, l0aShape1, l0aValidShape0, l0aValidShape1, l0aStride0, l0aStride1, l1Addr, l1Dtype, \
-    l1Shape0, l1Shape1, l1ValidShape0, l1ValidShape1, l1Stride0, l1Stride1, l1Offset0, l1Offset1, reluMode,           \
-    scaleValue)                                                                                                       \
-    DynL1ToL0At<l1Dtype, l1Offset0, l1Offset1>(                                                                       \
-        l0aAddr, l1Addr, l0aValidShape0, l0aValidShape1, l1ValidShape0, l1ValidShape1);
+#define RT_OPERATION_OP_L1_TO_L0_AT(l0aAddr, l0aDtype, l0aShape0, l0aShape1, l0aValidShape0, l0aValidShape1,         \
+                                    l0aStride0, l0aStride1, l1Addr, l1Dtype, l1Shape0, l1Shape1, l1ValidShape0,      \
+                                    l1ValidShape1, l1Stride0, l1Stride1, l1Offset0, l1Offset1, reluMode, scaleValue) \
+    DynL1ToL0At<l1Dtype, l1Offset0, l1Offset1>(l0aAddr, l1Addr, l0aValidShape0, l0aValidShape1, l1ValidShape0,       \
+                                               l1ValidShape1);
 
 template <typename T, unsigned Offset0, unsigned Offset1>
 TILEOP void DynL1ToL0At(__ca__ T* dst, __cbuf__ T* src, unsigned dstM, unsigned dstK, unsigned srcK, unsigned srcM)
@@ -263,12 +255,11 @@ TILEOP void DynL1ToL0At(__ca__ T* dst, __cbuf__ T* src, unsigned dstM, unsigned 
     }
 }
 
-#define RT_OPERATION_OP_L1_TO_L0_B(                                                                                   \
-    l0bAddr, l0bDtype, l0bShape0, l0bShape1, l0bValidShape0, l0bValidShape1, l0bStride0, l0bStride1, l1Addr, l1Dtype, \
-    l1Shape0, l1Shape1, l1ValidShape0, l1ValidShape1, l1Stride0, l1Stride1, l1Offset0, l1Offset1, reluMode,           \
-    scaleValue)                                                                                                       \
-    DynL1ToL0B<l1Dtype, l1Offset0, l1Offset1>(                                                                        \
-        l0bAddr, l1Addr, l0bValidShape0, l0bValidShape1, l1ValidShape0, l1ValidShape1);
+#define RT_OPERATION_OP_L1_TO_L0_B(l0bAddr, l0bDtype, l0bShape0, l0bShape1, l0bValidShape0, l0bValidShape1,         \
+                                   l0bStride0, l0bStride1, l1Addr, l1Dtype, l1Shape0, l1Shape1, l1ValidShape0,      \
+                                   l1ValidShape1, l1Stride0, l1Stride1, l1Offset0, l1Offset1, reluMode, scaleValue) \
+    DynL1ToL0B<l1Dtype, l1Offset0, l1Offset1>(l0bAddr, l1Addr, l0bValidShape0, l0bValidShape1, l1ValidShape0,       \
+                                              l1ValidShape1);
 
 template <typename T, unsigned Offset0, unsigned Offset1>
 TILEOP void DynL1ToL0B(__cb__ T* dst, __cbuf__ T* src, unsigned dstK, unsigned dstN, unsigned srcK, unsigned srcN)
@@ -308,8 +299,8 @@ TILEOP void DynL1ToL0B(__cb__ T* dst, __cbuf__ T* src, unsigned dstK, unsigned d
         int32_t dstOffsetStep = BLOCK_ALIGN_BYTE * BLOCK_ALIGN_BYTE;
         int32_t srcOffsetStep = srcK * BLOCK_ALIGN_BYTE;
         for (int32_t nIdx = 0; nIdx < static_cast<int32_t>(dstN / BLOCK_ALIGN_BYTE); ++nIdx) {
-            load_cbuf_to_cb_transpose(
-                dst + dstOffset, src + srcOffset, 0, repeat, srcStride, dstStride, inc, dstFracStride);
+            load_cbuf_to_cb_transpose(dst + dstOffset, src + srcOffset, 0, repeat, srcStride, dstStride, inc,
+                                      dstFracStride);
             dstOffset += dstOffsetStep;
             srcOffset += srcOffsetStep;
         }
@@ -320,19 +311,17 @@ TILEOP void DynL1ToL0B(__cb__ T* dst, __cbuf__ T* src, unsigned dstK, unsigned d
     uint16_t srcStride = srcK / c0Size;
     constexpr uint16_t dstStride = 0;
     for (int32_t kIdx = 0; kIdx < static_cast<int32_t>(dstK / c0Size); ++kIdx) {
-        load_cbuf_to_cb(
-            dst + kIdx * c0Size * dstN,
-            src + kIdx * BLOCK_CUBE_M_N * c0Size + (Offset0 * BLOCK_CUBE_M_N + Offset1 * srcK), 0, repeat, srcStride,
-            dstStride, 0, 1, inc);
+        load_cbuf_to_cb(dst + kIdx * c0Size * dstN,
+                        src + kIdx * BLOCK_CUBE_M_N * c0Size + (Offset0 * BLOCK_CUBE_M_N + Offset1 * srcK), 0, repeat,
+                        srcStride, dstStride, 0, 1, inc);
     }
 }
 
-#define RT_OPERATION_OP_L1_TO_L0_BT(                                                                                  \
-    l0bAddr, l0bDtype, l0bShape0, l0bShape1, l0bValidShape0, l0bValidShape1, l0bStride0, l0bStride1, l1Addr, l1Dtype, \
-    l1Shape0, l1Shape1, l1ValidShape0, l1ValidShape1, l1Stride0, l1Stride1, l1Offset0, l1Offset1, reluMode,           \
-    scaleValue)                                                                                                       \
-    DynL1ToL0Bt<l1Dtype, l1Offset0, l1Offset1>(                                                                       \
-        l0bAddr, l1Addr, l0bValidShape0, l0bValidShape1, l1ValidShape0, l1ValidShape1);
+#define RT_OPERATION_OP_L1_TO_L0_BT(l0bAddr, l0bDtype, l0bShape0, l0bShape1, l0bValidShape0, l0bValidShape1,         \
+                                    l0bStride0, l0bStride1, l1Addr, l1Dtype, l1Shape0, l1Shape1, l1ValidShape0,      \
+                                    l1ValidShape1, l1Stride0, l1Stride1, l1Offset0, l1Offset1, reluMode, scaleValue) \
+    DynL1ToL0Bt<l1Dtype, l1Offset0, l1Offset1>(l0bAddr, l1Addr, l0bValidShape0, l0bValidShape1, l1ValidShape0,       \
+                                               l1ValidShape1);
 
 template <typename T, unsigned Offset0, unsigned Offset1>
 TILEOP void DynL1ToL0Bt(__cb__ T* dst, __cbuf__ T* src, unsigned dstK, unsigned dstN, unsigned srcN, unsigned srcK)
@@ -356,25 +345,24 @@ TILEOP void DynL1ToL0Bt(__cb__ T* dst, __cbuf__ T* src, unsigned dstK, unsigned 
         uint8_t repeat = dstN / BLOCK_CUBE_M_N * dstK / c0Size;
         constexpr uint16_t srcStride = 1;
         constexpr uint16_t dstStride = 0;
-        load_cbuf_to_cb(
-            dst, src + (Offset0 * c0Size + Offset1 * srcN), (uint16_t)0, repeat, srcStride, dstStride, (uint8_t)0,
-            (bool)0, (addr_cal_mode_t)0);
+        load_cbuf_to_cb(dst, src + (Offset0 * c0Size + Offset1 * srcN), (uint16_t)0, repeat, srcStride, dstStride,
+                        (uint8_t)0, (bool)0, (addr_cal_mode_t)0);
     } else {
         uint8_t repeat = dstN / BLOCK_CUBE_M_N;
         constexpr uint16_t srcStride = 1;
         constexpr uint16_t dstStride = 0;
         for (int32_t kIdx = 0; kIdx < static_cast<int32_t>(dstK / c0Size); ++kIdx) {
-            load_cbuf_to_cb(
-                dst + kIdx * c0Size * dstN, src + kIdx * srcN * c0Size + (Offset0 * c0Size + Offset1 * srcN),
-                (uint16_t)0, repeat, srcStride, dstStride, (uint8_t)0, (bool)0, (addr_cal_mode_t)0);
+            load_cbuf_to_cb(dst + kIdx * c0Size * dstN,
+                            src + kIdx * srcN * c0Size + (Offset0 * c0Size + Offset1 * srcN), (uint16_t)0, repeat,
+                            srcStride, dstStride, (uint8_t)0, (bool)0, (addr_cal_mode_t)0);
         }
     }
 }
 
-#define RT_OPERATION_OP_L1_TO_BT(                                                                                     \
-    biasTableAddr, biasTableDtype, biasTableShape0, biasTableShape1, biasTableValidShape0, biasTableValidShape1,      \
-    biasTableStride0, biasTableStride1, l1Addr, l1Dtype, l1Shape0, l1Shape1, l1ValidShape0, l1ValidShape1, l1Stride0, \
-    l1Stride1, l1Offset0, l1Offset1)                                                                                  \
+#define RT_OPERATION_OP_L1_TO_BT(biasTableAddr, biasTableDtype, biasTableShape0, biasTableShape1,                \
+                                 biasTableValidShape0, biasTableValidShape1, biasTableStride0, biasTableStride1, \
+                                 l1Addr, l1Dtype, l1Shape0, l1Shape1, l1ValidShape0, l1ValidShape1, l1Stride0,   \
+                                 l1Stride1, l1Offset0, l1Offset1)                                                \
     DynL1ToBT<l1Dtype, biasTableDtype, l1Offset1>(biasTableAddr, l1Addr, biasTableValidShape1);
 
 template <typename L1T, typename BTT, unsigned Offset>
@@ -388,10 +376,10 @@ TILEOP void DynL1ToBT(uint64_t dst, __cbuf__ L1T* src, unsigned nSize)
     copy_cbuf_to_bt(dst, src + Offset, convControl, nBurst, lenBurst, sourceGap, dstGap);
 }
 
-#define RT_OPERATION_OP_L1_TO_FIX_QUANT_PRE(                                                                         \
-    fixPipeAddr, fixPipeDtype, fixPipeShape0, fixPipeShape1, fixPipeValidShape0, fixPipeValidShape1, fixPipeStride0, \
-    fixPipeStride1, l1Addr, l1Dtype, l1Shape0, l1Shape1, l1ValidShape0, l1ValidShape1, l1Stride0, l1Stride1,         \
-    l1Offset0, l1Offset1)                                                                                            \
+#define RT_OPERATION_OP_L1_TO_FIX_QUANT_PRE(fixPipeAddr, fixPipeDtype, fixPipeShape0, fixPipeShape1,                \
+                                            fixPipeValidShape0, fixPipeValidShape1, fixPipeStride0, fixPipeStride1, \
+                                            l1Addr, l1Dtype, l1Shape0, l1Shape1, l1ValidShape0, l1ValidShape1,      \
+                                            l1Stride0, l1Stride1, l1Offset0, l1Offset1)                             \
     DynL1ToFB<l1Dtype, l1Offset1>(fixPipeAddr, l1Addr, fixPipeValidShape1);
 
 template <typename T, unsigned L1Offset>
@@ -408,26 +396,23 @@ TILEOP void DynL1ToFB(__fbuf__ T* dst, __cbuf__ T* src, unsigned nSize)
     set_fpc(deqTensorAddr);
 }
 
-#define RT_OPERATION_OP_A_MUL_B(                                                                               \
-    l0cAddr, l0cDtype, l0cShape0, l0cShape1, l0cValidShape0, l0cValidShape1, l0cStride0, l0cStride1, l0aAddr,  \
-    l0aDtype, l0aShape0, l0aShape1, l0aValidShape0, l0aValidShape1, l0aStride0, l0aStride1, l0bAddr, l0bDtype, \
-    l0bShape0, l0bShape1, l0bValidShape0, l0bValidShape1, l0bStride0, l0bStride1, hasbias)                     \
-    DynTmad<l0cDtype, l0aDtype, l0bDtype, 0, 0, hasbias>(                                                      \
-        l0cAddr, l0aAddr, l0bAddr, l0aValidShape0, l0aValidShape1, l0bValidShape1, false, 0, l0cValidShape0,   \
-        l0cValidShape1);
+#define RT_OPERATION_OP_A_MUL_B(l0cAddr, l0cDtype, l0cShape0, l0cShape1, l0cValidShape0, l0cValidShape1, l0cStride0, \
+                                l0cStride1, l0aAddr, l0aDtype, l0aShape0, l0aShape1, l0aValidShape0, l0aValidShape1, \
+                                l0aStride0, l0aStride1, l0bAddr, l0bDtype, l0bShape0, l0bShape1, l0bValidShape0,     \
+                                l0bValidShape1, l0bStride0, l0bStride1, hasbias)                                     \
+    DynTmad<l0cDtype, l0aDtype, l0bDtype, 0, 0, hasbias>(l0cAddr, l0aAddr, l0bAddr, l0aValidShape0, l0aValidShape1,  \
+                                                         l0bValidShape1, false, 0, l0cValidShape0, l0cValidShape1);
 
-#define RT_OPERATION_OP_A_MULACC_B(                                                                            \
-    l0cAddr, l0cDtype, l0cShape0, l0cShape1, l0cValidShape0, l0cValidShape1, l0cStride0, l0cStride1, l0aAddr,  \
-    l0aDtype, l0aShape0, l0aShape1, l0aValidShape0, l0aValidShape1, l0aStride0, l0aStride1, l0bAddr, l0bDtype, \
-    l0bShape0, l0bShape1, l0bValidShape0, l0bValidShape1, l0bStride0, l0bStride1, hasbias)                     \
-    DynTmad<l0cDtype, l0aDtype, l0bDtype, 0, 0, hasbias>(                                                      \
-        l0cAddr, l0aAddr, l0bAddr, l0aValidShape0, l0aValidShape1, l0bValidShape1, true, 0, l0cValidShape0,    \
-        l0cValidShape1);
+#define RT_OPERATION_OP_A_MULACC_B(l0cAddr, l0cDtype, l0cShape0, l0cShape1, l0cValidShape0, l0cValidShape1,         \
+                                   l0cStride0, l0cStride1, l0aAddr, l0aDtype, l0aShape0, l0aShape1, l0aValidShape0, \
+                                   l0aValidShape1, l0aStride0, l0aStride1, l0bAddr, l0bDtype, l0bShape0, l0bShape1, \
+                                   l0bValidShape0, l0bValidShape1, l0bStride0, l0bStride1, hasbias)                 \
+    DynTmad<l0cDtype, l0aDtype, l0bDtype, 0, 0, hasbias>(l0cAddr, l0aAddr, l0bAddr, l0aValidShape0, l0aValidShape1, \
+                                                         l0bValidShape1, true, 0, l0cValidShape0, l0cValidShape1);
 
 template <typename Tc, typename Ta, typename Tb, unsigned Offset0, unsigned Offset1, bool HasBias = false>
-TILEOP void DynTmad(
-    __cc__ Tc* c, __ca__ Ta* a, __cb__ Tb* b, uint16_t m, uint16_t k, uint16_t n, bool zero_C, int uf,
-    unsigned L0CShape0, unsigned L0CShape1)
+TILEOP void DynTmad(__cc__ Tc* c, __ca__ Ta* a, __cb__ Tb* b, uint16_t m, uint16_t k, uint16_t n, bool zero_C, int uf,
+                    unsigned L0CShape0, unsigned L0CShape1)
 {
     if (m == 0 || k == 0 || n == 0) {
         return;
@@ -445,25 +430,25 @@ TILEOP void DynTmad(
     pipe_barrier(PIPE_M);
 }
 
-#define RT_OPERATION_OP_L0C_COPY_OUT(                                                                                \
-    gmAddr, gmDtype, gmShape0, gmShape1, l0cAddr, l0cDtype, l0cShape0, l0cShape1, l0cValidShape0, l0cValidShape1,    \
-    l0cStride0, l0cStride1, gmOffset0, gmOffset1, reluMode, enableGmAcc, scaleValue)                                 \
-    do {                                                                                                             \
-        if (enableGmAcc) {                                                                                           \
-            DynL0CCopyOut<gmDtype, l0cDtype, 1, true, reluMode>(                                                     \
-                gmAddr, l0cAddr, l0cValidShape0, l0cValidShape1, gmShape0, gmShape1, gmOffset0, gmOffset1, gmShape0, \
-                gmShape1, 0);                                                                                        \
-        } else {                                                                                                     \
-            DynL0CCopyOut<gmDtype, l0cDtype, 0, true, reluMode>(                                                     \
-                gmAddr, l0cAddr, l0cValidShape0, l0cValidShape1, gmShape0, gmShape1, gmOffset0, gmOffset1, gmShape0, \
-                gmShape1, 0, scaleValue);                                                                            \
-        }                                                                                                            \
+#define RT_OPERATION_OP_L0C_COPY_OUT(gmAddr, gmDtype, gmShape0, gmShape1, l0cAddr, l0cDtype, l0cShape0, l0cShape1,  \
+                                     l0cValidShape0, l0cValidShape1, l0cStride0, l0cStride1, gmOffset0, gmOffset1,  \
+                                     reluMode, enableGmAcc, scaleValue)                                             \
+    do {                                                                                                            \
+        if (enableGmAcc) {                                                                                          \
+            DynL0CCopyOut<gmDtype, l0cDtype, 1, true, reluMode>(gmAddr, l0cAddr, l0cValidShape0, l0cValidShape1,    \
+                                                                gmShape0, gmShape1, gmOffset0, gmOffset1, gmShape0, \
+                                                                gmShape1, 0);                                       \
+        } else {                                                                                                    \
+            DynL0CCopyOut<gmDtype, l0cDtype, 0, true, reluMode>(gmAddr, l0cAddr, l0cValidShape0, l0cValidShape1,    \
+                                                                gmShape0, gmShape1, gmOffset0, gmOffset1, gmShape0, \
+                                                                gmShape1, 0, scaleValue);                           \
+        }                                                                                                           \
     } while (0)
 
 template <typename GMT, typename L0CT, bool enableNZ2ND, uint8_t reluMode>
-TILEOP void DynL0CCopyOut(
-    __gm__ GMT* dst, __cc__ L0CT* src, unsigned oriTShape0, unsigned oriTShape1, unsigned GmShape0, unsigned GmShape1,
-    unsigned GmOffset0, unsigned GmOffset1, unsigned curH, unsigned curW, int uf, uint64_t scaleValue = 0)
+TILEOP void DynL0CCopyOut(__gm__ GMT* dst, __cc__ L0CT* src, unsigned oriTShape0, unsigned oriTShape1,
+                          unsigned GmShape0, unsigned GmShape1, unsigned GmOffset0, unsigned GmOffset1, unsigned curH,
+                          unsigned curW, int uf, uint64_t scaleValue = 0)
 {
     if (oriTShape0 == 0 || oriTShape1 == 0) {
         return;
@@ -516,37 +501,34 @@ TILEOP void DynL0CCopyOut(
     }
     uint8_t unitFlagMode = uf;
 
-    copy_matrix_cc_to_gm(
-        (__gm__ GMT*)(dst + gmOffset), (__cc__ L0CT*)src, 0, nSize, mSize, dstStrideDstD, srcStride, unitFlagMode,
-        quantPre, reluMode, channelSplit, enableNZ2ND);
+    copy_matrix_cc_to_gm((__gm__ GMT*)(dst + gmOffset), (__cc__ L0CT*)src, 0, nSize, mSize, dstStrideDstD, srcStride,
+                         unitFlagMode, quantPre, reluMode, channelSplit, enableNZ2ND);
 }
 
 template <typename GMT, typename L0CT, int isAcc, bool enableNZ2ND, uint8_t reluMode>
-TILEOP void DynL0CCopyOut(
-    __gm__ GMT* dst, __cc__ L0CT* src, unsigned oriTShape0, unsigned oriTShape1, unsigned GmShape0, unsigned GmShape1,
-    unsigned GmOffset0, unsigned GmOffset1, unsigned curH, unsigned curW, int uf)
+TILEOP void DynL0CCopyOut(__gm__ GMT* dst, __cc__ L0CT* src, unsigned oriTShape0, unsigned oriTShape1,
+                          unsigned GmShape0, unsigned GmShape1, unsigned GmOffset0, unsigned GmOffset1, unsigned curH,
+                          unsigned curW, int uf)
 {
     static_assert(reluMode == 0, "Relu operation is not supported in GM accumulate mode");
     SetAtomicAddition<GMT>();
-    DynL0CCopyOut<GMT, L0CT, enableNZ2ND, 0>(
-        dst, src, oriTShape0, oriTShape1, GmShape0, GmShape1, GmOffset0, GmOffset1, curH, curW, uf);
+    DynL0CCopyOut<GMT, L0CT, enableNZ2ND, 0>(dst, src, oriTShape0, oriTShape1, GmShape0, GmShape1, GmOffset0, GmOffset1,
+                                             curH, curW, uf);
     if constexpr (isAcc == 1) {
         set_atomic_none();
     }
 }
 
-#define RT_OPERATION_OP_L0C_TO_L1(                                                                              \
-    l1Addr, l1Dtype, l1Shape0, l1Shape1, l1ValidShape0, l1ValidShape1, l1Stride0, l1Stride1, l0cAddr, l0cDtype, \
-    l0cShape0, l0cShape1, l0cValidShape0, l0cValidShape1, l0cStride0, l0cStride1, offset0, offset1, reluMode,   \
-    scaleValue)                                                                                                 \
-    DynL0CToL1<l1Dtype, l0cDtype, reluMode>(                                                                    \
-        l1Addr, l0cAddr, l0cValidShape0, l0cValidShape1, l1ValidShape0, l1ValidShape1, offset0, offset1, scaleValue);
+#define RT_OPERATION_OP_L0C_TO_L1(l1Addr, l1Dtype, l1Shape0, l1Shape1, l1ValidShape0, l1ValidShape1, l1Stride0,       \
+                                  l1Stride1, l0cAddr, l0cDtype, l0cShape0, l0cShape1, l0cValidShape0, l0cValidShape1, \
+                                  l0cStride0, l0cStride1, offset0, offset1, reluMode, scaleValue)                     \
+    DynL0CToL1<l1Dtype, l0cDtype, reluMode>(l1Addr, l0cAddr, l0cValidShape0, l0cValidShape1, l1ValidShape0,           \
+                                            l1ValidShape1, offset0, offset1, scaleValue);
 
 template <typename L1T, typename L0CT, uint8_t reluMode>
-TILEOP void DynL0CToL1(
-    __cbuf__ L1T* dst, __cc__ L0CT* src, unsigned shape0, unsigned shape1, unsigned l1Shape0, unsigned l1Shape1,
-    unsigned l1Offset0, unsigned l1Offset1, unsigned l0cShape0, unsigned l0cShape1, unsigned l0cOffset0,
-    unsigned l0cOffset1, uint64_t scaleValue = 0)
+TILEOP void DynL0CToL1(__cbuf__ L1T* dst, __cc__ L0CT* src, unsigned shape0, unsigned shape1, unsigned l1Shape0,
+                       unsigned l1Shape1, unsigned l1Offset0, unsigned l1Offset1, unsigned l0cShape0,
+                       unsigned l0cShape1, unsigned l0cOffset0, unsigned l0cOffset1, uint64_t scaleValue = 0)
 {
     int64_t c0Size = BLOCK_ALIGN_BYTE / sizeof(L1T);
     uint16_t mSize = CeilAlign<uint16_t>(shape0, BLOCK_CUBE_M_N);
@@ -577,19 +559,17 @@ TILEOP void DynL0CToL1(
     bool nZ2NDEN = false;
     int64_t l1Offset = l1Offset1 * l1Shape0 + l1Offset0 * c0Size;
     int64_t l0cOffset = l0cOffset1 * l0cShape0 + l0cOffset0 * c0Size;
-    copy_matrix_cc_to_cbuf(
-        (__cbuf__ L1T*)(dst + l1Offset), (__cc__ L0CT*)(src + l0cOffset), 0, nSize, mSize, dstStrideDstD, srcStride,
-        unitFlagMode, quantPre, reluMode, channelSplit, nZ2NDEN);
+    copy_matrix_cc_to_cbuf((__cbuf__ L1T*)(dst + l1Offset), (__cc__ L0CT*)(src + l0cOffset), 0, nSize, mSize,
+                           dstStrideDstD, srcStride, unitFlagMode, quantPre, reluMode, channelSplit, nZ2NDEN);
 }
 
 // Internal: Reserved for custom scenarios.
-template <
-    typename T, typename T2, typename T3, int64_t dstRawShape0, int64_t offsetRawShape1, int64_t srcColumnStartOffset,
-    int64_t blockSize>
-TILEOP void GatherInL1(
-    __cbuf__ T* dst, int64_t dstOriginShape0, int64_t dstOriginShape1, __gm__ T* src, int64_t srcRawShape1,
-    __gm__ T2* offsets, __gm__ T3* blockTable, int64_t offsetsRowStartOffset, int64_t offsetsColumnStartOffset,
-    int64_t GMBlockTableStride1, int64_t GMBlockTableOffset0, int64_t GMBlockTableOffset1)
+template <typename T, typename T2, typename T3, int64_t dstRawShape0, int64_t offsetRawShape1,
+          int64_t srcColumnStartOffset, int64_t blockSize>
+TILEOP void GatherInL1(__cbuf__ T* dst, int64_t dstOriginShape0, int64_t dstOriginShape1, __gm__ T* src,
+                       int64_t srcRawShape1, __gm__ T2* offsets, __gm__ T3* blockTable, int64_t offsetsRowStartOffset,
+                       int64_t offsetsColumnStartOffset, int64_t GMBlockTableStride1, int64_t GMBlockTableOffset0,
+                       int64_t GMBlockTableOffset1)
 {
     static_assert(std::is_same_v<T2, int32_t> || std::is_same_v<T2, int64_t>);
     constexpr uint16_t c0Size = BLOCK_SIZE / sizeof(T);
@@ -607,27 +587,27 @@ TILEOP void GatherInL1(
             for (int64_t i = 0; i < dstOriginShape0; i++) {
                 uint64_t gatherOffset = offsets[i + offsetsStartOffset];
                 gatherOffset = CalaOffset2PageAttention<uint64_t, T3, blockSize>(blockTable, gatherOffset);
-                copy_gm_to_cbuf_multi_nd2nz_b8(
-                    (__cbuf__ T*)dst + i * c0Size, (__gm__ T*)src + gatherOffset * srcRawShape1 + srcColumnStartOffset,
-                    0, 1, 1, dValue, 0, srcDValue, dstNzC0Stride, 1, 1);
+                copy_gm_to_cbuf_multi_nd2nz_b8((__cbuf__ T*)dst + i * c0Size,
+                                               (__gm__ T*)src + gatherOffset * srcRawShape1 + srcColumnStartOffset, 0,
+                                               1, 1, dValue, 0, srcDValue, dstNzC0Stride, 1, 1);
             }
         }
         if constexpr (std::is_same<T, half>::value || std::is_same<T, bfloat16_t>::value) {
             for (int64_t i = 0; i < dstOriginShape0; i++) {
                 uint64_t gatherOffset = offsets[i + offsetsStartOffset];
                 gatherOffset = CalaOffset2PageAttention<uint64_t, T3, blockSize>(blockTable, gatherOffset);
-                copy_gm_to_cbuf_multi_nd2nz_b16(
-                    (__cbuf__ T*)dst + i * c0Size, (__gm__ T*)src + gatherOffset * srcRawShape1 + srcColumnStartOffset,
-                    0, 1, 1, dValue, 0, srcDValue, dstNzC0Stride, 1, 1);
+                copy_gm_to_cbuf_multi_nd2nz_b16((__cbuf__ T*)dst + i * c0Size,
+                                                (__gm__ T*)src + gatherOffset * srcRawShape1 + srcColumnStartOffset, 0,
+                                                1, 1, dValue, 0, srcDValue, dstNzC0Stride, 1, 1);
             }
         }
         if constexpr (std::is_same<T, float>::value) {
             for (int64_t i = 0; i < dstOriginShape0; i++) {
                 uint64_t gatherOffset = offsets[i + offsetsStartOffset];
                 gatherOffset = CalaOffset2PageAttention<uint64_t, T3, blockSize>(blockTable, gatherOffset);
-                copy_gm_to_cbuf_multi_nd2nz_b32s(
-                    (__cbuf__ T*)dst + i * c0Size, (__gm__ T*)src + gatherOffset * srcRawShape1 + srcColumnStartOffset,
-                    0, 1, 1, dValue, 0, srcDValue, dstNzC0Stride, 1, 1);
+                copy_gm_to_cbuf_multi_nd2nz_b32s((__cbuf__ T*)dst + i * c0Size,
+                                                 (__gm__ T*)src + gatherOffset * srcRawShape1 + srcColumnStartOffset, 0,
+                                                 1, 1, dValue, 0, srcDValue, dstNzC0Stride, 1, 1);
             }
         }
     } else {
@@ -637,9 +617,8 @@ TILEOP void GatherInL1(
         for (int64_t i = 0; i < dstOriginShape0; i++) {
             uint64_t gatherOffset = offsets[i + offsetsStartOffset];
             gatherOffset = CalaOffset2PageAttention<uint64_t, T3, blockSize>(blockTable, gatherOffset);
-            copy_gm_to_cbuf(
-                dst + i * c0Size, src + gatherOffset * srcRawShape1 + srcColumnStartOffset, 0, nBurst, 1, 0, dstStride,
-                PAD_NONE);
+            copy_gm_to_cbuf(dst + i * c0Size, src + gatherOffset * srcRawShape1 + srcColumnStartOffset, 0, nBurst, 1, 0,
+                            dstStride, PAD_NONE);
         }
     }
     pipe_barrier(PIPE_ALL);
@@ -672,9 +651,8 @@ TILEOP void DynL1ToL0Bt(__cb__ T* dst, __cbuf__ T* src)
 
 // Deprecated: L1 spill out scene
 template <typename GMT, typename L1T>
-TILEOP void DynL1CopyOutND(
-    __gm__ GMT* dst, __cbuf__ L1T* src, unsigned TShape0, unsigned TShape1, unsigned GmShape0, unsigned GmShape1,
-    int reserved)
+TILEOP void DynL1CopyOutND(__gm__ GMT* dst, __cbuf__ L1T* src, unsigned TShape0, unsigned TShape1, unsigned GmShape0,
+                           unsigned GmShape1, int reserved)
 {
     uint16_t nBurst = TShape0;
     uint16_t lenBurst = TShape1 * sizeof(GMT) / BLOCK_SIZE;
@@ -696,18 +674,16 @@ TILEOP void DynL1CopyOutND(
 // Deprecated: Currently 'L1CopyOut' is ONLY used when spilling occurred, and does NOT need data format conversion. the
 // impl redirect this function to L1CopyOutND directly.
 template <typename GMT, typename L1T>
-TILEOP void DynL1CopyOut(
-    __gm__ GMT* dst, __cbuf__ L1T* src, unsigned TShape0, unsigned TShape1, unsigned GmShape0, unsigned GmShape1,
-    int reserved)
+TILEOP void DynL1CopyOut(__gm__ GMT* dst, __cbuf__ L1T* src, unsigned TShape0, unsigned TShape1, unsigned GmShape0,
+                         unsigned GmShape1, int reserved)
 {
     TileOp::DynL1CopyOutND<GMT, L1T>(dst, src, TShape0, TShape1, GmShape0, GmShape1, reserved);
 }
 
 // Deprecated: L1 spill out scene
 template <typename GMT, typename L1T>
-TILEOP void DynL1CopyIn(
-    __cbuf__ L1T* dst, __gm__ GMT* src, unsigned TShape0, unsigned TShape1, unsigned GmShape0, unsigned GmShape1,
-    int reserved)
+TILEOP void DynL1CopyIn(__cbuf__ L1T* dst, __gm__ GMT* src, unsigned TShape0, unsigned TShape1, unsigned GmShape0,
+                        unsigned GmShape1, int reserved)
 {
     uint16_t nBurst = TShape0;
     uint16_t lenBurst = TShape1 * sizeof(GMT) / 32;
@@ -733,9 +709,8 @@ TILEOP void DynL1CopyIn(
  * brief: dynamic l1 copy in nz2nz functions with batch
  */
 template <typename GMT, typename L1T, unsigned TShape0, unsigned TShape1>
-TILEOP void DynL1CopyInNZ2NZ(
-    __cbuf__ L1T* dst, __gm__ GMT* src, unsigned GmShape0, unsigned GmShape1, unsigned GmOffset0, unsigned GmOffset1,
-    unsigned curH, unsigned curW, int reserved)
+TILEOP void DynL1CopyInNZ2NZ(__cbuf__ L1T* dst, __gm__ GMT* src, unsigned GmShape0, unsigned GmShape1,
+                             unsigned GmOffset0, unsigned GmOffset1, unsigned curH, unsigned curW, int reserved)
 {
     auto inputC0Size = 32 / sizeof(L1T);
     // 计算在那个Batch块中;
@@ -758,37 +733,33 @@ TILEOP void DynL1CopyInNZ2NZ(
  * brief: dynamic l1 copy in nd2nz functions
  */
 template <typename GMT, typename L1T, unsigned TShape0, unsigned TShape1>
-TILEOP void DynL1CopyIn(
-    __cbuf__ L1T* dst, __gm__ GMT* src, unsigned GmShape0, unsigned GmShape1, unsigned GmOffset0, unsigned GmOffset1,
-    int reserved)
+TILEOP void DynL1CopyIn(__cbuf__ L1T* dst, __gm__ GMT* src, unsigned GmShape0, unsigned GmShape1, unsigned GmOffset0,
+                        unsigned GmOffset1, int reserved)
 { // ND2NZ
     src += CalcLinearOffset(GmShape1, GmOffset0, GmOffset1);
 
     constexpr uint16_t ndNum = 1;
-    constexpr uint16_t nValue = TShape0;        // n
-    constexpr uint16_t dValue = TShape1;        // d
-    constexpr uint16_t srcNdMatrixStride = 0;   //
-    uint16_t srcDValue = GmShape1;              // D
+    constexpr uint16_t nValue = TShape0;      // n
+    constexpr uint16_t dValue = TShape1;      // d
+    constexpr uint16_t srcNdMatrixStride = 0; //
+    uint16_t srcDValue = GmShape1;            // D
     auto c0Size = 32 / sizeof(GMT);
     constexpr uint16_t dstNzC0Stride = TShape0; // n
     constexpr uint16_t dstNzNStride = 1;
     constexpr uint16_t dstNzMatrixStride = 1;
     if constexpr (std::is_same<GMT, int8_t>::value) {
-        copy_gm_to_cbuf_multi_nd2nz_b8(
-            (__cbuf__ L1T*)dst, (__gm__ GMT*)src, 0 /*sid*/, ndNum, nValue, dValue, srcNdMatrixStride, srcDValue,
-            dstNzC0Stride, dstNzNStride, dstNzMatrixStride);
+        copy_gm_to_cbuf_multi_nd2nz_b8((__cbuf__ L1T*)dst, (__gm__ GMT*)src, 0 /*sid*/, ndNum, nValue, dValue,
+                                       srcNdMatrixStride, srcDValue, dstNzC0Stride, dstNzNStride, dstNzMatrixStride);
     }
 
     if constexpr (std::is_same<GMT, half>::value || std::is_same<GMT, bfloat16_t>::value) {
-        copy_gm_to_cbuf_multi_nd2nz_b16(
-            (__cbuf__ L1T*)dst, (__gm__ GMT*)src, 0 /*sid*/, ndNum, nValue, dValue, srcNdMatrixStride, srcDValue,
-            dstNzC0Stride, dstNzNStride, dstNzMatrixStride);
+        copy_gm_to_cbuf_multi_nd2nz_b16((__cbuf__ L1T*)dst, (__gm__ GMT*)src, 0 /*sid*/, ndNum, nValue, dValue,
+                                        srcNdMatrixStride, srcDValue, dstNzC0Stride, dstNzNStride, dstNzMatrixStride);
     }
 
     if constexpr (std::is_same<GMT, float>::value) {
-        copy_gm_to_cbuf_multi_nd2nz_b32s(
-            (__cbuf__ L1T*)dst, (__gm__ GMT*)src, 0 /*sid*/, ndNum, nValue, dValue, srcNdMatrixStride, srcDValue,
-            dstNzC0Stride, dstNzNStride, dstNzMatrixStride);
+        copy_gm_to_cbuf_multi_nd2nz_b32s((__cbuf__ L1T*)dst, (__gm__ GMT*)src, 0 /*sid*/, ndNum, nValue, dValue,
+                                         srcNdMatrixStride, srcDValue, dstNzC0Stride, dstNzNStride, dstNzMatrixStride);
     }
 }
 
@@ -843,9 +814,8 @@ TILEOP void DynL1CopyInND(__cbuf__ L1T* dst, __gm__ GMT* src, unsigned GmShape0,
 }
 
 template <typename GMT, typename L0CT, unsigned TShape0, unsigned TShape1, unsigned oriTShape0, unsigned oriTShape1>
-TILEOP void DynL0CCopyOut(
-    __gm__ GMT* dst, __cc__ L0CT* src, unsigned GmShape0, unsigned GmShape1, unsigned GmOffset0, unsigned GmOffset1,
-    int uf)
+TILEOP void DynL0CCopyOut(__gm__ GMT* dst, __cc__ L0CT* src, unsigned GmShape0, unsigned GmShape1, unsigned GmOffset0,
+                          unsigned GmOffset1, int uf)
 { // NZ2ND
     uint16_t MSize = oriTShape0 < (GmShape0 - GmOffset0) ? oriTShape0 : (GmShape0 - GmOffset0);
     uint16_t NSize = TShape1 < (GmShape1 - GmOffset1) ? TShape1 : (GmShape1 - GmOffset1);
@@ -876,21 +846,18 @@ TILEOP void DynL0CCopyOut(
         }
     }
     set_nd_para(nd_para);
-    copy_matrix_cc_to_gm(
-        (__gm__ GMT*)(dst + (GmOffset0 * GmShape1) + GmOffset1), (__cc__ L0CT*)src, 0, NSize, MSize, dstStride_dst_D,
-        srcStride, UnitFlagMode, QuantPRE, ReLUPRE, channelSplit, NZ2ND_EN);
+    copy_matrix_cc_to_gm((__gm__ GMT*)(dst + (GmOffset0 * GmShape1) + GmOffset1), (__cc__ L0CT*)src, 0, NSize, MSize,
+                         dstStride_dst_D, srcStride, UnitFlagMode, QuantPRE, ReLUPRE, channelSplit, NZ2ND_EN);
 }
 
-template <
-    typename GMT, typename L0CT, unsigned TShape0, unsigned TShape1, unsigned oriTShape0, unsigned oriTShape1,
-    int isAcc>
-TILEOP void DynL0CCopyOut(
-    __gm__ GMT* dst, __cc__ L0CT* src, unsigned GmShape0, unsigned GmShape1, unsigned GmOffset0, unsigned GmOffset1,
-    int uf)
+template <typename GMT, typename L0CT, unsigned TShape0, unsigned TShape1, unsigned oriTShape0, unsigned oriTShape1,
+          int isAcc>
+TILEOP void DynL0CCopyOut(__gm__ GMT* dst, __cc__ L0CT* src, unsigned GmShape0, unsigned GmShape1, unsigned GmOffset0,
+                          unsigned GmOffset1, int uf)
 {
     SetAtomicAddition<GMT>();
-    DynL0CCopyOut<GMT, L0CT, TShape0, TShape1, oriTShape0, oriTShape1>(
-        dst, src, GmShape0, GmShape1, GmOffset0, GmOffset1, uf);
+    DynL0CCopyOut<GMT, L0CT, TShape0, TShape1, oriTShape0, oriTShape1>(dst, src, GmShape0, GmShape1, GmOffset0,
+                                                                       GmOffset1, uf);
     if constexpr (isAcc == 1) {
         set_atomic_none();
     }

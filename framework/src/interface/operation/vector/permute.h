@@ -24,8 +24,8 @@
 
 namespace npu::tile_fwk {
 
-void PermuteOperationOperandCheck(
-    const std::vector<LogicalTensorPtr>& iOperand, const std::vector<LogicalTensorPtr>& oOperand);
+void PermuteOperationOperandCheck(const std::vector<LogicalTensorPtr>& iOperand,
+                                  const std::vector<LogicalTensorPtr>& oOperand);
 std::vector<int64_t> PermuteResultShape(const std::vector<int64_t>& inputShape, const std::vector<int>& perm);
 bool IsIdentityPermutation(const std::vector<int>& perm);
 void NormalizePermutation(std::vector<int>& perm, int shapeSize);

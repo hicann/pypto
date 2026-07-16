@@ -38,9 +38,8 @@ struct ShapeStatus {
     int64_t stride;
 
     ShapeStatus() : size(0), tileSize(0), axisType(AXIS_KEEP), transformAxisIndex(), stride(0) {}
-    ShapeStatus(
-        int64_t s, int64_t ts = 0, AxisTransformType type = AXIS_KEEP, const std::vector<size_t>& indices = {},
-        int64_t st = 0)
+    ShapeStatus(int64_t s, int64_t ts = 0, AxisTransformType type = AXIS_KEEP, const std::vector<size_t>& indices = {},
+                int64_t st = 0)
         : size(s), tileSize(ts), axisType(type), transformAxisIndex(indices), stride(st)
     {}
 };
@@ -63,9 +62,8 @@ public:
      * outShape为需要推导tileshape的tensor shape 输出参数：返回值Status和outTileShape
      * 返回值为SUCCESS时，outTileShape正常赋值； 返回值为FAILED时未赋值
      */
-    Status DerivationReshapeTileShape(
-        Operation* op, const Shape& inShape, const Shape& outShape, const std::vector<int64_t>& inTileShape,
-        std::vector<int64_t>& outTileShape);
+    Status DerivationReshapeTileShape(Operation* op, const Shape& inShape, const Shape& outShape,
+                                      const std::vector<int64_t>& inTileShape, std::vector<int64_t>& outTileShape);
 };
 } // namespace tile_fwk
 } // namespace npu

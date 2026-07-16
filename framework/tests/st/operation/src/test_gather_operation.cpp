@@ -39,8 +39,8 @@ constexpr int AXIS0 = 0;
 constexpr int AXIS1 = 1;
 constexpr int AXIS2 = 2;
 constexpr int AXIS3 = 3;
-static void GatherOperationExeFunc1_1Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void GatherOperationExeFunc1_1Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                          const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0], inputs[1]}, {outputs[0]})
     {
@@ -52,9 +52,9 @@ static void GatherOperationExeFunc1_1Dims(
         LOOP("LOOP_L0_bIdx", FunctionType::DYNAMIC_LOOP, bIdx, LoopRange(0, bloop, 1))
         {
             auto tileTensor0 = View(inputs[0], {src_firstDim}, {src_firstDim}, {0});
-            auto tileTensor1 = View(
-                inputs[1], {firstViewShape}, {std::min(idx_firstDim - bIdx * firstViewShape, firstViewShape)},
-                {bIdx * firstViewShape});
+            auto tileTensor1 = View(inputs[1], {firstViewShape},
+                                    {std::min(idx_firstDim - bIdx * firstViewShape, firstViewShape)},
+                                    {bIdx * firstViewShape});
             TileShape::Current().SetVecTile(args->tileShape_);
             auto res = Gather(tileTensor0, tileTensor1, args->axis_);
             Assemble(res, {bIdx * firstViewShape}, outputs[0]);
@@ -62,8 +62,8 @@ static void GatherOperationExeFunc1_1Dims(
     }
 }
 
-static void GatherOperationExeFunc1_2Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void GatherOperationExeFunc1_2Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                          const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0], inputs[1]}, {outputs[0]})
     {
@@ -80,11 +80,10 @@ static void GatherOperationExeFunc1_2Dims(
             LOOP("LOOP_L1_sIdx", FunctionType::DYNAMIC_LOOP, sIdx, LoopRange(0, sloop, 1))
             {
                 auto tileTensor0 = View(inputs[0], {src_firstDim}, {src_firstDim}, {0});
-                auto tileTensor1 = View(
-                    inputs[1], {firstViewShape, secondViewShape},
-                    {std::min(idx_firstDim - bIdx * firstViewShape, firstViewShape),
-                     std::min(idx_secondDim - sIdx * secondViewShape, secondViewShape)},
-                    {bIdx * firstViewShape, sIdx * secondViewShape});
+                auto tileTensor1 = View(inputs[1], {firstViewShape, secondViewShape},
+                                        {std::min(idx_firstDim - bIdx * firstViewShape, firstViewShape),
+                                         std::min(idx_secondDim - sIdx * secondViewShape, secondViewShape)},
+                                        {bIdx * firstViewShape, sIdx * secondViewShape});
                 TileShape::Current().SetVecTile(args->tileShape_);
                 auto res = Gather(tileTensor0, tileTensor1, args->axis_);
                 Assemble(res, {bIdx * firstViewShape, sIdx * secondViewShape}, outputs[0]);
@@ -93,8 +92,8 @@ static void GatherOperationExeFunc1_2Dims(
     }
 }
 
-static void GatherOperationExeFunc2_1Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void GatherOperationExeFunc2_1Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                          const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0], inputs[1]}, {outputs[0]})
     {
@@ -119,9 +118,9 @@ static void GatherOperationExeFunc2_1Dims(
                         inputs[0], {src_firstDim, secondViewShape},
                         {src_firstDim, std::min(src_secondDim - sIdx * secondViewShape, secondViewShape)},
                         {0, sIdx * secondViewShape});
-                    auto tileTensor1 = View(
-                        inputs[1], {firstViewShape}, {std::min(idx_firstDim - bIdx * firstViewShape, firstViewShape)},
-                        {bIdx * firstViewShape});
+                    auto tileTensor1 = View(inputs[1], {firstViewShape},
+                                            {std::min(idx_firstDim - bIdx * firstViewShape, firstViewShape)},
+                                            {bIdx * firstViewShape});
                     TileShape::Current().SetVecTile(args->tileShape_);
                     auto res = Gather(tileTensor0, tileTensor1, args->axis_);
                     Assemble(res, {bIdx * firstViewShape, sIdx * secondViewShape}, outputs[0]);
@@ -138,9 +137,9 @@ static void GatherOperationExeFunc2_1Dims(
                         inputs[0], {firstViewShape, src_secondDim},
                         {std::min(src_firstDim - bIdx * firstViewShape, firstViewShape), src_secondDim},
                         {bIdx * firstViewShape, 0});
-                    auto tileTensor1 = View(
-                        inputs[1], {secondViewShape},
-                        {std::min(idx_firstDim - sIdx * secondViewShape, secondViewShape)}, {sIdx * secondViewShape});
+                    auto tileTensor1 = View(inputs[1], {secondViewShape},
+                                            {std::min(idx_firstDim - sIdx * secondViewShape, secondViewShape)},
+                                            {sIdx * secondViewShape});
                     TileShape::Current().SetVecTile(args->tileShape_);
                     auto res = Gather(tileTensor0, tileTensor1, args->axis_);
                     Assemble(res, {bIdx * firstViewShape, sIdx * secondViewShape}, outputs[0]);
@@ -150,8 +149,8 @@ static void GatherOperationExeFunc2_1Dims(
     }
 }
 
-static void GatherOperationExeFunc2_2Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void GatherOperationExeFunc2_2Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                          const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0], inputs[1]}, {outputs[0]})
     {
@@ -181,15 +180,14 @@ static void GatherOperationExeFunc2_2Dims(
                             inputs[0], {src_firstDim, thirdViewShape},
                             {src_firstDim, std::min(src_secondDim - nIdx * thirdViewShape, thirdViewShape)},
                             {0, nIdx * thirdViewShape});
-                        auto tileTensor1 = View(
-                            inputs[1], {firstViewShape, secondViewShape},
-                            {std::min(idx_firstDim - bIdx * firstViewShape, firstViewShape),
-                             std::min(idx_secondDim - sIdx * secondViewShape, secondViewShape)},
-                            {bIdx * firstViewShape, sIdx * secondViewShape});
+                        auto tileTensor1 = View(inputs[1], {firstViewShape, secondViewShape},
+                                                {std::min(idx_firstDim - bIdx * firstViewShape, firstViewShape),
+                                                 std::min(idx_secondDim - sIdx * secondViewShape, secondViewShape)},
+                                                {bIdx * firstViewShape, sIdx * secondViewShape});
                         TileShape::Current().SetVecTile(args->tileShape_);
                         auto res = Gather(tileTensor0, tileTensor1, args->axis_);
-                        Assemble(
-                            res, {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape}, outputs[0]);
+                        Assemble(res, {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape},
+                                 outputs[0]);
                     }
                 }
             }
@@ -207,15 +205,14 @@ static void GatherOperationExeFunc2_2Dims(
                             inputs[0], {firstViewShape, src_secondDim},
                             {std::min(src_firstDim - bIdx * firstViewShape, firstViewShape), src_secondDim},
                             {bIdx * firstViewShape, 0});
-                        auto tileTensor1 = View(
-                            inputs[1], {secondViewShape, thirdViewShape},
-                            {std::min(idx_firstDim - sIdx * secondViewShape, secondViewShape),
-                             std::min(idx_secondDim - nIdx * thirdViewShape, thirdViewShape)},
-                            {sIdx * secondViewShape, nIdx * thirdViewShape});
+                        auto tileTensor1 = View(inputs[1], {secondViewShape, thirdViewShape},
+                                                {std::min(idx_firstDim - sIdx * secondViewShape, secondViewShape),
+                                                 std::min(idx_secondDim - nIdx * thirdViewShape, thirdViewShape)},
+                                                {sIdx * secondViewShape, nIdx * thirdViewShape});
                         TileShape::Current().SetVecTile(args->tileShape_);
                         auto res = Gather(tileTensor0, tileTensor1, args->axis_);
-                        Assemble(
-                            res, {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape}, outputs[0]);
+                        Assemble(res, {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape},
+                                 outputs[0]);
                     }
                 }
             }
@@ -223,8 +220,8 @@ static void GatherOperationExeFunc2_2Dims(
     }
 }
 
-static void GatherOperationExeFunc3_1Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void GatherOperationExeFunc3_1Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                          const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0], inputs[1]}, {outputs[0]})
     {
@@ -255,14 +252,14 @@ static void GatherOperationExeFunc3_1Dims(
                             {src_firstDim, std::min(src_secondDim - sIdx * secondViewShape, secondViewShape),
                              std::min(src_thirdDim - nIdx * thirdViewShape, thirdViewShape)},
                             {0, sIdx * secondViewShape, nIdx * thirdViewShape});
-                        auto tileTensor1 = View(
-                            inputs[1], {firstViewShape},
-                            {std::min(idx_firstDim - bIdx * firstViewShape, firstViewShape)}, {bIdx * firstViewShape});
+                        auto tileTensor1 = View(inputs[1], {firstViewShape},
+                                                {std::min(idx_firstDim - bIdx * firstViewShape, firstViewShape)},
+                                                {bIdx * firstViewShape});
 
                         TileShape::Current().SetVecTile(args->tileShape_);
                         auto res = Gather(tileTensor0, tileTensor1, args->axis_);
-                        Assemble(
-                            res, {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape}, outputs[0]);
+                        Assemble(res, {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape},
+                                 outputs[0]);
                     }
                 }
             }
@@ -281,15 +278,14 @@ static void GatherOperationExeFunc3_1Dims(
                             {std::min(src_firstDim - bIdx * firstViewShape, firstViewShape), src_secondDim,
                              std::min(src_thirdDim - nIdx * thirdViewShape, thirdViewShape)},
                             {bIdx * firstViewShape, 0, nIdx * thirdViewShape});
-                        auto tileTensor1 = View(
-                            inputs[1], {secondViewShape},
-                            {std::min(idx_firstDim - sIdx * secondViewShape, secondViewShape)},
-                            {sIdx * secondViewShape});
+                        auto tileTensor1 = View(inputs[1], {secondViewShape},
+                                                {std::min(idx_firstDim - sIdx * secondViewShape, secondViewShape)},
+                                                {sIdx * secondViewShape});
 
                         TileShape::Current().SetVecTile(args->tileShape_);
                         auto res = Gather(tileTensor0, tileTensor1, args->axis_);
-                        Assemble(
-                            res, {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape}, outputs[0]);
+                        Assemble(res, {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape},
+                                 outputs[0]);
                     }
                 }
             }
@@ -308,14 +304,14 @@ static void GatherOperationExeFunc3_1Dims(
                             {std::min(src_firstDim - bIdx * firstViewShape, firstViewShape),
                              std::min(src_secondDim - sIdx * secondViewShape, secondViewShape), src_thirdDim},
                             {bIdx * firstViewShape, sIdx * secondViewShape, 0});
-                        auto tileTensor1 = View(
-                            inputs[1], {thirdViewShape},
-                            {std::min(idx_firstDim - nIdx * thirdViewShape, thirdViewShape)}, {nIdx * thirdViewShape});
+                        auto tileTensor1 = View(inputs[1], {thirdViewShape},
+                                                {std::min(idx_firstDim - nIdx * thirdViewShape, thirdViewShape)},
+                                                {nIdx * thirdViewShape});
 
                         TileShape::Current().SetVecTile(args->tileShape_);
                         auto res = Gather(tileTensor0, tileTensor1, args->axis_);
-                        Assemble(
-                            res, {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape}, outputs[0]);
+                        Assemble(res, {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape},
+                                 outputs[0]);
                     }
                 }
             }
@@ -323,8 +319,8 @@ static void GatherOperationExeFunc3_1Dims(
     }
 }
 
-static void GatherOperationExeFunc3_2Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void GatherOperationExeFunc3_2Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                          const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0], inputs[1]}, {outputs[0]})
     {
@@ -361,19 +357,17 @@ static void GatherOperationExeFunc3_2Dims(
                                  std::min(src_thirdDim - mIdx * fourthViewShape, fourthViewShape)},
                                 {0, nIdx * thirdViewShape, mIdx * fourthViewShape});
 
-                            auto tileTensor1 = View(
-                                inputs[1], {firstViewShape, secondViewShape},
-                                {std::min(idx_firstDim - bIdx * firstViewShape, firstViewShape),
-                                 std::min(idx_secondDim - sIdx * secondViewShape, secondViewShape)},
-                                {bIdx * firstViewShape, sIdx * secondViewShape});
+                            auto tileTensor1 = View(inputs[1], {firstViewShape, secondViewShape},
+                                                    {std::min(idx_firstDim - bIdx * firstViewShape, firstViewShape),
+                                                     std::min(idx_secondDim - sIdx * secondViewShape, secondViewShape)},
+                                                    {bIdx * firstViewShape, sIdx * secondViewShape});
 
                             TileShape::Current().SetVecTile(args->tileShape_);
                             auto res = Gather(tileTensor0, tileTensor1, args->axis_);
-                            Assemble(
-                                res,
-                                {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape,
-                                 mIdx * fourthViewShape},
-                                outputs[0]);
+                            Assemble(res,
+                                     {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape,
+                                      mIdx * fourthViewShape},
+                                     outputs[0]);
                         }
                     }
                 }
@@ -396,19 +390,17 @@ static void GatherOperationExeFunc3_2Dims(
                                 {std::min(src_firstDim - bIdx * firstViewShape, firstViewShape), src_secondDim,
                                  std::min(src_thirdDim - mIdx * fourthViewShape, fourthViewShape)},
                                 {bIdx * firstViewShape, 0, mIdx * fourthViewShape});
-                            auto tileTensor1 = View(
-                                inputs[1], {secondViewShape, thirdViewShape},
-                                {std::min(idx_firstDim - sIdx * secondViewShape, secondViewShape),
-                                 std::min(idx_secondDim - nIdx * thirdViewShape, thirdViewShape)},
-                                {sIdx * secondViewShape, nIdx * thirdViewShape});
+                            auto tileTensor1 = View(inputs[1], {secondViewShape, thirdViewShape},
+                                                    {std::min(idx_firstDim - sIdx * secondViewShape, secondViewShape),
+                                                     std::min(idx_secondDim - nIdx * thirdViewShape, thirdViewShape)},
+                                                    {sIdx * secondViewShape, nIdx * thirdViewShape});
 
                             TileShape::Current().SetVecTile(args->tileShape_);
                             auto res = Gather(tileTensor0, tileTensor1, args->axis_);
-                            Assemble(
-                                res,
-                                {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape,
-                                 mIdx * fourthViewShape},
-                                outputs[0]);
+                            Assemble(res,
+                                     {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape,
+                                      mIdx * fourthViewShape},
+                                     outputs[0]);
                         }
                     }
                 }
@@ -431,19 +423,17 @@ static void GatherOperationExeFunc3_2Dims(
                                 {std::min(src_firstDim - bIdx * firstViewShape, firstViewShape),
                                  std::min(src_secondDim - sIdx * secondViewShape, secondViewShape), src_thirdDim},
                                 {bIdx * firstViewShape, sIdx * secondViewShape, 0});
-                            auto tileTensor1 = View(
-                                inputs[1], {thirdViewShape, fourthViewShape},
-                                {std::min(idx_firstDim - nIdx * thirdViewShape, thirdViewShape),
-                                 std::min(idx_secondDim - mIdx * fourthViewShape, fourthViewShape)},
-                                {nIdx * thirdViewShape, mIdx * fourthViewShape});
+                            auto tileTensor1 = View(inputs[1], {thirdViewShape, fourthViewShape},
+                                                    {std::min(idx_firstDim - nIdx * thirdViewShape, thirdViewShape),
+                                                     std::min(idx_secondDim - mIdx * fourthViewShape, fourthViewShape)},
+                                                    {nIdx * thirdViewShape, mIdx * fourthViewShape});
 
                             TileShape::Current().SetVecTile(args->tileShape_);
                             auto res = Gather(tileTensor0, tileTensor1, args->axis_);
-                            Assemble(
-                                res,
-                                {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape,
-                                 mIdx * fourthViewShape},
-                                outputs[0]);
+                            Assemble(res,
+                                     {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape,
+                                      mIdx * fourthViewShape},
+                                     outputs[0]);
                         }
                     }
                 }
@@ -452,8 +442,8 @@ static void GatherOperationExeFunc3_2Dims(
     }
 }
 
-static void GatherOperationExeFunc4_1Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void GatherOperationExeFunc4_1Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                          const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0], inputs[1]}, {outputs[0]})
     {
@@ -490,18 +480,16 @@ static void GatherOperationExeFunc4_1Dims(
                                  std::min(src_thirdDim - nIdx * thirdViewShape, thirdViewShape),
                                  std::min(src_fourthDim - mIdx * fourthViewShape, fourthViewShape)},
                                 {0, sIdx * secondViewShape, nIdx * thirdViewShape, mIdx * fourthViewShape});
-                            auto tileTensor1 = View(
-                                inputs[1], {firstViewShape},
-                                {std::min(idx_firstDim - bIdx * firstViewShape, firstViewShape)},
-                                {bIdx * firstViewShape});
+                            auto tileTensor1 = View(inputs[1], {firstViewShape},
+                                                    {std::min(idx_firstDim - bIdx * firstViewShape, firstViewShape)},
+                                                    {bIdx * firstViewShape});
 
                             TileShape::Current().SetVecTile(args->tileShape_);
                             auto res = Gather(tileTensor0, tileTensor1, args->axis_);
-                            Assemble(
-                                res,
-                                {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape,
-                                 mIdx * fourthViewShape},
-                                outputs[0]);
+                            Assemble(res,
+                                     {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape,
+                                      mIdx * fourthViewShape},
+                                     outputs[0]);
                         }
                     }
                 }
@@ -525,18 +513,16 @@ static void GatherOperationExeFunc4_1Dims(
                                  std::min(src_thirdDim - nIdx * thirdViewShape, thirdViewShape),
                                  std::min(src_fourthDim - mIdx * fourthViewShape, fourthViewShape)},
                                 {bIdx * firstViewShape, 0, nIdx * thirdViewShape, mIdx * fourthViewShape});
-                            auto tileTensor1 = View(
-                                inputs[1], {secondViewShape},
-                                {std::min(idx_firstDim - sIdx * secondViewShape, secondViewShape)},
-                                {sIdx * secondViewShape});
+                            auto tileTensor1 = View(inputs[1], {secondViewShape},
+                                                    {std::min(idx_firstDim - sIdx * secondViewShape, secondViewShape)},
+                                                    {sIdx * secondViewShape});
 
                             TileShape::Current().SetVecTile(args->tileShape_);
                             auto res = Gather(tileTensor0, tileTensor1, args->axis_);
-                            Assemble(
-                                res,
-                                {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape,
-                                 mIdx * fourthViewShape},
-                                outputs[0]);
+                            Assemble(res,
+                                     {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape,
+                                      mIdx * fourthViewShape},
+                                     outputs[0]);
                         }
                     }
                 }
@@ -560,18 +546,16 @@ static void GatherOperationExeFunc4_1Dims(
                                  std::min(src_secondDim - sIdx * secondViewShape, secondViewShape), src_thirdDim,
                                  std::min(src_fourthDim - mIdx * fourthViewShape, fourthViewShape)},
                                 {bIdx * firstViewShape, sIdx * secondViewShape, 0, mIdx * fourthViewShape});
-                            auto tileTensor1 = View(
-                                inputs[1], {thirdViewShape},
-                                {std::min(idx_firstDim - nIdx * thirdViewShape, thirdViewShape)},
-                                {nIdx * thirdViewShape});
+                            auto tileTensor1 = View(inputs[1], {thirdViewShape},
+                                                    {std::min(idx_firstDim - nIdx * thirdViewShape, thirdViewShape)},
+                                                    {nIdx * thirdViewShape});
 
                             TileShape::Current().SetVecTile(args->tileShape_);
                             auto res = Gather(tileTensor0, tileTensor1, args->axis_);
-                            Assemble(
-                                res,
-                                {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape,
-                                 mIdx * fourthViewShape},
-                                outputs[0]);
+                            Assemble(res,
+                                     {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape,
+                                      mIdx * fourthViewShape},
+                                     outputs[0]);
                         }
                     }
                 }
@@ -595,18 +579,16 @@ static void GatherOperationExeFunc4_1Dims(
                                  std::min(src_secondDim - sIdx * secondViewShape, secondViewShape),
                                  std::min(src_thirdDim - nIdx * thirdViewShape, thirdViewShape), src_fourthDim},
                                 {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape, 0});
-                            auto tileTensor1 = View(
-                                inputs[1], {fourthViewShape},
-                                {std::min(idx_firstDim - mIdx * fourthViewShape, fourthViewShape)},
-                                {mIdx * fourthViewShape});
+                            auto tileTensor1 = View(inputs[1], {fourthViewShape},
+                                                    {std::min(idx_firstDim - mIdx * fourthViewShape, fourthViewShape)},
+                                                    {mIdx * fourthViewShape});
 
                             TileShape::Current().SetVecTile(args->tileShape_);
                             auto res = Gather(tileTensor0, tileTensor1, args->axis_);
-                            Assemble(
-                                res,
-                                {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape,
-                                 mIdx * fourthViewShape},
-                                outputs[0]);
+                            Assemble(res,
+                                     {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape,
+                                      mIdx * fourthViewShape},
+                                     outputs[0]);
                         }
                     }
                 }
@@ -615,8 +597,8 @@ static void GatherOperationExeFunc4_1Dims(
     }
 }
 
-static void GatherOperationExeFunc4_2Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void GatherOperationExeFunc4_2Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                          const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0], inputs[1]}, {outputs[0]})
     {
@@ -666,11 +648,10 @@ static void GatherOperationExeFunc4_2Dims(
 
                                 TileShape::Current().SetVecTile(args->tileShape_);
                                 auto res = Gather(tileTensor0, tileTensor1, args->axis_);
-                                Assemble(
-                                    res,
-                                    {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape,
-                                     mIdx * fourthViewShape, kIdx * fifthViewShape},
-                                    outputs[0]);
+                                Assemble(res,
+                                         {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape,
+                                          mIdx * fourthViewShape, kIdx * fifthViewShape},
+                                         outputs[0]);
                             }
                         }
                     }
@@ -706,11 +687,10 @@ static void GatherOperationExeFunc4_2Dims(
 
                                 TileShape::Current().SetVecTile(args->tileShape_);
                                 auto res = Gather(tileTensor0, tileTensor1, args->axis_);
-                                Assemble(
-                                    res,
-                                    {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape,
-                                     mIdx * fourthViewShape, kIdx * fifthViewShape},
-                                    outputs[0]);
+                                Assemble(res,
+                                         {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape,
+                                          mIdx * fourthViewShape, kIdx * fifthViewShape},
+                                         outputs[0]);
                             }
                         }
                     }
@@ -746,11 +726,10 @@ static void GatherOperationExeFunc4_2Dims(
 
                                 TileShape::Current().SetVecTile(args->tileShape_);
                                 auto res = Gather(tileTensor0, tileTensor1, args->axis_);
-                                Assemble(
-                                    res,
-                                    {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape,
-                                     mIdx * fourthViewShape, kIdx * fifthViewShape},
-                                    outputs[0]);
+                                Assemble(res,
+                                         {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape,
+                                          mIdx * fourthViewShape, kIdx * fifthViewShape},
+                                         outputs[0]);
                             }
                         }
                     }
@@ -786,11 +765,10 @@ static void GatherOperationExeFunc4_2Dims(
 
                                 TileShape::Current().SetVecTile(args->tileShape_);
                                 auto res = Gather(tileTensor0, tileTensor1, args->axis_);
-                                Assemble(
-                                    res,
-                                    {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape,
-                                     mIdx * fourthViewShape, kIdx * fifthViewShape},
-                                    outputs[0]);
+                                Assemble(res,
+                                         {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape,
+                                          mIdx * fourthViewShape, kIdx * fifthViewShape},
+                                         outputs[0]);
                             }
                         }
                     }
@@ -803,11 +781,11 @@ class GatherOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aih
 
 INSTANTIATE_TEST_SUITE_P(
     TestGather, GatherOperationTest,
-    ::testing::ValuesIn(GetOpMetaData<GatherOpMetaData>(
-        {GatherOperationExeFunc1_1Dims, GatherOperationExeFunc1_2Dims, GatherOperationExeFunc2_1Dims,
-         GatherOperationExeFunc2_2Dims, GatherOperationExeFunc3_1Dims, GatherOperationExeFunc3_2Dims,
-         GatherOperationExeFunc4_1Dims, GatherOperationExeFunc4_2Dims},
-        "Gather")));
+    ::testing::ValuesIn(GetOpMetaData<GatherOpMetaData>({GatherOperationExeFunc1_1Dims, GatherOperationExeFunc1_2Dims,
+                                                         GatherOperationExeFunc2_1Dims, GatherOperationExeFunc2_2Dims,
+                                                         GatherOperationExeFunc3_1Dims, GatherOperationExeFunc3_2Dims,
+                                                         GatherOperationExeFunc4_1Dims, GatherOperationExeFunc4_2Dims},
+                                                        "Gather")));
 
 TEST_P(GatherOperationTest, TestGather)
 {

@@ -27,27 +27,26 @@ namespace npu::tile_fwk::dynamic {
 
 struct Evaluator;
 
-std::vector<DevDynamicCellMatchStridePatch> PrepareDynamicCellMatchDescPatches(
-    const DyndevFunctionAttribute& dynAttr, Evaluator& eval);
+std::vector<DevDynamicCellMatchStridePatch> PrepareDynamicCellMatchDescPatches(const DyndevFunctionAttribute& dynAttr,
+                                                                               Evaluator& eval);
 
-void PatchHostDynamicCellMatchTableDesc(
-    DevAscendProgram* hostDevProg, const std::vector<DevDynamicCellMatchStridePatch>& patches);
+void PatchHostDynamicCellMatchTableDesc(DevAscendProgram* hostDevProg,
+                                        const std::vector<DevDynamicCellMatchStridePatch>& patches);
 
-void WriteDynamicCellMatchStridePatchesToLaunchArgs(
-    int64_t* launchInputs, const std::vector<DevDynamicCellMatchStridePatch>& patches);
+void WriteDynamicCellMatchStridePatchesToLaunchArgs(int64_t* launchInputs,
+                                                    const std::vector<DevDynamicCellMatchStridePatch>& patches);
 
-void ValidateDynamicCellMatchTableMemBudget(
-    const DyndevFunctionAttribute& dynAttr, DevAscendProgram* hostDevProg);
+void ValidateDynamicCellMatchTableMemBudget(const DyndevFunctionAttribute& dynAttr, DevAscendProgram* hostDevProg);
 
-void RefillDynamicMemBudgets(
-    DevAscendProgram* hostDevProg, DyndevFunctionAttribute& dynAttr, Evaluator& eval);
+void RefillDynamicMemBudgets(DevAscendProgram* hostDevProg, DyndevFunctionAttribute& dynAttr, Evaluator& eval);
 
-std::vector<DevDynamicCellMatchStridePatch> PrepareHostDynamicCellMatchForLaunch(
-    DyndevFunctionAttribute& dynAttr, Evaluator& eval, DevAscendProgram* hostDevProg);
+std::vector<DevDynamicCellMatchStridePatch> PrepareHostDynamicCellMatchForLaunch(DyndevFunctionAttribute& dynAttr,
+                                                                                 Evaluator& eval,
+                                                                                 DevAscendProgram* hostDevProg);
 
 template <typename MemoryHelperTy>
-inline void PatchRuntimeDynamicCellMatchMeta(
-    MemoryHelperTy& memoryHelper, DevAscendProgram* hostProg, DeviceKernelArgs& kArgs)
+inline void PatchRuntimeDynamicCellMatchMeta(MemoryHelperTy& memoryHelper, DevAscendProgram* hostProg,
+                                             DeviceKernelArgs& kArgs)
 {
     if (hostProg == nullptr) {
         return;

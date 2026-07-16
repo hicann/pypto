@@ -52,7 +52,7 @@ std::string DPlatformToSocVersion(DPlatform platform)
     }
     return DEFAULT_SOC_VERSION;
 }
-}
+} // namespace
 
 std::string SimulationPlatform::GetDevicePlatform()
 {
@@ -70,11 +70,10 @@ std::string SimulationPlatform::GetDevicePlatform()
         jsonData["global"]["platform"].contains("device_platform") &&
         jsonData["global"]["platform"]["device_platform"].is_string()) {
         platformStr = jsonData["global"]["platform"]["device_platform"].get<std::string>();
-        PLATFORM_LOGD("Key 'global.platform.device_platform' specified SoC version:%s.",
-            platformStr.c_str());
+        PLATFORM_LOGD("Key 'global.platform.device_platform' specified SoC version:%s.", platformStr.c_str());
     } else {
         PLATFORM_LOGW("Key 'global.platform.device_platform' not found in %s, use default platform.",
-            configPath.c_str());
+                      configPath.c_str());
     }
 
     DPlatform platform = StringToDpaltform(platformStr);

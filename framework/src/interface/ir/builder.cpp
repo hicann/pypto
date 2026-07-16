@@ -45,9 +45,8 @@ StmtPtr MakeStmtBody(const std::vector<StmtPtr>& stmts, const Span& span)
 
 Span MakeCombinedSpan(const Span& begin_span, const Span& end_span)
 {
-    return Span(
-        begin_span.Filename(), begin_span.BeginLine(), begin_span.BeginColumn(), end_span.EndLine(),
-        end_span.EndColumn());
+    return Span(begin_span.Filename(), begin_span.BeginLine(), begin_span.BeginColumn(), end_span.EndLine(),
+                end_span.EndColumn());
 }
 
 std::string MakeLoopReturnVarsMismatchMessage(const char* loop_kind, size_t iter_arg_count, size_t return_var_count)
@@ -68,10 +67,9 @@ IRBuilder::IRBuilder() = default;
 void IRBuilder::BeginFunction(const std::string& name, const Span& span, FunctionType type)
 {
     if (InFunction()) {
-        throw RuntimeError(
-            "Cannot begin function '" + name + "': already inside function '" +
-            static_cast<FunctionContext*>(CurrentContext())->GetName() + "' at " +
-            CurrentContext()->GetBeginSpan().ToString());
+        throw RuntimeError("Cannot begin function '" + name + "': already inside function '" +
+                           static_cast<FunctionContext*>(CurrentContext())->GetName() + "' at " +
+                           CurrentContext()->GetBeginSpan().ToString());
     }
 
     context_stack_.push_back(std::make_shared<FunctionContext>(name, span, type));
@@ -114,9 +112,8 @@ FunctionPtr IRBuilder::EndFunction(const Span& end_span)
     auto combinedSpan = MakeCombinedSpan(func_ctx->GetBeginSpan(), end_span);
 
     // Create function
-    auto func = std::make_shared<Function>(
-        func_ctx->GetName(), func_ctx->GetParams(), func_ctx->GetReturnTypes(), body, combinedSpan,
-        func_ctx->GetFuncType());
+    auto func = std::make_shared<Function>(func_ctx->GetName(), func_ctx->GetParams(), func_ctx->GetReturnTypes(), body,
+                                           combinedSpan, func_ctx->GetFuncType());
 
     // Pop context
     context_stack_.pop_back();
@@ -126,12 +123,12 @@ FunctionPtr IRBuilder::EndFunction(const Span& end_span)
 
 // ========== For Loop Building ==========
 
-void IRBuilder::BeginForLoop(
-    const VarPtr& loop_var, const ExprPtr& start, const ExprPtr& stop, const ExprPtr& step, const Span& span)
+void IRBuilder::BeginForLoop(const VarPtr& loop_var, const ExprPtr& start, const ExprPtr& stop, const ExprPtr& step,
+                             const Span& span)
 {
     if (context_stack_.empty()) {
-        throw RuntimeError(
-            "Cannot begin for loop: not inside a function or another valid context at " + span.ToString());
+        throw RuntimeError("Cannot begin for loop: not inside a function or another valid context at " +
+                           span.ToString());
     }
 
     context_stack_.push_back(std::make_shared<ForLoopContext>(loop_var, start, stop, step, span));
@@ -169,9 +166,9 @@ StmtPtr IRBuilder::EndForLoop(const Span& end_span)
     auto combinedSpan = MakeCombinedSpan(loop_ctx->GetBeginSpan(), end_span);
 
     // Create for statement
-    auto for_stmt = std::make_shared<ForStmt>(
-        loop_ctx->GetLoopVar(), loop_ctx->GetStart(), loop_ctx->GetStop(), loop_ctx->GetStep(), loop_ctx->GetIterArgs(),
-        body, loop_ctx->GetReturnVars(), combinedSpan);
+    auto for_stmt = std::make_shared<ForStmt>(loop_ctx->GetLoopVar(), loop_ctx->GetStart(), loop_ctx->GetStop(),
+                                              loop_ctx->GetStep(), loop_ctx->GetIterArgs(), body,
+                                              loop_ctx->GetReturnVars(), combinedSpan);
 
     // Pop context
     context_stack_.pop_back();
@@ -189,8 +186,8 @@ StmtPtr IRBuilder::EndForLoop(const Span& end_span)
 void IRBuilder::BeginWhileLoop(const ExprPtr& condition, const Span& span)
 {
     if (context_stack_.empty()) {
-        throw RuntimeError(
-            "Cannot begin while loop: not inside a function or another valid context at " + span.ToString());
+        throw RuntimeError("Cannot begin while loop: not inside a function or another valid context at " +
+                           span.ToString());
     }
 
     context_stack_.push_back(std::make_shared<WhileLoopContext>(condition, span));
@@ -225,15 +222,15 @@ StmtPtr IRBuilder::EndWhileLoop(const Span& end_span)
         // Pop context before throwing to maintain stack consistency
         context_stack_.pop_back();
 
-        throw RuntimeError(MakeLoopReturnVarsMismatchMessage(
-            "While", loop_ctx->GetIterArgs().size(), loop_ctx->GetReturnVars().size()));
+        throw RuntimeError(MakeLoopReturnVarsMismatchMessage("While", loop_ctx->GetIterArgs().size(),
+                                                             loop_ctx->GetReturnVars().size()));
     }
 
     auto body = MakeStmtBody(loop_ctx->GetStmts(), end_span);
     auto combinedSpan = MakeCombinedSpan(loop_ctx->GetBeginSpan(), end_span);
     // Create while statement
-    auto while_stmt = std::make_shared<WhileStmt>(
-        loop_ctx->GetCondition(), loop_ctx->GetIterArgs(), body, loop_ctx->GetReturnVars(), combinedSpan);
+    auto while_stmt = std::make_shared<WhileStmt>(loop_ctx->GetCondition(), loop_ctx->GetIterArgs(), body,
+                                                  loop_ctx->GetReturnVars(), combinedSpan);
 
     // Pop context
     context_stack_.pop_back();
@@ -305,8 +302,8 @@ StmtPtr IRBuilder::EndIf(const Span& end_span)
     auto combinedSpan = MakeCombinedSpan(if_ctx->GetBeginSpan(), end_span);
 
     // Create if statement
-    auto if_stmt = std::make_shared<IfStmt>(
-        if_ctx->GetCondition(), then_body, else_body, if_ctx->GetReturnVars(), combinedSpan);
+    auto if_stmt = std::make_shared<IfStmt>(if_ctx->GetCondition(), then_body, else_body, if_ctx->GetReturnVars(),
+                                            combinedSpan);
     // Pop context
     context_stack_.pop_back();
 
@@ -367,10 +364,9 @@ StmtPtr IRBuilder::EndSection(const Span& end_span)
 void IRBuilder::BeginProgram(const std::string& name, const Span& span)
 {
     if (InProgram()) {
-        throw RuntimeError(
-            "Cannot begin program '" + name + "': already inside program '" +
-            static_cast<ProgramContext*>(CurrentContext())->GetName() + "' at " +
-            CurrentContext()->GetBeginSpan().ToString());
+        throw RuntimeError("Cannot begin program '" + name + "': already inside program '" +
+                           static_cast<ProgramContext*>(CurrentContext())->GetName() + "' at " +
+                           CurrentContext()->GetBeginSpan().ToString());
     }
 
     context_stack_.push_back(std::make_shared<ProgramContext>(name, span));

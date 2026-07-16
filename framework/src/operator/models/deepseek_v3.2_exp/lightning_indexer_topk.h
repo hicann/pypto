@@ -24,21 +24,20 @@
 
 namespace npu::tile_fwk {
 
-void LightningIndexerTopkImpl(
-    const Tensor& query, const Tensor& key, bool isQuant, const Tensor* qScale, const Tensor* kScale,
-    const Tensor& weights, const Tensor& actSeqKey, const Tensor& blockTable, Tensor& topkRes, const int selectedCount,
-    IndexerTile tileConfig, const std::set<int>& unrollList = {64, 32, 16, 8, 4, 1}, Tensor* tmpOut = nullptr,
-    Tensor* topkValue = nullptr);
+void LightningIndexerTopkImpl(const Tensor& query, const Tensor& key, bool isQuant, const Tensor* qScale,
+                              const Tensor* kScale, const Tensor& weights, const Tensor& actSeqKey,
+                              const Tensor& blockTable, Tensor& topkRes, const int selectedCount,
+                              IndexerTile tileConfig, const std::set<int>& unrollList = {64, 32, 16, 8, 4, 1},
+                              Tensor* tmpOut = nullptr, Tensor* topkValue = nullptr);
 
-void LightningIndexerTopkQuant(
-    const Tensor& query, const Tensor& key, const Tensor& qScale, const Tensor& kScale, const Tensor& weights,
-    const Tensor& actSeqKey, const Tensor& blockTable, Tensor& topkRes, const int selectedCount, IndexerTile tileConfig,
-    const std::set<int>& unrollList = {64, 32, 16, 8, 4, 1});
+void LightningIndexerTopkQuant(const Tensor& query, const Tensor& key, const Tensor& qScale, const Tensor& kScale,
+                               const Tensor& weights, const Tensor& actSeqKey, const Tensor& blockTable,
+                               Tensor& topkRes, const int selectedCount, IndexerTile tileConfig,
+                               const std::set<int>& unrollList = {64, 32, 16, 8, 4, 1});
 
-void LightningIndexerTopk(
-    const Tensor& query, const Tensor& key, const Tensor& weights, const Tensor& actSeqKey, const Tensor& blockTable,
-    Tensor& topkRes, const int selectedCount, IndexerTile tileConfig,
-    const std::set<int>& unrollList = {64, 32, 16, 8, 4, 1});
+void LightningIndexerTopk(const Tensor& query, const Tensor& key, const Tensor& weights, const Tensor& actSeqKey,
+                          const Tensor& blockTable, Tensor& topkRes, const int selectedCount, IndexerTile tileConfig,
+                          const std::set<int>& unrollList = {64, 32, 16, 8, 4, 1});
 } // namespace npu::tile_fwk
 
 #endif // INDEXER_TOPK_H

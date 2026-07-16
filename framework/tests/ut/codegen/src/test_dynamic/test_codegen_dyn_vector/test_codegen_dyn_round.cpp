@@ -44,8 +44,8 @@ public:
 TEST_F(TestCodegenDynRound, TestDynOpRound)
 {
     std::vector<int64_t> shape = {64, 64};
-    auto function =
-        GenMockFuncDynUnary("TestDynOpRound", {shape}, [](Tensor& input, Tensor& output) { output = Round(input, 1); });
+    auto function = GenMockFuncDynUnary("TestDynOpRound", {shape},
+                                        [](Tensor& input, Tensor& output) { output = Round(input, 1); });
     std::string res = GenCodeByFunction(*function);
     std::string expect =
         R"!!!(TRound<float>(ubTensor_2, ubTensor_3, ubTensor_0, 10.f);

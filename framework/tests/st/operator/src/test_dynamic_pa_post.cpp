@@ -70,9 +70,8 @@ TEST_F(DynamicPAPOSTTest, dynamic_prolog_post_low_lantency)
 
     std::vector<uint8_t> devProgBinary;
 
-    PrologPost(
-        qNope, kNopeCache, vNopeCache, qRope, kRopeCache, blockTable, actSeqs, weightUV, weightO, blockSize,
-        softmaxScale, postOut, tileConfig);
+    PrologPost(qNope, kNopeCache, vNopeCache, qRope, kRopeCache, blockTable, actSeqs, weightUV, weightO, blockSize,
+               softmaxScale, postOut, tileConfig);
 
     // 读数据
     std::vector<npu::tile_fwk::bfloat16> qNopeData(b * nq * sq * dn, 0);
@@ -116,8 +115,8 @@ TEST_F(DynamicPAPOSTTest, dynamic_prolog_post_low_lantency)
     EXPECT_TRUE(resultCmp(golden, (float*)outs->data(), 0.004f));
 }
 
-void testPaAdds(
-    PaTileShapeConfig& tileConfig, int maxUnrollTimes = 1, bool manualUnroll = false, bool outputPaOut = true)
+void testPaAdds(PaTileShapeConfig& tileConfig, int maxUnrollTimes = 1, bool manualUnroll = false,
+                bool outputPaOut = true)
 {
     std::vector<uint8_t> devProgBinary;
     int paramsSize = 8;
@@ -153,13 +152,11 @@ void testPaAdds(
     Tensor postOut(DT_FP32, {b * nq * sq, dn}, "postOut");
     if (!manualUnroll) {
         if (outputPaOut) {
-            PageAttentionAddS(
-                qNope, kNopeCache, vNopeCache, qRope, kRopeCache, blockTable, actSeqs, blockSize, softmaxScale, paOut,
-                postOut, tileConfig, maxUnrollTimes);
+            PageAttentionAddS(qNope, kNopeCache, vNopeCache, qRope, kRopeCache, blockTable, actSeqs, blockSize,
+                              softmaxScale, paOut, postOut, tileConfig, maxUnrollTimes);
         } else {
-            PageAttentionAddSSingleOutput(
-                qNope, kNopeCache, vNopeCache, qRope, kRopeCache, blockTable, actSeqs, blockSize, softmaxScale, paOut,
-                postOut, tileConfig, maxUnrollTimes);
+            PageAttentionAddSSingleOutput(qNope, kNopeCache, vNopeCache, qRope, kRopeCache, blockTable, actSeqs,
+                                          blockSize, softmaxScale, paOut, postOut, tileConfig, maxUnrollTimes);
         }
     }
 
@@ -237,10 +234,10 @@ TEST_F(DynamicPAPOSTTest, dynamic_page_attention_adds_high_throughput_dview_larg
     testPaAdds(tileConfig, 1, false, outputPaOut);
 }
 
-void PageAttentionPost(
-    Tensor& qNope, Tensor& kNopeCache, Tensor& vNopeCache, Tensor& qRope, Tensor& kRopeCache, Tensor& blockTable,
-    Tensor& actSeqs, int blockSize, float softmaxScale, Tensor& weightUV, Tensor& weightO, Tensor& weightOScaleW,
-    Tensor& attentionOut, Tensor& postOut, PaTileShapeConfig& tileConfig, int maxUnrollTimes)
+void PageAttentionPost(Tensor& qNope, Tensor& kNopeCache, Tensor& vNopeCache, Tensor& qRope, Tensor& kRopeCache,
+                       Tensor& blockTable, Tensor& actSeqs, int blockSize, float softmaxScale, Tensor& weightUV,
+                       Tensor& weightO, Tensor& weightOScaleW, Tensor& attentionOut, Tensor& postOut,
+                       PaTileShapeConfig& tileConfig, int maxUnrollTimes)
 {
     auto dtype = qNope.GetStorage()->Datatype();
     // 入参B*S*N合轴
@@ -262,10 +259,9 @@ void PageAttentionPost(
     auto H = weightO.GetShape()[1];
     int S = 1;
 
-    FUNCTION(
-        "main",
-        {qNope, kNopeCache, vNopeCache, qRope, kRopeCache, blockTable, actSeqs, weightUV, weightO, weightOScaleW},
-        {postOut})
+    FUNCTION("main",
+             {qNope, kNopeCache, vNopeCache, qRope, kRopeCache, blockTable, actSeqs, weightUV, weightO, weightOScaleW},
+             {postOut})
     {
         SymbolicScalar nLoop = nQ / nTile;
         LOOP("LOOP_L0_bIdx", FunctionType::DYNAMIC_LOOP, bIdx, LoopRange(0, batchSize, 1))
@@ -283,9 +279,8 @@ void PageAttentionPost(
                 SymbolicScalar curOffset = bIdx * nQ + nIdx * nTile;
                 std::vector<SymbolicScalar> oiOffset = {curOffset, 0}; // (B*N*S, d)
 
-                LOOP(
-                    "LOOP_L2_bn", FunctionType::DYNAMIC_LOOP, bn, LoopRange(0, bnPerBatch, 1),
-                    PowersOf2(maxUnrollTimes))
+                LOOP("LOOP_L2_bn", FunctionType::DYNAMIC_LOOP, bn, LoopRange(0, bnPerBatch, 1),
+                     PowersOf2(maxUnrollTimes))
                 {
                     // 当前qn，qr和qi放入内层Loop，避免Concat单独切成一个小图
                     int curS2Tile = blockSize;
@@ -297,38 +292,34 @@ void PageAttentionPost(
 
                     SymbolicScalar curBlockIdx = GetTensorData(blockTable, {bIdx, bn});
                     curBlockIdx.AsIntermediateVariable();
-                    auto kn = View(
-                        kNopeCache, {curS2Tile, dN}, {std::min(curSeq - bn * blockSize, blockSize), dN},
-                        {curBlockIdx * blockSize, 0});
-                    auto kr = View(
-                        kRopeCache, {curS2Tile, dR}, {std::min(curSeq - bn * blockSize, blockSize), dR},
-                        {curBlockIdx * blockSize, 0});
+                    auto kn = View(kNopeCache, {curS2Tile, dN}, {std::min(curSeq - bn * blockSize, blockSize), dN},
+                                   {curBlockIdx * blockSize, 0});
+                    auto kr = View(kRopeCache, {curS2Tile, dR}, {std::min(curSeq - bn * blockSize, blockSize), dR},
+                                   {curBlockIdx * blockSize, 0});
                     Tensor kj(dtype, {curS2Tile, dN + dR}, "kj");
                     Assemble(kn, {0, 0}, kj);
                     Assemble(kr, {0, dN}, kj);
-                    auto vj = View(
-                        vNopeCache, {curS2Tile, dN}, {std::min(curSeq - bn * blockSize, blockSize), dN},
-                        {curBlockIdx * blockSize, 0});
+                    auto vj = View(vNopeCache, {curS2Tile, dN}, {std::min(curSeq - bn * blockSize, blockSize), dN},
+                                   {curBlockIdx * blockSize, 0});
 
-                    TileShape::Current().SetCubeTile(
-                        {c1Tile[0], c1Tile[1]}, {c1Tile[2], c1Tile[3]}, {c1Tile[4], c1Tile[5]});
-                    auto sij = Matrix::Matmul(
-                        DataType::DT_FP32, qi, kj, false,
-                        true); // (curNTile, dN+dR), (curS2Tile, dN+dR) -> (curNTile, curS2Tile)
+                    TileShape::Current().SetCubeTile({c1Tile[0], c1Tile[1]}, {c1Tile[2], c1Tile[3]},
+                                                     {c1Tile[4], c1Tile[5]});
+                    auto sij = Matrix::Matmul(DataType::DT_FP32, qi, kj, false,
+                                              true); // (curNTile, dN+dR), (curS2Tile, dN+dR) -> (curNTile, curS2Tile)
                     TileShape::Current().SetVecTile(v1Tile[0], v1Tile[1]);
                     auto sijScale = Mul(sij, Element(DataType::DT_FP32, softmaxScale)); // (curNTile, curS2Tile)
 
                     auto tildaMij = Amax(sijScale, -1, true); // (curNTile, curS2Tile) -> (curNTile, 1)
-                    auto tsub =
-                        Sub(sijScale, tildaMij); // (curNTile, curS2Tile) - (curNTile, 1) -> (curNTile, curS2Tile)
+                    auto tsub = Sub(sijScale,
+                                    tildaMij); // (curNTile, curS2Tile) - (curNTile, 1) -> (curNTile, curS2Tile)
                     auto tildaPij = Exp(tsub);
                     auto tildaPijF16 = Cast(tildaPij, dtype);
                     auto tildaLij = Sum(tildaPij, -1, true); // (nTileCur, s2TileCur) -> (nTileCur, 1)
 
                     IF(IsLoopBegin(bn, 0))
                     {
-                        TileShape::Current().SetCubeTile(
-                            {c2Tile[0], c2Tile[1]}, {c2Tile[2], c2Tile[3]}, {c2Tile[4], c2Tile[5]});
+                        TileShape::Current().SetCubeTile({c2Tile[0], c2Tile[1]}, {c2Tile[2], c2Tile[3]},
+                                                         {c2Tile[4], c2Tile[5]});
                         auto oiTmp = Matrix::Matmul(DataType::DT_FP32, tildaPijF16, vj, false, false);
                         ; // (curNTile, curS2Tile), (curS2Tile, dN) -> (curNTile, dN)
                         TileShape::Current().SetVecTile(v2Tile[0], v2Tile[1]);
@@ -350,18 +341,17 @@ void PageAttentionPost(
                         auto miNew = Maximum(mi, tildaMij); // (curNTile, 1), (curNTile, 1) -> (curNTile, 1)
                         auto t1 = Sub(mi, miNew);           // (curNTile, 1), (curNTile, 1) -> (curNTile, 1)
                         auto t2 = Exp(t1);
-                        auto t3 = Sub(tildaMij, miNew);     // (curNTile, 1), (curNTile, 1) -> (curNTile, 1)
+                        auto t3 = Sub(tildaMij, miNew); // (curNTile, 1), (curNTile, 1) -> (curNTile, 1)
                         auto t4 = Exp(t3);
-                        auto t5 = Mul(t4, tildaLij);        // (curNTile, 1), (curNTile, 1) -> (curNTile, 1)
-                        auto t6 = Mul(t2, li);              // (curNTile, 1), (curNTile, 1) -> (curNTile, 1)
-                        auto liNew = Add(t6, t5);           // (curNTile, 1), (curNTile, 1) -> (curNTile, 1)
+                        auto t5 = Mul(t4, tildaLij); // (curNTile, 1), (curNTile, 1) -> (curNTile, 1)
+                        auto t6 = Mul(t2, li);       // (curNTile, 1), (curNTile, 1) -> (curNTile, 1)
+                        auto liNew = Add(t6, t5);    // (curNTile, 1), (curNTile, 1) -> (curNTile, 1)
 
-                        auto q3 = Mul(oi, t2);              // (curNTile, dN), (curNTile, 1) -> (curNTile, dN)
-                        TileShape::Current().SetCubeTile(
-                            {c2Tile[0], c2Tile[1]}, {c2Tile[2], c2Tile[3]}, {c2Tile[4], c2Tile[5]});
-                        auto q1 = Matrix::Matmul(
-                            DataType::DT_FP32, tildaPijF16, vj, false,
-                            false);               // (curNTile, curS2Tile), (curS2Tile, dN) -> (curNTile, dN)
+                        auto q3 = Mul(oi, t2); // (curNTile, dN), (curNTile, 1) -> (curNTile, dN)
+                        TileShape::Current().SetCubeTile({c2Tile[0], c2Tile[1]}, {c2Tile[2], c2Tile[3]},
+                                                         {c2Tile[4], c2Tile[5]});
+                        auto q1 = Matrix::Matmul(DataType::DT_FP32, tildaPijF16, vj, false,
+                                                 false); // (curNTile, curS2Tile), (curS2Tile, dN) -> (curNTile, dN)
                         TileShape::Current().SetVecTile(v2Tile[0], v2Tile[1]);
                         auto q2 = Mul(q1, t4);    // (nTileCur, dN), (nTileCur, 1) -> (nTileCur, dN)
                         auto oiTmp = Add(q3, q2); // (nTileCur, dN), (nTileCur, dN) -> (nTileCur, dN)
@@ -391,36 +381,35 @@ void PageAttentionPost(
             auto t1Res = Transpose(r1Res, {0, 1}); // (N, bTile * S, kvLoraRank)    // 128个
 
             // config::SetPassOption(CUBE_NBUFFER_SETTING, std::map<int64_t, int64_t>{{0, 4}});
-            TileShape::Current().SetCubeTile(
-                {std::min(32L, bTile * S), std::min(32L, bTile * S)},
-                {std::min(256L, kvLoraRank), std::min(256L, kvLoraRank)},
-                {vHeadDim, vHeadDim});   // raw bTile*1  512   128   // 128/4个
+            TileShape::Current().SetCubeTile({std::min(32L, bTile * S), std::min(32L, bTile * S)},
+                                             {std::min(256L, kvLoraRank), std::min(256L, kvLoraRank)},
+                                             {vHeadDim, vHeadDim}); // raw bTile*1  512   128   // 128/4个
             auto bmmRes = Matrix::BatchMatmul(
                 dtype, t1Res, weightUV); // (N, bTile, kvLoraRank) * (N, kvLoraRank, vHeadDim) -> (N, bTile, vHeadDim)
 
             TileShape::Current().SetVecTile(1, std::min(bTile, bTile * S), vHeadDim); // raw (128, bTile*1, 128)
-            auto t3Res = Transpose(bmmRes, {0, 1});           // (N, bTile, vHeadDim) -> (bTile, N, vHeadDim) // 128个
-            auto r2Res =
-                Reshape(t3Res, {bTile * S, N * vHeadDim});    // (bTile * S, N, vHeadDim) -> (bTile * S, N*vHeadDim)
+            auto t3Res = Transpose(bmmRes, {0, 1}); // (N, bTile, vHeadDim) -> (bTile, N, vHeadDim) // 128个
+            auto r2Res = Reshape(t3Res,
+                                 {bTile * S, N * vHeadDim}); // (bTile * S, N, vHeadDim) -> (bTile * S, N*vHeadDim)
 
             TileShape::Current().SetVecTile(1, N * vHeadDim); // raw (bTile*1, 128*128)
             auto quantA = Quant(r2Res);
-            auto quantizedA = std::get<0>(quantA);            //(bTile * S, N*vHeadDim)
-            auto dequantScaleA = std::get<1>(quantA);         //(bTile * S, 1)
+            auto quantizedA = std::get<0>(quantA);    //(bTile * S, N*vHeadDim)
+            auto dequantScaleA = std::get<1>(quantA); //(bTile * S, 1)
 
             // (bTile*S, N*vHeadDim) @ (N*vHeadDim, H) = (bTile*S, H)
             // int8 @ int8 = int32
-            TileShape::Current().SetCubeTile(
-                {std::min(32L, bTile * S), std::min(32L, bTile * S)},
-                {std::min(128L, N * vHeadDim), std::min(128L, N * vHeadDim)}, {std::min(512L, H), std::min(512L, H)},
-                true);                                                                 // raw  bTile*1  16k  7168
+            TileShape::Current().SetCubeTile({std::min(32L, bTile * S), std::min(32L, bTile * S)},
+                                             {std::min(128L, N * vHeadDim), std::min(128L, N * vHeadDim)},
+                                             {std::min(512L, H), std::min(512L, H)},
+                                             true);                                    // raw  bTile*1  16k  7168
             Tensor res = npu::tile_fwk::Matrix::Matmul(DT_INT32, quantizedA, weightO); // (bTile*S, H) // 14*8=112个
 
             TileShape::Current().SetVecTile(std::min(bTile, bTile * S), std::min(bTile, H)); // raw (bTile*1, 7168)
             res = Cast(res, DataType::DT_FP32);
-            res = Mul(res, dequantScaleA);                                                   // (B*S, 1)
+            res = Mul(res, dequantScaleA); // (B*S, 1)
             Tensor weightOScaleW2Dim = Reshape(weightOScaleW, {1, H});
-            res = Mul(res, weightOScaleW2Dim);                                               // (1, H)  // 224个
+            res = Mul(res, weightOScaleW2Dim); // (1, H)  // 224个
             Tensor bmm5Res = Cast(res, DataType::DT_BF16, CAST_RINT);
             auto postOutTmp = Reshape(bmm5Res, {bTile, S, H});
 
@@ -483,9 +472,8 @@ void testPaPost(PaTileShapeConfig& tileConfig, int maxUnrollTimes = 1, bool manu
     Tensor postOut(DT_BF16, {B, S, H}, "postOut");
 
     if (!manualUnroll) {
-        PageAttentionPost(
-            qNope, kNopeCache, vNopeCache, qRope, kRopeCache, blockTable, actSeqs, blockSize, softmaxScale, weightUV,
-            weightO, weightOScaleW, paOut, postOut, tileConfig, maxUnrollTimes);
+        PageAttentionPost(qNope, kNopeCache, vNopeCache, qRope, kRopeCache, blockTable, actSeqs, blockSize,
+                          softmaxScale, weightUV, weightO, weightOScaleW, paOut, postOut, tileConfig, maxUnrollTimes);
     }
 
     // 读数据

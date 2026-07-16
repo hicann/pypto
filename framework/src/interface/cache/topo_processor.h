@@ -70,8 +70,8 @@ public:
     }
 
     /* 合并批量依赖处理 */
-    std::tuple<std::shared_ptr<CoreFunctionTopoCache>, uint64_t> MergeBatchDepend(
-        uint64_t batchDependNum, uint32_t mergeNum)
+    std::tuple<std::shared_ptr<CoreFunctionTopoCache>, uint64_t> MergeBatchDepend(uint64_t batchDependNum,
+                                                                                  uint32_t mergeNum)
     {
         ParseOldTopo(batchDependNum);
         GenVirtualSubgraphTopo(mergeNum);
@@ -90,8 +90,8 @@ private:
                 continue;
             }
             uint64_t tmpTopoId = ProcTopoBatchDepend(topoData);
-            MACHINE_LOGD(
-                "[TopoProcessor]proc topo %lu, dep num %lu, new tmp topoid:%lu", i, topoData->depNum, tmpTopoId);
+            MACHINE_LOGD("[TopoProcessor]proc topo %lu, dep num %lu, new tmp topoid:%lu", i, topoData->depNum,
+                         tmpTopoId);
         }
     }
 
@@ -105,8 +105,8 @@ private:
                 CoreFunctionTopo* oldTopo = oldTopoVec.front();
                 for (uint64_t i = 0; i < oldTopo->depNum; i++) {
                     uint8_t* base = static_cast<uint8_t*>(static_cast<void*>(srcTopoData_.get()));
-                    CoreFunctionTopo* topoData =
-                        reinterpret_cast<CoreFunctionTopo*>(base + ((uint64_t*)base)[oldTopo->depIds[i] + 1]);
+                    CoreFunctionTopo* topoData = reinterpret_cast<CoreFunctionTopo*>(
+                        base + ((uint64_t*)base)[oldTopo->depIds[i] + 1]);
                     if (static_cast<uint64_t>(topoData->readyCount * (-1)) != oldTopoVec.size()) {
                         return false;
                     }
@@ -115,14 +115,12 @@ private:
             };
             bool isPure = checkPureBatchDepend();
             if (isPure) {
-                MACHINE_LOGD(
-                    "[TopoProcessor]gen valid pure batch depend new topo %lu, size %lu, virtualTpopid:%lu", it->first,
-                    it->second.size(), virtualTopoId);
+                MACHINE_LOGD("[TopoProcessor]gen valid pure batch depend new topo %lu, size %lu, virtualTpopid:%lu",
+                             it->first, it->second.size(), virtualTopoId);
                 ConnectVirtualTopo(it->second, virtualTopoId, true);
             } else if (it->second.size() >= mergeNum) {
-                MACHINE_LOGD(
-                    "[TopoProcessor]gen valid mix batch depend new topo %lu, size %lu, virtualTpopid:%lu", it->first,
-                    it->second.size(), virtualTopoId);
+                MACHINE_LOGD("[TopoProcessor]gen valid mix batch depend new topo %lu, size %lu, virtualTpopid:%lu",
+                             it->first, it->second.size(), virtualTopoId);
                 ConnectVirtualTopo(it->second, virtualTopoId, false);
             } else {
                 MACHINE_LOGD("[TopoProcessor]erase unvalid new topo %lu, size %lu", it->first, it->second.size());
@@ -175,8 +173,8 @@ private:
 
         *(reinterpret_cast<uint64_t*>(topoCachePtr)) = newTopoSize;
         uint64_t* offsetPtr = reinterpret_cast<uint64_t*>(topoCachePtr) + 1;
-        uint8_t* topoPtr =
-            reinterpret_cast<uint8_t*>(reinterpret_cast<uint64_t*>(topoCachePtr) + srcTopoNum_ + virtualTopoNum_ + 1);
+        uint8_t* topoPtr = reinterpret_cast<uint8_t*>(reinterpret_cast<uint64_t*>(topoCachePtr) + srcTopoNum_ +
+                                                      virtualTopoNum_ + 1);
         uint64_t curCoreFuncOffset = sizeof(uint64_t) + (srcTopoNum_ + virtualTopoNum_) * sizeof(uint64_t);
         auto appendTopo = [&topoPtr, &offsetPtr, &curCoreFuncOffset](CoreFunctionTopo* srcTopo, uint64_t id) {
             offsetPtr[id] = curCoreFuncOffset;
@@ -189,13 +187,13 @@ private:
             tempPtr->extParamNum = srcTopo->extParamNum;
             const uint64_t depIdsLen = srcTopo->depNum + srcTopo->extParamNum;
             if (depIdsLen != 0) {
-                (void)memcpy_s(
-                    static_cast<uint8_t*>(static_cast<void*>(tempPtr->depIds)), depIdsLen * sizeof(uint64_t),
-                    static_cast<uint8_t*>(static_cast<void*>(srcTopo->depIds)), depIdsLen * sizeof(uint64_t));
+                (void)memcpy_s(static_cast<uint8_t*>(static_cast<void*>(tempPtr->depIds)), depIdsLen * sizeof(uint64_t),
+                               static_cast<uint8_t*>(static_cast<void*>(srcTopo->depIds)),
+                               depIdsLen * sizeof(uint64_t));
             }
 
-            uint32_t tempLength =
-                sizeof(CoreFunctionTopo) + sizeof(uint64_t) * (tempPtr->depNum + tempPtr->extParamNum);
+            uint32_t tempLength = sizeof(CoreFunctionTopo) +
+                                  sizeof(uint64_t) * (tempPtr->depNum + tempPtr->extParamNum);
             curCoreFuncOffset += tempLength;
             topoPtr += tempLength;
             MACHINE_LOGD("[TopoProcessor]gen final toppo, add topo, id = %lu, coretype = %lu", id, tempPtr->coreType);

@@ -71,8 +71,8 @@ public:
 
 TEST_F(TestSplitReshapePass, TestInit)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestReshapeSplit", "TestReshapeSplit", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestReshapeSplit", "TestReshapeSplit",
+                                                      nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     SplitReshape pass;
@@ -94,10 +94,10 @@ TEST_F(TestSplitReshapePass, TestInit)
     EXPECT_EQ(pass.sameRawInputCache_.size(), kSizeZero);
 }
 
-void BuildGraphForCollectCopyOut(
-    std::shared_ptr<Function>& func, std::shared_ptr<LogicalTensor>& input1, std::shared_ptr<LogicalTensor>& input2,
-    std::shared_ptr<LogicalTensor>& ubTensor, std::shared_ptr<LogicalTensor>& output, std::vector<int64_t>& offset1,
-    std::vector<int64_t>& offset2, std::vector<SymbolicScalar>& validShape)
+void BuildGraphForCollectCopyOut(std::shared_ptr<Function>& func, std::shared_ptr<LogicalTensor>& input1,
+                                 std::shared_ptr<LogicalTensor>& input2, std::shared_ptr<LogicalTensor>& ubTensor,
+                                 std::shared_ptr<LogicalTensor>& output, std::vector<int64_t>& offset1,
+                                 std::vector<int64_t>& offset2, std::vector<SymbolicScalar>& validShape)
 {
     func = std::make_shared<Function>(Program::GetInstance(), "TestReshapeSplit", "TestReshapeSplit", nullptr);
 
@@ -111,11 +111,14 @@ void BuildGraphForCollectCopyOut(
     std::vector<int64_t> shape3 = {kNumThree, kNumEight};
 
     auto ddrRawTensor = std::make_shared<RawTensor>(DT_FP32, shape);
-    auto input3 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor, offset3, shape1, CreateTestConstIntVector(shape1));
+    auto input3 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor, offset3, shape1,
+                                                             CreateTestConstIntVector(shape1));
     auto copyTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
 
-    input1 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor, offset1, shape1, CreateTestConstIntVector(shape1));
-    input2 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor, offset2, shape1, CreateTestConstIntVector(shape1));
+    input1 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor, offset1, shape1,
+                                                        CreateTestConstIntVector(shape1));
+    input2 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor, offset2, shape1,
+                                                        CreateTestConstIntVector(shape1));
     ubTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
     output = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape3, CreateTestConstIntVector(shape3));
 
@@ -174,8 +177,8 @@ TEST_F(TestSplitReshapePass, TestCollectCopyOut)
 
 TEST_F(TestSplitReshapePass, TestCheckSplit)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestReshapeSplit", "TestReshapeSplit", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestReshapeSplit", "TestReshapeSplit",
+                                                      nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
     // Prepare the graph
 
@@ -189,14 +192,18 @@ TEST_F(TestSplitReshapePass, TestCheckSplit)
     std::shared_ptr<RawTensor> ddrRawTensor1 = std::make_shared<RawTensor>(DT_FP32, shape);
     std::shared_ptr<RawTensor> ddrRawTensor2 = std::make_shared<RawTensor>(DT_FP32, shape);
 
-    auto case1Input1 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor1, offset1, shape1, CreateTestConstIntVector(shape1));
-    auto case1Input2 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor1, offset2, shape1, CreateTestConstIntVector(shape1));
+    auto case1Input1 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor1, offset1, shape1,
+                                                                  CreateTestConstIntVector(shape1));
+    auto case1Input2 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor1, offset2, shape1,
+                                                                  CreateTestConstIntVector(shape1));
     auto case1UbTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
     auto case1Output = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape3, CreateTestConstIntVector(shape3));
-    auto& assemble_op1 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {case1Input1}, {case1UbTensor});
+    auto& assemble_op1 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {case1Input1},
+                                                          {case1UbTensor});
     auto assemble_Attr1 = std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, offset1);
     assemble_op1.SetOpAttribute(assemble_Attr1);
-    auto& assemble_op2 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {case1Input2}, {case1UbTensor});
+    auto& assemble_op2 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {case1Input2},
+                                                          {case1UbTensor});
     auto assemble_Attr2 = std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, offset2);
     assemble_op2.SetOpAttribute(assemble_Attr2);
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {case1UbTensor}, {case1Output});
@@ -205,22 +212,28 @@ TEST_F(TestSplitReshapePass, TestCheckSplit)
     auto case2Output = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape3, CreateTestConstIntVector(shape3));
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {case2Input}, {case2Output});
 
-    auto case3Input1 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor1, offset1, shape1, CreateTestConstIntVector(shape1));
-    auto case3Input2 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor2, offset2, shape1, CreateTestConstIntVector(shape1));
+    auto case3Input1 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor1, offset1, shape1,
+                                                                  CreateTestConstIntVector(shape1));
+    auto case3Input2 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor2, offset2, shape1,
+                                                                  CreateTestConstIntVector(shape1));
     auto case3UbTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
     auto case3Output = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape3, CreateTestConstIntVector(shape3));
-    auto& assemble_op3 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {case3Input1}, {case3UbTensor});
+    auto& assemble_op3 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {case3Input1},
+                                                          {case3UbTensor});
     auto assemble_Attr3 = std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, offset1);
     assemble_op3.SetOpAttribute(assemble_Attr3);
-    auto& assemble_op4 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {case3Input2}, {case3UbTensor});
+    auto& assemble_op4 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {case3Input2},
+                                                          {case3UbTensor});
     auto assemble_Attr4 = std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, offset2);
     assemble_op4.SetOpAttribute(assemble_Attr4);
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {case3UbTensor}, {case3Output});
 
-    auto case4Input1 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor1, offset1, shape1, CreateTestConstIntVector(shape1));
+    auto case4Input1 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor1, offset1, shape1,
+                                                                  CreateTestConstIntVector(shape1));
     auto case4UbTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
     auto case4Output = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape3, CreateTestConstIntVector(shape3));
-    auto& assemble_op5 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {case4Input1}, {case4UbTensor});
+    auto& assemble_op5 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {case4Input1},
+                                                          {case4UbTensor});
     auto assemble_Attr5 = std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, offset1);
     assemble_op5.SetOpAttribute(assemble_Attr5);
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {case4UbTensor}, {case4Output});
@@ -287,8 +300,8 @@ TEST_F(TestSplitReshapePass, TestCheckDynStatus)
 
 TEST_F(TestSplitReshapePass, TestShapeAlign)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestReshapeSplit", "TestReshapeSplit", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestReshapeSplit", "TestReshapeSplit",
+                                                      nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
     // Prepare the graph
     SplitReshape pass;
@@ -330,8 +343,8 @@ TEST_F(TestSplitReshapePass, TestShapeAlign)
 
 TEST_F(TestSplitReshapePass, TestRawToAlign)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestReshapeSplit", "TestReshapeSplit", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestReshapeSplit", "TestReshapeSplit",
+                                                      nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
     // Prepare the graph
     SplitReshape pass;
@@ -406,8 +419,8 @@ TEST_F(TestSplitReshapePass, TestRawToAlign)
 
 TEST_F(TestSplitReshapePass, TestAlignToRaw)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestReshapeSplit", "TestReshapeSplit", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestReshapeSplit", "TestReshapeSplit",
+                                                      nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
     // Prepare the graph
     SplitReshape pass;
@@ -474,8 +487,8 @@ TEST_F(TestSplitReshapePass, TestAlignToRaw)
 
 TEST_F(TestSplitReshapePass, TestAlignToRawSpecialCase)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestReshapeSplit", "TestReshapeSplit", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestReshapeSplit", "TestReshapeSplit",
+                                                      nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
     // Prepare the graph
     SplitReshape pass;
@@ -517,8 +530,8 @@ rawShape = {2, 4}
 */
 TEST_F(TestSplitReshapePass, TestObtainCopyOutTileBeCovered)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestReshapeSplit", "TestReshapeSplit", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestReshapeSplit", "TestReshapeSplit",
+                                                      nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
     // Prepare the graph
 
@@ -533,8 +546,10 @@ TEST_F(TestSplitReshapePass, TestObtainCopyOutTileBeCovered)
     std::vector<int64_t> alignedShape = {kNumTwo, kNumTwo, kNumTwo};
 
     std::shared_ptr<RawTensor> ddrRawTensor = std::make_shared<RawTensor>(DT_FP32, shape);
-    auto input1 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor, offset1, shape1, CreateTestConstIntVector(shape1));
-    auto input2 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor, offset2, shape1, CreateTestConstIntVector(shape1));
+    auto input1 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor, offset1, shape1,
+                                                             CreateTestConstIntVector(shape1));
+    auto input2 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor, offset2, shape1,
+                                                             CreateTestConstIntVector(shape1));
     auto ubTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
     auto output = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape3, CreateTestConstIntVector(shape3));
 
@@ -550,7 +565,8 @@ TEST_F(TestSplitReshapePass, TestObtainCopyOutTileBeCovered)
     LogicalTensors overlaps;
     LogicalTensors newOverlaps;
     std::vector<SymbolicScalar> validShape;
-    auto newOutput = npu::tile_fwk::IRBuilder().CreateTensorVar(output->tensor, newOutputTileOffset, newOutputTileShape, validShape);
+    auto newOutput = npu::tile_fwk::IRBuilder().CreateTensorVar(output->tensor, newOutputTileOffset, newOutputTileShape,
+                                                                validShape);
     copyOutTilePara copyOutTile = {ubTensor, reshapeOp.GetOpMagic(), output, newOutput, alignedShape};
     OverlapStatus overlapStatus = OverlapStatus::NO_OVER_LAP;
     EXPECT_EQ(pass.CollectCopyOut(*currFunctionPtr), SUCCESS);
@@ -569,8 +585,8 @@ rawShape = {2, 2, 2}
 */
 TEST_F(TestSplitReshapePass, TestObtainCopyOutTilePerfectlyMatched)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestReshapeSplit", "TestReshapeSplit", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestReshapeSplit", "TestReshapeSplit",
+                                                      nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
     // Prepare the graph
 
@@ -580,7 +596,8 @@ TEST_F(TestSplitReshapePass, TestObtainCopyOutTilePerfectlyMatched)
     std::vector<int64_t> shape2 = {kNumFour, kNumTwo};
 
     std::shared_ptr<RawTensor> ddrRawTensor = std::make_shared<RawTensor>(DT_FP32, shape);
-    auto input = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor, offset, shape1, CreateTestConstIntVector(shape1));
+    auto input = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor, offset, shape1,
+                                                            CreateTestConstIntVector(shape1));
     auto ubTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
     auto output = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
 
@@ -596,7 +613,8 @@ TEST_F(TestSplitReshapePass, TestObtainCopyOutTilePerfectlyMatched)
     std::vector<int64_t> newOutputTileOffset = {kNumZero, kNumZero, kNumZero};
     std::vector<int64_t> newOutputTileShape = {kNumTwo, kNumTwo, kNumTwo};
     std::vector<int64_t> alignedShape = {kNumTwo, kNumTwo, kNumTwo};
-    auto newOutput = npu::tile_fwk::IRBuilder().CreateTensorVar(output->tensor, newOutputTileOffset, newOutputTileShape, validShape);
+    auto newOutput = npu::tile_fwk::IRBuilder().CreateTensorVar(output->tensor, newOutputTileOffset, newOutputTileShape,
+                                                                validShape);
     copyOutTilePara copyOutTile = {ubTensor, reshapeOp.GetOpMagic(), output, newOutput, alignedShape};
     OverlapStatus overlapStatus = OverlapStatus::NO_OVER_LAP;
     EXPECT_EQ(pass.CollectCopyOut(*currFunctionPtr), SUCCESS);
@@ -618,8 +636,8 @@ rawShape = {2, 2, 2}
 */
 TEST_F(TestSplitReshapePass, TestUpdateForPerfectlyMatch)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestReshapeSplit", "TestReshapeSplit", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestReshapeSplit", "TestReshapeSplit",
+                                                      nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
     // Prepare the graph
 
@@ -629,7 +647,8 @@ TEST_F(TestSplitReshapePass, TestUpdateForPerfectlyMatch)
     std::vector<int64_t> shape2 = {kNumFour, kNumTwo};
 
     std::shared_ptr<RawTensor> ddrRawTensor = std::make_shared<RawTensor>(DT_FP32, shape);
-    auto input = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor, offset, shape1, CreateTestConstIntVector(shape1));
+    auto input = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor, offset, shape1,
+                                                            CreateTestConstIntVector(shape1));
     input->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
     auto ubTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
     ubTensor1->SetMemoryTypeOriginal(MemoryType::MEM_UNKNOWN, false);
@@ -691,8 +710,8 @@ rawShape = {2, 2, 2}
 */
 TEST_F(TestSplitReshapePass, TestDynUpdateForPerfectlyMatch)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestReshapeSplit", "TestReshapeSplit", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestReshapeSplit", "TestReshapeSplit",
+                                                      nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
     // Prepare the graph
 
@@ -704,7 +723,8 @@ TEST_F(TestSplitReshapePass, TestDynUpdateForPerfectlyMatch)
     std::vector<SymbolicScalar> validShape = {kNumFour, CreateTestScalarVar("a")};
 
     std::shared_ptr<RawTensor> ddrRawTensor = std::make_shared<RawTensor>(DT_FP32, shape);
-    auto input = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor, offset, shape1, CreateTestConstIntVector(shape1));
+    auto input = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor, offset, shape1,
+                                                            CreateTestConstIntVector(shape1));
     input->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
     auto ubTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
     ubTensor1->SetMemoryTypeOriginal(MemoryType::MEM_UNKNOWN, false);
@@ -726,7 +746,8 @@ TEST_F(TestSplitReshapePass, TestDynUpdateForPerfectlyMatch)
     std::vector<int64_t> newTileShape = {kNumTwo, kNumTwo, kNumTwo};
     para.alignedShape = {kNumTwo, kNumTwo, kNumTwo};
     para.overlaps = {input};
-    auto newOverlap = npu::tile_fwk::IRBuilder().CreateTensorVar(input->tensor, newTileOffset, newTileShape, CreateTestConstIntVector(newTileShape));
+    auto newOverlap = npu::tile_fwk::IRBuilder().CreateTensorVar(input->tensor, newTileOffset, newTileShape,
+                                                                 CreateTestConstIntVector(newTileShape));
     para.newOverlaps = {newOverlap};
     para.reshapeSource = ubTensor1;
     para.input = ubTensor2;
@@ -772,8 +793,8 @@ rawShape = {2, 2, 2}
 */
 TEST_F(TestSplitReshapePass, TestUpdateForBeCovered)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestReshapeSplit", "TestReshapeSplit", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestReshapeSplit", "TestReshapeSplit",
+                                                      nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
     // Prepare the graph
     std::vector<int64_t> shape1 = {kNumTwo, kNumTwo, kNumTwo};
@@ -785,11 +806,13 @@ TEST_F(TestSplitReshapePass, TestUpdateForBeCovered)
     std::vector<int64_t> view_offset2 = {kNumZero, kNumTwo};
 
     std::shared_ptr<RawTensor> RawTensor1 = std::make_shared<RawTensor>(DT_FP32, shape1);
-    auto input = npu::tile_fwk::IRBuilder().CreateTensorVar(RawTensor1, offset1, shape1, CreateTestConstIntVector(shape1));
+    auto input = npu::tile_fwk::IRBuilder().CreateTensorVar(RawTensor1, offset1, shape1,
+                                                            CreateTestConstIntVector(shape1));
     input->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
     auto ubTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
     std::shared_ptr<RawTensor> RawTensor2 = std::make_shared<RawTensor>(DT_FP32, shape2);
-    auto ubTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(RawTensor2, offset2, shape2, CreateTestConstIntVector(shape2));
+    auto ubTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(RawTensor2, offset2, shape2,
+                                                                CreateTestConstIntVector(shape2));
     ubTensor2->SetMemoryTypeOriginal(MemoryType::MEM_UNKNOWN, false);
     auto output1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape3, CreateTestConstIntVector(shape3));
     output1->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
@@ -815,14 +838,16 @@ TEST_F(TestSplitReshapePass, TestUpdateForBeCovered)
     std::vector<int64_t> newCopyOutTileShape = {kNumTwo, kNumTwo, kNumTwo};
     para.alignedShape = {kNumTwo, kNumTwo, kNumTwo};
     para.overlaps = {input};
-    para.newOverlaps = {npu::tile_fwk::IRBuilder().CreateTensorVar(input->tensor, newCopyOutTileOffset, newCopyOutTileShape, validShape)};
+    para.newOverlaps = {npu::tile_fwk::IRBuilder().CreateTensorVar(input->tensor, newCopyOutTileOffset,
+                                                                   newCopyOutTileShape, validShape)};
     para.reshapeSource = ubTensor1;
     para.input = ubTensor2;
     para.output = output1;
     EXPECT_EQ(pass.CollectCopyOut(*currFunctionPtr), SUCCESS);
 
     std::vector<int64_t> viewOffset = {kNumZero, kNumZero};
-    auto inputView = npu::tile_fwk::IRBuilder().CreateTensorVar(ubTensor2->tensor, viewOffset, shape2, CreateTestConstIntVector(shape2));
+    auto inputView = npu::tile_fwk::IRBuilder().CreateTensorVar(ubTensor2->tensor, viewOffset, shape2,
+                                                                CreateTestConstIntVector(shape2));
     para.inputView = inputView;
     para.newInputViewTileShape = {kNumTwo, kNumOne, kNumTwo};
     para.newInputViewTileOffset = {kNumZero, kNumZero, kNumZero};
@@ -860,8 +885,8 @@ rawShape = {2, 2, 2}
 */
 TEST_F(TestSplitReshapePass, TestDynUpdateForBeCovered)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestReshapeSplit", "TestReshapeSplit", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestReshapeSplit", "TestReshapeSplit",
+                                                      nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
     // Prepare the graph
     std::vector<int64_t> shape1 = {kNumTwo, kNumTwo, kNumTwo};
@@ -874,11 +899,13 @@ TEST_F(TestSplitReshapePass, TestDynUpdateForBeCovered)
     std::vector<SymbolicScalar> validShape = {CreateTestScalarVar("a"), kNumFour};
 
     std::shared_ptr<RawTensor> RawTensor1 = std::make_shared<RawTensor>(DT_FP32, shape1);
-    auto input = npu::tile_fwk::IRBuilder().CreateTensorVar(RawTensor1, offset1, shape1, CreateTestConstIntVector(shape1));
+    auto input = npu::tile_fwk::IRBuilder().CreateTensorVar(RawTensor1, offset1, shape1,
+                                                            CreateTestConstIntVector(shape1));
     input->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
     auto ubTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
     std::shared_ptr<RawTensor> RawTensor2 = std::make_shared<RawTensor>(DT_FP32, shape2);
-    auto ubTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(RawTensor2, offset2, shape2, CreateTestConstIntVector(shape2));
+    auto ubTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(RawTensor2, offset2, shape2,
+                                                                CreateTestConstIntVector(shape2));
     ubTensor2->SetMemoryTypeOriginal(MemoryType::MEM_UNKNOWN, false);
     auto output1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape3, CreateTestConstIntVector(shape3));
     output1->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
@@ -902,8 +929,8 @@ TEST_F(TestSplitReshapePass, TestDynUpdateForBeCovered)
     std::vector<int64_t> newCopyOutTileShape = {kNumTwo, kNumTwo, kNumTwo};
     para.alignedShape = {kNumTwo, kNumTwo, kNumTwo};
     para.overlaps = {input};
-    auto newOverlap =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(input->tensor, newCopyOutTileOffset, newCopyOutTileShape, CreateTestConstIntVector(newCopyOutTileShape));
+    auto newOverlap = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        input->tensor, newCopyOutTileOffset, newCopyOutTileShape, CreateTestConstIntVector(newCopyOutTileShape));
     para.newOverlaps = {newOverlap};
     para.reshapeSource = ubTensor1;
     para.input = ubTensor2;
@@ -911,7 +938,8 @@ TEST_F(TestSplitReshapePass, TestDynUpdateForBeCovered)
     EXPECT_EQ(pass.CollectCopyOut(*currFunctionPtr), SUCCESS);
 
     std::vector<int64_t> viewOffset = {kNumZero, kNumZero};
-    auto inputView = npu::tile_fwk::IRBuilder().CreateTensorVar(ubTensor2->tensor, viewOffset, shape2, CreateTestConstIntVector(shape2));
+    auto inputView = npu::tile_fwk::IRBuilder().CreateTensorVar(ubTensor2->tensor, viewOffset, shape2,
+                                                                CreateTestConstIntVector(shape2));
     para.inputView = inputView;
     para.newInputViewTileShape = {kNumTwo, kNumOne, kNumTwo};
     para.newInputViewTileOffset = {kNumZero, kNumZero, kNumZero};
@@ -957,12 +985,10 @@ TEST_F(TestSplitReshapePass, TestDynUpdateForBeCovered)
     EXPECT_EQ(viewOpAttribute2->GetFromOffset(), view_offset2);
 }
 
-static void BuildBasePerfectlyMatchGraph(
-    std::shared_ptr<Function>& currFunctionPtr,
-    LogicalTensorPtr& input1Out, LogicalTensorPtr& input2Out,
-    LogicalTensorPtr& ubTensor1Out, LogicalTensorPtr& ubTensor2Out,
-    LogicalTensorPtr& outputOut, Operation*& viewOpOut,
-    std::vector<int64_t>& viewOffsetOut)
+static void BuildBasePerfectlyMatchGraph(std::shared_ptr<Function>& currFunctionPtr, LogicalTensorPtr& input1Out,
+                                         LogicalTensorPtr& input2Out, LogicalTensorPtr& ubTensor1Out,
+                                         LogicalTensorPtr& ubTensor2Out, LogicalTensorPtr& outputOut,
+                                         Operation*& viewOpOut, std::vector<int64_t>& viewOffsetOut)
 {
     std::vector<int64_t> shape1 = {kNumTwo, kNumFour};
     std::vector<int64_t> shape2 = {kNumTwo, kNumTwo};
@@ -972,9 +998,11 @@ static void BuildBasePerfectlyMatchGraph(
     viewOffsetOut = {kNumZero, kNumZero, kNumZero};
 
     std::shared_ptr<RawTensor> RawTensor1 = std::make_shared<RawTensor>(DT_FP32, shape1);
-    input1Out = npu::tile_fwk::IRBuilder().CreateTensorVar(RawTensor1, offset1, shape2, CreateTestConstIntVector(shape2));
+    input1Out = npu::tile_fwk::IRBuilder().CreateTensorVar(RawTensor1, offset1, shape2,
+                                                           CreateTestConstIntVector(shape2));
     input1Out->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
-    input2Out = npu::tile_fwk::IRBuilder().CreateTensorVar(RawTensor1, offset2, shape2, CreateTestConstIntVector(shape2));
+    input2Out = npu::tile_fwk::IRBuilder().CreateTensorVar(RawTensor1, offset2, shape2,
+                                                           CreateTestConstIntVector(shape2));
     input2Out->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
     ubTensor1Out = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
     ubTensor1Out->SetMemoryTypeOriginal(MemoryType::MEM_UNKNOWN, false);
@@ -983,10 +1011,12 @@ static void BuildBasePerfectlyMatchGraph(
     outputOut = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape3, CreateTestConstIntVector(shape3));
     outputOut->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
 
-    auto& assemble_op1 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {input1Out}, {ubTensor1Out});
+    auto& assemble_op1 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {input1Out},
+                                                          {ubTensor1Out});
     auto assemble_Attr1 = std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, offset1);
     assemble_op1.SetOpAttribute(assemble_Attr1);
-    auto& assemble_op2 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {input2Out}, {ubTensor1Out});
+    auto& assemble_op2 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {input2Out},
+                                                          {ubTensor1Out});
     auto assemble_Attr2 = std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, offset2);
     assemble_op2.SetOpAttribute(assemble_Attr2);
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {ubTensor1Out}, {ubTensor2Out});
@@ -1006,15 +1036,14 @@ rawShape = {2, 4}
 */
 TEST_F(TestSplitReshapePass, TestUpdateForPerfectlyMatchWithAll)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestReshapeSplit", "TestReshapeSplit", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestReshapeSplit", "TestReshapeSplit",
+                                                      nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     LogicalTensorPtr input1, input2, ubTensor1, ubTensor2, output;
     Operation* viewOpPtr = nullptr;
     std::vector<int64_t> view_offset;
-    BuildBasePerfectlyMatchGraph(currFunctionPtr, input1, input2,
-        ubTensor1, ubTensor2, output, viewOpPtr, view_offset);
+    BuildBasePerfectlyMatchGraph(currFunctionPtr, input1, input2, ubTensor1, ubTensor2, output, viewOpPtr, view_offset);
     auto& view_op = *viewOpPtr;
 
     CalcOverlapPara para;
@@ -1026,17 +1055,20 @@ TEST_F(TestSplitReshapePass, TestUpdateForPerfectlyMatchWithAll)
     para.overlaps = {input1, input2};
     std::vector<int64_t> newInput1TileOffset = {kNumZero, kNumZero, kNumZero};
     std::vector<int64_t> newInput1TileShape = {kNumTwo, kNumOne, kNumTwo};
-    auto newInput1 = npu::tile_fwk::IRBuilder().CreateTensorVar(input1->tensor, newInput1TileOffset, newInput1TileShape, validShape);
+    auto newInput1 = npu::tile_fwk::IRBuilder().CreateTensorVar(input1->tensor, newInput1TileOffset, newInput1TileShape,
+                                                                validShape);
     std::vector<int64_t> newInput2TileOffset = {kNumZero, kNumOne, kNumZero};
     std::vector<int64_t> newInput2TileShape = {kNumTwo, kNumOne, kNumTwo};
-    auto newInput2 = npu::tile_fwk::IRBuilder().CreateTensorVar(input2->tensor, newInput2TileOffset, newInput2TileShape, validShape);
+    auto newInput2 = npu::tile_fwk::IRBuilder().CreateTensorVar(input2->tensor, newInput2TileOffset, newInput2TileShape,
+                                                                validShape);
     para.newOverlaps = {newInput1, newInput2};
     para.reshapeSource = ubTensor1;
     para.input = ubTensor2;
     para.output = output;
     para.newInputViewTileShape = {kNumTwo, kNumTwo, kNumTwo};
     para.newInputViewTileOffset = {kNumZero, kNumZero, kNumZero};
-    auto inputView = npu::tile_fwk::IRBuilder().CreateTensorVar(ubTensor2->tensor, view_offset, shape3, CreateTestConstIntVector(shape3));
+    auto inputView = npu::tile_fwk::IRBuilder().CreateTensorVar(ubTensor2->tensor, view_offset, shape3,
+                                                                CreateTestConstIntVector(shape3));
     para.inputView = inputView;
     EXPECT_EQ(pass.CollectCopyOut(*currFunctionPtr), SUCCESS);
     EXPECT_EQ(pass.ProcessMultitoOne(*currFunctionPtr, view_op, para), SUCCESS);
@@ -1060,15 +1092,13 @@ rawShape = {2, 4}
 {2, 2}(ddr) -> {2, 4}(unknown) -> reshape -> {2, 2, 2}(ddr) -> view -> {2, 2}
 {2, 2}(ddr) ->
 */
-static void BuildDynUpdatePerfectlyMatchGraph(
-    std::shared_ptr<Function>& currFunctionPtr, Operation*& viewOpOut,
-    CalcOverlapPara& para, LogicalTensorPtr& inputViewOut,
-    std::vector<SymbolicScalar>& validShapeOut)
+static void BuildDynUpdatePerfectlyMatchGraph(std::shared_ptr<Function>& currFunctionPtr, Operation*& viewOpOut,
+                                              CalcOverlapPara& para, LogicalTensorPtr& inputViewOut,
+                                              std::vector<SymbolicScalar>& validShapeOut)
 {
     LogicalTensorPtr input1, input2, ubTensor1, ubTensor2, output;
     std::vector<int64_t> view_offset;
-    BuildBasePerfectlyMatchGraph(currFunctionPtr, input1, input2,
-        ubTensor1, ubTensor2, output, viewOpOut, view_offset);
+    BuildBasePerfectlyMatchGraph(currFunctionPtr, input1, input2, ubTensor1, ubTensor2, output, viewOpOut, view_offset);
     validShapeOut = {CreateTestScalarVar("a"), kNumTwo, kNumTwo};
     std::vector<int64_t> shape3 = {kNumTwo, kNumTwo, kNumTwo};
 
@@ -1076,12 +1106,12 @@ static void BuildDynUpdatePerfectlyMatchGraph(
     para.overlaps = {input1, input2};
     std::vector<int64_t> newInput1TileOffset = {kNumZero, kNumZero, kNumZero};
     std::vector<int64_t> newInput1TileShape = {kNumTwo, kNumOne, kNumTwo};
-    auto newInput1 =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(input1->tensor, newInput1TileOffset, newInput1TileShape, CreateTestConstIntVector(newInput1TileShape));
+    auto newInput1 = npu::tile_fwk::IRBuilder().CreateTensorVar(input1->tensor, newInput1TileOffset, newInput1TileShape,
+                                                                CreateTestConstIntVector(newInput1TileShape));
     std::vector<int64_t> newInput2TileOffset = {kNumZero, kNumOne, kNumZero};
     std::vector<int64_t> newInput2TileShape = {kNumTwo, kNumOne, kNumTwo};
-    auto newInput2 =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(input2->tensor, newInput2TileOffset, newInput2TileShape, CreateTestConstIntVector(newInput2TileShape));
+    auto newInput2 = npu::tile_fwk::IRBuilder().CreateTensorVar(input2->tensor, newInput2TileOffset, newInput2TileShape,
+                                                                CreateTestConstIntVector(newInput2TileShape));
     para.newOverlaps = {newInput1, newInput2};
     para.reshapeSource = ubTensor1;
     para.input = ubTensor2;
@@ -1089,14 +1119,15 @@ static void BuildDynUpdatePerfectlyMatchGraph(
     para.newInputViewTileShape = {kNumTwo, kNumTwo, kNumTwo};
     para.newInputViewTileOffset = {kNumZero, kNumZero, kNumZero};
     para.oriViewDynShape = GetViewValidShape(validShapeOut, view_offset, {}, shape3);
-    inputViewOut = npu::tile_fwk::IRBuilder().CreateTensorVar(ubTensor2->tensor, view_offset, shape3, CreateTestConstIntVector(shape3));
+    inputViewOut = npu::tile_fwk::IRBuilder().CreateTensorVar(ubTensor2->tensor, view_offset, shape3,
+                                                              CreateTestConstIntVector(shape3));
     para.inputView = inputViewOut;
 }
 
 TEST_F(TestSplitReshapePass, TestDynUpdateForPerfectlyMatchWithAll)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestReshapeSplit", "TestReshapeSplit", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestReshapeSplit", "TestReshapeSplit",
+                                                      nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     Operation* viewOpPtr = nullptr;
@@ -1132,10 +1163,9 @@ void RunPassStra(Function& func, const PassName passName)
     std::string passNameStr = PassNameStr(passName);
     std::string strategyName = passNameStr + "Strategy";
     PassManager& passManager = PassManager::Instance();
-    passManager.RegisterStrategy(
-        strategyName, {
-                          {passNameStr, passName},
-                      });
+    passManager.RegisterStrategy(strategyName, {
+                                                   {passNameStr, passName},
+                                               });
     EXPECT_EQ(passManager.RunPass(Program::GetInstance(), func, strategyName), SUCCESS);
 }
 
@@ -1221,8 +1251,8 @@ TEST_F(TestSplitReshapePass, TestPerfectlyMatchedSTest)
     Function* func = Program::GetInstance().GetFunctionByRawName("TENSOR_STCase1");
 
     RunPassStra(*func, PassName::EXPAND_FUNCTION);
-    CheckOpReshape(
-        func, CheckReshapeStruct{origShape, kSizeTwo, false, {}, reshapeShape, kSizeTwo, false, {}, kNumOne});
+    CheckOpReshape(func,
+                   CheckReshapeStruct{origShape, kSizeTwo, false, {}, reshapeShape, kSizeTwo, false, {}, kNumOne});
 
     RunPassStra(*func, PassName::SPLIT_RESHAPE);
     CheckOpReshape(
@@ -1269,8 +1299,8 @@ TEST_F(TestSplitReshapePass, TestBeCoveredSTest)
     Function* func = Program::GetInstance().GetFunctionByRawName("TENSOR_STCase2");
 
     RunPassStra(*func, PassName::EXPAND_FUNCTION);
-    CheckOpReshape(
-        func, CheckReshapeStruct{origShape, kSizeTwo, false, {}, reshapeShape, kSizeFour, false, {}, kNumOne});
+    CheckOpReshape(func,
+                   CheckReshapeStruct{origShape, kSizeTwo, false, {}, reshapeShape, kSizeFour, false, {}, kNumOne});
 
     RunPassStra(*func, PassName::SPLIT_RESHAPE);
     CheckOpReshape(
@@ -1318,20 +1348,17 @@ TEST_F(TestSplitReshapePass, TestPerfectlyMatchedWithallSTest)
     Function* func = Program::GetInstance().GetFunctionByRawName("TENSOR_STCase3");
 
     RunPassStra(*func, PassName::EXPAND_FUNCTION);
-    CheckOpReshape(
-        func, CheckReshapeStruct{origShape, kSizeFour, false, {}, reshapeShape, kSizeTwo, false, {}, kNumOne});
+    CheckOpReshape(func,
+                   CheckReshapeStruct{origShape, kSizeFour, false, {}, reshapeShape, kSizeTwo, false, {}, kNumOne});
 
     RunPassStra(*func, PassName::SPLIT_RESHAPE);
-    CheckOpReshape(
-        func, CheckReshapeStruct{
-                  tiledreshapeShape, kSizeTwo, true, tiledassembleShape, tiledviewShape, kSizeOne, true, tiledviewShape,
-                  kNumTwo});
+    CheckOpReshape(func, CheckReshapeStruct{tiledreshapeShape, kSizeTwo, true, tiledassembleShape, tiledviewShape,
+                                            kSizeOne, true, tiledviewShape, kNumTwo});
 }
 
-void CollectOperations(
-    std::shared_ptr<Function> func, std::unordered_map<LogicalTensorPtr, int>& inputsWeight,
-    std::unordered_map<LogicalTensorPtr, Operation*>& newAssembles, const uint32_t expectReshapeOp,
-    const uint32_t expectViewOp, int expectAssembleOp)
+void CollectOperations(std::shared_ptr<Function> func, std::unordered_map<LogicalTensorPtr, int>& inputsWeight,
+                       std::unordered_map<LogicalTensorPtr, Operation*>& newAssembles, const uint32_t expectReshapeOp,
+                       const uint32_t expectViewOp, int expectAssembleOp)
 {
     int reshapeOp = 0;
     int assembleOp = 0;
@@ -1356,18 +1383,17 @@ void CollectOperations(
     EXPECT_EQ(assembleOp, expectAssembleOp);
 }
 
-void CheckNewAssembles(
-    std::unordered_map<LogicalTensorPtr, Operation*>& newAssembles,
-    std::unordered_map<LogicalTensorPtr, std::vector<int64_t>>& expectAssembleOffset,
-    std::vector<std::string>& expectAssembleDynShape,
-    std::unordered_map<LogicalTensorPtr, std::vector<std::string>>& expectValidShapes,
-    std::vector<SymbolicScalar>& dynInputShape, LogicalTensors& reshapeOutputs,
-    const uint32_t reshapeOutputSize = kNumFour)
+void CheckNewAssembles(std::unordered_map<LogicalTensorPtr, Operation*>& newAssembles,
+                       std::unordered_map<LogicalTensorPtr, std::vector<int64_t>>& expectAssembleOffset,
+                       std::vector<std::string>& expectAssembleDynShape,
+                       std::unordered_map<LogicalTensorPtr, std::vector<std::string>>& expectValidShapes,
+                       std::vector<SymbolicScalar>& dynInputShape, LogicalTensors& reshapeOutputs,
+                       const uint32_t reshapeOutputSize = kNumFour)
 {
     for (auto [input, newAssemble] : newAssembles) {
         EXPECT_NE(newAssemble, nullptr);
-        auto assembleDynValidShape =
-            dynamic_cast<AssembleOpAttribute*>(newAssemble->GetOpAttribute().get())->GetFromDynValidShape();
+        auto assembleDynValidShape = dynamic_cast<AssembleOpAttribute*>(newAssemble->GetOpAttribute().get())
+                                         ->GetFromDynValidShape();
         EXPECT_EQ(assembleDynValidShape.size(), kNumThree);
         for (size_t i = 0; i < kNumThree; ++i) {
             EXPECT_EQ(assembleDynValidShape[i].Dump(), dynInputShape[i].Dump());
@@ -1418,9 +1444,11 @@ LogicalTensors BuildDynPerfectlyMatchFunc(std::shared_ptr<Function> func)
     ubTensor1->SetMemoryTypeOriginal(MemoryType::MEM_UNKNOWN, false);
     auto ubTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape3, CreateTestConstIntVector(shape3));
     ubTensor2->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
-    auto output1 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor2, viewOffset1, shape4, CreateTestConstIntVector(shape4));
+    auto output1 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor2, viewOffset1, shape4,
+                                                              CreateTestConstIntVector(shape4));
     output1->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
-    auto output2 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor2, viewOffset2, shape4, CreateTestConstIntVector(shape4));
+    auto output2 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor2, viewOffset2, shape4,
+                                                              CreateTestConstIntVector(shape4));
     output2->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
 
     auto& assemble_op1 = PassOperationUtils::AddOperation(*func, Opcode::OP_ASSEMBLE, {input1}, {ubTensor1});
@@ -1475,11 +1503,11 @@ TEST_F(TestSplitReshapePass, TestDynPerfectlyMatchSTest)
     std::unordered_map<LogicalTensorPtr, Operation*> newAssembles = {{inputs[0], nullptr}, {inputs[1], nullptr}};
     CollectOperations(func, inputsWeight, newAssembles, kNumTwo, kNumTwo, 11);
 
-    std::unordered_map<LogicalTensorPtr, std::vector<int64_t>> expectAssembleOffset = {
-        {inputs[0], assembleOffset1}, {inputs[1], assembleOffset2}};
+    std::unordered_map<LogicalTensorPtr, std::vector<int64_t>> expectAssembleOffset = {{inputs[0], assembleOffset1},
+                                                                                       {inputs[1], assembleOffset2}};
     LogicalTensors reshapeOutputs;
-    std::vector<std::string> expectAssembleDynShape = {
-        "RUNTIME_Max((a0*(a0!=0)), 0)", "RUNTIME_Max((a1*(a1!=0)), 0)", "2"};
+    std::vector<std::string> expectAssembleDynShape = {"RUNTIME_Max((a0*(a0!=0)), 0)", "RUNTIME_Max((a1*(a1!=0)), 0)",
+                                                       "2"};
     std::vector<std::string> expectReshapeDynShape = {
         "RUNTIME_Max(((RUNTIME_Min(RUNTIME_Max(a0, 0), 2)*(RUNTIME_Min(RUNTIME_Max(a0, 0), 2)!=0))-0), "
         "0)",
@@ -1488,9 +1516,8 @@ TEST_F(TestSplitReshapePass, TestDynPerfectlyMatchSTest)
         "1", "2"};
     std::unordered_map<LogicalTensorPtr, std::vector<std::string>> expectValidShapes = {
         {inputs[0], expectReshapeDynShape}, {inputs[1], expectReshapeDynShape}};
-    CheckNewAssembles(
-        newAssembles, expectAssembleOffset, expectAssembleDynShape, expectValidShapes, dynInputShape, reshapeOutputs,
-        kNumFour);
+    CheckNewAssembles(newAssembles, expectAssembleOffset, expectAssembleDynShape, expectValidShapes, dynInputShape,
+                      reshapeOutputs, kNumFour);
     EXPECT_NE(reshapeOutputs[0], reshapeOutputs[1]);
     EXPECT_NE(*(reshapeOutputs[0]->GetConsumers().begin()), *(reshapeOutputs[1]->GetConsumers().begin()));
 }
@@ -1520,13 +1547,17 @@ LogicalTensors BuildDynBeCoveredFunc(std::shared_ptr<Function> func)
     auto input2 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor1, assembleOffset2, shape1, dynInputShape);
     input2->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
     std::shared_ptr<RawTensor> ddrRawTensor2 = std::make_shared<RawTensor>(DT_FP32, shape3);
-    auto output1 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor2, viewOffset1, shape4, CreateTestConstIntVector(shape4));
+    auto output1 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor2, viewOffset1, shape4,
+                                                              CreateTestConstIntVector(shape4));
     output1->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
-    auto output2 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor2, viewOffset2, shape4, CreateTestConstIntVector(shape4));
+    auto output2 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor2, viewOffset2, shape4,
+                                                              CreateTestConstIntVector(shape4));
     output2->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
-    auto output3 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor2, viewOffset3, shape4, CreateTestConstIntVector(shape4));
+    auto output3 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor2, viewOffset3, shape4,
+                                                              CreateTestConstIntVector(shape4));
     output3->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
-    auto output4 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor2, viewOffset4, shape4, CreateTestConstIntVector(shape4));
+    auto output4 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor2, viewOffset4, shape4,
+                                                              CreateTestConstIntVector(shape4));
     output4->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
 
     auto& assemble_op1 = PassOperationUtils::AddOperation(*func, Opcode::OP_ASSEMBLE, {input1}, {ubTensor1});
@@ -1586,17 +1617,16 @@ TEST_F(TestSplitReshapePass, TestDynBeCoveredSTest)
     LogicalTensors reshapeOutputs;
     std::vector<std::string> expectAssembleDynShape = {"2", "2", "RUNTIME_Max((a*(a!=0)), 0)"};
     std::vector<std::string> expectValidShape1 = {
-        "4",
-        "RUNTIME_Max(((RUNTIME_Min(RUNTIME_Max(a, 0), 2)*(RUNTIME_Min(RUNTIME_Max(a, 0), 2)!=0))-0), 0)"};
+        "4", "RUNTIME_Max(((RUNTIME_Min(RUNTIME_Max(a, 0), 2)*(RUNTIME_Min(RUNTIME_Max(a, 0), 2)!=0))-0), 0)"};
     std::vector<std::string> expectValidShape2 = {
-        "4", "RUNTIME_Max((((RUNTIME_Min(RUNTIME_Max((a-2), 0), 2)+2)*(RUNTIME_Min(RUNTIME_Max((a-2), 0), 2)!=0))-2), 0)"};
-    std::unordered_map<LogicalTensorPtr, std::vector<int64_t>> expectAssembleOffset = {
-        {inputs[0], assembleOffset1}, {inputs[1], assembleOffset2}};
-    std::unordered_map<LogicalTensorPtr, std::vector<std::string>> expectValidShapes = {
-        {inputs[0], expectValidShape1}, {inputs[1], expectValidShape2}};
-    CheckNewAssembles(
-        newAssembles, expectAssembleOffset, expectAssembleDynShape, expectValidShapes, dynInputShape, reshapeOutputs,
-        kNumTwo);
+        "4",
+        "RUNTIME_Max((((RUNTIME_Min(RUNTIME_Max((a-2), 0), 2)+2)*(RUNTIME_Min(RUNTIME_Max((a-2), 0), 2)!=0))-2), 0)"};
+    std::unordered_map<LogicalTensorPtr, std::vector<int64_t>> expectAssembleOffset = {{inputs[0], assembleOffset1},
+                                                                                       {inputs[1], assembleOffset2}};
+    std::unordered_map<LogicalTensorPtr, std::vector<std::string>> expectValidShapes = {{inputs[0], expectValidShape1},
+                                                                                        {inputs[1], expectValidShape2}};
+    CheckNewAssembles(newAssembles, expectAssembleOffset, expectAssembleDynShape, expectValidShapes, dynInputShape,
+                      reshapeOutputs, kNumTwo);
     std::vector<int64_t> expectedShape = {kNumFour, kNumTwo};
     EXPECT_EQ(reshapeOutputs[0]->shape, expectedShape);
     EXPECT_EQ(reshapeOutputs[1]->shape, expectedShape);
@@ -1641,9 +1671,11 @@ LogicalTensors BuildDynPerfectlyMatchWithAllFunc(std::shared_ptr<Function> func)
     ubTensor1->SetMemoryTypeOriginal(MemoryType::MEM_UNKNOWN, false);
     auto ubTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape3, CreateTestConstIntVector(shape3));
     ubTensor2->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
-    auto output1 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor2, viewOffset1, shape4, CreateTestConstIntVector(shape4));
+    auto output1 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor2, viewOffset1, shape4,
+                                                              CreateTestConstIntVector(shape4));
     output1->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
-    auto output2 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor2, viewOffset2, shape4, CreateTestConstIntVector(shape4));
+    auto output2 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor2, viewOffset2, shape4,
+                                                              CreateTestConstIntVector(shape4));
     output2->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
 
     auto& assemble_op1 = PassOperationUtils::AddOperation(*func, Opcode::OP_ASSEMBLE, {input1}, {ubTensor1});
@@ -1703,25 +1735,22 @@ TEST_F(TestSplitReshapePass, TestDynPerfectlyMatchWithAllSTest)
         {inputs[0], nullptr}, {inputs[1], nullptr}, {inputs[2], nullptr}, {inputs[3], nullptr}};
     CollectOperations(func, inputsWeight, newAssembles, kNumTwo, kNumTwo, 1111);
 
-    std::unordered_map<LogicalTensorPtr, std::vector<int64_t>> expectAssembleOffset = {
-        {inputs[0], assembleOffset1},
-        {inputs[1], assembleOffset2},
-        {inputs[2], assembleOffset3},
-        {inputs[3], assembleOffset4}};
+    std::unordered_map<LogicalTensorPtr, std::vector<int64_t>> expectAssembleOffset = {{inputs[0], assembleOffset1},
+                                                                                       {inputs[1], assembleOffset2},
+                                                                                       {inputs[2], assembleOffset3},
+                                                                                       {inputs[3], assembleOffset4}};
     LogicalTensors reshapeOutputs;
 
     std::vector<std::string> expectAssembleDynShape = {"2", "4", "RUNTIME_Max((a*(a!=0)), 0)"};
     std::vector<std::string> expectValidShape = {
         "2", "2", "2",
         "RUNTIME_Max(((RUNTIME_Min(RUNTIME_Max(a, 0), 2)*(RUNTIME_Min(RUNTIME_Max(a, 0), 2)!=0))-0), 0)"};
-    std::unordered_map<LogicalTensorPtr, std::vector<std::string>> expectValidShapes = {
-        {inputs[0], expectValidShape},
-        {inputs[1], expectValidShape},
-        {inputs[2], expectValidShape},
-        {inputs[3], expectValidShape}};
-    CheckNewAssembles(
-        newAssembles, expectAssembleOffset, expectAssembleDynShape, expectValidShapes, dynInputShape, reshapeOutputs,
-        kNumFour);
+    std::unordered_map<LogicalTensorPtr, std::vector<std::string>> expectValidShapes = {{inputs[0], expectValidShape},
+                                                                                        {inputs[1], expectValidShape},
+                                                                                        {inputs[2], expectValidShape},
+                                                                                        {inputs[3], expectValidShape}};
+    CheckNewAssembles(newAssembles, expectAssembleOffset, expectAssembleDynShape, expectValidShapes, dynInputShape,
+                      reshapeOutputs, kNumFour);
     int eqCount = (reshapeOutputs[0] == reshapeOutputs[1]) + (reshapeOutputs[0] == reshapeOutputs[2]) +
                   (reshapeOutputs[0] == reshapeOutputs[3]) + (reshapeOutputs[1] == reshapeOutputs[2]) +
                   (reshapeOutputs[1] == reshapeOutputs[3]) + (reshapeOutputs[2] == reshapeOutputs[3]);
@@ -1968,17 +1997,21 @@ TEST_F(TestSplitReshapePass, TestExceptionCase4)
 
     std::shared_ptr<RawTensor> ddrRawTensor1 = std::make_shared<RawTensor>(DT_FP32, shape2);
     std::shared_ptr<RawTensor> ddrRawTensor2 = std::make_shared<RawTensor>(DT_FP32, shape3);
-    auto input1 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor1, assembleOffset1, shape1, CreateTestConstIntVector(shape1));
+    auto input1 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor1, assembleOffset1, shape1,
+                                                             CreateTestConstIntVector(shape1));
     input1->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
-    auto input2 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor1, assembleOffset2, shape1, CreateTestConstIntVector(shape1));
+    auto input2 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor1, assembleOffset2, shape1,
+                                                             CreateTestConstIntVector(shape1));
     input2->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
     auto ubTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
     ubTensor1->SetMemoryTypeOriginal(MemoryType::MEM_UNKNOWN, false);
     auto ubTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape3, CreateTestConstIntVector(shape3));
     ubTensor2->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
-    auto output1 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor2, viewOffset1, shape4, CreateTestConstIntVector(shape4));
+    auto output1 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor2, viewOffset1, shape4,
+                                                              CreateTestConstIntVector(shape4));
     output1->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
-    auto output2 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor2, viewOffset2, shape4, CreateTestConstIntVector(shape4));
+    auto output2 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor2, viewOffset2, shape4,
+                                                              CreateTestConstIntVector(shape4));
     output2->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
 
     auto& reshape_op = PassOperationUtils::AddOperation(*func, Opcode::OP_RESHAPE, {ubTensor1}, {ubTensor2});
@@ -2045,8 +2078,8 @@ TEST_F(TestSplitReshapePass, TestExceptionCase5)
 
 TEST_F(TestSplitReshapePass, TestShapeAlignIndexExceeded)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestReshapeSplit", "TestReshapeSplit", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestReshapeSplit", "TestReshapeSplit",
+                                                      nullptr);
     ASSERT_TRUE(currFunctionPtr != nullptr);
     SplitReshape pass;
     // shape1 单维先耗尽：第一轮 i1=0,i2=0 得到 prod1=1,i1=1,i2=1；下一轮 prod1==1&&prod2==1 时 i1>=shape1.size() 触发
@@ -2060,8 +2093,8 @@ TEST_F(TestSplitReshapePass, TestShapeAlignIndexExceeded)
 
 TEST_F(TestSplitReshapePass, TestRawToAlignUpdateShapeOffsetTailCond)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestReshapeSplit", "TestReshapeSplit", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestReshapeSplit", "TestReshapeSplit",
+                                                      nullptr);
     ASSERT_TRUE(currFunctionPtr != nullptr);
     SplitReshape pass;
     ReshapeTilePara shapePara;
@@ -2077,8 +2110,8 @@ TEST_F(TestSplitReshapePass, TestRawToAlignUpdateShapeOffsetTailCond)
 
 TEST_F(TestSplitReshapePass, TestRawToAlignUpdateShapeOffsetOffsetNotDivisible)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestReshapeSplit", "TestReshapeSplit", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestReshapeSplit", "TestReshapeSplit",
+                                                      nullptr);
     ASSERT_TRUE(currFunctionPtr != nullptr);
     SplitReshape pass;
     ReshapeTilePara shapePara;
@@ -2094,8 +2127,8 @@ TEST_F(TestSplitReshapePass, TestRawToAlignUpdateShapeOffsetOffsetNotDivisible)
 
 TEST_F(TestSplitReshapePass, TestRawToAlignUpdateShapeOffsetShapeNotDivisible)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestReshapeSplit", "TestReshapeSplit", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestReshapeSplit", "TestReshapeSplit",
+                                                      nullptr);
     ASSERT_TRUE(currFunctionPtr != nullptr);
     SplitReshape pass;
     ReshapeTilePara shapePara;
@@ -2111,8 +2144,8 @@ TEST_F(TestSplitReshapePass, TestRawToAlignUpdateShapeOffsetShapeNotDivisible)
 
 TEST_F(TestSplitReshapePass, TestRawToAlignConstructShapeOffsetStrideNotDivisible)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestReshapeSplit", "TestReshapeSplit", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestReshapeSplit", "TestReshapeSplit",
+                                                      nullptr);
     ASSERT_TRUE(currFunctionPtr != nullptr);
     SplitReshape pass;
     ReshapeTilePara shapePara;
@@ -2129,8 +2162,8 @@ TEST_F(TestSplitReshapePass, TestRawToAlignConstructShapeOffsetStrideNotDivisibl
 
 TEST_F(TestSplitReshapePass, TestRawToAlignShapeOneTileInvalid)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestReshapeSplit", "TestReshapeSplit", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestReshapeSplit", "TestReshapeSplit",
+                                                      nullptr);
     ASSERT_TRUE(currFunctionPtr != nullptr);
     SplitReshape pass;
     ReshapeTilePara shapePara;
@@ -2146,8 +2179,8 @@ TEST_F(TestSplitReshapePass, TestRawToAlignShapeOneTileInvalid)
 
 TEST_F(TestSplitReshapePass, TestAlignToRawRawShapeZero)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestReshapeSplit", "TestReshapeSplit", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestReshapeSplit", "TestReshapeSplit",
+                                                      nullptr);
     ASSERT_TRUE(currFunctionPtr != nullptr);
     SplitReshape pass;
     ReshapeTilePara shapePara;
@@ -2163,8 +2196,8 @@ TEST_F(TestSplitReshapePass, TestAlignToRawRawShapeZero)
 
 TEST_F(TestSplitReshapePass, TestAlignToRawStrideNotDivisibleByRawShape)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestReshapeSplit", "TestReshapeSplit", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestReshapeSplit", "TestReshapeSplit",
+                                                      nullptr);
     ASSERT_TRUE(currFunctionPtr != nullptr);
     SplitReshape pass;
     ReshapeTilePara shapePara;
@@ -2187,8 +2220,8 @@ TEST_F(TestSplitReshapePass, TestAlignToRawStrideNotDivisibleByRawShape)
  */
 TEST_F(TestSplitReshapePass, TestCollectCopyOutWithCopyOutProducer)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestReshapeSplit", "TestReshapeSplit", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestReshapeSplit", "TestReshapeSplit",
+                                                      nullptr);
     ASSERT_TRUE(currFunctionPtr != nullptr);
 
     std::vector<int64_t> shape = {kNumTwo, kNumFour};
@@ -2199,20 +2232,24 @@ TEST_F(TestSplitReshapePass, TestCollectCopyOutWithCopyOutProducer)
     ubTensor->SetMemoryTypeOriginal(MemoryType::MEM_UB, false);
 
     auto ddrRawTensor = std::make_shared<RawTensor>(DT_FP32, shape);
-    auto ddrTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor, offset, shape, CreateTestConstIntVector(shape));
+    auto ddrTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor, offset, shape,
+                                                                CreateTestConstIntVector(shape));
     ddrTensor->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
 
     auto ddrTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     ddrTensor2->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
 
-    auto reshapeOutput = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshapeOutputShape, CreateTestConstIntVector(reshapeOutputShape));
+    auto reshapeOutput = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshapeOutputShape,
+                                                                    CreateTestConstIntVector(reshapeOutputShape));
 
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {ubTensor}, {ddrTensor});
 
-    auto& assembleOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {ddrTensor}, {ddrTensor2});
+    auto& assembleOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {ddrTensor},
+                                                        {ddrTensor2});
     assembleOp.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, offset));
 
-    auto& reshapeOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {ddrTensor2}, {reshapeOutput});
+    auto& reshapeOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {ddrTensor2},
+                                                       {reshapeOutput});
     std::vector<SymbolicScalar> validShape = {kNumTwo, kNumTwo, kNumTwo};
     reshapeOp.SetAttribute(OP_ATTR_PREFIX + "validShape", validShape);
 
@@ -2244,38 +2281,45 @@ struct MultipleParallelCopyOutAssembleShapes {
     std::vector<std::vector<int64_t>> viewOffsets{{kNumZero, kNumZero}, {kNumOne, kNumZero}, {kNumTwo, kNumZero}};
 };
 
-void BuildMultipleParallelCopyOutAssembleGraph(
-    std::shared_ptr<Function>& func, const MultipleParallelCopyOutAssembleShapes& shapes,
-    std::vector<std::shared_ptr<LogicalTensor>>& inputs, std::vector<std::shared_ptr<LogicalTensor>>& outputs)
+void BuildMultipleParallelCopyOutAssembleGraph(std::shared_ptr<Function>& func,
+                                               const MultipleParallelCopyOutAssembleShapes& shapes,
+                                               std::vector<std::shared_ptr<LogicalTensor>>& inputs,
+                                               std::vector<std::shared_ptr<LogicalTensor>>& outputs)
 {
     auto sharedDdrRawTensor = std::make_shared<RawTensor>(DT_FP32, shapes.ddrBigShape);
     std::vector<std::shared_ptr<LogicalTensor>> ddrTensors;
     for (size_t i = 0; i < kNumThree; i++) {
-        auto input = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapes.ubShape, CreateTestConstIntVector(shapes.ubShape));
+        auto input = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapes.ubShape,
+                                                                CreateTestConstIntVector(shapes.ubShape));
         input->SetMemoryTypeOriginal(MemoryType::MEM_UB, false);
         inputs.push_back(input);
-        auto ddrTensor =
-            npu::tile_fwk::IRBuilder().CreateTensorVar(sharedDdrRawTensor, shapes.assembleOffsets[i], shapes.ubShape, CreateTestConstIntVector(shapes.ubShape));
+        auto ddrTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(
+            sharedDdrRawTensor, shapes.assembleOffsets[i], shapes.ubShape, CreateTestConstIntVector(shapes.ubShape));
         ddrTensor->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
         ddrTensors.push_back(ddrTensor);
         PassOperationUtils::AddOperation(*func, Opcode::OP_COPY_OUT, {input}, {ddrTensor});
     }
-    auto ddrBigTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapes.ddrBigShape, CreateTestConstIntVector(shapes.ddrBigShape));
+    auto ddrBigTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapes.ddrBigShape,
+                                                                   CreateTestConstIntVector(shapes.ddrBigShape));
     ddrBigTensor->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
     for (size_t i = 0; i < kNumThree; i++) {
-        auto& assembleOp = PassOperationUtils::AddOperation(*func, Opcode::OP_ASSEMBLE, {ddrTensors[i]}, {ddrBigTensor});
+        auto& assembleOp = PassOperationUtils::AddOperation(*func, Opcode::OP_ASSEMBLE, {ddrTensors[i]},
+                                                            {ddrBigTensor});
         assembleOp.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, shapes.assembleOffsets[i]));
     }
-    auto ddrReshape = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapes.reshapeShape, CreateTestConstIntVector(shapes.reshapeShape));
+    auto ddrReshape = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapes.reshapeShape,
+                                                                 CreateTestConstIntVector(shapes.reshapeShape));
     ddrReshape->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
     auto& reshapeOp = PassOperationUtils::AddOperation(*func, Opcode::OP_RESHAPE, {ddrBigTensor}, {ddrReshape});
     reshapeOp.SetAttribute(OP_ATTR_PREFIX + "validShape", std::vector<SymbolicScalar>{kNumThree, kNumEight});
     for (size_t i = 0; i < kNumThree; i++) {
-        auto ubOut = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapes.viewOutShape, CreateTestConstIntVector(shapes.viewOutShape));
+        auto ubOut = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapes.viewOutShape,
+                                                                CreateTestConstIntVector(shapes.viewOutShape));
         ubOut->SetMemoryTypeOriginal(MemoryType::MEM_UB, false);
         auto& viewOp = PassOperationUtils::AddOperation(*func, Opcode::OP_VIEW, {ddrReshape}, {ubOut});
         viewOp.SetOpAttribute(std::make_shared<ViewOpAttribute>(shapes.viewOffsets[i]));
-        auto output = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapes.viewOutShape, CreateTestConstIntVector(shapes.viewOutShape));
+        auto output = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapes.viewOutShape,
+                                                                 CreateTestConstIntVector(shapes.viewOutShape));
         PassOperationUtils::AddOperation(*func, Opcode::OP_ADDS, {ubOut}, {output});
         outputs.push_back(output);
     }
@@ -2295,10 +2339,10 @@ std::vector<std::shared_ptr<LogicalTensor>> BuildReduceAccAssembleDdrTensors(
         ddrTensor->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
         ddrTensors.push_back(ddrTensor);
         if (i == 0) {
-            auto reduceInput0 = npu::tile_fwk::IRBuilder().CreateTensorVar(
-                DT_FP32, shapes.ubShape, CreateTestConstIntVector(shapes.ubShape));
-            auto reduceInput1 = npu::tile_fwk::IRBuilder().CreateTensorVar(
-                DT_FP32, shapes.ubShape, CreateTestConstIntVector(shapes.ubShape));
+            auto reduceInput0 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapes.ubShape,
+                                                                           CreateTestConstIntVector(shapes.ubShape));
+            auto reduceInput1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapes.ubShape,
+                                                                           CreateTestConstIntVector(shapes.ubShape));
             reduceInput0->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
             reduceInput1->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
             inputs.push_back(reduceInput0);
@@ -2306,8 +2350,8 @@ std::vector<std::shared_ptr<LogicalTensor>> BuildReduceAccAssembleDdrTensors(
             PassOperationUtils::AddOperation(*func, Opcode::OP_REDUCE_ACC, {reduceInput0, reduceInput1}, {ddrTensor});
             continue;
         }
-        auto input = npu::tile_fwk::IRBuilder().CreateTensorVar(
-            DT_FP32, shapes.ubShape, CreateTestConstIntVector(shapes.ubShape));
+        auto input = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapes.ubShape,
+                                                                CreateTestConstIntVector(shapes.ubShape));
         input->SetMemoryTypeOriginal(MemoryType::MEM_UB, false);
         inputs.push_back(input);
         PassOperationUtils::AddOperation(*func, Opcode::OP_COPY_OUT, {input}, {ddrTensor});
@@ -2315,31 +2359,33 @@ std::vector<std::shared_ptr<LogicalTensor>> BuildReduceAccAssembleDdrTensors(
     return ddrTensors;
 }
 
-void BuildReduceAccAssembleInputGraph(
-    std::shared_ptr<Function>& func, const MultipleParallelCopyOutAssembleShapes& shapes,
-    std::vector<std::shared_ptr<LogicalTensor>>& inputs, std::vector<std::shared_ptr<LogicalTensor>>& outputs)
+void BuildReduceAccAssembleInputGraph(std::shared_ptr<Function>& func,
+                                      const MultipleParallelCopyOutAssembleShapes& shapes,
+                                      std::vector<std::shared_ptr<LogicalTensor>>& inputs,
+                                      std::vector<std::shared_ptr<LogicalTensor>>& outputs)
 {
     auto ddrTensors = BuildReduceAccAssembleDdrTensors(func, shapes, inputs);
-    auto ddrBigTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(
-        DT_FP32, shapes.ddrBigShape, CreateTestConstIntVector(shapes.ddrBigShape));
+    auto ddrBigTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapes.ddrBigShape,
+                                                                   CreateTestConstIntVector(shapes.ddrBigShape));
     ddrBigTensor->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
     for (size_t i = 0; i < kNumThree; i++) {
-        auto& assembleOp = PassOperationUtils::AddOperation(*func, Opcode::OP_ASSEMBLE, {ddrTensors[i]}, {ddrBigTensor});
+        auto& assembleOp = PassOperationUtils::AddOperation(*func, Opcode::OP_ASSEMBLE, {ddrTensors[i]},
+                                                            {ddrBigTensor});
         assembleOp.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, shapes.assembleOffsets[i]));
     }
-    auto ddrReshape = npu::tile_fwk::IRBuilder().CreateTensorVar(
-        DT_FP32, shapes.reshapeShape, CreateTestConstIntVector(shapes.reshapeShape));
+    auto ddrReshape = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapes.reshapeShape,
+                                                                 CreateTestConstIntVector(shapes.reshapeShape));
     ddrReshape->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
     auto& reshapeOp = PassOperationUtils::AddOperation(*func, Opcode::OP_RESHAPE, {ddrBigTensor}, {ddrReshape});
     reshapeOp.SetAttribute(OP_ATTR_PREFIX + "validShape", std::vector<SymbolicScalar>{kNumThree, kNumEight});
     for (size_t i = 0; i < kNumThree; i++) {
-        auto ubOut = npu::tile_fwk::IRBuilder().CreateTensorVar(
-            DT_FP32, shapes.viewOutShape, CreateTestConstIntVector(shapes.viewOutShape));
+        auto ubOut = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapes.viewOutShape,
+                                                                CreateTestConstIntVector(shapes.viewOutShape));
         ubOut->SetMemoryTypeOriginal(MemoryType::MEM_UB, false);
         auto& viewOp = PassOperationUtils::AddOperation(*func, Opcode::OP_VIEW, {ddrReshape}, {ubOut});
         viewOp.SetOpAttribute(std::make_shared<ViewOpAttribute>(shapes.viewOffsets[i]));
-        auto output = npu::tile_fwk::IRBuilder().CreateTensorVar(
-            DT_FP32, shapes.viewOutShape, CreateTestConstIntVector(shapes.viewOutShape));
+        auto output = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapes.viewOutShape,
+                                                                 CreateTestConstIntVector(shapes.viewOutShape));
         PassOperationUtils::AddOperation(*func, Opcode::OP_ADDS, {ubOut}, {output});
         outputs.push_back(output);
     }
@@ -2352,10 +2398,11 @@ std::vector<int64_t> GetLargeScaleAssembleOffset(size_t pathIndex, const std::ve
     return {static_cast<int64_t>(pathIndex) * ubShape.front(), 0};
 }
 
-void BuildLargeScaleCopyOutInputs(
-    std::shared_ptr<Function>& func, size_t pathCount, const std::vector<int64_t>& ubShape,
-    const std::shared_ptr<RawTensor>& sharedDdrRawTensor, std::vector<std::shared_ptr<LogicalTensor>>& inputs,
-    std::vector<std::shared_ptr<LogicalTensor>>& ddrTensors)
+void BuildLargeScaleCopyOutInputs(std::shared_ptr<Function>& func, size_t pathCount,
+                                  const std::vector<int64_t>& ubShape,
+                                  const std::shared_ptr<RawTensor>& sharedDdrRawTensor,
+                                  std::vector<std::shared_ptr<LogicalTensor>>& inputs,
+                                  std::vector<std::shared_ptr<LogicalTensor>>& ddrTensors)
 {
     inputs.reserve(pathCount);
     ddrTensors.reserve(pathCount);
@@ -2364,7 +2411,8 @@ void BuildLargeScaleCopyOutInputs(
         input->SetMemoryTypeOriginal(MemoryType::MEM_UB, false);
         inputs.push_back(input);
         auto assembleOffset = GetLargeScaleAssembleOffset(i, ubShape);
-        auto ddrTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(sharedDdrRawTensor, assembleOffset, ubShape, CreateTestConstIntVector(ubShape));
+        auto ddrTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(sharedDdrRawTensor, assembleOffset, ubShape,
+                                                                    CreateTestConstIntVector(ubShape));
         ddrTensor->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
         ddrTensors.push_back(ddrTensor);
         PassOperationUtils::AddOperation(*func, Opcode::OP_COPY_OUT, {input}, {ddrTensor});
@@ -2376,24 +2424,28 @@ std::shared_ptr<LogicalTensor> BuildLargeScaleAssembleAndReshape(
     const std::vector<std::shared_ptr<LogicalTensor>>& ddrTensors, int64_t reshapeRows, int64_t reshapeCols)
 {
     std::vector<int64_t> ddrBigShape = {reshapeRows * ubShape.front(), ubShape.back()};
-    auto ddrBigTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, ddrBigShape, CreateTestConstIntVector(ddrBigShape));
+    auto ddrBigTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, ddrBigShape,
+                                                                   CreateTestConstIntVector(ddrBigShape));
     ddrBigTensor->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
     for (size_t i = 0; i < pathCount; ++i) {
         auto assembleOffset = GetLargeScaleAssembleOffset(i, ubShape);
-        auto& assembleOp = PassOperationUtils::AddOperation(*func, Opcode::OP_ASSEMBLE, {ddrTensors[i]}, {ddrBigTensor});
+        auto& assembleOp = PassOperationUtils::AddOperation(*func, Opcode::OP_ASSEMBLE, {ddrTensors[i]},
+                                                            {ddrBigTensor});
         assembleOp.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, assembleOffset));
     }
     std::vector<int64_t> reshapeShape = {reshapeRows, reshapeCols};
-    auto ddrReshape = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshapeShape, CreateTestConstIntVector(reshapeShape));
+    auto ddrReshape = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshapeShape,
+                                                                 CreateTestConstIntVector(reshapeShape));
     ddrReshape->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
     auto& reshapeOp = PassOperationUtils::AddOperation(*func, Opcode::OP_RESHAPE, {ddrBigTensor}, {ddrReshape});
     reshapeOp.SetAttribute(OP_ATTR_PREFIX + "validShape", std::vector<SymbolicScalar>{reshapeRows, reshapeCols});
     return ddrReshape;
 }
 
-void BuildLargeScaleViewOutputs(
-    std::shared_ptr<Function>& func, size_t pathCount, int64_t reshapeCols, const std::shared_ptr<LogicalTensor>& ddrReshape,
-    std::vector<std::shared_ptr<LogicalTensor>>& inputs, std::vector<std::shared_ptr<LogicalTensor>>& outputs)
+void BuildLargeScaleViewOutputs(std::shared_ptr<Function>& func, size_t pathCount, int64_t reshapeCols,
+                                const std::shared_ptr<LogicalTensor>& ddrReshape,
+                                std::vector<std::shared_ptr<LogicalTensor>>& inputs,
+                                std::vector<std::shared_ptr<LogicalTensor>>& outputs)
 {
     outputs.reserve(pathCount);
     for (size_t i = 0; i < pathCount; ++i) {
@@ -2409,22 +2461,24 @@ void BuildLargeScaleViewOutputs(
     func->outCasts_ = outputs;
 }
 
-void BuildLargeScaleParallelCopyOutAssembleGraph(
-    std::shared_ptr<Function>& func, size_t pathCount, const std::vector<int64_t>& ubShape,
-    std::vector<std::shared_ptr<LogicalTensor>>& inputs, std::vector<std::shared_ptr<LogicalTensor>>& outputs)
+void BuildLargeScaleParallelCopyOutAssembleGraph(std::shared_ptr<Function>& func, size_t pathCount,
+                                                 const std::vector<int64_t>& ubShape,
+                                                 std::vector<std::shared_ptr<LogicalTensor>>& inputs,
+                                                 std::vector<std::shared_ptr<LogicalTensor>>& outputs)
 {
     int64_t reshapeRows = static_cast<int64_t>(pathCount);
     int64_t reshapeCols = ubShape.front() * ubShape.back();
-    auto sharedDdrRawTensor = std::make_shared<RawTensor>(DT_FP32, std::vector<int64_t>{reshapeRows * ubShape.front(), ubShape.back()});
+    auto sharedDdrRawTensor = std::make_shared<RawTensor>(
+        DT_FP32, std::vector<int64_t>{reshapeRows * ubShape.front(), ubShape.back()});
     std::vector<std::shared_ptr<LogicalTensor>> ddrTensors;
     BuildLargeScaleCopyOutInputs(func, pathCount, ubShape, sharedDdrRawTensor, inputs, ddrTensors);
     auto ddrReshape = BuildLargeScaleAssembleAndReshape(func, pathCount, ubShape, ddrTensors, reshapeRows, reshapeCols);
     BuildLargeScaleViewOutputs(func, pathCount, reshapeCols, ddrReshape, inputs, outputs);
 }
 
-void VerifyMultipleParallelCopyOutAssembleSplit(
-    std::shared_ptr<Function>& func, const std::vector<int64_t>& expectedInputShape,
-    const std::vector<int64_t>& expectedOutputShape, int expectedCount)
+void VerifyMultipleParallelCopyOutAssembleSplit(std::shared_ptr<Function>& func,
+                                                const std::vector<int64_t>& expectedInputShape,
+                                                const std::vector<int64_t>& expectedOutputShape, int expectedCount)
 {
     int reshapeOpCount = 0;
     for (auto& op : func->Operations()) {
@@ -2472,8 +2526,8 @@ TEST_F(TestSplitReshapePass, TestSplitReshapeWithMultipleParallelCopyOutAssemble
 
 TEST_F(TestSplitReshapePass, TestSkipSplitReshapeWhenAssembleInputProducedByReduceAcc)
 {
-    auto func = std::make_shared<Function>(
-        Program::GetInstance(), "TestReduceAccReshapeSplit", "TestReduceAccReshapeSplit", nullptr);
+    auto func = std::make_shared<Function>(Program::GetInstance(), "TestReduceAccReshapeSplit",
+                                           "TestReduceAccReshapeSplit", nullptr);
     ASSERT_TRUE(func != nullptr);
 
     MultipleParallelCopyOutAssembleShapes shapes;
@@ -2521,7 +2575,8 @@ TEST_F(TestSplitReshapePass, TestSplitReshapeLargeScaleRunTimeLimit)
     constexpr size_t pathCount = 2048;
     constexpr int64_t maxElapsedMs = 3000;
     const std::vector<int64_t> ubShape{kNumTwo, kNumFour};
-    auto func = std::make_shared<Function>(Program::GetInstance(), "TestLargeScaleReshapeSplit", "TestLargeScaleReshapeSplit", nullptr);
+    auto func = std::make_shared<Function>(Program::GetInstance(), "TestLargeScaleReshapeSplit",
+                                           "TestLargeScaleReshapeSplit", nullptr);
     ASSERT_TRUE(func != nullptr);
 
     std::vector<std::shared_ptr<LogicalTensor>> inputs;

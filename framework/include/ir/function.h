@@ -99,9 +99,8 @@ public:
      * \param span Source location
      * \param type Function type (default: Opaque)
      */
-    Function(
-        std::string name, std::vector<VarPtr> params, std::vector<TypePtr> returnTypes, StmtPtr body, Span span,
-        FunctionType type = FunctionType::OPAQUE, bool entry = false)
+    Function(std::string name, std::vector<VarPtr> params, std::vector<TypePtr> returnTypes, StmtPtr body, Span span,
+             FunctionType type = FunctionType::OPAQUE, bool entry = false)
         : IRNode(std::move(span)),
           name_(std::move(name)),
           funcType_(type),
@@ -124,14 +123,13 @@ public:
      */
     static constexpr auto GetFieldDescriptors()
     {
-        return std::tuple_cat(
-            IRNode::GetFieldDescriptors(),
-            std::make_tuple(
-                reflection::DefField(&Function::params_, "params"),
-                reflection::UsualField(&Function::funcType_, "func_type"),
-                reflection::UsualField(&Function::entry_, "entry"),
-                reflection::UsualField(&Function::returnTypes_, "return_types"),
-                reflection::UsualField(&Function::body_, "body"), reflection::IgnoreField(&Function::name_, "name")));
+        return std::tuple_cat(IRNode::GetFieldDescriptors(),
+                              std::make_tuple(reflection::DefField(&Function::params_, "params"),
+                                              reflection::UsualField(&Function::funcType_, "func_type"),
+                                              reflection::UsualField(&Function::entry_, "entry"),
+                                              reflection::UsualField(&Function::returnTypes_, "return_types"),
+                                              reflection::UsualField(&Function::body_, "body"),
+                                              reflection::IgnoreField(&Function::name_, "name")));
     }
 
 public:

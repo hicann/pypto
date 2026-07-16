@@ -30,12 +30,11 @@ void BindIRBuilder(py::module_& m)
     py::module_ ir = m.attr("ir");
 
     // IRBuilder class
-    py::class_<IRBuilder>(
-        ir, "IRBuilder",
-        "IR Builder for incremental IR construction with context management.\n\n"
-        "The IRBuilder provides a stateful API for building IR incrementally using\n"
-        "Begin/End patterns. It maintains a context stack to track nested scopes\n"
-        "and validates proper construction.")
+    py::class_<IRBuilder>(ir, "IRBuilder",
+                          "IR Builder for incremental IR construction with context management.\n\n"
+                          "The IRBuilder provides a stateful API for building IR incrementally using\n"
+                          "Begin/End patterns. It maintains a context stack to track nested scopes\n"
+                          "and validates proper construction.")
         .def(py::init<>(), "Create a new IR builder")
 
         // Function building
@@ -54,38 +53,35 @@ void BindIRBuilder(py::module_& m)
             "Raises:\n"
             "    RuntimeError: If already inside a function (nested functions not allowed)")
 
-        .def(
-            "func_arg", &IRBuilder::FuncArg, py::arg("name"), py::arg("type"), py::arg("span"),
-            "Add a function parameter.\n\n"
-            "Must be called within a function context.\n\n"
-            "Args:\n"
-            "    name: Parameter name\n"
-            "    type: Parameter type\n"
-            "    span: Source location for parameter\n\n"
-            "Returns:\n"
-            "    Var: Variable representing the parameter\n\n"
-            "Raises:\n"
-            "    RuntimeError: If not inside a function context")
+        .def("func_arg", &IRBuilder::FuncArg, py::arg("name"), py::arg("type"), py::arg("span"),
+             "Add a function parameter.\n\n"
+             "Must be called within a function context.\n\n"
+             "Args:\n"
+             "    name: Parameter name\n"
+             "    type: Parameter type\n"
+             "    span: Source location for parameter\n\n"
+             "Returns:\n"
+             "    Var: Variable representing the parameter\n\n"
+             "Raises:\n"
+             "    RuntimeError: If not inside a function context")
 
-        .def(
-            "return_type", &IRBuilder::ReturnType, py::arg("type"),
-            "Add a return type to the current function.\n\n"
-            "Can be called multiple times for multiple return types.\n\n"
-            "Args:\n"
-            "    type: Return type\n\n"
-            "Raises:\n"
-            "    RuntimeError: If not inside a function context")
+        .def("return_type", &IRBuilder::ReturnType, py::arg("type"),
+             "Add a return type to the current function.\n\n"
+             "Can be called multiple times for multiple return types.\n\n"
+             "Args:\n"
+             "    type: Return type\n\n"
+             "Raises:\n"
+             "    RuntimeError: If not inside a function context")
 
-        .def(
-            "end_function", &IRBuilder::EndFunction, py::arg("end_span"),
-            "End building a function.\n\n"
-            "Finalizes the function and returns it.\n\n"
-            "Args:\n"
-            "    end_span: Source location for end of function\n\n"
-            "Returns:\n"
-            "    Function: The built function\n\n"
-            "Raises:\n"
-            "    RuntimeError: If not inside a function context")
+        .def("end_function", &IRBuilder::EndFunction, py::arg("end_span"),
+             "End building a function.\n\n"
+             "Finalizes the function and returns it.\n\n"
+             "Args:\n"
+             "    end_span: Source location for end of function\n\n"
+             "Returns:\n"
+             "    Function: The built function\n\n"
+             "Raises:\n"
+             "    RuntimeError: If not inside a function context")
 
         // For loop building
         .def(
@@ -104,294 +100,265 @@ void BindIRBuilder(py::module_& m)
             "Raises:\n"
             "    RuntimeError: If not inside a valid context")
 
-        .def(
-            "add_iter_arg", &IRBuilder::AddIterArg, py::arg("iter_arg"),
-            "Add an iteration argument to the current for loop.\n\n"
-            "Iteration arguments are loop-carried values (SSA-style).\n\n"
-            "Args:\n"
-            "    iter_arg: Iteration argument with initial value\n\n"
-            "Raises:\n"
-            "    RuntimeError: If not inside a for loop context")
+        .def("add_iter_arg", &IRBuilder::AddIterArg, py::arg("iter_arg"),
+             "Add an iteration argument to the current for loop.\n\n"
+             "Iteration arguments are loop-carried values (SSA-style).\n\n"
+             "Args:\n"
+             "    iter_arg: Iteration argument with initial value\n\n"
+             "Raises:\n"
+             "    RuntimeError: If not inside a for loop context")
 
-        .def(
-            "add_return_var", &IRBuilder::AddReturnVar, py::arg("var"),
-            "Add a return variable to the current for loop.\n\n"
-            "Return variables capture the final values of iteration arguments.\n"
-            "Must match the number of iteration arguments.\n\n"
-            "Args:\n"
-            "    var: Return variable\n\n"
-            "Raises:\n"
-            "    RuntimeError: If not inside a for loop context")
+        .def("add_return_var", &IRBuilder::AddReturnVar, py::arg("var"),
+             "Add a return variable to the current for loop.\n\n"
+             "Return variables capture the final values of iteration arguments.\n"
+             "Must match the number of iteration arguments.\n\n"
+             "Args:\n"
+             "    var: Return variable\n\n"
+             "Raises:\n"
+             "    RuntimeError: If not inside a for loop context")
 
-        .def(
-            "end_for_loop", &IRBuilder::EndForLoop, py::arg("end_span"),
-            "End building a for loop.\n\n"
-            "Finalizes the loop and returns it.\n\n"
-            "Args:\n"
-            "    end_span: Source location for end of loop\n\n"
-            "Returns:\n"
-            "    ForStmt: The built for statement\n\n"
-            "Raises:\n"
-            "    RuntimeError: If not inside a for loop context\n"
-            "    RuntimeError: If number of return variables doesn't match iteration arguments")
+        .def("end_for_loop", &IRBuilder::EndForLoop, py::arg("end_span"),
+             "End building a for loop.\n\n"
+             "Finalizes the loop and returns it.\n\n"
+             "Args:\n"
+             "    end_span: Source location for end of loop\n\n"
+             "Returns:\n"
+             "    ForStmt: The built for statement\n\n"
+             "Raises:\n"
+             "    RuntimeError: If not inside a for loop context\n"
+             "    RuntimeError: If number of return variables doesn't match iteration arguments")
 
         // While loop building
-        .def(
-            "begin_while_loop", &IRBuilder::BeginWhileLoop, py::arg("condition"), py::arg("span"),
-            "Begin building a while loop.\n\n"
-            "Creates a new while loop context. Must be closed with end_while_loop().\n\n"
-            "Args:\n"
-            "    condition: Condition expression\n"
-            "    span: Source location for loop definition\n\n"
-            "Raises:\n"
-            "    RuntimeError: If not inside a valid context")
+        .def("begin_while_loop", &IRBuilder::BeginWhileLoop, py::arg("condition"), py::arg("span"),
+             "Begin building a while loop.\n\n"
+             "Creates a new while loop context. Must be closed with end_while_loop().\n\n"
+             "Args:\n"
+             "    condition: Condition expression\n"
+             "    span: Source location for loop definition\n\n"
+             "Raises:\n"
+             "    RuntimeError: If not inside a valid context")
 
-        .def(
-            "add_while_iter_arg", &IRBuilder::AddWhileIterArg, py::arg("iter_arg"),
-            "Add an iteration argument to the current while loop.\n\n"
-            "Iteration arguments are loop-carried values (SSA-style).\n\n"
-            "Args:\n"
-            "    iter_arg: Iteration argument with initial value\n\n"
-            "Raises:\n"
-            "    RuntimeError: If not inside a while loop context")
+        .def("add_while_iter_arg", &IRBuilder::AddWhileIterArg, py::arg("iter_arg"),
+             "Add an iteration argument to the current while loop.\n\n"
+             "Iteration arguments are loop-carried values (SSA-style).\n\n"
+             "Args:\n"
+             "    iter_arg: Iteration argument with initial value\n\n"
+             "Raises:\n"
+             "    RuntimeError: If not inside a while loop context")
 
-        .def(
-            "add_while_return_var", &IRBuilder::AddWhileReturnVar, py::arg("var"),
-            "Add a return variable to the current while loop.\n\n"
-            "Return variables capture the final values of iteration arguments.\n\n"
-            "Args:\n"
-            "    var: Return variable\n\n"
-            "Raises:\n"
-            "    RuntimeError: If not inside a while loop context")
+        .def("add_while_return_var", &IRBuilder::AddWhileReturnVar, py::arg("var"),
+             "Add a return variable to the current while loop.\n\n"
+             "Return variables capture the final values of iteration arguments.\n\n"
+             "Args:\n"
+             "    var: Return variable\n\n"
+             "Raises:\n"
+             "    RuntimeError: If not inside a while loop context")
 
-        .def(
-            "set_while_loop_condition", &IRBuilder::SetWhileLoopCondition, py::arg("condition"),
-            "Set the condition for the current while loop.\n\n"
-            "Used to update the loop condition after setting up iter_args. This allows\n"
-            "the condition to reference iter_arg variables that are defined in the loop.\n\n"
-            "Args:\n"
-            "    condition: New condition expression\n\n"
-            "Raises:\n"
-            "    RuntimeError: If not inside a while loop context")
+        .def("set_while_loop_condition", &IRBuilder::SetWhileLoopCondition, py::arg("condition"),
+             "Set the condition for the current while loop.\n\n"
+             "Used to update the loop condition after setting up iter_args. This allows\n"
+             "the condition to reference iter_arg variables that are defined in the loop.\n\n"
+             "Args:\n"
+             "    condition: New condition expression\n\n"
+             "Raises:\n"
+             "    RuntimeError: If not inside a while loop context")
 
-        .def(
-            "end_while_loop", &IRBuilder::EndWhileLoop, py::arg("end_span"),
-            "End building a while loop.\n\n"
-            "Finalizes the loop and returns it.\n\n"
-            "Args:\n"
-            "    end_span: Source location for end of loop\n\n"
-            "Returns:\n"
-            "    WhileStmt: The built while statement\n\n"
-            "Raises:\n"
-            "    RuntimeError: If not inside a while loop context\n"
-            "    RuntimeError: If number of return variables doesn't match iteration arguments")
+        .def("end_while_loop", &IRBuilder::EndWhileLoop, py::arg("end_span"),
+             "End building a while loop.\n\n"
+             "Finalizes the loop and returns it.\n\n"
+             "Args:\n"
+             "    end_span: Source location for end of loop\n\n"
+             "Returns:\n"
+             "    WhileStmt: The built while statement\n\n"
+             "Raises:\n"
+             "    RuntimeError: If not inside a while loop context\n"
+             "    RuntimeError: If number of return variables doesn't match iteration arguments")
 
         // If statement building
-        .def(
-            "begin_if", &IRBuilder::BeginIf, py::arg("condition"), py::arg("span"),
-            "Begin building an if statement.\n\n"
-            "Creates a new if context. Must be closed with end_if().\n\n"
-            "Args:\n"
-            "    condition: Condition expression\n"
-            "    span: Source location for if statement\n\n"
-            "Raises:\n"
-            "    RuntimeError: If not inside a valid context")
+        .def("begin_if", &IRBuilder::BeginIf, py::arg("condition"), py::arg("span"),
+             "Begin building an if statement.\n\n"
+             "Creates a new if context. Must be closed with end_if().\n\n"
+             "Args:\n"
+             "    condition: Condition expression\n"
+             "    span: Source location for if statement\n\n"
+             "Raises:\n"
+             "    RuntimeError: If not inside a valid context")
 
-        .def(
-            "begin_else", &IRBuilder::BeginElse, py::arg("span"),
-            "Begin the else branch of the current if statement.\n\n"
-            "Must be called after building the then branch.\n\n"
-            "Args:\n"
-            "    span: Source location for else keyword\n\n"
-            "Raises:\n"
-            "    RuntimeError: If not inside an if context\n"
-            "    RuntimeError: If else branch already begun")
+        .def("begin_else", &IRBuilder::BeginElse, py::arg("span"),
+             "Begin the else branch of the current if statement.\n\n"
+             "Must be called after building the then branch.\n\n"
+             "Args:\n"
+             "    span: Source location for else keyword\n\n"
+             "Raises:\n"
+             "    RuntimeError: If not inside an if context\n"
+             "    RuntimeError: If else branch already begun")
 
-        .def(
-            "add_if_return_var", &IRBuilder::AddIfReturnVar, py::arg("var"),
-            "Add a return variable to the current if statement.\n\n"
-            "Return variables are used for SSA phi nodes.\n\n"
-            "Args:\n"
-            "    var: Return variable\n\n"
-            "Raises:\n"
-            "    RuntimeError: If not inside an if context")
+        .def("add_if_return_var", &IRBuilder::AddIfReturnVar, py::arg("var"),
+             "Add a return variable to the current if statement.\n\n"
+             "Return variables are used for SSA phi nodes.\n\n"
+             "Args:\n"
+             "    var: Return variable\n\n"
+             "Raises:\n"
+             "    RuntimeError: If not inside an if context")
 
-        .def(
-            "end_if", &IRBuilder::EndIf, py::arg("end_span"),
-            "End building an if statement.\n\n"
-            "Finalizes the if statement and returns it.\n\n"
-            "Args:\n"
-            "    end_span: Source location for end of if\n\n"
-            "Returns:\n"
-            "    IfStmt: The built if statement\n\n"
-            "Raises:\n"
-            "    RuntimeError: If not inside an if context")
+        .def("end_if", &IRBuilder::EndIf, py::arg("end_span"),
+             "End building an if statement.\n\n"
+             "Finalizes the if statement and returns it.\n\n"
+             "Args:\n"
+             "    end_span: Source location for end of if\n\n"
+             "Returns:\n"
+             "    IfStmt: The built if statement\n\n"
+             "Raises:\n"
+             "    RuntimeError: If not inside an if context")
 
         // Section building
-        .def(
-            "begin_section", &IRBuilder::BeginSection, py::arg("section_kind"), py::arg("span"),
-            "Begin building a section statement.\n\n"
-            "Creates a new section context. Must be closed with end_section().\n\n"
-            "Args:\n"
-            "    section_kind: The kind of section (Vector or Cube)\n"
-            "    span: Source location for section statement\n\n"
-            "Raises:\n"
-            "    RuntimeError: If not inside a function or loop")
-        .def(
-            "end_section", &IRBuilder::EndSection, py::arg("end_span"),
-            "End building a section statement.\n\n"
-            "Finalizes the section statement and returns it.\n\n"
-            "Args:\n"
-            "    end_span: Source location for end of section\n\n"
-            "Returns:\n"
-            "    SectionStmt: The built section statement\n\n"
-            "Raises:\n"
-            "    RuntimeError: If not inside a section context")
+        .def("begin_section", &IRBuilder::BeginSection, py::arg("section_kind"), py::arg("span"),
+             "Begin building a section statement.\n\n"
+             "Creates a new section context. Must be closed with end_section().\n\n"
+             "Args:\n"
+             "    section_kind: The kind of section (Vector or Cube)\n"
+             "    span: Source location for section statement\n\n"
+             "Raises:\n"
+             "    RuntimeError: If not inside a function or loop")
+        .def("end_section", &IRBuilder::EndSection, py::arg("end_span"),
+             "End building a section statement.\n\n"
+             "Finalizes the section statement and returns it.\n\n"
+             "Args:\n"
+             "    end_span: Source location for end of section\n\n"
+             "Returns:\n"
+             "    SectionStmt: The built section statement\n\n"
+             "Raises:\n"
+             "    RuntimeError: If not inside a section context")
 
         // Statement recording
-        .def(
-            "emit", &IRBuilder::Emit, py::arg("stmt"),
-            "Emit a statement in the current context.\n\n"
-            "Adds a statement to the current context's statement list.\n\n"
-            "Args:\n"
-            "    stmt: Statement to emit\n\n"
-            "Raises:\n"
-            "    RuntimeError: If not inside a valid context")
+        .def("emit", &IRBuilder::Emit, py::arg("stmt"),
+             "Emit a statement in the current context.\n\n"
+             "Adds a statement to the current context's statement list.\n\n"
+             "Args:\n"
+             "    stmt: Statement to emit\n\n"
+             "Raises:\n"
+             "    RuntimeError: If not inside a valid context")
 
-        .def(
-            "assign", &IRBuilder::Assign, py::arg("var"), py::arg("value"), py::arg("span"),
-            "Create an assignment statement and emit it.\n\n"
-            "Convenience method that creates and emits an assignment.\n\n"
-            "Args:\n"
-            "    var: Variable to assign to\n"
-            "    value: Expression value\n"
-            "    span: Source location for assignment\n\n"
-            "Returns:\n"
-            "    AssignStmt: The created assignment statement\n\n"
-            "Raises:\n"
-            "    RuntimeError: If not inside a valid context")
+        .def("assign", &IRBuilder::Assign, py::arg("var"), py::arg("value"), py::arg("span"),
+             "Create an assignment statement and emit it.\n\n"
+             "Convenience method that creates and emits an assignment.\n\n"
+             "Args:\n"
+             "    var: Variable to assign to\n"
+             "    value: Expression value\n"
+             "    span: Source location for assignment\n\n"
+             "Returns:\n"
+             "    AssignStmt: The created assignment statement\n\n"
+             "Raises:\n"
+             "    RuntimeError: If not inside a valid context")
 
-        .def(
-            "var", &IRBuilder::Var, py::arg("name"), py::arg("type"), py::arg("span"),
-            "Create a variable (does not emit).\n\n"
-            "Helper to create a variable. User must create assignment separately.\n\n"
-            "Args:\n"
-            "    name: Variable name\n"
-            "    type: Variable type\n"
-            "    span: Source location\n\n"
-            "Returns:\n"
-            "    Var: The created variable")
+        .def("var", &IRBuilder::Var, py::arg("name"), py::arg("type"), py::arg("span"),
+             "Create a variable (does not emit).\n\n"
+             "Helper to create a variable. User must create assignment separately.\n\n"
+             "Args:\n"
+             "    name: Variable name\n"
+             "    type: Variable type\n"
+             "    span: Source location\n\n"
+             "Returns:\n"
+             "    Var: The created variable")
 
-        .def(
-            "return_", py::overload_cast<const std::vector<ir::ExprPtr>&, const ir::Span&>(&IRBuilder::Return),
-            py::arg("values"), py::arg("span"),
-            "Create a return statement and emit it.\n\n"
-            "Convenience method that creates and emits a return statement.\n\n"
-            "Args:\n"
-            "    values: List of expressions to return\n"
-            "    span: Source location for return statement\n\n"
-            "Returns:\n"
-            "    ReturnStmt: The created return statement\n\n"
-            "Raises:\n"
-            "    RuntimeError: If not inside a valid context")
+        .def("return_", py::overload_cast<const std::vector<ir::ExprPtr>&, const ir::Span&>(&IRBuilder::Return),
+             py::arg("values"), py::arg("span"),
+             "Create a return statement and emit it.\n\n"
+             "Convenience method that creates and emits a return statement.\n\n"
+             "Args:\n"
+             "    values: List of expressions to return\n"
+             "    span: Source location for return statement\n\n"
+             "Returns:\n"
+             "    ReturnStmt: The created return statement\n\n"
+             "Raises:\n"
+             "    RuntimeError: If not inside a valid context")
 
-        .def(
-            "return_", py::overload_cast<const ir::Span&>(&IRBuilder::Return), py::arg("span"),
-            "Create an empty return statement and emit it.\n\n"
-            "Convenience method that creates and emits an empty return statement.\n\n"
-            "Args:\n"
-            "    span: Source location for return statement\n\n"
-            "Returns:\n"
-            "    ReturnStmt: The created return statement\n\n"
-            "Raises:\n"
-            "    RuntimeError: If not inside a valid context")
+        .def("return_", py::overload_cast<const ir::Span&>(&IRBuilder::Return), py::arg("span"),
+             "Create an empty return statement and emit it.\n\n"
+             "Convenience method that creates and emits an empty return statement.\n\n"
+             "Args:\n"
+             "    span: Source location for return statement\n\n"
+             "Returns:\n"
+             "    ReturnStmt: The created return statement\n\n"
+             "Raises:\n"
+             "    RuntimeError: If not inside a valid context")
 
-        .def(
-            "break_", &IRBuilder::Break, py::arg("span"),
-            "Create a break statement and emit it.\n\n"
-            "Convenience method that creates and emits a break statement.\n\n"
-            "Args:\n"
-            "    span: Source location for break statement\n\n"
-            "Returns:\n"
-            "    BreakStmt: The created break statement\n\n"
-            "Raises:\n"
-            "    RuntimeError: If not inside a valid context")
+        .def("break_", &IRBuilder::Break, py::arg("span"),
+             "Create a break statement and emit it.\n\n"
+             "Convenience method that creates and emits a break statement.\n\n"
+             "Args:\n"
+             "    span: Source location for break statement\n\n"
+             "Returns:\n"
+             "    BreakStmt: The created break statement\n\n"
+             "Raises:\n"
+             "    RuntimeError: If not inside a valid context")
 
-        .def(
-            "continue_", &IRBuilder::Continue, py::arg("span"),
-            "Create a continue statement and emit it.\n\n"
-            "Convenience method that creates and emits a continue statement.\n\n"
-            "Args:\n"
-            "    span: Source location for continue statement\n\n"
-            "Returns:\n"
-            "    ContinueStmt: The created continue statement\n\n"
-            "Raises:\n"
-            "    RuntimeError: If not inside a valid context")
+        .def("continue_", &IRBuilder::Continue, py::arg("span"),
+             "Create a continue statement and emit it.\n\n"
+             "Convenience method that creates and emits a continue statement.\n\n"
+             "Args:\n"
+             "    span: Source location for continue statement\n\n"
+             "Returns:\n"
+             "    ContinueStmt: The created continue statement\n\n"
+             "Raises:\n"
+             "    RuntimeError: If not inside a valid context")
 
         // Context state queries
-        .def(
-            "in_function", &IRBuilder::InFunction,
-            "Check if currently inside a function.\n\n"
-            "Returns:\n"
-            "    bool: True if inside a function context")
+        .def("in_function", &IRBuilder::InFunction,
+             "Check if currently inside a function.\n\n"
+             "Returns:\n"
+             "    bool: True if inside a function context")
 
-        .def(
-            "in_loop", &IRBuilder::InLoop,
-            "Check if currently inside a for loop.\n\n"
-            "Returns:\n"
-            "    bool: True if inside a for loop context")
+        .def("in_loop", &IRBuilder::InLoop,
+             "Check if currently inside a for loop.\n\n"
+             "Returns:\n"
+             "    bool: True if inside a for loop context")
 
-        .def(
-            "in_if", &IRBuilder::InIf,
-            "Check if currently inside an if statement.\n\n"
-            "Returns:\n"
-            "    bool: True if inside an if statement context")
+        .def("in_if", &IRBuilder::InIf,
+             "Check if currently inside an if statement.\n\n"
+             "Returns:\n"
+             "    bool: True if inside an if statement context")
 
-        .def(
-            "in_program", &IRBuilder::InProgram,
-            "Check if currently inside a program.\n\n"
-            "Returns:\n"
-            "    bool: True if inside a program context")
+        .def("in_program", &IRBuilder::InProgram,
+             "Check if currently inside a program.\n\n"
+             "Returns:\n"
+             "    bool: True if inside a program context")
 
         // Program building
-        .def(
-            "begin_program", &IRBuilder::BeginProgram, py::arg("name"), py::arg("span"),
-            "Begin building a program.\n\n"
-            "Creates a new program context. Must be closed with end_program().\n\n"
-            "Args:\n"
-            "    name: Program name\n"
-            "    span: Source location for program definition\n\n"
-            "Raises:\n"
-            "    RuntimeError: If already inside another program")
+        .def("begin_program", &IRBuilder::BeginProgram, py::arg("name"), py::arg("span"),
+             "Begin building a program.\n\n"
+             "Creates a new program context. Must be closed with end_program().\n\n"
+             "Args:\n"
+             "    name: Program name\n"
+             "    span: Source location for program definition\n\n"
+             "Raises:\n"
+             "    RuntimeError: If already inside another program")
 
-        .def(
-            "add_function", &IRBuilder::AddFunction, py::arg("func"),
-            "Add a completed function to the current program.\n\n"
-            "Args:\n"
-            "    func: Completed function to add\n\n"
-            "Raises:\n"
-            "    RuntimeError: If not inside a program context")
+        .def("add_function", &IRBuilder::AddFunction, py::arg("func"),
+             "Add a completed function to the current program.\n\n"
+             "Args:\n"
+             "    func: Completed function to add\n\n"
+             "Raises:\n"
+             "    RuntimeError: If not inside a program context")
 
-        .def(
-            "end_program", &IRBuilder::EndProgram, py::arg("end_span"),
-            "End building a program.\n\n"
-            "Finalizes the program and returns it.\n\n"
-            "Args:\n"
-            "    end_span: Source location for end of program\n\n"
-            "Returns:\n"
-            "    Program: The built program\n\n"
-            "Raises:\n"
-            "    RuntimeError: If not inside a program context")
+        .def("end_program", &IRBuilder::EndProgram, py::arg("end_span"),
+             "End building a program.\n\n"
+             "Finalizes the program and returns it.\n\n"
+             "Args:\n"
+             "    end_span: Source location for end of program\n\n"
+             "Returns:\n"
+             "    Program: The built program\n\n"
+             "Raises:\n"
+             "    RuntimeError: If not inside a program context")
 
-        .def(
-            "get_function_return_types", &IRBuilder::GetFunctionReturnTypes, py::arg("func_name"),
-            "Get return types for a function by name.\n\n"
-            "Returns the return types for a function if it has been added to the program.\n"
-            "Returns empty list if not inside a program or function not yet added.\n\n"
-            "Args:\n"
-            "    func_name: Function name\n\n"
-            "Returns:\n"
-            "    List[Type]: Vector of return types")
+        .def("get_function_return_types", &IRBuilder::GetFunctionReturnTypes, py::arg("func_name"),
+             "Get return types for a function by name.\n\n"
+             "Returns the return types for a function if it has been added to the program.\n"
+             "Returns empty list if not inside a program or function not yet added.\n\n"
+             "Args:\n"
+             "    func_name: Function name\n\n"
+             "Returns:\n"
+             "    List[Type]: Vector of return types")
 
         .def(
             "create_tensor_var",
@@ -409,20 +376,18 @@ void BindIRBuilder(py::module_& m)
             "Returns:\n"
             "    LogicalTensor: The created tensor variable")
 
-        .def(
-            "create_const_int", &IRBuilder::CreateConstInt, py::arg("value"),
-            "Create a constant integer scalar.\n\n"
-            "Args:\n"
-            "    value: Integer value\n\n"
-            "Returns:\n"
-            "    SymbolicScalar: The created constant integer scalar")
+        .def("create_const_int", &IRBuilder::CreateConstInt, py::arg("value"),
+             "Create a constant integer scalar.\n\n"
+             "Args:\n"
+             "    value: Integer value\n\n"
+             "Returns:\n"
+             "    SymbolicScalar: The created constant integer scalar")
 
-        .def(
-            "create_scalar_var", &IRBuilder::CreateScalarVar, py::arg("sym") = "",
-            "Create a scalar variable.\n\n"
-            "    sym: Symbol of the variable\n\n"
-            "Returns:\n"
-            "    SymbolicScalar: The created scalar variable")
+        .def("create_scalar_var", &IRBuilder::CreateScalarVar, py::arg("sym") = "",
+             "Create a scalar variable.\n\n"
+             "    sym: Symbol of the variable\n\n"
+             "Returns:\n"
+             "    SymbolicScalar: The created scalar variable")
         .def(
             "create_tensor_op_stmt",
             [](IRBuilder& self, std::vector<ir::VarPtr> result, ir::VarPtr result_token, std::string opcode,
@@ -444,61 +409,56 @@ void BindIRBuilder(py::module_& m)
             "Returns:\n"
             "    TensorOpStmt: The created tensor operation statement")
 
-        .def(
-            "create_assign_stmt", &IRBuilder::CreateAssignStmt, py::arg("var"), py::arg("value"), py::arg("span"),
-            "Create an assignment statement.\n\n"
-            "Args:\n"
-            "    var: Variable of the assignment\n"
-            "    value: Right-hand side of the assignment\n"
-            "    span: Span of the assignment\n\n"
-            "Returns:\n"
-            "    AssignStmt: The created assignment statement")
+        .def("create_assign_stmt", &IRBuilder::CreateAssignStmt, py::arg("var"), py::arg("value"), py::arg("span"),
+             "Create an assignment statement.\n\n"
+             "Args:\n"
+             "    var: Variable of the assignment\n"
+             "    value: Right-hand side of the assignment\n"
+             "    span: Span of the assignment\n\n"
+             "Returns:\n"
+             "    AssignStmt: The created assignment statement")
 
-        .def(
-            "create_seq_stmts", &IRBuilder::CreateSeqStmts, py::arg("stmts"), py::arg("span"),
-            "Create a sequence of statements.\n\n"
-            "Args:\n"
-            "    stmts: Statements to create\n"
-            "    span: Span of the sequence\n\n"
-            "Returns:\n"
-            "    SeqStmts: The created sequence of statements")
+        .def("create_seq_stmts", &IRBuilder::CreateSeqStmts, py::arg("stmts"), py::arg("span"),
+             "Create a sequence of statements.\n\n"
+             "Args:\n"
+             "    stmts: Statements to create\n"
+             "    span: Span of the sequence\n\n"
+             "Returns:\n"
+             "    SeqStmts: The created sequence of statements")
 
-        .def(
-            "create_if_stmt", &IRBuilder::CreateIfStmt, py::arg("cond"), py::arg("then_body"), py::arg("else_body"),
-            py::arg("return_vars"), py::arg("span"),
-            "Create an if statement.\n\n"
-            "Args:\n"
-            "    cond: Condition of the if statement\n"
-            "    then_body: Then body of the if statement\n"
-            "    else_body: Else body of the if statement\n"
-            "    return_vars: Return variables of the if statement\n"
-            "    span: Span of the if statement\n\n"
-            "Returns:\n"
-            "    IfStmt: The created if statement")
+        .def("create_if_stmt", &IRBuilder::CreateIfStmt, py::arg("cond"), py::arg("then_body"), py::arg("else_body"),
+             py::arg("return_vars"), py::arg("span"),
+             "Create an if statement.\n\n"
+             "Args:\n"
+             "    cond: Condition of the if statement\n"
+             "    then_body: Then body of the if statement\n"
+             "    else_body: Else body of the if statement\n"
+             "    return_vars: Return variables of the if statement\n"
+             "    span: Span of the if statement\n\n"
+             "Returns:\n"
+             "    IfStmt: The created if statement")
 
-        .def(
-            "create_return_stmt", &IRBuilder::CreateReturnStmt, py::arg("return_vars"), py::arg("span"),
-            "Create a return statement.\n\n"
-            "Args:\n"
-            "    return_vars: Return variables of the return statement\n"
-            "    span: Span of the return statement\n\n"
-            "Returns:\n"
-            "    ReturnStmt: The created return statement")
+        .def("create_return_stmt", &IRBuilder::CreateReturnStmt, py::arg("return_vars"), py::arg("span"),
+             "Create a return statement.\n\n"
+             "Args:\n"
+             "    return_vars: Return variables of the return statement\n"
+             "    span: Span of the return statement\n\n"
+             "Returns:\n"
+             "    ReturnStmt: The created return statement")
 
-        .def(
-            "create_yield_stmt", &IRBuilder::CreateYieldStmt, py::arg("return_vars"), py::arg("span"),
-            "Create a yield statement.\n\n"
-            "Args:\n"
-            "    return_vars: Return variables of the yield statement\n"
-            "    span: Span of the yield statement\n\n"
-            "Returns:\n"
-            "    YieldStmt: The created yield statement")
+        .def("create_yield_stmt", &IRBuilder::CreateYieldStmt, py::arg("return_vars"), py::arg("span"),
+             "Create a yield statement.\n\n"
+             "Args:\n"
+             "    return_vars: Return variables of the yield statement\n"
+             "    span: Span of the yield statement\n\n"
+             "Returns:\n"
+             "    YieldStmt: The created yield statement")
 
         .def(
             "create_for_stmt",
-            [](IRBuilder& self, const ir::VarPtr& loop_var, const ir::ExprPtr& start, const ir::ExprPtr& stop, const ir::ExprPtr& step,
-               const std::vector<ir::IterArgPtr>& iter_args, const ir::StmtPtr& body, const std::vector<ir::VarPtr>& return_vars,
-               const ir::Span& span, const py::object& attrs) {
+            [](IRBuilder& self, const ir::VarPtr& loop_var, const ir::ExprPtr& start, const ir::ExprPtr& stop,
+               const ir::ExprPtr& step, const std::vector<ir::IterArgPtr>& iter_args, const ir::StmtPtr& body,
+               const std::vector<ir::VarPtr>& return_vars, const ir::Span& span, const py::object& attrs) {
                 py::dict attr_dict;
                 if (!attrs.is_none()) {
                     attr_dict = attrs.cast<py::dict>();
@@ -521,36 +481,33 @@ void BindIRBuilder(py::module_& m)
             "Returns:\n"
             "    ForStmt: The created for statement")
 
-        .def(
-            "create_while_stmt", &IRBuilder::CreateWhileStmt, py::arg("cond"), py::arg("iter_args"), py::arg("body"),
-            py::arg("return_vars"), py::arg("span"),
-            "Create a while statement.\n\n"
-            "Args:\n"
-            "    cond: Condition of the while statement\n"
-            "    iterArgs: Iteration arguments of the loop\n"
-            "    body: Body of the while statement\n"
-            "    returnVars: Return variables of the while statement\n"
-            "    span: Span of the while statement\n\n"
-            "Returns:\n"
-            "    WhileStmt: The created while statement")
+        .def("create_while_stmt", &IRBuilder::CreateWhileStmt, py::arg("cond"), py::arg("iter_args"), py::arg("body"),
+             py::arg("return_vars"), py::arg("span"),
+             "Create a while statement.\n\n"
+             "Args:\n"
+             "    cond: Condition of the while statement\n"
+             "    iterArgs: Iteration arguments of the loop\n"
+             "    body: Body of the while statement\n"
+             "    returnVars: Return variables of the while statement\n"
+             "    span: Span of the while statement\n\n"
+             "Returns:\n"
+             "    WhileStmt: The created while statement")
 
-        .def(
-            "create_break_stmt", &IRBuilder::CreateBreakStmt, py::arg("return_vars"), py::arg("span"),
-            "Create a break statement.\n\n"
-            "Args:\n"
-            "    return_vars: Return variables of the break statement\n"
-            "    span: Span of the break statement\n\n"
-            "Returns:\n"
-            "    BreakStmt: The created break statement")
+        .def("create_break_stmt", &IRBuilder::CreateBreakStmt, py::arg("return_vars"), py::arg("span"),
+             "Create a break statement.\n\n"
+             "Args:\n"
+             "    return_vars: Return variables of the break statement\n"
+             "    span: Span of the break statement\n\n"
+             "Returns:\n"
+             "    BreakStmt: The created break statement")
 
-        .def(
-            "create_continue_stmt", &IRBuilder::CreateContinueStmt, py::arg("return_vars"), py::arg("span"),
-            "Create a continue statement.\n\n"
-            "Args:\n"
-            "    return_vars: Return variables of the continue statement\n"
-            "    span: Span of the continue statement\n\n"
-            "Returns:\n"
-            "    ContinueStmt: The created continue statement")
+        .def("create_continue_stmt", &IRBuilder::CreateContinueStmt, py::arg("return_vars"), py::arg("span"),
+             "Create a continue statement.\n\n"
+             "Args:\n"
+             "    return_vars: Return variables of the continue statement\n"
+             "    span: Span of the continue statement\n\n"
+             "Returns:\n"
+             "    ContinueStmt: The created continue statement")
 
         .def(
             "create_function",
@@ -567,24 +524,22 @@ void BindIRBuilder(py::module_& m)
             "Returns:\n"
             "    Function: The created function")
 
-        .def(
-            "create_program", &IRBuilder::CreateProgram, py::arg("functions"), py::arg("name"), py::arg("span"),
-            "Create a program.\n\n"
-            "Args:\n"
-            "    functions: Functions of the program\n"
-            "    name: Name of the program\n"
-            "    span: Span of the program\n\n"
-            "Returns:\n"
-            "    Program: The created program")
+        .def("create_program", &IRBuilder::CreateProgram, py::arg("functions"), py::arg("name"), py::arg("span"),
+             "Create a program.\n\n"
+             "Args:\n"
+             "    functions: Functions of the program\n"
+             "    name: Name of the program\n"
+             "    span: Span of the program\n\n"
+             "Returns:\n"
+             "    Program: The created program")
 
-        .def(
-            "create_var_like", &IRBuilder::CreateVarLike, py::arg("name"), py::arg("value"),
-            "Create a variable like the given value.\n\n"
-            "Args:\n"
-            "    name: Name of the variable\n"
-            "    value: Value to base the variable on\n"
-            "Returns:\n"
-            "    Var: The created variable")
+        .def("create_var_like", &IRBuilder::CreateVarLike, py::arg("name"), py::arg("value"),
+             "Create a variable like the given value.\n\n"
+             "Args:\n"
+             "    name: Name of the variable\n"
+             "    value: Value to base the variable on\n"
+             "Returns:\n"
+             "    Var: The created variable")
 
         .def(
             "create_iter_arg",
@@ -616,13 +571,12 @@ void BindIRBuilder(py::module_& m)
 
         .def("none", &IRBuilder::None, "Get the None value.\n\n")
 
-        .def(
-            "set_insert_point", &IRBuilder::SetInsertPoint, py::arg("point"),
-            "Set insert point.\n\n"
-            "Args:\n"
-            "    point: Insert point\n"
-            "Returns:\n"
-            "    None")
+        .def("set_insert_point", &IRBuilder::SetInsertPoint, py::arg("point"),
+             "Set insert point.\n\n"
+             "Args:\n"
+             "    point: Insert point\n"
+             "Returns:\n"
+             "    None")
 
         .def("clear_insert_point", &IRBuilder::ClearInsertPoint, "Clear insert point.\n\n");
 

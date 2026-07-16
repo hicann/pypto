@@ -36,9 +36,8 @@
 namespace pypto {
 namespace ir {
 
-TypePtr DeduceTensorCreateType(
-    [[maybe_unused]] const std::vector<ExprPtr>& args,
-    [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
+TypePtr DeduceTensorCreateType([[maybe_unused]] const std::vector<ExprPtr>& args,
+                               [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
 {
     // tensor.create: shape is a single TupleType argument
     // dtype comes from kwargs
@@ -90,9 +89,8 @@ TypePtr DeduceTensorCreateType(
     return std::make_shared<TensorType>(shape, dtype);
 }
 
-TypePtr DeduceTensorViewType(
-    [[maybe_unused]] const std::vector<ExprPtr>& args,
-    [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
+TypePtr DeduceTensorViewType([[maybe_unused]] const std::vector<ExprPtr>& args,
+                             [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
 {
     // tensor.view requires exactly 3 arguments: input tensor, shape tuple, and offset tuple
     CHECK(args.size() == 3) << "tensor.view requires exactly 3 arguments (input, shape, offset), but got "
@@ -151,9 +149,8 @@ TypePtr DeduceTensorViewType(
     return std::make_shared<TensorType>(new_shape, tensor_type->dtype_);
 }
 
-TypePtr DeduceTensorAssembleType(
-    [[maybe_unused]] const std::vector<ExprPtr>& args,
-    [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
+TypePtr DeduceTensorAssembleType([[maybe_unused]] const std::vector<ExprPtr>& args,
+                                 [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
 {
     // tensor.assemble requires exactly 3 arguments: target, source, and offset tuple
     CHECK(args.size() == 3) << "tensor.assemble requires exactly 3 arguments (target, source, offset), but got "

@@ -81,7 +81,7 @@ public:
     const char* what() const noexcept override;
 
     [[nodiscard]] std::string DiagnosticWithBacktrace() const;
- 	  	 
+
     int operator=(ErrorMessage& msg);
 
 private:
@@ -103,52 +103,62 @@ public:
 };
 
 #ifndef __DEVICE__
-#define ASSERT_WITH_CODE(errcode, cond)                                                                                \
-    (cond) ?                                                                                                           \
-        0 :                                                                                                            \
-        npu::tile_fwk::Error(__func__, __FILE__, __LINE__, npu::tile_fwk::GetBacktrace(0, /* 64 is maxFrames */ 64)) = \
-            npu::tile_fwk::ErrorMessage() << "ASSERT FAILED: "                                                         \
-            << "ErrCode: F" << std::uppercase << std::hex << std::setw(5) << std::setfill('0')                         \
-            << (static_cast<unsigned>(errcode) & 0xFFFFF) << std::dec << "! Enum: " << #errcode << "\n"
+#define ASSERT_WITH_CODE(errcode, cond)                                                                             \
+    (cond) ? 0 :                                                                                                    \
+             npu::tile_fwk::Error(__func__, __FILE__, __LINE__,                                                     \
+                                  npu::tile_fwk::GetBacktrace(                                                      \
+                                      0, /* 64 is maxFrames */ 64)) = npu::tile_fwk::ErrorMessage()                 \
+                                                                      << "ASSERT FAILED: "                          \
+                                                                      << "ErrCode: F" << std::uppercase << std::hex \
+                                                                      << std::setw(5) << std::setfill('0')          \
+                                                                      << (static_cast<unsigned>(errcode) & 0xFFFFF) \
+                                                                      << std::dec << "! Enum: " << #errcode << "\n"
 
-#define CHECK_WITH_CODE(errcode, cond)                                                                                 \
-    (cond) ?                                                                                                           \
-        0 :                                                                                                            \
-        npu::tile_fwk::Error(__func__, __FILE__, __LINE__, npu::tile_fwk::GetBacktrace(0, /* 64 is maxFrames */ 64)) = \
-            npu::tile_fwk::ErrorMessage() << "CHECK FAILED: "                                                          \
-            << "ErrCode: F" << std::uppercase << std::hex << std::setw(5) << std::setfill('0')                         \
-            << (static_cast<unsigned>(errcode) & 0xFFFFF) << std::dec << "! Enum: " << #errcode << "\n"
+#define CHECK_WITH_CODE(errcode, cond)                                                                              \
+    (cond) ? 0 :                                                                                                    \
+             npu::tile_fwk::Error(__func__, __FILE__, __LINE__,                                                     \
+                                  npu::tile_fwk::GetBacktrace(                                                      \
+                                      0, /* 64 is maxFrames */ 64)) = npu::tile_fwk::ErrorMessage()                 \
+                                                                      << "CHECK FAILED: "                           \
+                                                                      << "ErrCode: F" << std::uppercase << std::hex \
+                                                                      << std::setw(5) << std::setfill('0')          \
+                                                                      << (static_cast<unsigned>(errcode) & 0xFFFFF) \
+                                                                      << std::dec << "! Enum: " << #errcode << "\n"
 
-#define TILEFWK_ERROR()                                                                                            \
-    npu::tile_fwk::Error(__func__, __FILE__, __LINE__, npu::tile_fwk::GetBacktrace(0, /* 64 is maxFrames */ 64)) = \
-        npu::tile_fwk::ErrorMessage()
+#define TILEFWK_ERROR()                                \
+    npu::tile_fwk::Error(__func__, __FILE__, __LINE__, \
+                         npu::tile_fwk::GetBacktrace(0, /* 64 is maxFrames */ 64)) = npu::tile_fwk::ErrorMessage()
 #else
-#define ASSERT_WITH_CODE(errcode, cond)                                                                        \
-    (cond) ? 0 :                                                                                               \
-             AssertInfo() = npu::tile_fwk::ErrorMessage() << "ASSERT FAILED: "                                 \
-                            << "ErrCode: F" << std::uppercase << std::hex << std::setw(5) << std::setfill('0') \
-                            << (static_cast<unsigned>(errcode) & 0xFFFFF) << std::dec << "! Enum: " << #errcode << "\n"
+#define ASSERT_WITH_CODE(errcode, cond)                                                                         \
+    (cond) ? 0 :                                                                                                \
+             AssertInfo() = npu::tile_fwk::ErrorMessage()                                                       \
+                            << "ASSERT FAILED: "                                                                \
+                            << "ErrCode: F" << std::uppercase << std::hex << std::setw(5) << std::setfill('0')  \
+                            << (static_cast<unsigned>(errcode) & 0xFFFFF) << std::dec << "! Enum: " << #errcode \
+                            << "\n"
 
-#define CHECK_WITH_CODE(errcode, cond)                                                                         \
-    (cond) ? 0 :                                                                                               \
-             AssertInfo() = npu::tile_fwk::ErrorMessage() << "CHECK FAILED: "                                  \
-                            << "ErrCode: F" << std::uppercase << std::hex << std::setw(5) << std::setfill('0') \
-                            << (static_cast<unsigned>(errcode) & 0xFFFFF) << std::dec << "! Enum: " << #errcode << "\n"
+#define CHECK_WITH_CODE(errcode, cond)                                                                          \
+    (cond) ? 0 :                                                                                                \
+             AssertInfo() = npu::tile_fwk::ErrorMessage()                                                       \
+                            << "CHECK FAILED: "                                                                 \
+                            << "ErrCode: F" << std::uppercase << std::hex << std::setw(5) << std::setfill('0')  \
+                            << (static_cast<unsigned>(errcode) & 0xFFFFF) << std::dec << "! Enum: " << #errcode \
+                            << "\n"
 #endif
 
 #define ASSERT_DEFAULT_SELECT(_1, _2, NAME, ...) NAME
 #define ASSERT_DEFAULT_WITHOUT_ERR_CODE(default_errcode, cond) ASSERT_WITH_CODE(default_errcode, cond)
 #define ASSERT_DEFAULT_WITH_ERR_CODE(default_errcode, errcode, cond) ASSERT_WITH_CODE(errcode, cond)
-#define ASSERT_DEFAULT(default_errcode, ...)                                                                     \
-    ASSERT_DEFAULT_SELECT(__VA_ARGS__, ASSERT_DEFAULT_WITH_ERR_CODE, ASSERT_DEFAULT_WITHOUT_ERR_CODE)(         \
-        default_errcode, __VA_ARGS__)
+#define ASSERT_DEFAULT(default_errcode, ...)                                                          \
+    ASSERT_DEFAULT_SELECT(__VA_ARGS__, ASSERT_DEFAULT_WITH_ERR_CODE, ASSERT_DEFAULT_WITHOUT_ERR_CODE) \
+    (default_errcode, __VA_ARGS__)
 
 #define CHECK_DEFAULT_SELECT(_1, _2, NAME, ...) NAME
 #define CHECK_DEFAULT_WITHOUT_ERR_CODE(default_errcode, cond) CHECK_WITH_CODE(default_errcode, cond)
 #define CHECK_DEFAULT_WITH_ERR_CODE(default_errcode, errcode, cond) CHECK_WITH_CODE(errcode, cond)
-#define CHECK_DEFAULT(default_errcode, ...)                                                                       \
-    CHECK_DEFAULT_SELECT(__VA_ARGS__, CHECK_DEFAULT_WITH_ERR_CODE, CHECK_DEFAULT_WITHOUT_ERR_CODE)(             \
-        default_errcode, __VA_ARGS__)
+#define CHECK_DEFAULT(default_errcode, ...)                                                        \
+    CHECK_DEFAULT_SELECT(__VA_ARGS__, CHECK_DEFAULT_WITH_ERR_CODE, CHECK_DEFAULT_WITHOUT_ERR_CODE) \
+    (default_errcode, __VA_ARGS__)
 
 #define ASSERT(...) ASSERT_DEFAULT(npu::tile_fwk::InternalError::COMMON_INNER_ERROR, __VA_ARGS__)
 #define CHECK(...) CHECK_DEFAULT(npu::tile_fwk::ExternalError::COMMON_EXTERNAL_ERROR, __VA_ARGS__)

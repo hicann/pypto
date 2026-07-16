@@ -41,15 +41,15 @@ TEST_F(TestCodegenDynCmp, TestDynOpCmp)
 
     std::vector<int64_t> shape = {64, 64};
     std::vector<SymbolicScalar> dynValidShape = {64, 64};
-    auto localTensorInput1 =
-        CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
-    auto localTensorInput2 =
-        CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
+    auto localTensorInput1 = CreateLogicalTensor(
+        {*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
+    auto localTensorInput2 = CreateLogicalTensor(
+        {*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
     auto localTensorRes = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
     auto localTensorTmp = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
 
-    auto& op = function->AddOperation(
-        Opcode::OP_CMP, {localTensorInput1, localTensorInput2}, {localTensorRes, localTensorTmp});
+    auto& op = function->AddOperation(Opcode::OP_CMP, {localTensorInput1, localTensorInput2},
+                                      {localTensorRes, localTensorTmp});
     op.SetAttribute(OP_ATTR_PREFIX + "cmp_operation", 0);
     op.SetAttribute(OP_ATTR_PREFIX + "cmp_mode", 0);
 
@@ -70,8 +70,8 @@ TEST_F(TestCodegenDynCmp, TestDynOpCmpS)
     std::vector<SymbolicScalar> dynValidShape = {64, 64};
     Element scalaVal(DataType::DT_FP32, 1.0);
 
-    auto localTensorInput1 =
-        CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
+    auto localTensorInput1 = CreateLogicalTensor(
+        {*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
     auto localTensorRes = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
     auto localTensorTmp = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
 

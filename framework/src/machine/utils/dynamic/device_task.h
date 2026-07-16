@@ -83,7 +83,8 @@ struct DynDeviceTask : DynDeviceTaskBase {
             of.open(path);
         }
         if (of.tellp() == 0) {
-             of << "seqNo,taskId,rootIndex,rootHash,opmagic,leafIndex,leafHash,coreType,psgId,wrapId,staticSuccCount,successors\n";
+            of << "seqNo,taskId,rootIndex,rootHash,opmagic,leafIndex,leafHash,coreType,psgId,wrapId,staticSuccCount,"
+                  "successors\n";
         }
         for (size_t funcIdx = 0; funcIdx < stitchedList.size(); funcIdx++) {
             stitchedList[funcIdx].DumpTopo(of, header->seqNo, funcIdx, cceBinary, enableVFFusion, &devTask);
@@ -123,8 +124,8 @@ struct DynDeviceTask : DynDeviceTaskBase {
 };
 
 #define DYN_DEVICE_TASK_EXT_SIZE 0x400
-static_assert(
-    sizeof(DynDeviceTask) < sizeof(DynDeviceTaskBase) + DYN_DEVICE_TASK_EXT_SIZE, "Invalid dyn device task extension");
+static_assert(sizeof(DynDeviceTask) < sizeof(DynDeviceTaskBase) + DYN_DEVICE_TASK_EXT_SIZE,
+              "Invalid dyn device task extension");
 
 struct DeviceTaskCtrl {
     uint64_t taskId{0};
@@ -139,15 +140,15 @@ struct DeviceTaskCtrl {
     std::atomic<uint64_t> nextSameIterTaskCtrl{0}; // make sure fetched as soon as possible,ctrl cpu maybe set next task
                                                    // ctrl after this taskctrl fetched by schedule cpu
     std::atomic<bool> notFree{false};
-    std::atomic<int> freeCnt{0};                   // make sure all sch release this ctrl
+    std::atomic<int> freeCnt{0}; // make sure all sch release this ctrl
 
     uint32_t ParallelForId() { return (reinterpret_cast<DynDeviceTask*>(devTask))->ParallelForId(); }
     uint32_t ParallelIterId() { return (reinterpret_cast<DynDeviceTask*>(devTask))->ParallelIterId(); }
     bool SupportParallel() { return (reinterpret_cast<DynDeviceTask*>(devTask))->ParallelForId() != 0; }
     uint32_t ParallelWsId() { return (reinterpret_cast<DynDeviceTask*>(devTask))->ParallelWsId(); }
     bool ExistNextSameIterTask() { return existNextSameIterTask.load(std::memory_order_acquire); }
-    uint32_t GetMaxC() { return (reinterpret_cast<DynDeviceTask *>(devTask))->GetMaxC(); }
-    uint32_t GetMaxV() { return (reinterpret_cast<DynDeviceTask *>(devTask))->GetMaxV(); }
+    uint32_t GetMaxC() { return (reinterpret_cast<DynDeviceTask*>(devTask))->GetMaxC(); }
+    uint32_t GetMaxV() { return (reinterpret_cast<DynDeviceTask*>(devTask))->GetMaxV(); }
     DeviceTaskCtrl* NextSameIterTaskCtrl()
     {
         return reinterpret_cast<DeviceTaskCtrl*>(nextSameIterTaskCtrl.load(std::memory_order_acquire));
@@ -159,8 +160,8 @@ struct DeviceTaskCtrl {
         auto* dynTask = reinterpret_cast<DynDeviceTask*>(devTask);
         dynTask->taskStageAllocMem.VerifyAll();
         dynTask->taskStageAllocMem.canFree.store(true);
-        notFree.store(
-            false, std::memory_order_release); // parallel device task will reuse this ctrl,so this ctrl cannot free
+        notFree.store(false,
+                      std::memory_order_release); // parallel device task will reuse this ctrl,so this ctrl cannot free
     }
 
     void Free(int scheCpuNum)

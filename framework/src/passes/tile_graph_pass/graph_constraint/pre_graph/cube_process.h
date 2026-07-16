@@ -70,8 +70,8 @@ public:
     Status CheckValidCube(const Operation& op);
     Status UpdateCubeOp(Function& function);
     Status UpdateCopyAttr(Operation& op) const;
-    Status AddL1CopyInAttr(
-        const std::shared_ptr<LogicalTensor> input, int nzValue, int mValue, int kValue, int nValue) const;
+    Status AddL1CopyInAttr(const std::shared_ptr<LogicalTensor> input, int nzValue, int mValue, int kValue,
+                           int nValue) const;
     Status AddL0cCopyOutAttr(const std::shared_ptr<LogicalTensor> output, int nzValue, int mValue, int nValue) const;
     Status UpdateL0cDtype(Operation& op);
     Status AlignGMTensor(Function& function, std::vector<Operation*>& l0CCopyOuts, Operation& mulOp);

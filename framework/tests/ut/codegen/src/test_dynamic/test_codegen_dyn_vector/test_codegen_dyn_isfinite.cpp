@@ -39,8 +39,8 @@ void TestCodegenIsFiniteBody()
     std::vector<int64_t> vecTileShape = {5, 9};
     std::vector<int64_t> shape{12, 14};
 
-    auto function = GenMockFuncDynUnary(
-        "IsFinite", {shape, vecTileShape}, [](Tensor& input, Tensor& output) { output = IsFinite(input); });
+    auto function = GenMockFuncDynUnary("IsFinite", {shape, vecTileShape},
+                                        [](Tensor& input, Tensor& output) { output = IsFinite(input); });
 
     std::string res = GenCodeByFunction(*function);
     std::string expect = R"!!!(TIsFinite(ubTensor_2, ubTensor_0, ubTensor_3);)!!!";

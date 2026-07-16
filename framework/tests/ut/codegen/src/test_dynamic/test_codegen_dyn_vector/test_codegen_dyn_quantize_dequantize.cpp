@@ -34,16 +34,17 @@ public:
 protected:
     static void RunCodeGenAndCheck(const std::string& funcName, const std::string& expect)
     {
-        auto function = Program::GetInstance().GetFunctionByRawName(
-            FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+        auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX +
+                                                                    HIDDEN_FUNC_SUFFIX);
         std::string res = GenCodeByFunction(*function);
         CheckStringExist(expect, res);
     }
 
-    static void RunQuantizeTestSymmetric(
-        const std::string& funcName, const std::string& expect, DataType inputType, DataType outputType,
-        const std::vector<int64_t>& inputShape, const std::vector<int64_t>& scaleShape,
-        const std::vector<int64_t>& outputShape, const std::vector<int64_t>& vecTile, int axis)
+    static void RunQuantizeTestSymmetric(const std::string& funcName, const std::string& expect, DataType inputType,
+                                         DataType outputType, const std::vector<int64_t>& inputShape,
+                                         const std::vector<int64_t>& scaleShape,
+                                         const std::vector<int64_t>& outputShape, const std::vector<int64_t>& vecTile,
+                                         int axis)
     {
         TileShape::Current().SetVecTile(vecTile);
         Tensor input(inputType, inputShape, "input");
@@ -63,11 +64,12 @@ protected:
         RunCodeGenAndCheck(funcName, expect);
     }
 
-    static void RunQuantizeTestAsymmetric(
-        const std::string& funcName, const std::string& expect, DataType inputType, DataType outputType,
-        const std::vector<int64_t>& inputShape, const std::vector<int64_t>& scaleShape,
-        const std::vector<int64_t>& zeroPointShape, const std::vector<int64_t>& outputShape,
-        const std::vector<int64_t>& vecTile, int axis)
+    static void RunQuantizeTestAsymmetric(const std::string& funcName, const std::string& expect, DataType inputType,
+                                          DataType outputType, const std::vector<int64_t>& inputShape,
+                                          const std::vector<int64_t>& scaleShape,
+                                          const std::vector<int64_t>& zeroPointShape,
+                                          const std::vector<int64_t>& outputShape, const std::vector<int64_t>& vecTile,
+                                          int axis)
     {
         TileShape::Current().SetVecTile(vecTile);
         Tensor input(inputType, inputShape, "input");
@@ -87,10 +89,10 @@ protected:
         RunCodeGenAndCheck(funcName, expect);
     }
 
-    static void RunDequantizeTest(
-        const std::string& funcName, const std::string& expect, DataType inputType,
-        const std::vector<int64_t>& inputShape, const std::vector<int64_t>& scaleShape,
-        const std::vector<int64_t>& outputShape, const std::vector<int64_t>& vecTile, int axis)
+    static void RunDequantizeTest(const std::string& funcName, const std::string& expect, DataType inputType,
+                                  const std::vector<int64_t>& inputShape, const std::vector<int64_t>& scaleShape,
+                                  const std::vector<int64_t>& outputShape, const std::vector<int64_t>& vecTile,
+                                  int axis)
     {
         TileShape::Current().SetVecTile(vecTile);
         Tensor input(inputType, inputShape, "input");
@@ -150,37 +152,33 @@ TEST_F(TestCodegenDynQuantize, QuantizeAsymmetricAxisM2)
 // Dequantize: INT8 -> FP32, axis=-1 (per-row)
 TEST_F(TestCodegenDynQuantize, DequantizeInt8ToFP32)
 {
-    RunDequantizeTest(
-        "DEQUANTIZE_INT8_FP32",
-        R"!!!(TDequant<pto::DequantType::INT8>(ubTensor_6, ubTensor_0, ubTensor_2, ubTensor_4);)!!!", DataType::DT_INT8,
-        {8, 128}, {8}, {8, 128}, {8, 128}, -1);
+    RunDequantizeTest("DEQUANTIZE_INT8_FP32",
+                      R"!!!(TDequant<pto::DequantType::INT8>(ubTensor_6, ubTensor_0, ubTensor_2, ubTensor_4);)!!!",
+                      DataType::DT_INT8, {8, 128}, {8}, {8, 128}, {8, 128}, -1);
 }
 
 // Dequantize: INT16 -> FP32, axis=-1 (per-row)
 TEST_F(TestCodegenDynQuantize, DequantizeInt16ToFP32)
 {
-    RunDequantizeTest(
-        "DEQUANTIZE_INT16_FP32",
-        R"!!!(TDequant<pto::DequantType::INT16>(ubTensor_6, ubTensor_0, ubTensor_2, ubTensor_4);)!!!",
-        DataType::DT_INT16, {16, 64}, {16}, {16, 64}, {16, 64}, -1);
+    RunDequantizeTest("DEQUANTIZE_INT16_FP32",
+                      R"!!!(TDequant<pto::DequantType::INT16>(ubTensor_6, ubTensor_0, ubTensor_2, ubTensor_4);)!!!",
+                      DataType::DT_INT16, {16, 64}, {16}, {16, 64}, {16, 64}, -1);
 }
 
 // Dequantize INT8 with axis=-2 (per-column)
 TEST_F(TestCodegenDynQuantize, DequantizeInt8AxisM2)
 {
-    RunDequantizeTest(
-        "DEQUANTIZE_INT8_AXIS_M2",
-        R"!!!(TDequant<pto::DequantType::INT8>(ubTensor_9, ubTensor_2, ubTensor_5, ubTensor_7);)!!!", DataType::DT_INT8,
-        {4, 256}, {256}, {4, 256}, {4, 128}, -2);
+    RunDequantizeTest("DEQUANTIZE_INT8_AXIS_M2",
+                      R"!!!(TDequant<pto::DequantType::INT8>(ubTensor_9, ubTensor_2, ubTensor_5, ubTensor_7);)!!!",
+                      DataType::DT_INT8, {4, 256}, {256}, {4, 256}, {4, 128}, -2);
 }
 
 // Dequantize INT16 with axis=-2 (per-column)
 TEST_F(TestCodegenDynQuantize, DequantizeInt16AxisM2)
 {
-    RunDequantizeTest(
-        "DEQUANTIZE_INT16_AXIS_M2",
-        R"!!!(TDequant<pto::DequantType::INT16>(ubTensor_9, ubTensor_2, ubTensor_5, ubTensor_7);)!!!",
-        DataType::DT_INT16, {4, 256}, {256}, {4, 256}, {4, 128}, -2);
+    RunDequantizeTest("DEQUANTIZE_INT16_AXIS_M2",
+                      R"!!!(TDequant<pto::DequantType::INT16>(ubTensor_9, ubTensor_2, ubTensor_5, ubTensor_7);)!!!",
+                      DataType::DT_INT16, {4, 256}, {256}, {4, 256}, {4, 128}, -2);
 }
 
 TEST_F(TestCodegenDynQuantize, QuantMXDefaultRoundDownFp8Output)
@@ -205,8 +203,8 @@ TEST_F(TestCodegenDynQuantize, QuantMXDefaultRoundDownFp8Output)
         }
     }
 
-    auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX +
+                                                                HIDDEN_FUNC_SUFFIX);
 
     CheckStringExist(R"!!!(TQuantMX<)!!!", GenCodeByFunction(*function));
     Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
@@ -234,8 +232,8 @@ TEST_F(TestCodegenDynQuantize, QuantMXRoundUpFp8Output)
         }
     }
 
-    auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX +
+                                                                HIDDEN_FUNC_SUFFIX);
 
     CheckStringExist(R"!!!(TQuantMX<0, 1, 1>)!!!", GenCodeByFunction(*function));
     Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
@@ -263,8 +261,8 @@ TEST_F(TestCodegenDynQuantize, QuantMXRoundUpFp8OutputNonPerformanceMode)
         }
     }
 
-    auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX +
+                                                                HIDDEN_FUNC_SUFFIX);
     function->SetUnderDynamicFunction(true);
 
     npu::tile_fwk::CodeGenCtx ctx;

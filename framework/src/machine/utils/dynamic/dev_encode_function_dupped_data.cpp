@@ -20,10 +20,9 @@ constexpr const uint8_t MAIN_BLOCK_SIZE = 2;
 std::string DevAscendFunctionDuppedData::Dump(int indent) const
 {
     if (GetSource()->GetOperationSize() != GetOperationSize()) {
-        DEV_ERROR(
-            ProgEncodeErr::FUNC_OP_SIZE_MISMATCH,
-            "#ctrl.encode.func_op: GetOperationSize mismatch: source=%zu, self=%u", GetSource()->GetOperationSize(),
-            GetOperationSize());
+        DEV_ERROR(ProgEncodeErr::FUNC_OP_SIZE_MISMATCH,
+                  "#ctrl.encode.func_op: GetOperationSize mismatch: source=%zu, self=%u",
+                  GetSource()->GetOperationSize(), GetOperationSize());
     }
     DEV_ASSERT(ProgEncodeErr::FUNC_OP_SIZE_MISMATCH, GetSource()->GetOperationSize() == GetOperationSize());
     std::string INDENT(indent, ' ');
@@ -60,9 +59,8 @@ std::string DevAscendFunctionDuppedData::Dump(int indent) const
     return oss.str();
 }
 
-void DevAscendFunctionDupped::DumpTopo(
-    std::ofstream& os, int seqNo, int funcIdx, const DevCceBinary* cceBinary, bool enableVFFusion,
-    const DeviceTask* devTask) const
+void DevAscendFunctionDupped::DumpTopo(std::ofstream& os, int seqNo, int funcIdx, const DevCceBinary* cceBinary,
+                                       bool enableVFFusion, const DeviceTask* devTask) const
 {
     auto func = GetSource();
     for (size_t opIdx = 0; opIdx < DupData()->GetSource()->GetOperationSize(); opIdx++) {
@@ -100,12 +98,10 @@ void DevAscendFunctionDupped::DumpTensorAddrInfo(std::vector<std::string>& infos
     auto dumpOperand = [&](const DevAscendOperationOperandInfo& operandInfo, size_t opIdx) {
         std::stringstream os;
         uint64_t rawIdx = srcFunc->GetTensor(operandInfo.tensorIndex)->rawIndex;
-        auto *rawTensor = srcFunc->GetRawTensor(rawIdx);
-        os << seqNo << "," << MakeTaskID(funcIdx, opIdx) << "," <<
-            rawTensor->rawMagic << "," <<
-            GetRawTensorAddrEx(rawIdx) << "," <<
-            DataType2String(rawTensor->dataType, true) << "," <<
-            BytesOf(rawTensor->dataType);
+        auto* rawTensor = srcFunc->GetRawTensor(rawIdx);
+        os << seqNo << "," << MakeTaskID(funcIdx, opIdx) << "," << rawTensor->rawMagic << ","
+           << GetRawTensorAddrEx(rawIdx) << "," << DataType2String(rawTensor->dataType, true) << ","
+           << BytesOf(rawTensor->dataType);
 
         uint32_t dimSize = rawTensor->GetDim();
         os << ",(";
@@ -144,9 +140,8 @@ static void FlushStream(std::vector<std::string>& lines, std::stringstream& oss)
     oss.str("");
 }
 
-void DevAscendFunctionDupped::DumpRawShape(
-    const DevAscendRawTensor* rawTensor, uint32_t dimSize, std::vector<std::string>& lines,
-    std::stringstream& oss) const
+void DevAscendFunctionDupped::DumpRawShape(const DevAscendRawTensor* rawTensor, uint32_t dimSize,
+                                           std::vector<std::string>& lines, std::stringstream& oss) const
 {
     oss << "        rawShape=[";
     bool isFirstDim = true;
@@ -162,9 +157,8 @@ void DevAscendFunctionDupped::DumpRawShape(
     FlushStream(lines, oss);
 }
 
-void DevAscendFunctionDupped::DumpOperandShape(
-    uint32_t dimSize, size_t opIdx, size_t operandIdx, bool isIn, std::vector<std::string>& lines,
-    std::stringstream& oss) const
+void DevAscendFunctionDupped::DumpOperandShape(uint32_t dimSize, size_t opIdx, size_t operandIdx, bool isIn,
+                                               std::vector<std::string>& lines, std::stringstream& oss) const
 {
     uint64_t offset[DEV_SHAPE_DIM_MAX];
     uint64_t shape[DEV_SHAPE_DIM_MAX];

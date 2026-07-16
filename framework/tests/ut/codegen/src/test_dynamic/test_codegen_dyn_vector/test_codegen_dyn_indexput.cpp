@@ -61,8 +61,8 @@ TEST_F(TestCodegenDynIndexPut, DynIndexPutTileTensor)
             IndexPut_(input, {indices1}, values);
         }
     }
-    auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX +
+                                                                HIDDEN_FUNC_SUFFIX);
     config::SetCodeGenOption(SUPPORT_DYNAMIC_ALIGNED, true);
 
     std::string res = GenCodeByFunction(*function);

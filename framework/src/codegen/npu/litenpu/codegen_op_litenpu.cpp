@@ -53,8 +53,8 @@ std::string CodeGenOpLiteNPU::GenGmParamVar(unsigned gmParamIdx) const
     return std::string("RealizedGM") + std::to_string(paramLocation[gmParamIdx]) + ".Addr";
 }
 
-TileTensor CodeGenOpLiteNPU::BuildTileTensor(
-    int paramIdx, const std::string& usingType, const TileTensorShape& tileTensorShape)
+TileTensor CodeGenOpLiteNPU::BuildTileTensor(int paramIdx, const std::string& usingType,
+                                             const TileTensorShape& tileTensorShape)
 {
     int64_t gmOffset{0};
     bool isSpillToGm = GetTensorAttr(paramIdx, OpAttributeKey::workspaceBaseOffset, gmOffset);
@@ -70,8 +70,8 @@ TileTensor CodeGenOpLiteNPU::BuildTileTensor(
     tileTensor.bufType = operandType[paramIdx];
 
     if (tileTensor.bufType == OperandType::BUF_DDR) {
-        tileTensor.bufVar =
-            isSpillToGm ? GenGMAddrExprWithOffset(paramIdx, CODEGEN_LITENPU_WORKSPACE) : GenGmParamVar(paramIdx);
+        tileTensor.bufVar = isSpillToGm ? GenGMAddrExprWithOffset(paramIdx, CODEGEN_LITENPU_WORKSPACE) :
+                                          GenGmParamVar(paramIdx);
     } else {
         tileTensor.bufVar = sm->QueryVarNameByTensorMagic(tileTensor.magic, true);
     }
@@ -86,16 +86,15 @@ TileTensor CodeGenOpLiteNPU::BuildTileTensor(
     return tileTensor;
 }
 
-void CodeGenOpLiteNPU::UpdateTileTensorShapeAndStride(
-    [[maybe_unused]] int paramIdx, TileTensor& tileTensor, [[maybe_unused]] bool isSpillToGm,
-    const TileTensorShape& tileTensorShape)
+void CodeGenOpLiteNPU::UpdateTileTensorShapeAndStride([[maybe_unused]] int paramIdx, TileTensor& tileTensor,
+                                                      [[maybe_unused]] bool isSpillToGm,
+                                                      const TileTensorShape& tileTensorShape)
 {
     auto newShape = tileTensorShape.shape;
     auto newRawShape = tileTensorShape.rawShape;
     auto newDynValidShape = tileTensorShape.dynamicValidShape;
-    CODEGEN_LOGI(
-        "newShape is %s, newRawShape is %s, newDynValidShape is %s", IntVecToStr(newShape).c_str(),
-        IntVecToStr(newRawShape).c_str(), IntVecToStr(newDynValidShape).c_str());
+    CODEGEN_LOGI("newShape is %s, newRawShape is %s, newDynValidShape is %s", IntVecToStr(newShape).c_str(),
+                 IntVecToStr(newRawShape).c_str(), IntVecToStr(newDynValidShape).c_str());
 
     tileTensor.rawShape = newRawShape;
 
@@ -162,8 +161,8 @@ void CodeGenOpLiteNPU::ExtractCoaGetParamOffset(const SymbolicScalar& expr, int&
         return;
     }
     if (operands[RUNTIME_COA_BASE]->IsImmediate()) {
-        base =
-            static_cast<int>(std::static_pointer_cast<RawSymbolicImmediate>(operands[RUNTIME_COA_BASE])->Immediate());
+        base = static_cast<int>(
+            std::static_pointer_cast<RawSymbolicImmediate>(operands[RUNTIME_COA_BASE])->Immediate());
     }
     if (operands[RUNTIME_COA_IDX]->IsImmediate()) {
         idx = static_cast<int>(std::static_pointer_cast<RawSymbolicImmediate>(operands[RUNTIME_COA_IDX])->Immediate());

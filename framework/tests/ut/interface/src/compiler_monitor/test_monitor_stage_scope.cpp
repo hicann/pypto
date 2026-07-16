@@ -96,8 +96,10 @@ TEST_F(TestMonitorStageScope, NestedStageScopeCodeGenAndFuncToBin)
             bool hasCodeGen = false;
             bool hasFuncToBin = false;
             for (const auto& s : stages) {
-                if (s.stageName == "CodeGen") hasCodeGen = true;
-                if (s.stageName == STAGE_FUNC_TO_BIN) hasFuncToBin = true;
+                if (s.stageName == "CodeGen")
+                    hasCodeGen = true;
+                if (s.stageName == STAGE_FUNC_TO_BIN)
+                    hasFuncToBin = true;
             }
             EXPECT_FALSE(hasCodeGen);
             EXPECT_TRUE(hasFuncToBin);

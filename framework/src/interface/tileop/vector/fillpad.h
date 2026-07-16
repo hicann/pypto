@@ -50,9 +50,8 @@ TILEOP void TFillPad(DstTensor dst, SrcTensor src)
     constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<DstTensor, 4, 5>();
     constexpr auto srcTileH = TileOp::GetTensorTileShapeDim<SrcTensor, 3, 5>();
     constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<SrcTensor, 4, 5>();
-    using DstTileType = pto::Tile<
-        pto::TileType::Vec, DstDtype, dstTileH, dstTileW, pto::BLayout::RowMajor, -1, -1, pto::SLayout::NoneBox, 512,
-        padValue>;
+    using DstTileType = pto::Tile<pto::TileType::Vec, DstDtype, dstTileH, dstTileW, pto::BLayout::RowMajor, -1, -1,
+                                  pto::SLayout::NoneBox, 512, padValue>;
     using SrcTileType = pto::Tile<pto::TileType::Vec, SrcDtype, srcTileH, srcTileW, pto::BLayout::RowMajor, -1, -1>;
 
     for (LoopVar n0Index = 0; n0Index < dstShape0; ++n0Index) {

@@ -47,8 +47,7 @@ const std::string& DepVerifyDumpDir()
 
 inline bool DumpEnabled()
 {
-    static const bool cached =
-        (config::GetDebugOption<int64_t>(CFG_RUNTIME_DBEUG_MODE) == CFG_RUNTIME_DEBUG_VERIFY);
+    static const bool cached = (config::GetDebugOption<int64_t>(CFG_RUNTIME_DBEUG_MODE) == CFG_RUNTIME_DEBUG_VERIFY);
     return cached;
 }
 
@@ -68,9 +67,8 @@ std::string CsvQuote(const std::string& s)
     return out;
 }
 
-std::ofstream OpenCsv(const std::string& fileName,
-                      std::initializer_list<const char*> header,
-                      std::string& outPath, bool enabled)
+std::ofstream OpenCsv(const std::string& fileName, std::initializer_list<const char*> header, std::string& outPath,
+                      bool enabled)
 {
     std::ofstream ofs;
     if (!enabled) {
@@ -106,10 +104,9 @@ void WriteCellMatchDesc(std::ostream& os, const dynamic::DevCellMatchTableDesc& 
     os << "]," << desc.GetStride(0);
 }
 
-void CollectTensorAndFuncNamesPerFrontendSlot(
-    const TensorSlotManager& slotManager,
-    std::unordered_map<int, std::string>& feSlotToTensorName,
-    std::unordered_map<int, std::string>& feSlotToFuncName)
+void CollectTensorAndFuncNamesPerFrontendSlot(const TensorSlotManager& slotManager,
+                                              std::unordered_map<int, std::string>& feSlotToTensorName,
+                                              std::unordered_map<int, std::string>& feSlotToFuncName)
 {
     for (const auto& kv : slotManager.slotIndexDict) {
         int feIdx = kv.second;
@@ -139,18 +136,15 @@ void CollectTensorAndFuncNamesPerFrontendSlot(
 
 } // namespace
 
-void DumpSlotMapping(const TensorSlotManager& slotManager,
-                     const std::unordered_map<int, int>& slotIdxMapping,
+void DumpSlotMapping(const TensorSlotManager& slotManager, const std::unordered_map<int, int>& slotIdxMapping,
                      const IncastOutcastLink& inoutLink)
 {
     if (!DumpEnabled()) {
         return;
     }
 
-    std::set<int> inputRuntimeSlots(
-        inoutLink.inputSlotIndexList.begin(), inoutLink.inputSlotIndexList.end());
-    std::set<int> outputRuntimeSlots(
-        inoutLink.outputSlotIndexList.begin(), inoutLink.outputSlotIndexList.end());
+    std::set<int> inputRuntimeSlots(inoutLink.inputSlotIndexList.begin(), inoutLink.inputSlotIndexList.end());
+    std::set<int> outputRuntimeSlots(inoutLink.outputSlotIndexList.begin(), inoutLink.outputSlotIndexList.end());
 
     std::unordered_map<int, std::string> feSlotToTensorName;
     std::unordered_map<int, std::string> feSlotToFuncName;
@@ -169,9 +163,8 @@ void DumpSlotMapping(const TensorSlotManager& slotManager,
         } else if (isOutput) {
             role = "OUTPUT";
         }
-        blob << slot.first << ',' << slot.second << ',' << role << ','
-             << CsvQuote(feSlotToTensorName[slot.first]) << ','
-             << CsvQuote(feSlotToFuncName[slot.first]) << '\n';
+        blob << slot.first << ',' << slot.second << ',' << role << ',' << CsvQuote(feSlotToTensorName[slot.first])
+             << ',' << CsvQuote(feSlotToFuncName[slot.first]) << '\n';
     }
 
     const std::string path = DepVerifyDumpDir() + "/slot_mapping.csv";
@@ -181,17 +174,14 @@ void DumpSlotMapping(const TensorSlotManager& slotManager,
     }
     ofs << blob.str();
     ofs.close();
-    MACHINE_LOGD("SlotMapping dumped to %s, total %zu entries",
-                 path.c_str(), slotIdxMapping.size());
+    MACHINE_LOGD("SlotMapping dumped to %s, total %zu entries", path.c_str(), slotIdxMapping.size());
 }
 
 StaticTopoCsvWriter::StaticTopoCsvWriter()
 {
-    ofs_ = OpenCsv(
-        "static_topo.csv",
-        {"funcKey", "rootHash", "rawName", "opIdx",
-         "incastSlots", "outcastSlots", "staticSuccessors"},
-        path_, DumpEnabled());
+    ofs_ = OpenCsv("static_topo.csv",
+                   {"funcKey", "rootHash", "rawName", "opIdx", "incastSlots", "outcastSlots", "staticSuccessors"},
+                   path_, DumpEnabled());
 }
 
 StaticTopoCsvWriter::~StaticTopoCsvWriter()
@@ -201,10 +191,7 @@ StaticTopoCsvWriter::~StaticTopoCsvWriter()
     }
 }
 
-bool StaticTopoCsvWriter::Enabled() const
-{
-    return ofs_.is_open();
-}
+bool StaticTopoCsvWriter::Enabled() const { return ofs_.is_open(); }
 
 void StaticTopoCsvWriter::WriteFunction(int devRootKey, dynamic::DevAscendFunction& funcBin)
 {
@@ -213,8 +200,7 @@ void StaticTopoCsvWriter::WriteFunction(int devRootKey, dynamic::DevAscendFuncti
     }
     auto& os = ofs_;
     for (size_t opIdx = 0; opIdx < funcBin.GetOperationSize(); opIdx++) {
-        os << devRootKey << ',' << funcBin.rootHash << ','
-           << CsvQuote(funcBin.GetRawName()) << ',' << opIdx << ',';
+        os << devRootKey << ',' << funcBin.rootHash << ',' << CsvQuote(funcBin.GetRawName()) << ',' << opIdx << ',';
         os << '[';
         for (size_t i = 0; i < funcBin.GetIncastSize(); i++) {
             auto& incast = funcBin.GetIncast(i);
@@ -255,11 +241,9 @@ void StaticTopoCsvWriter::WriteFunction(int devRootKey, dynamic::DevAscendFuncti
 
 SlotCellTableCsvWriter::SlotCellTableCsvWriter(bool fillContent)
 {
-    ofs_ = OpenCsv(
-        "slot_cell_table.csv",
-        {"slotIdx", "stitchPolicy", "rootHash", "funcKey",
-         "cellShape", "cellCount", "outcastCount"},
-        path_, fillContent && DumpEnabled());
+    ofs_ = OpenCsv("slot_cell_table.csv",
+                   {"slotIdx", "stitchPolicy", "rootHash", "funcKey", "cellShape", "cellCount", "outcastCount"}, path_,
+                   fillContent && DumpEnabled());
 }
 
 SlotCellTableCsvWriter::~SlotCellTableCsvWriter()
@@ -269,14 +253,9 @@ SlotCellTableCsvWriter::~SlotCellTableCsvWriter()
     }
 }
 
-bool SlotCellTableCsvWriter::Enabled() const
-{
-    return ofs_.is_open();
-}
+bool SlotCellTableCsvWriter::Enabled() const { return ofs_.is_open(); }
 
-void SlotCellTableCsvWriter::WritePartial(int slotIdx,
-                                          const dynamic::DevCellMatchTableDesc& desc,
-                                          size_t outcastCount)
+void SlotCellTableCsvWriter::WritePartial(int slotIdx, const dynamic::DevCellMatchTableDesc& desc, size_t outcastCount)
 {
     if (!ofs_.is_open()) {
         return;

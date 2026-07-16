@@ -140,9 +140,8 @@ void SSAVerifier::VerifyForStmt(const ForStmtPtr& for_stmt)
     if (!for_stmt->iterArgs_.empty()) {
         StmtPtr last_stmt = GetLastStmt(for_stmt->body_);
         if (!last_stmt || !As<YieldStmt>(last_stmt)) {
-            RecordError(
-                ssa::ErrorType::MISSING_YIELD, "ForStmt with iter_args must have YieldStmt as last statement in body",
-                for_stmt->span_);
+            RecordError(ssa::ErrorType::MISSING_YIELD,
+                        "ForStmt with iter_args must have YieldStmt as last statement in body", for_stmt->span_);
         }
     }
 }
@@ -156,9 +155,8 @@ void SSAVerifier::VerifyWhileStmt(const WhileStmtPtr& while_stmt)
     if (!while_stmt->iterArgs_.empty()) {
         StmtPtr last_stmt = GetLastStmt(while_stmt->body_);
         if (!last_stmt || !As<YieldStmt>(last_stmt)) {
-            RecordError(
-                ssa::ErrorType::MISSING_YIELD, "WhileStmt with iter_args must have YieldStmt as last statement in body",
-                while_stmt->span_);
+            RecordError(ssa::ErrorType::MISSING_YIELD,
+                        "WhileStmt with iter_args must have YieldStmt as last statement in body", while_stmt->span_);
         }
     }
 }
@@ -187,15 +185,13 @@ void SSAVerifier::VerifyIfStmt(const IfStmtPtr& if_stmt)
     auto else_yield = As<YieldStmt>(else_last);
 
     if (!then_yield) {
-        RecordError(
-            ssa::ErrorType::MISSING_YIELD, "IfStmt then branch must end with YieldStmt when return_vars exist",
-            if_stmt->span_);
+        RecordError(ssa::ErrorType::MISSING_YIELD, "IfStmt then branch must end with YieldStmt when return_vars exist",
+                    if_stmt->span_);
     }
 
     if (!else_yield) {
-        RecordError(
-            ssa::ErrorType::MISSING_YIELD, "IfStmt else branch must end with YieldStmt when return_vars exist",
-            if_stmt->span_);
+        RecordError(ssa::ErrorType::MISSING_YIELD, "IfStmt else branch must end with YieldStmt when return_vars exist",
+                    if_stmt->span_);
     }
 }
 

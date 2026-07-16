@@ -43,8 +43,8 @@ constexpr const char* kDevLogFilePrefix = "pypto-simulation-";
 constexpr int64_t kMaxLogFileSize = 20 * 1024 * 1024; // 10MB
 
 const std::string kLogLevelNoneStr = "[NONE] ";
-const std::array<std::string, static_cast<size_t>(LogLevel::NONE)> kLogLevelStrArray = {
-    "[DEBUG]", "[INFO ]", "[WARN ]", "[ERROR]", "[EVENT]"};
+const std::array<std::string, static_cast<size_t>(LogLevel::NONE)> kLogLevelStrArray = {"[DEBUG]", "[INFO ]", "[WARN ]",
+                                                                                        "[ERROR]", "[EVENT]"};
 
 uint64_t GetTid()
 {
@@ -54,8 +54,7 @@ uint64_t GetTid()
 
 static bool StartWith(const std::string& s, const std::string& prefix)
 {
-    return s.size() >= prefix.size() &&
-           s.compare(0, prefix.size(), prefix) == 0;
+    return s.size() >= prefix.size() && s.compare(0, prefix.size(), prefix) == 0;
 }
 
 int64_t GetPid() { return getpid(); }
@@ -194,7 +193,7 @@ LogManager::LogManager()
 
     auto getLogFiles = [](const std::string& path, const std::string& prefix, const std::string& ext) {
         std::queue<std::string> files;
-        for (auto file: GetFiles(path, ext)) {
+        for (auto file : GetFiles(path, ext)) {
             if (StartWith(file, prefix)) {
                 files.push(RealPath(path + "/" + file));
             }
@@ -274,9 +273,8 @@ void LogManager::ConstructMessage(const LogLevel logLevel, const char* fmt, va_l
 
 void LogManager::ConstructMsgHeader(const LogLevel logLevel, LogMsg& logMsg)
 {
-    int ret = snprintf_s(
-        logMsg.msg, MAX_MSG_LENGTH, MAX_MSG_LENGTH - 1, "%s %s(%lu):%s ", GetLogLevelStr(logLevel).c_str(), kModuleName,
-        GetTid(), GetCurrentTime().c_str());
+    int ret = snprintf_s(logMsg.msg, MAX_MSG_LENGTH, MAX_MSG_LENGTH - 1, "%s %s(%lu):%s ",
+                         GetLogLevelStr(logLevel).c_str(), kModuleName, GetTid(), GetCurrentTime().c_str());
     if (ret < 0) {
         std::cerr << "Construct log msg hader failed: " << ret << std::endl;
         return;

@@ -78,8 +78,8 @@ std::string ConvertCompactModeToPTOValue(ir::CompactMode compact)
     }
 }
 
-void ApplyTileViewValidShape(
-    const ir::TileTypePtr& tile_type, int64_t rows, int64_t cols, std::string& type_rows, std::string& type_cols)
+void ApplyTileViewValidShape(const ir::TileTypePtr& tile_type, int64_t rows, int64_t cols, std::string& type_rows,
+                             std::string& type_cols)
 {
     if (!tile_type->tileView_.has_value()) {
         return;

@@ -56,20 +56,17 @@ struct MinMaxStats {
 
 class ExecutionGraphStatistic {
 public:
-    json AnalyzeExecutionGraph(
-        Function& func, const std::multimap<int, int>& psgToESgMap,
-        const std::vector<std::vector<OperationPtr>>& subgraphGroups);
-    void AnalyzeIsomorphism(
-        json& report, const std::multimap<int, int>& psgToESgMap,
-        const std::vector<std::vector<OperationPtr>>& subgraphGroups);
+    json AnalyzeExecutionGraph(Function& func, const std::multimap<int, int>& psgToESgMap,
+                               const std::vector<std::vector<OperationPtr>>& subgraphGroups);
+    void AnalyzeIsomorphism(json& report, const std::multimap<int, int>& psgToESgMap,
+                            const std::vector<std::vector<OperationPtr>>& subgraphGroups);
 
 private:
     uint64_t AnalyzePeakMemoryUsage(Function* rootFunc, std::vector<int>& peakMemoryUsageSubgraphs);
     uint64_t CalculateOperationMemory(const Operation& op);
     std::unordered_map<CoreType, int> CountCoreTypes(Function* rootFunc);
-    uint64_t AnalyzeSubgraphLatencies(
-        Function& func, uint64_t& maxLatency, uint64_t& minLatency, std::vector<int>& maxLatencySubgraphs,
-        std::vector<int>& minLatencySubgraphs);
+    uint64_t AnalyzeSubgraphLatencies(Function& func, uint64_t& maxLatency, uint64_t& minLatency,
+                                      std::vector<int>& maxLatencySubgraphs, std::vector<int>& minLatencySubgraphs);
     PathResult FindLongestPath(Function& func);
     ConcurrencyStats CalculateConcurrency(Function& func);
     json AnalyzeGraphDependencies(Function& func);

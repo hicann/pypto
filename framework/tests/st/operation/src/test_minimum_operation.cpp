@@ -37,9 +37,8 @@ struct MinimumOpMetaData {
     nlohmann::json test_data_;
 };
 
-void UpdateInputBrcViewShape(
-    std::vector<int64_t>& inputBrcViewShape, const std::vector<SymbolicScalar>& inputsShape,
-    const std::vector<SymbolicScalar>& outputsShape)
+void UpdateInputBrcViewShape(std::vector<int64_t>& inputBrcViewShape, const std::vector<SymbolicScalar>& inputsShape,
+                             const std::vector<SymbolicScalar>& outputsShape)
 {
     for (size_t i = 0; i < inputsShape.size(); i++) {
         if (inputsShape[i] == 1 && outputsShape[i] != 1) {
@@ -48,9 +47,9 @@ void UpdateInputBrcViewShape(
     }
 }
 
-void UpdateInputBrcVaildShape(
-    std::vector<SymbolicScalar>& inputValidShape, const std::vector<SymbolicScalar>& inputsShape,
-    const std::vector<SymbolicScalar>& outputsShape)
+void UpdateInputBrcVaildShape(std::vector<SymbolicScalar>& inputValidShape,
+                              const std::vector<SymbolicScalar>& inputsShape,
+                              const std::vector<SymbolicScalar>& outputsShape)
 {
     for (size_t i = 0; i < inputsShape.size(); i++) {
         if (inputsShape[i] == 1 && outputsShape[i] != 1) {
@@ -59,9 +58,8 @@ void UpdateInputBrcVaildShape(
     }
 }
 
-void UpdateOffset(
-    std::vector<SymbolicScalar>& offset, const std::vector<SymbolicScalar>& inputsShape,
-    const std::vector<SymbolicScalar>& outputsShape)
+void UpdateOffset(std::vector<SymbolicScalar>& offset, const std::vector<SymbolicScalar>& inputsShape,
+                  const std::vector<SymbolicScalar>& outputsShape)
 {
     for (size_t i = 0; i < inputsShape.size(); i++) {
         if (inputsShape[i] == 1 && outputsShape[i] != 1) {
@@ -70,8 +68,8 @@ void UpdateOffset(
     }
 }
 
-void MinimumOperationExeFunc2Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+void MinimumOperationExeFunc2Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                  const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0], inputs[1]}, {outputs[0]})
     {
@@ -97,10 +95,10 @@ void MinimumOperationExeFunc2Dims(
                 std::vector<SymbolicScalar> secondInputValidShape = {
                     std::min(secondInputsShape[0] - bIdx * secondInputViewShape[0], secondInputViewShape[0]),
                     std::min(secondInputsShape[1] - sIdx * secondInputViewShape[1], secondInputViewShape[1])};
-                std::vector<SymbolicScalar> firstOffset = {
-                    bIdx * firstInputViewShape[0], sIdx * firstInputViewShape[1]};
-                std::vector<SymbolicScalar> secondOffset = {
-                    bIdx * secondInputViewShape[0], sIdx * secondInputViewShape[1]};
+                std::vector<SymbolicScalar> firstOffset = {bIdx * firstInputViewShape[0],
+                                                           sIdx * firstInputViewShape[1]};
+                std::vector<SymbolicScalar> secondOffset = {bIdx * secondInputViewShape[0],
+                                                            sIdx * secondInputViewShape[1]};
 
                 UpdateInputBrcVaildShape(firstInputValidShape, firstInputsShape, outputsShape);
                 UpdateInputBrcVaildShape(secondInputValidShape, secondInputsShape, outputsShape);
@@ -116,17 +114,17 @@ void MinimumOperationExeFunc2Dims(
     }
 }
 
-void MinimumOperationExeFunc3Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+void MinimumOperationExeFunc3Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                  const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0], inputs[1]}, {outputs[0]})
     {
-        std::vector<SymbolicScalar> firstInputsShape = {
-            inputs[0].GetShape()[0], inputs[0].GetShape()[1], inputs[0].GetShape()[2]};
-        std::vector<SymbolicScalar> secondInputsShape = {
-            inputs[1].GetShape()[0], inputs[1].GetShape()[1], inputs[1].GetShape()[2]};
-        std::vector<SymbolicScalar> outputsShape = {
-            outputs[0].GetShape()[0], outputs[0].GetShape()[1], outputs[0].GetShape()[2]};
+        std::vector<SymbolicScalar> firstInputsShape = {inputs[0].GetShape()[0], inputs[0].GetShape()[1],
+                                                        inputs[0].GetShape()[2]};
+        std::vector<SymbolicScalar> secondInputsShape = {inputs[1].GetShape()[0], inputs[1].GetShape()[1],
+                                                         inputs[1].GetShape()[2]};
+        std::vector<SymbolicScalar> outputsShape = {outputs[0].GetShape()[0], outputs[0].GetShape()[1],
+                                                    outputs[0].GetShape()[2]};
         auto args = static_cast<const MinimumOpFuncArgs*>(opArgs);
         std::vector<int64_t> viewShape = {args->viewShape_[0], args->viewShape_[1], args->viewShape_[2]};
         std::vector<int64_t> firstInputViewShape = viewShape;
@@ -171,20 +169,20 @@ void MinimumOperationExeFunc3Dims(
     }
 }
 
-void MinimumOperationExeFunc4Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+void MinimumOperationExeFunc4Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                  const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0], inputs[1]}, {outputs[0]})
     {
-        std::vector<SymbolicScalar> firstInputsShape = {
-            inputs[0].GetShape()[0], inputs[0].GetShape()[1], inputs[0].GetShape()[2], inputs[0].GetShape()[3]};
-        std::vector<SymbolicScalar> secondInputsShape = {
-            inputs[1].GetShape()[0], inputs[1].GetShape()[1], inputs[1].GetShape()[2], inputs[1].GetShape()[3]};
-        std::vector<SymbolicScalar> outputsShape = {
-            outputs[0].GetShape()[0], outputs[0].GetShape()[1], outputs[0].GetShape()[2], outputs[0].GetShape()[3]};
+        std::vector<SymbolicScalar> firstInputsShape = {inputs[0].GetShape()[0], inputs[0].GetShape()[1],
+                                                        inputs[0].GetShape()[2], inputs[0].GetShape()[3]};
+        std::vector<SymbolicScalar> secondInputsShape = {inputs[1].GetShape()[0], inputs[1].GetShape()[1],
+                                                         inputs[1].GetShape()[2], inputs[1].GetShape()[3]};
+        std::vector<SymbolicScalar> outputsShape = {outputs[0].GetShape()[0], outputs[0].GetShape()[1],
+                                                    outputs[0].GetShape()[2], outputs[0].GetShape()[3]};
         auto args = static_cast<const MinimumOpFuncArgs*>(opArgs);
-        std::vector<int64_t> viewShape = {
-            args->viewShape_[0], args->viewShape_[1], args->viewShape_[2], args->viewShape_[3]};
+        std::vector<int64_t> viewShape = {args->viewShape_[0], args->viewShape_[1], args->viewShape_[2],
+                                          args->viewShape_[3]};
         std::vector<int64_t> firstInputViewShape = viewShape;
         std::vector<int64_t> secondInputViewShape = viewShape;
         UpdateInputBrcViewShape(firstInputViewShape, firstInputsShape, outputsShape);
@@ -227,9 +225,9 @@ void MinimumOperationExeFunc4Dims(
                         Tensor tileTensor1 = View(inputs[1], secondInputViewShape, secondInputValidShape, secondOffset);
                         TileShape::Current().SetVecTile(args->tileShape_);
                         auto res = Minimum(tileTensor0, tileTensor1);
-                        Assemble(
-                            res, {bIdx * viewShape[0], sIdx * viewShape[1], nIdx * viewShape[2], mIdx * viewShape[3]},
-                            outputs[0]);
+                        Assemble(res,
+                                 {bIdx * viewShape[0], sIdx * viewShape[1], nIdx * viewShape[2], mIdx * viewShape[3]},
+                                 outputs[0]);
                     }
                 }
             }
@@ -237,8 +235,8 @@ void MinimumOperationExeFunc4Dims(
     }
 }
 
-void MinSOperationExeFuncDoubleCut(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+void MinSOperationExeFuncDoubleCut(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                   const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0]})
     {
@@ -254,11 +252,10 @@ void MinSOperationExeFuncDoubleCut(
         {
             LOOP("LOOP_L1_sIdx", FunctionType::DYNAMIC_LOOP, sIdx, LoopRange(0, sloop, 1))
             {
-                auto tileTensor0 = View(
-                    inputs[0], {firstViewShape, secondViewShape},
-                    {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                     std::min(secondDim - sIdx * secondViewShape, secondViewShape)},
-                    {bIdx * firstViewShape, sIdx * secondViewShape});
+                auto tileTensor0 = View(inputs[0], {firstViewShape, secondViewShape},
+                                        {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                         std::min(secondDim - sIdx * secondViewShape, secondViewShape)},
+                                        {bIdx * firstViewShape, sIdx * secondViewShape});
                 TileShape::Current().SetVecTile(args->tileShape_);
                 auto res = Minimum(tileTensor0, args->value_);
                 Assemble(res, {bIdx * firstViewShape, sIdx * secondViewShape}, outputs[0]);
@@ -267,8 +264,8 @@ void MinSOperationExeFuncDoubleCut(
     }
 }
 
-void MinSOperationExeFuncTripleCut(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+void MinSOperationExeFuncTripleCut(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                   const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0]})
     {
@@ -289,12 +286,11 @@ void MinSOperationExeFuncTripleCut(
             {
                 LOOP("LOOP_L2_nIdx", FunctionType::DYNAMIC_LOOP, nIdx, LoopRange(0, nloop, 1))
                 {
-                    auto tileTensor0 = View(
-                        inputs[0], {firstViewShape, secondViewShape, thirdViewShape},
-                        {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                         std::min(secondDim - sIdx * secondViewShape, secondViewShape),
-                         std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape)},
-                        {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape});
+                    auto tileTensor0 = View(inputs[0], {firstViewShape, secondViewShape, thirdViewShape},
+                                            {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                             std::min(secondDim - sIdx * secondViewShape, secondViewShape),
+                                             std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape)},
+                                            {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape});
                     TileShape::Current().SetVecTile(args->tileShape_);
                     auto res = Minimum(tileTensor0, args->value_);
                     Assemble(res, {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape}, outputs[0]);
@@ -304,8 +300,8 @@ void MinSOperationExeFuncTripleCut(
     }
 }
 
-void MinSOperationExeFuncQuadrupleCut(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+void MinSOperationExeFuncQuadrupleCut(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                      const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0]})
     {
@@ -331,21 +327,20 @@ void MinSOperationExeFuncQuadrupleCut(
                 {
                     LOOP("LOOP_L3_qIdx", FunctionType::DYNAMIC_LOOP, qIdx, LoopRange(0, qloop, 1))
                     {
-                        auto tileTensor0 = View(
-                            inputs[0], {firstViewShape, secondViewShape, thirdViewShape, fourthViewShape},
-                            {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                             std::min(secondDim - sIdx * secondViewShape, secondViewShape),
-                             std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape),
-                             std::min(fourthDim - qIdx * fourthViewShape, fourthViewShape)},
-                            {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape,
-                             qIdx * fourthViewShape});
+                        auto tileTensor0 = View(inputs[0],
+                                                {firstViewShape, secondViewShape, thirdViewShape, fourthViewShape},
+                                                {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                                 std::min(secondDim - sIdx * secondViewShape, secondViewShape),
+                                                 std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape),
+                                                 std::min(fourthDim - qIdx * fourthViewShape, fourthViewShape)},
+                                                {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape,
+                                                 qIdx * fourthViewShape});
                         TileShape::Current().SetVecTile(args->tileShape_);
                         auto res = Minimum(tileTensor0, args->value_);
-                        Assemble(
-                            res,
-                            {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape,
-                             qIdx * fourthViewShape},
-                            outputs[0]);
+                        Assemble(res,
+                                 {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape,
+                                  qIdx * fourthViewShape},
+                                 outputs[0]);
                     }
                 }
             }
@@ -355,11 +350,10 @@ void MinSOperationExeFuncQuadrupleCut(
 
 class MinimumOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac_param<MinimumOpMetaData> {};
 
-INSTANTIATE_TEST_SUITE_P(
-    TestMinimum, MinimumOperationTest,
-    ::testing::ValuesIn(
-        GetOpMetaData<MinimumOpMetaData>(
-            {MinimumOperationExeFunc2Dims, MinimumOperationExeFunc3Dims, MinimumOperationExeFunc4Dims}, "Minimum")));
+INSTANTIATE_TEST_SUITE_P(TestMinimum, MinimumOperationTest,
+                         ::testing::ValuesIn(GetOpMetaData<MinimumOpMetaData>(
+                             {MinimumOperationExeFunc2Dims, MinimumOperationExeFunc3Dims, MinimumOperationExeFunc4Dims},
+                             "Minimum")));
 
 TEST_P(MinimumOperationTest, TestMinimum)
 {

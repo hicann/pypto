@@ -25,9 +25,9 @@
 
 namespace npu::tile_fwk {
 
-void GatherAfterPrologCompute(
-    Tensor& topKIndcies, Tensor& kNopeCache, Tensor& kRopeCache, Tensor& blockTable, Tensor& actSeqs, Tensor& gatherRes,
-    const DSIASimpleParams& params, SymbolicScalar b, SymbolicScalar s1);
+void GatherAfterPrologCompute(Tensor& topKIndcies, Tensor& kNopeCache, Tensor& kRopeCache, Tensor& blockTable,
+                              Tensor& actSeqs, Tensor& gatherRes, const DSIASimpleParams& params, SymbolicScalar b,
+                              SymbolicScalar s1);
 
 } // namespace npu::tile_fwk
 

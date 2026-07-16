@@ -161,22 +161,21 @@ bool AICPUMachine::IsTerminate()
             return false;
         }
     }
-    return (
-        top->taskMap.empty() && completionQueue.IsTerminate() && outcastReferenceQueue.IsTerminate() &&
-        incastReferenceQueue.IsTerminate() && releaseQueue.IsTerminate() && cacheRespQueue.IsTerminate());
+    return (top->taskMap.empty() && completionQueue.IsTerminate() && outcastReferenceQueue.IsTerminate() &&
+            incastReferenceQueue.IsTerminate() && releaseQueue.IsTerminate() && cacheRespQueue.IsTerminate());
 }
 
 void AICPUMachine::UpdatePollingStates(std::vector<bool>& threadGroupActive)
 {
     for (uint64_t threadId = 0; threadId < threadsNum; threadId++) {
         if (GetSim()->GetCycles() < threadState->currentCompletionEnd[threadId]) {
-            SIMULATION_LOGI(
-                "[Cycle: %lu][AICPUMachine: %lu][updatepolling] %lu", GetSim()->GetCycles(), machineId, pollingTimeAxe);
+            SIMULATION_LOGI("[Cycle: %lu][AICPUMachine: %lu][updatepolling] %lu", GetSim()->GetCycles(), machineId,
+                            pollingTimeAxe);
             GetSim()->UpdateNextCycles(std::min<uint64_t>(INT_MAX, pollingTimeAxe));
         } else {
             pollingTimeAxe = INT_MAX;
-            SIMULATION_LOGI(
-                "[Cycle: %lu][AICPUMachine: %lu][updatepolling] %lu", GetSim()->GetCycles(), machineId, pollingTimeAxe);
+            SIMULATION_LOGI("[Cycle: %lu][AICPUMachine: %lu][updatepolling] %lu", GetSim()->GetCycles(), machineId,
+                            pollingTimeAxe);
 
             GetSim()->UpdateNextCycles(std::min<uint64_t>(INT_MAX, pollingTimeAxe));
         }
@@ -195,29 +194,26 @@ void AICPUMachine::UpdateDispatchStates(std::vector<bool>& threadGroupActive, st
 {
     for (uint64_t threadId = 0; threadId < threadsNum; threadId++) {
         if (GetSim()->GetCycles() < threadState->currentSchedulerEnd[threadId]) {
-            SIMULATION_LOGI(
-                "[Cycle: %lu][AICPUMachine: %lu][updatedispatch] %lu", GetSim()->GetCycles(), machineId,
-                dispatchTimeAxe);
+            SIMULATION_LOGI("[Cycle: %lu][AICPUMachine: %lu][updatedispatch] %lu", GetSim()->GetCycles(), machineId,
+                            dispatchTimeAxe);
             GetSim()->UpdateNextCycles(std::min<uint64_t>(INT_MAX, dispatchTimeAxe));
         } else {
             dispatchTimeAxe = INT_MAX;
-            SIMULATION_LOGI(
-                "[Cycle: %lu][AICPUMachine: %lu][updatedispatch] %lu", GetSim()->GetCycles(), machineId,
-                dispatchTimeAxe);
+            SIMULATION_LOGI("[Cycle: %lu][AICPUMachine: %lu][updatedispatch] %lu", GetSim()->GetCycles(), machineId,
+                            dispatchTimeAxe);
             GetSim()->UpdateNextCycles(std::min<uint64_t>(INT_MAX, dispatchTimeAxe));
         }
         currentCycle.at(threadId) = std::max<uint64_t>(
             std::max<uint64_t>(GetSim()->GetCycles(), threadState->currentCompletionEnd[threadId]),
             threadState->currentSchedulerEnd.at(threadId));
         // 检查submission和completion状态
-        bool threadBusy =
-            ((GetSim()->GetCycles() < threadState->currentCompletionEnd[threadId]) ||
-             (GetSim()->GetCycles() <= threadState->currentSchedulerEnd[threadId]));
+        bool threadBusy = ((GetSim()->GetCycles() < threadState->currentCompletionEnd[threadId]) ||
+                           (GetSim()->GetCycles() <= threadState->currentSchedulerEnd[threadId]));
 
         bool machineBusy = true;
         uint64_t startIdx = threadId * ((subMachines.size() + threadsNum - 1) / threadsNum);
-        uint64_t endIdx =
-            std::min((threadId + 1) * ((subMachines.size() + threadsNum - 1) / threadsNum), subMachines.size());
+        uint64_t endIdx = std::min((threadId + 1) * ((subMachines.size() + threadsNum - 1) / threadsNum),
+                                   subMachines.size());
 
         for (uint64_t i = startIdx; i < endIdx; i++) {
             auto& submachine = subMachines[i];
@@ -243,8 +239,8 @@ void AICPUMachine::RecordDependency(std::shared_ptr<Task> task)
     }
 }
 
-void AICPUMachine::ResolveDependence(
-    const std::shared_ptr<CoreMachine>& core, uint64_t threadId, std::vector<uint64_t>& threadCompletionCycles)
+void AICPUMachine::ResolveDependence(const std::shared_ptr<CoreMachine>& core, uint64_t threadId,
+                                     std::vector<uint64_t>& threadCompletionCycles)
 {
     auto resCycles = GetSim()->GetCycles() + threadCompletionCycles[threadId];
     CompletedPacket packet;
@@ -263,9 +259,8 @@ void AICPUMachine::ResolveDependence(
 
     auto funcHash = top->taskMap[taskId]->functionHash;
     GetSim()->leafFunctionTime[funcHash] = taskExeCycle;
-    SIMULATION_LOGI(
-        "[Cycle: %lu][AICPUMachine: %lu][AnalysisPacket] Processing completed taskId: %lu from core %lu",
-        GetSim()->GetCycles(), machineId, taskId, core->machineId);
+    SIMULATION_LOGI("[Cycle: %lu][AICPUMachine: %lu][AnalysisPacket] Processing completed taskId: %lu from core %lu",
+                    GetSim()->GetCycles(), machineId, taskId, core->machineId);
 
     std::shared_ptr<Task> task;
     std::vector<uint64_t> successors;
@@ -276,8 +271,9 @@ void AICPUMachine::ResolveDependence(
     }
     task = taskIt->second;
     successors = task->successors; // 复制successors以减少持锁时间
-    ASSERT(npu::tile_fwk::InternalError::SIM_INNER_ERROR, task->status == true) << "[SIMULATION]: "
-                                 << "task status is false. taskId=" << task->taskId;
+    ASSERT(npu::tile_fwk::InternalError::SIM_INNER_ERROR, task->status == true)
+        << "[SIMULATION]: "
+        << "task status is false. taskId=" << task->taskId;
     RecordDependency(task);
 
     // 如果没有successor，则不需要解依赖耗时
@@ -296,30 +292,27 @@ void AICPUMachine::ResolveDependence(
 
     // 如果没有successor，则不需要解依赖耗时
     if (!successors.empty()) {
-        GetSim()->GetLogger()->AddEventEnd(
-            machineId, threadId + reversedTidNum, std::max<uint64_t>(GetSim()->GetCycles(), resCycles));
+        GetSim()->GetLogger()->AddEventEnd(machineId, threadId + reversedTidNum,
+                                           std::max<uint64_t>(GetSim()->GetCycles(), resCycles));
     }
 }
 
-void AICPUMachine::WakeupSuccessors(
-    uint64_t threadId, uint64_t& resCycles, std::vector<uint64_t> successors,
-    std::vector<uint64_t>& threadCompletionCycles)
+void AICPUMachine::WakeupSuccessors(uint64_t threadId, uint64_t& resCycles, std::vector<uint64_t> successors,
+                                    std::vector<uint64_t>& threadCompletionCycles)
 {
     // Process successors
-    SIMULATION_LOGI(
-        "[Cycle: %lu][AICPUMachine][AnalysisPacket] Found %zu successors", GetSim()->GetCycles(), successors.size());
+    SIMULATION_LOGI("[Cycle: %lu][AICPUMachine][AnalysisPacket] Found %zu successors", GetSim()->GetCycles(),
+                    successors.size());
     for (uint64_t successorTaskId : successors) {
-        SIMULATION_LOGI(
-            "[Cycle: %lu][AICPUMachine][AnalysisPacket] Processing successor taskId: %lu", GetSim()->GetCycles(),
-            successorTaskId);
+        SIMULATION_LOGI("[Cycle: %lu][AICPUMachine][AnalysisPacket] Processing successor taskId: %lu",
+                        GetSim()->GetCycles(), successorTaskId);
 
         auto& successor = top->taskMap.at(successorTaskId);
         if (successor->remainingPredecessors == 0) {
             continue;
         }
-        SIMULATION_LOGI(
-            "[Cycle: %lu][AICPUMachine][AnalysisPacket] Remaining before: %d", GetSim()->GetCycles(),
-            successor->remainingPredecessors);
+        SIMULATION_LOGI("[Cycle: %lu][AICPUMachine][AnalysisPacket] Remaining before: %d", GetSim()->GetCycles(),
+                        successor->remainingPredecessors);
 
         successor->remainingPredecessors--;
         resCycles += config.resolveCycles;
@@ -327,14 +320,12 @@ void AICPUMachine::WakeupSuccessors(
         stats->resolveNum++;
         top->stats->resolveNum++;
         threadCompletionCycles[threadId] += config.resolveCycles;
-        SIMULATION_LOGI(
-            "[Cycle: %lu][AICPUMachine][AnalysisPacket] Remaining after: %d", GetSim()->GetCycles(),
-            successor->remainingPredecessors);
+        SIMULATION_LOGI("[Cycle: %lu][AICPUMachine][AnalysisPacket] Remaining after: %d", GetSim()->GetCycles(),
+                        successor->remainingPredecessors);
 
         if (successor->remainingPredecessors == 0) {
-            SIMULATION_LOGI(
-                "[Cycle: %lu][AICPUMachine][AnalysisPacket] Successor is now READY, pushing to ready queue",
-                GetSim()->GetCycles());
+            SIMULATION_LOGI("[Cycle: %lu][AICPUMachine][AnalysisPacket] Successor is now READY, pushing to ready queue",
+                            GetSim()->GetCycles());
 
             lastCycles = GetSim()->GetCycles();
             localReadyQueues.Enqueue(successorTaskId, resCycles - GetSim()->GetCycles());
@@ -362,10 +353,10 @@ void AICPUMachine::PollingMachine()
                 continue;
             }
 
-            GetSim()->GetLogger()->AddEventBegin(
-                "PollingCore_" + std::to_string(core->machineId), machineId, threadId + reversedTidNum,
-                GetSim()->GetCycles() + threadCompletionCycles[threadId],
-                "AICPU Machine Thread: " + std::to_string(threadId));
+            GetSim()->GetLogger()->AddEventBegin("PollingCore_" + std::to_string(core->machineId), machineId,
+                                                 threadId + reversedTidNum,
+                                                 GetSim()->GetCycles() + threadCompletionCycles[threadId],
+                                                 "AICPU Machine Thread: " + std::to_string(threadId));
 
             threadCompletionCycles[threadId] += config.completionCycles;
             stats->pollingNum++;
@@ -376,8 +367,8 @@ void AICPUMachine::PollingMachine()
                 ResolveDependence(core, threadId, threadCompletionCycles);
             }
 
-            GetSim()->GetLogger()->AddEventEnd(
-                machineId, threadId + reversedTidNum, GetSim()->GetCycles() + threadCompletionCycles[threadId]);
+            GetSim()->GetLogger()->AddEventEnd(machineId, threadId + reversedTidNum,
+                                               GetSim()->GetCycles() + threadCompletionCycles[threadId]);
         }
     }
 
@@ -388,8 +379,8 @@ void AICPUMachine::PollingMachine()
         threadState->currentCompletionEnd[threadId] = GetSim()->GetCycles() + threadCompletionCycles[threadId];
 
         pollingTimeAxe = std::min<uint64_t>(INT_MAX, threadState->currentCompletionEnd[threadId]);
-        SIMULATION_LOGI(
-            "[Cycle: %lu][AICPUMachine: %lu][polling] %lu", GetSim()->GetCycles(), machineId, pollingTimeAxe);
+        SIMULATION_LOGI("[Cycle: %lu][AICPUMachine: %lu][polling] %lu", GetSim()->GetCycles(), machineId,
+                        pollingTimeAxe);
 
         GetSim()->UpdateNextCycles(pollingTimeAxe);
     }
@@ -422,9 +413,8 @@ void AICPUMachine::SendTask(uint64_t taskId, std::shared_ptr<Machine> subMachine
         task->status = true;
         top->executingTaskMap[subMachine->machineId]++;
         subMachine->SubmitTask(packet, delay);
-        SIMULATION_LOGI(
-            "[Cycle: %lu][AICPU][DispatchPacket] submit task %lu to Machine %lu", GetSim()->GetCycles(), taskId,
-            subMachine->machineId);
+        SIMULATION_LOGI("[Cycle: %lu][AICPU][DispatchPacket] submit task %lu to Machine %lu", GetSim()->GetCycles(),
+                        taskId, subMachine->machineId);
 
         StatTaskType(subMachine->machineType, threadId);
     }
@@ -454,9 +444,8 @@ uint64_t AICPUMachine::GetTaskLoad(MachineType type)
     return minTaskNum;
 }
 
-void AICPUMachine::DispatchTasksInNormalMode(
-    uint64_t threadId, std::vector<uint64_t>& threadSchedulerCycles, std::vector<uint64_t>& currentCycle,
-    uint64_t delayCycle)
+void AICPUMachine::DispatchTasksInNormalMode(uint64_t threadId, std::vector<uint64_t>& threadSchedulerCycles,
+                                             std::vector<uint64_t>& currentCycle, uint64_t delayCycle)
 {
     for (size_t level = 0; level < wlStatus.maxLevel; level++) {
         for (size_t group = 0; group < wlStatus.groups; group++) {
@@ -472,23 +461,22 @@ void AICPUMachine::DispatchTasksInNormalMode(
             if (top->executingTaskMap[submachine->machineId] < submachine->maxRunningTasks &&
                 top->executingTaskMap[submachine->machineId] <= minTaskNum) {
                 uint64_t taskId = top->PopReadyQueue(submachine->machineType);
-                GetSim()->GetLogger()->AddEventBegin(
-                    "Dispatch_Task_" + std::to_string(taskId), machineId, threadId + reversedTidNum,
-                    currentCycle.at(threadId) + threadSchedulerCycles[threadId],
-                    "Dispatching Machine Thread: " + std::to_string(threadId));
+                GetSim()->GetLogger()->AddEventBegin("Dispatch_Task_" + std::to_string(taskId), machineId,
+                                                     threadId + reversedTidNum,
+                                                     currentCycle.at(threadId) + threadSchedulerCycles[threadId],
+                                                     "Dispatching Machine Thread: " + std::to_string(threadId));
                 threadSchedulerCycles[threadId] += config.schedulerCycles;
                 delayCycle += config.schedulerCycles;
                 SendTask(taskId, submachine, delayCycle, threadId);
-                GetSim()->GetLogger()->AddEventEnd(
-                    machineId, threadId + reversedTidNum, currentCycle.at(threadId) + threadSchedulerCycles[threadId]);
+                GetSim()->GetLogger()->AddEventEnd(machineId, threadId + reversedTidNum,
+                                                   currentCycle.at(threadId) + threadSchedulerCycles[threadId]);
             }
         }
     }
 }
 
-void AICPUMachine::DispatchTasksInReplayMode(
-    uint64_t threadId, std::vector<uint64_t>& threadSchedulerCycles, std::vector<uint64_t>& currentCycle,
-    uint64_t delayCycle)
+void AICPUMachine::DispatchTasksInReplayMode(uint64_t threadId, std::vector<uint64_t>& threadSchedulerCycles,
+                                             std::vector<uint64_t>& currentCycle, uint64_t delayCycle)
 {
     for (auto& subMachine : subMachines) {
         auto& replayInfoQ = top->replayTasksInfoMap[subMachine->machineId];
@@ -503,9 +491,8 @@ void AICPUMachine::DispatchTasksInReplayMode(
         // Task Ready
         auto& replayTask = replayInfoQ.front();
         if (replayTask.seqNo <= top->currentSeq && top->IsReady(replayTask.taskId)) {
-            LoggerDispatch(
-                replayTask.taskId, threadId, currentCycle.at(threadId) + threadSchedulerCycles[threadId],
-                currentCycle.at(threadId) + threadSchedulerCycles[threadId] + config.schedulerCycles);
+            LoggerDispatch(replayTask.taskId, threadId, currentCycle.at(threadId) + threadSchedulerCycles[threadId],
+                           currentCycle.at(threadId) + threadSchedulerCycles[threadId] + config.schedulerCycles);
 
             threadSchedulerCycles[threadId] += config.schedulerCycles;
             delayCycle += config.schedulerCycles;
@@ -517,8 +504,8 @@ void AICPUMachine::DispatchTasksInReplayMode(
     }
 }
 
-void AICPUMachine::DispatchTasksForThread(
-    uint64_t threadId, std::vector<uint64_t>& threadSchedulerCycles, std::vector<uint64_t>& currentCycle)
+void AICPUMachine::DispatchTasksForThread(uint64_t threadId, std::vector<uint64_t>& threadSchedulerCycles,
+                                          std::vector<uint64_t>& currentCycle)
 {
     uint64_t delayCycle = 0;
     if (top->config.replayEnable && !top->replayPreExecute) {
@@ -647,18 +634,18 @@ void AICPUMachine::DispatchPacket()
         if (!threadGroupActive[threadId]) {
             continue;
         }
-        threadState->currentSchedulerEnd[threadId] =
-            std::max<uint64_t>(GetSim()->GetCycles(), currentCycle.at(threadId)) + threadSchedulerCycles[threadId];
+        threadState->currentSchedulerEnd[threadId] = std::max<uint64_t>(GetSim()->GetCycles(),
+                                                                        currentCycle.at(threadId)) +
+                                                     threadSchedulerCycles[threadId];
 
         dispatchTimeAxe = std::min<uint64_t>(INT_MAX, threadState->currentSchedulerEnd[threadId]);
         if (threadSchedulerCycles[threadId] != 0) {
-            SIMULATION_LOGI(
-                "[Cycle: %lu][AICPUMachine: %lu][dispatch] %lu", GetSim()->GetCycles(), machineId, dispatchTimeAxe);
+            SIMULATION_LOGI("[Cycle: %lu][AICPUMachine: %lu][dispatch] %lu", GetSim()->GetCycles(), machineId,
+                            dispatchTimeAxe);
             GetSim()->UpdateNextCycles(dispatchTimeAxe);
         } else {
-            SIMULATION_LOGI(
-                "[Cycle: %lu][AICPUMachine: %lu][dispatch] %lu", GetSim()->GetCycles(), machineId,
-                GetSim()->GetCycles() + 1);
+            SIMULATION_LOGI("[Cycle: %lu][AICPUMachine: %lu][dispatch] %lu", GetSim()->GetCycles(), machineId,
+                            GetSim()->GetCycles() + 1);
             GetSim()->UpdateNextCycles(GetSim()->GetCycles() + 1);
         }
     }
@@ -696,8 +683,8 @@ void AICPUMachine::CheckDeadlock()
         }
     }
 
-    execute |=
-        std::any_of(threadState->threadDone.begin(), threadState->threadDone.end(), [](bool done) { return !done; });
+    execute |= std::any_of(threadState->threadDone.begin(), threadState->threadDone.end(),
+                           [](bool done) { return !done; });
 
     SetMachineExecuting(execute);
 }

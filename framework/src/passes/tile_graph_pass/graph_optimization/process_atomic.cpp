@@ -105,13 +105,14 @@ Status ProcessAtomic::EliminateReduceAcc(Function& function)
                 }
             }
             op.SetAsDeleted();
-            APASS_LOG_DEBUG_F(
-                Elements::Operation, "%s[%d] will be deleted.", op.GetOpcodeStr().c_str(), op.GetOpMagic());
+            APASS_LOG_DEBUG_F(Elements::Operation, "%s[%d] will be deleted.", op.GetOpcodeStr().c_str(),
+                              op.GetOpMagic());
         }
     }
     function.EraseOperations(true);
     if (DeadOperationEliminator::EliminateDeadOperation(function) != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Function, "Eliminate dead operation failed for ReduceAcc in CommonOperationEliminate.");
+        APASS_LOG_ERROR_F(Elements::Function,
+                          "Eliminate dead operation failed for ReduceAcc in CommonOperationEliminate.");
         return FAILED;
     }
     return SUCCESS;
@@ -138,7 +139,8 @@ Status ProcessAtomic::EliminateAtomicRMW(Function& function)
     }
     function.EraseOperations(true);
     if (DeadOperationEliminator::EliminateDeadOperation(function) != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Function, "Eliminate dead operation failed for AtomicRMW in CommonOperationEliminate.");
+        APASS_LOG_ERROR_F(Elements::Function,
+                          "Eliminate dead operation failed for AtomicRMW in CommonOperationEliminate.");
         return FAILED;
     }
     return SUCCESS;
@@ -151,8 +153,8 @@ Status ProcessAtomic::ProcessSingleAtomicRMW(Operation& op)
     auto rmwOut = op.GetOOperands().front();
     auto assembleAttr = std::dynamic_pointer_cast<AssembleOpAttribute>(op.GetOpAttribute());
     if (assembleAttr == nullptr) {
-        APASS_LOG_ERROR_F(
-            Elements::Operation, "Op[%d] missing AssembleOpAttribute; Cannot eliminate.", op.GetOpMagic());
+        APASS_LOG_ERROR_F(Elements::Operation, "Op[%d] missing AssembleOpAttribute; Cannot eliminate.",
+                          op.GetOpMagic());
         return FAILED;
     }
 
@@ -212,7 +214,8 @@ bool ProcessAtomic::HasConsumerExcept(const std::shared_ptr<LogicalTensor>& inpu
     return false;
 }
 
-Status ProcessAtomic::PrepareAtomicRMWSharedInputs(Function& function, const std::vector<Operation*>& atomicRmwOps) const
+Status ProcessAtomic::PrepareAtomicRMWSharedInputs(Function& function,
+                                                   const std::vector<Operation*>& atomicRmwOps) const
 {
     for (auto* op : atomicRmwOps) {
         if (op == nullptr || op->IsDeleted()) {
@@ -221,7 +224,8 @@ Status ProcessAtomic::PrepareAtomicRMWSharedInputs(Function& function, const std
         auto inputsBackup = op->GetIOperands();
         for (const auto& input : inputsBackup) {
             if (PrepareExclusiveAtomicInput(function, *op, input) == nullptr) {
-                APASS_LOG_ERROR_F(Elements::Operation, "Prepare shared input failed for AtomicRMW op[%d].", op->GetOpMagic());
+                APASS_LOG_ERROR_F(Elements::Operation, "Prepare shared input failed for AtomicRMW op[%d].",
+                                  op->GetOpMagic());
                 return FAILED;
             }
         }
@@ -246,13 +250,15 @@ std::shared_ptr<LogicalTensor> ProcessAtomic::PrepareExclusiveAtomicInput(
 
     for (auto* producerOp : producersBackup) {
         if (producerOp == nullptr) {
-            APASS_LOG_ERROR_F(Elements::Operation, "Null producer detected for atomic input tensor[%d].", input->GetMagic());
+            APASS_LOG_ERROR_F(Elements::Operation, "Null producer detected for atomic input tensor[%d].",
+                              input->GetMagic());
             return nullptr;
         }
         if (producerOp->GetOpcode() != Opcode::OP_ASSEMBLE && producerOp->GetOpcode() != Opcode::OP_ASSEMBLE_SSA) {
             continue;
         }
-        auto& clonedProducer = producerOp->CloneOperation(function, producerOp->GetIOperands(), producerOp->GetOOperands());
+        auto& clonedProducer = producerOp->CloneOperation(function, producerOp->GetIOperands(),
+                                                          producerOp->GetOOperands());
         clonedProducer.UpdateSubgraphID(producerOp->GetSubgraphID());
         clonedProducer.SetCoreType(producerOp->GetCoreType());
         clonedProducer.SetSpan(producerOp->GetSpan());
@@ -279,9 +285,9 @@ std::string ProcessAtomic::GetRmwAttrKey(AtomicRMWMode mode)
     }
 }
 
-Status ProcessAtomic::ProcessAssembleProducer(
-    Operation& producerOp, std::shared_ptr<LogicalTensor> rmwOut, AtomicRMWMode rmwMode,
-    const std::vector<int64_t>& rmwOffset, const std::vector<SymbolicScalar>& rmwDynOffset)
+Status ProcessAtomic::ProcessAssembleProducer(Operation& producerOp, std::shared_ptr<LogicalTensor> rmwOut,
+                                              AtomicRMWMode rmwMode, const std::vector<int64_t>& rmwOffset,
+                                              const std::vector<SymbolicScalar>& rmwDynOffset)
 {
     std::string rmwAttrKey = GetRmwAttrKey(rmwMode);
     if (CheckAndSetRmwAttr(producerOp, rmwMode, rmwAttrKey) != SUCCESS) {
@@ -319,19 +325,18 @@ Status ProcessAtomic::CheckAndSetRmwAttr(Operation& producerOp, AtomicRMWMode rm
         else if (hasMin)
             existingAttrType = "atomic_min";
 
-        APASS_LOG_ERROR_F(
-            Elements::Operation,
-            "Op[%d] rmwMode conflict: producer assemble op already has '%s' attribute, "
-            "but current wants to set '%s'. Cannot set different rmwMode to the same assemble op.",
-            producerOp.GetOpMagic(), existingAttrType.c_str(), rmwAttrKey.c_str());
+        APASS_LOG_ERROR_F(Elements::Operation,
+                          "Op[%d] rmwMode conflict: producer assemble op already has '%s' attribute, "
+                          "but current wants to set '%s'. Cannot set different rmwMode to the same assemble op.",
+                          producerOp.GetOpMagic(), existingAttrType.c_str(), rmwAttrKey.c_str());
         return FAILED;
     }
     return SUCCESS;
 }
 
-void ProcessAtomic::AccumulateAssembleOffset(
-    std::shared_ptr<AssembleOpAttribute> producerAttr, const std::vector<int64_t>& rmwOffset,
-    const std::vector<SymbolicScalar>& rmwDynOffset)
+void ProcessAtomic::AccumulateAssembleOffset(std::shared_ptr<AssembleOpAttribute> producerAttr,
+                                             const std::vector<int64_t>& rmwOffset,
+                                             const std::vector<SymbolicScalar>& rmwDynOffset)
 {
     auto& producerOffset = producerAttr->GetToOffset();
     auto& producerDynOffset = producerAttr->GetToDynOffset();
@@ -352,8 +357,8 @@ void ProcessAtomic::AccumulateAssembleOffset(
     }
 }
 
-void ProcessAtomic::CollectReduceAccUpstream(
-    Operation& op, std::set<int>& visited, std::vector<Operation*>& result) const
+void ProcessAtomic::CollectReduceAccUpstream(Operation& op, std::set<int>& visited,
+                                             std::vector<Operation*>& result) const
 {
     if (visited.count(op.GetOpMagic()) > 0 || op.IsDeleted()) {
         return;
@@ -368,8 +373,7 @@ void ProcessAtomic::CollectReduceAccUpstream(
             continue;
         }
         for (auto* producer : input->GetProducers()) {
-            if (producer == nullptr || producer->IsDeleted() ||
-                producer->GetOpcode() == Opcode::OP_ATOMIC_RMW) {
+            if (producer == nullptr || producer->IsDeleted() || producer->GetOpcode() == Opcode::OP_ATOMIC_RMW) {
                 continue;
             }
             CollectReduceAccUpstream(*producer, visited, result);
@@ -377,8 +381,8 @@ void ProcessAtomic::CollectReduceAccUpstream(
     }
 }
 
-Status ProcessAtomic::TraceBackAndRemoveVecDup(
-    Function& function, Operation& op, std::set<int>& visited, bool& anyRemoved)
+Status ProcessAtomic::TraceBackAndRemoveVecDup(Function& function, Operation& op, std::set<int>& visited,
+                                               bool& anyRemoved)
 {
     if (visited.count(op.GetOpMagic()) > 0 || op.IsDeleted()) {
         return SUCCESS;
@@ -419,8 +423,7 @@ Status ProcessAtomic::RemoveVecDupBranchFromCubeOp(Operation& cubeOp, bool& anyR
             if (producer == nullptr || producer->IsDeleted()) {
                 continue;
             }
-            if ((producer->GetOpcode() == Opcode::OP_ASSEMBLE ||
-                 producer->GetOpcode() == Opcode::OP_ASSEMBLE_SSA) &&
+            if ((producer->GetOpcode() == Opcode::OP_ASSEMBLE || producer->GetOpcode() == Opcode::OP_ASSEMBLE_SSA) &&
                 IsVecDupAssembleInput(*producer)) {
                 input->RemoveConsumer(&cubeOp);
                 cubeOp.EraseInput(input);

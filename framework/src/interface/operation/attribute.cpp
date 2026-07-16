@@ -159,8 +159,8 @@ Json ViewOpAttribute::DumpDynJson()
     return res;
 }
 
-std::shared_ptr<ViewOpAttribute> ViewOpAttribute::DeserializeFrom(
-    const Json& attrJson, [[maybe_unused]] Function* function)
+std::shared_ptr<ViewOpAttribute> ViewOpAttribute::DeserializeFrom(const Json& attrJson,
+                                                                  [[maybe_unused]] Function* function)
 {
     int despos = 0;
     auto memType = attrJson[despos++];
@@ -179,8 +179,8 @@ std::shared_ptr<ViewOpAttribute> ViewOpAttribute::DeserializeFrom(
     for (int i = 0; i < dynValidShapeSize; i++) {
         toDynValidShape.push_back(LoadSymbolicScalar(attrJson[despos++]));
     }
-    return std::make_shared<ViewOpAttribute>(
-        fromOffset, static_cast<MemoryType>(memType), fromDynOffset, toDynValidShape);
+    return std::make_shared<ViewOpAttribute>(fromOffset, static_cast<MemoryType>(memType), fromDynOffset,
+                                             toDynValidShape);
 }
 
 std::shared_ptr<OpAttribute> ViewOpAttribute::Clone() const
@@ -249,8 +249,8 @@ Json AssembleOpAttribute::DumpDynJson()
     return res;
 }
 
-std::shared_ptr<AssembleOpAttribute> AssembleOpAttribute::DeserializeFrom(
-    const Json& attrJson, [[maybe_unused]] Function* function)
+std::shared_ptr<AssembleOpAttribute> AssembleOpAttribute::DeserializeFrom(const Json& attrJson,
+                                                                          [[maybe_unused]] Function* function)
 {
     int despos = 0;
     auto memType = attrJson[despos++];
@@ -269,8 +269,8 @@ std::shared_ptr<AssembleOpAttribute> AssembleOpAttribute::DeserializeFrom(
     for (int i = 0; i < dynValidShapeSize; i++) {
         fromDynValidShape.push_back(LoadSymbolicScalar(attrJson[despos++]));
     }
-    return std::make_shared<AssembleOpAttribute>(
-        static_cast<MemoryType>(memType), toOffset, toDynOffset, fromDynValidShape);
+    return std::make_shared<AssembleOpAttribute>(static_cast<MemoryType>(memType), toOffset, toDynOffset,
+                                                 fromDynValidShape);
 }
 
 std::shared_ptr<OpAttribute> AssembleOpAttribute::Clone() const
@@ -278,10 +278,10 @@ std::shared_ptr<OpAttribute> AssembleOpAttribute::Clone() const
     return std::make_shared<AssembleOpAttribute>(from_, toOffset_, toDynOffset_, fromDynValidShape_);
 }
 
-CallOpAttribute::CallOpAttribute(
-    const FunctionHash& calleeHash, const std::vector<std::vector<SymbolicScalar>>& argList,
-    const std::string& calleMagicName, const std::map<int, SymbolicScalar>& outIndexToExpr,
-    const std::vector<SymbolicScalar>& linearArgList)
+CallOpAttribute::CallOpAttribute(const FunctionHash& calleeHash,
+                                 const std::vector<std::vector<SymbolicScalar>>& argList,
+                                 const std::string& calleMagicName, const std::map<int, SymbolicScalar>& outIndexToExpr,
+                                 const std::vector<SymbolicScalar>& linearArgList)
     : invokeInfo_(std::make_shared<SubfuncInvokeInfoTy>()),
       calleeHash_(calleeHash),
       argList_(argList),
@@ -395,7 +395,7 @@ std::vector<int64_t> CallOpAttribute::GetLinearImmediateArgList(int begin, int e
                 return {};
             } else {
                 FE_ASSERT(false) << "Invalid Immediate in " << Dump() << " index " << i << " = "
-                                       << linearArgList[i].Dump();
+                                 << linearArgList[i].Dump();
             }
         }
     }
@@ -403,8 +403,8 @@ std::vector<int64_t> CallOpAttribute::GetLinearImmediateArgList(int begin, int e
     return result;
 }
 
-std::shared_ptr<CallOpAttribute> CallOpAttribute::DeserializeFrom(
-    const Json& attrJson, [[maybe_unused]] Function* function)
+std::shared_ptr<CallOpAttribute> CallOpAttribute::DeserializeFrom(const Json& attrJson,
+                                                                  [[maybe_unused]] Function* function)
 {
     // CallOp特殊：attrJson为整体的Json而不是单独的attr Json
     auto& attrJsonReal = attrJson["attr"];
@@ -451,8 +451,8 @@ Json ConvertOpAttribute::DumpDynJson()
 
 std::pair<MemoryType, MemoryType> ConvertOpAttribute::GetConvertPath() const { return {from_, to_}; }
 
-std::shared_ptr<ConvertOpAttribute> ConvertOpAttribute::DeserializeFrom(
-    const Json& attrJson, [[maybe_unused]] Function* function)
+std::shared_ptr<ConvertOpAttribute> ConvertOpAttribute::DeserializeFrom(const Json& attrJson,
+                                                                        [[maybe_unused]] Function* function)
 {
     HashBuffer buffer = attrJson.get<HashBuffer>();
     return std::make_shared<ConvertOpAttribute>(static_cast<MemoryType>(buffer[0]), static_cast<MemoryType>(buffer[1]));
@@ -621,8 +621,8 @@ bool CopyOpAttribute::IsDynOffset(const std::vector<OpImmediate>& offset) const
     return false;
 }
 
-std::shared_ptr<CopyOpAttribute> CopyOpAttribute::DeserializeFrom(
-    const Json& attrJson, [[maybe_unused]] Function* function)
+std::shared_ptr<CopyOpAttribute> CopyOpAttribute::DeserializeFrom(const Json& attrJson,
+                                                                  [[maybe_unused]] Function* function)
 {
     if (attrJson.size() <= VALUE3) {
         std::vector<OpImmediate> vec;
@@ -659,8 +659,8 @@ std::shared_ptr<CopyOpAttribute> CopyOpAttribute::DeserializeFrom(
         for (size_t i = 0; i < validShapeSize; i++) {
             dynValidShape.push_back(OpImmediate::DeserializeFrom(attrJson, despos));
         };
-        result =
-            std::make_shared<CopyOpAttribute>(static_cast<MemoryType>(from), offset, shape, rawShape, dynValidShape);
+        result = std::make_shared<CopyOpAttribute>(static_cast<MemoryType>(from), offset, shape, rawShape,
+                                                   dynValidShape);
     } else {
         auto to = attrJson[despos++];
         auto size = attrJson[despos++];
@@ -682,7 +682,4 @@ std::shared_ptr<CopyOpAttribute> CopyOpAttribute::DeserializeFrom(
     return result;
 }
 
-std::shared_ptr<OpAttribute> CopyOpAttribute::Clone() const
-{
-    return std::make_shared<CopyOpAttribute>(*this);
-}
+std::shared_ptr<OpAttribute> CopyOpAttribute::Clone() const { return std::make_shared<CopyOpAttribute>(*this); }

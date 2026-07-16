@@ -15,8 +15,8 @@
 
 namespace npu::tile_fwk::dynamic {
 
-std::string DumpCellMatchPartialUpdateTable(
-    const uint64_t* cellMatchTableData, uint32_t dataSize, const DevCellMatchTableDesc& desc)
+std::string DumpCellMatchPartialUpdateTable(const uint64_t* cellMatchTableData, uint32_t dataSize,
+                                            const DevCellMatchTableDesc& desc)
 {
     std::ostringstream oss;
     if (desc.cellUint64Size == 0 || dataSize == 0 || cellMatchTableData == nullptr) {

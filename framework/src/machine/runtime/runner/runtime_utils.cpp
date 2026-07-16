@@ -1,5 +1,5 @@
 /**
-* Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * Copyright (c) 2025 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
  * Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -28,7 +28,7 @@ extern "C" __attribute__((weak)) int drvGetProcessSign(process_sign* sign);
 namespace npu::tile_fwk {
 namespace {
 constexpr uint32_t kMinDefaultDim = 20;
-constexpr uint32_t AICAIVRATIO = 2;  // AIC:AIV的比例系数
+constexpr uint32_t AICAIVRATIO = 2; // AIC:AIV的比例系数
 
 int GetMaxBlockdim()
 {
@@ -41,17 +41,16 @@ int GetMaxBlockdim()
     // 若不满足AIC和AIV的比例，手动处理成为符合AIC和AIV的比例最大值
     if (vectorBlockDim != cubeBlockDim * AICAIVRATIO) {
         auto rtsMaxBlockDim = std::min(cubeBlockDim, vectorBlockDim / AICAIVRATIO);
-        MACHINE_LOGW(
-            "The cubeBlockDim[%u] and vectorBlockDim[%u] do not conform to the 1: %u ratio of AIC and AIV, "
-            "and will be set to values that conform to the ratio of AIC and AIV. "
-            "The cubeBlockDim and vectorBlockDim are set at %u and %u",
-            cubeBlockDim, vectorBlockDim, AICAIVRATIO, rtsMaxBlockDim, rtsMaxBlockDim * AICAIVRATIO);
+        MACHINE_LOGW("The cubeBlockDim[%u] and vectorBlockDim[%u] do not conform to the 1: %u ratio of AIC and AIV, "
+                     "and will be set to values that conform to the ratio of AIC and AIV. "
+                     "The cubeBlockDim and vectorBlockDim are set at %u and %u",
+                     cubeBlockDim, vectorBlockDim, AICAIVRATIO, rtsMaxBlockDim, rtsMaxBlockDim * AICAIVRATIO);
         return rtsMaxBlockDim;
     } else {
         return cubeBlockDim;
     }
 }
-}
+} // namespace
 
 int GetCfgBlockdim()
 {
@@ -84,4 +83,4 @@ uint32_t GetProcessId()
     MACHINE_LOGD("Using getpid(): pid=%u", pid);
     return pid;
 }
-}
+} // namespace npu::tile_fwk

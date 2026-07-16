@@ -38,7 +38,7 @@ namespace osp {
  */
 template <typename ConstrGraphT>
 class TrimmedGroupScheduler : public Scheduler<ConstrGraphT> {
-    Scheduler<ConstrGraphT> *subScheduler_;
+    Scheduler<ConstrGraphT>* subScheduler_;
     unsigned minNonZeroProcs_;
 
 public:
@@ -47,13 +47,14 @@ public:
      * @param scheduler The sub-scheduler to use for scheduling individual component groups.
      * @param minNonZeroProcs The minimum number of non-zero processors to utilize.
      */
-    TrimmedGroupScheduler(Scheduler<ConstrGraphT> &scheduler, unsigned minNonZeroProcs)
-        : subScheduler_(&scheduler), minNonZeroProcs_(minNonZeroProcs) {}
+    TrimmedGroupScheduler(Scheduler<ConstrGraphT>& scheduler, unsigned minNonZeroProcs)
+        : subScheduler_(&scheduler), minNonZeroProcs_(minNonZeroProcs)
+    {}
 
-    ReturnStatus ComputeSchedule(BspSchedule<ConstrGraphT> &schedule) override
+    ReturnStatus ComputeSchedule(BspSchedule<ConstrGraphT>& schedule) override
     {
-        const auto &instance = schedule.GetInstance();
-        const ConstrGraphT &dag = instance.GetComputationalDag();
+        const auto& instance = schedule.GetInstance();
+        const ConstrGraphT& dag = instance.GetComputationalDag();
 
         std::vector<VertexIdxT<ConstrGraphT>> componentMap(dag.NumVertices());
         size_t numComponents = ComputeWeaklyConnectedComponents(dag, componentMap);
@@ -102,7 +103,7 @@ private:
      * @param arch The global architecture.
      * @return The sub-architecture.
      */
-    BspArchitecture<ConstrGraphT> BuildSubArchitecture(const BspArchitecture<ConstrGraphT> &arch)
+    BspArchitecture<ConstrGraphT> BuildSubArchitecture(const BspArchitecture<ConstrGraphT>& arch)
     {
         std::vector<unsigned> subProcCounts(arch.GetNumberOfProcessorTypes());
         std::vector<VMemwT<ConstrGraphT>> memWeights(arch.GetNumberOfProcessorTypes(), 0);
@@ -120,11 +121,10 @@ private:
     /**
      * @brief Computes prefix-sum offsets from processor type counts.
      */
-    static std::vector<unsigned> ComputeProcTypeOffsets(
-        const BspArchitecture<ConstrGraphT> &arch)
+    static std::vector<unsigned> ComputeProcTypeOffsets(const BspArchitecture<ConstrGraphT>& arch)
     {
         std::vector<unsigned> offsets(arch.GetNumberOfProcessorTypes(), 0);
-        const auto &counts = arch.GetProcessorTypeCount();
+        const auto& counts = arch.GetProcessorTypeCount();
         for (unsigned t = 1; t < arch.GetNumberOfProcessorTypes(); ++t) {
             offsets[t] = offsets[t - 1] + counts[t - 1];
         }
@@ -134,13 +134,13 @@ private:
     /**
      * @brief Solves the sub-schedule for each group and maps the results back to the global schedule.
      */
-    ReturnStatus SolveAndMapSubProblems(BspSchedule<ConstrGraphT> &schedule,
-                                        const std::vector<std::vector<unsigned>> &componentIndicesPerGroup,
-                                        const std::vector<std::vector<VertexIdxT<ConstrGraphT>>> &componentsVertices,
-                                        const BspArchitecture<ConstrGraphT> &subArch)
+    ReturnStatus SolveAndMapSubProblems(BspSchedule<ConstrGraphT>& schedule,
+                                        const std::vector<std::vector<unsigned>>& componentIndicesPerGroup,
+                                        const std::vector<std::vector<VertexIdxT<ConstrGraphT>>>& componentsVertices,
+                                        const BspArchitecture<ConstrGraphT>& subArch)
     {
-        const auto &instance = schedule.GetInstance();
-        const auto &dag = instance.GetComputationalDag();
+        const auto& instance = schedule.GetInstance();
+        const auto& dag = instance.GetComputationalDag();
 
         const auto archProcTypeOffsets = ComputeProcTypeOffsets(instance.GetArchitecture());
         const auto subArchProcTypeOffsets = ComputeProcTypeOffsets(subArch);
@@ -148,14 +148,13 @@ private:
         unsigned maxSupersteps = 0;
 
         for (unsigned i = 0; i < minNonZeroProcs_; ++i) {
-            if (componentIndicesPerGroup[i].empty()) continue;
+            if (componentIndicesPerGroup[i].empty())
+                continue;
 
             std::vector<VertexIdxT<ConstrGraphT>> groupVertices;
             for (unsigned compIdx : componentIndicesPerGroup[i]) {
-                groupVertices.insert(
-                    groupVertices.end(),
-                    componentsVertices[compIdx].begin(),
-                    componentsVertices[compIdx].end());
+                groupVertices.insert(groupVertices.end(), componentsVertices[compIdx].begin(),
+                                     componentsVertices[compIdx].end());
             }
             std::sort(groupVertices.begin(), groupVertices.end());
 
@@ -171,15 +170,15 @@ private:
                 return status;
             }
 
-            for (const auto &vGlobal : groupVertices) {
+            for (const auto& vGlobal : groupVertices) {
                 const auto vLocal = globalToLocalMap.at(vGlobal);
                 const unsigned subProc = subSchedule.AssignedProcessor(vLocal);
                 const unsigned subSuperstep = subSchedule.AssignedSuperstep(vLocal);
 
                 const unsigned procType = subArch.ProcessorType(subProc);
                 const unsigned localIdxWithinType = subProc - subArchProcTypeOffsets[procType];
-                const unsigned globalProc = archProcTypeOffsets[procType]
-                    + (i * subProcCounts[procType]) + localIdxWithinType;
+                const unsigned globalProc = archProcTypeOffsets[procType] + (i * subProcCounts[procType]) +
+                                            localIdxWithinType;
 
                 schedule.SetAssignedProcessor(vGlobal, globalProc);
                 schedule.SetAssignedSuperstep(vGlobal, subSuperstep);
@@ -191,6 +190,6 @@ private:
         return ReturnStatus::OSP_SUCCESS;
     }
 };
-}    // namespace osp
+} // namespace osp
 } // namespace npu::tile_fwk
 #endif // OSP_TRIMMED_GROUP_SCHEDULER_HPP

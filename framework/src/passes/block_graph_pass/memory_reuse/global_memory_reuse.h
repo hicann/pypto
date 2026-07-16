@@ -82,59 +82,50 @@ private:
     void PreProcessStorageGroups();
     Status UpdateStorageId(TensorsDesc& tensorsDesc, std::unordered_map<int64_t, int>& idMap, int& storageId);
     void MarkNonOverlappingConsumerTensors();
-    void RecordAllConsumerShapeAndOffset(
-        LogicalTensorPtr& out, std::vector<std::vector<int>>& allOffsets, std::vector<std::vector<int>>& allShapes,
-        bool& canReuse);
-    bool ExtractImmediateArguments(
-        const std::vector<SymbolicScalar>& argList, size_t startIndex, size_t count, std::vector<int>& result);
-    bool CheckAllConsumerAccessNoOverlap(
-        const std::vector<std::vector<int>>& allOffsets, const std::vector<std::vector<int>>& allShapes);
-    bool CheckNoOverlapForTwoConsumers(
-        const std::vector<std::vector<int>>& allOffsets, const std::vector<std::vector<int>>& allShapes,
-        size_t dimCount);
-    size_t SelectSweepAxis(
-        const std::vector<std::pair<int64_t, int64_t>>& ranges, size_t consumerCount, size_t dimCount);
-    bool CheckNoOverlapByActiveSet(
-        const std::vector<std::pair<int64_t, int64_t>>& ranges, size_t consumerCount, size_t dimCount,
-        size_t sweepAxis);
+    void RecordAllConsumerShapeAndOffset(LogicalTensorPtr& out, std::vector<std::vector<int>>& allOffsets,
+                                         std::vector<std::vector<int>>& allShapes, bool& canReuse);
+    bool ExtractImmediateArguments(const std::vector<SymbolicScalar>& argList, size_t startIndex, size_t count,
+                                   std::vector<int>& result);
+    bool CheckAllConsumerAccessNoOverlap(const std::vector<std::vector<int>>& allOffsets,
+                                         const std::vector<std::vector<int>>& allShapes);
+    bool CheckNoOverlapForTwoConsumers(const std::vector<std::vector<int>>& allOffsets,
+                                       const std::vector<std::vector<int>>& allShapes, size_t dimCount);
+    size_t SelectSweepAxis(const std::vector<std::pair<int64_t, int64_t>>& ranges, size_t consumerCount,
+                           size_t dimCount);
+    bool CheckNoOverlapByActiveSet(const std::vector<std::pair<int64_t, int64_t>>& ranges, size_t consumerCount,
+                                   size_t dimCount, size_t sweepAxis);
     void InitializeLeafGlobalMemoryReuse();
-    void CollectOutputTensor(
-        Function& leafFunc, std::unordered_map<LogicalTensorPtr, size_t>& tensorToInfo,
-        std::vector<WorkspaceInfo>& outWspInfo, std::vector<WorkspaceInfo>& leafFuncReuseMap);
-    void CollectInputTensor(
-        Function& leafFunc, std::unordered_map<LogicalTensorPtr, WorkspaceInfo>& inputWorkspaceInfoMap);
+    void CollectOutputTensor(Function& leafFunc, std::unordered_map<LogicalTensorPtr, size_t>& tensorToInfo,
+                             std::vector<WorkspaceInfo>& outWspInfo, std::vector<WorkspaceInfo>& leafFuncReuseMap);
+    void CollectInputTensor(Function& leafFunc,
+                            std::unordered_map<LogicalTensorPtr, WorkspaceInfo>& inputWorkspaceInfoMap);
     void ProcessLeafGlobalMemoryReuse(Function& leafFunc);
 
     bool CheckAllConsumersConnectedToOp(const LogicalTensorPtr& tensor, Operation& op) const;
     // 检查某个CallOp的输出是否可以复用输入
-    bool TryReuseInputForOutput(
-        Operation& callOp, size_t outputIdx, LogicalTensorPtr& reusedInput, uint64_t& storageOffset) const;
-    bool CalOffsetRawShape(
-        size_t dimCount, const std::vector<SymbolicScalar>& argList, std::vector<int>& offsets,
-        std::vector<int>& rawShapes) const;
-    void CalStridesStorageOffset(
-        size_t dimCount, const LogicalTensorPtr& input, std::vector<int>& offsets, std::vector<int>& rawShapes,
-        uint64_t& storageOffset) const;
+    bool TryReuseInputForOutput(Operation& callOp, size_t outputIdx, LogicalTensorPtr& reusedInput,
+                                uint64_t& storageOffset) const;
+    bool CalOffsetRawShape(size_t dimCount, const std::vector<SymbolicScalar>& argList, std::vector<int>& offsets,
+                           std::vector<int>& rawShapes) const;
+    void CalStridesStorageOffset(size_t dimCount, const LogicalTensorPtr& input, std::vector<int>& offsets,
+                                 std::vector<int>& rawShapes, uint64_t& storageOffset) const;
     bool GetStorageOffsetByCall(Operation& callOp, size_t inputIdx, uint64_t& storageOffset) const;
     void UpdateStorageForActualRaw(LogicalTensorPtr& input) const;
     TensorBucket& GetBestFitBucket(const TensorsDesc& tensorsDesc);
     TensorBucket& HandleNewBuckets(const TensorsDesc& tensorsDesc, int64_t rawDataSize, int magic);
     void UpdateTensorMagicToBucketIdx(const std::set<LogicalTensorPtr>& tensors, int bucketIdx);
-    void ScanParentOps(
-        Function& leafFunc, const Operation& parent, std::unordered_set<LogicalTensorPtr>& visited,
-        std::unordered_set<Operation*>& operations);
-    bool CheckReuseOp(
-        const std::unordered_set<Operation*>& operations, std::deque<Operation*>& parents,
-        const WorkspaceInfo& outWspInfo, std::unordered_map<LogicalTensorPtr, WorkspaceInfo>& inputWorkspaceInfoMap,
-        std::vector<WorkspaceInfo>& leafFuncReuseMap);
-    void FindReusableInputForOutput(
-        Function& leafFunc, Operation& op, const WorkspaceInfo& outWspInfo,
-        std::unordered_map<LogicalTensorPtr, WorkspaceInfo>& inputWorkspaceInfoMap,
-        std::vector<WorkspaceInfo>& leafFuncReuseMap);
-    void ProcessOutputForGlobalMemoryReuse(
-        Function& leafFunc, WorkspaceInfo& wspInfo,
-        std::unordered_map<LogicalTensorPtr, WorkspaceInfo>& inputWorkspaceInfoMap,
-        std::vector<WorkspaceInfo>& leafFuncReuseMap);
+    void ScanParentOps(Function& leafFunc, const Operation& parent, std::unordered_set<LogicalTensorPtr>& visited,
+                       std::unordered_set<Operation*>& operations);
+    bool CheckReuseOp(const std::unordered_set<Operation*>& operations, std::deque<Operation*>& parents,
+                      const WorkspaceInfo& outWspInfo,
+                      std::unordered_map<LogicalTensorPtr, WorkspaceInfo>& inputWorkspaceInfoMap,
+                      std::vector<WorkspaceInfo>& leafFuncReuseMap);
+    void FindReusableInputForOutput(Function& leafFunc, Operation& op, const WorkspaceInfo& outWspInfo,
+                                    std::unordered_map<LogicalTensorPtr, WorkspaceInfo>& inputWorkspaceInfoMap,
+                                    std::vector<WorkspaceInfo>& leafFuncReuseMap);
+    void ProcessOutputForGlobalMemoryReuse(Function& leafFunc, WorkspaceInfo& wspInfo,
+                                           std::unordered_map<LogicalTensorPtr, WorkspaceInfo>& inputWorkspaceInfoMap,
+                                           std::vector<WorkspaceInfo>& leafFuncReuseMap);
     Status UpdateIncastOutCast();
 
     std::vector<TensorBucket> buckets_;

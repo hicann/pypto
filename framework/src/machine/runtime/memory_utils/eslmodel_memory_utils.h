@@ -57,17 +57,15 @@ inline std::vector<MmapRecord> MmapGlobalManager::records_;
 inline std::mutex MmapGlobalManager::mutex_;
 
 struct EslModelMemoryUtils {
-    EslModelMemoryUtils(bool isHugePage = true, bool isDevice = true) :isUseHugePage_(isHugePage), isDevice_(isDevice) {}
+    EslModelMemoryUtils(bool isHugePage = true, bool isDevice = true) : isUseHugePage_(isHugePage), isDevice_(isDevice)
+    {}
     bool IsDevice() { return isDevice_; }
 
-    static void UnmapAllMappings()
-    {
-        MmapGlobalManager::UnmapAll();
-    }
+    static void UnmapAllMappings() { MmapGlobalManager::UnmapAll(); }
 
-    uint8_t *AllocDev(size_t size, uint8_t **cachedDevAddrHolder)
+    uint8_t* AllocDev(size_t size, uint8_t** cachedDevAddrHolder)
     {
-        uint8_t *devPtr = nullptr;
+        uint8_t* devPtr = nullptr;
         const bool needAlloc = (cachedDevAddrHolder == nullptr) || (*cachedDevAddrHolder == nullptr);
         if (needAlloc) {
             if (isUseHugePage_) {
@@ -85,55 +83,52 @@ struct EslModelMemoryUtils {
         return devPtr;
     }
 
-    uint8_t *AllocZero(uint64_t size, uint8_t **cachedDevAddrHolder)
+    uint8_t* AllocZero(uint64_t size, uint8_t** cachedDevAddrHolder)
     {
-        uint8_t *devPtr = AllocDev(size, cachedDevAddrHolder);
+        uint8_t* devPtr = AllocDev(size, cachedDevAddrHolder);
         std::vector<uint8_t> zeroBuffer(static_cast<size_t>(size), 0);
         RuntimeMemcpy(devPtr, size, zeroBuffer.data(), size, RtMemcpyKind::HOST_TO_DEVICE);
         memset_s(devPtr, size, 0, size);
         return devPtr;
     }
 
-    uint8_t *CopyToDev(RawTensorData &data)
+    uint8_t* CopyToDev(RawTensorData& data)
     {
         if (data.GetDevPtr() == nullptr) {
-            uint8_t *devPtr = nullptr;
+            uint8_t* devPtr = nullptr;
             DevMemoryPool::Instance().AllocDevAddr(&devPtr, data.size());
             if (devPtr == nullptr) {
                 return nullptr;
             }
             MapEslAddrToHostAddr(reinterpret_cast<uintptr_t>(devPtr), data.size());
-            RuntimeMemcpy(devPtr, data.size(), (uint8_t *)data.data(), data.size(), RtMemcpyKind::HOST_TO_DEVICE);
+            RuntimeMemcpy(devPtr, data.size(), (uint8_t*)data.data(), data.size(), RtMemcpyKind::HOST_TO_DEVICE);
             data.SetDevPtr(devPtr);
         }
         return data.GetDevPtr();
     }
 
     template <typename T>
-    T *CopyToDev(std::vector<T> data, uint8_t **cachedDevAddrHolder)
+    T* CopyToDev(std::vector<T> data, uint8_t** cachedDevAddrHolder)
     {
-        return (T *)CopyToDev((uint8_t *)data.data(), data.size() * sizeof(T), cachedDevAddrHolder);
+        return (T*)CopyToDev((uint8_t*)data.data(), data.size() * sizeof(T), cachedDevAddrHolder);
     }
 
-    void CopyToDev(uint8_t *devPtr, uint8_t *data, uint64_t size)
+    void CopyToDev(uint8_t* devPtr, uint8_t* data, uint64_t size)
     {
         RuntimeMemcpy(devPtr, size, data, size, RtMemcpyKind::HOST_TO_DEVICE);
     }
 
-    uint8_t *CopyToDev(uint8_t *data, uint64_t size, uint8_t **cachedDevAddrHolder)
+    uint8_t* CopyToDev(uint8_t* data, uint64_t size, uint8_t** cachedDevAddrHolder)
     {
-        uint8_t *devPtr = AllocDev(size, cachedDevAddrHolder);
+        uint8_t* devPtr = AllocDev(size, cachedDevAddrHolder);
         RuntimeMemcpy(devPtr, size, data, size, RtMemcpyKind::HOST_TO_DEVICE);
         memcpy_s(devPtr, size, data, size);
         return devPtr;
     }
 
-    void CopyFromDev(RawTensorData &data)
-    {
-        CopyFromDev(data.data(), data.GetDevPtr(), data.size());
-    }
+    void CopyFromDev(RawTensorData& data) { CopyFromDev(data.data(), data.GetDevPtr(), data.size()); }
 
-    void CopyFromDev(uint8_t *data, uint8_t *devPtr, uint64_t size)
+    void CopyFromDev(uint8_t* data, uint8_t* devPtr, uint64_t size)
     {
         RuntimeMemcpy(data, size, devPtr, size, RtMemcpyKind::DEVICE_TO_HOST);
     }
@@ -165,7 +160,7 @@ struct EslModelMemoryUtils {
     {
         long pageSize = sysconf(_SC_PAGESIZE);
         auto alignSize = AlignAddress(size, pageSize, true) + pageSize;
-        void *hostAddr = mmap((void *)AlignAddress(eslAddr, pageSize, false), alignSize, PROT_READ | PROT_WRITE,
+        void* hostAddr = mmap((void*)AlignAddress(eslAddr, pageSize, false), alignSize, PROT_READ | PROT_WRITE,
                               MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
         if (hostAddr == MAP_FAILED) {
             perror("mmap failed");
@@ -176,9 +171,6 @@ struct EslModelMemoryUtils {
         return hostAddr;
     }
 
-    void MemCopytoMapAddr(uint8_t *dst, uint8_t *src, uintptr_t size)
-    {
-        MemcpyS(dst, size, src, size);
-    }
+    void MemCopytoMapAddr(uint8_t* dst, uint8_t* src, uintptr_t size) { MemcpyS(dst, size, src, size); }
 };
-}
+} // namespace npu::tile_fwk::dynamic

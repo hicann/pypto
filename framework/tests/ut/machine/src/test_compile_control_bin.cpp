@@ -29,8 +29,8 @@ using namespace npu::tile_fwk;
 using Json = nlohmann::json;
 
 namespace npu::tile_fwk {
-void GenCustomOpInfo(
-    const std::string& funcName, const std::string& controlAicpuPath, const std::string& constrolSoName);
+void GenCustomOpInfo(const std::string& funcName, const std::string& controlAicpuPath,
+                     const std::string& constrolSoName);
 bool GenTilingFunc(const std::string& funcName, const std::string& controlAicpuPath);
 bool TieFwkAicpuPreCompile(std::string& preCompileO, std::string& controlAicpuPath);
 bool SharedAicpuCompile(const std::string& funcName, const std::string& aicpuDirPath, const std::string& preCompileO);
@@ -44,10 +44,12 @@ public:
         setenv("LC_ALL", "C", 1);
         setenv("LANG", "C", 1);
     }
-    void TearDown() override {
+    void TearDown() override
+    {
         std::string cmd = "rm -rf " + testDir_;
         [[maybe_unused]] int ret = system(cmd.c_str());
     }
+
 public:
     std::string testDir_ = "/tmp/test_compile_control_bin_" + std::to_string(getpid());
 };

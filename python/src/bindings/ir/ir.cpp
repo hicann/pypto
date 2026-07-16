@@ -264,10 +264,10 @@ void BindDType(py::module_& ir)
         .def_readonly_static("HF4", &DataType::HF4, "4-bit Hisilicon float")
         .def_readonly_static("HF8", &DataType::HF8, "8-bit Hisilicon float")
         .def_readonly_static("INDEX", &DataType::INDEX, "Machine-word sized integer type for index computations")
-        .def_readonly_static(
-            "DEFAULT_CONST_INT", &DataType::INT64, "Default dtype for bare integer constant literals (= INT64)")
-        .def_readonly_static(
-            "DEFAULT_CONST_FLOAT", &DataType::FP32, "Default dtype for bare float constant literals (= FP32)")
+        .def_readonly_static("DEFAULT_CONST_INT", &DataType::INT64,
+                             "Default dtype for bare integer constant literals (= INT64)")
+        .def_readonly_static("DEFAULT_CONST_FLOAT", &DataType::FP32,
+                             "Default dtype for bare float constant literals (= FP32)")
         .def("get_bit", &DataType::GetBit, "Get the size in bits of this data type.")
         .def("to_string", &DataType::ToString, "Get a human-readable string name.")
         .def("to_c_type_string", &DataType::ToCTypeString, "Get C style type string for code generation.")
@@ -291,16 +291,14 @@ void BindDType(py::module_& ir)
 void BindSpan(py::module_& ir)
 {
     // Span - value type, copy semantics
-    py::class_<Span>(
-        ir, "Span", "Source location information tracking file, line, and column positions")
-        .def(
-            py::init<std::string, int, int, int, int>(), py::arg("filename"), py::arg("begin_line"),
-            py::arg("begin_column"), py::arg("end_line") = -1, py::arg("end_column") = -1, "Create a source span")
+    py::class_<Span>(ir, "Span", "Source location information tracking file, line, and column positions")
+        .def(py::init<std::string, int, int, int, int>(), py::arg("filename"), py::arg("begin_line"),
+             py::arg("begin_column"), py::arg("end_line") = -1, py::arg("end_column") = -1, "Create a source span")
         .def("to_string", &Span::ToString, "Convert span to string representation")
         .def("is_valid", &Span::IsValid, "Check if the span has valid coordinates")
-        .def_static(
-            "unknown", &Span::Unknown, "Create an unknown/invalid span for cases where source location is unavailable",
-            py::return_value_policy::reference)
+        .def_static("unknown", &Span::Unknown,
+                    "Create an unknown/invalid span for cases where source location is unavailable",
+                    py::return_value_policy::reference)
         .def(
             "is_unknown", [](const Span& self) { return self.IsUnknown(); }, "Check if the span is unknown")
         .def("__repr__", &Span::ToString)
@@ -331,12 +329,9 @@ void BindOp(py::module_& ir)
 void BindTypeClass(py::module_& ir)
 {
     // Type - abstract base, const shared_ptr
-    auto type_class =
-        py::class_<Type, std::shared_ptr<Type>>(ir, "Type", "Base class for type representations");
+    auto type_class = py::class_<Type, std::shared_ptr<Type>>(ir, "Type", "Base class for type representations");
     BindFields<Type>(type_class);
-    type_class.def(
-        "__str__", [](const TypePtr& self) { return PythonPrint(self, "ir"); },
-        "IR string representation");
+    type_class.def("__str__", [](const TypePtr& self) { return PythonPrint(self, "ir"); }, "IR string representation");
     type_class.def(
         "__eq__", [](const TypePtr& self, const TypePtr& other) { return structural_equal(self, other); },
         "Equality comparison");
@@ -349,8 +344,8 @@ void BindTypeClass(py::module_& ir)
     BindFields<UnknownType>(unknown_type_class);
 
     // ScalarType - const shared_ptr
-    auto scalar_type_class = py::class_<ScalarType, Type, std::shared_ptr<ScalarType>>(
-        ir, "ScalarType", "Scalar type representation");
+    auto scalar_type_class = py::class_<ScalarType, Type, std::shared_ptr<ScalarType>>(ir, "ScalarType",
+                                                                                       "Scalar type representation");
     scalar_type_class.def(py::init<DataType>(), py::arg("dtype"), "Create a scalar type");
     BindFields<ScalarType>(scalar_type_class);
 
@@ -358,23 +353,20 @@ void BindTypeClass(py::module_& ir)
     auto ptr_type_class = py::class_<PtrType, Type, std::shared_ptr<PtrType>>(
         ir, "PtrType", "Pointer type representation (!pto.ptr<dtype>)");
     ptr_type_class.def(py::init<DataType>(), py::arg("dtype"), "Create a pointer type");
-    ptr_type_class.def(
-        py::init([]() { return GetOuterCompatPtrType(); }),
-        "Create the outer-IR compatibility pointer type (INT8-based)");
+    ptr_type_class.def(py::init([]() { return GetOuterCompatPtrType(); }),
+                       "Create the outer-IR compatibility pointer type (INT8-based)");
     ptr_type_class.def_static("get", &GetOuterCompatPtrType, "Get the outer-IR compatibility pointer type singleton");
     BindFields<PtrType>(ptr_type_class);
 
     // IRNode - abstract base, const shared_ptr
-    auto irnode_class =
-        py::class_<IRNode, std::shared_ptr<IRNode>>(ir, "IRNode", "Base class for all IR nodes");
+    auto irnode_class = py::class_<IRNode, std::shared_ptr<IRNode>>(ir, "IRNode", "Base class for all IR nodes");
     BindFields<IRNode>(irnode_class);
     irnode_class
         .def(
             "same_as", [](const IRNodePtr& self, const IRNodePtr& other) { return self == other; }, py::arg("other"),
             "Check if this IR node is the same as another IR node.")
         .def(
-            "__str__", [](const IRNodePtr& self) { return PythonPrint(self, "ir"); },
-            "IR string representation")
+            "__str__", [](const IRNodePtr& self) { return PythonPrint(self, "ir"); }, "IR string representation")
         .def(
             "as_python", [](const IRNodePtr& self, const std::string& prefix) { return PythonPrint(self, prefix); },
             py::arg("prefix") = "ir",
@@ -383,8 +375,7 @@ void BindTypeClass(py::module_& ir)
             "    prefix: Module prefix (default 'ir' for 'import pypto_pro.ir as ir')");
 
     // Expr - abstract base, const shared_ptr
-    auto expr_class = py::class_<Expr, IRNode, std::shared_ptr<Expr>>(
-        ir, "Expr", "Base class for all expressions");
+    auto expr_class = py::class_<Expr, IRNode, std::shared_ptr<Expr>>(ir, "Expr", "Base class for all expressions");
     BindFields<Expr>(expr_class);
 
     // ShapedType - abstract base for types with shape and optional memref
@@ -414,27 +405,23 @@ void BindTypeClass(py::module_& ir)
     // TensorView - struct for tensor view information - must be before TensorType
     py::class_<TensorView>(ir, "TensorView", "Tensor view representation with stride and layout")
         .def(py::init<>(), "Create an empty tensor view")
-        .def(
-            py::init<const std::vector<ExprPtr>&, TensorLayout>(), py::arg("stride"), py::arg("layout"),
-            "Create a tensor view with stride and layout")
-        .def(
-            py::init<const std::vector<ExprPtr>&, const std::vector<ExprPtr>&, TensorLayout>(), py::arg("valid_shape"),
-            py::arg("stride"), py::arg("layout"), "Create a tensor view with valid_shape, stride and layout")
+        .def(py::init<const std::vector<ExprPtr>&, TensorLayout>(), py::arg("stride"), py::arg("layout"),
+             "Create a tensor view with stride and layout")
+        .def(py::init<const std::vector<ExprPtr>&, const std::vector<ExprPtr>&, TensorLayout>(), py::arg("valid_shape"),
+             py::arg("stride"), py::arg("layout"), "Create a tensor view with valid_shape, stride and layout")
         .def_readwrite("valid_shape", &TensorView::validShape, "Valid shape dimensions")
         .def_readwrite("stride", &TensorView::stride, "Stride for each dimension")
         .def_readwrite("layout", &TensorView::layout, "Tensor layout type")
-        .def_readwrite(
-            "ptr", &TensorView::ptr, "Source pointer ExprPtr (set for ptr.make_tensor-created views; None otherwise).");
+        .def_readwrite("ptr", &TensorView::ptr,
+                       "Source pointer ExprPtr (set for ptr.make_tensor-created views; None otherwise).");
 
     // TensorType - const shared_ptr
     auto tensor_type_class = py::class_<TensorType, ShapedType, std::shared_ptr<TensorType>>(
         ir, "TensorType", "Tensor type representation");
-    tensor_type_class.def(
-        py::init<const std::vector<ExprPtr>&, DataType, std::optional<MemRefPtr>>(), py::arg("shape"), py::arg("dtype"),
-        py::arg("memref") = py::none(), "Create a tensor type");
-    tensor_type_class.def(
-        py::init<const std::vector<int64_t>&, DataType, std::optional<MemRefPtr>>(), py::arg("shape"), py::arg("dtype"),
-        py::arg("memref") = py::none(), "Create a tensor type");
+    tensor_type_class.def(py::init<const std::vector<ExprPtr>&, DataType, std::optional<MemRefPtr>>(), py::arg("shape"),
+                          py::arg("dtype"), py::arg("memref") = py::none(), "Create a tensor type");
+    tensor_type_class.def(py::init<const std::vector<int64_t>&, DataType, std::optional<MemRefPtr>>(), py::arg("shape"),
+                          py::arg("dtype"), py::arg("memref") = py::none(), "Create a tensor type");
     tensor_type_class.def(
         py::init<const std::vector<ExprPtr>&, DataType, std::optional<MemRefPtr>, std::optional<TensorView>>(),
         py::arg("shape"), py::arg("dtype"), py::arg("memref") = py::none(), py::arg("tensor_view") = py::none(),
@@ -448,28 +435,23 @@ void BindTypeClass(py::module_& ir)
     // TileType - const shared_ptr
     auto tile_type_class = py::class_<TileType, ShapedType, std::shared_ptr<TileType>>(
         ir, "TileType", "Tile type representation (multi-dimensional tensor)");
-    tile_type_class.def(
-        py::init<
-            const std::vector<ExprPtr>&, DataType, std::optional<MemRefPtr>, std::optional<TileView>,
-            std::optional<HardwareInfo>>(),
-        py::arg("shape"), py::arg("dtype"), py::arg("memref") = py::none(), py::arg("tile_view") = py::none(),
-        py::arg("hardware_info") = py::none(),
-        "Create a tile type (supports multi-dimensional tensors; code generation has constraints)");
-    tile_type_class.def(
-        py::init<
-            const std::vector<int64_t>&, DataType, std::optional<MemRefPtr>, std::optional<TileView>,
-            std::optional<HardwareInfo>>(),
-        py::arg("shape"), py::arg("dtype"), py::arg("memref") = py::none(), py::arg("tile_view") = py::none(),
-        py::arg("hardware_info") = py::none(),
-        "Create a tile type (supports multi-dimensional tensors; code generation has constraints)");
+    tile_type_class.def(py::init<const std::vector<ExprPtr>&, DataType, std::optional<MemRefPtr>,
+                                 std::optional<TileView>, std::optional<HardwareInfo>>(),
+                        py::arg("shape"), py::arg("dtype"), py::arg("memref") = py::none(),
+                        py::arg("tile_view") = py::none(), py::arg("hardware_info") = py::none(),
+                        "Create a tile type (supports multi-dimensional tensors; code generation has constraints)");
+    tile_type_class.def(py::init<const std::vector<int64_t>&, DataType, std::optional<MemRefPtr>,
+                                 std::optional<TileView>, std::optional<HardwareInfo>>(),
+                        py::arg("shape"), py::arg("dtype"), py::arg("memref") = py::none(),
+                        py::arg("tile_view") = py::none(), py::arg("hardware_info") = py::none(),
+                        "Create a tile type (supports multi-dimensional tensors; code generation has constraints)");
     BindFields<TileType>(tile_type_class);
 
     // TupleType - const shared_ptr
     auto tuple_type_class = py::class_<TupleType, Type, std::shared_ptr<TupleType>>(
         ir, "TupleType", "Tuple type representation (contains multiple types)");
-    tuple_type_class.def(
-        py::init<const std::vector<TypePtr>&>(), py::arg("types"),
-        "Create a tuple type from a list of types");
+    tuple_type_class.def(py::init<const std::vector<TypePtr>&>(), py::arg("types"),
+                         "Create a tuple type from a list of types");
     BindFields<TupleType>(tuple_type_class);
 
     // TokenType - const shared_ptr
@@ -478,8 +460,8 @@ void BindTypeClass(py::module_& ir)
         .def_static("get", GetTokenType, "Get the token type");
 
     // LogicalTensorType - const shared_ptr
-    py::class_<LogicalTensorType, Type, std::shared_ptr<LogicalTensorType>>(
-        ir, "LogicalTensorType", "Logical tensor type")
+    py::class_<LogicalTensorType, Type, std::shared_ptr<LogicalTensorType>>(ir, "LogicalTensorType",
+                                                                            "Logical tensor type")
         .def(py::init<>(), "Create a logical tensor type");
 
     // MemorySpace enum
@@ -748,15 +730,13 @@ void BindTypeClass(py::module_& ir)
         .value("PK", ir::MaskStoreDist::PK);
 
     // HardwareInfo - struct for hardware-specific tile information
-    py::class_<HardwareInfo>(
-        ir, "HardwareInfo", "Hardware-specific tile information (layout, fractal, pad, compact)")
+    py::class_<HardwareInfo>(ir, "HardwareInfo", "Hardware-specific tile information (layout, fractal, pad, compact)")
         .def(py::init<>(), "Create a default hardware info")
-        .def(
-            py::init<TileLayout, TileLayout, uint64_t, TilePad, CompactMode>(),
-            py::arg("blayout") = TileLayout::row_major, py::arg("slayout") = TileLayout::none_box,
-            py::arg("fractal") = HardwareInfo::kDefaultFractal, py::arg("pad") = TilePad::null,
-            py::arg("compact") = CompactMode::null,
-            "Create hardware info with blayout, slayout, fractal, pad, and compact")
+        .def(py::init<TileLayout, TileLayout, uint64_t, TilePad, CompactMode>(),
+             py::arg("blayout") = TileLayout::row_major, py::arg("slayout") = TileLayout::none_box,
+             py::arg("fractal") = HardwareInfo::kDefaultFractal, py::arg("pad") = TilePad::null,
+             py::arg("compact") = CompactMode::null,
+             "Create hardware info with blayout, slayout, fractal, pad, and compact")
         .def_readwrite("blayout", &HardwareInfo::blayout, "Block layout")
         .def_readwrite("slayout", &HardwareInfo::slayout, "Scatter layout")
         .def_readwrite("fractal", &HardwareInfo::fractal, "Fractal size")
@@ -764,12 +744,11 @@ void BindTypeClass(py::module_& ir)
         .def_readwrite("compact", &HardwareInfo::compact, "Compact mode");
 
     // TileView - struct for tile view information
-    py::class_<TileView>(
-        ir, "TileView", "Tile view representation with valid shape, stride, and start offset")
+    py::class_<TileView>(ir, "TileView", "Tile view representation with valid shape, stride, and start offset")
         .def(py::init<>(), "Create an empty tile view")
-        .def(
-            py::init<const std::vector<ExprPtr>&, const std::vector<ExprPtr>&, ExprPtr>(), py::arg("valid_shape"),
-            py::arg("stride"), py::arg("start_offset"), "Create a tile view with valid_shape, stride, and start_offset")
+        .def(py::init<const std::vector<ExprPtr>&, const std::vector<ExprPtr>&, ExprPtr>(), py::arg("valid_shape"),
+             py::arg("stride"), py::arg("start_offset"),
+             "Create a tile view with valid_shape, stride, and start_offset")
         .def_readwrite("valid_shape", &TileView::validShape, "Valid shape dimensions")
         .def_readwrite("stride", &TileView::stride, "Stride for each dimension")
         .def_readwrite("start_offset", &TileView::startOffset, "Starting offset");
@@ -808,31 +787,24 @@ void BindTypeClass(py::module_& ir)
 void BindExpr(py::module_& ir)
 {
     // Var - const shared_ptr
-    auto var_class =
-        py::class_<Var, Expr, std::shared_ptr<Var>>(ir, "Var", "Variable reference expression");
+    auto var_class = py::class_<Var, Expr, std::shared_ptr<Var>>(ir, "Var", "Variable reference expression");
 
-    var_class.def(
-        py::init<const std::string&, const TypePtr&, const Span&>(), py::arg("name"), py::arg("type"), py::arg("span"),
-        "Create a variable reference (memory reference is stored in ShapedType for Tensor/Tile types)");
+    var_class.def(py::init<const std::string&, const TypePtr&, const Span&>(), py::arg("name"), py::arg("type"),
+                  py::arg("span"),
+                  "Create a variable reference (memory reference is stored in ShapedType for Tensor/Tile types)");
     BindFields<Var>(var_class);
 
     // IterArg - const shared_ptr
-    auto iterarg_class = py::class_<IterArg, std::shared_ptr<IterArg>>(
-        ir, "IterArg", "Iteration argument variable");
+    auto iterarg_class = py::class_<IterArg, std::shared_ptr<IterArg>>(ir, "IterArg", "Iteration argument variable");
     iterarg_class
-        .def(
-            py::init<const std::string&, const TypePtr&, const ExprPtr&, const Span&>(), py::arg("name"),
-            py::arg("type"), py::arg("initValue"), py::arg("span"),
-            "Create an iteration argument with initial value")
-        .def(
-            py::init<VarPtr, const ExprPtr&>(), py::arg("iterVar"), py::arg("initValue"),
-            "Create an iteration argument with initial value")
-        .def(
-            "__str__", [](const std::shared_ptr<const IterArg>& self) -> std::string { return self->iterVar_->name_; })
+        .def(py::init<const std::string&, const TypePtr&, const ExprPtr&, const Span&>(), py::arg("name"),
+             py::arg("type"), py::arg("initValue"), py::arg("span"), "Create an iteration argument with initial value")
+        .def(py::init<VarPtr, const ExprPtr&>(), py::arg("iterVar"), py::arg("initValue"),
+             "Create an iteration argument with initial value")
+        .def("__str__", [](const std::shared_ptr<const IterArg>& self) -> std::string { return self->iterVar_->name_; })
         .def_property_readonly(
-            "name", [](const std::shared_ptr<const IterArg>& self) -> const std::string& {
-                return self->iterVar_->name_;
-            },
+            "name",
+            [](const std::shared_ptr<const IterArg>& self) -> const std::string& { return self->iterVar_->name_; },
             "Variable name");
     BindFields<IterArg>(iterarg_class);
 
@@ -840,64 +812,57 @@ void BindExpr(py::module_& ir)
     auto memref_class = py::class_<MemRef, Var, std::shared_ptr<MemRef>>(
         ir, "MemRef", "Memory reference variable for shaped types (inherits from Var)");
     memref_class
-        .def(
-            py::init<MemorySpace, ExprPtr, uint64_t, Span>(), py::arg("memory_space"), py::arg("addr"), py::arg("size"),
-            py::arg("span") = Span::Unknown(), "Create a memory reference with memory_space, addr, size, and span")
-        .def(
-            py::init<MemorySpace, ExprPtr, uint64_t, uint64_t, Span>(), py::arg("memory_space"), py::arg("addr"),
-            py::arg("size"), py::arg("id"), py::arg("span") = Span::Unknown(),
-            "Create a memory reference with memory_space, addr, size, id, and span")
+        .def(py::init<MemorySpace, ExprPtr, uint64_t, Span>(), py::arg("memory_space"), py::arg("addr"),
+             py::arg("size"), py::arg("span") = Span::Unknown(),
+             "Create a memory reference with memory_space, addr, size, and span")
+        .def(py::init<MemorySpace, ExprPtr, uint64_t, uint64_t, Span>(), py::arg("memory_space"), py::arg("addr"),
+             py::arg("size"), py::arg("id"), py::arg("span") = Span::Unknown(),
+             "Create a memory reference with memory_space, addr, size, id, and span")
         .def_readonly("memory_space", &MemRef::memorySpace_, "Memory space (DDR, Vec, Mat, Left, Right, Scaling, Acc)")
         .def_readonly("addr", &MemRef::addr_, "Starting address expression")
         .def_readonly("size", &MemRef::size_, "Size in bytes (64-bit unsigned)")
-        .def_readwrite(
-            "memory_space_", &MemRef::memorySpace_, "Memory space (DDR, Vec, Mat, Left, Right, Scaling, Acc)")
+        .def_readwrite("memory_space_", &MemRef::memorySpace_,
+                       "Memory space (DDR, Vec, Mat, Left, Right, Scaling, Acc)")
         .def_readwrite("addr_", &MemRef::addr_, "Starting address expression")
         .def_readwrite("size_", &MemRef::size_, "Size in bytes (64-bit unsigned)")
-        .def_static(
-            "same_allocation", &MemRef::SameAllocation, py::arg("a"), py::arg("b"),
-            "Check if two MemRefs share the same allocation (same base pointer)")
-        .def_static(
-            "may_alias", &MemRef::MayAlias, py::arg("a"), py::arg("b"),
-            "Check if two MemRefs may alias (same base + overlapping byte ranges)");
+        .def_static("same_allocation", &MemRef::SameAllocation, py::arg("a"), py::arg("b"),
+                    "Check if two MemRefs share the same allocation (same base pointer)")
+        .def_static("may_alias", &MemRef::MayAlias, py::arg("a"), py::arg("b"),
+                    "Check if two MemRefs may alias (same base + overlapping byte ranges)");
 
     // ConstInt - const shared_ptr
-    auto constint_class = py::class_<ConstInt, Expr, std::shared_ptr<ConstInt>>(
-        ir, "ConstInt", "Constant integer expression");
-    constint_class.def(
-        py::init<int64_t, DataType, const Span&>(), py::arg("value"), py::arg("dtype"), py::arg("span"),
-        "Create a constant integer expression");
+    auto constint_class = py::class_<ConstInt, Expr, std::shared_ptr<ConstInt>>(ir, "ConstInt",
+                                                                                "Constant integer expression");
+    constint_class.def(py::init<int64_t, DataType, const Span&>(), py::arg("value"), py::arg("dtype"), py::arg("span"),
+                       "Create a constant integer expression");
     BindFields<ConstInt>(constint_class);
     constint_class.def_property_readonly("dtype", &ConstInt::dtype, "Data type of the expression");
 
     // ConstFloat - const shared_ptr
-    auto constfloat_class = py::class_<ConstFloat, Expr, std::shared_ptr<ConstFloat>>(
-        ir, "ConstFloat", "Constant float expression");
-    constfloat_class.def(
-        py::init<double, DataType, const Span&>(), py::arg("value"), py::arg("dtype"), py::arg("span"),
-        "Create a constant float expression");
+    auto constfloat_class = py::class_<ConstFloat, Expr, std::shared_ptr<ConstFloat>>(ir, "ConstFloat",
+                                                                                      "Constant float expression");
+    constfloat_class.def(py::init<double, DataType, const Span&>(), py::arg("value"), py::arg("dtype"), py::arg("span"),
+                         "Create a constant float expression");
     BindFields<ConstFloat>(constfloat_class);
     constfloat_class.def_property_readonly("dtype", &ConstFloat::dtype, "Data type of the expression");
 
     // ConstBool - const shared_ptr
-    auto constbool_class = py::class_<ConstBool, Expr, std::shared_ptr<ConstBool>>(
-        ir, "ConstBool", "Constant boolean expression");
-    constbool_class.def(
-        py::init<bool, const Span&>(), py::arg("value"), py::arg("span"), "Create a constant boolean expression");
+    auto constbool_class = py::class_<ConstBool, Expr, std::shared_ptr<ConstBool>>(ir, "ConstBool",
+                                                                                   "Constant boolean expression");
+    constbool_class.def(py::init<bool, const Span&>(), py::arg("value"), py::arg("span"),
+                        "Create a constant boolean expression");
     BindFields<ConstBool>(constbool_class);
     constbool_class.def_property_readonly("dtype", &ConstBool::dtype, "Data type of the expression (always BOOL)");
 
     // Call - const shared_ptr
-    auto call_class =
-        py::class_<Call, Expr, std::shared_ptr<Call>>(ir, "Call", "Function call expression");
+    auto call_class = py::class_<Call, Expr, std::shared_ptr<Call>>(ir, "Call", "Function call expression");
 
     // Constructors taking op name string
-    call_class.def(
-        py::init<std::string, const std::vector<ExprPtr>&, const Span&>(), py::arg("op"), py::arg("args"),
-        py::arg("span"), "Create a function call expression from op name string");
-    call_class.def(
-        py::init<std::string, const std::vector<ExprPtr>&, const TypePtr&, const Span&>(), py::arg("op"),
-        py::arg("args"), py::arg("type"), py::arg("span"), "Create a function call expression with explicit type");
+    call_class.def(py::init<std::string, const std::vector<ExprPtr>&, const Span&>(), py::arg("op"), py::arg("args"),
+                   py::arg("span"), "Create a function call expression from op name string");
+    call_class.def(py::init<std::string, const std::vector<ExprPtr>&, const TypePtr&, const Span&>(), py::arg("op"),
+                   py::arg("args"), py::arg("type"), py::arg("span"),
+                   "Create a function call expression with explicit type");
 
     // Constructors taking Op object (extract name for backward compat)
     call_class.def(
@@ -905,52 +870,44 @@ void BindExpr(py::module_& ir)
             return std::make_shared<Call>(op->name_, args, span);
         }),
         py::arg("op"), py::arg("args"), py::arg("span"), "Create a function call expression");
-    call_class.def(
-        py::init(
-            [](const OpPtr& op, const std::vector<ExprPtr>& args, const TypePtr& type, const Span& span)
-                -> std::shared_ptr<Call> { return std::make_shared<Call>(op->name_, args, type, span); }),
-        py::arg("op"), py::arg("args"), py::arg("type"), py::arg("span"),
-        "Create a function call expression with explicit type");
+    call_class.def(py::init([](const OpPtr& op, const std::vector<ExprPtr>& args, const TypePtr& type,
+                               const Span& span) -> std::shared_ptr<Call> {
+                       return std::make_shared<Call>(op->name_, args, type, span);
+                   }),
+                   py::arg("op"), py::arg("args"), py::arg("type"), py::arg("span"),
+                   "Create a function call expression with explicit type");
 
     // Constructors with kwargs (using py::dict)
-    call_class.def(
-        py::init(
-            [](const std::string& name, const std::vector<ExprPtr>& args, const py::dict& kwargs_dict,
-               const Span& span) -> std::shared_ptr<Call> {
-                auto kwargs = ConvertKwargsDict(kwargs_dict);
-                return std::make_shared<Call>(name, args, kwargs, span);
-            }),
-        py::arg("op"), py::arg("args"), py::arg("kwargs"), py::arg("span"),
-        "Create a function call expression with kwargs");
-    call_class.def(
-        py::init(
-            [](const std::string& name, const std::vector<ExprPtr>& args, const py::dict& kwargs_dict,
-               const TypePtr& type, const Span& span) -> std::shared_ptr<Call> {
-                auto kwargs = ConvertKwargsDict(kwargs_dict);
-                return std::make_shared<Call>(name, args, kwargs, type, span);
-            }),
-        py::arg("op"), py::arg("args"), py::arg("kwargs"), py::arg("type"), py::arg("span"),
-        "Create a function call expression with kwargs and explicit type");
+    call_class.def(py::init([](const std::string& name, const std::vector<ExprPtr>& args, const py::dict& kwargs_dict,
+                               const Span& span) -> std::shared_ptr<Call> {
+                       auto kwargs = ConvertKwargsDict(kwargs_dict);
+                       return std::make_shared<Call>(name, args, kwargs, span);
+                   }),
+                   py::arg("op"), py::arg("args"), py::arg("kwargs"), py::arg("span"),
+                   "Create a function call expression with kwargs");
+    call_class.def(py::init([](const std::string& name, const std::vector<ExprPtr>& args, const py::dict& kwargs_dict,
+                               const TypePtr& type, const Span& span) -> std::shared_ptr<Call> {
+                       auto kwargs = ConvertKwargsDict(kwargs_dict);
+                       return std::make_shared<Call>(name, args, kwargs, type, span);
+                   }),
+                   py::arg("op"), py::arg("args"), py::arg("kwargs"), py::arg("type"), py::arg("span"),
+                   "Create a function call expression with kwargs and explicit type");
 
     // Kwargs with Op object (backward compat)
-    call_class.def(
-        py::init(
-            [](const OpPtr& op, const std::vector<ExprPtr>& args, const py::dict& kwargs_dict,
-               const Span& span) -> std::shared_ptr<Call> {
-                auto kwargs = ConvertKwargsDict(kwargs_dict);
-                return std::make_shared<Call>(op->name_, args, kwargs, span);
-            }),
-        py::arg("op"), py::arg("args"), py::arg("kwargs"), py::arg("span"),
-        "Create a function call expression with kwargs");
-    call_class.def(
-        py::init(
-            [](const OpPtr& op, const std::vector<ExprPtr>& args, const py::dict& kwargs_dict, const TypePtr& type,
-               const Span& span) -> std::shared_ptr<Call> {
-                auto kwargs = ConvertKwargsDict(kwargs_dict);
-                return std::make_shared<Call>(op->name_, args, kwargs, type, span);
-            }),
-        py::arg("op"), py::arg("args"), py::arg("kwargs"), py::arg("type"), py::arg("span"),
-        "Create a function call expression with kwargs and explicit type");
+    call_class.def(py::init([](const OpPtr& op, const std::vector<ExprPtr>& args, const py::dict& kwargs_dict,
+                               const Span& span) -> std::shared_ptr<Call> {
+                       auto kwargs = ConvertKwargsDict(kwargs_dict);
+                       return std::make_shared<Call>(op->name_, args, kwargs, span);
+                   }),
+                   py::arg("op"), py::arg("args"), py::arg("kwargs"), py::arg("span"),
+                   "Create a function call expression with kwargs");
+    call_class.def(py::init([](const OpPtr& op, const std::vector<ExprPtr>& args, const py::dict& kwargs_dict,
+                               const TypePtr& type, const Span& span) -> std::shared_ptr<Call> {
+                       auto kwargs = ConvertKwargsDict(kwargs_dict);
+                       return std::make_shared<Call>(op->name_, args, kwargs, type, span);
+                   }),
+                   py::arg("op"), py::arg("args"), py::arg("kwargs"), py::arg("type"), py::arg("span"),
+                   "Create a function call expression with kwargs and explicit type");
 
     BindFields<Call>(call_class);
 
@@ -983,11 +940,10 @@ void BindExpr(py::module_& ir)
         "Keyword arguments (metadata) for this call");
 
     // MakeTuple - const shared_ptr
-    auto make_tuple_class = py::class_<MakeTuple, Expr, std::shared_ptr<MakeTuple>>(
-        ir, "MakeTuple", "Tuple construction expression");
-    make_tuple_class.def(
-        py::init<const std::vector<ExprPtr>&, const Span&>(), py::arg("elements"), py::arg("span"),
-        "Create a tuple construction expression");
+    auto make_tuple_class = py::class_<MakeTuple, Expr, std::shared_ptr<MakeTuple>>(ir, "MakeTuple",
+                                                                                    "Tuple construction expression");
+    make_tuple_class.def(py::init<const std::vector<ExprPtr>&, const Span&>(), py::arg("elements"), py::arg("span"),
+                         "Create a tuple construction expression");
     BindFields<MakeTuple>(make_tuple_class);
 
     // GetItemExpr - unified subscript expression (tuple element access or tile offset)
@@ -995,9 +951,8 @@ void BindExpr(py::module_& ir)
         ir, "GetItemExpr",
         "Unified subscript expression: value[slice]. Dispatch on value's static type "
         "(TupleType => tuple element access with ConstInt slice; TileType => tile element offset).");
-    get_item_class.def(
-        py::init<const ExprPtr&, const ExprPtr&, const Span&>(), py::arg("value"), py::arg("slice"), py::arg("span"),
-        "Create a subscript expression (value[slice])");
+    get_item_class.def(py::init<const ExprPtr&, const ExprPtr&, const Span&>(), py::arg("value"), py::arg("slice"),
+                       py::arg("span"), "Create a subscript expression (value[slice])");
     BindFields<GetItemExpr>(get_item_class);
 
     // BinaryExpr - abstract, const shared_ptr
@@ -1006,16 +961,15 @@ void BindExpr(py::module_& ir)
     BindFields<BinaryExpr>(binaryexpr_class);
 
     // UnaryExpr - abstract, const shared_ptr
-    auto unaryexpr_class = py::class_<UnaryExpr, Expr, std::shared_ptr<UnaryExpr>>(
-        ir, "UnaryExpr", "Base class for unary operations");
+    auto unaryexpr_class = py::class_<UnaryExpr, Expr, std::shared_ptr<UnaryExpr>>(ir, "UnaryExpr",
+                                                                                   "Base class for unary operations");
     BindFields<UnaryExpr>(unaryexpr_class);
 
 // Macro to bind binary expression nodes
-#define BIND_BINARY_EXPR(OpName, Description)                                                                     \
-    py::class_<OpName, BinaryExpr, std::shared_ptr<OpName>>(ir, #OpName, Description)         \
-        .def(                                                                                                     \
-            py::init<const ExprPtr&, const ExprPtr&, DataType, const Span&>(), py::arg("left"), py::arg("right"), \
-            py::arg("dtype"), py::arg("span"), "Create " Description)
+#define BIND_BINARY_EXPR(OpName, Description)                                                                      \
+    py::class_<OpName, BinaryExpr, std::shared_ptr<OpName>>(ir, #OpName, Description)                              \
+        .def(py::init<const ExprPtr&, const ExprPtr&, DataType, const Span&>(), py::arg("left"), py::arg("right"), \
+             py::arg("dtype"), py::arg("span"), "Create " Description)
 
     // Bind all binary expression nodes
     BIND_BINARY_EXPR(Add, "Addition expression (left + right)");
@@ -1045,11 +999,10 @@ void BindExpr(py::module_& ir)
 #undef BIND_BINARY_EXPR
 
 // Macro to bind unary expression nodes
-#define BIND_UNARY_EXPR(OpName, Description)                                                                          \
-    py::class_<OpName, UnaryExpr, std::shared_ptr<OpName>>(ir, #OpName, Description)              \
-        .def(                                                                                                         \
-            py::init<const ExprPtr&, DataType, const Span&>(), py::arg("operand"), py::arg("dtype"), py::arg("span"), \
-            "Create " Description)
+#define BIND_UNARY_EXPR(OpName, Description)                                                                           \
+    py::class_<OpName, UnaryExpr, std::shared_ptr<OpName>>(ir, #OpName, Description)                                   \
+        .def(py::init<const ExprPtr&, DataType, const Span&>(), py::arg("operand"), py::arg("dtype"), py::arg("span"), \
+             "Create " Description)
 
     // Bind all unary expression nodes
     BIND_UNARY_EXPR(Abs, "Absolute value expression (abs(operand))");
@@ -1061,57 +1014,51 @@ void BindExpr(py::module_& ir)
 #undef BIND_UNARY_EXPR
 
     // Bind structural hash and equality functions
-    ir.def(
-        "structural_hash", static_cast<uint64_t (*)(const IRNodePtr&, bool)>(&structural_hash_with_var_identity),
-        py::arg("node"), py::arg("enable_auto_mapping") = false,
-        "Compute deterministic structural hash of an IR node (ignores Span). "
-        "If enable_auto_mapping=True, variable names are ignored (e.g., x+1 and y+1 hash the same). "
-        "If enable_auto_mapping=False (default), different variable objects produce different hashes.");
-    ir.def(
-        "structural_hash", static_cast<uint64_t (*)(const TypePtr&, bool)>(&structural_hash_with_var_identity),
-        py::arg("type"), py::arg("enable_auto_mapping") = false,
-        "Compute deterministic structural hash of a type. "
-        "enable_auto_mapping only affects variables embedded in the type (e.g., shape expressions).");
+    ir.def("structural_hash", static_cast<uint64_t (*)(const IRNodePtr&, bool)>(&structural_hash_with_var_identity),
+           py::arg("node"), py::arg("enable_auto_mapping") = false,
+           "Compute deterministic structural hash of an IR node (ignores Span). "
+           "If enable_auto_mapping=True, variable names are ignored (e.g., x+1 and y+1 hash the same). "
+           "If enable_auto_mapping=False (default), different variable objects produce different hashes.");
+    ir.def("structural_hash", static_cast<uint64_t (*)(const TypePtr&, bool)>(&structural_hash_with_var_identity),
+           py::arg("type"), py::arg("enable_auto_mapping") = false,
+           "Compute deterministic structural hash of a type. "
+           "enable_auto_mapping only affects variables embedded in the type (e.g., shape expressions).");
 
-    ir.def(
-        "structural_equal", static_cast<bool (*)(const IRNodePtr&, const IRNodePtr&, bool)>(&structural_equal),
-        py::arg("lhs"), py::arg("rhs"), py::arg("enable_auto_mapping") = false,
-        "Check if two IR nodes are structurally equal. "
-        "Ignores source location (Span). Returns True if IR nodes have identical structure. "
-        "If enable_auto_mapping=True, automatically map variables (e.g., x+1 equals y+1). "
-        "If enable_auto_mapping=False (default), variable objects must be exactly the same (not just same "
-        "name).");
-    ir.def(
-        "structural_equal", static_cast<bool (*)(const TypePtr&, const TypePtr&, bool)>(&structural_equal),
-        py::arg("lhs"), py::arg("rhs"), py::arg("enable_auto_mapping") = false,
-        "Check if two types are structurally equal. "
-        "Ignores source location (Span). Returns True if types have identical structure. "
-        "If enable_auto_mapping=True, automatically map variables (e.g., x+1 equals y+1). "
-        "If enable_auto_mapping=False (default), variable objects must be exactly the same (not just same "
-        "name).");
+    ir.def("structural_equal", static_cast<bool (*)(const IRNodePtr&, const IRNodePtr&, bool)>(&structural_equal),
+           py::arg("lhs"), py::arg("rhs"), py::arg("enable_auto_mapping") = false,
+           "Check if two IR nodes are structurally equal. "
+           "Ignores source location (Span). Returns True if IR nodes have identical structure. "
+           "If enable_auto_mapping=True, automatically map variables (e.g., x+1 equals y+1). "
+           "If enable_auto_mapping=False (default), variable objects must be exactly the same (not just same "
+           "name).");
+    ir.def("structural_equal", static_cast<bool (*)(const TypePtr&, const TypePtr&, bool)>(&structural_equal),
+           py::arg("lhs"), py::arg("rhs"), py::arg("enable_auto_mapping") = false,
+           "Check if two types are structurally equal. "
+           "Ignores source location (Span). Returns True if types have identical structure. "
+           "If enable_auto_mapping=True, automatically map variables (e.g., x+1 equals y+1). "
+           "If enable_auto_mapping=False (default), variable objects must be exactly the same (not just same "
+           "name).");
 
-    ir.def(
-        "assert_structural_equal",
-        static_cast<void (*)(const IRNodePtr&, const IRNodePtr&, bool)>(&assert_structural_equal), py::arg("lhs"),
-        py::arg("rhs"), py::arg("enable_auto_mapping") = false,
-        "Assert two IR nodes are structurally equal. "
-        "Raises RuntimeError with FE error code and detailed error message showing the first mismatch location "
-        "if they differ. "
-        "Ignores source location (Span). "
-        "If enable_auto_mapping=True, automatically map variables (e.g., x+1 equals y+1). "
-        "If enable_auto_mapping=False (default), variable objects must be exactly the same (not just same "
-        "name).");
-    ir.def(
-        "assert_structural_equal",
-        static_cast<void (*)(const TypePtr&, const TypePtr&, bool)>(&assert_structural_equal), py::arg("lhs"),
-        py::arg("rhs"), py::arg("enable_auto_mapping") = false,
-        "Assert two types are structurally equal. "
-        "Raises RuntimeError with FE error code and detailed error message showing the first mismatch location "
-        "if they differ. "
-        "Ignores source location (Span). "
-        "If enable_auto_mapping=True, automatically map variables (e.g., x+1 equals y+1). "
-        "If enable_auto_mapping=False (default), variable objects must be exactly the same (not just same "
-        "name).");
+    ir.def("assert_structural_equal",
+           static_cast<void (*)(const IRNodePtr&, const IRNodePtr&, bool)>(&assert_structural_equal), py::arg("lhs"),
+           py::arg("rhs"), py::arg("enable_auto_mapping") = false,
+           "Assert two IR nodes are structurally equal. "
+           "Raises RuntimeError with FE error code and detailed error message showing the first mismatch location "
+           "if they differ. "
+           "Ignores source location (Span). "
+           "If enable_auto_mapping=True, automatically map variables (e.g., x+1 equals y+1). "
+           "If enable_auto_mapping=False (default), variable objects must be exactly the same (not just same "
+           "name).");
+    ir.def("assert_structural_equal",
+           static_cast<void (*)(const TypePtr&, const TypePtr&, bool)>(&assert_structural_equal), py::arg("lhs"),
+           py::arg("rhs"), py::arg("enable_auto_mapping") = false,
+           "Assert two types are structurally equal. "
+           "Raises RuntimeError with FE error code and detailed error message showing the first mismatch location "
+           "if they differ. "
+           "Ignores source location (Span). "
+           "If enable_auto_mapping=True, automatically map variables (e.g., x+1 equals y+1). "
+           "If enable_auto_mapping=False (default), variable objects must be exactly the same (not just same "
+           "name).");
 }
 
 void BindStmt(py::module_& ir)
@@ -1119,73 +1066,68 @@ void BindStmt(py::module_& ir)
     // ========== Statements ==========
 
     // Stmt - abstract base, const shared_ptr
-    auto stmt_class = py::class_<Stmt, IRNode, std::shared_ptr<Stmt>>(
-        ir, "Stmt", "Base class for all statements");
+    auto stmt_class = py::class_<Stmt, IRNode, std::shared_ptr<Stmt>>(ir, "Stmt", "Base class for all statements");
     BindFields<Stmt>(stmt_class);
 
     // AssignStmt - const shared_ptr
     auto assign_stmt_class = py::class_<AssignStmt, Stmt, std::shared_ptr<AssignStmt>>(
         ir, "AssignStmt", "Assignment statement: var = value");
-    assign_stmt_class.def(
-        py::init<const VarPtr&, const ExprPtr&, const Span&>(), py::arg("var"), py::arg("value"), py::arg("span"),
-        "Create an assignment statement");
+    assign_stmt_class.def(py::init<const VarPtr&, const ExprPtr&, const Span&>(), py::arg("var"), py::arg("value"),
+                          py::arg("span"), "Create an assignment statement");
     BindFields<AssignStmt>(assign_stmt_class);
 
     // IfStmt - const shared_ptr
     auto if_stmt_class = py::class_<IfStmt, Stmt, std::shared_ptr<IfStmt>>(
         ir, "IfStmt", "Conditional statement: if condition then then_body else else_body");
-    if_stmt_class.def(
-        py::init<
-            const ExprPtr&, const StmtPtr&, const std::optional<StmtPtr>&, const std::vector<VarPtr>&, const Span&>(),
-        py::arg("condition"), py::arg("then_body"), py::arg("else_body") = py::none(), py::arg("return_vars"),
-        py::arg("span"),
-        "Create a conditional statement with then and else branches (else_body can be None)");
+    if_stmt_class.def(py::init<const ExprPtr&, const StmtPtr&, const std::optional<StmtPtr>&,
+                               const std::vector<VarPtr>&, const Span&>(),
+                      py::arg("condition"), py::arg("then_body"), py::arg("else_body") = py::none(),
+                      py::arg("return_vars"), py::arg("span"),
+                      "Create a conditional statement with then and else branches (else_body can be None)");
     BindFields<IfStmt>(if_stmt_class);
 
     // YieldStmt - const shared_ptr
-    auto yield_stmt_class = py::class_<YieldStmt, Stmt, std::shared_ptr<YieldStmt>>(
-        ir, "YieldStmt", "Yield statement: yield value");
-    yield_stmt_class.def(
-        py::init<const std::vector<ExprPtr>&, const Span&>(), py::arg("value"), py::arg("span"),
-        "Create a yield statement with a list of expressions");
+    auto yield_stmt_class = py::class_<YieldStmt, Stmt, std::shared_ptr<YieldStmt>>(ir, "YieldStmt",
+                                                                                    "Yield statement: yield value");
+    yield_stmt_class.def(py::init<const std::vector<ExprPtr>&, const Span&>(), py::arg("value"), py::arg("span"),
+                         "Create a yield statement with a list of expressions");
     yield_stmt_class.def(py::init<const Span&>(), py::arg("span"), "Create a yield statement without values");
     BindFields<YieldStmt>(yield_stmt_class);
 
     // ReturnStmt - const shared_ptr
     auto return_stmt_class = py::class_<ReturnStmt, Stmt, std::shared_ptr<ReturnStmt>>(
         ir, "ReturnStmt", "Return statement: return value");
-    return_stmt_class.def(
-        py::init<const std::vector<ExprPtr>&, const Span&>(), py::arg("value"), py::arg("span"),
-        "Create a return statement with a list of expressions");
+    return_stmt_class.def(py::init<const std::vector<ExprPtr>&, const Span&>(), py::arg("value"), py::arg("span"),
+                          "Create a return statement with a list of expressions");
     return_stmt_class.def(py::init<const Span&>(), py::arg("span"), "Create a return statement without values");
     BindFields<ReturnStmt>(return_stmt_class);
 
     // ForStmt - const shared_ptr
     auto for_stmt_class = py::class_<ForStmt, Stmt, std::shared_ptr<ForStmt>>(
         ir, "ForStmt", "For loop statement: for loop_var in range(start, stop, step): body");
-    for_stmt_class.def(
-        py::init([](const VarPtr& loop_var, const ExprPtr& start, const ExprPtr& stop, const ExprPtr& step,
-                    const std::vector<IterArgPtr>& iter_args, const StmtPtr& body,
-                    const std::vector<VarPtr>& return_vars, const Span& span, const py::object& attrs) {
-            py::dict attr_dict;
-            if (!attrs.is_none()) {
-                attr_dict = attrs.cast<py::dict>();
-            }
-            auto attr_list = ConvertAttrDict(attr_dict);
-            return std::make_shared<ForStmt>(loop_var, start, stop, step, iter_args, body, return_vars, span, attr_list);
-        }),
-        py::arg("loop_var"), py::arg("start"), py::arg("stop"), py::arg("step"), py::arg("iter_args"), py::arg("body"),
-        py::arg("return_vars"), py::arg("span"), py::arg("attrs") = py::none(), "Create a for loop statement with attributes");
+    for_stmt_class.def(py::init([](const VarPtr& loop_var, const ExprPtr& start, const ExprPtr& stop,
+                                   const ExprPtr& step, const std::vector<IterArgPtr>& iter_args, const StmtPtr& body,
+                                   const std::vector<VarPtr>& return_vars, const Span& span, const py::object& attrs) {
+                           py::dict attr_dict;
+                           if (!attrs.is_none()) {
+                               attr_dict = attrs.cast<py::dict>();
+                           }
+                           auto attr_list = ConvertAttrDict(attr_dict);
+                           return std::make_shared<ForStmt>(loop_var, start, stop, step, iter_args, body, return_vars,
+                                                            span, attr_list);
+                       }),
+                       py::arg("loop_var"), py::arg("start"), py::arg("stop"), py::arg("step"), py::arg("iter_args"),
+                       py::arg("body"), py::arg("return_vars"), py::arg("span"), py::arg("attrs") = py::none(),
+                       "Create a for loop statement with attributes");
     BindFields<ForStmt>(for_stmt_class);
 
     // WhileStmt - const shared_ptr
     auto while_stmt_class = py::class_<WhileStmt, Stmt, std::shared_ptr<WhileStmt>>(
         ir, "WhileStmt", "While loop statement: while condition: body");
-    while_stmt_class.def(
-        py::init<
-            const ExprPtr&, const std::vector<IterArgPtr>&, const StmtPtr&, const std::vector<VarPtr>&, const Span&>(),
-        py::arg("condition"), py::arg("iter_args"), py::arg("body"), py::arg("return_vars"), py::arg("span"),
-        "Create a while loop statement");
+    while_stmt_class.def(py::init<const ExprPtr&, const std::vector<IterArgPtr>&, const StmtPtr&,
+                                  const std::vector<VarPtr>&, const Span&>(),
+                         py::arg("condition"), py::arg("iter_args"), py::arg("body"), py::arg("return_vars"),
+                         py::arg("span"), "Create a while loop statement");
     BindFields<WhileStmt>(while_stmt_class);
 
     // SectionKind enum
@@ -1197,28 +1139,24 @@ void BindStmt(py::module_& ir)
 
     // SectionStmt - const shared_ptr
     auto section_stmt_class = py::class_<SectionStmt, Stmt, std::shared_ptr<SectionStmt>>(
-        ir, "SectionStmt",
-        "Section statement: marks a region with specific section context (Vector or Cube)");
-    section_stmt_class.def(
-        py::init<SectionKind, const StmtPtr&, const Span&>(), py::arg("section_kind"), py::arg("body"), py::arg("span"),
-        "Create a section statement");
+        ir, "SectionStmt", "Section statement: marks a region with specific section context (Vector or Cube)");
+    section_stmt_class.def(py::init<SectionKind, const StmtPtr&, const Span&>(), py::arg("section_kind"),
+                           py::arg("body"), py::arg("span"), "Create a section statement");
     BindFields<SectionStmt>(section_stmt_class);
 
     // SeqStmts - const shared_ptr
     auto seq_stmts_class = py::class_<SeqStmts, Stmt, std::shared_ptr<SeqStmts>>(
         ir, "SeqStmts", "Sequence of statements: a sequence of statements");
-    seq_stmts_class.def(
-        py::init<const std::vector<StmtPtr>&, const Span&>(), py::arg("stmts"), py::arg("span"),
-        "Create a sequence of statements");
+    seq_stmts_class.def(py::init<const std::vector<StmtPtr>&, const Span&>(), py::arg("stmts"), py::arg("span"),
+                        "Create a sequence of statements");
     seq_stmts_class.def(py::init<const Span&>(), py::arg("span"), "Create a sequence of statements");
     seq_stmts_class.def(
         "__getitem__",
         [](SeqStmtsPtr& self, int index) {
             int size = static_cast<int>(self->stmts_.size());
             if (index < -size || index >= size) {
-                throw IndexError(
-                    "SeqStmts index " + std::to_string(index) + " out of range [" + std::to_string(-size) + ", " +
-                    std::to_string(size - 1) + "]");
+                throw IndexError("SeqStmts index " + std::to_string(index) + " out of range [" + std::to_string(-size) +
+                                 ", " + std::to_string(size - 1) + "]");
             }
             if (index < 0)
                 index += size;
@@ -1236,49 +1174,43 @@ void BindStmt(py::module_& ir)
             return py::make_iterator(stmts.begin(), stmts.end());
         },
         py::keep_alive<0, 1>());
-    seq_stmts_class.def(
-        "__len__", [](SeqStmtsPtr& self) { return self->stmts_.size(); }, "Number of statements");
+    seq_stmts_class.def("__len__", [](SeqStmtsPtr& self) { return self->stmts_.size(); }, "Number of statements");
     BindFields<SeqStmts>(seq_stmts_class);
 
     // EvalStmt - const shared_ptr
-    auto eval_stmt_class = py::class_<EvalStmt, Stmt, std::shared_ptr<EvalStmt>>(
-        ir, "EvalStmt", "Evaluation statement: expr");
-    eval_stmt_class.def(
-        py::init<const ExprPtr&, const Span&>(), py::arg("expr"), py::arg("span"), "Create an evaluation statement");
+    auto eval_stmt_class = py::class_<EvalStmt, Stmt, std::shared_ptr<EvalStmt>>(ir, "EvalStmt",
+                                                                                 "Evaluation statement: expr");
+    eval_stmt_class.def(py::init<const ExprPtr&, const Span&>(), py::arg("expr"), py::arg("span"),
+                        "Create an evaluation statement");
     BindFields<EvalStmt>(eval_stmt_class);
 
     // BreakStmt - const shared_ptr
-    auto break_stmt_class = py::class_<BreakStmt, Stmt, std::shared_ptr<BreakStmt>>(
-        ir, "BreakStmt", "Break statement: break");
+    auto break_stmt_class = py::class_<BreakStmt, Stmt, std::shared_ptr<BreakStmt>>(ir, "BreakStmt",
+                                                                                    "Break statement: break");
     break_stmt_class.def(py::init<const Span&>(), py::arg("span"), "Create a break statement");
-    break_stmt_class.def(
-        py::init<const std::vector<ExprPtr>&, const Span&>(), py::arg("operands"), py::arg("span"),
-        "Create a break statement with operands");
+    break_stmt_class.def(py::init<const std::vector<ExprPtr>&, const Span&>(), py::arg("operands"), py::arg("span"),
+                         "Create a break statement with operands");
     BindFields<BreakStmt>(break_stmt_class);
 
     // ContinueStmt - const shared_ptr
     auto continue_stmt_class = py::class_<ContinueStmt, Stmt, std::shared_ptr<ContinueStmt>>(
         ir, "ContinueStmt", "Continue statement: continue");
     continue_stmt_class.def(py::init<const Span&>(), py::arg("span"), "Create a continue statement");
-    continue_stmt_class.def(
-        py::init<const std::vector<ExprPtr>&, const Span&>(), py::arg("operands"), py::arg("span"),
-        "Create a continue statement with operands");
+    continue_stmt_class.def(py::init<const std::vector<ExprPtr>&, const Span&>(), py::arg("operands"), py::arg("span"),
+                            "Create a continue statement with operands");
     BindFields<ContinueStmt>(continue_stmt_class);
 
     // ScalarOpStmt - const shared_ptr
     auto scalarop_stmt_class = py::class_<ScalarOpStmt, Stmt, std::shared_ptr<ScalarOpStmt>>(
-        ir, "ScalarOpStmt",
-        "Scalar operation statement: result, result_token = opcode(args, tokens)");
-    scalarop_stmt_class.def(
-        py::init<VarPtr, VarPtr, std::string, const std::vector<ExprPtr>&, const Span&>(), py::arg("result"),
-        py::arg("result_token"), py::arg("opcode"), py::arg("args"), py::arg("span"),
-        "Create a scalar operation statement");
+        ir, "ScalarOpStmt", "Scalar operation statement: result, result_token = opcode(args, tokens)");
+    scalarop_stmt_class.def(py::init<VarPtr, VarPtr, std::string, const std::vector<ExprPtr>&, const Span&>(),
+                            py::arg("result"), py::arg("result_token"), py::arg("opcode"), py::arg("args"),
+                            py::arg("span"), "Create a scalar operation statement");
     BindFields<ScalarOpStmt>(scalarop_stmt_class);
 
     // TensorOpStmt - const shared_ptr
     auto tensorop_stmt_class = py::class_<TensorOpStmt, Stmt, std::shared_ptr<TensorOpStmt>>(
-        ir, "TensorOpStmt",
-        "Tensor operation statement: results, result_token = opcode(args, attrs, tokens)");
+        ir, "TensorOpStmt", "Tensor operation statement: results, result_token = opcode(args, attrs, tokens)");
     tensorop_stmt_class.def(
         py::init([](std::vector<VarPtr> results, VarPtr result_token, std::string opcode, std::vector<ExprPtr> args,
                     const std::vector<VarPtr>& tokens, py::dict attrs, Span span) {
@@ -1304,17 +1236,15 @@ void BindProgram(py::module_& ir)
     auto function_class = py::class_<Function, IRNode, std::shared_ptr<Function>>(
         ir, "Function", py::dynamic_attr(), "Function definition with name, parameters, return types, and body");
     function_class.def(
-        py::init(
-            [](const std::string& name, const py::list& params, const std::vector<TypePtr>& return_types,
-               const StmtPtr& body, const Span& span, FunctionType type, bool entry) -> std::shared_ptr<Function> {
-                std::vector<VarPtr> param_vars;
-                param_vars.reserve(py::len(params));
-                for (auto item : params) {
-                    param_vars.push_back(py::cast<VarPtr>(item));
-                }
-                return std::make_shared<Function>(
-                    name, std::move(param_vars), return_types, body, span, type, entry);
-            }),
+        py::init([](const std::string& name, const py::list& params, const std::vector<TypePtr>& return_types,
+                    const StmtPtr& body, const Span& span, FunctionType type, bool entry) -> std::shared_ptr<Function> {
+            std::vector<VarPtr> param_vars;
+            param_vars.reserve(py::len(params));
+            for (auto item : params) {
+                param_vars.push_back(py::cast<VarPtr>(item));
+            }
+            return std::make_shared<Function>(name, std::move(param_vars), return_types, body, span, type, entry);
+        }),
         py::arg("name"), py::arg("params"), py::arg("return_types"), py::arg("body"), py::arg("span"),
         py::arg("type") = FunctionType::OPAQUE, py::arg("entry") = false, "Create a function definition");
     BindFields<Function>(function_class);
@@ -1325,9 +1255,8 @@ void BindProgram(py::module_& ir)
         "Side table mapping a tuple type to its ordered field-name list. "
         "Populated by the parser, carried on Program, read by codegen.");
     debug_info_class.def(py::init<>());
-    debug_info_class.def(
-        "register_tuple_fields", &IRDebugInfo::RegisterTupleFields, py::arg("type"), py::arg("fields"),
-        "Record the ordered field-name list for a named tuple / struct type.");
+    debug_info_class.def("register_tuple_fields", &IRDebugInfo::RegisterTupleFields, py::arg("type"), py::arg("fields"),
+                         "Record the ordered field-name list for a named tuple / struct type.");
     debug_info_class.def(
         "get_tuple_fields",
         [](const IRDebugInfo& self, const TupleTypePtr& type) -> py::object {
@@ -1338,9 +1267,8 @@ void BindProgram(py::module_& ir)
             return py::cast(*fields);
         },
         py::arg("type"), "Look up field names by type, returns None if not registered.");
-    debug_info_class.def(
-        "register_tuple_name", &IRDebugInfo::RegisterTupleName, py::arg("type"), py::arg("name"),
-        "Record the C++ struct type name for a named tuple / struct type.");
+    debug_info_class.def("register_tuple_name", &IRDebugInfo::RegisterTupleName, py::arg("type"), py::arg("name"),
+                         "Record the C++ struct type name for a named tuple / struct type.");
     debug_info_class.def(
         "get_tuple_name",
         [](const IRDebugInfo& self, const TupleTypePtr& type) -> py::object {
@@ -1357,19 +1285,18 @@ void BindProgram(py::module_& ir)
         ir, "Program",
         "Program definition with functions mapped by name. "
         "Functions are automatically sorted by name for deterministic ordering.");
-    program_class.def(
-        py::init([](const std::vector<FunctionPtr>& functions, const std::string& name, const Span& span,
-                    IRDebugInfoPtr debug_info) {
-            return std::make_shared<Program>(functions, name, span, std::move(debug_info));
-        }),
-        py::arg("functions"), py::arg("name"), py::arg("span"), py::arg("debug_info") = nullptr,
-        "Create a program from a list of functions. "
-        "Functions are keyed by their names automatically.");
+    program_class.def(py::init([](const std::vector<FunctionPtr>& functions, const std::string& name, const Span& span,
+                                  IRDebugInfoPtr debug_info) {
+                          return std::make_shared<Program>(functions, name, span, std::move(debug_info));
+                      }),
+                      py::arg("functions"), py::arg("name"), py::arg("span"), py::arg("debug_info") = nullptr,
+                      "Create a program from a list of functions. "
+                      "Functions are keyed by their names automatically.");
     program_class.def_property_readonly(
         "debug_info", [](const ProgramPtr& self) { return self->debugInfo_; },
         "Tuple/struct field-name side table; None if the Program was built without one.");
-    program_class.def(
-        "get_function", &Program::GetFunction, py::arg("name"), "Get a function by name, returns None if not found");
+    program_class.def("get_function", &Program::GetFunction, py::arg("name"),
+                      "Get a function by name, returns None if not found");
     program_class.def(
         "__getitem__", [](const ProgramPtr& self, const std::string& name) { return self->GetFunction(name); },
         py::arg("name"), "Get function by name (dict-like access), returns None if not found");
@@ -1398,9 +1325,8 @@ void BindProgram(py::module_& ir)
 
     // Python-style printer function for Type objects
     ir.def(
-        "python_print_type",
-        [](const TypePtr& type, const std::string& prefix) { return PythonPrint(type, prefix); }, py::arg("type"),
-        py::arg("prefix") = "ir",
+        "python_print_type", [](const TypePtr& type, const std::string& prefix) { return PythonPrint(type, prefix); },
+        py::arg("type"), py::arg("prefix") = "ir",
         "Print Type object in Python IR syntax.\n\n"
         "Args:\n"
         "    type: Type to print\n"
@@ -1412,42 +1338,34 @@ void BindHelpers(py::module_& ir)
     // operator functions for Var (wrapped in Python for span capture and normalization)
     ir.def("add", &MakeAdd, py::arg("lhs"), py::arg("rhs"), py::arg("span") = Span::Unknown(), "Addition operator");
     ir.def("sub", &MakeSub, py::arg("lhs"), py::arg("rhs"), py::arg("span") = Span::Unknown(), "Subtraction operator");
-    ir.def(
-        "mul", &MakeMul, py::arg("lhs"), py::arg("rhs"), py::arg("span") = Span::Unknown(), "Multiplication operator");
-    ir.def(
-        "truediv", &MakeFloatDiv, py::arg("lhs"), py::arg("rhs"), py::arg("span") = Span::Unknown(),
-        "True division operator");
-    ir.def(
-        "floordiv", &MakeFloorDiv, py::arg("lhs"), py::arg("rhs"), py::arg("span") = Span::Unknown(),
-        "Floor division operator");
+    ir.def("mul", &MakeMul, py::arg("lhs"), py::arg("rhs"), py::arg("span") = Span::Unknown(),
+           "Multiplication operator");
+    ir.def("truediv", &MakeFloatDiv, py::arg("lhs"), py::arg("rhs"), py::arg("span") = Span::Unknown(),
+           "True division operator");
+    ir.def("floordiv", &MakeFloorDiv, py::arg("lhs"), py::arg("rhs"), py::arg("span") = Span::Unknown(),
+           "Floor division operator");
     ir.def("mod", &MakeFloorMod, py::arg("lhs"), py::arg("rhs"), py::arg("span") = Span::Unknown(), "Modulo operator");
     ir.def("pow", &MakePow, py::arg("lhs"), py::arg("rhs"), py::arg("span") = Span::Unknown(), "Power operator");
     ir.def("eq", &MakeEq, py::arg("lhs"), py::arg("rhs"), py::arg("span") = Span::Unknown(), "Equality operator");
     ir.def("ne", &MakeNe, py::arg("lhs"), py::arg("rhs"), py::arg("span") = Span::Unknown(), "Inequality operator");
     ir.def("lt", &MakeLt, py::arg("lhs"), py::arg("rhs"), py::arg("span") = Span::Unknown(), "Less than operator");
-    ir.def(
-        "le", &MakeLe, py::arg("lhs"), py::arg("rhs"), py::arg("span") = Span::Unknown(),
-        "Less than or equal operator");
+    ir.def("le", &MakeLe, py::arg("lhs"), py::arg("rhs"), py::arg("span") = Span::Unknown(),
+           "Less than or equal operator");
     ir.def("gt", &MakeGt, py::arg("lhs"), py::arg("rhs"), py::arg("span") = Span::Unknown(), "Greater than operator");
-    ir.def(
-        "ge", &MakeGe, py::arg("lhs"), py::arg("rhs"), py::arg("span") = Span::Unknown(),
-        "Greater than or equal operator");
+    ir.def("ge", &MakeGe, py::arg("lhs"), py::arg("rhs"), py::arg("span") = Span::Unknown(),
+           "Greater than or equal operator");
     ir.def("neg", &MakeNeg, py::arg("operand"), py::arg("span") = Span::Unknown(), "Negation operator");
     ir.def("cast", &MakeCast, py::arg("operand"), py::arg("dtype"), py::arg("span") = Span::Unknown(), "Cast operator");
-    ir.def(
-        "bit_and", &MakeBitAnd, py::arg("lhs"), py::arg("rhs"), py::arg("span") = Span::Unknown(),
-        "Bitwise and operator");
-    ir.def(
-        "bit_or", &MakeBitOr, py::arg("lhs"), py::arg("rhs"), py::arg("span") = Span::Unknown(), "Bitwise or operator");
-    ir.def(
-        "bit_xor", &MakeBitXor, py::arg("lhs"), py::arg("rhs"), py::arg("span") = Span::Unknown(),
-        "Bitwise xor operator");
-    ir.def(
-        "bit_shift_left", &MakeBitShiftLeft, py::arg("lhs"), py::arg("rhs"), py::arg("span") = Span::Unknown(),
-        "Bitwise left shift operator");
-    ir.def(
-        "bit_shift_right", &MakeBitShiftRight, py::arg("lhs"), py::arg("rhs"), py::arg("span") = Span::Unknown(),
-        "Bitwise right shift operator");
+    ir.def("bit_and", &MakeBitAnd, py::arg("lhs"), py::arg("rhs"), py::arg("span") = Span::Unknown(),
+           "Bitwise and operator");
+    ir.def("bit_or", &MakeBitOr, py::arg("lhs"), py::arg("rhs"), py::arg("span") = Span::Unknown(),
+           "Bitwise or operator");
+    ir.def("bit_xor", &MakeBitXor, py::arg("lhs"), py::arg("rhs"), py::arg("span") = Span::Unknown(),
+           "Bitwise xor operator");
+    ir.def("bit_shift_left", &MakeBitShiftLeft, py::arg("lhs"), py::arg("rhs"), py::arg("span") = Span::Unknown(),
+           "Bitwise left shift operator");
+    ir.def("bit_shift_right", &MakeBitShiftRight, py::arg("lhs"), py::arg("rhs"), py::arg("span") = Span::Unknown(),
+           "Bitwise right shift operator");
     ir.def("bit_not", &MakeBitNot, py::arg("operand"), py::arg("span") = Span::Unknown(), "Bitwise not operator");
     ir.def("not_", &MakeNot, py::arg("operand"), py::arg("span") = Span::Unknown(), "Logical not operator");
     ir.def("min_", &MakeMin, py::arg("lhs"), py::arg("rhs"), py::arg("span") = Span::Unknown(), "Minimum operator");
@@ -1471,15 +1389,14 @@ void BindHelpers(py::module_& ir)
             // Capture Python callable in a C++ ConversionFunc
             OpConversionRegistry::GetInstance().RegisterCustom(
                 from_op,
-                [func](
-                    const std::vector<ExprPtr>& args, const std::vector<std::pair<std::string, std::any>>& kwargs,
-                    const Span& span) -> ConversionResult {
+                [func](const std::vector<ExprPtr>& args, const std::vector<std::pair<std::string, std::any>>& kwargs,
+                       const Span& span) -> ConversionResult {
                     py::gil_scoped_acquire guard;
                     // Convert kwargs to Python list of (key, value) tuples
                     py::list py_kwargs_list;
                     for (const auto& [key, val] : kwargs) {
-                        py::object py_val =
-                            AnyToPyObject<DataType, MemorySpace, bool, int, std::string, double>(val, key);
+                        py::object py_val = AnyToPyObject<DataType, MemorySpace, bool, int, std::string, double>(val,
+                                                                                                                 key);
                         py::tuple pair = py::make_tuple(py::cast(key), py_val);
                         py_kwargs_list.append(pair);
                     }

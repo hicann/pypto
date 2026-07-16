@@ -38,33 +38,29 @@ public:
         using iterator_category = std::forward_iterator_tag;
         using difference_type = std::ptrdiff_t;
         using value_type = DirectedEdge<GraphT>;
-        using reference = value_type &;
-        using pointer = value_type *;
+        using reference = value_type&;
+        using pointer = value_type*;
 
         struct ArrowProxy {
             value_type value_;
 
-            const value_type *operator->() const noexcept
-            {
-                return &value_;
-            }
+            const value_type* operator->() const noexcept { return &value_; }
         };
 
         DirectedEdgeIterator() noexcept : graph_(nullptr), currentVertex_(0), currentEdgeIdx_(0) {}
 
-        DirectedEdgeIterator(const DirectedEdgeIterator &other) = default;
-        DirectedEdgeIterator(DirectedEdgeIterator &&other) noexcept = default;
+        DirectedEdgeIterator(const DirectedEdgeIterator& other) = default;
+        DirectedEdgeIterator(DirectedEdgeIterator&& other) noexcept = default;
 
-        DirectedEdgeIterator &operator=(const DirectedEdgeIterator &other) = default;
-        DirectedEdgeIterator &operator=(DirectedEdgeIterator &&other) noexcept = default;
+        DirectedEdgeIterator& operator=(const DirectedEdgeIterator& other) = default;
+        DirectedEdgeIterator& operator=(DirectedEdgeIterator&& other) noexcept = default;
 
-        explicit DirectedEdgeIterator(const GraphT &graph1)
-            : graph_(&graph1), currentVertex_(0), currentEdgeIdx_(0)
+        explicit DirectedEdgeIterator(const GraphT& graph1) : graph_(&graph1), currentVertex_(0), currentEdgeIdx_(0)
         {
             AdvanceToValid();
         }
 
-        DirectedEdgeIterator(const VertexIdxT<GraphT> edgeIdx, const GraphT &graph1)
+        DirectedEdgeIterator(const VertexIdxT<GraphT> edgeIdx, const GraphT& graph1)
             : graph_(&graph1), currentVertex_(0), currentEdgeIdx_(edgeIdx)
         {
             if (currentEdgeIdx_ >= graph_->NumEdges()) {
@@ -92,17 +88,11 @@ public:
             }
         }
 
-        [[nodiscard]] value_type operator*() const
-        {
-            return {currentVertex_, *currentChild_};
-        }
+        [[nodiscard]] value_type operator*() const { return {currentVertex_, *currentChild_}; }
 
-        [[nodiscard]] ArrowProxy operator->() const
-        {
-            return {operator*()};
-        }
+        [[nodiscard]] ArrowProxy operator->() const { return {operator*()}; }
 
-        DirectedEdgeIterator &operator++()
+        DirectedEdgeIterator& operator++()
         {
             currentChild_++;
             currentEdgeIdx_++;
@@ -121,22 +111,19 @@ public:
             return temp;
         }
 
-        [[nodiscard]] bool operator==(const DirectedEdgeIterator &other) const noexcept
+        [[nodiscard]] bool operator==(const DirectedEdgeIterator& other) const noexcept
         {
             return currentEdgeIdx_ == other.currentEdgeIdx_;
         }
 
-        [[nodiscard]] bool operator!=(const DirectedEdgeIterator &other) const noexcept
-        {
-            return !(*this == other);
-        }
+        [[nodiscard]] bool operator!=(const DirectedEdgeIterator& other) const noexcept { return !(*this == other); }
 
     private:
-        const GraphT *graph_;                  // Pointer to the graph
-        VertexIdxT<GraphT> currentVertex_;     // Current source vertex
-        ChildIteratorT currentChild_;          // Iterator to the current target vertex
-                                              // in current_vertex's adjacency list
-        VertexIdxT<GraphT> currentEdgeIdx_;    // Global index of the current edge in the traversal order
+        const GraphT* graph_;               // Pointer to the graph
+        VertexIdxT<GraphT> currentVertex_;  // Current source vertex
+        ChildIteratorT currentChild_;       // Iterator to the current target vertex
+                                            // in current_vertex's adjacency list
+        VertexIdxT<GraphT> currentEdgeIdx_; // Global index of the current edge in the traversal order
 
         void AdvanceToValid()
         {
@@ -150,46 +137,27 @@ public:
         }
     };
 
-    using DirEdgeIterator
-        = DirectedEdgeIterator<decltype(std::declval<GraphT>().Children(std::declval<VertexIdxT<GraphT>>()).begin())>;
+    using DirEdgeIterator = DirectedEdgeIterator<
+        decltype(std::declval<GraphT>().Children(std::declval<VertexIdxT<GraphT>>()).begin())>;
     using Iterator = DirEdgeIterator;
     using ConstIterator = DirEdgeIterator;
 
-    explicit EdgeView(const GraphT &graph) : graph_(graph) {}
+    explicit EdgeView(const GraphT& graph) : graph_(graph) {}
 
-    [[nodiscard]] auto begin() const
-    {
-        return DirEdgeIterator(graph_);
-    }
+    [[nodiscard]] auto begin() const { return DirEdgeIterator(graph_); }
 
-    [[nodiscard]] auto cbegin() const
-    {
-        return DirEdgeIterator(graph_);
-    }
+    [[nodiscard]] auto cbegin() const { return DirEdgeIterator(graph_); }
 
-    [[nodiscard]] auto end() const
-    {
-        return DirEdgeIterator(graph_.NumEdges(), graph_);
-    }
+    [[nodiscard]] auto end() const { return DirEdgeIterator(graph_.NumEdges(), graph_); }
 
-    [[nodiscard]] auto cend() const
-    {
-        return DirEdgeIterator(graph_.NumEdges(), graph_);
-    }
+    [[nodiscard]] auto cend() const { return DirEdgeIterator(graph_.NumEdges(), graph_); }
 
-    [[nodiscard]] auto size() const
-    {
-        return graph_.NumEdges();
-    }
+    [[nodiscard]] auto size() const { return graph_.NumEdges(); }
 
-    [[nodiscard]] bool empty() const
-    {
-        return graph_.NumEdges() == 0;
-    }
+    [[nodiscard]] bool empty() const { return graph_.NumEdges() == 0; }
 
 private:
-
-    const GraphT &graph_;
+    const GraphT& graph_;
 };
 
 /**
@@ -210,22 +178,18 @@ public:
         using iterator_category = typename std::iterator_traits<ChildIteratorT>::iterator_category;
         using difference_type = std::ptrdiff_t;
         using value_type = DirectedEdge<GraphT>;
-        using pointer = value_type *;
-        using reference = value_type &;
+        using pointer = value_type*;
+        using reference = value_type&;
 
         struct ArrowProxy {
             value_type value_;
 
-            const value_type *operator->() const noexcept
-            {
-                return &value_;
-            }
+            const value_type* operator->() const noexcept { return &value_; }
         };
 
         IncidentEdgeIterator() = default;
 
-        IncidentEdgeIterator(VertexIdxT<GraphT> u, ChildIteratorT it)
-            : anchorVertex_(u), currentIt_(it) {}
+        IncidentEdgeIterator(VertexIdxT<GraphT> u, ChildIteratorT it) : anchorVertex_(u), currentIt_(it) {}
 
         [[nodiscard]] value_type operator*() const
         {
@@ -236,12 +200,9 @@ public:
             }
         }
 
-        [[nodiscard]] ArrowProxy operator->() const
-        {
-            return {operator*()};
-        }
+        [[nodiscard]] ArrowProxy operator->() const { return {operator*()}; }
 
-        IncidentEdgeIterator &operator++()
+        IncidentEdgeIterator& operator++()
         {
             ++currentIt_;
             return *this;
@@ -254,7 +215,7 @@ public:
             return temp;
         }
 
-        IncidentEdgeIterator &operator--()
+        IncidentEdgeIterator& operator--()
         {
             --currentIt_;
             return *this;
@@ -267,15 +228,12 @@ public:
             return temp;
         }
 
-        [[nodiscard]] bool operator==(const IncidentEdgeIterator &other) const noexcept
+        [[nodiscard]] bool operator==(const IncidentEdgeIterator& other) const noexcept
         {
             return currentIt_ == other.currentIt_;
         }
 
-        [[nodiscard]] bool operator!=(const IncidentEdgeIterator &other) const noexcept
-        {
-            return !(*this == other);
-        }
+        [[nodiscard]] bool operator!=(const IncidentEdgeIterator& other) const noexcept { return !(*this == other); }
 
     private:
         VertexIdxT<GraphT> anchorVertex_;
@@ -283,15 +241,14 @@ public:
     };
 
     // Helper to deduce iterator type based on direction
-    using BaseIteratorType
-        = std::conditional_t<isOutgoing,
-                             decltype(std::declval<GraphT>().Children(std::declval<VertexIdxT<GraphT>>()).begin()),
-                             decltype(std::declval<GraphT>().Parents(std::declval<VertexIdxT<GraphT>>()).begin())>;
+    using BaseIteratorType = std::conditional_t<
+        isOutgoing, decltype(std::declval<GraphT>().Children(std::declval<VertexIdxT<GraphT>>()).begin()),
+        decltype(std::declval<GraphT>().Parents(std::declval<VertexIdxT<GraphT>>()).begin())>;
 
     using Iterator = IncidentEdgeIterator<BaseIteratorType>;
     using ConstIterator = Iterator;
 
-    IncidentEdgeView(const GraphT &graph, VertexIdxT<GraphT> u) : graph_(graph), anchorVertex_(u) {}
+    IncidentEdgeView(const GraphT& graph, VertexIdxT<GraphT> u) : graph_(graph), anchorVertex_(u) {}
 
     [[nodiscard]] auto begin() const
     {
@@ -302,10 +259,7 @@ public:
         }
     }
 
-    [[nodiscard]] auto cbegin() const
-    {
-        return begin();
-    }
+    [[nodiscard]] auto cbegin() const { return begin(); }
 
     [[nodiscard]] auto end() const
     {
@@ -316,10 +270,7 @@ public:
         }
     }
 
-    [[nodiscard]] auto cend() const
-    {
-        return end();
-    }
+    [[nodiscard]] auto cend() const { return end(); }
 
     [[nodiscard]] auto size() const
     {
@@ -340,8 +291,7 @@ public:
     }
 
 private:
-
-    const GraphT &graph_;
+    const GraphT& graph_;
     VertexIdxT<GraphT> anchorVertex_;
 };
 
@@ -356,6 +306,6 @@ using OutEdgeView = IncidentEdgeView<GraphT, true>;
  */
 template <typename GraphT>
 using InEdgeView = IncidentEdgeView<GraphT, false>;
-}    // namespace osp
+} // namespace osp
 } // namespace npu::tile_fwk
 #endif // OSP_DIRECTED_GRAPH_EDGE_VIEW_HPP

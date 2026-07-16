@@ -31,9 +31,7 @@ namespace npu {
 namespace tile_fwk {
 
 struct OpMagicComparator {
-    bool operator()(const Operation* a, const Operation* b) const {
-        return a->GetOpMagic() < b->GetOpMagic();
-    }
+    bool operator()(const Operation* a, const Operation* b) const { return a->GetOpMagic() < b->GetOpMagic(); }
 };
 
 struct ConvertOpInfo {
@@ -55,7 +53,7 @@ public:
         key: Tensor 指针
         value: Opmagic到consumer op的指针和该op所需内存类型对的映射map
     */
-    std::map<LogicalTensorPtr, std::map<int, std::pair<Operation *, MemoryType>>> tensorTobeMap;
+    std::map<LogicalTensorPtr, std::map<int, std::pair<Operation*, MemoryType>>> tensorTobeMap;
     std::unordered_map<int, std::map<MemoryType, std::set<Operation*, OpMagicComparator>>> conflictMap;
 
     // 设置指定tensor的指定consumer op所需的mem tobe 类型
@@ -102,16 +100,15 @@ public:
     bool CrossCore(const MemoryType from, const MemoryType to) const;
 
     // 更新消费者并重连graph
-    void UpdateConsumerAndReconnect(
-        std::shared_ptr<LogicalTensor> oldTensor, std::shared_ptr<LogicalTensor> newTensor, Operation* op) const;
+    void UpdateConsumerAndReconnect(std::shared_ptr<LogicalTensor> oldTensor, std::shared_ptr<LogicalTensor> newTensor,
+                                    Operation* op) const;
 
     // 对外总接口
     Status DoInsertion(Function& function);
 
     // 构建转换路径
-    Status ConstructPath(
-        MemoryType from, MemoryType to, std::vector<MemoryType>& paths, const std::shared_ptr<LogicalTensor>& oOperand,
-        const Operation& op) const;
+    Status ConstructPath(MemoryType from, MemoryType to, std::vector<MemoryType>& paths,
+                         const std::shared_ptr<LogicalTensor>& oOperand, const Operation& op) const;
 
     // 检查tensor是否需要跳过
     bool SkipOperand(const std::shared_ptr<LogicalTensor>& oOperand, const std::vector<int>& visitedTensor) const;
@@ -123,18 +120,19 @@ public:
     bool isAllConsumersValid(Function& function, const std::set<Operation*, OpMagicComparator>& consumers) const;
 
     // 为每个存在内存冲突的消费者插入convert op
-    void InsertConvertOpForEachConsumer(
-        Function& function, const Operation& op, const std::shared_ptr<LogicalTensor>& oOperand,
-        std::set<Operation*, OpMagicComparator>& consumers, std::vector<MemoryType>& paths);
+    void InsertConvertOpForEachConsumer(Function& function, const Operation& op,
+                                        const std::shared_ptr<LogicalTensor>& oOperand,
+                                        std::set<Operation*, OpMagicComparator>& consumers,
+                                        std::vector<MemoryType>& paths);
 
     // 记录需要插入的convert op
-    std::shared_ptr<LogicalTensor> RecordInsertConvertOp(
-        const std::shared_ptr<LogicalTensor>& oOperand, const std::vector<MemoryType>& paths, Function& function,
-        const Operation& op);
+    std::shared_ptr<LogicalTensor> RecordInsertConvertOp(const std::shared_ptr<LogicalTensor>& oOperand,
+                                                         const std::vector<MemoryType>& paths, Function& function,
+                                                         const Operation& op);
 
     // 创建convert链路上的中间tensor，并继承输入tensor的动态shape状态
-    std::shared_ptr<LogicalTensor> CreateTensorLikeForConvert(
-        const std::shared_ptr<LogicalTensor>& input, MemoryType outputMemoryType) const;
+    std::shared_ptr<LogicalTensor> CreateTensorLikeForConvert(const std::shared_ptr<LogicalTensor>& input,
+                                                              MemoryType outputMemoryType) const;
 
     // 构造convert转view时使用的ViewOpAttribute
     std::shared_ptr<ViewOpAttribute> BuildViewAttrForConvert(const Operation& op, MemoryType to) const;
@@ -143,9 +141,8 @@ public:
     std::shared_ptr<AssembleOpAttribute> BuildAssembleAttrForConvert(const Operation& op, MemoryType from) const;
 
     // graph重连
-    void GraphReconnect(
-        const std::shared_ptr<LogicalTensor>& oOperand, std::shared_ptr<LogicalTensor> output,
-        const std::set<Operation*, OpMagicComparator>& consumers, Function& function) const;
+    void GraphReconnect(const std::shared_ptr<LogicalTensor>& oOperand, std::shared_ptr<LogicalTensor> output,
+                        const std::set<Operation*, OpMagicComparator>& consumers, Function& function) const;
 
     // cube级联场景
     bool IsNotValidDataType(const std::shared_ptr<LogicalTensor>& firstCVOutput) const;
@@ -154,23 +151,23 @@ public:
     bool FitL0C2L1(const LogicalTensorPtr& tensor);
 
     // l0c2l1场景规避条件检查，检查op输入是否满足无非立即数的validShape
-    bool FitL0C2L1(const Operation &op);
+    bool FitL0C2L1(const Operation& op);
 
     // 检查是否适合 UB2L1 小搬大
-    bool FitUB2L1(const LogicalTensorPtr &tensor) const;
+    bool FitUB2L1(const LogicalTensorPtr& tensor) const;
 
     // 判断同一源 tensor 是否有并行 consumer 需要不同的 memory 去向
     bool HasParallelDifferentConsumerRequirement(const LogicalTensorPtr& tensor, MemoryType targetType) const;
 
     // 特殊场景处理：生成者均为Assemble或者消费者均为View/Assemble，且mem路径中经过DDR
-    void ProcessSpecialProducersOrConsumers(
-        Function& function, const Operation& op, const std::shared_ptr<LogicalTensor>& oOperand,
-        std::set<Operation*, OpMagicComparator>& consumers, MemoryType& requiredMemoryType);
+    void ProcessSpecialProducersOrConsumers(Function& function, const Operation& op,
+                                            const std::shared_ptr<LogicalTensor>& oOperand,
+                                            std::set<Operation*, OpMagicComparator>& consumers,
+                                            MemoryType& requiredMemoryType);
 
     // 构造转换路径
-    Status ProcessConvertPath(
-        const Operation& op, const std::shared_ptr<LogicalTensor>& oOperand, MemoryType requiredMemoryType,
-        std::vector<MemoryType>& paths);
+    Status ProcessConvertPath(const Operation& op, const std::shared_ptr<LogicalTensor>& oOperand,
+                              MemoryType requiredMemoryType, std::vector<MemoryType>& paths);
 };
 static constexpr int MATMUL_DIM_NUM = 2;
 static constexpr int L0C2L1_DIM1_SHAPE_RESTICT = 16; // l0c2l1要求输入的外轴（第一轴）元素数量必须是16的倍数

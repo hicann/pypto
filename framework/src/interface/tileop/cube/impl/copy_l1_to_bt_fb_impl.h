@@ -27,11 +27,11 @@ INLINE void TExtractL1ToBTOrFBImpl(DstTileData& dst, SrcTileData& src)
     constexpr auto staticL0BW = Std::tuple_element<shapeSize - 1, typename DstTileData::TileShape>::type::value;
     int64_t nL1 = GetShape<1>(src);
     int64_t nL0 = GetShape<1>(dst);
-    using tileL1Tensor =
-        pto::Tile<pto::TileType::Mat, typename SrcTileData::Type, 1, staticL1W, pto::BLayout::RowMajor, -1, -1>;
-    using tileBiasOrFbTensor = pto::Tile<
-        DstTileData::FORMAT == Hardware::BIAS ? pto::TileType::Bias : pto::TileType::Scaling,
-        typename DstTileData::Type, 1, staticL0BW, pto::BLayout::RowMajor, -1, -1>;
+    using tileL1Tensor = pto::Tile<pto::TileType::Mat, typename SrcTileData::Type, 1, staticL1W, pto::BLayout::RowMajor,
+                                   -1, -1>;
+    using tileBiasOrFbTensor = pto::Tile<DstTileData::FORMAT == Hardware::BIAS ? pto::TileType::Bias :
+                                                                                 pto::TileType::Scaling,
+                                         typename DstTileData::Type, 1, staticL0BW, pto::BLayout::RowMajor, -1, -1>;
     tileL1Tensor l1Tensor(1, nL1);
     tileBiasOrFbTensor biasOrFbTensor(1, nL0);
     pto::TASSIGN<tileL1Tensor>(l1Tensor, static_cast<uint64_t>(src.GetAddr()));

@@ -92,9 +92,8 @@ TEST_F(IRTypeStrTest, TestTensorTypeWithMemRefStr)
     auto offset = std::make_shared<ConstInt>(0, DataType::INT64, Span::Unknown());
     MemRefPtr memref = std::make_shared<MemRef>(MemorySpace::DDR, offset, 1024);
     auto tt = std::make_shared<TensorType>(std::vector<ExprPtr>{dim1, dim2}, DataType::FP16, memref);
-    ASSERT_EQ(
-        PythonPrint(std::static_pointer_cast<const Type>(tt)),
-        "ir.Tensor[[16, 32], ir.FP16, ir.MemRef(ir.MemorySpace.DDR, 0, 1024)]");
+    ASSERT_EQ(PythonPrint(std::static_pointer_cast<const Type>(tt)),
+              "ir.Tensor[[16, 32], ir.FP16, ir.MemRef(ir.MemorySpace.DDR, 0, 1024)]");
 }
 
 TEST_F(IRTypeStrTest, TestTupleTypeStr)
@@ -102,8 +101,8 @@ TEST_F(IRTypeStrTest, TestTupleTypeStr)
     auto t1 = std::make_shared<ScalarType>(DataType::INT32);
     auto t2 = std::make_shared<ScalarType>(DataType::FP32);
     auto tup = std::make_shared<TupleType>(std::vector<TypePtr>{t1, t2});
-    ASSERT_EQ(
-        PythonPrint(std::static_pointer_cast<const Type>(tup)), "ir.Tuple[ir.Scalar[ir.INT32], ir.Scalar[ir.FP32]]");
+    ASSERT_EQ(PythonPrint(std::static_pointer_cast<const Type>(tup)),
+              "ir.Tuple[ir.Scalar[ir.INT32], ir.Scalar[ir.FP32]]");
 }
 
 TEST_F(IRTypeStrTest, TestPtrTypeStr)
@@ -269,9 +268,8 @@ TEST_F(IRStmtStrTest, TestSeqStmtsStr)
     auto assign_x = std::make_shared<AssignStmt>(x, std::make_shared<ConstInt>(42, DataType::INT32, sp), sp);
     auto assign_y = std::make_shared<AssignStmt>(y, std::make_shared<ConstInt>(0, DataType::INT32, sp), sp);
     auto seq = std::make_shared<SeqStmts>(std::vector<StmtPtr>{assign_x, assign_y}, sp);
-    ASSERT_EQ(
-        PythonPrint(std::static_pointer_cast<const IRNode>(seq)),
-        "x: ir.Scalar[ir.INT32] = 42\ny: ir.Scalar[ir.INT32] = 0");
+    ASSERT_EQ(PythonPrint(std::static_pointer_cast<const IRNode>(seq)),
+              "x: ir.Scalar[ir.INT32] = 42\ny: ir.Scalar[ir.INT32] = 0");
 }
 
 TEST_F(IRStmtStrTest, TestIfStmtStr)
@@ -293,9 +291,8 @@ TEST_F(IRStmtStrTest, TestIfElseStmtStr)
     auto elseBody = std::make_shared<AssignStmt>(y, std::make_shared<ConstInt>(0, DataType::INT32, sp), sp);
 
     auto ifElse = std::make_shared<IfStmt>(cond, thenBody, elseBody, std::vector<VarPtr>{}, sp);
-    ASSERT_EQ(
-        PythonPrint(std::static_pointer_cast<const IRNode>(ifElse)),
-        "if True:\n    x: ir.Scalar[ir.INT32] = 42\nelse:\n    y: ir.Scalar[ir.INT32] = 0");
+    ASSERT_EQ(PythonPrint(std::static_pointer_cast<const IRNode>(ifElse)),
+              "if True:\n    x: ir.Scalar[ir.INT32] = 42\nelse:\n    y: ir.Scalar[ir.INT32] = 0");
 }
 
 TEST_F(IRStmtStrTest, TestForStmtStr)
@@ -304,18 +301,17 @@ TEST_F(IRStmtStrTest, TestForStmtStr)
     auto init = std::make_shared<ConstInt>(0, DataType::INT32, sp);
     auto iterArg = std::make_shared<IterArg>("sum", st, init, sp);
     auto retVar = std::make_shared<Var>("sum_out", st, sp);
-    auto body =
-        std::make_shared<YieldStmt>(std::vector<ExprPtr>{std::make_shared<ConstInt>(1, DataType::INT32, sp)}, sp);
+    auto body = std::make_shared<YieldStmt>(std::vector<ExprPtr>{std::make_shared<ConstInt>(1, DataType::INT32, sp)},
+                                            sp);
 
-    auto forStmt = std::make_shared<ForStmt>(
-        i, std::make_shared<ConstInt>(0, DataType::INT32, sp), std::make_shared<ConstInt>(10, DataType::INT32, sp),
-        std::make_shared<ConstInt>(1, DataType::INT32, sp), std::vector<IterArgPtr>{iterArg}, body,
-        std::vector<VarPtr>{retVar}, sp);
+    auto forStmt = std::make_shared<ForStmt>(i, std::make_shared<ConstInt>(0, DataType::INT32, sp),
+                                             std::make_shared<ConstInt>(10, DataType::INT32, sp),
+                                             std::make_shared<ConstInt>(1, DataType::INT32, sp),
+                                             std::vector<IterArgPtr>{iterArg}, body, std::vector<VarPtr>{retVar}, sp);
 
-    ASSERT_EQ(
-        PythonPrint(std::static_pointer_cast<const IRNode>(forStmt)),
-        "for i, (sum,) in ir.range(0, 10, 1, init_values=(0,)):\n"
-        "    sum_out: ir.Scalar[ir.INT32] = ir.yield_(1)");
+    ASSERT_EQ(PythonPrint(std::static_pointer_cast<const IRNode>(forStmt)),
+              "for i, (sum,) in ir.range(0, 10, 1, init_values=(0,)):\n"
+              "    sum_out: ir.Scalar[ir.INT32] = ir.yield_(1)");
 }
 
 TEST_F(IRStmtStrTest, TestWhileStmtStr)
@@ -325,8 +321,8 @@ TEST_F(IRStmtStrTest, TestWhileStmtStr)
     auto assign = std::make_shared<AssignStmt>(x, std::make_shared<ConstInt>(42, DataType::INT32, sp), sp);
 
     auto whileStmt = std::make_shared<WhileStmt>(cond, std::vector<IterArgPtr>{}, assign, std::vector<VarPtr>{}, sp);
-    ASSERT_EQ(
-        PythonPrint(std::static_pointer_cast<const IRNode>(whileStmt)), "while True:\n    x: ir.Scalar[ir.INT32] = 42");
+    ASSERT_EQ(PythonPrint(std::static_pointer_cast<const IRNode>(whileStmt)),
+              "while True:\n    x: ir.Scalar[ir.INT32] = 42");
 }
 
 TEST_F(IRStmtStrTest, TestYieldStmtStr)
@@ -372,10 +368,9 @@ TEST_F(IRStmtStrTest, TestFunctionStr)
     auto assign = std::make_shared<AssignStmt>(x, std::make_shared<ConstInt>(42, DataType::INT32, sp), sp);
     auto func = std::make_shared<Function>("test_func", std::vector<VarPtr>{x}, std::vector<TypePtr>{st}, assign, sp);
 
-    ASSERT_EQ(
-        PythonPrint(std::static_pointer_cast<const IRNode>(func)),
-        "@ir.function\ndef test_func(x: ir.Scalar[ir.INT32]) -> ir.Scalar[ir.INT32]:\n"
-        "    x: ir.Scalar[ir.INT32] = 42");
+    ASSERT_EQ(PythonPrint(std::static_pointer_cast<const IRNode>(func)),
+              "@ir.function\ndef test_func(x: ir.Scalar[ir.INT32]) -> ir.Scalar[ir.INT32]:\n"
+              "    x: ir.Scalar[ir.INT32] = 42");
 }
 
 TEST_F(IRStmtStrTest, TestProgramStr)
@@ -412,9 +407,8 @@ TEST_F(IRStructuralTest, TestHashIgnoresSpan)
 {
     auto a = std::make_shared<Var>("x", Scalar(DataType::INT32), Span("file_a", 1, 1));
     auto b = std::make_shared<Var>("x", Scalar(DataType::INT32), Span("file_b", 99, 99));
-    ASSERT_EQ(
-        structural_hash(std::static_pointer_cast<const IRNode>(a)),
-        structural_hash(std::static_pointer_cast<const IRNode>(b)));
+    ASSERT_EQ(structural_hash(std::static_pointer_cast<const IRNode>(a)),
+              structural_hash(std::static_pointer_cast<const IRNode>(b)));
 }
 
 TEST_F(IRStructuralTest, TestEqualIdenticalNodes)
@@ -448,10 +442,10 @@ TEST_F(IRStructuralTest, TestEqualAutoMapping)
     auto exprX = std::make_shared<Add>(x, one, DataType::INT32, sp);
     auto exprY = std::make_shared<Add>(y, one, DataType::INT32, sp);
 
-    ASSERT_FALSE(structural_equal(
-        std::static_pointer_cast<const IRNode>(exprX), std::static_pointer_cast<const IRNode>(exprY), false));
-    ASSERT_TRUE(structural_equal(
-        std::static_pointer_cast<const IRNode>(exprX), std::static_pointer_cast<const IRNode>(exprY), true));
+    ASSERT_FALSE(structural_equal(std::static_pointer_cast<const IRNode>(exprX),
+                                  std::static_pointer_cast<const IRNode>(exprY), false));
+    ASSERT_TRUE(structural_equal(std::static_pointer_cast<const IRNode>(exprX),
+                                 std::static_pointer_cast<const IRNode>(exprY), true));
 }
 
 TEST_F(IRStructuralTest, TestHashAutoMapping)
@@ -459,12 +453,10 @@ TEST_F(IRStructuralTest, TestHashAutoMapping)
     auto x = std::make_shared<Var>("x", Scalar(DataType::INT32), sp);
     auto y = std::make_shared<Var>("y", Scalar(DataType::INT32), sp);
 
-    ASSERT_NE(
-        structural_hash(std::static_pointer_cast<const IRNode>(x), false),
-        structural_hash(std::static_pointer_cast<const IRNode>(y), false));
-    ASSERT_EQ(
-        structural_hash(std::static_pointer_cast<const IRNode>(x), true),
-        structural_hash(std::static_pointer_cast<const IRNode>(y), true));
+    ASSERT_NE(structural_hash(std::static_pointer_cast<const IRNode>(x), false),
+              structural_hash(std::static_pointer_cast<const IRNode>(y), false));
+    ASSERT_EQ(structural_hash(std::static_pointer_cast<const IRNode>(x), true),
+              structural_hash(std::static_pointer_cast<const IRNode>(y), true));
 }
 
 TEST_F(IRStructuralTest, TestAssertStructuralEqualPass)

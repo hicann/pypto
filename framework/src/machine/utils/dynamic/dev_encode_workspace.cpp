@@ -36,8 +36,8 @@ namespace dynamic {
 constexpr int32_t MAX_AICORE_NUM_2210 = 75;
 constexpr int32_t MAX_AICORE_NUM_3510 = 108;
 static constexpr uint64_t GENERAL_METADATA_SIZE_MIN = 2 * MEBI;
-constexpr size_t CALC_STITCH_NUM =
-    ToUnderlying(WsAicpuSlabMemType::DUPPED_STITCH) - ToUnderlying(WsAicpuSlabMemType::READY_QUE);
+constexpr size_t CALC_STITCH_NUM = ToUnderlying(WsAicpuSlabMemType::DUPPED_STITCH) -
+                                   ToUnderlying(WsAicpuSlabMemType::READY_QUE);
 uint32_t EffectiveUnrollTimes(const DevAscendFunction* devFunc)
 {
     return devFunc != nullptr ? devFunc->unrollTimes : 1u;
@@ -128,11 +128,10 @@ void ValidateMaxWorkspaceOrThrow(uint64_t maxWorkspaceBytes, uint64_t workspaceS
 {
     constexpr int kMin = 1;
     if (maxWorkspaceBytes > 0 && maxWorkspaceBytes < workspaceStitchMin) {
-        MACHINE_LOGE(
-            DevCommonErr::PARAM_CHECK_FAILED,
-            "[workspaceSize] max_workspace_kb=%lu is below minimum runnable workspace=%lu bytes (k_min=%d). "
-            "Reduce operator workspace requirements or increase max_workspace_kb.",
-            WorkspaceBytesToKbCeil(maxWorkspaceBytes), workspaceStitchMin, kMin);
+        MACHINE_LOGE(DevCommonErr::PARAM_CHECK_FAILED,
+                     "[workspaceSize] max_workspace_kb=%lu is below minimum runnable workspace=%lu bytes (k_min=%d). "
+                     "Reduce operator workspace requirements or increase max_workspace_kb.",
+                     WorkspaceBytesToKbCeil(maxWorkspaceBytes), workspaceStitchMin, kMin);
         std::ostringstream oss;
         oss << "max_workspace_kb below minimum runnable workspace=" << workspaceStitchMin;
         throw std::runtime_error(oss.str());
@@ -141,7 +140,8 @@ void ValidateMaxWorkspaceOrThrow(uint64_t maxWorkspaceBytes, uint64_t workspaceS
 
 void ApplyTensorWorkspaceResult(DevAscendProgram* devProg, const WorkspaceDesc& wsDesc)
 {
-    devProg->memBudget.tensor.slottableOutcastSlotSize = wsDesc.totalExclusiveOutcastSlot + wsDesc.totalAssembleOutcastSlot;
+    devProg->memBudget.tensor.slottableOutcastSlotSize = wsDesc.totalExclusiveOutcastSlot +
+                                                         wsDesc.totalAssembleOutcastSlot;
     devProg->memBudget.tensor.rootInnerSpilledMem = wsDesc.maxRootInnerSpilledMem;
     devProg->memBudget.tensor.devTaskInnerExclusiveOutcasts = wsDesc.maxRootTotalExclusiveOutcastMem;
     devProg->memBudget.tensor.maxStaticOutcastMem = wsDesc.maxStaticOutcastMem;
@@ -157,9 +157,8 @@ uint64_t CalcGeneralMetadataSlotWorkspace(DevAscendProgram* devProg)
     uint64_t itemPoolMemSize = DeviceWorkspaceAllocator::CalcMetadataItemPoolMemSize(devProg);
     uint64_t vectorMemSize = DeviceWorkspaceAllocator::CalcMetadataVectorMemSize(devProg);
     uint64_t slotAllocatorMemSize = DeviceWorkspaceAllocator::CalcMetadataSlotAllocatorMemSize(devProg);
-    MACHINE_LOGI(
-        "[workspaceSize] ItemPoolMemSize is: %lu, vectorMemSize is: %lu, slotAllocatorMemSize is %lu.,",
-        itemPoolMemSize, vectorMemSize, slotAllocatorMemSize);
+    MACHINE_LOGI("[workspaceSize] ItemPoolMemSize is: %lu, vectorMemSize is: %lu, slotAllocatorMemSize is %lu.,",
+                 itemPoolMemSize, vectorMemSize, slotAllocatorMemSize);
     static constexpr uint64_t AICPU_SLOT_STATIC_MEMSIZE = 2 * MEBI;
     generalMetadataSlotSize = itemPoolMemSize + vectorMemSize + slotAllocatorMemSize + AICPU_SLOT_STATIC_MEMSIZE;
     MACHINE_LOGI("[workspaceSize] Workspace of generalMetadataSlotSize is %lu., ", generalMetadataSlotSize);
@@ -170,8 +169,8 @@ uint64_t CalcGeneralMetadataSlabWorkspace(DevAscendProgram* devProg)
 {
     DeviceWorkspaceAllocator workspace(devProg);
     uint64_t generalMetadataSlabSize = 0;
-    uint32_t slabSize = AlignUpSlab(
-        workspace.CalcSlabMemObjmaxSize() * ALLOC_NUM_ONE_SLAB + SlabWsAllocator::FirstObjBaseOffset());
+    uint32_t slabSize = AlignUpSlab(workspace.CalcSlabMemObjmaxSize() * ALLOC_NUM_ONE_SLAB +
+                                    SlabWsAllocator::FirstObjBaseOffset());
     uint32_t slabCapacity[ToUnderlying(WsAicpuSlabMemType::COHERENT_SLAB_MEM_TYPE_BUTT)];
     size_t objUsedNum[ToUnderlying(WsAicpuSlabMemType::COHERENT_SLAB_MEM_TYPE_BUTT)]{
         MAX_STITCH_FUNC_NUM, // DevFunctionDupped: protocol max; runtime submits before exceeding
@@ -179,8 +178,8 @@ uint64_t CalcGeneralMetadataSlabWorkspace(DevAscendProgram* devProg)
         1,                   // VecStitchList
         1,                   // DynDevTask
     };
-    workspace.CalculateSlabCapacityPerType(
-        slabSize, slabCapacity, ToUnderlying(WsAicpuSlabMemType::COHERENT_SLAB_MEM_TYPE_BUTT));
+    workspace.CalculateSlabCapacityPerType(slabSize, slabCapacity,
+                                           ToUnderlying(WsAicpuSlabMemType::COHERENT_SLAB_MEM_TYPE_BUTT));
 
     for (int i = 0; i < ToUnderlying(WsAicpuSlabMemType::COHERENT_SLAB_MEM_TYPE_BUTT); i++) {
         MACHINE_LOGI("SlabCapacity[%d] is %u.", i, slabCapacity[i]);
@@ -194,10 +193,10 @@ uint64_t CalcGeneralMetadataSlabWorkspace(DevAscendProgram* devProg)
         MACHINE_LOGI("[workspaceSize] RequiredSlabNum[%d] is %u.", i, requiredSlabNum);
         generalMetadataSlabSize += static_cast<uint64_t>(requiredSlabNum) * slabSize;
     }
-    MACHINE_LOGI(
-        "[workspaceSize] General->MetadataSlabSize is %lu.", static_cast<unsigned long>(generalMetadataSlabSize));
-    generalMetadataSlabSize =
-        (generalMetadataSlabSize < GENERAL_METADATA_SIZE_MIN) ? GENERAL_METADATA_SIZE_MIN : generalMetadataSlabSize;
+    MACHINE_LOGI("[workspaceSize] General->MetadataSlabSize is %lu.",
+                 static_cast<unsigned long>(generalMetadataSlabSize));
+    generalMetadataSlabSize = (generalMetadataSlabSize < GENERAL_METADATA_SIZE_MIN) ? GENERAL_METADATA_SIZE_MIN :
+                                                                                      generalMetadataSlabSize;
     return (generalMetadataSlabSize + SLAB_ALIGN_GRANULARITY) * devProg->GetParallelism();
 }
 
@@ -205,7 +204,8 @@ uint64_t CalcStitchWorkspace(DevAscendProgram& devProg)
 {
     DeviceWorkspaceAllocator workspace(&devProg);
     uint32_t slabCapacity[CALC_STITCH_NUM] = {0};
-    uint32_t objUsedNum[CALC_STITCH_NUM] = {READY_QUEUE_SIZE, DIE_READY_QUEUE_SIZE * DIE_NUM, 1, MAX_SCHEDULE_AICPU_NUM, MAX_STITCH_FUNC_NUM};
+    uint32_t objUsedNum[CALC_STITCH_NUM] = {READY_QUEUE_SIZE, DIE_READY_QUEUE_SIZE * DIE_NUM, 1, MAX_SCHEDULE_AICPU_NUM,
+                                            MAX_STITCH_FUNC_NUM};
     uint32_t slabSize = workspace.CalcStitchSlabMemObjmaxSize(slabCapacity);
     uint64_t stitchPoolSize = slabSize << 4;
 
@@ -213,8 +213,7 @@ uint64_t CalcStitchWorkspace(DevAscendProgram& devProg)
         if (slabCapacity[i] == 0) {
             continue;
         }
-        uint32_t requiredSlabNum =
-            ((objUsedNum[i] << 2) + slabCapacity[i] - 1) / slabCapacity[i];
+        uint32_t requiredSlabNum = ((objUsedNum[i] << 2) + slabCapacity[i] - 1) / slabCapacity[i];
         stitchPoolSize += slabSize * requiredSlabNum;
     }
     MACHINE_LOGD("[workspaceSize] Stitch pool size is %lu, with slab size:%u.", stitchPoolSize, slabSize);
@@ -249,8 +248,8 @@ uint64_t CalcStitchCacheSize(DevAscendProgram* devProg)
             devProg->rootFuncMaxCallOpsize = callOpsize;
         }
     }
-    uint64_t cacheSize =
-        static_cast<uint64_t>(devProg->rootFuncMaxCallOpsize) * devProg->rootFuncMaxCallOpsize * sizeof(uint64_t);
+    uint64_t cacheSize = static_cast<uint64_t>(devProg->rootFuncMaxCallOpsize) * devProg->rootFuncMaxCallOpsize *
+                         sizeof(uint64_t);
     MACHINE_LOGI("stitchCacheSize: %lu, maxCallOpsize: %u", cacheSize, devProg->rootFuncMaxCallOpsize);
     return cacheSize;
 }
@@ -263,15 +262,15 @@ int32_t GetPlatformMaxAicoreNum()
     return MAX_AICORE_NUM_2210;
 }
 
-void ApplyStitchDepthConfig(
-    DevAscendProgram* devProg, WorkspaceDesc& wsDesc, const StitchDepthConfig& config, uint64_t totalSlot)
+void ApplyStitchDepthConfig(DevAscendProgram* devProg, WorkspaceDesc& wsDesc, const StitchDepthConfig& config,
+                            uint64_t totalSlot)
 {
     ApplyTensorWorkspaceResult(devProg, wsDesc);
     devProg->memBudget.aicoreSpilled.aicoreCount = wsDesc.platform.aicoreCount;
     devProg->memBudget.tensor.memoryDrivenWorkspace = config.memoryDrivenWorkspace;
     devProg->stitchMaxFunctionNum = config.stitchMaxFunctionNum;
-    devProg->memBudget.tensor.runtimeOutcastPoolSize =
-        totalSlot * (config.runtimeOutcastPoolDepth + 1) * devProg->GetParallelism();
+    devProg->memBudget.tensor.runtimeOutcastPoolSize = totalSlot * (config.runtimeOutcastPoolDepth + 1) *
+                                                       devProg->GetParallelism();
 }
 
 static void EmitWorkspaceUserMessage(const std::string& msg)
@@ -284,7 +283,8 @@ static void EmitWorkspaceUserMessage(const std::string& msg)
 static std::string BuildNonMemoryDrivenWorkspaceUserMessage(uint64_t contextWsKb, uint64_t stitchMinKb)
 {
     std::ostringstream oss;
-    oss << "Recommended: set max_workspace_kb near " << contextWsKb << "KB and above " << stitchMinKb << "KB to activate memory-driven mode.";
+    oss << "Recommended: set max_workspace_kb near " << contextWsKb << "KB and above " << stitchMinKb
+        << "KB to activate memory-driven mode.";
     return oss.str();
 }
 
@@ -296,28 +296,27 @@ static std::string BuildMemoryDrivenWorkspaceUserMessage(uint64_t maxWorkspaceKb
     return oss.str();
 }
 
-void LogWorkspaceEncodeSummary(
-    int kMin, uint32_t stitchNumMax, const DevAscendProgram& devProg,
-    const StitchDepthConfig& depthConfig, uint64_t maxWorkspaceBytes, uint64_t workspaceStitchMin)
+void LogWorkspaceEncodeSummary(int kMin, uint32_t stitchNumMax, const DevAscendProgram& devProg,
+                               const StitchDepthConfig& depthConfig, uint64_t maxWorkspaceBytes,
+                               uint64_t workspaceStitchMin)
 {
-    MACHINE_LOGI(
-        "[workspaceSize] stitch depth: k_min=%d, stitchNumMax=%u, k_eff=%u, outcastCacheDepth=%u, "
-        "runtimeOutcastPoolDepth=%u, devTaskBoundaryOutcastNum=%lu, devTaskInnerTemporalOutcastNum=%lu, "
-        "stitchMax=%u, stitch_1=%lu, encoded_tensor_budget=%lu, context_workspace=%lu, metadata=%lu, "
-        "max_workspace_kb=%lu, memory_driven=%d, runtimeOutcastPoolSize=%u.",
-        kMin, stitchNumMax, depthConfig.kEff, depthConfig.outcastCacheDepth, depthConfig.runtimeOutcastPoolDepth,
-        devProg.memBudget.tensor.devTaskBoundaryOutcastNum, devProg.memBudget.tensor.devTaskInnerTemporalOutcastNum,
-        devProg.stitchMaxFunctionNum, workspaceStitchMin, depthConfig.encodedWorkspaceSize,
-        devProg.workspaceSize, devProg.memBudget.metadata.Total(),
-        WorkspaceBytesToKbCeil(maxWorkspaceBytes), static_cast<int>(depthConfig.memoryDrivenWorkspace),
-        devProg.memBudget.tensor.runtimeOutcastPoolSize);
+    MACHINE_LOGI("[workspaceSize] stitch depth: k_min=%d, stitchNumMax=%u, k_eff=%u, outcastCacheDepth=%u, "
+                 "runtimeOutcastPoolDepth=%u, devTaskBoundaryOutcastNum=%lu, devTaskInnerTemporalOutcastNum=%lu, "
+                 "stitchMax=%u, stitch_1=%lu, encoded_tensor_budget=%lu, context_workspace=%lu, metadata=%lu, "
+                 "max_workspace_kb=%lu, memory_driven=%d, runtimeOutcastPoolSize=%u.",
+                 kMin, stitchNumMax, depthConfig.kEff, depthConfig.outcastCacheDepth,
+                 depthConfig.runtimeOutcastPoolDepth, devProg.memBudget.tensor.devTaskBoundaryOutcastNum,
+                 devProg.memBudget.tensor.devTaskInnerTemporalOutcastNum, devProg.stitchMaxFunctionNum,
+                 workspaceStitchMin, depthConfig.encodedWorkspaceSize, devProg.workspaceSize,
+                 devProg.memBudget.metadata.Total(), WorkspaceBytesToKbCeil(maxWorkspaceBytes),
+                 static_cast<int>(depthConfig.memoryDrivenWorkspace), devProg.memBudget.tensor.runtimeOutcastPoolSize);
     if (depthConfig.memoryDrivenWorkspace == 0) {
-        EmitWorkspaceUserMessage(BuildNonMemoryDrivenWorkspaceUserMessage(
-            WorkspaceBytesToKbCeil(devProg.workspaceSize), WorkspaceBytesToKbCeil(workspaceStitchMin)));
+        EmitWorkspaceUserMessage(BuildNonMemoryDrivenWorkspaceUserMessage(WorkspaceBytesToKbCeil(devProg.workspaceSize),
+                                                                          WorkspaceBytesToKbCeil(workspaceStitchMin)));
         return;
     }
-    EmitWorkspaceUserMessage(BuildMemoryDrivenWorkspaceUserMessage(
-        WorkspaceBytesToKbCeil(maxWorkspaceBytes), depthConfig.kEff));
+    EmitWorkspaceUserMessage(
+        BuildMemoryDrivenWorkspaceUserMessage(WorkspaceBytesToKbCeil(maxWorkspaceBytes), depthConfig.kEff));
 }
 
 struct FlexSlotInfo {
@@ -327,8 +326,8 @@ struct FlexSlotInfo {
     SymbolicScalar dynMemReq;
 };
 
-static void MarkOutcastSlotsFromEncodeList(
-    const std::vector<std::vector<uint8_t>>& hostDevEncodeList, std::vector<FlexSlotInfo>& slotInfoList)
+static void MarkOutcastSlotsFromEncodeList(const std::vector<std::vector<uint8_t>>& hostDevEncodeList,
+                                           std::vector<FlexSlotInfo>& slotInfoList)
 {
     for (const auto& devEncodeBin : hostDevEncodeList) {
         if (devEncodeBin.empty()) {
@@ -341,7 +340,8 @@ static void MarkOutcastSlotsFromEncodeList(
             bool isAssembleOutcastSlot = false;
             for (size_t j = 0; j < toSlotList.size(); j++) {
                 FlexSlotInfo& slotInfo = slotInfoList[devFunc->At(toSlotList, j)];
-                if (slotInfo.kindSet.Contains(RuntimeSlotKind::INPUT) || slotInfo.kindSet.Contains(RuntimeSlotKind::OUTPUT)) {
+                if (slotInfo.kindSet.Contains(RuntimeSlotKind::INPUT) ||
+                    slotInfo.kindSet.Contains(RuntimeSlotKind::OUTPUT)) {
                     isInputOutputSlot = true;
                 } else if (slotInfo.kindSet.Contains(RuntimeSlotKind::ASSEMBLE_OUTCAST)) {
                     isAssembleOutcastSlot = true;
@@ -352,8 +352,8 @@ static void MarkOutcastSlotsFromEncodeList(
                 for (size_t j = 0; j < toSlotList.size(); j++) {
                     FlexSlotInfo& slotInfo = slotInfoList[devFunc->At(toSlotList, j)];
                     slotInfo.kindSet.Add(RuntimeSlotKind::ASSEMBLE_OUTCAST);
-                    slotInfo.maxAssembleDstMemReq = std::max(
-                        slotInfo.maxAssembleDstMemReq, devFunc->GetOutcastRawTensor(outcastIdx)->maxStaticMemReq);
+                    slotInfo.maxAssembleDstMemReq = std::max(slotInfo.maxAssembleDstMemReq,
+                                                             devFunc->GetOutcastRawTensor(outcastIdx)->maxStaticMemReq);
                 }
             } else {
                 for (size_t j = 0; j < toSlotList.size(); j++) {
@@ -392,9 +392,9 @@ static std::vector<FlexSlotInfo> MarkInputOutputAssembleSlots(DevAscendProgram& 
         const size_t size = devProg.devEncodeList[i].size();
         hostDevEncodeList.emplace_back(data, data + size);
     }
-    return MarkInputOutputAssembleSlots(
-        devProg.slotSize, devProg.GetInputTensorSlotIndexList(), devProg.GetOutputTensorSlotIndexList(),
-        devProg.GetAssembleTensorSlotIndexList(), hostDevEncodeList);
+    return MarkInputOutputAssembleSlots(devProg.slotSize, devProg.GetInputTensorSlotIndexList(),
+                                        devProg.GetOutputTensorSlotIndexList(),
+                                        devProg.GetAssembleTensorSlotIndexList(), hostDevEncodeList);
 }
 
 static bool IsInputOutputSlot(const std::vector<FlexSlotInfo>& slotInfoList, DevAscendFunction* func, size_t idx)
@@ -445,8 +445,8 @@ static SymbolicScalar GetDynRawTensorSize(Function* dynFunc, int funcKey, int id
     return size;
 }
 
-static void ProcessAssembleOutcast(
-    Function* func, DevAscendFunction* devFunc, size_t outIdx, std::vector<FlexSlotInfo>& slots, uint64_t staticMemReq)
+static void ProcessAssembleOutcast(Function* func, DevAscendFunction* devFunc, size_t outIdx,
+                                   std::vector<FlexSlotInfo>& slots, uint64_t staticMemReq)
 {
     SymbolicScalar dynMemReq;
     if (devFunc->GetOutcastRawTensor(outIdx)->memoryRequirement == 0) {
@@ -479,9 +479,9 @@ static void ProcessExclusiveOutcast(DevAscendFunction* devFunc, size_t outIdx, s
     }
 }
 
-static void ProcessDevFunctionOutcasts(
-    WorkspaceDesc::WorkspacePerRootFunctionDesc& rootMem,
-    Function* func, DevAscendFunction* devFunc, std::vector<FlexSlotInfo>& slots, uint64_t& maxExclusiveOutcastMem)
+static void ProcessDevFunctionOutcasts(WorkspaceDesc::WorkspacePerRootFunctionDesc& rootMem, Function* func,
+                                       DevAscendFunction* devFunc, std::vector<FlexSlotInfo>& slots,
+                                       uint64_t& maxExclusiveOutcastMem)
 {
     rootMem.func = func;
     rootMem.devFuncName = devFunc->GetRawName();
@@ -515,22 +515,22 @@ static void ProcessDevFunctionOutcasts(
 
 static std::pair<uint64_t, SymbolicScalar> ComputeAssembleOutcastMem(const std::vector<FlexSlotInfo>& slots)
 {
-    uint64_t maxStaticAssembleOutcastMem =
-        std::accumulate(slots.begin(), slots.end(), UINT64_C(0), [](uint64_t acc, const FlexSlotInfo& slot) {
-            return std::max(
-                acc, (slot.kindSet.Contains(RuntimeSlotKind::ASSEMBLE_OUTCAST) ? slot.maxAssembleDstMemReq : 0));
+    uint64_t maxStaticAssembleOutcastMem = std::accumulate(
+        slots.begin(), slots.end(), UINT64_C(0), [](uint64_t acc, const FlexSlotInfo& slot) {
+            return std::max(acc,
+                            (slot.kindSet.Contains(RuntimeSlotKind::ASSEMBLE_OUTCAST) ? slot.maxAssembleDstMemReq : 0));
         });
 
-    SymbolicScalar maxDynamicAssembleOutcastMem =
-        std::accumulate(slots.begin(), slots.end(), SymbolicScalar(0), [](SymbolicScalar acc, const FlexSlotInfo& slot) {
+    SymbolicScalar maxDynamicAssembleOutcastMem = std::accumulate(
+        slots.begin(), slots.end(), SymbolicScalar(0), [](SymbolicScalar acc, const FlexSlotInfo& slot) {
             return std::max(acc, slot.dynMemReq.IsValid() ? slot.dynMemReq : SymbolicScalar(0));
         });
 
     return {maxStaticAssembleOutcastMem, maxDynamicAssembleOutcastMem};
 }
 
-static SymbolicScalar ComputeDynamicCellMatchTableBytesForOutcast(
-    const DevAscendProgramPartialUpdate& partial, const std::shared_ptr<RawTensor>& rawTensor)
+static SymbolicScalar ComputeDynamicCellMatchTableBytesForOutcast(const DevAscendProgramPartialUpdate& partial,
+                                                                  const std::shared_ptr<RawTensor>& rawTensor)
 {
     SymbolicScalar cellCount(1);
     auto dynShape = rawTensor->GetDynRawShape();
@@ -550,20 +550,20 @@ static SymbolicScalar ComputeDynamicCellMatchTableBytesForOutcast(
     }
 
     return cellCount * SymbolicScalar(static_cast<int64_t>(partial.cellMatchTableDesc.cellUint64Size)) *
-        SymbolicScalar(static_cast<int64_t>(sizeof(uint64_t)));
+           SymbolicScalar(static_cast<int64_t>(sizeof(uint64_t)));
 }
 
-static bool IsRuntimeDynamicPartialWithSlotRoot(
-    const DevAscendProgramPartialUpdate& partial, const std::shared_ptr<DyndevFunctionAttribute>& dynAttr)
+static bool IsRuntimeDynamicPartialWithSlotRoot(const DevAscendProgramPartialUpdate& partial,
+                                                const std::shared_ptr<DyndevFunctionAttribute>& dynAttr)
 {
     return partial.cellMatchRuntimePartialUpdateTable.size() == 0 &&
            partial.cellMatchTableDesc.GetDimensionSize() > 0 &&
            dynAttr->slotRootOutcastDict.count(partial.slotIndex) != 0;
 }
 
-static bool IsRuntimeDynamicPartialNeedAlloc(
-    const DevAscendProgramPartialUpdate& partial, const std::shared_ptr<DyndevFunctionAttribute>& dynAttr,
-    const std::unordered_set<int>& constructAssembleNeedAllocSlots)
+static bool IsRuntimeDynamicPartialNeedAlloc(const DevAscendProgramPartialUpdate& partial,
+                                             const std::shared_ptr<DyndevFunctionAttribute>& dynAttr,
+                                             const std::unordered_set<int>& constructAssembleNeedAllocSlots)
 {
     return IsRuntimeDynamicPartialWithSlotRoot(partial, dynAttr) &&
            (constructAssembleNeedAllocSlots.count(partial.slotIndex) > 0 || partial.isOutputTensorStitchSlot);
@@ -608,8 +608,8 @@ void BuildDynamicCellMatchLaunchMeta(Function* func, DevAscendProgram& devProg)
         int slotIndex = partial.slotIndex;
         DyndevFunctionAttribute::DynamicCellMatchLaunchMeta meta;
         meta.slotIndex = slotIndex;
-        meta.descOffset = static_cast<uint64_t>(
-            reinterpret_cast<const uint8_t*>(&partial.cellMatchTableDesc) - devProgBase);
+        meta.descOffset = static_cast<uint64_t>(reinterpret_cast<const uint8_t*>(&partial.cellMatchTableDesc) -
+                                                devProgBase);
         int dim = partial.cellMatchTableDesc.GetDimensionSize();
         meta.cellShape.resize(dim);
         for (int d = 0; d < dim; ++d) {
@@ -633,9 +633,10 @@ void BuildDynamicCellMatchLaunchMeta(Function* func, DevAscendProgram& devProg)
     }
 }
 
-static void AccumulateRootFunctionIntoWorkspaceDesc(
-    WorkspaceDesc& desc, Function* func, DevAscendFunction* devFunc, std::vector<FlexSlotInfo>& slots,
-    uint64_t& maxExclusiveOutcastMem, uint64_t& maxRootMaxExclusiveOutcastMem, uint64_t& maxPerCoreSpilledMem)
+static void AccumulateRootFunctionIntoWorkspaceDesc(WorkspaceDesc& desc, Function* func, DevAscendFunction* devFunc,
+                                                    std::vector<FlexSlotInfo>& slots, uint64_t& maxExclusiveOutcastMem,
+                                                    uint64_t& maxRootMaxExclusiveOutcastMem,
+                                                    uint64_t& maxPerCoreSpilledMem)
 {
     WorkspaceDesc::WorkspacePerRootFunctionDesc rootMem;
     ProcessDevFunctionOutcasts(rootMem, func, devFunc, slots, maxExclusiveOutcastMem);
@@ -644,9 +645,8 @@ static void AccumulateRootFunctionIntoWorkspaceDesc(
     desc.rootFuncDescList.push_back(std::move(rootMem));
 }
 
-static void FinalizeWorkspaceDescSlotBudgets(
-    WorkspaceDesc& desc, const std::vector<FlexSlotInfo>& slots, uint64_t maxPerCoreSpilledMem,
-    uint64_t maxRootMaxExclusiveOutcastMem)
+static void FinalizeWorkspaceDescSlotBudgets(WorkspaceDesc& desc, const std::vector<FlexSlotInfo>& slots,
+                                             uint64_t maxPerCoreSpilledMem, uint64_t maxRootMaxExclusiveOutcastMem)
 {
     auto [maxStaticAssembleOutcastMem, maxDynamicAssembleOutcastMem] = ComputeAssembleOutcastMem(slots);
     desc.maxLeafPerCoreSpilledMem = AlignUp(maxPerCoreSpilledMem, TENSOR_ADDR_ALIGNMENT);
@@ -660,8 +660,8 @@ static void FinalizeWorkspaceDescSlotBudgets(
     });
 }
 
-WorkspaceDesc CollectWorkspaceDesc(
-    Function* func, DevAscendProgram& devProg, const std::unordered_set<int>& constructAssembleNeedAllocSlots)
+WorkspaceDesc CollectWorkspaceDesc(Function* func, DevAscendProgram& devProg,
+                                   const std::unordered_set<int>& constructAssembleNeedAllocSlots)
 {
     auto dynAttr = func->GetDyndevAttribute();
     std::vector<FlexSlotInfo> slots = MarkInputOutputAssembleSlots(devProg);
@@ -681,8 +681,8 @@ WorkspaceDesc CollectWorkspaceDesc(
             continue;
         }
         DevAscendFunction* devFunc = reinterpret_cast<DevAscendFunction*>(const_cast<uint8_t*>(data));
-        AccumulateRootFunctionIntoWorkspaceDesc(
-            desc, func, devFunc, slots, maxExclusiveOutcastMem, maxRootMaxExclusiveOutcastMem, maxPerCoreSpilledMem);
+        AccumulateRootFunctionIntoWorkspaceDesc(desc, func, devFunc, slots, maxExclusiveOutcastMem,
+                                                maxRootMaxExclusiveOutcastMem, maxPerCoreSpilledMem);
     }
 
     FinalizeWorkspaceDescSlotBudgets(desc, slots, maxPerCoreSpilledMem, maxRootMaxExclusiveOutcastMem);
@@ -695,20 +695,19 @@ WorkspaceDesc CollectWorkspaceDesc(
         }
     }
     desc.cellMatch.dynamicCellMatchSlotNum = dynamicCellMatchSlotNum;
-    desc.cellMatch.maxDynamicCellMatchTableMem =
-        ComputeMaxDynamicCellMatchTableMemPerSlot(func, devProg, constructAssembleNeedAllocSlots);
+    desc.cellMatch.maxDynamicCellMatchTableMem = ComputeMaxDynamicCellMatchTableMemPerSlot(
+        func, devProg, constructAssembleNeedAllocSlots);
     return desc;
 }
 
-WorkspaceDesc CollectWorkspaceDescFromHostEncodeList(
-    Function* func, const DyndevFunctionAttribute& dyndevAttr,
-    const std::unordered_set<int>& constructAssembleNeedAllocSlots)
+WorkspaceDesc CollectWorkspaceDescFromHostEncodeList(Function* func, const DyndevFunctionAttribute& dyndevAttr,
+                                                     const std::unordered_set<int>& constructAssembleNeedAllocSlots)
 {
     const auto& link = dyndevAttr.inoutLink;
     const auto& hostDevEncodeList = dyndevAttr.devEncodeList;
-    std::vector<FlexSlotInfo> slots = MarkInputOutputAssembleSlots(
-        link.totalSlot, link.inputSlotIndexList, link.outputSlotIndexList, link.assembleSlotIndexList,
-        hostDevEncodeList);
+    std::vector<FlexSlotInfo> slots = MarkInputOutputAssembleSlots(link.totalSlot, link.inputSlotIndexList,
+                                                                   link.outputSlotIndexList, link.assembleSlotIndexList,
+                                                                   hostDevEncodeList);
 
     WorkspaceDesc desc;
     desc.maxUnrollTimes = ComputeMaxUnrollTimesFromDevEncodeList(hostDevEncodeList);
@@ -724,8 +723,8 @@ WorkspaceDesc CollectWorkspaceDescFromHostEncodeList(
             continue;
         }
         DevAscendFunction* devFunc = reinterpret_cast<DevAscendFunction*>(const_cast<uint8_t*>(devEncodeBin.data()));
-        AccumulateRootFunctionIntoWorkspaceDesc(
-            desc, func, devFunc, slots, maxExclusiveOutcastMem, maxRootMaxExclusiveOutcastMem, maxPerCoreSpilledMem);
+        AccumulateRootFunctionIntoWorkspaceDesc(desc, func, devFunc, slots, maxExclusiveOutcastMem,
+                                                maxRootMaxExclusiveOutcastMem, maxPerCoreSpilledMem);
     }
 
     FinalizeWorkspaceDescSlotBudgets(desc, slots, maxPerCoreSpilledMem, maxRootMaxExclusiveOutcastMem);
@@ -736,17 +735,18 @@ WorkspaceDesc CollectWorkspaceDescFromHostEncodeList(
     return desc;
 }
 
-uint64_t DevAscendProgram::GetCtrlFlowCacheSlottedOutcastBlockCount(
-    uint64_t totalSlot, uint32_t outcastCacheDepthFallback) const
+uint64_t DevAscendProgram::GetCtrlFlowCacheSlottedOutcastBlockCount(uint64_t totalSlot,
+                                                                    uint32_t outcastCacheDepthFallback) const
 {
-    const uint64_t liveSlotCount =
-        memBudget.tensor.devTaskBoundaryOutcastNum + memBudget.tensor.devTaskInnerTemporalOutcastNum;
+    const uint64_t liveSlotCount = memBudget.tensor.devTaskBoundaryOutcastNum +
+                                   memBudget.tensor.devTaskInnerTemporalOutcastNum;
     if (liveSlotCount != 0) {
         return liveSlotCount;
     }
-    const uint32_t depth = outcastCacheDepthFallback > 0 ? outcastCacheDepthFallback
-                                                           : (stitchMaxFunctionNum > 0 ? stitchMaxFunctionNum
-                                                                                         : static_cast<uint32_t>(MAX_STITCH_FUNC_NUM));
+    const uint32_t depth = outcastCacheDepthFallback > 0 ?
+                               outcastCacheDepthFallback :
+                               (stitchMaxFunctionNum > 0 ? stitchMaxFunctionNum :
+                                                           static_cast<uint32_t>(MAX_STITCH_FUNC_NUM));
     return EstimateCtrlFlowCacheSlottedBlockCount(totalSlot, depth);
 }
 

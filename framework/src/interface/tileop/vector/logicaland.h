@@ -22,9 +22,8 @@
 #include "utils/tile_tensor.h"
 
 template <typename Type>
-using CVT_TYPE = std::conditional_t<std::is_same_v<Type, float>
-                                 || std::is_same_v<Type, int32_t>
-                                 || std::is_same_v<Type, int64_t>, float, half>;
+using CVT_TYPE = std::conditional_t<
+    std::is_same_v<Type, float> || std::is_same_v<Type, int32_t> || std::is_same_v<Type, int64_t>, float, half>;
 
 template <typename T, typename U>
 using FINAL_TYPE = std::conditional_t<std::is_same_v<CVT_TYPE<T>, CVT_TYPE<U>>, CVT_TYPE<T>, float>;
@@ -87,8 +86,8 @@ TILEOP void SelectLogicalResult(T& dst, U& src1, U& src2, TMP& tmp)
 }
 
 template <typename T, typename U1, typename U2, typename L, typename Res, typename Cvt, typename V>
-TILEOP void LogicalAndImpl(
-    T& dst, U1& src1, U2& src2, L& tmp1, L& tmp2, L& ones, L& zeros, Res& res1, Res& res2, Cvt& cvt, V& startAddrUBTile)
+TILEOP void LogicalAndImpl(T& dst, U1& src1, U2& src2, L& tmp1, L& tmp2, L& ones, L& zeros, Res& res1, Res& res2,
+                           Cvt& cvt, V& startAddrUBTile)
 {
     CalculateSrcLogicalTile(tmp1, src1, zeros, ones, res1, cvt, startAddrUBTile);
 #ifdef __DAV_V220
@@ -208,19 +207,19 @@ TILEOP void TLogicalAnd(T0 dst, T1 src1, T2 src2, T3 tmp)
                         loopDstTile.Assign(dst.GetAddr(), dstOffset + j * COUNT_MAX);
                         loopSrc1Tile.Assign(src1.GetAddr(), src1Offset + j * COUNT_MAX);
                         loopSrc2Tile.Assign(src2.GetAddr(), src2Offset + j * COUNT_MAX);
-                        LogicalAndImpl(
-                            loopDstTile.Data(), loopSrc1Tile.Data(), loopSrc2Tile.Data(), loopTmp1Tile.Data(),
-                            loopTmp2Tile.Data(), loopOneTile.Data(), loopZeroTile.Data(), cmp1Tile.Data(),
-                            cmp2Tile.Data(), loopCvtTile.Data(), startAddrUBTile.Data());
+                        LogicalAndImpl(loopDstTile.Data(), loopSrc1Tile.Data(), loopSrc2Tile.Data(),
+                                       loopTmp1Tile.Data(), loopTmp2Tile.Data(), loopOneTile.Data(),
+                                       loopZeroTile.Data(), cmp1Tile.Data(), cmp2Tile.Data(), loopCvtTile.Data(),
+                                       startAddrUBTile.Data());
                     }
                     if (remainAfterLoop > 0) {
                         remainDstTile.Assign(dst.GetAddr(), dstOffset + numLoop * COUNT_MAX);
                         remainSrc1Tile.Assign(src1.GetAddr(), src1Offset + numLoop * COUNT_MAX);
                         remainSrc2Tile.Assign(src2.GetAddr(), src2Offset + numLoop * COUNT_MAX);
-                        LogicalAndImpl(
-                            remainDstTile.Data(), remainSrc1Tile.Data(), remainSrc2Tile.Data(), remainTmp1Tile.Data(),
-                            remainTmp2Tile.Data(), remainOneTile.Data(), remainZeroTile.Data(), cmp1Tile.Data(),
-                            cmp2Tile.Data(), remainCvtTile.Data(), startAddrUBTile.Data());
+                        LogicalAndImpl(remainDstTile.Data(), remainSrc1Tile.Data(), remainSrc2Tile.Data(),
+                                       remainTmp1Tile.Data(), remainTmp2Tile.Data(), remainOneTile.Data(),
+                                       remainZeroTile.Data(), cmp1Tile.Data(), cmp2Tile.Data(), remainCvtTile.Data(),
+                                       startAddrUBTile.Data());
                     }
                 }
             }

@@ -43,10 +43,11 @@ TEST(PassTest, InferMemoryConflictInferOutputWriteConflict)
         }
     }
     int cnt = 0;
-    PassManager::Instance().RegisterStrategy(
-        "InferOutputWriteConflictTestStrategy", {{"InferMemoryConflict", PassName::INFER_MEMORY_CONFLICT}});
-    EXPECT_EQ(PassManager::Instance().RunPass(
-        Program::GetInstance(), *loopFunc, "InferOutputWriteConflictTestStrategy"), SUCCESS);
+    PassManager::Instance().RegisterStrategy("InferOutputWriteConflictTestStrategy",
+                                             {{"InferMemoryConflict", PassName::INFER_MEMORY_CONFLICT}});
+    EXPECT_EQ(
+        PassManager::Instance().RunPass(Program::GetInstance(), *loopFunc, "InferOutputWriteConflictTestStrategy"),
+        SUCCESS);
     for (auto out : loopFunc->GetOriginOutcast()) {
         if (out->tensor->GetSymbol() == "a") {
             EXPECT_FALSE(out->HasAttr(OpAttributeKey::writeConflict));

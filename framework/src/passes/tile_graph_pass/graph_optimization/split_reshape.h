@@ -154,29 +154,26 @@ private:
     Status SetMemoryType(Function& function);
 
     Status ObtainReshapeSource(Function& function, const OpPara& para, LogicalTensorPtr& newReshapeSource);
-    Status ObtainCopyOutTile(
-        Function& function, const copyOutTilePara& copyOutTile, LogicalTensors& overlaps, LogicalTensors& newOverlaps,
-        OverlapStatus& overlapStatus);
-    Status ConstructShapeOffset(
-        const ReshapeTilePara& shapePara, size_t& i, size_t j, std::vector<int64_t>& newOffset,
-        std::vector<int64_t>& newShape);
+    Status ObtainCopyOutTile(Function& function, const copyOutTilePara& copyOutTile, LogicalTensors& overlaps,
+                             LogicalTensors& newOverlaps, OverlapStatus& overlapStatus);
+    Status ConstructShapeOffset(const ReshapeTilePara& shapePara, size_t& i, size_t j, std::vector<int64_t>& newOffset,
+                                std::vector<int64_t>& newShape);
 
-    Status CalcTileInfo(
-        const CalcOverlapPara& para, std::vector<int64_t>& newShape, std::vector<int64_t>& newOffset,
-        std::vector<int64_t>& reshapeTileShape, std::vector<int64_t>& reshapeTileOffset);
-    Status CheckReshapeSkip(
-        const LogicalTensorPtr& input, const LogicalTensorPtr& output, CheckOutputParam& checkOutputParam);
+    Status CalcTileInfo(const CalcOverlapPara& para, std::vector<int64_t>& newShape, std::vector<int64_t>& newOffset,
+                        std::vector<int64_t>& reshapeTileShape, std::vector<int64_t>& reshapeTileOffset);
+    Status CheckReshapeSkip(const LogicalTensorPtr& input, const LogicalTensorPtr& output,
+                            CheckOutputParam& checkOutputParam);
     Status CheckValidOp(const CheckParam& para, CheckOutputParam& checkOutputParam);
     Status CheckOp(Function& function, Operation& op);
-    Status UpdateReshapeOp(
-        Function& function, Operation& op, const OverlapStatus& status, const CalcOverlapPara& calcpara);
+    Status UpdateReshapeOp(Function& function, Operation& op, const OverlapStatus& status,
+                           const CalcOverlapPara& calcpara);
     Status ProcessPerfectlyMatch(Function& function, Operation& op, const PerfectlyMatchPara& para);
     Status ProcessOnetoOne(Function& function, Operation& op, const CalcOverlapPara& para);
     Status ProcessBeCovered(Function& function, Operation& op, const BeCoveredPara& para);
     Status ProcessOnetoMulti(Function& function, Operation& op, const CalcOverlapPara& para);
     Status ProcessPerfectlyMatchWithAll(Function& function, Operation& op, const PerfectlyMatchWithAllPara& para);
-    Status UpdateForPerfectlyMatchWithAll(
-        Function& function, Operation& op, const CalcOverlapPara& para, const ReshapeSourcePara& sourcePara);
+    Status UpdateForPerfectlyMatchWithAll(Function& function, Operation& op, const CalcOverlapPara& para,
+                                          const ReshapeSourcePara& sourcePara);
     Status ProcessMultitoOne(Function& function, Operation& op, const CalcOverlapPara& para);
     Status AddReshapeRawInputs(const int overlapRawMagic, const LogicalTensorPtr overlap);
 
@@ -187,31 +184,26 @@ private:
     std::vector<int64_t> ObtainMapOffset(const LogicalTensorPtr& input, const LogicalTensorPtr& output) const;
     bool HasAssembleInputProducedByReduceAcc(const LogicalTensorPtr& reshapeSource, int& assembleOpMagic) const;
 
-    Status AddAssembleOp(
-        const MemoryType& memoryType, const std::vector<int64_t>& outputOffset, const LogicalTensorPtr& input,
-        const LogicalTensorPtr& output, const Operation* originOp);
-    Status GetAssembleDynShape(
-        const LogicalTensorPtr& input, const LogicalTensorPtr& output, const std::vector<int64_t>& toOffset,
-        std::vector<SymbolicScalar>& dynValidShape);
+    Status AddAssembleOp(const MemoryType& memoryType, const std::vector<int64_t>& outputOffset,
+                         const LogicalTensorPtr& input, const LogicalTensorPtr& output, const Operation* originOp);
+    Status GetAssembleDynShape(const LogicalTensorPtr& input, const LogicalTensorPtr& output,
+                               const std::vector<int64_t>& toOffset, std::vector<SymbolicScalar>& dynValidShape);
     Status GetReshapeDynShape(const std::shared_ptr<ReshapeOp>& op, std::vector<SymbolicScalar>& dynValidShape);
     Status GroupReshapeOffset(const std::shared_ptr<ReshapeOp>& isAddReshapeop, const std::vector<int64_t>& offset);
-    Status UpdateDynShape(
-        const std::shared_ptr<ReshapeOp>& reshapeOp, const std::vector<int64_t>& offset,
-        const std::vector<SymbolicScalar>& dynShape);
-    Status ObtainChangingAxis(
-        std::vector<int64_t> alignedShape, std::vector<int64_t> input, std::vector<bool>& ChangingAxis);
-    Status CheckDynStatus(
-        std::vector<int64_t> alignedShape, std::vector<int64_t> input, std::vector<int64_t> output,
-        std::vector<SymbolicScalar> dynOutput);
-    Status CheckDynOutputAlignment(
-        const std::vector<int64_t>& alignedShape, const std::vector<int64_t>& output,
-        const std::vector<SymbolicScalar>& dynOutput, const std::vector<bool>& changingAxis);
+    Status UpdateDynShape(const std::shared_ptr<ReshapeOp>& reshapeOp, const std::vector<int64_t>& offset,
+                          const std::vector<SymbolicScalar>& dynShape);
+    Status ObtainChangingAxis(std::vector<int64_t> alignedShape, std::vector<int64_t> input,
+                              std::vector<bool>& ChangingAxis);
+    Status CheckDynStatus(std::vector<int64_t> alignedShape, std::vector<int64_t> input, std::vector<int64_t> output,
+                          std::vector<SymbolicScalar> dynOutput);
+    Status CheckDynOutputAlignment(const std::vector<int64_t>& alignedShape, const std::vector<int64_t>& output,
+                                   const std::vector<SymbolicScalar>& dynOutput, const std::vector<bool>& changingAxis);
     Status UpdateShapeOffset(UpdatePara& para, bool& flag, int& currentShape, int& currentOffset);
     Status ShapeAlign(std::vector<int64_t> shape1, std::vector<int64_t> shape2, std::vector<int64_t>& alignedShape);
-    Status RawToAlign(
-        const ReshapeTilePara& shapePara, std::vector<int64_t>& newOffset, std::vector<int64_t>& newShape);
-    Status AlignToRaw(
-        const ReshapeTilePara& shapePara, std::vector<int64_t>& newOffset, std::vector<int64_t>& newShape);
+    Status RawToAlign(const ReshapeTilePara& shapePara, std::vector<int64_t>& newOffset,
+                      std::vector<int64_t>& newShape);
+    Status AlignToRaw(const ReshapeTilePara& shapePara, std::vector<int64_t>& newOffset,
+                      std::vector<int64_t>& newShape);
 
     Status DefaultEnabledPreCheck(Function& function) override;
     SplitReshapeChecker checker_;

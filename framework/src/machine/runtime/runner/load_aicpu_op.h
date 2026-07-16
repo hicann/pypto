@@ -28,9 +28,8 @@ class LoadAicpuOp {
 public:
     LoadAicpuOp() = default;
     ~LoadAicpuOp() {}
-    static int AicpuKernelLaunch(
-        [[maybe_unused]] void* funcHandle, [[maybe_unused]] const RtStream& stream,
-        [[maybe_unused]] DeviceKernelArgs* kArgs, [[maybe_unused]] const uint32_t& blockDim);
+    static int AicpuKernelLaunch([[maybe_unused]] void* funcHandle, [[maybe_unused]] const RtStream& stream,
+                                 [[maybe_unused]] DeviceKernelArgs* kArgs, [[maybe_unused]] const uint32_t& blockDim);
     int LaunchBuiltInOp(RtStream stream, DeviceKernelArgs* kArgs, const int& aicpuNum,
                         const std::string& funcName) const;
     int LaunchPyptoNullOp(RtStream stream, DeviceKernelArgs* kArgs, const int& aicpuNum);
@@ -43,6 +42,7 @@ public:
         static LoadAicpuOp loadCustomAicpuOp;
         return loadCustomAicpuOp;
     }
+
 private:
     void* customBinHandle_ = nullptr;
     bool isPyptoNullLaunched_ = false;

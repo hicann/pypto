@@ -43,10 +43,7 @@ std::vector<uint8_t> DeviceLauncher::tensorInfo_(kDefaultTensorinfoSize);
 std::unordered_map<Function*, DeviceLauncher::DeviceRunCacheInfo> DeviceLauncher::cacheInfoDict_;
 std::atomic<int64_t> DeviceLauncher::sequence_(0);
 
-void DeviceLauncher::CheckAscendDriverVersionOnboard()
-{
-    AscendDriverVersionGate::EnsureDriverVersionForOnboardOnce();
-}
+void DeviceLauncher::CheckAscendDriverVersionOnboard() { AscendDriverVersionGate::EnsureDriverVersionForOnboardOnce(); }
 
 int DeviceLauncher::SetCaptureStream(RtStream aicoreStream, RtStream aicpuStream, bool& isCapture)
 {
@@ -96,8 +93,8 @@ int DeviceLauncher::DeviceLaunchOnceWithDeviceTensorData(
 {
     MACHINE_LOGI("Kernel Launch");
     aicoreStream = aicoreStream == nullptr ? GetContextAiCoreStream() : aicoreStream;
-    KernelLaunchInfo launchInfo(GetContextScheStream(), GetContextCtrlStream(), aicoreStream,
-        config.blockdim, config.aicpuNum);
+    KernelLaunchInfo launchInfo(GetContextScheStream(), GetContextCtrlStream(), aicoreStream, config.blockdim,
+                                config.aicpuNum);
     // 1.Add stream to capture model
     int rc = SetCaptureStream(launchInfo.aicoreStream, launchInfo.schedStream, launchInfo.isCaptureActivate);
     if (rc < 0) {
@@ -182,26 +179,27 @@ int DeviceLauncher::DeviceSynchronize(RtStream aicpuStream, RtStream aicoreStrea
     return rc;
 }
 
-int DeviceLauncher::DeviceRunOnce(
-    Function* function, DevControlFlowCache* hostCtrlCache, const DeviceLauncherConfig& config)
+int DeviceLauncher::DeviceRunOnce(Function* function, DevControlFlowCache* hostCtrlCache,
+                                  const DeviceLauncherConfig& config)
 {
     auto& inputDataList = ProgramData::GetInstance().GetInputDataList();
     auto& outputDataList = ProgramData::GetInstance().GetOutputDataList();
     std::vector<DeviceTensorData> inputDeviceDataList;
     std::vector<DeviceTensorData> outputDeviceDataList;
     DeviceMemoryUtils devMemoryUtilis(true);
-    std::tie(inputDeviceDataList, outputDeviceDataList) =
-        BuildInputOutputFromHost(devMemoryUtilis, inputDataList, outputDataList);
+    std::tie(inputDeviceDataList, outputDeviceDataList) = BuildInputOutputFromHost(devMemoryUtilis, inputDataList,
+                                                                                   outputDataList);
 
     DeviceMemoryUtils devMemory(false);
     uint8_t* devCtrlCache = nullptr;
     if (hostCtrlCache) {
-        devCtrlCache =
-            devMemory.CopyToDev(reinterpret_cast<uint8_t*>(hostCtrlCache), hostCtrlCache->usedCacheSize, nullptr);
+        devCtrlCache = devMemory.CopyToDev(reinterpret_cast<uint8_t*>(hostCtrlCache), hostCtrlCache->usedCacheSize,
+                                           nullptr);
     }
 
     int rc = DeviceLaunchOnceWithDeviceTensorData(function, inputDeviceDataList, outputDeviceDataList, nullptr, true,
-        nullptr, reinterpret_cast<DevControlFlowCache*>(devCtrlCache), config);
+                                                  nullptr, reinterpret_cast<DevControlFlowCache*>(devCtrlCache),
+                                                  config);
     CopyFromDev(DeviceMemoryUtils(), outputDataList);
     if (HasInplaceArgs(function) || outputDataList.size() == 0) {
         CopyFromDev(DeviceMemoryUtils(), inputDataList);
@@ -221,10 +219,7 @@ void DeviceLauncher::SetDevRunCacheKernelEnable(Function* func, bool enabled)
     cacheInfoDict_[func].devProgEnabled = enabled;
 }
 
-bool DeviceLauncher::IsDevRunCacheKernelEnable(Function* func)
-{
-    return cacheInfoDict_[func].devProgEnabled;
-}
+bool DeviceLauncher::IsDevRunCacheKernelEnable(Function* func) { return cacheInfoDict_[func].devProgEnabled; }
 
 void DeviceLauncher::SetDevRunCacheKernel(Function* func, uint8_t* devProg)
 {
@@ -287,7 +282,7 @@ int32_t DataFormat2CannFormat(const TileOpFormat format)
 }
 
 void DeviceLauncher::DumpIOTensorsWithCann(AclRtStream stream, std::vector<DeviceTensorData>& tensors,
-    const std::string& funcName)
+                                           const std::string& funcName)
 {
     if (AdxDumpGetDumpSwitch(AdxDumpType::OPERATOR) != 0) {
         std::vector<AdxTensorInfoV2> dumpTensors;
@@ -298,7 +293,7 @@ void DeviceLauncher::DumpIOTensorsWithCann(AclRtStream stream, std::vector<Devic
             info.tensorSize = static_cast<size_t>(tensor.GetDataSize());
             info.format = DataFormat2CannFormat(tensor.Format());
             info.dataType = static_cast<int32_t>(DataType2CannType(tensor.GetDataType()));
-            info.tensorAddr = static_cast<int64_t *>(tensor.GetAddr());
+            info.tensorAddr = static_cast<int64_t*>(tensor.GetAddr());
             info.placement = static_cast<int32_t>(AdxTensorPlacement::kOnDeviceHbm);
             info.shape = tensor.GetShape();
             info.originShape = tensor.GetShape();
@@ -381,7 +376,7 @@ int DeviceLauncher::LaunchSyncTask(AclRtStream aicoreStream, bool isCaptureMode,
     if (launchEarlyMode == 1) { // 1 ： early launch in all modes
         return 0;
     }
-    if (launchEarlyMode == 0 && isCaptureMode) {  // 0 : early launch only in capture mode
+    if (launchEarlyMode == 0 && isCaptureMode) { // 0 : early launch only in capture mode
         return 0;
     }
 
@@ -416,9 +411,8 @@ int DeviceLauncher::RunPreSync(RtStream scheStream, RtStream ctrlStream, RtStrea
     return 0;
 }
 
-int DeviceLauncher::LaunchAicpuKernel(
-    RtAicpuArgsEx& rtArgs, [[maybe_unused]] bool debugEnable, [[maybe_unused]] Function* function,
-    const std::vector<DeviceTensorData>& tensors)
+int DeviceLauncher::LaunchAicpuKernel(RtAicpuArgsEx& rtArgs, [[maybe_unused]] bool debugEnable,
+                                      [[maybe_unused]] Function* function, const std::vector<DeviceTensorData>& tensors)
 {
     auto ctrlStream = GetStreamContext().GetCtrlStream();
     auto schedStream = GetStreamContext().GetScheStream();
@@ -427,17 +421,18 @@ int DeviceLauncher::LaunchAicpuKernel(
     int ret = 0;
     auto args = (AiCpuArgs*)rtArgs.args;
     const int nrAicpu = static_cast<int>(DeviceLauncher::GetDevProg(function)->devArgs.nrAicpu);
-    const bool launchSchedSameCluster = static_cast<int>(DeviceLauncher::GetDevProg(function)->devArgs.launchSchedSameCluster);
+    const bool launchSchedSameCluster = static_cast<int>(
+        DeviceLauncher::GetDevProg(function)->devArgs.launchSchedSameCluster);
     if (launchSchedSameCluster) {
         MACHINE_LOGW("When available AICPUs are insufficient, execute export PYPTO_LAUNCH_SCHED_SAME_CLUSTER=false"
-            "to disable the constraint that forces scheduling threads onto the same cluster.");
+                     "to disable the constraint that forces scheduling threads onto the same cluster.");
     }
     args->kArgs.parameter.ctrlBlockNum = static_cast<int>(DeviceLauncher::GetDevProg(function)->ctrlBlockDim);
-    auto startTime = MspfSysCycleTime();    
+    auto startTime = MspfSysCycleTime();
     args->kArgs.parameter.runMode = RUN_SPLITTED_STREAM_CTRL;
-    ret = RuntimeAicpuKernelLaunchExWithArgs(
-        static_cast<uint32_t>(npu::tile_fwk::RtKernelType::AICPU_KFC), "AST_DYN_AICPU", 1, &rtArgs, nullptr, ctrlStream,
-        RT_KERNEL_USE_SPECIAL_TIMEOUT);
+    ret = RuntimeAicpuKernelLaunchExWithArgs(static_cast<uint32_t>(npu::tile_fwk::RtKernelType::AICPU_KFC),
+                                             "AST_DYN_AICPU", 1, &rtArgs, nullptr, ctrlStream,
+                                             RT_KERNEL_USE_SPECIAL_TIMEOUT);
     devRunner.ReportHostProfInfo(ctrlStream, startTime, 1, MSPF_GE_TASK_TYPE_AI_CPU, false);
     if (ret != RT_SUCCESS) {
         return ret;
@@ -445,16 +440,15 @@ int DeviceLauncher::LaunchAicpuKernel(
     args->kArgs.parameter.runMode = RUN_SPLITTED_STREAM_SCHE;
     startTime = MspfSysCycleTime();
     const int scheCpuNum = static_cast<int>(DeviceLauncher::GetDevProg(function)->devArgs.scheCpuNum);
-    ret = RuntimeAicpuKernelLaunchExWithArgs(
-        static_cast<uint32_t>(npu::tile_fwk::RtKernelType::AICPU_KFC), "AST_DYN_AICPU", nrAicpu, &rtArgs, nullptr,
-        schedStream, RT_KERNEL_USE_SPECIAL_TIMEOUT);
-    devRunner.ReportHostProfInfo(schedStream, startTime, scheCpuNum, MSPF_GE_TASK_TYPE_AI_CPU, false);    
+    ret = RuntimeAicpuKernelLaunchExWithArgs(static_cast<uint32_t>(npu::tile_fwk::RtKernelType::AICPU_KFC),
+                                             "AST_DYN_AICPU", nrAicpu, &rtArgs, nullptr, schedStream,
+                                             RT_KERNEL_USE_SPECIAL_TIMEOUT);
+    devRunner.ReportHostProfInfo(schedStream, startTime, scheCpuNum, MSPF_GE_TASK_TYPE_AI_CPU, false);
     return ret;
 }
 
-int DeviceLauncher::LaunchAicoreKernel(
-    AclRtStream aicoreStream, void* kernel, RtArgsEx& rtArgs, RtTaskCfgInfo& rtTaskCfg,
-    bool debugEnable, [[maybe_unused]] Function* function)
+int DeviceLauncher::LaunchAicoreKernel(AclRtStream aicoreStream, void* kernel, RtArgsEx& rtArgs,
+                                       RtTaskCfgInfo& rtTaskCfg, bool debugEnable, [[maybe_unused]] Function* function)
 {
     auto& devRunner = DeviceRunner::Get();
     auto tilingKey = OpInfoManager::GetInstance().GetOpTilingKey();
@@ -493,7 +487,8 @@ int DeviceLauncher::LaunchAicoreKernel(
 }
 
 int DeviceLauncher::LaunchKernel(AclRtStream aicoreStream, uint8_t* ctrlFlowCache, KernelBinary* kernel,
-    int64_t* workspace, const std::vector<DeviceTensorData>& tensors, bool isDebugMode, int launchEarlyMode)
+                                 int64_t* workspace, const std::vector<DeviceTensorData>& tensors, bool isDebugMode,
+                                 int launchEarlyMode)
 {
     auto& rtAicpuArgs = kernel->GetRtAicpuArgs();
     auto& rtAicoreArgs = kernel->GetRtAicoreArgs();
@@ -529,15 +524,14 @@ int DeviceLauncher::LaunchKernel(AclRtStream aicoreStream, uint8_t* ctrlFlowCach
     kernelArgs[0] = const_cast<char*>(kernel->GetKernelname().c_str());
     kernelArgs[4] = (int64_t*)(args + 1);
     kernelArgs[6] = (DevTensorData*)((int64_t*)(args + 1) + 2);
-    ret = LaunchAicoreKernel(
-        aicoreStream, kernel->GetKernelBin(), rtAicoreArgs, rtTaskCfg, debugEnable, kernel->GetFunction());
+    ret = LaunchAicoreKernel(aicoreStream, kernel->GetKernelBin(), rtAicoreArgs, rtTaskCfg, debugEnable,
+                             kernel->GetFunction());
     MACHINE_ASSERT(ret == RT_SUCCESS) << "launch aicore failed: " << ret;
     return ret;
 }
 
-void DeviceLauncher::EmulationLaunch(
-    Function* function, const std::vector<DeviceTensorData>& tensors,
-    DevControlFlowCache* ctrlCache, LaunchMode launchMode)
+void DeviceLauncher::EmulationLaunch(Function* function, const std::vector<DeviceTensorData>& tensors,
+                                     DevControlFlowCache* ctrlCache, LaunchMode launchMode)
 {
     DeviceLauncherConfig config;
     DeviceLauncherConfigFillDeviceInfo(config);
@@ -551,9 +545,8 @@ void DeviceLauncher::EmulationLaunch(
     }
 }
 
-uint8_t* DeviceLauncher::PrepareLaunch(
-    KernelBinary* kernel, std::vector<DeviceTensorData>& tensors,
-    AclMdlRI rtModel, LaunchMode launchMode)
+uint8_t* DeviceLauncher::PrepareLaunch(KernelBinary* kernel, std::vector<DeviceTensorData>& tensors, AclMdlRI rtModel,
+                                       LaunchMode launchMode)
 {
     AddAicpuStream(IsCaptureMode(), rtModel);
     HOST_PERF_TRACE(TracePhase::LaunchAttachStream);

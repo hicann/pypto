@@ -37,16 +37,15 @@ public:
 
     template <typename Scheduler>
     friend Status RunSchedulerMainLoop(Scheduler& self);
+
 public:
-    Status Schedule(
-        const std::vector<Operation*>& opList,
-        const std::unordered_map<Operation*, CoreLocationType>& opCoreMap =
-            std::unordered_map<Operation*, CoreLocationType>(),
-        const std::unordered_set<CoreLocationType> fixCoreConfig = CORE_INIT_CONFIGS_HARDWARE_ONE);
+    Status Schedule(const std::vector<Operation*>& opList,
+                    const std::unordered_map<Operation*, CoreLocationType>& opCoreMap =
+                        std::unordered_map<Operation*, CoreLocationType>(),
+                    const std::unordered_set<CoreLocationType> fixCoreConfig = CORE_INIT_CONFIGS_HARDWARE_ONE);
     OoOScheduler(Function& function)
-        : function_(function),
-          spillEngine_(state_, function_),
-          dualDstEngine_(state_, function_) {}
+        : function_(function), spillEngine_(state_, function_), dualDstEngine_(state_, function_)
+    {}
 
     void AddObserver(ScheduleObserver* observer) { state_.observers_.push_back(observer); }
     std::vector<Operation*> GetNewOperations();
@@ -56,7 +55,6 @@ public:
     void SetEnableDualDst(bool v) { dualDstEngine_.SetEnableDualDst(v); }
 
 private:
-
     Function& function_;
     SpillEngine spillEngine_;
     DualDstEngine dualDstEngine_;
@@ -73,7 +71,7 @@ private:
     void NotifyOpRetire(Operation* op, const std::vector<int>& freedMemIds);
     void NotifyAllocExec(Operation* op, int memId);
     void NotifyBufferRearrange(Operation* triggerOp, MemoryType memType,
-        std::vector<BufferRearrangeEvent::Change> changes);
+                               std::vector<BufferRearrangeEvent::Change> changes);
     void NotifyAllocFail(Operation* triggerOp, MemoryType memType, uint64_t requestSize);
     void NotifyScheduleEnd(bool success);
     void NotifyInitDDRBuffers();
@@ -86,23 +84,22 @@ private:
     std::vector<DDRRef> BuildDDRRefs(Operation* op) const;
 
     // scheduler
-    Status Init(
-        const std::vector<Operation*>& opList,
-        const std::unordered_map<Operation*, CoreLocationType>& opCoreMap =
-            std::unordered_map<Operation*, CoreLocationType>(),
-        const std::unordered_set<CoreLocationType> fixCoreConfig = CORE_INIT_CONFIGS_HARDWARE_ONE);
+    Status Init(const std::vector<Operation*>& opList,
+                const std::unordered_map<Operation*, CoreLocationType>& opCoreMap =
+                    std::unordered_map<Operation*, CoreLocationType>(),
+                const std::unordered_set<CoreLocationType> fixCoreConfig = CORE_INIT_CONFIGS_HARDWARE_ONE);
 
     Status InitOpEntry(Operation* op, const std::unordered_map<Operation*, CoreLocationType>& opCoreMap);
     Status InitOpCoreType(Operation* op, const std::unordered_map<Operation*, CoreLocationType>& opCoreMap);
     void InitOpViewOps(Operation* op);
 
-    void InitCoreConfig(const std::vector<Operation *> &opList);
+    void InitCoreConfig(const std::vector<Operation*>& opList);
     void InitTensorCoreMap();
     void InitIssueQueuesAndBufferManager();
 
-    void AllocWorkspaceGM(const std::vector<Operation *> &opList);
+    void AllocWorkspaceGM(const std::vector<Operation*>& opList);
     Status SeqSchedule();
-    Status ExecuteAllocIssue(Operation* op, size_t &pcIdx);
+    Status ExecuteAllocIssue(Operation* op, size_t& pcIdx);
     Status RetireIssue(Operation* op);
     Status ScheduleMainLoop();
     void LaunchReadyIssue();
@@ -113,19 +110,17 @@ private:
     Status RetireOpAndAwakeSucc(Operation* op, uint64_t& commitCnt);
     Status FreeBuffer(Operation* op, std::vector<int>& freedMemIds);
     Status BufferAllocStage(uint64_t& commitCnt);
-    Status ExecuteAllocIssue(uint64_t &commitCnt, MemoryType memType,
-        OpQueue &pipe);
+    Status ExecuteAllocIssue(uint64_t& commitCnt, MemoryType memType, OpQueue& pipe);
     Status TryDualDstAllocOnce(Operation* op, uint64_t& commitCnt, bool& allocated);
     Status TryRegularAllocOnce(Operation* op, MemoryType memType, CoreLocationType coreLocation,
-                               const std::vector<int>& reqMemIds,
-                               uint64_t& commitCnt, bool& allocated);
+                               const std::vector<int>& reqMemIds, uint64_t& commitCnt, bool& allocated);
     void HandleViewOp(Operation* op);
     Status LaunchIssueStage(int& nextCycle);
     Status AllocTensorMemRange(Operation* op);
-    Status AllocViewTensorMemRange(Operation &operation);
+    Status AllocViewTensorMemRange(Operation& operation);
     Status CheckAndUpdateLifecycle();
     void UpdateIssueExecOrder();
-    void PrintOpList(std::vector<Operation *> opList);
+    void PrintOpList(std::vector<Operation*> opList);
     bool HasEnoughBuffer(Operation* allocOp, MemoryType memType);
     Status RearrangeBuffer(Operation* allocOp, MemoryType memType);
     Status GenBufferSpill(Operation* allocOp, SpillContext& ctx);
@@ -134,19 +129,19 @@ private:
     Status PrintSpillFailedInfo(Operation* allocOp);
     std::vector<std::vector<int>> GetSpillGroup(BufferPool& pool, size_t sizeNeedSpill);
     std::vector<std::vector<int>> GetDualSpillGroup(BufferPool& poolA, BufferPool& poolB, size_t sizeNeedSpill);
-    Status GetGroupNextUseTime(std::vector<int> group, Operation* allocOp,
-        std::vector<int> &groupNextUseTime, std::unordered_map<int, size_t> &nextUseTimeCache);
+    Status GetGroupNextUseTime(std::vector<int> group, Operation* allocOp, std::vector<int>& groupNextUseTime,
+                               std::unordered_map<int, size_t>& nextUseTimeCache);
 
     Status SpillOnBlock();
     Status SpillOnCoreBlock(std::pair<CoreLocationType, MemoryType> coreLocation);
-    Status FindFirstOrder(std::pair<CoreLocationType, MemoryType> &orderFirstPair);
-    Status FindCoreLocationMemoryType(CoreLocationType coreLocation, MemoryType &spillMemType);
+    Status FindFirstOrder(std::pair<CoreLocationType, MemoryType>& orderFirstPair);
+    Status FindCoreLocationMemoryType(CoreLocationType coreLocation, MemoryType& spillMemType);
 
     std::vector<Operation*>& GetViewOps(Operation* op) { return state_.schedInfoMap[op].viewOps; }
     void SetIsRetired(Operation* op, bool isRetired) { state_.schedInfoMap[op].isRetired = isRetired; }
     void SetCoreLocation(Operation* op, CoreLocationType loc) { state_.schedInfoMap[op].coreLocation = loc; }
 
-    void UpdateL0MXMap(const std::vector<Operation*> &opList);
+    void UpdateL0MXMap(const std::vector<Operation*>& opList);
 };
 } // namespace npu::tile_fwk
 #endif // PASS_SCHEDULER_H

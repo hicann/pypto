@@ -55,12 +55,11 @@ public:
 
 TEST_F(CodegenPreprocTest, TestSaveGmTensorParamIdxToOp)
 {
-    auto rootFuncPtr = std::make_shared<Function>(
-        Program::GetInstance(), "TestSaveGmTensorParamIdxToOp", "TestSaveGmTensorParamIdxToOp", nullptr);
+    auto rootFuncPtr = std::make_shared<Function>(Program::GetInstance(), "TestSaveGmTensorParamIdxToOp",
+                                                  "TestSaveGmTensorParamIdxToOp", nullptr);
     rootFuncPtr->rootFunc_ = rootFuncPtr.get();
-    auto currFunctionPtr = std::make_shared<Function>(
-        Program::GetInstance(), "TestSaveGmTensorParamIdxToOpLeaf", "TestSaveGmTensorParamIdxToOpLeaf",
-        rootFuncPtr.get());
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestSaveGmTensorParamIdxToOpLeaf",
+                                                      "TestSaveGmTensorParamIdxToOpLeaf", rootFuncPtr.get());
     EXPECT_TRUE(currFunctionPtr != nullptr);
     rootFuncPtr->rootFunc_->programs_.emplace(currFunctionPtr->GetFuncMagic(), currFunctionPtr.get());
     rootFuncPtr->SetFunctionType(FunctionType::DYNAMIC_LOOP_PATH);
@@ -124,11 +123,11 @@ TEST_F(CodegenPreprocTest, TestCombineAxisRowSumLine)
     PadLocalBuffer padLocalBufferTest;
     EXPECT_EQ(padLocalBufferTest.RunOnFunction(*funcPtr), SUCCESS);
 
-    auto rootFuncPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestCombineAxis", "TestCombineAxis", nullptr);
+    auto rootFuncPtr = std::make_shared<Function>(Program::GetInstance(), "TestCombineAxis", "TestCombineAxis",
+                                                  nullptr);
     rootFuncPtr->rootFunc_ = rootFuncPtr.get();
-    auto currFunctionPtr = std::make_shared<Function>(
-        Program::GetInstance(), "TestCombineAxisLeaf", "TestCombineAxisLeaf", graph.GetFunction());
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestCombineAxisLeaf",
+                                                      "TestCombineAxisLeaf", graph.GetFunction());
     EXPECT_TRUE(currFunctionPtr != nullptr);
     rootFuncPtr->rootFunc_->programs_.emplace(currFunctionPtr->GetFuncMagic(), graph.GetFunction());
     rootFuncPtr->SetFunctionType(FunctionType::DYNAMIC_LOOP_PATH);
@@ -178,11 +177,11 @@ TEST_F(CodegenPreprocTest, TestCombineAxisExpand)
     PadLocalBuffer padLocalBufferTest;
     EXPECT_EQ(padLocalBufferTest.RunOnFunction(*funcPtr), SUCCESS);
 
-    auto rootFuncPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestCombineAxis", "TestCombineAxis", nullptr);
+    auto rootFuncPtr = std::make_shared<Function>(Program::GetInstance(), "TestCombineAxis", "TestCombineAxis",
+                                                  nullptr);
     rootFuncPtr->rootFunc_ = rootFuncPtr.get();
-    auto currFunctionPtr = std::make_shared<Function>(
-        Program::GetInstance(), "TestCombineAxisLeaf", "TestCombineAxisLeaf", graph.GetFunction());
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestCombineAxisLeaf",
+                                                      "TestCombineAxisLeaf", graph.GetFunction());
     EXPECT_TRUE(currFunctionPtr != nullptr);
     rootFuncPtr->rootFunc_->programs_.emplace(currFunctionPtr->GetFuncMagic(), graph.GetFunction());
     rootFuncPtr->SetFunctionType(FunctionType::DYNAMIC_LOOP_PATH);
@@ -218,11 +217,11 @@ TEST_F(CodegenPreprocTest, TestCombineAxisExpandinline)
     PadLocalBuffer padLocalBufferTest;
     EXPECT_EQ(padLocalBufferTest.RunOnFunction(*funcPtr), SUCCESS);
 
-    auto rootFuncPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestCombineAxis", "TestCombineAxis", nullptr);
+    auto rootFuncPtr = std::make_shared<Function>(Program::GetInstance(), "TestCombineAxis", "TestCombineAxis",
+                                                  nullptr);
     rootFuncPtr->rootFunc_ = rootFuncPtr.get();
-    auto currFunctionPtr = std::make_shared<Function>(
-        Program::GetInstance(), "TestCombineAxisLeaf", "TestCombineAxisLeaf", graph.GetFunction());
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestCombineAxisLeaf",
+                                                      "TestCombineAxisLeaf", graph.GetFunction());
     EXPECT_TRUE(currFunctionPtr != nullptr);
     rootFuncPtr->rootFunc_->programs_.emplace(currFunctionPtr->GetFuncMagic(), graph.GetFunction());
     rootFuncPtr->SetFunctionType(FunctionType::DYNAMIC_LOOP_PATH);
@@ -283,11 +282,11 @@ TEST_F(CodegenPreprocTest, TestCombineAxisExpand2)
     PadLocalBuffer padLocalBufferTest;
     EXPECT_EQ(padLocalBufferTest.RunOnFunction(*funcPtr), SUCCESS);
 
-    auto rootFuncPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestCombineAxis", "TestCombineAxis", nullptr);
+    auto rootFuncPtr = std::make_shared<Function>(Program::GetInstance(), "TestCombineAxis", "TestCombineAxis",
+                                                  nullptr);
     rootFuncPtr->rootFunc_ = rootFuncPtr.get();
-    auto currFunctionPtr = std::make_shared<Function>(
-        Program::GetInstance(), "TestCombineAxisLeaf", "TestCombineAxisLeaf", graph.GetFunction());
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestCombineAxisLeaf",
+                                                      "TestCombineAxisLeaf", graph.GetFunction());
     EXPECT_TRUE(currFunctionPtr != nullptr);
     rootFuncPtr->rootFunc_->programs_.emplace(currFunctionPtr->GetFuncMagic(), graph.GetFunction());
     rootFuncPtr->SetFunctionType(FunctionType::DYNAMIC_LOOP_PATH);
@@ -334,11 +333,11 @@ TEST_F(CodegenPreprocTest, TestCombineAxis3510)
     PadLocalBuffer padLocalBufferTest;
     EXPECT_EQ(padLocalBufferTest.RunOnFunction(*funcPtr), SUCCESS);
 
-    auto rootFuncPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestCombineAxis", "TestCombineAxis", nullptr);
+    auto rootFuncPtr = std::make_shared<Function>(Program::GetInstance(), "TestCombineAxis", "TestCombineAxis",
+                                                  nullptr);
     rootFuncPtr->rootFunc_ = rootFuncPtr.get();
-    auto currFunctionPtr = std::make_shared<Function>(
-        Program::GetInstance(), "TestCombineAxisLeaf", "TestCombineAxisLeaf", graph.GetFunction());
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestCombineAxisLeaf",
+                                                      "TestCombineAxisLeaf", graph.GetFunction());
     EXPECT_TRUE(currFunctionPtr != nullptr);
     rootFuncPtr->rootFunc_->programs_.emplace(currFunctionPtr->GetFuncMagic(), graph.GetFunction());
     rootFuncPtr->SetFunctionType(FunctionType::DYNAMIC_LOOP_PATH);
@@ -355,11 +354,11 @@ TEST_F(CodegenPreprocTest, TestCombineAxis3510)
 
 TEST_F(CodegenPreprocTest, TestSaveGmTensorParamIdxToOpPermute)
 {
-    auto rootFuncPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestSaveGmParamPermute", "TestSaveGmParamPermute", nullptr);
+    auto rootFuncPtr = std::make_shared<Function>(Program::GetInstance(), "TestSaveGmParamPermute",
+                                                  "TestSaveGmParamPermute", nullptr);
     rootFuncPtr->rootFunc_ = rootFuncPtr.get();
-    auto currFunctionPtr = std::make_shared<Function>(
-        Program::GetInstance(), "TestSaveGmParamPermuteLeaf", "TestSaveGmParamPermuteLeaf", rootFuncPtr.get());
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestSaveGmParamPermuteLeaf",
+                                                      "TestSaveGmParamPermuteLeaf", rootFuncPtr.get());
     EXPECT_TRUE(currFunctionPtr != nullptr);
     rootFuncPtr->rootFunc_->programs_.emplace(currFunctionPtr->GetFuncMagic(), currFunctionPtr.get());
     rootFuncPtr->SetFunctionType(FunctionType::DYNAMIC_LOOP_PATH);
@@ -388,11 +387,11 @@ TEST_F(CodegenPreprocTest, TestSaveGmTensorParamIdxToOpPermute)
 
 TEST_F(CodegenPreprocTest, TestSaveGmTensorParamIdxToOpPermuteElement)
 {
-    auto rootFuncPtr = std::make_shared<Function>(
-        Program::GetInstance(), "TestSaveGmParamPermuteElem", "TestSaveGmParamPermuteElem", nullptr);
+    auto rootFuncPtr = std::make_shared<Function>(Program::GetInstance(), "TestSaveGmParamPermuteElem",
+                                                  "TestSaveGmParamPermuteElem", nullptr);
     rootFuncPtr->rootFunc_ = rootFuncPtr.get();
-    auto currFunctionPtr = std::make_shared<Function>(
-        Program::GetInstance(), "TestSaveGmParamPermuteElemLeaf", "TestSaveGmParamPermuteElemLeaf", rootFuncPtr.get());
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestSaveGmParamPermuteElemLeaf",
+                                                      "TestSaveGmParamPermuteElemLeaf", rootFuncPtr.get());
     EXPECT_TRUE(currFunctionPtr != nullptr);
     rootFuncPtr->rootFunc_->programs_.emplace(currFunctionPtr->GetFuncMagic(), currFunctionPtr.get());
     rootFuncPtr->SetFunctionType(FunctionType::DYNAMIC_LOOP_PATH);
@@ -406,8 +405,8 @@ TEST_F(CodegenPreprocTest, TestSaveGmTensorParamIdxToOpPermuteElement)
 
     auto& copyin = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_COPY_IN, {tensor1}, {tensor3});
     copyin.SetIOpAtt(0, 0);
-    auto& permute_elem_op =
-        IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_PERMUTE_ELEMENT, {tensor3}, {tensor2});
+    auto& permute_elem_op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_PERMUTE_ELEMENT, {tensor3},
+                                                           {tensor2});
     permute_elem_op.SetIOpAtt(0, 0);
     auto& copyout = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_COPY_OUT, {tensor2}, {tensor4});
     copyout.SetOOpAtt(0, 1);
@@ -438,11 +437,11 @@ TEST_F(CodegenPreprocTest, TestCombineAxis3510BothLastDimOne)
     PadLocalBuffer padLocalBufferTest;
     EXPECT_EQ(padLocalBufferTest.RunOnFunction(*funcPtr), SUCCESS);
 
-    auto rootFuncPtr = std::make_shared<Function>(
-        Program::GetInstance(), "TestCombineAxis3510BLast1", "TestCombineAxis3510BLast1", nullptr);
+    auto rootFuncPtr = std::make_shared<Function>(Program::GetInstance(), "TestCombineAxis3510BLast1",
+                                                  "TestCombineAxis3510BLast1", nullptr);
     rootFuncPtr->rootFunc_ = rootFuncPtr.get();
-    auto currFunctionPtr = std::make_shared<Function>(
-        Program::GetInstance(), "TestCombineAxis3510BLast1Leaf", "TestCombineAxis3510BLast1Leaf", graph.GetFunction());
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestCombineAxis3510BLast1Leaf",
+                                                      "TestCombineAxis3510BLast1Leaf", graph.GetFunction());
     EXPECT_TRUE(currFunctionPtr != nullptr);
     rootFuncPtr->rootFunc_->programs_.emplace(currFunctionPtr->GetFuncMagic(), graph.GetFunction());
     rootFuncPtr->SetFunctionType(FunctionType::DYNAMIC_LOOP_PATH);
@@ -469,11 +468,10 @@ TEST_F(CodegenPreprocTest, TestGenGmOoRCheckInfoCopyInCopyOut)
     EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"ddr_in"}, {"ub_buf"}, "copyin", true), true);
     EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_OUT, {"ub_buf"}, {"ddr_out"}, "copyout", true), true);
 
-    auto rootFuncPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestGmOoRCheck", "TestGmOoRCheck", nullptr);
+    auto rootFuncPtr = std::make_shared<Function>(Program::GetInstance(), "TestGmOoRCheck", "TestGmOoRCheck", nullptr);
     rootFuncPtr->rootFunc_ = rootFuncPtr.get();
-    auto currFunctionPtr = std::make_shared<Function>(
-        Program::GetInstance(), "TestGmOoRCheckLeaf", "TestGmOoRCheckLeaf", graph.GetFunction());
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestGmOoRCheckLeaf",
+                                                      "TestGmOoRCheckLeaf", graph.GetFunction());
     EXPECT_TRUE(currFunctionPtr != nullptr);
     rootFuncPtr->rootFunc_->programs_.emplace(currFunctionPtr->GetFuncMagic(), graph.GetFunction());
     rootFuncPtr->SetFunctionType(FunctionType::DYNAMIC_LOOP_PATH);
@@ -523,11 +521,11 @@ TEST_F(CodegenPreprocTest, TestGenGmOoRCheckInfoWithOffset)
     ASSERT_NE(copyinAttr, nullptr);
     copyinAttr->SetFromOffset(OpImmediate::Specified({2, 3}));
 
-    auto rootFuncPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestGmOoROffset", "TestGmOoROffset", nullptr);
+    auto rootFuncPtr = std::make_shared<Function>(Program::GetInstance(), "TestGmOoROffset", "TestGmOoROffset",
+                                                  nullptr);
     rootFuncPtr->rootFunc_ = rootFuncPtr.get();
-    auto currFunctionPtr = std::make_shared<Function>(
-        Program::GetInstance(), "TestGmOoROffsetLeaf", "TestGmOoROffsetLeaf", graph.GetFunction());
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestGmOoROffsetLeaf",
+                                                      "TestGmOoROffsetLeaf", graph.GetFunction());
     EXPECT_TRUE(currFunctionPtr != nullptr);
     rootFuncPtr->rootFunc_->programs_.emplace(currFunctionPtr->GetFuncMagic(), graph.GetFunction());
     rootFuncPtr->SetFunctionType(FunctionType::DYNAMIC_LOOP_PATH);
@@ -558,11 +556,10 @@ TEST_F(CodegenPreprocTest, TestGenGmOoRCheckInfoNonDdrSkipped)
     EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, shape, MemoryType::MEM_UB, "ub_out"), true);
     EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"ub_in"}, {"ub_out"}, "copyin", true), true);
 
-    auto rootFuncPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestGmOoRSkip", "TestGmOoRSkip", nullptr);
+    auto rootFuncPtr = std::make_shared<Function>(Program::GetInstance(), "TestGmOoRSkip", "TestGmOoRSkip", nullptr);
     rootFuncPtr->rootFunc_ = rootFuncPtr.get();
-    auto currFunctionPtr = std::make_shared<Function>(
-        Program::GetInstance(), "TestGmOoRSkipLeaf", "TestGmOoRSkipLeaf", graph.GetFunction());
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestGmOoRSkipLeaf", "TestGmOoRSkipLeaf",
+                                                      graph.GetFunction());
     EXPECT_TRUE(currFunctionPtr != nullptr);
     rootFuncPtr->rootFunc_->programs_.emplace(currFunctionPtr->GetFuncMagic(), graph.GetFunction());
     rootFuncPtr->SetFunctionType(FunctionType::DYNAMIC_LOOP_PATH);

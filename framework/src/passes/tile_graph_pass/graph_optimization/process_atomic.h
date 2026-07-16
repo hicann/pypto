@@ -46,20 +46,19 @@ private:
     Status CheckAtomicRMWUnsupportedMode(Function& function);
     std::string GetRmwAttrKey(AtomicRMWMode mode);
     Status CheckAndSetRmwAttr(Operation& producerOp, AtomicRMWMode rmwMode, const std::string& rmwAttrKey);
-    void AccumulateAssembleOffset(
-        std::shared_ptr<AssembleOpAttribute> producerAttr, const std::vector<int64_t>& rmwOffset,
-        const std::vector<SymbolicScalar>& rmwDynOffset);
-    Status ProcessAssembleProducer(
-        Operation& producerOp, std::shared_ptr<LogicalTensor> rmwOut, AtomicRMWMode rmwMode,
-        const std::vector<int64_t>& rmwOffset, const std::vector<SymbolicScalar>& rmwDynOffset);
+    void AccumulateAssembleOffset(std::shared_ptr<AssembleOpAttribute> producerAttr,
+                                  const std::vector<int64_t>& rmwOffset,
+                                  const std::vector<SymbolicScalar>& rmwDynOffset);
+    Status ProcessAssembleProducer(Operation& producerOp, std::shared_ptr<LogicalTensor> rmwOut, AtomicRMWMode rmwMode,
+                                   const std::vector<int64_t>& rmwOffset,
+                                   const std::vector<SymbolicScalar>& rmwDynOffset);
     bool HasAssembleProducer(const std::shared_ptr<LogicalTensor>& input) const;
     bool HasConsumerExcept(const std::shared_ptr<LogicalTensor>& input, const Operation& op) const;
     Status PrepareAtomicRMWSharedInputs(Function& function, const std::vector<Operation*>& atomicRmwOps) const;
-    std::shared_ptr<LogicalTensor> PrepareExclusiveAtomicInput(
-        Function& function, Operation& atomicOp, const std::shared_ptr<LogicalTensor>& input) const;
+    std::shared_ptr<LogicalTensor> PrepareExclusiveAtomicInput(Function& function, Operation& atomicOp,
+                                                               const std::shared_ptr<LogicalTensor>& input) const;
     Status ProcessSingleAtomicRMW(Operation& op);
-    void CollectReduceAccUpstream(Operation& op, std::set<int>& visited,
-        std::vector<Operation*>& result) const;
+    void CollectReduceAccUpstream(Operation& op, std::set<int>& visited, std::vector<Operation*>& result) const;
     Status TraceBackAndRemoveVecDup(Function& function, Operation& op, std::set<int>& visited, bool& anyRemoved);
     Status RemoveVecDupBranchFromCubeOp(Operation& cubeOp, bool& anyRemoved);
     bool IsVecDupAssembleInput(const Operation& assembleOp) const;

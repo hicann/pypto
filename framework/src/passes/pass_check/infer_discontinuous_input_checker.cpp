@@ -24,13 +24,12 @@
 
 namespace npu {
 namespace tile_fwk {
-std::unordered_set<Opcode> inplaceNodes{
-    Opcode::OP_VIEW, Opcode::OP_ASSEMBLE, Opcode::OP_RESHAPE, Opcode::OP_INDEX_OUTCAST};
+std::unordered_set<Opcode> inplaceNodes{Opcode::OP_VIEW, Opcode::OP_ASSEMBLE, Opcode::OP_RESHAPE,
+                                        Opcode::OP_INDEX_OUTCAST};
 
-Status checkAssemble(
-    const std::unordered_map<LogicalTensorPtr, int64_t>& tensorMap,
-    const std::unordered_map<LogicalTensorPtr, std::pair<Offset, Offset>>& offsetMap,
-    std::unordered_map<int64_t, int64_t>& rawTensorSize)
+Status checkAssemble(const std::unordered_map<LogicalTensorPtr, int64_t>& tensorMap,
+                     const std::unordered_map<LogicalTensorPtr, std::pair<Offset, Offset>>& offsetMap,
+                     std::unordered_map<int64_t, int64_t>& rawTensorSize)
 {
     std::unordered_map<int, Offset> rawMagicToRawOffset;
     for (auto [logicTensor, rawMagic] : tensorMap) {
@@ -46,18 +45,16 @@ Status checkAssemble(
         if (rawMagicToRawOffset.find(rawMagic) == rawMagicToRawOffset.end()) {
             rawMagicToRawOffset[rawMagic] = rawOffset;
         } else if (rawMagicToRawOffset[rawMagic] != rawOffset) {
-            APASS_LOG_ERROR_C(
-                TensorErr::TENSOR_SHAPE_MISMATCH, Elements::Operation,
-                "LogicTensor(%d) relative position to rawTensor(%ld) changed after the assemble op.",
-                logicTensor->GetMagic(), static_cast<long>(rawMagic));
+            APASS_LOG_ERROR_C(TensorErr::TENSOR_SHAPE_MISMATCH, Elements::Operation,
+                              "LogicTensor(%d) relative position to rawTensor(%ld) changed after the assemble op.",
+                              logicTensor->GetMagic(), static_cast<long>(rawMagic));
             return FAILED;
         }
     }
     for (auto& [rawMagic, shape] : rawTensorSize) {
         if (shape != 0) {
-            APASS_LOG_ERROR_C(
-                TensorErr::TENSOR_SHAPE_MISMATCH, Elements::Tensor, "RawTensor(%ld) is not fully covered.",
-                static_cast<long>(rawMagic));
+            APASS_LOG_ERROR_C(TensorErr::TENSOR_SHAPE_MISMATCH, Elements::Tensor,
+                              "RawTensor(%ld) is not fully covered.", static_cast<long>(rawMagic));
             return FAILED;
         }
     }
@@ -104,12 +101,12 @@ Status checkTensor(const LogicalTensorPtr& tensor)
             APASS_LOG_ERROR_F(Elements::Function, "CheckView Failed.");
             return FAILED;
         }
-        std::shared_ptr<AssembleOpAttribute> attr =
-            std::dynamic_pointer_cast<AssembleOpAttribute>(producer->GetOpAttribute());
+        std::shared_ptr<AssembleOpAttribute> attr = std::dynamic_pointer_cast<AssembleOpAttribute>(
+            producer->GetOpAttribute());
         if (attr == nullptr) {
-            APASS_LOG_ERROR_C(
-                OperationErr::OP_NULL_POINTER, Elements::Operation, "Assemble op %d do not have attribute. %s",
-                producer->GetOpMagic(), GetFormatBacktrace(producer).c_str());
+            APASS_LOG_ERROR_C(OperationErr::OP_NULL_POINTER, Elements::Operation,
+                              "Assemble op %d do not have attribute. %s", producer->GetOpMagic(),
+                              GetFormatBacktrace(producer).c_str());
             return FAILED;
         }
         LogicalTensorPtr inputTensor = *(producer->GetIOperands().begin());

@@ -50,9 +50,8 @@ static std::vector<T> getGoldenVec(std::vector<int64_t> shape, std::string fileN
     return golden;
 }
 
-template <
-    typename T = npu::tile_fwk::float16, typename wDtype = int8_t, bool splitK = false, bool nz = true,
-    bool isSmooth = true, bool usePrefetch = true>
+template <typename T = npu::tile_fwk::float16, typename wDtype = int8_t, bool splitK = false, bool nz = true,
+          bool isSmooth = true, bool usePrefetch = true>
 void TestMlaPrologV2(const SimpleParams& params)
 {
     SetInterpreterConfig();
@@ -171,15 +170,14 @@ void TestMlaPrologV2(const SimpleParams& params)
         }
     }
     config::SetPassConfig("PVC2_OOO", "InferMemoryConflict", KEY_DISABLE_PASS, true);
-    MlaProlog(
-        x, wDq, wUqQr, wUk, wDkvKr, gamma_cq, gamma_ckv, sin, cos, kv_len, kv_cache, kr_cache, quantInputs, ropeConfig,
-        output_q, output_q_rope, output_kv_cache, output_kr_cache, 1e-5f, 1e-5f, params.cacheMode, splitK, isSmooth);
+    MlaProlog(x, wDq, wUqQr, wUk, wDkvKr, gamma_cq, gamma_ckv, sin, cos, kv_len, kv_cache, kr_cache, quantInputs,
+              ropeConfig, output_q, output_q_rope, output_kv_cache, output_kr_cache, 1e-5f, 1e-5f, params.cacheMode,
+              splitK, isSmooth);
 #ifdef BUILD_WITH_CANN
-    DevFuncRunner::Run(
-        Program::GetInstance().GetLastFunction(),
-        {xData, wDqData, wUqQrData, wUkData, wDkvKrData, gammaCqData, gammaCkvData, sinData, cosData, kvLenData,
-         kvCacheData, krCacheData, wQbScaleData, smoothCqData},
-        {outputQData, outputQRopeData, kvCacheData, krCacheData});
+    DevFuncRunner::Run(Program::GetInstance().GetLastFunction(),
+                       {xData, wDqData, wUqQrData, wUkData, wDkvKrData, gammaCqData, gammaCkvData, sinData, cosData,
+                        kvLenData, kvCacheData, krCacheData, wQbScaleData, smoothCqData},
+                       {outputQData, outputQRopeData, kvCacheData, krCacheData});
     std::cout << "qNope ====== " << std::endl;
     EXPECT_TRUE(resultCmp<T>(golden1, (T*)outputQData->data(), 0.008f, 16));
     std::cout << "qRope ======" << std::endl;

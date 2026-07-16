@@ -122,10 +122,9 @@ public:
      */
     static constexpr auto GetFieldDescriptors()
     {
-        return std::tuple_cat(
-            Stmt::GetFieldDescriptors(),
-            std::make_tuple(
-                reflection::DefField(&AssignStmt::var_, "var"), reflection::UsualField(&AssignStmt::value_, "value")));
+        return std::tuple_cat(Stmt::GetFieldDescriptors(),
+                              std::make_tuple(reflection::DefField(&AssignStmt::var_, "var"),
+                                              reflection::UsualField(&AssignStmt::value_, "value")));
     }
 };
 
@@ -164,8 +163,8 @@ public:
      */
     static constexpr auto GetFieldDescriptors()
     {
-        return std::tuple_cat(
-            Stmt::GetFieldDescriptors(), std::make_tuple(reflection::UsualField(&SeqStmts::stmts_, "stmts")));
+        return std::tuple_cat(Stmt::GetFieldDescriptors(),
+                              std::make_tuple(reflection::UsualField(&SeqStmts::stmts_, "stmts")));
     }
 
     /**
@@ -250,8 +249,8 @@ public:
      * \param returnVars Return variables (can be empty)
      * \param span Source location
      */
-    IfStmt(
-        ExprPtr condition, StmtPtr thenBody, std::optional<StmtPtr> elseBody, std::vector<VarPtr> returnVars, Span span)
+    IfStmt(ExprPtr condition, StmtPtr thenBody, std::optional<StmtPtr> elseBody, std::vector<VarPtr> returnVars,
+           Span span)
         : Stmt(std::move(span)),
           condition_(std::move(condition)),
           thenBody_(SeqStmts::Wrap(thenBody, span)),
@@ -269,12 +268,11 @@ public:
      */
     static constexpr auto GetFieldDescriptors()
     {
-        return std::tuple_cat(
-            Stmt::GetFieldDescriptors(), std::make_tuple(
-                                             reflection::UsualField(&IfStmt::condition_, "condition"),
-                                             reflection::UsualField(&IfStmt::thenBody_, "then_body"),
-                                             reflection::UsualField(&IfStmt::elseBody_, "else_body"),
-                                             reflection::DefField(&IfStmt::returnVars_, "return_vars")));
+        return std::tuple_cat(Stmt::GetFieldDescriptors(),
+                              std::make_tuple(reflection::UsualField(&IfStmt::condition_, "condition"),
+                                              reflection::UsualField(&IfStmt::thenBody_, "then_body"),
+                                              reflection::UsualField(&IfStmt::elseBody_, "else_body"),
+                                              reflection::DefField(&IfStmt::returnVars_, "return_vars")));
     }
 
 public:
@@ -319,8 +317,8 @@ public:
      */
     static constexpr auto GetFieldDescriptors()
     {
-        return std::tuple_cat(
-            Stmt::GetFieldDescriptors(), std::make_tuple(reflection::UsualField(&YieldStmt::value_, "value")));
+        return std::tuple_cat(Stmt::GetFieldDescriptors(),
+                              std::make_tuple(reflection::UsualField(&YieldStmt::value_, "value")));
     }
 
 public:
@@ -362,8 +360,8 @@ public:
      */
     static constexpr auto GetFieldDescriptors()
     {
-        return std::tuple_cat(
-            Stmt::GetFieldDescriptors(), std::make_tuple(reflection::UsualField(&ReturnStmt::value_, "value")));
+        return std::tuple_cat(Stmt::GetFieldDescriptors(),
+                              std::make_tuple(reflection::UsualField(&ReturnStmt::value_, "value")));
     }
 
 public:
@@ -406,9 +404,8 @@ public:
      * \param returnVars Return variables (capture final values, accessible after loop)
      * \param span Source location
      */
-    ForStmt(
-        VarPtr loopVar, ExprPtr start, ExprPtr stop, ExprPtr step, std::vector<IterArgPtr> iterArgs, StmtPtr body,
-        std::vector<VarPtr> returnVars, Span span, std::vector<std::pair<std::string, std::any>> attrs = {})
+    ForStmt(VarPtr loopVar, ExprPtr start, ExprPtr stop, ExprPtr step, std::vector<IterArgPtr> iterArgs, StmtPtr body,
+            std::vector<VarPtr> returnVars, Span span, std::vector<std::pair<std::string, std::any>> attrs = {})
         : Stmt(std::move(span)),
           loopVar_(std::move(loopVar)),
           start_(std::move(start)),
@@ -501,8 +498,8 @@ public:
      * \param returnVars Return variables (capture final values, accessible after loop)
      * \param span Source location
      */
-    WhileStmt(
-        ExprPtr condition, std::vector<IterArgPtr> iterArgs, StmtPtr body, std::vector<VarPtr> returnVars, Span span)
+    WhileStmt(ExprPtr condition, std::vector<IterArgPtr> iterArgs, StmtPtr body, std::vector<VarPtr> returnVars,
+              Span span)
         : Stmt(std::move(span)),
           condition_(std::move(condition)),
           iterArgs_(std::move(iterArgs)),
@@ -521,12 +518,11 @@ public:
      */
     static constexpr auto GetFieldDescriptors()
     {
-        return std::tuple_cat(
-            Stmt::GetFieldDescriptors(), std::make_tuple(
-                                             reflection::DefField(&WhileStmt::iterArgs_, "iter_args"),
-                                             reflection::UsualField(&WhileStmt::condition_, "condition"),
-                                             reflection::UsualField(&WhileStmt::body_, "body"),
-                                             reflection::DefField(&WhileStmt::returnVars_, "return_vars")));
+        return std::tuple_cat(Stmt::GetFieldDescriptors(),
+                              std::make_tuple(reflection::DefField(&WhileStmt::iterArgs_, "iter_args"),
+                                              reflection::UsualField(&WhileStmt::condition_, "condition"),
+                                              reflection::UsualField(&WhileStmt::body_, "body"),
+                                              reflection::DefField(&WhileStmt::returnVars_, "return_vars")));
     }
 
 public:
@@ -549,10 +545,9 @@ public:
 
     static constexpr auto GetFieldDescriptors()
     {
-        return std::tuple_cat(
-            Stmt::GetFieldDescriptors(), std::make_tuple(
-                                             reflection::UsualField(&SectionStmt::sectionKind_, "section_kind"),
-                                             reflection::UsualField(&SectionStmt::body_, "body")));
+        return std::tuple_cat(Stmt::GetFieldDescriptors(),
+                              std::make_tuple(reflection::UsualField(&SectionStmt::sectionKind_, "section_kind"),
+                                              reflection::UsualField(&SectionStmt::body_, "body")));
     }
 
 public:
@@ -590,8 +585,8 @@ public:
      */
     static constexpr auto GetFieldDescriptors()
     {
-        return std::tuple_cat(
-            Stmt::GetFieldDescriptors(), std::make_tuple(reflection::UsualField(&EvalStmt::expr_, "expr")));
+        return std::tuple_cat(Stmt::GetFieldDescriptors(),
+                              std::make_tuple(reflection::UsualField(&EvalStmt::expr_, "expr")));
     }
 
 public:
@@ -617,8 +612,8 @@ public:
 
     static constexpr auto GetFieldDescriptors()
     {
-        return std::tuple_cat(
-            Stmt::GetFieldDescriptors(), std::make_tuple(reflection::UsualField(&BreakStmt::value_, "value")));
+        return std::tuple_cat(Stmt::GetFieldDescriptors(),
+                              std::make_tuple(reflection::UsualField(&BreakStmt::value_, "value")));
     }
 };
 
@@ -641,8 +636,8 @@ public:
 
     static constexpr auto GetFieldDescriptors()
     {
-        return std::tuple_cat(
-            Stmt::GetFieldDescriptors(), std::make_tuple(reflection::UsualField(&ContinueStmt::value_, "value")));
+        return std::tuple_cat(Stmt::GetFieldDescriptors(),
+                              std::make_tuple(reflection::UsualField(&ContinueStmt::value_, "value")));
     }
 };
 
@@ -673,11 +668,10 @@ public:
      */
     static constexpr auto GetFieldDescriptors()
     {
-        auto newFields = std::make_tuple(
-            reflection::DefField(&ScalarOpStmt::result_, "result"),
-            reflection::UsualField(&ScalarOpStmt::result_token_, "result_token"),
-            reflection::UsualField(&ScalarOpStmt::opcode_, "opcode"),
-            reflection::UsualField(&ScalarOpStmt::args_, "args"));
+        auto newFields = std::make_tuple(reflection::DefField(&ScalarOpStmt::result_, "result"),
+                                         reflection::UsualField(&ScalarOpStmt::result_token_, "result_token"),
+                                         reflection::UsualField(&ScalarOpStmt::opcode_, "opcode"),
+                                         reflection::UsualField(&ScalarOpStmt::args_, "args"));
         return std::tuple_cat(Stmt::GetFieldDescriptors(), newFields);
     }
 };
@@ -693,9 +687,8 @@ public:
     std::vector<VarPtr> tokens_;
     std::vector<std::pair<std::string, std::any>> attrs_;
 
-    TensorOpStmt(
-        std::vector<VarPtr> result, VarPtr result_token, std::string opcode, std::vector<ExprPtr> args,
-        std::vector<VarPtr> tokens, std::vector<std::pair<std::string, std::any>> attrs, Span span)
+    TensorOpStmt(std::vector<VarPtr> result, VarPtr result_token, std::string opcode, std::vector<ExprPtr> args,
+                 std::vector<VarPtr> tokens, std::vector<std::pair<std::string, std::any>> attrs, Span span)
         : Stmt(std::move(span)),
           result_(std::move(result)),
           result_token_(std::move(result_token)),
@@ -717,13 +710,12 @@ public:
      */
     static constexpr auto GetFieldDescriptors()
     {
-        auto newFields = std::make_tuple(
-            reflection::DefField(&TensorOpStmt::result_, "result"),
-            reflection::UsualField(&TensorOpStmt::result_token_, "result_token"),
-            reflection::UsualField(&TensorOpStmt::opcode_, "opcode"),
-            reflection::UsualField(&TensorOpStmt::args_, "args"),
-            reflection::UsualField(&TensorOpStmt::tokens_, "tokens"),
-            reflection::UsualField(&TensorOpStmt::attrs_, "attrs"));
+        auto newFields = std::make_tuple(reflection::DefField(&TensorOpStmt::result_, "result"),
+                                         reflection::UsualField(&TensorOpStmt::result_token_, "result_token"),
+                                         reflection::UsualField(&TensorOpStmt::opcode_, "opcode"),
+                                         reflection::UsualField(&TensorOpStmt::args_, "args"),
+                                         reflection::UsualField(&TensorOpStmt::tokens_, "tokens"),
+                                         reflection::UsualField(&TensorOpStmt::attrs_, "attrs"));
         return std::tuple_cat(Stmt::GetFieldDescriptors(), newFields);
     }
 };

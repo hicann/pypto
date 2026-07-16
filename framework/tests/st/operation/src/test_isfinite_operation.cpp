@@ -35,8 +35,8 @@ struct IsFiniteOpMetaData {
     nlohmann::json test_data_;
 };
 
-static void IsFiniteOperationExeFuncDoubleCut(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void IsFiniteOperationExeFuncDoubleCut(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                              const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0]})
     {
@@ -52,11 +52,10 @@ static void IsFiniteOperationExeFuncDoubleCut(
         {
             LOOP("LOOP_L1_sIdx", FunctionType::DYNAMIC_LOOP, sIdx, LoopRange(0, sloop, 1))
             {
-                auto tileTensor0 = View(
-                    inputs[0], {firstViewShape, secondViewShape},
-                    {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                     std::min(secondDim - sIdx * secondViewShape, secondViewShape)},
-                    {bIdx * firstViewShape, sIdx * secondViewShape});
+                auto tileTensor0 = View(inputs[0], {firstViewShape, secondViewShape},
+                                        {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                         std::min(secondDim - sIdx * secondViewShape, secondViewShape)},
+                                        {bIdx * firstViewShape, sIdx * secondViewShape});
                 TileShape::Current().SetVecTile(args->tileShape_);
                 auto res = IsFinite(tileTensor0);
                 Assemble(res, {bIdx * firstViewShape, sIdx * secondViewShape}, outputs[0]);
@@ -65,8 +64,8 @@ static void IsFiniteOperationExeFuncDoubleCut(
     }
 }
 
-static void IsFiniteOperationExeFuncTripleCut(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void IsFiniteOperationExeFuncTripleCut(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                              const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0]})
     {
@@ -87,12 +86,11 @@ static void IsFiniteOperationExeFuncTripleCut(
             {
                 LOOP("LOOP_L3_nIdx", FunctionType::DYNAMIC_LOOP, nIdx, LoopRange(0, nloop, 1))
                 {
-                    auto tileTensor = View(
-                        inputs[0], {firstViewShape, secondViewShape, thirdViewShape},
-                        {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                         std::min(secondDim - sIdx * secondViewShape, secondViewShape),
-                         std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape)},
-                        {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape});
+                    auto tileTensor = View(inputs[0], {firstViewShape, secondViewShape, thirdViewShape},
+                                           {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                            std::min(secondDim - sIdx * secondViewShape, secondViewShape),
+                                            std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape)},
+                                           {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape});
                     TileShape::Current().SetVecTile(args->tileShape_);
                     auto res = IsFinite(tileTensor);
                     Assemble(res, {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape}, outputs[0]);
@@ -102,8 +100,8 @@ static void IsFiniteOperationExeFuncTripleCut(
     }
 }
 
-static void IsFiniteOperationExeFuncQuadrupleCut(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void IsFiniteOperationExeFuncQuadrupleCut(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                                 const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0]})
     {
@@ -130,21 +128,20 @@ static void IsFiniteOperationExeFuncQuadrupleCut(
                 {
                     LOOP("LOOP_L3_nIdx", FunctionType::DYNAMIC_LOOP, nIdx, LoopRange(0, nloop, 1))
                     {
-                        Tensor tileTensor0 = View(
-                            inputs[0], {firstViewShape, secondViewShape, thirdViewShape, fourthViewShape},
-                            {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                             std::min(secondDim - sIdx * secondViewShape, secondViewShape),
-                             std::min(thirdDim - mIdx * thirdViewShape, thirdViewShape),
-                             std::min(fourthDim - nIdx * fourthViewShape, fourthViewShape)},
-                            {bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape,
-                             nIdx * fourthViewShape});
+                        Tensor tileTensor0 = View(inputs[0],
+                                                  {firstViewShape, secondViewShape, thirdViewShape, fourthViewShape},
+                                                  {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                                   std::min(secondDim - sIdx * secondViewShape, secondViewShape),
+                                                   std::min(thirdDim - mIdx * thirdViewShape, thirdViewShape),
+                                                   std::min(fourthDim - nIdx * fourthViewShape, fourthViewShape)},
+                                                  {bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape,
+                                                   nIdx * fourthViewShape});
                         TileShape::Current().SetVecTile(args->tileShape_);
                         auto res = IsFinite(tileTensor0);
-                        Assemble(
-                            res,
-                            {bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape,
-                             nIdx * fourthViewShape},
-                            outputs[0]);
+                        Assemble(res,
+                                 {bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape,
+                                  nIdx * fourthViewShape},
+                                 outputs[0]);
                     }
                 }
             }
@@ -152,8 +149,8 @@ static void IsFiniteOperationExeFuncQuadrupleCut(
     }
 }
 
-static void IsFiniteOperationExeFunc5DCut(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void IsFiniteOperationExeFunc5DCut(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                          const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0]})
     {
@@ -197,11 +194,10 @@ static void IsFiniteOperationExeFunc5DCut(
                                  nIdx * fourthViewShape, kIdx * fifthViewShape});
                             TileShape::Current().SetVecTile(args->tileShape_);
                             auto res = IsFinite(tileTensor0);
-                            Assemble(
-                                res,
-                                {bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape,
-                                 nIdx * fourthViewShape, kIdx * fifthViewShape},
-                                outputs[0]);
+                            Assemble(res,
+                                     {bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape,
+                                      nIdx * fourthViewShape, kIdx * fifthViewShape},
+                                     outputs[0]);
                         }
                     }
                 }
@@ -212,12 +208,11 @@ static void IsFiniteOperationExeFunc5DCut(
 
 class IsFiniteOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac_param<IsFiniteOpMetaData> {};
 
-INSTANTIATE_TEST_SUITE_P(
-    TestIsFinite, IsFiniteOperationTest,
-    ::testing::ValuesIn(GetOpMetaData<IsFiniteOpMetaData>(
-        {IsFiniteOperationExeFuncDoubleCut, IsFiniteOperationExeFuncTripleCut, IsFiniteOperationExeFuncQuadrupleCut,
-         IsFiniteOperationExeFunc5DCut},
-        "IsFinite")));
+INSTANTIATE_TEST_SUITE_P(TestIsFinite, IsFiniteOperationTest,
+                         ::testing::ValuesIn(GetOpMetaData<IsFiniteOpMetaData>(
+                             {IsFiniteOperationExeFuncDoubleCut, IsFiniteOperationExeFuncTripleCut,
+                              IsFiniteOperationExeFuncQuadrupleCut, IsFiniteOperationExeFunc5DCut},
+                             "IsFinite")));
 
 TEST_P(IsFiniteOperationTest, TestIsFinite)
 {

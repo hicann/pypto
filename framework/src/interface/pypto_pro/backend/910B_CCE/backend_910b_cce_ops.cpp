@@ -61,15 +61,15 @@ static std::string BuildStaticNZStrideType(const DataType& dtype, int64_t full_r
            std::to_string(16 * c0) + ", " + std::to_string(c0) + ", 1>";
 }
 
-static int64_t ComputeStaticNZPhysicalOffset(
-    const DataType& dtype, int64_t full_rows, int64_t row_offset, int64_t col_offset)
+static int64_t ComputeStaticNZPhysicalOffset(const DataType& dtype, int64_t full_rows, int64_t row_offset,
+                                             int64_t col_offset)
 {
     const int64_t c0 = cce::GetNZInnerCols(dtype);
     return col_offset * full_rows + row_offset * c0;
 }
 
-static void ValidateDebugDumpNZWindowStructure(
-    const ir::TensorTypePtr& tensor_type, const ir::MakeTuplePtr& offsets, const ir::MakeTuplePtr& shapes)
+static void ValidateDebugDumpNZWindowStructure(const ir::TensorTypePtr& tensor_type, const ir::MakeTuplePtr& offsets,
+                                               const ir::MakeTuplePtr& shapes)
 {
     CHECK(tensor_type != nullptr) << "debug.dump_tensor NZ lowering requires TensorType";
     CHECK(offsets != nullptr) << "debug.dump_tensor NZ lowering requires offsets tuple";
@@ -81,8 +81,8 @@ static void ValidateDebugDumpNZWindowStructure(
     }
 }
 
-static bool IsStaticDebugDumpNZWindow(
-    const ir::TensorTypePtr& tensor_type, const ir::MakeTuplePtr& offsets, const ir::MakeTuplePtr& shapes)
+static bool IsStaticDebugDumpNZWindow(const ir::TensorTypePtr& tensor_type, const ir::MakeTuplePtr& offsets,
+                                      const ir::MakeTuplePtr& shapes)
 {
     return tensor_type && offsets && shapes && ir::As<ir::ConstInt>(tensor_type->shape_[0]) &&
            ir::As<ir::ConstInt>(tensor_type->shape_[1]) && ir::As<ir::ConstInt>(offsets->elements_[0]) &&
@@ -90,8 +90,8 @@ static bool IsStaticDebugDumpNZWindow(
            ir::As<ir::ConstInt>(shapes->elements_[1]);
 }
 
-static bool CanUseStaticDebugDumpNZFastPath(
-    const ir::TensorTypePtr& tensor_type, const ir::MakeTuplePtr& offsets, const ir::MakeTuplePtr& shapes)
+static bool CanUseStaticDebugDumpNZFastPath(const ir::TensorTypePtr& tensor_type, const ir::MakeTuplePtr& offsets,
+                                            const ir::MakeTuplePtr& shapes)
 {
     if (!IsStaticDebugDumpNZWindow(tensor_type, offsets, shapes)) {
         return false;
@@ -159,8 +159,8 @@ static bool NeedsCcePrintfUnsignedU64Helper(const DataType& dtype, char conversi
     return (conversion == 'u' || conversion == 'x') && (dtype == DataType::UINT64 || dtype == DataType::INDEX);
 }
 
-static std::string RewriteCcePrintfFormatForScalarType(
-    const std::string& format_segment, char conversion, const DataType& dtype)
+static std::string RewriteCcePrintfFormatForScalarType(const std::string& format_segment, char conversion,
+                                                       const DataType& dtype)
 {
     if (!NeedsCcePrintfSignedLongLong(dtype, conversion)) {
         return format_segment;
@@ -192,8 +192,8 @@ static std::string CastCcePrintfArgIfNeeded(const std::string& arg, const DataTy
     return arg;
 }
 
-static void AppendCcePrintfCall(
-    std::vector<std::string>* statements, const std::string& format, const std::vector<std::string>& args = {})
+static void AppendCcePrintfCall(std::vector<std::string>* statements, const std::string& format,
+                                const std::vector<std::string>& args = {})
 {
     if (format.empty()) {
         return;
@@ -211,8 +211,8 @@ static bool CcePrintfSpecHasFlag(const std::string& conversion_spec, char flag)
     return conversion_spec.find(flag) != std::string::npos;
 }
 
-static void AppendCcePrintfUnsignedDecimalU64(
-    std::vector<std::string>* statements, const std::string& arg, int* temp_id)
+static void AppendCcePrintfUnsignedDecimalU64(std::vector<std::string>* statements, const std::string& arg,
+                                              int* temp_id)
 {
     const std::string suffix = std::to_string((*temp_id)++);
     const std::string value = "__pypto_printf_u64_value_" + suffix;
@@ -237,8 +237,8 @@ static void AppendCcePrintfUnsignedDecimalU64(
     statements->push_back("}");
 }
 
-static void AppendCcePrintfUnsignedHexU64(
-    std::vector<std::string>* statements, const std::string& arg, const std::string& conversion_spec, int* temp_id)
+static void AppendCcePrintfUnsignedHexU64(std::vector<std::string>* statements, const std::string& arg,
+                                          const std::string& conversion_spec, int* temp_id)
 {
     const std::string suffix = std::to_string((*temp_id)++);
     const std::string value = "__pypto_printf_u64_value_" + suffix;
@@ -257,14 +257,14 @@ static void AppendCcePrintfUnsignedHexU64(
         statements->push_back("    cce::printf(\"%x%08x\", " + high + ", " + low + ");");
     }
     statements->push_back("  } else {");
-    statements->push_back(
-        "    cce::printf(\"" + debug_printf::EscapeStringLiteral(conversion_spec) + "\", " + low + ");");
+    statements->push_back("    cce::printf(\"" + debug_printf::EscapeStringLiteral(conversion_spec) + "\", " + low +
+                          ");");
     statements->push_back("  }");
     statements->push_back("}");
 }
 
-static std::vector<std::string> MakeCcePrintfStatements(
-    const std::string& format, const std::vector<std::string>& args, const std::vector<DataType>& arg_dtypes)
+static std::vector<std::string> MakeCcePrintfStatements(const std::string& format, const std::vector<std::string>& args,
+                                                        const std::vector<DataType>& arg_dtypes)
 {
     CHECK(args.size() == arg_dtypes.size()) << "debug.printf CCE argument/type count mismatch";
 
@@ -292,8 +292,8 @@ static std::vector<std::string> MakeCcePrintfStatements(
             continue;
         }
 
-        std::string rewritten_format =
-            RewriteCcePrintfFormatForScalarType(segments[i].format_segment, segments[i].conversion, arg_dtypes[i]);
+        std::string rewritten_format = RewriteCcePrintfFormatForScalarType(segments[i].format_segment,
+                                                                           segments[i].conversion, arg_dtypes[i]);
         std::string rewritten_arg = CastCcePrintfArgIfNeeded(args[i], arg_dtypes[i], segments[i].conversion);
         AppendCcePrintfCall(&statements, rewritten_format, {rewritten_arg});
     }
@@ -311,8 +311,8 @@ static bool HasDynamicTensorShape(const ir::TensorTypePtr& tensor_type)
     return false;
 }
 
-static bool IsFullTensorWindow(
-    const ir::TensorTypePtr& tensor_type, const ir::MakeTuplePtr& offsets, const ir::MakeTuplePtr& shapes)
+static bool IsFullTensorWindow(const ir::TensorTypePtr& tensor_type, const ir::MakeTuplePtr& offsets,
+                               const ir::MakeTuplePtr& shapes)
 {
     if (!tensor_type || !offsets || !shapes) {
         return false;
@@ -356,9 +356,10 @@ static std::string GetRuntimeTensorStrideExpr(const std::string& tensor_name, si
     return tensor_name + ".GetStride(GlobalTensorDim::DIM_" + std::to_string(gt_dim) + ")";
 }
 
-static std::string BuildShapeTypeForDump(
-    codegen::CCECodegen& codegen, const std::string& tensor_name, const ir::TensorTypePtr& tensor_type,
-    const std::vector<ir::ExprPtr>& shape_exprs, bool use_runtime_full_shape, std::vector<std::string>* ctor_args)
+static std::string BuildShapeTypeForDump(codegen::CCECodegen& codegen, const std::string& tensor_name,
+                                         const ir::TensorTypePtr& tensor_type,
+                                         const std::vector<ir::ExprPtr>& shape_exprs, bool use_runtime_full_shape,
+                                         std::vector<std::string>* ctor_args)
 {
     CHECK(shape_exprs.size() >= 1 && shape_exprs.size() <= 5)
         << "debug.dump_tensor currently supports tensor rank 1..5, but got " << shape_exprs.size();
@@ -381,9 +382,9 @@ static std::string BuildShapeTypeForDump(
     return "pto::Shape<" + JoinExpressions(template_dims, ", ") + ">";
 }
 
-static void ComputeStridesFromShape(
-    codegen::CCECodegen& codegen, const ir::TensorTypePtr& tensor_type, size_t rank, size_t pad_dims,
-    std::vector<std::string>& stride_template_dims, std::vector<std::string>* ctor_args)
+static void ComputeStridesFromShape(codegen::CCECodegen& codegen, const ir::TensorTypePtr& tensor_type, size_t rank,
+                                    size_t pad_dims, std::vector<std::string>& stride_template_dims,
+                                    std::vector<std::string>* ctor_args)
 {
     for (size_t i = 0; i < rank; ++i) {
         bool all_const = true;
@@ -410,9 +411,9 @@ static void ComputeStridesFromShape(
     }
 }
 
-static std::string BuildStrideTypeForDump(
-    codegen::CCECodegen& codegen, const std::string& tensor_name, const ir::TensorTypePtr& tensor_type,
-    bool use_runtime_tensor_view, std::vector<std::string>* ctor_args)
+static std::string BuildStrideTypeForDump(codegen::CCECodegen& codegen, const std::string& tensor_name,
+                                          const ir::TensorTypePtr& tensor_type, bool use_runtime_tensor_view,
+                                          std::vector<std::string>* ctor_args)
 {
     CHECK(tensor_type) << "debug.dump_tensor requires TensorType for stride generation";
     const size_t rank = tensor_type->shape_.size();
@@ -452,9 +453,9 @@ static std::string BuildStrideTypeForDump(
     return "pto::Stride<" + JoinExpressions(stride_template_dims, ", ") + ">";
 }
 
-static std::string ComputeRuntimeStrideBasedOffset(
-    codegen::CCECodegen& codegen, const std::string& tensor_name, const ir::TensorTypePtr& tensor_type,
-    const ir::MakeTuplePtr& offsets, const std::string& start_offset)
+static std::string ComputeRuntimeStrideBasedOffset(codegen::CCECodegen& codegen, const std::string& tensor_name,
+                                                   const ir::TensorTypePtr& tensor_type,
+                                                   const ir::MakeTuplePtr& offsets, const std::string& start_offset)
 {
     CHECK(tensor_type) << "debug.dump_tensor requires TensorType for runtime offset generation";
     const size_t rank = tensor_type->shape_.size();
@@ -486,8 +487,8 @@ static std::string ComputeRuntimeStrideBasedOffset(
     return offset_computation.str();
 }
 
-static std::string GetTensorLogicalDimForNZDump(
-    codegen::CCECodegen& codegen, const ir::TensorTypePtr& tensor_type, size_t axis)
+static std::string GetTensorLogicalDimForNZDump(codegen::CCECodegen& codegen, const ir::TensorTypePtr& tensor_type,
+                                                size_t axis)
 {
     CHECK(tensor_type) << "debug.dump_tensor NZ lowering requires TensorType";
     CHECK(axis < tensor_type->shape_.size()) << "debug.dump_tensor NZ axis out of range";
@@ -505,9 +506,8 @@ static std::string GetExprForNZDump(codegen::CCECodegen& codegen, const ir::Expr
     return codegen.GetExprAsCode(expr);
 }
 
-static std::string ComputeNZDumpPhysicalOffsetExpr(
-    codegen::CCECodegen& codegen, const ir::TensorTypePtr& tensor_type, const ir::MakeTuplePtr& offsets,
-    const std::string& full_rows)
+static std::string ComputeNZDumpPhysicalOffsetExpr(codegen::CCECodegen& codegen, const ir::TensorTypePtr& tensor_type,
+                                                   const ir::MakeTuplePtr& offsets, const std::string& full_rows)
 {
     CHECK(tensor_type) << "debug.dump_tensor NZ lowering requires TensorType";
     CHECK(offsets && offsets->elements_.size() == 2) << "debug.dump_tensor NZ lowering requires 2D offsets";
@@ -524,9 +524,11 @@ struct DebugDumpTensorNZContext {
     std::string start_offset;
 };
 
-static DebugDumpTensorNZContext PrepareDebugDumpTensorNZContext(
-    codegen::CCECodegen& codegen, const ir::VarPtr& tensor_var, const ir::TensorTypePtr& tensor_type,
-    const ir::MakeTuplePtr& offsets_tuple, const ir::MakeTuplePtr& shapes_tuple)
+static DebugDumpTensorNZContext PrepareDebugDumpTensorNZContext(codegen::CCECodegen& codegen,
+                                                                const ir::VarPtr& tensor_var,
+                                                                const ir::TensorTypePtr& tensor_type,
+                                                                const ir::MakeTuplePtr& offsets_tuple,
+                                                                const ir::MakeTuplePtr& shapes_tuple)
 {
     ValidateDebugDumpNZWindowStructure(tensor_type, offsets_tuple, shapes_tuple);
 
@@ -540,12 +542,13 @@ static DebugDumpTensorNZContext PrepareDebugDumpTensorNZContext(
     return context;
 }
 
-static std::string MakeDebugDumpTensorNZStaticCodegenCCE(
-    codegen::CCECodegen& codegen, const ir::VarPtr& tensor_var, const ir::TensorTypePtr& tensor_type,
-    const ir::MakeTuplePtr& offsets_tuple, const ir::MakeTuplePtr& shapes_tuple)
+static std::string MakeDebugDumpTensorNZStaticCodegenCCE(codegen::CCECodegen& codegen, const ir::VarPtr& tensor_var,
+                                                         const ir::TensorTypePtr& tensor_type,
+                                                         const ir::MakeTuplePtr& offsets_tuple,
+                                                         const ir::MakeTuplePtr& shapes_tuple)
 {
-    DebugDumpTensorNZContext context =
-        PrepareDebugDumpTensorNZContext(codegen, tensor_var, tensor_type, offsets_tuple, shapes_tuple);
+    DebugDumpTensorNZContext context = PrepareDebugDumpTensorNZContext(codegen, tensor_var, tensor_type, offsets_tuple,
+                                                                       shapes_tuple);
 
     auto get_static_const_int_or_throw = [](const ir::ExprPtr& expr, const std::string& message) -> int64_t {
         auto value = ir::As<ir::ConstInt>(expr);
@@ -569,8 +572,8 @@ static std::string MakeDebugDumpTensorNZStaticCodegenCCE(
     const int64_t cols = get_static_const_int_or_throw(
         shapes_tuple->elements_[1], "debug.dump_tensor: CCE NZ dump static path requires a static column shape");
 
-    const int64_t physical_offset =
-        ComputeStaticNZPhysicalOffset(tensor_type->dtype_, full_rows, row_offset, col_offset);
+    const int64_t physical_offset = ComputeStaticNZPhysicalOffset(tensor_type->dtype_, full_rows, row_offset,
+                                                                  col_offset);
 
     const std::string effective_offset = AddStartOffsetIfNeeded(context.start_offset, std::to_string(physical_offset));
     const std::string shape_alias = "__debug_dump_tensor_shape_" + std::to_string(context.debug_id);
@@ -579,22 +582,22 @@ static std::string MakeDebugDumpTensorNZStaticCodegenCCE(
     const std::string view_name = "__debug_dump_tensor_view_" + std::to_string(context.debug_id);
 
     codegen.Emit("using " + shape_alias + " = " + BuildStaticNZShapeType(tensor_type->dtype_, rows, cols) + ";");
-    codegen.Emit(
-        "using " + stride_alias + " = " + BuildStaticNZStrideType(tensor_type->dtype_, full_rows, full_cols) + ";");
-    codegen.Emit(
-        "using " + global_alias + " = GlobalTensor<" + codegen.GetTypeString(tensor_type->dtype_) + ", " + shape_alias +
-        ", " + stride_alias + ", Layout::NZ>;");
+    codegen.Emit("using " + stride_alias + " = " + BuildStaticNZStrideType(tensor_type->dtype_, full_rows, full_cols) +
+                 ";");
+    codegen.Emit("using " + global_alias + " = GlobalTensor<" + codegen.GetTypeString(tensor_type->dtype_) + ", " +
+                 shape_alias + ", " + stride_alias + ", Layout::NZ>;");
     codegen.Emit(global_alias + " " + view_name + "(" + context.base_ptr + " + " + effective_offset + ");");
     codegen.Emit("TPRINT(" + view_name + ");");
     return "";
 }
 
-static std::string MakeDebugDumpTensorNZDynamicCodegenCCE(
-    codegen::CCECodegen& codegen, const ir::VarPtr& tensor_var, const ir::TensorTypePtr& tensor_type,
-    const ir::MakeTuplePtr& offsets_tuple, const ir::MakeTuplePtr& shapes_tuple)
+static std::string MakeDebugDumpTensorNZDynamicCodegenCCE(codegen::CCECodegen& codegen, const ir::VarPtr& tensor_var,
+                                                          const ir::TensorTypePtr& tensor_type,
+                                                          const ir::MakeTuplePtr& offsets_tuple,
+                                                          const ir::MakeTuplePtr& shapes_tuple)
 {
-    DebugDumpTensorNZContext context =
-        PrepareDebugDumpTensorNZContext(codegen, tensor_var, tensor_type, offsets_tuple, shapes_tuple);
+    DebugDumpTensorNZContext context = PrepareDebugDumpTensorNZContext(codegen, tensor_var, tensor_type, offsets_tuple,
+                                                                       shapes_tuple);
 
     const std::string full_rows = GetTensorLogicalDimForNZDump(codegen, tensor_type, 0);
     const std::string full_cols = GetTensorLogicalDimForNZDump(codegen, tensor_type, 1);
@@ -610,16 +613,15 @@ static std::string MakeDebugDumpTensorNZDynamicCodegenCCE(
     const std::string global_alias = "__debug_dump_tensor_type_" + std::to_string(context.debug_id);
     const std::string view_name = "__debug_dump_tensor_view_" + std::to_string(context.debug_id);
 
-    codegen.Emit(
-        "using " + shape_alias + " = pto::TileShape2D<" + dtype + ", pto::DYNAMIC, pto::DYNAMIC, Layout::NZ>;");
-    codegen.Emit(
-        "using " + stride_alias + " = pto::BaseShape2D<" + dtype + ", pto::DYNAMIC, pto::DYNAMIC, Layout::NZ>;");
-    codegen.Emit(
-        "using " + global_alias + " = GlobalTensor<" + dtype + ", " + shape_alias + ", " + stride_alias +
-        ", Layout::NZ>;");
-    codegen.Emit(
-        global_alias + " " + view_name + "(" + context.base_ptr + " + " + physical_offset + ", " + shape_alias + "(" +
-        rows + ", " + cols + "), " + stride_alias + "(" + full_rows + ", " + full_cols + "));");
+    codegen.Emit("using " + shape_alias + " = pto::TileShape2D<" + dtype +
+                 ", pto::DYNAMIC, pto::DYNAMIC, Layout::NZ>;");
+    codegen.Emit("using " + stride_alias + " = pto::BaseShape2D<" + dtype +
+                 ", pto::DYNAMIC, pto::DYNAMIC, Layout::NZ>;");
+    codegen.Emit("using " + global_alias + " = GlobalTensor<" + dtype + ", " + shape_alias + ", " + stride_alias +
+                 ", Layout::NZ>;");
+    codegen.Emit(global_alias + " " + view_name + "(" + context.base_ptr + " + " + physical_offset + ", " +
+                 shape_alias + "(" + rows + ", " + cols + "), " + stride_alias + "(" + full_rows + ", " + full_cols +
+                 "));");
     codegen.Emit("TPRINT(" + view_name + ");");
     return "";
 }
@@ -664,18 +666,18 @@ static std::string MakeDebugDumpTensorCodegenCCE(const ir::CallPtr& op, codegen:
     const bool use_runtime_tensor_view = has_dynamic_tensor_shape;
 
     std::string start_offset;
-    const std::string offset_expr =
-        use_runtime_tensor_view ?
-            ComputeRuntimeStrideBasedOffset(codegen, tensor_name, tensor_type, offsets_tuple, start_offset) :
-            cce::ComputeStrideBasedOffset(codegen, offsets_tuple, tensor_type);
+    const std::string offset_expr = use_runtime_tensor_view ?
+                                        ComputeRuntimeStrideBasedOffset(codegen, tensor_name, tensor_type,
+                                                                        offsets_tuple, start_offset) :
+                                        cce::ComputeStrideBasedOffset(codegen, offsets_tuple, tensor_type);
 
     std::vector<std::string> shape_ctor_args;
     std::vector<std::string> stride_ctor_args;
-    const std::string shape_type = BuildShapeTypeForDump(
-        codegen, tensor_name, tensor_type, shapes_tuple->elements_, use_runtime_tensor_view && is_full_tensor_window,
-        &shape_ctor_args);
-    const std::string stride_type =
-        BuildStrideTypeForDump(codegen, tensor_name, tensor_type, use_runtime_tensor_view, &stride_ctor_args);
+    const std::string shape_type = BuildShapeTypeForDump(codegen, tensor_name, tensor_type, shapes_tuple->elements_,
+                                                         use_runtime_tensor_view && is_full_tensor_window,
+                                                         &shape_ctor_args);
+    const std::string stride_type = BuildStrideTypeForDump(codegen, tensor_name, tensor_type, use_runtime_tensor_view,
+                                                           &stride_ctor_args);
 
     std::string layout_suffix = ", Layout::ND";
     if (tensor_type->shape_.size() == 2) {
@@ -688,9 +690,8 @@ static std::string MakeDebugDumpTensorCodegenCCE(const ir::CallPtr& op, codegen:
 
     codegen.Emit("using " + shape_alias + " = " + shape_type + ";");
     codegen.Emit("using " + stride_alias + " = " + stride_type + ";");
-    codegen.Emit(
-        "using " + global_alias + " = GlobalTensor<" + codegen.GetTypeString(tensor_type->dtype_) + ", " + shape_alias +
-        ", " + stride_alias + layout_suffix + ">;");
+    codegen.Emit("using " + global_alias + " = GlobalTensor<" + codegen.GetTypeString(tensor_type->dtype_) + ", " +
+                 shape_alias + ", " + stride_alias + layout_suffix + ">;");
 
     std::string shape_ctor = shape_alias + "(" + JoinExpressions(shape_ctor_args, ", ") + ")";
     if (shape_ctor_args.empty()) {
@@ -701,9 +702,8 @@ static std::string MakeDebugDumpTensorCodegenCCE(const ir::CallPtr& op, codegen:
         stride_ctor = stride_alias + "()";
     }
 
-    codegen.Emit(
-        global_alias + " " + view_name + "(" + base_ptr + " + " + offset_expr + ", " + shape_ctor + ", " + stride_ctor +
-        ");");
+    codegen.Emit(global_alias + " " + view_name + "(" + base_ptr + " + " + offset_expr + ", " + shape_ctor + ", " +
+                 stride_ctor + ");");
     codegen.Emit("TPRINT(" + view_name + ");");
     return "";
 }
@@ -792,31 +792,26 @@ static std::string MakeDebugDumpTileCodegenCCE(const ir::CallPtr& op, codegen::C
     codegen.Emit("int " + valid_row + " = " + requested_row + ";");
     codegen.Emit("if (" + valid_row + " > " + src_valid_row + ") " + valid_row + " = " + src_valid_row + ";");
     codegen.Emit("if (" + valid_row + " < 0) " + valid_row + " = 0;");
-    codegen.Emit(
-        "if (" + valid_row + " > " + std::to_string(tile_rows->value_) + ") " + valid_row + " = " +
-        std::to_string(tile_rows->value_) + ";");
+    codegen.Emit("if (" + valid_row + " > " + std::to_string(tile_rows->value_) + ") " + valid_row + " = " +
+                 std::to_string(tile_rows->value_) + ";");
     codegen.Emit("int " + valid_col + " = " + requested_col + ";");
     codegen.Emit("if (" + valid_col + " > " + src_valid_col + ") " + valid_col + " = " + src_valid_col + ";");
     codegen.Emit("if (" + valid_col + " < 0) " + valid_col + " = 0;");
-    codegen.Emit(
-        "if (" + valid_col + " > " + std::to_string(tile_cols->value_) + ") " + valid_col + " = " +
-        std::to_string(tile_cols->value_) + ";");
-    codegen.Emit(
-        "cce::printf(\"=== [TPRINT Tile Window] Data Type: %s, Layout: %s, TileType: %s ===\\n\", "
-        "pto::GetDTypeName<" +
-        codegen.GetTypeString(tile_type->dtype_) + ">(), pto::GetLayoutName(decltype(" + src +
-        ")::BFractal, decltype(" + src + ")::SFractal), \"Vec\");");
-    codegen.Emit(
-        "cce::printf(\"  Source Shape: [%d, %d], Window Offsets: [%d, %d], Requested Shape: [%d, %d], "
-        "Valid Shape: [%d, %d]\\n\", " +
-        std::to_string(tile_rows->value_) + ", " + std::to_string(tile_cols->value_) + ", static_cast<int>(" + row_off +
-        "), static_cast<int>(" + col_off + "), " + requested_row + ", " + requested_col + ", " + valid_row + ", " +
-        valid_col + ");");
+    codegen.Emit("if (" + valid_col + " > " + std::to_string(tile_cols->value_) + ") " + valid_col + " = " +
+                 std::to_string(tile_cols->value_) + ";");
+    codegen.Emit("cce::printf(\"=== [TPRINT Tile Window] Data Type: %s, Layout: %s, TileType: %s ===\\n\", "
+                 "pto::GetDTypeName<" +
+                 codegen.GetTypeString(tile_type->dtype_) + ">(), pto::GetLayoutName(decltype(" + src +
+                 ")::BFractal, decltype(" + src + ")::SFractal), \"Vec\");");
+    codegen.Emit("cce::printf(\"  Source Shape: [%d, %d], Window Offsets: [%d, %d], Requested Shape: [%d, %d], "
+                 "Valid Shape: [%d, %d]\\n\", " +
+                 std::to_string(tile_rows->value_) + ", " + std::to_string(tile_cols->value_) + ", static_cast<int>(" +
+                 row_off + "), static_cast<int>(" + col_off + "), " + requested_row + ", " + requested_col + ", " +
+                 valid_row + ", " + valid_col + ");");
     codegen.Emit("for (int " + row_idx + " = 0; " + row_idx + " < " + valid_row + "; ++" + row_idx + ") {");
     codegen.Emit("  for (int " + col_idx + " = 0; " + col_idx + " < " + valid_col + "; ++" + col_idx + ") {");
-    codegen.Emit(
-        "    auto __debug_src_offset = pto::GetTileOffset<decltype(" + src + ")>(" + row_idx + " + (" + row_off +
-        "), " + col_idx + " + (" + col_off + "));");
+    codegen.Emit("    auto __debug_src_offset = pto::GetTileOffset<decltype(" + src + ")>(" + row_idx + " + (" +
+                 row_off + "), " + col_idx + " + (" + col_off + "));");
     codegen.Emit("    auto " + debug_val + " = " + src + ".data()[__debug_src_offset];");
     codegen.Emit("    pto::PrintValue(" + debug_val + ", " + col_idx + ");");
     codegen.Emit("  }");
@@ -824,13 +819,6 @@ static std::string MakeDebugDumpTileCodegenCCE(const ir::CallPtr& op, codegen::C
     codegen.Emit("}");
     return "";
 }
-
-
-
-
-
-
-
 
 // Helper function for get_block_idx (returns value expression)
 static std::string MakeBlockGetBlockIdxCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
@@ -879,7 +867,6 @@ static std::string MakePtrAddPtrCodegenCCE(const ir::CallPtr& op, codegen::Codeg
     return "(" + ptr + " + " + offset + ")";
 }
 
-
 // ============================================================================
 // Matmul Operations
 // ============================================================================
@@ -924,7 +911,6 @@ REGISTER_BACKEND_OP(Backend910B_CCE, "get_block_idx")
 // Reduction Operations
 // ============================================================================
 
-
 // ============================================================================
 // Broadcast Operations
 // ============================================================================
@@ -933,9 +919,8 @@ REGISTER_BACKEND_OP(Backend910B_CCE, "get_block_idx")
 // Transform Operations (view/reshape/transpose: same buffer, reinterpret)
 // ============================================================================
 
-
-[[maybe_unused]] static std::string MakeTileTransposeCodegenCCE(
-    const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
+[[maybe_unused]] static std::string MakeTileTransposeCodegenCCE(const ir::CallPtr& op,
+                                                                codegen::CodegenBase& codegen_base)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
     std::string target_var = codegen.GetCurrentResultTarget();
@@ -983,8 +968,8 @@ static std::string PipeTypeToCCEString(ir::PipeType pipe)
     }
 }
 
-static std::string MakeSyncCodegenCCE(
-    const std::string& isa_name, const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
+static std::string MakeSyncCodegenCCE(const std::string& isa_name, const ir::CallPtr& op,
+                                      codegen::CodegenBase& codegen_base)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
     auto set_pipe = static_cast<ir::PipeType>(op->GetKwarg<int>("set_pipe"));
@@ -1058,9 +1043,8 @@ static std::string MakeDcciCodegenCCE(const ir::CallPtr& op, codegen::CodegenBas
         if (tensor_ptr.empty()) {
             tensor_ptr = tensor_var + ".data()";
         }
-        codegen.Emit(
-            "dcci(reinterpret_cast<__gm__ void*>(" + tensor_ptr + " + " + offset + "), " + cache_line + ", " +
-            NormalizeDcciDst(dst_attr, false) + ");");
+        codegen.Emit("dcci(reinterpret_cast<__gm__ void*>(" + tensor_ptr + " + " + offset + "), " + cache_line + ", " +
+                     NormalizeDcciDst(dst_attr, false) + ");");
         return "";
     }
 
@@ -1076,9 +1060,8 @@ static std::string MakeDcciCodegenCCE(const ir::CallPtr& op, codegen::CodegenBas
     if (op->args_.size() == 2) {
         offset = codegen.GetExprAsCode(op->args_[1]);
     }
-    codegen.Emit(
-        "dcci(reinterpret_cast<__ubuf__ void*>(" + tile + ".data() + " + offset + "), " + cache_line + ", " +
-        NormalizeDcciDst(dst_attr, true) + ");");
+    codegen.Emit("dcci(reinterpret_cast<__ubuf__ void*>(" + tile + ".data() + " + offset + "), " + cache_line + ", " +
+                 NormalizeDcciDst(dst_attr, true) + ");");
     return "";
 }
 
@@ -1171,8 +1154,8 @@ REGISTER_BACKEND_OP(Backend910B_CCE, "system.dcci")
 // Cross-core WAIT: wait_flag_dev(event_id)
 // SET signals completion from a pipe; WAIT blocks until the other core signals.
 
-static std::string MakeCrossCoreSetCodegenCCE(
-    const ir::CallPtr& op, codegen::CodegenBase& codegen_base, bool is_dynamic)
+static std::string MakeCrossCoreSetCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base,
+                                              bool is_dynamic)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
     auto pipe = op->GetKwarg<int>("pipe");
@@ -1208,16 +1191,15 @@ static std::string MakeCrossCoreSetCodegenCCE(
             codegen.Emit("ffts_cross_core_sync(" + pipe_str + ", getFFTSMsg(FFTS_MODE_VAL, " + event_id + "));");
         } else {
             int event_id = op->GetKwarg<int>("event_id");
-            codegen.Emit(
-                "ffts_cross_core_sync(" + pipe_str + ", getFFTSMsg(FFTS_MODE_VAL, " + std::to_string(event_id) + "));");
+            codegen.Emit("ffts_cross_core_sync(" + pipe_str + ", getFFTSMsg(FFTS_MODE_VAL, " +
+                         std::to_string(event_id) + "));");
         }
     }
     return "";
 }
 
-static void EmitWaitIntraBlockCCE(
-    codegen::CCECodegen& codegen, const ir::CallPtr& op, const std::string& pipe_str, bool is_dynamic,
-    int event_id_offset = 0)
+static void EmitWaitIntraBlockCCE(codegen::CCECodegen& codegen, const ir::CallPtr& op, const std::string& pipe_str,
+                                  bool is_dynamic, int event_id_offset = 0)
 {
     if (is_dynamic) {
         std::string event_id = codegen.GetExprAsCode(op->args_[0]);
@@ -1232,8 +1214,8 @@ static void EmitWaitIntraBlockCCE(
     codegen.Emit("wait_intra_block(" + pipe_str + ", " + std::to_string(event_id) + ");");
 }
 
-static std::string MakeCrossCoreWaitCodegenCCE(
-    const ir::CallPtr& op, codegen::CodegenBase& codegen_base, bool is_dynamic)
+static std::string MakeCrossCoreWaitCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base,
+                                               bool is_dynamic)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
     auto pipe = op->GetKwarg<int>("pipe");
@@ -1411,9 +1393,8 @@ static std::string MakeTensorDimCodegenCCE(const ir::CallPtr& op, codegen::Codeg
     CHECK(input_tensor_var) << "tensor.dim need var with TensorType for first arg";
     std::string input_tensor_var_name = codegen.GetVarName(input_tensor_var);
 
-    codegen.Emit(
-        "int " + target_var + " = " + input_tensor_var_name + ".GetShape(GlobalTensorDim::DIM_" +
-        std::to_string(gt_dim) + ");");
+    codegen.Emit("int " + target_var + " = " + input_tensor_var_name + ".GetShape(GlobalTensorDim::DIM_" +
+                 std::to_string(gt_dim) + ");");
     return "";
 }
 
@@ -1547,8 +1528,8 @@ static int GetMutexModeCCE(const ir::CallPtr& op)
     return mode;
 }
 
-static std::string MakeMutexBufCodegenCCE(
-    const ir::CallPtr& op, codegen::CodegenBase& codegen_base, const std::string& intrinsic, bool is_dynamic)
+static std::string MakeMutexBufCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base,
+                                          const std::string& intrinsic, bool is_dynamic)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
     auto pipe = static_cast<ir::PipeType>(op->GetKwarg<int>("pipe"));
@@ -1629,9 +1610,12 @@ static std::string MakeSystemSyncAllCodegenCCE(const ir::CallPtr& op, codegen::C
     std::string core_type = op->GetKwarg<std::string>("core_type", "mix");
 
     std::string core_type_tok;
-    if (core_type == "aiv_only") core_type_tok = "SyncCoreType::AIVOnly";
-    else if (core_type == "aic_only") core_type_tok = "SyncCoreType::AICOnly";
-    else core_type_tok = "SyncCoreType::Mix";
+    if (core_type == "aiv_only")
+        core_type_tok = "SyncCoreType::AIVOnly";
+    else if (core_type == "aic_only")
+        core_type_tok = "SyncCoreType::AICOnly";
+    else
+        core_type_tok = "SyncCoreType::Mix";
 
     if (mode == "hard") {
         // args[0] is an empty MakeTuple for hard mode

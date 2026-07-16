@@ -40,8 +40,8 @@ TILEOP void TVecDup(T0 dst, Scalar src)
     for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
         for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
             for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
-                using TileDefineDst = pto::Tile<
-                    pto::TileType::Vec, T1, dstTileH, dstTileW, pto::BLayout::RowMajor, -1, -1>;
+                using TileDefineDst = pto::Tile<pto::TileType::Vec, T1, dstTileH, dstTileW, pto::BLayout::RowMajor, -1,
+                                                -1>;
                 TileDefineDst dstTile(shape3, shape4);
                 auto dstOffset = n0Index * dstStride0 + n1Index * dstStride1 + n2Index * dstStride2;
                 pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + dstOffset * dstTypeSize));

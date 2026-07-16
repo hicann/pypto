@@ -55,29 +55,25 @@ private:
     void DoHealthCheckAfter(Function& function, const std::string& folderPath) override;
     void SortTaskList(std::vector<Operation*>& operations, std::vector<Operation*>& taskList);
     Status SortAndLatencyEstimate(std::vector<Operation*>& opList, std::vector<Operation*>& taskOpList, int& latency);
-    void CollectStatistic(
-        OoOScheduleStatistic& oooHealthCheck, Function& function, std::pair<uint64_t, Function*>& program);
-    Status NonMixSchedule(
-        std::vector<Operation*>& opList, Function& function, std::pair<uint64_t, Function*>& program,
-        int64_t& maxWorkeSpaceSize);
-    Status MixSchedule(
-        std::vector<Operation*>& opList, Function& function, std::pair<uint64_t, Function*>& program,
-        int64_t& maxWorkeSpaceSize);
+    void CollectStatistic(OoOScheduleStatistic& oooHealthCheck, Function& function,
+                          std::pair<uint64_t, Function*>& program);
+    Status NonMixSchedule(std::vector<Operation*>& opList, Function& function, std::pair<uint64_t, Function*>& program,
+                          int64_t& maxWorkeSpaceSize);
+    Status MixSchedule(std::vector<Operation*>& opList, Function& function, std::pair<uint64_t, Function*>& program,
+                       int64_t& maxWorkeSpaceSize);
     Status EstimateTaskLatencyAndSchedule(TaskSplitter& splitter, std::vector<Operation*>& opList,
-        const std::string& schedMode = "");
-    Status BuildMixedScheduleOps(
-        TaskSplitter& splitter, std::vector<Operation*>& opList,
-        std::unordered_map<Operation*, CoreLocationType>& opCoreMap);
-    Status BuildMemIdToAllocIdx(
-        const std::vector<Operation*>& opList, std::unordered_map<uint64_t, size_t>& memIdToAllocIdx);
-    bool MoveAllocBeforeOp(
-        std::vector<Operation*>& opList, size_t allocIdx, int targetIdx,
-        std::unordered_map<uint64_t, size_t>& memIdToAllocIdx, uint64_t memId);
+                                          const std::string& schedMode = "");
+    Status BuildMixedScheduleOps(TaskSplitter& splitter, std::vector<Operation*>& opList,
+                                 std::unordered_map<Operation*, CoreLocationType>& opCoreMap);
+    Status BuildMemIdToAllocIdx(const std::vector<Operation*>& opList,
+                                std::unordered_map<uint64_t, size_t>& memIdToAllocIdx);
+    bool MoveAllocBeforeOp(std::vector<Operation*>& opList, size_t allocIdx, int targetIdx,
+                           std::unordered_map<uint64_t, size_t>& memIdToAllocIdx, uint64_t memId);
     Status ModifyAllocOrder(std::vector<Operation*>& opList);
     Status UpdateOpCoreMap(const TaskNode& taskNode, std::unordered_map<Operation*, CoreLocationType>& opCoreMap);
-    std::vector<ScheduleUnit> BuildScheduleUnits(
-        const std::vector<TaskNode>& taskNodeList, const std::vector<std::pair<int, int>>& cyclePairs,
-        std::vector<Operation*>& opList);
+    std::vector<ScheduleUnit> BuildScheduleUnits(const std::vector<TaskNode>& taskNodeList,
+                                                 const std::vector<std::pair<int, int>>& cyclePairs,
+                                                 std::vector<Operation*>& opList);
     std::vector<Function*> oriFunctions;
     std::map<uint64_t, OoOScheduleStatistic> statisticMap_;
     // Per-program tracers, populated on SUCCESS only; failure path flushes inline.

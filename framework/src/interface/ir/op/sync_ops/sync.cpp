@@ -25,9 +25,8 @@ namespace ir {
 namespace {
 
 // Helper to deduce UnknownType (for ops with no return value)
-TypePtr DeduceUnknownType(
-    [[maybe_unused]] const std::vector<ExprPtr>& args,
-    [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
+TypePtr DeduceUnknownType([[maybe_unused]] const std::vector<ExprPtr>& args,
+                          [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
 {
     (void)args;
     (void)kwargs;
@@ -57,25 +56,25 @@ bool IsDcciTensorOffset(const ExprPtr& offset)
     return true;
 }
 
-TypePtr DeduceSyncAllType(
-    const std::vector<ExprPtr>& args,
-    const std::vector<std::pair<std::string, std::any>>& kwargs)
+TypePtr DeduceSyncAllType(const std::vector<ExprPtr>& args, const std::vector<std::pair<std::string, std::any>>& kwargs)
 {
-    int mode = 0;        // SyncAllMode::HARD = 0
-    int core_type = 2;   // SyncCoreType::MIX = 2
+    int mode = 0;      // SyncAllMode::HARD = 0
+    int core_type = 2; // SyncCoreType::MIX = 2
     for (const auto& [key, value] : kwargs) {
-        if (key == "mode") mode = std::any_cast<int>(value);
-        if (key == "core_type") core_type = std::any_cast<int>(value);
+        if (key == "mode")
+            mode = std::any_cast<int>(value);
+        if (key == "core_type")
+            core_type = std::any_cast<int>(value);
     }
 
-    if (mode == 0) {  // HARD
+    if (mode == 0) { // HARD
         // args[0] is an empty MakeTuple for hard mode
         if (!args.empty()) {
             auto tuple = As<MakeTuple>(args[0]);
             CHECK(!tuple || tuple->elements_.empty())
                 << "system.sync_all hard mode does not accept workspace arguments";
         }
-    } else if (mode == 1) {  // SOFT
+    } else if (mode == 1) { // SOFT
         CHECK(core_type == 0 || core_type == 1 || core_type == 2)
             << "system.sync_all soft mode core_type must be AIV_ONLY(0), AIC_ONLY(1), or MIX(2), got " << core_type;
         CHECK(args.size() == 1) << "system.sync_all soft mode requires exactly 1 argument (workspaces list), got "
@@ -92,8 +91,7 @@ TypePtr DeduceSyncAllType(
                 CHECK(!has_gm) << "system.sync_all: duplicate gm_workspace (TensorType) in workspaces list";
                 has_gm = true;
             } else if (auto tile_type = As<TileType>(elem_type)) {
-                CHECK(tile_type->memref_.has_value())
-                    << "system.sync_all: workspace tile must have memref";
+                CHECK(tile_type->memref_.has_value()) << "system.sync_all: workspace tile must have memref";
                 auto space = tile_type->memref_.value()->memorySpace_;
                 if (space == MemorySpace::Vec) {
                     CHECK(!has_ub) << "system.sync_all: duplicate ub_workspace (Vec TileType) in workspaces list";
@@ -116,10 +114,10 @@ TypePtr DeduceSyncAllType(
 
         // Validate required workspaces per core_type
         CHECK(has_gm) << "system.sync_all soft mode: workspaces list must contain a gm_workspace (TensorType)";
-        if (core_type == 0) {  // AIV_ONLY
+        if (core_type == 0) { // AIV_ONLY
             CHECK(has_ub) << "system.sync_all soft aiv_only: workspaces list must contain ub_workspace (Vec TileType)";
             CHECK(!has_l1) << "system.sync_all soft aiv_only: l1_workspace (Mat TileType) is not allowed";
-        } else if (core_type == 1) {  // AIC_ONLY
+        } else if (core_type == 1) { // AIC_ONLY
             CHECK(has_l1) << "system.sync_all soft aic_only: workspaces list must contain l1_workspace (Mat TileType)";
             CHECK(!has_ub) << "system.sync_all soft aic_only: ub_workspace (Vec TileType) is not allowed";
         } else { // MIX
@@ -250,7 +248,8 @@ REGISTER_OP("system.wait_cross_core_dyn")
 REGISTER_OP("system.sync_all")
     .set_description("Global core synchronization (hard or soft mode)")
     .set_op_category("SyncOp")
-    .add_argument("workspaces", "Soft mode workspace list as MakeTuple (Tensor gm + Tile ub/l1 + optional int used_cores)")
+    .add_argument("workspaces",
+                  "Soft mode workspace list as MakeTuple (Tensor gm + Tile ub/l1 + optional int used_cores)")
     .set_attr<int>("mode")
     .set_attr<int>("core_type")
     .f_deduce_type(DeduceSyncAllType);

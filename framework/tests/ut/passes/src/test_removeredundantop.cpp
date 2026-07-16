@@ -83,8 +83,8 @@ inCast{8,16}->exp->outCast1
 */
 TEST_F(TestRemoveRedundantOpPass, RemoveRedundantOpUTest1)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantOp", "TestRemoveRedundantOp", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantOp",
+                                                      "TestRemoveRedundantOp", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     // Prepare the graph
@@ -134,8 +134,8 @@ inCast{8,16}->regcopy->ubTensor1{16,8}->exp->outCast1{16,8}
 */
 TEST_F(TestRemoveRedundantOpPass, RemoveRedundantOpUTest2)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantOp", "TestRemoveRedundantOp", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantOp",
+                                                      "TestRemoveRedundantOp", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     // Prepare the graph
@@ -184,8 +184,8 @@ inCast{8,16}->exp->outCast1/outCast2{8,16}->exp->outCast3{8,16}
 */
 TEST_F(TestRemoveRedundantOpPass, RemoveRedundantOpUTest3)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantOp", "TestRemoveRedundantOp", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantOp",
+                                                      "TestRemoveRedundantOp", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     // Prepare the graph
@@ -193,9 +193,11 @@ TEST_F(TestRemoveRedundantOpPass, RemoveRedundantOpUTest3)
     auto inCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     auto ubTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     ubTensor->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
-    auto outCast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape), TileOpFormat::TILEOP_ND, "outCast1");
+    auto outCast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape),
+                                                               TileOpFormat::TILEOP_ND, "outCast1");
     outCast1->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
-    auto outCast2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape), TileOpFormat::TILEOP_ND, "outCast2");
+    auto outCast2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape),
+                                                               TileOpFormat::TILEOP_ND, "outCast2");
     outCast2->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
     auto outCast3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
@@ -234,8 +236,8 @@ inCast{8,16}->exp->ddrTensor1{8,16}->exp->ubTensor2{8,16}->view->ubTensor3{8,16}
 */
 TEST_F(TestRemoveRedundantOpPass, RemoveRedundantOpUTest4)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantOp", "TestRemoveRedundantOp", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantOp",
+                                                      "TestRemoveRedundantOp", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     std::vector<int64_t> shape1 = {kNumEight, kNumExpFour};
@@ -269,8 +271,8 @@ inCast{8,16}->view->ddrTensor{8,16}->assemble->outCast{1,8,16}
 */
 TEST_F(TestRemoveRedundantOpPass, RemoveRedundantOpUTest6)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantOp", "TestRemoveRedundantOp", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantOp",
+                                                      "TestRemoveRedundantOp", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     // Prepare the graph
@@ -296,8 +298,8 @@ inCast{8,16}/{a0,16}->regcopy->ubTensor1{8,16}/{a1,16}->exp->outCast1{16,8}
 */
 TEST_F(TestRemoveRedundantOpPass, RemoveRedundantOpUTest7)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantOp", "TestRemoveRedundantOp", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantOp",
+                                                      "TestRemoveRedundantOp", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     // Prepare the graph
@@ -345,8 +347,8 @@ all delete
 */
 TEST_F(TestRemoveRedundantOpPass, RemoveRedundantOpUTest10)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantOp", "TestRemoveRedundantOp", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantOp",
+                                                      "TestRemoveRedundantOp", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     // Prepare the graph
@@ -356,17 +358,16 @@ TEST_F(TestRemoveRedundantOpPass, RemoveRedundantOpUTest10)
     inCast->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
     auto ubTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     ubTensor->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
-    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape), TileOpFormat::TILEOP_ND, "outCast");
+    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape),
+                                                              TileOpFormat::TILEOP_ND, "outCast");
     outCast->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
 
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {inCast}, {ubTensor},
-        [&offset](Operation& op) {
-            op.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset));
-        });
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {ubTensor}, {outCast},
-        [&offset](Operation& op) {
-            op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset));
-        });
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {inCast}, {ubTensor}, [&offset](Operation& op) {
+        op.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset));
+    });
+    PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_ASSEMBLE, {ubTensor}, {outCast},
+        [&offset](Operation& op) { op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset)); });
 
     currFunctionPtr->inCasts_.push_back(inCast);
     currFunctionPtr->outCasts_.push_back(outCast);
@@ -398,8 +399,8 @@ all delete
 */
 TEST_F(TestRemoveRedundantOpPass, RemoveRedundantOpUTest11)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantOp", "TestRemoveRedundantOp", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantOp",
+                                                      "TestRemoveRedundantOp", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     // Prepare the graph
@@ -413,17 +414,16 @@ TEST_F(TestRemoveRedundantOpPass, RemoveRedundantOpUTest11)
     inCast2->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
     auto ubTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
     ubTensor->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
-    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2), TileOpFormat::TILEOP_ND, "outCast");
+    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2),
+                                                              TileOpFormat::TILEOP_ND, "outCast");
     outCast->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
 
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {inCast1}, {ubTensor},
-        [&offset1](Operation& op) {
-            op.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset1));
-        });
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {inCast2}, {ubTensor},
-        [&offset2](Operation& op) {
-            op.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset2));
-        });
+    PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_VIEW, {inCast1}, {ubTensor},
+        [&offset1](Operation& op) { op.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset1)); });
+    PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_VIEW, {inCast2}, {ubTensor},
+        [&offset2](Operation& op) { op.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset2)); });
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {ubTensor}, {outCast});
 
     currFunctionPtr->inCasts_.push_back(inCast1);
@@ -456,8 +456,8 @@ inCast{8,16}->sqrt->ubTensor1{8,16}->expand->ubTensor2{8,16}->exp->outCast1{8,16
 */
 TEST_F(TestRemoveRedundantOpPass, RemoveRedundantOpUTest12)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantOp", "TestRemoveRedundantOp", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantOp",
+                                                      "TestRemoveRedundantOp", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     // Prepare the graph
@@ -525,11 +525,11 @@ TEST_F(TestRemoveRedundantOpPass, RemoveRedundantOpSTest1)
     Function* func = Program::GetInstance().GetFunctionByRawName("TENSOR_STCase1");
     EXPECT_EQ(func->Operations().size(), kSizeEleven);
 
-    passManager.RegisterStrategy(
-        "RemoveRedundantOpTestStrategy", {
-                                             {"AssignMemoryType", PassName::ASSIGN_MEMORY_TYPE},
-                                             {"RemoveRedundantOp", PassName::REMOVE_REDUNDANT_OP},
-                                         });
+    passManager.RegisterStrategy("RemoveRedundantOpTestStrategy",
+                                 {
+                                     {"AssignMemoryType", PassName::ASSIGN_MEMORY_TYPE},
+                                     {"RemoveRedundantOp", PassName::REMOVE_REDUNDANT_OP},
+                                 });
     auto ret = passManager.RunPass(Program::GetInstance(), *func, "RemoveRedundantOpTestStrategy");
     EXPECT_EQ(ret, SUCCESS);
 
@@ -583,11 +583,11 @@ TEST_F(TestRemoveRedundantOpPass, RemoveRedundantOpSTest2)
 
     Function* func = Program::GetInstance().GetFunctionByRawName("TENSOR_STCase2");
 
-    passManager.RegisterStrategy(
-        "RemoveRedundantOpTestStrategy", {
-                                             {"AssignMemoryType", PassName::ASSIGN_MEMORY_TYPE},
-                                             {"RemoveRedundantOp", PassName::REMOVE_REDUNDANT_OP},
-                                         });
+    passManager.RegisterStrategy("RemoveRedundantOpTestStrategy",
+                                 {
+                                     {"AssignMemoryType", PassName::ASSIGN_MEMORY_TYPE},
+                                     {"RemoveRedundantOp", PassName::REMOVE_REDUNDANT_OP},
+                                 });
     auto ret = passManager.RunPass(Program::GetInstance(), *func, "RemoveRedundantOpTestStrategy");
     EXPECT_EQ(ret, SUCCESS);
 
@@ -621,11 +621,10 @@ TEST_F(TestRemoveRedundantOpPass, RemoveRedundantOpSTest3)
     std::vector<int64_t> tile_shape = {kNumExpFive, kNumExpSix};
 
     PassManager& passManager = PassManager::Instance();
-    passManager.RegisterStrategy(
-        "ExpandFunctionTestStrategy", {
-                                          {"ExpandFunction", PassName::EXPAND_FUNCTION},
-                                          {"AssignMemoryType", PassName::ASSIGN_MEMORY_TYPE},
-                                      });
+    passManager.RegisterStrategy("ExpandFunctionTestStrategy", {
+                                                                   {"ExpandFunction", PassName::EXPAND_FUNCTION},
+                                                                   {"AssignMemoryType", PassName::ASSIGN_MEMORY_TYPE},
+                                                               });
 
     Tensor input(DT_FP32, shape, "input");
     Tensor output(DT_FP32, shape, "output");
@@ -645,10 +644,10 @@ TEST_F(TestRemoveRedundantOpPass, RemoveRedundantOpSTest3)
     }
     EXPECT_EQ(assemble_before, kNumThree);
 
-    passManager.RegisterStrategy(
-        "RemoveRedundantOpTestStrategy", {
-                                             {"RemoveRedundantOp", PassName::REMOVE_REDUNDANT_OP},
-                                         });
+    passManager.RegisterStrategy("RemoveRedundantOpTestStrategy",
+                                 {
+                                     {"RemoveRedundantOp", PassName::REMOVE_REDUNDANT_OP},
+                                 });
     EXPECT_EQ(passManager.RunPass(Program::GetInstance(), *func, "RemoveRedundantOpTestStrategy"), SUCCESS);
 
     // ================== Verify the effect of the Pass ==================
@@ -663,54 +662,58 @@ TEST_F(TestRemoveRedundantOpPass, RemoveRedundantOpSTest3)
 }
 void RemoveRedundantL1DataMoveGraph(std::shared_ptr<Function>& currFunctionPtr)
 {
-    std::shared_ptr<LogicalTensor> input_cast1 =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 64}, CreateTestConstIntVector(std::vector<int64_t>{32, 64}));
-    std::shared_ptr<LogicalTensor> input_cast2 =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{64, 16}, CreateTestConstIntVector(std::vector<int64_t>{64, 16}));
-    std::shared_ptr<LogicalTensor> input_cast1_view =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 64}, CreateTestConstIntVector(std::vector<int64_t>{32, 64}));
-    std::shared_ptr<LogicalTensor> input_cast2_view =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{64, 16}, CreateTestConstIntVector(std::vector<int64_t>{64, 16}));
+    std::shared_ptr<LogicalTensor> input_cast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{32, 64}, CreateTestConstIntVector(std::vector<int64_t>{32, 64}));
+    std::shared_ptr<LogicalTensor> input_cast2 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{64, 16}, CreateTestConstIntVector(std::vector<int64_t>{64, 16}));
+    std::shared_ptr<LogicalTensor> input_cast1_view = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{32, 64}, CreateTestConstIntVector(std::vector<int64_t>{32, 64}));
+    std::shared_ptr<LogicalTensor> input_cast2_view = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{64, 16}, CreateTestConstIntVector(std::vector<int64_t>{64, 16}));
     input_cast1_view->SetMemoryTypeBoth(MEM_L1);
     input_cast2_view->SetMemoryTypeBoth(MEM_L1);
-    std::shared_ptr<LogicalTensor> op_view_L1_out1 =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 64}, CreateTestConstIntVector(std::vector<int64_t>{32, 64}));
-    std::shared_ptr<LogicalTensor> op_view_L1_out2 =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{64, 16}, CreateTestConstIntVector(std::vector<int64_t>{64, 16}));
+    std::shared_ptr<LogicalTensor> op_view_L1_out1 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{32, 64}, CreateTestConstIntVector(std::vector<int64_t>{32, 64}));
+    std::shared_ptr<LogicalTensor> op_view_L1_out2 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{64, 16}, CreateTestConstIntVector(std::vector<int64_t>{64, 16}));
     op_view_L1_out1->SetMemoryTypeBoth(MEM_L1);
     op_view_L1_out2->SetMemoryTypeBoth(MEM_L1);
-    std::shared_ptr<LogicalTensor> view_out1 =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 32}, CreateTestConstIntVector(std::vector<int64_t>{32, 32}));
-    std::shared_ptr<LogicalTensor> view_out2 =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 32}, CreateTestConstIntVector(std::vector<int64_t>{32, 32}));
-    std::shared_ptr<LogicalTensor> view_out3 =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 16}, CreateTestConstIntVector(std::vector<int64_t>{32, 16}));
-    std::shared_ptr<LogicalTensor> view_out4 =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 16}, CreateTestConstIntVector(std::vector<int64_t>{32, 16}));
-    std::shared_ptr<LogicalTensor> l0a_out1 =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 32}, CreateTestConstIntVector(std::vector<int64_t>{32, 32}));
-    std::shared_ptr<LogicalTensor> l0a_out2 =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 32}, CreateTestConstIntVector(std::vector<int64_t>{32, 32}));
-    std::shared_ptr<LogicalTensor> l0b_out1 =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 16}, CreateTestConstIntVector(std::vector<int64_t>{32, 16}));
-    std::shared_ptr<LogicalTensor> l0b_out2 =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 16}, CreateTestConstIntVector(std::vector<int64_t>{32, 16}));
-    std::shared_ptr<LogicalTensor> a_mul_b_out1 =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 16}, CreateTestConstIntVector(std::vector<int64_t>{32, 16}));
-    std::shared_ptr<LogicalTensor> a_mul_b_out2 =
-        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 16}, CreateTestConstIntVector(std::vector<int64_t>{32, 16}));
-    auto& head_view_op1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {input_cast1}, {input_cast1_view});
+    std::shared_ptr<LogicalTensor> view_out1 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{32, 32}, CreateTestConstIntVector(std::vector<int64_t>{32, 32}));
+    std::shared_ptr<LogicalTensor> view_out2 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{32, 32}, CreateTestConstIntVector(std::vector<int64_t>{32, 32}));
+    std::shared_ptr<LogicalTensor> view_out3 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{32, 16}, CreateTestConstIntVector(std::vector<int64_t>{32, 16}));
+    std::shared_ptr<LogicalTensor> view_out4 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{32, 16}, CreateTestConstIntVector(std::vector<int64_t>{32, 16}));
+    std::shared_ptr<LogicalTensor> l0a_out1 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{32, 32}, CreateTestConstIntVector(std::vector<int64_t>{32, 32}));
+    std::shared_ptr<LogicalTensor> l0a_out2 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{32, 32}, CreateTestConstIntVector(std::vector<int64_t>{32, 32}));
+    std::shared_ptr<LogicalTensor> l0b_out1 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{32, 16}, CreateTestConstIntVector(std::vector<int64_t>{32, 16}));
+    std::shared_ptr<LogicalTensor> l0b_out2 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{32, 16}, CreateTestConstIntVector(std::vector<int64_t>{32, 16}));
+    std::shared_ptr<LogicalTensor> a_mul_b_out1 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{32, 16}, CreateTestConstIntVector(std::vector<int64_t>{32, 16}));
+    std::shared_ptr<LogicalTensor> a_mul_b_out2 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{32, 16}, CreateTestConstIntVector(std::vector<int64_t>{32, 16}));
+    auto& head_view_op1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {input_cast1},
+                                                         {input_cast1_view});
     std::vector<int> newoffset{0, 0};
     auto viewAttribute = std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0});
     viewAttribute->SetToType(MemoryType::MEM_L1);
     head_view_op1.SetOpAttribute(viewAttribute);
 
-    auto& head_view_op2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {input_cast2}, {input_cast2_view});
+    auto& head_view_op2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {input_cast2},
+                                                         {input_cast2_view});
     head_view_op2.SetOpAttribute(viewAttribute);
 
-    auto& view_L1_op1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {input_cast1_view}, {op_view_L1_out1});
+    auto& view_L1_op1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {input_cast1_view},
+                                                       {op_view_L1_out1});
     view_L1_op1.SetOpAttribute(viewAttribute);
-    auto& view_L1_op2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {input_cast2_view}, {op_view_L1_out2});
+    auto& view_L1_op2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {input_cast2_view},
+                                                       {op_view_L1_out2});
     view_L1_op2.SetOpAttribute(viewAttribute);
 
     auto& view_op1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {op_view_L1_out1}, {view_out1});
@@ -737,8 +740,8 @@ void RemoveRedundantL1DataMoveGraph(std::shared_ptr<Function>& currFunctionPtr)
 }
 TEST_F(TestRemoveRedundantOpPass, RemoveRedundantOpL1DataMove)
 {
-    auto currFunctionPtr = std::make_shared<Function>(
-        Program::GetInstance(), "RemoveRedundantOpL1DataMove", "RemoveRedundantOpL1DataMove", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "RemoveRedundantOpL1DataMove",
+                                                      "RemoveRedundantOpL1DataMove", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
     Program::GetInstance().InsertFuncToFunctionMap("RemoveRedundantOpL1DataMove", currFunctionPtr);
 
@@ -784,8 +787,8 @@ inCast{8,16}->reshape->ubTensor2{32,4}->sqrt->outCast{32,4}
 */
 TEST_F(TestRemoveRedundantOpPass, RemoveRedundantOpUTest13)
 {
-    auto currFunctionPtr = std::make_shared<Function>(
-        Program::GetInstance(), "TestRemoveRedundantReshape", "TestRemoveRedundantReshape", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantReshape",
+                                                      "TestRemoveRedundantReshape", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     // Prepare the graph
@@ -831,8 +834,8 @@ inCast{8,16}->sqrt->outCast{8,16}
 */
 TEST_F(TestRemoveRedundantOpPass, RemoveRedundantOpUTest14)
 {
-    auto currFunctionPtr = std::make_shared<Function>(
-        Program::GetInstance(), "TestRemoveRedundantReshape", "TestRemoveRedundantReshape", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantReshape",
+                                                      "TestRemoveRedundantReshape", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     // Prepare the graph
@@ -873,8 +876,8 @@ inCast{8,16}->sqrt->outCast1{8,16}
 */
 TEST_F(TestRemoveRedundantOpPass, RemoveRedundantOpUTest15)
 {
-    auto currFunctionPtr = std::make_shared<Function>(
-        Program::GetInstance(), "TestRemoveRedundantReshape", "TestRemoveRedundantReshape", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantReshape",
+                                                      "TestRemoveRedundantReshape", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     // Prepare the graph
@@ -920,8 +923,8 @@ inCast{8,16}->reshape->ubTensor1{16,8}->exp->outCast1{16,8}
 */
 TEST_F(TestRemoveRedundantOpPass, RemoveRedundantOpUTest16)
 {
-    auto currFunctionPtr = std::make_shared<Function>(
-        Program::GetInstance(), "TestRemoveRedundantReshape", "TestRemoveRedundantReshape", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantReshape",
+                                                      "TestRemoveRedundantReshape", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     // Prepare the graph
@@ -965,8 +968,8 @@ all delete
 */
 TEST_F(TestRemoveRedundantOpPass, RemoveRedundantOpUTest17)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantOp", "TestRemoveRedundantOp", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantOp",
+                                                      "TestRemoveRedundantOp", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     // Prepare the graph
@@ -978,18 +981,17 @@ TEST_F(TestRemoveRedundantOpPass, RemoveRedundantOpUTest17)
     ubTensor1->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
     auto ubTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     ubTensor2->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
-    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape), TileOpFormat::TILEOP_ND, "outCast");
+    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape),
+                                                              TileOpFormat::TILEOP_ND, "outCast");
     outCast->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
 
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {inCast}, {ubTensor1},
-        [&offset](Operation& op) {
-            op.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset));
-        });
+    PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_VIEW, {inCast}, {ubTensor1},
+        [&offset](Operation& op) { op.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset)); });
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {ubTensor1}, {ubTensor2});
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {ubTensor2}, {outCast},
-        [&offset](Operation& op) {
-            op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset));
-        });
+    PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_ASSEMBLE, {ubTensor2}, {outCast},
+        [&offset](Operation& op) { op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset)); });
 
     currFunctionPtr->inCasts_.push_back(inCast);
     currFunctionPtr->outCasts_.push_back(outCast);
@@ -1026,14 +1028,15 @@ inCast{8,16}->exp->ddrTensor1{8,16} ->assemble-> outCast{8,16}
 */
 TEST_F(TestRemoveRedundantOpPass, TestRemoveMoreAssembleSpecialCase)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantOp", "TestRemoveRedundantOp", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantOp",
+                                                      "TestRemoveRedundantOp", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     // Prepare the graph
     std::vector<int64_t> shape = {kNumEight, kNumExpFour};
     auto inCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
-    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape), TileOpFormat::TILEOP_ND, "outCast");
+    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape),
+                                                              TileOpFormat::TILEOP_ND, "outCast");
     outCast->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
     auto ubTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     ubTensor1->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
@@ -1072,15 +1075,16 @@ inCast{8,16}->exp->Tensor1{8,16} ->Reshape->Tensor2{16,8} ->assemble-> outCast{8
 */
 TEST_F(TestRemoveRedundantOpPass, TestRemoveMoreAssembleDynSpecialCase)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantOp", "TestRemoveRedundantOp", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantOp",
+                                                      "TestRemoveRedundantOp", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     // Prepare the graph
     std::vector<int64_t> shape = {kNumEight, kNumExpFour};
     std::vector<int64_t> shape1 = {kNumExpFour, kNumEight};
     auto inCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
-    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1), TileOpFormat::TILEOP_ND, "outCast");
+    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1),
+                                                              TileOpFormat::TILEOP_ND, "outCast");
     outCast->UpdateDynValidShape({CreateTestScalarVar("output_0_Dim_0"), CreateTestScalarVar("output_0_Dim_1")});
     outCast->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
     auto ubTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
@@ -1132,8 +1136,8 @@ inCast3{8,16}
 */
 TEST_F(TestRemoveRedundantOpPass, TestGenerateViewSpecialCase)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantOp", "TestRemoveRedundantOp", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantOp",
+                                                      "TestRemoveRedundantOp", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     // Prepare the graph
@@ -1146,7 +1150,8 @@ TEST_F(TestRemoveRedundantOpPass, TestGenerateViewSpecialCase)
     auto inCast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     auto inCast2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     auto inCast3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
-    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1), TileOpFormat::TILEOP_ND, "outCast");
+    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1),
+                                                              TileOpFormat::TILEOP_ND, "outCast");
     outCast->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
     auto ubTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
     ubTensor1->SetMemoryTypeOriginal(MemoryType::MEM_UB, false);
@@ -1155,27 +1160,22 @@ TEST_F(TestRemoveRedundantOpPass, TestGenerateViewSpecialCase)
     auto ubTensor3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     ubTensor3->SetMemoryTypeOriginal(MemoryType::MEM_UB, false);
 
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {inCast1}, {ubTensor1},
-        [&offset1](Operation& op) {
-            op.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset1));
-        });
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {inCast1}, {ubTensor2},
-        [&offset2](Operation& op) {
-            op.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset2));
-        });
+    PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_VIEW, {inCast1}, {ubTensor1},
+        [&offset1](Operation& op) { op.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset1)); });
+    PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_VIEW, {inCast1}, {ubTensor2},
+        [&offset2](Operation& op) { op.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset2)); });
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_MUL, {inCast2, inCast3}, {ubTensor3});
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {ubTensor1}, {outCast},
-        [&offset1](Operation& op) {
-            op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset1));
-        });
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {ubTensor2}, {outCast},
-        [&offset2](Operation& op) {
-            op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset2));
-        });
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {ubTensor3}, {outCast},
-        [&offset3](Operation& op) {
-            op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset3));
-        });
+    PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_ASSEMBLE, {ubTensor1}, {outCast},
+        [&offset1](Operation& op) { op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset1)); });
+    PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_ASSEMBLE, {ubTensor2}, {outCast},
+        [&offset2](Operation& op) { op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset2)); });
+    PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_ASSEMBLE, {ubTensor3}, {outCast},
+        [&offset3](Operation& op) { op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset3)); });
 
     currFunctionPtr->inCasts_.push_back(inCast1);
     currFunctionPtr->inCasts_.push_back(inCast2);
@@ -1207,8 +1207,8 @@ inCast{8,16}->view->Tensor1{4,16}->exp->outCast{4,16}
 */
 TEST_F(TestRemoveRedundantOpPass, TestGenerateViewDynOffsetCase)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantOp", "TestRemoveRedundantOp", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantOp",
+                                                      "TestRemoveRedundantOp", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
     uint32_t dynOffset = 0;
     // Prepare the graph
@@ -1218,21 +1218,21 @@ TEST_F(TestRemoveRedundantOpPass, TestGenerateViewDynOffsetCase)
     std::vector<SymbolicScalar> newDynOffset{dynOffset, dynOffset};
 
     auto inCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
-    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1), TileOpFormat::TILEOP_ND, "outCast");
+    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1),
+                                                              TileOpFormat::TILEOP_ND, "outCast");
     outCast->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
     auto ubTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
     ubTensor1->SetMemoryTypeOriginal(MemoryType::MEM_UB, false);
     auto ubTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
     ubTensor2->SetMemoryTypeOriginal(MemoryType::MEM_UB, false);
 
-    auto& viewOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {inCast}, {ubTensor1},
-        [&offset, &newDynOffset](Operation& op) {
+    auto& viewOp = PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_VIEW, {inCast}, {ubTensor1}, [&offset, &newDynOffset](Operation& op) {
             op.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset, newDynOffset));
         });
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {ubTensor1}, {ubTensor2},
-        [&offset](Operation& op) {
-            op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset));
-        });
+    PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_ASSEMBLE, {ubTensor1}, {ubTensor2},
+        [&offset](Operation& op) { op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset)); });
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {ubTensor2}, {outCast});
 
     currFunctionPtr->inCasts_.push_back(inCast);
@@ -1266,8 +1266,8 @@ inCast{8,16}->view->outCast1{4,16}->exp->Tensor2{4,16}->exp->outCast2{4,16}
 */
 TEST_F(TestRemoveRedundantOpPass, TestOutcastMutiConsumerCase)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantOp", "TestRemoveRedundantOp", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantOp",
+                                                      "TestRemoveRedundantOp", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
     // Prepare the graph
     std::vector<int64_t> shape = {kNumEight, kNumExpFour};
@@ -1275,8 +1275,10 @@ TEST_F(TestRemoveRedundantOpPass, TestOutcastMutiConsumerCase)
     std::vector<int64_t> offset = {kNumZero, kNumZero};
 
     auto inCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
-    auto outCast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1), TileOpFormat::TILEOP_ND, "outCast");
-    auto outCast2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1), TileOpFormat::TILEOP_ND, "outCast");
+    auto outCast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1),
+                                                               TileOpFormat::TILEOP_ND, "outCast");
+    auto outCast2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1),
+                                                               TileOpFormat::TILEOP_ND, "outCast");
     outCast1->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
     outCast2->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
     auto ddrTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
@@ -1284,10 +1286,9 @@ TEST_F(TestRemoveRedundantOpPass, TestOutcastMutiConsumerCase)
     auto ubTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
     ubTensor2->SetMemoryTypeOriginal(MemoryType::MEM_UB, false);
 
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {ddrTensor1}, {outCast1},
-        [&offset](Operation& op) {
-            op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset));
-        });
+    PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_ASSEMBLE, {ddrTensor1}, {outCast1},
+        [&offset](Operation& op) { op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset)); });
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {inCast}, {ddrTensor1});
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {ddrTensor1}, {ubTensor2});
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {ubTensor2}, {outCast2});
@@ -1310,8 +1311,8 @@ dynamic-axis, cannot delete
 */
 TEST_F(TestRemoveRedundantOpPass, DynamicOutcast)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantOp", "TestRemoveRedundantOp", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantOp",
+                                                      "TestRemoveRedundantOp", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     // Prepare the graph
@@ -1325,21 +1326,20 @@ TEST_F(TestRemoveRedundantOpPass, DynamicOutcast)
     ubTensor1->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
     auto ubTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
     ubTensor2->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
-    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape3, CreateTestConstIntVector(shape3), TileOpFormat::TILEOP_ND, "outCast");
+    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape3, CreateTestConstIntVector(shape3),
+                                                              TileOpFormat::TILEOP_ND, "outCast");
     outCast->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
 
     currFunctionPtr->inCasts_.push_back(inCast);
     currFunctionPtr->outCasts_.push_back(outCast);
 
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {inCast}, {ubTensor1});
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {ubTensor1}, {ubTensor2},
-        [&offset](Operation& op) {
-            op.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset));
-        });
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {ubTensor2}, {outCast},
-        [&offset](Operation& op) {
-            op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset));
-        });
+    PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_VIEW, {ubTensor1}, {ubTensor2},
+        [&offset](Operation& op) { op.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset)); });
+    PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_ASSEMBLE, {ubTensor2}, {outCast},
+        [&offset](Operation& op) { op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset)); });
 
     RemoveRedundantOp removeredundantpass;
     EXPECT_EQ(removeredundantpass.PreCheck(*currFunctionPtr), SUCCESS);
@@ -1367,8 +1367,8 @@ startOutCast and endOutCast are both outcasts, cannot delete view/assemble.
 */
 TEST_F(TestRemoveRedundantOpPass, TestOutcastToOutcastViewAssembleSkip)
 {
-    auto currFunctionPtr = std::make_shared<Function>(
-        Program::GetInstance(), "TestRemoveRedundantOp", "TestRemoveRedundantOp", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantOp",
+                                                      "TestRemoveRedundantOp", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     std::vector<int64_t> shape = {kNumEight, kNumExpFour};
@@ -1376,13 +1376,13 @@ TEST_F(TestRemoveRedundantOpPass, TestOutcastToOutcastViewAssembleSkip)
     std::vector<int64_t> offset = {kNumZero, kNumZero};
     auto inCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     inCast->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
-    auto startOutCast = npu::tile_fwk::IRBuilder().CreateTensorVar(
-        DT_FP32, shape, CreateTestConstIntVector(shape), TileOpFormat::TILEOP_ND, "startOutCast");
+    auto startOutCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape),
+                                                                   TileOpFormat::TILEOP_ND, "startOutCast");
     startOutCast->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
     auto ubTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, viewShape, CreateTestConstIntVector(viewShape));
     ubTensor->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
-    auto endOutCast = npu::tile_fwk::IRBuilder().CreateTensorVar(
-        DT_FP32, shape, CreateTestConstIntVector(shape), TileOpFormat::TILEOP_ND, "endOutCast");
+    auto endOutCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape),
+                                                                 TileOpFormat::TILEOP_ND, "endOutCast");
     endOutCast->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
 
     currFunctionPtr->inCasts_.push_back(inCast);
@@ -1390,14 +1390,12 @@ TEST_F(TestRemoveRedundantOpPass, TestOutcastToOutcastViewAssembleSkip)
     currFunctionPtr->outCasts_.push_back(endOutCast);
 
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {inCast}, {startOutCast});
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {startOutCast}, {ubTensor},
-        [&offset](Operation& op) {
-            op.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset));
-        });
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {ubTensor}, {endOutCast},
-        [&offset](Operation& op) {
-            op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset));
-        });
+    PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_VIEW, {startOutCast}, {ubTensor},
+        [&offset](Operation& op) { op.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset)); });
+    PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_ASSEMBLE, {ubTensor}, {endOutCast},
+        [&offset](Operation& op) { op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset)); });
 
     RemoveRedundantOp removeredundantpass;
     EXPECT_EQ(removeredundantpass.PreCheck(*currFunctionPtr), SUCCESS);
@@ -1420,18 +1418,16 @@ TEST_F(TestRemoveRedundantOpPass, TestOutcastToOutcastViewAssembleSkip)
 
 TEST_F(TestRemoveRedundantOpPass, AssembleDDR)
 {
-    auto func = std::make_shared<Function>(Program::GetInstance(),
-        "TestAssembleDDRNoConsumer",
-        "TestAssembleDDRNoConsumer",
-        nullptr);
+    auto func = std::make_shared<Function>(Program::GetInstance(), "TestAssembleDDRNoConsumer",
+                                           "TestAssembleDDRNoConsumer", nullptr);
     EXPECT_TRUE(func != nullptr);
 
-    std::vector<int64_t> shape = { 64, 64 };
-    
+    std::vector<int64_t> shape = {64, 64};
+
     auto inTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     auto ddrOut = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     ddrOut->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR);
-    PassOperationUtils::AddOperation(*func, Opcode::OP_ASSEMBLE, { inTensor }, { ddrOut });
+    PassOperationUtils::AddOperation(*func, Opcode::OP_ASSEMBLE, {inTensor}, {ddrOut});
 
     func->inCasts_.push_back(inTensor);
 
@@ -1441,10 +1437,8 @@ TEST_F(TestRemoveRedundantOpPass, AssembleDDR)
 
 TEST_F(TestRemoveRedundantOpPass, ViewOp_OutCast)
 {
-    auto func = std::make_shared<Function>(Program::GetInstance(),
-        "TestView_OutCast_Cover75",
-        "TestView_OutCast_Cover75",
-        nullptr);
+    auto func = std::make_shared<Function>(Program::GetInstance(), "TestView_OutCast_Cover75",
+                                           "TestView_OutCast_Cover75", nullptr);
     EXPECT_TRUE(func != nullptr);
     std::vector<int64_t> shape = {64, 64};
     auto in = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
@@ -1463,10 +1457,8 @@ TEST_F(TestRemoveRedundantOpPass, ViewOp_OutCast)
 
 TEST_F(TestRemoveRedundantOpPass, RegCopyNoConsumer)
 {
-    auto func = std::make_shared<Function>(Program::GetInstance(),
-        "TestRegCopyNoConsumer",
-        "TestRegCopyNoConsumer",
-        nullptr);
+    auto func = std::make_shared<Function>(Program::GetInstance(), "TestRegCopyNoConsumer", "TestRegCopyNoConsumer",
+                                           nullptr);
     EXPECT_TRUE(func != nullptr);
 
     std::vector<int64_t> shape = {64, 64};
@@ -1493,8 +1485,8 @@ reshape_dim1]->assemble->outCast{16,8}
 */
 TEST_F(TestRemoveRedundantOpPass, TestDynValidShapeInference)
 {
-    auto currFunctionPtr = std::make_shared<Function>(
-        Program::GetInstance(), "TestDynValidShapeInference", "TestDynValidShapeInference", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestDynValidShapeInference",
+                                                      "TestDynValidShapeInference", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     std::vector<int64_t> shape8x16 = {kNumEight, kNumExpFour};
@@ -1503,15 +1495,19 @@ TEST_F(TestRemoveRedundantOpPass, TestDynValidShapeInference)
     auto inCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape8x16, CreateTestConstIntVector(shape8x16));
     inCast->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
 
-    auto expOutput = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape8x16, CreateTestConstIntVector(shape8x16));
+    auto expOutput = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape8x16,
+                                                                CreateTestConstIntVector(shape8x16));
     expOutput->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
     expOutput->UpdateDynValidShape({CreateTestScalarVar("exp_output_dim0"), CreateTestScalarVar("exp_output_dim1")});
 
-    auto reshapeOutput = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape16x8, CreateTestConstIntVector(shape16x8));
+    auto reshapeOutput = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape16x8,
+                                                                    CreateTestConstIntVector(shape16x8));
     reshapeOutput->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
-    reshapeOutput->UpdateDynValidShape({CreateTestScalarVar("reshape_output_dim0"), CreateTestScalarVar("reshape_output_dim1")});
+    reshapeOutput->UpdateDynValidShape(
+        {CreateTestScalarVar("reshape_output_dim0"), CreateTestScalarVar("reshape_output_dim1")});
 
-    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape16x8, CreateTestConstIntVector(shape16x8), TileOpFormat::TILEOP_ND, "outCast");
+    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape16x8, CreateTestConstIntVector(shape16x8),
+                                                              TileOpFormat::TILEOP_ND, "outCast");
     outCast->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
 
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {inCast}, {expOutput});
@@ -1569,8 +1565,8 @@ inCast{8,16}->view(Tensor2)->exp->outCast{4,16}
 */
 TEST_F(TestRemoveRedundantOpPass, TestNewViewDynValidShapeInference)
 {
-    auto currFunctionPtr = std::make_shared<Function>(
-        Program::GetInstance(), "TestNewViewDynValidShape", "TestNewViewDynValidShape", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestNewViewDynValidShape",
+                                                      "TestNewViewDynValidShape", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     std::vector<int64_t> shape8x16 = {kNumEight, kNumExpFour};
@@ -1580,25 +1576,26 @@ TEST_F(TestRemoveRedundantOpPass, TestNewViewDynValidShapeInference)
     auto inCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape8x16, CreateTestConstIntVector(shape8x16));
     inCast->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
 
-    auto viewOutput = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape4x16, CreateTestConstIntVector(shape4x16));
+    auto viewOutput = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape4x16,
+                                                                 CreateTestConstIntVector(shape4x16));
     viewOutput->SetMemoryTypeOriginal(MemoryType::MEM_UB, false);
     viewOutput->UpdateDynValidShape({CreateTestScalarVar("view_output_dim0"), CreateTestScalarVar("view_output_dim1")});
 
-    auto assembleOutput = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape4x16, CreateTestConstIntVector(shape4x16));
+    auto assembleOutput = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape4x16,
+                                                                     CreateTestConstIntVector(shape4x16));
     assembleOutput->SetMemoryTypeOriginal(MemoryType::MEM_UB, false);
 
-    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape4x16, CreateTestConstIntVector(shape4x16), TileOpFormat::TILEOP_ND, "outCast");
+    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape4x16, CreateTestConstIntVector(shape4x16),
+                                                              TileOpFormat::TILEOP_ND, "outCast");
     outCast->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
 
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {inCast}, {viewOutput},
-        [&offset](Operation& op) {
-            op.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset));
-        });
+    PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_VIEW, {inCast}, {viewOutput},
+        [&offset](Operation& op) { op.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset)); });
 
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {viewOutput}, {assembleOutput},
-        [&offset](Operation& op) {
-            op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset));
-        });
+    PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_ASSEMBLE, {viewOutput}, {assembleOutput},
+        [&offset](Operation& op) { op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset)); });
 
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {assembleOutput}, {outCast});
 
@@ -1636,8 +1633,8 @@ Expected: no new view generated, all original ops preserved.
 */
 TEST_F(TestRemoveRedundantOpPass, TestGenerateViewWithNonViewProducer)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantOp", "TestRemoveRedundantOp", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantOp",
+                                                      "TestRemoveRedundantOp", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     // Prepare the graph
@@ -1649,7 +1646,8 @@ TEST_F(TestRemoveRedundantOpPass, TestGenerateViewWithNonViewProducer)
     std::vector<int64_t> offset3 = {kNumEight, kNumZero};
     auto inCast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     auto inCast2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
-    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1), TileOpFormat::TILEOP_ND, "outCast");
+    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1),
+                                                              TileOpFormat::TILEOP_ND, "outCast");
     outCast->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
     auto ubTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
     ubTensor1->SetMemoryTypeOriginal(MemoryType::MEM_UB, false);
@@ -1657,20 +1655,17 @@ TEST_F(TestRemoveRedundantOpPass, TestGenerateViewWithNonViewProducer)
     ubTensor2->SetMemoryTypeOriginal(MemoryType::MEM_UB, false);
 
     // inCast1->view->ubTensor1->assemble->outCast (view-assemble chain from startTensor=inCast1)
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {inCast1}, {ubTensor1},
-        [&offset1](Operation& op) {
-            op.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset1));
-        });
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {ubTensor1}, {outCast},
-        [&offset1](Operation& op) {
-            op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset1));
-        });
+    PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_VIEW, {inCast1}, {ubTensor1},
+        [&offset1](Operation& op) { op.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset1)); });
+    PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_ASSEMBLE, {ubTensor1}, {outCast},
+        [&offset1](Operation& op) { op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset1)); });
     // inCast2->exp->ubTensor2->assemble->outCast (non-view producer chain)
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {inCast2}, {ubTensor2});
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {ubTensor2}, {outCast},
-        [&offset3](Operation& op) {
-            op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset3));
-        });
+    PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_ASSEMBLE, {ubTensor2}, {outCast},
+        [&offset3](Operation& op) { op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset3)); });
 
     currFunctionPtr->inCasts_.push_back(inCast1);
     currFunctionPtr->inCasts_.push_back(inCast2);
@@ -1706,8 +1701,8 @@ Expected: no new view generated, all original ops preserved.
 */
 TEST_F(TestRemoveRedundantOpPass, TestGenerateViewEndTensorLargerThanStartTensor)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantOp", "TestRemoveRedundantOp", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantOp",
+                                                      "TestRemoveRedundantOp", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     // Prepare the graph
@@ -1716,21 +1711,20 @@ TEST_F(TestRemoveRedundantOpPass, TestGenerateViewEndTensorLargerThanStartTensor
     std::vector<int64_t> shape2 = {kNumFour, kNumExpFour};
     std::vector<int64_t> offset1 = {kNumZero, kNumZero};
     auto inCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
-    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1), TileOpFormat::TILEOP_ND, "outCast");
+    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1),
+                                                              TileOpFormat::TILEOP_ND, "outCast");
     outCast->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
     auto ubTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
     ubTensor1->SetMemoryTypeOriginal(MemoryType::MEM_UB, false);
 
     // inCast{8,16}->view->ubTensor1{4,16}->assemble->outCast{128,16}
     // endTensor=outCast{128,16}, startTensor=inCast{8,16}, dim0: 128 > 8 => not a part of startTensor
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {inCast}, {ubTensor1},
-        [&offset1](Operation& op) {
-            op.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset1));
-        });
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {ubTensor1}, {outCast},
-        [&offset1](Operation& op) {
-            op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset1));
-        });
+    PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_VIEW, {inCast}, {ubTensor1},
+        [&offset1](Operation& op) { op.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset1)); });
+    PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_ASSEMBLE, {ubTensor1}, {outCast},
+        [&offset1](Operation& op) { op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset1)); });
 
     currFunctionPtr->inCasts_.push_back(inCast);
     currFunctionPtr->outCasts_.push_back(outCast);
@@ -1767,8 +1761,8 @@ Expected: a new view op is created, non-view-assemble producer chain preserved o
 */
 TEST_F(TestRemoveRedundantOpPass, TestGenerateViewOutcastWithNonViewProducer)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantOp", "TestRemoveRedundantOp", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantOp",
+                                                      "TestRemoveRedundantOp", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     // Prepare the graph: endTensor shape must be <= startTensor shape in every dim
@@ -1779,7 +1773,8 @@ TEST_F(TestRemoveRedundantOpPass, TestGenerateViewOutcastWithNonViewProducer)
     std::vector<int64_t> offset3 = {kNumExpFive, kNumZero};
     auto inCast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     auto inCast2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
-    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1), TileOpFormat::TILEOP_ND, "outCast");
+    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1),
+                                                              TileOpFormat::TILEOP_ND, "outCast");
     outCast->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
     auto ubTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
     ubTensor1->SetMemoryTypeOriginal(MemoryType::MEM_UB, false);
@@ -1787,20 +1782,17 @@ TEST_F(TestRemoveRedundantOpPass, TestGenerateViewOutcastWithNonViewProducer)
     ubTensor2->SetMemoryTypeOriginal(MemoryType::MEM_UB, false);
 
     // inCast1{64,64}->view->ubTensor1{32,64}->assemble->outCast{32,64} (view-assemble chain from inCast1)
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {inCast1}, {ubTensor1},
-        [&offset1](Operation& op) {
-            op.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset1));
-        });
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {ubTensor1}, {outCast},
-        [&offset1](Operation& op) {
-            op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset1));
-        });
+    PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_VIEW, {inCast1}, {ubTensor1},
+        [&offset1](Operation& op) { op.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset1)); });
+    PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_ASSEMBLE, {ubTensor1}, {outCast},
+        [&offset1](Operation& op) { op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset1)); });
     // inCast2{64,64}->exp->ubTensor2{32,64}->assemble->outCast{32,64} (non-view producer chain)
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {inCast2}, {ubTensor2});
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {ubTensor2}, {outCast},
-        [&offset3](Operation& op) {
-            op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset3));
-        });
+    PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_ASSEMBLE, {ubTensor2}, {outCast},
+        [&offset3](Operation& op) { op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset3)); });
 
     currFunctionPtr->inCasts_.push_back(inCast1);
     currFunctionPtr->inCasts_.push_back(inCast2);
@@ -1828,5 +1820,5 @@ TEST_F(TestRemoveRedundantOpPass, TestGenerateViewOutcastWithNonViewProducer)
     EXPECT_EQ(assembleNum, kNumTwo);
     EXPECT_EQ(expNum, kNumOne);
 }
-}
-}
+} // namespace tile_fwk
+} // namespace npu

@@ -40,9 +40,8 @@ std::unique_ptr<Backend> BackendRegistry::Create(const std::string& type_name, c
     // For singleton backends, we cannot create new instances
     (void)type_name;
     (void)soc;
-    throw ir::ValueError(
-        "Cannot create backend instances via registry - backends are singletons. "
-        "Use Backend910B_CCE::Instance() instead.");
+    throw ir::ValueError("Cannot create backend instances via registry - backends are singletons. "
+                         "Use Backend910B_CCE::Instance() instead.");
 }
 
 bool BackendRegistry::IsRegistered(const std::string& type_name) const
@@ -55,9 +54,8 @@ std::unique_ptr<Backend> CreateBackendFromRegistry(const std::string& type_name,
     // For singleton backends, we cannot create new instances
     (void)type_name;
     (void)soc;
-    throw ir::ValueError(
-        "Cannot create backend instances via registry - backends are singletons. "
-        "Use Backend910B_CCE::Instance() instead.");
+    throw ir::ValueError("Cannot create backend instances via registry - backends are singletons. "
+                         "Use Backend910B_CCE::Instance() instead.");
 }
 
 // Auto-register Backend910B_CCE

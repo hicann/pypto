@@ -21,53 +21,53 @@
 #include "machine/runtime/memory_utils/eslmodel_memory_utils.h"
 #include "machine/runtime/runner/runtime_utils.h"
 
-extern "C" int DynTileFwkBackendKernelServer(void *targ);
+extern "C" int DynTileFwkBackendKernelServer(void* targ);
 namespace npu::tile_fwk::dynamic {
 
-int EslModelLauncher::EslModelLaunchAicore(AclRtStream aicoreStream, void *kernel, DeviceKernelArgs *kernelArgs)
+int EslModelLauncher::EslModelLaunchAicore(AclRtStream aicoreStream, void* kernel, DeviceKernelArgs* kernelArgs)
 {
     RtArgsEx rtArgs;
     memset_s(&rtArgs, sizeof(rtArgs), 0, sizeof(rtArgs));
-    std::vector<void *> kArgs = {nullptr, nullptr, nullptr, nullptr, nullptr, kernelArgs->cfgdata};
+    std::vector<void*> kArgs = {nullptr, nullptr, nullptr, nullptr, nullptr, kernelArgs->cfgdata};
     rtArgs.args = kArgs.data();
     rtArgs.argsSize = kArgs.size() * sizeof(int64_t);
     uint64_t tilingKey = OpInfoManager::GetInstance().GetOpTilingKey();
     RtTaskCfgInfo cfg = {};
     cfg.schemMode = static_cast<uint8_t>(RtSchemModeType::BATCH);
-    auto *devProg = (dynamic::DevAscendProgram *)(kernelArgs->cfgdata);
+    auto* devProg = (dynamic::DevAscendProgram*)(kernelArgs->cfgdata);
     auto blockDim = devProg->devArgs.nrValidAic;
     return RuntimeKernelLaunchWithHandleV2(kernel, tilingKey, blockDim, &rtArgs, nullptr, aicoreStream, &cfg);
 }
 
 void EslModelLauncher::CopyInputOutputData()
 {
-    auto &inputDataList = ProgramData::GetInstance().GetInputDataList();
-    auto &outputDataList = ProgramData::GetInstance().GetOutputDataList();
+    auto& inputDataList = ProgramData::GetInstance().GetInputDataList();
+    auto& outputDataList = ProgramData::GetInstance().GetOutputDataList();
     for (size_t k = 0; k < inputDataList.size(); k++) {
-        auto &inputData = inputDataList[k];
+        auto& inputData = inputDataList[k];
         if (inputData) {
-            MemcpyS(inputData->GetDevPtr(), inputData->size(), (uint8_t *)inputData->data(), inputData->size());
+            MemcpyS(inputData->GetDevPtr(), inputData->size(), (uint8_t*)inputData->data(), inputData->size());
         }
     }
     for (size_t k = 0; k < outputDataList.size(); k++) {
-        auto &outputData = outputDataList[k];
+        auto& outputData = outputDataList[k];
         if (outputData) {
-            MemcpyS(outputData->GetDevPtr(), outputData->size(), (uint8_t *)outputData->data(), outputData->size());
+            MemcpyS(outputData->GetDevPtr(), outputData->size(), (uint8_t*)outputData->data(), outputData->size());
         }
     }
 }
 
-int EslModelLauncher::DynamicKernelLaunchEsl(DeviceKernelArgs *kArgs, AclRtStream aicoreStream, void *kernel)
+int EslModelLauncher::DynamicKernelLaunchEsl(DeviceKernelArgs* kArgs, AclRtStream aicoreStream, void* kernel)
 {
-    auto *devProg = (dynamic::DevAscendProgram *)(kArgs->cfgdata);
+    auto* devProg = (dynamic::DevAscendProgram*)(kArgs->cfgdata);
     devProg->devArgs.nrAic = 32;
     devProg->devArgs.nrAiv = 64;
     EslModelLaunchAicore(aicoreStream, kernel, kArgs);
     CopyInputOutputData();
     devProg->devArgs.enableEslModel = true;
     size_t shmSize = DEVICE_TASK_CTRL_POOL_SIZE + DEVICE_TASK_QUEUE_SIZE * devProg->devArgs.scheCpuNum;
-    auto deviceTaskCtrlPoolAddr = devProg->devArgs.runtimeDataRingBufferAddr +
-        sizeof(RuntimeDataRingBufferHead) + DEV_ARGS_SIZE;
+    auto deviceTaskCtrlPoolAddr = devProg->devArgs.runtimeDataRingBufferAddr + sizeof(RuntimeDataRingBufferHead) +
+                                  DEV_ARGS_SIZE;
     (void)memset_s(reinterpret_cast<void*>(deviceTaskCtrlPoolAddr), shmSize, 0, shmSize);
     int launchAiCpuNum = static_cast<int>(devProg->devArgs.nrAicpu + dynamic::MAX_CONTROL_FLOW_AICPU_NUM);
     std::vector<std::thread> aicpuThreads(launchAiCpuNum);
@@ -99,9 +99,10 @@ int EslModelLauncher::DynamicKernelLaunchEsl(DeviceKernelArgs *kArgs, AclRtStrea
     return 0;
 }
 
-int EslModelLauncher::EslModelLaunchDeviceTensorData(Function *function,
-    const std::vector<DeviceTensorData> &inputList, const std::vector<DeviceTensorData> &outputList,
-    RtStream aicpuStream, RtStream aicoreStream, void *kernel, const DeviceLauncherConfig &config)
+int EslModelLauncher::EslModelLaunchDeviceTensorData(Function* function, const std::vector<DeviceTensorData>& inputList,
+                                                     const std::vector<DeviceTensorData>& outputList,
+                                                     RtStream aicpuStream, RtStream aicoreStream, void* kernel,
+                                                     const DeviceLauncherConfig& config)
 {
     MACHINE_LOGI("Kernel Launch");
     bool isCapture = false;
@@ -136,35 +137,36 @@ int EslModelLauncher::EslModelLaunchDeviceTensorData(Function *function,
     return rc;
 }
 
-int EslModelLauncher::EslModelRunOnce(void *kernel, const DeviceLauncherConfig &config)
+int EslModelLauncher::EslModelRunOnce(void* kernel, const DeviceLauncherConfig& config)
 {
-    auto &inputDataList = ProgramData::GetInstance().GetInputDataList();
-    auto &outputDataList = ProgramData::GetInstance().GetOutputDataList();
+    auto& inputDataList = ProgramData::GetInstance().GetInputDataList();
+    auto& outputDataList = ProgramData::GetInstance().GetOutputDataList();
     auto aicpuStream = GetStreamContext().GetScheStream();
     auto aicoreStream = GetStreamContext().GetAiCoreStream();
     std::vector<DeviceTensorData> inputDeviceDataList;
     std::vector<DeviceTensorData> outputDeviceDataList;
     EslModelMemoryUtils devMemoryHugePage(true);
     EslModelMemoryUtils devMemoryNotHugePage(false);
-    Function *function = Program::GetInstance().GetLastFunction();
-    std::tie(inputDeviceDataList, outputDeviceDataList) =
-        DeviceLauncher::BuildInputOutputFromHost(devMemoryHugePage, inputDataList, outputDataList);
-    int rc = EslModelLaunchDeviceTensorData(function, inputDeviceDataList, outputDeviceDataList,
-        aicpuStream, aicoreStream, kernel, config);
+    Function* function = Program::GetInstance().GetLastFunction();
+    std::tie(inputDeviceDataList, outputDeviceDataList) = DeviceLauncher::BuildInputOutputFromHost(
+        devMemoryHugePage, inputDataList, outputDataList);
+    int rc = EslModelLaunchDeviceTensorData(function, inputDeviceDataList, outputDeviceDataList, aicpuStream,
+                                            aicoreStream, kernel, config);
     if (HasInplaceArgs(function) || outputDataList.size() == 0) {
         DeviceLauncher::CopyFromDev(devMemoryNotHugePage, inputDataList);
     }
     return rc;
 }
 
-void EslModelLauncher::LiteAllocDeviceMemory(const std::vector<DeviceTensorData> &tensors,
-    std::vector<uint8_t *> &deviceAddrs, uint8_t *&workspaceAddr, Function *function)
+void EslModelLauncher::LiteAllocDeviceMemory(const std::vector<DeviceTensorData>& tensors,
+                                             std::vector<uint8_t*>& deviceAddrs, uint8_t*& workspaceAddr,
+                                             Function* function)
 {
     for (size_t i = 0; i < tensors.size(); i++) {
-        uint8_t *deviceAddr = nullptr;
-        AclRtMalloc((void **)&deviceAddr, tensors[i].GetDataSize(), AclRtMemMallocPolicy::HUGE_FIRST);
-        AclRtMemcpy(deviceAddr, tensors[i].GetDataSize(), (uint8_t *)tensors[i].GetAddr(),
-            tensors[i].GetDataSize(), AclRtMemcpyKind::HOST_TO_DEVICE);
+        uint8_t* deviceAddr = nullptr;
+        AclRtMalloc((void**)&deviceAddr, tensors[i].GetDataSize(), AclRtMemMallocPolicy::HUGE_FIRST);
+        AclRtMemcpy(deviceAddr, tensors[i].GetDataSize(), (uint8_t*)tensors[i].GetAddr(), tensors[i].GetDataSize(),
+                    AclRtMemcpyKind::HOST_TO_DEVICE);
         deviceAddrs.push_back(deviceAddr);
     }
 
@@ -172,17 +174,17 @@ void EslModelLauncher::LiteAllocDeviceMemory(const std::vector<DeviceTensorData>
     for (auto& devRoot : dynAttr->funcGroup.devRootList) {
         int64_t workspaceSize = dynAttr->rootTileDict[devRoot]->GetStackWorkespaceSize();
         if (workspaceSize > 0) {
-            AclRtMalloc((void **)&workspaceAddr, workspaceSize, AclRtMemMallocPolicy::HUGE_FIRST);
+            AclRtMalloc((void**)&workspaceAddr, workspaceSize, AclRtMemMallocPolicy::HUGE_FIRST);
             deviceAddrs.push_back(workspaceAddr);
             break;
         }
     }
 }
 
-void EslModelLauncher::LiteRegisterKernel(Function *function, void *&hdl, int &stubFunc)
+void EslModelLauncher::LiteRegisterKernel(Function* function, void*& hdl, int& stubFunc)
 {
     auto dynAttr = function->GetDyndevAttribute();
-    std::vector<uint8_t> &kernelBinary = dynAttr->kernelBinary;
+    std::vector<uint8_t>& kernelBinary = dynAttr->kernelBinary;
     RtDevBinary binary = {
         .magic = RT_DEV_BINARY_MAGIC_ELF,
         .version = 0,
@@ -190,8 +192,7 @@ void EslModelLauncher::LiteRegisterKernel(Function *function, void *&hdl, int &s
         .length = kernelBinary.size(),
     };
     int ret = RuntimeDevBinaryRegister(&binary, &hdl);
-    ASSERT(npu::tile_fwk::InternalError::SIM_INNER_ERROR, ret == RT_SUCCESS)
-        << "register kernel failed: " << ret;
+    ASSERT(npu::tile_fwk::InternalError::SIM_INNER_ERROR, ret == RT_SUCCESS) << "register kernel failed: " << ret;
 
     stubFunc = 1;
     std::string kernelName = "";
@@ -201,13 +202,13 @@ void EslModelLauncher::LiteRegisterKernel(Function *function, void *&hdl, int &s
     RuntimeFunctionRegister(hdl, &stubFunc, kernelName.c_str(), kernelName.c_str(), 0);
 }
 
-int EslModelLauncher::EslModelLiteRunOnce(Function *function, std::vector<DeviceTensorData> &tensors)
+int EslModelLauncher::EslModelLiteRunOnce(Function* function, std::vector<DeviceTensorData>& tensors)
 {
     ProgramData::GetInstance().Reset();
 
     // Allocate device memory (I/O + workspace)
-    std::vector<uint8_t *> deviceAddrs;
-    uint8_t *workspaceAddr = nullptr;
+    std::vector<uint8_t*> deviceAddrs;
+    uint8_t* workspaceAddr = nullptr;
     LiteAllocDeviceMemory(tensors, deviceAddrs, workspaceAddr, function);
 
     // Init ACL, device and stream
@@ -218,23 +219,21 @@ int EslModelLauncher::EslModelLiteRunOnce(Function *function, std::vector<Device
     AclRtCreateStream(&stream);
 
     // Register and launch kernel
-    void *hdl = nullptr;
+    void* hdl = nullptr;
     int stubFunc = 1;
     LiteRegisterKernel(function, hdl, stubFunc);
     RtArgsEx rtArgs = {};
     rtArgs.args = deviceAddrs.data();
-    rtArgs.argsSize = deviceAddrs.size() * sizeof(void *);
+    rtArgs.argsSize = deviceAddrs.size() * sizeof(void*);
     int ret = RuntimeKernelLaunch(&stubFunc, 1, rtArgs.args, rtArgs.argsSize, nullptr, stream);
-    ASSERT(npu::tile_fwk::InternalError::SIM_INNER_ERROR, ret == RT_SUCCESS)
-        << "LiteKernelLaunch failed: " << ret;
+    ASSERT(npu::tile_fwk::InternalError::SIM_INNER_ERROR, ret == RT_SUCCESS) << "LiteKernelLaunch failed: " << ret;
 
     // Synchronize and copy back
     ret = AclRtSynchronizeStream(stream);
-    ASSERT(npu::tile_fwk::InternalError::SIM_INNER_ERROR, ret == RT_SUCCESS)
-        << "Stream sync failed: " << ret;
+    ASSERT(npu::tile_fwk::InternalError::SIM_INNER_ERROR, ret == RT_SUCCESS) << "Stream sync failed: " << ret;
     for (size_t i = 0; i < tensors.size(); i++) {
-        AclRtMemcpy((uint8_t *)tensors[i].GetAddr(), tensors[i].GetDataSize(), deviceAddrs[i],
-            tensors[i].GetDataSize(), AclRtMemcpyKind::DEVICE_TO_HOST);
+        AclRtMemcpy((uint8_t*)tensors[i].GetAddr(), tensors[i].GetDataSize(), deviceAddrs[i], tensors[i].GetDataSize(),
+                    AclRtMemcpyKind::DEVICE_TO_HOST);
         AclRtFree(deviceAddrs[i]);
     }
     if (workspaceAddr != nullptr) {
@@ -246,4 +245,4 @@ int EslModelLauncher::EslModelLiteRunOnce(Function *function, std::vector<Device
     AclFinalize();
     return ret;
 }
-}
+} // namespace npu::tile_fwk::dynamic

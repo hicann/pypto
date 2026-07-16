@@ -18,13 +18,12 @@
 
 #include "cube_utils.h"
 
-template <
-    int64_t blockSize, typename globalData, typename tileData, typename TileData, typename GlobalData, typename BlockT,
-    typename OffsetT>
-INLINE void GatherExecute(
-    TileData dst, GlobalData src, BlockT block, OffsetT offset, uint64_t offsetsStartOffset, uint64_t srcColumnStartOffset,
-    uint64_t GMBlockTableOffset, int64_t srcShape0, int64_t srcShape1, int64_t srcStride0, int64_t srcStride1,
-    int64_t dstShape0, int64_t dstShape1, int64_t srcCol, int64_t loop, int64_t c0Size)
+template <int64_t blockSize, typename globalData, typename tileData, typename TileData, typename GlobalData,
+          typename BlockT, typename OffsetT>
+INLINE void GatherExecute(TileData dst, GlobalData src, BlockT block, OffsetT offset, uint64_t offsetsStartOffset,
+                          uint64_t srcColumnStartOffset, uint64_t GMBlockTableOffset, int64_t srcShape0,
+                          int64_t srcShape1, int64_t srcStride0, int64_t srcStride1, int64_t dstShape0,
+                          int64_t dstShape1, int64_t srcCol, int64_t loop, int64_t c0Size)
 {
     for (int64_t i = 0; i < loop; i++) {
         uint64_t gatherOffset = offset.GetAddr()[i + offsetsStartOffset];
@@ -39,12 +38,10 @@ INLINE void GatherExecute(
     }
 }
 
-template <
-    int64_t blockSize, typename TileData, typename GlobalData, typename BlockT, typename OffsetT, typename SrcCoord,
-    typename OffsetCoord, typename BlockCoord>
-INLINE void TGatherInL1Impl(
-    TileData dst, GlobalData src, BlockT block, OffsetT offset, SrcCoord srcCoord, OffsetCoord offsetCoord,
-    BlockCoord blockCoord)
+template <int64_t blockSize, typename TileData, typename GlobalData, typename BlockT, typename OffsetT,
+          typename SrcCoord, typename OffsetCoord, typename BlockCoord>
+INLINE void TGatherInL1Impl(TileData dst, GlobalData src, BlockT block, OffsetT offset, SrcCoord srcCoord,
+                            OffsetCoord offsetCoord, BlockCoord blockCoord)
 {
     constexpr uint64_t shapeSize = Std::tuple_size<typename TileData::Shape>::value;
     constexpr int64_t c0Size = BLOCK_ALIGN_BYTE / sizeof(typename TileData::Type);
@@ -68,16 +65,14 @@ INLINE void TGatherInL1Impl(
     using strideDim2 = pto::Stride<1, 1, 1, -1, -1>;
     using globalData = pto::GlobalTensor<typename GlobalData::Type, shapeDim2, strideDim2, pto::Layout::ND>;
     if (dstShape1 % c0Size > 0) {
-        using tileData = pto::Tile<
-            pto::TileType::Mat, typename TileData::Type, staticL1H, staticL1W, pto::BLayout::ColMajor, -1, -1,
-            pto::SLayout::RowMajor>;
+        using tileData = pto::Tile<pto::TileType::Mat, typename TileData::Type, staticL1H, staticL1W,
+                                   pto::BLayout::ColMajor, -1, -1, pto::SLayout::RowMajor>;
         GatherExecute<blockSize, globalData, tileData>(
             dst, src, block, offset, offsetsStartOffset, srcColumnStartOffset, GMBlockTableOffset, 1, staticL1W,
             srcStride0, srcStride1, dstShape0, dstShape1, srcShape1, dstShape0, c0Size);
     } else {
-        using tileData = pto::Tile<
-            pto::TileType::Mat, typename TileData::Type, staticL1W / c0Size, staticL1H * c0Size, pto::BLayout::RowMajor, -1,
-            -1>;
+        using tileData = pto::Tile<pto::TileType::Mat, typename TileData::Type, staticL1W / c0Size, staticL1H * c0Size,
+                                   pto::BLayout::RowMajor, -1, -1>;
         // 这里需要采用性能更高的ND2ND的搬运方式。
         // GM上将(1, dstShape1)的数据，转变为(dstShape1 / c0Size, c0Size)。
         // L1上将(staticL1W / c0Size, staticL1H / 16, 16, c0Size)的NZ数据，对每c0Size列做展平为一行，得到(staticL1W /

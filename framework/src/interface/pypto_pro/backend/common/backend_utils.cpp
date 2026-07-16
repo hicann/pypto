@@ -85,8 +85,8 @@ CompareAttrs GetCompareAttrs(const ir::CallPtr& op)
 
 namespace cce {
 
-std::string ComputeStrideBasedOffset(
-    codegen::CCECodegen& codegen, const ir::MakeTuplePtr& offsets, const ir::TensorTypePtr& tensor_type)
+std::string ComputeStrideBasedOffset(codegen::CCECodegen& codegen, const ir::MakeTuplePtr& offsets,
+                                     const ir::TensorTypePtr& tensor_type)
 {
     return codegen.ComputeIRBasedOffset(tensor_type, offsets);
 }
@@ -151,9 +151,8 @@ static bool IsConstZero(const ir::ExprPtr& expr)
     return value && value->value_ == 0;
 }
 
-void ValidateStoreNZPreconditions(
-    const std::string& op_name, const ir::ExprPtr& src_expr, const ir::MakeTuplePtr& offsets,
-    const ir::TensorTypePtr& dst_tensor_type)
+void ValidateStoreNZPreconditions(const std::string& op_name, const ir::ExprPtr& src_expr,
+                                  const ir::MakeTuplePtr& offsets, const ir::TensorTypePtr& dst_tensor_type)
 {
     if (!IsNZTensorType(dst_tensor_type)) {
         return;
@@ -294,9 +293,8 @@ PrintfFormatParts SplitPrintfSegment(const std::string& format_segment)
     size_t percent_idx = format_segment.rfind('%', conv_idx);
     INTERNAL_CHECK(percent_idx != std::string::npos)
         << "debug.printf failed to locate '%' while splitting format segment";
-    return {
-        format_segment.substr(0, percent_idx), format_segment.substr(percent_idx, conv_idx - percent_idx + 1),
-        format_segment.substr(conv_idx + 1)};
+    return {format_segment.substr(0, percent_idx), format_segment.substr(percent_idx, conv_idx - percent_idx + 1),
+            format_segment.substr(conv_idx + 1)};
 }
 
 std::vector<PrintfSegment> ParsePrintfSegments(const std::string& format)

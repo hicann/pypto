@@ -37,7 +37,7 @@ namespace npu::tile_fwk {
 // 工具函数
 // ============================================================
 
-constexpr int kMoveAdjacentSwap = 2;    
+constexpr int kMoveAdjacentSwap = 2;
 constexpr int kMoveInsertionShift = 3;
 
 void LocalSearchSolver::TakeSnapshot(const TaskGraph& taskGraph, Snapshot& snap)
@@ -146,9 +146,8 @@ void LocalSearchSolver::SelectBestAIVCore(
     CoreScheduler::UpdateInterval(availTime[core], idx, interval);
 }
 
-void LocalSearchSolver::ScheduleOneTask(
-    TaskNode& task, std::map<int, TargetCoreType>& pin,
-    std::unordered_map<TargetCoreType, std::vector<std::pair<int, int>>>& availTime)
+void LocalSearchSolver::ScheduleOneTask(TaskNode& task, std::map<int, TargetCoreType>& pin,
+                                        std::unordered_map<TargetCoreType, std::vector<std::pair<int, int>>>& availTime)
 {
     // depStart 已由调用方写入 task.endTimeCandidate
     int depStart = task.endTimeCandidate;
@@ -187,8 +186,8 @@ void LocalSearchSolver::ScheduleOneTask(
     SelectBestAIVCore(task, pin, availTime, depStart);
 }
 
-void LocalSearchSolver::ForwardPassWithPin(
-    TaskGraph& taskGraph, const std::vector<int>& topoOrder, std::map<int, TargetCoreType>& pin)
+void LocalSearchSolver::ForwardPassWithPin(TaskGraph& taskGraph, const std::vector<int>& topoOrder,
+                                           std::map<int, TargetCoreType>& pin)
 {
     std::unordered_map<TargetCoreType, std::vector<std::pair<int, int>>> availTime;
     availTime[TargetCoreType::AIC] = {{0, INT32_MAX}};
@@ -261,9 +260,9 @@ double LocalSearchSolver::CalcCandidateCost(const TaskGraph& g) const
     return static_cast<double>(makespan) + penalty;
 }
 
-double LocalSearchSolver::DecodeAndScore(
-    TaskGraph& taskGraph, const std::vector<int>& topoOrder, const std::map<int, TargetCoreType>& pinIn,
-    std::map<int, TargetCoreType>& pinOut, int& makespan)
+double LocalSearchSolver::DecodeAndScore(TaskGraph& taskGraph, const std::vector<int>& topoOrder,
+                                         const std::map<int, TargetCoreType>& pinIn,
+                                         std::map<int, TargetCoreType>& pinOut, int& makespan)
 {
     for (auto& t : taskGraph.tasks) {
         t.targetCoreTypeCandidate = TargetCoreType::UNKNOWN;
@@ -324,8 +323,8 @@ void LocalSearchSolver::InitSearchState(TaskGraph& taskGraph, double baselineCos
 
     // 预算
     // 预算：每轮 decode 次数 ≈ |B| (OP1) + n (OP2) + n*2*LS_SHIFT_RADIUS (OP3)
-    constexpr int kPatienceFloor = 4;       // 最小耐心(迭代数)下限
-    constexpr int kPatienceDivisor = 4;     // patience = maxIters / 该除数
+    constexpr int kPatienceFloor = 4;   // 最小耐心(迭代数)下限
+    constexpr int kPatienceDivisor = 4; // patience = maxIters / 该除数
     long long decodesPerIter = static_cast<long long>(ss.branches.size()) + static_cast<long long>(ss.n) +
                                static_cast<long long>(ss.n) * LS_SHIFT_RADIUS * 2;
     long long opsPerIter = std::max(1LL, decodesPerIter * ss.n);
@@ -333,8 +332,8 @@ void LocalSearchSolver::InitSearchState(TaskGraph& taskGraph, double baselineCos
     ss.patience = std::max(kPatienceFloor, ss.maxIters / kPatienceDivisor);
     ss.noImprove = 0;
 
-    APASS_LOG_INFO_F(
-        Elements::Operation, "[local_search] n=%d, branches=%zu, maxIters=%d.", ss.n, ss.branches.size(), ss.maxIters);
+    APASS_LOG_INFO_F(Elements::Operation, "[local_search] n=%d, branches=%zu, maxIters=%d.", ss.n, ss.branches.size(),
+                     ss.maxIters);
 }
 
 bool LocalSearchSolver::RunBranchFlips(TaskGraph& taskGraph, SearchState& ss, Fallback& fb, bool& improved)
@@ -512,9 +511,8 @@ bool LocalSearchSolver::ApplyBestResult(TaskGraph& taskGraph, SearchState& ss, d
     if (ss.bestCost + LS_EPS < baselineCost) {
         RestoreSnapshot(taskGraph, ss.bestSnap);
         taskGraph.ApplyCandidateUnconditional();
-        APASS_LOG_INFO_F(
-            Elements::Operation, "[local_search] improved: cost %.4f -> %.4f, makespan %d -> %d.", baselineCost,
-            ss.bestCost, baselineMakespan, ss.bestMakespan);
+        APASS_LOG_INFO_F(Elements::Operation, "[local_search] improved: cost %.4f -> %.4f, makespan %d -> %d.",
+                         baselineCost, ss.bestCost, baselineMakespan, ss.bestMakespan);
         return true;
     }
     APASS_LOG_INFO_F(

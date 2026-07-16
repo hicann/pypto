@@ -81,24 +81,28 @@ void BuildGraphForTest(std::shared_ptr<Function>& currFunctionPtr, std::vector<O
     op1.cycleEnd = op1.cycleStart + op1.GetLatency();
     opListPtr.emplace_back(&op1);
     auto& setflag1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_SYNC_SRC, {input}, {output});
-    setflag1.syncQueue_ = {PipeType::PIPE_MTE2, PipeType::PIPE_V, CoreType::AIV, CoreType::AIV, 0, AIVCore::AIV0, AIVCore::AIV0};
+    setflag1.syncQueue_ = {PipeType::PIPE_MTE2, PipeType::PIPE_V, CoreType::AIV, CoreType::AIV, 0,
+                           AIVCore::AIV0,       AIVCore::AIV0};
     opListPtr.emplace_back(&setflag1);
     auto& vecop1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_SQRT, {tensor3}, {tensor4});
     vecop1.cycleStart = TS_NUM15;
     vecop1.cycleEnd = vecop1.cycleStart + vecop1.GetLatency();
     opListPtr.emplace_back(&vecop1);
     auto& setflag2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_SYNC_SRC, {input}, {output});
-    setflag2.syncQueue_ = {PipeType::PIPE_V, PipeType::PIPE_MTE3, CoreType::AIV, CoreType::AIV, 0, AIVCore::AIV0, AIVCore::AIV0};
+    setflag2.syncQueue_ = {PipeType::PIPE_V, PipeType::PIPE_MTE3, CoreType::AIV, CoreType::AIV, 0,
+                           AIVCore::AIV0,    AIVCore::AIV0};
     opListPtr.emplace_back(&setflag2);
     auto& waitflag1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_SYNC_DST, {input}, {output});
-    waitflag1.syncQueue_ = {PipeType::PIPE_MTE2, PipeType::PIPE_V, CoreType::AIV, CoreType::AIV, 0, AIVCore::AIV0, AIVCore::AIV0};
+    waitflag1.syncQueue_ = {PipeType::PIPE_MTE2, PipeType::PIPE_V, CoreType::AIV, CoreType::AIV, 0,
+                            AIVCore::AIV0,       AIVCore::AIV0};
     opListPtr.emplace_back(&waitflag1);
     auto& vecop2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_RECIPROCAL, {tensor2}, {tensor5});
     vecop2.cycleStart = TS_NUM28;
     vecop2.cycleEnd = vecop2.cycleStart + vecop2.GetLatency();
     opListPtr.emplace_back(&vecop2);
     auto& waitflag2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_SYNC_DST, {input}, {output});
-    waitflag2.syncQueue_ = {PipeType::PIPE_V, PipeType::PIPE_MTE3, CoreType::AIV, CoreType::AIV, 0, AIVCore::AIV0, AIVCore::AIV0};
+    waitflag2.syncQueue_ = {PipeType::PIPE_V, PipeType::PIPE_MTE3, CoreType::AIV, CoreType::AIV, 0,
+                            AIVCore::AIV0,    AIVCore::AIV0};
     opListPtr.emplace_back(&waitflag2);
     auto& op2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_TRANSPOSE_MOVEOUT, {tensor4}, {tensor6});
     op2.cycleStart = TS_NUM42;
@@ -120,8 +124,8 @@ TEST_F(TuneSyncForVFTest, TestTuneSyncForVF)
     // Build Graph
     auto rootFuncPtr = std::make_shared<Function>(Program::GetInstance(), "TestTuneSync", "TestTuneSync", nullptr);
     rootFuncPtr->rootFunc_ = rootFuncPtr.get();
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestTuneSyncLeaf", "TestTuneSyncLeaf", rootFuncPtr.get());
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestTuneSyncLeaf", "TestTuneSyncLeaf",
+                                                      rootFuncPtr.get());
     EXPECT_TRUE(currFunctionPtr != nullptr);
     rootFuncPtr->rootFunc_->programs_.emplace(currFunctionPtr->GetFuncMagic(), currFunctionPtr.get());
     std::vector<Operation*> opListPtr;
@@ -139,11 +143,11 @@ TEST_F(TuneSyncForVFTest, TestTuneSyncForVF)
 
 TEST_F(TuneSyncForVFTest, TestMainProcess)
 {
-    auto rootFuncPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestMainSchedule", "TestMainSchedule", nullptr);
+    auto rootFuncPtr = std::make_shared<Function>(Program::GetInstance(), "TestMainSchedule", "TestMainSchedule",
+                                                  nullptr);
     rootFuncPtr->rootFunc_ = rootFuncPtr.get();
-    auto currFunctionPtr = std::make_shared<Function>(
-        Program::GetInstance(), "TestMainScheduleLeaf", "TestMainScheduleLeaf", rootFuncPtr.get());
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestMainScheduleLeaf",
+                                                      "TestMainScheduleLeaf", rootFuncPtr.get());
     EXPECT_TRUE(currFunctionPtr != nullptr);
     rootFuncPtr->rootFunc_->programs_.emplace(currFunctionPtr->GetFuncMagic(), currFunctionPtr.get());
     std::vector<std::shared_ptr<LogicalTensor>> input;
@@ -164,8 +168,8 @@ TEST_F(TuneSyncForVFTest, TestMainProcess)
 TEST_F(TuneSyncForVFTest, TestSkip)
 {
     config::SetPassGlobalConfig(KEY_ENABLE_VF, false);
-    auto rootFuncPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestMainSchedule", "TestMainSchedule", nullptr);
+    auto rootFuncPtr = std::make_shared<Function>(Program::GetInstance(), "TestMainSchedule", "TestMainSchedule",
+                                                  nullptr);
     TuneSyncForVF tuneSync;
     EXPECT_EQ(tuneSync.RunOnFunction(*rootFuncPtr.get()), SUCCESS);
 }

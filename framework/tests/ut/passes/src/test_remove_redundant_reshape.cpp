@@ -90,10 +90,10 @@ TEST_F(RemoveRedundantReshapeTest, TestReshapeChain)
 
     // Initialize PassManager
     PassManager& passManager = PassManager::Instance();
-    passManager.RegisterStrategy(
-        "ReshapeTestStrategy", {
-                                   {"RemoveRedundantReshape", PassName::REMOVE_REDUNDANT_RESHAPE},
-                               });
+    passManager.RegisterStrategy("ReshapeTestStrategy",
+                                 {
+                                     {"RemoveRedundantReshape", PassName::REMOVE_REDUNDANT_RESHAPE},
+                                 });
     ConfigManager::Instance();
 
     // Create and configure the function
@@ -116,8 +116,7 @@ TEST_F(RemoveRedundantReshapeTest, TestReshapeChain)
     ASSERT_NE(assemble_op, nullptr) << "Assemble operation should be kept";
     ASSERT_NE(reshape_op, nullptr) << "Reshape operation should be kept";
 
-    EXPECT_EQ(view_op->GetIOperands()[0]->shape, shape1)
-        << "The input shape of View should be the same as shape1";
+    EXPECT_EQ(view_op->GetIOperands()[0]->shape, shape1) << "The input shape of View should be the same as shape1";
     EXPECT_EQ(view_op->GetOOperands()[0]->shape, shape1)
         << "Without matmul, view/reshape/assemble reorder should be skipped";
     EXPECT_EQ(reshape_op->GetIOperands()[0]->shape, shape1)
@@ -137,8 +136,8 @@ TEST_F(RemoveRedundantReshapeTest, TestReplaceInput)
     Tensor out_tensor_C(DT_FP32, shape3, "out_tensor_C");
 
     PassManager& passManager = PassManager::Instance();
-    passManager.RegisterStrategy(
-        "ReshapeTestStrategy", {{"RemoveRedundantReshape", PassName::REMOVE_REDUNDANT_RESHAPE}});
+    passManager.RegisterStrategy("ReshapeTestStrategy",
+                                 {{"RemoveRedundantReshape", PassName::REMOVE_REDUNDANT_RESHAPE}});
 
     TileShape::Current().SetVecTile({1, 64, 64});
     int64_t first_reshape_magic = -1;
@@ -161,8 +160,7 @@ TEST_F(RemoveRedundantReshapeTest, TestReplaceInput)
     Function* currentFunction = Program::GetInstance().GetFunctionByRawName("TENSOR_ReplaceInputFunction");
     auto updated_operations = currentFunction->Operations();
 
-    EXPECT_EQ(updated_operations.size(), 6)
-        << "Without matmul, view/reshape/assemble reorder should be skipped";
+    EXPECT_EQ(updated_operations.size(), 6) << "Without matmul, view/reshape/assemble reorder should be skipped";
     EXPECT_FALSE(IsOpRemoved(updated_operations, first_reshape_magic))
         << "Without matmul, the first Reshape operation should be kept";
 
@@ -170,8 +168,7 @@ TEST_F(RemoveRedundantReshapeTest, TestReplaceInput)
     Operation* view_op = FindOpByOpcode(updated_operations, Opcode::OP_VIEW);
     ASSERT_NE(add_op, nullptr) << "Add operation should be present";
     ASSERT_NE(view_op, nullptr) << "View operation should be present";
-    EXPECT_EQ(add_op->GetIOperands()[0]->shape, shape2)
-        << "The input shape of Add should be the same as shape2";
+    EXPECT_EQ(add_op->GetIOperands()[0]->shape, shape2) << "The input shape of Add should be the same as shape2";
 }
 
 /*
@@ -182,8 +179,8 @@ TEST_F(RemoveRedundantReshapeTest, TestReplaceInput)
  */
 TEST_F(RemoveRedundantReshapeTest, TestViewReshapeReorderWithMatmul)
 {
-    auto currFunctionPtr = std::make_shared<Function>(
-        Program::GetInstance(), "TestViewReshapeReorder", "TestViewReshapeReorder", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestViewReshapeReorder",
+                                                      "TestViewReshapeReorder", nullptr);
     ASSERT_NE(currFunctionPtr, nullptr);
 
     std::vector<int64_t> inputShape = {32, 64};
@@ -217,16 +214,18 @@ TEST_F(RemoveRedundantReshapeTest, TestViewReshapeReorderWithMatmul)
     EXPECT_EQ(pass.RunOnFunction(*currFunctionPtr), SUCCESS);
 
     auto ops = currFunctionPtr->Operations();
-    EXPECT_FALSE(IsOpRemoved(ops, viewMagic))
-        << "View should be kept (no cascaded pattern, reorder skipped)";
-    EXPECT_FALSE(IsOpRemoved(ops, reshapeMagic))
-        << "Reshape should be kept (no cascaded pattern, reorder skipped)";
+    EXPECT_FALSE(IsOpRemoved(ops, viewMagic)) << "View should be kept (no cascaded pattern, reorder skipped)";
+    EXPECT_FALSE(IsOpRemoved(ops, reshapeMagic)) << "Reshape should be kept (no cascaded pattern, reorder skipped)";
 
     int viewCount = 0, reshapeCount = 0, matmulCount = 0;
     for (auto& op : ops) {
-        if (op.GetOpcode() == Opcode::OP_VIEW) { viewCount++; }
-        else if (op.GetOpcode() == Opcode::OP_RESHAPE) { reshapeCount++; }
-        else if (op.GetOpcode() == Opcode::OP_A_MUL_B) { matmulCount++; }
+        if (op.GetOpcode() == Opcode::OP_VIEW) {
+            viewCount++;
+        } else if (op.GetOpcode() == Opcode::OP_RESHAPE) {
+            reshapeCount++;
+        } else if (op.GetOpcode() == Opcode::OP_A_MUL_B) {
+            matmulCount++;
+        }
     }
     EXPECT_EQ(viewCount, 1) << "Original View should be preserved";
     EXPECT_EQ(reshapeCount, 1) << "Original Reshape should be preserved";
@@ -241,8 +240,8 @@ TEST_F(RemoveRedundantReshapeTest, TestViewReshapeReorderWithMatmul)
  */
 TEST_F(RemoveRedundantReshapeTest, TestReshapeAssembleReorderWithMatmul)
 {
-    auto currFunctionPtr = std::make_shared<Function>(
-        Program::GetInstance(), "TestReshapeAssembleReorder", "TestReshapeAssembleReorder", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestReshapeAssembleReorder",
+                                                      "TestReshapeAssembleReorder", nullptr);
     ASSERT_NE(currFunctionPtr, nullptr);
 
     std::vector<int64_t> inputShape = {2048};
@@ -276,16 +275,18 @@ TEST_F(RemoveRedundantReshapeTest, TestReshapeAssembleReorderWithMatmul)
     EXPECT_EQ(pass.RunOnFunction(*currFunctionPtr), SUCCESS);
 
     auto ops = currFunctionPtr->Operations();
-    EXPECT_FALSE(IsOpRemoved(ops, reshapeMagic))
-        << "Reshape should be kept (no cascaded pattern, reorder skipped)";
-    EXPECT_FALSE(IsOpRemoved(ops, assembleMagic))
-        << "Assemble should be kept (no cascaded pattern, reorder skipped)";
+    EXPECT_FALSE(IsOpRemoved(ops, reshapeMagic)) << "Reshape should be kept (no cascaded pattern, reorder skipped)";
+    EXPECT_FALSE(IsOpRemoved(ops, assembleMagic)) << "Assemble should be kept (no cascaded pattern, reorder skipped)";
 
     int assembleCount = 0, reshapeCount = 0, matmulCount = 0;
     for (auto& op : ops) {
-        if (op.GetOpcode() == Opcode::OP_ASSEMBLE) { assembleCount++; }
-        else if (op.GetOpcode() == Opcode::OP_RESHAPE) { reshapeCount++; }
-        else if (op.GetOpcode() == Opcode::OP_A_MUL_B) { matmulCount++; }
+        if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
+            assembleCount++;
+        } else if (op.GetOpcode() == Opcode::OP_RESHAPE) {
+            reshapeCount++;
+        } else if (op.GetOpcode() == Opcode::OP_A_MUL_B) {
+            matmulCount++;
+        }
     }
     EXPECT_EQ(assembleCount, 1) << "Original Assemble should be preserved";
     EXPECT_EQ(reshapeCount, 1) << "Original Reshape should be preserved";
@@ -298,8 +299,8 @@ TEST_F(RemoveRedundantReshapeTest, TestReshapeAssembleReorderWithMatmul)
  */
 TEST_F(RemoveRedundantReshapeTest, TestSubReshapeAssembleSkipReorderWithMatmul)
 {
-    auto currFunctionPtr = std::make_shared<Function>(
-        Program::GetInstance(), "TestSubReshapeAssemble", "TestSubReshapeAssemble", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestSubReshapeAssemble",
+                                                      "TestSubReshapeAssemble", nullptr);
     ASSERT_NE(currFunctionPtr, nullptr);
     std::vector<int64_t> subShape = {32, 64};
     std::vector<int64_t> middleShape = {2048};
@@ -312,12 +313,13 @@ TEST_F(RemoveRedundantReshapeTest, TestSubReshapeAssembleSkipReorderWithMatmul)
     auto matmulA = IRBuilder().CreateTensorVar(DT_FP32, matmulShape, CreateTestConstIntVector(matmulShape));
     auto matmulB = IRBuilder().CreateTensorVar(DT_FP32, matmulShape, CreateTestConstIntVector(matmulShape));
     auto matmulC = IRBuilder().CreateTensorVar(DT_FP32, matmulShape, CreateTestConstIntVector(matmulShape));
-    int subMagic = IRBuilder().CreateTensorOpStmt(
-        *currFunctionPtr, Opcode::OP_SUB, {subIn1, subIn2}, {subOut}).GetOpMagic();
-    int reshapeMagic = IRBuilder().CreateTensorOpStmt(
-        *currFunctionPtr, Opcode::OP_RESHAPE, {subOut}, {middle}).GetOpMagic();
-    auto& assembleOp = IRBuilder().CreateTensorOpStmt(
-        *currFunctionPtr, Opcode::OP_ASSEMBLE, {middle}, {output});
+    int subMagic = IRBuilder()
+                       .CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_SUB, {subIn1, subIn2}, {subOut})
+                       .GetOpMagic();
+    int reshapeMagic = IRBuilder()
+                           .CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_RESHAPE, {subOut}, {middle})
+                           .GetOpMagic();
+    auto& assembleOp = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_ASSEMBLE, {middle}, {output});
     assembleOp.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
     int assembleMagic = assembleOp.GetOpMagic();
     IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_A_MUL_B, {matmulA, matmulB}, {matmulC});
@@ -331,10 +333,15 @@ TEST_F(RemoveRedundantReshapeTest, TestSubReshapeAssembleSkipReorderWithMatmul)
     EXPECT_FALSE(IsOpRemoved(ops, assembleMagic)) << "Assemble should be kept";
     int subCount = 0, reshapeCount = 0, assembleCount = 0, matmulCount = 0;
     for (auto& op : ops) {
-        if (op.GetOpcode() == Opcode::OP_SUB) { subCount++; }
-        else if (op.GetOpcode() == Opcode::OP_RESHAPE) { reshapeCount++; }
-        else if (op.GetOpcode() == Opcode::OP_ASSEMBLE) { assembleCount++; }
-        else if (op.GetOpcode() == Opcode::OP_A_MUL_B) { matmulCount++; }
+        if (op.GetOpcode() == Opcode::OP_SUB) {
+            subCount++;
+        } else if (op.GetOpcode() == Opcode::OP_RESHAPE) {
+            reshapeCount++;
+        } else if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
+            assembleCount++;
+        } else if (op.GetOpcode() == Opcode::OP_A_MUL_B) {
+            matmulCount++;
+        }
     }
     EXPECT_EQ(subCount, 1);
     EXPECT_EQ(reshapeCount, 1);
@@ -354,8 +361,8 @@ struct FanoutGraphInfo {
 static FanoutGraphInfo BuildViewReshapeFanoutGraph()
 {
     FanoutGraphInfo info;
-    info.func = std::make_shared<Function>(
-        Program::GetInstance(), "TestViewReshapeFanout", "TestViewReshapeFanout", nullptr);
+    info.func = std::make_shared<Function>(Program::GetInstance(), "TestViewReshapeFanout", "TestViewReshapeFanout",
+                                           nullptr);
 
     std::vector<int64_t> inputShape = {4, 32};
     std::vector<int64_t> middleShape = {4, 16};
@@ -416,8 +423,7 @@ TEST_F(RemoveRedundantReshapeTest, TestViewReshapeFanoutWithMatmul)
     EXPECT_EQ(pass.RunOnFunction(*info.func), SUCCESS);
 
     auto ops = info.func->Operations();
-    EXPECT_FALSE(IsOpRemoved(ops, info.viewMagic))
-        << "View should be kept (no cascaded pattern, reorder skipped)";
+    EXPECT_FALSE(IsOpRemoved(ops, info.viewMagic)) << "View should be kept (no cascaded pattern, reorder skipped)";
     EXPECT_FALSE(IsOpRemoved(ops, info.reshapeMagic))
         << "Reshape should be kept (no cascaded pattern, reorder skipped)";
     EXPECT_FALSE(IsOpRemoved(ops, info.fanoutView1Magic))
@@ -427,9 +433,13 @@ TEST_F(RemoveRedundantReshapeTest, TestViewReshapeFanoutWithMatmul)
 
     int viewCount = 0, reshapeCount = 0, matmulCount = 0;
     for (auto& op : ops) {
-        if (op.GetOpcode() == Opcode::OP_VIEW) { viewCount++; }
-        else if (op.GetOpcode() == Opcode::OP_RESHAPE) { reshapeCount++; }
-        else if (op.GetOpcode() == Opcode::OP_A_MUL_B) { matmulCount++; }
+        if (op.GetOpcode() == Opcode::OP_VIEW) {
+            viewCount++;
+        } else if (op.GetOpcode() == Opcode::OP_RESHAPE) {
+            reshapeCount++;
+        } else if (op.GetOpcode() == Opcode::OP_A_MUL_B) {
+            matmulCount++;
+        }
     }
     EXPECT_EQ(viewCount, 3) << "Original 3 Views (1 main + 2 fanout) should be preserved";
     EXPECT_EQ(reshapeCount, 1) << "Original Reshape should be preserved";
@@ -446,8 +456,7 @@ struct ReshapeAssembleGraphInfo {
 static ReshapeAssembleGraphInfo BuildReshapeAssembleGraph(const std::string& name)
 {
     ReshapeAssembleGraphInfo info;
-    info.func = std::make_shared<Function>(
-        Program::GetInstance(), name, name, nullptr);
+    info.func = std::make_shared<Function>(Program::GetInstance(), name, name, nullptr);
 
     std::vector<int64_t> inputShape = {32, 64};
     std::vector<int64_t> middleShape = {2048};
@@ -505,9 +514,13 @@ TEST_F(RemoveRedundantReshapeTest, TestReshapeAssembleSkipReorderWithSymbolicDyn
 
     int assembleCount = 0, reshapeCount = 0, matmulCount = 0;
     for (auto& op : ops) {
-        if (op.GetOpcode() == Opcode::OP_ASSEMBLE) { assembleCount++; }
-        else if (op.GetOpcode() == Opcode::OP_RESHAPE) { reshapeCount++; }
-        else if (op.GetOpcode() == Opcode::OP_A_MUL_B) { matmulCount++; }
+        if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
+            assembleCount++;
+        } else if (op.GetOpcode() == Opcode::OP_RESHAPE) {
+            reshapeCount++;
+        } else if (op.GetOpcode() == Opcode::OP_A_MUL_B) {
+            matmulCount++;
+        }
     }
     EXPECT_EQ(assembleCount, 1);
     EXPECT_EQ(reshapeCount, 1);
@@ -531,17 +544,18 @@ TEST_F(RemoveRedundantReshapeTest, TestReshapeAssembleReorderWithConcreteDynVali
     auto ops = info.func->Operations();
     int matmulCount = 0;
     for (auto& op : ops) {
-        if (op.GetOpcode() == Opcode::OP_A_MUL_B) { matmulCount++; }
+        if (op.GetOpcode() == Opcode::OP_A_MUL_B) {
+            matmulCount++;
+        }
     }
     EXPECT_EQ(matmulCount, 1);
 }
 
 TEST_F(RemoveRedundantReshapeTest, TestInferInputDynRawShapeFromOutputRejectsNullArgs)
 {
-    auto input = IRBuilder().CreateTensorVar(
-        DT_FP32, std::vector<int64_t>{-1, 64}, CreateTestConstIntVector({-1, 64}));
-    auto output = IRBuilder().CreateTensorVar(
-        DT_FP32, std::vector<int64_t>{-1, 4, 16}, CreateTestConstIntVector({-1, 4, 16}));
+    auto input = IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{-1, 64}, CreateTestConstIntVector({-1, 64}));
+    auto output = IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{-1, 4, 16},
+                                              CreateTestConstIntVector({-1, 4, 16}));
 
     std::vector<SymbolicScalar> inferred;
     EXPECT_FALSE(ViewReshapeAssembleReorderUtils::InferInputDynRawShapeFromOutput(nullptr, output, inferred));
@@ -550,10 +564,9 @@ TEST_F(RemoveRedundantReshapeTest, TestInferInputDynRawShapeFromOutputRejectsNul
 
 TEST_F(RemoveRedundantReshapeTest, TestInferInputDynRawShapeFromOutputRejectsBadDynShapeSize)
 {
-    auto input = IRBuilder().CreateTensorVar(
-        DT_FP32, std::vector<int64_t>{-1, 64}, CreateTestConstIntVector({-1, 64}));
-    auto output = IRBuilder().CreateTensorVar(
-        DT_FP32, std::vector<int64_t>{-1, 4, 16}, CreateTestConstIntVector({-1, 4, 16}));
+    auto input = IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{-1, 64}, CreateTestConstIntVector({-1, 64}));
+    auto output = IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{-1, 4, 16},
+                                              CreateTestConstIntVector({-1, 4, 16}));
     output->GetRawTensor()->UpdateDynRawShape(CreateTestConstIntVector({4, 4}));
 
     std::vector<SymbolicScalar> inferred;
@@ -562,10 +575,9 @@ TEST_F(RemoveRedundantReshapeTest, TestInferInputDynRawShapeFromOutputRejectsBad
 
 TEST_F(RemoveRedundantReshapeTest, TestInferInputDynRawShapeFromOutputRejectsIncompatibleShapes)
 {
-    auto input = IRBuilder().CreateTensorVar(
-        DT_FP32, std::vector<int64_t>{-1, 64}, CreateTestConstIntVector({-1, 64}));
-    auto output = IRBuilder().CreateTensorVar(
-        DT_FP32, std::vector<int64_t>{-1, 128}, CreateTestConstIntVector({-1, 128}));
+    auto input = IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{-1, 64}, CreateTestConstIntVector({-1, 64}));
+    auto output = IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{-1, 128},
+                                              CreateTestConstIntVector({-1, 128}));
     output->GetRawTensor()->UpdateDynRawShape(CreateTestConstIntVector({4, 128}));
 
     std::vector<SymbolicScalar> inferred;
@@ -578,15 +590,14 @@ TEST_F(RemoveRedundantReshapeTest, TestInferInputDynRawShapeFromOutputRejectsInc
  */
 TEST_F(RemoveRedundantReshapeTest, TestCreateMetadataReshapeInfersInputDynRawShape)
 {
-    auto func = std::make_shared<Function>(
-        Program::GetInstance(), "TestInferDynRawShape", "TestInferDynRawShape", nullptr);
+    auto func = std::make_shared<Function>(Program::GetInstance(), "TestInferDynRawShape", "TestInferDynRawShape",
+                                           nullptr);
 
     // input: static shape {-1, 64}, dynRawShape {-1, 64} (has negative -> triggers inference)
-    auto input = IRBuilder().CreateTensorVar(
-        DT_FP32, std::vector<int64_t>{-1, 64}, CreateTestConstIntVector({-1, 64}));
+    auto input = IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{-1, 64}, CreateTestConstIntVector({-1, 64}));
     // output: static shape {-1, 4, 16}, dynRawShape {4, 4, 16} (concrete, source for inference)
-    auto output = IRBuilder().CreateTensorVar(
-        DT_FP32, std::vector<int64_t>{-1, 4, 16}, CreateTestConstIntVector({-1, 4, 16}));
+    auto output = IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{-1, 4, 16},
+                                              CreateTestConstIntVector({-1, 4, 16}));
     output->GetRawTensor()->UpdateDynRawShape(CreateTestConstIntVector({4, 4, 16}));
 
     // srcOp: a dummy reshape op for attribute copying
@@ -600,8 +611,8 @@ TEST_F(RemoveRedundantReshapeTest, TestCreateMetadataReshapeInfersInputDynRawSha
     EXPECT_EQ(beforeDynRawShape[0].Concrete(), -1);
 
     ViewReshapeAssembleReorderUtils utils;
-    utils.CreateMetadataReshape(*func, input, output, CreateTestConstIntVector({4, 4, 16}),
-        ir::Span::Unknown(), Operation::ScopeInfo(), srcOp);
+    utils.CreateMetadataReshape(*func, input, output, CreateTestConstIntVector({4, 4, 16}), ir::Span::Unknown(),
+                                Operation::ScopeInfo(), srcOp);
 
     // After: input dynRawShape inferred to {4, 64}
     const auto& afterDynRawShape = input->GetRawTensor()->GetDynRawShape();
@@ -616,15 +627,13 @@ TEST_F(RemoveRedundantReshapeTest, TestCreateMetadataReshapeInfersInputDynRawSha
  */
 TEST_F(RemoveRedundantReshapeTest, TestCreateMetadataReshapeKeepsOriginalWhenInferFails)
 {
-    auto func = std::make_shared<Function>(
-        Program::GetInstance(), "TestInferFail", "TestInferFail", nullptr);
+    auto func = std::make_shared<Function>(Program::GetInstance(), "TestInferFail", "TestInferFail", nullptr);
 
     // input: {-1, 64}, dynRawShape {-1, 64}
-    auto input = IRBuilder().CreateTensorVar(
-        DT_FP32, std::vector<int64_t>{-1, 64}, CreateTestConstIntVector({-1, 64}));
+    auto input = IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{-1, 64}, CreateTestConstIntVector({-1, 64}));
     // output: {-1, 128} — incompatible (64 vs 128), inference fails
-    auto output = IRBuilder().CreateTensorVar(
-        DT_FP32, std::vector<int64_t>{-1, 128}, CreateTestConstIntVector({-1, 128}));
+    auto output = IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{-1, 128},
+                                              CreateTestConstIntVector({-1, 128}));
     output->GetRawTensor()->UpdateDynRawShape(CreateTestConstIntVector({4, 128}));
 
     auto dummyIn = IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{4}, CreateTestConstIntVector({4}));
@@ -632,8 +641,8 @@ TEST_F(RemoveRedundantReshapeTest, TestCreateMetadataReshapeKeepsOriginalWhenInf
     auto& srcOp = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_RESHAPE, {dummyIn}, {dummyOut});
 
     ViewReshapeAssembleReorderUtils utils;
-    utils.CreateMetadataReshape(*func, input, output, CreateTestConstIntVector({4, 128}),
-        ir::Span::Unknown(), Operation::ScopeInfo(), srcOp);
+    utils.CreateMetadataReshape(*func, input, output, CreateTestConstIntVector({4, 128}), ir::Span::Unknown(),
+                                Operation::ScopeInfo(), srcOp);
 
     // After: input dynRawShape unchanged (still {-1, 64})
     const auto& afterDynRawShape = input->GetRawTensor()->GetDynRawShape();
@@ -648,15 +657,13 @@ TEST_F(RemoveRedundantReshapeTest, TestCreateMetadataReshapeKeepsOriginalWhenInf
  */
 TEST_F(RemoveRedundantReshapeTest, TestCreateMetadataReshapeSkipsWhenNoNegativeDynDim)
 {
-    auto func = std::make_shared<Function>(
-        Program::GetInstance(), "TestNoNegDim", "TestNoNegDim", nullptr);
+    auto func = std::make_shared<Function>(Program::GetInstance(), "TestNoNegDim", "TestNoNegDim", nullptr);
 
     // input: dynRawShape already concrete {8, 64} — no negative dims
-    auto input = IRBuilder().CreateTensorVar(
-        DT_FP32, std::vector<int64_t>{-1, 64}, CreateTestConstIntVector({-1, 64}));
+    auto input = IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{-1, 64}, CreateTestConstIntVector({-1, 64}));
     input->GetRawTensor()->UpdateDynRawShape(CreateTestConstIntVector({8, 64}));
-    auto output = IRBuilder().CreateTensorVar(
-        DT_FP32, std::vector<int64_t>{-1, 4, 16}, CreateTestConstIntVector({-1, 4, 16}));
+    auto output = IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{-1, 4, 16},
+                                              CreateTestConstIntVector({-1, 4, 16}));
     output->GetRawTensor()->UpdateDynRawShape(CreateTestConstIntVector({4, 4, 16}));
 
     auto dummyIn = IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{4}, CreateTestConstIntVector({4}));
@@ -664,8 +671,8 @@ TEST_F(RemoveRedundantReshapeTest, TestCreateMetadataReshapeSkipsWhenNoNegativeD
     auto& srcOp = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_RESHAPE, {dummyIn}, {dummyOut});
 
     ViewReshapeAssembleReorderUtils utils;
-    utils.CreateMetadataReshape(*func, input, output, CreateTestConstIntVector({4, 4, 16}),
-        ir::Span::Unknown(), Operation::ScopeInfo(), srcOp);
+    utils.CreateMetadataReshape(*func, input, output, CreateTestConstIntVector({4, 4, 16}), ir::Span::Unknown(),
+                                Operation::ScopeInfo(), srcOp);
 
     // After: input dynRawShape unchanged (still {8, 64}, not overwritten by output's {4,...})
     const auto& afterDynRawShape = input->GetRawTensor()->GetDynRawShape();

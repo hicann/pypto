@@ -31,23 +31,15 @@ enum class AdxDumpType : int32_t {
     AIC_ERR_DETAIL_DUMP = 0x05 // COREDUMP mode
 };
 
-enum class AdxTensorType : int32_t {
-    INPUT,
-    OUTPUT,
-    WORKSPACE
-};
+enum class AdxTensorType : int32_t { INPUT, OUTPUT, WORKSPACE };
 
-enum class AdxAddressType : int32_t {
-    TRADITIONAL,
-    NOTILING,
-    RAW
-};
+enum class AdxAddressType : int32_t { TRADITIONAL, NOTILING, RAW };
 
 enum class AdxTensorPlacement : int32_t {
-    kOnDeviceHbm,  ///< Tensor位于Device上的HBM内存
-    kOnHost,       ///< Tensor位于Host
-    kFollowing,    ///< Tensor位于Host，且数据紧跟在结构体后面
-    kOnDeviceP2p,  ///< Tensor位于Device上的P2p内存
+    kOnDeviceHbm, ///< Tensor位于Device上的HBM内存
+    kOnHost,      ///< Tensor位于Host
+    kFollowing,   ///< Tensor位于Host，且数据紧跟在结构体后面
+    kOnDeviceP2p, ///< Tensor位于Device上的P2p内存
     kTensorPlacementEnd
 };
 
@@ -58,29 +50,29 @@ enum class AdxExceptionDumpMode : uint32_t {
 };
 
 struct AdxTensorInfoV2 {
-    AdxTensorType type;       // tensor类型
-    size_t tensorSize;     // tensor内存大小
+    AdxTensorType type; // tensor类型
+    size_t tensorSize;  // tensor内存大小
     int32_t format;
     int32_t dataType;
-    int64_t *tensorAddr;   // tensor数据地址
-    AdxAddressType addrType;  // 地址的类型
+    int64_t* tensorAddr;     // tensor数据地址
+    AdxAddressType addrType; // 地址的类型
     int32_t placement;
-    uint32_t argsOffSet;   // tensor数据地址在args里的偏移
-    std::vector<int64_t> shape;  //shape
-    std::vector<int64_t> originShape; //originShape
+    uint32_t argsOffSet;              // tensor数据地址在args里的偏移
+    std::vector<int64_t> shape;       // shape
+    std::vector<int64_t> originShape; // originShape
 };
 
 struct AdxTensorInfo {
-    AdxTensorType type;       // tensor类型
-    size_t tensorSize;     // tensor内存大小
+    AdxTensorType type; // tensor类型
+    size_t tensorSize;  // tensor内存大小
     int32_t format;
     int32_t dataType;
-    int64_t *tensorAddr;   // tensor数据地址
-    AdxAddressType addrType;  // 地址的类型
+    int64_t* tensorAddr;     // tensor数据地址
+    AdxAddressType addrType; // 地址的类型
     int32_t placement;
-    uint32_t argsOffSet;   // tensor数据地址在args里的偏移
-    std::vector<int64_t> shape;  //shape
-    std::vector<int64_t> originShape; //originShape
+    uint32_t argsOffSet;              // tensor数据地址在args里的偏移
+    std::vector<int64_t> shape;       // shape
+    std::vector<int64_t> originShape; // originShape
 };
 
 struct AdxExceptionDumpInfo {
@@ -88,13 +80,14 @@ struct AdxExceptionDumpInfo {
     RtCoreType coreType;
     uint32_t argssize;
     void* argAddr;
-    void *bin;
+    void* bin;
     char kernelName[MAX_KERNEL_BUF_LEN];
     char kernelDisplayName[MAX_KERNEL_BUF_LEN];
     uint32_t extraTensorNum;
     AdxTensorInfo tensorInfo[MAX_TENSOR_NUM];
 };
 
-typedef int32_t(*AdumpExceptionDumpCallback)(AclRtExceptionInfo *exceptionInfo, AdxExceptionDumpInfo *exceptionDumpInfo,
-                uint32_t exceptionDumpSize, uint32_t* exceptionDumpRealSize, AdxExceptionDumpMode *mode);
+typedef int32_t (*AdumpExceptionDumpCallback)(AclRtExceptionInfo* exceptionInfo,
+                                              AdxExceptionDumpInfo* exceptionDumpInfo, uint32_t exceptionDumpSize,
+                                              uint32_t* exceptionDumpRealSize, AdxExceptionDumpMode* mode);
 } // namespace npu::tile_fwk

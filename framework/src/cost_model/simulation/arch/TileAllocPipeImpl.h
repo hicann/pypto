@@ -23,12 +23,11 @@ namespace CostModel {
 class TileAllocPipeImpl : public PipeMachineImpl {
 public:
     // this belongs to A2A3 arch
-    std::unordered_map<CorePipeType, uint64_t> bufferSize = {
-        {CorePipeType::PIPE_VECTOR_BMU, 192 * pow(2, 10)},
-        {CorePipeType::PIPE_CUBE_BMU_L1, 512 * pow(2, 10)},
-        {CorePipeType::PIPE_CUBE_BMU_L0A, 64 * pow(2, 10)},
-        {CorePipeType::PIPE_CUBE_BMU_L0B, 64 * pow(2, 10)},
-        {CorePipeType::PIPE_CUBE_BMU_L0C, 128 * pow(2, 10)}};
+    std::unordered_map<CorePipeType, uint64_t> bufferSize = {{CorePipeType::PIPE_VECTOR_BMU, 192 * pow(2, 10)},
+                                                             {CorePipeType::PIPE_CUBE_BMU_L1, 512 * pow(2, 10)},
+                                                             {CorePipeType::PIPE_CUBE_BMU_L0A, 64 * pow(2, 10)},
+                                                             {CorePipeType::PIPE_CUBE_BMU_L0B, 64 * pow(2, 10)},
+                                                             {CorePipeType::PIPE_CUBE_BMU_L0C, 128 * pow(2, 10)}};
 
     uint64_t Simulate(const TileOpPtr& tileOp) override
     {

@@ -35,20 +35,19 @@ TILEOP void UBCopyIn(__ubuf__ T* dst, __gm__ T* src)
         return;
     }
     if constexpr (sizeof(T) == 1) {
-        copy_gm_to_ubuf_align_b8(
-            dst, src, 0 /*sid*/, nBurst, lenBurst, 0 /*left padding count*/, 0 /*right padding count*/, gmGap, ubGap);
+        copy_gm_to_ubuf_align_b8(dst, src, 0 /*sid*/, nBurst, lenBurst, 0 /*left padding count*/,
+                                 0 /*right padding count*/, gmGap, ubGap);
     } else if (sizeof(T) == 2) {
-        copy_gm_to_ubuf_align_b16(
-            dst, src, 0 /*sid*/, nBurst, lenBurst, 0 /*left padding count*/, 0 /*right padding count*/, gmGap, ubGap);
+        copy_gm_to_ubuf_align_b16(dst, src, 0 /*sid*/, nBurst, lenBurst, 0 /*left padding count*/,
+                                  0 /*right padding count*/, gmGap, ubGap);
     } else {
-        copy_gm_to_ubuf_align_b32(
-            dst, src, 0 /*sid*/, nBurst, lenBurst, 0 /*left padding count*/, 0 /*right padding count*/, gmGap, ubGap);
+        copy_gm_to_ubuf_align_b32(dst, src, 0 /*sid*/, nBurst, lenBurst, 0 /*left padding count*/,
+                                  0 /*right padding count*/, gmGap, ubGap);
     }
 }
 
-template <
-    typename T, unsigned T0, unsigned T1, unsigned T2, unsigned T3, unsigned T4, unsigned UBS1, unsigned UBS2,
-    unsigned UBS3, unsigned UBS4, unsigned GMS1, unsigned GMS2, unsigned GMS3, unsigned GMS4>
+template <typename T, unsigned T0, unsigned T1, unsigned T2, unsigned T3, unsigned T4, unsigned UBS1, unsigned UBS2,
+          unsigned UBS3, unsigned UBS4, unsigned GMS1, unsigned GMS2, unsigned GMS3, unsigned GMS4>
 TILEOP void UBCopyIn(__ubuf__ T* dst, __gm__ T* src)
 {
     static_assert((UBS4 * sizeof(T)) % 32 == 0, "UB tile must be 32B aligned!");
@@ -84,20 +83,19 @@ TILEOP void UBCopyOut(__gm__ T* dst, __ubuf__ T* src)
     static_assert(lenBurst < ((1ULL << 21) - 1ULL));
     static_assert(gmGap < ((1ULL << 32) - 1ULL));
     if constexpr (sizeof(T) == 1) {
-        copy_ubuf_to_gm_align_b8(
-            dst, src, 0 /*sid*/, nBurst, lenBurst, 0 /*left padding count*/, 0 /*right padding count*/, ubGap, gmGap);
+        copy_ubuf_to_gm_align_b8(dst, src, 0 /*sid*/, nBurst, lenBurst, 0 /*left padding count*/,
+                                 0 /*right padding count*/, ubGap, gmGap);
     } else if (sizeof(T) == 2) {
-        copy_ubuf_to_gm_align_b16(
-            dst, src, 0 /*sid*/, nBurst, lenBurst, 0 /*left padding count*/, 0 /*right padding count*/, ubGap, gmGap);
+        copy_ubuf_to_gm_align_b16(dst, src, 0 /*sid*/, nBurst, lenBurst, 0 /*left padding count*/,
+                                  0 /*right padding count*/, ubGap, gmGap);
     } else {
-        copy_ubuf_to_gm_align_b32(
-            dst, src, 0 /*sid*/, nBurst, lenBurst, 0 /*left padding count*/, 0 /*right padding count*/, ubGap, gmGap);
+        copy_ubuf_to_gm_align_b32(dst, src, 0 /*sid*/, nBurst, lenBurst, 0 /*left padding count*/,
+                                  0 /*right padding count*/, ubGap, gmGap);
     }
 }
 
-template <
-    typename T, unsigned T0, unsigned T1, unsigned T2, unsigned T3, unsigned T4, unsigned GMS1, unsigned GMS2,
-    unsigned GMS3, unsigned GMS4, unsigned UBS1, unsigned UBS2, unsigned UBS3, unsigned UBS4>
+template <typename T, unsigned T0, unsigned T1, unsigned T2, unsigned T3, unsigned T4, unsigned GMS1, unsigned GMS2,
+          unsigned GMS3, unsigned GMS4, unsigned UBS1, unsigned UBS2, unsigned UBS3, unsigned UBS4>
 TILEOP void UBCopyOut(__gm__ T* dst, __ubuf__ T* src)
 {
     static_assert((UBS4 * sizeof(T)) % 32 == 0, "UB tile must be 32B aligned!");
@@ -122,17 +120,15 @@ TILEOP void UBCopyOut(__gm__ T* dst, __ubuf__ T* src)
 }
 
 // NEXTNEXT: delete after pass resolve the problem of redundant copy in
-template <
-    typename T, unsigned T0, unsigned T1, unsigned T2, unsigned T3, unsigned T4, unsigned UBS1, unsigned UBS2,
-    unsigned UBS3, unsigned UBS4, unsigned GMS1, unsigned GMS2, unsigned GMS3, unsigned GMS4, unsigned isNop>
+template <typename T, unsigned T0, unsigned T1, unsigned T2, unsigned T3, unsigned T4, unsigned UBS1, unsigned UBS2,
+          unsigned UBS3, unsigned UBS4, unsigned GMS1, unsigned GMS2, unsigned GMS3, unsigned GMS4, unsigned isNop>
 TILEOP void UBCopyIn(__ubuf__ T* dst, __gm__ T* src)
 {
     // do nothing
 }
 
-template <
-    typename T, typename T2, unsigned src0OriShape1, unsigned src1OriShape1, unsigned GmShape1, unsigned src0rawShape1,
-    unsigned cacheMode, unsigned blockSize>
+template <typename T, typename T2, unsigned src0OriShape1, unsigned src1OriShape1, unsigned GmShape1,
+          unsigned src0rawShape1, unsigned cacheMode, unsigned blockSize>
 TILEOP void TIndexoutcast(__gm__ T* dst, __ubuf__ T* src0, __ubuf__ T2* src1)
 {
     for (auto i = 0; i < src1OriShape1; i++) {
@@ -150,8 +146,8 @@ TILEOP void TIndexoutcast(__gm__ T* dst, __ubuf__ T* src0, __ubuf__ T2* src1)
             __gm__ T* new_dst = dst + blockCount * blockSize * GmShape1 + index * 32 / sizeof(T);
             set_flag(PIPE_S, PIPE_MTE3, EVENT_ID7);
             wait_flag(PIPE_S, PIPE_MTE3, EVENT_ID7);
-            copy_ubuf_to_gm(
-                new_dst, src0 + i * src0OriShape1, 0 /*sid*/, src0OriShape1 / 32 * sizeof(T), 1, 0, blockSize - 1);
+            copy_ubuf_to_gm(new_dst, src0 + i * src0OriShape1, 0 /*sid*/, src0OriShape1 / 32 * sizeof(T), 1, 0,
+                            blockSize - 1);
         } else {
             __gm__ T* new_dst = dst + curValue * GmShape1;
             set_flag(PIPE_S, PIPE_MTE3, EVENT_ID7);
@@ -161,9 +157,8 @@ TILEOP void TIndexoutcast(__gm__ T* dst, __ubuf__ T* src0, __ubuf__ T2* src1)
     }
 }
 
-template <
-    typename T, typename T2, unsigned src1OriShape0, unsigned src1OriShape1, unsigned src1rawShape1,
-    unsigned src0OriShape3, unsigned src0rawShape1, unsigned src0rawShape3, unsigned cacheMode>
+template <typename T, typename T2, unsigned src1OriShape0, unsigned src1OriShape1, unsigned src1rawShape1,
+          unsigned src0OriShape3, unsigned src0rawShape1, unsigned src0rawShape3, unsigned cacheMode>
 TILEOP void TIndexoutcast(__gm__ T* dst, __ubuf__ T* src, __ubuf__ T2* index)
 {
     constexpr unsigned b = src1OriShape0;
@@ -182,8 +177,8 @@ TILEOP void TIndexoutcast(__gm__ T* dst, __ubuf__ T* src, __ubuf__ T2* index)
             curDst = dst + *dstIdx * nd; // dst [index[i][j]] [n][d]
             set_flag(PIPE_S, PIPE_MTE3, EVENT_ID7);
             wait_flag(PIPE_S, PIPE_MTE3, EVENT_ID7);
-            copy_ubuf_to_gm_align_b32(
-                curDst, curSrc, 0 /*sid*/, 1, nd * sizeof(T), 0, 0, (nd_32aligned - nd) * sizeof(T) / BLOCK_SIZE, 0);
+            copy_ubuf_to_gm_align_b32(curDst, curSrc, 0 /*sid*/, 1, nd * sizeof(T), 0, 0,
+                                      (nd_32aligned - nd) * sizeof(T) / BLOCK_SIZE, 0);
             curSrc += nd_32aligned;
             dstIdx++;
         }
@@ -193,17 +188,15 @@ TILEOP void TIndexoutcast(__gm__ T* dst, __ubuf__ T* src, __ubuf__ T2* index)
 }
 
 // src1=index [1,2] , src0: [TShape0,TShape1,TShape2,TShape3],  dst [GmShape0,GmShape1,GmShape2,GmShape3]
-template <
-    typename T, typename T2, unsigned src0OriShape0, unsigned src0OriShape1, unsigned src0OriShape3,
-    unsigned src0rawShape1, unsigned src0rawShape2, unsigned src0rawShape3, unsigned src1OriShape0,
-    unsigned src1OriShape1, unsigned src1rawShape3, unsigned GmShape2, unsigned GmShape3, unsigned cacheMode,
-    unsigned blockSize>
+template <typename T, typename T2, unsigned src0OriShape0, unsigned src0OriShape1, unsigned src0OriShape3,
+          unsigned src0rawShape1, unsigned src0rawShape2, unsigned src0rawShape3, unsigned src1OriShape0,
+          unsigned src1OriShape1, unsigned src1rawShape3, unsigned GmShape2, unsigned GmShape3, unsigned cacheMode,
+          unsigned blockSize>
 TILEOP void TIndexoutcast(__gm__ T* dst, __ubuf__ T* src0, __ubuf__ T2* src1)
 {
     if (cacheMode == 2) {
-        TIndexoutcast<
-            T, T2, src1OriShape0, src1OriShape1, src1rawShape3, src0OriShape3, src0rawShape1, src0rawShape3, cacheMode>(
-            dst, src0, src1);
+        TIndexoutcast<T, T2, src1OriShape0, src1OriShape1, src1rawShape3, src0OriShape3, src0rawShape1, src0rawShape3,
+                      cacheMode>(dst, src0, src1);
         return;
     }
     static_assert(src0OriShape1 == 1, "src0OriShape1 now only support 1");
@@ -246,9 +239,8 @@ TILEOP void Load(__ubuf__ T1* dst, __gm__ T1* src, __ubuf__ T2* offsets, int64_t
 }
 
 template <typename T1, typename T2, int64_t rawShape1, int64_t rawShape2>
-TILEOP void Load(
-    __ubuf__ T1* dst, __gm__ T1* src, __ubuf__ T2* offsets, int64_t originShape0, int64_t originShape1,
-    int64_t originShape2)
+TILEOP void Load(__ubuf__ T1* dst, __gm__ T1* src, __ubuf__ T2* offsets, int64_t originShape0, int64_t originShape1,
+                 int64_t originShape2)
 {
     static_assert(std::is_same_v<T2, int32_t> || std::is_same_v<T2, int64_t>);
     pipe_barrier(PIPE_ALL);

@@ -74,8 +74,8 @@ static std::vector<int64_t> GetNoAxisViewShapes(const std::vector<int64_t>& view
     return shapes;
 }
 
-static void CumOperationExeFuncDoubleCut(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void CumOperationExeFuncDoubleCut(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                         const OpFuncArgs* opArgs)
 {
     auto args = static_cast<const CumOpFuncArgs*>(opArgs);
 
@@ -107,16 +107,15 @@ static void CumOperationExeFuncDoubleCut(
             {
                 std::vector<SymbolicScalar> indices = {bIdx};
                 indices.insert(indices.begin() + axis, 0);
-                const std::vector<int64_t> tensorViewShape =
-                    GetCumOperationViewShape(inputs[0], args->viewShape_, axis);
+                const std::vector<int64_t> tensorViewShape = GetCumOperationViewShape(inputs[0], args->viewShape_,
+                                                                                      axis);
 
                 SymbolicScalar validShape0 = std::min(
                     SymbolicScalar(inputs[0].GetShape()[0]) - indices[0] * tensorViewShape[0], tensorViewShape[0]);
                 SymbolicScalar validShape1 = std::min(
                     SymbolicScalar(inputs[0].GetShape()[1]) - indices[1] * tensorViewShape[1], tensorViewShape[1]);
-                auto tileTensor = View(
-                    inputs[0], tensorViewShape, {validShape0, validShape1},
-                    {indices[0] * tensorViewShape[0], indices[1] * tensorViewShape[1]});
+                auto tileTensor = View(inputs[0], tensorViewShape, {validShape0, validShape1},
+                                       {indices[0] * tensorViewShape[0], indices[1] * tensorViewShape[1]});
 
                 TileShape::Current().SetVecTile(args->tileShape_);
                 Tensor res;
@@ -131,8 +130,8 @@ static void CumOperationExeFuncDoubleCut(
     }
 }
 
-static void CumOperationExeFuncTripleCut(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void CumOperationExeFuncTripleCut(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                         const OpFuncArgs* opArgs)
 {
     auto args = static_cast<const CumOpFuncArgs*>(opArgs);
 
@@ -150,21 +149,20 @@ static void CumOperationExeFuncTripleCut(
                 std::vector<SymbolicScalar> indices = {bIdx, sIdx};
                 indices.insert(indices.begin() + axis, 0);
 
-                const std::vector<int64_t> tensorViewShape =
-                    GetCumOperationViewShape(inputs[0], args->viewShape_, axis);
+                const std::vector<int64_t> tensorViewShape = GetCumOperationViewShape(inputs[0], args->viewShape_,
+                                                                                      axis);
                 SymbolicScalar validShape0 = std::min(
                     SymbolicScalar(inputs[0].GetShape()[0]) - indices[0] * tensorViewShape[0], tensorViewShape[0]);
                 SymbolicScalar validShape1 = std::min(
                     SymbolicScalar(inputs[0].GetShape()[1]) - indices[1] * tensorViewShape[1], tensorViewShape[1]);
                 SymbolicScalar validShape2 = std::min(
                     SymbolicScalar(inputs[0].GetShape()[2]) - indices[2] * tensorViewShape[2], tensorViewShape[2]);
-                auto tileTensor = View(
-                    inputs[0], tensorViewShape, {validShape0, validShape1, validShape2},
-                    {
-                        indices[0] * tensorViewShape[0],
-                        indices[1] * tensorViewShape[1],
-                        indices[2] * tensorViewShape[2],
-                    });
+                auto tileTensor = View(inputs[0], tensorViewShape, {validShape0, validShape1, validShape2},
+                                       {
+                                           indices[0] * tensorViewShape[0],
+                                           indices[1] * tensorViewShape[1],
+                                           indices[2] * tensorViewShape[2],
+                                       });
 
                 TileShape::Current().SetVecTile(args->tileShape_);
                 Tensor res;
@@ -173,21 +171,20 @@ static void CumOperationExeFuncTripleCut(
                 } else {
                     res = CumProd(tileTensor, axis);
                 }
-                Assemble(
-                    res,
-                    {
-                        indices[0] * args->viewShape_[0],
-                        indices[1] * args->viewShape_[1],
-                        indices[2] * args->viewShape_[2],
-                    },
-                    outputs[0]);
+                Assemble(res,
+                         {
+                             indices[0] * args->viewShape_[0],
+                             indices[1] * args->viewShape_[1],
+                             indices[2] * args->viewShape_[2],
+                         },
+                         outputs[0]);
             }
         }
     }
 }
 
-static void CumOperationExeFuncQuadraticCut(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void CumOperationExeFuncQuadraticCut(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                            const OpFuncArgs* opArgs)
 {
     auto args = static_cast<const CumOpFuncArgs*>(opArgs);
 
@@ -208,8 +205,8 @@ static void CumOperationExeFuncQuadraticCut(
                     std::vector<SymbolicScalar> indices = {bIdx, sIdx, kIdx};
                     indices.insert(indices.begin() + axis, 0);
 
-                    const std::vector<int64_t> tensorViewShape =
-                        GetCumOperationViewShape(inputs[0], args->viewShape_, axis);
+                    const std::vector<int64_t> tensorViewShape = GetCumOperationViewShape(inputs[0], args->viewShape_,
+                                                                                          axis);
                     SymbolicScalar validShape0 = std::min(
                         SymbolicScalar(inputs[0].GetShape()[0]) - indices[0] * tensorViewShape[0], tensorViewShape[0]);
                     SymbolicScalar validShape1 = std::min(
@@ -218,14 +215,14 @@ static void CumOperationExeFuncQuadraticCut(
                         SymbolicScalar(inputs[0].GetShape()[2]) - indices[2] * tensorViewShape[2], tensorViewShape[2]);
                     SymbolicScalar validShape3 = std::min(
                         SymbolicScalar(inputs[0].GetShape()[3]) - indices[3] * tensorViewShape[3], tensorViewShape[3]);
-                    auto tileTensor = View(
-                        inputs[0], tensorViewShape, {validShape0, validShape1, validShape2, validShape3},
-                        {
-                            indices[0] * tensorViewShape[0],
-                            indices[1] * tensorViewShape[1],
-                            indices[2] * tensorViewShape[2],
-                            indices[3] * tensorViewShape[3],
-                        });
+                    auto tileTensor = View(inputs[0], tensorViewShape,
+                                           {validShape0, validShape1, validShape2, validShape3},
+                                           {
+                                               indices[0] * tensorViewShape[0],
+                                               indices[1] * tensorViewShape[1],
+                                               indices[2] * tensorViewShape[2],
+                                               indices[3] * tensorViewShape[3],
+                                           });
 
                     TileShape::Current().SetVecTile(args->tileShape_);
                     Tensor res;
@@ -234,23 +231,22 @@ static void CumOperationExeFuncQuadraticCut(
                     } else {
                         res = CumProd(tileTensor, axis);
                     }
-                    Assemble(
-                        res,
-                        {
-                            indices[0] * args->viewShape_[0],
-                            indices[1] * args->viewShape_[1],
-                            indices[2] * args->viewShape_[2],
-                            indices[3] * args->viewShape_[3],
-                        },
-                        outputs[0]);
+                    Assemble(res,
+                             {
+                                 indices[0] * args->viewShape_[0],
+                                 indices[1] * args->viewShape_[1],
+                                 indices[2] * args->viewShape_[2],
+                                 indices[3] * args->viewShape_[3],
+                             },
+                             outputs[0]);
                 }
             }
         }
     }
 }
 
-static void CumOperationExeFuncPentaCut(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void CumOperationExeFuncPentaCut(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                        const OpFuncArgs* opArgs)
 {
     auto args = static_cast<const CumOpFuncArgs*>(opArgs);
 
@@ -274,8 +270,8 @@ static void CumOperationExeFuncPentaCut(
                         std::vector<SymbolicScalar> tmpIndices = {bIdx, sIdx, kIdx, mIdx};
                         tmpIndices.insert(tmpIndices.begin() + axis, 0);
 
-                        const std::vector<int64_t> tensorViewShape =
-                            GetCumOperationViewShape(inputs[0], args->viewShape_, axis);
+                        const std::vector<int64_t> tensorViewShape = GetCumOperationViewShape(inputs[0],
+                                                                                              args->viewShape_, axis);
                         SymbolicScalar validShape0 = std::min(
                             SymbolicScalar(inputs[0].GetShape()[0]) - tmpIndices[0] * tensorViewShape[0],
                             tensorViewShape[0]);
@@ -291,12 +287,11 @@ static void CumOperationExeFuncPentaCut(
                         SymbolicScalar validShape4 = std::min(
                             SymbolicScalar(inputs[0].GetShape()[4]) - tmpIndices[4] * tensorViewShape[4],
                             tensorViewShape[4]);
-                        auto tileTensor = View(
-                            inputs[0], tensorViewShape,
-                            {validShape0, validShape1, validShape2, validShape3, validShape4},
-                            {tmpIndices[0] * tensorViewShape[0], tmpIndices[1] * tensorViewShape[1],
-                             tmpIndices[2] * tensorViewShape[2], tmpIndices[3] * tensorViewShape[3],
-                             tmpIndices[4] * tensorViewShape[4]});
+                        auto tileTensor = View(inputs[0], tensorViewShape,
+                                               {validShape0, validShape1, validShape2, validShape3, validShape4},
+                                               {tmpIndices[0] * tensorViewShape[0], tmpIndices[1] * tensorViewShape[1],
+                                                tmpIndices[2] * tensorViewShape[2], tmpIndices[3] * tensorViewShape[3],
+                                                tmpIndices[4] * tensorViewShape[4]});
 
                         TileShape::Current().SetVecTile(args->tileShape_);
                         Tensor res;
@@ -305,12 +300,11 @@ static void CumOperationExeFuncPentaCut(
                         } else {
                             res = CumProd(tileTensor, axis);
                         }
-                        Assemble(
-                            res,
-                            {tmpIndices[0] * args->viewShape_[0], tmpIndices[1] * args->viewShape_[1],
-                             tmpIndices[2] * args->viewShape_[2], tmpIndices[3] * args->viewShape_[3],
-                             tmpIndices[4] * args->viewShape_[4]},
-                            outputs[0]);
+                        Assemble(res,
+                                 {tmpIndices[0] * args->viewShape_[0], tmpIndices[1] * args->viewShape_[1],
+                                  tmpIndices[2] * args->viewShape_[2], tmpIndices[3] * args->viewShape_[3],
+                                  tmpIndices[4] * args->viewShape_[4]},
+                                 outputs[0]);
                     }
                 }
             }
@@ -322,10 +316,9 @@ class CumSumOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aih
 
 INSTANTIATE_TEST_SUITE_P(
     TestCumSum, CumSumOperationTest,
-    ::testing::ValuesIn(GetOpMetaData<CumOpMetaData>(
-        {CumOperationExeFuncDoubleCut, CumOperationExeFuncTripleCut, CumOperationExeFuncQuadraticCut,
-         CumOperationExeFuncPentaCut},
-        "CumSum")));
+    ::testing::ValuesIn(GetOpMetaData<CumOpMetaData>({CumOperationExeFuncDoubleCut, CumOperationExeFuncTripleCut,
+                                                      CumOperationExeFuncQuadraticCut, CumOperationExeFuncPentaCut},
+                                                     "CumSum")));
 
 TEST_P(CumSumOperationTest, TestCumSum)
 {
@@ -341,10 +334,9 @@ class CumProdOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Ai
 
 INSTANTIATE_TEST_SUITE_P(
     TestCumProd, CumProdOperationTest,
-    ::testing::ValuesIn(GetOpMetaData<CumOpMetaData>(
-        {CumOperationExeFuncDoubleCut, CumOperationExeFuncTripleCut, CumOperationExeFuncQuadraticCut,
-         CumOperationExeFuncPentaCut},
-        "CumProd")));
+    ::testing::ValuesIn(GetOpMetaData<CumOpMetaData>({CumOperationExeFuncDoubleCut, CumOperationExeFuncTripleCut,
+                                                      CumOperationExeFuncQuadraticCut, CumOperationExeFuncPentaCut},
+                                                     "CumProd")));
 
 TEST_P(CumProdOperationTest, TestCumProd)
 {

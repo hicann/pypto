@@ -22,14 +22,14 @@
 
 #ifndef __DEVICE__
 
-#define PYPTO_HOST_LOGE_WITH_ERRCODE(module, errCode, fmt, ...)                                                    \
-    PYPTO_HOST_LOG(DLOG_ERROR, module, "ErrCode: F%05X! Enum: %s " fmt, static_cast<uint32_t>(errCode) & 0xFFFFF,  \
-                   #errCode, ##__VA_ARGS__);                                                                       \
+#define PYPTO_HOST_LOGE_WITH_ERRCODE(module, errCode, fmt, ...)                                                   \
+    PYPTO_HOST_LOG(DLOG_ERROR, module, "ErrCode: F%05X! Enum: %s " fmt, static_cast<uint32_t>(errCode) & 0xFFFFF, \
+                   #errCode, ##__VA_ARGS__);                                                                      \
     REPORT_ERROR_MSG(errCode, fmt, ##__VA_ARGS__)
 
-#define PYPTO_SIM_LOGE_WITH_ERRCODE(module, errCode, fmt, ...)                                                    \
-    PYPTO_SIM_LOG(DLOG_ERROR, module, "ErrCode: F%05X! Enum: %s " fmt, static_cast<uint32_t>(errCode) & 0xFFFFF,  \
-                  #errCode, ##__VA_ARGS__);                                                                       \
+#define PYPTO_SIM_LOGE_WITH_ERRCODE(module, errCode, fmt, ...)                                                   \
+    PYPTO_SIM_LOG(DLOG_ERROR, module, "ErrCode: F%05X! Enum: %s " fmt, static_cast<uint32_t>(errCode) & 0xFFFFF, \
+                  #errCode, ##__VA_ARGS__);                                                                      \
     REPORT_ERROR_MSG(errCode, fmt, ##__VA_ARGS__)
 
 #define FE_LOGD(...) PYPTO_HOST_LOG(DLOG_DEBUG, FUNCTION, __VA_ARGS__)
@@ -57,10 +57,10 @@
 #define MACHINE_LOGD(...) PYPTO_HOST_LOG(DLOG_DEBUG, MACHINE, __VA_ARGS__)
 #define MACHINE_LOGI(...) PYPTO_HOST_LOG(DLOG_INFO, MACHINE, __VA_ARGS__)
 #define MACHINE_LOGW(...) PYPTO_HOST_LOG(DLOG_WARN, MACHINE, __VA_ARGS__)
-#define MACHINE_LOGE(errCode, fmt, ...)                                                                 \
-    do {                                                                                                \
-        PYPTO_HOST_LOGE_WITH_ERRCODE(MACHINE, errCode, fmt, ##__VA_ARGS__);                             \
-        MACHINE_ASSERT(false);                                                                          \
+#define MACHINE_LOGE(errCode, fmt, ...)                                     \
+    do {                                                                    \
+        PYPTO_HOST_LOGE_WITH_ERRCODE(MACHINE, errCode, fmt, ##__VA_ARGS__); \
+        MACHINE_ASSERT(false);                                              \
     } while (0)
 #define MACHINE_EVENT(...) PYPTO_HOST_LOG_WITHOUT_LEVEL_CHECK(DLOG_INFO, MACHINE, __VA_ARGS__)
 #define MACHINE_LOGI_FULL(...) PYPTO_HOST_SPLIT_LOG(DLOG_INFO, MACHINE, __VA_ARGS__)
@@ -83,10 +83,9 @@
 #define VERIFY_LOGW(...) PYPTO_HOST_LOG(DLOG_WARN, VERIFY, __VA_ARGS__)
 #define VERIFY_LOGE(errCode, fmt, ...) PYPTO_HOST_LOGE_WITH_ERRCODE(VERIFY, errCode, fmt, ##__VA_ARGS__)
 #define VERIFY_EVENT(...) PYPTO_HOST_LOG_WITHOUT_LEVEL_CHECK(DLOG_INFO, VERIFY, __VA_ARGS__)
-#define VERIFY_LOGE_FULL(errCode, fmt, ...) \
-    PYPTO_HOST_SPLIT_LOG(                   \
-        DLOG_ERROR, VERIFY, "ErrCode: F%05X! Enum: %s " fmt, static_cast<uint32_t>(errCode) & 0xFFFFF, #errCode, \
-        ##__VA_ARGS__)
+#define VERIFY_LOGE_FULL(errCode, fmt, ...)                                   \
+    PYPTO_HOST_SPLIT_LOG(DLOG_ERROR, VERIFY, "ErrCode: F%05X! Enum: %s " fmt, \
+                         static_cast<uint32_t>(errCode) & 0xFFFFF, #errCode, ##__VA_ARGS__)
 
 #define COMPILER_LOGD(...) PYPTO_HOST_LOG(DLOG_DEBUG, COMPILER_MONITOR, __VA_ARGS__)
 #define COMPILER_LOGI(...) PYPTO_HOST_LOG(DLOG_INFO, COMPILER_MONITOR, __VA_ARGS__)
@@ -124,7 +123,6 @@
 #define PYPTO_LOGI(...) PYPTO_HOST_LOG_WITHOUT_MODULE(DLOG_INFO, __VA_ARGS__)
 #define PYPTO_LOGW(...) PYPTO_HOST_LOG_WITHOUT_MODULE(DLOG_WARN, __VA_ARGS__)
 #define PYPTO_LOGE(...) PYPTO_HOST_LOG_WITHOUT_MODULE(DLOG_ERROR, __VA_ARGS__)
-#define PYPTO_LOGE_FULL(fmt, ...) \
-    PYPTO_HOST_SPLIT_LOG_WITHOUT_MODULE(DLOG_ERROR, fmt, ##__VA_ARGS__)
+#define PYPTO_LOGE_FULL(fmt, ...) PYPTO_HOST_SPLIT_LOG_WITHOUT_MODULE(DLOG_ERROR, fmt, ##__VA_ARGS__)
 
 #endif

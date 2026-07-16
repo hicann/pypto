@@ -19,80 +19,35 @@ using namespace npu::tile_fwk;
 
 class TestCodeGenKirin9030Exp : public CodegenTestLiteNPU {
 public:
-    TestCodeGenKirin9030Exp() : CodegenTestLiteNPU("Kirin9030"){};
+    TestCodeGenKirin9030Exp() : CodegenTestLiteNPU("Kirin9030") {};
 };
 
-TEST_F(TestCodeGenKirin9030Exp, test_Exp_fp16_001)
-{
-    TestCodeGenExp::Instance().test_Exp_fp16_001();
-}
+TEST_F(TestCodeGenKirin9030Exp, test_Exp_fp16_001) { TestCodeGenExp::Instance().test_Exp_fp16_001(); }
 
-TEST_F(TestCodeGenKirin9030Exp, DISABLED_test_Exp_fp16_002)
-{
-    TestCodeGenExp::Instance().test_Exp_fp16_002();
-}
+TEST_F(TestCodeGenKirin9030Exp, DISABLED_test_Exp_fp16_002) { TestCodeGenExp::Instance().test_Exp_fp16_002(); }
 
-TEST_F(TestCodeGenKirin9030Exp, DISABLED_test_exp_fp32_003)
-{
-    TestCodeGenExp::Instance().test_exp_fp32_003();
-}
+TEST_F(TestCodeGenKirin9030Exp, DISABLED_test_exp_fp32_003) { TestCodeGenExp::Instance().test_exp_fp32_003(); }
 
-TEST_F(TestCodeGenKirin9030Exp, DISABLED_test_exp_fp32_004)
-{
-    TestCodeGenExp::Instance().test_exp_fp32_004();
-}
+TEST_F(TestCodeGenKirin9030Exp, DISABLED_test_exp_fp32_004) { TestCodeGenExp::Instance().test_exp_fp32_004(); }
 
-TEST_F(TestCodeGenKirin9030Exp, DISABLED_test_Exp_fp16_005)
-{
-    TestCodeGenExp::Instance().test_Exp_fp16_005();
-}
+TEST_F(TestCodeGenKirin9030Exp, DISABLED_test_Exp_fp16_005) { TestCodeGenExp::Instance().test_Exp_fp16_005(); }
 
-TEST_F(TestCodeGenKirin9030Exp, DISABLED_test_exp_fp32_006)
-{
-    TestCodeGenExp::Instance().test_exp_fp32_006();
-}
+TEST_F(TestCodeGenKirin9030Exp, DISABLED_test_exp_fp32_006) { TestCodeGenExp::Instance().test_exp_fp32_006(); }
 
-TEST_F(TestCodeGenKirin9030Exp, DISABLED_test_Exp_fp16_007)
-{
-    TestCodeGenExp::Instance().test_Exp_fp16_007();
-}
+TEST_F(TestCodeGenKirin9030Exp, DISABLED_test_Exp_fp16_007) { TestCodeGenExp::Instance().test_Exp_fp16_007(); }
 
-TEST_F(TestCodeGenKirin9030Exp, DISABLED_test_exp_fp32_008)
-{
-    TestCodeGenExp::Instance().test_exp_fp32_008();
-}
+TEST_F(TestCodeGenKirin9030Exp, DISABLED_test_exp_fp32_008) { TestCodeGenExp::Instance().test_exp_fp32_008(); }
 
-TEST_F(TestCodeGenKirin9030Exp, DISABLED_test_Exp_fp16_009)
-{
-    TestCodeGenExp::Instance().test_Exp_fp16_009();
-}
+TEST_F(TestCodeGenKirin9030Exp, DISABLED_test_Exp_fp16_009) { TestCodeGenExp::Instance().test_Exp_fp16_009(); }
 
-TEST_F(TestCodeGenKirin9030Exp, DISABLED_test_exp_fp32_010)
-{
-    TestCodeGenExp::Instance().test_exp_fp32_010();
-}
+TEST_F(TestCodeGenKirin9030Exp, DISABLED_test_exp_fp32_010) { TestCodeGenExp::Instance().test_exp_fp32_010(); }
 
-TEST_F(TestCodeGenKirin9030Exp, DISABLED_test_Exp_fp16_011)
-{
-    TestCodeGenExp::Instance().test_Exp_fp16_011();
-}
+TEST_F(TestCodeGenKirin9030Exp, DISABLED_test_Exp_fp16_011) { TestCodeGenExp::Instance().test_Exp_fp16_011(); }
 
-TEST_F(TestCodeGenKirin9030Exp, DISABLED_test_exp_fp32_012)
-{
-    TestCodeGenExp::Instance().test_exp_fp32_012();
-}
+TEST_F(TestCodeGenKirin9030Exp, DISABLED_test_exp_fp32_012) { TestCodeGenExp::Instance().test_exp_fp32_012(); }
 
-TEST_F(TestCodeGenKirin9030Exp, DISABLED_test_Exp_fp16_013)
-{
-    TestCodeGenExp::Instance().test_Exp_fp16_013();
-}
+TEST_F(TestCodeGenKirin9030Exp, DISABLED_test_Exp_fp16_013) { TestCodeGenExp::Instance().test_Exp_fp16_013(); }
 
-TEST_F(TestCodeGenKirin9030Exp, DISABLED_test_exp_fp32_014)
-{
-    TestCodeGenExp::Instance().test_exp_fp32_014();
-}
+TEST_F(TestCodeGenKirin9030Exp, DISABLED_test_exp_fp32_014) { TestCodeGenExp::Instance().test_exp_fp32_014(); }
 
-TEST_F(TestCodeGenKirin9030Exp, DISABLED_test_Exp_fp16_015)
-{
-    TestCodeGenExp::Instance().test_Exp_fp16_015();
-}
+TEST_F(TestCodeGenKirin9030Exp, DISABLED_test_Exp_fp16_015) { TestCodeGenExp::Instance().test_Exp_fp16_015(); }

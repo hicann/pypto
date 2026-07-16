@@ -99,8 +99,8 @@ inline uint64_t GetCoa(const uint32_t index, uint64_t* opAttrs, uint64_t* expres
     return isExpression ? expressionTable[decodedValue] : decodedValue;
 }
 
-inline std::vector<uint32_t> GetCoaVector(
-    const uint32_t baseIndex, const uint32_t dim, uint64_t* opAttrs, uint64_t* expressionTable)
+inline std::vector<uint32_t> GetCoaVector(const uint32_t baseIndex, const uint32_t dim, uint64_t* opAttrs,
+                                          uint64_t* expressionTable)
 {
     std::vector<uint32_t> vec(dim);
     for (uint32_t i = 0; i < dim; ++i) {
@@ -128,13 +128,13 @@ inline AicpuParamInfo DecodeAicpuCode(const npu::tile_fwk::dynamic::DevRelocVect
 
     paramInfo.dim = aicpuCode[paramInfo.inIndex + AICPU_ATTR_DIM_INDEX];
 
-    paramInfo.rawShape.assign(
-        aicpuCode.begin() + paramInfo.rawShapeIndex, aicpuCode.begin() + paramInfo.rawShapeIndex + paramInfo.dim);
+    paramInfo.rawShape.assign(aicpuCode.begin() + paramInfo.rawShapeIndex,
+                              aicpuCode.begin() + paramInfo.rawShapeIndex + paramInfo.dim);
 
     paramInfo.shapeIndex = paramInfo.rawShapeIndex + paramInfo.dim;
 
-    paramInfo.shape.assign(
-        aicpuCode.begin() + paramInfo.shapeIndex, aicpuCode.begin() + paramInfo.shapeIndex + paramInfo.dim);
+    paramInfo.shape.assign(aicpuCode.begin() + paramInfo.shapeIndex,
+                           aicpuCode.begin() + paramInfo.shapeIndex + paramInfo.dim);
 
     index = index + aicpuCode[index] + 1;
     if (index + 1 < static_cast<int32_t>(aicpuCode.size())) {
@@ -142,24 +142,20 @@ inline AicpuParamInfo DecodeAicpuCode(const npu::tile_fwk::dynamic::DevRelocVect
     }
     paramInfo.bufferStride = aicpuCode[paramInfo.attrIndex + ATTR_STRIDE_OFFSET];
     uint32_t tileShapeDim = aicpuCode[paramInfo.attrIndex + ATTR_TILESHAPE_OFFSET];
-    paramInfo.tileShape.assign(
-        aicpuCode.begin() + paramInfo.attrIndex + ATTR_TILESHAPE_OFFSET + 1,
-        aicpuCode.begin() + paramInfo.attrIndex + ATTR_TILESHAPE_OFFSET + tileShapeDim + 1);
+    paramInfo.tileShape.assign(aicpuCode.begin() + paramInfo.attrIndex + ATTR_TILESHAPE_OFFSET + 1,
+                               aicpuCode.begin() + paramInfo.attrIndex + ATTR_TILESHAPE_OFFSET + tileShapeDim + 1);
 
     uint32_t baseOffset = ATTR_TILESHAPE_OFFSET + tileShapeDim + 1;
-    paramInfo.viewshapes.assign(
-        aicpuCode.begin() + paramInfo.attrIndex + baseOffset,
-        aicpuCode.begin() + paramInfo.attrIndex + baseOffset + tileShapeDim);
+    paramInfo.viewshapes.assign(aicpuCode.begin() + paramInfo.attrIndex + baseOffset,
+                                aicpuCode.begin() + paramInfo.attrIndex + baseOffset + tileShapeDim);
 
     baseOffset += tileShapeDim;
-    paramInfo.viewTileStrides.assign(
-        aicpuCode.begin() + paramInfo.attrIndex + baseOffset,
-        aicpuCode.begin() + paramInfo.attrIndex + baseOffset + tileShapeDim);
+    paramInfo.viewTileStrides.assign(aicpuCode.begin() + paramInfo.attrIndex + baseOffset,
+                                     aicpuCode.begin() + paramInfo.attrIndex + baseOffset + tileShapeDim);
 
     baseOffset += tileShapeDim;
-    paramInfo.viewIndexStrides.assign(
-        aicpuCode.begin() + paramInfo.attrIndex + baseOffset,
-        aicpuCode.begin() + paramInfo.attrIndex + baseOffset + tileShapeDim);
+    paramInfo.viewIndexStrides.assign(aicpuCode.begin() + paramInfo.attrIndex + baseOffset,
+                                      aicpuCode.begin() + paramInfo.attrIndex + baseOffset + tileShapeDim);
 
     baseOffset += tileShapeDim;
     paramInfo.viewTileNum = aicpuCode[paramInfo.attrIndex + baseOffset];

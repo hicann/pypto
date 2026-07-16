@@ -44,8 +44,8 @@ struct CompileTaskInfo {
 
 class CompileInfo {
 public:
-    CompileInfo(
-        Function& topFunc, const CodeGenCtx& ctx, const std::pair<uint64_t, Function*>& subFuncPair, bool isCube)
+    CompileInfo(Function& topFunc, const CodeGenCtx& ctx, const std::pair<uint64_t, Function*>& subFuncPair,
+                bool isCube)
         : userSpecCCEDir_(ctx.cceDir),
           isCube_(isCube),
           attr_(subFuncPair.second->GetLeafFuncAttribute()),
@@ -135,9 +135,8 @@ public:
 
 protected:
     void GenExtraAlloc(const std::shared_ptr<SymbolManager>& sm, const std::shared_ptr<LogicalTensor>& tensor);
-    void GenFuncBodyBefore(
-        const std::pair<uint64_t, Function*>& subFuncPair, Function& topFunc, CompileInfo& compileInfo,
-        std::ostringstream& oss) const;
+    void GenFuncBodyBefore(const std::pair<uint64_t, Function*>& subFuncPair, Function& topFunc,
+                           CompileInfo& compileInfo, std::ostringstream& oss) const;
     void GenInclude(const Function& topFunc, std::ostringstream& oss) const;
     void GenCommentBeforeFuncHeader(Function& subFunc, std::ostringstream& oss) const;
     std::string GenFuncHeader(uint64_t programId, Function& topFunc, CompileInfo& compileInfo) const;
@@ -145,8 +144,8 @@ protected:
     void GenFuncEnd(std::ostringstream& oss) const;
     static std::string GenKernelName(Function& topFunc, uint64_t programId);
 
-    void GenCodeToBinaryTask(
-        std::ostringstream& code, const CompileInfo& compileInfo, const std::string& compileOptions) const;
+    void GenCodeToBinaryTask(std::ostringstream& code, const CompileInfo& compileInfo,
+                             const std::string& compileOptions) const;
     bool IsNeedDumpCode(const std::string& inputFile) const;
     void DumpCode(const std::string& name, std::ostringstream& code) const;
     int DoCompileCmd(const std::string& compileCmd) const;
@@ -155,11 +154,11 @@ protected:
     void Prepare(const Function& topFunc);
 
     virtual void BuildIncludes(std::ostringstream& oss) const;
-    virtual void BuildExtraOptions(
-        std::ostringstream& oss, const CompileInfo& compileInfo, const std::string& compileOptions) const;
+    virtual void BuildExtraOptions(std::ostringstream& oss, const CompileInfo& compileInfo,
+                                   const std::string& compileOptions) const;
 
-    void GenAlloc(
-        const std::shared_ptr<SymbolManager>& sm, BufferType bufferType, const std::shared_ptr<LogicalTensor>& tensor);
+    void GenAlloc(const std::shared_ptr<SymbolManager>& sm, BufferType bufferType,
+                  const std::shared_ptr<LogicalTensor>& tensor);
 
     void GenDynParamForExpr(std::ostringstream& oss, const Function& func) const;
 

@@ -32,8 +32,8 @@ namespace npu::tile_fwk {
 
 class DualDstEngine {
 public:
-    DualDstEngine(ScheduleState& state, Function& function)
-        : state_(state), function_(function), enableDualDst_(false) {}
+    DualDstEngine(ScheduleState& state, Function& function) : state_(state), function_(function), enableDualDst_(false)
+    {}
     ~DualDstEngine() {}
 
     Status RunDualDstFuse();
@@ -44,7 +44,10 @@ public:
 
     bool IsDualDstEnabled() const { return enableDualDst_; }
     void SetEnableDualDst(bool enable) { enableDualDst_ = enable; }
-    void SetDualDstL0CDirection(const std::unordered_map<LogicalTensorPtr, int64_t>& dir) { dualDstL0CDirection_ = dir; }
+    void SetDualDstL0CDirection(const std::unordered_map<LogicalTensorPtr, int64_t>& dir)
+    {
+        dualDstL0CDirection_ = dir;
+    }
     const auto& GetL02L0MXMap() const { return l02L0MXMap_; }
     auto& GetL02L0MXMap() { return l02L0MXMap_; }
 
@@ -77,26 +80,21 @@ private:
 
     CoreLocationType ConsumerCore(Operation* copyUbOp);
     Operation* FindAllocPred(Operation* op);
-    void BuildAdjacencyCandidates(const std::vector<Operation*>& copyUbs,
-                                  const std::vector<CopyUbGeometry>& geos,
-                                  std::vector<CandidatePair>& candM,
-                                  std::vector<CandidatePair>& candN);
+    void BuildAdjacencyCandidates(const std::vector<Operation*>& copyUbs, const std::vector<CopyUbGeometry>& geos,
+                                  std::vector<CandidatePair>& candM, std::vector<CandidatePair>& candN);
     void PickAllocOrder(Operation* a1, Operation* a2, Operation*& early, Operation*& late);
 
     Operation* GetDualDstCopyOpFor(Operation* allocOp);
     int GetDualDstPairedMemId(Operation* allocOp);
     void EraseFromOrderedOps(Operation* op);
-    void IdentifyPairsForOneL0C(LogicalTensorPtr l0cTensor,
-                                const std::vector<Operation*>& copyUbs,
+    void IdentifyPairsForOneL0C(LogicalTensorPtr l0cTensor, const std::vector<Operation*>& copyUbs,
                                 std::vector<DualDstPair>& pairs);
     Status IdentifyDualDstPairs(std::vector<DualDstPair>& pairs);
     Status FuseDualDstPairs(const std::vector<DualDstPair>& pairs);
     Operation* CreateDualDstFusedOp(const DualDstPair& p, LogicalTensorPtr l0cIn);
     void SetDualDstCopyAttr(Operation* C, LogicalTensorPtr l0cIn, const DualDstPair& p,
-                            std::shared_ptr<CopyOpAttribute> attrE,
-                            std::shared_ptr<CopyOpAttribute> attrL);
-    void RewireEdgesForFusedOp(Operation* opEarly, Operation* opLate,
-                               Operation* A, Operation* B, Operation* C);
+                            std::shared_ptr<CopyOpAttribute> attrE, std::shared_ptr<CopyOpAttribute> attrL);
+    void RewireEdgesForFusedOp(Operation* opEarly, Operation* opLate, Operation* A, Operation* B, Operation* C);
     void DetachOldOpsFromTensors(const DualDstPair& p, LogicalTensorPtr l0cIn, Operation* B);
     void RegisterFusedOpInMaps(Operation* C, int execOrder);
     void SyncBufRefCountForFuse(const DualDstPair& p, Operation* B, Operation* C);

@@ -39,7 +39,7 @@ TILEOP constexpr int GetBrcOperandAt()
     if constexpr (Idx >= sizeof...(BrcOperands) || sizeof...(BrcOperands) == 0) {
         return BRC_NONE;
     } else {
-        constexpr int arr[] = { BrcOperands... };
+        constexpr int arr[] = {BrcOperands...};
         return arr[Idx];
     }
 }
@@ -93,18 +93,16 @@ TILEOP constexpr BrcMode GetBrcMode()
         return;                                                                             \
     }
 
-template <
-    BinaryOp op, auto PrecisionType = pto::DivAlgorithm::DEFAULT, typename LastUse, typename T0,
-    typename T1, typename T2>
+template <BinaryOp op, auto PrecisionType = pto::DivAlgorithm::DEFAULT, typename LastUse, typename T0, typename T1,
+          typename T2>
 TILEOP void BinaryRowExpandComputeImpl(T0 dst, T1 src0, T2 src1)
 {
     EXTRACT_LAST_USE_3DIM(LastUse)
     BINARY_EXPAND_DISPATCH(ROWEXPAND, PrecisionType)
 }
 
-template <
-    BinaryOp op, auto PrecisionType = pto::DivAlgorithm::DEFAULT, typename LastUse, typename T0,
-    typename T1, typename T2>
+template <BinaryOp op, auto PrecisionType = pto::DivAlgorithm::DEFAULT, typename LastUse, typename T0, typename T1,
+          typename T2>
 TILEOP void BinaryColExpandComputeImpl(T0 dst, T1 src0, T2 src1)
 {
     EXTRACT_LAST_USE_3DIM(LastUse)
@@ -129,9 +127,8 @@ TILEOP void BinaryColExpandComputeImpl(T0 dst, T1 src0, T2 src1)
     }
 }
 
-template <
-    BinaryOp op, auto PrecisionType = pto::DivAlgorithm::DEFAULT, typename Src0TileInfo, typename Src1TileInfo,
-    typename LastUse, int... BrcOperands, typename T0, typename T1, typename T2>
+template <BinaryOp op, auto PrecisionType = pto::DivAlgorithm::DEFAULT, typename Src0TileInfo, typename Src1TileInfo,
+          typename LastUse, int... BrcOperands, typename T0, typename T1, typename T2>
 TILEOP void BinaryMixBrcCompute(T0 dst, T1 src0, T2 src1)
 {
     const auto dstLayout = dst.GetLayout();
@@ -145,18 +142,20 @@ TILEOP void BinaryMixBrcCompute(T0 dst, T1 src0, T2 src1)
     auto src0Shape4 = src0Layout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
     auto src1Shape4 = src1Layout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
     constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, DIM_5TH, MAX_DIMS>();
-    constexpr bool src0IsColMajor = (Src0TileInfo::tileW == 1 && GetBrcOperandAt<DIM_5TH, BrcOperands...>() == BRC_LEFT);
-    constexpr bool src1IsColMajor = (Src1TileInfo::tileW == 1 && GetBrcOperandAt<DIM_5TH, BrcOperands...>() == BRC_RIGHT);
+    constexpr bool src0IsColMajor = (Src0TileInfo::tileW == 1 &&
+                                     GetBrcOperandAt<DIM_5TH, BrcOperands...>() == BRC_LEFT);
+    constexpr bool src1IsColMajor = (Src1TileInfo::tileW == 1 &&
+                                     GetBrcOperandAt<DIM_5TH, BrcOperands...>() == BRC_RIGHT);
 
     constexpr pto::BLayout src0BLayout = src0IsColMajor ? pto::BLayout::ColMajor : pto::BLayout::RowMajor;
     constexpr pto::BLayout src1BLayout = src1IsColMajor ? pto::BLayout::ColMajor : pto::BLayout::RowMajor;
     constexpr auto src0TileH = src0IsColMajor ? Src0TileInfo::tileH : 1;
     constexpr auto src1TileH = src1IsColMajor ? Src1TileInfo::tileH : 1;
     using dstTileDefine = pto::Tile<pto::TileType::Vec, typename T0::Type, 1, dstTileW, pto::BLayout::RowMajor, -1, -1>;
-    using src0TileDefine =
-        pto::Tile<pto::TileType::Vec, typename T1::Type, src0TileH, Src0TileInfo::tileW, src0BLayout, -1, -1>;
-    using src1TileDefine =
-        pto::Tile<pto::TileType::Vec, typename T2::Type, src1TileH, Src1TileInfo::tileW, src1BLayout, -1, -1>;
+    using src0TileDefine = pto::Tile<pto::TileType::Vec, typename T1::Type, src0TileH, Src0TileInfo::tileW, src0BLayout,
+                                     -1, -1>;
+    using src1TileDefine = pto::Tile<pto::TileType::Vec, typename T2::Type, src1TileH, Src1TileInfo::tileW, src1BLayout,
+                                     -1, -1>;
     dstTileDefine dstTile(1, shape4);
     src0TileDefine src0Tile(1, src0Shape4);
     src1TileDefine src1Tile(1, src1Shape4);
@@ -165,16 +164,31 @@ TILEOP void BinaryMixBrcCompute(T0 dst, T1 src0, T2 src1)
             for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
                 for (LoopVar n3Index = 0; n3Index < shape3; ++n3Index) {
                     auto dsttileOffset = GenTileOffset(dst, TileOffset4Dim(n0Index, n1Index, n2Index, n3Index));
-                    auto src0tileOffset = GenTileOffset(src0, TileOffset4Dim(
-                        (Src0TileInfo::tile0 == 1 || GetBrcOperandAt<DIM_1ST, BrcOperands...>() == BRC_LEFT) ? 0 : n0Index,
-                        (Src0TileInfo::tile1 == 1 || GetBrcOperandAt<DIM_2ND, BrcOperands...>() == BRC_LEFT) ? 0 : n1Index,
-                        (Src0TileInfo::tile2 == 1 || GetBrcOperandAt<DIM_3RD, BrcOperands...>() == BRC_LEFT) ? 0 : n2Index,
-                        GetBrcOperandAt<DIM_4TH, BrcOperands...>() == BRC_LEFT ? 0 : n3Index));
-                    auto src1tileOffset = GenTileOffset(src1, TileOffset4Dim(
-                        (Src1TileInfo::tile0 == 1 || GetBrcOperandAt<DIM_1ST, BrcOperands...>() == BRC_RIGHT) ? 0 : n0Index,
-                        (Src1TileInfo::tile1 == 1 || GetBrcOperandAt<DIM_2ND, BrcOperands...>() == BRC_RIGHT) ? 0 : n1Index,
-                        (Src1TileInfo::tile2 == 1 || GetBrcOperandAt<DIM_3RD, BrcOperands...>() == BRC_RIGHT) ? 0 : n2Index,
-                        GetBrcOperandAt<DIM_4TH, BrcOperands...>() == BRC_RIGHT ? 0 : n3Index));
+                    auto src0tileOffset = GenTileOffset(
+                        src0, TileOffset4Dim(
+                                  (Src0TileInfo::tile0 == 1 || GetBrcOperandAt<DIM_1ST, BrcOperands...>() == BRC_LEFT) ?
+                                      0 :
+                                      n0Index,
+                                  (Src0TileInfo::tile1 == 1 || GetBrcOperandAt<DIM_2ND, BrcOperands...>() == BRC_LEFT) ?
+                                      0 :
+                                      n1Index,
+                                  (Src0TileInfo::tile2 == 1 || GetBrcOperandAt<DIM_3RD, BrcOperands...>() == BRC_LEFT) ?
+                                      0 :
+                                      n2Index,
+                                  GetBrcOperandAt<DIM_4TH, BrcOperands...>() == BRC_LEFT ? 0 : n3Index));
+                    auto src1tileOffset = GenTileOffset(
+                        src1,
+                        TileOffset4Dim(
+                            (Src1TileInfo::tile0 == 1 || GetBrcOperandAt<DIM_1ST, BrcOperands...>() == BRC_RIGHT) ?
+                                0 :
+                                n0Index,
+                            (Src1TileInfo::tile1 == 1 || GetBrcOperandAt<DIM_2ND, BrcOperands...>() == BRC_RIGHT) ?
+                                0 :
+                                n1Index,
+                            (Src1TileInfo::tile2 == 1 || GetBrcOperandAt<DIM_3RD, BrcOperands...>() == BRC_RIGHT) ?
+                                0 :
+                                n2Index,
+                            GetBrcOperandAt<DIM_4TH, BrcOperands...>() == BRC_RIGHT ? 0 : n3Index));
                     pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + dsttileOffset * sizeof(typename T0::Type)));
                     pto::TASSIGN(src0Tile, (uint64_t)(src0.GetAddr() + src0tileOffset * sizeof(typename T1::Type)));
                     pto::TASSIGN(src1Tile, (uint64_t)(src1.GetAddr() + src1tileOffset * sizeof(typename T2::Type)));

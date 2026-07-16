@@ -171,26 +171,25 @@ public:
 
 private:
     std::string DumpTensor(int tensorIndex) const;
-    std::string DumpOperationAttr(
-        int operationIndex, uint64_t* runtimeExpressionList = nullptr, bool dumpIndex = false) const;
-    std::string DumpOperation(
-        int operationIndex, int& totalAttrStartIdx, const std::vector<uintdevptr_t>& ooperandAddrList = {},
-        const std::vector<uintdevptr_t>& ioperandAddrList = {}, uint64_t* runtimeExpressionList = nullptr) const;
+    std::string DumpOperationAttr(int operationIndex, uint64_t* runtimeExpressionList = nullptr,
+                                  bool dumpIndex = false) const;
+    std::string DumpOperation(int operationIndex, int& totalAttrStartIdx,
+                              const std::vector<uintdevptr_t>& ooperandAddrList = {},
+                              const std::vector<uintdevptr_t>& ioperandAddrList = {},
+                              uint64_t* runtimeExpressionList = nullptr) const;
     std::string DumpRawTensor(int rawIndex, uintdevptr_t addr = 0) const;
-    std::string DumpIncast(
-        int incastIndex, const std::string& indent, uint64_t* runtimeExpressionList = nullptr,
-        const std::vector<uintdevptr_t>& slotAddrList = {}) const;
-    std::string DumpOutcast(
-        int outcastIndex, const std::string& indent, uint64_t* runtimeExpressionList = nullptr,
-        const std::vector<uintdevptr_t>& slotAddrList = {}) const;
+    std::string DumpIncast(int incastIndex, const std::string& indent, uint64_t* runtimeExpressionList = nullptr,
+                           const std::vector<uintdevptr_t>& slotAddrList = {}) const;
+    std::string DumpOutcast(int outcastIndex, const std::string& indent, uint64_t* runtimeExpressionList = nullptr,
+                            const std::vector<uintdevptr_t>& slotAddrList = {}) const;
 
 public:
     std::string Dump(int indent = 0) const;
 
     bool HasValueDepend() const { return getInputDataCount + getTensorDataCount; }
 
-    schema::coa SchemaGetCoa(
-        int operationIndex, uint64_t* runtimeExpressionList = nullptr, bool dumpIndex = false) const
+    schema::coa SchemaGetCoa(int operationIndex, uint64_t* runtimeExpressionList = nullptr,
+                             bool dumpIndex = false) const
     {
         std::vector<schema::TextType> coaDataList;
         for (size_t j = 0; j < GetOperationAttrSize(operationIndex); j++) {
@@ -393,8 +392,8 @@ public:
         return GetTensor(tensorIndex);
     }
 
-    inline const DevAscendOperationOperandInfo& GetOperationOperandInfo(
-        int operationIndex, int operandIndex, bool isIOperand = true) const
+    inline const DevAscendOperationOperandInfo& GetOperationOperandInfo(int operationIndex, int operandIndex,
+                                                                        bool isIOperand = true) const
     {
         if (isIOperand) {
             return GetOperationIOperandInfo(operationIndex, operandIndex);
@@ -478,9 +477,8 @@ public:
 
     std::vector<std::tuple<int, int, int>> LookupConnectionSlotIndexFrom(const DevAscendFunction* func) const;
 
-    void AppendOutcastConnections(
-        std::vector<std::tuple<int, int, int>>& connectionList, int fromSlot, int incastIndex,
-        const DevAscendFunction* func) const;
+    void AppendOutcastConnections(std::vector<std::tuple<int, int, int>>& connectionList, int fromSlot, int incastIndex,
+                                  const DevAscendFunction* func) const;
 
     inline const DevAscendRawTensor* GetOutcastRawTensor(int index) const
     {
@@ -488,9 +486,8 @@ public:
         return GetRawTensor(GetTensor(tensorIndex));
     }
 
-    inline void GetTensorOffset(
-        uint64_t offset[DEV_SHAPE_DIM_MAX], const DevAscendRawTensor* rawTensor,
-        const DevAscendOperationOperandInfo& operandInfo) const
+    inline void GetTensorOffset(uint64_t offset[DEV_SHAPE_DIM_MAX], const DevAscendRawTensor* rawTensor,
+                                const DevAscendOperationOperandInfo& operandInfo) const
     {
         const SymInt* offsetSymList = &At(operationAttrList_, operandInfo.staticOffsetAttrBeginIndex);
         for (int i = 0; i < rawTensor->GetDim(); i++) {
@@ -517,17 +514,18 @@ public:
 private:
     friend struct EncodeDevAscendFunctionInfo;
 
-    void InitIncastOutcastAttr(
-        uintdevptr_t& initOffset, const std::vector<std::shared_ptr<LogicalTensor>>& iList,
-        const std::vector<std::shared_ptr<LogicalTensor>>& oList, bool fillContent);
-    void InitOperationDynamicField(
-        uintdevptr_t& initOffset, DevAscendFunctionPredInfo predInfo, uint32_t stitchCount,
-        const std::unordered_map<uint64_t, int>& calleeHashIndexDict, const SymbolicExpressionTable* expressionTable,
-        const OrderedSet<Operation*>& callList, const std::vector<std::shared_ptr<LogicalTensor>>& incastTensorList,
-        const std::vector<std::shared_ptr<LogicalTensor>>& outcastTensorList,
-        const std::unordered_map<Operation*, OrderedSet<Operation*>>& callOpSuccDict, bool fillContent);
-    void FillExclusiveOutcastSlotMark(
-        const IncastOutcastLink* inoutLink, std::vector<bool>& isExclusiveOutcastSlotMarks);
+    void InitIncastOutcastAttr(uintdevptr_t& initOffset, const std::vector<std::shared_ptr<LogicalTensor>>& iList,
+                               const std::vector<std::shared_ptr<LogicalTensor>>& oList, bool fillContent);
+    void InitOperationDynamicField(uintdevptr_t& initOffset, DevAscendFunctionPredInfo predInfo, uint32_t stitchCount,
+                                   const std::unordered_map<uint64_t, int>& calleeHashIndexDict,
+                                   const SymbolicExpressionTable* expressionTable,
+                                   const OrderedSet<Operation*>& callList,
+                                   const std::vector<std::shared_ptr<LogicalTensor>>& incastTensorList,
+                                   const std::vector<std::shared_ptr<LogicalTensor>>& outcastTensorList,
+                                   const std::unordered_map<Operation*, OrderedSet<Operation*>>& callOpSuccDict,
+                                   bool fillContent);
+    void FillExclusiveOutcastSlotMark(const IncastOutcastLink* inoutLink,
+                                      std::vector<bool>& isExclusiveOutcastSlotMarks);
     void InitRawTensorAndMemoryRequirement(
         uintdevptr_t& initOffset, const OrderedSet<std::shared_ptr<RawTensor>>& incastRawList,
         const OrderedSet<std::shared_ptr<RawTensor>>& outcastRawList,
@@ -536,27 +534,27 @@ private:
         const std::vector<EncodeRawTensorAttr>& rawAttrs, const EncodeDevAscendFunctionParam& param,
         const SymbolicExpressionTable* expressionTable, bool fillContent);
 
-    void UpdateRawTensorDesc(
-        const std::shared_ptr<RawTensor>& rawTensor, size_t i, size_t incastRawListSize, DevAscendRawTensor& encoded);
+    void UpdateRawTensorDesc(const std::shared_ptr<RawTensor>& rawTensor, size_t i, size_t incastRawListSize,
+                             DevAscendRawTensor& encoded);
 
-    void InitTensor(
-        uintdevptr_t& initOffset, const OrderedSet<std::shared_ptr<LogicalTensor>>& tlist,
-        const OrderedSet<std::shared_ptr<RawTensor>>& rawList, bool fillContent);
+    void InitTensor(uintdevptr_t& initOffset, const OrderedSet<std::shared_ptr<LogicalTensor>>& tlist,
+                    const OrderedSet<std::shared_ptr<RawTensor>>& rawList, bool fillContent);
 
-    void InitOperation(
-        uintdevptr_t& initOffset, const SymbolicExpressionTable* expressionTable,
-        const OrderedSet<Operation*>& callList, const OrderedSet<std::shared_ptr<LogicalTensor>>& tlist,
-        const OrderedSet<std::shared_ptr<RawTensor>>& rawList,
-        const std::unordered_map<Operation*, uint64_t>& callOpPredDict,
-        const std::unordered_map<Operation*, OrderedSet<Operation*>>& callOpSuccDict,
-        const std::unordered_map<uint64_t, int>& calleeHashIndexDict, const std::vector<int32_t>& stitchIndexList,
-        const std::vector<int>& noPredOpList, const std::vector<int>& noSuccOpList,
-        const std::unordered_map<Operation*, std::vector<int>>& copyOutResolveSuccIndexListDict, bool fillContent);
-    void InitOperationNoPredNoSuccIndices(
-        uintdevptr_t& initOffset, const OrderedSet<Operation*>& callList,
-        const std::unordered_map<Operation*, uint64_t>& callOpPredDict,
-        const std::unordered_map<Operation*, OrderedSet<Operation*>>& callOpSuccDict,
-        const std::vector<int>& noPredOpList, const std::vector<int>& noSuccOpList, bool fillContent);
+    void InitOperation(uintdevptr_t& initOffset, const SymbolicExpressionTable* expressionTable,
+                       const OrderedSet<Operation*>& callList, const OrderedSet<std::shared_ptr<LogicalTensor>>& tlist,
+                       const OrderedSet<std::shared_ptr<RawTensor>>& rawList,
+                       const std::unordered_map<Operation*, uint64_t>& callOpPredDict,
+                       const std::unordered_map<Operation*, OrderedSet<Operation*>>& callOpSuccDict,
+                       const std::unordered_map<uint64_t, int>& calleeHashIndexDict,
+                       const std::vector<int32_t>& stitchIndexList, const std::vector<int>& noPredOpList,
+                       const std::vector<int>& noSuccOpList,
+                       const std::unordered_map<Operation*, std::vector<int>>& copyOutResolveSuccIndexListDict,
+                       bool fillContent);
+    void InitOperationNoPredNoSuccIndices(uintdevptr_t& initOffset, const OrderedSet<Operation*>& callList,
+                                          const std::unordered_map<Operation*, uint64_t>& callOpPredDict,
+                                          const std::unordered_map<Operation*, OrderedSet<Operation*>>& callOpSuccDict,
+                                          const std::vector<int>& noPredOpList, const std::vector<int>& noSuccOpList,
+                                          bool fillContent);
     void InitOperationBufferLayouts(
         uintdevptr_t& initOffset, const OrderedSet<Operation*>& callList,
         const std::unordered_map<Operation*, OrderedSet<Operation*>>& callOpSuccDict,
@@ -575,23 +573,24 @@ private:
         const std::unordered_map<uint64_t, int>& calleeHashIndexDict, const std::vector<int32_t>& stitchIndexList,
         const std::unordered_map<Operation*, std::vector<int>>& copyOutResolveSuccIndexListDict,
         DevAscendFunctionDuppedData* dupData);
-    void PopulateOneEncodedOpOperandsAndAttrs(
-        size_t index, int& operanSize, int& staticAttributeSize, const SymbolicExpressionTable* expressionTable,
-        const OrderedSet<Operation*>& callList, const OrderedSet<std::shared_ptr<LogicalTensor>>& tlist,
-        const OrderedSet<std::shared_ptr<RawTensor>>& rawList,
-        const std::unordered_map<uint64_t, int>& calleeHashIndexDict, const std::vector<int32_t>& stitchIndexList);
+    void PopulateOneEncodedOpOperandsAndAttrs(size_t index, int& operanSize, int& staticAttributeSize,
+                                              const SymbolicExpressionTable* expressionTable,
+                                              const OrderedSet<Operation*>& callList,
+                                              const OrderedSet<std::shared_ptr<LogicalTensor>>& tlist,
+                                              const OrderedSet<std::shared_ptr<RawTensor>>& rawList,
+                                              const std::unordered_map<uint64_t, int>& calleeHashIndexDict,
+                                              const std::vector<int32_t>& stitchIndexList);
     void PopulateOneEncodedOpGraphEdges(
         size_t index, int& sucSize, int& copyOutResolveSuccIdxSize, const OrderedSet<Operation*>& callList,
         const std::unordered_map<Operation*, OrderedSet<Operation*>>& callOpSuccDict,
         const std::unordered_map<Operation*, std::vector<int>>& copyOutResolveSuccIndexListDict,
         DevAscendFunctionDuppedData* dupData);
-    void VerifyOperationEncodedContent(
-        const OrderedSet<Operation*>& callList, const std::unordered_map<Operation*, uint64_t>& callOpPredDict,
-        DevAscendFunctionDuppedData* dupData);
-    void InitWrapInfo(
-        uintdevptr_t& initOffset, const OrderedSet<Operation*>& callList, bool fillContent,
-        const std::unordered_map<uint64_t, int>& calleeHashIndexDict,
-        const std::vector<CceCodeInfo>& cceCodeInfoList);
+    void VerifyOperationEncodedContent(const OrderedSet<Operation*>& callList,
+                                       const std::unordered_map<Operation*, uint64_t>& callOpPredDict,
+                                       DevAscendFunctionDuppedData* dupData);
+    void InitWrapInfo(uintdevptr_t& initOffset, const OrderedSet<Operation*>& callList, bool fillContent,
+                      const std::unordered_map<uint64_t, int>& calleeHashIndexDict,
+                      const std::vector<CceCodeInfo>& cceCodeInfoList);
     void InitIncastOutcast(
         uintdevptr_t& initOffset, const std::vector<std::shared_ptr<LogicalTensor>>& incastTensorList,
         const std::vector<std::shared_ptr<LogicalTensor>>& outcastTensorList,
@@ -601,15 +600,14 @@ private:
         const EncodeDevAscendFunctionParam& param, const std::string& initRawName, bool fillContent,
         const std::unordered_map<int, int>& opIdxToHubOpIdx = {});
 
-    void FillIncastUseList(
-        DevLocalVector<DevAscendFunctionCallOperandUse>& useList, uint64_t& useSize,
-        const std::vector<std::shared_ptr<LogicalTensor>>& tensorList,
-        const std::unordered_map<std::shared_ptr<LogicalTensor>, InoutOperationAttr>& attrDict, bool fillContent,
-        const std::unordered_map<int, int>& opIdxToHubOpIdx);
+    void FillIncastUseList(DevLocalVector<DevAscendFunctionCallOperandUse>& useList, uint64_t& useSize,
+                           const std::vector<std::shared_ptr<LogicalTensor>>& tensorList,
+                           const std::unordered_map<std::shared_ptr<LogicalTensor>, InoutOperationAttr>& attrDict,
+                           bool fillContent, const std::unordered_map<int, int>& opIdxToHubOpIdx);
 
-    void FillOutcastUseList(
-        DevLocalVector<DevAscendFunctionCallOperandUse>& useList, uint64_t& useSize,
-        const std::vector<std::shared_ptr<LogicalTensor>>& tensorList,
-        const std::unordered_map<std::shared_ptr<LogicalTensor>, InoutOperationAttr>& attrDict, bool fillContent);
+    void FillOutcastUseList(DevLocalVector<DevAscendFunctionCallOperandUse>& useList, uint64_t& useSize,
+                            const std::vector<std::shared_ptr<LogicalTensor>>& tensorList,
+                            const std::unordered_map<std::shared_ptr<LogicalTensor>, InoutOperationAttr>& attrDict,
+                            bool fillContent);
 };
 } // namespace npu::tile_fwk::dynamic

@@ -43,9 +43,8 @@ TEST_F(TestCodegenDynSpillOut, UBSpillOut)
     const std::vector<int64_t> shape = {64, 64};
     const std::vector<SymbolicScalar> dynValidShape = {64, 64};
     auto function = GenMockFuncDyn("UBSpillOut");
-    auto ddrTensor = CreateLogicalTensor(
-        {*function, DataType::DT_FP32, MemoryType::MEM_DEVICE_DDR, shape, "UBSpillOut", SYMBOL_STACK_BASE,
-         dynValidShape});
+    auto ddrTensor = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_DEVICE_DDR, shape, "UBSpillOut",
+                                          SYMBOL_STACK_BASE, dynValidShape});
     int64_t baseOffset{0};
     ddrTensor->SetAttr(OpAttributeKey::workspaceBaseOffset, baseOffset);
     auto ubTensor = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
@@ -65,9 +64,8 @@ TEST_F(TestCodegenDynSpillOut, L1SpillOut)
     std::vector<int64_t> shape = {64, 64};
     const std::vector<SymbolicScalar> dynValidShape = {64, 64};
     auto function = GenMockFuncDyn("L1SpillOut");
-    auto ddrTensor = CreateLogicalTensor(
-        {*function, DataType::DT_FP32, MemoryType::MEM_DEVICE_DDR, shape, "L1SpillOut", SYMBOL_STACK_BASE,
-         dynValidShape});
+    auto ddrTensor = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_DEVICE_DDR, shape, "L1SpillOut",
+                                          SYMBOL_STACK_BASE, dynValidShape});
     int64_t baseOffset{0};
     ddrTensor->SetAttr(OpAttributeKey::workspaceBaseOffset, baseOffset);
     auto l1Tensor = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_L1, shape, dynValidShape});
@@ -85,9 +83,8 @@ TEST_F(TestCodegenDynSpillOut, L1SpillTileTensor)
     std::vector<int64_t> shape = {64, 64};
     const std::vector<SymbolicScalar> dynValidShape = {64, 64};
     auto function = GenMockFuncDyn("L1SpillTileTensor");
-    auto ddrTensor = CreateLogicalTensor(
-        {*function, DataType::DT_FP32, MemoryType::MEM_DEVICE_DDR, shape, "L1SpillOut", SYMBOL_STACK_BASE,
-         dynValidShape});
+    auto ddrTensor = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_DEVICE_DDR, shape, "L1SpillOut",
+                                          SYMBOL_STACK_BASE, dynValidShape});
     int64_t baseOffset{0};
     ddrTensor->SetAttr(OpAttributeKey::workspaceBaseOffset, baseOffset);
     auto l1Tensor = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_L1, shape, dynValidShape});
@@ -103,8 +100,8 @@ TEST_F(TestCodegenDynSpillOut, L1SpillTileTensor)
     op2.SetAttribute(OP_ATTR_PREFIX + "copy_in_mode", 0);
 
     std::string res = GenCodeByFunction(*function);
-    std::string expect =
-        R"!!!(TStore<TStoreConfig<CopyOutMode::NZ2ND, 0, 0>>(gmTensor_9, l1Tensor_10, Coord2Dim(0, 0));)!!!";
+    std::string
+        expect = R"!!!(TStore<TStoreConfig<CopyOutMode::NZ2ND, 0, 0>>(gmTensor_9, l1Tensor_10, Coord2Dim(0, 0));)!!!";
     CheckStringExist(expect, res);
 
     expect =

@@ -79,22 +79,22 @@ LogicalTensorPtr IRBuilder::CreateTensorVar(DataType t, Shape shape, TileOpForma
     return std::make_shared<LogicalTensor>(DummyFunc(), t, std::move(shape), format, name);
 }
 
-LogicalTensorPtr IRBuilder::CreateTensorVar(
-    DataType t, Shape shape, std::vector<SymbolicScalar> validShape, TileOpFormat format, std::string name)
+LogicalTensorPtr IRBuilder::CreateTensorVar(DataType t, Shape shape, std::vector<SymbolicScalar> validShape,
+                                            TileOpFormat format, std::string name)
 {
     return std::make_shared<LogicalTensor>(DummyFunc(), t, std::move(shape), std::move(validShape), format, name);
 }
 
-LogicalTensorPtr IRBuilder::CreateTensorVar(
-    std::shared_ptr<RawTensor> rawTensor, Offset offset, Shape shape, std::vector<SymbolicScalar> validShape)
+LogicalTensorPtr IRBuilder::CreateTensorVar(std::shared_ptr<RawTensor> rawTensor, Offset offset, Shape shape,
+                                            std::vector<SymbolicScalar> validShape)
 {
     LogicalTensorPtr tensor;
     if (validShape.empty()) {
-        tensor =
-            std::make_shared<LogicalTensor>(DummyFunc(), std::move(rawTensor), std::move(offset), std::move(shape));
+        tensor = std::make_shared<LogicalTensor>(DummyFunc(), std::move(rawTensor), std::move(offset),
+                                                 std::move(shape));
     } else {
-        tensor = std::make_shared<LogicalTensor>(
-            DummyFunc(), std::move(rawTensor), std::move(offset), std::move(shape), std::move(validShape));
+        tensor = std::make_shared<LogicalTensor>(DummyFunc(), std::move(rawTensor), std::move(offset), std::move(shape),
+                                                 std::move(validShape));
     }
     return tensor;
 }
@@ -104,28 +104,28 @@ LogicalTensorPtr IRBuilder::CreateTensorVar(Function& f, DataType t, Shape shape
     return std::make_shared<LogicalTensor>(f, t, std::move(shape), format, name);
 }
 
-LogicalTensorPtr IRBuilder::CreateTensorVar(
-    Function& f, DataType t, Shape shape, std::vector<SymbolicScalar> validShape, TileOpFormat format, std::string name)
+LogicalTensorPtr IRBuilder::CreateTensorVar(Function& f, DataType t, Shape shape,
+                                            std::vector<SymbolicScalar> validShape, TileOpFormat format,
+                                            std::string name)
 {
     return std::make_shared<LogicalTensor>(f, t, std::move(shape), std::move(validShape), format, name);
 }
 
-LogicalTensorPtr IRBuilder::CreateTensorVar(
-    Function& f, std::shared_ptr<RawTensor> rawTensor, Offset offset, Shape shape,
-    std::vector<SymbolicScalar> validShape)
+LogicalTensorPtr IRBuilder::CreateTensorVar(Function& f, std::shared_ptr<RawTensor> rawTensor, Offset offset,
+                                            Shape shape, std::vector<SymbolicScalar> validShape)
 {
     LogicalTensorPtr tensor;
     if (validShape.empty()) {
         tensor = std::make_shared<LogicalTensor>(f, std::move(rawTensor), std::move(offset), std::move(shape));
     } else {
-        tensor = std::make_shared<LogicalTensor>(
-            f, std::move(rawTensor), std::move(offset), std::move(shape), std::move(validShape));
+        tensor = std::make_shared<LogicalTensor>(f, std::move(rawTensor), std::move(offset), std::move(shape),
+                                                 std::move(validShape));
     }
     return tensor;
 }
 
-Operation& IRBuilder::CreateTensorOpStmt(
-    Function& f, const Opcode opCode, const LogicalTensors& iOperands, const LogicalTensors& oOperands, ir::Span span)
+Operation& IRBuilder::CreateTensorOpStmt(Function& f, const Opcode opCode, const LogicalTensors& iOperands,
+                                         const LogicalTensors& oOperands, ir::Span span)
 {
     return f.AddRawOperation(opCode, iOperands, oOperands, span);
 }
@@ -136,8 +136,8 @@ std::shared_ptr<RawTensor> IRBuilder::CreateRawTensor(DataType t, Shape shape, T
     return std::make_shared<RawTensor>(t, std::move(shape), format, std::move(name), magic);
 }
 
-std::shared_ptr<RawTensor> IRBuilder::CreateRawTensor(
-    DataType t, std::vector<SymbolicScalar> dynShape, TileOpFormat format, std::string name)
+std::shared_ptr<RawTensor> IRBuilder::CreateRawTensor(DataType t, std::vector<SymbolicScalar> dynShape,
+                                                      TileOpFormat format, std::string name)
 {
     auto shape = SymbolicScalar::Concrete(dynShape, -1);
     auto magic = IdGen<IdType::RAW_TENSOR>::Inst().NewId();
@@ -146,9 +146,10 @@ std::shared_ptr<RawTensor> IRBuilder::CreateRawTensor(
     return raw;
 }
 
-ir::TensorOpStmtPtr IRBuilder::CreateTensorOpStmt(
-    std::vector<ir::VarPtr> result, ir::VarPtr result_token, std::string opcode, std::vector<ir::ExprPtr> args,
-    std::vector<ir::VarPtr> tokens, std::vector<std::pair<std::string, std::any>> attrs, ir::Span span)
+ir::TensorOpStmtPtr IRBuilder::CreateTensorOpStmt(std::vector<ir::VarPtr> result, ir::VarPtr result_token,
+                                                  std::string opcode, std::vector<ir::ExprPtr> args,
+                                                  std::vector<ir::VarPtr> tokens,
+                                                  std::vector<std::pair<std::string, std::any>> attrs, ir::Span span)
 {
     return std::make_shared<ir::TensorOpStmt>(result, result_token, opcode, args, tokens, attrs, span);
 }
@@ -198,9 +199,8 @@ ir::SeqStmtsPtr IRBuilder::CreateSeqStmts(std::vector<ir::StmtPtr> stmts, ir::Sp
     return std::make_shared<ir::SeqStmts>(stmts, span);
 }
 
-ir::IfStmtPtr IRBuilder::CreateIfStmt(
-    ir::ExprPtr cond, ir::StmtPtr thenBody, std::optional<ir::StmtPtr> elseBody, std::vector<ir::VarPtr> returnVars,
-    ir::Span span)
+ir::IfStmtPtr IRBuilder::CreateIfStmt(ir::ExprPtr cond, ir::StmtPtr thenBody, std::optional<ir::StmtPtr> elseBody,
+                                      std::vector<ir::VarPtr> returnVars, ir::Span span)
 {
     return std::make_shared<ir::IfStmt>(cond, thenBody, elseBody, returnVars, span);
 }
@@ -215,16 +215,17 @@ ir::ReturnStmtPtr IRBuilder::CreateReturnStmt(std::vector<ir::ExprPtr> values, i
     return std::make_shared<ir::ReturnStmt>(values, span);
 }
 
-ir::ForStmtPtr IRBuilder::CreateForStmt(
-    ir::VarPtr loopVar, ir::ExprPtr start, ir::ExprPtr stop, ir::ExprPtr step, std::vector<ir::IterArgPtr> iterArgs,
-    ir::StmtPtr body, std::vector<ir::VarPtr> returnVars, ir::Span span, std::vector<std::pair<std::string, std::any>> attrs)
+ir::ForStmtPtr IRBuilder::CreateForStmt(ir::VarPtr loopVar, ir::ExprPtr start, ir::ExprPtr stop, ir::ExprPtr step,
+                                        std::vector<ir::IterArgPtr> iterArgs, ir::StmtPtr body,
+                                        std::vector<ir::VarPtr> returnVars, ir::Span span,
+                                        std::vector<std::pair<std::string, std::any>> attrs)
 {
-    return std::make_shared<ir::ForStmt>(loopVar, start, stop, step, std::move(iterArgs), body, returnVars, span, std::move(attrs));
+    return std::make_shared<ir::ForStmt>(loopVar, start, stop, step, std::move(iterArgs), body, returnVars, span,
+                                         std::move(attrs));
 }
 
-ir::WhileStmtPtr IRBuilder::CreateWhileStmt(
-    ir::ExprPtr cond, std::vector<ir::IterArgPtr> iterArgs, ir::StmtPtr body, std::vector<ir::VarPtr> returnVars,
-    ir::Span span)
+ir::WhileStmtPtr IRBuilder::CreateWhileStmt(ir::ExprPtr cond, std::vector<ir::IterArgPtr> iterArgs, ir::StmtPtr body,
+                                            std::vector<ir::VarPtr> returnVars, ir::Span span)
 {
     return std::make_shared<ir::WhileStmt>(cond, iterArgs, body, returnVars, span);
 }
@@ -239,9 +240,8 @@ ir::ContinueStmtPtr IRBuilder::CreateContinueStmt(std::vector<ir::ExprPtr> value
     return std::make_shared<ir::ContinueStmt>(values, span);
 }
 
-ir::FunctionPtr IRBuilder::CreateFunction(
-    std::string name, std::vector<ir::VarPtr> params, std::vector<ir::TypePtr> returnTypes, ir::StmtPtr body,
-    ir::Span span)
+ir::FunctionPtr IRBuilder::CreateFunction(std::string name, std::vector<ir::VarPtr> params,
+                                          std::vector<ir::TypePtr> returnTypes, ir::StmtPtr body, ir::Span span)
 {
     return std::make_shared<ir::Function>(name, params, returnTypes, body, span);
 }

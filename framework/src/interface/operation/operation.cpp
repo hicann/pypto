@@ -279,8 +279,8 @@ void Operation::InitTensorGraphMetadata()
 
 void Operation::InitLatency(Opcode opcode)
 {
-    const auto& latencyOperands =
-        (opcode == Opcode::OP_COPY_IN || opcode == Opcode::OP_VIEW) ? GetOOperands() : GetIOperands();
+    const auto& latencyOperands = (opcode == Opcode::OP_COPY_IN || opcode == Opcode::OP_VIEW) ? GetOOperands() :
+                                                                                                GetIOperands();
     if (!latencyOperands.empty()) {
         // Get operation latency
         latency_ = GetLatencyByOperands(latencyOperands, GetOpcodeStr());
@@ -412,7 +412,7 @@ void Operation::DumpOperandsJson(Json& opDump, bool dumpTensor) const
     }
     opDump["ioperands"] = ioperandsDump;
     opDump["ooperands"] = ooperandsDump;
-    
+
     Json itokensDump = Json::array();
     for (const auto& token : tokens_) {
         itokensDump.push_back(token->name_);
@@ -551,9 +551,10 @@ Json Operation::DumpJson(bool dumpTensor) const
     return opDump;
 }
 
-void Operation::LoadOperandsFromJson(
-    const Json& opDump, const std::unordered_map<int, std::shared_ptr<LogicalTensor>>& tensorDict,
-    std::vector<std::shared_ptr<LogicalTensor>>& ioperands, std::vector<std::shared_ptr<LogicalTensor>>& ooperands)
+void Operation::LoadOperandsFromJson(const Json& opDump,
+                                     const std::unordered_map<int, std::shared_ptr<LogicalTensor>>& tensorDict,
+                                     std::vector<std::shared_ptr<LogicalTensor>>& ioperands,
+                                     std::vector<std::shared_ptr<LogicalTensor>>& ooperands)
 {
     for (auto& i : opDump["ioperands"]) {
         std::shared_ptr<LogicalTensor> tensor;
@@ -760,8 +761,8 @@ std::string Operation::DumpSSA(const std::string& prefix) const
 
 std::string Operation::Dump() const { return DumpSSA(); }
 
-void Operation::ReplaceInputOperand(
-    const std::shared_ptr<LogicalTensor>& originInput, const std::shared_ptr<LogicalTensor>& newInput)
+void Operation::ReplaceInputOperand(const std::shared_ptr<LogicalTensor>& originInput,
+                                    const std::shared_ptr<LogicalTensor>& newInput)
 {
     if (originInput == nullptr || newInput == nullptr) {
         return;
@@ -775,8 +776,8 @@ void Operation::ReplaceInputOperand(
     }
 }
 
-void Operation::ReplaceOutputOperand(
-    const std::shared_ptr<LogicalTensor>& originOutput, const std::shared_ptr<LogicalTensor>& newOutput)
+void Operation::ReplaceOutputOperand(const std::shared_ptr<LogicalTensor>& originOutput,
+                                     const std::shared_ptr<LogicalTensor>& newOutput)
 {
     if (originOutput == nullptr || newOutput == nullptr) {
         return;
@@ -980,8 +981,8 @@ void Operation::RemoveOutCtrlOperation(Operation& operation)
     }
 }
 
-Operation& Operation::CloneOperation(
-    Function& func, const LogicalTensors& iOperandList, const LogicalTensors& oOperandList) const
+Operation& Operation::CloneOperation(Function& func, const LogicalTensors& iOperandList,
+                                     const LogicalTensors& oOperandList) const
 {
     Operation& op = func.AddRawOperation(opcode_, iOperandList, oOperandList);
     op.SetScopeInfo(scopeInfo_);
@@ -1004,9 +1005,11 @@ void Operation::UnlinkFromLogicalTensors()
     }
 }
 
-std::shared_ptr<Operation> Operation::CloneTensorOpStmt(
-    const LogicalTensors& iOperandList, const LogicalTensors& oOperandList, const ir::VarPtr& resultToken,
-    const std::vector<ir::VarPtr>& tokens, ir::Span span, Function* targetFunc) const
+std::shared_ptr<Operation> Operation::CloneTensorOpStmt(const LogicalTensors& iOperandList,
+                                                        const LogicalTensors& oOperandList,
+                                                        const ir::VarPtr& resultToken,
+                                                        const std::vector<ir::VarPtr>& tokens, ir::Span span,
+                                                        Function* targetFunc) const
 {
     const_cast<Operation*>(this)->UnlinkFromLogicalTensors();
     auto applyCloneMetadata = [&](Operation& op) {
@@ -1150,8 +1153,8 @@ void Operation::EraseDependTensor(const std::shared_ptr<LogicalTensor>& dependTe
     }
 }
 
-void Operation::ReplaceInput(
-    const std::shared_ptr<LogicalTensor>& newInput, const std::shared_ptr<LogicalTensor>& oldInput)
+void Operation::ReplaceInput(const std::shared_ptr<LogicalTensor>& newInput,
+                             const std::shared_ptr<LogicalTensor>& oldInput)
 {
     for (size_t i = 0; i < GetIOperands().size(); i++) {
         if (iOperand[i]->magic == oldInput->magic) {
@@ -1160,8 +1163,8 @@ void Operation::ReplaceInput(
     }
 }
 
-void Operation::ReplaceOutput(
-    const std::shared_ptr<LogicalTensor>& newOutput, const std::shared_ptr<LogicalTensor>& oldOutput)
+void Operation::ReplaceOutput(const std::shared_ptr<LogicalTensor>& newOutput,
+                              const std::shared_ptr<LogicalTensor>& oldOutput)
 {
     for (int i = 0; static_cast<size_t>(i) < oOperand.size(); ++i) {
         if (oOperand[i]->magic == oldOutput->magic) {
@@ -1196,7 +1199,7 @@ bool Operation::IsNeedStackGM() const
 }
 
 static void AppendFromDynValidShapeRefs(CopyOpAttribute& copyAttr,
-    std::vector<std::reference_wrapper<SymbolicScalar>>& dynamicAttributeList)
+                                        std::vector<std::reference_wrapper<SymbolicScalar>>& dynamicAttributeList)
 {
     for (auto& shape : copyAttr.GetFromDynValidShape()) {
         if (shape.IsSpecified()) {
@@ -1206,7 +1209,7 @@ static void AppendFromDynValidShapeRefs(CopyOpAttribute& copyAttr,
 }
 
 static void AppendToDynValidShapeRefs(CopyOpAttribute& copyAttr,
-    std::vector<std::reference_wrapper<SymbolicScalar>>& dynamicAttributeList)
+                                      std::vector<std::reference_wrapper<SymbolicScalar>>& dynamicAttributeList)
 {
     for (auto& shape : copyAttr.GetToDynValidShape()) {
         if (shape.IsSpecified()) {
@@ -1348,11 +1351,11 @@ std::vector<std::reference_wrapper<SymbolicScalar>> Operation::GetDynamicAttribu
                 dynamicAttributeList.push_back(std::reference_wrapper<SymbolicScalar>(offset.GetSpecifiedValue()));
             }
         } break;
-        case Opcode::OP_L1_RESHAPE_COPY_IN: 
+        case Opcode::OP_L1_RESHAPE_COPY_IN:
             [[fallthrough]];
-        case Opcode::OP_L0C_RESHAPE_COPY_OUT: 
+        case Opcode::OP_L0C_RESHAPE_COPY_OUT:
             [[fallthrough]];
-        case Opcode::OP_RESHAPE_COPY_OUT: 
+        case Opcode::OP_RESHAPE_COPY_OUT:
             [[fallthrough]];
         case Opcode::OP_RESHAPE_COPY_IN: {
             auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(GetOpAttribute());

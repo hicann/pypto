@@ -24,23 +24,23 @@ void InsertOpForViewAssemble::InsertViewAssemble(Function& function, Operation* 
 {
     auto& moveOutTensorPtr = viewOp->GetOOperands()[0];
     auto shape = moveOutTensorPtr->GetShape();
-    LogicalTensorPtr ddrTensorPtr =
-        irBuilder_.CreateTensorVar(moveOutTensorPtr->Datatype(), shape, std::vector<SymbolicScalar>{});
+    LogicalTensorPtr ddrTensorPtr = irBuilder_.CreateTensorVar(moveOutTensorPtr->Datatype(), shape,
+                                                               std::vector<SymbolicScalar>{});
     ddrTensorPtr->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
     ddrTensorPtr->UpdateDynValidShape(moveOutTensorPtr->GetDynValidShape());
-    LogicalTensorPtr moveInTensorPtr =
-        irBuilder_.CreateTensorVar(moveOutTensorPtr->Datatype(), shape, std::vector<SymbolicScalar>{});
+    LogicalTensorPtr moveInTensorPtr = irBuilder_.CreateTensorVar(moveOutTensorPtr->Datatype(), shape,
+                                                                  std::vector<SymbolicScalar>{});
     moveInTensorPtr->SetMemoryTypeBoth(moveOutTensorPtr->GetMemoryTypeOriginal(), true);
     moveInTensorPtr->UpdateDynValidShape(moveOutTensorPtr->GetDynValidShape());
     std::vector<int64_t> offset(moveOutTensorPtr->GetShape().size(), 0);
     std::vector<SymbolicScalar> dynOffset(moveOutTensorPtr->GetShape().size(), 0);
-    Operation& assemble =
-        irBuilder_.CreateTensorOpStmt(function, Opcode::OP_ASSEMBLE, {moveOutTensorPtr}, {ddrTensorPtr});
-    assemble.SetOpAttribute(std::make_shared<AssembleOpAttribute>(
-        moveOutTensorPtr->GetMemoryTypeOriginal(), offset, dynOffset, moveOutTensorPtr->GetDynValidShape()));
+    Operation& assemble = irBuilder_.CreateTensorOpStmt(function, Opcode::OP_ASSEMBLE, {moveOutTensorPtr},
+                                                        {ddrTensorPtr});
+    assemble.SetOpAttribute(std::make_shared<AssembleOpAttribute>(moveOutTensorPtr->GetMemoryTypeOriginal(), offset,
+                                                                  dynOffset, moveOutTensorPtr->GetDynValidShape()));
     Operation& view = irBuilder_.CreateTensorOpStmt(function, Opcode::OP_VIEW, {ddrTensorPtr}, {moveInTensorPtr});
-    view.SetOpAttribute(std::make_shared<ViewOpAttribute>(
-        offset, moveOutTensorPtr->GetMemoryTypeOriginal(), dynOffset, moveOutTensorPtr->GetDynValidShape()));
+    view.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset, moveOutTensorPtr->GetMemoryTypeOriginal(), dynOffset,
+                                                          moveOutTensorPtr->GetDynValidShape()));
     assembleOp->ReplaceInput(moveInTensorPtr, moveOutTensorPtr);
 }
 
@@ -57,16 +57,14 @@ Status InsertOpForViewAssemble::InsertCopy(Function& function, Operation* viewOp
             assembleOpAttr->SetFromType(MemoryType::MEM_UB);
         }
         APASS_LOG_INFO_F(Elements::Operation, "Set Assemble Op[%d] iOperand MEM_DDR.", assOp->GetOpMagic());
-    } else if (
-        assOp->GetIOperands()[0]->GetMemoryTypeOriginal() == MemoryType::MEM_L1 ||
-        assOp->GetIOperands()[0]->GetMemoryTypeOriginal() == MemoryType::MEM_UB) {
-        APASS_LOG_INFO_F(
-            Elements::Operation, "Insert Copy For View[%d], Assemble[%d].", viewOp->GetOpMagic(), assOp->GetOpMagic());
+    } else if (assOp->GetIOperands()[0]->GetMemoryTypeOriginal() == MemoryType::MEM_L1 ||
+               assOp->GetIOperands()[0]->GetMemoryTypeOriginal() == MemoryType::MEM_UB) {
+        APASS_LOG_INFO_F(Elements::Operation, "Insert Copy For View[%d], Assemble[%d].", viewOp->GetOpMagic(),
+                         assOp->GetOpMagic());
         InsertViewAssemble(function, viewOp, assOp);
     } else {
-        APASS_LOG_ERROR_F(
-            Elements::Operation, "Assemble inTensor %d memory type is unexpected, InsertCopy failed.",
-            assOp->GetIOperands()[0]->GetMagic());
+        APASS_LOG_ERROR_F(Elements::Operation, "Assemble inTensor %d memory type is unexpected, InsertCopy failed.",
+                          assOp->GetIOperands()[0]->GetMagic());
         return FAILED;
     }
     return SUCCESS;
@@ -79,9 +77,8 @@ bool InsertOpForViewAssemble::NeedInsertCopy(LogicalTensorPtr& assembleOut)
         auto& prodOp = *assOp->GetIOperands()[0]->GetProducers().begin();
         if (prodOp->GetOpcode() != Opcode::OP_VIEW) {
             isNeedInsert = true;
-            APASS_LOG_INFO_F(
-                Elements::Operation, "assOp[%d] producerOp %s[%d] is not viewOp.", assOp->GetOpMagic(),
-                prodOp->GetOpcodeStr().c_str(), prodOp->GetOpMagic());
+            APASS_LOG_INFO_F(Elements::Operation, "assOp[%d] producerOp %s[%d] is not viewOp.", assOp->GetOpMagic(),
+                             prodOp->GetOpcodeStr().c_str(), prodOp->GetOpMagic());
             continue;
         }
         recordOpPair_.push_back(std::make_pair(prodOp, assOp));
@@ -94,25 +91,23 @@ bool InsertOpForViewAssemble::NeedInsertCopy(LogicalTensorPtr& assembleOut)
             return false;
         }
         if (assembleAttr->GetToOffset() != viewAttr->GetFromOffset()) {
-            APASS_LOG_INFO_F(
-                Elements::Operation, "assOp[%d] GetToOffset is not equal to viewOp[%d] GetFromOffset.",
-                assOp->GetOpMagic(), prodOp->GetOpMagic());
+            APASS_LOG_INFO_F(Elements::Operation, "assOp[%d] GetToOffset is not equal to viewOp[%d] GetFromOffset.",
+                             assOp->GetOpMagic(), prodOp->GetOpMagic());
             isNeedInsert = true;
             continue;
         }
         if (assembleAttr->GetToDynOffset().size() != viewAttr->GetFromDynOffset().size()) {
-            APASS_LOG_INFO_F(
-                Elements::Operation, "assOp[%d] GetToDynOffset size is not equal to viewOp[%d] GetFromDynOffset size.",
-                assOp->GetOpMagic(), prodOp->GetOpMagic());
+            APASS_LOG_INFO_F(Elements::Operation,
+                             "assOp[%d] GetToDynOffset size is not equal to viewOp[%d] GetFromDynOffset size.",
+                             assOp->GetOpMagic(), prodOp->GetOpMagic());
             isNeedInsert = true;
             continue;
         }
         for (size_t i = 0; i < assembleAttr->GetToDynOffset().size(); i++) {
             if (assembleAttr->GetToDynOffset()[i].Dump() != viewAttr->GetFromDynOffset()[i].Dump()) {
-                APASS_LOG_INFO_F(
-                    Elements::Operation,
-                    "assOp[%d] GetToDynOffset value is not equal to viewOp[%d] GetFromDynOffset value.",
-                    assOp->GetOpMagic(), prodOp->GetOpMagic());
+                APASS_LOG_INFO_F(Elements::Operation,
+                                 "assOp[%d] GetToDynOffset value is not equal to viewOp[%d] GetFromDynOffset value.",
+                                 assOp->GetOpMagic(), prodOp->GetOpMagic());
                 isNeedInsert = true;
                 break;
             }
@@ -121,17 +116,16 @@ bool InsertOpForViewAssemble::NeedInsertCopy(LogicalTensorPtr& assembleOut)
         auto inShape = viewIn->GetShape();
         auto outShape = assembleOut->GetShape();
         if (inShape.size() != outShape.size()) {
-            APASS_LOG_INFO_F(
-                Elements::Operation, "assOp[%d] GetShape size is not equal to viewOp[%d] GetShape size.",
-                assOp->GetOpMagic(), prodOp->GetOpMagic());
+            APASS_LOG_INFO_F(Elements::Operation, "assOp[%d] GetShape size is not equal to viewOp[%d] GetShape size.",
+                             assOp->GetOpMagic(), prodOp->GetOpMagic());
             isNeedInsert = true;
             continue;
         }
         for (size_t i = 0; i < inShape.size(); i++) {
             if (inShape[i] != outShape[i]) {
-                APASS_LOG_INFO_F(
-                    Elements::Operation, "assOp[%d] GetShape value is not equal to viewOp[%d] GetShape value.",
-                    assOp->GetOpMagic(), prodOp->GetOpMagic());
+                APASS_LOG_INFO_F(Elements::Operation,
+                                 "assOp[%d] GetShape value is not equal to viewOp[%d] GetShape value.",
+                                 assOp->GetOpMagic(), prodOp->GetOpMagic());
                 isNeedInsert = true;
                 break;
             }
@@ -159,8 +153,8 @@ Status InsertOpForViewAssemble::JudgedViewAssemble(Function& function)
             prodOp->GetIOperands()[0]->GetMemoryTypeOriginal() == prodOp->GetOOperands()[0]->GetMemoryTypeOriginal() &&
             notProcessOut_.find(op.GetOOperands()[0]) == notProcessOut_.end()) {
             assembleOutSet_.insert(op.GetOOperands()[0]);
-            APASS_LOG_INFO_F(
-                Elements::Operation, "assembleOutSet_ insert oOperand %d", op.GetOOperands()[0]->GetMagic());
+            APASS_LOG_INFO_F(Elements::Operation, "assembleOutSet_ insert oOperand %d",
+                             op.GetOOperands()[0]->GetMagic());
         }
     }
     for (auto assembleOut : assembleOutSet_) {

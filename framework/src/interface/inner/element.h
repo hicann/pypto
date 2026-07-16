@@ -85,8 +85,8 @@ struct ElementDump {
     void DumpElement(uint64_t v)
     {
         Clear();
-        data.size =
-            snprintf_s(data.data, sizeof(data.data), sizeof(data.data) - 1, "%lu", static_cast<unsigned long>(v));
+        data.size = snprintf_s(data.data, sizeof(data.data), sizeof(data.data) - 1, "%lu",
+                               static_cast<unsigned long>(v));
     }
     void DumpElement(double v)
     {

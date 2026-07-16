@@ -32,7 +32,7 @@
 
 #define MODULE_NAME "AssignMemoryType"
 
-#define RETURN_IF_NOT_SUCCESS(expr)       \
+#define RETURN_IF_NOT_SUCCESS(expr)                \
     do {                                           \
         Status assignMemoryReturnStatus = (expr);  \
         if (assignMemoryReturnStatus != SUCCESS) { \
@@ -80,8 +80,8 @@ Status AssignMemoryType::AssignConfirmedMemoryTypes(Function& function)
 Status AssignMemoryType::AssignOpcodeDefinedMemoryTypes(Operation& operation)
 {
     auto opcode = operation.GetOpcode();
-    bool hasSpecialInputRule =
-        opcode == Opcode::OP_REDUCE_ACC || OpChecker::check(operation, OpChecker::CalcTypeChecker(OpCalcType::MATMUL));
+    bool hasSpecialInputRule = opcode == Opcode::OP_REDUCE_ACC ||
+                               OpChecker::check(operation, OpChecker::CalcTypeChecker(OpCalcType::MATMUL));
     const auto& inputsMemType = OpcodeManager::Inst().GetInputsMemType(opcode);
     if (!hasSpecialInputRule) {
         for (size_t i = 0; i < operation.iOperand.size(); ++i) {
@@ -120,32 +120,30 @@ Status AssignMemoryType::AssignMatmulInputRequirements(Operation& operation)
             } else if (producerOpcode == Opcode::OP_VIEW) {
                 auto viewOpAttribute = std::dynamic_pointer_cast<ViewOpAttribute>(producerOp->GetOpAttribute());
                 if (viewOpAttribute == nullptr) {
-                    APASS_LOG_ERROR_F(
-                        Elements::Operation, "View attribute is null for %s[%d] while assigning matmul input.",
-                        producerOp->GetOpcodeStr().c_str(), producerOp->GetOpMagic());
+                    APASS_LOG_ERROR_F(Elements::Operation,
+                                      "View attribute is null for %s[%d] while assigning matmul input.",
+                                      producerOp->GetOpcodeStr().c_str(), producerOp->GetOpMagic());
                     return FAILED;
                 }
                 requirement = viewOpAttribute->GetTo();
                 if (requirement == MemoryType::MEM_UNKNOWN) {
                     requirement = MemoryType::MEM_DEVICE_DDR;
                 }
-            } else if (OpChecker::check(
-                           producerOp, OpChecker::CalcTypeChecker(OpCalcType::MOVE_LOCAL),
-                           OpChecker::InputMemTypeChecker(MemoryType::MEM_L1),
-                           OpChecker::OutputMemTypeChecker(MemoryType::MEM_L0A))) {
+            } else if (OpChecker::check(producerOp, OpChecker::CalcTypeChecker(OpCalcType::MOVE_LOCAL),
+                                        OpChecker::InputMemTypeChecker(MemoryType::MEM_L1),
+                                        OpChecker::OutputMemTypeChecker(MemoryType::MEM_L0A))) {
                 requirement = MemoryType::MEM_L0A;
-            } else if (OpChecker::check(
-                           producerOp, OpChecker::CalcTypeChecker(OpCalcType::MOVE_LOCAL),
-                           OpChecker::InputMemTypeChecker(MemoryType::MEM_L1),
-                           OpChecker::OutputMemTypeChecker(MemoryType::MEM_L0B))) {
+            } else if (OpChecker::check(producerOp, OpChecker::CalcTypeChecker(OpCalcType::MOVE_LOCAL),
+                                        OpChecker::InputMemTypeChecker(MemoryType::MEM_L1),
+                                        OpChecker::OutputMemTypeChecker(MemoryType::MEM_L0B))) {
                 requirement = MemoryType::MEM_L0B;
             }
             RETURN_IF_NOT_SUCCESS(
                 SetRequirementChecked(tensor, operation, requirement, "AssignMatmulInputRequirements"));
             if (requirement != MemoryType::MEM_DEVICE_DDR && requirement != MemoryType::MEM_UNKNOWN) {
-                APASS_LOG_DEBUG_F(
-                    Elements::Operation, "Infer %s[%d] input tensor[%d] as %s.", operation.GetOpcodeStr().c_str(),
-                    operation.GetOpMagic(), tensor->GetMagic(), BriefMemoryTypeToString(requirement).c_str());
+                APASS_LOG_DEBUG_F(Elements::Operation, "Infer %s[%d] input tensor[%d] as %s.",
+                                  operation.GetOpcodeStr().c_str(), operation.GetOpMagic(), tensor->GetMagic(),
+                                  BriefMemoryTypeToString(requirement).c_str());
             }
         }
     }
@@ -156,9 +154,9 @@ Status AssignMemoryType::AssignViewAttrMemoryType(Operation& operation)
 {
     auto viewOpAttribute = std::dynamic_pointer_cast<ViewOpAttribute>(operation.GetOpAttribute());
     if (viewOpAttribute == nullptr) {
-        APASS_LOG_ERROR_F(
-            Elements::Operation, "View attribute is null for %s[%d] while assigning view attr memory type.",
-            operation.GetOpcodeStr().c_str(), operation.GetOpMagic());
+        APASS_LOG_ERROR_F(Elements::Operation,
+                          "View attribute is null for %s[%d] while assigning view attr memory type.",
+                          operation.GetOpcodeStr().c_str(), operation.GetOpMagic());
         return FAILED;
     }
     MemoryType attrToType = viewOpAttribute->GetTo();
@@ -173,9 +171,9 @@ Status AssignMemoryType::AssignAssembleAttrMemoryType(Operation& operation)
         return SUCCESS;
     auto assembleOpAttribute = std::dynamic_pointer_cast<AssembleOpAttribute>(operation.GetOpAttribute());
     if (assembleOpAttribute == nullptr) {
-        APASS_LOG_ERROR_F(
-            Elements::Operation, "Assemble attribute is null for %s[%d] while assigning assemble attr memory type.",
-            operation.GetOpcodeStr().c_str(), operation.GetOpMagic());
+        APASS_LOG_ERROR_F(Elements::Operation,
+                          "Assemble attribute is null for %s[%d] while assigning assemble attr memory type.",
+                          operation.GetOpcodeStr().c_str(), operation.GetOpMagic());
         return FAILED;
     }
     MemoryType attrFromType = assembleOpAttribute->GetFrom();
@@ -187,13 +185,11 @@ Status AssignMemoryType::AssignAssembleAttrMemoryType(Operation& operation)
 Status AssignMemoryType::AssignInOutCastMemoryTypes(Function& function)
 {
     for (auto& incast : function.inCasts_) {
-        RETURN_IF_NOT_SUCCESS(
-            SetOriginalChecked(incast, MemoryType::MEM_DEVICE_DDR, "AssignIncastMemoryType", true));
+        RETURN_IF_NOT_SUCCESS(SetOriginalChecked(incast, MemoryType::MEM_DEVICE_DDR, "AssignIncastMemoryType", true));
     }
 
     for (auto& outcast : function.outCasts_) {
-        RETURN_IF_NOT_SUCCESS(
-            SetOriginalChecked(outcast, MemoryType::MEM_DEVICE_DDR, "AssignOutcastMemoryType", true));
+        RETURN_IF_NOT_SUCCESS(SetOriginalChecked(outcast, MemoryType::MEM_DEVICE_DDR, "AssignOutcastMemoryType", true));
     }
     return SUCCESS;
 }
@@ -207,8 +203,8 @@ Status AssignMemoryType::EnsureAllConsumerRequirementsExist(Function& function)
         for (const auto& consumerOp : tensor->GetConsumers()) {
             if (inserter.HasRequirement(tensor, *consumerOp))
                 continue;
-            RETURN_IF_NOT_SUCCESS(SetRequirementChecked(
-                tensor, *consumerOp, MemoryType::MEM_UNKNOWN, "EnsureAllConsumerRequirementsExist"));
+            RETURN_IF_NOT_SUCCESS(SetRequirementChecked(tensor, *consumerOp, MemoryType::MEM_UNKNOWN,
+                                                        "EnsureAllConsumerRequirementsExist"));
         }
         return SUCCESS;
     };
@@ -251,10 +247,9 @@ bool AssignMemoryType::IsReshapeCubeToVecL0C2UBPattern(Operation& op)
             }
         }
 
-        isProducerProducerAllCube =
-            !isProducerProducerCube.empty() &&
-            std::all_of(
-                isProducerProducerCube.begin(), isProducerProducerCube.end(), [](bool val) { return val == true; });
+        isProducerProducerAllCube = !isProducerProducerCube.empty() &&
+                                    std::all_of(isProducerProducerCube.begin(), isProducerProducerCube.end(),
+                                                [](bool val) { return val == true; });
         if (!isProducerAssemble || !isProducerProducerAllCube) {
             isL0C2UBPattern = false;
         }
@@ -270,10 +265,9 @@ bool AssignMemoryType::IsReshapeCubeToVecL0C2UBPattern(Operation& op)
                 isConsumerConsumerVector.push_back(consumerConsumer->GetCoreType() == CoreType::AIV);
             }
         }
-        isConsumerConsumerAllVector =
-            !isConsumerConsumerVector.empty() &&
-            std::all_of(
-                isConsumerConsumerVector.begin(), isConsumerConsumerVector.end(), [](bool val) { return val == true; });
+        isConsumerConsumerAllVector = !isConsumerConsumerVector.empty() &&
+                                      std::all_of(isConsumerConsumerVector.begin(), isConsumerConsumerVector.end(),
+                                                  [](bool val) { return val == true; });
         if (!isConsumerViewAssemble || !isConsumerConsumerAllVector) {
             isL0C2UBPattern = false;
         }
@@ -353,16 +347,15 @@ bool AssignMemoryType::IsReshapeVecToCubeUB2L1ProducerPattern(
                 CollectProducerAIVFlags(producerProducer, isProducerDepth3Vector);
             }
         }
-        isProducerDepth2AllVector =
-            !isProducerDepth2Vector.empty() &&
-            std::all_of(isProducerDepth2Vector.begin(), isProducerDepth2Vector.end(), [](bool val) { return val; });
-        isProducerDepth2AllViewAssemble =
-            !isProducerDepth2ViewAssemble.empty() &&
-            std::all_of(
-                isProducerDepth2ViewAssemble.begin(), isProducerDepth2ViewAssemble.end(), [](bool val) { return val; });
-        isProducerDepth3AllVector =
-            !isProducerDepth3Vector.empty() &&
-            std::all_of(isProducerDepth3Vector.begin(), isProducerDepth3Vector.end(), [](bool val) { return val; });
+        isProducerDepth2AllVector = !isProducerDepth2Vector.empty() &&
+                                    std::all_of(isProducerDepth2Vector.begin(), isProducerDepth2Vector.end(),
+                                                [](bool val) { return val; });
+        isProducerDepth2AllViewAssemble = !isProducerDepth2ViewAssemble.empty() &&
+                                          std::all_of(isProducerDepth2ViewAssemble.begin(),
+                                                      isProducerDepth2ViewAssemble.end(), [](bool val) { return val; });
+        isProducerDepth3AllVector = !isProducerDepth3Vector.empty() &&
+                                    std::all_of(isProducerDepth3Vector.begin(), isProducerDepth3Vector.end(),
+                                                [](bool val) { return val; });
         // currently only support the following patterns:
         // 1. vector op -> view(s)/assemble(s) -> reshape op
         // 2. vector op -> view(s)/assemble(s) -> view(s)/assemble(s) -> reshape op
@@ -390,12 +383,12 @@ bool AssignMemoryType::IsReshapeVecToCubeUB2L1ConsumerPattern(
                 CollectConsumerAICFlags(consumerConsumer, isConsumerDepth3Cube);
             }
         }
-        isConsumerDepth2AllView =
-            !isConsumerDepth2View.empty() &&
-            std::all_of(isConsumerDepth2View.begin(), isConsumerDepth2View.end(), [](bool val) { return val; });
-        isConsumerDepth3AllCube =
-            !isConsumerDepth3Cube.empty() &&
-            std::all_of(isConsumerDepth3Cube.begin(), isConsumerDepth3Cube.end(), [](bool val) { return val; });
+        isConsumerDepth2AllView = !isConsumerDepth2View.empty() &&
+                                  std::all_of(isConsumerDepth2View.begin(), isConsumerDepth2View.end(),
+                                              [](bool val) { return val; });
+        isConsumerDepth3AllCube = !isConsumerDepth3Cube.empty() &&
+                                  std::all_of(isConsumerDepth3Cube.begin(), isConsumerDepth3Cube.end(),
+                                              [](bool val) { return val; });
         if (!isConsumerDepth1View || !isConsumerDepth2AllView || !isConsumerDepth3AllCube) {
             return false;
         }
@@ -503,25 +496,23 @@ Status AssignMemoryType::InferUncertainMemoryTypes(Function& function)
     return ApplyPlatformPathFallbackRules(function);
 }
 
-Status AssignMemoryType::GetFirstInputOutputIfOpcode(
-    Operation& operation, Opcode expectedOpcode, const std::string& action, LogicalTensorPtr& input,
-    LogicalTensorPtr& output, bool& shouldHandle) const
+Status AssignMemoryType::GetFirstInputOutputIfOpcode(Operation& operation, Opcode expectedOpcode,
+                                                     const std::string& action, LogicalTensorPtr& input,
+                                                     LogicalTensorPtr& output, bool& shouldHandle) const
 {
     shouldHandle = operation.GetOpcode() == expectedOpcode;
     if (!shouldHandle)
         return SUCCESS;
     if (operation.iOperand.empty() || operation.oOperand.empty()) {
-        APASS_LOG_ERROR_F(
-            Elements::Operation, "%s for %s[%d] failed because operand is empty.", action.c_str(),
-            operation.GetOpcodeStr().c_str(), operation.GetOpMagic());
+        APASS_LOG_ERROR_F(Elements::Operation, "%s for %s[%d] failed because operand is empty.", action.c_str(),
+                          operation.GetOpcodeStr().c_str(), operation.GetOpMagic());
         return FAILED;
     }
     input = operation.iOperand.front();
     output = operation.oOperand.front();
     if (input == nullptr || output == nullptr) {
-        APASS_LOG_ERROR_F(
-            Elements::Operation, "%s for %s[%d] failed because operand tensor is null.", action.c_str(),
-            operation.GetOpcodeStr().c_str(), operation.GetOpMagic());
+        APASS_LOG_ERROR_F(Elements::Operation, "%s for %s[%d] failed because operand tensor is null.", action.c_str(),
+                          operation.GetOpcodeStr().c_str(), operation.GetOpMagic());
         return FAILED;
     }
     return SUCCESS;
@@ -532,15 +523,14 @@ Status AssignMemoryType::InferViewMemoryType(Operation& operation)
     LogicalTensorPtr input;
     LogicalTensorPtr output;
     bool shouldHandle = false;
-    RETURN_IF_NOT_SUCCESS(GetFirstInputOutputIfOpcode(
-        operation, Opcode::OP_VIEW, "Infer OP_VIEW memory type", input, output, shouldHandle));
+    RETURN_IF_NOT_SUCCESS(GetFirstInputOutputIfOpcode(operation, Opcode::OP_VIEW, "Infer OP_VIEW memory type", input,
+                                                      output, shouldHandle));
     if (!shouldHandle)
         return SUCCESS;
     auto viewOpAttribute = std::dynamic_pointer_cast<ViewOpAttribute>(operation.GetOpAttribute());
     if (viewOpAttribute == nullptr) {
-        APASS_LOG_ERROR_F(
-            Elements::Operation, "Infer OP_VIEW[%d] memory type failed because view attr is null.",
-            operation.GetOpMagic());
+        APASS_LOG_ERROR_F(Elements::Operation, "Infer OP_VIEW[%d] memory type failed because view attr is null.",
+                          operation.GetOpMagic());
         return FAILED;
     }
     MemoryType inputOriginal = input->GetMemoryTypeOriginal();
@@ -565,8 +555,8 @@ Status AssignMemoryType::InferViewMemoryType(Operation& operation)
 
 Status AssignMemoryType::InferViewOutputFromRequirement(const LogicalTensorPtr& output, MemoryType& outputOriginal)
 {
-    MemoryType uniqueOutputRequirement =
-        output == nullptr ? MemoryType::MEM_UNKNOWN : inserter.TryGetUniqueKnownRequiredType(output);
+    MemoryType uniqueOutputRequirement = output == nullptr ? MemoryType::MEM_UNKNOWN :
+                                                             inserter.TryGetUniqueKnownRequiredType(output);
     if (outputOriginal != MemoryType::MEM_UNKNOWN || uniqueOutputRequirement == MemoryType::MEM_UNKNOWN)
         return SUCCESS;
     RETURN_IF_NOT_SUCCESS(SetOriginalChecked(output, uniqueOutputRequirement, "InferViewOutputRequirement"));
@@ -574,30 +564,28 @@ Status AssignMemoryType::InferViewOutputFromRequirement(const LogicalTensorPtr& 
     return SUCCESS;
 }
 
-Status AssignMemoryType::InferViewKnownInputOutput(
-    Operation& operation, const LogicalTensorPtr& input, MemoryType inputOriginal, MemoryType outputOriginal)
+Status AssignMemoryType::InferViewKnownInputOutput(Operation& operation, const LogicalTensorPtr& input,
+                                                   MemoryType inputOriginal, MemoryType outputOriginal)
 {
     auto viewOpAttribute = std::dynamic_pointer_cast<ViewOpAttribute>(operation.GetOpAttribute());
     if (viewOpAttribute == nullptr) {
-        APASS_LOG_ERROR_F(
-            Elements::Operation, "Infer OP_VIEW[%d] memory type failed because view attr is null.",
-            operation.GetOpMagic());
+        APASS_LOG_ERROR_F(Elements::Operation, "Infer OP_VIEW[%d] memory type failed because view attr is null.",
+                          operation.GetOpMagic());
         return FAILED;
     }
     viewOpAttribute->SetToType(outputOriginal);
     if (CanUseDirectViewPath(operation, inputOriginal, outputOriginal)) {
         ForceSetRequirement(input, operation, inputOriginal, "InferViewDirectPath");
-        APASS_LOG_DEBUG_F(
-            Elements::Operation, "Infer OP_VIEW[%d] direct %s for input tensor[%d].", operation.GetOpMagic(),
-            BriefMemoryTypeToString(inputOriginal).c_str(), input->GetMagic());
+        APASS_LOG_DEBUG_F(Elements::Operation, "Infer OP_VIEW[%d] direct %s for input tensor[%d].",
+                          operation.GetOpMagic(), BriefMemoryTypeToString(inputOriginal).c_str(), input->GetMagic());
         return SUCCESS;
     }
     ForceSetRequirement(input, operation, MemoryType::MEM_DEVICE_DDR, "InferViewFallbackDdr");
     return SUCCESS;
 }
 
-Status AssignMemoryType::InferViewKnownInputUnknownOutput(
-    Operation& operation, const LogicalTensorPtr& input, const LogicalTensorPtr& output, MemoryType inputOriginal)
+Status AssignMemoryType::InferViewKnownInputUnknownOutput(Operation& operation, const LogicalTensorPtr& input,
+                                                          const LogicalTensorPtr& output, MemoryType inputOriginal)
 {
     if (inputOriginal == MemoryType::MEM_L0C)
         return SUCCESS;
@@ -605,20 +593,18 @@ Status AssignMemoryType::InferViewKnownInputUnknownOutput(
     ForceSetRequirement(input, operation, inputOriginal, "InferViewReuseInputOriginal");
     auto viewOpAttribute = std::dynamic_pointer_cast<ViewOpAttribute>(operation.GetOpAttribute());
     if (viewOpAttribute == nullptr) {
-        APASS_LOG_ERROR_F(
-            Elements::Operation, "Infer OP_VIEW[%d] memory type failed because view attr is null.",
-            operation.GetOpMagic());
+        APASS_LOG_ERROR_F(Elements::Operation, "Infer OP_VIEW[%d] memory type failed because view attr is null.",
+                          operation.GetOpMagic());
         return FAILED;
     }
     viewOpAttribute->SetToType(inputOriginal);
-    APASS_LOG_DEBUG_F(
-        Elements::Operation, "Infer OP_VIEW[%d] reuse %s for output tensor[%d].", operation.GetOpMagic(),
-        BriefMemoryTypeToString(inputOriginal).c_str(), output->GetMagic());
+    APASS_LOG_DEBUG_F(Elements::Operation, "Infer OP_VIEW[%d] reuse %s for output tensor[%d].", operation.GetOpMagic(),
+                      BriefMemoryTypeToString(inputOriginal).c_str(), output->GetMagic());
     return SUCCESS;
 }
 
-bool AssignMemoryType::TryHandleUnalignedView(
-    Operation& operation, const LogicalTensorPtr& input, MemoryType inputOriginal, MemoryType outputOriginal)
+bool AssignMemoryType::TryHandleUnalignedView(Operation& operation, const LogicalTensorPtr& input,
+                                              MemoryType inputOriginal, MemoryType outputOriginal)
 {
     if (inputOriginal == MemoryType::MEM_UNKNOWN || IsViewFromOffsetAligned(operation))
         return false;
@@ -634,12 +620,11 @@ bool AssignMemoryType::TryHandleUnalignedView(
     return true;
 }
 
-bool AssignMemoryType::TryHandleSpecialDirectMemoryPath(
-    Operation& operation, MemoryType from, MemoryType to, bool& directPath)
+bool AssignMemoryType::TryHandleSpecialDirectMemoryPath(Operation& operation, MemoryType from, MemoryType to,
+                                                        bool& directPath)
 {
     LogicalTensorPtr input = operation.iOperand.empty() ? nullptr : operation.iOperand.front();
-    if (MemoryPathUtils::IsSpecialDirectMemoryPath(from, to) &&
-        HasParallelDifferentConsumerRequirement(input, to)) {
+    if (MemoryPathUtils::IsSpecialDirectMemoryPath(from, to) && HasParallelDifferentConsumerRequirement(input, to)) {
         directPath = false;
         APASS_LOG_DEBUG_F(
             Elements::Operation,
@@ -675,8 +660,8 @@ bool AssignMemoryType::IsAdvancedMemoryPath(MemoryType from, MemoryType to) cons
                     (from == MemoryType::MEM_UB && to == MemoryType::MEM_L1));
 }
 
-bool AssignMemoryType::HasParallelDifferentConsumerRequirement(
-    const LogicalTensorPtr& tensor, MemoryType targetType) const
+bool AssignMemoryType::HasParallelDifferentConsumerRequirement(const LogicalTensorPtr& tensor,
+                                                               MemoryType targetType) const
 {
     if (tensor == nullptr || tensor->GetConsumers().size() <= 1) {
         return false;
@@ -768,8 +753,8 @@ bool AssignMemoryType::HasTransDataConsumer(const LogicalTensorPtr& tensor) cons
     return false;
 }
 
-bool AssignMemoryType::HasPermuteProducerAndTransDataDownstream(
-    const LogicalTensorPtr& input, const LogicalTensorPtr& output) const
+bool AssignMemoryType::HasPermuteProducerAndTransDataDownstream(const LogicalTensorPtr& input,
+                                                                const LogicalTensorPtr& output) const
 {
     bool hasPermuteProducer = false;
     for (const auto& producerOp : input->GetProducers()) {
@@ -811,17 +796,16 @@ Status AssignMemoryType::AssignAssembleToOutCastRequirement(Operation& operation
     if (operation.GetOpcode() != Opcode::OP_ASSEMBLE)
         return SUCCESS;
     if (operation.iOperand.empty() || operation.oOperand.empty()) {
-        APASS_LOG_ERROR_F(
-            Elements::Operation, "Handle OP_ASSEMBLE[%d] to outcast failed because operand is empty.",
-            operation.GetOpMagic());
+        APASS_LOG_ERROR_F(Elements::Operation, "Handle OP_ASSEMBLE[%d] to outcast failed because operand is empty.",
+                          operation.GetOpMagic());
         return FAILED;
     }
     auto input = operation.iOperand.front();
     auto output = operation.oOperand.front();
     if (input == nullptr || output == nullptr) {
-        APASS_LOG_ERROR_F(
-            Elements::Operation, "Handle OP_ASSEMBLE[%d] to outcast failed because operand tensor is null.",
-            operation.GetOpMagic());
+        APASS_LOG_ERROR_F(Elements::Operation,
+                          "Handle OP_ASSEMBLE[%d] to outcast failed because operand tensor is null.",
+                          operation.GetOpMagic());
         return FAILED;
     }
     MemoryType inputOriginal = input->GetMemoryTypeOriginal();
@@ -829,9 +813,9 @@ Status AssignMemoryType::AssignAssembleToOutCastRequirement(Operation& operation
     ForceSetOriginal(output, MemoryType::MEM_DEVICE_DDR, "AssignAssembleToOutCastRequirement");
     auto assembleOpAttribute = std::dynamic_pointer_cast<AssembleOpAttribute>(operation.GetOpAttribute());
     if (assembleOpAttribute == nullptr) {
-        APASS_LOG_ERROR_F(
-            Elements::Operation, "Handle OP_ASSEMBLE[%d] to outcast failed because assemble attr is null.",
-            operation.GetOpMagic());
+        APASS_LOG_ERROR_F(Elements::Operation,
+                          "Handle OP_ASSEMBLE[%d] to outcast failed because assemble attr is null.",
+                          operation.GetOpMagic());
         return FAILED;
     }
     if (inputOriginal != MemoryType::MEM_UNKNOWN) {
@@ -840,14 +824,13 @@ Status AssignMemoryType::AssignAssembleToOutCastRequirement(Operation& operation
     return SUCCESS;
 }
 
-Status AssignMemoryType::InferAssembleMemoryType(
-    Function& function, Operation& operation, std::unordered_set<LogicalTensorPtr>& inferredAssembleOutputs)
+Status AssignMemoryType::InferAssembleMemoryType(Function& function, Operation& operation,
+                                                 std::unordered_set<LogicalTensorPtr>& inferredAssembleOutputs)
 {
     if (operation.GetOpcode() != Opcode::OP_ASSEMBLE)
         return SUCCESS;
-    if (!operation.oOperand.empty() &&
-        std::find(function.outCasts_.begin(), function.outCasts_.end(), operation.oOperand.front()) !=
-            function.outCasts_.end()) {
+    if (!operation.oOperand.empty() && std::find(function.outCasts_.begin(), function.outCasts_.end(),
+                                                 operation.oOperand.front()) != function.outCasts_.end()) {
         return AssignAssembleToOutCastRequirement(operation);
     }
     if (!operation.oOperand.empty() && operation.oOperand.front() != nullptr &&
@@ -862,15 +845,14 @@ Status AssignMemoryType::InferAssembleMemoryType(Operation& operation)
     if (operation.GetOpcode() != Opcode::OP_ASSEMBLE)
         return SUCCESS;
     if (operation.iOperand.empty() || operation.oOperand.empty()) {
-        APASS_LOG_ERROR_F(
-            Elements::Operation, "Infer OP_ASSEMBLE[%d] memory type failed because operand is empty.",
-            operation.GetOpMagic());
+        APASS_LOG_ERROR_F(Elements::Operation, "Infer OP_ASSEMBLE[%d] memory type failed because operand is empty.",
+                          operation.GetOpMagic());
         return FAILED;
     }
     if (std::dynamic_pointer_cast<AssembleOpAttribute>(operation.GetOpAttribute()) == nullptr) {
-        APASS_LOG_ERROR_F(
-            Elements::Operation, "Infer OP_ASSEMBLE[%d] memory type failed because assemble attr is null.",
-            operation.GetOpMagic());
+        APASS_LOG_ERROR_F(Elements::Operation,
+                          "Infer OP_ASSEMBLE[%d] memory type failed because assemble attr is null.",
+                          operation.GetOpMagic());
         return FAILED;
     }
     return InferAssembleOutputMemoryType(operation.oOperand.front());
@@ -883,8 +865,8 @@ Status AssignMemoryType::InferAssembleOutputMemoryType(const LogicalTensorPtr& o
         return FAILED;
     }
     if (HasAssembleInputOutputElementCountMismatch(output)) {
-        RETURN_IF_NOT_SUCCESS(ApplyAssembleDdrOutputWithInputOriginals(
-            output, "InferAssembleElementCountMismatch", "InferAssembleElementCountMismatchFillInput"));
+        RETURN_IF_NOT_SUCCESS(ApplyAssembleDdrOutputWithInputOriginals(output, "InferAssembleElementCountMismatch",
+                                                                       "InferAssembleElementCountMismatchFillInput"));
         return SUCCESS;
     }
     MemoryType tempOriginal = InferAssembleTempOriginal(output);
@@ -921,8 +903,8 @@ bool AssignMemoryType::HasAssembleInputOutputElementCountMismatch(const LogicalT
     return true;
 }
 
-Status AssignMemoryType::TryInferAssembleOutputByTempOriginal(
-    const LogicalTensorPtr& output, MemoryType tempOriginal, bool& handled)
+Status AssignMemoryType::TryInferAssembleOutputByTempOriginal(const LogicalTensorPtr& output, MemoryType tempOriginal,
+                                                              bool& handled)
 {
     handled = tempOriginal != MemoryType::MEM_UNKNOWN;
     if (!handled)
@@ -936,8 +918,8 @@ Status AssignMemoryType::TryInferAssembleOutputByTempOriginal(
         RETURN_IF_NOT_SUCCESS(ApplyAssembleDirectOutputOriginal(output, tempOriginal));
         return SUCCESS;
     }
-    RETURN_IF_NOT_SUCCESS(ApplyAssembleDdrOutputWithInputOriginals(
-        output, "InferAssembleUnsupportedPath", "InferAssembleFallbackFillInput"));
+    RETURN_IF_NOT_SUCCESS(ApplyAssembleDdrOutputWithInputOriginals(output, "InferAssembleUnsupportedPath",
+                                                                   "InferAssembleFallbackFillInput"));
     return SUCCESS;
 }
 
@@ -981,32 +963,32 @@ Status AssignMemoryType::ApplyAssembleDirectOutputOriginal(const LogicalTensorPt
     for (auto& producerOp : output->GetProducers()) {
         if (!IsAssembleProducer(producerOp))
             continue;
-        RETURN_IF_NOT_SUCCESS(SyncAssembleInputRequirementAndAttr(
-            *producerOp, MemoryType::MEM_UNKNOWN, "InferAssembleFillInputRequirement"));
+        RETURN_IF_NOT_SUCCESS(SyncAssembleInputRequirementAndAttr(*producerOp, MemoryType::MEM_UNKNOWN,
+                                                                  "InferAssembleFillInputRequirement"));
     }
     return SUCCESS;
 }
 
-Status AssignMemoryType::SyncAssembleInputRequirementAndAttr(
-    Operation& operation, MemoryType fallbackType, const std::string& reason)
+Status AssignMemoryType::SyncAssembleInputRequirementAndAttr(Operation& operation, MemoryType fallbackType,
+                                                             const std::string& reason)
 {
     auto input = operation.iOperand.front();
     if (input == nullptr) {
-        APASS_LOG_ERROR_F(
-            Elements::Operation, "Infer OP_ASSEMBLE[%d] failed because input tensor is null.", operation.GetOpMagic());
+        APASS_LOG_ERROR_F(Elements::Operation, "Infer OP_ASSEMBLE[%d] failed because input tensor is null.",
+                          operation.GetOpMagic());
         return FAILED;
     }
     MemoryType fromType = inserter.GetRequirementOrUnknown(input, operation);
-    MemoryType resolvedFallback =
-        fallbackType == MemoryType::MEM_UNKNOWN ? input->GetMemoryTypeOriginal() : fallbackType;
+    MemoryType resolvedFallback = fallbackType == MemoryType::MEM_UNKNOWN ? input->GetMemoryTypeOriginal() :
+                                                                            fallbackType;
     if (fromType == MemoryType::MEM_UNKNOWN && resolvedFallback != MemoryType::MEM_UNKNOWN) {
         fromType = resolvedFallback;
         ForceSetRequirement(input, operation, fromType, reason);
     }
     auto assembleOpAttribute = std::dynamic_pointer_cast<AssembleOpAttribute>(operation.GetOpAttribute());
     if (assembleOpAttribute == nullptr) {
-        APASS_LOG_ERROR_F(
-            Elements::Operation, "Infer OP_ASSEMBLE[%d] failed because assemble attr is null.", operation.GetOpMagic());
+        APASS_LOG_ERROR_F(Elements::Operation, "Infer OP_ASSEMBLE[%d] failed because assemble attr is null.",
+                          operation.GetOpMagic());
         return FAILED;
     }
     if (fromType != MemoryType::MEM_UNKNOWN) {
@@ -1015,15 +997,16 @@ Status AssignMemoryType::SyncAssembleInputRequirementAndAttr(
     return SUCCESS;
 }
 
-Status AssignMemoryType::ApplyAssembleDdrOutputWithInputOriginals(
-    const LogicalTensorPtr& output, const std::string& originalReason, const std::string& inputReason)
+Status AssignMemoryType::ApplyAssembleDdrOutputWithInputOriginals(const LogicalTensorPtr& output,
+                                                                  const std::string& originalReason,
+                                                                  const std::string& inputReason)
 {
     ForceSetOriginal(output, MemoryType::MEM_DEVICE_DDR, originalReason);
     return FillAssembleInputRequirementsFromOriginal(output, inputReason);
 }
 
-Status AssignMemoryType::FillAssembleInputRequirementsFromOriginal(
-    const LogicalTensorPtr& output, const std::string& reason)
+Status AssignMemoryType::FillAssembleInputRequirementsFromOriginal(const LogicalTensorPtr& output,
+                                                                   const std::string& reason)
 {
     for (auto& producerOp : output->GetProducers()) {
         if (!IsAssembleProducer(producerOp))
@@ -1080,9 +1063,8 @@ Status AssignMemoryType::ApplyAssembleProducerCandidate(const LogicalTensorPtr& 
         RETURN_IF_NOT_SUCCESS(
             SyncAssembleInputRequirementAndAttr(*producerOp, producerCandidate, "InferAssembleProducerCandidate"));
     }
-    APASS_LOG_DEBUG_F(
-        Elements::Tensor, "Infer assemble output tensor[%d] original as %s by producer candidate.", output->GetMagic(),
-        BriefMemoryTypeToString(producerCandidate).c_str());
+    APASS_LOG_DEBUG_F(Elements::Tensor, "Infer assemble output tensor[%d] original as %s by producer candidate.",
+                      output->GetMagic(), BriefMemoryTypeToString(producerCandidate).c_str());
     return SUCCESS;
 }
 
@@ -1162,8 +1144,8 @@ bool AssignMemoryType::FitsAssembleOutputMemoryLimit(const LogicalTensorPtr& out
         return static_cast<size_t>(output->GetDataSize()) <= ubThreshold;
     }
     if (memoryType == MemoryType::MEM_L1) {
-        const size_t l1Threshold =
-            static_cast<size_t>(Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_L1) * L1_THRESHOLD);
+        const size_t l1Threshold = static_cast<size_t>(
+            Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_L1) * L1_THRESHOLD);
         return static_cast<size_t>(output->GetDataSize()) <= l1Threshold;
     }
     return true;
@@ -1174,8 +1156,8 @@ Status AssignMemoryType::InferReshapeMemoryType(Operation& operation)
     LogicalTensorPtr input;
     LogicalTensorPtr output;
     bool shouldHandle = false;
-    RETURN_IF_NOT_SUCCESS(GetFirstInputOutputIfOpcode(
-        operation, Opcode::OP_RESHAPE, "Infer OP_RESHAPE memory type", input, output, shouldHandle));
+    RETURN_IF_NOT_SUCCESS(GetFirstInputOutputIfOpcode(operation, Opcode::OP_RESHAPE, "Infer OP_RESHAPE memory type",
+                                                      input, output, shouldHandle));
     if (!shouldHandle) {
         return SUCCESS;
     }
@@ -1191,8 +1173,8 @@ Status AssignMemoryType::InferReshapeMemoryType(Operation& operation)
     return ApplyReshapeMemoryType(operation, input, output, isDynamic, canUseUb);
 }
 
-MemoryType AssignMemoryType::GetReshapeInputRequirement(
-    Operation& operation, const LogicalTensorPtr& input, MemoryType inputOriginal)
+MemoryType AssignMemoryType::GetReshapeInputRequirement(Operation& operation, const LogicalTensorPtr& input,
+                                                        MemoryType inputOriginal)
 {
     MemoryType inputRequirement = inserter.GetRequirementOrUnknown(input, operation);
     if (inputRequirement != MemoryType::MEM_UNKNOWN || inputOriginal == MemoryType::MEM_UNKNOWN) {
@@ -1297,9 +1279,8 @@ bool AssignMemoryType::HasRequirementThroughViewConsumers(
     return false;
 }
 
-bool AssignMemoryType::CanUseUbForReshape(
-    const LogicalTensorPtr& input, const LogicalTensorPtr& output, MemoryType inputRequirement,
-    MemoryType outputOriginal) const
+bool AssignMemoryType::CanUseUbForReshape(const LogicalTensorPtr& input, const LogicalTensorPtr& output,
+                                          MemoryType inputRequirement, MemoryType outputOriginal) const
 {
     if (inputRequirement != outputOriginal) {
         return false;
@@ -1307,8 +1288,8 @@ bool AssignMemoryType::CanUseUbForReshape(
     return inputRequirement == MemoryType::MEM_UB && FitsTensorInUb(input) && FitsTensorInUb(output);
 }
 
-Status AssignMemoryType::ApplyReshapeMemoryType(
-    Operation& operation, const LogicalTensorPtr& input, const LogicalTensorPtr& output, bool isDynamic, bool canUseUb)
+Status AssignMemoryType::ApplyReshapeMemoryType(Operation& operation, const LogicalTensorPtr& input,
+                                                const LogicalTensorPtr& output, bool isDynamic, bool canUseUb)
 {
     if (canUseUb) {
         const char* reason = isDynamic ? "InferDynamicReshapeUb" : "InferStaticReshapeUb";
@@ -1327,19 +1308,20 @@ Status AssignMemoryType::InferViewTypeMemoryType(Operation& operation)
     LogicalTensorPtr input;
     LogicalTensorPtr output;
     bool shouldHandle = false;
-    RETURN_IF_NOT_SUCCESS(GetFirstInputOutputIfOpcode(
-        operation, Opcode::OP_VIEW_TYPE, "Infer OP_VIEW_TYPE memory type", input, output, shouldHandle));
+    RETURN_IF_NOT_SUCCESS(GetFirstInputOutputIfOpcode(operation, Opcode::OP_VIEW_TYPE, "Infer OP_VIEW_TYPE memory type",
+                                                      input, output, shouldHandle));
     if (!shouldHandle) {
         return SUCCESS;
     }
     MemoryType outputOriginal = output->GetMemoryTypeOriginal();
-    MemoryType outputRequirement =
-        output == nullptr ? MemoryType::MEM_UNKNOWN : inserter.TryGetUniqueKnownRequiredType(output);
+    MemoryType outputRequirement = output == nullptr ? MemoryType::MEM_UNKNOWN :
+                                                       inserter.TryGetUniqueKnownRequiredType(output);
     // 输出 toBeMap 未知时，沿后续未推导的视图链向前查找有效内存类型
     if (outputRequirement == MemoryType::MEM_UNKNOWN) {
         MemoryType forwarded = InferTargetTypeThroughForwardViews(output);
         if (forwarded != MemoryType::MEM_UNKNOWN) {
-            APASS_LOG_DEBUG_F(Elements::Operation,
+            APASS_LOG_DEBUG_F(
+                Elements::Operation,
                 "Infer OP_VIEW_TYPE[%d] memory type reused from forward view requirement %s for output tensor[%d].",
                 operation.GetOpMagic(), BriefMemoryTypeToString(forwarded).c_str(), output->GetMagic());
             outputRequirement = forwarded;
@@ -1354,9 +1336,9 @@ Status AssignMemoryType::InferViewTypeMemoryType(Operation& operation)
     return InferViewTypeInput(operation, input, output, targetType);
 }
 
-Status AssignMemoryType::TryInferViewTypeFromProducerView(
-    Operation& operation, const LogicalTensorPtr& input, const LogicalTensorPtr& output, MemoryType targetType,
-    bool& handled)
+Status AssignMemoryType::TryInferViewTypeFromProducerView(Operation& operation, const LogicalTensorPtr& input,
+                                                          const LogicalTensorPtr& output, MemoryType targetType,
+                                                          bool& handled)
 {
     handled = false;
     auto& producers = input->GetProducers();
@@ -1369,10 +1351,9 @@ Status AssignMemoryType::TryInferViewTypeFromProducerView(
     }
     handled = true;
     if (producer->iOperand.empty()) {
-        APASS_LOG_ERROR_F(
-            Elements::Operation,
-            "Infer OP_VIEW_TYPE[%d] memory type failed because producer OP_VIEW[%d] input is empty.",
-            operation.GetOpMagic(), producer->GetOpMagic());
+        APASS_LOG_ERROR_F(Elements::Operation,
+                          "Infer OP_VIEW_TYPE[%d] memory type failed because producer OP_VIEW[%d] input is empty.",
+                          operation.GetOpMagic(), producer->GetOpMagic());
         return FAILED;
     }
     auto viewInput = producer->iOperand.front();
@@ -1391,8 +1372,8 @@ Status AssignMemoryType::TryInferViewTypeFromProducerView(
     return SUCCESS;
 }
 
-Status AssignMemoryType::InferViewTypeInput(
-    Operation& operation, const LogicalTensorPtr& input, const LogicalTensorPtr& output, MemoryType targetType)
+Status AssignMemoryType::InferViewTypeInput(Operation& operation, const LogicalTensorPtr& input,
+                                            const LogicalTensorPtr& output, MemoryType targetType)
 {
     MemoryType inputOriginal = input->GetMemoryTypeOriginal();
     if (targetType != MemoryType::MEM_UNKNOWN && inputOriginal == targetType) {
@@ -1440,8 +1421,8 @@ MemoryType AssignMemoryType::InferTargetTypeThroughForwardViews(
     return InferTargetTypeThroughForwardViews(viewOutput, visitedTensors);
 }
 
-bool AssignMemoryType::KeepSplitReshapeUb(
-    Operation& operation, const LogicalTensorPtr& input, const LogicalTensorPtr& output)
+bool AssignMemoryType::KeepSplitReshapeUb(Operation& operation, const LogicalTensorPtr& input,
+                                          const LogicalTensorPtr& output)
 {
     if (input == nullptr || output == nullptr) {
         return false;
@@ -1453,8 +1434,8 @@ bool AssignMemoryType::KeepSplitReshapeUb(
     }
     Operation* producer = *producers.begin();
     Operation* consumer = *consumers.begin();
-    const size_t ubThreshold =
-        static_cast<size_t>(Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB) * UB_THRESHOLD_ASSEMBLE);
+    const size_t ubThreshold = static_cast<size_t>(Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB) *
+                                                   UB_THRESHOLD_ASSEMBLE);
     int64_t inputDataSize = input->GetDataSize();
     if (producer != nullptr && consumer != nullptr && producer->GetOpcode() == Opcode::OP_ASSEMBLE &&
         consumer->GetOpcode() == Opcode::OP_VIEW && input->GetMemoryTypeOriginal() == MemoryType::MEM_UB &&
@@ -1494,8 +1475,8 @@ bool AssignMemoryType::FitsTensorInUb(const LogicalTensorPtr& tensor) const
     if (tensor == nullptr) {
         return false;
     }
-    const size_t ubThreshold =
-        static_cast<size_t>(Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB) * UB_THRESHOLD_NORMAL);
+    const size_t ubThreshold = static_cast<size_t>(Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB) *
+                                                   UB_THRESHOLD_NORMAL);
     int64_t dataSize = tensor->GetDataSize();
     return dataSize >= 0 && static_cast<size_t>(dataSize) <= ubThreshold;
 }
@@ -1513,8 +1494,8 @@ Status AssignMemoryType::HandleNopMemoryType(Operation& operation)
     LogicalTensorPtr input;
     LogicalTensorPtr output;
     bool shouldHandle = false;
-    RETURN_IF_NOT_SUCCESS(GetFirstInputOutputIfOpcode(
-        operation, Opcode::OP_NOP, "Handle OP_NOP memory type", input, output, shouldHandle));
+    RETURN_IF_NOT_SUCCESS(GetFirstInputOutputIfOpcode(operation, Opcode::OP_NOP, "Handle OP_NOP memory type", input,
+                                                      output, shouldHandle));
     if (!shouldHandle) {
         return SUCCESS;
     }
@@ -1533,15 +1514,14 @@ Status AssignMemoryType::HandleNopMemoryType(Operation& operation)
 
 Status AssignMemoryType::ApplyOversizedLocalBufferFallback(Function& function)
 {
-    const size_t ubAssembleThreshold =
-        static_cast<size_t>(Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB) * UB_THRESHOLD_ASSEMBLE);
-    const size_t ubNormalThreshold =
-        static_cast<size_t>(Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB) * UB_THRESHOLD_NORMAL);
-    const size_t l1Threshold =
-        static_cast<size_t>(Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_L1) * L1_THRESHOLD);
-    APASS_LOG_INFO_F(
-        Elements::Function, "Memory threshold: UB assemble %zu, UB normal %zu, L1 %zu.", ubAssembleThreshold,
-        ubNormalThreshold, l1Threshold);
+    const size_t ubAssembleThreshold = static_cast<size_t>(
+        Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB) * UB_THRESHOLD_ASSEMBLE);
+    const size_t ubNormalThreshold = static_cast<size_t>(
+        Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB) * UB_THRESHOLD_NORMAL);
+    const size_t l1Threshold = static_cast<size_t>(Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_L1) *
+                                                   L1_THRESHOLD);
+    APASS_LOG_INFO_F(Elements::Function, "Memory threshold: UB assemble %zu, UB normal %zu, L1 %zu.",
+                     ubAssembleThreshold, ubNormalThreshold, l1Threshold);
     for (auto& op : function.Operations()) {
         RETURN_IF_NOT_SUCCESS(ApplyOversizedLocalBufferFallback(op));
     }
@@ -1554,16 +1534,16 @@ Status AssignMemoryType::ApplyOversizedLocalBufferFallback(Operation& operation)
         return SUCCESS;
     }
     if (operation.oOperand.empty()) {
-        APASS_LOG_ERROR_F(
-            Elements::Operation, "Apply oversized fallback for %s[%d] failed because output operand is empty.",
-            operation.GetOpcodeStr().c_str(), operation.GetOpMagic());
+        APASS_LOG_ERROR_F(Elements::Operation,
+                          "Apply oversized fallback for %s[%d] failed because output operand is empty.",
+                          operation.GetOpcodeStr().c_str(), operation.GetOpMagic());
         return FAILED;
     }
     auto output = operation.oOperand.front();
     if (output == nullptr) {
-        APASS_LOG_ERROR_F(
-            Elements::Operation, "Apply oversized fallback for %s[%d] failed because output tensor is null.",
-            operation.GetOpcodeStr().c_str(), operation.GetOpMagic());
+        APASS_LOG_ERROR_F(Elements::Operation,
+                          "Apply oversized fallback for %s[%d] failed because output tensor is null.",
+                          operation.GetOpcodeStr().c_str(), operation.GetOpMagic());
         return FAILED;
     }
     bool isAssemble = operation.GetOpcode() == Opcode::OP_ASSEMBLE;
@@ -1572,9 +1552,8 @@ Status AssignMemoryType::ApplyOversizedLocalBufferFallback(Operation& operation)
         return SUCCESS;
     }
     ForceSetOriginal(output, MemoryType::MEM_DEVICE_DDR, "ApplyOversizedLocalBufferFallback");
-    APASS_LOG_DEBUG_F(
-        Elements::Operation, "Force %s[%d] output tensor[%d] to DDR by size limit.", operation.GetOpcodeStr().c_str(),
-        operation.GetOpMagic(), output->GetMagic());
+    APASS_LOG_DEBUG_F(Elements::Operation, "Force %s[%d] output tensor[%d] to DDR by size limit.",
+                      operation.GetOpcodeStr().c_str(), operation.GetOpMagic(), output->GetMagic());
     if (operation.GetOpcode() == Opcode::OP_VIEW) {
         RETURN_IF_NOT_SUCCESS(DowngradeOversizedViewInputRequirement(operation));
         auto viewAttr = std::dynamic_pointer_cast<ViewOpAttribute>(operation.GetOpAttribute());
@@ -1585,18 +1564,18 @@ Status AssignMemoryType::ApplyOversizedLocalBufferFallback(Operation& operation)
     return SUCCESS;
 }
 
-bool AssignMemoryType::IsOversizedLocalBuffer(
-    const LogicalTensorPtr& tensor, MemoryType memoryType, bool useAssembleUbLimit, bool allowL1Fallback) const
+bool AssignMemoryType::IsOversizedLocalBuffer(const LogicalTensorPtr& tensor, MemoryType memoryType,
+                                              bool useAssembleUbLimit, bool allowL1Fallback) const
 {
     if (memoryType == MemoryType::MEM_UB) {
         double ubLimitRatio = useAssembleUbLimit ? UB_THRESHOLD_ASSEMBLE : UB_THRESHOLD_NORMAL;
-        size_t threshold =
-            static_cast<size_t>(Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB) * ubLimitRatio);
+        size_t threshold = static_cast<size_t>(Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB) *
+                                               ubLimitRatio);
         return ExceedsMemoryLimit(tensor, threshold);
     }
     if (memoryType == MemoryType::MEM_L1 && allowL1Fallback) {
-        size_t threshold =
-            static_cast<size_t>(Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_L1) * L1_THRESHOLD);
+        size_t threshold = static_cast<size_t>(Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_L1) *
+                                               L1_THRESHOLD);
         return ExceedsMemoryLimit(tensor, threshold);
     }
     return false;
@@ -1605,9 +1584,9 @@ bool AssignMemoryType::IsOversizedLocalBuffer(
 Status AssignMemoryType::DowngradeOversizedViewInputRequirement(Operation& operation)
 {
     if (operation.iOperand.empty() || operation.iOperand.front() == nullptr) {
-        APASS_LOG_ERROR_F(
-            Elements::Operation, "Apply oversized fallback for OP_VIEW[%d] failed because of invalid input operand.",
-            operation.GetOpMagic());
+        APASS_LOG_ERROR_F(Elements::Operation,
+                          "Apply oversized fallback for OP_VIEW[%d] failed because of invalid input operand.",
+                          operation.GetOpMagic());
         return FAILED;
     }
     auto input = operation.iOperand.front();
@@ -1616,9 +1595,8 @@ Status AssignMemoryType::DowngradeOversizedViewInputRequirement(Operation& opera
         return SUCCESS;
     }
     ForceSetRequirement(input, operation, MemoryType::MEM_DEVICE_DDR, "ApplyOversizedViewInputFallback");
-    APASS_LOG_DEBUG_F(
-        Elements::Operation, "Force OP_VIEW[%d] input tensor[%d] requirement to DDR by size limit.",
-        operation.GetOpMagic(), input->GetMagic());
+    APASS_LOG_DEBUG_F(Elements::Operation, "Force OP_VIEW[%d] input tensor[%d] requirement to DDR by size limit.",
+                      operation.GetOpMagic(), input->GetMagic());
     return SUCCESS;
 }
 
@@ -1698,22 +1676,20 @@ Status AssignMemoryType::SyncViewMemoryAttr(Operation& operation)
         return SUCCESS;
     }
     if (operation.oOperand.empty()) {
-        APASS_LOG_ERROR_F(
-            Elements::Operation, "Sync OP_VIEW[%d] toAttr failed because output operand is empty.",
-            operation.GetOpMagic());
+        APASS_LOG_ERROR_F(Elements::Operation, "Sync OP_VIEW[%d] toAttr failed because output operand is empty.",
+                          operation.GetOpMagic());
         return FAILED;
     }
     auto viewOpAttribute = std::dynamic_pointer_cast<ViewOpAttribute>(operation.GetOpAttribute());
     if (viewOpAttribute == nullptr) {
-        APASS_LOG_ERROR_F(
-            Elements::Operation, "Sync OP_VIEW[%d] toAttr failed because view attr is null.", operation.GetOpMagic());
+        APASS_LOG_ERROR_F(Elements::Operation, "Sync OP_VIEW[%d] toAttr failed because view attr is null.",
+                          operation.GetOpMagic());
         return FAILED;
     }
     auto output = operation.oOperand.front();
     if (output == nullptr) {
-        APASS_LOG_ERROR_F(
-            Elements::Operation, "Sync OP_VIEW[%d] toAttr failed because output tensor is null.",
-            operation.GetOpMagic());
+        APASS_LOG_ERROR_F(Elements::Operation, "Sync OP_VIEW[%d] toAttr failed because output tensor is null.",
+                          operation.GetOpMagic());
         return FAILED;
     }
     MemoryType toType = output->GetMemoryTypeOriginal();
@@ -1730,23 +1706,20 @@ Status AssignMemoryType::SyncAssembleMemoryAttr(Operation& operation)
         return SUCCESS;
     }
     if (operation.iOperand.empty()) {
-        APASS_LOG_ERROR_F(
-            Elements::Operation, "Sync OP_ASSEMBLE[%d] fromAttr failed because input operand is empty.",
-            operation.GetOpMagic());
+        APASS_LOG_ERROR_F(Elements::Operation, "Sync OP_ASSEMBLE[%d] fromAttr failed because input operand is empty.",
+                          operation.GetOpMagic());
         return FAILED;
     }
     auto assembleOpAttribute = std::dynamic_pointer_cast<AssembleOpAttribute>(operation.GetOpAttribute());
     if (assembleOpAttribute == nullptr) {
-        APASS_LOG_ERROR_F(
-            Elements::Operation, "Sync OP_ASSEMBLE[%d] fromAttr failed because assemble attr is null.",
-            operation.GetOpMagic());
+        APASS_LOG_ERROR_F(Elements::Operation, "Sync OP_ASSEMBLE[%d] fromAttr failed because assemble attr is null.",
+                          operation.GetOpMagic());
         return FAILED;
     }
     auto input = operation.iOperand.front();
     if (input == nullptr) {
-        APASS_LOG_ERROR_F(
-            Elements::Operation, "Sync OP_ASSEMBLE[%d] fromAttr failed because input tensor is null.",
-            operation.GetOpMagic());
+        APASS_LOG_ERROR_F(Elements::Operation, "Sync OP_ASSEMBLE[%d] fromAttr failed because input tensor is null.",
+                          operation.GetOpMagic());
         return FAILED;
     }
     MemoryType fromType = inserter.GetRequirementOrUnknown(input, operation);
@@ -1797,13 +1770,13 @@ Status AssignMemoryType::SyncTensorToBe(Function& function)
     return SUCCESS;
 }
 
-Status AssignMemoryType::SetOriginalChecked(
-    const LogicalTensorPtr& tensor, MemoryType memoryType, const std::string& reason, bool allowOverride)
+Status AssignMemoryType::SetOriginalChecked(const LogicalTensorPtr& tensor, MemoryType memoryType,
+                                            const std::string& reason, bool allowOverride)
 {
     std::string context = reason.empty() ? "unknown" : reason;
     if (tensor == nullptr) {
-        APASS_LOG_ERROR_F(
-            Elements::Tensor, "SetOriginalChecked failed because tensor is null, reason: %s.", context.c_str());
+        APASS_LOG_ERROR_F(Elements::Tensor, "SetOriginalChecked failed because tensor is null, reason: %s.",
+                          context.c_str());
         return FAILED;
     }
     if (memoryType == MemoryType::MEM_UNKNOWN) {
@@ -1822,32 +1795,30 @@ Status AssignMemoryType::SetOriginalChecked(
     return SUCCESS;
 }
 
-void AssignMemoryType::ForceSetOriginal(
-    const LogicalTensorPtr& tensor, MemoryType memoryType, const std::string& reason)
+void AssignMemoryType::ForceSetOriginal(const LogicalTensorPtr& tensor, MemoryType memoryType,
+                                        const std::string& reason)
 {
     if (tensor != nullptr && memoryType != MemoryType::MEM_UNKNOWN) {
-        APASS_LOG_DEBUG_F(
-            Elements::Tensor, "Force tensor[%d] original as %s, reason %s.", tensor->GetMagic(),
-            BriefMemoryTypeToString(memoryType).c_str(), reason.c_str());
+        APASS_LOG_DEBUG_F(Elements::Tensor, "Force tensor[%d] original as %s, reason %s.", tensor->GetMagic(),
+                          BriefMemoryTypeToString(memoryType).c_str(), reason.c_str());
     }
     SetOriginalChecked(tensor, memoryType, reason, true);
 }
 
-Status AssignMemoryType::SetRequirementChecked(
-    const LogicalTensorPtr& tensor, Operation& operation, MemoryType memoryType, const std::string& reason,
-    bool allowOverride)
+Status AssignMemoryType::SetRequirementChecked(const LogicalTensorPtr& tensor, Operation& operation,
+                                               MemoryType memoryType, const std::string& reason, bool allowOverride)
 {
     std::string context = reason.empty() ? "unknown" : reason;
     if (tensor == nullptr) {
-        APASS_LOG_ERROR_F(
-            Elements::Tensor, "SetRequirementChecked failed because tensor is null for operation %s[%d], reason: %s.",
-            operation.GetOpcodeStr().c_str(), operation.GetOpMagic(), context.c_str());
+        APASS_LOG_ERROR_F(Elements::Tensor,
+                          "SetRequirementChecked failed because tensor is null for operation %s[%d], reason: %s.",
+                          operation.GetOpcodeStr().c_str(), operation.GetOpMagic(), context.c_str());
         return FAILED;
     }
     if (!tensor->HasConsumer(operation)) {
-        APASS_LOG_ERROR_F(
-            Elements::Tensor, "Operation %s[%d] is not a consumer of tensor %d, reason: %s.",
-            operation.GetOpcodeStr().c_str(), operation.GetOpMagic(), tensor->GetMagic(), context.c_str());
+        APASS_LOG_ERROR_F(Elements::Tensor, "Operation %s[%d] is not a consumer of tensor %d, reason: %s.",
+                          operation.GetOpcodeStr().c_str(), operation.GetOpMagic(), tensor->GetMagic(),
+                          context.c_str());
         return FAILED;
     }
     bool hasRequirement = inserter.HasRequirement(tensor, operation);
@@ -1869,20 +1840,19 @@ Status AssignMemoryType::SetRequirementChecked(
     return SUCCESS;
 }
 
-void AssignMemoryType::ForceSetRequirement(
-    const LogicalTensorPtr& tensor, Operation& operation, MemoryType memoryType, const std::string& reason)
+void AssignMemoryType::ForceSetRequirement(const LogicalTensorPtr& tensor, Operation& operation, MemoryType memoryType,
+                                           const std::string& reason)
 {
     if (tensor != nullptr && memoryType != MemoryType::MEM_UNKNOWN) {
-        APASS_LOG_DEBUG_F(
-            Elements::Tensor, "Force tensor[%d] requirement for %s[%d] as %s, reason %s.", tensor->GetMagic(),
-            operation.GetOpcodeStr().c_str(), operation.GetOpMagic(), BriefMemoryTypeToString(memoryType).c_str(),
-            reason.c_str());
+        APASS_LOG_DEBUG_F(Elements::Tensor, "Force tensor[%d] requirement for %s[%d] as %s, reason %s.",
+                          tensor->GetMagic(), operation.GetOpcodeStr().c_str(), operation.GetOpMagic(),
+                          BriefMemoryTypeToString(memoryType).c_str(), reason.c_str());
     }
     SetRequirementChecked(tensor, operation, memoryType, reason, true);
 }
 
-void AssignMemoryType::FillUnknownRequirementsWith(
-    const LogicalTensorPtr& tensor, MemoryType memoryType, const char* reason)
+void AssignMemoryType::FillUnknownRequirementsWith(const LogicalTensorPtr& tensor, MemoryType memoryType,
+                                                   const char* reason)
 {
     if (tensor == nullptr || memoryType == MemoryType::MEM_UNKNOWN) {
         return;
@@ -1898,8 +1868,8 @@ void AssignMemoryType::FillUnknownRequirementsWith(
 bool AssignMemoryType::AreAllConsumerRequirements(const LogicalTensorPtr& tensor, MemoryType memoryType) const
 {
     auto requirements = inserter.GetConsumerRequirements(tensor);
-    return std::all_of(
-        requirements.begin(), requirements.end(), [memoryType](const auto& item) { return item.second == memoryType; });
+    return std::all_of(requirements.begin(), requirements.end(),
+                       [memoryType](const auto& item) { return item.second == memoryType; });
 }
 
 void AssignMemoryType::DowngradeConsumerRequirements(const LogicalTensorPtr& tensor, MemoryType fromType)
@@ -1933,15 +1903,9 @@ Status AssignMemoryType::InsertConvertOpsAndInferShape(Function& function)
     return SUCCESS;
 }
 
-Status AssignMemoryType::PreCheck(Function& function)
-{
-    return checker.DoPreCheck(function);
-}
+Status AssignMemoryType::PreCheck(Function& function) { return checker.DoPreCheck(function); }
 
-Status AssignMemoryType::PostCheck(Function& function)
-{
-    return checker.DoPostCheck(function);
-}
+Status AssignMemoryType::PostCheck(Function& function) { return checker.DoPostCheck(function); }
 
 int64_t AssignMemoryType::CalcLineOffset(const Shape& shape, const Offset& offset)
 {
@@ -1981,8 +1945,10 @@ void AssignMemoryType::ProcessL0C2L1SmallToLarge(Function& function)
             !IsDimMultiple(oOperand->GetShape(), iOperand->GetShape()) || !isConsumerOutputMultiple) {
             oOperand->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, true);
             DowngradeConsumerRequirements(oOperand, MemoryType::MEM_L0C);
-            APASS_LOG_DEBUG_F(Elements::Tensor, "Set tensor %d original memory type "
-                "to DDR since not towards L1 or not multipule dimensions.", oOperand->magic);
+            APASS_LOG_DEBUG_F(Elements::Tensor,
+                              "Set tensor %d original memory type "
+                              "to DDR since not towards L1 or not multipule dimensions.",
+                              oOperand->magic);
         }
     }
 }
@@ -2023,8 +1989,10 @@ bool AssignMemoryType::CheckUBTileShape(const LogicalTensorPtr& output)
     if (output->GetShape()[0] % L0C_TILE_SIZE == 0 && output->GetShape()[1] % L0C_TILE_SIZE == 0) {
         return true;
     }
-    APASS_LOG_DEBUG_F(Elements::Tensor, "Set tensor %d original memory type to DDR since vector tile shape "
-        "is not 16-element aligned.", output->magic);
+    APASS_LOG_DEBUG_F(Elements::Tensor,
+                      "Set tensor %d original memory type to DDR since vector tile shape "
+                      "is not 16-element aligned.",
+                      output->magic);
     return false;
 }
 
@@ -2052,7 +2020,8 @@ static bool IsViewConsumerToUb(Operation* consumerOp)
     return viewOpAttribute != nullptr && viewOpAttribute->GetTo() == MemoryType::MEM_UB;
 }
 
-static bool IsConsumerRequirementTowardsUb(const LogicalTensorPtr& tensor, Operation* consumerOp, MemoryType requirement)
+static bool IsConsumerRequirementTowardsUb(const LogicalTensorPtr& tensor, Operation* consumerOp,
+                                           MemoryType requirement)
 {
     if (requirement == MemoryType::MEM_UB) {
         return true;
@@ -2087,27 +2056,29 @@ void AssignMemoryType::ProcessL0C2UBSmallToLarge(Function& function)
         if (iOperand->GetMemoryTypeOriginal() != MEM_L0C) {
             continue;
         }
-        if (iOperand->GetShape().size() != kMatrixShapeDimCount || oOperand->GetShape().size() != kMatrixShapeDimCount) {
+        if (iOperand->GetShape().size() != kMatrixShapeDimCount ||
+            oOperand->GetShape().size() != kMatrixShapeDimCount) {
             continue;
         }
         bool isConsumerOutputMultiple = CheckConsumerViewShapeMultiple(oOperand, iOperand);
         bool isVecTileShapeValid = CheckUBTileShape(oOperand);
         bool canUseUb = !HasParallelDifferentConsumerRequirement(iOperand, MemoryType::MEM_UB) &&
-            AreAllConsumerRequirementsTowardsUb(inserter, oOperand) &&
-            IsDimMultiple(oOperand->GetShape(), iOperand->GetShape()) && isConsumerOutputMultiple &&
-            isVecTileShapeValid && FitsAssembleOutputMemoryLimit(oOperand, MemoryType::MEM_UB);
+                        AreAllConsumerRequirementsTowardsUb(inserter, oOperand) &&
+                        IsDimMultiple(oOperand->GetShape(), iOperand->GetShape()) && isConsumerOutputMultiple &&
+                        isVecTileShapeValid && FitsAssembleOutputMemoryLimit(oOperand, MemoryType::MEM_UB);
         if (!canUseUb) {
             oOperand->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, true);
             DowngradeConsumerRequirements(oOperand, MemoryType::MEM_L0C);
-            APASS_LOG_DEBUG_F(Elements::Tensor, "Set tensor %d original memory type to DDR since "
-                "not towards UB or not multiple dimensions.", oOperand->magic);
+            APASS_LOG_DEBUG_F(Elements::Tensor,
+                              "Set tensor %d original memory type to DDR since "
+                              "not towards UB or not multiple dimensions.",
+                              oOperand->magic);
             continue;
         }
         ForceSetOriginal(oOperand, MemoryType::MEM_UB, "ProcessL0C2UBSmallToLarge");
         for (const auto& [consumerOp, memoryType] : inserter.GetConsumerRequirements(oOperand)) {
             if (memoryType != MemoryType::MEM_UB && IsViewConsumerToUb(consumerOp)) {
-                inserter.UpdateTensorTobeMap(
-                    oOperand, *consumerOp, MemoryType::MEM_UB, "ProcessL0C2UBSmallToLarge");
+                inserter.UpdateTensorTobeMap(oOperand, *consumerOp, MemoryType::MEM_UB, "ProcessL0C2UBSmallToLarge");
             }
         }
     }
@@ -2153,7 +2124,8 @@ void AssignMemoryType::ProcessUB2L1SmallToLarge(Function& function)
         if (iOperand->GetMemoryTypeOriginal() != MEM_UB || oOperand->GetMemoryTypeOriginal() != MEM_L1) {
             continue;
         }
-        if (iOperand->GetShape().size() != kMatrixShapeDimCount || oOperand->GetShape().size() != kMatrixShapeDimCount) {
+        if (iOperand->GetShape().size() != kMatrixShapeDimCount ||
+            oOperand->GetShape().size() != kMatrixShapeDimCount) {
             continue;
         }
         if (ShouldSkipUB2L1SmallToLarge(iOperand, oOperand)) {
@@ -2170,16 +2142,16 @@ void AssignMemoryType::ProcessUB2L1SmallToLarge(Function& function)
     }
 }
 
-bool AssignMemoryType::ShouldSkipUB2L1SmallToLarge(
-    const LogicalTensorPtr& iOperand, const LogicalTensorPtr& oOperand) const
+bool AssignMemoryType::ShouldSkipUB2L1SmallToLarge(const LogicalTensorPtr& iOperand,
+                                                   const LogicalTensorPtr& oOperand) const
 {
-    const size_t UB_LIMIT = static_cast<size_t>(
-        Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB) * UB_THRESHOLD_NORMAL);
+    const size_t UB_LIMIT = static_cast<size_t>(Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB) *
+                                                UB_THRESHOLD_NORMAL);
     if (CalcNZTensorSize(iOperand) > UB_LIMIT) {
         return true;
     }
     // 检查 consumer view 是否有 copy_in_mode=0 属性
-    for (auto &consumerOp : oOperand->GetConsumers()) {
+    for (auto& consumerOp : oOperand->GetConsumers()) {
         if (consumerOp->GetOpcode() == Opcode::OP_VIEW) {
             int64_t copyInModeValue = 0;
             if (consumerOp->GetAttr<int64_t>("op_attr_copy_in_mode", copyInModeValue) && copyInModeValue == 0) {
@@ -2212,24 +2184,26 @@ void AssignMemoryType::ProcessUB2L1LargeToSmall(Function& function)
             inserter.UpdateTensorTobeMap(iOperand, op, MEM_DEVICE_DDR);
             continue;
         }
-        if (iOperand->GetShape().size() != kMatrixShapeDimCount || oOperand->GetShape().size() != kMatrixShapeDimCount) {
+        if (iOperand->GetShape().size() != kMatrixShapeDimCount ||
+            oOperand->GetShape().size() != kMatrixShapeDimCount) {
             inserter.UpdateTensorTobeMap(iOperand, op, MEM_DEVICE_DDR);
             continue;
         }
-        const size_t UB_LIMIT =
-            static_cast<size_t>(Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB) * UB_THRESHOLD_NORMAL);
+        const size_t UB_LIMIT = static_cast<size_t>(Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB) *
+                                                    UB_THRESHOLD_NORMAL);
         size_t totalSize = CalcNZTensorSize(iOperand);
         if (totalSize > UB_LIMIT) {
             APASS_LOG_DEBUG_F(Elements::Operation,
-                "UB2L1 large to small: totalSize %zu exceeds UB_LIMIT %zu, downgrade to DDR", totalSize, UB_LIMIT);
+                              "UB2L1 large to small: totalSize %zu exceeds UB_LIMIT %zu, downgrade to DDR", totalSize,
+                              UB_LIMIT);
             inserter.UpdateTensorTobeMap(iOperand, op, MEM_DEVICE_DDR);
             continue;
         }
         int64_t copyInModeValue = 0;
         if (op.GetAttr<int64_t>("op_attr_copy_in_mode", copyInModeValue) && copyInModeValue == 0) {
             APASS_LOG_DEBUG_F(Elements::Operation,
-                "UB2L1 large to small skip: bias/scale tensor (copy_in_mode=%ld), View Op[%d]",
-                static_cast<long>(copyInModeValue), op.GetOpMagic());
+                              "UB2L1 large to small skip: bias/scale tensor (copy_in_mode=%ld), View Op[%d]",
+                              static_cast<long>(copyInModeValue), op.GetOpMagic());
             inserter.UpdateTensorTobeMap(iOperand, op, MEM_DEVICE_DDR);
             continue;
         }
@@ -2256,21 +2230,21 @@ bool AssignMemoryType::CheckInnerAxisC0Size(const LogicalTensorPtr& input, const
     int64_t outputC0Size = (outputDtypeBytes > 0) ? (kC0AlignBytes / outputDtypeBytes) : 0;
     if (inputC0Size <= 0 || outputC0Size <= 0) {
         APASS_LOG_DEBUG_F(Elements::Operation,
-            "CheckInnerAxisC0Size: invalid C0 size, inputC0Size=%ld, outputC0Size=%ld",
-            static_cast<long>(inputC0Size), static_cast<long>(outputC0Size));
+                          "CheckInnerAxisC0Size: invalid C0 size, inputC0Size=%ld, outputC0Size=%ld",
+                          static_cast<long>(inputC0Size), static_cast<long>(outputC0Size));
         return false;
     }
     // 分别检查 input 和 output 的内轴是否满足各自的 C0 size 切分
     if (inputInnerAxis % static_cast<size_t>(inputC0Size) != 0) {
         APASS_LOG_DEBUG_F(Elements::Operation,
-            "CheckInnerAxisC0Size: input inner=%zu, dtypeBytes=%ld, c0Size=%ld, not aligned",
-            inputInnerAxis, static_cast<long>(inputDtypeBytes), static_cast<long>(inputC0Size));
+                          "CheckInnerAxisC0Size: input inner=%zu, dtypeBytes=%ld, c0Size=%ld, not aligned",
+                          inputInnerAxis, static_cast<long>(inputDtypeBytes), static_cast<long>(inputC0Size));
         return false;
     }
     if (outputInnerAxis % static_cast<size_t>(outputC0Size) != 0) {
         APASS_LOG_DEBUG_F(Elements::Operation,
-            "CheckInnerAxisC0Size: output inner=%zu, dtypeBytes=%ld, c0Size=%ld, not aligned",
-            outputInnerAxis, static_cast<long>(outputDtypeBytes), static_cast<long>(outputC0Size));
+                          "CheckInnerAxisC0Size: output inner=%zu, dtypeBytes=%ld, c0Size=%ld, not aligned",
+                          outputInnerAxis, static_cast<long>(outputDtypeBytes), static_cast<long>(outputC0Size));
         return false;
     }
     return true;
@@ -2305,8 +2279,7 @@ size_t AssignMemoryType::CalcNZTensorSize(const LogicalTensorPtr& tensor) const
         c0 = static_cast<size_t>(kC0AlignBytes / bytes);
     }
     if (c0 <= 0) {
-        APASS_LOG_DEBUG_F(Elements::Operation,
-            "CalcNZTensorSize: invalid C0 size, c0=%zu", c0);
+        APASS_LOG_DEBUG_F(Elements::Operation, "CalcNZTensorSize: invalid C0 size, c0=%zu", c0);
         // 返回原始 ND 格式大小作为 fallback
         return outer * inner * static_cast<size_t>(bytes > 0 ? bytes : kAlignBytes);
     }

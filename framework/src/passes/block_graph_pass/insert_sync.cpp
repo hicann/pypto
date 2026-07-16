@@ -22,8 +22,8 @@
 
 namespace npu {
 namespace tile_fwk {
-Status RangeSearchTree::ProcessTreeNode(
-    const Interval& interval, IntervalTreeNode* currPtr, std::vector<IntervalTreeNode*>& intervalStack)
+Status RangeSearchTree::ProcessTreeNode(const Interval& interval, IntervalTreeNode* currPtr,
+                                        std::vector<IntervalTreeNode*>& intervalStack)
 {
     int start = currPtr->interval.start;
     if (interval.start < start) {
@@ -133,8 +133,8 @@ void DataDependencySearcher::CheckWAWSearchTree(Operation* opWait, std::set<int>
         auto tensor = opWait->GetOOperands()[outIdx];
         MemoryType currMemoryType = tensor->GetMemoryTypeOriginal();
         if (wawSearchTree_.count(currMemoryType) > 0) {
-            TileRange rg =
-                currMemoryType == MemoryType::MEM_UB ? ubTensorRangeMap[tensor->GetMagic()] : tensor->memoryrange;
+            TileRange rg = currMemoryType == MemoryType::MEM_UB ? ubTensorRangeMap[tensor->GetMagic()] :
+                                                                  tensor->memoryrange;
             std::set<int> found = wawSearchTree_[currMemoryType].GetCovered(rg.start, rg.end);
             res.insert(found.begin(), found.end());
         }
@@ -152,8 +152,8 @@ void DataDependencySearcher::CheckRAWSearchTree(Operation* opWait, std::set<int>
             res.insert(found.begin(), found.end());
         }
         if (rawSearchTree_.count(readMemoryType) > 0) {
-            TileRange rg =
-                readMemoryType == MemoryType::MEM_UB ? ubTensorRangeMap[tensor->GetMagic()] : tensor->memoryrange;
+            TileRange rg = readMemoryType == MemoryType::MEM_UB ? ubTensorRangeMap[tensor->GetMagic()] :
+                                                                  tensor->memoryrange;
             std::set<int> found = rawSearchTree_[readMemoryType].GetCovered(rg.start, rg.end);
             res.insert(found.begin(), found.end());
         }
@@ -171,8 +171,8 @@ void DataDependencySearcher::CheckWARSearchTree(Operation* opWait, std::set<int>
             res.insert(found.begin(), found.end());
         }
         if (warSearchTree_.count(writeMemoryType) > 0) {
-            TileRange rg =
-                writeMemoryType == MemoryType::MEM_UB ? ubTensorRangeMap[tensor->GetMagic()] : tensor->memoryrange;
+            TileRange rg = writeMemoryType == MemoryType::MEM_UB ? ubTensorRangeMap[tensor->GetMagic()] :
+                                                                   tensor->memoryrange;
             std::set<int> found = warSearchTree_[writeMemoryType].GetCovered(rg.start, rg.end);
             res.insert(found.begin(), found.end());
         }
@@ -201,8 +201,8 @@ void DataDependencySearcher::InsertWAWSearchTree(const Operation* opSet, int idx
         if (wawSearchTree_.count(prevMemoryType) == 0) {
             wawSearchTree_[prevMemoryType] = RangeSearchTree();
         }
-        TileRange rg =
-            prevMemoryType == MemoryType::MEM_UB ? ubTensorRangeMap[tensor->GetMagic()] : tensor->memoryrange;
+        TileRange rg = prevMemoryType == MemoryType::MEM_UB ? ubTensorRangeMap[tensor->GetMagic()] :
+                                                              tensor->memoryrange;
         wawSearchTree_[prevMemoryType].Insert(rg.start, rg.end, idx);
     }
 }
@@ -222,8 +222,8 @@ void DataDependencySearcher::InsertRAWSearchTree(const Operation* opSet, int idx
         if (rawSearchTree_.count(writeMemoryType) == 0) {
             rawSearchTree_[writeMemoryType] = RangeSearchTree();
         }
-        TileRange rg =
-            writeMemoryType == MemoryType::MEM_UB ? ubTensorRangeMap[tensor->GetMagic()] : tensor->memoryrange;
+        TileRange rg = writeMemoryType == MemoryType::MEM_UB ? ubTensorRangeMap[tensor->GetMagic()] :
+                                                               tensor->memoryrange;
         rawSearchTree_[writeMemoryType].Insert(rg.start, rg.end, idx);
     }
 }
@@ -243,8 +243,8 @@ void DataDependencySearcher::InsertWARSearchTree(const Operation* opSet, int idx
         if (warSearchTree_.count(readMemoryType) == 0) {
             warSearchTree_[readMemoryType] = RangeSearchTree();
         }
-        TileRange rg =
-            readMemoryType == MemoryType::MEM_UB ? ubTensorRangeMap[tensor->GetMagic()] : tensor->memoryrange;
+        TileRange rg = readMemoryType == MemoryType::MEM_UB ? ubTensorRangeMap[tensor->GetMagic()] :
+                                                              tensor->memoryrange;
         warSearchTree_[readMemoryType].Insert(rg.start, rg.end, idx);
     }
 }
@@ -295,9 +295,8 @@ Status PipeSync::InsertSync(Function& function, std::vector<Operation*>& syncedO
     uint64_t idxInput = 0;
     for (const auto& op : opLogPtr) {
         BuildTensorRangeMap(op);
-        APASS_LOG_DEBUG_F(
-            Elements::Operation, "Input operation %lu %lu: %s.", static_cast<unsigned long>(idxInput),
-            static_cast<unsigned long>(op->GetOpMagic()), op->GetOpcodeStr().c_str());
+        APASS_LOG_DEBUG_F(Elements::Operation, "Input operation %lu %lu: %s.", static_cast<unsigned long>(idxInput),
+                          static_cast<unsigned long>(op->GetOpMagic()), op->GetOpcodeStr().c_str());
         idxInput++;
     }
     if (PipeDispatch(opLogPtr, synced) != SUCCESS) {
@@ -449,9 +448,8 @@ PipeSync::PipeCoreRealEx PipeSync::GetPipeFromSeq(PipeSeq seq) { return seq2pipe
 Status PipeSync::AdjustCopyInCfg(TileOpCfg& opcfg, const Operation& op)
 {
     if (op.GetOpAttribute() == nullptr) {
-        APASS_LOG_ERROR_F(
-            Elements::Operation, "%d COPYIN op attr is nullptr, AdjustOpCfg failed.%s", op.GetOpMagic(),
-            GetFormatBacktrace(op).c_str());
+        APASS_LOG_ERROR_F(Elements::Operation, "%d COPYIN op attr is nullptr, AdjustOpCfg failed.%s", op.GetOpMagic(),
+                          GetFormatBacktrace(op).c_str());
         return FAILED;
     }
     std::shared_ptr<CopyOpAttribute> attr = std::static_pointer_cast<CopyOpAttribute>(op.GetOpAttribute());
@@ -474,9 +472,8 @@ Status PipeSync::AdjustCopyInCfg(TileOpCfg& opcfg, const Operation& op)
 Status PipeSync::AdjustCopyOutCfg(TileOpCfg& opcfg, const Operation& op)
 {
     if (op.GetOpAttribute() == nullptr) {
-        APASS_LOG_ERROR_F(
-            Elements::Operation, "%d COPYOUT op attr is nullptr, AdjustOpCfg failed.%s", op.GetOpMagic(),
-            GetFormatBacktrace(op).c_str());
+        APASS_LOG_ERROR_F(Elements::Operation, "%d COPYOUT op attr is nullptr, AdjustOpCfg failed.%s", op.GetOpMagic(),
+                          GetFormatBacktrace(op).c_str());
         return FAILED;
     }
     std::shared_ptr<CopyOpAttribute> attr = std::static_pointer_cast<CopyOpAttribute>(op.GetOpAttribute());
@@ -533,9 +530,9 @@ Status PipeSync::PipeDispatch(const std::vector<Operation*>& opLogPtr, std::vect
     dataDependencySearcher.ubTensorRangeMap = ubTensorRangeMap;
     for (size_t i = 0; i < opLogPtr.size(); i++) {
         if (opLogPtr[i]->GetOpcodeStr().find("ALLOC") != std::string::npos) {
-            APASS_LOG_ERROR_F(
-                Elements::Operation, "%d ALLOC op should not appear in InsertSync, PipeDispatch failed.%s",
-                opLogPtr[i]->GetOpMagic(), GetFormatBacktrace(opLogPtr[i]).c_str());
+            APASS_LOG_ERROR_F(Elements::Operation,
+                              "%d ALLOC op should not appear in InsertSync, PipeDispatch failed.%s",
+                              opLogPtr[i]->GetOpMagic(), GetFormatBacktrace(opLogPtr[i]).c_str());
             return FAILED;
         }
         auto opcfg = OpcodeManager::Inst().GetTileOpCfg(opLogPtr[i]->GetOpcode());
@@ -615,11 +612,10 @@ Status PipeSync::AddOpDep(DepOp& setOp, DepOp& waitOp, bool isMergeCvSyncBase)
             APASS_LOG_ERROR_F(Elements::Operation, "This dependency should not exist, AddOpDep failed.");
             return FAILED;
         }
-        PipeCoreRealEx elePipeCoreEx(
-            depOps_[ele].selfPipeCore.pipeStart, depOps_[ele].selfPipeCore.core, depOps_[ele].selfPipeCore.aivCore);
-        PipeCoreRealEx waitOpPipeCoreEx(
-            depOps_[waitOpIdx].selfPipeCore.pipeStart, depOps_[waitOpIdx].selfPipeCore.core,
-            depOps_[waitOpIdx].selfPipeCore.aivCore);
+        PipeCoreRealEx elePipeCoreEx(depOps_[ele].selfPipeCore.pipeStart, depOps_[ele].selfPipeCore.core,
+                                     depOps_[ele].selfPipeCore.aivCore);
+        PipeCoreRealEx waitOpPipeCoreEx(depOps_[waitOpIdx].selfPipeCore.pipeStart, depOps_[waitOpIdx].selfPipeCore.core,
+                                        depOps_[waitOpIdx].selfPipeCore.aivCore);
         if (elePipeCoreEx == waitOpPipeCoreEx) {
             if (ele <= waitOpIdx && !isMergeCvSyncBase) {
                 APASS_LOG_ERROR_F(Elements::Operation, "New waitidx should less than old, AddOpDep failed.");
@@ -696,8 +692,8 @@ Status PipeSync::ProcessEventIdElement(EventIdProcessContext& ctx)
     }
 
     PipeCoreRealEx currEx(op.selfPipeCore.pipeEnd, op.selfPipeCore.core, op.selfPipeCore.aivCore);
-    PipeCoreRealEx eleEx(
-        depOps_[ele].selfPipeCore.pipeStart, depOps_[ele].selfPipeCore.core, depOps_[ele].selfPipeCore.aivCore);
+    PipeCoreRealEx eleEx(depOps_[ele].selfPipeCore.pipeStart, depOps_[ele].selfPipeCore.core,
+                         depOps_[ele].selfPipeCore.aivCore);
     PipePairEx pp{currEx, eleEx};
 
     // 当前逻辑该函数不需要处理cv同步
@@ -707,8 +703,8 @@ Status PipeSync::ProcessEventIdElement(EventIdProcessContext& ctx)
     return ProcessSameCoreCase(pp, ctx);
 }
 
-Status PipeSync::HandleEventID(
-    DepOp& op, IssueQueue& issueQ, IssueNum& issuenum, bool& deadlock, bool& res, std::vector<IndexOp>& syncedOpLog)
+Status PipeSync::HandleEventID(DepOp& op, IssueQueue& issueQ, IssueNum& issuenum, bool& deadlock, bool& res,
+                               std::vector<IndexOp>& syncedOpLog)
 {
     bool eventIdOk = true;
     bool failedFlag = false;
@@ -748,8 +744,8 @@ bool PipeSync::CheckIssuedOp(const DepOp& op)
     return true;
 }
 
-Status PipeSync::PopFromQueue(
-    IssueQueue& issueQ, std::vector<size_t>& poped, bool& deadlock, std::vector<IndexOp>& syncedOpLog)
+Status PipeSync::PopFromQueue(IssueQueue& issueQ, std::vector<size_t>& poped, bool& deadlock,
+                              std::vector<IndexOp>& syncedOpLog)
 {
     IssueNum issuenum;
 
@@ -782,8 +778,8 @@ Status PipeSync::PopFromQueue(
         orderedOpList_.pop();
         for (auto ele : op.setPipe) {
             PipeCoreRealEx currPipeCoreEx(op.selfPipeCore.pipeEnd, op.selfPipeCore.core, op.selfPipeCore.aivCore);
-            PipeCoreRealEx elePipeCoreEx(
-                depOps_[ele].selfPipeCore.pipeStart, depOps_[ele].selfPipeCore.core, depOps_[ele].selfPipeCore.aivCore);
+            PipeCoreRealEx elePipeCoreEx(depOps_[ele].selfPipeCore.pipeStart, depOps_[ele].selfPipeCore.core,
+                                         depOps_[ele].selfPipeCore.aivCore);
             auto pp = PipePairEx{currPipeCoreEx, elePipeCoreEx};
             issuenum.currIssueNum[pp] = issuenum.currIssueNum[pp] + 1;
         }
@@ -849,15 +845,14 @@ Status PipeSync::InjectWaitFlag(Function& function, size_t idx, std::vector<Inde
 Status PipeSync::UpdateSyncArriveStatus(int eventId, const PipeCore& setPipe, const PipeCore& currPipe,
                                         const PipeCoreRealEx& setPipeRealEx, const PipeCoreRealEx& currPipeRealEx)
 {
-    EventResource eventResource {
-        eventId,
-        {setPipe.core, setPipe.aivCore},
-        {currPipe.core, currPipe.aivCore},
-        setPipe.pipeEnd,
-        currPipe.pipeStart
-    };
+    EventResource eventResource{eventId,
+                                {setPipe.core, setPipe.aivCore},
+                                {currPipe.core, currPipe.aivCore},
+                                setPipe.pipeEnd,
+                                currPipe.pipeStart};
     syncArriveStatus[currPipeRealEx].insert(eventResource);
-    syncArriveStatus[currPipeRealEx].insert(syncArriveStatus[setPipeRealEx].begin(), syncArriveStatus[setPipeRealEx].end());
+    syncArriveStatus[currPipeRealEx].insert(syncArriveStatus[setPipeRealEx].begin(),
+                                            syncArriveStatus[setPipeRealEx].end());
     if (RecycleCrossCoreEventIds(currPipeRealEx) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "UpdateSyncArriveStatus failed at function RecycleCrossCoreEventIds.");
         return FAILED;
@@ -908,8 +903,8 @@ Status PipeSync::InjectSetFlag(Function& function, size_t idx, std::vector<Index
     return SUCCESS;
 }
 
-Status PipeSync::InjectSync(
-    Function& function, const std::vector<Operation*>& opLogPtr, size_t idx, std::vector<IndexOp>& syncedOpLog)
+Status PipeSync::InjectSync(Function& function, const std::vector<Operation*>& opLogPtr, size_t idx,
+                            std::vector<IndexOp>& syncedOpLog)
 {
     // check idx range
     if (idx > std::numeric_limits<uint64_t>::max() / SEQUENCE_IDX) {
@@ -923,8 +918,8 @@ Status PipeSync::InjectSync(
     // insert current operation
     syncedOpLog.emplace_back(std::make_pair(idx * SEQUENCE_IDX, std::ref(*opLogPtr[idx])));
     depOps_[idx].issued = true;
-    APASS_LOG_DEBUG_F(
-        Elements::Operation, "Insert %d %s", opLogPtr[idx]->GetOpMagic(), opLogPtr[idx]->GetOpcodeStr().c_str());
+    APASS_LOG_DEBUG_F(Elements::Operation, "Insert %d %s", opLogPtr[idx]->GetOpMagic(),
+                      opLogPtr[idx]->GetOpcodeStr().c_str());
 
     // insert set_flag
     if (InjectSetFlag(function, idx, syncedOpLog) != SUCCESS) {
@@ -946,8 +941,8 @@ int PipeSync::GetMaxEventId(const PipePairEx& pp)
     return EVENT_ID7;
 }
 
-Status PipeSync::ProcessDeadLock(
-    uint64_t& eventIdDeadlockEnterTimes, bool& eventIdDeadlock, std::vector<IndexOp>& syncedOpLog)
+Status PipeSync::ProcessDeadLock(uint64_t& eventIdDeadlockEnterTimes, bool& eventIdDeadlock,
+                                 std::vector<IndexOp>& syncedOpLog)
 {
     eventIdDeadlockEnterTimes++;
     // eventID deadlock
@@ -965,9 +960,8 @@ Status PipeSync::ProcessDeadLock(
     return SUCCESS;
 }
 
-Status PipeSync::IssueOpPipeSeq(
-    Function& function, const std::vector<Operation*>& opLogPtr, std::vector<IndexOp>& syncedOpLog,
-    bool& eventIdDeadlock, size_t& issued)
+Status PipeSync::IssueOpPipeSeq(Function& function, const std::vector<Operation*>& opLogPtr,
+                                std::vector<IndexOp>& syncedOpLog, bool& eventIdDeadlock, size_t& issued)
 {
     for (int i = 0; i < static_cast<int>(PipeSeq::PIPE_END); i++) {
         std::vector<size_t> issuedOps;
@@ -986,9 +980,8 @@ Status PipeSync::IssueOpPipeSeq(
     return SUCCESS;
 }
 
-Status PipeSync::IssueSyncOp(
-    Function& function, const std::vector<Operation*>& opLogPtr, std::vector<IndexOp>& syncedOpLog, size_t& totalIssued,
-    size_t& allIssued)
+Status PipeSync::IssueSyncOp(Function& function, const std::vector<Operation*>& opLogPtr,
+                             std::vector<IndexOp>& syncedOpLog, size_t& totalIssued, size_t& allIssued)
 {
     bool eventIdDeadlock = false;
     uint64_t eventIdDeadlockEnterTimes = 0;
@@ -1020,9 +1013,8 @@ Status PipeSync::IssueOp(Function& function, const std::vector<Operation*>& opLo
     size_t allIssued = 0;
     for (int i = 0; i < static_cast<int>(PipeSeq::PIPE_END); i++) {
         allIssued += issueState_[i].ops.size();
-        APASS_LOG_DEBUG_F(
-            Elements::Operation, "Pipe seq %d: %s %s", i, PipeSeqName(static_cast<PipeSeq>(i)).c_str(),
-            issueState_[i].DumpIssueQueue(opLogPtr).c_str());
+        APASS_LOG_DEBUG_F(Elements::Operation, "Pipe seq %d: %s %s", i, PipeSeqName(static_cast<PipeSeq>(i)).c_str(),
+                          issueState_[i].DumpIssueQueue(opLogPtr).c_str());
     }
     if (IssueSyncOp(function, opLogPtr, syncedOpLog, totalIssued, allIssued) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "IssueOp failed with IssueSyncOp.");
@@ -1193,8 +1185,8 @@ bool PipeSync::FindMaxOverlap(DataDepInfo& depInfo, int& maxOverlapDepIdx)
     return true;
 }
 
-Status PipeSync::SynDependency(
-    int maxOverlapDepIdx, const DataDepInfo& depInfo, const PipePairEx& pipePairEx, std::vector<IndexOp>& syncedOpLog)
+Status PipeSync::SynDependency(int maxOverlapDepIdx, const DataDepInfo& depInfo, const PipePairEx& pipePairEx,
+                               std::vector<IndexOp>& syncedOpLog)
 {
     int set1 = depInfo.opDepList[maxOverlapDepIdx].first;
     int wait1 = depInfo.opDepList[maxOverlapDepIdx].second;
@@ -1259,17 +1251,17 @@ Status PipeSync::GetDepInfo(std::vector<IndexOp>& syncedOpLog, const PipePairEx&
 }
 
 std::vector<PipeSync::PipeCoreRealEx> PipeSync::cvPipeCoreEx = {
-    {PIPE_S, CoreType::AIV, AIVCore::AIV0}, {PIPE_S, CoreType::AIV, AIVCore::AIV1},
-    {PIPE_MTE2, CoreType::AIV, AIVCore::AIV0}, {PIPE_MTE2, CoreType::AIV, AIVCore::AIV1},
-    {PIPE_MTE3, CoreType::AIV, AIVCore::AIV0}, {PIPE_MTE3, CoreType::AIV, AIVCore::AIV1},
-    {PIPE_V, CoreType::AIV, AIVCore::AIV0}, {PIPE_V, CoreType::AIV, AIVCore::AIV1},
-    {PIPE_S, CoreType::AIC, AIVCore::UNSPECIFIED}, {PIPE_MTE1, CoreType::AIC, AIVCore::UNSPECIFIED},
+    {PIPE_S, CoreType::AIV, AIVCore::AIV0},           {PIPE_S, CoreType::AIV, AIVCore::AIV1},
+    {PIPE_MTE2, CoreType::AIV, AIVCore::AIV0},        {PIPE_MTE2, CoreType::AIV, AIVCore::AIV1},
+    {PIPE_MTE3, CoreType::AIV, AIVCore::AIV0},        {PIPE_MTE3, CoreType::AIV, AIVCore::AIV1},
+    {PIPE_V, CoreType::AIV, AIVCore::AIV0},           {PIPE_V, CoreType::AIV, AIVCore::AIV1},
+    {PIPE_S, CoreType::AIC, AIVCore::UNSPECIFIED},    {PIPE_MTE1, CoreType::AIC, AIVCore::UNSPECIFIED},
     {PIPE_MTE2, CoreType::AIC, AIVCore::UNSPECIFIED}, {PIPE_MTE3, CoreType::AIC, AIVCore::UNSPECIFIED},
-    {PIPE_M, CoreType::AIC, AIVCore::UNSPECIFIED}, {PIPE_FIX, CoreType::AIC, AIVCore::UNSPECIFIED},
+    {PIPE_M, CoreType::AIC, AIVCore::UNSPECIFIED},    {PIPE_FIX, CoreType::AIC, AIVCore::UNSPECIFIED},
 };
 
-std::string PipeSync::DataDepInfo::DumpDataDepInfo(
-    const std::vector<IndexOp>& syncedOpLog, const std::vector<Operation*>& oriOpList)
+std::string PipeSync::DataDepInfo::DumpDataDepInfo(const std::vector<IndexOp>& syncedOpLog,
+                                                   const std::vector<Operation*>& oriOpList)
 {
     std::stringstream ss;
     ss << "    CV_SYNC_SRC magic: ";
@@ -1404,7 +1396,8 @@ void PipeSync::RemoveEventIdFromCrossCoreQueues(int eventId)
     }
 }
 
-Status PipeSync::GetEventId(const PipePairEx& pp, int& eventId, size_t setIdx, size_t& waitIdx, std::vector<IndexOp>& syncedOpLog, Function& function)
+Status PipeSync::GetEventId(const PipePairEx& pp, int& eventId, size_t setIdx, size_t& waitIdx,
+                            std::vector<IndexOp>& syncedOpLog, Function& function)
 {
     // reserved for future
     (void)waitIdx;
@@ -1465,18 +1458,17 @@ void PipeSync::RemoveSetIntraBlockAndOpDep(std::vector<IndexOp>& syncedOpLog)
         op->SetAsDeleted();
         setOpMap.erase(op);
         Operation* opPtr = op;
-        syncedOpLog.erase(
-            std::remove_if(syncedOpLog.begin(), syncedOpLog.end(),
-                [opPtr](const IndexOp& entry) { return &entry.second.get() == opPtr; }),
-            syncedOpLog.end());
+        syncedOpLog.erase(std::remove_if(syncedOpLog.begin(), syncedOpLog.end(),
+                                         [opPtr](const IndexOp& entry) { return &entry.second.get() == opPtr; }),
+                          syncedOpLog.end());
     }
     NoWaitCVPairs_.clear();
     crossCoreFreeEventId_.clear();
     syncArriveStatus.clear();
 }
 
-void PipeSync::CreateForceSyncOp(Opcode opcode, PipeType pipe, CoreType core, AIVCore aivCore,
-                                  uint64_t& insertIdx, Function& function, std::vector<IndexOp>& syncedOpLog)
+void PipeSync::CreateForceSyncOp(Opcode opcode, PipeType pipe, CoreType core, AIVCore aivCore, uint64_t& insertIdx,
+                                 Function& function, std::vector<IndexOp>& syncedOpLog)
 {
     std::vector<std::shared_ptr<LogicalTensor>> input;
     std::vector<std::shared_ptr<LogicalTensor>> output;
@@ -1486,13 +1478,13 @@ void PipeSync::CreateForceSyncOp(Opcode opcode, PipeType pipe, CoreType core, AI
     op.SetAIVCore(aivCore);
 }
 
-void PipeSync::CreateBarAllOp(AIVCore aivCore, uint64_t& insertIdx, Function& function, std::vector<IndexOp>& syncedOpLog)
+void PipeSync::CreateBarAllOp(AIVCore aivCore, uint64_t& insertIdx, Function& function,
+                              std::vector<IndexOp>& syncedOpLog)
 {
     std::vector<std::shared_ptr<LogicalTensor>> input;
     std::vector<std::shared_ptr<LogicalTensor>> output;
     Operation& op = irBuilder_.CreateTensorOpStmt(function, Opcode::OP_BAR_ALL, input, output);
-    op.syncQueue_ = {PipeType::PIPE_ALL,   PipeType::PIPE_ALL,  CoreType::AIV, CoreType::AIV, -1,
-                     aivCore, aivCore};
+    op.syncQueue_ = {PipeType::PIPE_ALL, PipeType::PIPE_ALL, CoreType::AIV, CoreType::AIV, -1, aivCore, aivCore};
     syncedOpLog.emplace_back(std::make_pair(++insertIdx, std::ref(op)));
     op.SetAIVCore(aivCore);
 }
@@ -1504,18 +1496,24 @@ void PipeSync::AddCrossCoreForceSyncOps(size_t setIdx, std::vector<IndexOp>& syn
     PipeType prevAiv1Pipe = PipeType::PIPE_MTE3;
 
     uint64_t insertIdx = setIdx * SEQUENCE_IDX;
-    
+
     CreateBarAllOp(AIVCore::UNSPECIFIED, insertIdx, function, syncedOpLog);
-    CreateForceSyncOp(Opcode::OP_FFTS_CROSS_CORE_SYNC, prevAicPipe, CoreType::AIC, AIVCore::UNSPECIFIED, insertIdx, function, syncedOpLog);
-    CreateForceSyncOp(Opcode::OP_WAIT_FLAG_DEV, PipeType::PIPE_S, CoreType::AIC, AIVCore::UNSPECIFIED, insertIdx, function, syncedOpLog);
+    CreateForceSyncOp(Opcode::OP_FFTS_CROSS_CORE_SYNC, prevAicPipe, CoreType::AIC, AIVCore::UNSPECIFIED, insertIdx,
+                      function, syncedOpLog);
+    CreateForceSyncOp(Opcode::OP_WAIT_FLAG_DEV, PipeType::PIPE_S, CoreType::AIC, AIVCore::UNSPECIFIED, insertIdx,
+                      function, syncedOpLog);
     CreateBarAllOp(AIVCore::UNSPECIFIED, insertIdx, function, syncedOpLog);
     CreateBarAllOp(AIVCore::AIV0, insertIdx, function, syncedOpLog);
-    CreateForceSyncOp(Opcode::OP_WAIT_FLAG_DEV, PipeType::PIPE_S, CoreType::AIV, AIVCore::AIV0, insertIdx, function, syncedOpLog);
-    CreateForceSyncOp(Opcode::OP_FFTS_CROSS_CORE_SYNC, prevAiv0Pipe, CoreType::AIV, AIVCore::AIV0, insertIdx, function, syncedOpLog);
+    CreateForceSyncOp(Opcode::OP_WAIT_FLAG_DEV, PipeType::PIPE_S, CoreType::AIV, AIVCore::AIV0, insertIdx, function,
+                      syncedOpLog);
+    CreateForceSyncOp(Opcode::OP_FFTS_CROSS_CORE_SYNC, prevAiv0Pipe, CoreType::AIV, AIVCore::AIV0, insertIdx, function,
+                      syncedOpLog);
     CreateBarAllOp(AIVCore::AIV0, insertIdx, function, syncedOpLog);
     CreateBarAllOp(AIVCore::AIV1, insertIdx, function, syncedOpLog);
-    CreateForceSyncOp(Opcode::OP_WAIT_FLAG_DEV, PipeType::PIPE_S, CoreType::AIV, AIVCore::AIV1, insertIdx, function, syncedOpLog);
-    CreateForceSyncOp(Opcode::OP_FFTS_CROSS_CORE_SYNC, prevAiv1Pipe, CoreType::AIV, AIVCore::AIV1, insertIdx, function, syncedOpLog);
+    CreateForceSyncOp(Opcode::OP_WAIT_FLAG_DEV, PipeType::PIPE_S, CoreType::AIV, AIVCore::AIV1, insertIdx, function,
+                      syncedOpLog);
+    CreateForceSyncOp(Opcode::OP_FFTS_CROSS_CORE_SYNC, prevAiv1Pipe, CoreType::AIV, AIVCore::AIV1, insertIdx, function,
+                      syncedOpLog);
     CreateBarAllOp(AIVCore::AIV1, insertIdx, function, syncedOpLog);
 }
 
@@ -1541,10 +1539,10 @@ bool PipeSync::CheckWawDependency(const Operation& opSet, const Operation& opWai
             auto memType = opSet.GetOOperands()[setIdx]->GetMemoryTypeOriginal();
             int magic1 = opSet.GetOOperands()[setIdx]->GetMagic();
             int magic2 = opWait.GetOOperands()[waitIdx]->GetMagic();
-            TileRange range1 =
-                memType == MemoryType::MEM_UB ? ubTensorRangeMap[magic1] : opSet.GetOOperands()[setIdx]->memoryrange;
-            TileRange range2 =
-                memType == MemoryType::MEM_UB ? ubTensorRangeMap[magic2] : opWait.GetOOperands()[waitIdx]->memoryrange;
+            TileRange range1 = memType == MemoryType::MEM_UB ? ubTensorRangeMap[magic1] :
+                                                               opSet.GetOOperands()[setIdx]->memoryrange;
+            TileRange range2 = memType == MemoryType::MEM_UB ? ubTensorRangeMap[magic2] :
+                                                               opWait.GetOOperands()[waitIdx]->memoryrange;
             if (BufOverlap(range1, range2)) {
                 return true;
             }
@@ -1564,10 +1562,10 @@ bool PipeSync::CheckRawDependency(const Operation& opSet, const Operation& opWai
             auto memType = opWait.GetIOperands()[inIdx]->GetMemoryTypeOriginal();
             int magic1 = opWait.GetIOperands()[inIdx]->GetMagic();
             int magic2 = opSet.GetOOperands()[outIdx]->GetMagic();
-            TileRange range1 =
-                memType == MemoryType::MEM_UB ? ubTensorRangeMap[magic1] : opWait.GetIOperands()[inIdx]->memoryrange;
-            TileRange range2 =
-                memType == MemoryType::MEM_UB ? ubTensorRangeMap[magic2] : opSet.GetOOperands()[outIdx]->memoryrange;
+            TileRange range1 = memType == MemoryType::MEM_UB ? ubTensorRangeMap[magic1] :
+                                                               opWait.GetIOperands()[inIdx]->memoryrange;
+            TileRange range2 = memType == MemoryType::MEM_UB ? ubTensorRangeMap[magic2] :
+                                                               opSet.GetOOperands()[outIdx]->memoryrange;
             auto overlap = BufOverlap(range1, range2);
             auto ddrTensorSame = memType == MemoryType::MEM_DEVICE_DDR && range1.memId == range2.memId;
             if (overlap || ddrTensorSame) {
@@ -1589,10 +1587,10 @@ bool PipeSync::CheckWarDependency(const Operation& opSet, const Operation& opWai
             auto memType = opSet.GetIOperands()[inIdx]->GetMemoryTypeOriginal();
             int magic1 = opSet.GetIOperands()[inIdx]->GetMagic();
             int magic2 = opWait.GetOOperands()[outIdx]->GetMagic();
-            TileRange range1 =
-                memType == MemoryType::MEM_UB ? ubTensorRangeMap[magic1] : opSet.GetIOperands()[inIdx]->memoryrange;
-            TileRange range2 =
-                memType == MemoryType::MEM_UB ? ubTensorRangeMap[magic2] : opWait.GetOOperands()[outIdx]->memoryrange;
+            TileRange range1 = memType == MemoryType::MEM_UB ? ubTensorRangeMap[magic1] :
+                                                               opSet.GetIOperands()[inIdx]->memoryrange;
+            TileRange range2 = memType == MemoryType::MEM_UB ? ubTensorRangeMap[magic2] :
+                                                               opWait.GetOOperands()[outIdx]->memoryrange;
             auto overlap = BufOverlap(range1, range2);
             auto ddrTensorSame = memType == MemoryType::MEM_DEVICE_DDR && range1.memId == range2.memId;
             if (overlap || ddrTensorSame) {
@@ -1685,12 +1683,12 @@ bool PipeSync::IgnorableIntraPipeDep(size_t prev, size_t curr, const std::vector
 }
 
 // find depend op in opLog for 0 to idx
-void PipeSync::FindDep(
-    DepOp& op, const std::vector<Operation*>& opLogPtr, size_t idx, DataDependencySearcher& dataDependencySearcher)
+void PipeSync::FindDep(DepOp& op, const std::vector<Operation*>& opLogPtr, size_t idx,
+                       DataDependencySearcher& dataDependencySearcher)
 {
     const auto currOp = opLogPtr[idx];
-    APASS_LOG_DEBUG_F(
-        Elements::Operation, "=== OP: %d %zu %s ===", currOp->GetOpMagic(), idx, currOp->GetOpcodeStr().c_str());
+    APASS_LOG_DEBUG_F(Elements::Operation, "=== OP: %d %zu %s ===", currOp->GetOpMagic(), idx,
+                      currOp->GetOpcodeStr().c_str());
     // check dependency from latest op to oldest
     auto dataDependencySet = dataDependencySearcher.Find(currOp);
     for (auto it = dataDependencySet.rbegin(); it != dataDependencySet.rend(); it++) {
@@ -1759,7 +1757,8 @@ void PipeSync::PushEventIdIfAbsent(std::deque<int>& queue, int eventId)
 Status PipeSync::RecycleCrossCoreEventIds(const PipeCoreRealEx& currPipeRealEx)
 {
     if (crossCoreFreeEventId_.count(currPipeRealEx) == 0) {
-        APASS_LOG_ERROR_F(Elements::Operation,
+        APASS_LOG_ERROR_F(
+            Elements::Operation,
             "crossCoreFreeEventId_ does not contain the given PipeCoreRealEx, RecycleCrossCoreEventIds failed.");
         return FAILED;
     }
@@ -1801,9 +1800,8 @@ std::deque<int>& PipeSync::GetFreeEventIdQueue(const PipePairEx& pp)
     return freeEventId_[pp];
 }
 
-void PipeSync::AddPhaseOp1(
-    Function& function, const std::vector<Operation*>& srcLog, std::vector<Operation*>& dstLog, size_t& i,
-    size_t& prerun)
+void PipeSync::AddPhaseOp1(Function& function, const std::vector<Operation*>& srcLog, std::vector<Operation*>& dstLog,
+                           size_t& i, size_t& prerun)
 {
     constexpr size_t prerunNum = 2;
     for (; i < srcLog.size(); i++) {
@@ -1823,8 +1821,8 @@ void PipeSync::AddPhaseOp1(
             if (prerun == 0) {
                 std::vector<std::shared_ptr<LogicalTensor>> input;
                 std::vector<std::shared_ptr<LogicalTensor>> output;
-                Operation& phaseOp =
-                    irBuilder_.CreateTensorOpStmt(function, npu::tile_fwk::Opcode::OP_PHASE1, input, output);
+                Operation& phaseOp = irBuilder_.CreateTensorOpStmt(function, npu::tile_fwk::Opcode::OP_PHASE1, input,
+                                                                   output);
                 Operation* phaseOpPtr = &phaseOp;
                 dstLog.emplace_back(phaseOpPtr);
             }
@@ -1845,8 +1843,8 @@ void PipeSync::AddPhaseOp2(Function& function, std::vector<Operation*>& dstLog, 
     }
 }
 
-void PipeSync::PhaseKernelProcess(
-    Function& function, const std::vector<Operation*>& srcLog, std::vector<Operation*>& dstLog)
+void PipeSync::PhaseKernelProcess(Function& function, const std::vector<Operation*>& srcLog,
+                                  std::vector<Operation*>& dstLog)
 {
     size_t prerun = 0;
     size_t i = 0;
@@ -1870,11 +1868,11 @@ void InsertSync::InsertPipeAll(Function* subGraphFunc)
         if (i != oriOpList.size() - 1) {
             std::vector<std::shared_ptr<LogicalTensor>> input;
             std::vector<std::shared_ptr<LogicalTensor>> output;
-            Operation& syncOp =
-                irBuilder_.CreateTensorOpStmt(*subGraphFunc, npu::tile_fwk::Opcode::OP_BAR_ALL, input, output);
+            Operation& syncOp = irBuilder_.CreateTensorOpStmt(*subGraphFunc, npu::tile_fwk::Opcode::OP_BAR_ALL, input,
+                                                              output);
             AIVCore nextAIVCore = oriOpList[i + 1]->GetAIVCore();
             syncOp.syncQueue_ = {PipeType::PIPE_ALL, PipeType::PIPE_ALL, CoreType::AIV, CoreType::AIV, -1,
-                                 nextAIVCore, nextAIVCore};
+                                 nextAIVCore,        nextAIVCore};
             syncOp.SetAIVCore(nextAIVCore);
             newOpList.push_back(&syncOp);
         }
@@ -1892,33 +1890,33 @@ void InsertSync::InsertCvSyncOps(Function* subGraphFunc, Operation* currOp, Oper
     AIVCore nextAIVCore = nextOp->GetAIVCore();
     int eventId = (currAivCore == AIVCore::AIV0 || nextAIVCore == AIVCore::AIV0) ? 15 : 31;
 
-    Operation& syncOp1 =
-        irBuilder_.CreateTensorOpStmt(*subGraphFunc, npu::tile_fwk::Opcode::OP_BAR_ALL, input, output);
+    Operation& syncOp1 = irBuilder_.CreateTensorOpStmt(*subGraphFunc, npu::tile_fwk::Opcode::OP_BAR_ALL, input, output);
     syncOp1.syncQueue_ = {PipeType::PIPE_ALL, PipeType::PIPE_ALL, CoreType::AIV, CoreType::AIV, -1,
-                            currAivCore, currAivCore};
+                          currAivCore,        currAivCore};
     syncOp1.SetAIVCore(currAivCore);
     PipeType srcPipe = (currAivCore == AIVCore::UNSPECIFIED) ? PipeType::PIPE_FIX : PipeType::PIPE_MTE3;
-    Operation& cvSyncSrc1 =
-        irBuilder_.CreateTensorOpStmt(*subGraphFunc, npu::tile_fwk::Opcode::OP_CV_SYNC_SRC, input, output);
+    Operation& cvSyncSrc1 = irBuilder_.CreateTensorOpStmt(*subGraphFunc, npu::tile_fwk::Opcode::OP_CV_SYNC_SRC, input,
+                                                          output);
     cvSyncSrc1.syncQueue_ = {srcPipe, srcPipe, CoreType::AIV, CoreType::AIV, eventId, currAivCore, currAivCore};
     cvSyncSrc1.SetAIVCore(currAivCore);
-    Operation& cvSyncDst1 =
-        irBuilder_.CreateTensorOpStmt(*subGraphFunc, npu::tile_fwk::Opcode::OP_CV_SYNC_DST, input, output);
-    cvSyncDst1.syncQueue_ = {PipeType::PIPE_S, PipeType::PIPE_S, CoreType::AIV, CoreType::AIV, eventId, currAivCore, currAivCore};
+    Operation& cvSyncDst1 = irBuilder_.CreateTensorOpStmt(*subGraphFunc, npu::tile_fwk::Opcode::OP_CV_SYNC_DST, input,
+                                                          output);
+    cvSyncDst1.syncQueue_ = {PipeType::PIPE_S, PipeType::PIPE_S, CoreType::AIV, CoreType::AIV,
+                             eventId,          currAivCore,      currAivCore};
     cvSyncDst1.SetAIVCore(currAivCore);
 
-    Operation& syncOp2 =
-        irBuilder_.CreateTensorOpStmt(*subGraphFunc, npu::tile_fwk::Opcode::OP_BAR_ALL, input, output);
+    Operation& syncOp2 = irBuilder_.CreateTensorOpStmt(*subGraphFunc, npu::tile_fwk::Opcode::OP_BAR_ALL, input, output);
     syncOp2.syncQueue_ = {PipeType::PIPE_ALL, PipeType::PIPE_ALL, CoreType::AIV, CoreType::AIV, -1,
-                            nextAIVCore, nextAIVCore};
+                          nextAIVCore,        nextAIVCore};
     syncOp2.SetAIVCore(nextAIVCore);
     PipeType dstPipe = (nextAIVCore == AIVCore::UNSPECIFIED) ? PipeType::PIPE_FIX : PipeType::PIPE_MTE3;
-    Operation& cvSyncDst2 =
-        irBuilder_.CreateTensorOpStmt(*subGraphFunc, npu::tile_fwk::Opcode::OP_CV_SYNC_DST, input, output);
-    cvSyncDst2.syncQueue_ = {PipeType::PIPE_S, PipeType::PIPE_S, CoreType::AIV, CoreType::AIV, eventId, nextAIVCore, nextAIVCore};
+    Operation& cvSyncDst2 = irBuilder_.CreateTensorOpStmt(*subGraphFunc, npu::tile_fwk::Opcode::OP_CV_SYNC_DST, input,
+                                                          output);
+    cvSyncDst2.syncQueue_ = {PipeType::PIPE_S, PipeType::PIPE_S, CoreType::AIV, CoreType::AIV,
+                             eventId,          nextAIVCore,      nextAIVCore};
     cvSyncDst2.SetAIVCore(nextAIVCore);
-    Operation& cvSyncSrc2 =
-        irBuilder_.CreateTensorOpStmt(*subGraphFunc, npu::tile_fwk::Opcode::OP_CV_SYNC_SRC, input, output);
+    Operation& cvSyncSrc2 = irBuilder_.CreateTensorOpStmt(*subGraphFunc, npu::tile_fwk::Opcode::OP_CV_SYNC_SRC, input,
+                                                          output);
     cvSyncSrc2.syncQueue_ = {dstPipe, dstPipe, CoreType::AIV, CoreType::AIV, eventId, nextAIVCore, nextAIVCore};
     cvSyncSrc2.SetAIVCore(nextAIVCore);
 
@@ -1942,16 +1940,16 @@ void InsertSync::InsertCvPipeAll(Function* subGraphFunc)
         }
         auto currOpCfg = OpcodeManager::Inst().GetTileOpCfg(oriOpList[i]->GetOpcode());
         ps.AdjustOpCfg(currOpCfg, *oriOpList[i]);
-        auto nextOpCfg = OpcodeManager::Inst().GetTileOpCfg(oriOpList[i+1]->GetOpcode());
-        ps.AdjustOpCfg(nextOpCfg, *oriOpList[i+1]);
+        auto nextOpCfg = OpcodeManager::Inst().GetTileOpCfg(oriOpList[i + 1]->GetOpcode());
+        ps.AdjustOpCfg(nextOpCfg, *oriOpList[i + 1]);
         if (currOpCfg.coreType_ == nextOpCfg.coreType_) {
             std::vector<std::shared_ptr<LogicalTensor>> input;
             std::vector<std::shared_ptr<LogicalTensor>> output;
-            Operation& syncOp =
-                irBuilder_.CreateTensorOpStmt(*subGraphFunc, npu::tile_fwk::Opcode::OP_BAR_ALL, input, output);
+            Operation& syncOp = irBuilder_.CreateTensorOpStmt(*subGraphFunc, npu::tile_fwk::Opcode::OP_BAR_ALL, input,
+                                                              output);
             AIVCore nextAIVCore = oriOpList[i + 1]->GetAIVCore();
             syncOp.syncQueue_ = {PipeType::PIPE_ALL, PipeType::PIPE_ALL, CoreType::AIV, CoreType::AIV, -1,
-                                 nextAIVCore, nextAIVCore};
+                                 nextAIVCore,        nextAIVCore};
             syncOp.SetAIVCore(nextAIVCore);
             newOpList.push_back(&syncOp);
             continue;
@@ -1978,8 +1976,8 @@ Status InsertSync::CheckNewOpListSeq(const std::vector<Operation*>& oriOpList, c
         }
     }
     if (i != oriOpList.size()) {
-        APASS_LOG_ERROR_F(
-            Elements::Operation, "NewOpList sequence is not equal to OriOpList sequence, CheckNewOpListSeq failed.");
+        APASS_LOG_ERROR_F(Elements::Operation,
+                          "NewOpList sequence is not equal to OriOpList sequence, CheckNewOpListSeq failed.");
         return FAILED;
     }
     return SUCCESS;
@@ -2022,9 +2020,8 @@ Status InsertSync::InsertSyncMainLoop(Function* subGraphFunc)
         return FAILED;
     }
     subGraphFunc->ScheduleBy(opListNew, true);
-    APASS_LOG_DEBUG_F(
-        Elements::Operation,
-        "==========================================================================================");
+    APASS_LOG_DEBUG_F(Elements::Operation,
+                      "==========================================================================================");
     for (const auto& op : subGraphFunc->Operations(false).DuplicatedOpList()) {
         if (op->GetOpcodeStr().find("SYNC_SRC") != std::string::npos ||
             op->GetOpcodeStr().find("SYNC_DST") != std::string::npos || op->GetOpcode() == Opcode::OP_BAR_V ||
@@ -2040,9 +2037,8 @@ Status InsertSync::InsertSyncMainLoop(Function* subGraphFunc)
                 static_cast<int>(op->syncQueue_.setAivCore_), static_cast<int>(op->syncQueue_.waitAivCore_));
             continue;
         }
-        APASS_LOG_DEBUG_F(
-            Elements::Operation, "Output operation %d: %s, AIV core type: %d", op->GetOpMagic(),
-            op->GetOpcodeStr().c_str(), static_cast<int>(op->GetAIVCore()));
+        APASS_LOG_DEBUG_F(Elements::Operation, "Output operation %d: %s, AIV core type: %d", op->GetOpMagic(),
+                          op->GetOpcodeStr().c_str(), static_cast<int>(op->GetAIVCore()));
     }
     return SUCCESS;
 }
@@ -2050,8 +2046,8 @@ Status InsertSync::InsertSyncMainLoop(Function* subGraphFunc)
 // regist pass
 Status InsertSync::RunOnFunction(Function& function)
 {
-    APASS_LOG_INFO_F(
-        Elements::Operation, "===============================================================> Start InsertSync.");
+    APASS_LOG_INFO_F(Elements::Operation,
+                     "===============================================================> Start InsertSync.");
     const unsigned hardwareConcurrency = config::GetPassGlobalConfig(KEY_PASS_THREAD_NUM, 1);
     uint64_t index = 0;
     std::vector<std::pair<uint64_t, Function*>> subPrograms;
@@ -2101,8 +2097,8 @@ Status InsertSync::RunOnFunction(Function& function)
         return FAILED;
     }
 
-    APASS_LOG_INFO_F(
-        Elements::Operation, "===============================================================> Finish InsertSync.");
+    APASS_LOG_INFO_F(Elements::Operation,
+                     "===============================================================> Finish InsertSync.");
     return SUCCESS;
 }
 } // namespace tile_fwk

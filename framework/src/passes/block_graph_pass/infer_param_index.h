@@ -32,19 +32,17 @@ public:
 
 private:
     std::string DumpParamIndex(const std::map<std::string, DynParamInfo>& dynParamTable);
-    bool HandleCopyOpShape(Operation& op, Function &function, bool &isCopyIn);
-    Status ResetOutputDynValidShape(Operation& op, Function &function);
+    bool HandleCopyOpShape(Operation& op, Function& function, bool& isCopyIn);
+    Status ResetOutputDynValidShape(Operation& op, Function& function);
     Status ResetViewDynValidShape(const Operation& op);
     Status ResetAssembleDynValidShape(const Operation& op);
     Status ResetDynValidShape(Function& function);
     Status InsertAddr2ValidShapeSpecified(Operation& op, std::map<int, std::vector<SymbolicScalar>>& addr2ValidShape,
-        std::map<int, std::vector<SymbolicScalar>>& addr2ValidShapeSpecified);
-    Status UpdateValidShape(
-        Function& subFunc, std::map<int, std::vector<SymbolicScalar>>& addr2ValidShape,
-        std::map<int, std::vector<SymbolicScalar>>& addr2ValidShapeSpecified);
-    Status SetSubValidShape(
-        Function& subFunc, std::map<int, std::vector<SymbolicScalar>>& addr2ValidShape,
-        std::map<int, std::vector<SymbolicScalar>>& addr2ValidShapeSpecified);
+                                          std::map<int, std::vector<SymbolicScalar>>& addr2ValidShapeSpecified);
+    Status UpdateValidShape(Function& subFunc, std::map<int, std::vector<SymbolicScalar>>& addr2ValidShape,
+                            std::map<int, std::vector<SymbolicScalar>>& addr2ValidShapeSpecified);
+    Status SetSubValidShape(Function& subFunc, std::map<int, std::vector<SymbolicScalar>>& addr2ValidShape,
+                            std::map<int, std::vector<SymbolicScalar>>& addr2ValidShapeSpecified);
     Status UpdateParamIndex(Function& function);
     Status InferShape(Function& function);
 };

@@ -39,9 +39,8 @@ class TaskSplitter {
 public:
     void SplitGraph(const std::vector<Operation*>& opList); // 此处opList必须符合拓扑序
     void BuildOpGraph();
-    void BuildInOutGraph(
-        std::vector<std::set<int>>& inGraph, std::vector<std::set<int>>& outGraph, std::vector<int>& clusterIds,
-        int clusterNum);
+    void BuildInOutGraph(std::vector<std::set<int>>& inGraph, std::vector<std::set<int>>& outGraph,
+                         std::vector<int>& clusterIds, int clusterNum);
     TaskGraph BuildTaskGraph();
     void BuildSameLayerConnectionWithBack();
     void BuildSameLayerConnectionWithFront();
@@ -58,61 +57,57 @@ public:
     std::unordered_set<int> CollectOooScopeProtectedClusters(DSUWithOrder& dsu);
     std::unordered_set<int> CollectProtectedClusterIds(const std::vector<int>& opCluster) const;
     int BuildCluster(std::vector<int>& clusterIds, std::vector<ScheduleCoreType>& clusterCoreTypes);
-    void ReverseDFSFindByOutputMemType(
-        int opIdx, MemoryType targetMemType, std::vector<int>& result, std::vector<bool>& visited);
+    void ReverseDFSFindByOutputMemType(int opIdx, MemoryType targetMemType, std::vector<int>& result,
+                                       std::vector<bool>& visited);
     std::vector<std::vector<int>> FindMergeableTaskNodes();
     void MergeTask();
     void MergeTaskByTargetCoreType();
     void MarkInternalSubgraphID();
-    void CombineSCC(
-        std::vector<int>& clusterIds, std::vector<ScheduleCoreType>& clusterCoreTypes,
-        std::vector<std::set<int>>& inGraph, std::vector<std::set<int>>& outGraph,
-        std::vector<std::vector<int>>& sccResult);
-    void RecordIDMap(
-        std::unordered_map<int, int>& oldClusterToNewCluster, std::vector<ScheduleCoreType>& clusterCoreTypes);
+    void CombineSCC(std::vector<int>& clusterIds, std::vector<ScheduleCoreType>& clusterCoreTypes,
+                    std::vector<std::set<int>>& inGraph, std::vector<std::set<int>>& outGraph,
+                    std::vector<std::vector<int>>& sccResult);
+    void RecordIDMap(std::unordered_map<int, int>& oldClusterToNewCluster,
+                     std::vector<ScheduleCoreType>& clusterCoreTypes);
     TaskGraph& GetTaskGraph() { return taskGraph_; }
     std::vector<Operation*> GetMergedOperations();
 
     // BuildCluster 辅助函数
     inline bool IsL1MultiConsumerSkip(size_t idx) const;
     inline bool IsL1ToL0Op(int opIdx) const;
-    int CollectClusters(
-        DSUWithOrder& dsu, std::unordered_map<int, int>& rootToCluster, std::vector<ScheduleCoreType>& coreTypes) const;
-    void GetOpClusterIds(
-        DSUWithOrder& dsu, const std::unordered_map<int, int>& rootToCluster, std::vector<int>& opCluster) const;
-    void BuildClusterDepGraph(
-        const std::vector<int>& opCluster, int clusterNum, std::vector<std::set<int>>& clusterIn) const;
-    void BuildClusterInOutGraph(
-        const std::vector<std::set<int>>& clusterIn, int clusterNum, std::vector<std::set<int>>& clusterOut) const;
-    void GroupAIVClustersByDep(
-        const std::vector<std::set<int>>& clusterIn, const std::vector<std::set<int>>& clusterOut,
-        const std::vector<ScheduleCoreType>& tmpCoreTypes, int clusterNum,
-        std::map<std::pair<std::set<int>, std::set<int>>, std::vector<int>>& vecGroups) const;
-    void MergeVecClusterGroup(
-        DSUWithOrder& dsu, const std::vector<int>& opCluster, const std::vector<int>& vecClusters);
-    void GroupAICClustersByDep(
-        const std::vector<std::set<int>>& clusterIn, const std::vector<std::set<int>>& clusterOut,
-        const std::vector<ScheduleCoreType>& tmpCoreTypes, int clusterNum,
-        std::map<std::pair<std::set<int>, std::set<int>>, std::vector<int>>& cubeGroups) const;
-    void MergeCubeClusterGroup(
-        DSUWithOrder& dsu, const std::vector<int>& opCluster, const std::vector<int>& cubeClusters);
-    void BuildClusterGraph(
-        const std::vector<int>& opCluster, int clusterNum, std::vector<std::set<int>>& clIn,
-        std::vector<std::set<int>>& clOut) const;
+    int CollectClusters(DSUWithOrder& dsu, std::unordered_map<int, int>& rootToCluster,
+                        std::vector<ScheduleCoreType>& coreTypes) const;
+    void GetOpClusterIds(DSUWithOrder& dsu, const std::unordered_map<int, int>& rootToCluster,
+                         std::vector<int>& opCluster) const;
+    void BuildClusterDepGraph(const std::vector<int>& opCluster, int clusterNum,
+                              std::vector<std::set<int>>& clusterIn) const;
+    void BuildClusterInOutGraph(const std::vector<std::set<int>>& clusterIn, int clusterNum,
+                                std::vector<std::set<int>>& clusterOut) const;
+    void GroupAIVClustersByDep(const std::vector<std::set<int>>& clusterIn,
+                               const std::vector<std::set<int>>& clusterOut,
+                               const std::vector<ScheduleCoreType>& tmpCoreTypes, int clusterNum,
+                               std::map<std::pair<std::set<int>, std::set<int>>, std::vector<int>>& vecGroups) const;
+    void MergeVecClusterGroup(DSUWithOrder& dsu, const std::vector<int>& opCluster,
+                              const std::vector<int>& vecClusters);
+    void GroupAICClustersByDep(const std::vector<std::set<int>>& clusterIn,
+                               const std::vector<std::set<int>>& clusterOut,
+                               const std::vector<ScheduleCoreType>& tmpCoreTypes, int clusterNum,
+                               std::map<std::pair<std::set<int>, std::set<int>>, std::vector<int>>& cubeGroups) const;
+    void MergeCubeClusterGroup(DSUWithOrder& dsu, const std::vector<int>& opCluster,
+                               const std::vector<int>& cubeClusters);
+    void BuildClusterGraph(const std::vector<int>& opCluster, int clusterNum, std::vector<std::set<int>>& clIn,
+                           std::vector<std::set<int>>& clOut) const;
     void EstimateClusterCycles(const std::vector<int>& opCluster, int clusterNum, std::vector<int>& clusterCycle) const;
-    std::vector<int> TopoSortClusters(
-        int clusterNum, const std::vector<std::set<int>>& clIn, const std::vector<std::set<int>>& clOut) const;
-    int FindMergeTarget(
-        int clusterId, const std::vector<ScheduleCoreType>& coreTypes, const std::vector<int>& cycle,
-        const std::vector<std::set<int>>& clIn, const std::vector<std::set<int>>& clOut) const;
+    std::vector<int> TopoSortClusters(int clusterNum, const std::vector<std::set<int>>& clIn,
+                                      const std::vector<std::set<int>>& clOut) const;
+    int FindMergeTarget(int clusterId, const std::vector<ScheduleCoreType>& coreTypes, const std::vector<int>& cycle,
+                        const std::vector<std::set<int>>& clIn, const std::vector<std::set<int>>& clOut) const;
     void UnionTwoClusters(DSUWithOrder& dsu, const std::vector<int>& opCluster, int srcCluster, int dstCluster);
-    void UpdateClusterGraphAfterMerge(
-        int src, int dst, std::vector<int>& cycle, std::vector<std::set<int>>& clIn,
-        std::vector<std::set<int>>& clOut) const;
-    void RunSmallClusterMerge(
-        DSUWithOrder& dsu, const std::vector<int>& topoOrder, std::vector<ScheduleCoreType>& coreTypes,
-        std::vector<int>& cycle, std::vector<std::set<int>>& clIn, std::vector<std::set<int>>& clOut, int clusterNum,
-        const std::unordered_set<int>& protectedClusterIds = {});
+    void UpdateClusterGraphAfterMerge(int src, int dst, std::vector<int>& cycle, std::vector<std::set<int>>& clIn,
+                                      std::vector<std::set<int>>& clOut) const;
+    void RunSmallClusterMerge(DSUWithOrder& dsu, const std::vector<int>& topoOrder,
+                              std::vector<ScheduleCoreType>& coreTypes, std::vector<int>& cycle,
+                              std::vector<std::set<int>>& clIn, std::vector<std::set<int>>& clOut, int clusterNum,
+                              const std::unordered_set<int>& protectedClusterIds = {});
 
     // 基于 task 间 AIV 连通性计算分支 ID
     void ComputeTaskLevelBranches();
@@ -132,17 +127,16 @@ public:
     std::unordered_set<int> oooScopeProtectedClusters_;
     std::vector<std::vector<int>> cycledSCCClusters_;
     std::vector<std::pair<int, int>> cycledTaskNodePairs_;
-    void RecordCycledClusters(
-        const std::vector<ScheduleCoreType>& clusterCoreTypes, const std::vector<std::vector<int>>& sccResult);
+    void RecordCycledClusters(const std::vector<ScheduleCoreType>& clusterCoreTypes,
+                              const std::vector<std::vector<int>>& sccResult);
     const std::vector<std::pair<int, int>>& GetCycledTaskNodePairs() const { return cycledTaskNodePairs_; }
 };
 
 // 使用TarJan算法寻找强连通分量
 class StrongConnectionComponentFinder {
 public:
-    void Find(
-        std::vector<std::set<int>>& inGraph, std::vector<std::set<int>>& outGraph,
-        std::vector<std::vector<int>>& sccResult);
+    void Find(std::vector<std::set<int>>& inGraph, std::vector<std::set<int>>& outGraph,
+              std::vector<std::vector<int>>& sccResult);
     void TarJanAlg(int idx, std::vector<std::set<int>>& outGraph, std::vector<std::vector<int>>& sccResult);
     std::vector<std::vector<int>> strongConnectionComponent_;
     int index_;

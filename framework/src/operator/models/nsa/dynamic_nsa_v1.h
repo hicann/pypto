@@ -101,30 +101,28 @@ struct NSAV1SimpleParams {
         return params;
     }
 };
-void GenGatedScoreCompute(
-    const Tensor& x, const Tensor& gateW1, const Tensor& gateW2, const Tensor& gateSimW1, Tensor& gatingScore,
-    GateMode gateMode);
+void GenGatedScoreCompute(const Tensor& x, const Tensor& gateW1, const Tensor& gateW2, const Tensor& gateSimW1,
+                          Tensor& gatingScore, GateMode gateMode);
 
-void GenGatedScore(
-    const Tensor& x, const Tensor& gateW1, const Tensor& gateW2, const Tensor& gateSimW1, Tensor& gatingScore,
-    GateMode gateMode);
+void GenGatedScore(const Tensor& x, const Tensor& gateW1, const Tensor& gateW2, const Tensor& gateSimW1,
+                   Tensor& gatingScore, GateMode gateMode);
 
 void GenAttn(Tensor& gatingScore, Tensor& cmpAtten, Tensor& selAtten, Tensor& winAtten, Tensor& attentionOut);
 
-void DynamicNsa(
-    const Tensor& tokenX, const Tensor& wDq, const Tensor& wUqQr, const Tensor& wUk, const Tensor& wDkvKr,
-    const Tensor& gammaCq, const Tensor& gammaCkv, const Tensor& sin, const Tensor& cos, const Tensor& cacheIndex,
-    Tensor& kvCache, Tensor& krCache, const MlaQuantInputs& quantInputs, const MlaTileConfig& tileConfig,
-    float epsilonCq, float epsilonCkv, std::string cacheMode, Tensor& topkIndices, Tensor& kvActSeqs,
-    Tensor& blockTable, int front, int near, int topk, int slcBlockSize, int blockSize, float softmaxScale,
-    SATileShapeConfig saTileConfig, const Tensor& gateW1, const Tensor& gateW2, const Tensor& gateSimW1,
-    GateMode gateMode, Tensor& cmpAtten, int winSize, WinAttenTileShapeConfig& winAttntileConfig,
-    PostTensors& postTensors, const PostTileConfig& postConfig, Tensor& kvCacheOut, Tensor& krCacheOut, Tensor& postOut,
-    const Tensor& cmpKvCache, const Tensor& cmpKrCache, const Tensor& cmpBlockTable, const Tensor& actSeqLen,
-    const Tensor& actCmpSeqLen, const Tensor& mlpWk1, const Tensor& mlpWk2, const Tensor& mlpCos, const Tensor& mlpSin,
-    Tensor& cmpAttnOut, Tensor& cmpSoftmax, Tensor& fullK, Tensor& cmpK, Tensor& firstRope, Tensor& firstRopeInput,
-    Tensor& topkRes, Tensor& topkInput, const int cmpBlockSize, const int cmpStride, CmpAttnTile& tileConfig_v2,
-    bool debug = false);
+void DynamicNsa(const Tensor& tokenX, const Tensor& wDq, const Tensor& wUqQr, const Tensor& wUk, const Tensor& wDkvKr,
+                const Tensor& gammaCq, const Tensor& gammaCkv, const Tensor& sin, const Tensor& cos,
+                const Tensor& cacheIndex, Tensor& kvCache, Tensor& krCache, const MlaQuantInputs& quantInputs,
+                const MlaTileConfig& tileConfig, float epsilonCq, float epsilonCkv, std::string cacheMode,
+                Tensor& topkIndices, Tensor& kvActSeqs, Tensor& blockTable, int front, int near, int topk,
+                int slcBlockSize, int blockSize, float softmaxScale, SATileShapeConfig saTileConfig,
+                const Tensor& gateW1, const Tensor& gateW2, const Tensor& gateSimW1, GateMode gateMode,
+                Tensor& cmpAtten, int winSize, WinAttenTileShapeConfig& winAttntileConfig, PostTensors& postTensors,
+                const PostTileConfig& postConfig, Tensor& kvCacheOut, Tensor& krCacheOut, Tensor& postOut,
+                const Tensor& cmpKvCache, const Tensor& cmpKrCache, const Tensor& cmpBlockTable,
+                const Tensor& actSeqLen, const Tensor& actCmpSeqLen, const Tensor& mlpWk1, const Tensor& mlpWk2,
+                const Tensor& mlpCos, const Tensor& mlpSin, Tensor& cmpAttnOut, Tensor& cmpSoftmax, Tensor& fullK,
+                Tensor& cmpK, Tensor& firstRope, Tensor& firstRopeInput, Tensor& topkRes, Tensor& topkInput,
+                const int cmpBlockSize, const int cmpStride, CmpAttnTile& tileConfig_v2, bool debug = false);
 
 } // namespace npu::tile_fwk
 

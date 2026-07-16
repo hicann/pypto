@@ -38,9 +38,8 @@ public:
     void TearDown() override {}
 };
 
-void AddTensor(
-    ComputationalGraphBuilder& G, const std::string name, const Shape& shape, const Shape& rawShape,
-    const Offset& offset, const MemoryType memType)
+void AddTensor(ComputationalGraphBuilder& G, const std::string name, const Shape& shape, const Shape& rawShape,
+               const Offset& offset, const MemoryType memType)
 {
     std::string nameRaw = name + "_raw";
     G.AddTensor(DataType::DT_FP32, rawShape, nameRaw);

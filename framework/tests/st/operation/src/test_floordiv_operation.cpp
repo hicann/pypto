@@ -65,8 +65,8 @@ std::vector<int64_t> GetBroadCastOffsetRatio(const Tensor& self, const Tensor& o
     return result;
 }
 
-void FloorDivOperationExeFunc1Dim(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+void FloorDivOperationExeFunc1Dim(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                  const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0], inputs[1]}, {outputs[0]})
     {
@@ -78,17 +78,17 @@ void FloorDivOperationExeFunc1Dim(
         LOOP("LOOP_L0_bIdx", FunctionType::DYNAMIC_LOOP, bIdx, LoopRange(0, bloop, 1))
         {
             const Shape& tile0ViewShape = GetBroadCastViewShape(inputs[0], inputs[1], args->viewShape_);
-            const std::vector<int64_t>& tile0OffsetRatio =
-                GetBroadCastOffsetRatio(inputs[0], inputs[1], args->viewShape_);
+            const std::vector<int64_t>& tile0OffsetRatio = GetBroadCastOffsetRatio(inputs[0], inputs[1],
+                                                                                   args->viewShape_);
             const Shape& tile1ViewShape = GetBroadCastViewShape(inputs[1], inputs[0], args->viewShape_);
-            const std::vector<int64_t>& tile1OffsetRatio =
-                GetBroadCastOffsetRatio(inputs[1], inputs[0], args->viewShape_);
-            Tensor tileTensor0 = View(
-                inputs[0], {tile0ViewShape[0]}, {std::min(firstDim - bIdx * tile0ViewShape[0], tile0ViewShape[0])},
-                {bIdx * tile0ViewShape[0] * tile0OffsetRatio[0]});
-            Tensor tileTensor1 = View(
-                inputs[1], {tile1ViewShape[0]}, {std::min(firstDim - bIdx * tile1ViewShape[0], tile1ViewShape[0])},
-                {bIdx * tile1ViewShape[0] * tile1OffsetRatio[0]});
+            const std::vector<int64_t>& tile1OffsetRatio = GetBroadCastOffsetRatio(inputs[1], inputs[0],
+                                                                                   args->viewShape_);
+            Tensor tileTensor0 = View(inputs[0], {tile0ViewShape[0]},
+                                      {std::min(firstDim - bIdx * tile0ViewShape[0], tile0ViewShape[0])},
+                                      {bIdx * tile0ViewShape[0] * tile0OffsetRatio[0]});
+            Tensor tileTensor1 = View(inputs[1], {tile1ViewShape[0]},
+                                      {std::min(firstDim - bIdx * tile1ViewShape[0], tile1ViewShape[0])},
+                                      {bIdx * tile1ViewShape[0] * tile1OffsetRatio[0]});
             TileShape::Current().SetVecTile(args->tileShape_);
             auto res = FloorDiv(tileTensor0, tileTensor1);
             Assemble(res, {bIdx * firstViewShape}, outputs[0]);
@@ -96,8 +96,8 @@ void FloorDivOperationExeFunc1Dim(
     }
 }
 
-void FloorDivOperationExeFunc2Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+void FloorDivOperationExeFunc2Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                   const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0], inputs[1]}, {outputs[0]})
     {
@@ -114,11 +114,11 @@ void FloorDivOperationExeFunc2Dims(
             LOOP("LOOP_L1_sIdx", FunctionType::DYNAMIC_LOOP, sIdx, LoopRange(0, sloop, 1))
             {
                 const Shape& tile0ViewShape = GetBroadCastViewShape(inputs[0], inputs[1], args->viewShape_);
-                const std::vector<int64_t>& tile0OffsetRatio =
-                    GetBroadCastOffsetRatio(inputs[0], inputs[1], args->viewShape_);
+                const std::vector<int64_t>& tile0OffsetRatio = GetBroadCastOffsetRatio(inputs[0], inputs[1],
+                                                                                       args->viewShape_);
                 const Shape& tile1ViewShape = GetBroadCastViewShape(inputs[1], inputs[0], args->viewShape_);
-                const std::vector<int64_t>& tile1OffsetRatio =
-                    GetBroadCastOffsetRatio(inputs[1], inputs[0], args->viewShape_);
+                const std::vector<int64_t>& tile1OffsetRatio = GetBroadCastOffsetRatio(inputs[1], inputs[0],
+                                                                                       args->viewShape_);
                 Tensor tileTensor0 = View(
                     inputs[0], {tile0ViewShape[0], tile0ViewShape[1]},
                     {std::min(firstDim - bIdx * tile0ViewShape[0], tile0ViewShape[0]),
@@ -137,8 +137,8 @@ void FloorDivOperationExeFunc2Dims(
     }
 }
 
-void FloorDivOperationExeFunc3Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+void FloorDivOperationExeFunc3Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                   const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0], inputs[1]}, {outputs[0]})
     {
@@ -161,11 +161,11 @@ void FloorDivOperationExeFunc3Dims(
                 LOOP("LOOP_L2_nIdx", FunctionType::DYNAMIC_LOOP, nIdx, LoopRange(0, nloop, 1))
                 {
                     const Shape& tile0ViewShape = GetBroadCastViewShape(inputs[0], inputs[1], args->viewShape_);
-                    const std::vector<int64_t>& tile0OffsetRatio =
-                        GetBroadCastOffsetRatio(inputs[0], inputs[1], args->viewShape_);
+                    const std::vector<int64_t>& tile0OffsetRatio = GetBroadCastOffsetRatio(inputs[0], inputs[1],
+                                                                                           args->viewShape_);
                     const Shape& tile1ViewShape = GetBroadCastViewShape(inputs[1], inputs[0], args->viewShape_);
-                    const std::vector<int64_t>& tile1OffsetRatio =
-                        GetBroadCastOffsetRatio(inputs[1], inputs[0], args->viewShape_);
+                    const std::vector<int64_t>& tile1OffsetRatio = GetBroadCastOffsetRatio(inputs[1], inputs[0],
+                                                                                           args->viewShape_);
                     Tensor tileTensor0 = View(
                         inputs[0], {tile0ViewShape[0], tile0ViewShape[1], tile0ViewShape[2]},
                         {std::min(firstDim - bIdx * tile0ViewShape[0], tile0ViewShape[0]),
@@ -189,8 +189,8 @@ void FloorDivOperationExeFunc3Dims(
     }
 }
 
-void FloorDivOperationExeFunc4Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+void FloorDivOperationExeFunc4Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                   const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0], inputs[1]}, {outputs[0]})
     {
@@ -218,11 +218,11 @@ void FloorDivOperationExeFunc4Dims(
                     LOOP("LOOP_L3_kIdx", FunctionType::DYNAMIC_LOOP, kIdx, LoopRange(0, kloop, 1))
                     {
                         const Shape& tile0ViewShape = GetBroadCastViewShape(inputs[0], inputs[1], args->viewShape_);
-                        const std::vector<int64_t>& tile0OffsetRatio =
-                            GetBroadCastOffsetRatio(inputs[0], inputs[1], args->viewShape_);
+                        const std::vector<int64_t>& tile0OffsetRatio = GetBroadCastOffsetRatio(inputs[0], inputs[1],
+                                                                                               args->viewShape_);
                         const Shape& tile1ViewShape = GetBroadCastViewShape(inputs[1], inputs[0], args->viewShape_);
-                        const std::vector<int64_t>& tile1OffsetRatio =
-                            GetBroadCastOffsetRatio(inputs[1], inputs[0], args->viewShape_);
+                        const std::vector<int64_t>& tile1OffsetRatio = GetBroadCastOffsetRatio(inputs[1], inputs[0],
+                                                                                               args->viewShape_);
                         Tensor tileTensor0 = View(
                             inputs[0], {tile0ViewShape[0], tile0ViewShape[1], tile0ViewShape[2], tile0ViewShape[3]},
                             {std::min(firstDim - bIdx * tile0ViewShape[0], tile0ViewShape[0]),
@@ -245,11 +245,10 @@ void FloorDivOperationExeFunc4Dims(
                              kIdx * tile1ViewShape[3] * tile1OffsetRatio[3]});
                         TileShape::Current().SetVecTile(args->tileShape_);
                         auto res = FloorDiv(tileTensor0, tileTensor1);
-                        Assemble(
-                            res,
-                            {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape,
-                             kIdx * fourthViewShape},
-                            outputs[0]);
+                        Assemble(res,
+                                 {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape,
+                                  kIdx * fourthViewShape},
+                                 outputs[0]);
                     }
                 }
             }
@@ -259,10 +258,11 @@ void FloorDivOperationExeFunc4Dims(
 
 class FloorDivOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac_param<FloorDivOpMetaData> {};
 
-INSTANTIATE_TEST_SUITE_P(
-    TestFloorDiv, FloorDivOperationTest,
-    ::testing::ValuesIn(GetOpMetaData<FloorDivOpMetaData, 1>(
-        {FloorDivOperationExeFunc1Dim, FloorDivOperationExeFunc2Dims, FloorDivOperationExeFunc3Dims, FloorDivOperationExeFunc4Dims}, "FloorDiv")));
+INSTANTIATE_TEST_SUITE_P(TestFloorDiv, FloorDivOperationTest,
+                         ::testing::ValuesIn(GetOpMetaData<FloorDivOpMetaData, 1>(
+                             {FloorDivOperationExeFunc1Dim, FloorDivOperationExeFunc2Dims,
+                              FloorDivOperationExeFunc3Dims, FloorDivOperationExeFunc4Dims},
+                             "FloorDiv")));
 
 TEST_P(FloorDivOperationTest, TestFloorDiv)
 {

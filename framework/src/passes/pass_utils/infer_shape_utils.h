@@ -23,22 +23,22 @@ namespace npu {
 namespace tile_fwk {
 class InferShapeUtils {
 public:
-/**
- * @brief Common InferShape method, supporting full-graph inference and targeted op inference.
- * 
- * @param function The function on which shape inference is to be performed.
- * @param targetOps List of target operations to infer shapes for. If empty, inference is performed 
- *                  on all operations in the function. If non-empty, only the specified operations 
- *                  are inferred, but it is required that targetOps includes all necessary 
- *                  dependent operations; otherwise, topological ordering and inference may be incorrect.
- * @return Status Operation result, SUCCESS indicates success, FAILED indicates failure.
- * 
- * @note When targetOps is non-empty, only the operations in targetOps are included in the operation set, 
- *       and only edges between operations within targetOps are added during dependency graph construction. 
- *       The caller must ensure that targetOps contains all required dependent operations, or that the 
- *       DynValidShape of those operations is already correctly set, to avoid inference errors caused by 
- *       dependency truncation.
- */
+    /**
+     * @brief Common InferShape method, supporting full-graph inference and targeted op inference.
+     *
+     * @param function The function on which shape inference is to be performed.
+     * @param targetOps List of target operations to infer shapes for. If empty, inference is performed
+     *                  on all operations in the function. If non-empty, only the specified operations
+     *                  are inferred, but it is required that targetOps includes all necessary
+     *                  dependent operations; otherwise, topological ordering and inference may be incorrect.
+     * @return Status Operation result, SUCCESS indicates success, FAILED indicates failure.
+     *
+     * @note When targetOps is non-empty, only the operations in targetOps are included in the operation set,
+     *       and only edges between operations within targetOps are added during dependency graph construction.
+     *       The caller must ensure that targetOps contains all required dependent operations, or that the
+     *       DynValidShape of those operations is already correctly set, to avoid inference errors caused by
+     *       dependency truncation.
+     */
     static Status InferShape(Function& function, const std::vector<Operation*>& targetOps = {});
 };
 } // namespace tile_fwk

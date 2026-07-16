@@ -98,7 +98,7 @@ inline constexpr uint64_t GIBI = UINT64_C(1024) * 1024 * 1024;
 
 constexpr const int INVALID_LOOP_GROUPID = -1;
 
-template<typename ValueType = int64_t>
+template <typename ValueType = int64_t>
 inline ValueType AlignUp(ValueType value, int64_t alignment)
 {
     if (alignment == 0) {
@@ -178,12 +178,12 @@ enum IQType {
 
 // hardware pipeline
 enum PipeType {
-    PIPE_S = 0,    // Scalar Pipe
-    PIPE_V,        // Vector Pipe, including{VectorOP write UB,  L0C->UB write}
-    PIPE_M,        // Matrix Pipe, including{}
-    PIPE_MTE1,     // L1->L0{A,B}
-    PIPE_MTE2,     // OUT ->{L1, L0{A,B}, UB}
-    PIPE_MTE3,     // UB ->{OUT,L1}
+    PIPE_S = 0, // Scalar Pipe
+    PIPE_V,     // Vector Pipe, including{VectorOP write UB,  L0C->UB write}
+    PIPE_M,     // Matrix Pipe, including{}
+    PIPE_MTE1,  // L1->L0{A,B}
+    PIPE_MTE2,  // OUT ->{L1, L0{A,B}, UB}
+    PIPE_MTE3,  // UB ->{OUT,L1}
     PIPE_ALL,
     PIPE_MTE4 = 7, // MOV_UB_TO_OUT
     PIPE_MTE5 = 8, // MOV_OUT_TO_UB
@@ -224,11 +224,13 @@ void CombineLastTwoAxisOffset(std::vector<T>& offset, const std::vector<int64_t>
         return;
     }
     ASSERT(TensorErr::TENSOR_SHAPE_MISMATCH, shapeSize >= NUM2)
-         << "shapeSize " << shapeSize << " must be greater than " << NUM2;
+        << "shapeSize " << shapeSize << " must be greater than " << NUM2;
     ASSERT(TensorErr::TENSOR_SHAPE_MISMATCH, offset.size() == shapeSize)
-         << "offset size " << offset.size() << "must be equal to shapeSize " << shapeSize << ", offset " << IntVecToStr(offset);
+        << "offset size " << offset.size() << "must be equal to shapeSize " << shapeSize << ", offset "
+        << IntVecToStr(offset);
     ASSERT(TensorErr::TENSOR_SHAPE_MISMATCH, rawShape.size() == shapeSize)
-         << "rawShape size " << rawShape.size() << "must be equal to shapeSize " << shapeSize << ", rawShape " << IntVecToStr(rawShape);
+        << "rawShape size " << rawShape.size() << "must be equal to shapeSize " << shapeSize << ", rawShape "
+        << IntVecToStr(rawShape);
     offset[shapeSize - 1] = offset[shapeSize - NUM2] * rawShape[shapeSize - 1] + offset[shapeSize - 1];
     offset[shapeSize - NUM2] = 0;
 }
@@ -513,13 +515,15 @@ inline bool IsPtoDataDumpEnabled()
 }
 
 // 向上取整除法
-inline int CeilDiv(int a, int b) {
+inline int CeilDiv(int a, int b)
+{
     ASSERT(b != 0) << "Param(b) must not be zero.";
     return a / b + (a % b != 0 ? 1 : 0);
 }
 
 // 向下取整除法
-inline int FloorDiv(int a, int b) {
+inline int FloorDiv(int a, int b)
+{
     ASSERT(b != 0) << "Param(b) must not be zero.";
     return a / b;
 }
@@ -584,7 +588,7 @@ enum class CopyOutMode : int64_t { NZ2ND = 0, NZ2NZ = 1, ND2ND = 2, NZ2DN = 3 };
 
 enum class CopyMode : int64_t { UNKNOWN = 0, EXTRACT = 1, INSERT = 2, MOVE = 3 };
 
-enum class PaddingMode : int64_t { NORMAL_PADDING_MODE = 0, MX_PADDING_MODE = 1};
+enum class PaddingMode : int64_t { NORMAL_PADDING_MODE = 0, MX_PADDING_MODE = 1 };
 } // namespace Matrix
 
 std::string SafeExecCommandWithOutput(const std::vector<std::string>& args);

@@ -20,8 +20,8 @@
 
 namespace npu::tile_fwk {
 namespace {
-ScalarImmediateType EvaluateSymbolicCallRuntimeGetInputShapeDimSize(
-    EvaluateSymbol* evaluateSymbol, const std::vector<ScalarImmediateType>& dataList)
+ScalarImmediateType EvaluateSymbolicCallRuntimeGetInputShapeDimSize(EvaluateSymbol* evaluateSymbol,
+                                                                    const std::vector<ScalarImmediateType>& dataList)
 {
     FE_ASSERT(dataList.size() == 1);
     auto inputIndex = dataList[0];
@@ -31,8 +31,8 @@ ScalarImmediateType EvaluateSymbolicCallRuntimeGetInputShapeDimSize(
     return ret;
 }
 
-ScalarImmediateType EvaluateSymbolicCallRuntimeGetInputShapeDim(
-    EvaluateSymbol* evaluateSymbol, const std::vector<ScalarImmediateType>& dataList)
+ScalarImmediateType EvaluateSymbolicCallRuntimeGetInputShapeDim(EvaluateSymbol* evaluateSymbol,
+                                                                const std::vector<ScalarImmediateType>& dataList)
 {
     FE_ASSERT(dataList.size() == SIZE_TWO);
     auto inputIndex = dataList[0];
@@ -43,8 +43,8 @@ ScalarImmediateType EvaluateSymbolicCallRuntimeGetInputShapeDim(
     return ret;
 }
 
-ScalarImmediateType EvaluateSymbolicCallRuntimeGetInputData(
-    EvaluateSymbol* evaluateSymbol, const std::vector<ScalarImmediateType>& dataList)
+ScalarImmediateType EvaluateSymbolicCallRuntimeGetInputData(EvaluateSymbol* evaluateSymbol,
+                                                            const std::vector<ScalarImmediateType>& dataList)
 {
     auto inputIndex = dataList[0];
     auto input = evaluateSymbol->GetInputDataViewList()[inputIndex];
@@ -57,8 +57,9 @@ ScalarImmediateType EvaluateSymbolicCallRuntimeGetInputData(
     return ret;
 }
 
-ScalarImmediateType EvaluateSymbolicCallRuntimeGetTensorDataInt32(
-    EvaluateSymbol* evaluateSymbol, int ioType, int ioTypeIndex, const std::vector<ScalarImmediateType>& offsetList)
+ScalarImmediateType EvaluateSymbolicCallRuntimeGetTensorDataInt32(EvaluateSymbol* evaluateSymbol, int ioType,
+                                                                  int ioTypeIndex,
+                                                                  const std::vector<ScalarImmediateType>& offsetList)
 {
     UNUSED(offsetList);
     auto inoutDataPair = evaluateSymbol->GetInoutDataPair();
@@ -75,43 +76,44 @@ ScalarImmediateType EvaluateSymbolicCallRuntimeGetTensorDataInt32(
     return ret;
 }
 
-ScalarImmediateType EvaluateSymbolicCallRuntimeGetTensorDataInt32Dim1(
-    EvaluateSymbol* evaluateSymbol, const std::vector<ScalarImmediateType>& dataList)
+ScalarImmediateType EvaluateSymbolicCallRuntimeGetTensorDataInt32Dim1(EvaluateSymbol* evaluateSymbol,
+                                                                      const std::vector<ScalarImmediateType>& dataList)
 {
     auto ioType = dataList[GET_TENSOR_DATA_OPERAND_INDEX_IOTYPE - 1];
     auto ioTypeIndex = dataList[GET_TENSOR_DATA_OPERAND_INDEX_IOTYPE_INDEX - 1];
-    std::vector<ScalarImmediateType> offsetList(
-        dataList.begin() + GET_TENSOR_DATA_OPERAND_INDEX_ADDRESS - 1 + 1, dataList.end());
+    std::vector<ScalarImmediateType> offsetList(dataList.begin() + GET_TENSOR_DATA_OPERAND_INDEX_ADDRESS - 1 + 1,
+                                                dataList.end());
 
     auto ret = EvaluateSymbolicCallRuntimeGetTensorDataInt32(evaluateSymbol, ioType, ioTypeIndex, offsetList);
     return ret;
 }
 
-ScalarImmediateType EvaluateSymbolicCallRuntimeGetTensorDataInt32Dim2(
-    EvaluateSymbol* evaluateSymbol, const std::vector<ScalarImmediateType>& dataList)
+ScalarImmediateType EvaluateSymbolicCallRuntimeGetTensorDataInt32Dim2(EvaluateSymbol* evaluateSymbol,
+                                                                      const std::vector<ScalarImmediateType>& dataList)
 {
     auto ioType = dataList[GET_TENSOR_DATA_OPERAND_INDEX_IOTYPE - 1];
     auto ioTypeIndex = dataList[GET_TENSOR_DATA_OPERAND_INDEX_IOTYPE_INDEX - 1];
-    std::vector<ScalarImmediateType> offsetList(
-        dataList.begin() + GET_TENSOR_DATA_OPERAND_INDEX_ADDRESS - 1 + 1, dataList.end());
+    std::vector<ScalarImmediateType> offsetList(dataList.begin() + GET_TENSOR_DATA_OPERAND_INDEX_ADDRESS - 1 + 1,
+                                                dataList.end());
 
     auto ret = EvaluateSymbolicCallRuntimeGetTensorDataInt32(evaluateSymbol, ioType, ioTypeIndex, offsetList);
     return ret;
 }
 
-ScalarImmediateType EvaluateSymbolicCallRuntimeGetTensorDataInt32Dim3(
-    EvaluateSymbol* evaluateSymbol, const std::vector<ScalarImmediateType>& dataList)
+ScalarImmediateType EvaluateSymbolicCallRuntimeGetTensorDataInt32Dim3(EvaluateSymbol* evaluateSymbol,
+                                                                      const std::vector<ScalarImmediateType>& dataList)
 {
     auto ioType = dataList[GET_TENSOR_DATA_OPERAND_INDEX_IOTYPE - 1];
     auto ioTypeIndex = dataList[GET_TENSOR_DATA_OPERAND_INDEX_IOTYPE_INDEX - 1];
-    std::vector<ScalarImmediateType> offsetList(
-        dataList.begin() + GET_TENSOR_DATA_OPERAND_INDEX_ADDRESS - 1 + 1, dataList.end());
+    std::vector<ScalarImmediateType> offsetList(dataList.begin() + GET_TENSOR_DATA_OPERAND_INDEX_ADDRESS - 1 + 1,
+                                                dataList.end());
 
     auto ret = EvaluateSymbolicCallRuntimeGetTensorDataInt32(evaluateSymbol, ioType, ioTypeIndex, offsetList);
     return ret;
 }
 
-ScalarImmediateType EvaluateSymbolicCallGetHcclRankId(EvaluateSymbol *evaluateSymbol, const std::vector<ScalarImmediateType> &dataList)
+ScalarImmediateType EvaluateSymbolicCallGetHcclRankId(EvaluateSymbol* evaluateSymbol,
+                                                      const std::vector<ScalarImmediateType>& dataList)
 {
     int hcclIdx = static_cast<int>(dataList[0]);
     return evaluateSymbol->EvaluateRankId(hcclIdx);
@@ -123,24 +125,24 @@ ScalarImmediateType EvaluateSymbolicCallGetParaAddr(EvaluateSymbol*, const std::
     return 0;
 }
 
-ScalarImmediateType EvaluateSymbolicCallRuntimeIsLoopBegin(
-    EvaluateSymbol* evaluateSymbol, const std::vector<ScalarImmediateType>& dataList)
+ScalarImmediateType EvaluateSymbolicCallRuntimeIsLoopBegin(EvaluateSymbol* evaluateSymbol,
+                                                           const std::vector<ScalarImmediateType>& dataList)
 {
     FE_ASSERT(dataList.size() == SIZE_TWO);
     auto ret = evaluateSymbol->RuntimeIsLoopBegin(dataList[0], dataList[1]);
     return ret;
 }
 
-ScalarImmediateType EvaluateSymbolicCallRuntimeIsLoopEnd(
-    EvaluateSymbol* evaluateSymbol, const std::vector<ScalarImmediateType>& dataList)
+ScalarImmediateType EvaluateSymbolicCallRuntimeIsLoopEnd(EvaluateSymbol* evaluateSymbol,
+                                                         const std::vector<ScalarImmediateType>& dataList)
 {
     FE_ASSERT(dataList.size() == SIZE_TWO);
     auto ret = evaluateSymbol->RuntimeIsLoopEnd(dataList[0], dataList[1]);
     return ret;
 }
 
-ScalarImmediateType EvaluateSymbolicCallRuntimeGetViewValidShapeDim(
-    EvaluateSymbol* evaluateSymbol, const std::vector<ScalarImmediateType>& dataList)
+ScalarImmediateType EvaluateSymbolicCallRuntimeGetViewValidShapeDim(EvaluateSymbol* evaluateSymbol,
+                                                                    const std::vector<ScalarImmediateType>& dataList)
 {
     UNUSED(evaluateSymbol);
     FE_ASSERT(dataList.size() == SIZE_THREE);
@@ -155,18 +157,18 @@ ScalarImmediateType EvaluateSymbolicCallRuntimeGetViewValidShapeDim(
     return validshape;
 }
 
-ScalarImmediateType EvaluateSymbolicCallRuntimeCoaGetValidShape(
-    EvaluateSymbol* evaluateSymbol, const std::vector<ScalarImmediateType>& dataList,
-    const std::vector<SymbolicScalar>& linearArgList)
+ScalarImmediateType EvaluateSymbolicCallRuntimeCoaGetValidShape(EvaluateSymbol* evaluateSymbol,
+                                                                const std::vector<ScalarImmediateType>& dataList,
+                                                                const std::vector<SymbolicScalar>& linearArgList)
 {
     FE_ASSERT(linearArgList.size()) << "linearArgList is null";
     auto coaIndex = dataList[1] + COA_INDEX_DIM_BASE + dataList[0] * 3 + dataList[2];
     return evaluateSymbol->EvaluateSymbolicScalar(linearArgList[coaIndex]);
 }
 
-ScalarImmediateType EvaluateSymbolicCallRuntimeCoaGetOffset(
-    EvaluateSymbol* evaluateSymbol, const std::vector<ScalarImmediateType>& dataList,
-    const std::vector<SymbolicScalar>& linearArgList)
+ScalarImmediateType EvaluateSymbolicCallRuntimeCoaGetOffset(EvaluateSymbol* evaluateSymbol,
+                                                            const std::vector<ScalarImmediateType>& dataList,
+                                                            const std::vector<SymbolicScalar>& linearArgList)
 {
     FE_ASSERT(linearArgList.size()) << "linearArgList is null";
 
@@ -174,9 +176,9 @@ ScalarImmediateType EvaluateSymbolicCallRuntimeCoaGetOffset(
     return evaluateSymbol->EvaluateSymbolicScalar(linearArgList[coaIndex]);
 }
 
-ScalarImmediateType EvaluateSymbolicCallRuntimeCoaGetRawShape(
-    EvaluateSymbol* evaluateSymbol, const std::vector<ScalarImmediateType>& dataList,
-    const std::vector<SymbolicScalar>& linearArgList)
+ScalarImmediateType EvaluateSymbolicCallRuntimeCoaGetRawShape(EvaluateSymbol* evaluateSymbol,
+                                                              const std::vector<ScalarImmediateType>& dataList,
+                                                              const std::vector<SymbolicScalar>& linearArgList)
 {
     FE_ASSERT(linearArgList.size()) << "linearArgList is null";
     // Matches RUNTIME_COA_GET_PARAM_RAW_SHAPE(dim, base, idx) in aicore_runtime.h:
@@ -185,9 +187,9 @@ ScalarImmediateType EvaluateSymbolicCallRuntimeCoaGetRawShape(
     return evaluateSymbol->EvaluateSymbolicScalar(linearArgList[coaIndex]);
 }
 
-ScalarImmediateType EvaluateSymbolicCallRuntimeCoaGetParam(
-    EvaluateSymbol* evaluateSymbol, const std::vector<ScalarImmediateType>& dataList,
-    const std::vector<SymbolicScalar>& linearArgList)
+ScalarImmediateType EvaluateSymbolicCallRuntimeCoaGetParam(EvaluateSymbol* evaluateSymbol,
+                                                           const std::vector<ScalarImmediateType>& dataList,
+                                                           const std::vector<SymbolicScalar>& linearArgList)
 {
     FE_ASSERT(linearArgList.size()) << "linearArgList is null";
     FE_ASSERT(dataList.size() == 1);
@@ -197,9 +199,9 @@ ScalarImmediateType EvaluateSymbolicCallRuntimeCoaGetParam(
 }
 } // namespace
 
-ScalarImmediateType EvaluateSymbol::EvaluateSymbolicCall(
-    const std::string& name, const std::vector<ScalarImmediateType>& dataList,
-    const std::vector<SymbolicScalar>& linearArgList)
+ScalarImmediateType EvaluateSymbol::EvaluateSymbolicCall(const std::string& name,
+                                                         const std::vector<ScalarImmediateType>& dataList,
+                                                         const std::vector<SymbolicScalar>& linearArgList)
 {
     using CallEntry = ScalarImmediateType (*)(EvaluateSymbol*, const std::vector<ScalarImmediateType>& dataList);
     static std::unordered_map<std::string, CallEntry> callEntryDict = {
@@ -215,9 +217,9 @@ ScalarImmediateType EvaluateSymbol::EvaluateSymbolicCall(
         {"RUNTIME_COA_GET_PARAM_ADDR", EvaluateSymbolicCallGetParaAddr},
         {"RUNTIME_GetHcclRankId", EvaluateSymbolicCallGetHcclRankId},
     };
-    using CallWithLinerArgsEntry = ScalarImmediateType (*)(
-        EvaluateSymbol*, const std::vector<ScalarImmediateType>& dataList,
-        const std::vector<SymbolicScalar>& linearArgList);
+    using CallWithLinerArgsEntry = ScalarImmediateType (*)(EvaluateSymbol*,
+                                                           const std::vector<ScalarImmediateType>& dataList,
+                                                           const std::vector<SymbolicScalar>& linearArgList);
     static std::unordered_map<std::string, CallWithLinerArgsEntry> CallWithLinerArgsEntryDict = {
         {"RUNTIME_COA_GET_PARAM", EvaluateSymbolicCallRuntimeCoaGetParam},
         {"RUNTIME_COA_GET_PARAM_VALID_SHAPE", EvaluateSymbolicCallRuntimeCoaGetValidShape},
@@ -245,8 +247,8 @@ static std::map<std::string, long> constSymbolDict_ = {
     {"RUNTIME_bool_t", DataType::DT_BOOL},
 };
 
-ScalarImmediateType EvaluateSymbol::EvaluateSymbolicScalar(
-    const RawSymbolicScalarPtr& ss, const std::vector<SymbolicScalar>& linearArgList)
+ScalarImmediateType EvaluateSymbol::EvaluateSymbolicScalar(const RawSymbolicScalarPtr& ss,
+                                                           const std::vector<SymbolicScalar>& linearArgList)
 {
     ScalarImmediateType result{0};
     switch (ss->Kind()) {

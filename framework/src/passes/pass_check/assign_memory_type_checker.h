@@ -33,9 +33,8 @@ public:
     Status DoPostCheck(Function& function) override;
 
 private:
-    void CheckPattern(
-        Operation* operation, std::queue<std::pair<Operation*, int>>& opQueue, int depth,
-        std::unordered_set<Operation*>& visited);
+    void CheckPattern(Operation* operation, std::queue<std::pair<Operation*, int>>& opQueue, int depth,
+                      std::unordered_set<Operation*>& visited);
     Status CheckAmulBInputProducers(Operation& operation);
     Status CheckTensorNotMemUnknown(Function& function);
     Status CheckMoveOpReachable(Function& function);

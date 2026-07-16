@@ -45,10 +45,11 @@ std::unique_ptr<Pass> PassRegistry::CreatePass(const std::string& passName) cons
 }
 
 // PassRegistrar
-PassRegistrar::PassRegistrar(
-    const std::string& passName, PassRegistry::CreateFn createFn, std::function<void()> typeCheck)
+PassRegistrar::PassRegistrar(const std::string& passName, PassRegistry::CreateFn createFn,
+                             std::function<void()> typeCheck)
 {
-    ASSERT(FunctionErr::FUNCTION_GRAPH_STRUCTURE, !passName.empty()) << "[PassRegistry][Manager][ERROR]: PassName can not be empty.";
+    ASSERT(FunctionErr::FUNCTION_GRAPH_STRUCTURE, !passName.empty())
+        << "[PassRegistry][Manager][ERROR]: PassName can not be empty.";
     typeCheck();
     PassRegistry::GetInstance().RegisterPass(passName, std::move(createFn));
 }

@@ -29,10 +29,11 @@
 namespace npu::tile_fwk {
 namespace osp {
 template <typename VertT = std::size_t, typename EdgeT = std::size_t, typename WorkWeightType = unsigned,
-    typename CommWeightType = unsigned, typename MemWeightType = unsigned, typename VertexTypeTemplateType = unsigned>
+          typename CommWeightType = unsigned, typename MemWeightType = unsigned,
+          typename VertexTypeTemplateType = unsigned>
 class CompactSparseGraph {
     static_assert(std::is_integral<VertT>::value && std::is_integral<EdgeT>::value,
-        "Vertex and edge type must be of integral nature.");
+                  "Vertex and edge type must be of integral nature.");
     static_assert(std::is_arithmetic_v<WorkWeightType> && "Work weight must be of arithmetic type.");
     static_assert(std::is_arithmetic_v<CommWeightType> && "Communication weight must be of arithmetic type.");
     static_assert(std::is_arithmetic_v<MemWeightType> && "Memory weight must be of arithmetic type.");
@@ -53,14 +54,14 @@ public:
     static bool constexpr parentsInVertexOrder_ = true;
 
     CompactSparseGraph() = default;
-    CompactSparseGraph(const CompactSparseGraph &other) = default;
-    CompactSparseGraph(CompactSparseGraph &&other) = default;
-    CompactSparseGraph &operator=(const CompactSparseGraph &other) = default;
-    CompactSparseGraph &operator=(CompactSparseGraph &&other) = default;
+    CompactSparseGraph(const CompactSparseGraph& other) = default;
+    CompactSparseGraph(CompactSparseGraph&& other) = default;
+    CompactSparseGraph& operator=(const CompactSparseGraph& other) = default;
+    CompactSparseGraph& operator=(CompactSparseGraph&& other) = default;
     ~CompactSparseGraph() = default;
 
     template <template <typename, typename...> class Container>
-    CompactSparseGraph(VertexIdx numVertices, const Container<std::pair<VertexIdx, VertexIdx>> &edges)
+    CompactSparseGraph(VertexIdx numVertices, const Container<std::pair<VertexIdx, VertexIdx>>& edges)
         : numberOfVertices_(numVertices), numberOfEdges_(static_cast<EdgeT>(edges.size()))
     {
         vertWorkWeights_ = std::vector<VertexWorkWeightType>(NumVertices(), 1);
@@ -73,7 +74,7 @@ public:
         std::vector<std::vector<VertexIdx>> childrenTmp(NumVertices());
         std::vector<EdgeT> numParentsTmp(NumVertices(), 0);
 
-        for (const auto &edge : edges) {
+        for (const auto& edge : edges) {
             childrenTmp[edge.first].push_back(edge.second);
             numParentsTmp[edge.second]++;
         }
@@ -89,7 +90,7 @@ public:
             cscSourcePtr[vert] = static_cast<EdgeT>(cscEdgeChildren.size());
 
             std::sort(childrenTmp[vert].begin(), childrenTmp[vert].end());
-            for (const auto &chld : childrenTmp[vert]) {
+            for (const auto& chld : childrenTmp[vert]) {
                 cscEdgeChildren.emplace_back(chld);
             }
         }
@@ -102,7 +103,7 @@ public:
 
         std::vector<EdgeT> offset = csrTargetPtr;
         for (VertexIdx vert = 0; vert < NumVertices(); ++vert) {
-            for (const auto &chld : childrenTmp[vert]) {
+            for (const auto& chld : childrenTmp[vert]) {
                 csrEdgeParents[offset[chld]++] = vert;
             }
         }
@@ -111,73 +112,37 @@ public:
         csrInEdges_ = CompactParentEdges(std::move(csrEdgeParents), std::move(csrTargetPtr));
     }
 
-    inline auto Vertices() const
-    {
-        return IntegralRange<VertexIdx>(numberOfVertices_);
-    }
+    inline auto Vertices() const { return IntegralRange<VertexIdx>(numberOfVertices_); }
 
-    inline VertT NumVertices() const
-    {
-        return numberOfVertices_;
-    }
-    inline EdgeT NumEdges() const
-    {
-        return numberOfEdges_;
-    }
+    inline VertT NumVertices() const { return numberOfVertices_; }
+    inline EdgeT NumEdges() const { return numberOfEdges_; }
 
-    inline auto Parents(const VertexIdx &v) const
-    {
-        return csrInEdges_.Parents(v);
-    }
-    inline auto Children(const VertexIdx &v) const
-    {
-        return cscOutEdges_.Children(v);
-    }
+    inline auto Parents(const VertexIdx& v) const { return csrInEdges_.Parents(v); }
+    inline auto Children(const VertexIdx& v) const { return cscOutEdges_.Children(v); }
 
-    inline EdgeT InDegree(const VertexIdx &v) const
-    {
-        return csrInEdges_.NumberOfParents(v);
-    }
-    inline EdgeT OutDegree(const VertexIdx &v) const
-    {
-        return cscOutEdges_.NumberOfChildren(v);
-    }
+    inline EdgeT InDegree(const VertexIdx& v) const { return csrInEdges_.NumberOfParents(v); }
+    inline EdgeT OutDegree(const VertexIdx& v) const { return cscOutEdges_.NumberOfChildren(v); }
 
-    inline VertexWorkWeightType VertexWorkWeight(const VertexIdx &v) const
-    {
-        return vertWorkWeights_[v];
-    }
-    inline VertexCommWeightType VertexCommWeight(const VertexIdx &v) const
-    {
-        return vertCommWeights_[v];
-    }
-    inline VertexMemWeightType VertexMemWeight(const VertexIdx &v) const
-    {
-        return vertMemWeights_[v];
-    }
-    inline VertexTypeType VertexType(const VertexIdx &v) const
-    {
-        return vertTypes_[v];
-    }
+    inline VertexWorkWeightType VertexWorkWeight(const VertexIdx& v) const { return vertWorkWeights_[v]; }
+    inline VertexCommWeightType VertexCommWeight(const VertexIdx& v) const { return vertCommWeights_[v]; }
+    inline VertexMemWeightType VertexMemWeight(const VertexIdx& v) const { return vertMemWeights_[v]; }
+    inline VertexTypeType VertexType(const VertexIdx& v) const { return vertTypes_[v]; }
 
-    inline VertexTypeType NumVertexTypes() const
-    {
-        return numberOfVertexTypes_;
-    }
+    inline VertexTypeType NumVertexTypes() const { return numberOfVertexTypes_; }
 
-    inline void SetVertexWorkWeight(const VertexIdx &v, const VertexWorkWeightType workWeight)
+    inline void SetVertexWorkWeight(const VertexIdx& v, const VertexWorkWeightType workWeight)
     {
         vertWorkWeights_[v] = workWeight;
     }
-    inline void SetVertexCommWeight(const VertexIdx &v, const VertexCommWeightType commWeight)
+    inline void SetVertexCommWeight(const VertexIdx& v, const VertexCommWeightType commWeight)
     {
         vertCommWeights_[v] = commWeight;
     }
-    inline void SetVertexMemWeight(const VertexIdx &v, const VertexMemWeightType memWeight)
+    inline void SetVertexMemWeight(const VertexIdx& v, const VertexMemWeightType memWeight)
     {
         vertMemWeights_[v] = memWeight;
     }
-    inline void SetVertexType(const VertexIdx &v, const VertexTypeType vertexType)
+    inline void SetVertexType(const VertexIdx& v, const VertexTypeType vertexType)
     {
         vertTypes_[v] = vertexType;
         numberOfVertexTypes_ = std::max(numberOfVertexTypes_, vertexType);
@@ -187,24 +152,21 @@ protected:
     class CompactParentEdges {
     public:
         CompactParentEdges() = default;
-        CompactParentEdges(const CompactParentEdges &other) = default;
-        CompactParentEdges(CompactParentEdges &&other) = default;
-        CompactParentEdges &operator=(const CompactParentEdges &other) = default;
-        CompactParentEdges &operator=(CompactParentEdges &&other) = default;
+        CompactParentEdges(const CompactParentEdges& other) = default;
+        CompactParentEdges(CompactParentEdges&& other) = default;
+        CompactParentEdges& operator=(const CompactParentEdges& other) = default;
+        CompactParentEdges& operator=(CompactParentEdges&& other) = default;
         ~CompactParentEdges() = default;
 
-        CompactParentEdges(std::vector<VertexIdx> &&csrEdgeParents, std::vector<EdgeT> &&csrTargetPtr)
+        CompactParentEdges(std::vector<VertexIdx>&& csrEdgeParents, std::vector<EdgeT>&& csrTargetPtr)
             : csrEdgeParents_(std::move(csrEdgeParents)), csrTargetPtr_(std::move(csrTargetPtr)) {};
 
-        inline EdgeT NumberOfParents(const VertexIdx v) const
-        {
-            return csrTargetPtr_[v + 1] - csrTargetPtr_[v];
-        }
+        inline EdgeT NumberOfParents(const VertexIdx v) const { return csrTargetPtr_[v + 1] - csrTargetPtr_[v]; }
 
         class ParentRange {
         public:
-            ParentRange(const std::vector<VertexIdx> &csrEdgeParents, const std::vector<EdgeT> &csrTargetPtr,
-                const VertexIdx vert)
+            ParentRange(const std::vector<VertexIdx>& csrEdgeParents, const std::vector<EdgeT>& csrTargetPtr,
+                        const VertexIdx vert)
                 : csrEdgeParents_(csrEdgeParents), csrTargetPtr_(csrTargetPtr), vert_(vert) {};
 
             inline auto cbegin() const
@@ -221,14 +183,8 @@ protected:
                 return it;
             }
 
-            inline auto end() const
-            {
-                return cend();
-            }
-            inline auto begin() const
-            {
-                return cbegin();
-            }
+            inline auto end() const { return cend(); }
+            inline auto begin() const { return cbegin(); }
 
             inline auto crbegin() const
             {
@@ -244,18 +200,12 @@ protected:
                 return it;
             };
 
-            inline auto rend() const
-            {
-                return crend();
-            }
-            inline auto rbegin() const
-            {
-                return crbegin();
-            }
+            inline auto rend() const { return crend(); }
+            inline auto rbegin() const { return crbegin(); }
 
         private:
-            const std::vector<VertexIdx> &csrEdgeParents_;
-            const std::vector<EdgeT> &csrTargetPtr_;
+            const std::vector<VertexIdx>& csrEdgeParents_;
+            const std::vector<EdgeT>& csrTargetPtr_;
             const VertexIdx vert_;
         };
 
@@ -273,41 +223,32 @@ protected:
     class CompactChildrenEdges {
     public:
         CompactChildrenEdges() = default;
-        CompactChildrenEdges(const CompactChildrenEdges &other) = default;
-        CompactChildrenEdges(CompactChildrenEdges &&other) = default;
-        CompactChildrenEdges &operator=(const CompactChildrenEdges &other) = default;
-        CompactChildrenEdges &operator=(CompactChildrenEdges &&other) = default;
+        CompactChildrenEdges(const CompactChildrenEdges& other) = default;
+        CompactChildrenEdges(CompactChildrenEdges&& other) = default;
+        CompactChildrenEdges& operator=(const CompactChildrenEdges& other) = default;
+        CompactChildrenEdges& operator=(CompactChildrenEdges&& other) = default;
         ~CompactChildrenEdges() = default;
 
-        CompactChildrenEdges(std::vector<VertexIdx> &&cscEdgeChildren, std::vector<EdgeT> &&cscSourcePtr)
+        CompactChildrenEdges(std::vector<VertexIdx>&& cscEdgeChildren, std::vector<EdgeT>&& cscSourcePtr)
             : cscEdgeChildren_(std::move(cscEdgeChildren)), cscSourcePtr_(std::move(cscSourcePtr)) {};
 
-        inline EdgeT NumberOfChildren(const VertexIdx v) const
-        {
-            return cscSourcePtr_[v + 1] - cscSourcePtr_[v];
-        }
+        inline EdgeT NumberOfChildren(const VertexIdx v) const { return cscSourcePtr_[v + 1] - cscSourcePtr_[v]; }
 
-        inline VertexIdx Source(const EdgeT &indx) const
+        inline VertexIdx Source(const EdgeT& indx) const
         {
             auto it = std::upper_bound(cscSourcePtr_.cbegin(), cscSourcePtr_.cend(), indx);
             VertexIdx src = static_cast<VertexIdx>(std::distance(cscSourcePtr_.cbegin(), it) - 1);
             return src;
         };
 
-        inline VertexIdx Target(const EdgeT &indx) const
-        {
-            return cscEdgeChildren_[indx];
-        }
+        inline VertexIdx Target(const EdgeT& indx) const { return cscEdgeChildren_[indx]; }
 
-        inline EdgeT ChildrenIndxBegin(const VertexIdx &vert) const
-        {
-            return cscSourcePtr_[vert];
-        }
+        inline EdgeT ChildrenIndxBegin(const VertexIdx& vert) const { return cscSourcePtr_[vert]; }
 
         class ChildrenRange {
         public:
-            ChildrenRange(const std::vector<VertexIdx> &cscEdgeChildren, const std::vector<EdgeT> &cscSourcePtr,
-                const VertexIdx vert)
+            ChildrenRange(const std::vector<VertexIdx>& cscEdgeChildren, const std::vector<EdgeT>& cscSourcePtr,
+                          const VertexIdx vert)
                 : cscEdgeChildren_(cscEdgeChildren), cscSourcePtr_(cscSourcePtr), vert_(vert) {};
 
             inline auto cbegin() const
@@ -324,14 +265,8 @@ protected:
                 return it;
             };
 
-            inline auto begin() const
-            {
-                return cbegin();
-            }
-            inline auto end() const
-            {
-                return cend();
-            }
+            inline auto begin() const { return cbegin(); }
+            inline auto end() const { return cend(); }
 
             inline auto crbegin() const
             {
@@ -347,18 +282,12 @@ protected:
                 return it;
             };
 
-            inline auto rbegin() const
-            {
-                return crbegin();
-            }
-            inline auto rend() const
-            {
-                return crend();
-            }
+            inline auto rbegin() const { return crbegin(); }
+            inline auto rend() const { return crend(); }
 
         private:
-            const std::vector<VertexIdx> &cscEdgeChildren_;
-            const std::vector<EdgeT> &cscSourcePtr_;
+            const std::vector<VertexIdx>& cscEdgeChildren_;
+            const std::vector<EdgeT>& cscSourcePtr_;
             const VertexIdx vert_;
         };
 
@@ -387,8 +316,8 @@ protected:
     std::vector<VertexTypeType> vertTypes_;
 
 private:
-    using ThisT =
-        CompactSparseGraph<VertT, EdgeT, WorkWeightType, CommWeightType, MemWeightType, VertexTypeTemplateType>;
+    using ThisT = CompactSparseGraph<VertT, EdgeT, WorkWeightType, CommWeightType, MemWeightType,
+                                     VertexTypeTemplateType>;
 };
 } // namespace osp
 } // namespace npu::tile_fwk

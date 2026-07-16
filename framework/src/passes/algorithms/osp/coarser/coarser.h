@@ -51,9 +51,8 @@ public:
      * @param vertex_contraction_map Output mapping from dag_in to coarsened_dag.
      * @return A status code indicating the success or failure of the coarsening operation.
      */
-    virtual bool CoarsenDag(const GraphTIn &dagIn,
-                            GraphTOut &coarsenedDag,
-                            std::vector<VertexIdxT<GraphTOut>> &vertexContractionMap) = 0;
+    virtual bool CoarsenDag(const GraphTIn& dagIn, GraphTOut& coarsenedDag,
+                            std::vector<VertexIdxT<GraphTOut>>& vertexContractionMap) = 0;
 
     /**
      * @brief Destructor for the Coarser class.
@@ -69,11 +68,10 @@ public:
 template <typename GraphTIn, typename GraphTOut>
 class CoarserGenExpansionMap : public Coarser<GraphTIn, GraphTOut> {
 public:
-    virtual std::vector<std::vector<VertexIdxT<GraphTIn>>> GenerateVertexExpansionMap(const GraphTIn &dagIn) = 0;
+    virtual std::vector<std::vector<VertexIdxT<GraphTIn>>> GenerateVertexExpansionMap(const GraphTIn& dagIn) = 0;
 
-    virtual bool CoarsenDag(const GraphTIn &dagIn,
-                            GraphTOut &coarsenedDag,
-                            std::vector<VertexIdxT<GraphTOut>> &vertexContractionMap) override
+    virtual bool CoarsenDag(const GraphTIn& dagIn, GraphTOut& coarsenedDag,
+                            std::vector<VertexIdxT<GraphTOut>>& vertexContractionMap) override
     {
         if (dagIn.NumVertices() == 0) {
             vertexContractionMap = std::vector<VertexIdxT<GraphTOut>>();
@@ -92,6 +90,6 @@ public:
      */
     virtual ~CoarserGenExpansionMap() = default;
 };
-}    // namespace osp
-}    // namespace npu::tile_fwk
-#endif    // PASS_OSP_COARSER_HPP
+} // namespace osp
+} // namespace npu::tile_fwk
+#endif // PASS_OSP_COARSER_HPP

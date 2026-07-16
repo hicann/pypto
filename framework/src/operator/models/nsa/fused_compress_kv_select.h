@@ -58,21 +58,24 @@ Tensor MlpCompress(const Tensor& x, const Tensor& w1, const Tensor& w2, MlpCmpTi
 Tensor BatchMlpSingleRope(const Tensor& x, const Tensor& cos, const Tensor& sin, MlpRopeTile& tileConfig);
 Tensor BatchMlpCompress(const Tensor& x, const Tensor& w1, const Tensor& w2, MlpCmpTile& tileConfig);
 
-void FusedCompressKvSelectCompute(
-    const Tensor& qNope, const Tensor& qRope, const Tensor& kvCache, const Tensor& krCache, const Tensor& cmpKvCache,
-    const Tensor& cmpKrCache, const Tensor& blockTable, const Tensor& cmpBlockTable, const Tensor& actSeqLen,
-    const Tensor& actCmpSeqLen, const Tensor& mlpWk1, const Tensor& mlpWk2, const Tensor& mlpCos, const Tensor& mlpSin,
-    Tensor& cmpAttnOut, Tensor& cmpAttnOut16, Tensor& cmpSoftmax, Tensor& fullK, Tensor& cmpK, Tensor& firstRope,
-    Tensor& firstRopeInput, Tensor& topkRes, Tensor& topkInput, const int blockSize, const int cmpBlockSize,
-    const int cmpStride, const float softmaxScale, const int n1, const int n2, CmpAttnTile& tileConfig);
+void FusedCompressKvSelectCompute(const Tensor& qNope, const Tensor& qRope, const Tensor& kvCache,
+                                  const Tensor& krCache, const Tensor& cmpKvCache, const Tensor& cmpKrCache,
+                                  const Tensor& blockTable, const Tensor& cmpBlockTable, const Tensor& actSeqLen,
+                                  const Tensor& actCmpSeqLen, const Tensor& mlpWk1, const Tensor& mlpWk2,
+                                  const Tensor& mlpCos, const Tensor& mlpSin, Tensor& cmpAttnOut, Tensor& cmpAttnOut16,
+                                  Tensor& cmpSoftmax, Tensor& fullK, Tensor& cmpK, Tensor& firstRope,
+                                  Tensor& firstRopeInput, Tensor& topkRes, Tensor& topkInput, const int blockSize,
+                                  const int cmpBlockSize, const int cmpStride, const float softmaxScale, const int n1,
+                                  const int n2, CmpAttnTile& tileConfig);
 
-void FusedCompressKvSelect(
-    const Tensor& qNope, const Tensor& qRope, const Tensor& kvCache, const Tensor& krCache, const Tensor& cmpKvCache,
-    const Tensor& cmpKrCache, const Tensor& blockTable, const Tensor& cmpBlockTable, const Tensor& actSeqLen,
-    const Tensor& actCmpSeqLen, const Tensor& mlpWk1, const Tensor& mlpWk2, const Tensor& mlpCos, const Tensor& mlpSin,
-    Tensor& cmpAttnOut, Tensor& cmpAttnOut16, Tensor& cmpSoftmax, Tensor& fullK, Tensor& cmpK, Tensor& firstRope,
-    Tensor& firstRopeInput, Tensor& topkRes, Tensor& topkInput, const int blockSize, const int cmpBlockSize,
-    const int cmpStride, const float softmaxScale, const int n1, const int n2, CmpAttnTile& tileConfig);
+void FusedCompressKvSelect(const Tensor& qNope, const Tensor& qRope, const Tensor& kvCache, const Tensor& krCache,
+                           const Tensor& cmpKvCache, const Tensor& cmpKrCache, const Tensor& blockTable,
+                           const Tensor& cmpBlockTable, const Tensor& actSeqLen, const Tensor& actCmpSeqLen,
+                           const Tensor& mlpWk1, const Tensor& mlpWk2, const Tensor& mlpCos, const Tensor& mlpSin,
+                           Tensor& cmpAttnOut, Tensor& cmpAttnOut16, Tensor& cmpSoftmax, Tensor& fullK, Tensor& cmpK,
+                           Tensor& firstRope, Tensor& firstRopeInput, Tensor& topkRes, Tensor& topkInput,
+                           const int blockSize, const int cmpBlockSize, const int cmpStride, const float softmaxScale,
+                           const int n1, const int n2, CmpAttnTile& tileConfig);
 
 } // namespace npu::tile_fwk
 

@@ -19,12 +19,11 @@
 #include "../cube_utils.h"
 
 namespace {
-template <
-    typename TileL0C, typename TileL0A, typename TileL0AScale, typename TileL0B, typename TileL0BScale,
-    typename TileC, typename TileA, typename TileAScale, typename TileB, typename TileBScale>
-INLINE void AssignTensorAddresses(
-    TileL0C& l0c, TileL0A& l0a, TileL0AScale& l0aScale, TileL0B& l0b, TileL0BScale& l0bScale,
-    TileC& c, TileA& a, TileAScale& aScale, TileB& b, TileBScale& bScale)
+template <typename TileL0C, typename TileL0A, typename TileL0AScale, typename TileL0B, typename TileL0BScale,
+          typename TileC, typename TileA, typename TileAScale, typename TileB, typename TileBScale>
+INLINE void AssignTensorAddresses(TileL0C& l0c, TileL0A& l0a, TileL0AScale& l0aScale, TileL0B& l0b,
+                                  TileL0BScale& l0bScale, TileC& c, TileA& a, TileAScale& aScale, TileB& b,
+                                  TileBScale& bScale)
 {
     pto::TASSIGN(l0a, static_cast<uint64_t>(a.GetAddr()));
     pto::TASSIGN(l0aScale, static_cast<uint64_t>(aScale.GetAddr()));
@@ -34,9 +33,8 @@ INLINE void AssignTensorAddresses(
 }
 } // namespace
 
-template <
-    bool initMatrixC, typename TileRes, typename TileLeft, typename TileLeftScale, typename TileRight,
-    typename TileRightScale>
+template <bool initMatrixC, typename TileRes, typename TileLeft, typename TileLeftScale, typename TileRight,
+          typename TileRightScale>
 INLINE void MatmulMXImpl(TileRes& c, TileLeft& a, TileLeftScale& aScale, TileRight& b, TileRightScale& bScale)
 {
     int64_t validM = GetShape<0>(a);
@@ -55,12 +53,12 @@ INLINE void MatmulMXImpl(TileRes& c, TileLeft& a, TileLeftScale& aScale, TileRig
     constexpr uint64_t shapeSizeAScale = Std::tuple_size<typename TileLeftScale::Shape>::value;
     constexpr auto staticL0AH = Std::tuple_element<shapeSizeA - SHAPE_DIM2, typename TileLeft::TileShape>::type::value;
     constexpr auto staticL0AW = Std::tuple_element<shapeSizeA - 1, typename TileLeft::TileShape>::type::value;
-    constexpr auto staticL0AScaleW =
-        Std::tuple_element<shapeSizeAScale - SHAPE_DIM2, typename TileLeftScale::TileShape>::type::value;
+    constexpr auto staticL0AScaleW = Std::tuple_element<shapeSizeAScale - SHAPE_DIM2,
+                                                        typename TileLeftScale::TileShape>::type::value;
     constexpr auto staticL0BH = Std::tuple_element<shapeSizeB - SHAPE_DIM2, typename TileRight::TileShape>::type::value;
     constexpr auto staticL0BW = Std::tuple_element<shapeSizeB - 1, typename TileRight::TileShape>::type::value;
-    constexpr auto staticL0BScaleH =
-        Std::tuple_element<shapeSizeBScale - SHAPE_DIM3, typename TileRightScale::TileShape>::type::value;
+    constexpr auto staticL0BScaleH = Std::tuple_element<shapeSizeBScale - SHAPE_DIM3,
+                                                        typename TileRightScale::TileShape>::type::value;
     constexpr auto staticL0CH = Std::tuple_element<shapeSizeC - SHAPE_DIM2, typename TileRes::TileShape>::type::value;
     constexpr auto staticL0CW = Std::tuple_element<shapeSizeC - 1, typename TileRes::TileShape>::type::value;
     // validK=0或者validScaleK=0且A_MUL_B模式：使用静态K大小，配合全零L1数据产生正确输出
@@ -70,11 +68,11 @@ INLINE void MatmulMXImpl(TileRes& c, TileLeft& a, TileLeftScale& aScale, TileRig
     }
     using tileL0CTensor = pto::TileAcc<typename TileRes::Type, staticL0CH, staticL0CW, -1, -1>;
     using tileL0ATensor = pto::TileLeft<typename TileLeft::Type, staticL0AH, staticL0AW, -1, -1>;
-    using tileL0AScaleTensor =
-        pto::TileLeftScale<typename TileLeft::Type, staticL0AH, staticL0AScaleW * SHAPE_DIM2, -1, -1>;
+    using tileL0AScaleTensor = pto::TileLeftScale<typename TileLeft::Type, staticL0AH, staticL0AScaleW * SHAPE_DIM2, -1,
+                                                  -1>;
     using tileL0BTensor = pto::TileRight<typename TileRight::Type, staticL0BH, staticL0BW, -1, -1>;
-    using tileL0BScaleTensor =
-        pto::TileRightScale<typename TileRight::Type, staticL0BScaleH * SHAPE_DIM2, staticL0BW, -1, -1>;
+    using tileL0BScaleTensor = pto::TileRightScale<typename TileRight::Type, staticL0BScaleH * SHAPE_DIM2, staticL0BW,
+                                                   -1, -1>;
     validM = (validM + BLOCK_CUBE_M_N - 1) / BLOCK_CUBE_M_N * BLOCK_CUBE_M_N;
     validK = (validK + MX_BLOCK_ALIGN_BYTE - 1) / MX_BLOCK_ALIGN_BYTE * MX_BLOCK_ALIGN_BYTE;
     tileL0ATensor l0a(validM, validK);
@@ -92,11 +90,10 @@ INLINE void MatmulMXImpl(TileRes& c, TileLeft& a, TileLeftScale& aScale, TileRig
 #endif
 }
 
-template <
-    typename TileRes, typename TileLeft, typename TileLeftScale, typename TileRight, typename TileRightScale,
-    typename TileBias>
-INLINE void MatmulMXImpl(
-    TileRes& c, TileLeft& a, TileLeftScale& aScale, TileRight& b, TileRightScale& bScale, TileBias& bias)
+template <typename TileRes, typename TileLeft, typename TileLeftScale, typename TileRight, typename TileRightScale,
+          typename TileBias>
+INLINE void MatmulMXImpl(TileRes& c, TileLeft& a, TileLeftScale& aScale, TileRight& b, TileRightScale& bScale,
+                         TileBias& bias)
 {
     int64_t validM = GetShape<0>(a);
     int64_t validK = GetShape<1>(a);
@@ -114,21 +111,21 @@ INLINE void MatmulMXImpl(
     constexpr auto staticL0CW = Std::tuple_element<shapeSizeC - 1, typename TileRes::TileShape>::type::value;
     constexpr auto staticL0AH = Std::tuple_element<shapeSizeA - SHAPE_DIM2, typename TileLeft::TileShape>::type::value;
     constexpr auto staticL0AW = Std::tuple_element<shapeSizeA - 1, typename TileLeft::TileShape>::type::value;
-    constexpr auto staticL0AScaleW =
-        Std::tuple_element<shapeSizeAScale - SHAPE_DIM2, typename TileLeftScale::TileShape>::type::value;
+    constexpr auto staticL0AScaleW = Std::tuple_element<shapeSizeAScale - SHAPE_DIM2,
+                                                        typename TileLeftScale::TileShape>::type::value;
     constexpr auto staticL0BH = Std::tuple_element<shapeSizeB - SHAPE_DIM2, typename TileRight::TileShape>::type::value;
     constexpr auto staticL0BW = Std::tuple_element<shapeSizeB - 1, typename TileRight::TileShape>::type::value;
-    constexpr auto staticL0BScaleH =
-        Std::tuple_element<shapeSizeBScale - SHAPE_DIM3, typename TileRightScale::TileShape>::type::value;
+    constexpr auto staticL0BScaleH = Std::tuple_element<shapeSizeBScale - SHAPE_DIM3,
+                                                        typename TileRightScale::TileShape>::type::value;
     using tileL0CTensor = pto::TileAcc<typename TileRes::Type, staticL0CH, staticL0CW, -1, -1>;
     using tileL0ATensor = pto::TileLeft<typename TileLeft::Type, staticL0AH, staticL0AW, -1, -1>;
-    using tileL0AScaleTensor =
-        pto::TileLeftScale<typename TileLeft::Type, staticL0AH, staticL0AScaleW * SHAPE_DIM2, -1, -1>;
+    using tileL0AScaleTensor = pto::TileLeftScale<typename TileLeft::Type, staticL0AH, staticL0AScaleW * SHAPE_DIM2, -1,
+                                                  -1>;
     using tileL0BTensor = pto::TileRight<typename TileRight::Type, staticL0BH, staticL0BW, -1, -1>;
-    using tileL0BScaleTensor =
-        pto::TileRightScale<typename TileRight::Type, staticL0BScaleH * SHAPE_DIM2, staticL0BW, -1, -1>;
-    using tileBiasTensor =
-        pto::Tile<pto::TileType::Bias, typename TileBias::Type, 1, staticL0BW, pto::BLayout::RowMajor, -1, -1>;
+    using tileL0BScaleTensor = pto::TileRightScale<typename TileRight::Type, staticL0BScaleH * SHAPE_DIM2, staticL0BW,
+                                                   -1, -1>;
+    using tileBiasTensor = pto::Tile<pto::TileType::Bias, typename TileBias::Type, 1, staticL0BW,
+                                     pto::BLayout::RowMajor, -1, -1>;
     validM = (validM + BLOCK_CUBE_M_N - 1) / BLOCK_CUBE_M_N * BLOCK_CUBE_M_N;
     validK = (validK + MX_BLOCK_ALIGN_BYTE - 1) / MX_BLOCK_ALIGN_BYTE * MX_BLOCK_ALIGN_BYTE;
     tileL0ATensor l0a(validM, validK);

@@ -103,8 +103,8 @@ public:
 private:
     void CalculateTileGolden();
     void CalculateFunctionArgTile(FunctionPtr func, std::shared_ptr<TileState> state);
-    void CalculateFunctionTileGolden(
-        FunctionPtr func, std::shared_ptr<TileState> local, std::shared_ptr<TileState> global, int esgId);
+    void CalculateFunctionTileGolden(FunctionPtr func, std::shared_ptr<TileState> local,
+                                     std::shared_ptr<TileState> global, int esgId);
     void PrintFunctionOutputTile(FunctionPtr func, std::shared_ptr<TileState> state);
     void PrintTopo();
     void PrintFunctionTopo(FunctionPtr func);

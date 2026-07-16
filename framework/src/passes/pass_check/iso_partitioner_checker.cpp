@@ -88,8 +88,8 @@ Status GraphPartitionChecker::PostOperationCheck(Function& function)
             }
         }
         if (isStartNodeInSubgraph) {
-            APASS_LOG_DEBUG_F(
-                Elements::Operation, "Operation (opmagic: %d) is start node in subgraph.", op.GetOpMagic());
+            APASS_LOG_DEBUG_F(Elements::Operation, "Operation (opmagic: %d) is start node in subgraph.",
+                              op.GetOpMagic());
             if (op.GetOpcode() == Opcode::OP_ASSEMBLE || op.GetOpcode() == Opcode::OP_COPY_OUT) {
                 APASS_LOG_ERROR_F(
                     Elements::Operation,
@@ -113,10 +113,9 @@ Status GraphPartitionChecker::PostOperationCheck(Function& function)
         if (isEndNodeInSubgraph) {
             APASS_LOG_DEBUG_F(Elements::Operation, "Operation (opmagic: %d) is end node in subgraph.", op.GetOpMagic());
             if (op.GetOpcode() == Opcode::OP_VIEW || op.GetOpcode() == Opcode::OP_COPY_IN) {
-                APASS_LOG_ERROR_F(
-                    Elements::Operation,
-                    "Operation (opmagic: %d) is the end node of the subgraph, opcode should not be %s.%s",
-                    op.GetOpMagic(), op.GetOpcodeStr().c_str(), GetFormatBacktrace(op).c_str());
+                APASS_LOG_ERROR_F(Elements::Operation,
+                                  "Operation (opmagic: %d) is the end node of the subgraph, opcode should not be %s.%s",
+                                  op.GetOpMagic(), op.GetOpcodeStr().c_str(), GetFormatBacktrace(op).c_str());
                 return FAILED;
             }
         }

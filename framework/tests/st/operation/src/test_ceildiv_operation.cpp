@@ -66,8 +66,8 @@ std::vector<int64_t> GetBroadCastOffsetRatio(const Tensor& self, const Tensor& o
     return result;
 }
 
-void CeilDivOperationExeFunc2Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+void CeilDivOperationExeFunc2Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                  const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0], inputs[1]}, {outputs[0]})
     {
@@ -84,11 +84,11 @@ void CeilDivOperationExeFunc2Dims(
             LOOP("LOOP_L1_sIdx", FunctionType::DYNAMIC_LOOP, sIdx, LoopRange(0, sloop, 1))
             {
                 const Shape& tile0ViewShape = GetBroadCastViewShape(inputs[0], inputs[1], args->viewShape_);
-                const std::vector<int64_t>& tile0OffsetRatio =
-                    GetBroadCastOffsetRatio(inputs[0], inputs[1], args->viewShape_);
+                const std::vector<int64_t>& tile0OffsetRatio = GetBroadCastOffsetRatio(inputs[0], inputs[1],
+                                                                                       args->viewShape_);
                 const Shape& tile1ViewShape = GetBroadCastViewShape(inputs[1], inputs[0], args->viewShape_);
-                const std::vector<int64_t>& tile1OffsetRatio =
-                    GetBroadCastOffsetRatio(inputs[1], inputs[0], args->viewShape_);
+                const std::vector<int64_t>& tile1OffsetRatio = GetBroadCastOffsetRatio(inputs[1], inputs[0],
+                                                                                       args->viewShape_);
                 Tensor tileTensor0 = View(
                     inputs[0], {tile0ViewShape[0], tile0ViewShape[1]},
                     {std::min(firstDim - bIdx * tile0ViewShape[0], tile0ViewShape[0]),
@@ -107,8 +107,8 @@ void CeilDivOperationExeFunc2Dims(
     }
 }
 
-void CeilDivOperationExeFunc3Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+void CeilDivOperationExeFunc3Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                  const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0], inputs[1]}, {outputs[0]})
     {
@@ -131,11 +131,11 @@ void CeilDivOperationExeFunc3Dims(
                 LOOP("LOOP_L2_nIdx", FunctionType::DYNAMIC_LOOP, nIdx, LoopRange(0, nloop, 1))
                 {
                     const Shape& tile0ViewShape = GetBroadCastViewShape(inputs[0], inputs[1], args->viewShape_);
-                    const std::vector<int64_t>& tile0OffsetRatio =
-                        GetBroadCastOffsetRatio(inputs[0], inputs[1], args->viewShape_);
+                    const std::vector<int64_t>& tile0OffsetRatio = GetBroadCastOffsetRatio(inputs[0], inputs[1],
+                                                                                           args->viewShape_);
                     const Shape& tile1ViewShape = GetBroadCastViewShape(inputs[1], inputs[0], args->viewShape_);
-                    const std::vector<int64_t>& tile1OffsetRatio =
-                        GetBroadCastOffsetRatio(inputs[1], inputs[0], args->viewShape_);
+                    const std::vector<int64_t>& tile1OffsetRatio = GetBroadCastOffsetRatio(inputs[1], inputs[0],
+                                                                                           args->viewShape_);
                     Tensor tileTensor0 = View(
                         inputs[0], {tile0ViewShape[0], tile0ViewShape[1], tile0ViewShape[2]},
                         {std::min(firstDim - bIdx * tile0ViewShape[0], tile0ViewShape[0]),
@@ -159,8 +159,8 @@ void CeilDivOperationExeFunc3Dims(
     }
 }
 
-void CeilDivOperationExeFunc4Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+void CeilDivOperationExeFunc4Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                  const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0], inputs[1]}, {outputs[0]})
     {
@@ -188,11 +188,11 @@ void CeilDivOperationExeFunc4Dims(
                     LOOP("LOOP_L3_kIdx", FunctionType::DYNAMIC_LOOP, kIdx, LoopRange(0, kloop, 1))
                     {
                         const Shape& tile0ViewShape = GetBroadCastViewShape(inputs[0], inputs[1], args->viewShape_);
-                        const std::vector<int64_t>& tile0OffsetRatio =
-                            GetBroadCastOffsetRatio(inputs[0], inputs[1], args->viewShape_);
+                        const std::vector<int64_t>& tile0OffsetRatio = GetBroadCastOffsetRatio(inputs[0], inputs[1],
+                                                                                               args->viewShape_);
                         const Shape& tile1ViewShape = GetBroadCastViewShape(inputs[1], inputs[0], args->viewShape_);
-                        const std::vector<int64_t>& tile1OffsetRatio =
-                            GetBroadCastOffsetRatio(inputs[1], inputs[0], args->viewShape_);
+                        const std::vector<int64_t>& tile1OffsetRatio = GetBroadCastOffsetRatio(inputs[1], inputs[0],
+                                                                                               args->viewShape_);
                         Tensor tileTensor0 = View(
                             inputs[0], {tile0ViewShape[0], tile0ViewShape[1], tile0ViewShape[2], tile0ViewShape[3]},
                             {std::min(firstDim - bIdx * tile0ViewShape[0], tile0ViewShape[0]),
@@ -215,11 +215,10 @@ void CeilDivOperationExeFunc4Dims(
                              kIdx * tile1ViewShape[3] * tile1OffsetRatio[3]});
                         TileShape::Current().SetVecTile(args->tileShape_);
                         auto res = CeilDiv(tileTensor0, tileTensor1);
-                        Assemble(
-                            res,
-                            {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape,
-                             kIdx * fourthViewShape},
-                            outputs[0]);
+                        Assemble(res,
+                                 {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape,
+                                  kIdx * fourthViewShape},
+                                 outputs[0]);
                     }
                 }
             }
@@ -229,10 +228,10 @@ void CeilDivOperationExeFunc4Dims(
 
 class CeilDivOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac_param<CeilDivOpMetaData> {};
 
-INSTANTIATE_TEST_SUITE_P(
-    TestCeilDiv, CeilDivOperationTest,
-    ::testing::ValuesIn(GetOpMetaData<CeilDivOpMetaData>(
-        {CeilDivOperationExeFunc2Dims, CeilDivOperationExeFunc3Dims, CeilDivOperationExeFunc4Dims}, "CeilDiv")));
+INSTANTIATE_TEST_SUITE_P(TestCeilDiv, CeilDivOperationTest,
+                         ::testing::ValuesIn(GetOpMetaData<CeilDivOpMetaData>(
+                             {CeilDivOperationExeFunc2Dims, CeilDivOperationExeFunc3Dims, CeilDivOperationExeFunc4Dims},
+                             "CeilDiv")));
 
 TEST_P(CeilDivOperationTest, TestCeilDiv)
 {

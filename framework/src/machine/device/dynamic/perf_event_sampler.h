@@ -137,26 +137,28 @@ private:
 #define AICPU_PMU_SCOPE(section_name_literal) \
     ::npu::tile_fwk::AicpuPerfScopedSampler aicpuPerfScopedSampler_##__LINE__(section_name_literal)
 
-#define AICPU_PMU_BEGIN(sampler_name) \
+#define AICPU_PMU_BEGIN(sampler_name)                                 \
     auto& sampler_name = ::npu::tile_fwk::GetAicpuPerfEventSampler(); \
     (sampler_name).Begin()
 
-#define AICPU_PMU_END(sampler_name, section_name_literal) \
-    do { \
-        (sampler_name).End(); \
+#define AICPU_PMU_END(sampler_name, section_name_literal)                         \
+    do {                                                                          \
+        (sampler_name).End();                                                     \
         DEV_ERROR(MachineError::UNKNOWN, "[AICPU_PMU] %s", section_name_literal); \
-        (sampler_name).Dump(); \
+        (sampler_name).Dump();                                                    \
     } while (0)
 
 // 外部对象式采样（跨函数场景）
 #define AICPU_PMU_BEGIN_EXTERNAL(sampler_ptr) \
-    do { (sampler_ptr)->Begin(); } while (0)
+    do {                                      \
+        (sampler_ptr)->Begin();               \
+    } while (0)
 
-#define AICPU_PMU_END_EXTERNAL(sampler_ptr, section_name_literal) \
-    do { \
-        (sampler_ptr)->End(); \
+#define AICPU_PMU_END_EXTERNAL(sampler_ptr, section_name_literal)                 \
+    do {                                                                          \
+        (sampler_ptr)->End();                                                     \
         DEV_ERROR(MachineError::UNKNOWN, "[AICPU_PMU] %s", section_name_literal); \
-        (sampler_ptr)->Dump(); \
+        (sampler_ptr)->Dump();                                                    \
     } while (0)
 #else
 class AicpuPerfEventSampler {
@@ -174,10 +176,7 @@ static inline AicpuPerfEventSampler& GetAicpuPerfEventSampler()
 
 class AicpuPerfScopedSampler {
 public:
-    explicit AicpuPerfScopedSampler(const char* sectionName)
-    {
-        (void)sectionName;
-    }
+    explicit AicpuPerfScopedSampler(const char* sectionName) { (void)sectionName; }
 };
 
 #define AICPU_PMU_SCOPE(section_name_literal)

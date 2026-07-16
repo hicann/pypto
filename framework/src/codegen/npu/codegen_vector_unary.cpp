@@ -61,8 +61,9 @@ std::string CodeGenOpNPU::PrintCastDynamicUnaligned(const PrintUnaryParam& param
 std::string CodeGenOpNPU::PrintCastTileTensor() const
 {
     bool hasTmpBuffer = (operandCnt == NUM3);
-    std::vector<std::string> tileOpParamList =
-        hasTmpBuffer ? GetTileOpParamsWithTmpBuf({ToUnderlying(MIMOIdx::TMP_IDX)}) : GetTileOpParamsByOrder();
+    std::vector<std::string> tileOpParamList = hasTmpBuffer ?
+                                                   GetTileOpParamsWithTmpBuf({ToUnderlying(MIMOIdx::TMP_IDX)}) :
+                                                   GetTileOpParamsByOrder();
     auto mode = opAttrs.at(OP_ATTR_PREFIX + "mode");
     int64_t modeEnum{0};
     if (mode.has_value()) {
@@ -354,9 +355,8 @@ std::string CodeGenOpNPU::PrintExpandLayout(std::vector<int> expandAxes) const
     return oss.str();
 }
 
-std::string CodeGenOpNPU::PrintExpand(
-    const std::string& s0Var, const std::string& dVar, const std::string& srcDtypeStr,
-    const std::string& dstDtypeStr) const
+std::string CodeGenOpNPU::PrintExpand(const std::string& s0Var, const std::string& dVar, const std::string& srcDtypeStr,
+                                      const std::string& dstDtypeStr) const
 {
     std::vector<int64_t> dos = NormalizeShape(shape[0], SHAPE_DIM4);
     std::vector<int64_t> os = NormalizeShape(shape[1], SHAPE_DIM4);
@@ -596,12 +596,11 @@ std::string CodeGenOpNPU::GenUnaryOp() const
         return PrintReduceEx({s0Var, dVar, srcDtypeStr, dstDtypeStr});
     } else if (opCode == Opcode::OP_ROWMAXLINE || opCode == Opcode::OP_ROWMINLINE || opCode == Opcode::OP_ROWPRODLINE) {
         return PrintRowMaxline({s0Var, dVar, srcDtypeStr, dstDtypeStr});
-    } else if (
-        opCode == Opcode::OP_EXP || opCode == Opcode::OP_SQRT || opCode == Opcode::OP_ABS ||
-        opCode == Opcode::OP_RELU || opCode == Opcode::OP_RECIPROCAL || opCode == Opcode::OP_NEG ||
-        opCode == Opcode::OP_RSQRT || opCode == Opcode::OP_LN || opCode == Opcode::OP_LOGICALNOT ||
-        opCode == Opcode::OP_BRCB || opCode == Opcode::OP_CEIL || opCode == Opcode::OP_FLOOR ||
-        opCode == Opcode::OP_TRUNC) {
+    } else if (opCode == Opcode::OP_EXP || opCode == Opcode::OP_SQRT || opCode == Opcode::OP_ABS ||
+               opCode == Opcode::OP_RELU || opCode == Opcode::OP_RECIPROCAL || opCode == Opcode::OP_NEG ||
+               opCode == Opcode::OP_RSQRT || opCode == Opcode::OP_LN || opCode == Opcode::OP_LOGICALNOT ||
+               opCode == Opcode::OP_BRCB || opCode == Opcode::OP_CEIL || opCode == Opcode::OP_FLOOR ||
+               opCode == Opcode::OP_TRUNC) {
         return PrintUnary({s0Var, dVar, srcDtypeStr, dstDtypeStr});
     } else if (opCode == Opcode::OP_COPY_UB_TO_UB) {
         return PrintVcopy({s0Var, dVar, srcDtypeStr, dstDtypeStr});

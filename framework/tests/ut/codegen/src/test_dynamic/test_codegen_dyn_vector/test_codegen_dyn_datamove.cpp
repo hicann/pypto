@@ -56,8 +56,8 @@ public:
                 output = Transpose(inputSrc, tc.perm);
             }
         }
-        auto function = Program::GetInstance().GetFunctionByRawName(
-            FUNCTION_PREFIX + tc.caseName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+        auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + tc.caseName + SUB_FUNC_SUFFIX +
+                                                                    HIDDEN_FUNC_SUFFIX);
         std::string res = GenCodeByFunction(*function);
         CheckStringExist(tc.expect, res);
     }
@@ -65,14 +65,13 @@ public:
 
 TEST_F(TestCodegenDynDataMove, TestDatamoveUnalignDim3)
 {
-    RunDataMoveTest(
-        {.caseName = "TestDatamoveUnalignDim3",
-         .inputShape = {1, 32, 437},
-         .vecTile = {1, 32, 512},
-         .dtype = DT_FP32,
-         .outputShape = {32, 1, 437},
-         .perm = {0, 1},
-         .expect = R"!!!(TTransMoveOut<2, 3>(gmTensor_2, ubTensor_0, Coord3Dim(0, 0, 0));)!!!"});
+    RunDataMoveTest({.caseName = "TestDatamoveUnalignDim3",
+                     .inputShape = {1, 32, 437},
+                     .vecTile = {1, 32, 512},
+                     .dtype = DT_FP32,
+                     .outputShape = {32, 1, 437},
+                     .perm = {0, 1},
+                     .expect = R"!!!(TTransMoveOut<2, 3>(gmTensor_2, ubTensor_0, Coord3Dim(0, 0, 0));)!!!"});
 }
 
 TEST_F(TestCodegenDynDataMove, TestDatamoveUnalignDim4)

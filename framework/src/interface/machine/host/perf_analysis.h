@@ -173,9 +173,8 @@ private:
         return eventAvgSumNs;
     }
 
-    void PrintPerfTable(
-        std::ostream& out, const std::vector<PerfData>& dataVec, size_t dataSize, uint64_t totalTimeNs,
-        uint64_t avgSumNs, const std::string& title)
+    void PrintPerfTable(std::ostream& out, const std::vector<PerfData>& dataVec, size_t dataSize, uint64_t totalTimeNs,
+                        uint64_t avgSumNs, const std::string& title)
     {
         out << "\n--- " << title << " Statistics ---" << std::endl;
 
@@ -194,8 +193,9 @@ private:
                 double maxTimeUs = static_cast<double>(data.maxTimeNs) / 1000.0;
                 double minTimeUs = static_cast<double>(data.minTimeNs) / 1000.0;
 
-                double totalPercent =
-                    (totalTimeNs > 0) ? (static_cast<double>(data.totalTimeNs) / totalTimeNs * 100.0) : 0.0;
+                double totalPercent = (totalTimeNs > 0) ?
+                                          (static_cast<double>(data.totalTimeNs) / totalTimeNs * 100.0) :
+                                          0.0;
                 double avgPercent = (avgSumNs > 0) ? (static_cast<double>(data.AvgTimeNs()) / avgSumNs * 100.0) : 0.0;
 
                 out << std::left << std::fixed << std::setprecision(3) << std::setw(40) << data.name << std::setw(12)
@@ -348,13 +348,13 @@ public:
         out << "========== Perf Statistics ==========" << std::endl;
         uint64_t traceTotalNs = traceTotalUs * 1000;
         uint64_t traceAvgSumNs = CalculateTraceAvgSumNs();
-        PrintPerfTable(
-            out, traceData_, static_cast<size_t>(TracePhase::MAX_TRACE_PHASES), traceTotalNs, traceAvgSumNs, "Trace");
+        PrintPerfTable(out, traceData_, static_cast<size_t>(TracePhase::MAX_TRACE_PHASES), traceTotalNs, traceAvgSumNs,
+                       "Trace");
 
         uint64_t eventTotalNs = eventTotalUs * 1000;
         uint64_t eventAvgSumNs = CalculateEventAvgSumNs();
-        PrintPerfTable(
-            out, eventData_, static_cast<size_t>(EventPhase::MAX_EVENT_PHASES), eventTotalNs, eventAvgSumNs, "Event");
+        PrintPerfTable(out, eventData_, static_cast<size_t>(EventPhase::MAX_EVENT_PHASES), eventTotalNs, eventAvgSumNs,
+                       "Event");
 
         out << std::endl << "--- Summary ---" << std::endl;
         out << "Total time since initialization: " << std::fixed << std::setprecision(3) << totalTimeUs / 1000.0

@@ -65,24 +65,22 @@ public:
 
 class IsomorphismGraphGroup {
 public:
-    Status BuildGraphGroup(
-        std::shared_ptr<OperationGraphInfo> operationInfo, std::shared_ptr<NodeGraphInfo> superNodeInfo,
-        std::vector<int32_t>& expandCandidate, std::unordered_set<int32_t>& currentNodeSet,
-        std::vector<int32_t>& idxInLinkNum, std::deque<int32_t>& zeroInQueue);
-    Status ExpandIsoGraphs(
-        std::unordered_set<int32_t>& currentNodeSet, std::vector<int32_t>& idxInLinkNum,
-        std::deque<int32_t>& zeroInQueue, int32_t pgUpperBound);
-    static bool IsoGraphMerge(
-        std::shared_ptr<IsomorphismGraphGroup>& currGraph, std::shared_ptr<IsomorphismGraphGroup>& mergeGraph,
-        std::vector<std::pair<int32_t, int32_t>>& isoSubIdxs);
+    Status BuildGraphGroup(std::shared_ptr<OperationGraphInfo> operationInfo,
+                           std::shared_ptr<NodeGraphInfo> superNodeInfo, std::vector<int32_t>& expandCandidate,
+                           std::unordered_set<int32_t>& currentNodeSet, std::vector<int32_t>& idxInLinkNum,
+                           std::deque<int32_t>& zeroInQueue);
+    Status ExpandIsoGraphs(std::unordered_set<int32_t>& currentNodeSet, std::vector<int32_t>& idxInLinkNum,
+                           std::deque<int32_t>& zeroInQueue, int32_t pgUpperBound);
+    static bool IsoGraphMerge(std::shared_ptr<IsomorphismGraphGroup>& currGraph,
+                              std::shared_ptr<IsomorphismGraphGroup>& mergeGraph,
+                              std::vector<std::pair<int32_t, int32_t>>& isoSubIdxs);
     size_t Size() const;
     void Clear();
     bool GetMergeable();
     int32_t GetLatency() const;
     Status InLinkCountDelete(int32_t nodeIdx, std::vector<int32_t>& idxInLinkNum, std::deque<int32_t>& zeroInQueue);
-    bool IsLegalIsoGraphExtender(
-        std::vector<int32_t>& expandCandidate, std::unordered_set<int32_t>& currentNodeSet,
-        std::vector<int32_t>& idxInLinkNum, int32_t pgUpperBound);
+    bool IsLegalIsoGraphExtender(std::vector<int32_t>& expandCandidate, std::unordered_set<int32_t>& currentNodeSet,
+                                 std::vector<int32_t>& idxInLinkNum, int32_t pgUpperBound);
     bool IsLegalSubGraphMerge(SubGraph* sg1, SubGraph* sg2);
     std::shared_ptr<SubGraph> GetSubGraph(int32_t idx);
     std::vector<std::shared_ptr<SubGraph>> isoGraphs_;
@@ -103,13 +101,15 @@ private:
     Status IsomorphismGroupMergeProcess(bool nonIsoGraphsMerge);
     Status UpdatePartitionResult(Function& function);
     Status EstimateCycleUB(Function& function);
-    Status IsomorphismGroupMergePrepare(
-        std::vector<std::pair<int32_t, int32_t>>& isoSubIdxs, std::vector<std::set<int32_t>>& isoInGraph,
-        std::vector<std::set<int32_t>>& isoOutGraph, std::vector<std::vector<int32_t>>& isoNodeList,
-        std::vector<int32_t>& isoIdx2color);
-    std::vector<int32_t> GetCandidateMergeColors(
-        int32_t currColor, std::vector<std::set<int32_t>>& isoInGraph, std::vector<std::set<int32_t>>& isoOutGraph,
-        std::vector<std::vector<int32_t>>& isoNodeList, std::vector<int32_t>& isoIdx2color, bool nonIsoGraphsMerge);
+    Status IsomorphismGroupMergePrepare(std::vector<std::pair<int32_t, int32_t>>& isoSubIdxs,
+                                        std::vector<std::set<int32_t>>& isoInGraph,
+                                        std::vector<std::set<int32_t>>& isoOutGraph,
+                                        std::vector<std::vector<int32_t>>& isoNodeList,
+                                        std::vector<int32_t>& isoIdx2color);
+    std::vector<int32_t> GetCandidateMergeColors(int32_t currColor, std::vector<std::set<int32_t>>& isoInGraph,
+                                                 std::vector<std::set<int32_t>>& isoOutGraph,
+                                                 std::vector<std::vector<int32_t>>& isoNodeList,
+                                                 std::vector<int32_t>& isoIdx2color, bool nonIsoGraphsMerge);
     bool SuitableForMergeCheck(int32_t currColor, int32_t mergeColor, bool nonIsoGraphsMerge) const;
     bool CanMergeScopes(int32_t currColor, int32_t mergeColor) const;
     int32_t CalculateMergedLatency(int32_t currColor, int32_t mergeColor) const;
@@ -121,5 +121,5 @@ private:
     int32_t cycleLB_ = -1;
 };
 
-}  // namespace npu::tile_fwk
-#endif  // PASS_ISO_PARTITIONER_H
+} // namespace npu::tile_fwk
+#endif // PASS_ISO_PARTITIONER_H

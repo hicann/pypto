@@ -24,7 +24,7 @@
 namespace npu::tile_fwk {
 
 struct SaTileShapeConfig {
-    int gTile;                                   // 由于没有处理尾块，当前仅支持因子切分
+    int gTile; // 由于没有处理尾块，当前仅支持因子切分
     int sKvTile;
     std::array<int, TILE_CUBE_DIMS> c1TileShape; // (m, M), (k, K), (n, N)
     std::array<int, TILE_VEC_DIMS> v1TileShape;
@@ -32,13 +32,13 @@ struct SaTileShapeConfig {
     std::array<int, TILE_VEC_DIMS> v2TileShape;
 };
 
-void SlcAttn(
-    const Tensor& qNope, const Tensor& qRope, const Tensor& kSlc, const Tensor& vSlc, const Tensor& kvSlcActSeqs,
-    int nQ, int nKv, float softmaxScale, Tensor& attentionOut, SaTileShapeConfig tileConfig = {});
+void SlcAttn(const Tensor& qNope, const Tensor& qRope, const Tensor& kSlc, const Tensor& vSlc,
+             const Tensor& kvSlcActSeqs, int nQ, int nKv, float softmaxScale, Tensor& attentionOut,
+             SaTileShapeConfig tileConfig = {});
 
-void SlcAttnCompute(
-    const Tensor& qNope, const Tensor& qRope, const Tensor& kSlc, const Tensor& vSlc, const Tensor& kvSlcActSeqs,
-    int nQ, int nKv, float softmaxScale, Tensor& attentionOut, SaTileShapeConfig tileConfig = {});
+void SlcAttnCompute(const Tensor& qNope, const Tensor& qRope, const Tensor& kSlc, const Tensor& vSlc,
+                    const Tensor& kvSlcActSeqs, int nQ, int nKv, float softmaxScale, Tensor& attentionOut,
+                    SaTileShapeConfig tileConfig = {});
 
 } // namespace npu::tile_fwk
 

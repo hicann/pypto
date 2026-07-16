@@ -58,22 +58,21 @@ private:
 
     Status InferUncertainMemoryTypes(Function& function);
 
-    Status GetFirstInputOutputIfOpcode(
-        Operation& operation, Opcode expectedOpcode, const std::string& action, LogicalTensorPtr& input,
-        LogicalTensorPtr& output, bool& shouldHandle) const;
+    Status GetFirstInputOutputIfOpcode(Operation& operation, Opcode expectedOpcode, const std::string& action,
+                                       LogicalTensorPtr& input, LogicalTensorPtr& output, bool& shouldHandle) const;
 
     Status InferViewMemoryType(Operation& operation);
 
     Status InferViewOutputFromRequirement(const LogicalTensorPtr& output, MemoryType& outputOriginal);
 
-    Status InferViewKnownInputOutput(
-        Operation& operation, const LogicalTensorPtr& input, MemoryType inputOriginal, MemoryType outputOriginal);
+    Status InferViewKnownInputOutput(Operation& operation, const LogicalTensorPtr& input, MemoryType inputOriginal,
+                                     MemoryType outputOriginal);
 
-    Status InferViewKnownInputUnknownOutput(
-        Operation& operation, const LogicalTensorPtr& input, const LogicalTensorPtr& output, MemoryType inputOriginal);
+    Status InferViewKnownInputUnknownOutput(Operation& operation, const LogicalTensorPtr& input,
+                                            const LogicalTensorPtr& output, MemoryType inputOriginal);
 
-    bool TryHandleUnalignedView(
-        Operation& operation, const LogicalTensorPtr& input, MemoryType inputOriginal, MemoryType outputOriginal);
+    bool TryHandleUnalignedView(Operation& operation, const LogicalTensorPtr& input, MemoryType inputOriginal,
+                                MemoryType outputOriginal);
 
     bool CanUseDirectViewPath(Operation& operation, MemoryType from, MemoryType to);
 
@@ -89,11 +88,10 @@ private:
 
     bool HasTransDataConsumer(const LogicalTensorPtr& tensor) const;
 
-    bool HasPermuteProducerAndTransDataDownstream(
-        const LogicalTensorPtr& input, const LogicalTensorPtr& output) const;
+    bool HasPermuteProducerAndTransDataDownstream(const LogicalTensorPtr& input, const LogicalTensorPtr& output) const;
 
-    Status InferAssembleMemoryType(
-        Function& function, Operation& operation, std::unordered_set<LogicalTensorPtr>& inferredAssembleOutputs);
+    Status InferAssembleMemoryType(Function& function, Operation& operation,
+                                   std::unordered_set<LogicalTensorPtr>& inferredAssembleOutputs);
 
     Status InferAssembleMemoryType(Operation& operation);
 
@@ -113,11 +111,11 @@ private:
 
     Status ApplyAssembleDirectOutputOriginal(const LogicalTensorPtr& output, MemoryType targetOriginal);
 
-    Status SyncAssembleInputRequirementAndAttr(
-        Operation& operation, MemoryType fallbackType, const std::string& reason);
+    Status SyncAssembleInputRequirementAndAttr(Operation& operation, MemoryType fallbackType,
+                                               const std::string& reason);
 
-    Status ApplyAssembleDdrOutputWithInputOriginals(
-        const LogicalTensorPtr& output, const std::string& originalReason, const std::string& inputReason);
+    Status ApplyAssembleDdrOutputWithInputOriginals(const LogicalTensorPtr& output, const std::string& originalReason,
+                                                    const std::string& inputReason);
 
     Status FillAssembleInputRequirementsFromOriginal(const LogicalTensorPtr& output, const std::string& reason);
 
@@ -137,8 +135,8 @@ private:
 
     Status InferReshapeMemoryType(Operation& operation);
 
-    MemoryType GetReshapeInputRequirement(
-        Operation& operation, const LogicalTensorPtr& input, MemoryType inputOriginal);
+    MemoryType GetReshapeInputRequirement(Operation& operation, const LogicalTensorPtr& input,
+                                          MemoryType inputOriginal);
 
     Status InferReshapeOutputFromRequirement(const LogicalTensorPtr& output, MemoryType& outputOriginal);
 
@@ -147,17 +145,14 @@ private:
     MemoryType InferUniqueRequirementThroughViewConsumers(
         const LogicalTensorPtr& tensor, std::unordered_set<const LogicalTensor*>& visitedTensors) const;
 
-    bool HasRequirementThroughViewConsumers(
-        const LogicalTensorPtr& tensor, MemoryType targetRequirement,
-        std::unordered_set<const LogicalTensor*>& visitedTensors) const;
+    bool HasRequirementThroughViewConsumers(const LogicalTensorPtr& tensor, MemoryType targetRequirement,
+                                            std::unordered_set<const LogicalTensor*>& visitedTensors) const;
 
-    bool CanUseUbForReshape(
-        const LogicalTensorPtr& input, const LogicalTensorPtr& output, MemoryType inputRequirement,
-        MemoryType outputOriginal) const;
+    bool CanUseUbForReshape(const LogicalTensorPtr& input, const LogicalTensorPtr& output, MemoryType inputRequirement,
+                            MemoryType outputOriginal) const;
 
-    Status ApplyReshapeMemoryType(
-        Operation& operation, const LogicalTensorPtr& input, const LogicalTensorPtr& output, bool isDynamic,
-        bool canUseUb);
+    Status ApplyReshapeMemoryType(Operation& operation, const LogicalTensorPtr& input, const LogicalTensorPtr& output,
+                                  bool isDynamic, bool canUseUb);
 
     Status InferReshapeL0C2UBAndUB2L1PatternLiteNPU(Operation& op);
 
@@ -175,18 +170,17 @@ private:
 
     Status InferViewTypeMemoryType(Operation& operation);
 
-    Status TryInferViewTypeFromProducerView(
-        Operation& operation, const LogicalTensorPtr& input, const LogicalTensorPtr& output, MemoryType targetType,
-        bool& handled);
+    Status TryInferViewTypeFromProducerView(Operation& operation, const LogicalTensorPtr& input,
+                                            const LogicalTensorPtr& output, MemoryType targetType, bool& handled);
 
-    Status InferViewTypeInput(
-        Operation& operation, const LogicalTensorPtr& input, const LogicalTensorPtr& output, MemoryType targetType);
+    Status InferViewTypeInput(Operation& operation, const LogicalTensorPtr& input, const LogicalTensorPtr& output,
+                              MemoryType targetType);
 
     // 当 tensor 的 toBeMap 未知时，沿后续未推导的视图链向前查找有效内存类型
     MemoryType InferTargetTypeThroughForwardViews(const LogicalTensorPtr& tensor) const;
 
-    MemoryType InferTargetTypeThroughForwardViews(
-        const LogicalTensorPtr& tensor, std::unordered_set<LogicalTensorPtr>& visitedTensors) const;
+    MemoryType InferTargetTypeThroughForwardViews(const LogicalTensorPtr& tensor,
+                                                  std::unordered_set<LogicalTensorPtr>& visitedTensors) const;
 
     bool KeepSplitReshapeUb(Operation& operation, const LogicalTensorPtr& input, const LogicalTensorPtr& output);
 
@@ -202,8 +196,8 @@ private:
 
     Status ApplyOversizedLocalBufferFallback(Operation& operation);
 
-    bool IsOversizedLocalBuffer(
-        const LogicalTensorPtr& tensor, MemoryType memoryType, bool useAssembleUbLimit, bool allowL1Fallback) const;
+    bool IsOversizedLocalBuffer(const LogicalTensorPtr& tensor, MemoryType memoryType, bool useAssembleUbLimit,
+                                bool allowL1Fallback) const;
 
     Status DowngradeOversizedViewInputRequirement(Operation& operation);
 
@@ -225,19 +219,16 @@ private:
 
     Status SyncTensorToBe(Function& function);
 
-    Status SetOriginalChecked(
-        const LogicalTensorPtr& tensor, MemoryType memoryType, const std::string& reason = "unknown",
-        bool allowOverride = false);
+    Status SetOriginalChecked(const LogicalTensorPtr& tensor, MemoryType memoryType,
+                              const std::string& reason = "unknown", bool allowOverride = false);
 
     void ForceSetOriginal(const LogicalTensorPtr& tensor, MemoryType memoryType, const std::string& reason = "unknown");
 
-    Status SetRequirementChecked(
-        const LogicalTensorPtr& tensor, Operation& operation, MemoryType memoryType,
-        const std::string& reason = "unknown", bool allowOverride = false);
+    Status SetRequirementChecked(const LogicalTensorPtr& tensor, Operation& operation, MemoryType memoryType,
+                                 const std::string& reason = "unknown", bool allowOverride = false);
 
-    void ForceSetRequirement(
-        const LogicalTensorPtr& tensor, Operation& operation, MemoryType memoryType,
-        const std::string& reason = "unknown");
+    void ForceSetRequirement(const LogicalTensorPtr& tensor, Operation& operation, MemoryType memoryType,
+                             const std::string& reason = "unknown");
 
     void FillUnknownRequirementsWith(const LogicalTensorPtr& tensor, MemoryType memoryType, const char* reason);
     bool AreAllConsumerRequirements(const LogicalTensorPtr& tensor, MemoryType memoryType) const;

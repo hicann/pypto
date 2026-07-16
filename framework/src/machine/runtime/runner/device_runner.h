@@ -31,41 +31,49 @@ struct KernelLaunchInfo {
     RtBinHandle binHandle;
     bool isCaptureActivate;
     KernelLaunchInfo(RtStream sStream, RtStream cStream, RtStream aStream, uint32_t blkDim, uint32_t cpuNum)
-        : schedStream(sStream), ctrlStream(cStream), aicoreStream(aStream), blockDim(blkDim), aicpuNum(cpuNum),
-          binHandle(nullptr), isCaptureActivate(false) {}
+        : schedStream(sStream),
+          ctrlStream(cStream),
+          aicoreStream(aStream),
+          blockDim(blkDim),
+          aicpuNum(cpuNum),
+          binHandle(nullptr),
+          isCaptureActivate(false)
+    {}
 };
 class DeviceRunner {
 public:
     static DeviceRunner& Get();
-    int DynamicRun(const KernelLaunchInfo &launchInfo, DeviceKernelArgs* kernelArgs);
-    int DynamicLaunch(const KernelLaunchInfo &launchInfo, DeviceKernelArgs* kernelArgs);
+    int DynamicRun(const KernelLaunchInfo& launchInfo, DeviceKernelArgs* kernelArgs);
+    int DynamicLaunch(const KernelLaunchInfo& launchInfo, DeviceKernelArgs* kernelArgs);
     static int DynamicLaunchSynchronize(RtStream schedStream, RtStream ctrlStream, RtStream aicoreStream);
 
-    void SetHostProfFunction(Function* function, const std::vector<npu::tile_fwk::dynamic::DeviceTensorData>& tensors = {});
+    void SetHostProfFunction(Function* function,
+                             const std::vector<npu::tile_fwk::dynamic::DeviceTensorData>& tensors = {});
     uint32_t GetHostProfType() const;
-    void ReportHostProfInfo(
-        RtStream stream, uint64_t startTime, uint32_t blockDim, uint16_t taskType, bool isCore = false) const;
+    void ReportHostProfInfo(RtStream stream, uint64_t startTime, uint32_t blockDim, uint16_t taskType,
+                            bool isCore = false) const;
 
     void InitMetaData(DeviceArgs& devArgs) const;
     bool GetEnableDumpDevPref() const;
     void ResetPerData() const;
     void SyncProfData(bool debugEnable);
     void SetDebugEnable();
+
 private:
     DeviceRunner() = default;
     ~DeviceRunner();
     int Init();
     int InitDeviceArgs(DeviceArgs& args);
     static void InitAiCpuSoBin(DeviceArgs& devArgs);
-    static void InitDevDfxArgs(const bool isPerfTrace, DevDfxArgs &devDfxArg);
-    static void GetAicoreRegs(const ArchInfo archInfo, std::vector<int64_t> &regs, std::vector<int64_t> &regsPmu);
+    static void InitDevDfxArgs(const bool isPerfTrace, DevDfxArgs& devDfxArg);
+    static void GetAicoreRegs(const ArchInfo archInfo, std::vector<int64_t>& regs, std::vector<int64_t>& regsPmu);
     static int InitDeviceArgsCore(DeviceArgs& args);
     static void InitAicpuPerfAddr(DeviceArgs& args);
-    static int LaunchAicpuServerInit(int64_t *devArgsAddr);
+    static int LaunchAicpuServerInit(int64_t* devArgsAddr);
     /**************DynamicFunction**************/
-    int DynamicKernelLaunch(const KernelLaunchInfo &launchInfo, DeviceKernelArgs* kernelArgs) const;
-    int DynamicTripleStreamLaunch(const KernelLaunchInfo &launchInfo, DeviceKernelArgs* kernelArgs) const;
-    static int LaunchDynamicAiCore(void *binHandle, RtStream aicoreStream, uint32_t blockDim,
+    int DynamicKernelLaunch(const KernelLaunchInfo& launchInfo, DeviceKernelArgs* kernelArgs) const;
+    int DynamicTripleStreamLaunch(const KernelLaunchInfo& launchInfo, DeviceKernelArgs* kernelArgs) const;
+    static int LaunchDynamicAiCore(void* binHandle, RtStream aicoreStream, uint32_t blockDim,
                                    DeviceKernelArgs* kernelArgs);
     static int LaunchDynamicAiCpu(RtStream aicpuStream, uint32_t aicpuNum, DeviceKernelArgs* kernelArgs);
     static void RunPost(RtStream aicpuStream, RtStream aicoreStream);

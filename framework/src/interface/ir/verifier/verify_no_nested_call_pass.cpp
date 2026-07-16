@@ -113,14 +113,12 @@ private:
     void VisitBinaryExpr(const std::shared_ptr<const BinaryExprType>& op)
     {
         if (As<Call>(op->left_)) {
-            RecordError(
-                nested_call::ErrorType::CALL_IN_BINARY_EXPR,
-                "Binary expression left operand cannot be a call expression", op->left_->span_);
+            RecordError(nested_call::ErrorType::CALL_IN_BINARY_EXPR,
+                        "Binary expression left operand cannot be a call expression", op->left_->span_);
         }
         if (As<Call>(op->right_)) {
-            RecordError(
-                nested_call::ErrorType::CALL_IN_BINARY_EXPR,
-                "Binary expression right operand cannot be a call expression", op->right_->span_);
+            RecordError(nested_call::ErrorType::CALL_IN_BINARY_EXPR,
+                        "Binary expression right operand cannot be a call expression", op->right_->span_);
         }
 
         // Continue visiting sub-expressions
@@ -134,9 +132,8 @@ private:
     void VisitUnaryExpr(const std::shared_ptr<const UnaryExprType>& op)
     {
         if (As<Call>(op->operand_)) {
-            RecordError(
-                nested_call::ErrorType::CALL_IN_UNARY_EXPR, "Unary expression operand cannot be a call expression",
-                op->operand_->span_);
+            RecordError(nested_call::ErrorType::CALL_IN_UNARY_EXPR,
+                        "Unary expression operand cannot be a call expression", op->operand_->span_);
         }
 
         // Continue visiting sub-expression
@@ -170,9 +167,8 @@ void NoNestedCallVerifier::VisitStmt_(const IfStmtPtr& op)
 
     // Check if condition is a call
     if (As<Call>(op->condition_)) {
-        RecordError(
-            nested_call::ErrorType::CALL_IN_IF_CONDITION, "If condition cannot be a call expression",
-            op->condition_->span_);
+        RecordError(nested_call::ErrorType::CALL_IN_IF_CONDITION, "If condition cannot be a call expression",
+                    op->condition_->span_);
     }
 
     // Continue with default traversal
@@ -186,19 +182,16 @@ void NoNestedCallVerifier::VisitStmt_(const ForStmtPtr& op)
 
     // Check if range expressions are calls
     if (As<Call>(op->start_)) {
-        RecordError(
-            nested_call::ErrorType::CALL_IN_FOR_RANGE, "For loop start expression cannot be a call expression",
-            op->start_->span_);
+        RecordError(nested_call::ErrorType::CALL_IN_FOR_RANGE, "For loop start expression cannot be a call expression",
+                    op->start_->span_);
     }
     if (As<Call>(op->stop_)) {
-        RecordError(
-            nested_call::ErrorType::CALL_IN_FOR_RANGE, "For loop stop expression cannot be a call expression",
-            op->stop_->span_);
+        RecordError(nested_call::ErrorType::CALL_IN_FOR_RANGE, "For loop stop expression cannot be a call expression",
+                    op->stop_->span_);
     }
     if (As<Call>(op->step_)) {
-        RecordError(
-            nested_call::ErrorType::CALL_IN_FOR_RANGE, "For loop step expression cannot be a call expression",
-            op->step_->span_);
+        RecordError(nested_call::ErrorType::CALL_IN_FOR_RANGE, "For loop step expression cannot be a call expression",
+                    op->step_->span_);
     }
 
     // Continue with default traversal
@@ -212,9 +205,8 @@ void NoNestedCallVerifier::VisitStmt_(const WhileStmtPtr& op)
 
     // Check if condition is a call
     if (As<Call>(op->condition_)) {
-        RecordError(
-            nested_call::ErrorType::CALL_IN_WHILE_CONDITION, "While loop condition cannot be a call expression",
-            op->condition_->span_);
+        RecordError(nested_call::ErrorType::CALL_IN_WHILE_CONDITION, "While loop condition cannot be a call expression",
+                    op->condition_->span_);
     }
 
     // Continue with default traversal

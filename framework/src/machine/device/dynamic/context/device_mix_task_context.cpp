@@ -26,8 +26,8 @@ inline int32_t GetWrapAicoreIdx(uint32_t coreType, int32_t wrapVecId)
     }
 }
 
-void DeviceTaskContext::ProcessWrapQueue(
-    DynDeviceTask* dyntask, uint32_t wrapId, int funcIndex, size_t opIndex, WrapInfoQueue* wrapQueue)
+void DeviceTaskContext::ProcessWrapQueue(DynDeviceTask* dyntask, uint32_t wrapId, int funcIndex, size_t opIndex,
+                                         WrapInfoQueue* wrapQueue)
 {
     DEV_VERBOSE_DEBUG("add task to wrap queue, wrapId = %u, funcIndex = %d, opIndex = %lu", wrapId, funcIndex, opIndex);
     if (wrapQueue == nullptr) {
@@ -54,9 +54,8 @@ void DeviceTaskContext::ProcessWrapQueue(
 
     auto opWrapOffsetList = reinterpret_cast<uint16_t*>(dyntask->devTask.mixTaskData.opWrapOffsetList[funcIndex]);
     if (unlikely(opWrapOffsetList == nullptr)) {
-        DEV_ERROR(
-            DevCommonErr::NULLPTR, "#ctrl.earlydep.resolve.wrap: the funcIndex:%d have wrapId but not found: %u!",
-            funcIndex, wrapId);
+        DEV_ERROR(DevCommonErr::NULLPTR, "#ctrl.earlydep.resolve.wrap: the funcIndex:%d have wrapId but not found: %u!",
+                  funcIndex, wrapId);
         return;
     }
     auto opWrapId = GetOpWrapID(wrapId);
@@ -74,8 +73,8 @@ void DeviceTaskContext::ProcessWrapQueue(
 WrapInfoQueue* DeviceTaskContext::AllocWrapQueue(DynDeviceTask* dyntask)
 {
     uint32_t size = sizeof(WrapInfoQueue) + dyntask->devTask.mixTaskData.wrapIdNum * sizeof(WrapInfo);
-    WsAllocation qalloc =
-        ControlFlowAllocateSlab(devProg_, size, workspace_->SlabAlloc(size, WsAicpuSlabMemType::WRAP_QUEUE));
+    WsAllocation qalloc = ControlFlowAllocateSlab(devProg_, size,
+                                                  workspace_->SlabAlloc(size, WsAicpuSlabMemType::WRAP_QUEUE));
     WrapInfoQueue* q = qalloc.As<WrapInfoQueue>();
     q->head = 0;
     q->tail = 0;
@@ -108,8 +107,8 @@ void DeviceTaskContext::InitWrapOffsetList(DynDeviceTask* dyntask)
             continue;
         }
         uint32_t size = dyntask->dynFuncDataCacheList[i].devFunc->wrapIdNum_ * sizeof(uint16_t);
-        WsAllocation qalloc =
-            ControlFlowAllocateSlab(devProg_, size, workspace_->SlabAlloc(size, WsAicpuSlabMemType::WRAP_OFFSET_LIST));
+        WsAllocation qalloc = ControlFlowAllocateSlab(
+            devProg_, size, workspace_->SlabAlloc(size, WsAicpuSlabMemType::WRAP_OFFSET_LIST));
         uint16_t* q = qalloc.As<uint16_t>();
         dyntask->devTask.mixTaskData.opWrapOffsetList[i] = q;
         memset_s(q, size, INVALID_UINT16_IDX, size);
@@ -142,8 +141,8 @@ void DeviceTaskContext::InitDieReadyQueues(DynDeviceTask* dyntask, DevAscendProg
     ReadyCoreFunctionQueue* queue[DIE_READY_QUEUE_SIZE * DIE_NUM];
     uint32_t size = sizeof(ReadyCoreFunctionQueue) + dyntask->devTask.coreFunctionCnt * sizeof(taskid_t);
     for (size_t i = 0; i < DIE_READY_QUEUE_SIZE * DIE_NUM; ++i) {
-        WsAllocation qalloc =
-            ControlFlowAllocateSlab(devProg_, size, workspace_->SlabAlloc(size, WsAicpuSlabMemType::DIE_READY_QUE));
+        WsAllocation qalloc = ControlFlowAllocateSlab(devProg_, size,
+                                                      workspace_->SlabAlloc(size, WsAicpuSlabMemType::DIE_READY_QUE));
         ReadyCoreFunctionQueue* q = qalloc.As<ReadyCoreFunctionQueue>();
         InitReadyCoreFunctionQueue(q, dyntask->devTask.coreFunctionCnt);
         queue[i] = q;

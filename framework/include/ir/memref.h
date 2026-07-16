@@ -84,11 +84,10 @@ public:
      */
     static constexpr auto GetFieldDescriptors()
     {
-        return std::tuple_cat(
-            Var::GetFieldDescriptors(),
-            std::make_tuple(
-                reflection::UsualField(&MemRef::memorySpace_, "memory_space"),
-                reflection::UsualField(&MemRef::addr_, "addr"), reflection::UsualField(&MemRef::size_, "size")));
+        return std::tuple_cat(Var::GetFieldDescriptors(),
+                              std::make_tuple(reflection::UsualField(&MemRef::memorySpace_, "memory_space"),
+                                              reflection::UsualField(&MemRef::addr_, "addr"),
+                                              reflection::UsualField(&MemRef::size_, "size")));
     }
 };
 

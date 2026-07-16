@@ -34,10 +34,10 @@ inline bool IsCellMatchDescFillReady(const DevCellMatchTableDesc& cellMatchTable
     return true;
 }
 
-inline void DumpCellMatchAccessRange(
-    int funcKey, int operationIndex,
-    const uint64_t offset[DEV_SHAPE_DIM_MAX], const uint64_t validShape[DEV_SHAPE_DIM_MAX],
-    const uint64_t rawShape[DEV_SHAPE_DIM_MAX], const DevCellMatchTableDesc& cellMatchTableDesc)
+inline void DumpCellMatchAccessRange(int funcKey, int operationIndex, const uint64_t offset[DEV_SHAPE_DIM_MAX],
+                                     const uint64_t validShape[DEV_SHAPE_DIM_MAX],
+                                     const uint64_t rawShape[DEV_SHAPE_DIM_MAX],
+                                     const DevCellMatchTableDesc& cellMatchTableDesc)
 {
     uint64_t dumpOffset[DEV_SHAPE_DIM_MAX] = {0};
     uint64_t dumpValidShape[DEV_SHAPE_DIM_MAX] = {0};
@@ -53,20 +53,18 @@ inline void DumpCellMatchAccessRange(
         cellShape[i] = static_cast<uint64_t>(cellMatchTableDesc.GetCellShape(i));
     }
 
-    DEV_WARN(
-        "[StitchCellRange] funcKey=%d op=%d dim=%d "
-        "offset=[%lu,%lu,%lu,%lu,%lu] validShape=[%lu,%lu,%lu,%lu,%lu] "
-        "rawShape=[%lu,%lu,%lu,%lu,%lu] cellShape=[%lu,%lu,%lu,%lu,%lu]",
-        funcKey, operationIndex, dims,
-        dumpOffset[0], dumpOffset[1], dumpOffset[2], dumpOffset[3], dumpOffset[4],
-        dumpValidShape[0], dumpValidShape[1], dumpValidShape[2], dumpValidShape[3], dumpValidShape[4],
-        dumpRawShape[0], dumpRawShape[1], dumpRawShape[2], dumpRawShape[3], dumpRawShape[4],
-        cellShape[0], cellShape[1], cellShape[2], cellShape[3], cellShape[4]);
+    DEV_WARN("[StitchCellRange] funcKey=%d op=%d dim=%d "
+             "offset=[%lu,%lu,%lu,%lu,%lu] validShape=[%lu,%lu,%lu,%lu,%lu] "
+             "rawShape=[%lu,%lu,%lu,%lu,%lu] cellShape=[%lu,%lu,%lu,%lu,%lu]",
+             funcKey, operationIndex, dims, dumpOffset[0], dumpOffset[1], dumpOffset[2], dumpOffset[3], dumpOffset[4],
+             dumpValidShape[0], dumpValidShape[1], dumpValidShape[2], dumpValidShape[3], dumpValidShape[4],
+             dumpRawShape[0], dumpRawShape[1], dumpRawShape[2], dumpRawShape[3], dumpRawShape[4], cellShape[0],
+             cellShape[1], cellShape[2], cellShape[3], cellShape[4]);
 }
 
-inline bool CheckOffsetAndValidShapeInRawShape(
-    uint64_t offset[DEV_SHAPE_DIM_MAX], uint64_t validShape[DEV_SHAPE_DIM_MAX],
-    const uint64_t rawShape[DEV_SHAPE_DIM_MAX], int dims)
+inline bool CheckOffsetAndValidShapeInRawShape(uint64_t offset[DEV_SHAPE_DIM_MAX],
+                                               uint64_t validShape[DEV_SHAPE_DIM_MAX],
+                                               const uint64_t rawShape[DEV_SHAPE_DIM_MAX], int dims)
 {
     bool clamped = false;
     for (int i = 0; i < dims; i++) {
@@ -76,14 +74,12 @@ inline bool CheckOffsetAndValidShapeInRawShape(
     }
     for (int i = 0; i < dims; i++) {
         if (offset[i] > rawShape[i]) {
-            DEV_WARN(
-                "#ctrl.stitch.bound: action=offset_out_of_range, offset > rawShape");
+            DEV_WARN("#ctrl.stitch.bound: action=offset_out_of_range, offset > rawShape");
             offset[i] = rawShape[i];
             validShape[i] = 0;
             clamped = true;
         } else if (validShape[i] > rawShape[i] - offset[i]) {
-            DEV_WARN(
-                "#ctrl.stitch.bound: action=validShape_out_of_range, offset + validShape > rawShape");
+            DEV_WARN("#ctrl.stitch.bound: action=validShape_out_of_range, offset + validShape > rawShape");
             validShape[i] = rawShape[i] - offset[i];
             clamped = true;
         }
@@ -92,12 +88,12 @@ inline bool CheckOffsetAndValidShapeInRawShape(
 }
 
 template <bool skipExpression>
-static bool GetTensorOffsetAndShape(
-    const DevAscendFunction* devFunc, uint64_t offset[DEV_SHAPE_DIM_MAX], uint64_t shape[DEV_SHAPE_DIM_MAX],
-    const uint64_t* runtimeExpressionList, int dims, int operationIndex, int offsetAttrIndex, int shapeAttrIndex)
+static bool GetTensorOffsetAndShape(const DevAscendFunction* devFunc, uint64_t offset[DEV_SHAPE_DIM_MAX],
+                                    uint64_t shape[DEV_SHAPE_DIM_MAX], const uint64_t* runtimeExpressionList, int dims,
+                                    int operationIndex, int offsetAttrIndex, int shapeAttrIndex)
 {
-    auto [offsetSymList, shapeSymList] =
-        devFunc->GetTensorOffsetShapeSymList(operationIndex, offsetAttrIndex, shapeAttrIndex);
+    auto [offsetSymList, shapeSymList] = devFunc->GetTensorOffsetShapeSymList(operationIndex, offsetAttrIndex,
+                                                                              shapeAttrIndex);
 
     bool paramConcrete = true;
     for (int i = 0; i < dims; i++) {
@@ -128,9 +124,9 @@ static bool GetTensorOffsetAndShape(
 }
 
 template <bool skipExpression>
-static bool GetTensorRawShape(
-    DevAscendFunction* devFunc, uint64_t rawShape[DEV_SHAPE_DIM_MAX], const uint64_t* runtimeExpressionList, int dims,
-    int operationIndex, int rawshapeAttrIndex)
+static bool GetTensorRawShape(DevAscendFunction* devFunc, uint64_t rawShape[DEV_SHAPE_DIM_MAX],
+                              const uint64_t* runtimeExpressionList, int dims, int operationIndex,
+                              int rawshapeAttrIndex)
 {
     const SymInt* rawShapeSymList = &(devFunc->GetOperationAttr(operationIndex, rawshapeAttrIndex));
     bool paramConcrete = true;
@@ -150,17 +146,14 @@ static bool GetTensorRawShape(
 }
 
 template <bool skipExpression>
-static bool GetTensorOffsetAndValidShape(
-    const DevAscendFunction* devFunc, uint64_t offset[DEV_SHAPE_DIM_MAX], uint64_t validShape[DEV_SHAPE_DIM_MAX],
-    const uint64_t* runtimeExpressionList, const DevCellMatchTableDesc& cellMatchTableDesc, int dims,
-    int operationIndex, int offsetAttrIndex)
+static bool GetTensorOffsetAndValidShape(const DevAscendFunction* devFunc, uint64_t offset[DEV_SHAPE_DIM_MAX],
+                                         uint64_t validShape[DEV_SHAPE_DIM_MAX], const uint64_t* runtimeExpressionList,
+                                         const DevCellMatchTableDesc& cellMatchTableDesc, int dims, int operationIndex,
+                                         int offsetAttrIndex)
 {
-    const SymInt* offsetSymList =
-        &(devFunc->GetOperationAttr(operationIndex, offsetAttrIndex));
-    const SymInt* validShapeSymList =
-        &(devFunc->GetOperationAttr(operationIndex, offsetAttrIndex + 3 * dims));
-    const SymInt* rawShapeSymList =
-        &(devFunc->GetOperationAttr(operationIndex, offsetAttrIndex + 2 * dims));
+    const SymInt* offsetSymList = &(devFunc->GetOperationAttr(operationIndex, offsetAttrIndex));
+    const SymInt* validShapeSymList = &(devFunc->GetOperationAttr(operationIndex, offsetAttrIndex + 3 * dims));
+    const SymInt* rawShapeSymList = &(devFunc->GetOperationAttr(operationIndex, offsetAttrIndex + 2 * dims));
 
     uint64_t rawShape[DEV_SHAPE_DIM_MAX] = {0};
     bool paramConcrete = true;
@@ -202,9 +195,8 @@ static bool GetTensorOffsetAndValidShape(
 
     bool clamped = CheckOffsetAndValidShapeInRawShape(offset, validShape, rawShape, dims);
     if (clamped) {
-        DumpCellMatchAccessRange(
-            devFunc->GetFuncKey(), operationIndex, offset, validShape, rawShape,
-            cellMatchTableDesc);
+        DumpCellMatchAccessRange(devFunc->GetFuncKey(), operationIndex, offset, validShape, rawShape,
+                                 cellMatchTableDesc);
     }
     return paramConcrete;
 }

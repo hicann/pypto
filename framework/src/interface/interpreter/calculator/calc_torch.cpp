@@ -364,9 +364,8 @@ static std::pair<uint8_t, float> ComputeB16OcpExponentAndScaling(float maxAbsVal
     if (maxAbsValue <= std::ldexp(1.0f, targetMaxPow2 - kE8M0ExponentBias)) {
         return {0u, std::ldexp(1.0f, kE8M0ExponentBias)};
     }
-    const int e8m0 =
-        static_cast<int>(std::floor(std::log2(static_cast<long double>(maxAbsValue)))) - targetMaxPow2 +
-        kE8M0ExponentBias;
+    const int e8m0 = static_cast<int>(std::floor(std::log2(static_cast<long double>(maxAbsValue)))) - targetMaxPow2 +
+                     kE8M0ExponentBias;
     const auto clamped = static_cast<uint8_t>(std::clamp(e8m0, 0, 0xFE));
     return {clamped, std::ldexp(1.0f, kE8M0ExponentBias - static_cast<int>(clamped))};
 }
@@ -409,8 +408,8 @@ static uint8_t EncodeE4M3Fn(float value)
     const uint32_t mantOdd = (absBits >> kShift) & 1u;
     // Reinterpret as int32 for the exponent/rounding adjustment
     const int32_t expBiasDelta = static_cast<int32_t>(p.expBias - kF32ExpBias);
-    const int32_t valToAdd =
-        expBiasDelta * static_cast<int32_t>(uint32_t{1} << kF32Mbits) + static_cast<int32_t>(kMagicAdder);
+    const int32_t valToAdd = expBiasDelta * static_cast<int32_t>(uint32_t{1} << kF32Mbits) +
+                             static_cast<int32_t>(kMagicAdder);
     const uint32_t adjusted = absBits + static_cast<uint32_t>(valToAdd) + mantOdd;
     return sign | static_cast<uint8_t>((adjusted >> kShift) & 0x7Fu);
 }
@@ -438,8 +437,8 @@ static uint8_t EncodeE2M1Magic(float value)
     return static_cast<uint8_t>(sign | magCode);
 }
 
-static torch::Tensor View(
-    const torch::Tensor& self, const std::vector<int64_t>& shape, const std::vector<int64_t>& offset)
+static torch::Tensor View(const torch::Tensor& self, const std::vector<int64_t>& shape,
+                          const std::vector<int64_t>& offset)
 {
     int64_t storageOffset = self.storage_offset();
     for (size_t dim = 0; dim < offset.size(); dim++) {
@@ -596,7 +595,8 @@ static void Signbit(const TensorData& out, const TensorData& self)
     ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void Tanh(const TensorData &out, const TensorData &self) {
+static void Tanh(const TensorData& out, const TensorData& self)
+{
     auto tout = From(out);
     auto tself = From(self);
     torch::tanh_out(tout.second, tself.second);
@@ -784,8 +784,8 @@ static void Abs(const TensorData& out, const TensorData& self)
     ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void WhereTT(
-    const TensorData& out, const TensorData& condition, const TensorData& input, const TensorData& other)
+static void WhereTT(const TensorData& out, const TensorData& condition, const TensorData& input,
+                    const TensorData& other)
 {
     auto tout = From(out);
     auto tcondition = From(condition);
@@ -890,8 +890,8 @@ static void Add(const TensorData& out, const TensorData& self, const TensorData&
     std::vector<int64_t> shape_self = tself.second.sizes().vec();
     std::vector<int64_t> shape_other = tother.second.sizes().vec();
 
-    if (shape_self.size() == 0x2 && shape_other.size() == 0x2 &&
-        shape_self[0] == shape_other[0] && shape_self[1] != shape_other[1]) {
+    if (shape_self.size() == 0x2 && shape_other.size() == 0x2 && shape_self[0] == shape_other[0] &&
+        shape_self[1] != shape_other[1]) {
         if (shape_other[1] == 0x8) {
             int64_t cols_self = shape_self[1];
             int64_t cols_other = shape_other[1];
@@ -917,8 +917,8 @@ static void Sub(const TensorData& out, const TensorData& self, const TensorData&
     std::vector<int64_t> shape_self = tself.second.sizes().vec();
     std::vector<int64_t> shape_other = tother.second.sizes().vec();
 
-    if (shape_self.size() == 0x2 && shape_other.size() == 0x2 &&
-        shape_self[0] == shape_other[0] && shape_self[1] != shape_other[1]) {
+    if (shape_self.size() == 0x2 && shape_other.size() == 0x2 && shape_self[0] == shape_other[0] &&
+        shape_self[1] != shape_other[1]) {
         if (shape_other[1] == 0x8) {
             int64_t cols_self = shape_self[1];
             int64_t cols_other = shape_other[1];
@@ -944,8 +944,8 @@ static void Mul(const TensorData& out, const TensorData& self, const TensorData&
     std::vector<int64_t> shape_self = tself.second.sizes().vec();
     std::vector<int64_t> shape_other = tother.second.sizes().vec();
 
-    if (shape_self.size() == 0x2 && shape_other.size() == 0x2 &&
-        shape_self[0] == shape_other[0] && shape_self[1] != shape_other[1]) {
+    if (shape_self.size() == 0x2 && shape_other.size() == 0x2 && shape_self[0] == shape_other[0] &&
+        shape_self[1] != shape_other[1]) {
         if (shape_other[1] == 0x8) {
             int64_t cols_self = shape_self[1];
             int64_t cols_other = shape_other[1];
@@ -971,8 +971,8 @@ static void Div(const TensorData& out, const TensorData& self, const TensorData&
     std::vector<int64_t> shape_self = tself.second.sizes().vec();
     std::vector<int64_t> shape_other = tother.second.sizes().vec();
 
-    if (shape_self.size() == 0x2 && shape_other.size() == 0x2 &&
-        shape_self[0] == shape_other[0] && shape_self[1] != shape_other[1]) {
+    if (shape_self.size() == 0x2 && shape_other.size() == 0x2 && shape_self[0] == shape_other[0] &&
+        shape_self[1] != shape_other[1]) {
         if (shape_other[1] == 0x8) {
             int64_t cols_self = shape_self[1];
             int64_t cols_other = shape_other[1];
@@ -997,8 +997,8 @@ static void Hypot(const TensorData& out, const TensorData& self, const TensorDat
     std::vector<int64_t> shape_self = tself.second.sizes().vec();
     std::vector<int64_t> shape_other = tother.second.sizes().vec();
 
-    if (shape_self.size() == 0x2 && shape_other.size() == 0x2 &&
-        shape_self[0] == shape_other[0] && shape_self[1] != shape_other[1]) {
+    if (shape_self.size() == 0x2 && shape_other.size() == 0x2 && shape_self[0] == shape_other[0] &&
+        shape_self[1] != shape_other[1]) {
         if (shape_other[1] == 0x8) {
             int64_t cols_self = shape_self[1];
             int64_t cols_other = shape_other[1];
@@ -1024,8 +1024,8 @@ static void Fmod(const TensorData& out, const TensorData& self, const TensorData
     std::vector<int64_t> shape_self = tself.second.sizes().vec();
     std::vector<int64_t> shape_other = tother.second.sizes().vec();
 
-    if (shape_self.size() == 0x2 && shape_other.size() == 0x2 &&
-        shape_self[0] == shape_other[0] && shape_self[1] != shape_other[1]) {
+    if (shape_self.size() == 0x2 && shape_other.size() == 0x2 && shape_self[0] == shape_other[0] &&
+        shape_self[1] != shape_other[1]) {
         if (shape_other[1] == 0x8) {
             int64_t cols_self = shape_self[1];
             int64_t cols_other = shape_other[1];
@@ -1212,8 +1212,8 @@ static void Min(const TensorData& out, const TensorData& self, const TensorData&
     std::vector<int64_t> shape_self = tself.second.sizes().vec();
     std::vector<int64_t> shape_other = tother.second.sizes().vec();
 
-    if (shape_self.size() == 0x2 && shape_other.size() == 0x2 &&
-        shape_self[0] == shape_other[0] && shape_self[1] != shape_other[1]) {
+    if (shape_self.size() == 0x2 && shape_other.size() == 0x2 && shape_self[0] == shape_other[0] &&
+        shape_self[1] != shape_other[1]) {
         if (shape_other[1] == 0x8) {
             int64_t cols_self = shape_self[1];
             int64_t cols_other = shape_other[1];
@@ -1239,8 +1239,8 @@ static void Max(const TensorData& out, const TensorData& self, const TensorData&
     std::vector<int64_t> shape_self = tself.second.sizes().vec();
     std::vector<int64_t> shape_other = tother.second.sizes().vec();
 
-    if (shape_self.size() == 0x2 && shape_other.size() == 0x2 &&
-        shape_self[0] == shape_other[0] && shape_self[1] != shape_other[1]) {
+    if (shape_self.size() == 0x2 && shape_other.size() == 0x2 && shape_self[0] == shape_other[0] &&
+        shape_self[1] != shape_other[1]) {
         if (shape_other[1] == 0x8) {
             int64_t cols_self = shape_self[1];
             int64_t cols_other = shape_other[1];
@@ -1273,8 +1273,8 @@ static void MaxS(const TensorData& out, const TensorData& self, const Element& e
     ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void LReLU(
-    const TensorData& out, const TensorData& self, const Element& negative_slope = Element(DataType::DT_FP32, 0.01))
+static void LReLU(const TensorData& out, const TensorData& self,
+                  const Element& negative_slope = Element(DataType::DT_FP32, 0.01))
 {
     auto tout = From(out);
     auto tself = From(self);
@@ -1317,9 +1317,8 @@ static void PhiloxRandomGolden(std::vector<uint32_t>& counter, std::vector<uint3
     }
 }
 
-static void Uniform(
-    const TensorData& out, const Element& key, const Element& counter0, const Element& counter1, const Element& rounds,
-    DataType dtype)
+static void Uniform(const TensorData& out, const Element& key, const Element& counter0, const Element& counter1,
+                    const Element& rounds, DataType dtype)
 {
     std::vector<uint32_t> keyVec(0x2);
     keyVec[0] = static_cast<uint32_t>(key.Cast<uint64_t>() & 0xFFFFFFFF);
@@ -1426,8 +1425,8 @@ static void Uniform(
 }
 
 template <typename T>
-static void CompareImpl(
-    const TensorData& out, const torch::Tensor& tself, const T& other_op, CmpOperationType operation, CmpModeType mode)
+static void CompareImpl(const TensorData& out, const torch::Tensor& tself, const T& other_op,
+                        CmpOperationType operation, CmpModeType mode)
 {
     auto tout = From(out);
     torch::Tensor tmp_result;
@@ -1488,15 +1487,14 @@ static void CompareImpl(
     }
 }
 
-static void Compare(
-    const TensorData& out, const TensorData& self, const TensorData& other, CmpOperationType operation,
-    CmpModeType mode)
+static void Compare(const TensorData& out, const TensorData& self, const TensorData& other, CmpOperationType operation,
+                    CmpModeType mode)
 {
     CompareImpl(out, From(self).second, From(other).second, operation, mode);
 }
 
-static void Cmps(
-    const TensorData& out, const TensorData& self, const Element& elem, CmpOperationType operation, CmpModeType mode)
+static void Cmps(const TensorData& out, const TensorData& self, const Element& elem, CmpOperationType operation,
+                 CmpModeType mode)
 {
     CompareImpl(out, From(self).second, From(elem), operation, mode);
 }
@@ -1562,8 +1560,8 @@ static void FormatND2NZ(const TensorData& out, const TensorData& self)
         tself = torch::constant_pad_nd(tself, {0, padnFloat - nFloat, 0, padm - m}, 0); // [b, padm, padn]
     }
 
-    tself = tself.reshape({-1, padm, n1, n0Float});               // [b, padm, n1, n0]
-    tself = tself.permute({0, 0x2, 1, 0x3});                      // [b, n1, padm, n0]
+    tself = tself.reshape({-1, padm, n1, n0Float}); // [b, padm, n1, n0]
+    tself = tself.permute({0, 0x2, 1, 0x3});        // [b, n1, padm, n0]
 
     std::vector<int64_t> nzShape(shape.begin(), shape.end() - 2); // remove last 2 dim, keep only batch dims
     nzShape.push_back(padm);
@@ -1603,8 +1601,8 @@ static void FormatNZ2ND(const TensorData& out, const TensorData& self)
     ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void MatmulMultiDataLoad(
-    torch::Tensor& out, const torch::Tensor& lhs, const torch::Tensor& rhs, const torch::Tensor& bias, int64_t kstep)
+static void MatmulMultiDataLoad(torch::Tensor& out, const torch::Tensor& lhs, const torch::Tensor& rhs,
+                                const torch::Tensor& bias, int64_t kstep)
 {
     auto shapeL = lhs.sizes().vec();
     auto shapeR = rhs.sizes().vec();
@@ -1642,21 +1640,19 @@ static void QuantExecute(torch::Tensor& tout, const TensorData* scalePtr, uint64
         auto scaleTensor = From(*scalePtr);
         auto scaleU32 = scaleTensor.second.to(torch::kInt32);
         auto* u32Data = scaleU32.data_ptr<int32_t>();
-        auto scaleF32 =
-            torch::from_blob(
-                reinterpret_cast<float*>(u32Data), scaleU32.sizes(), torch::TensorOptions().dtype(torch::kFloat32))
-                .clone();
+        auto scaleF32 = torch::from_blob(reinterpret_cast<float*>(u32Data), scaleU32.sizes(),
+                                         torch::TensorOptions().dtype(torch::kFloat32))
+                            .clone();
         tout.mul_(scaleF32);
     }
 }
 
-static void QuantPreCompute(
-    const TensorData& out, const TensorData& self, const TensorData* scalePtr, uint64_t scale, int relu)
+static void QuantPreCompute(const TensorData& out, const TensorData& self, const TensorData* scalePtr, uint64_t scale,
+                            int relu)
 {
     ASSERT(CalculatorErrorScene::QUANTPRECOMPUTE_NULL_DATAPTR, out.dataPtr != nullptr && self.dataPtr != nullptr);
-    ASSERT(
-        CalculatorErrorScene::QUANTPRECOMPUTE_DTYPE_MISMATCH,
-        out.dtype == DataType::DT_FP16 && self.dtype == DataType::DT_INT32);
+    ASSERT(CalculatorErrorScene::QUANTPRECOMPUTE_DTYPE_MISMATCH,
+           out.dtype == DataType::DT_FP16 && self.dtype == DataType::DT_INT32);
     auto tself = From(self);
     auto tout = From(out);
     auto dtype = tout.second.scalar_type();
@@ -1684,17 +1680,15 @@ static torch::Tensor BuildMXScaleForA(const torch::Tensor& scaleA, bool scaleATr
     constexpr size_t localScaleIndex2 = 2;
     if (!scaleATrans) {
         // test reference: scale_a.view(m, k / 32)
-        ASSERT(
-            CalculatorErrorScene::MATMUL_INPUT_SHAPE_MISMATCH,
-            localScaleA.size(localScaleIndex0) == mSize && localScaleA.size(localScaleIndex2) == 0x2)
+        ASSERT(CalculatorErrorScene::MATMUL_INPUT_SHAPE_MISMATCH,
+               localScaleA.size(localScaleIndex0) == mSize && localScaleA.size(localScaleIndex2) == 0x2)
             << "MX scale_a shape mismatch, expected [M, K/64, 2], got [" << localScaleA.size(localScaleIndex0) << ", "
             << localScaleA.size(localScaleIndex1) << ", " << localScaleA.size(localScaleIndex2) << "]";
         merged = localScaleA.reshape({mSize, -1});
     } else {
         // test reference: torch.transpose(scale_a, -2, -1).reshape(k / 32, m).T
-        ASSERT(
-            CalculatorErrorScene::MATMUL_INPUT_SHAPE_MISMATCH,
-            localScaleA.size(localScaleIndex1) == mSize && localScaleA.size(localScaleIndex2) == 0x2)
+        ASSERT(CalculatorErrorScene::MATMUL_INPUT_SHAPE_MISMATCH,
+               localScaleA.size(localScaleIndex1) == mSize && localScaleA.size(localScaleIndex2) == 0x2)
             << "MX trans scale_a shape mismatch, expected [K/64, M, 2], got [" << localScaleA.size(localScaleIndex0)
             << ", " << localScaleA.size(localScaleIndex1) << ", " << localScaleA.size(localScaleIndex2) << "]";
         merged = localScaleA.transpose(0, 1).reshape({mSize, -1});
@@ -1716,17 +1710,15 @@ static torch::Tensor BuildMXScaleForB(const torch::Tensor& scaleB, bool scaleBTr
     constexpr size_t localScaleIndex2 = 0x2;
     if (!scaleBTrans) {
         // test reference: torch.transpose(scale_b, -2, -1).reshape(k / 32, n)
-        ASSERT(
-            CalculatorErrorScene::MATMUL_INPUT_SHAPE_MISMATCH,
-            localScaleB.size(localScaleIndex1) == nSize && localScaleB.size(localScaleIndex2) == 0x2)
+        ASSERT(CalculatorErrorScene::MATMUL_INPUT_SHAPE_MISMATCH,
+               localScaleB.size(localScaleIndex1) == nSize && localScaleB.size(localScaleIndex2) == 0x2)
             << "MX scale_b shape mismatch, expected [K/64, N, 2], got [" << localScaleB.size(localScaleIndex0) << ", "
             << localScaleB.size(localScaleIndex1) << ", " << localScaleB.size(localScaleIndex2) << "]";
         merged = localScaleB.transpose(0, 1).reshape({nSize, -1}).transpose(0, 1);
     } else {
         // test reference: scale_b.view(n, k / 32).T
-        ASSERT(
-            CalculatorErrorScene::MATMUL_INPUT_SHAPE_MISMATCH,
-            localScaleB.size(localScaleIndex0) == nSize && localScaleB.size(localScaleIndex2) == 0x2)
+        ASSERT(CalculatorErrorScene::MATMUL_INPUT_SHAPE_MISMATCH,
+               localScaleB.size(localScaleIndex0) == nSize && localScaleB.size(localScaleIndex2) == 0x2)
             << "MX trans scale_b shape mismatch, expected [N, K/64, 2], got [" << localScaleB.size(localScaleIndex0)
             << ", " << localScaleB.size(localScaleIndex1) << ", " << localScaleB.size(localScaleIndex2) << "]";
         merged = localScaleB.reshape({nSize, -1}).transpose(0, 1);
@@ -1737,8 +1729,8 @@ static torch::Tensor BuildMXScaleForB(const torch::Tensor& scaleB, bool scaleBTr
     return expanded;
 }
 
-static void MatMul(
-    const TensorData& out, const TensorData& self, const TensorData& other, const TensorData* acc, MatMulParam& param)
+static void MatMul(const TensorData& out, const TensorData& self, const TensorData& other, const TensorData* acc,
+                   MatMulParam& param)
 {
     auto tout = From(out);
     auto dtype = tout.second.scalar_type();
@@ -1774,9 +1766,8 @@ static void MatMul(
     if (param.aScalePtr != nullptr && param.bScalePtr != nullptr) {
         auto taScale = From(*param.aScalePtr).second.to(calcType);
         auto tbScale = From(*param.bScalePtr).second.to(calcType);
-        ASSERT(
-            CalculatorErrorScene::MATMUL_INPUT_SHAPE_MISMATCH,
-            tself.second.dim() == 0x2 && tother.second.dim() == 0x2)
+        ASSERT(CalculatorErrorScene::MATMUL_INPUT_SHAPE_MISMATCH,
+               tself.second.dim() == 0x2 && tother.second.dim() == 0x2)
             << "MX MatMul currently only supports 2D matrices.";
         int64_t mSize = tself.second.size(0);
         int64_t kSize = tself.second.size(1);
@@ -1851,14 +1842,12 @@ void Gather(const TensorData& out, const TensorData& params, const TensorData& i
     tout.second.copy_(gathered.reshape(outSize));
     ToOperand(tout.second, tout.first, out.dtype);
 }
-void GatherINUBGolden(
-    torch::Tensor& out, const torch::Tensor& params, const torch::Tensor& indices, const torch::Tensor& pageTable,
-    int64_t blockSize, int64_t axis)
+void GatherINUBGolden(torch::Tensor& out, const torch::Tensor& params, const torch::Tensor& indices,
+                      const torch::Tensor& pageTable, int64_t blockSize, int64_t axis)
 {
     // ---- 基本约束：只做 CPU，不考虑 CUDA ----
-    ASSERT(
-        CalculatorErrorScene::GATHER_INUB_DEVICE_INVALID,
-        params.is_cpu() && indices.is_cpu() && pageTable.is_cpu() && out.is_cpu())
+    ASSERT(CalculatorErrorScene::GATHER_INUB_DEVICE_INVALID,
+           params.is_cpu() && indices.is_cpu() && pageTable.is_cpu() && out.is_cpu())
         << "CPU-only: params/indices/pageTable/out must all be on CPU.";
 
     // ---- axis：严格等价你 golden（token 维），只允许 axis==0 ----
@@ -1875,8 +1864,7 @@ void GatherINUBGolden(
         << "indices must be [1, topk_count]";
     ASSERT(CalculatorErrorScene::GATHER_INUB_SHAPE_INVALID, pageTable.dim() == 0x2 && pageTable.size(0) == 1)
         << "pageTable must be [1, num_logical_blocks]";
-    ASSERT(CalculatorErrorScene::GATHER_INUB_SHAPE_INVALID, out.dim() == 0x2)
-        << "out must be [topk_count, hidden_dim]";
+    ASSERT(CalculatorErrorScene::GATHER_INUB_SHAPE_INVALID, out.dim() == 0x2) << "out must be [topk_count, hidden_dim]";
 
     const int64_t hidden_dim = params.size(1);
     const int64_t topk_count = indices.size(1);
@@ -1886,13 +1874,11 @@ void GatherINUBGolden(
         << "out must have shape [topk_count, hidden_dim]";
 
     // ---- dtype：indices/pageTable 必须是整数；统一转 int64（不转 params）----
-    ASSERT(
-        CalculatorErrorScene::GATHER_INUB_DTYPE_INVALID,
-        indices.scalar_type() == at::kInt || indices.scalar_type() == at::kLong)
+    ASSERT(CalculatorErrorScene::GATHER_INUB_DTYPE_INVALID,
+           indices.scalar_type() == at::kInt || indices.scalar_type() == at::kLong)
         << "indices must be int32 or int64";
-    ASSERT(
-        CalculatorErrorScene::GATHER_INUB_DTYPE_INVALID,
-        pageTable.scalar_type() == at::kInt || pageTable.scalar_type() == at::kLong)
+    ASSERT(CalculatorErrorScene::GATHER_INUB_DTYPE_INVALID,
+           pageTable.scalar_type() == at::kInt || pageTable.scalar_type() == at::kLong)
         << "pageTable must be int32 or int64";
 
     // out/params dtype 必须一致（index_select 不会帮你做 dtype cast）
@@ -1927,9 +1913,8 @@ void GatherINUBGolden(
     // 逻辑块 id 范围检查（其实 logical 已经检查过，这里更保险）
     ASSERT(CalculatorErrorScene::GATHER_INUB_LOGICAL_BLOCK_INVALID, logical_block.ge(0).all().item<bool>())
         << "logical_block_id < 0 exists";
-    ASSERT(
-        CalculatorErrorScene::GATHER_INUB_LOGICAL_BLOCK_INVALID,
-        logical_block.lt(num_logical_blocks).all().item<bool>())
+    ASSERT(CalculatorErrorScene::GATHER_INUB_LOGICAL_BLOCK_INVALID,
+           logical_block.lt(num_logical_blocks).all().item<bool>())
         << "logical_block_id out of range for pageTable";
 
     at::Tensor physical_block = pt.index_select(0, logical_block);
@@ -1946,9 +1931,8 @@ void GatherINUBGolden(
     out.copy_(selected);
 }
 
-void GatherINUB(
-    const TensorData& out, const TensorData& params, const TensorData& indices, const TensorData& pageTable,
-    int64_t blockSize, int64_t axis)
+void GatherINUB(const TensorData& out, const TensorData& params, const TensorData& indices, const TensorData& pageTable,
+                int64_t blockSize, int64_t axis)
 {
     auto tout = From(out);
     auto tparams = From(params);
@@ -1958,9 +1942,8 @@ void GatherINUB(
     ToOperand(tout.second, tout.first, out.dtype);
 }
 
-void GatherInL1Golden(
-    torch::Tensor& out, const torch::Tensor& params, const torch::Tensor& indices, const torch::Tensor& pageTable,
-    int64_t blockSize)
+void GatherInL1Golden(torch::Tensor& out, const torch::Tensor& params, const torch::Tensor& indices,
+                      const torch::Tensor& pageTable, int64_t blockSize)
 {
     torch::Tensor logical = indices.reshape({-1}).to(torch::kLong);
     torch::Tensor pt = pageTable.reshape({-1}).to(torch::kLong);
@@ -1982,9 +1965,8 @@ static torch::Tensor FromGatherInL1(const TensorData& data)
     return view;
 }
 
-void GatherInL1(
-    const TensorData& out, const TensorData& params, const TensorData& indices, const TensorData& pageTable,
-    int64_t blockSize)
+void GatherInL1(const TensorData& out, const TensorData& params, const TensorData& indices, const TensorData& pageTable,
+                int64_t blockSize)
 {
     auto tout = From(out);
     auto tparams = FromGatherInL1(params);
@@ -2040,9 +2022,8 @@ void GatherMask(const TensorData& out, const TensorData& self, int patternMode)
     ToOperand(ret.second, ret.first, out.dtype);
 }
 
-void IndexAdd(
-    const TensorData& out, const TensorData& self, const TensorData& src, const TensorData& indices, int axis,
-    const Element& alpha)
+void IndexAdd(const TensorData& out, const TensorData& self, const TensorData& src, const TensorData& indices, int axis,
+              const Element& alpha)
 {
     auto tout = From(out);
     auto inputSelf = From(self);
@@ -2052,7 +2033,9 @@ void IndexAdd(
     ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void Quantize(const TensorData &out, const TensorData &input, const TensorData &scale, const TensorData &zeroPoints) {
+static void Quantize(const TensorData& out, const TensorData& input, const TensorData& scale,
+                     const TensorData& zeroPoints)
+{
     auto tout = From(out);
     auto tinput = From(input);
     auto tscale = From(scale);
@@ -2094,7 +2077,9 @@ static void Quantize(const TensorData &out, const TensorData &input, const Tenso
     ToOperand(rounded, tout.first, out.dtype);
 }
 
-static void Dequantize(const TensorData &out, const TensorData &input, const TensorData &scale, const TensorData &zeroPoints) {
+static void Dequantize(const TensorData& out, const TensorData& input, const TensorData& scale,
+                       const TensorData& zeroPoints)
+{
     auto tout = From(out);
     auto tinput = From(input);
     auto tscale = From(scale);
@@ -2128,7 +2113,8 @@ static void Dequantize(const TensorData &out, const TensorData &input, const Ten
     ToOperand(result, tout.first, out.dtype);
 }
 
-void TriU(const TensorData &out, const TensorData &in, int diagonal) {
+void TriU(const TensorData& out, const TensorData& in, int diagonal)
+{
     auto output = From(out);
     auto input = From(in);
 
@@ -2161,9 +2147,8 @@ void CumProd(const TensorData& out, const TensorData& in, int axis)
     ToOperand(tout.second, tout.first, out.dtype);
 }
 
-void IndexPut(
-    const TensorData& out, const TensorData& self, const std::vector<TensorData>& indices, const TensorData& values,
-    bool accumulate)
+void IndexPut(const TensorData& out, const TensorData& self, const std::vector<TensorData>& indices,
+              const TensorData& values, bool accumulate)
 {
     c10::List<c10::optional<at::Tensor>> indicesList;
     for (auto idx : indices) {
@@ -2198,7 +2183,7 @@ static void Copy(const TensorData& out, const TensorData& self, bool trans, bool
     if (trans) {
         auto res = tself.second.transpose(-1, AXIS_TO_LAST);
         if (isMx) {
-            //scaleMM输入量化参数为三维(m0,k0,2),转置需要对高两维进行转置操作
+            // scaleMM输入量化参数为三维(m0,k0,2),转置需要对高两维进行转置操作
             res = tself.second.transpose(0, 1);
         }
         ToOperand(res, tout.first, out.dtype);
@@ -2215,8 +2200,7 @@ static torch::Tensor InterleaveTensor(const torch::Tensor& src0, const torch::Te
     return torch::stack(inputs, -1).reshape(interleavedShape);
 }
 
-static void Interleave(
-    const TensorData& out0, const TensorData& out1, const TensorData& self, const TensorData& other)
+static void Interleave(const TensorData& out0, const TensorData& out1, const TensorData& self, const TensorData& other)
 {
     auto tout0 = From(out0);
     auto tout1 = From(out1);
@@ -2229,17 +2213,17 @@ static void Interleave(
     ToOperand(interleaved.slice(-1, lastDim, interleaved.size(-1)), tout1.first, out1.dtype);
 }
 
-static void DeInterleaveTensor(
-    const torch::Tensor& interleaved, const std::pair<torch::Tensor, torch::Tensor>& out0,
-    const std::pair<torch::Tensor, torch::Tensor>& out1, DataType out0Dtype, DataType out1Dtype)
+static void DeInterleaveTensor(const torch::Tensor& interleaved, const std::pair<torch::Tensor, torch::Tensor>& out0,
+                               const std::pair<torch::Tensor, torch::Tensor>& out1, DataType out0Dtype,
+                               DataType out1Dtype)
 {
     auto lastDim = interleaved.size(-1);
     ToOperand(interleaved.slice(-1, 0, lastDim, 0x2), out0.first, out0Dtype);
     ToOperand(interleaved.slice(-1, 1, lastDim, 0x2), out1.first, out1Dtype);
 }
 
-static void DeInterleave(
-    const TensorData& out0, const TensorData& out1, const TensorData& self, const TensorData& other)
+static void DeInterleave(const TensorData& out0, const TensorData& out1, const TensorData& self,
+                         const TensorData& other)
 {
     auto tout0 = From(out0);
     auto tout1 = From(out1);
@@ -2357,8 +2341,8 @@ static void RowArgMinSingle(const TensorData& out, const TensorData& self, int d
     ToOperand(idxResult, tout.first, out.dtype);
 }
 
-static void RowArgMaxWithValueSingle(
-    const TensorData& outValue, const TensorData& outIndex, const TensorData& outTemp, const TensorData& self, int dim)
+static void RowArgMaxWithValueSingle(const TensorData& outValue, const TensorData& outIndex, const TensorData& outTemp,
+                                     const TensorData& self, int dim)
 {
     auto toutValue = From(outValue);
     auto toutIndex = From(outIndex);
@@ -2370,8 +2354,8 @@ static void RowArgMaxWithValueSingle(
     ToOperand(idxResult, toutIndex.first, outIndex.dtype);
 }
 
-static void RowArgMinWithValueSingle(
-    const TensorData& outValue, const TensorData& outIndex, const TensorData& outTemp, const TensorData& self, int dim)
+static void RowArgMinWithValueSingle(const TensorData& outValue, const TensorData& outIndex, const TensorData& outTemp,
+                                     const TensorData& self, int dim)
 {
     auto toutValue = From(outValue);
     auto toutIndex = From(outIndex);
@@ -2383,22 +2367,20 @@ static void RowArgMinWithValueSingle(
     ToOperand(idxResult, toutIndex.first, outIndex.dtype);
 }
 
-static void RowArgMaxWithValueLine(
-    const TensorData& outValue, const TensorData& outIndex, const TensorData& outTemp, const TensorData& self, int dim)
+static void RowArgMaxWithValueLine(const TensorData& outValue, const TensorData& outIndex, const TensorData& outTemp,
+                                   const TensorData& self, int dim)
 {
     RowArgMaxWithValueSingle(outValue, outIndex, outTemp, self, dim);
 }
 
-static void RowArgMinWithValueLine(
-    const TensorData& outValue, const TensorData& outIndex, const TensorData& outTemp, const TensorData& self, int dim)
+static void RowArgMinWithValueLine(const TensorData& outValue, const TensorData& outIndex, const TensorData& outTemp,
+                                   const TensorData& self, int dim)
 {
     RowArgMinWithValueSingle(outValue, outIndex, outTemp, self, dim);
 }
 
-static void PairArgMax(
-    const TensorData& outValue, const TensorData& outIndex,
-    const TensorData& value1, const TensorData& index1,
-    const TensorData& value2, const TensorData& index2)
+static void PairArgMax(const TensorData& outValue, const TensorData& outIndex, const TensorData& value1,
+                       const TensorData& index1, const TensorData& value2, const TensorData& index2)
 {
     auto toutValue = From(outValue);
     auto toutIndex = From(outIndex);
@@ -2413,10 +2395,8 @@ static void PairArgMax(
     ToOperand(selectdIndex, toutIndex.first, outIndex.dtype);
 }
 
-static void PairArgMin(
-    const TensorData& outValue, const TensorData& outIndex,
-    const TensorData& value1, const TensorData& index1,
-    const TensorData& value2, const TensorData& index2)
+static void PairArgMin(const TensorData& outValue, const TensorData& outIndex, const TensorData& value1,
+                       const TensorData& index1, const TensorData& value2, const TensorData& index2)
 {
     auto toutValue = From(outValue);
     auto toutIndex = From(outIndex);
@@ -2435,14 +2415,14 @@ static void Reshape(const TensorData& out, const TensorData& self)
 {
     auto tout = From(out);
     auto tself = From(self);
-    
+
     torch::Tensor res;
     if (out.dataPtr == self.dataPtr) {
         res = torch::reshape(tself.second.clone(), out.shape);
     } else {
         res = torch::reshape(tself.second, out.shape);
     }
-    
+
     ToOperand(res, tout.first, out.dtype);
 }
 
@@ -2656,9 +2636,8 @@ static void MrgSort(const TensorData& out, const TensorData& self, int64_t axis,
     ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void TiledMrgSort(
-    const TensorData& out, const TensorData& src1, const TensorData& src2, const TensorData& src3,
-    const TensorData& src4, int validBit, int kvalue)
+static void TiledMrgSort(const TensorData& out, const TensorData& src1, const TensorData& src2, const TensorData& src3,
+                         const TensorData& src4, int validBit, int kvalue)
 {
     auto self1 = From(src1);
     auto self2 = From(src2);
@@ -2717,8 +2696,8 @@ static void TiledMrgSort(
     ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void TopK(
-    const TensorData& outValue, const TensorData& outIndex, const TensorData& self, int k, int axis, bool descending)
+static void TopK(const TensorData& outValue, const TensorData& outIndex, const TensorData& self, int k, int axis,
+                 bool descending)
 {
     auto tself = From(self);
     auto toutValue = From(outValue);
@@ -2821,7 +2800,7 @@ static void TopkMerge(const TensorData& out, const TensorData& self, int mergeSi
 
     // Build actual element indices (each pack occupies 2 positions)
     auto packIdx0 = sortIndices * 0x2; // value position
-    auto packIdx1 = packIdx0 + 1;    // index position
+    auto packIdx1 = packIdx0 + 1;      // index position
     // Stack and flatten to 1D vector for index_select
     auto allIndices = torch::stack({packIdx0.flatten(), packIdx1.flatten()}, 1).flatten();
 
@@ -2926,8 +2905,8 @@ void Sort(const TensorData& value, const TensorData& index, const TensorData& se
     ToOperand(tindex.second, tindex.first, index.dtype);
 }
 
-bool ScatterDateCopy(
-    const std::vector<int64_t>& loopIdx, torch::Tensor& src, torch::Tensor& indices, torch::Tensor& ret, int blockSize)
+bool ScatterDateCopy(const std::vector<int64_t>& loopIdx, torch::Tensor& src, torch::Tensor& indices,
+                     torch::Tensor& ret, int blockSize)
 {
     bool flag = false;
     int64_t s = indices.size(1);
@@ -2956,9 +2935,8 @@ bool ScatterDateCopy(
     return flag;
 }
 
-static void ScatterUpdate(
-    const TensorData& out, const TensorData& self, const TensorData& index, const TensorData& dst, int axis,
-    std::string cacheMode, int blockSize)
+static void ScatterUpdate(const TensorData& out, const TensorData& self, const TensorData& index, const TensorData& dst,
+                          int axis, std::string cacheMode, int blockSize)
 {
     (void)axis;
     (void)cacheMode;
@@ -2971,12 +2949,10 @@ static void ScatterUpdate(
 
     ASSERT(CalculatorErrorScene::SCATTER_INDICES_DIM_INVALID,
            indices.second.dim() == 2); // indices should be 2 dim
-    ASSERT(
-        CalculatorErrorScene::SCATTER_SRC_RET_DIM_UNSUPPORTED,
-        (src.second.dim() == 2) || (src.second.dim() == 4)); // only 2, 4 dim support
-    ASSERT(
-        CalculatorErrorScene::SCATTER_SRC_RET_DIM_UNSUPPORTED,
-        (ret.second.dim() == 2) || (ret.second.dim() == 4)); // only 2, 4 dim support
+    ASSERT(CalculatorErrorScene::SCATTER_SRC_RET_DIM_UNSUPPORTED,
+           (src.second.dim() == 2) || (src.second.dim() == 4)); // only 2, 4 dim support
+    ASSERT(CalculatorErrorScene::SCATTER_SRC_RET_DIM_UNSUPPORTED,
+           (ret.second.dim() == 2) || (ret.second.dim() == 4)); // only 2, 4 dim support
     ASSERT(CalculatorErrorScene::SCATTER_SRC_RET_DIM_MISMATCH, src.second.dim() == ret.second.dim());
 
     int64_t b = indices.second.size(0);
@@ -2993,8 +2969,8 @@ static void ScatterUpdate(
 
 static const std::vector<std::string> scatterModeString = {"add", "multiply"};
 
-static void ScatterElement(
-    const TensorData& out, const TensorData& self, const TensorData& index, const Element& src, int axis, int reduce)
+static void ScatterElement(const TensorData& out, const TensorData& self, const TensorData& index, const Element& src,
+                           int axis, int reduce)
 {
     auto output = From(out);
     auto inputSelf = From(self);
@@ -3007,8 +2983,8 @@ static void ScatterElement(
         auto res = torch::scatter(inputSelf.second, axis, inputIndices.second, From(src));
         ToOperand(res, output.first, out.dtype);
     } else {
-        auto res =
-            torch::scatter(inputSelf.second, axis, inputIndices.second, From(src), scatterModeString.at(reduce - 1));
+        auto res = torch::scatter(inputSelf.second, axis, inputIndices.second, From(src),
+                                  scatterModeString.at(reduce - 1));
         ToOperand(res, output.first, out.dtype);
     }
 }
@@ -3026,8 +3002,8 @@ static void Brcb(const TensorData& out, const TensorData& self)
     ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void Scatter(
-    const TensorData& out, const TensorData& self, const TensorData& index, const TensorData& src, int axis, int reduce)
+static void Scatter(const TensorData& out, const TensorData& self, const TensorData& index, const TensorData& src,
+                    int axis, int reduce)
 {
     auto output = From(out);
     auto inputSelf = From(self);
@@ -3041,8 +3017,8 @@ static void Scatter(
         output.second = torch::scatter(inputSelf.second, axis, inputIndices.second, inputSrc.second);
         ToOperand(output.second, output.first, out.dtype);
     } else {
-        output.second = torch::scatter(
-            inputSelf.second, axis, inputIndices.second, inputSrc.second, scatterModeString.at(reduce - 1));
+        output.second = torch::scatter(inputSelf.second, axis, inputIndices.second, inputSrc.second,
+                                       scatterModeString.at(reduce - 1));
         ToOperand(output.second, output.first, out.dtype);
     }
 }
@@ -3092,8 +3068,8 @@ static float NormalizeQuantMXMaxValue(float srcValue, const QuantMXContext& ctx)
     return ctx.isFp4E2M1 ? RoundToBf16(absValue) : absValue;
 }
 
-static float ComputeQuantMXGroupMax(
-    const float* inputPtr, int64_t row, int64_t cols, int64_t group, const QuantMXContext& ctx)
+static float ComputeQuantMXGroupMax(const float* inputPtr, int64_t row, int64_t cols, int64_t group,
+                                    const QuantMXContext& ctx)
 {
     float maxAbsValue = 0.0f;
     bool hasNaN = false;
@@ -3123,7 +3099,7 @@ static std::pair<uint8_t, float> ComputeQuantMXExponentAndScaling(float maxAbsVa
 }
 
 static void StoreQuantMXScaling(float* scalingPtr, int64_t row, int64_t groupCols, int64_t group, float scaling,
-    const QuantMXContext& ctx)
+                                const QuantMXContext& ctx)
 {
     const int64_t offset = row * groupCols * ctx.scalingFactor + group * ctx.scalingFactor;
     scalingPtr[offset] = scaling;
@@ -3146,9 +3122,8 @@ static float ScaleQuantMXValue(float srcValue, float groupScaling, const QuantMX
     return srcValue * groupScaling;
 }
 
-static void StoreQuantMXValue(
-    uint8_t* quantPtr, int64_t row, int64_t cols, int64_t quantCols, int64_t col, float srcValue, float groupScaling,
-    const QuantMXContext& ctx)
+static void StoreQuantMXValue(uint8_t* quantPtr, int64_t row, int64_t cols, int64_t quantCols, int64_t col,
+                              float srcValue, float groupScaling, const QuantMXContext& ctx)
 {
     const float scaled = ScaleQuantMXValue(srcValue, groupScaling, ctx);
     if (ctx.isFp4E2M1) {
@@ -3161,9 +3136,9 @@ static void StoreQuantMXValue(
     quantPtr[row * cols + col] = EncodeE4M3Fn(scaled);
 }
 
-static void FillQuantMXGroup(
-    const float* inputPtr, uint8_t* quantPtr, uint8_t* expPtr, float* scalingPtr, float* maxPtr, int64_t row,
-    int64_t group, int64_t cols, int64_t expCols, int64_t groupCols, int64_t quantCols, const QuantMXContext& ctx)
+static void FillQuantMXGroup(const float* inputPtr, uint8_t* quantPtr, uint8_t* expPtr, float* scalingPtr,
+                             float* maxPtr, int64_t row, int64_t group, int64_t cols, int64_t expCols,
+                             int64_t groupCols, int64_t quantCols, const QuantMXContext& ctx)
 {
     const float maxAbsValue = ComputeQuantMXGroupMax(inputPtr, row, cols, group, ctx);
     const auto exponentAndScaling = ComputeQuantMXExponentAndScaling(maxAbsValue, ctx);
@@ -3173,22 +3148,21 @@ static void FillQuantMXGroup(
     for (int64_t inner = 0; inner < MX_QUANT_TILE_BLOCK; ++inner) {
         const int64_t col = group * MX_QUANT_TILE_BLOCK + inner;
         if (col < cols) {
-            StoreQuantMXValue(
-                quantPtr, row, cols, quantCols, col, inputPtr[row * cols + col], exponentAndScaling.second, ctx);
+            StoreQuantMXValue(quantPtr, row, cols, quantCols, col, inputPtr[row * cols + col],
+                              exponentAndScaling.second, ctx);
         }
     }
 }
 
-static void FillQuantMXRows(
-    const float* inputPtr, uint8_t* quantPtr, uint8_t* expPtr, float* scalingPtr, float* maxPtr, int64_t rows,
-    int64_t cols, int64_t expCols, int64_t groupCols, int64_t quantCols, DataType srcDtype, DataType quantDtype,
-    bool performanceMode, int64_t mode)
+static void FillQuantMXRows(const float* inputPtr, uint8_t* quantPtr, uint8_t* expPtr, float* scalingPtr, float* maxPtr,
+                            int64_t rows, int64_t cols, int64_t expCols, int64_t groupCols, int64_t quantCols,
+                            DataType srcDtype, DataType quantDtype, bool performanceMode, int64_t mode)
 {
     const QuantMXContext ctx = MakeQuantMXContext(srcDtype, quantDtype, performanceMode, mode);
     for (int64_t row = 0; row < rows; ++row) {
         for (int64_t group = 0; group < groupCols; ++group) {
-            FillQuantMXGroup(
-                inputPtr, quantPtr, expPtr, scalingPtr, maxPtr, row, group, cols, expCols, groupCols, quantCols, ctx);
+            FillQuantMXGroup(inputPtr, quantPtr, expPtr, scalingPtr, maxPtr, row, group, cols, expCols, groupCols,
+                             quantCols, ctx);
         }
     }
 }
@@ -3207,8 +3181,8 @@ struct QuantMXShapes {
     int64_t quantCols;
 };
 
-static std::vector<int64_t> BuildQuantMXPerformanceGroupedShape(
-    const std::vector<int64_t>& inputShape, int64_t groupCols)
+static std::vector<int64_t> BuildQuantMXPerformanceGroupedShape(const std::vector<int64_t>& inputShape,
+                                                                int64_t groupCols)
 {
     auto shape = inputShape;
     if (shape.size() == 1) {
@@ -3220,8 +3194,8 @@ static std::vector<int64_t> BuildQuantMXPerformanceGroupedShape(
     return shape;
 }
 
-static QuantMXShapes BuildQuantMXShapes(
-    const torch::Tensor& input, DataType srcDtype, DataType quantDtype, bool performanceMode)
+static QuantMXShapes BuildQuantMXShapes(const torch::Tensor& input, DataType srcDtype, DataType quantDtype,
+                                        bool performanceMode)
 {
     QuantMXShapes shapes;
     shapes.quantShape = input.sizes().vec();
@@ -3238,8 +3212,7 @@ static QuantMXShapes BuildQuantMXShapes(
         shapes.quantShape.back() = LastDimPackedCount(shapes.cols, quantDtype);
     }
     shapes.groupedShape.back() = (shapes.cols + MX_QUANT_TILE_BLOCK - 1) / MX_QUANT_TILE_BLOCK;
-    shapes.performanceGroupedShape =
-        BuildQuantMXPerformanceGroupedShape(shapes.quantShape, shapes.groupedShape.back());
+    shapes.performanceGroupedShape = BuildQuantMXPerformanceGroupedShape(shapes.quantShape, shapes.groupedShape.back());
     shapes.performanceScalingShape = shapes.performanceGroupedShape;
     if (srcDtype == DT_FP32) {
         shapes.performanceScalingShape.back() *= 0x2;
@@ -3269,9 +3242,11 @@ static torch::Tensor CreateQuantMXScalingTemp(const std::vector<int64_t>& scalin
 }
 
 static void CopyQuantMXOutputs(const std::pair<torch::Tensor, torch::Tensor>& tout,
-    const std::pair<torch::Tensor, torch::Tensor>& texp, const std::pair<torch::Tensor, torch::Tensor>& tmax,
-    const std::pair<torch::Tensor, torch::Tensor>& tscaling, const torch::Tensor& quantRaw, const torch::Tensor& expRaw,
-    const torch::Tensor& maxTemp, const torch::Tensor& scalingTemp, const QuantMXShapes& shapes, bool performanceMode)
+                               const std::pair<torch::Tensor, torch::Tensor>& texp,
+                               const std::pair<torch::Tensor, torch::Tensor>& tmax,
+                               const std::pair<torch::Tensor, torch::Tensor>& tscaling, const torch::Tensor& quantRaw,
+                               const torch::Tensor& expRaw, const torch::Tensor& maxTemp,
+                               const torch::Tensor& scalingTemp, const QuantMXShapes& shapes, bool performanceMode)
 {
     tout.first.copy_(quantRaw);
     texp.first.copy_(performanceMode ? expRaw.reshape(shapes.performanceGroupedShape) : expRaw);
@@ -3279,9 +3254,8 @@ static void CopyQuantMXOutputs(const std::pair<torch::Tensor, torch::Tensor>& to
     tscaling.second.copy_(scalingTemp);
 }
 
-static void QuantMX(
-    const TensorData& out, const TensorData& exp, const TensorData& max, const TensorData& scaling,
-    const TensorData& self, bool performanceMode, int64_t mode)
+static void QuantMX(const TensorData& out, const TensorData& exp, const TensorData& max, const TensorData& scaling,
+                    const TensorData& self, bool performanceMode, int64_t mode)
 {
     auto tout = From(out);
     auto texp = From(exp);
@@ -3310,9 +3284,8 @@ static void QuantMX(
     auto* scalingPtr = scalingFlat.data_ptr<float>();
     auto* maxPtr = maxFlat.data_ptr<float>();
 
-    FillQuantMXRows(
-        inputPtr, quantPtr, expPtr, scalingPtr, maxPtr, shapes.rows, shapes.cols, shapes.expCols, shapes.groupCols,
-        shapes.quantCols, self.dtype, out.dtype, performanceMode, mode);
+    FillQuantMXRows(inputPtr, quantPtr, expPtr, scalingPtr, maxPtr, shapes.rows, shapes.cols, shapes.expCols,
+                    shapes.groupCols, shapes.quantCols, self.dtype, out.dtype, performanceMode, mode);
     CopyQuantMXOutputs(tout, texp, tmax, tscaling, quantRaw, expRaw, maxTemp, scalingTemp, shapes, performanceMode);
 }
 

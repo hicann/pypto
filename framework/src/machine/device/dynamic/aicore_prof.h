@@ -25,12 +25,13 @@
 #include "machine/device/dynamic/aicore_prof_dav3510_pmu.h"
 
 typedef void* VOID_PTR;
-typedef int32_t (*ProfCommandHandle)(uint32_t type, void *data, uint32_t len);
-using PyptoProfGetFuncPtr = void(*)(void*);
+typedef int32_t (*ProfCommandHandle)(uint32_t type, void* data, uint32_t len);
+using PyptoProfGetFuncPtr = void (*)(void*);
 extern "C" {
 __attribute__((weak)) int32_t AdprofReportAdditionalInfo(uint32_t agingFlag, const VOID_PTR data, uint32_t length);
 #ifndef MSVP_PROF_API
-__attribute__((weak)) int32_t MsprofReportAdditionalInfo(uint32_t nonPersistantFlag, const VOID_PTR data, uint32_t length);
+__attribute__((weak)) int32_t MsprofReportAdditionalInfo(uint32_t nonPersistantFlag, const VOID_PTR data,
+                                                         uint32_t length);
 __attribute__((weak)) int32_t MsprofRegisterCallback(uint32_t moduleId, ProfCommandHandle handle);
 #endif
 __attribute__((weak)) int32_t AdprofCheckFeatureIsOn(uint64_t feature);
@@ -57,12 +58,12 @@ struct PyptoProfDataparam {
     int32_t coreIdx;
     uint32_t subGraphId;
     uint32_t taskId;
-    const struct TaskStat *taskStat;
+    const struct TaskStat* taskStat;
 };
 
 struct PyPtoMsprofCommandHandleParams {
     uint32_t pathLen;
-    uint32_t storageLimit;  // MB
+    uint32_t storageLimit; // MB
     uint32_t profDataLen;
     char path[PATH_SIZE];
     char profData[PROF_DATA_SIZE];
@@ -276,12 +277,12 @@ public:
     ~AiCoreProf() {}
 #ifdef __DEVICE__
     static void RegDevProf();
-    static int DevProfInit(uint32_t type, void *data, uint32_t len);
+    static int DevProfInit(uint32_t type, void* data, uint32_t len);
     void GetIsOpenDevProf();
     static uint64_t devProfSwitch_;
-    static uint32_t devProfType_ ;
+    static uint32_t devProfType_;
 #endif
-    void ProfInit(DeviceArgs *deviceArgs);
+    void ProfInit(DeviceArgs* deviceArgs);
     void ProfStart();
     void ProfGetSwitch(int64_t& flag) const;
     void ProfStop();
@@ -309,9 +310,8 @@ private:
     void SetPmuEvents(void* mapBase, const int32_t coreIdx) const;
     PmuCtrlAddrs InitPmuRegAddrsForCore(void* addr, void* mapBase, int coreIdx);
     void ProgramPmuStartForCore(void* mapBase, int coreIdx, const PmuCtrlAddrs& addrs);
-    void FillPmuData(
-        MsprofAicpuPyPtoPmuData& data, int32_t& coreIdx, uint32_t& subGraphId, uint32_t& taskId,
-        uint64_t taskCtrlTaskId) const;
+    void FillPmuData(MsprofAicpuPyPtoPmuData& data, int32_t& coreIdx, uint32_t& subGraphId, uint32_t& taskId,
+                     uint64_t taskCtrlTaskId) const;
     void DebugPmuData(int32_t coreIdx, const MsprofAicpuPyPtoPmuData& data) const;
     uint64_t ProfGetCurCpuTimestamp();
 

@@ -40,12 +40,13 @@ class Program : public IRNode {
 public:
     Program(std::map<std::string, FunctionPtr> functions, std::string name, Span span,
             IRDebugInfoPtr debugInfo = nullptr)
-        : IRNode(std::move(span)), name_(std::move(name)), functions_(std::move(functions)),
+        : IRNode(std::move(span)),
+          name_(std::move(name)),
+          functions_(std::move(functions)),
           debugInfo_(std::move(debugInfo))
     {}
 
-    Program(const std::vector<FunctionPtr>& functions, std::string name, Span span,
-            IRDebugInfoPtr debugInfo = nullptr);
+    Program(const std::vector<FunctionPtr>& functions, std::string name, Span span, IRDebugInfoPtr debugInfo = nullptr);
 
     [[nodiscard]] ObjectKind GetKind() const override { return ObjectKind::Program; }
     [[nodiscard]] std::string TypeName() const override { return "Program"; }
@@ -64,10 +65,9 @@ public:
      */
     static constexpr auto GetFieldDescriptors()
     {
-        return std::tuple_cat(
-            IRNode::GetFieldDescriptors(), std::make_tuple(
-                                               reflection::IgnoreField(&Program::name_, "name"),
-                                               reflection::UsualField(&Program::functions_, "functions")));
+        return std::tuple_cat(IRNode::GetFieldDescriptors(),
+                              std::make_tuple(reflection::IgnoreField(&Program::name_, "name"),
+                                              reflection::UsualField(&Program::functions_, "functions")));
     }
 
 public:

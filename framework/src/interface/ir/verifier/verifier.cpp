@@ -32,9 +32,8 @@ void IRVerifier::AddRule(PropertyVerifierPtr rule)
     }
 
     // Check if rule with same name already exists
-    auto it = std::find_if(rules_.begin(), rules_.end(), [&rule](const PropertyVerifierPtr& r) {
-        return r->GetName() == rule->GetName();
-    });
+    auto it = std::find_if(rules_.begin(), rules_.end(),
+                           [&rule](const PropertyVerifierPtr& r) { return r->GetName() == rule->GetName(); });
     if (it == rules_.end()) {
         rules_.push_back(rule);
     }
@@ -78,9 +77,8 @@ void IRVerifier::VerifyOrThrow(const ProgramPtr& program) const
     auto diagnostics = Verify(program);
 
     // Check if there are any errors (not just warnings)
-    bool has_errors = std::any_of(diagnostics.begin(), diagnostics.end(), [](const Diagnostic& d) {
-        return d.severity == DiagnosticSeverity::ERROR;
-    });
+    bool has_errors = std::any_of(diagnostics.begin(), diagnostics.end(),
+                                  [](const Diagnostic& d) { return d.severity == DiagnosticSeverity::ERROR; });
     if (has_errors) {
         std::string report = GenerateReport(diagnostics);
         throw VerificationError(report, std::move(diagnostics));

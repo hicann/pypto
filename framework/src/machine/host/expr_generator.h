@@ -74,10 +74,10 @@ public:
     }
 
     template <typename ExpressionSet>
-    void GenerateBatchFile(
-        SymbolicExpressionTable* exprTable, std::ostringstream& controlFlowOss, std::ostringstream& exprHeaderOss,
-        const std::string& expName, const ExpressionSet& expressions, std::vector<std::string>& exprSrcFiles,
-        int indent, int devRootKey)
+    void GenerateBatchFile(SymbolicExpressionTable* exprTable, std::ostringstream& controlFlowOss,
+                           std::ostringstream& exprHeaderOss, const std::string& expName,
+                           const ExpressionSet& expressions, std::vector<std::string>& exprSrcFiles, int indent,
+                           int devRootKey)
     {
         for (auto& batch : batches_) {
             std::string filePath = outputDir_ + "/" + batch.fileName;
@@ -123,14 +123,16 @@ private:
 
     // 寻找模板相同、若干立即数同步等差的最长连续段，返回段长（≥1）。
     template <typename ExpressionSet>
-    size_t DetectArithmeticRun(
-        const ExpressionSet& expressions, size_t runStart, size_t batchEnd, std::vector<TrackedDiff>& tracked) const
+    size_t DetectArithmeticRun(const ExpressionSet& expressions, size_t runStart, size_t batchEnd,
+                               std::vector<TrackedDiff>& tracked) const
     {
         tracked.clear();
-        if (runStart + 1 >= batchEnd) { return 1; }
+        if (runStart + 1 >= batchEnd) {
+            return 1;
+        }
         std::vector<SymbolicExpressionTable::ImmediateDiff> headDiffs;
-        if (!SymbolicExpressionTable::FindAllImmediateDifferences(
-                expressions[runStart], expressions[runStart + 1], headDiffs)) {
+        if (!SymbolicExpressionTable::FindAllImmediateDifferences(expressions[runStart], expressions[runStart + 1],
+                                                                  headDiffs)) {
             return 1;
         }
         if (headDiffs.empty()) {
@@ -141,21 +143,21 @@ private:
             tracked.push_back({d.path, d.immLhs, d.immRhs - d.immLhs, d.immRhs});
         }
         std::sort(tracked.begin(), tracked.end(),
-            [](const TrackedDiff& a, const TrackedDiff& b) { return a.path < b.path; });
+                  [](const TrackedDiff& a, const TrackedDiff& b) { return a.path < b.path; });
 
         size_t runLength = 2;
         for (size_t cursor = runStart + 2; cursor < batchEnd; cursor++) {
             std::vector<SymbolicExpressionTable::ImmediateDiff> pairDiffs;
-            if (!SymbolicExpressionTable::FindAllImmediateDifferences(
-                    expressions[cursor - 1], expressions[cursor], pairDiffs)) {
+            if (!SymbolicExpressionTable::FindAllImmediateDifferences(expressions[cursor - 1], expressions[cursor],
+                                                                      pairDiffs)) {
                 break;
             }
             if (pairDiffs.size() != tracked.size()) {
                 break;
             }
             std::sort(pairDiffs.begin(), pairDiffs.end(),
-                [](const SymbolicExpressionTable::ImmediateDiff& a,
-                    const SymbolicExpressionTable::ImmediateDiff& b) { return a.path < b.path; });
+                      [](const SymbolicExpressionTable::ImmediateDiff& a,
+                         const SymbolicExpressionTable::ImmediateDiff& b) { return a.path < b.path; });
             bool ok = true;
             for (size_t i = 0; i < pairDiffs.size(); i++) {
                 if (pairDiffs[i].path != tracked[i].path || pairDiffs[i].immLhs != tracked[i].lastImm ||
@@ -176,27 +178,27 @@ private:
     }
 
     // 构造 (firstImm + step * loopVar) 的占位 AST，step==1 / firstImm==0 会化简。
-    static RawSymbolicScalarPtr BuildLoopAffinePlaceholder(
-        int64_t firstImm, int64_t step, const RawSymbolicScalarPtr& loopVarNode)
+    static RawSymbolicScalarPtr BuildLoopAffinePlaceholder(int64_t firstImm, int64_t step,
+                                                           const RawSymbolicScalarPtr& loopVarNode)
     {
         RawSymbolicScalarPtr kPart = loopVarNode;
         if (step != 1) {
             auto stepImm = RawSymbolicImmediate::Create(step);
-            kPart = std::make_shared<RawSymbolicExpression>(
-                SymbolicOpcode::T_BOP_MUL, std::vector<RawSymbolicScalarPtr>{stepImm, loopVarNode});
+            kPart = std::make_shared<RawSymbolicExpression>(SymbolicOpcode::T_BOP_MUL,
+                                                            std::vector<RawSymbolicScalarPtr>{stepImm, loopVarNode});
         }
         if (firstImm == 0) {
             return kPart;
         }
         auto firstImmNode = RawSymbolicImmediate::Create(firstImm);
-        return std::make_shared<RawSymbolicExpression>(
-            SymbolicOpcode::T_BOP_ADD, std::vector<RawSymbolicScalarPtr>{firstImmNode, kPart});
+        return std::make_shared<RawSymbolicExpression>(SymbolicOpcode::T_BOP_ADD,
+                                                       std::vector<RawSymbolicScalarPtr>{firstImmNode, kPart});
     }
 
     // 输出折叠后的 for 循环：单差异沿用紧凑头，多差异切到计数头并展开每处 affine 子树。
-    void EmitFoldedLoop(
-        std::ostream& out, const RawSymbolicScalarPtr& firstExpr, const std::vector<TrackedDiff>& tracked,
-        size_t startExprIdx, size_t runLength, size_t loopId) const
+    void EmitFoldedLoop(std::ostream& out, const RawSymbolicScalarPtr& firstExpr,
+                        const std::vector<TrackedDiff>& tracked, size_t startExprIdx, size_t runLength,
+                        size_t loopId) const
     {
         FE_ASSERT(!tracked.empty());
         // sym_ 前缀让 BuildSymbolName 不再附加 VALUE_。
@@ -213,7 +215,8 @@ private:
                 replacements.emplace_back(d.path, BuildLoopAffinePlaceholder(d.firstImm, d.step, loopVarNode));
             }
         }
-        std::string loopBodyTemplate = SymbolicExpressionTable::BuildExpressionWithPlaceholders(firstExpr, replacements);
+        std::string loopBodyTemplate = SymbolicExpressionTable::BuildExpressionWithPlaceholders(firstExpr,
+                                                                                                replacements);
 
         out << "    {\n"
             << "        int64_t __expr_loop_idx = " << static_cast<long long>(startExprIdx) << ";\n";
@@ -235,9 +238,8 @@ private:
 
     // 主驱动：扫到等差段就折叠，否则单行展开。
     template <typename ExpressionSet>
-    void EmitBatchBody(
-        std::ostream& out, SymbolicExpressionTable* exprTable, const ExpressionSet& expressions, size_t batchStart,
-        size_t batchEnd) const
+    void EmitBatchBody(std::ostream& out, SymbolicExpressionTable* exprTable, const ExpressionSet& expressions,
+                       size_t batchStart, size_t batchEnd) const
     {
         constexpr size_t MIN_LOOP_LEN = 3;
         size_t exprIdx = batchStart;
@@ -256,7 +258,6 @@ private:
         }
     }
 
-
     void CalculateBatches()
     {
         size_t numBatches = (totalExprs_ + EXPRS_PER_BATCH - 1) / EXPRS_PER_BATCH;
@@ -268,8 +269,8 @@ private:
             batch.startExprIndex = i * EXPRS_PER_BATCH;
             batch.endExprIndex = std::min(batch.startExprIndex + EXPRS_PER_BATCH, totalExprs_);
             batch.totalExprs = totalExprs_;
-            batch.fileName =
-                "control_flow_expr_table_" + std::to_string(devRootKey_) + "_" + std::to_string(i) + ".cpp";
+            batch.fileName = "control_flow_expr_table_" + std::to_string(devRootKey_) + "_" + std::to_string(i) +
+                             ".cpp";
             batch.functionName = "SetExprBatch_" + std::to_string(devRootKey_) + "_" + std::to_string(i);
             batches_.emplace_back(batch);
         }

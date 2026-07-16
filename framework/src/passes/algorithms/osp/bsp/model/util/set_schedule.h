@@ -38,12 +38,11 @@ public:
      * @brief Constructs a SetSchedule from another BspSchedule.
      * @param schedule The source schedule to copy from.
      */
-    SetSchedule(const BspSchedule<GraphT> &schedule)
+    SetSchedule(const BspSchedule<GraphT>& schedule)
         : instance_(&schedule.GetInstance()), numberOfSupersteps_(schedule.NumberOfSupersteps())
     {
-        stepProcessorVertices_.resize(schedule.NumberOfSupersteps(),
-            std::vector<std::unordered_set<VertexIdx>>(
-                schedule.GetInstance().NumberOfProcessors()));
+        stepProcessorVertices_.resize(schedule.NumberOfSupersteps(), std::vector<std::unordered_set<VertexIdx>>(
+                                                                         schedule.GetInstance().NumberOfProcessors()));
 
         for (const auto v : schedule.GetInstance().Vertices()) {
             const unsigned step = schedule.AssignedSuperstep(v);
@@ -61,36 +60,28 @@ public:
         numberOfSupersteps_ = 0;
     }
 
-    [[nodiscard]] const BspInstance<GraphT> &GetInstance() const
-    {
-        return *instance_;
-    }
-    [[nodiscard]] unsigned NumberOfSupersteps() const
-    {
-        return numberOfSupersteps_;
-    }
+    [[nodiscard]] const BspInstance<GraphT>& GetInstance() const { return *instance_; }
+    [[nodiscard]] unsigned NumberOfSupersteps() const { return numberOfSupersteps_; }
 
     /**
      * @brief Get the internal node assignment structure.
      * @return Reference to the vector of vectors of unordered sets of vertices.
      */
-    [[nodiscard]] const std::vector<std::vector<std::unordered_set<VertexIdx>>> &
-    GetProcessorStepVertices() const
+    [[nodiscard]] const std::vector<std::vector<std::unordered_set<VertexIdx>>>& GetProcessorStepVertices() const
     {
         return stepProcessorVertices_;
     }
-    [[nodiscard]] std::vector<std::vector<std::unordered_set<VertexIdx>>> &
-    GetProcessorStepVertices()
+    [[nodiscard]] std::vector<std::vector<std::unordered_set<VertexIdx>>>& GetProcessorStepVertices()
     {
         return stepProcessorVertices_;
     }
 
 private:
-    const BspInstance<GraphT> *instance_ = nullptr;
+    const BspInstance<GraphT>* instance_ = nullptr;
 
     unsigned numberOfSupersteps_ = 0;
     std::vector<std::vector<std::unordered_set<VertexIdx>>> stepProcessorVertices_;
 };
-}    // namespace osp
+} // namespace osp
 } // namespace npu::tile_fwk
 #endif // OSP_SET_SCHEDULE_H

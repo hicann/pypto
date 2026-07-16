@@ -17,8 +17,8 @@
 using namespace tile_fwk::test_operation;
 namespace {
 struct FloorDivsOpFuncArgs : public OpFuncArgs {
-    FloorDivsOpFuncArgs(
-        const Element& value, const std::vector<int64_t>& viewShape, const std::vector<int64_t> tileShape)
+    FloorDivsOpFuncArgs(const Element& value, const std::vector<int64_t>& viewShape,
+                        const std::vector<int64_t> tileShape)
         : value_(value), viewShape_(viewShape), tileShape_(tileShape)
     {}
 
@@ -36,8 +36,8 @@ struct FloorDivsOpMetaData {
     nlohmann::json test_data_;
 };
 
-static void FloorDivsOperationExeFuncOneCut(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void FloorDivsOperationExeFuncOneCut(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                            const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0]})
     {
@@ -48,9 +48,9 @@ static void FloorDivsOperationExeFuncOneCut(
 
         LOOP("LOOP_L0_bIdx", FunctionType::DYNAMIC_LOOP, bIdx, LoopRange(0, bloop, 1))
         {
-            auto tileTensor0 = View(
-                inputs[0], {firstViewShape}, {std::min(firstDim - bIdx * firstViewShape, firstViewShape)},
-                {bIdx * firstViewShape});
+            auto tileTensor0 = View(inputs[0], {firstViewShape},
+                                    {std::min(firstDim - bIdx * firstViewShape, firstViewShape)},
+                                    {bIdx * firstViewShape});
             TileShape::Current().SetVecTile(args->tileShape_);
             auto res = FloorDiv(tileTensor0, args->value_);
             Assemble(res, {bIdx * firstViewShape}, outputs[0]);
@@ -58,8 +58,8 @@ static void FloorDivsOperationExeFuncOneCut(
     }
 }
 
-static void FloorDivsOperationExeFuncDoubleCut(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void FloorDivsOperationExeFuncDoubleCut(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                               const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0]})
     {
@@ -75,11 +75,10 @@ static void FloorDivsOperationExeFuncDoubleCut(
         {
             LOOP("LOOP_L1_sIdx", FunctionType::DYNAMIC_LOOP, sIdx, LoopRange(0, sloop, 1))
             {
-                auto tileTensor0 = View(
-                    inputs[0], {firstViewShape, secondViewShape},
-                    {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                     std::min(secondDim - sIdx * secondViewShape, secondViewShape)},
-                    {bIdx * firstViewShape, sIdx * secondViewShape});
+                auto tileTensor0 = View(inputs[0], {firstViewShape, secondViewShape},
+                                        {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                         std::min(secondDim - sIdx * secondViewShape, secondViewShape)},
+                                        {bIdx * firstViewShape, sIdx * secondViewShape});
                 TileShape::Current().SetVecTile(args->tileShape_);
                 auto res = FloorDiv(tileTensor0, args->value_);
                 Assemble(res, {bIdx * firstViewShape, sIdx * secondViewShape}, outputs[0]);
@@ -88,8 +87,8 @@ static void FloorDivsOperationExeFuncDoubleCut(
     }
 }
 
-static void FloorDivsOperationExeFuncTripleCut(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void FloorDivsOperationExeFuncTripleCut(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                               const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0]})
     {
@@ -110,12 +109,11 @@ static void FloorDivsOperationExeFuncTripleCut(
             {
                 LOOP("LOOP_L2_nIdx", FunctionType::DYNAMIC_LOOP, nIdx, LoopRange(0, nloop, 1))
                 {
-                    auto tileTensor0 = View(
-                        inputs[0], {firstViewShape, secondViewShape, thirdViewShape},
-                        {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                         std::min(secondDim - sIdx * secondViewShape, secondViewShape),
-                         std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape)},
-                        {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape});
+                    auto tileTensor0 = View(inputs[0], {firstViewShape, secondViewShape, thirdViewShape},
+                                            {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                             std::min(secondDim - sIdx * secondViewShape, secondViewShape),
+                                             std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape)},
+                                            {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape});
                     TileShape::Current().SetVecTile(args->tileShape_);
                     auto res = FloorDiv(tileTensor0, args->value_);
                     Assemble(res, {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape}, outputs[0]);
@@ -125,8 +123,8 @@ static void FloorDivsOperationExeFuncTripleCut(
     }
 }
 
-static void FloorDivsOperationExeFuncQuadrupleCut(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void FloorDivsOperationExeFuncQuadrupleCut(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                                  const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0]})
     {
@@ -152,21 +150,20 @@ static void FloorDivsOperationExeFuncQuadrupleCut(
                 {
                     LOOP("LOOP_L3_qIdx", FunctionType::DYNAMIC_LOOP, qIdx, LoopRange(0, qloop, 1))
                     {
-                        auto tileTensor0 = View(
-                            inputs[0], {firstViewShape, secondViewShape, thirdViewShape, fourthViewShape},
-                            {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                             std::min(secondDim - sIdx * secondViewShape, secondViewShape),
-                             std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape),
-                             std::min(fourthDim - qIdx * fourthViewShape, fourthViewShape)},
-                            {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape,
-                             qIdx * fourthViewShape});
+                        auto tileTensor0 = View(inputs[0],
+                                                {firstViewShape, secondViewShape, thirdViewShape, fourthViewShape},
+                                                {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                                 std::min(secondDim - sIdx * secondViewShape, secondViewShape),
+                                                 std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape),
+                                                 std::min(fourthDim - qIdx * fourthViewShape, fourthViewShape)},
+                                                {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape,
+                                                 qIdx * fourthViewShape});
                         TileShape::Current().SetVecTile(args->tileShape_);
                         auto res = FloorDiv(tileTensor0, args->value_);
-                        Assemble(
-                            res,
-                            {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape,
-                             qIdx * fourthViewShape},
-                            outputs[0]);
+                        Assemble(res,
+                                 {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape,
+                                  qIdx * fourthViewShape},
+                                 outputs[0]);
                     }
                 }
             }
@@ -176,10 +173,11 @@ static void FloorDivsOperationExeFuncQuadrupleCut(
 
 class FloorDivsOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac_param<FloorDivsOpMetaData> {};
 
-INSTANTIATE_TEST_SUITE_P(
-    TestFloorDivs, FloorDivsOperationTest,
-    ::testing::ValuesIn(GetOpMetaData<FloorDivsOpMetaData, 1>(
-        {FloorDivsOperationExeFuncOneCut, FloorDivsOperationExeFuncDoubleCut, FloorDivsOperationExeFuncTripleCut,FloorDivsOperationExeFuncQuadrupleCut}, "FloorDivs")));
+INSTANTIATE_TEST_SUITE_P(TestFloorDivs, FloorDivsOperationTest,
+                         ::testing::ValuesIn(GetOpMetaData<FloorDivsOpMetaData, 1>(
+                             {FloorDivsOperationExeFuncOneCut, FloorDivsOperationExeFuncDoubleCut,
+                              FloorDivsOperationExeFuncTripleCut, FloorDivsOperationExeFuncQuadrupleCut},
+                             "FloorDivs")));
 
 TEST_P(FloorDivsOperationTest, TestFloorDivs)
 {

@@ -16,6 +16,15 @@ pypto@pypto:
       - framework/include/
       - framework/src/
     unrelease:
+      - framework/src/machine/device/dynamic/context
+      - framework/src/passes/statistics
+      - framework/src/passes/pass_check
+      - framework/src/passes/tensor_graph_pass
+      - framework/src/passes/tile_graph_pass/graph_constraint
+      - framework/src/interface/interpreter
+      - framework/src/interface/ir
+      - framework/src/interface/pypto_pro
+      - framework/src/operator/models
       - framework/src/machine/runtime/
       - framework/src/cost_model/simulation_pv/
       - framework/src/cann_host_runtime/

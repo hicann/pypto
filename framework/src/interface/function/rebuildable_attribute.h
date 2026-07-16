@@ -36,38 +36,40 @@ class DevAscendFunction;
 class Function;
 
 struct RebuildableAttributeBase {
-    virtual void Rebuild(Function *func);
-    virtual void Reset(void *data);
+    virtual void Rebuild(Function* func);
+    virtual void Reset(void* data);
     virtual ~RebuildableAttributeBase() = default;
     virtual bool AllowRead() const { return true; }
     virtual bool AllowWrite() const { return true; }
 };
 
-template<typename T>
+template <typename T>
 struct RebuildableAttribute : RebuildableAttributeBase {
-    virtual void Reset(void *dataPtr) override {
+    virtual void Reset(void* dataPtr) override
+    {
         FE_ASSERT(this->AllowWrite());
-        data = *(T *)dataPtr;
+        data = *(T*)dataPtr;
     }
-    const T &Get() const {
+    const T& Get() const
+    {
         FE_ASSERT(this->AllowRead());
         return data;
     }
+
 protected:
     T data;
 };
 
 class RebuildableAttributeManager {
 public:
-    static EntryRegistrarGroup &GetRegistrarGroup();
+    static EntryRegistrarGroup& GetRegistrarGroup();
 
-    static RebuildableAttributeManager &GetInstance();
+    static RebuildableAttributeManager& GetInstance();
 
-    template<typename T>
-    T *GetAttr(Function *func)
+    template <typename T>
+    T* GetAttr(Function* func)
     {
-        static_assert(std::is_base_of_v<RebuildableAttributeBase, T>,
-                      "T must inherit from RebuildableAttributeBase");
+        static_assert(std::is_base_of_v<RebuildableAttributeBase, T>, "T must inherit from RebuildableAttributeBase");
         if (attrDict_.find(func) == attrDict_.end()) {
             InitAttrsForFunc(func);
         }
@@ -76,19 +78,19 @@ public:
         return attr.get();
     }
 
-    template<typename T>
-    void ResetAttr(Function *func, void *data)
+    template <typename T>
+    void ResetAttr(Function* func, void* data)
     {
         GetAttr<T>(func)->Reset(data);
     }
 
-    template<typename T>
-    void BuildAttr(Function *func)
+    template <typename T>
+    void BuildAttr(Function* func)
     {
         GetAttr<T>(func)->Build(func);
     }
 
-    void InitAttr(Function *func, const std::string &name, std::shared_ptr<RebuildableAttributeBase> base)
+    void InitAttr(Function* func, const std::string& name, std::shared_ptr<RebuildableAttributeBase> base)
     {
         attrDict_[func][name] = base;
     }
@@ -96,24 +98,25 @@ public:
     RebuildableAttributeManager() = default;
 
 private:
-    void InitAttrsForFunc(Function *func);
+    void InitAttrsForFunc(Function* func);
 
-    std::unordered_map<Function *, std::unordered_map<std::string, std::shared_ptr<RebuildableAttributeBase>>> attrDict_;
+    std::unordered_map<Function*, std::unordered_map<std::string, std::shared_ptr<RebuildableAttributeBase>>> attrDict_;
 };
 
 struct RebuildableAttrInitContext {
-    RebuildableAttributeManager *manager;
-    Function *func;
+    RebuildableAttributeManager* manager;
+    Function* func;
 };
 
-#define RBUILDABLE_ATTRIBUTE_REGISTER(TyAttr) \
-    static void Entry##TyAttr(void *data) { \
-        auto ctx = reinterpret_cast<RebuildableAttrInitContext *>(data); \
-        auto ptr = std::make_shared<TyAttr>(); \
+#define RBUILDABLE_ATTRIBUTE_REGISTER(TyAttr)                                \
+    static void Entry##TyAttr(void* data)                                    \
+    {                                                                        \
+        auto ctx = reinterpret_cast<RebuildableAttrInitContext*>(data);      \
+        auto ptr = std::make_shared<TyAttr>();                               \
         auto base = std::static_pointer_cast<RebuildableAttributeBase>(ptr); \
-        const std::string name = typeid(TyAttr).name(); \
-        ctx->manager->InitAttr(ctx->func, name, base); \
-    } \
+        const std::string name = typeid(TyAttr).name();                      \
+        ctx->manager->InitAttr(ctx->func, name, base);                       \
+    }                                                                        \
     static EntryRegistrarNode node(RebuildableAttributeManager::GetRegistrarGroup(), Entry##TyAttr, #TyAttr);
 
 struct RebuildableWorkspaceDesc : RebuildableAttribute<WorkspaceDesc> {
@@ -122,4 +125,4 @@ struct RebuildableWorkspaceDesc : RebuildableAttribute<WorkspaceDesc> {
     std::string PrettyDumpSize(uint64_t maxDynamicAssembleOutcastMem, uint64_t debugSize) const;
 };
 
-}
+} // namespace npu::tile_fwk

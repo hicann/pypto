@@ -51,17 +51,16 @@ public:
     Status BuildInGraph(Function& function);
     Status EdgeIndexCheck(const bool found, const int newIndex, const size_t graphSize) const;
 
-    SubfuncTopologyInfoTy ConstructSubgraphTopologyInfo(
-        Function& function, std::vector<SubfuncInvokeInfoTy>& esgInvokeInfoMap);
+    SubfuncTopologyInfoTy ConstructSubgraphTopologyInfo(Function& function,
+                                                        std::vector<SubfuncInvokeInfoTy>& esgInvokeInfoMap);
     void UpdateTopoEntry(size_t i, int eSgId, int realOutDegree, const setType& succESgs, SubfuncTopologyInfoTy& topo);
 
     void SetColorGraph(size_t i, const OperationsViewer& list);
     void BuildColorGraph(Function& function);
     void PrintColorGraph(const Function& function);
     void ProcessColorGraph(Function& function);
-    void FindRedundantEdges(
-        int colorNum, std::vector<std::vector<int>>& redundantColorInGraph,
-        std::vector<std::vector<int>>& redundantColorOutGraph);
+    void FindRedundantEdges(int colorNum, std::vector<std::vector<int>>& redundantColorInGraph,
+                            std::vector<std::vector<int>>& redundantColorOutGraph);
     void EraseRedundantColorEdges(const Function& function);
     Status SetReadySubGraphType(Function* rootFunc, size_t i, const CoreType& esgGraphType);
     void SetNList(std::vector<std::vector<OperationPtr>>& nList) { nLIST_ = &nList; }

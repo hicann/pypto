@@ -23,8 +23,8 @@
 
 namespace npu::tile_fwk {
 
-void FunctionUtils::RelinkOperationInput(
-    Operation* op, const size_t inputIndex, const Operation* targetOp, const size_t outputIndex)
+void FunctionUtils::RelinkOperationInput(Operation* op, const size_t inputIndex, const Operation* targetOp,
+                                         const size_t outputIndex)
 {
     if (op == nullptr || targetOp == nullptr) {
         return;
@@ -119,17 +119,15 @@ bool FunctionUtils::IsContinuous(const std::vector<std::shared_ptr<LogicalTensor
 NodeType FunctionUtils::GetNodeType(const LogicalTensor& tensor, const Function& function)
 {
     // 检查是否为 INCAST
-    auto in_it = std::find_if(function.inCasts_.begin(), function.inCasts_.end(), [&tensor](const auto& t) {
-        return t != nullptr && t.get() == &tensor;
-    });
+    auto in_it = std::find_if(function.inCasts_.begin(), function.inCasts_.end(),
+                              [&tensor](const auto& t) { return t != nullptr && t.get() == &tensor; });
     if (in_it != function.inCasts_.end()) {
         return NodeType::INCAST;
     }
 
     // 检查是否为 OUTCAST
-    auto out_it = std::find_if(function.outCasts_.begin(), function.outCasts_.end(), [&tensor](const auto& t) {
-        return t != nullptr && t.get() == &tensor;
-    });
+    auto out_it = std::find_if(function.outCasts_.begin(), function.outCasts_.end(),
+                               [&tensor](const auto& t) { return t != nullptr && t.get() == &tensor; });
     if (out_it != function.outCasts_.end()) {
         return NodeType::OUTCAST;
     }
@@ -186,7 +184,6 @@ int CommonUtils::GetTensorSubgraphID(const LogicalTensor* tensor)
     return NOT_IN_SUBGRAPH;
 }
 
-
 namespace {
 bool MayOverlap(const Operation* op0, const Operation* op1)
 {
@@ -238,9 +235,8 @@ Status FunctionUtils::InferOutcastWriteConflict(Function& function)
 {
     for (auto& outcast : function.GetOutcast()) {
         auto& prodSet = outcast->GetProducers();
-        bool hasConflict = std::any_of(prodSet.begin(), prodSet.end(), [](auto& prod) {
-            return prod->GetOpcode() == Opcode::OP_ATOMIC_RMW;
-        });
+        bool hasConflict = std::any_of(prodSet.begin(), prodSet.end(),
+                                       [](auto& prod) { return prod->GetOpcode() == Opcode::OP_ATOMIC_RMW; });
         if (hasConflict) {
             outcast->SetAttr(OpAttributeKey::writeConflict, true);
             continue;

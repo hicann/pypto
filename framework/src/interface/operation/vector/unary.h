@@ -165,26 +165,26 @@ Opcode GetUnaryOpNameCode()
 #undef CASE
 }
 
-void UnaryOperationOperandCheck(
-    const std::vector<LogicalTensorPtr>& iOperand, const std::vector<LogicalTensorPtr>& oOperand);
+void UnaryOperationOperandCheck(const std::vector<LogicalTensorPtr>& iOperand,
+                                const std::vector<LogicalTensorPtr>& oOperand);
 
 template <UnaryOpType T>
-std::pair<LogicalTensorPtr, Operation*> TensorUnaryOperationWithOp(
-    Function& function, LogicalTensorPtr operand, std::optional<DataType> datatype = std::nullopt)
+std::pair<LogicalTensorPtr, Operation*> TensorUnaryOperationWithOp(Function& function, LogicalTensorPtr operand,
+                                                                   std::optional<DataType> datatype = std::nullopt)
 {
     auto opName = GetUnaryOpName<T>();
     CheckTensorDimRange(operand, MIN_TENSOR_DIM, MAX_TENSOR_DIM, opName);
     CheckTensorShapeSize(operand, opName);
     datatype = datatype.value_or(operand->tensor->datatype);
-    auto result = std::make_shared<LogicalTensor>(
-        function, *datatype, operand->shape, operand->GetDynValidShape(), operand->Format());
+    auto result = std::make_shared<LogicalTensor>(function, *datatype, operand->shape, operand->GetDynValidShape(),
+                                                  operand->Format());
     Operation* op = &function.AddOperation(GetUnaryOpNameCode<T>(), {operand}, {result});
     return {result, op};
 }
 
 template <UnaryOpType T>
-LogicalTensorPtr TensorUnaryOperation(
-    Function& function, LogicalTensorPtr operand, std::optional<DataType> datatype = std::nullopt)
+LogicalTensorPtr TensorUnaryOperation(Function& function, LogicalTensorPtr operand,
+                                      std::optional<DataType> datatype = std::nullopt)
 {
     return TensorUnaryOperationWithOp<T>(function, operand, datatype).first;
 }

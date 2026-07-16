@@ -46,17 +46,15 @@ void ConvertInserter::UpdateTensorTobeMap(const LogicalTensorPtr& tensor, Operat
     bool hasReason = reason != nullptr && reason[0] != '\0';
     if (!tensor->HasConsumer(operation)) {
         if (hasReason) {
-            APASS_LOG_ERROR_F(
-                Elements::Tensor,
-                "Operation %d is not a consumer of tensor %d; "
-                "Please make sure the operation is relative to the tensor to be mapped. reason: %s.",
-                operation.GetOpMagic(), tensor->GetMagic(), reason);
+            APASS_LOG_ERROR_F(Elements::Tensor,
+                              "Operation %d is not a consumer of tensor %d; "
+                              "Please make sure the operation is relative to the tensor to be mapped. reason: %s.",
+                              operation.GetOpMagic(), tensor->GetMagic(), reason);
         } else {
-            APASS_LOG_ERROR_F(
-                Elements::Tensor,
-                "Operation %d is not a consumer of tensor %d; "
-                "Please make sure the operation is relative to the tensor to be mapped.",
-                operation.GetOpMagic(), tensor->GetMagic());
+            APASS_LOG_ERROR_F(Elements::Tensor,
+                              "Operation %d is not a consumer of tensor %d; "
+                              "Please make sure the operation is relative to the tensor to be mapped.",
+                              operation.GetOpMagic(), tensor->GetMagic());
         }
         return;
     }
@@ -77,15 +75,13 @@ void ConvertInserter::UpdateTensorTobeMap(const LogicalTensorPtr& tensor, Operat
     MemoryType oldType = currentType;
     currentType = t;
     if (hasReason) {
-        APASS_LOG_DEBUG_F(
-            Elements::Tensor, "Update tensor %d toBeMap(%s[%d]) from %s to %s, reason: %s.", tensor->GetMagic(),
-            operation.GetOpcodeStr().c_str(), operation.GetOpMagic(), BriefMemoryTypeToString(oldType).c_str(),
-            BriefMemoryTypeToString(t).c_str(), reason);
+        APASS_LOG_DEBUG_F(Elements::Tensor, "Update tensor %d toBeMap(%s[%d]) from %s to %s, reason: %s.",
+                          tensor->GetMagic(), operation.GetOpcodeStr().c_str(), operation.GetOpMagic(),
+                          BriefMemoryTypeToString(oldType).c_str(), BriefMemoryTypeToString(t).c_str(), reason);
     } else {
-        APASS_LOG_DEBUG_F(
-            Elements::Tensor, "Update tensor %d toBeMap(%s[%d]) from %s to %s,", tensor->GetMagic(),
-            operation.GetOpcodeStr().c_str(), operation.GetOpMagic(), BriefMemoryTypeToString(oldType).c_str(),
-            BriefMemoryTypeToString(t).c_str());
+        APASS_LOG_DEBUG_F(Elements::Tensor, "Update tensor %d toBeMap(%s[%d]) from %s to %s,", tensor->GetMagic(),
+                          operation.GetOpcodeStr().c_str(), operation.GetOpMagic(),
+                          BriefMemoryTypeToString(oldType).c_str(), BriefMemoryTypeToString(t).c_str());
     }
 }
 
@@ -93,11 +89,10 @@ std::map<MemoryType, std::set<Operation*, OpMagicComparator>> ConvertInserter::G
     LogicalTensorPtr& tensor) const
 {
     if (tensorTobeMap.count(tensor) == 0) {
-        APASS_LOG_INFO_F(
-            Elements::Tensor,
-            "Tensor %d has not been inserted yet; "
-            "Please make sure tensor in the tobe map.",
-            tensor->GetMagic());
+        APASS_LOG_INFO_F(Elements::Tensor,
+                         "Tensor %d has not been inserted yet; "
+                         "Please make sure tensor in the tobe map.",
+                         tensor->GetMagic());
         return {};
     }
     std::map<MemoryType, std::set<Operation*, OpMagicComparator>> result;
@@ -208,13 +203,12 @@ bool ConvertInserter::CrossCore(const MemoryType from, const MemoryType to) cons
     return std::find(paths.begin(), paths.end(), MemoryType::MEM_DEVICE_DDR) != paths.end();
 }
 
-void ConvertInserter::UpdateConsumerAndReconnect(
-    std::shared_ptr<LogicalTensor> oldTensor, std::shared_ptr<LogicalTensor> newTensor, Operation* op) const
+void ConvertInserter::UpdateConsumerAndReconnect(std::shared_ptr<LogicalTensor> oldTensor,
+                                                 std::shared_ptr<LogicalTensor> newTensor, Operation* op) const
 {
     newTensor->AddConsumer(op);
     auto updateViewOffset = [](std::shared_ptr<LogicalTensor> oldTensor1, std::shared_ptr<LogicalTensor> newTensor1,
-                               Operation* op1)
-{
+                               Operation* op1) {
         auto viewOpAttribute = dynamic_cast<ViewOpAttribute*>(op1->GetOpAttribute().get());
         if (viewOpAttribute != nullptr) {
             auto oldOffset = viewOpAttribute->GetFromOffset();
@@ -286,9 +280,10 @@ Status ConvertInserter::RecordConflict(Function& function)
     return SUCCESS;
 }
 
-void ConvertInserter::InsertConvertOpForEachConsumer(
-    Function& function, const Operation& op, const std::shared_ptr<LogicalTensor>& oOperand,
-    std::set<Operation*, OpMagicComparator>& consumers, std::vector<MemoryType>& paths)
+void ConvertInserter::InsertConvertOpForEachConsumer(Function& function, const Operation& op,
+                                                     const std::shared_ptr<LogicalTensor>& oOperand,
+                                                     std::set<Operation*, OpMagicComparator>& consumers,
+                                                     std::vector<MemoryType>& paths)
 {
     for (auto consumer : consumers) {
         auto output = RecordInsertConvertOp(oOperand, paths, function, op);
@@ -299,15 +294,14 @@ void ConvertInserter::InsertConvertOpForEachConsumer(
 }
 
 // 特殊场景处理：生成者均为Assemble或者消费者均为View/Assemble，且mem路径中经过DDR
-void ConvertInserter::ProcessSpecialProducersOrConsumers(
-    Function& function, const Operation& op, const std::shared_ptr<LogicalTensor>& oOperand,
-    std::set<Operation*, OpMagicComparator>& consumers, MemoryType& requiredMemoryType)
+void ConvertInserter::ProcessSpecialProducersOrConsumers(Function& function, const Operation& op,
+                                                         const std::shared_ptr<LogicalTensor>& oOperand,
+                                                         std::set<Operation*, OpMagicComparator>& consumers,
+                                                         MemoryType& requiredMemoryType)
 {
     // case1:当tensor的生产者都是assemble，并且tensor的mem路径需要经过DDR，则将tensor的ori刷成DDR
-    APASS_LOG_DEBUG_F(
-        Elements::Operation, "Operation %s[%d] has output %d original and requirement conflict.",
-        op.GetOpcodeStr().c_str(),
-        op.GetOpMagic(), oOperand->magic);
+    APASS_LOG_DEBUG_F(Elements::Operation, "Operation %s[%d] has output %d original and requirement conflict.",
+                      op.GetOpcodeStr().c_str(), op.GetOpMagic(), oOperand->magic);
     const auto& items = tensorTobeMap.at(oOperand);
     bool crossCore = std::all_of(items.begin(), items.end(), [this, &oOperand](const auto& item) {
         return CrossCore(oOperand->GetMemoryTypeOriginal(), item.second.second);
@@ -394,8 +388,8 @@ bool ConvertInserter::FitUB2L1(const LogicalTensorPtr& tensor) const
     return true;
 }
 
-bool ConvertInserter::HasParallelDifferentConsumerRequirement(
-    const LogicalTensorPtr& tensor, MemoryType targetType) const
+bool ConvertInserter::HasParallelDifferentConsumerRequirement(const LogicalTensorPtr& tensor,
+                                                              MemoryType targetType) const
 {
     if (tensor == nullptr || tensor->GetConsumers().size() <= 1) {
         return false;
@@ -414,20 +408,18 @@ bool ConvertInserter::HasParallelDifferentConsumerRequirement(
     });
 }
 
-Status ConvertInserter::ProcessConvertPath(
-    const Operation& op, const std::shared_ptr<LogicalTensor>& oOperand, MemoryType requiredMemoryType,
-    std::vector<MemoryType>& paths)
+Status ConvertInserter::ProcessConvertPath(const Operation& op, const std::shared_ptr<LogicalTensor>& oOperand,
+                                           MemoryType requiredMemoryType, std::vector<MemoryType>& paths)
 {
     auto currTensorMemOri = oOperand->GetMemoryTypeOriginal();
     bool useDdrForSpecialPath = MemoryPathUtils::IsSpecialDirectMemoryPath(currTensorMemOri, requiredMemoryType) &&
-        HasParallelDifferentConsumerRequirement(oOperand, requiredMemoryType);
+                                HasParallelDifferentConsumerRequirement(oOperand, requiredMemoryType);
     if (useDdrForSpecialPath) {
         paths = {currTensorMemOri, MemoryType::MEM_DEVICE_DDR, requiredMemoryType};
-        APASS_LOG_DEBUG_F(
-            Elements::Tensor,
-            "Use DDR fallback path for tensor %d because %s -> %s has parallel different requirements.",
-            oOperand->magic, BriefMemoryTypeToString(currTensorMemOri).c_str(),
-            BriefMemoryTypeToString(requiredMemoryType).c_str());
+        APASS_LOG_DEBUG_F(Elements::Tensor,
+                          "Use DDR fallback path for tensor %d because %s -> %s has parallel different requirements.",
+                          oOperand->magic, BriefMemoryTypeToString(currTensorMemOri).c_str(),
+                          BriefMemoryTypeToString(requiredMemoryType).c_str());
         return SUCCESS;
     }
     if (currTensorMemOri == MemoryType::MEM_L0C && requiredMemoryType == MemoryType::MEM_L1) {
@@ -448,40 +440,37 @@ Status ConvertInserter::ProcessConvertPath(
     return SUCCESS;
 }
 
-Status ConvertInserter::ConstructPath(
-    MemoryType from, MemoryType to, std::vector<MemoryType>& paths, const std::shared_ptr<LogicalTensor>& oOperand,
-    const Operation& op) const
+Status ConvertInserter::ConstructPath(MemoryType from, MemoryType to, std::vector<MemoryType>& paths,
+                                      const std::shared_ptr<LogicalTensor>& oOperand, const Operation& op) const
 {
     Platform::Instance().GetDie().FindNearestPath(from, to, paths);
     if (paths.empty()) {
         // path为空的两种场景:1、from和to内存类型一致；2、from和to不一致，且未找到数据通路。这里处理场景2，报错退出
-        APASS_LOG_ERROR_F(
-            Elements::Operation, "No memory path found from %s to %s for tensor %d in operation %s[%d]. %s",
-            BriefMemoryTypeToString(from).c_str(), BriefMemoryTypeToString(to).c_str(), oOperand->magic,
-            op.GetOpcodeStr().c_str(), op.GetOpMagic(), GetFormatBacktrace(op).c_str());
+        APASS_LOG_ERROR_F(Elements::Operation,
+                          "No memory path found from %s to %s for tensor %d in operation %s[%d]. %s",
+                          BriefMemoryTypeToString(from).c_str(), BriefMemoryTypeToString(to).c_str(), oOperand->magic,
+                          op.GetOpcodeStr().c_str(), op.GetOpMagic(), GetFormatBacktrace(op).c_str());
         return FAILED;
     }
     return SUCCESS;
 }
 
-bool ConvertInserter::SkipOperand(
-    const std::shared_ptr<LogicalTensor>& oOperand, const std::vector<int>& visitedTensor) const
+bool ConvertInserter::SkipOperand(const std::shared_ptr<LogicalTensor>& oOperand,
+                                  const std::vector<int>& visitedTensor) const
 {
-    return (
-        (conflictMap.find(oOperand->magic) == conflictMap.end()) ||
-        (std::find(visitedTensor.begin(), visitedTensor.end(), oOperand->magic) != visitedTensor.end()));
+    return ((conflictMap.find(oOperand->magic) == conflictMap.end()) ||
+            (std::find(visitedTensor.begin(), visitedTensor.end(), oOperand->magic) != visitedTensor.end()));
 }
 
 bool ConvertInserter::isAllProducerAssemble(const std::shared_ptr<LogicalTensor>& oOperand) const
 {
     auto producers = oOperand->GetProducers();
-    return std::all_of(producers.begin(), producers.end(), [](const Operation* producerOp) {
-        return producerOp->GetOpcode() == Opcode::OP_ASSEMBLE;
-    });
+    return std::all_of(producers.begin(), producers.end(),
+                       [](const Operation* producerOp) { return producerOp->GetOpcode() == Opcode::OP_ASSEMBLE; });
 }
 
-bool ConvertInserter::isAllConsumersValid(
-    Function& function, const std::set<Operation*, OpMagicComparator>& consumers) const
+bool ConvertInserter::isAllConsumersValid(Function& function,
+                                          const std::set<Operation*, OpMagicComparator>& consumers) const
 {
     for (const auto consumer : consumers) {
         if (consumer->GetOpcode() != Opcode::OP_VIEW && consumer->GetOpcode() != Opcode::OP_ASSEMBLE) {
@@ -495,44 +484,43 @@ bool ConvertInserter::isAllConsumersValid(
     return true;
 }
 
-std::shared_ptr<LogicalTensor> ConvertInserter::RecordInsertConvertOp(
-    const std::shared_ptr<LogicalTensor>& oOperand, const std::vector<MemoryType>& paths, Function& function,
-    const Operation& op)
+std::shared_ptr<LogicalTensor> ConvertInserter::RecordInsertConvertOp(const std::shared_ptr<LogicalTensor>& oOperand,
+                                                                      const std::vector<MemoryType>& paths,
+                                                                      Function& function, const Operation& op)
 {
     (void)function;
     std::shared_ptr<LogicalTensor> input = oOperand;
     for (size_t i = 0; i < paths.size() - 1; ++i) {
         std::shared_ptr<LogicalTensor> output = CreateTensorLikeForConvert(input, paths[i + 1]);
         converts.emplace_back(ConvertOpInfo{paths[i], paths[i + 1], input, output});
-        APASS_LOG_DEBUG_F(
-            Elements::Tensor, "%s[%d] --> tensor[%d](%s) --> Convert --> %s.", op.GetOpcodeStr().c_str(),
-            op.GetOpMagic(), input->magic, BriefMemoryTypeToString(input->GetMemoryTypeOriginal()).c_str(),
-            BriefMemoryTypeToString(output->GetMemoryTypeOriginal()).c_str());
-        APASS_LOG_DEBUG_F(
-            Elements::Tensor, "--- %s --> %s ---", BriefMemoryTypeToString(paths[i]).c_str(),
-            BriefMemoryTypeToString(paths[i + 1]).c_str());
+        APASS_LOG_DEBUG_F(Elements::Tensor, "%s[%d] --> tensor[%d](%s) --> Convert --> %s.", op.GetOpcodeStr().c_str(),
+                          op.GetOpMagic(), input->magic,
+                          BriefMemoryTypeToString(input->GetMemoryTypeOriginal()).c_str(),
+                          BriefMemoryTypeToString(output->GetMemoryTypeOriginal()).c_str());
+        APASS_LOG_DEBUG_F(Elements::Tensor, "--- %s --> %s ---", BriefMemoryTypeToString(paths[i]).c_str(),
+                          BriefMemoryTypeToString(paths[i + 1]).c_str());
         input = output;
     }
     return input;
 }
 
-std::shared_ptr<LogicalTensor> ConvertInserter::CreateTensorLikeForConvert(
-    const std::shared_ptr<LogicalTensor>& input, MemoryType outputMemoryType) const
+std::shared_ptr<LogicalTensor> ConvertInserter::CreateTensorLikeForConvert(const std::shared_ptr<LogicalTensor>& input,
+                                                                           MemoryType outputMemoryType) const
 {
     IRBuilder builder;
-    std::shared_ptr<RawTensor> newRawTensor =
-        std::make_shared<RawTensor>(input->Datatype(), input->GetShape(), input->Format());
+    std::shared_ptr<RawTensor> newRawTensor = std::make_shared<RawTensor>(input->Datatype(), input->GetShape(),
+                                                                          input->Format());
     std::vector<int64_t> newoffset(input->offset.size(), 0);
-    std::shared_ptr<LogicalTensor> output =
-        builder.CreateTensorVar(newRawTensor, newoffset, input->shape, std::vector<SymbolicScalar>{});
+    std::shared_ptr<LogicalTensor> output = builder.CreateTensorVar(newRawTensor, newoffset, input->shape,
+                                                                    std::vector<SymbolicScalar>{});
     output->SetMemoryTypeOriginal(outputMemoryType);
     GraphUtils::CopyDynStatus(output, input);
     return output;
 }
 
-void ConvertInserter::GraphReconnect(
-    const std::shared_ptr<LogicalTensor>& oOperand, std::shared_ptr<LogicalTensor> output,
-    const std::set<Operation*, OpMagicComparator>& consumers, Function& function) const
+void ConvertInserter::GraphReconnect(const std::shared_ptr<LogicalTensor>& oOperand,
+                                     std::shared_ptr<LogicalTensor> output,
+                                     const std::set<Operation*, OpMagicComparator>& consumers, Function& function) const
 {
     for (const auto& consumer : consumers) {
         if (consumer->BelongTo() == &function) {
@@ -583,17 +571,16 @@ void ConvertInserter::InsertConvertOps(Function& function)
 std::shared_ptr<ViewOpAttribute> ConvertInserter::BuildViewAttrForConvert(const Operation& op, MemoryType to) const
 {
     auto input = op.iOperand.front();
-    return std::make_shared<ViewOpAttribute>(
-        input->GetOffset(), to, input->GetDynOffset(), input->GetDynValidShape());
+    return std::make_shared<ViewOpAttribute>(input->GetOffset(), to, input->GetDynOffset(), input->GetDynValidShape());
 }
 
-std::shared_ptr<AssembleOpAttribute> ConvertInserter::BuildAssembleAttrForConvert(
-    const Operation& op, MemoryType from) const
+std::shared_ptr<AssembleOpAttribute> ConvertInserter::BuildAssembleAttrForConvert(const Operation& op,
+                                                                                  MemoryType from) const
 {
     auto input = op.iOperand.front();
     auto output = op.oOperand.front();
-    return std::make_shared<AssembleOpAttribute>(
-        from, output->GetOffset(), output->GetDynOffset(), input->GetDynValidShape());
+    return std::make_shared<AssembleOpAttribute>(from, output->GetOffset(), output->GetDynOffset(),
+                                                 input->GetDynValidShape());
 }
 
 // 对外总接口

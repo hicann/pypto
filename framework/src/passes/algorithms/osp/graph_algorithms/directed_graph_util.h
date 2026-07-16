@@ -43,9 +43,9 @@ namespace osp {
  * @return true if there is an edge from src to dest, false otherwise.
  */
 template <typename GraphT>
-bool Edge(const VertexIdxT<GraphT> &src, const VertexIdxT<GraphT> &dest, const GraphT &graph)
+bool Edge(const VertexIdxT<GraphT>& src, const VertexIdxT<GraphT>& dest, const GraphT& graph)
 {
-    for (const auto &child : graph.Children(src)) {
+    for (const auto& child : graph.Children(src)) {
         if (child == dest) {
             return true;
         }
@@ -54,17 +54,19 @@ bool Edge(const VertexIdxT<GraphT> &src, const VertexIdxT<GraphT> &dest, const G
 }
 
 template <typename GraphT>
-VWorkwT<GraphT> CriticalPathWeight(const GraphT &graph)
+VWorkwT<GraphT> CriticalPathWeight(const GraphT& graph)
 {
-    if (graph.NumVertices() == 0) {return 0; }
+    if (graph.NumVertices() == 0) {
+        return 0;
+    }
 
     std::vector<VWorkwT<GraphT>> topLength(graph.NumVertices(), 0);
     VWorkwT<GraphT> criticalPathWeight = 0;
 
     // calculating lenght of longest path
-    for (const auto &node : GetTopOrder(graph)) {
+    for (const auto& node : GetTopOrder(graph)) {
         VWorkwT<GraphT> maxTemp = 0;
-        for (const auto &parent : graph.Parents(node)) {
+        for (const auto& parent : graph.Parents(node)) {
             maxTemp = std::max(maxTemp, topLength[parent]);
         }
 
@@ -78,10 +80,10 @@ VWorkwT<GraphT> CriticalPathWeight(const GraphT &graph)
 }
 
 template <typename GraphT>
-std::pair<EdgeDescT<GraphT>, bool> EdgeDesc(
-    const VertexIdxT<GraphT> &src, const VertexIdxT<GraphT> &dest, const GraphT &graph)
+std::pair<EdgeDescT<GraphT>, bool> EdgeDesc(const VertexIdxT<GraphT>& src, const VertexIdxT<GraphT>& dest,
+                                            const GraphT& graph)
 {
-    for (const auto &edge : OutEdges(src, graph)) {
+    for (const auto& edge : OutEdges(src, graph)) {
         if (Target(edge, graph) == dest) {
             return {edge, true};
         }
@@ -102,7 +104,7 @@ std::pair<EdgeDescT<GraphT>, bool> EdgeDesc(
  * @return The total number of weakly connected components.
  */
 template <typename GraphT>
-std::size_t ComputeWeaklyConnectedComponents(const GraphT &graph, std::vector<VertexIdxT<GraphT>> &components)
+std::size_t ComputeWeaklyConnectedComponents(const GraphT& graph, std::vector<VertexIdxT<GraphT>>& components)
 {
     using VertexType = VertexIdxT<GraphT>;
 
@@ -114,7 +116,7 @@ std::size_t ComputeWeaklyConnectedComponents(const GraphT &graph, std::vector<Ve
     components.assign(graph.NumVertices(), std::numeric_limits<VertexType>::max());
     VertexType componentId = 0;
 
-    for (const auto &v : graph.Vertices()) {
+    for (const auto& v : graph.Vertices()) {
         if (components[v] != std::numeric_limits<VertexType>::max()) {
             continue;
         }
@@ -126,13 +128,13 @@ std::size_t ComputeWeaklyConnectedComponents(const GraphT &graph, std::vector<Ve
 
         while (head < q.size()) {
             VertexType u = q[head++];
-            for (const auto &neighbor : graph.Parents(u)) {
+            for (const auto& neighbor : graph.Parents(u)) {
                 if (components[neighbor] == std::numeric_limits<VertexType>::max()) {
                     components[neighbor] = componentId;
                     q.push_back(neighbor);
                 }
             }
-            for (const auto &neighbor : graph.Children(u)) {
+            for (const auto& neighbor : graph.Children(u)) {
                 if (components[neighbor] == std::numeric_limits<VertexType>::max()) {
                     components[neighbor] = componentId;
                     q.push_back(neighbor);
@@ -150,11 +152,11 @@ std::size_t ComputeWeaklyConnectedComponents(const GraphT &graph, std::vector<Ve
  * @return The number of weakly connected components.
  */
 template <typename GraphT>
-std::size_t CountWeaklyConnectedComponents(const GraphT &graph)
+std::size_t CountWeaklyConnectedComponents(const GraphT& graph)
 {
     std::vector<VertexIdxT<GraphT>> components;
     return ComputeWeaklyConnectedComponents(graph, components);
 }
-}    // namespace osp
+} // namespace osp
 } // namespace npu::tile_fwk
 #endif // OSP_DIRECTED_GRAPH_UTIL_HPP

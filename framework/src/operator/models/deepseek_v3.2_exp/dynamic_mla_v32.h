@@ -89,25 +89,24 @@ struct SimpleParams {
     }
 };
 
-std::vector<Tensor> PreCompute2D(
-    const Tensor& tokenX, const Tensor& wDq, const Tensor& wUqQr, const Tensor& wDkvKr, const Tensor& gammaCq,
-    float epsilonCq, const MlaQuantInputs& quantInputs);
+std::vector<Tensor> PreCompute2D(const Tensor& tokenX, const Tensor& wDq, const Tensor& wUqQr, const Tensor& wDkvKr,
+                                 const Tensor& gammaCq, float epsilonCq, const MlaQuantInputs& quantInputs);
 Tensor RopeV2(const Tensor& x, const Tensor& cos, const Tensor& sin, const RopeTileShapeConfig& tileConfig);
 Tensor Rope3DV2(const Tensor& x, const Tensor& cos, const Tensor& sin, const RopeTileShapeConfig& tileConfig);
 
-void MlaPrologComputeV32(
-    const Tensor& tokenX, const Tensor& wDq, const Tensor& wUqQr, const Tensor& wUk, const Tensor& wDkvKr,
-    const Tensor& gammaCq, const Tensor& gammaCkv, const Tensor& sin, const Tensor& cos, const Tensor& cacheIndex,
-    Tensor& kvCache, Tensor& krCache, const MlaQuantInputs& quantInputs, const MlaTileConfig& tileConfig,
-    Tensor& queryOut, Tensor& queryRopeOut, Tensor& kvCacheOut, Tensor& krCacheOut, Tensor& rmsRes, float epsilonCq,
-    float epsilonCkv, std::string cacheMode);
+void MlaPrologComputeV32(const Tensor& tokenX, const Tensor& wDq, const Tensor& wUqQr, const Tensor& wUk,
+                         const Tensor& wDkvKr, const Tensor& gammaCq, const Tensor& gammaCkv, const Tensor& sin,
+                         const Tensor& cos, const Tensor& cacheIndex, Tensor& kvCache, Tensor& krCache,
+                         const MlaQuantInputs& quantInputs, const MlaTileConfig& tileConfig, Tensor& queryOut,
+                         Tensor& queryRopeOut, Tensor& kvCacheOut, Tensor& krCacheOut, Tensor& rmsRes, float epsilonCq,
+                         float epsilonCkv, std::string cacheMode);
 
-void MlaPrologV32(
-    const Tensor& tokenX, const Tensor& wDq, const Tensor& wUqQr, const Tensor& wUk, const Tensor& wDkvKr,
-    const Tensor& gammaCq, const Tensor& gammaCkv, const Tensor& sin, const Tensor& cos, const Tensor& cacheIndex,
-    Tensor& kvCache, Tensor& krCache, const MlaQuantInputs& quantInputs, const MlaTileConfig& tileConfig,
-    Tensor& queryOut, Tensor& queryRopeOut, Tensor& kvCacheOut, Tensor& krCacheOut, float epsilonCq = 1e-5f,
-    float epsilonCkv = 1e-5f, std::string cacheMode = "PA_NZ");
+void MlaPrologV32(const Tensor& tokenX, const Tensor& wDq, const Tensor& wUqQr, const Tensor& wUk, const Tensor& wDkvKr,
+                  const Tensor& gammaCq, const Tensor& gammaCkv, const Tensor& sin, const Tensor& cos,
+                  const Tensor& cacheIndex, Tensor& kvCache, Tensor& krCache, const MlaQuantInputs& quantInputs,
+                  const MlaTileConfig& tileConfig, Tensor& queryOut, Tensor& queryRopeOut, Tensor& kvCacheOut,
+                  Tensor& krCacheOut, float epsilonCq = 1e-5f, float epsilonCkv = 1e-5f,
+                  std::string cacheMode = "PA_NZ");
 
 } // namespace npu::tile_fwk
 

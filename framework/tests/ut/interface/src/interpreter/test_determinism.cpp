@@ -39,8 +39,8 @@ TEST_F(DeterminismTest, Verify)
     constexpr int dtsize = 4;
     constexpr int dim = 32;
     constexpr int write = 16;
-    auto tensor = std::make_shared<TraceRawTensorMemory>(
-        TraceMemoryRange(0, dim * dim * dtsize), std::vector<int64_t>({dim, dim}));
+    auto tensor = std::make_shared<TraceRawTensorMemory>(TraceMemoryRange(0, dim * dim * dtsize),
+                                                         std::vector<int64_t>({dim, dim}));
 
     TraceCopy copy(true, tensor, {0, 0}, {write, write}, false);
     auto leafCopyOutList = std::vector<TraceCopy>({copy});
@@ -152,10 +152,10 @@ TEST_F(DeterminismTest, LoadTrace)
     auto leafTask2 = exec.GetLeafTask(TraceLeafTaskUid(0, 0x7, 1, 2, 2));
     EXPECT_EQ(rootTask->GetLeafTaskDict()[leafTask1->GetUid()], leafTask1);
     EXPECT_EQ(rootTask->GetLeafTaskDict()[leafTask2->GetUid()], leafTask2);
-    EXPECT_EQ(
-        leafTask1->GetCoaList(), std::vector<TraceCoa>({TraceCoa(1), TraceCoa(2), TraceCoa(3, true), TraceCoa(4)}));
-    EXPECT_EQ(
-        leafTask2->GetCoaList(), std::vector<TraceCoa>({TraceCoa(5), TraceCoa(6), TraceCoa(7, true), TraceCoa(8)}));
+    EXPECT_EQ(leafTask1->GetCoaList(),
+              std::vector<TraceCoa>({TraceCoa(1), TraceCoa(2), TraceCoa(3, true), TraceCoa(4)}));
+    EXPECT_EQ(leafTask2->GetCoaList(),
+              std::vector<TraceCoa>({TraceCoa(5), TraceCoa(6), TraceCoa(7, true), TraceCoa(8)}));
 }
 
 } // namespace npu::tile_fwk

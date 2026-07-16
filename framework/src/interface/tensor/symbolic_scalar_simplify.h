@@ -746,24 +746,20 @@ private:
         SYM_TRY_REWRITE_IF(sym_div(sym_div(x, c1), c2), sym_div(x, c1.Val() * c2.Val()), c1.Val() > 0 && c2.Val() > 0);
 
         // floordiv(x + c1, c2) => floordiv(x, c2) + c1/c2 when c2>0 and c1%c2==0
-        SYM_TRY_REWRITE_IF(
-            sym_div(x + c1, c2), sym_div(x, c2) + (c1.Val() / c2.Val()), c2.Val() > 0 && c1.Val() % c2.Val() == 0);
-        SYM_TRY_REWRITE_IF(
-            sym_div(c1 + x, c2), sym_div(x, c2) + (c1.Val() / c2.Val()), c2.Val() > 0 && c1.Val() % c2.Val() == 0);
+        SYM_TRY_REWRITE_IF(sym_div(x + c1, c2), sym_div(x, c2) + (c1.Val() / c2.Val()),
+                           c2.Val() > 0 && c1.Val() % c2.Val() == 0);
+        SYM_TRY_REWRITE_IF(sym_div(c1 + x, c2), sym_div(x, c2) + (c1.Val() / c2.Val()),
+                           c2.Val() > 0 && c1.Val() % c2.Val() == 0);
 
         // floordiv(x * c1 + y, c2) => x * (c1/c2) + floordiv(y, c2)
-        SYM_TRY_REWRITE_IF(
-            sym_div(x * c1 + y, c2), x * (c1.Val() / c2.Val()) + sym_div(y, c2),
-            c2.Val() > 0 && c1.Val() % c2.Val() == 0);
-        SYM_TRY_REWRITE_IF(
-            sym_div(c1 * x + y, c2), x * (c1.Val() / c2.Val()) + sym_div(y, c2),
-            c2.Val() > 0 && c1.Val() % c2.Val() == 0);
-        SYM_TRY_REWRITE_IF(
-            sym_div(y + x * c1, c2), sym_div(y, c2) + x * (c1.Val() / c2.Val()),
-            c2.Val() > 0 && c1.Val() % c2.Val() == 0);
-        SYM_TRY_REWRITE_IF(
-            sym_div(y + c1 * x, c2), sym_div(y, c2) + x * (c1.Val() / c2.Val()),
-            c2.Val() > 0 && c1.Val() % c2.Val() == 0);
+        SYM_TRY_REWRITE_IF(sym_div(x * c1 + y, c2), x * (c1.Val() / c2.Val()) + sym_div(y, c2),
+                           c2.Val() > 0 && c1.Val() % c2.Val() == 0);
+        SYM_TRY_REWRITE_IF(sym_div(c1 * x + y, c2), x * (c1.Val() / c2.Val()) + sym_div(y, c2),
+                           c2.Val() > 0 && c1.Val() % c2.Val() == 0);
+        SYM_TRY_REWRITE_IF(sym_div(y + x * c1, c2), sym_div(y, c2) + x * (c1.Val() / c2.Val()),
+                           c2.Val() > 0 && c1.Val() % c2.Val() == 0);
+        SYM_TRY_REWRITE_IF(sym_div(y + c1 * x, c2), sym_div(y, c2) + x * (c1.Val() / c2.Val()),
+                           c2.Val() > 0 && c1.Val() % c2.Val() == 0);
 
         return ret;
     }
@@ -847,13 +843,11 @@ private:
         // i.e. min(max(min(max(x, c1), c2) - c3, c4), c5) => min(max(x - c3, c4), c5).
         // The inner clamp bounds become redundant when its achievable range [L1, H1] shifted
         // by -c still covers the outer range [L2, H2]: L1 <= L2 + c and H1 >= H2 + c.
-        SYM_TRY_REWRITE_IF(
-            sym_min(sym_max(sym_min(sym_max(x, c1), c2) - c3, c4), c5), sym_min(sym_max(x - c3, c4), c5),
-            c1.Val() <= c4.Val() + c3.Val() && c2.Val() >= c5.Val() + c3.Val());
+        SYM_TRY_REWRITE_IF(sym_min(sym_max(sym_min(sym_max(x, c1), c2) - c3, c4), c5), sym_min(sym_max(x - c3, c4), c5),
+                           c1.Val() <= c4.Val() + c3.Val() && c2.Val() >= c5.Val() + c3.Val());
 
-        SYM_TRY_REWRITE_IF(
-            sym_min(sym_max(sym_min(sym_max(x, c1), c2), c4), c5), sym_min(sym_max(x, c4), c5),
-            c1.Val() <= c4.Val() && c2.Val() >= c5.Val());
+        SYM_TRY_REWRITE_IF(sym_min(sym_max(sym_min(sym_max(x, c1), c2), c4), c5), sym_min(sym_max(x, c4), c5),
+                           c1.Val() <= c4.Val() && c2.Val() >= c5.Val());
 
         SYM_TRY_REWRITE(sym_min(sym_min(x, y), sym_min(x, z)), sym_min(sym_min(y, z), x));
         SYM_TRY_REWRITE(sym_min(sym_min(x, y), sym_min(z, x)), sym_min(sym_min(y, z), x));

@@ -179,9 +179,8 @@ void CacheMachine::AddMSHR(const CachePacket& req, uint64_t curCycle)
     }
 
     // Add new MSHR.
-    misses.emplace(
-        std::piecewise_construct, std::forward_as_tuple(addr),
-        std::forward_as_tuple(addr, curCycle + config.l2MissExtraLatency, req));
+    misses.emplace(std::piecewise_construct, std::forward_as_tuple(addr),
+                   std::forward_as_tuple(addr, curCycle + config.l2MissExtraLatency, req));
 }
 
 void CacheMachine::AllocateCache(uint64_t addr, uint64_t currentCycle)

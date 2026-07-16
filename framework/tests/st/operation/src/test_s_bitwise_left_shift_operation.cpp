@@ -18,8 +18,8 @@
 using namespace tile_fwk::test_operation;
 namespace {
 struct SBitwiseLeftShiftOpFuncArgs : public OpFuncArgs {
-    SBitwiseLeftShiftOpFuncArgs(
-        const Element& value, const std::vector<int64_t>& viewShape, const std::vector<int64_t> tileShape)
+    SBitwiseLeftShiftOpFuncArgs(const Element& value, const std::vector<int64_t>& viewShape,
+                                const std::vector<int64_t> tileShape)
         : value_(value), viewShape_(viewShape), tileShape_(tileShape)
     {}
 
@@ -37,8 +37,8 @@ struct SBitwiseLeftShiftOpMetaData {
     nlohmann::json test_data_;
 };
 
-static void SBitwiseLeftShiftOperationExeFuncDoubleCut(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void SBitwiseLeftShiftOperationExeFuncDoubleCut(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                                       const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0]})
     {
@@ -54,11 +54,10 @@ static void SBitwiseLeftShiftOperationExeFuncDoubleCut(
         {
             LOOP("LOOP_L1_sIdx", FunctionType::DYNAMIC_LOOP, sIdx, LoopRange(0, sloop, 1))
             {
-                auto tileTensor0 = View(
-                    inputs[0], {firstViewShape, secondViewShape},
-                    {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                     std::min(secondDim - sIdx * secondViewShape, secondViewShape)},
-                    {bIdx * firstViewShape, sIdx * secondViewShape});
+                auto tileTensor0 = View(inputs[0], {firstViewShape, secondViewShape},
+                                        {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                         std::min(secondDim - sIdx * secondViewShape, secondViewShape)},
+                                        {bIdx * firstViewShape, sIdx * secondViewShape});
                 TileShape::Current().SetVecTile(args->tileShape_);
                 auto res = BitwiseLeftShift(args->value_, tileTensor0);
                 Assemble(res, {bIdx * firstViewShape, sIdx * secondViewShape}, outputs[0]);
@@ -67,8 +66,8 @@ static void SBitwiseLeftShiftOperationExeFuncDoubleCut(
     }
 }
 
-static void SBitwiseLeftShiftOperationExeFuncTripleCut(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void SBitwiseLeftShiftOperationExeFuncTripleCut(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                                       const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0]})
     {
@@ -89,12 +88,11 @@ static void SBitwiseLeftShiftOperationExeFuncTripleCut(
             {
                 LOOP("LOOP_L2_nIdx", FunctionType::DYNAMIC_LOOP, nIdx, LoopRange(0, nloop, 1))
                 {
-                    auto tileTensor0 = View(
-                        inputs[0], {firstViewShape, secondViewShape, thirdViewShape},
-                        {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                         std::min(secondDim - sIdx * secondViewShape, secondViewShape),
-                         std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape)},
-                        {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape});
+                    auto tileTensor0 = View(inputs[0], {firstViewShape, secondViewShape, thirdViewShape},
+                                            {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                             std::min(secondDim - sIdx * secondViewShape, secondViewShape),
+                                             std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape)},
+                                            {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape});
                     TileShape::Current().SetVecTile(args->tileShape_);
                     auto res = BitwiseLeftShift(args->value_, tileTensor0);
                     Assemble(res, {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape}, outputs[0]);
@@ -104,8 +102,8 @@ static void SBitwiseLeftShiftOperationExeFuncTripleCut(
     }
 }
 
-static void SBitwiseLeftShiftOperationExeFuncQuadrupleCut(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void SBitwiseLeftShiftOperationExeFuncQuadrupleCut(const std::vector<Tensor>& inputs,
+                                                          std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0]})
     {
@@ -131,21 +129,20 @@ static void SBitwiseLeftShiftOperationExeFuncQuadrupleCut(
                 {
                     LOOP("LOOP_L3_qIdx", FunctionType::DYNAMIC_LOOP, qIdx, LoopRange(0, qloop, 1))
                     {
-                        auto tileTensor0 = View(
-                            inputs[0], {firstViewShape, secondViewShape, thirdViewShape, fourthViewShape},
-                            {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                             std::min(secondDim - sIdx * secondViewShape, secondViewShape),
-                             std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape),
-                             std::min(fourthDim - qIdx * fourthViewShape, fourthViewShape)},
-                            {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape,
-                             qIdx * fourthViewShape});
+                        auto tileTensor0 = View(inputs[0],
+                                                {firstViewShape, secondViewShape, thirdViewShape, fourthViewShape},
+                                                {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                                 std::min(secondDim - sIdx * secondViewShape, secondViewShape),
+                                                 std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape),
+                                                 std::min(fourthDim - qIdx * fourthViewShape, fourthViewShape)},
+                                                {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape,
+                                                 qIdx * fourthViewShape});
                         TileShape::Current().SetVecTile(args->tileShape_);
                         auto res = BitwiseLeftShift(args->value_, tileTensor0);
-                        Assemble(
-                            res,
-                            {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape,
-                             qIdx * fourthViewShape},
-                            outputs[0]);
+                        Assemble(res,
+                                 {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape,
+                                  qIdx * fourthViewShape},
+                                 outputs[0]);
                     }
                 }
             }
@@ -156,12 +153,11 @@ static void SBitwiseLeftShiftOperationExeFuncQuadrupleCut(
 class SBitwiseLeftShiftOperationTest
     : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac_param<SBitwiseLeftShiftOpMetaData> {};
 
-INSTANTIATE_TEST_SUITE_P(
-    TestSBitwiseLeftShift, SBitwiseLeftShiftOperationTest,
-    ::testing::ValuesIn(GetOpMetaData<SBitwiseLeftShiftOpMetaData>(
-        {SBitwiseLeftShiftOperationExeFuncDoubleCut, SBitwiseLeftShiftOperationExeFuncTripleCut,
-         SBitwiseLeftShiftOperationExeFuncQuadrupleCut},
-        "SBitwiseLeftShift")));
+INSTANTIATE_TEST_SUITE_P(TestSBitwiseLeftShift, SBitwiseLeftShiftOperationTest,
+                         ::testing::ValuesIn(GetOpMetaData<SBitwiseLeftShiftOpMetaData>(
+                             {SBitwiseLeftShiftOperationExeFuncDoubleCut, SBitwiseLeftShiftOperationExeFuncTripleCut,
+                              SBitwiseLeftShiftOperationExeFuncQuadrupleCut},
+                             "SBitwiseLeftShift")));
 
 TEST_P(SBitwiseLeftShiftOperationTest, TestSBitwiseLeftShift)
 {

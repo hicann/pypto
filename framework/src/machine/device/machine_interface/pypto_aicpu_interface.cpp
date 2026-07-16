@@ -54,9 +54,8 @@ __attribute__((visibility("default"))) uint32_t DynPyptoKernelServer(void* args)
 {
     auto ret = g_handleManager.ExecuteFunc(args, dyExecFuncKey);
     if (ret != 0) {
-        DEV_ERROR(
-            ServerKernelErr::KERNEL_EXEC_FAILED, "#sche.task.run.dyn.server: TileFwk kernelFunc [%s] exec not Success",
-            dynServerKernelFun.c_str());
+        DEV_ERROR(ServerKernelErr::KERNEL_EXEC_FAILED,
+                  "#sche.task.run.dyn.server: TileFwk kernelFunc [%s] exec not Success", dynServerKernelFun.c_str());
         return 1;
     }
     return 0;
@@ -66,9 +65,9 @@ __attribute__((visibility("default"))) uint32_t DynPyptoKernelServerInit(void* a
 {
     auto ret = g_handleManager.ExecuteFunc(args, dyInitFuncKey);
     if (ret != 0) {
-        DEV_ERROR(
-            ServerKernelErr::KERNEL_EXEC_FAILED,
-            "#sche.task.pre.dyn.server.init: TileFwk kernelFunc [%s] exec not Success", dynServerKernelInitFun.c_str());
+        DEV_ERROR(ServerKernelErr::KERNEL_EXEC_FAILED,
+                  "#sche.task.pre.dyn.server.init: TileFwk kernelFunc [%s] exec not Success",
+                  dynServerKernelInitFun.c_str());
         return 1;
     }
     return 0;

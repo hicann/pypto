@@ -42,9 +42,8 @@ public:
     inline void resize(size_t size)
     {
         if (size > N) {
-            DEV_ERROR(
-                DevDataErr::SMALL_ARRAY_RESIZE_OOB, "#array.resize: resize %zu exceeds maximum allowed value %d\n",
-                size, N);
+            DEV_ERROR(DevDataErr::SMALL_ARRAY_RESIZE_OOB,
+                      "#array.resize: resize %zu exceeds maximum allowed value %d\n", size, N);
         }
         DEV_ASSERT(DevDataErr::SMALL_ARRAY_RESIZE_OOB, size <= N);
         size_ = size;

@@ -58,11 +58,12 @@ public:
      *
      * @param inst The BspInstance for the schedule.
      */
-    BspSchedule(const BspInstance<GraphT> &inst)
+    BspSchedule(const BspInstance<GraphT>& inst)
         : instance_(&inst),
           numberOfSupersteps_(1),
           nodeToProcessorAssignment_(std::vector<unsigned>(inst.NumberOfVertices(), 0)),
-          nodeToSuperstepAssignment_(std::vector<unsigned>(inst.NumberOfVertices(), 0)) {}
+          nodeToSuperstepAssignment_(std::vector<unsigned>(inst.NumberOfVertices(), 0))
+    {}
 
     /**
      * @brief Constructs a BspSchedule object with the specified BspInstance, processor assignment, and superstep
@@ -72,9 +73,8 @@ public:
      * @param processor_assignment_ The processor assignment for the nodes.
      * @param superstep_assignment_ The superstep assignment for the nodes.
      */
-    BspSchedule(const BspInstance<GraphT> &inst,
-                const std::vector<unsigned> &processorAssignment,
-                const std::vector<unsigned> &superstepAssignment)
+    BspSchedule(const BspInstance<GraphT>& inst, const std::vector<unsigned>& processorAssignment,
+                const std::vector<unsigned>& superstepAssignment)
         : instance_(&inst),
           nodeToProcessorAssignment_(processorAssignment),
           nodeToSuperstepAssignment_(superstepAssignment)
@@ -87,11 +87,12 @@ public:
      *
      * @param schedule The schedule to copy.
      */
-    BspSchedule(const BspSchedule<GraphT> &schedule)
+    BspSchedule(const BspSchedule<GraphT>& schedule)
         : instance_(schedule.instance_),
           numberOfSupersteps_(schedule.numberOfSupersteps_),
           nodeToProcessorAssignment_(schedule.nodeToProcessorAssignment_),
-          nodeToSuperstepAssignment_(schedule.nodeToSuperstepAssignment_) {}
+          nodeToSuperstepAssignment_(schedule.nodeToSuperstepAssignment_)
+    {}
 
     /**
      * @brief Copy assignment operator.
@@ -99,7 +100,7 @@ public:
      * @param schedule The schedule to copy.
      * @return A reference to this schedule.
      */
-    BspSchedule<GraphT> &operator=(const BspSchedule<GraphT> &schedule)
+    BspSchedule<GraphT>& operator=(const BspSchedule<GraphT>& schedule)
     {
         if (this != &schedule) {
             instance_ = schedule.instance_;
@@ -115,11 +116,12 @@ public:
      *
      * @param schedule The schedule to move.
      */
-    BspSchedule(BspSchedule<GraphT> &&schedule) noexcept
+    BspSchedule(BspSchedule<GraphT>&& schedule) noexcept
         : instance_(schedule.instance_),
           numberOfSupersteps_(schedule.numberOfSupersteps_),
           nodeToProcessorAssignment_(std::move(schedule.nodeToProcessorAssignment_)),
-          nodeToSuperstepAssignment_(std::move(schedule.nodeToSuperstepAssignment_)) {}
+          nodeToSuperstepAssignment_(std::move(schedule.nodeToSuperstepAssignment_))
+    {}
 
     /**
      * @brief Move assignment operator.
@@ -127,7 +129,7 @@ public:
      * @param schedule The schedule to move.
      * @return A reference to this schedule.
      */
-    BspSchedule<GraphT> &operator=(BspSchedule<GraphT> &&schedule) noexcept
+    BspSchedule<GraphT>& operator=(BspSchedule<GraphT>&& schedule) noexcept
     {
         if (this != &schedule) {
             instance_ = schedule.instance_;
@@ -146,11 +148,12 @@ public:
      * @param schedule The other schedule to copy from.
      */
     template <typename GraphTOther>
-    BspSchedule(const BspInstance<GraphT> &instance, const BspSchedule<GraphTOther> &schedule)
+    BspSchedule(const BspInstance<GraphT>& instance, const BspSchedule<GraphTOther>& schedule)
         : instance_(&instance),
           numberOfSupersteps_(schedule.NumberOfSupersteps()),
           nodeToProcessorAssignment_(schedule.AssignedProcessors()),
-          nodeToSuperstepAssignment_(schedule.AssignedSupersteps()) {}
+          nodeToSuperstepAssignment_(schedule.AssignedSupersteps())
+    {}
 
     /**
      * @brief Destructor for the BspSchedule class.
@@ -162,25 +165,16 @@ public:
      *
      * @return A reference to the BspInstance for the schedule.
      */
-    [[nodiscard]] const BspInstance<GraphT> &GetInstance() const
-    {
-        return *instance_;
-    }
+    [[nodiscard]] const BspInstance<GraphT>& GetInstance() const { return *instance_; }
 
     /**
      * @brief Returns the number of supersteps in the schedule.
      *
      * @return The number of supersteps in the schedule.
      */
-    [[nodiscard]] unsigned NumberOfSupersteps() const
-    {
-        return numberOfSupersteps_;
-    }
+    [[nodiscard]] unsigned NumberOfSupersteps() const { return numberOfSupersteps_; }
 
-    unsigned& NumberOfSupersteps()
-    {
-        return numberOfSupersteps_;
-    }
+    unsigned& NumberOfSupersteps() { return numberOfSupersteps_; }
 
     void Clear()
     {
@@ -208,10 +202,7 @@ public:
      * @param node The node for which to return the assigned superstep.
      * @return The superstep assigned to the specified node.
      */
-    [[nodiscard]] unsigned AssignedSuperstep(const VertexIdx node) const
-    {
-        return nodeToSuperstepAssignment_[node];
-    }
+    [[nodiscard]] unsigned AssignedSuperstep(const VertexIdx node) const { return nodeToSuperstepAssignment_[node]; }
 
     /**
      * @brief Returns the processor assigned to the specified node.
@@ -219,40 +210,25 @@ public:
      * @param node The node for which to return the assigned processor.
      * @return The processor assigned to the specified node.
      */
-    [[nodiscard]] unsigned AssignedProcessor(const VertexIdx node) const
-    {
-        return nodeToProcessorAssignment_[node];
-    }
+    [[nodiscard]] unsigned AssignedProcessor(const VertexIdx node) const { return nodeToProcessorAssignment_[node]; }
 
     /**
      * @brief Returns the superstep assignment for the schedule.
      *
      * @return The superstep assignment for the schedule.
      */
-    [[nodiscard]] const std::vector<unsigned> &AssignedSupersteps() const
-    {
-        return nodeToSuperstepAssignment_;
-    }
+    [[nodiscard]] const std::vector<unsigned>& AssignedSupersteps() const { return nodeToSuperstepAssignment_; }
 
-    [[nodiscard]] std::vector<unsigned> &AssignedSupersteps()
-    {
-        return nodeToSuperstepAssignment_;
-    }
+    [[nodiscard]] std::vector<unsigned>& AssignedSupersteps() { return nodeToSuperstepAssignment_; }
 
     /**
      * @brief Returns the processor assignment for the schedule.
      *
      * @return The processor assignment for the schedule.
      */
-    [[nodiscard]] const std::vector<unsigned> &AssignedProcessors() const
-    {
-        return nodeToProcessorAssignment_;
-    }
+    [[nodiscard]] const std::vector<unsigned>& AssignedProcessors() const { return nodeToProcessorAssignment_; }
 
-    [[nodiscard]] std::vector<unsigned> &AssignedProcessors()
-    {
-        return nodeToProcessorAssignment_;
-    }
+    [[nodiscard]] std::vector<unsigned>& AssignedProcessors() { return nodeToProcessorAssignment_; }
 
     /**
      * @brief Returns the staleness of the schedule.
@@ -262,10 +238,7 @@ public:
      *
      * @return The staleness of the schedule.
      */
-    [[nodiscard]] virtual unsigned GetStaleness() const
-    {
-        return 1;
-    }
+    [[nodiscard]] virtual unsigned GetStaleness() const { return 1; }
 
     /**
      * @brief Sets the superstep assigned to the specified node.
@@ -283,7 +256,7 @@ public:
             }
         } else {
             APASS_LOG_ERROR_F(Elements::Config,
-                "Invalid Argument while assigning node to superstep: index out of range.");
+                              "Invalid Argument while assigning node to superstep: index out of range.");
             throw std::invalid_argument("Invalid Argument while assigning node to superstep: index out of range.");
         }
     }
@@ -308,20 +281,14 @@ public:
      *
      * @return The work costs of the schedule.
      */
-    virtual VWorkwT<GraphT> ComputeWorkCosts() const
-    {
-        return cost_helpers::ComputeWorkCosts(*this);
-    }
+    virtual VWorkwT<GraphT> ComputeWorkCosts() const { return cost_helpers::ComputeWorkCosts(*this); }
 
     /**
      * @brief Computes the costs of the schedule accoring to lazy communication cost evaluation.
      *
      * @return The costs of the schedule.
      */
-    virtual VWorkwT<GraphT> ComputeCosts() const
-    {
-        return LazyCommunicationCost<GraphT>()(*this);
-    }
+    virtual VWorkwT<GraphT> ComputeCosts() const { return LazyCommunicationCost<GraphT>()(*this); }
 
     /**
      * @brief Checks if the schedule is valid.
@@ -330,10 +297,7 @@ public:
      *
      * @return True if the schedule is valid, false otherwise.
      */
-    [[nodiscard]] bool IsValid() const
-    {
-        return SatisfiesPrecedenceConstraints() && SatisfiesNodeTypeConstraints();
-    }
+    [[nodiscard]] bool IsValid() const { return SatisfiesPrecedenceConstraints() && SatisfiesNodeTypeConstraints(); }
 
     /**
      * @brief Returns true if the schedule satisfies the precedence constraints of the computational DAG.
@@ -346,12 +310,12 @@ public:
      */
     [[nodiscard]] bool SatisfiesPrecedenceConstraints() const
     {
-        if (static_cast<VertexIdxT<GraphT>>(nodeToProcessorAssignment_.size()) != instance_->NumberOfVertices()
-            || static_cast<VertexIdxT<GraphT>>(nodeToSuperstepAssignment_.size()) != instance_->NumberOfVertices()) {
+        if (static_cast<VertexIdxT<GraphT>>(nodeToProcessorAssignment_.size()) != instance_->NumberOfVertices() ||
+            static_cast<VertexIdxT<GraphT>>(nodeToSuperstepAssignment_.size()) != instance_->NumberOfVertices()) {
             return false;
         }
 
-        for (const auto &v : instance_->Vertices()) {
+        for (const auto& v : instance_->Vertices()) {
             if (nodeToSuperstepAssignment_[v] >= numberOfSupersteps_) {
                 return false;
             }
@@ -359,9 +323,11 @@ public:
                 return false;
             }
 
-            for (const auto &target : instance_->GetComputationalDag().Children(v)) {
-                const unsigned differentProcessors
-                    = (nodeToProcessorAssignment_[v] == nodeToProcessorAssignment_[target]) ? 0u : GetStaleness();
+            for (const auto& target : instance_->GetComputationalDag().Children(v)) {
+                const unsigned differentProcessors = (nodeToProcessorAssignment_[v] ==
+                                                      nodeToProcessorAssignment_[target]) ?
+                                                         0u :
+                                                         GetStaleness();
                 if (nodeToSuperstepAssignment_[v] + differentProcessors > nodeToSuperstepAssignment_[target]) {
                     return false;
                 }
@@ -384,7 +350,7 @@ public:
             return false;
         }
 
-        for (const auto &node : instance_->Vertices()) {
+        for (const auto& node : instance_->Vertices()) {
             if (!instance_->IsCompatible(node, nodeToProcessorAssignment_[node])) {
                 return false;
             }
@@ -398,19 +364,16 @@ public:
      *
      * @param number_of_supersteps_ The number of supersteps.
      */
-    void SetNumberOfSupersteps(const unsigned numberOfSupersteps)
-    {
-        numberOfSupersteps_ = numberOfSupersteps;
-    }
+    void SetNumberOfSupersteps(const unsigned numberOfSupersteps) { numberOfSupersteps_ = numberOfSupersteps; }
 
 protected:
-    const BspInstance<GraphT> *instance_;
+    const BspInstance<GraphT>* instance_;
 
     unsigned numberOfSupersteps_;
 
     std::vector<unsigned> nodeToProcessorAssignment_;
     std::vector<unsigned> nodeToSuperstepAssignment_;
 };
-}    // namespace osp
+} // namespace osp
 } // namespace npu::tile_fwk
 #endif // OSP_BSP_SCHEDULE_H

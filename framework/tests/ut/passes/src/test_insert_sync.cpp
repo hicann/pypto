@@ -130,9 +130,8 @@ public:
         }
     }
 
-    void BuildDeps(
-        PipeSync& ps, DataDependencySearcher& dataDependencySearcher, std::vector<Operation*>& opLogPtr,
-        std::vector<IndexOp>& synced)
+    void BuildDeps(PipeSync& ps, DataDependencySearcher& dataDependencySearcher, std::vector<Operation*>& opLogPtr,
+                   std::vector<IndexOp>& synced)
     {
         for (size_t i = 0; i < opLogPtr.size(); i++) {
             auto opcfg = OpcodeManager::Inst().GetTileOpCfg(opLogPtr[i]->GetOpcode());
@@ -157,8 +156,8 @@ TEST_F(InsertSyncTest, TestEnableDebug)
 {
     auto rootFuncPtr = std::make_shared<Function>(Program::GetInstance(), "TestParams", "TestParams", nullptr);
     rootFuncPtr->rootFunc_ = rootFuncPtr.get();
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestAddParams", "TestAddParams", rootFuncPtr.get());
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestAddParams", "TestAddParams",
+                                                      rootFuncPtr.get());
     EXPECT_TRUE(currFunctionPtr != nullptr);
     rootFuncPtr->rootFunc_->programs_.emplace(currFunctionPtr->GetFuncMagic(), currFunctionPtr.get());
 
@@ -176,7 +175,8 @@ TEST_F(InsertSyncTest, TestEnableDebug)
     (void)copy_op1;
     auto& copy_op2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_COPY_IN, {incast2}, {ubTensor2});
     (void)copy_op2;
-    auto& add_op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_ADD, {ubTensor1, ubTensor2}, {ubTensor3});
+    auto& add_op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_ADD, {ubTensor1, ubTensor2},
+                                                  {ubTensor3});
     (void)add_op;
     auto& copy_out_op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_COPY_OUT, {ubTensor3}, {outCast});
     (void)copy_out_op;
@@ -189,8 +189,8 @@ TEST_F(InsertSyncTest, TestEnableDebug)
     EXPECT_TRUE(true);
 }
 
-std::vector<std::shared_ptr<LogicalTensor>> AddOpForTestFindDep(
-    std::vector<Operation*>& opLogPtr, std::shared_ptr<Function> currFunctionPtr)
+std::vector<std::shared_ptr<LogicalTensor>> AddOpForTestFindDep(std::vector<Operation*>& opLogPtr,
+                                                                std::shared_ptr<Function> currFunctionPtr)
 {
     // Build graph
     std::vector<int64_t> shape1 = {IS_NUM16, IS_NUM16};
@@ -232,8 +232,8 @@ std::vector<std::shared_ptr<LogicalTensor>> AddOpForTestFindDep(
     return {tensor1, tensor2, tensor3, tensor4, tensor5, tensor6};
 }
 
-void CheckDependencyForTestFindDep(
-    PipeSync& ps, std::set<int> dataDependencySet, std::vector<Operation*>& opLogPtr, size_t i)
+void CheckDependencyForTestFindDep(PipeSync& ps, std::set<int> dataDependencySet, std::vector<Operation*>& opLogPtr,
+                                   size_t i)
 {
     for (auto it = dataDependencySet.rbegin(); it != dataDependencySet.rend(); it++) {
         size_t k = *it;
@@ -274,8 +274,8 @@ TEST_F(InsertSyncTest, TestFindDep)
 {
     auto rootFuncPtr = std::make_shared<Function>(Program::GetInstance(), "TestFindDep", "TestFindDep", nullptr);
     rootFuncPtr->rootFunc_ = rootFuncPtr.get();
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestFindDepLeaf", "TestFindDepLeaf", rootFuncPtr.get());
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestFindDepLeaf", "TestFindDepLeaf",
+                                                      rootFuncPtr.get());
     EXPECT_TRUE(currFunctionPtr != nullptr);
     rootFuncPtr->rootFunc_->programs_.emplace(currFunctionPtr->GetFuncMagic(), currFunctionPtr.get());
 
@@ -326,11 +326,11 @@ TEST_F(InsertSyncTest, TestFindDep)
 
 TEST_F(InsertSyncTest, TestPhaseKernelProcess)
 {
-    auto rootFuncPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestPhaseKernelProcess", "TestPhaseKernelProcess", nullptr);
+    auto rootFuncPtr = std::make_shared<Function>(Program::GetInstance(), "TestPhaseKernelProcess",
+                                                  "TestPhaseKernelProcess", nullptr);
     rootFuncPtr->rootFunc_ = rootFuncPtr.get();
-    auto currFunctionPtr = std::make_shared<Function>(
-        Program::GetInstance(), "TestPhaseKernelProcessLeaf", "TestPhaseKernelProcessLeaf", rootFuncPtr.get());
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestPhaseKernelProcessLeaf",
+                                                      "TestPhaseKernelProcessLeaf", rootFuncPtr.get());
     EXPECT_TRUE(currFunctionPtr != nullptr);
     rootFuncPtr->rootFunc_->programs_.emplace(currFunctionPtr->GetFuncMagic(), currFunctionPtr.get());
 
@@ -409,8 +409,8 @@ TEST_F(InsertSyncTest, TestUpdateDep)
 {
     auto rootFuncPtr = std::make_shared<Function>(Program::GetInstance(), "TestUpdateDep", "TestUpdateDep", nullptr);
     rootFuncPtr->rootFunc_ = rootFuncPtr.get();
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestUpdateDepLeaf", "TestUpdateDepLeaf", rootFuncPtr.get());
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestUpdateDepLeaf", "TestUpdateDepLeaf",
+                                                      rootFuncPtr.get());
     EXPECT_TRUE(currFunctionPtr != nullptr);
     rootFuncPtr->rootFunc_->programs_.emplace(currFunctionPtr->GetFuncMagic(), currFunctionPtr.get());
 
@@ -476,20 +476,20 @@ void AddOpForTestHandleEventID(std::vector<Operation*>& opLogPtr, std::shared_pt
     tensor5->memoryrange.start = IS_NUM700;
     tensor5->memoryrange.end = IS_NUM800;
     auto& copyin1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_COPY_IN, {tensor1}, {tensor2});
-    opLogPtr.emplace_back(&copyin1);  // index 0
+    opLogPtr.emplace_back(&copyin1); // index 0
     auto& copyin2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_COPY_IN, {tensor4}, {tensor5});
-    opLogPtr.emplace_back(&copyin2);  // index 1 - moved before cast to satisfy AdjustOpDep conditions
+    opLogPtr.emplace_back(&copyin2); // index 1 - moved before cast to satisfy AdjustOpDep conditions
     auto& cast = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_CAST, {tensor2}, {tensor3});
-    opLogPtr.emplace_back(&cast);     // index 2
+    opLogPtr.emplace_back(&cast); // index 2
 }
 
 TEST_F(InsertSyncTest, TestHandleEventID)
 {
-    auto rootFuncPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestHandleEventID", "TestHandleEventID", nullptr);
+    auto rootFuncPtr = std::make_shared<Function>(Program::GetInstance(), "TestHandleEventID", "TestHandleEventID",
+                                                  nullptr);
     rootFuncPtr->rootFunc_ = rootFuncPtr.get();
-    auto currFunctionPtr = std::make_shared<Function>(
-        Program::GetInstance(), "TestHandleEventIDLeaf", "TestHandleEventIDLeaf", rootFuncPtr.get());
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestHandleEventIDLeaf",
+                                                      "TestHandleEventIDLeaf", rootFuncPtr.get());
     EXPECT_TRUE(currFunctionPtr != nullptr);
     rootFuncPtr->rootFunc_->programs_.emplace(currFunctionPtr->GetFuncMagic(), currFunctionPtr.get());
 
@@ -497,14 +497,14 @@ TEST_F(InsertSyncTest, TestHandleEventID)
     AddOpForTestHandleEventID(opLogPtr, currFunctionPtr);
 
     PipeSync ps;
-    ps.InitIssueQueue();  // Initialize issueState_ before BuildDeps
+    ps.InitIssueQueue(); // Initialize issueState_ before BuildDeps
     DataDependencySearcher dataDependencySearcher;
     ProcessOpList(ps, dataDependencySearcher, opLogPtr);
     std::vector<IndexOp> synced;
     BuildDeps(ps, dataDependencySearcher, opLogPtr, synced);
     // After reorder: copyin1(0), copyin2(1), cast(2)
     EXPECT_EQ(ps.depOps_[0].setPipe[0], static_cast<size_t>(IS_NUM2));  // copyin1 sets for cast
-    EXPECT_EQ(ps.depOps_[IS_NUM2].waitPipe[0], static_cast<size_t>(0));  // cast waits for copyin1
+    EXPECT_EQ(ps.depOps_[IS_NUM2].waitPipe[0], static_cast<size_t>(0)); // cast waits for copyin1
 
     // HandleEventID - Test AdjustOpDep path
     // Set up conditions to trigger AdjustOpDep:
@@ -518,8 +518,10 @@ TEST_F(InsertSyncTest, TestHandleEventID)
     PipeSync::IssueQueue& issueQ = ps.issueState_[IS_NUM4];
     PipeSync::DepOp& handleOp = ps.depOps_[0];    // copyin1
     PipeSync::DepOp& eleOp = ps.depOps_[IS_NUM2]; // cast
-    PipeSync::PipeCoreRealEx currPipeCoreEx(handleOp.selfPipeCore.pipeEnd, handleOp.selfPipeCore.core, handleOp.selfPipeCore.aivCore);
-    PipeSync::PipeCoreRealEx elePipeCoreEx(eleOp.selfPipeCore.pipeStart, eleOp.selfPipeCore.core, eleOp.selfPipeCore.aivCore);
+    PipeSync::PipeCoreRealEx currPipeCoreEx(handleOp.selfPipeCore.pipeEnd, handleOp.selfPipeCore.core,
+                                            handleOp.selfPipeCore.aivCore);
+    PipeSync::PipeCoreRealEx elePipeCoreEx(eleOp.selfPipeCore.pipeStart, eleOp.selfPipeCore.core,
+                                           eleOp.selfPipeCore.aivCore);
     PipeSync::PipePairEx pp{currPipeCoreEx, elePipeCoreEx};
 
     // Pre-set issuenum to trigger AdjustOpDep: currIssueNum >= maxIssueNum
@@ -527,8 +529,8 @@ TEST_F(InsertSyncTest, TestHandleEventID)
     issuenum.currIssueNum[pp] = IS_NUM8;
 
     // Verify initial state before HandleEventID
-    EXPECT_EQ(ps.depOps_[IS_NUM2].waitPipe[0], static_cast<size_t>(0));  // cast waits for copyin1
-    EXPECT_EQ(ps.depOps_[0].setPipe[0], static_cast<size_t>(IS_NUM2));   // copyin1 sets for cast
+    EXPECT_EQ(ps.depOps_[IS_NUM2].waitPipe[0], static_cast<size_t>(0)); // cast waits for copyin1
+    EXPECT_EQ(ps.depOps_[0].setPipe[0], static_cast<size_t>(IS_NUM2));  // copyin1 sets for cast
 
     ps.HandleEventID(handleOp, issueQ, issuenum, eventIdDeadlock, res, synced);
     issueQ.DumpIssueQueue(ps.oriOpList_);
@@ -537,9 +539,9 @@ TEST_F(InsertSyncTest, TestHandleEventID)
     // After HandleEventID with AdjustOpDep:
     // RemoveOpDep: copyin1's setPipe removes cast, cast's waitPipe removes copyin1
     // AddOpDep: copyin2's setPipe adds cast, cast's waitPipe adds copyin2
-    EXPECT_EQ(ps.depOps_[IS_NUM2].waitPipe[0], static_cast<size_t>(IS_NUM1));  // cast now waits for copyin2
-    EXPECT_EQ(ps.depOps_[IS_NUM1].setPipe[0], static_cast<size_t>(IS_NUM2));   // copyin2 sets for cast
-    EXPECT_EQ(ps.depOps_[0].setPipe.size(), static_cast<size_t>(0));           // copyin1 has no setPipe
+    EXPECT_EQ(ps.depOps_[IS_NUM2].waitPipe[0], static_cast<size_t>(IS_NUM1)); // cast now waits for copyin2
+    EXPECT_EQ(ps.depOps_[IS_NUM1].setPipe[0], static_cast<size_t>(IS_NUM2));  // copyin2 sets for cast
+    EXPECT_EQ(ps.depOps_[0].setPipe.size(), static_cast<size_t>(0));          // copyin1 has no setPipe
 
     // InitCVEventIdQ
     ps.InitCVEventIdQ();
@@ -551,11 +553,11 @@ TEST_F(InsertSyncTest, TestHandleEventID)
 
 TEST_F(InsertSyncTest, TestRelaxFakeDataDep)
 {
-    auto rootFuncPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestRelaxFakeDataDep", "TestRelaxFakeDataDep", nullptr);
+    auto rootFuncPtr = std::make_shared<Function>(Program::GetInstance(), "TestRelaxFakeDataDep",
+                                                  "TestRelaxFakeDataDep", nullptr);
     rootFuncPtr->rootFunc_ = rootFuncPtr.get();
-    auto currFunctionPtr = std::make_shared<Function>(
-        Program::GetInstance(), "TestRelaxFakeDataDepLeaf", "TestRelaxFakeDataDepLeaf", rootFuncPtr.get());
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestRelaxFakeDataDepLeaf",
+                                                      "TestRelaxFakeDataDepLeaf", rootFuncPtr.get());
     EXPECT_TRUE(currFunctionPtr != nullptr);
     rootFuncPtr->rootFunc_->programs_.emplace(currFunctionPtr->GetFuncMagic(), currFunctionPtr.get());
 

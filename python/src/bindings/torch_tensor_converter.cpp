@@ -38,16 +38,20 @@ uintptr_t ReadTensorDataPtr(const py::object& torchTensor)
     return static_cast<uintptr_t>(py::cast<int64_t>(torchTensor.attr("data_ptr")()));
 }
 
-void SetNZTensorShapeAlign(std::vector<int64_t>& shape, DataType dtype) {
-    if (shape.size() <= 1) return;
+void SetNZTensorShapeAlign(std::vector<int64_t>& shape, DataType dtype)
+{
+    if (shape.size() <= 1)
+        return;
     int64_t dtypeBytes = static_cast<int64_t>(BytesOf(dtype));
     // Ensure dtypeBytes is positive to avoid division by zero
-    if (dtypeBytes <= 0) return;
+    if (dtypeBytes <= 0)
+        return;
     // Calculate inner axis alignment size: 32 bytes / data type byte size
     int64_t blockAlignBytes = 32;
     int64_t c0Size = blockAlignBytes / dtypeBytes;
     // Additional safety check to prevent division by zero in later calculations
-    if (c0Size <= 0) return;
+    if (c0Size <= 0)
+        return;
     int64_t blockAlignSize = 16;
     int64_t inner_index = shape.size() - 1;
     int64_t outer_index = shape.size() - 2;
@@ -122,9 +126,8 @@ DataType ReadTensorDataType(const py::object& tensorDef, const py::object& torch
     return TorchDtypeToDataType(torchTensor.attr("dtype"));
 }
 
-TileOpFormat ReadTensorFormat(
-    const py::object& tensorDef, const py::object& torchTensor, Tensor& baseTensor, const TensorDeviceInfo& deviceInfo,
-    py::module_& torch_npu)
+TileOpFormat ReadTensorFormat(const py::object& tensorDef, const py::object& torchTensor, Tensor& baseTensor,
+                              const TensorDeviceInfo& deviceInfo, py::module_& torch_npu)
 {
     if (!tensorDef.attr("explicit_format").is_none()) {
         return baseTensor.Format();
@@ -142,8 +145,7 @@ TileOpFormat ReadTensorFormat(
 Tensor& ReadTensorDefBase(const py::object& tensorDef)
 {
     auto baseObj = py::getattr(tensorDef, "_base", py::none());
-    FE_ASSERT(FeError::INVALID_TYPE, py::isinstance<Tensor>(baseObj))
-        << "the '_base' attribute must be a Tensor type";
+    FE_ASSERT(FeError::INVALID_TYPE, py::isinstance<Tensor>(baseObj)) << "the '_base' attribute must be a Tensor type";
     return baseObj.cast<Tensor&>();
 }
 
@@ -152,9 +154,8 @@ bool IsSameDevice(const TensorDeviceInfo& lhs, const TensorDeviceInfo& rhs)
     return lhs.type == rhs.type && lhs.index == rhs.index;
 }
 
-TensorDeviceInfo ConvertSingleTensor(
-    const py::object& torchTensor, const py::object& tensorDef, py::module_& torch_npu,
-    npu::tile_fwk::dynamic::DeviceTensorData& out)
+TensorDeviceInfo ConvertSingleTensor(const py::object& torchTensor, const py::object& tensorDef, py::module_& torch_npu,
+                                     npu::tile_fwk::dynamic::DeviceTensorData& out)
 {
     TensorDeviceInfo deviceInfo = ReadDeviceInfo(torchTensor);
     Tensor& baseTensor = ReadTensorDefBase(tensorDef);
@@ -185,9 +186,8 @@ int ValidateDeviceAndReturnIndex(const TensorDeviceInfo& deviceInfo)
 
 namespace pypto {
 
-int TorchTensorConverter::Convert(
-    py::sequence& tensors, py::sequence& tensor_defs,
-    std::vector<npu::tile_fwk::dynamic::DeviceTensorData>& tensors_data)
+int TorchTensorConverter::Convert(py::sequence& tensors, py::sequence& tensor_defs,
+                                  std::vector<npu::tile_fwk::dynamic::DeviceTensorData>& tensors_data)
 {
     const size_t n = static_cast<size_t>(py::len(tensors));
     CHECK(FeError::INVALID_VAL, n != 0) << "Empty tensor list";

@@ -59,15 +59,14 @@ size_t SelectSweepAxis(const std::vector<AssembleArea>& areas)
     return bestAxis;
 }
 
-bool RangesOverlap(
-    const std::vector<std::pair<int64_t, int64_t>>& left, const std::vector<std::pair<int64_t, int64_t>>& right)
+bool RangesOverlap(const std::vector<std::pair<int64_t, int64_t>>& left,
+                   const std::vector<std::pair<int64_t, int64_t>>& right)
 {
     if (left.size() != right.size()) {
         return false;
     }
-    return std::equal(left.begin(), left.end(), right.begin(), [](const auto& a, const auto& b) {
-        return a.second >= b.first && a.first <= b.second;
-    });
+    return std::equal(left.begin(), left.end(), right.begin(),
+                      [](const auto& a, const auto& b) { return a.second >= b.first && a.first <= b.second; });
 }
 
 bool FindOverlap(const std::vector<AssembleArea>& areas, size_t& prevIdx, size_t& curIdx)
@@ -136,9 +135,8 @@ Status CheckDynSkip(const LogicalTensorPtr& outputTensor, bool& needSkip)
         }
         auto assembleOpAttr = std::dynamic_pointer_cast<AssembleOpAttribute>(producerOp->GetOpAttribute());
         if (!assembleOpAttr) {
-            APASS_LOG_WARN_F(
-                Elements::Tensor, "%s[%d] has no valid assembleOpAttribute; Please check.",
-                producerOp->GetOpcodeStr().c_str(), producerOp->GetOpMagic());
+            APASS_LOG_WARN_F(Elements::Tensor, "%s[%d] has no valid assembleOpAttribute; Please check.",
+                             producerOp->GetOpcodeStr().c_str(), producerOp->GetOpMagic());
             return FAILED;
         }
         if (assembleOpAttr->GetToDynOffset().size() != 0) {
@@ -221,10 +219,10 @@ Status AssembleChecker::CheckAssembleOverlap(Function& function)
         if (FindOverlap(coveredAreas, prevIdx, curIdx)) {
             const auto& prevArea = coveredAreas[prevIdx];
             const auto& curArea = coveredAreas[curIdx];
-            APASS_LOG_WARN_F(
-                Elements::Tensor, "Tensor produced by assemble has overlap inputs. Overlap input1: shape:%s offset:%s.",
-                CommonUtils::ContainerToStr(prevArea.shape).c_str(),
-                CommonUtils::ContainerToStr(prevArea.offset).c_str());
+            APASS_LOG_WARN_F(Elements::Tensor,
+                             "Tensor produced by assemble has overlap inputs. Overlap input1: shape:%s offset:%s.",
+                             CommonUtils::ContainerToStr(prevArea.shape).c_str(),
+                             CommonUtils::ContainerToStr(prevArea.offset).c_str());
             APASS_LOG_WARN_F(
                 Elements::Tensor,
                 "Overlap input2: shape:%s offset:%s; Please check the function graph; Please check Tensor[%d] and "

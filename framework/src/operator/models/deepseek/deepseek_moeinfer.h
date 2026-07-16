@@ -23,13 +23,11 @@
 
 namespace npu::tile_fwk {
 
-void DynamicFFN(
-    const Tensor& hiddenStates, const Tensor& ffnweight1, const Tensor& ffnweight2, const Tensor& ffnweight3,
-    Tensor& out, int BASIC_BATCH);
-void DynamicFFNQuant(
-    const Tensor& hiddenStatesQuant, const Tensor& hiddenStatesScale, const Tensor& ffnweight1,
-    const Tensor& ffnweight2, const Tensor& ffnweight3, const Tensor& ffnScale1, const Tensor& ffnScale2,
-    const Tensor& ffnScale3, Tensor& out, int BASIC_BATCH);
+void DynamicFFN(const Tensor& hiddenStates, const Tensor& ffnweight1, const Tensor& ffnweight2,
+                const Tensor& ffnweight3, Tensor& out, int BASIC_BATCH);
+void DynamicFFNQuant(const Tensor& hiddenStatesQuant, const Tensor& hiddenStatesScale, const Tensor& ffnweight1,
+                     const Tensor& ffnweight2, const Tensor& ffnweight3, const Tensor& ffnScale1,
+                     const Tensor& ffnScale2, const Tensor& ffnScale3, Tensor& out, int BASIC_BATCH);
 
 } // namespace npu::tile_fwk
 

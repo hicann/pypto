@@ -9,9 +9,9 @@
  */
 
 /*!
-* \file test_dequantize_operation.cpp
-* \brief Test cases for Dequantize operation
-*/
+ * \file test_dequantize_operation.cpp
+ * \brief Test cases for Dequantize operation
+ */
 
 #include "test_operation.h"
 
@@ -20,21 +20,26 @@ using namespace tile_fwk::test_operation;
 namespace {
 
 struct DequantizeOpFuncArgs : public OpFuncArgs {
-    DequantizeOpFuncArgs(std::vector<int64_t> shape, std::vector<int64_t> vecTileShapes,
-                        DataType inputDtype, int axis, bool useZeroPoints = false)
-        : viewShape_(shape), tileShape_(vecTileShapes), inputDtype_(inputDtype), axis_(axis),
-        useZeroPoints_(useZeroPoints) {}
+    DequantizeOpFuncArgs(std::vector<int64_t> shape, std::vector<int64_t> vecTileShapes, DataType inputDtype, int axis,
+                         bool useZeroPoints = false)
+        : viewShape_(shape),
+          tileShape_(vecTileShapes),
+          inputDtype_(inputDtype),
+          axis_(axis),
+          useZeroPoints_(useZeroPoints)
+    {}
 
     std::vector<int64_t> viewShape_;
     std::vector<int64_t> tileShape_;
-    DataType inputDtype_;  // INT8 or INT16
+    DataType inputDtype_; // INT8 or INT16
     int axis_;
     bool useZeroPoints_;
 };
 
 struct DequantizeOpMetaData {
-    explicit DequantizeOpMetaData(const OpFunc &opFunc, const nlohmann::json &test_data)
-        : opFunc_(opFunc), test_data_(test_data) {}
+    explicit DequantizeOpMetaData(const OpFunc& opFunc, const nlohmann::json& test_data)
+        : opFunc_(opFunc), test_data_(test_data)
+    {}
 
     OpFunc opFunc_;
     nlohmann::json test_data_;
@@ -45,13 +50,15 @@ struct DequantizeOpMetaData {
 // ============================================================
 
 // 1D dequantization with axis=-1, symmetric/asymmetric
-static void Dequantize1DOperationExeFunc(
-    const std::vector<Tensor> &inputs, std::vector<Tensor> &outputs, const OpFuncArgs *opArgs) {
-    auto args = static_cast<const DequantizeOpFuncArgs *>(opArgs);
+static void Dequantize1DOperationExeFunc(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                         const OpFuncArgs* opArgs)
+{
+    auto args = static_cast<const DequantizeOpFuncArgs*>(opArgs);
     const bool useZeroPoints = args->useZeroPoints_;
 
     if (useZeroPoints) {
-        FUNCTION("main", {inputs[0], inputs[1], inputs[2]}, {outputs[0]}) {
+        FUNCTION("main", {inputs[0], inputs[1], inputs[2]}, {outputs[0]})
+        {
             const int viewShape = args->viewShape_[0];
 
             SymbolicScalar dim = inputs[0].GetShape()[0];
@@ -59,10 +66,10 @@ static void Dequantize1DOperationExeFunc(
 
             int axis = args->axis_;
 
-            LOOP("LOOP_L0_idx", FunctionType::DYNAMIC_LOOP, idx, LoopRange(0, loop, 1)) {
-                auto tileTensorInput = View(inputs[0], {viewShape},
-                    {std::min(dim - idx * viewShape, viewShape)},
-                    {idx * viewShape});
+            LOOP("LOOP_L0_idx", FunctionType::DYNAMIC_LOOP, idx, LoopRange(0, loop, 1))
+            {
+                auto tileTensorInput = View(inputs[0], {viewShape}, {std::min(dim - idx * viewShape, viewShape)},
+                                            {idx * viewShape});
 
                 // Scale shape: [1] for axis=-1 on 1D tensor
                 auto tileTensorScale = inputs[1];
@@ -74,7 +81,8 @@ static void Dequantize1DOperationExeFunc(
             }
         }
     } else {
-        FUNCTION("main", {inputs[0], inputs[1]}, {outputs[0]}) {
+        FUNCTION("main", {inputs[0], inputs[1]}, {outputs[0]})
+        {
             const int viewShape = args->viewShape_[0];
 
             SymbolicScalar dim = inputs[0].GetShape()[0];
@@ -82,10 +90,10 @@ static void Dequantize1DOperationExeFunc(
 
             int axis = args->axis_;
 
-            LOOP("LOOP_L0_idx", FunctionType::DYNAMIC_LOOP, idx, LoopRange(0, loop, 1)) {
-                auto tileTensorInput = View(inputs[0], {viewShape},
-                    {std::min(dim - idx * viewShape, viewShape)},
-                    {idx * viewShape});
+            LOOP("LOOP_L0_idx", FunctionType::DYNAMIC_LOOP, idx, LoopRange(0, loop, 1))
+            {
+                auto tileTensorInput = View(inputs[0], {viewShape}, {std::min(dim - idx * viewShape, viewShape)},
+                                            {idx * viewShape});
 
                 // Scale shape: [1] for axis=-1 on 1D tensor
                 auto tileTensorScale = inputs[1];
@@ -103,13 +111,15 @@ static void Dequantize1DOperationExeFunc(
 // ============================================================
 
 // 2D dequantization with axis=-1 / -2, symmetric/asymmetric
-static void Dequantize2DOperationExeFunc(
-    const std::vector<Tensor> &inputs, std::vector<Tensor> &outputs, const OpFuncArgs *opArgs) {
-    auto args = static_cast<const DequantizeOpFuncArgs *>(opArgs);
+static void Dequantize2DOperationExeFunc(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                         const OpFuncArgs* opArgs)
+{
+    auto args = static_cast<const DequantizeOpFuncArgs*>(opArgs);
     const bool useZeroPoints = args->useZeroPoints_;
 
     if (useZeroPoints) {
-        FUNCTION("main", {inputs[0], inputs[1], inputs[2]}, {outputs[0]}) {
+        FUNCTION("main", {inputs[0], inputs[1], inputs[2]}, {outputs[0]})
+        {
             const int firstViewShape = args->viewShape_[0];
             const int secondViewShape = args->viewShape_[1];
 
@@ -120,31 +130,37 @@ static void Dequantize2DOperationExeFunc(
 
             int axis = args->axis_;
 
-            LOOP("LOOP_L0_bIdx", FunctionType::DYNAMIC_LOOP, bIdx, LoopRange(0, bloop, 1)) {
-                LOOP("LOOP_L1_sIdx", FunctionType::DYNAMIC_LOOP, sIdx, LoopRange(0, sloop, 1)) {
+            LOOP("LOOP_L0_bIdx", FunctionType::DYNAMIC_LOOP, bIdx, LoopRange(0, bloop, 1))
+            {
+                LOOP("LOOP_L1_sIdx", FunctionType::DYNAMIC_LOOP, sIdx, LoopRange(0, sloop, 1))
+                {
                     auto tileTensorInput = View(inputs[0], {firstViewShape, secondViewShape},
-                        {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                            std::min(secondDim - sIdx * secondViewShape, secondViewShape)},
-                        {bIdx * firstViewShape, sIdx * secondViewShape});
+                                                {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                                 std::min(secondDim - sIdx * secondViewShape, secondViewShape)},
+                                                {bIdx * firstViewShape, sIdx * secondViewShape});
 
                     // shape: [..., row] for axis=-1 / [..., col] for axis=-2
                     SymbolicScalar paraViewShape = (axis == -1) ? firstViewShape : secondViewShape;
                     SymbolicScalar paraViewShapeBefore = (axis == -1) ? bIdx * firstViewShape : sIdx * secondViewShape;
-                    SymbolicScalar paraViewShapeTail = (axis == -1) ? firstDim - paraViewShapeBefore : secondDim - paraViewShapeBefore;
+                    SymbolicScalar paraViewShapeTail = (axis == -1) ? firstDim - paraViewShapeBefore :
+                                                                      secondDim - paraViewShapeBefore;
 
                     auto tileTensorScale = View(inputs[1], {paraViewShape},
-                            {std::min(paraViewShapeTail, paraViewShape)}, {paraViewShapeBefore});
+                                                {std::min(paraViewShapeTail, paraViewShape)}, {paraViewShapeBefore});
                     auto tileTensorZeroPoints = View(inputs[2], {paraViewShape},
-                            {std::min(paraViewShapeTail, paraViewShape)}, {paraViewShapeBefore});
+                                                     {std::min(paraViewShapeTail, paraViewShape)},
+                                                     {paraViewShapeBefore});
 
                     TileShape::Current().SetVecTile(args->tileShape_);
-                    auto res = Dequantize(tileTensorInput, tileTensorScale, DataType::DT_FP32, axis, tileTensorZeroPoints);
+                    auto res = Dequantize(tileTensorInput, tileTensorScale, DataType::DT_FP32, axis,
+                                          tileTensorZeroPoints);
                     Assemble(res, {bIdx * firstViewShape, sIdx * secondViewShape}, outputs[0]);
                 }
             }
         }
     } else {
-        FUNCTION("main", {inputs[0], inputs[1]}, {outputs[0]}) {
+        FUNCTION("main", {inputs[0], inputs[1]}, {outputs[0]})
+        {
             const int firstViewShape = args->viewShape_[0];
             const int secondViewShape = args->viewShape_[1];
 
@@ -155,20 +171,23 @@ static void Dequantize2DOperationExeFunc(
 
             int axis = args->axis_;
 
-            LOOP("LOOP_L0_bIdx", FunctionType::DYNAMIC_LOOP, bIdx, LoopRange(0, bloop, 1)) {
-                LOOP("LOOP_L1_sIdx", FunctionType::DYNAMIC_LOOP, sIdx, LoopRange(0, sloop, 1)) {
+            LOOP("LOOP_L0_bIdx", FunctionType::DYNAMIC_LOOP, bIdx, LoopRange(0, bloop, 1))
+            {
+                LOOP("LOOP_L1_sIdx", FunctionType::DYNAMIC_LOOP, sIdx, LoopRange(0, sloop, 1))
+                {
                     auto tileTensorInput = View(inputs[0], {firstViewShape, secondViewShape},
-                        {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                            std::min(secondDim - sIdx * secondViewShape, secondViewShape)},
-                        {bIdx * firstViewShape, sIdx * secondViewShape});
+                                                {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                                 std::min(secondDim - sIdx * secondViewShape, secondViewShape)},
+                                                {bIdx * firstViewShape, sIdx * secondViewShape});
 
                     // shape: [..., row] for axis=-1 / [..., col] for axis=-2
                     SymbolicScalar paraViewShape = (axis == -1) ? firstViewShape : secondViewShape;
                     SymbolicScalar paraViewShapeBefore = (axis == -1) ? bIdx * firstViewShape : sIdx * secondViewShape;
-                    SymbolicScalar paraViewShapeTail = (axis == -1) ? firstDim - paraViewShapeBefore : secondDim - paraViewShapeBefore;
+                    SymbolicScalar paraViewShapeTail = (axis == -1) ? firstDim - paraViewShapeBefore :
+                                                                      secondDim - paraViewShapeBefore;
 
                     auto tileTensorScale = View(inputs[1], {paraViewShape},
-                            {std::min(paraViewShapeTail, paraViewShape)}, {paraViewShapeBefore});
+                                                {std::min(paraViewShapeTail, paraViewShape)}, {paraViewShapeBefore});
 
                     TileShape::Current().SetVecTile(args->tileShape_);
                     auto res = Dequantize(tileTensorInput, tileTensorScale, DataType::DT_FP32, axis, Tensor());
@@ -184,13 +203,15 @@ static void Dequantize2DOperationExeFunc(
 // ============================================================
 
 // 3D dequantization with axis=-1 / -2, symmetric/asymmetric
-static void Dequantize3DOperationExeFunc(
-    const std::vector<Tensor> &inputs, std::vector<Tensor> &outputs, const OpFuncArgs *opArgs) {
-    auto args = static_cast<const DequantizeOpFuncArgs *>(opArgs);
+static void Dequantize3DOperationExeFunc(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                         const OpFuncArgs* opArgs)
+{
+    auto args = static_cast<const DequantizeOpFuncArgs*>(opArgs);
     const bool useZeroPoints = args->useZeroPoints_;
 
     if (useZeroPoints) {
-        FUNCTION("main", {inputs[0], inputs[1], inputs[2]}, {outputs[0]}) {
+        FUNCTION("main", {inputs[0], inputs[1], inputs[2]}, {outputs[0]})
+        {
             const int firstViewShape = args->viewShape_[0];
             const int secondViewShape = args->viewShape_[1];
             const int thirdViewShape = args->viewShape_[2];
@@ -204,35 +225,46 @@ static void Dequantize3DOperationExeFunc(
 
             int axis = args->axis_;
 
-            LOOP("LOOP_L0_bIdx", FunctionType::DYNAMIC_LOOP, bIdx, LoopRange(0, bloop, 1)) {
-                LOOP("LOOP_L1_sIdx", FunctionType::DYNAMIC_LOOP, sIdx, LoopRange(0, sloop, 1)) {
-                    LOOP("LOOP_L2_nIdx", FunctionType::DYNAMIC_LOOP, nIdx, LoopRange(0, nloop, 1)) {
-                        auto tileTensorInput = View(inputs[0], {firstViewShape, secondViewShape, thirdViewShape},
+            LOOP("LOOP_L0_bIdx", FunctionType::DYNAMIC_LOOP, bIdx, LoopRange(0, bloop, 1))
+            {
+                LOOP("LOOP_L1_sIdx", FunctionType::DYNAMIC_LOOP, sIdx, LoopRange(0, sloop, 1))
+                {
+                    LOOP("LOOP_L2_nIdx", FunctionType::DYNAMIC_LOOP, nIdx, LoopRange(0, nloop, 1))
+                    {
+                        auto tileTensorInput = View(
+                            inputs[0], {firstViewShape, secondViewShape, thirdViewShape},
                             {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                                std::min(secondDim - sIdx * secondViewShape, secondViewShape),
-                                std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape)},
+                             std::min(secondDim - sIdx * secondViewShape, secondViewShape),
+                             std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape)},
                             {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape});
 
                         SymbolicScalar paraViewShape = (axis == -1) ? secondViewShape : thirdViewShape;
-                        SymbolicScalar paraViewShapeBefore = (axis == -1) ? sIdx * secondViewShape : nIdx * thirdViewShape;
-                        SymbolicScalar paraViewShapeTail = (axis == -1) ? secondDim - paraViewShapeBefore : thirdDim - paraViewShapeBefore;
+                        SymbolicScalar paraViewShapeBefore = (axis == -1) ? sIdx * secondViewShape :
+                                                                            nIdx * thirdViewShape;
+                        SymbolicScalar paraViewShapeTail = (axis == -1) ? secondDim - paraViewShapeBefore :
+                                                                          thirdDim - paraViewShapeBefore;
 
                         auto tileTensorScale = View(inputs[1], {firstViewShape, paraViewShape},
-                            {std::min(firstDim - bIdx * firstViewShape, firstViewShape), std::min(paraViewShapeTail, paraViewShape)},
-                            {bIdx * firstViewShape, paraViewShapeBefore});
+                                                    {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                                     std::min(paraViewShapeTail, paraViewShape)},
+                                                    {bIdx * firstViewShape, paraViewShapeBefore});
                         auto tileTensorZeroPoints = View(inputs[2], {firstViewShape, paraViewShape},
-                            {std::min(firstDim - bIdx * firstViewShape, firstViewShape), std::min(paraViewShapeTail, paraViewShape)},
-                            {bIdx * firstViewShape, paraViewShapeBefore});
+                                                         {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                                          std::min(paraViewShapeTail, paraViewShape)},
+                                                         {bIdx * firstViewShape, paraViewShapeBefore});
 
                         TileShape::Current().SetVecTile(args->tileShape_);
-                        auto res = Dequantize(tileTensorInput, tileTensorScale, DataType::DT_FP32, axis, tileTensorZeroPoints);
-                        Assemble(res, {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape}, outputs[0]);
+                        auto res = Dequantize(tileTensorInput, tileTensorScale, DataType::DT_FP32, axis,
+                                              tileTensorZeroPoints);
+                        Assemble(res, {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape},
+                                 outputs[0]);
                     }
                 }
             }
         }
     } else {
-        FUNCTION("main", {inputs[0], inputs[1]}, {outputs[0]}) {
+        FUNCTION("main", {inputs[0], inputs[1]}, {outputs[0]})
+        {
             const int firstViewShape = args->viewShape_[0];
             const int secondViewShape = args->viewShape_[1];
             const int thirdViewShape = args->viewShape_[2];
@@ -246,26 +278,34 @@ static void Dequantize3DOperationExeFunc(
 
             int axis = args->axis_;
 
-            LOOP("LOOP_L0_bIdx", FunctionType::DYNAMIC_LOOP, bIdx, LoopRange(0, bloop, 1)) {
-                LOOP("LOOP_L1_sIdx", FunctionType::DYNAMIC_LOOP, sIdx, LoopRange(0, sloop, 1)) {
-                    LOOP("LOOP_L2_nIdx", FunctionType::DYNAMIC_LOOP, nIdx, LoopRange(0, nloop, 1)) {
-                        auto tileTensorInput = View(inputs[0], {firstViewShape, secondViewShape, thirdViewShape},
+            LOOP("LOOP_L0_bIdx", FunctionType::DYNAMIC_LOOP, bIdx, LoopRange(0, bloop, 1))
+            {
+                LOOP("LOOP_L1_sIdx", FunctionType::DYNAMIC_LOOP, sIdx, LoopRange(0, sloop, 1))
+                {
+                    LOOP("LOOP_L2_nIdx", FunctionType::DYNAMIC_LOOP, nIdx, LoopRange(0, nloop, 1))
+                    {
+                        auto tileTensorInput = View(
+                            inputs[0], {firstViewShape, secondViewShape, thirdViewShape},
                             {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                                std::min(secondDim - sIdx * secondViewShape, secondViewShape),
-                                std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape)},
+                             std::min(secondDim - sIdx * secondViewShape, secondViewShape),
+                             std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape)},
                             {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape});
 
                         SymbolicScalar paraViewShape = (axis == -1) ? secondViewShape : thirdViewShape;
-                        SymbolicScalar paraViewShapeBefore = (axis == -1) ? sIdx * secondViewShape : nIdx * thirdViewShape;
-                        SymbolicScalar paraViewShapeTail = (axis == -1) ? secondDim - paraViewShapeBefore : thirdDim - paraViewShapeBefore;
+                        SymbolicScalar paraViewShapeBefore = (axis == -1) ? sIdx * secondViewShape :
+                                                                            nIdx * thirdViewShape;
+                        SymbolicScalar paraViewShapeTail = (axis == -1) ? secondDim - paraViewShapeBefore :
+                                                                          thirdDim - paraViewShapeBefore;
 
                         auto tileTensorScale = View(inputs[1], {firstViewShape, paraViewShape},
-                            {std::min(firstDim - bIdx * firstViewShape, firstViewShape), std::min(paraViewShapeTail, paraViewShape)},
-                            {bIdx * firstViewShape, paraViewShapeBefore});
+                                                    {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                                     std::min(paraViewShapeTail, paraViewShape)},
+                                                    {bIdx * firstViewShape, paraViewShapeBefore});
 
                         TileShape::Current().SetVecTile(args->tileShape_);
                         auto res = Dequantize(tileTensorInput, tileTensorScale, DataType::DT_FP32, axis, Tensor());
-                        Assemble(res, {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape}, outputs[0]);
+                        Assemble(res, {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape},
+                                 outputs[0]);
                     }
                 }
             }
@@ -278,13 +318,15 @@ static void Dequantize3DOperationExeFunc(
 // ============================================================
 
 // 4D dequantization with axis=-1 / -2, symmetric/asymmetric
-static void Dequantize4DOperationExeFunc(
-    const std::vector<Tensor> &inputs, std::vector<Tensor> &outputs, const OpFuncArgs *opArgs) {
-    auto args = static_cast<const DequantizeOpFuncArgs *>(opArgs);
+static void Dequantize4DOperationExeFunc(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                         const OpFuncArgs* opArgs)
+{
+    auto args = static_cast<const DequantizeOpFuncArgs*>(opArgs);
     const bool useZeroPoints = args->useZeroPoints_;
 
     if (useZeroPoints) {
-        FUNCTION("main", {inputs[0], inputs[1], inputs[2]}, {outputs[0]}) {
+        FUNCTION("main", {inputs[0], inputs[1], inputs[2]}, {outputs[0]})
+        {
             const int firstViewShape = args->viewShape_[0];
             const int secondViewShape = args->viewShape_[1];
             const int thirdViewShape = args->viewShape_[2];
@@ -301,43 +343,57 @@ static void Dequantize4DOperationExeFunc(
 
             int axis = args->axis_;
 
-            LOOP("LOOP_L0", FunctionType::DYNAMIC_LOOP, idx0, LoopRange(0, loop0, 1)) {
-                LOOP("LOOP_L1", FunctionType::DYNAMIC_LOOP, idx1, LoopRange(0, loop1, 1)) {
-                    LOOP("LOOP_L2", FunctionType::DYNAMIC_LOOP, idx2, LoopRange(0, loop2, 1)) {
-                        LOOP("LOOP_L3", FunctionType::DYNAMIC_LOOP, idx3, LoopRange(0, loop3, 1)) {
-                            auto tileTensorInput = View(inputs[0],
-                                {firstViewShape, secondViewShape, thirdViewShape, fourthViewShape},
+            LOOP("LOOP_L0", FunctionType::DYNAMIC_LOOP, idx0, LoopRange(0, loop0, 1))
+            {
+                LOOP("LOOP_L1", FunctionType::DYNAMIC_LOOP, idx1, LoopRange(0, loop1, 1))
+                {
+                    LOOP("LOOP_L2", FunctionType::DYNAMIC_LOOP, idx2, LoopRange(0, loop2, 1))
+                    {
+                        LOOP("LOOP_L3", FunctionType::DYNAMIC_LOOP, idx3, LoopRange(0, loop3, 1))
+                        {
+                            auto tileTensorInput = View(
+                                inputs[0], {firstViewShape, secondViewShape, thirdViewShape, fourthViewShape},
                                 {std::min(firstDim - idx0 * firstViewShape, firstViewShape),
-                                    std::min(secondDim - idx1 * secondViewShape, secondViewShape),
-                                    std::min(thirdDim - idx2 * thirdViewShape, thirdViewShape),
-                                    std::min(fourthDim - idx3 * fourthViewShape, fourthViewShape)},
-                                {idx0 * firstViewShape, idx1 * secondViewShape, idx2 * thirdViewShape, idx3 * fourthViewShape});
+                                 std::min(secondDim - idx1 * secondViewShape, secondViewShape),
+                                 std::min(thirdDim - idx2 * thirdViewShape, thirdViewShape),
+                                 std::min(fourthDim - idx3 * fourthViewShape, fourthViewShape)},
+                                {idx0 * firstViewShape, idx1 * secondViewShape, idx2 * thirdViewShape,
+                                 idx3 * fourthViewShape});
 
                             SymbolicScalar paraViewShape = (axis == -1) ? thirdViewShape : fourthViewShape;
-                            SymbolicScalar paraViewShapeBefore = (axis == -1) ? idx2 * thirdViewShape : idx3 * fourthViewShape;
-                            SymbolicScalar paraViewShapeTail = (axis == -1) ? thirdDim - paraViewShapeBefore : fourthDim - paraViewShapeBefore;
+                            SymbolicScalar paraViewShapeBefore = (axis == -1) ? idx2 * thirdViewShape :
+                                                                                idx3 * fourthViewShape;
+                            SymbolicScalar paraViewShapeTail = (axis == -1) ? thirdDim - paraViewShapeBefore :
+                                                                              fourthDim - paraViewShapeBefore;
 
-                            auto tileTensorScale = View(inputs[1], {firstViewShape, secondViewShape, paraViewShape},
+                            auto tileTensorScale = View(
+                                inputs[1], {firstViewShape, secondViewShape, paraViewShape},
                                 {std::min(firstDim - idx0 * firstViewShape, firstViewShape),
-                                    std::min(secondDim - idx1 * secondViewShape, secondViewShape),
-                                    std::min(paraViewShapeTail, paraViewShape)},
+                                 std::min(secondDim - idx1 * secondViewShape, secondViewShape),
+                                 std::min(paraViewShapeTail, paraViewShape)},
                                 {idx0 * firstViewShape, idx1 * secondViewShape, paraViewShapeBefore});
-                            auto tileTensorZeroPoints = View(inputs[2], {firstViewShape, secondViewShape, paraViewShape},
+                            auto tileTensorZeroPoints = View(
+                                inputs[2], {firstViewShape, secondViewShape, paraViewShape},
                                 {std::min(firstDim - idx0 * firstViewShape, firstViewShape),
-                                    std::min(secondDim - idx1 * secondViewShape, secondViewShape),
-                                    std::min(paraViewShapeTail, paraViewShape)},
+                                 std::min(secondDim - idx1 * secondViewShape, secondViewShape),
+                                 std::min(paraViewShapeTail, paraViewShape)},
                                 {idx0 * firstViewShape, idx1 * secondViewShape, paraViewShapeBefore});
 
                             TileShape::Current().SetVecTile(args->tileShape_);
-                            auto res = Dequantize(tileTensorInput, tileTensorScale, DataType::DT_FP32, axis, tileTensorZeroPoints);
-                            Assemble(res, {idx0 * firstViewShape, idx1 * secondViewShape, idx2 * thirdViewShape, idx3 * fourthViewShape}, outputs[0]);
+                            auto res = Dequantize(tileTensorInput, tileTensorScale, DataType::DT_FP32, axis,
+                                                  tileTensorZeroPoints);
+                            Assemble(res,
+                                     {idx0 * firstViewShape, idx1 * secondViewShape, idx2 * thirdViewShape,
+                                      idx3 * fourthViewShape},
+                                     outputs[0]);
                         }
                     }
                 }
             }
         }
     } else {
-        FUNCTION("main", {inputs[0], inputs[1]}, {outputs[0]}) {
+        FUNCTION("main", {inputs[0], inputs[1]}, {outputs[0]})
+        {
             const int firstViewShape = args->viewShape_[0];
             const int secondViewShape = args->viewShape_[1];
             const int thirdViewShape = args->viewShape_[2];
@@ -354,31 +410,42 @@ static void Dequantize4DOperationExeFunc(
 
             int axis = args->axis_;
 
-            LOOP("LOOP_L0", FunctionType::DYNAMIC_LOOP, idx0, LoopRange(0, loop0, 1)) {
-                LOOP("LOOP_L1", FunctionType::DYNAMIC_LOOP, idx1, LoopRange(0, loop1, 1)) {
-                    LOOP("LOOP_L2", FunctionType::DYNAMIC_LOOP, idx2, LoopRange(0, loop2, 1)) {
-                        LOOP("LOOP_L3", FunctionType::DYNAMIC_LOOP, idx3, LoopRange(0, loop3, 1)) {
-                            auto tileTensorInput = View(inputs[0],
-                                {firstViewShape, secondViewShape, thirdViewShape, fourthViewShape},
+            LOOP("LOOP_L0", FunctionType::DYNAMIC_LOOP, idx0, LoopRange(0, loop0, 1))
+            {
+                LOOP("LOOP_L1", FunctionType::DYNAMIC_LOOP, idx1, LoopRange(0, loop1, 1))
+                {
+                    LOOP("LOOP_L2", FunctionType::DYNAMIC_LOOP, idx2, LoopRange(0, loop2, 1))
+                    {
+                        LOOP("LOOP_L3", FunctionType::DYNAMIC_LOOP, idx3, LoopRange(0, loop3, 1))
+                        {
+                            auto tileTensorInput = View(
+                                inputs[0], {firstViewShape, secondViewShape, thirdViewShape, fourthViewShape},
                                 {std::min(firstDim - idx0 * firstViewShape, firstViewShape),
-                                    std::min(secondDim - idx1 * secondViewShape, secondViewShape),
-                                    std::min(thirdDim - idx2 * thirdViewShape, thirdViewShape),
-                                    std::min(fourthDim - idx3 * fourthViewShape, fourthViewShape)},
-                                {idx0 * firstViewShape, idx1 * secondViewShape, idx2 * thirdViewShape, idx3 * fourthViewShape});
+                                 std::min(secondDim - idx1 * secondViewShape, secondViewShape),
+                                 std::min(thirdDim - idx2 * thirdViewShape, thirdViewShape),
+                                 std::min(fourthDim - idx3 * fourthViewShape, fourthViewShape)},
+                                {idx0 * firstViewShape, idx1 * secondViewShape, idx2 * thirdViewShape,
+                                 idx3 * fourthViewShape});
 
                             SymbolicScalar paraViewShape = (axis == -1) ? thirdViewShape : fourthViewShape;
-                            SymbolicScalar paraViewShapeBefore = (axis == -1) ? idx2 * thirdViewShape : idx3 * fourthViewShape;
-                            SymbolicScalar paraViewShapeTail = (axis == -1) ? thirdDim - paraViewShapeBefore : fourthDim - paraViewShapeBefore;
+                            SymbolicScalar paraViewShapeBefore = (axis == -1) ? idx2 * thirdViewShape :
+                                                                                idx3 * fourthViewShape;
+                            SymbolicScalar paraViewShapeTail = (axis == -1) ? thirdDim - paraViewShapeBefore :
+                                                                              fourthDim - paraViewShapeBefore;
 
-                            auto tileTensorScale = View(inputs[1], {firstViewShape, secondViewShape, paraViewShape},
+                            auto tileTensorScale = View(
+                                inputs[1], {firstViewShape, secondViewShape, paraViewShape},
                                 {std::min(firstDim - idx0 * firstViewShape, firstViewShape),
-                                    std::min(secondDim - idx1 * secondViewShape, secondViewShape),
-                                    std::min(paraViewShapeTail, paraViewShape)},
+                                 std::min(secondDim - idx1 * secondViewShape, secondViewShape),
+                                 std::min(paraViewShapeTail, paraViewShape)},
                                 {idx0 * firstViewShape, idx1 * secondViewShape, paraViewShapeBefore});
 
                             TileShape::Current().SetVecTile(args->tileShape_);
                             auto res = Dequantize(tileTensorInput, tileTensorScale, DataType::DT_FP32, axis, Tensor());
-                            Assemble(res, {idx0 * firstViewShape, idx1 * secondViewShape, idx2 * thirdViewShape, idx3 * fourthViewShape}, outputs[0]);
+                            Assemble(res,
+                                     {idx0 * firstViewShape, idx1 * secondViewShape, idx2 * thirdViewShape,
+                                      idx3 * fourthViewShape},
+                                     outputs[0]);
                         }
                     }
                 }
@@ -388,7 +455,8 @@ static void Dequantize4DOperationExeFunc(
 }
 
 // Helper function to select the appropriate execution function based on test parameters
-OpFunc SelectDequantizeOpFunc(int ndim) {
+OpFunc SelectDequantizeOpFunc(int ndim)
+{
     // inputDtype (INT8/INT16) doesn't affect loop structure, only ndim matters
     if (ndim == 1) {
         return Dequantize1DOperationExeFunc;
@@ -407,10 +475,13 @@ OpFunc SelectDequantizeOpFunc(int ndim) {
 class DequantizeOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac_param<DequantizeOpMetaData> {};
 
 INSTANTIATE_TEST_SUITE_P(TestDequantize, DequantizeOperationTest,
-    ::testing::ValuesIn(GetOpMetaData<DequantizeOpMetaData>(
-        {Dequantize1DOperationExeFunc, Dequantize2DOperationExeFunc, Dequantize3DOperationExeFunc, Dequantize4DOperationExeFunc}, "Dequantize")));
+                         ::testing::ValuesIn(GetOpMetaData<DequantizeOpMetaData>(
+                             {Dequantize1DOperationExeFunc, Dequantize2DOperationExeFunc, Dequantize3DOperationExeFunc,
+                              Dequantize4DOperationExeFunc},
+                             "Dequantize")));
 
-TEST_P(DequantizeOperationTest, TestDequantize) {
+TEST_P(DequantizeOperationTest, TestDequantize)
+{
     auto test_data = GetParam().test_data_;
     auto inputDtype = static_cast<DataType>(GetValueByName<int>(test_data, "param_input_dtype"));
     auto axis = GetValueByName<int>(test_data, "axis");
@@ -429,10 +500,10 @@ TEST_P(DequantizeOperationTest, TestDequantize) {
     testCase.args = &args;
     testCase.opFunc = selectedOpFunc;
     std::transform(testCase.inputTensors.begin(), testCase.inputTensors.end(), std::back_inserter(testCase.inputPaths),
-        [](const auto &tensor) { return GetGoldenDir() + "/" + tensor.GetStorage()->Symbol() + ".bin"; });
+                   [](const auto& tensor) { return GetGoldenDir() + "/" + tensor.GetStorage()->Symbol() + ".bin"; });
     std::transform(testCase.outputTensors.begin(), testCase.outputTensors.end(),
-        std::back_inserter(testCase.goldenPaths),
-        [](const auto &tensor) { return GetGoldenDir() + "/" + tensor.GetStorage()->Symbol() + ".bin"; });
+                   std::back_inserter(testCase.goldenPaths),
+                   [](const auto& tensor) { return GetGoldenDir() + "/" + tensor.GetStorage()->Symbol() + ".bin"; });
     auto params_dict = test_data.at("params");
     testCase.onBoard = params_dict.find("on_board") == params_dict.end() || GetValueByName<bool>(test_data, "on_board");
 

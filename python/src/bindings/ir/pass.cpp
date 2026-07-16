@@ -34,9 +34,8 @@ void BindPasses(py::module_& m)
         .value("SplitIncoreOrch", IRProperty::SplitIncoreOrch, "InCore scopes outlined into separate functions")
         .value("HasMemRefs", IRProperty::HasMemRefs, "MemRef objects initialized on variables")
         .value("IncoreBlockOps", IRProperty::IncoreBlockOps, "InCore functions use block ops (tile types, load/store)")
-        .value(
-            "AllocatedMemoryAddr", IRProperty::AllocatedMemoryAddr,
-            "All MemRefs have valid addresses within buffer limits");
+        .value("AllocatedMemoryAddr", IRProperty::AllocatedMemoryAddr,
+               "All MemRefs have valid addresses within buffer limits");
 
     py::class_<IRPropertySet>(m, "IRPropertySet", "A set of IR properties")
         .def(py::init<>(), "Create an empty property set")
@@ -67,9 +66,8 @@ void BindPasses(py::module_& m)
     m.def(
         "get_verified_properties", []() { return GetVerifiedProperties(); },
         "Get the set of properties automatically verified during compilation");
-    m.def(
-        "get_default_verification_level", &GetDefaultVerificationLevel,
-        "Get the default verification level (from PYPTO_VERIFY_LEVEL env var, default: Basic)");
+    m.def("get_default_verification_level", &GetDefaultVerificationLevel,
+          "Get the default verification level (from PYPTO_VERIFY_LEVEL env var, default: Basic)");
 
     py::class_<Pass>(m, "Pass", "Opaque pass object. Do not instantiate directly - use factory functions.")
         .def("__call__", &Pass::operator(), py::arg("program"), "Execute pass on program")
@@ -81,68 +79,56 @@ void BindPasses(py::module_& m)
         .def_static("init_mem_ref", &pass::InitMemRef, "Create a memory reuse pass")
         .def_static("basic_memory_reuse", &pass::BasicMemoryReuse, "Create a basic memory reuse pass")
         .def_static("allocate_memory_addr", &pass::AllocateMemoryAddr, "Create an allocate memory address pass")
-        .def_static(
-            "lower_break_continue", &pass::LowerBreakContinue,
-            "Create a pass that lowers break/continue statements to structured control flow")
-        .def_static(
-            "outline_incore_scopes", &pass::OutlineIncoreScopes,
-            "Create a pass that outlines InCore scopes into separate functions")
-        .def_static(
-            "convert_tensor_to_block_ops", &pass::ConvertTensorToBlockOps,
-            "Create a pass that converts tensor ops to block ops in InCore functions")
+        .def_static("lower_break_continue", &pass::LowerBreakContinue,
+                    "Create a pass that lowers break/continue statements to structured control flow")
+        .def_static("outline_incore_scopes", &pass::OutlineIncoreScopes,
+                    "Create a pass that outlines InCore scopes into separate functions")
+        .def_static("convert_tensor_to_block_ops", &pass::ConvertTensorToBlockOps,
+                    "Create a pass that converts tensor ops to block ops in InCore functions")
         .def_static("flatten_call_expr", &pass::FlattenCallExpr, "Create a pass that flattens nested call expressions")
-        .def_static(
-            "normalize_stmt_structure", &pass::NormalizeStmtStructure,
-            "Create a pass that normalizes statement structure")
-        .def_static(
-            "flatten_single_stmt", &pass::FlattenSingleStmt,
-            "Create a pass that recursively flattens single-statement blocks")
-        .def_static(
-            "run_verifier", &pass::RunVerifier, py::arg("disabled_rules") = std::vector<std::string>{},
-            "Create a verifier pass with configurable rules")
+        .def_static("normalize_stmt_structure", &pass::NormalizeStmtStructure,
+                    "Create a pass that normalizes statement structure")
+        .def_static("flatten_single_stmt", &pass::FlattenSingleStmt,
+                    "Create a pass that recursively flattens single-statement blocks")
+        .def_static("run_verifier", &pass::RunVerifier, py::arg("disabled_rules") = std::vector<std::string>{},
+                    "Create a verifier pass with configurable rules")
         .def_static("aggressive_dce", &pass::AggressiveDCE, "Eliminate dead code")
         .def_static("canonicalize", &pass::Canonicalize, "Canonicalize IR")
         .def_static("token_pass", &pass::TokenPass, "Add WAR/WAW token dependencies")
         .def_static("merge_stmts_into_if", &pass::MergeStmtsIntoIf, "Merge stmts into if branches")
         .def_static("create_root_functions", &pass::CreateRootFunctions, "Create root functions from IR")
-        .def_static(
-            "finalize_dynamic_function", &pass::FinalizeDynamicFunction,
-            "Finalize dynamic functions built from new IR");
+        .def_static("finalize_dynamic_function", &pass::FinalizeDynamicFunction,
+                    "Finalize dynamic functions built from new IR");
 
-    py::class_<PassInstrument, std::shared_ptr<PassInstrument>>(
-        m, "PassInstrument", "Abstract base class for pass instrumentation")
+    py::class_<PassInstrument, std::shared_ptr<PassInstrument>>(m, "PassInstrument",
+                                                                "Abstract base class for pass instrumentation")
         .def("get_name", &PassInstrument::GetName, "Get the name of this instrument");
 
     py::class_<CallbackInstrument, PassInstrument, std::shared_ptr<CallbackInstrument>>(
         m, "CallbackInstrument", "Instrument that invokes callbacks before/after each pass")
-        .def(
-            py::init<CallbackInstrument::Callback, CallbackInstrument::Callback, std::string>(),
-            py::arg("before_pass") = nullptr, py::arg("after_pass") = nullptr, py::arg("name") = "CallbackInstrument",
-            "Create a callback instrument with optional before/after callbacks");
+        .def(py::init<CallbackInstrument::Callback, CallbackInstrument::Callback, std::string>(),
+             py::arg("before_pass") = nullptr, py::arg("after_pass") = nullptr, py::arg("name") = "CallbackInstrument",
+             "Create a callback instrument with optional before/after callbacks");
 
-    py::class_<PassContext>(
-        m, "PassContext",
-        "Context that holds instruments and pass configuration.\n\n"
-        "When active, Pass.__call__ will run the context's instruments\n"
-        "before/after each pass execution. Also controls automatic\n"
-        "verification level for PassPipeline.")
-        .def(
-            py::init<std::vector<PassInstrumentPtr>, VerificationLevel>(), py::arg("instruments"),
-            py::arg("verification_level") = VerificationLevel::Basic,
-            "Create a PassContext with instruments and optional verification level")
-        .def(
-            "__enter__",
-            [](PassContext& self) -> PassContext& {
-                self.EnterContext();
-                return self;
-            })
+    py::class_<PassContext>(m, "PassContext",
+                            "Context that holds instruments and pass configuration.\n\n"
+                            "When active, Pass.__call__ will run the context's instruments\n"
+                            "before/after each pass execution. Also controls automatic\n"
+                            "verification level for PassPipeline.")
+        .def(py::init<std::vector<PassInstrumentPtr>, VerificationLevel>(), py::arg("instruments"),
+             py::arg("verification_level") = VerificationLevel::Basic,
+             "Create a PassContext with instruments and optional verification level")
+        .def("__enter__",
+             [](PassContext& self) -> PassContext& {
+                 self.EnterContext();
+                 return self;
+             })
         .def("__exit__", [](PassContext& self, const py::args&) { self.ExitContext(); })
-        .def(
-            "get_verification_level", &PassContext::GetVerificationLevel, "Get the verification level for this context")
+        .def("get_verification_level", &PassContext::GetVerificationLevel,
+             "Get the verification level for this context")
         .def("get_instruments", &PassContext::GetInstruments, "Get the instruments registered on this context")
-        .def_static(
-            "current", &PassContext::Current, py::return_value_policy::reference,
-            "Get the currently active context, or None if no context is active");
+        .def_static("current", &PassContext::Current, py::return_value_policy::reference,
+                    "Get the currently active context, or None if no context is active");
 
     py::class_<PassPipeline>(m, "PassPipeline", "A pipeline of passes executed in sequence")
         .def(py::init<>(), "Create an empty pipeline")
@@ -158,37 +144,28 @@ void BindPasses(py::module_& m)
     py::enum_<typecheck::ErrorType>(m, "TypeCheckErrorType", "Type checking error types")
         .value("TYPE_KIND_MISMATCH", typecheck::ErrorType::TYPE_KIND_MISMATCH, "Type kind mismatch")
         .value("DTYPE_MISMATCH", typecheck::ErrorType::DTYPE_MISMATCH, "Data type mismatch")
-        .value(
-            "SHAPE_DIMENSION_MISMATCH", typecheck::ErrorType::SHAPE_DIMENSION_MISMATCH,
-            "Shape dimension count mismatch")
+        .value("SHAPE_DIMENSION_MISMATCH", typecheck::ErrorType::SHAPE_DIMENSION_MISMATCH,
+               "Shape dimension count mismatch")
         .value("SHAPE_VALUE_MISMATCH", typecheck::ErrorType::SHAPE_VALUE_MISMATCH, "Shape dimension value mismatch")
         .value("SIZE_MISMATCH", typecheck::ErrorType::SIZE_MISMATCH, "Vector size mismatch in control flow")
-        .value(
-            "IF_CONDITION_MUST_BE_SCALAR", typecheck::ErrorType::IF_CONDITION_MUST_BE_SCALAR,
-            "IfStmt condition must be ScalarType")
-        .value(
-            "FOR_RANGE_MUST_BE_SCALAR", typecheck::ErrorType::FOR_RANGE_MUST_BE_SCALAR,
-            "ForStmt range must be ScalarType");
+        .value("IF_CONDITION_MUST_BE_SCALAR", typecheck::ErrorType::IF_CONDITION_MUST_BE_SCALAR,
+               "IfStmt condition must be ScalarType")
+        .value("FOR_RANGE_MUST_BE_SCALAR", typecheck::ErrorType::FOR_RANGE_MUST_BE_SCALAR,
+               "ForStmt range must be ScalarType");
 
     py::enum_<nested_call::ErrorType>(m, "NestedCallErrorType", "Nested call verification error types")
-        .value(
-            "CALL_IN_CALL_ARGS", nested_call::ErrorType::CALL_IN_CALL_ARGS,
-            "Call expression appears in call arguments")
-        .value(
-            "CALL_IN_IF_CONDITION", nested_call::ErrorType::CALL_IN_IF_CONDITION,
-            "Call expression appears in if condition")
-        .value(
-            "CALL_IN_FOR_RANGE", nested_call::ErrorType::CALL_IN_FOR_RANGE,
-            "Call expression appears in for range (start/stop/step)")
-        .value(
-            "CALL_IN_BINARY_EXPR", nested_call::ErrorType::CALL_IN_BINARY_EXPR,
-            "Call expression appears in binary expression operands")
-        .value(
-            "CALL_IN_UNARY_EXPR", nested_call::ErrorType::CALL_IN_UNARY_EXPR,
-            "Call expression appears in unary expression operand")
-        .value(
-            "CALL_IN_WHILE_CONDITION", nested_call::ErrorType::CALL_IN_WHILE_CONDITION,
-            "Call expression appears in while condition");
+        .value("CALL_IN_CALL_ARGS", nested_call::ErrorType::CALL_IN_CALL_ARGS,
+               "Call expression appears in call arguments")
+        .value("CALL_IN_IF_CONDITION", nested_call::ErrorType::CALL_IN_IF_CONDITION,
+               "Call expression appears in if condition")
+        .value("CALL_IN_FOR_RANGE", nested_call::ErrorType::CALL_IN_FOR_RANGE,
+               "Call expression appears in for range (start/stop/step)")
+        .value("CALL_IN_BINARY_EXPR", nested_call::ErrorType::CALL_IN_BINARY_EXPR,
+               "Call expression appears in binary expression operands")
+        .value("CALL_IN_UNARY_EXPR", nested_call::ErrorType::CALL_IN_UNARY_EXPR,
+               "Call expression appears in unary expression operand")
+        .value("CALL_IN_WHILE_CONDITION", nested_call::ErrorType::CALL_IN_WHILE_CONDITION,
+               "Call expression appears in while condition");
 
     py::enum_<DiagnosticSeverity>(m, "DiagnosticSeverity", "Severity level for diagnostics")
         .value("Error", DiagnosticSeverity::ERROR, "Error that must be fixed")
@@ -201,27 +178,22 @@ void BindPasses(py::module_& m)
         .def_readonly("message", &Diagnostic::message, "Human-readable error message")
         .def_readonly("span", &Diagnostic::span, "Source location of the issue");
 
-    py::class_<IRVerifier>(
-        m, "IRVerifier",
-        "IR verification system that manages verification rules\n\n"
-        "IRVerifier collects verification rules and applies them to programs.\n"
-        "Rules can be enabled/disabled individually.")
+    py::class_<IRVerifier>(m, "IRVerifier",
+                           "IR verification system that manages verification rules\n\n"
+                           "IRVerifier collects verification rules and applies them to programs.\n"
+                           "Rules can be enabled/disabled individually.")
         .def(py::init<>(), "Create an empty verifier with no rules")
-        .def_static(
-            "create_default", &IRVerifier::CreateDefault,
-            "Create a verifier with default built-in rules (SSAVerify, TypeCheck)")
+        .def_static("create_default", &IRVerifier::CreateDefault,
+                    "Create a verifier with default built-in rules (SSAVerify, TypeCheck)")
         .def("enable_rule", &IRVerifier::EnableRule, py::arg("name"), "Enable a previously disabled rule")
         .def("disable_rule", &IRVerifier::DisableRule, py::arg("name"), "Disable a rule")
         .def("is_rule_enabled", &IRVerifier::IsRuleEnabled, py::arg("name"), "Check if a rule is enabled")
-        .def(
-            "verify", &IRVerifier::Verify, py::arg("program"),
-            "Verify a program and collect diagnostics (does not throw)")
-        .def(
-            "verify_or_throw", &IRVerifier::VerifyOrThrow, py::arg("program"),
-            "Verify a program and throw VerificationError if errors are found")
-        .def_static(
-            "generate_report", &IRVerifier::GenerateReport, py::arg("diagnostics"),
-            "Generate a formatted report from diagnostics");
+        .def("verify", &IRVerifier::Verify, py::arg("program"),
+             "Verify a program and collect diagnostics (does not throw)")
+        .def("verify_or_throw", &IRVerifier::VerifyOrThrow, py::arg("program"),
+             "Verify a program and throw VerificationError if errors are found")
+        .def_static("generate_report", &IRVerifier::GenerateReport, py::arg("diagnostics"),
+                    "Generate a formatted report from diagnostics");
 }
 } // namespace ir
 } // namespace pypto

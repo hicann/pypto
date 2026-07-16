@@ -104,8 +104,8 @@ TEST_F(PassManagerTest, TestPassManager)
     PassManager::Instance().RegisterStrategy("PM_TEST2", {{"PassTestCast1", PassName::NOT_DEFINED}});
     auto errPasses = PassManager::Instance().GetStrategyPasses("PM_TEST1");
     EXPECT_TRUE(errPasses.empty());
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestPassManager", "TestPassManager", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestPassManager", "TestPassManager",
+                                                      nullptr);
     EXPECT_TRUE(PassManager::Instance().RunPass(Program::GetInstance(), *currFunctionPtr, "PM_TEST") == SUCCESS);
     EXPECT_TRUE(PassManager::Instance().RunPass(Program::GetInstance(), *currFunctionPtr, "PM_TEST2") == SUCCESS);
 }
@@ -115,8 +115,8 @@ TEST_F(PassManagerTest, TestPassBase)
     PassTestCast passTestCase;
     auto logFolder = passTestCase.LogFolder("output", 0);
     EXPECT_TRUE(logFolder.empty() == false);
-    auto currFunctionPtr1 =
-        std::make_shared<Function>(Program::GetInstance(), "TestPassManager1", "TestPassManager1", nullptr);
+    auto currFunctionPtr1 = std::make_shared<Function>(Program::GetInstance(), "TestPassManager1", "TestPassManager1",
+                                                       nullptr);
     PassConfigs configs;
     configs.printGraph = true;
     passTestCase.SetPassConfigs(configs);
@@ -137,10 +137,10 @@ TEST_F(PassManagerTest, TestPassBase)
 
 TEST_F(PassManagerTest, TestPassStrategy)
 {
-    PassManager::Instance().RegisterStrategy(
-        "StrategyTest", {{"RemoveRedundantReshape", PassName::REMOVE_REDUNDANT_RESHAPE},
-                         {"InferMemoryConflict", PassName::INFER_MEMORY_CONFLICT},
-                         {"ExpandFunction", PassName::EXPAND_FUNCTION}});
+    PassManager::Instance().RegisterStrategy("StrategyTest",
+                                             {{"RemoveRedundantReshape", PassName::REMOVE_REDUNDANT_RESHAPE},
+                                              {"InferMemoryConflict", PassName::INFER_MEMORY_CONFLICT},
+                                              {"ExpandFunction", PassName::EXPAND_FUNCTION}});
     // user define
     auto strategyPasses = PassManager::Instance().GetStrategyPasses("StrategyTest");
     EXPECT_TRUE(!strategyPasses.empty());
@@ -154,9 +154,9 @@ TEST_F(PassManagerTest, TestPassStrategy)
 
 TEST_F(PassManagerTest, TestPassReg)
 {
-    PassManager::Instance().RegisterStrategy(
-        "TestPassReg", {{"RemoveRedundantReshape", PassName::REMOVE_REDUNDANT_RESHAPE},
-                        {"RemoveRedundantReshape", PassName::REMOVE_REDUNDANT_RESHAPE}});
+    PassManager::Instance().RegisterStrategy("TestPassReg",
+                                             {{"RemoveRedundantReshape", PassName::REMOVE_REDUNDANT_RESHAPE},
+                                              {"RemoveRedundantReshape", PassName::REMOVE_REDUNDANT_RESHAPE}});
     // user define
     auto strategyPasses = PassManager::Instance().GetStrategyPasses("TestPassReg");
     EXPECT_TRUE(strategyPasses.size() == 1);
@@ -178,8 +178,8 @@ void GetGraph(ComputationalGraphBuilder& G)
 
 TEST_F(PassManagerTest, TestPassDFX)
 {
-    PassManager::Instance().RegisterStrategy(
-        "TestPassDFX", {{"RemoveRedundantReshape", PassName::REMOVE_REDUNDANT_RESHAPE}});
+    PassManager::Instance().RegisterStrategy("TestPassDFX",
+                                             {{"RemoveRedundantReshape", PassName::REMOVE_REDUNDANT_RESHAPE}});
     ComputationalGraphBuilder G;
     GetGraph(G);
     Function* function = G.GetFunction();
@@ -190,14 +190,14 @@ TEST_F(PassManagerTest, TestPassDFX)
     config::SetPassConfig("TestPassDFX", "RemoveRedundantReshape", "dump_graph", true);
     PassManager::Instance().RunPass(Program::GetInstance(), *function, "TestPassDFX");
     auto strategyPath = rootPath + "/computation_graph/Strategy_00_TestPassDFX";
-    auto afterJsonPath =
-        strategyPath + "/Pass_00_RemoveRedundantReshape/After_000_RemoveRedundantReshape_PROGRAM_ENTRY.json";
-    auto beforeJsonPath =
-        strategyPath + "/Pass_00_RemoveRedundantReshape/Before_000_RemoveRedundantReshape_PROGRAM_ENTRY.json";
-    auto beforeIRPath =
-        strategyPath + "/Pass_00_RemoveRedundantReshape/Before_000_RemoveRedundantReshape_PROGRAM_ENTRY.tifwkgr";
-    auto afterIRPath =
-        strategyPath + "/Pass_00_RemoveRedundantReshape/After_000_RemoveRedundantReshape_PROGRAM_ENTRY.tifwkgr";
+    auto afterJsonPath = strategyPath +
+                         "/Pass_00_RemoveRedundantReshape/After_000_RemoveRedundantReshape_PROGRAM_ENTRY.json";
+    auto beforeJsonPath = strategyPath +
+                          "/Pass_00_RemoveRedundantReshape/Before_000_RemoveRedundantReshape_PROGRAM_ENTRY.json";
+    auto beforeIRPath = strategyPath +
+                        "/Pass_00_RemoveRedundantReshape/Before_000_RemoveRedundantReshape_PROGRAM_ENTRY.tifwkgr";
+    auto afterIRPath = strategyPath +
+                       "/Pass_00_RemoveRedundantReshape/After_000_RemoveRedundantReshape_PROGRAM_ENTRY.tifwkgr";
     std::cout << "afterJsonPath: " << afterJsonPath << std::endl;
     EXPECT_TRUE(IsPathExist(afterJsonPath));
     EXPECT_TRUE(IsPathExist(beforeJsonPath));
@@ -210,10 +210,10 @@ TEST_F(PassManagerTest, TestPassDFX)
 TEST_F(PassManagerTest, TestDumpMultiplePassGraphByDebugOption)
 {
     const std::string testStrategy = "TestDumpMultiplePassGraphByDebugOption";
-    PassManager::Instance().RegisterStrategy(
-        testStrategy, {{"RemoveRedundantReshape", PassName::REMOVE_REDUNDANT_RESHAPE},
-                       {"InferMemoryConflict", PassName::INFER_MEMORY_CONFLICT},
-                       {"RemoveUndrivenView", PassName::REMOVE_UNDRIVEN_VIEW}});
+    PassManager::Instance().RegisterStrategy(testStrategy,
+                                             {{"RemoveRedundantReshape", PassName::REMOVE_REDUNDANT_RESHAPE},
+                                              {"InferMemoryConflict", PassName::INFER_MEMORY_CONFLICT},
+                                              {"RemoveUndrivenView", PassName::REMOVE_UNDRIVEN_VIEW}});
     ComputationalGraphBuilder G;
     GetGraph(G);
     Function* function = G.GetFunction();
@@ -224,18 +224,17 @@ TEST_F(PassManagerTest, TestDumpMultiplePassGraphByDebugOption)
     }
 
     config::SetOptionsNg<std::vector<std::string>>(
-        "debug.dump_pass_graph",
-        std::vector<std::string>{"RemoveRedundantReshape", "InferMemoryConflict"});
+        "debug.dump_pass_graph", std::vector<std::string>{"RemoveRedundantReshape", "InferMemoryConflict"});
     EXPECT_EQ(PassManager::Instance().RunPass(Program::GetInstance(), *function, testStrategy), SUCCESS);
 
-    auto firstAfterJsonPath =
-        strategyPath + "/Pass_00_RemoveRedundantReshape/After_000_RemoveRedundantReshape_PROGRAM_ENTRY.json";
-    auto firstAfterIRPath =
-        strategyPath + "/Pass_00_RemoveRedundantReshape/After_000_RemoveRedundantReshape_PROGRAM_ENTRY.tifwkgr";
-    auto secondAfterJsonPath =
-        strategyPath + "/Pass_01_InferMemoryConflict/After_001_InferMemoryConflict_PROGRAM_ENTRY.json";
-    auto secondAfterIRPath =
-        strategyPath + "/Pass_01_InferMemoryConflict/After_001_InferMemoryConflict_PROGRAM_ENTRY.tifwkgr";
+    auto firstAfterJsonPath = strategyPath +
+                              "/Pass_00_RemoveRedundantReshape/After_000_RemoveRedundantReshape_PROGRAM_ENTRY.json";
+    auto firstAfterIRPath = strategyPath +
+                            "/Pass_00_RemoveRedundantReshape/After_000_RemoveRedundantReshape_PROGRAM_ENTRY.tifwkgr";
+    auto secondAfterJsonPath = strategyPath +
+                               "/Pass_01_InferMemoryConflict/After_001_InferMemoryConflict_PROGRAM_ENTRY.json";
+    auto secondAfterIRPath = strategyPath +
+                             "/Pass_01_InferMemoryConflict/After_001_InferMemoryConflict_PROGRAM_ENTRY.tifwkgr";
     EXPECT_TRUE(IsPathExist(firstAfterJsonPath));
     EXPECT_TRUE(IsPathExist(firstAfterIRPath));
     EXPECT_TRUE(IsPathExist(secondAfterJsonPath));
@@ -247,17 +246,17 @@ TEST_F(PassManagerTest, TestDumpMultiplePassGraphByDebugOption)
 TEST_F(PassManagerTest, TestPassStrategyRepeatRegister)
 {
     const std::string testStrategy = "RepeatRegStrategy";
-    PassManager::Instance().RegisterStrategy(
-        testStrategy, {{"RemoveRedundantReshape", PassName::REMOVE_REDUNDANT_RESHAPE},
-                       {"InferMemoryConflict", PassName::INFER_MEMORY_CONFLICT}});
+    PassManager::Instance().RegisterStrategy(testStrategy,
+                                             {{"RemoveRedundantReshape", PassName::REMOVE_REDUNDANT_RESHAPE},
+                                              {"InferMemoryConflict", PassName::INFER_MEMORY_CONFLICT}});
     auto firstPasses = PassManager::Instance().GetStrategyPasses(testStrategy);
     EXPECT_TRUE(firstPasses.size() == 2);
     EXPECT_TRUE(firstPasses[0].identifier == "RemoveRedundantReshape");
     EXPECT_TRUE(firstPasses[1].identifier == "InferMemoryConflict");
 
-    PassManager::Instance().RegisterStrategy(
-        testStrategy, {{"ExpandFunction", PassName::EXPAND_FUNCTION},
-                       {"RemoveRedundantReshape", PassName::REMOVE_REDUNDANT_RESHAPE}});
+    PassManager::Instance().RegisterStrategy(testStrategy,
+                                             {{"ExpandFunction", PassName::EXPAND_FUNCTION},
+                                              {"RemoveRedundantReshape", PassName::REMOVE_REDUNDANT_RESHAPE}});
     auto updatedPasses = PassManager::Instance().GetStrategyPasses(testStrategy);
     EXPECT_TRUE(updatedPasses.size() == 2);
     EXPECT_TRUE(updatedPasses[0].identifier == "ExpandFunction");

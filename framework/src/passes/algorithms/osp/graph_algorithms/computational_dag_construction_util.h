@@ -35,23 +35,22 @@ namespace osp {
  * @param to The target graph.
  */
 template <typename GraphFrom, typename GraphTo>
-void ConstructComputationalDag(const GraphFrom &from, GraphTo &to)
+void ConstructComputationalDag(const GraphFrom& from, GraphTo& to)
 {
     std::vector<VertexIdxT<GraphTo>> vertexMap;
     vertexMap.reserve(from.NumVertices());
 
-    for (const auto &vIdx : from.Vertices()) {
-        vertexMap.push_back(to.AddVertex(
-            from.VertexWorkWeight(vIdx), from.VertexCommWeight(vIdx),
-            from.VertexMemWeight(vIdx), from.VertexType(vIdx)));
+    for (const auto& vIdx : from.Vertices()) {
+        vertexMap.push_back(to.AddVertex(from.VertexWorkWeight(vIdx), from.VertexCommWeight(vIdx),
+                                         from.VertexMemWeight(vIdx), from.VertexType(vIdx)));
     }
 
-    for (const auto &v : from.Vertices()) {
-        for (const auto &child : from.Children(v)) {
+    for (const auto& v : from.Vertices()) {
+        for (const auto& child : from.Children(v)) {
             to.AddEdge(vertexMap[v], vertexMap[child]);
         }
     }
 }
-}    // namespace osp
+} // namespace osp
 } // namespace npu::tile_fwk
 #endif // OSP_COMPUTATIONAL_DAG_CONSTRUCTION_UTIL_HPP

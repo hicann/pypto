@@ -417,9 +417,8 @@ void CodeGenOpNPU::AppendLocalBufferVarOffset(const std::map<unsigned, std::refe
         std::string& var = kv.second.get();
 
         ASSERT(GenCodeErr::SYMBOL_NOT_FOUND, !var.empty()) << "operandIdx: " << operandIdx << ", var is empty !!";
-        CODEGEN_LOGI(
-            "var: %s, varRawShape: %s, varOffset: %s, resOffset: %ld", var.c_str(), IntVecToStr(varRawShape).c_str(),
-            IntVecToStr(varOffset).c_str(), static_cast<long>(resOffset));
+        CODEGEN_LOGI("var: %s, varRawShape: %s, varOffset: %s, resOffset: %ld", var.c_str(),
+                     IntVecToStr(varRawShape).c_str(), IntVecToStr(varOffset).c_str(), static_cast<long>(resOffset));
 
         var.append(" + ").append(std::to_string(resOffset));
     }
@@ -484,8 +483,8 @@ std::string CodeGenOpNPU::GetGmTensorAddrByAttr(unsigned gmParamIdx) const
     std::map<TensorAddrKey, SymbolicScalar> addrs;
     bool ret = GetTensorAttr(gmParamIdx, TensorAttributeKey::tensorAddr, addrs);
     if (!ret || addrs.empty()) {
-        CODEGEN_LOGW(
-            "gmParamIdx: %u, tensorAddr is not found in attr !! op: %s", gmParamIdx, originalOp.Dump().c_str());
+        CODEGEN_LOGW("gmParamIdx: %u, tensorAddr is not found in attr !! op: %s", gmParamIdx,
+                     originalOp.Dump().c_str());
         return "";
     }
     ASSERT(OperErr::ATTRIBUTE_INVALID, originalOp.BelongTo() != nullptr)
@@ -494,9 +493,8 @@ std::string CodeGenOpNPU::GetGmTensorAddrByAttr(unsigned gmParamIdx) const
     TensorAddrKey key{funcMagic, originalOp.GetOpMagic()};
     auto iter = addrs.find(key);
     ASSERT(OperErr::ATTRIBUTE_INVALID, iter != addrs.end())
-        << "addr is not found by TensorAddrKey{funcMagic: " << funcMagic
-        << ", opMagic: " << originalOp.GetOpMagic() << "}, gmParamIdx: " << gmParamIdx
-        << ", op: " << originalOp.Dump();
+        << "addr is not found by TensorAddrKey{funcMagic: " << funcMagic << ", opMagic: " << originalOp.GetOpMagic()
+        << "}, gmParamIdx: " << gmParamIdx << ", op: " << originalOp.Dump();
     std::string gmParamVar = SymbolicExpressionTable::BuildExpression(iter->second);
     CODEGEN_LOGI("gmParamVar from attr is : %s", gmParamVar.c_str());
     return gmParamVar;
@@ -520,8 +518,8 @@ std::string CodeGenOpNPU::GenGmParamVar(unsigned gmParamIdx) const
 // Used for parameter of GM shape and offset, e.g.
 // GET_PARAM_RAWSHAPE_2(param, 19, 9), GET_PARAM_OFFSET_2(param, 19, 9)
 // If dim is 2, the macro would be expanded into "shape0, shape1" which is implemented in aicore_runtime.h
-std::vector<std::string> CodeGenOpNPU::GenGetParamMacroPacked(
-    unsigned gmParamIdx, int dim, const std::string& prefix) const
+std::vector<std::string> CodeGenOpNPU::GenGetParamMacroPacked(unsigned gmParamIdx, int dim,
+                                                              const std::string& prefix) const
 {
     std::vector<std::string> paramExpr;
     std::ostringstream os;
@@ -547,8 +545,8 @@ std::vector<std::string> CodeGenOpNPU::GenDynStridePacked(const std::vector<std:
     return paramExpr;
 };
 
-std::vector<std::string> CodeGenOpNPU::GenParamIdxExprByIndex(
-    unsigned gmParamIdx, int dim, const std::string& prefix) const
+std::vector<std::string> CodeGenOpNPU::GenParamIdxExprByIndex(unsigned gmParamIdx, int dim,
+                                                              const std::string& prefix) const
 {
     std::vector<std::string> paramExpr;
     std::ostringstream os;
@@ -586,15 +584,14 @@ std::vector<std::string> CodeGenOpNPU::BuildStride(const std::vector<int64_t>& i
     return res;
 }
 
-void CodeGenOpNPU::UpdateTileTensorShapeAndStride(
-    int paramIdx, TileTensor& tileTensor, bool isSpillToGm, const TileTensorShape& tileTensorShape)
+void CodeGenOpNPU::UpdateTileTensorShapeAndStride(int paramIdx, TileTensor& tileTensor, bool isSpillToGm,
+                                                  const TileTensorShape& tileTensorShape)
 {
     auto newShape = tileTensorShape.shape;
     auto newRawShape = tileTensorShape.rawShape;
     auto newDynValidShape = tileTensorShape.dynamicValidShape;
-    CODEGEN_LOGI(
-        "newShape is %s, newRawShape is %s, newDynValidShape is %s", IntVecToStr(newShape).c_str(),
-        IntVecToStr(newRawShape).c_str(), IntVecToStr(newDynValidShape).c_str());
+    CODEGEN_LOGI("newShape is %s, newRawShape is %s, newDynValidShape is %s", IntVecToStr(newShape).c_str(),
+                 IntVecToStr(newRawShape).c_str(), IntVecToStr(newDynValidShape).c_str());
 
     tileTensor.rawShape = newRawShape;
 
@@ -637,8 +634,8 @@ void CodeGenOpNPU::UpdateTileTensorShapeAndStride(
     tileTensor.stride = BuildStride(newRawShape);
 }
 
-TileTensor CodeGenOpNPU::BuildTileTensor(
-    int paramIdx, const std::string& usingType, const TileTensorShape& tileTensorShape)
+TileTensor CodeGenOpNPU::BuildTileTensor(int paramIdx, const std::string& usingType,
+                                         const TileTensorShape& tileTensorShape)
 {
     int64_t gmOffset{0};
     bool isSpillToGm = GetTensorAttr(paramIdx, OpAttributeKey::workspaceBaseOffset, gmOffset);
@@ -692,20 +689,19 @@ void CodeGenOpNPU::UpdateTileTensorInfo()
     tileOpName = iter->second; // update tileOpName from SUPPORT_TILETENSOR_OPS
 
     for (int i = 0; i < operandCnt; ++i) {
-        TileTensorUsing tileTensorUsing{
-            functionType == FunctionType::STATIC || isMainBlock,
-            operandDtype[i],
-            operandType[i],
-            static_cast<int>(rawShape[i].size()),
-            shape[i],
-            rawShape[i]};
+        TileTensorUsing tileTensorUsing{functionType == FunctionType::STATIC || isMainBlock,
+                                        operandDtype[i],
+                                        operandType[i],
+                                        static_cast<int>(rawShape[i].size()),
+                                        shape[i],
+                                        rawShape[i]};
         std::string usingType = sm->AddTileTensorUsing(tileTensorUsing);
         TileTensorShape tileTensorShape{false, shape[i], rawShape[i], dynamicValidShape[i]};
         TileTensor tileTensor = BuildTileTensor(i, usingType, tileTensorShape);
         std::string tensorName = sm->AddTileTensor(originalOp.GetOpMagic(), tileTensor);
         tensorNames_[i] = tensorName;
-        CODEGEN_LOGI(
-            "AddTileTensor op idx: %d, result usingType: %s, tensorName: %s", i, usingType.c_str(), tensorName.c_str());
+        CODEGEN_LOGI("AddTileTensor op idx: %d, result usingType: %s, tensorName: %s", i, usingType.c_str(),
+                     tensorName.c_str());
     }
 }
 
@@ -771,10 +767,10 @@ void CodeGenOpNPU::UpdateLoopInfo()
             continue;
         }
         TileTensorShape tileTensorShape = BuildTileTensorShapeInLoop(i);
-        CODEGEN_LOGI(
-            "tileTensorShape: isInLoop is %s newShape is %s, newRawShape is %s, newDynValidShape is %s",
-            tileTensorShape.isInLoop ? "true" : "false", IntVecToStr(tileTensorShape.shape).c_str(),
-            IntVecToStr(tileTensorShape.rawShape).c_str(), IntVecToStr(tileTensorShape.dynamicValidShape).c_str());
+        CODEGEN_LOGI("tileTensorShape: isInLoop is %s newShape is %s, newRawShape is %s, newDynValidShape is %s",
+                     tileTensorShape.isInLoop ? "true" : "false", IntVecToStr(tileTensorShape.shape).c_str(),
+                     IntVecToStr(tileTensorShape.rawShape).c_str(),
+                     IntVecToStr(tileTensorShape.dynamicValidShape).c_str());
         TileTensorUsing tileTensorUsing{
             functionType == FunctionType::STATIC || isMainBlock, operandDtype[i],       operandType[i],
             static_cast<int>(tileTensorShape.rawShape.size()),   tileTensorShape.shape, tileTensorShape.rawShape};

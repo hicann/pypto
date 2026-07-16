@@ -52,16 +52,14 @@ Tensor RotateHalf(const Tensor& input)
         -1); // x1 add 0, 规避pass view+assemble未翻译registor_copy的问题
 }
 
-void ApplyRotaryPosEmbV2(
-    const Tensor& q, const Tensor& k, const Tensor& cos, const Tensor& sin, Tensor& qEmbed, Tensor& kEmbed,
-    const int unsqueezeDim, const RoPETileShapeConfigNew& ropeTileShapeConfig)
+void ApplyRotaryPosEmbV2(const Tensor& q, const Tensor& k, const Tensor& cos, const Tensor& sin, Tensor& qEmbed,
+                         Tensor& kEmbed, const int unsqueezeDim, const RoPETileShapeConfigNew& ropeTileShapeConfig)
 {
     auto outputDtype = qEmbed.GetStorage()->Datatype();
 
     // q/k仅支持四维，cos/sin仅支持san维
-    assert(
-        q.GetShape().size() == SHAPE_DIM4 && k.GetShape().size() == SHAPE_DIM4 && cos.GetShape().size() == SHAPE_DIM3 &&
-        sin.GetShape().size() == SHAPE_DIM3);
+    assert(q.GetShape().size() == SHAPE_DIM4 && k.GetShape().size() == SHAPE_DIM4 &&
+           cos.GetShape().size() == SHAPE_DIM3 && sin.GetShape().size() == SHAPE_DIM3);
 
     assert(!ropeTileShapeConfig.threeDimsTileShape.empty() && "rope ThreeDims Tile need to set!");
     assert(!ropeTileShapeConfig.fourDimsTileShapeQ.empty() && "rope FourDimsQ Tile need to set!");
@@ -87,7 +85,7 @@ void ApplyRotaryPosEmbV2(
     int h = castQ.GetShape()[2];
     int d = castQ.GetShape()[NUM_VALUE_3];
 
-    auto qView = Reshape(castQ, {b, s, h, d / 2, 2});           // [b,n,s,qk_d//2,2]
+    auto qView = Reshape(castQ, {b, s, h, d / 2, 2}); // [b,n,s,qk_d//2,2]
     TileShape::Current().SetVecTile(ropeTileShapeConfig.fiveDimsTileShape);
     auto qTrans = Transpose(qView, {NUM_VALUE_3, NUM_VALUE_4}); // [b,n,s,2,qk_d//2]
     auto qReshape = Reshape(qTrans, {b, s, h, d});              // [b,n,s,qk_d]
@@ -119,16 +117,15 @@ void ApplyRotaryPosEmbV2(
     }
 }
 
-void ApplyRotaryPosEmb(
-    const Tensor& q, const Tensor& k, const Tensor& cos, const Tensor& sin, const Tensor& positionIds, Tensor& qEmbed,
-    Tensor& kEmbed, const int unsqueezeDim, const RoPETileShapeConfig& ropeTileShapeConfig)
+void ApplyRotaryPosEmb(const Tensor& q, const Tensor& k, const Tensor& cos, const Tensor& sin,
+                       const Tensor& positionIds, Tensor& qEmbed, Tensor& kEmbed, const int unsqueezeDim,
+                       const RoPETileShapeConfig& ropeTileShapeConfig)
 {
     auto outputDtype = qEmbed.GetStorage()->Datatype();
 
     // q/k仅支持四维，cos/sin仅支持两维
-    assert(
-        q.GetShape().size() == SHAPE_DIM4 && k.GetShape().size() == SHAPE_DIM4 && cos.GetShape().size() == SHAPE_DIM2 &&
-        sin.GetShape().size() == SHAPE_DIM2);
+    assert(q.GetShape().size() == SHAPE_DIM4 && k.GetShape().size() == SHAPE_DIM4 &&
+           cos.GetShape().size() == SHAPE_DIM2 && sin.GetShape().size() == SHAPE_DIM2);
 
     assert(!ropeTileShapeConfig.twoDimsTileShape.empty() && "rope TwoDims Tile need to set!");
     assert(!ropeTileShapeConfig.threeDimsTileShape.empty() && "rope ThreeDims Tile need to set!");
@@ -160,7 +157,7 @@ void ApplyRotaryPosEmb(
     int d = castQ.GetShape()[NUM_VALUE_3];
 
     TileShape::Current().SetVecTile(ropeTileShapeConfig.fourDimsTileShape);
-    auto qView = Reshape(castQ, {b, h, s, d / 2, 2});           // [b,n,s,qk_d//2,2]
+    auto qView = Reshape(castQ, {b, h, s, d / 2, 2}); // [b,n,s,qk_d//2,2]
     TileShape::Current().SetVecTile(ropeTileShapeConfig.fiveDimsTileShape);
     auto qTrans = Transpose(qView, {NUM_VALUE_3, NUM_VALUE_4}); // [b,n,s,2,qk_d//2]
     auto qReshape = Reshape(qTrans, {b, h, s, d});              // [b,n,s,qk_d]

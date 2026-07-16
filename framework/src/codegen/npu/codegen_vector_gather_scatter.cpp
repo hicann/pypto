@@ -147,8 +147,8 @@ std::string CodeGenOpNPU::GenGatherFromUBOp() const
 
     std::vector dstShape = rawShape[ID0];
     std::vector src0Shape = rawShape[ID1];
-    CODEGEN_LOGI(
-        "GenGatherOp, src0 Shape is [%ld,%ld]", static_cast<long>(src0Shape[0]), static_cast<long>(src0Shape[1]));
+    CODEGEN_LOGI("GenGatherOp, src0 Shape is [%ld,%ld]", static_cast<long>(src0Shape[0]),
+                 static_cast<long>(src0Shape[1]));
 
     std::string dstDtypeStr = DataType2CCEStr(operandDtype[ID0]);
     std::string src0DtypeStr = DataType2CCEStr(operandDtype[ID1]);
@@ -343,8 +343,8 @@ std::string CodeGenOpNPU::PrintScatterElementSOpDynamicUnaligned(const PrintScat
     const Element& scala = extOperandVal;
     std::string scalarDtypeBuffer = DataType2CCEStr(scala.GetDataType());
     auto dynSrc1Shape = dynamicValidShape[ToUnderlying(MISOIdx::SRC1_IDX)];
-    FillVecWithDummyInHead<SymbolicScalar>(
-        dynSrc1Shape, SHAPE_DIM4 - dynamicValidShape[ToUnderlying(MISOIdx::SRC1_IDX)].size(), 1);
+    FillVecWithDummyInHead<SymbolicScalar>(dynSrc1Shape,
+                                           SHAPE_DIM4 - dynamicValidShape[ToUnderlying(MISOIdx::SRC1_IDX)].size(), 1);
 
     std::vector<std::string> templateParams;
     templateParams.emplace_back(dataTypeExpr[ToUnderlying(MISOIdx::DST_IDX)]);

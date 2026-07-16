@@ -35,9 +35,8 @@ public:
     TestCodegenDynBitwiseBinary() : CodegenTestBase({.compileStage = CS_EXECUTE_GRAPH, .setIdGen = true}) {}
 };
 
-void TestBitwiseTensorDynBody(
-    const std::vector<int64_t>& shape, const std::vector<int64_t>& tile_shape, const std::string& name,
-    const std::string& expect)
+void TestBitwiseTensorDynBody(const std::vector<int64_t>& shape, const std::vector<int64_t>& tile_shape,
+                              const std::string& name, const std::string& expect)
 {
     // 设置Tile形状
     TileShape::Current().SetVecTile(tile_shape);
@@ -61,16 +60,15 @@ void TestBitwiseTensorDynBody(
         }
     }
 
-    auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + name + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + name + SUB_FUNC_SUFFIX +
+                                                                HIDDEN_FUNC_SUFFIX);
 
     std::string res = GenCodeByFunction(*function);
     CheckStringExist(expect, res);
 }
 
-void TestBitwiseScalarDynBody(
-    const std::vector<int64_t>& shape, const std::vector<int64_t>& tile_shape, const std::string& name,
-    const std::string& expect)
+void TestBitwiseScalarDynBody(const std::vector<int64_t>& shape, const std::vector<int64_t>& tile_shape,
+                              const std::string& name, const std::string& expect)
 {
     // 设置Tile形状
     TileShape::Current().SetVecTile(tile_shape);
@@ -94,8 +92,8 @@ void TestBitwiseScalarDynBody(
         }
     }
 
-    auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + name + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + name + SUB_FUNC_SUFFIX +
+                                                                HIDDEN_FUNC_SUFFIX);
 
     std::string res = GenCodeByFunction(*function);
     CheckStringExist(expect, res);

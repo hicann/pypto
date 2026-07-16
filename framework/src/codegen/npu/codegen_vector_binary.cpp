@@ -692,9 +692,9 @@ std::string CodeGenOpNPU::GenVectorScalarOpByMode(VecScalMode mode) const
     int64_t emuopc = -1;
     GetOpAttr(OP_EMUOP_PREFIX + "opc", emuopc);
     if (emuopc == EMUOP_TENSOR_EXTRACT) {
-        int ret = sprintf_s(
-            buffer, sizeof(buffer), "RUNTIME_TensorExtract(/*type=*/%s, /*mem=*/__ubuf__, /*dst*/%s, /*src*/%s);\n",
-            dstDtypeStr.c_str(), dVar.c_str(), s0Var.c_str());
+        int ret = sprintf_s(buffer, sizeof(buffer),
+                            "RUNTIME_TensorExtract(/*type=*/%s, /*mem=*/__ubuf__, /*dst*/%s, /*src*/%s);\n",
+                            dstDtypeStr.c_str(), dVar.c_str(), s0Var.c_str());
         ASSERT(GenCodeErr::PRINT_FAILED, ret >= 0) << "Gen " << opCodeStr << ":EMUOP_TENSOR_EXTRACT failed " << ret;
         return buffer;
     }
@@ -708,13 +708,12 @@ std::string CodeGenOpNPU::GenVectorScalarOpByMode(VecScalMode mode) const
     }
 
     std::string scalarTmpBuffer = FormatScalarLiteral(extOperandVal);
-    int ret = sprintf_s(
-        buffer, sizeof(buffer),
-        "%s_<%s, %d, %d, %d, %d, /*DS*/ %d, %d, %d, /*S0S*/ %d, %d, %d>"
-        "((__ubuf__ %s*)%s, (__ubuf__ %s*)%s, (%s)%s);\n",
-        tileOpName.c_str(), dstDtypeStr.c_str(), os0[ID0], os0[ID1], os0[ID2], os0[ID3], ds[ID1], ds[ID2], ds[ID3],
-        s0[ID1], s0[ID2], s0[ID3], dstDtypeStr.c_str(), dVar.c_str(), dstDtypeStr.c_str(), s0Var.c_str(),
-        dstDtypeStr.c_str(), scalarTmpBuffer.c_str());
+    int ret = sprintf_s(buffer, sizeof(buffer),
+                        "%s_<%s, %d, %d, %d, %d, /*DS*/ %d, %d, %d, /*S0S*/ %d, %d, %d>"
+                        "((__ubuf__ %s*)%s, (__ubuf__ %s*)%s, (%s)%s);\n",
+                        tileOpName.c_str(), dstDtypeStr.c_str(), os0[ID0], os0[ID1], os0[ID2], os0[ID3], ds[ID1],
+                        ds[ID2], ds[ID3], s0[ID1], s0[ID2], s0[ID3], dstDtypeStr.c_str(), dVar.c_str(),
+                        dstDtypeStr.c_str(), s0Var.c_str(), dstDtypeStr.c_str(), scalarTmpBuffer.c_str());
     ASSERT(GenCodeErr::PRINT_FAILED, ret >= 0) << "sprintf_s " << opCodeStr << "  failed " << ret;
     return buffer;
 }

@@ -31,8 +31,8 @@ using namespace npu::tile_fwk::dynamic;
 
 class DynamicPATest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac {};
 
-static void readBlockTableFromFile(
-    const std::string& filename, int rows, int cols, std::vector<std::vector<int>>& blockTable)
+static void readBlockTableFromFile(const std::string& filename, int rows, int cols,
+                                   std::vector<std::vector<int>>& blockTable)
 {
     std::ifstream inFile(filename, std::ios::binary);
     if (!inFile) {
@@ -151,24 +151,21 @@ void testPa(PaTileShapeConfig& tileConfig, PaConfig config)
     });
 
     if (config.onlyBatchLoop) {
-        PageAttentionHighThroughput(
-            qNope, kNopeCache, vNopeCache, qRope, kRopeCache, blockTable, actSeqs, blockSize, softmaxScale, paOut,
-            tileConfig, config.maxUnrollTimes);
+        PageAttentionHighThroughput(qNope, kNopeCache, vNopeCache, qRope, kRopeCache, blockTable, actSeqs, blockSize,
+                                    softmaxScale, paOut, tileConfig, config.maxUnrollTimes);
     } else {
         if (!config.manualUnroll) {
             if (!config.isImmediateSymScalar) {
-                PageAttention(
-                    qNope, kNopeCache, vNopeCache, qRope, kRopeCache, blockTable, actSeqs, blockSize, softmaxScale,
-                    paOut, tileConfig, config.maxUnrollTimes, config.isNzFormat);
+                PageAttention(qNope, kNopeCache, vNopeCache, qRope, kRopeCache, blockTable, actSeqs, blockSize,
+                              softmaxScale, paOut, tileConfig, config.maxUnrollTimes, config.isNzFormat);
             } else {
-                PageAttentionWithImmScalar(
-                    qNope, kNopeCache, vNopeCache, qRope, kRopeCache, blockTableVector /*vector*/, seq /*vector*/,
-                    blockSize, softmaxScale, paOut, tileConfig, config.maxUnrollTimes, config.isNzFormat);
+                PageAttentionWithImmScalar(qNope, kNopeCache, vNopeCache, qRope, kRopeCache,
+                                           blockTableVector /*vector*/, seq /*vector*/, blockSize, softmaxScale, paOut,
+                                           tileConfig, config.maxUnrollTimes, config.isNzFormat);
             }
         } else {
-            PageAttentionWithManualUnroll(
-                qNope, kNopeCache, vNopeCache, qRope, kRopeCache, blockTable, actSeqs, blockSize, softmaxScale, paOut,
-                tileConfig, config.maxUnrollTimes);
+            PageAttentionWithManualUnroll(qNope, kNopeCache, vNopeCache, qRope, kRopeCache, blockTable, actSeqs,
+                                          blockSize, softmaxScale, paOut, tileConfig, config.maxUnrollTimes);
         }
     }
 
@@ -311,7 +308,7 @@ TEST_F(DynamicPATest, dynamic_pa_noflash_unalign)
     const int blockSize = 128;
     tileConfig.headNumQTile = nTile;
     tileConfig.v0TileShape = {nTile, 128};
-    tileConfig.c1TileShape = {nTile, nTile, 64, 64, blockSize, blockSize};   // n, D, S2
+    tileConfig.c1TileShape = {nTile, nTile, 64, 64, blockSize, blockSize}; // n, D, S2
     tileConfig.v1TileShape = {nTile, 128};
     tileConfig.c2TileShape = {nTile, nTile, 128, 128, blockSize, blockSize}; // n, S2, D
     tileConfig.v2TileShape = {nTile, 128};
@@ -326,7 +323,7 @@ TEST_F(DynamicPATest, dynamic_pa_noflash)
     const int blockSize = 128;
     tileConfig.headNumQTile = nTile;
     tileConfig.v0TileShape = {nTile, 128};
-    tileConfig.c1TileShape = {nTile, nTile, 64, 64, blockSize, blockSize};   // n, D, S2
+    tileConfig.c1TileShape = {nTile, nTile, 64, 64, blockSize, blockSize}; // n, D, S2
     tileConfig.v1TileShape = {nTile, 128};
     tileConfig.c2TileShape = {nTile, nTile, 128, 128, blockSize, blockSize}; // n, S2, D
     tileConfig.v2TileShape = {nTile, 128};
@@ -341,7 +338,7 @@ TEST_F(DynamicPATest, dynamic_pa_low_lantency_dyn_unalign)
     const int blockSize = 128;
     tileConfig.headNumQTile = nTile;
     tileConfig.v0TileShape = {nTile, 128};
-    tileConfig.c1TileShape = {nTile, nTile, 64, 64, blockSize, blockSize};   // n, D, S2
+    tileConfig.c1TileShape = {nTile, nTile, 64, 64, blockSize, blockSize}; // n, D, S2
     tileConfig.v1TileShape = {nTile, 128};
     tileConfig.c2TileShape = {nTile, nTile, 128, 128, blockSize, blockSize}; // n, S2, D
     tileConfig.v2TileShape = {nTile, 128};

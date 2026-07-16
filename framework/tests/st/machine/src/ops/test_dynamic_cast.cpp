@@ -25,8 +25,8 @@ using namespace npu::tile_fwk::dynamic;
 class DynamicCastTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac {};
 
 // 设置测试张量
-void SetupTestTensors(
-    int b, int sq, int d, DataType iType, DataType oType, Tensor& q, Tensor& actSeqs, Tensor& out, bool ready_on_host)
+void SetupTestTensors(int b, int sq, int d, DataType iType, DataType oType, Tensor& q, Tensor& actSeqs, Tensor& out,
+                      bool ready_on_host)
 {
     std::vector<int64_t> qShape = {b * sq, d};
     std::vector<int64_t> outShape = {b * sq, d};
@@ -76,9 +76,8 @@ void VerifyResults(int b, int sq, int d, const std::vector<int32_t>& golden)
 {
     std::vector<float> x(b * sq * d);
     auto outs = npu::tile_fwk::ProgramData::GetInstance().GetOutputData(0);
-    std::vector<int32_t> outVec(
-        reinterpret_cast<int32_t*>(outs->data()),
-        reinterpret_cast<int32_t*>(outs->data()) + outs->size() / sizeof(int32_t));
+    std::vector<int32_t> outVec(reinterpret_cast<int32_t*>(outs->data()),
+                                reinterpret_cast<int32_t*>(outs->data()) + outs->size() / sizeof(int32_t));
     int ret = resultCmpCast<float, int32_t>(x, golden, outVec, 0.001f);
     EXPECT_EQ(ret, true);
 }
@@ -220,9 +219,8 @@ TEST_F(DynamicCastTest, testDynCastDevSeparate)
 
     std::vector<float> x(b * sq * d);
     auto outs = npu::tile_fwk::ProgramData::GetInstance().GetOutputData(0);
-    std::vector<int32_t> outVec(
-        reinterpret_cast<int32_t*>(outs->data()),
-        reinterpret_cast<int32_t*>(outs->data()) + outs->size() / sizeof(int32_t));
+    std::vector<int32_t> outVec(reinterpret_cast<int32_t*>(outs->data()),
+                                reinterpret_cast<int32_t*>(outs->data()) + outs->size() / sizeof(int32_t));
     int ret = resultCmpCast<float, int32_t>(x, golden, outVec, 0.001f);
     EXPECT_EQ(ret, true);
 #endif

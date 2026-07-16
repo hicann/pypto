@@ -87,8 +87,8 @@ Pass pass::AggressiveDCE()
                     return func;
             }
             auto newBody = std::make_shared<ir::SeqStmts>(std::move(newStmts), func->body_->span_);
-            return std::make_shared<ir::Function>(
-                func->name_, func->params_, func->returnTypes_, newBody, func->span_, func->funcType_, func->entry_);
+            return std::make_shared<ir::Function>(func->name_, func->params_, func->returnTypes_, newBody, func->span_,
+                                                  func->funcType_, func->entry_);
         },
         "AggressiveDCE");
 }

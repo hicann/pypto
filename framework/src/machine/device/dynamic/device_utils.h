@@ -66,9 +66,9 @@ constexpr uint64_t NUM_FIFTY = 50;
 constexpr uint64_t US_PER_SEC = 1000000;
 constexpr uint64_t NSEC_PER_USEC = 1000;
 constexpr uint64_t NSEC_PER_SEC = 1000000000;
-constexpr uint64_t HAND_SHAKE_TIMEOUT_A2A3_CYCLES = 48000000000ULL;  // 48G cycles, 16分钟 @50MHz
+constexpr uint64_t HAND_SHAKE_TIMEOUT_A2A3_CYCLES = 48000000000ULL; // 48G cycles, 16分钟 @50MHz
 constexpr uint64_t HAND_SHAKE_TIMEOUT_A5_CYCLES = 960000000000ULL;  // 960G cycles, 16分钟 @1000MHz
-constexpr uint64_t TIMEOUT_A5_50US = 50000ULL;     // 50μs @1000MHz (1000 cycles per μs)
+constexpr uint64_t TIMEOUT_A5_50US = 50000ULL;                      // 50μs @1000MHz (1000 cycles per μs)
 constexpr int32_t MAX_MNG_AICORE_AVG_NUM = 8;
 constexpr uint32_t CORE_IDX_AIV = 0;
 constexpr uint32_t CORE_IDX_AIC = 1;
@@ -76,24 +76,24 @@ const uint32_t AIV_NUM_PER_AI_CORE = 2;
 const int INVALID_CORE_IDX = 0xFF;
 
 // A2/A3 架构超时常量 (基于 50MHz aicpu 频率，周期数直接定义，避免运行时乘法)
-constexpr uint64_t TIMEOUT_A2A3_20US   = 1000ULL;           // 1000 cycles
-constexpr uint64_t TIMEOUT_A2A3_50US   = 2500ULL;           // 2500 cycles
-constexpr uint64_t TIMEOUT_A2A3_100US  = 5000ULL;           // 5000 cycles
-constexpr uint64_t TIMEOUT_A2A3_200US  = 10000ULL;          // 10000 cycles
-constexpr uint64_t TIMEOUT_A2A3_1MS    = 50000ULL;          // 50000 cycles
-constexpr uint64_t TIMEOUT_A2A3_2MS    = 100000ULL;         // 100000 cycles
-constexpr uint64_t TIMEOUT_A2A3_3MS    = 150000ULL;         // 150000 cycles
-constexpr uint64_t TIMEOUT_A2A3_55MS   = 2750000ULL;        // 2750000 cycles
-constexpr uint64_t TIMEOUT_A2A3_1SEC   = 50000000ULL;       // 50M cycles
-constexpr uint64_t TIMEOUT_A2A3_10SEC  = 500000000ULL;      // 500M cycles
-constexpr uint64_t TIMEOUT_A2A3_1MIN   = 3000000000ULL;     // 3G cycles
-constexpr uint64_t TIMEOUT_A2A3_20MIN  = 60000000000ULL;    // 60G cycles
+constexpr uint64_t TIMEOUT_A2A3_20US = 1000ULL;         // 1000 cycles
+constexpr uint64_t TIMEOUT_A2A3_50US = 2500ULL;         // 2500 cycles
+constexpr uint64_t TIMEOUT_A2A3_100US = 5000ULL;        // 5000 cycles
+constexpr uint64_t TIMEOUT_A2A3_200US = 10000ULL;       // 10000 cycles
+constexpr uint64_t TIMEOUT_A2A3_1MS = 50000ULL;         // 50000 cycles
+constexpr uint64_t TIMEOUT_A2A3_2MS = 100000ULL;        // 100000 cycles
+constexpr uint64_t TIMEOUT_A2A3_3MS = 150000ULL;        // 150000 cycles
+constexpr uint64_t TIMEOUT_A2A3_55MS = 2750000ULL;      // 2750000 cycles
+constexpr uint64_t TIMEOUT_A2A3_1SEC = 50000000ULL;     // 50M cycles
+constexpr uint64_t TIMEOUT_A2A3_10SEC = 500000000ULL;   // 500M cycles
+constexpr uint64_t TIMEOUT_A2A3_1MIN = 3000000000ULL;   // 3G cycles
+constexpr uint64_t TIMEOUT_A2A3_20MIN = 60000000000ULL; // 60G cycles
 
 // A5 架构超时常量 (基于 1000MHz，是 A2A3 的 20 倍)
-constexpr uint64_t TIMEOUT_A5_1SEC   = 1000000000ULL;       // 1G cycles
-constexpr uint64_t TIMEOUT_A5_10SEC  = 10000000000ULL;      // 10G cycles
-constexpr uint64_t TIMEOUT_A5_1MIN   = 60000000000ULL;      // 60G cycles
-constexpr uint64_t TIMEOUT_A5_20MIN  = 1200000000000ULL;    // 1200G cycles
+constexpr uint64_t TIMEOUT_A5_1SEC = 1000000000ULL;     // 1G cycles
+constexpr uint64_t TIMEOUT_A5_10SEC = 10000000000ULL;   // 10G cycles
+constexpr uint64_t TIMEOUT_A5_1MIN = 60000000000ULL;    // 60G cycles
+constexpr uint64_t TIMEOUT_A5_20MIN = 1200000000000ULL; // 1200G cycles
 
 #define PERF_LEVEL 0
 #define PERF_AICORE_THREAD_START 100
@@ -215,7 +215,10 @@ inline const TO* PtrToPtr(const TI* const ptr)
 }
 
 inline uint64_t PtrToValue(const void* const ptr) { return static_cast<uint64_t>(reinterpret_cast<uintptr_t>(ptr)); }
-inline uint64_t PtrToValue(const volatile void* const ptr) { return static_cast<uint64_t>(reinterpret_cast<uintptr_t>(const_cast<const void*>(ptr))); }
+inline uint64_t PtrToValue(const volatile void* const ptr)
+{
+    return static_cast<uint64_t>(reinterpret_cast<uintptr_t>(const_cast<const void*>(ptr)));
+}
 
 inline void* ValueToPtr(const uint64_t value) { return reinterpret_cast<void*>(static_cast<uintptr_t>(value)); }
 
@@ -271,18 +274,18 @@ inline int CheckTimeOut(const uint64_t& tStart, uint64_t& tCnt, uint64_t& tCur, 
         DEV_IF_VERBOSE_DEBUG
         {
             if (tCur - tStart > DFX_TIME_OUT_THRESHOLD) {
-                DEV_ERROR(
-                    SchedErr::TASK_WAIT_TIMEOUT,
-                    "#sche.task.run.sync.timeout: %s dfx_timeout, aicpu force exit, ttl=%lu.", opString.c_str(), tCnt);
+                DEV_ERROR(SchedErr::TASK_WAIT_TIMEOUT,
+                          "#sche.task.run.sync.timeout: %s dfx_timeout, aicpu force exit, ttl=%lu.", opString.c_str(),
+                          tCnt);
                 return DEVICE_MACHINE_ERROR;
             }
         }
         else
         {
             if (tCur - tStart > TIME_OUT_THRESHOLD) {
-                DEV_ERROR(
-                    SchedErr::TASK_WAIT_TIMEOUT, "#sche.task.run.sync.timeout: %s timeout, aicpu force exit, ttl=%lu.",
-                    opString.c_str(), tCnt);
+                DEV_ERROR(SchedErr::TASK_WAIT_TIMEOUT,
+                          "#sche.task.run.sync.timeout: %s timeout, aicpu force exit, ttl=%lu.", opString.c_str(),
+                          tCnt);
                 return DEVICE_MACHINE_ERROR;
             }
         }
@@ -304,90 +307,78 @@ inline int CheckTimeOut(const std::string& operation, TimeCheck& timeCheck)
 // Timeout check macros
 // TIMEOUT_CHECK_INIT(arch, timeout_cycles_val) - initializes timeout_map, start, timeout_cycles, warn_interval(1/10)
 // TIMEOUT_CHECK_INIT_WARN_ONLY(arch) - for infinite wait scenarios (no timeout, warn_interval = 1MIN)
-#define TIMEOUT_CHECK_INIT(arch, timeout_cycles_val) \
+#define TIMEOUT_CHECK_INIT(arch, timeout_cycles_val)                                                \
     const uint64_t* timeout_map = (arch == ArchInfo::DAV_3510) ? TIMEOUT_MAP_A5 : TIMEOUT_MAP_A2A3; \
-    uint64_t start = GetCycles(); \
-    uint64_t timeout_cycles = timeout_cycles_val; \
-    uint64_t warn_interval = timeout_cycles / 10; \
-    (void) timeout_map;
+    uint64_t start = GetCycles();                                                                   \
+    uint64_t timeout_cycles = timeout_cycles_val;                                                   \
+    uint64_t warn_interval = timeout_cycles / 10;                                                   \
+    (void)timeout_map;
 
 #define TIMEOUT_CHECK_INIT_WARN_ONLY(arch) \
-    uint64_t start = GetCycles(); \
+    uint64_t start = GetCycles();          \
     uint64_t warn_interval = (arch == ArchInfo::DAV_3510) ? TIMEOUT_A5_1MIN : TIMEOUT_A2A3_1MIN
 
-constexpr uint64_t TIMEOUT_INDEX_50US   = 0;
-constexpr uint64_t TIMEOUT_INDEX_1SEC   = 1;
-constexpr uint64_t TIMEOUT_INDEX_10SEC  = 2;
-constexpr uint64_t TIMEOUT_INDEX_1MIN   = 3;
-constexpr uint64_t TIMEOUT_INDEX_20MIN  = 4;
+constexpr uint64_t TIMEOUT_INDEX_50US = 0;
+constexpr uint64_t TIMEOUT_INDEX_1SEC = 1;
+constexpr uint64_t TIMEOUT_INDEX_10SEC = 2;
+constexpr uint64_t TIMEOUT_INDEX_1MIN = 3;
+constexpr uint64_t TIMEOUT_INDEX_20MIN = 4;
 constexpr uint64_t TIMEOUT_INDEX_HAND_SHAKE = 5;
 
-static constexpr uint64_t TIMEOUT_MAP_A2A3[7] = {
-    TIMEOUT_A2A3_50US,
-    TIMEOUT_A2A3_1SEC,
-    TIMEOUT_A2A3_10SEC,
-    TIMEOUT_A2A3_1MIN,
-    TIMEOUT_A2A3_20MIN,
-    HAND_SHAKE_TIMEOUT_A2A3_CYCLES
-};
+static constexpr uint64_t TIMEOUT_MAP_A2A3[7] = {TIMEOUT_A2A3_50US, TIMEOUT_A2A3_1SEC,  TIMEOUT_A2A3_10SEC,
+                                                 TIMEOUT_A2A3_1MIN, TIMEOUT_A2A3_20MIN, HAND_SHAKE_TIMEOUT_A2A3_CYCLES};
 
-static constexpr uint64_t TIMEOUT_MAP_A5[7] = {
-    TIMEOUT_A5_50US,
-    TIMEOUT_A5_1SEC,
-    TIMEOUT_A5_10SEC,
-    TIMEOUT_A5_1MIN,
-    TIMEOUT_A5_20MIN,
-    HAND_SHAKE_TIMEOUT_A5_CYCLES
-};
+static constexpr uint64_t TIMEOUT_MAP_A5[7] = {TIMEOUT_A5_50US, TIMEOUT_A5_1SEC,  TIMEOUT_A5_10SEC,
+                                               TIMEOUT_A5_1MIN, TIMEOUT_A5_20MIN, HAND_SHAKE_TIMEOUT_A5_CYCLES};
 
-#define TIMEOUT_10SEC  (timeout_map[TIMEOUT_INDEX_10SEC])
-#define TIMEOUT_1MIN   (timeout_map[TIMEOUT_INDEX_1MIN])
-#define TIMEOUT_20MIN  (timeout_map[TIMEOUT_INDEX_20MIN])
+#define TIMEOUT_10SEC (timeout_map[TIMEOUT_INDEX_10SEC])
+#define TIMEOUT_1MIN (timeout_map[TIMEOUT_INDEX_1MIN])
+#define TIMEOUT_20MIN (timeout_map[TIMEOUT_INDEX_20MIN])
 #define TIMEOUT_HAND_SHAKE (timeout_map[TIMEOUT_INDEX_HAND_SHAKE])
 
 // Only warning, never exit - for infinite wait scenarios (uses warn_interval from TIMEOUT_CHECK_INIT_WARN_ONLY)
-#define __PYPTO_TIMEOUT_CHECK_WARN_ONLY(fmt, ...) \
-    do { \
-        if ((GetCycles() - start) % warn_interval == 0) { \
+#define __PYPTO_TIMEOUT_CHECK_WARN_ONLY(fmt, ...)           \
+    do {                                                    \
+        if ((GetCycles() - start) % warn_interval == 0) {   \
             DEV_WARN(fmt " still waiting.", ##__VA_ARGS__); \
-        } \
+        }                                                   \
     } while (0)
 
 // Only exit, no warning - for short timeout scenarios like 10sec (uses timeout_cycles from TIMEOUT_CHECK_INIT)
 #define __PYPTO_TIMEOUT_CHECK_EXIT_ONLY(error_code, action, fmt, ...) \
-    do { \
-        (void)warn_interval; \
-        if ((GetCycles() - start) > timeout_cycles) { \
-            DEV_ERROR(error_code, fmt " timeout.", ##__VA_ARGS__); \
-            action; \
-        } \
+    do {                                                              \
+        (void)warn_interval;                                          \
+        if ((GetCycles() - start) > timeout_cycles) {                 \
+            DEV_ERROR(error_code, fmt " timeout.", ##__VA_ARGS__);    \
+            action;                                                   \
+        }                                                             \
     } while (0)
 
-// Warn and exit - for arbitration scenarios where failure is normal degradation (uses timeout_cycles from TIMEOUT_CHECK_INIT)
+// Warn and exit - for arbitration scenarios where failure is normal degradation (uses timeout_cycles from
+// TIMEOUT_CHECK_INIT)
 #define __PYPTO_TIMEOUT_CHECK_WARN_EXIT(action, fmt, ...) \
-    do { \
-        (void)warn_interval; \
-        if ((GetCycles() - start) > timeout_cycles) { \
-            DEV_WARN(fmt " timeout.", ##__VA_ARGS__); \
-            action; \
-        } \
+    do {                                                  \
+        (void)warn_interval;                              \
+        if ((GetCycles() - start) > timeout_cycles) {     \
+            DEV_WARN(fmt " timeout.", ##__VA_ARGS__);     \
+            action;                                       \
+        }                                                 \
     } while (0)
 
 // Both exit and warning - for long timeout scenarios (uses timeout_cycles and warn_interval from TIMEOUT_CHECK_INIT)
-#define __PYPTO_TIMEOUT_CHECK(error_code, action, fmt, ...) \
-    do { \
-        if ((GetCycles() - start) > timeout_cycles) { \
+#define __PYPTO_TIMEOUT_CHECK(error_code, action, fmt, ...)        \
+    do {                                                           \
+        if ((GetCycles() - start) > timeout_cycles) {              \
             DEV_ERROR(error_code, fmt " timeout.", ##__VA_ARGS__); \
-            action; \
-        } \
-        if ((GetCycles() - start) % warn_interval == 0) { \
-            DEV_WARN(fmt " still waiting.", ##__VA_ARGS__); \
-        } \
+            action;                                                \
+        }                                                          \
+        if ((GetCycles() - start) % warn_interval == 0) {          \
+            DEV_WARN(fmt " still waiting.", ##__VA_ARGS__);        \
+        }                                                          \
     } while (0)
 
 // Reset timeout start time - used when a new batch of parallel tasks arrives,
 // giving each batch its own full timeout window.
-#define __PYPTO_TIMEOUT_CHECK_RESET \
-    start = GetCycles();
+#define __PYPTO_TIMEOUT_CHECK_RESET start = GetCycles();
 } // namespace npu::tile_fwk::dynamic
 #endif

@@ -37,16 +37,16 @@ AllocKey SymbolManager::CreateAllocKey(int tensorMagicNum) const
 {
     std::shared_ptr<LogicalTensor> tensor = SymbolManager::GetTensorByMagic(tensorMagicNum);
     if (!tensor) {
-        CODEGEN_LOGE(
-            GenCodeErr::TENSOR_NOT_FOUND, "can not query tensor object from tensor magicnum: %d", tensorMagicNum);
+        CODEGEN_LOGE(GenCodeErr::TENSOR_NOT_FOUND, "can not query tensor object from tensor magicnum: %d",
+                     tensorMagicNum);
         return {};
     }
 
     return CreateAllocKey(tensor);
 }
 
-bool SymbolManager::BindAddrWithVariableName(
-    const AllocKey& key, const std::string& varName, const std::string& varNameT)
+bool SymbolManager::BindAddrWithVariableName(const AllocKey& key, const std::string& varName,
+                                             const std::string& varNameT)
 {
     auto iter = key2VariableName_.find(key);
     if (iter != key2VariableName_.end()) {
@@ -146,9 +146,8 @@ std::string SymbolManager::AddTileTensor(int opMagic, const TileTensor& tileTens
 {
     TileTensorKey tileTensorKey = BuildTileTensorKey(tileTensor);
 
-    CODEGEN_LOGI(
-        "AddTileTensor --> tensorMagic=%d, opMagic=%d, key={%s}", tileTensor.magic, opMagic,
-        tileTensorKey.ToString().c_str());
+    CODEGEN_LOGI("AddTileTensor --> tensorMagic=%d, opMagic=%d, key={%s}", tileTensor.magic, opMagic,
+                 tileTensorKey.ToString().c_str());
 
     auto tileTensorByKeyIter = tileTensorByKey_.find(tileTensorKey);
     bool isNewTileTensor = false;
@@ -200,9 +199,8 @@ const TileTensor* SymbolManager::QueryTileTensorInLoopByMagic(int tensorMagic, i
 void SymbolManager::InsertTensorNameInLoopToFullDim(const std::string& tensorName, const std::string& fullDimTensorName)
 {
     auto res = tensorNameInLoopToFullDim_.insert({tensorName, fullDimTensorName});
-    CODEGEN_LOGI(
-        "res is %d, InsertTensorNameInLoopToFullDim %s -> %s", res.second, tensorName.c_str(),
-        fullDimTensorName.c_str());
+    CODEGEN_LOGI("res is %d, InsertTensorNameInLoopToFullDim %s -> %s", res.second, tensorName.c_str(),
+                 fullDimTensorName.c_str());
 }
 
 std::string SymbolManager::QueryTileTensorFullDimByTensorInLoop(const std::string& tensorName)
@@ -210,9 +208,8 @@ std::string SymbolManager::QueryTileTensorFullDimByTensorInLoop(const std::strin
     std::string fullDimTensorName;
     auto iter = tensorNameInLoopToFullDim_.find(tensorName);
     if (iter != tensorNameInLoopToFullDim_.end()) {
-        CODEGEN_LOGI(
-            "QueryTileTensorFullDimByTensorInLoop found tensor in loop %s, full dim tensor is %s", tensorName.c_str(),
-            iter->second.c_str());
+        CODEGEN_LOGI("QueryTileTensorFullDimByTensorInLoop found tensor in loop %s, full dim tensor is %s",
+                     tensorName.c_str(), iter->second.c_str());
         fullDimTensorName = iter->second;
     }
 

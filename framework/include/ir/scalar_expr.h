@@ -61,8 +61,8 @@ public:
      */
     static constexpr auto GetFieldDescriptors()
     {
-        return std::tuple_cat(
-            Expr::GetFieldDescriptors(), std::make_tuple(reflection::UsualField(&ConstInt::value_, "value")));
+        return std::tuple_cat(Expr::GetFieldDescriptors(),
+                              std::make_tuple(reflection::UsualField(&ConstInt::value_, "value")));
     }
 
     [[nodiscard]] DataType dtype() const
@@ -108,8 +108,8 @@ public:
      */
     static constexpr auto GetFieldDescriptors()
     {
-        return std::tuple_cat(
-            Expr::GetFieldDescriptors(), std::make_tuple(reflection::UsualField(&ConstFloat::value_, "value")));
+        return std::tuple_cat(Expr::GetFieldDescriptors(),
+                              std::make_tuple(reflection::UsualField(&ConstFloat::value_, "value")));
     }
 
     [[nodiscard]] DataType dtype() const
@@ -154,8 +154,8 @@ public:
      */
     static constexpr auto GetFieldDescriptors()
     {
-        return std::tuple_cat(
-            Expr::GetFieldDescriptors(), std::make_tuple(reflection::UsualField(&ConstBool::value_, "value")));
+        return std::tuple_cat(Expr::GetFieldDescriptors(),
+                              std::make_tuple(reflection::UsualField(&ConstBool::value_, "value")));
     }
 
     [[nodiscard]] DataType dtype() const { return DataType::BOOL; }
@@ -184,10 +184,9 @@ public:
      */
     static constexpr auto GetFieldDescriptors()
     {
-        return std::tuple_cat(
-            Expr::GetFieldDescriptors(), std::make_tuple(
-                                             reflection::UsualField(&BinaryExpr::left_, "left"),
-                                             reflection::UsualField(&BinaryExpr::right_, "right")));
+        return std::tuple_cat(Expr::GetFieldDescriptors(),
+                              std::make_tuple(reflection::UsualField(&BinaryExpr::left_, "left"),
+                                              reflection::UsualField(&BinaryExpr::right_, "right")));
     }
 };
 
@@ -250,8 +249,8 @@ public:
 
     static constexpr auto GetFieldDescriptors()
     {
-        return std::tuple_cat(
-            Expr::GetFieldDescriptors(), std::make_tuple(reflection::UsualField(&UnaryExpr::operand_, "operand")));
+        return std::tuple_cat(Expr::GetFieldDescriptors(),
+                              std::make_tuple(reflection::UsualField(&UnaryExpr::operand_, "operand")));
     }
 };
 

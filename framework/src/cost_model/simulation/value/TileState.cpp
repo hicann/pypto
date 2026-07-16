@@ -17,8 +17,8 @@
 
 namespace CostModel {
 
-TileState::TileStateKeyTy TileState::TileKey(
-    int rawMagic, OperandType bufType, std::vector<int>& shape, std::vector<int>& offset)
+TileState::TileStateKeyTy TileState::TileKey(int rawMagic, OperandType bufType, std::vector<int>& shape,
+                                             std::vector<int>& offset)
 {
     TileState::TileStateKeyTy k(rawMagic, bufType, shape, offset);
     return k;

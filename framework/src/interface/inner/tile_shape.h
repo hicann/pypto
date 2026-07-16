@@ -70,4 +70,4 @@ inline void DeserializeFrom(HashBuffer& hashBuffer, DistTile& distTile)
     distTile.rank[2] = hashBuffer[8]; // offset 8,  rank[2]
     distTile.rankId = hashBuffer[9];  // offset 9,  rankId
 }
-};                                    // namespace npu::tile_fwk
+}; // namespace npu::tile_fwk

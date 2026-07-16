@@ -67,7 +67,8 @@ struct AOTBinary {
     void InitCodeSize(const void* data, uint64_t size)
     {
         if (size > AOT_CODE_POOL_CODE_SIZE) {
-            DEV_ERROR(DevCommonErr::MEMCPY_FAILED, "AOTBinary code size %zu is too large, max %d", size, AOT_CODE_POOL_CODE_SIZE);
+            DEV_ERROR(DevCommonErr::MEMCPY_FAILED, "AOTBinary code size %zu is too large, max %d", size,
+                      AOT_CODE_POOL_CODE_SIZE);
             DEV_ASSERT(DevCommonErr::MEMCPY_FAILED, false);
             return;
         }
@@ -91,9 +92,9 @@ struct AOTBinary {
 struct DeviceExecuteContext;
 
 struct AOTBinaryControlFlow : AOTBinary {
-    typedef void (*controlFlowEntry)(
-        struct DeviceExecuteContext* ctx, int64_t* symbolTable,
-        RuntimeCallEntryType runtimeCallList[T_RUNTIME_CALL_MAX], DevStartArgsBase* startArgsBase);
+    typedef void (*controlFlowEntry)(struct DeviceExecuteContext* ctx, int64_t* symbolTable,
+                                     RuntimeCallEntryType runtimeCallList[T_RUNTIME_CALL_MAX],
+                                     DevStartArgsBase* startArgsBase);
 
     AOTBinaryControlFlow() = default;
 
@@ -114,12 +115,11 @@ struct AOTBinaryControlFlow : AOTBinary {
         }
     }
 
-    void CallControlFlow(
-        struct DeviceExecuteContext* ctx, int64_t* symbolTable,
-        RuntimeCallEntryType runtimeCallList[T_RUNTIME_CALL_MAX], DevStartArgsBase* startArgsBase)
+    void CallControlFlow(struct DeviceExecuteContext* ctx, int64_t* symbolTable,
+                         RuntimeCallEntryType runtimeCallList[T_RUNTIME_CALL_MAX], DevStartArgsBase* startArgsBase)
     {
-        (reinterpret_cast<controlFlowEntry>(const_cast<unsigned char*>(code_)))(
-            ctx, symbolTable, runtimeCallList, startArgsBase);
+        (reinterpret_cast<controlFlowEntry>(const_cast<unsigned char*>(code_)))(ctx, symbolTable, runtimeCallList,
+                                                                                startArgsBase);
     }
 };
 
@@ -150,8 +150,8 @@ struct DeviceExecuteProgram {
     DeviceExecuteProgram() {}
     DeviceExecuteProgram(DevAscendProgram* prog_, AOTBinaryControlFlow::controlFlowEntry entry = nullptr)
         : prog(prog_),
-          controlFlowBinary(
-              IsDeviceMode() ? prog_->GetDevControlFlowBinary() : prog_->GetHostControlFlowBinary(), entry),
+          controlFlowBinary(IsDeviceMode() ? prog_->GetDevControlFlowBinary() : prog_->GetHostControlFlowBinary(),
+                            entry),
           exprBinary(prog_->GetExpressionTableBinary())
     {}
 

@@ -103,9 +103,8 @@ private:
     /**
      * \brief Check type equality including shape for TensorType and TileType
      */
-    void CheckTypeEquality(
-        const TypePtr& type1, const TypePtr& type2, const std::string& context, const std::string& desc1,
-        const std::string& desc2, const Span& span);
+    void CheckTypeEquality(const TypePtr& type1, const TypePtr& type2, const std::string& context,
+                           const std::string& desc1, const std::string& desc2, const Span& span);
 
     /**
      * \brief Check if two ExprPtr represent the same constant value
@@ -117,15 +116,14 @@ private:
      */
     void CheckIsScalarType(const ExprPtr& expr, const std::string& context, const Span& span);
 
-    void CheckLoopIterArgYieldTypes(
-        const std::vector<IterArgPtr>& iter_args, const std::vector<VarPtr>& return_vars,
-        const YieldStmtPtr& yield_stmt, const std::string& context, const Span& span);
-    void CheckLoopIterArgYieldTypeAt(
-        const std::vector<IterArgPtr>& iter_args, const std::vector<VarPtr>& return_vars,
-        const YieldStmtPtr& yield_stmt, size_t index, const std::string& context, const Span& span);
+    void CheckLoopIterArgYieldTypes(const std::vector<IterArgPtr>& iter_args, const std::vector<VarPtr>& return_vars,
+                                    const YieldStmtPtr& yield_stmt, const std::string& context, const Span& span);
+    void CheckLoopIterArgYieldTypeAt(const std::vector<IterArgPtr>& iter_args, const std::vector<VarPtr>& return_vars,
+                                     const YieldStmtPtr& yield_stmt, size_t index, const std::string& context,
+                                     const Span& span);
     void CheckIfReturnYieldTypes(const IfStmtPtr& op, const YieldStmtPtr& then_yield, const YieldStmtPtr& else_yield);
-    void CheckIfReturnYieldTypeAt(
-        const IfStmtPtr& op, const YieldStmtPtr& then_yield, const YieldStmtPtr& else_yield, size_t index);
+    void CheckIfReturnYieldTypeAt(const IfStmtPtr& op, const YieldStmtPtr& then_yield, const YieldStmtPtr& else_yield,
+                                  size_t index);
 };
 
 // TypeChecker implementation
@@ -137,9 +135,8 @@ void TypeChecker::RecordError(typecheck::ErrorType type, const std::string& mess
 
 StmtPtr TypeChecker::GetLastStmt(const StmtPtr& stmt) { return GetLastStmtFromSeq(stmt); }
 
-void TypeChecker::CheckTypeEquality(
-    const TypePtr& type1, const TypePtr& type2, const std::string& context, const std::string& desc1,
-    const std::string& desc2, const Span& span)
+void TypeChecker::CheckTypeEquality(const TypePtr& type1, const TypePtr& type2, const std::string& context,
+                                    const std::string& desc1, const std::string& desc2, const Span& span)
 {
     if (!type1 || !type2)
         return;
@@ -280,9 +277,9 @@ void TypeChecker::VisitStmt_(const ForStmtPtr& op)
     IRVisitor::VisitStmt_(op);
 }
 
-void TypeChecker::CheckLoopIterArgYieldTypes(
-    const std::vector<IterArgPtr>& iter_args, const std::vector<VarPtr>& return_vars, const YieldStmtPtr& yield_stmt,
-    const std::string& context, const Span& span)
+void TypeChecker::CheckLoopIterArgYieldTypes(const std::vector<IterArgPtr>& iter_args,
+                                             const std::vector<VarPtr>& return_vars, const YieldStmtPtr& yield_stmt,
+                                             const std::string& context, const Span& span)
 {
     const size_t num_iter_args = iter_args.size();
     const size_t num_yield_values = yield_stmt->value_.size();
@@ -300,9 +297,9 @@ void TypeChecker::CheckLoopIterArgYieldTypes(
     }
 }
 
-void TypeChecker::CheckLoopIterArgYieldTypeAt(
-    const std::vector<IterArgPtr>& iter_args, const std::vector<VarPtr>& return_vars, const YieldStmtPtr& yield_stmt,
-    size_t index, const std::string& context, const Span& span)
+void TypeChecker::CheckLoopIterArgYieldTypeAt(const std::vector<IterArgPtr>& iter_args,
+                                              const std::vector<VarPtr>& return_vars, const YieldStmtPtr& yield_stmt,
+                                              size_t index, const std::string& context, const Span& span)
 {
     const auto& iter_arg = iter_args[index];
     const auto& yield_value = yield_stmt->value_[index];
@@ -317,15 +314,12 @@ void TypeChecker::CheckLoopIterArgYieldTypeAt(
     if (!init_type || !yield_type || !return_type)
         return;
 
-    CheckTypeEquality(
-        init_type, yield_type, context, "iter_arg[" + std::to_string(index) + "] initValue",
-        "yield value[" + std::to_string(index) + "]", span);
-    CheckTypeEquality(
-        yield_type, return_type, context, "yield value[" + std::to_string(index) + "]",
-        "return_var[" + std::to_string(index) + "]", span);
-    CheckTypeEquality(
-        init_type, return_type, context, "iter_arg[" + std::to_string(index) + "] initValue",
-        "return_var[" + std::to_string(index) + "]", span);
+    CheckTypeEquality(init_type, yield_type, context, "iter_arg[" + std::to_string(index) + "] initValue",
+                      "yield value[" + std::to_string(index) + "]", span);
+    CheckTypeEquality(yield_type, return_type, context, "yield value[" + std::to_string(index) + "]",
+                      "return_var[" + std::to_string(index) + "]", span);
+    CheckTypeEquality(init_type, return_type, context, "iter_arg[" + std::to_string(index) + "] initValue",
+                      "return_var[" + std::to_string(index) + "]", span);
 }
 
 void TypeChecker::VisitStmt_(const WhileStmtPtr& op)
@@ -377,8 +371,8 @@ void TypeChecker::VisitStmt_(const IfStmtPtr& op)
     IRVisitor::VisitStmt_(op);
 }
 
-void TypeChecker::CheckIfReturnYieldTypes(
-    const IfStmtPtr& op, const YieldStmtPtr& then_yield, const YieldStmtPtr& else_yield)
+void TypeChecker::CheckIfReturnYieldTypes(const IfStmtPtr& op, const YieldStmtPtr& then_yield,
+                                          const YieldStmtPtr& else_yield)
 {
     size_t num_then_values = then_yield->value_.size();
     size_t num_else_values = else_yield->value_.size();
@@ -396,8 +390,8 @@ void TypeChecker::CheckIfReturnYieldTypes(
     }
 }
 
-void TypeChecker::CheckIfReturnYieldTypeAt(
-    const IfStmtPtr& op, const YieldStmtPtr& then_yield, const YieldStmtPtr& else_yield, size_t index)
+void TypeChecker::CheckIfReturnYieldTypeAt(const IfStmtPtr& op, const YieldStmtPtr& then_yield,
+                                           const YieldStmtPtr& else_yield, size_t index)
 {
     const auto& then_value = then_yield->value_[index];
     const auto& else_value = else_yield->value_[index];
@@ -410,9 +404,8 @@ void TypeChecker::CheckIfReturnYieldTypeAt(
     if (!then_type || !else_type)
         return;
 
-    CheckTypeEquality(
-        then_type, else_type, "IfStmt", "then yield value[" + std::to_string(index) + "]",
-        "else yield value[" + std::to_string(index) + "]", op->span_);
+    CheckTypeEquality(then_type, else_type, "IfStmt", "then yield value[" + std::to_string(index) + "]",
+                      "else yield value[" + std::to_string(index) + "]", op->span_);
 }
 
 } // namespace

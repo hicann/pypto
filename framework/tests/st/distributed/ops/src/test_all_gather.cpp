@@ -36,8 +36,8 @@ void TestAllGather(OpTestParam& testParam, std::string& goldenDir)
     Tensor in(dType, shape, "in");
     Tensor out(dType, outShape, "out");
 
-    std::vector<T> inPtr =
-        ReadToVector<T>(goldenDir + "/input_rank_" + std::to_string(testParam.rankId) + ".bin", shape);
+    std::vector<T> inPtr = ReadToVector<T>(goldenDir + "/input_rank_" + std::to_string(testParam.rankId) + ".bin",
+                                           shape);
 
     Shape shmemDataShape{testParam.rankSize * row, col};
     FUNCTION("ALLGATHER", {in}, {out})

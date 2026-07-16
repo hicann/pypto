@@ -30,7 +30,8 @@
 template <typename DATA, typename CMP>
 TILEOP void AtanCalc(DATA dst, DATA src, DATA tmp1, DATA tmp2, CMP cmp)
 {
-    constexpr float a[] = {-0.333329409, 0.199887753, -0.141718030, 0.105184801, -0.0725297481, 0.0398497507, -0.0143969795, 0.00245002890};
+    constexpr float a[] = {-0.333329409,  0.199887753,  -0.141718030,  0.105184801,
+                           -0.0725297481, 0.0398497507, -0.0143969795, 0.00245002890};
     constexpr float pi2 = 1.570796326794896619;
     pto::TABS(tmp1, src);
     pto::TEXPANDS(dst, 1.0);
@@ -239,12 +240,12 @@ TILEOP void TAtan2(DST dst, SRC0 src0, SRC1 src1, TMP tmp)
                 tmp3Tile.Assign(tmp.GetAddr(), tmp3Offset);
                 pto::TASSIGN(tmp2UIntTile, tmp.GetAddr() + tmp2Offset * dstDtypeSize);
                 pto::TASSIGN(cmpTile, tmp.GetAddr() + cmpOffset * dstDtypeSize);
-                Atan2Div(dstTile.Data(), src0Tile.Data(), src1Tile.Data(),
-                    tmp1Tile.Data(), tmp2Tile.Data(), tmp3Tile.Data(), cmpTile);
+                Atan2Div(dstTile.Data(), src0Tile.Data(), src1Tile.Data(), tmp1Tile.Data(), tmp2Tile.Data(),
+                         tmp3Tile.Data(), cmpTile);
                 AtanCalc(tmp1Tile.Data(), dstTile.Data(), tmp2Tile.Data(), tmp3Tile.Data(), cmpTile);
                 Atan2Cast(dstHalfTile, src0Tile.Data(), dstUIntTile, tmp2UIntTile, cmpTile);
-                Atan2Sp(dstTile.Data(), src0Tile.Data(), src1Tile.Data(),
-                    tmp1Tile.Data(), tmp2Tile.Data(), tmp3Tile.Data(), cmpTile);
+                Atan2Sp(dstTile.Data(), src0Tile.Data(), src1Tile.Data(), tmp1Tile.Data(), tmp2Tile.Data(),
+                        tmp3Tile.Data(), cmpTile);
             }
         }
     }

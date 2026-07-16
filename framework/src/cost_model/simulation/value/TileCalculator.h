@@ -33,7 +33,7 @@ public:
     static TileCalculator& Self() { return instance; }
     void Reset();
     void CalculateInput(TilePtr tile, std::shared_ptr<TileState> global);
-    void Calculate(
-        TileOpPtr op, FunctionInvokeInfo& invoke, std::shared_ptr<TileState> local, std::shared_ptr<TileState> global);
+    void Calculate(TileOpPtr op, FunctionInvokeInfo& invoke, std::shared_ptr<TileState> local,
+                   std::shared_ptr<TileState> global);
 };
 }; // namespace CostModel

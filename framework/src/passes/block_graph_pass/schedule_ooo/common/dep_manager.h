@@ -26,60 +26,61 @@
 
 namespace npu::tile_fwk {
 
-inline bool IsViewOp(const Operation &op) {
+inline bool IsViewOp(const Operation& op)
+{
     const auto opc = op.GetOpcode();
     return opc == Opcode::OP_VIEW || opc == Opcode::OP_VIEW_TYPE;
 }
 
 class DependencyManager {
 public:
-    void RegisterOp(Operation *op);
+    void RegisterOp(Operation* op);
 
     void ClearDependencies();
 
-    static bool IsOpAlloc(Operation *op);
+    static bool IsOpAlloc(Operation* op);
 
-    void AddDependency(Operation *preOp, Operation *postOp);
+    void AddDependency(Operation* preOp, Operation* postOp);
 
-    void AddAllocDependency(Operation *preOp, Operation *postOp);
+    void AddAllocDependency(Operation* preOp, Operation* postOp);
 
-    Status InitAllocDependencies(Operation *op, std::unordered_map<int, Operation *> &tensor2AllocOpMap);
+    Status InitAllocDependencies(Operation* op, std::unordered_map<int, Operation*>& tensor2AllocOpMap);
 
-    bool RemoveDependency(Operation *preOp, Operation *postOp);
+    bool RemoveDependency(Operation* preOp, Operation* postOp);
 
-    int InsertSuccessor(Operation *op, Operation *succ);
-    int RemoveSuccessor(Operation *op, Operation *succ);
-    void RemoveSuccessorOp(Operation *op);
-    int InsertPredecessor(Operation *op, Operation *pred);
-    int RemovePredecessor(Operation *op, Operation *pred);
-    void RemovePredecessorOp(Operation *op);
+    int InsertSuccessor(Operation* op, Operation* succ);
+    int RemoveSuccessor(Operation* op, Operation* succ);
+    void RemoveSuccessorOp(Operation* op);
+    int InsertPredecessor(Operation* op, Operation* pred);
+    int RemovePredecessor(Operation* op, Operation* pred);
+    void RemovePredecessorOp(Operation* op);
 
-    std::set<Operation *, Operation::OperationComparator> &GetSuccessors(Operation *op);
-    std::set<Operation *, Operation::OperationComparator> &GetPredecessors(Operation *op);
-    bool HasOp(Operation *op) const;
+    std::set<Operation*, Operation::OperationComparator>& GetSuccessors(Operation* op);
+    std::set<Operation*, Operation::OperationComparator>& GetPredecessors(Operation* op);
+    bool HasOp(Operation* op) const;
 
-    std::string PrintOp(Operation *op);
+    std::string PrintOp(Operation* op);
 
-    Operation *SkipViewChain(Operation *start, bool followProducers);
+    Operation* SkipViewChain(Operation* start, bool followProducers);
 
-    void FindDependencies(Operation *op, bool needView);
-    void InitOpConsumerAndProducer(const std::vector<Operation *> &ops);
+    void FindDependencies(Operation* op, bool needView);
+    void InitOpConsumerAndProducer(const std::vector<Operation*>& ops);
 
-    Status InitDependencies(const std::vector<Operation *> &ops, bool needView);
+    Status InitDependencies(const std::vector<Operation*>& ops, bool needView);
 
-    void PrintDependencies(const std::vector<Operation *> &ops);
+    void PrintDependencies(const std::vector<Operation*>& ops);
 
 private:
     void Clear();
 
-    void HandleScaleOpDependency(Operation *op, MemoryType memType);
-    void AddProducerDependencies(Operation *op);
-    void AddConsumerDependencies(Operation *op);
+    void HandleScaleOpDependency(Operation* op, MemoryType memType);
+    void AddProducerDependencies(Operation* op);
+    void AddConsumerDependencies(Operation* op);
 
-    std::unordered_map<Operation *, std::set<Operation *, Operation::OperationComparator>> opConsumers;
-    std::unordered_map<Operation *, std::set<Operation *, Operation::OperationComparator>> opProducers;
-    std::unordered_map<Operation *, std::set<Operation *, Operation::OperationComparator>> inGraph_;
-    std::unordered_map<Operation *, std::set<Operation *, Operation::OperationComparator>> outGraph_;
+    std::unordered_map<Operation*, std::set<Operation*, Operation::OperationComparator>> opConsumers;
+    std::unordered_map<Operation*, std::set<Operation*, Operation::OperationComparator>> opProducers;
+    std::unordered_map<Operation*, std::set<Operation*, Operation::OperationComparator>> inGraph_;
+    std::unordered_map<Operation*, std::set<Operation*, Operation::OperationComparator>> outGraph_;
 };
 
 } // namespace npu::tile_fwk

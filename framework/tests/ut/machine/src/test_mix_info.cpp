@@ -83,10 +83,7 @@ TEST_F(TestMixInfo, DumpMixInfo_TileGraphFunction)
     Tensor output(DataType::DT_FP32, shape, "output");
 
     std::string funcName = "TestTileGraphFunc";
-    FUNCTION(funcName, {input, output})
-    {
-        output = Sub(input, input);
-    }
+    FUNCTION(funcName, {input, output}) { output = Sub(input, input); }
 
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName);
     ASSERT_NE(function, nullptr);
@@ -105,10 +102,7 @@ TEST_F(TestMixInfo, DumpMixInfo_TensorGraphDynamicType)
     Tensor output(DataType::DT_FP32, shape, "output");
 
     std::string funcName = "TestTensorGraphDynamicType";
-    FUNCTION(funcName, {input, output})
-    {
-        output = Add(input, input);
-    }
+    FUNCTION(funcName, {input, output}) { output = Add(input, input); }
 
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName);
     ASSERT_NE(function, nullptr);
@@ -128,10 +122,7 @@ TEST_F(TestMixInfo, DumpMixInfo_LeafFuncWithSyncOps)
     Tensor output(DataType::DT_FP32, shape, "output");
 
     std::string funcName = "TestLeafFuncWithSyncOps";
-    FUNCTION(funcName, {input, output})
-    {
-        output = Add(input, input);
-    }
+    FUNCTION(funcName, {input, output}) { output = Add(input, input); }
 
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName);
     ASSERT_NE(function, nullptr);
@@ -151,10 +142,12 @@ TEST_F(TestMixInfo, DumpMixInfo_LeafFuncWithSyncOps)
     auto outCast = std::make_shared<LogicalTensor>(*leafFunc, DataType::DT_FP32, shape);
 
     auto& syncSrcOp = leafFunc->AddOperation(Opcode::OP_CV_SYNC_SRC, {}, {});
-    syncSrcOp.syncQueue_ = OpSyncQueue(PipeType::PIPE_M, PipeType::PIPE_M, CoreType::AIV, CoreType::AIV, 10, AIVCore::UNSPECIFIED, AIVCore::UNSPECIFIED);
+    syncSrcOp.syncQueue_ = OpSyncQueue(PipeType::PIPE_M, PipeType::PIPE_M, CoreType::AIV, CoreType::AIV, 10,
+                                       AIVCore::UNSPECIFIED, AIVCore::UNSPECIFIED);
 
     auto& syncDstOp = leafFunc->AddOperation(Opcode::OP_CV_SYNC_DST, {}, {});
-    syncDstOp.syncQueue_ = OpSyncQueue(PipeType::PIPE_M, PipeType::PIPE_M, CoreType::AIV, CoreType::AIV, 20, AIVCore::UNSPECIFIED, AIVCore::UNSPECIFIED);
+    syncDstOp.syncQueue_ = OpSyncQueue(PipeType::PIPE_M, PipeType::PIPE_M, CoreType::AIV, CoreType::AIV, 20,
+                                       AIVCore::UNSPECIFIED, AIVCore::UNSPECIFIED);
 
     Program::GetInstance().InsertFuncToFunctionMap(leafFunc->GetMagicName(), leafFunc);
 
@@ -179,10 +172,7 @@ TEST_F(TestMixInfo, DumpMixInfo_MultipleWrapIdAndMixId)
     Tensor output(DataType::DT_FP32, shape, "output");
 
     std::string funcName = "TestMultipleWrapIdAndMixId";
-    FUNCTION(funcName, {input, output})
-    {
-        output = Add(input, input);
-    }
+    FUNCTION(funcName, {input, output}) { output = Add(input, input); }
 
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName);
     ASSERT_NE(function, nullptr);

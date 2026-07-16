@@ -19,10 +19,9 @@
 using namespace npu::tile_fwk;
 
 namespace npu::tile_fwk {
-void IncreFlashAttention(
-    Tensor& qNope, Tensor& kNopeCache, Tensor& vNopeCache, Tensor& qRope, Tensor& kRopeCache,
-    std::vector<std::vector<int>>& blockTable, std::vector<int>& actSeqs, float softmaxScale, Tensor& attentionOut,
-    IfaTileShapeConfig& tileConfig)
+void IncreFlashAttention(Tensor& qNope, Tensor& kNopeCache, Tensor& vNopeCache, Tensor& qRope, Tensor& kRopeCache,
+                         std::vector<std::vector<int>>& blockTable, std::vector<int>& actSeqs, float softmaxScale,
+                         Tensor& attentionOut, IfaTileShapeConfig& tileConfig)
 {
     auto batchSize = blockTable.size();
     ASSERT(batchSize == actSeqs.size());
@@ -65,8 +64,8 @@ void IncreFlashAttention(
                 auto kj = Assemble({{kn, {0, 0}}, {kr, {0, dN}}});
                 auto vj = View(vNopeCache, {s2TileCur, dN}, {curBlockIdx * blockSize, 0});
 
-                TileShape::Current().SetCubeTile(
-                    {c1Tile[0], c1Tile[1]}, {c1Tile[2], c1Tile[3]}, {c1Tile[4], c1Tile[5]});
+                TileShape::Current().SetCubeTile({c1Tile[0], c1Tile[1]}, {c1Tile[2], c1Tile[3]},
+                                                 {c1Tile[4], c1Tile[5]});
                 // (nTileCur, dN+dR), (s2TileCur, dN+dR) -> (nTileCur, s2TileCur)
                 TileShape::Current().SetMatrixSize({qi.GetShape()[0], 0, kj.GetShape()[0]});
                 auto sij = Matrix::Matmul(DataType::DT_FP32, qi, kj, false, true);
@@ -80,8 +79,8 @@ void IncreFlashAttention(
                 auto tildaLij = Sum(tildaPij, -1, true); // (nTileCur, s2TileCur) -> (nTileCur, 1)
 
                 if (bn == 0) {
-                    TileShape::Current().SetCubeTile(
-                        {c2Tile[0], c2Tile[1]}, {c2Tile[2], c2Tile[3]}, {c2Tile[4], c2Tile[5]});
+                    TileShape::Current().SetCubeTile({c2Tile[0], c2Tile[1]}, {c2Tile[2], c2Tile[3]},
+                                                     {c2Tile[4], c2Tile[5]});
                     TileShape::Current().SetMatrixSize(
                         {tildaPijF16.GetShape()[0], tildaPijF16.GetShape()[1], vj.GetShape()[1]});
                     auto oiTmp = Matrix::Matmul(DataType::DT_FP32, tildaPijF16, vj, false, false);
@@ -100,14 +99,14 @@ void IncreFlashAttention(
                 auto miNew = Maximum(mi, tildaMij); // (nTileCur, 1), (nTileCur, 1) -> (nTileCur, 1)
                 auto t1 = Sub(mi, miNew);           // (nTileCur, 1), (nTileCur, 1) -> (nTileCur, 1)
                 auto t2 = Exp(t1);
-                auto t3 = Sub(tildaMij, miNew);     // (nTileCur, 1), (nTileCur, 1) -> (nTileCur, 1)
+                auto t3 = Sub(tildaMij, miNew); // (nTileCur, 1), (nTileCur, 1) -> (nTileCur, 1)
                 auto t4 = Exp(t3);
-                auto t5 = Mul(t4, tildaLij);        // (nTileCur, 1), (nTileCur, 1) -> (nTileCur, 1)
-                auto t6 = Mul(t2, li);              // (nTileCur, 1), (nTileCur, 1) -> (nTileCur, 1)
-                auto liNew = Add(t6, t5);           // (nTileCur, 1), (nTileCur, 1) -> (nTileCur, 1)
-                auto q3 = Mul(oi, t2);              // (nTileCur, dN), (nTileCur, 1) -> (nTileCur, dN)
-                TileShape::Current().SetCubeTile(
-                    {c2Tile[0], c2Tile[1]}, {c2Tile[2], c2Tile[3]}, {c2Tile[4], c2Tile[5]});
+                auto t5 = Mul(t4, tildaLij); // (nTileCur, 1), (nTileCur, 1) -> (nTileCur, 1)
+                auto t6 = Mul(t2, li);       // (nTileCur, 1), (nTileCur, 1) -> (nTileCur, 1)
+                auto liNew = Add(t6, t5);    // (nTileCur, 1), (nTileCur, 1) -> (nTileCur, 1)
+                auto q3 = Mul(oi, t2);       // (nTileCur, dN), (nTileCur, 1) -> (nTileCur, dN)
+                TileShape::Current().SetCubeTile({c2Tile[0], c2Tile[1]}, {c2Tile[2], c2Tile[3]},
+                                                 {c2Tile[4], c2Tile[5]});
                 // (nTileCur, s2TileCur), (s2TileCur, dN) -> (nTileCur, dN)
                 TileShape::Current().SetMatrixSize(
                     {tildaPijF16.GetShape()[0], tildaPijF16.GetShape()[1], vj.GetShape()[1]});

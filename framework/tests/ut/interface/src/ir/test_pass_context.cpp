@@ -83,10 +83,10 @@ TEST_F(PassContextTest, TestNestedContexts)
 TEST_F(PassContextTest, TestRunBeforePassCallsAllInstruments)
 {
     int count = 0;
-    auto inst1 =
-        std::make_shared<CallbackInstrument>([&count](const Pass&, const ProgramPtr&) { count++; }, nullptr, "I1");
-    auto inst2 =
-        std::make_shared<CallbackInstrument>([&count](const Pass&, const ProgramPtr&) { count++; }, nullptr, "I2");
+    auto inst1 = std::make_shared<CallbackInstrument>([&count](const Pass&, const ProgramPtr&) { count++; }, nullptr,
+                                                      "I1");
+    auto inst2 = std::make_shared<CallbackInstrument>([&count](const Pass&, const ProgramPtr&) { count++; }, nullptr,
+                                                      "I2");
     PassContext ctx({inst1, inst2});
     auto p = pass::CreateProgramPass([](const ProgramPtr& prog) { return prog; }, "BeforeInstrumentedPass");
     auto prog = MakeSimpleProgram();
@@ -97,10 +97,10 @@ TEST_F(PassContextTest, TestRunBeforePassCallsAllInstruments)
 TEST_F(PassContextTest, TestRunAfterPassCallsAllInstruments)
 {
     int count = 0;
-    auto inst1 =
-        std::make_shared<CallbackInstrument>(nullptr, [&count](const Pass&, const ProgramPtr&) { count++; }, "I1");
-    auto inst2 =
-        std::make_shared<CallbackInstrument>(nullptr, [&count](const Pass&, const ProgramPtr&) { count++; }, "I2");
+    auto inst1 = std::make_shared<CallbackInstrument>(
+        nullptr, [&count](const Pass&, const ProgramPtr&) { count++; }, "I1");
+    auto inst2 = std::make_shared<CallbackInstrument>(
+        nullptr, [&count](const Pass&, const ProgramPtr&) { count++; }, "I2");
     PassContext ctx({inst1, inst2});
     auto p = pass::CreateProgramPass([](const ProgramPtr& prog) { return prog; }, "AfterInstrumentedPass");
     auto prog = MakeSimpleProgram();

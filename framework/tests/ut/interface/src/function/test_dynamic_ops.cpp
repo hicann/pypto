@@ -538,10 +538,9 @@ TEST_F(DynamicOpsTest, IndexAdd_)
             goldenData[j] = 9.0f;
         }
         TileShape::Current().SetVecTile(1, 16);
-        ProgramData::GetInstance().AppendInputs(
-            {RawTensorData::CreateConstantTensor<float>(self, 1.0),
-             RawTensorData::CreateConstantTensor<float>(source, 1.0),
-             RawTensorData::CreateConstantTensor<int32_t>(index, 0)});
+        ProgramData::GetInstance().AppendInputs({RawTensorData::CreateConstantTensor<float>(self, 1.0),
+                                                 RawTensorData::CreateConstantTensor<float>(source, 1.0),
+                                                 RawTensorData::CreateConstantTensor<int32_t>(index, 0)});
         ProgramData::GetInstance().AppendOutputs({
             RawTensorData::CreateConstantTensor<float>(out, 1.0),
         });
@@ -826,9 +825,8 @@ TEST_F(DynamicOpsTest, OpsElementWise)
 
         FUNCTION("main", {t0, t1, t2, t3, t4, t5}, {out})
         {
-            LOOP(
-                "L0", FunctionType::DYNAMIC_LOOP, i,
-                LoopRange(npu::tile_fwk::GetTensorData(t5, {n - 1, s - 1, m * s - 1})))
+            LOOP("L0", FunctionType::DYNAMIC_LOOP, i,
+                 LoopRange(npu::tile_fwk::GetTensorData(t5, {n - 1, s - 1, m * s - 1})))
             {
                 IF(i == 0)
                 {
@@ -949,8 +947,8 @@ TEST_F(DynamicOpsTest, Cmps)
             {
                 (void)i;
                 auto t0 = View(self, {b, s}, {0, 0});
-                out = Compare(
-                    t0, elem, static_cast<OpType>(CmpOperationType::EQ), static_cast<OutType>(CmpModeType::BOOL));
+                out = Compare(t0, elem, static_cast<OpType>(CmpOperationType::EQ),
+                              static_cast<OutType>(CmpModeType::BOOL));
             }
         }
     });
@@ -985,8 +983,8 @@ TEST_F(DynamicOpsTest, WhereSS)
             {
                 (void)i;
                 auto t0 = View(self, {b, s}, {0, 0});
-                auto mask = Compare(
-                    t0, elem, static_cast<OpType>(CmpOperationType::EQ), static_cast<OutType>(CmpModeType::BOOL));
+                auto mask = Compare(t0, elem, static_cast<OpType>(CmpOperationType::EQ),
+                                    static_cast<OutType>(CmpModeType::BOOL));
                 out = Where(mask, zeroFp32, elem);
             }
         }
@@ -1299,8 +1297,8 @@ TEST_F(DynamicOpsTest, MatMulPertensor)
         param.relu = 1;
         calc::MatMul(golden, logicTensor0, logicTensor1, param);
 
-        ProgramData::GetInstance().PrepareData(
-            {logicTensor0->GetData(), logicTensor1->GetData()}, {out0->GetData()}, {golden->GetData()});
+        ProgramData::GetInstance().PrepareData({logicTensor0->GetData(), logicTensor1->GetData()}, {out0->GetData()},
+                                               {golden->GetData()});
 
         TileShape::Current().SetCubeTile({64, 64}, {64, 64}, {64, 64}, false);
         FUNCTION("main", {t0, t1}, {out})
@@ -1386,8 +1384,8 @@ TEST_F(DynamicOpsTest, MatMulBias)
         param.biasPtr = &logicBiasData;
         calc::MatMul(golden, d0, d1, param);
 
-        ProgramData::GetInstance().PrepareData(
-            {d0->GetData(), d1->GetData(), logicBias->GetData()}, {out0->GetData()}, {golden->GetData()});
+        ProgramData::GetInstance().PrepareData({d0->GetData(), d1->GetData(), logicBias->GetData()}, {out0->GetData()},
+                                               {golden->GetData()});
 
         FUNCTION("main", {t0, t1, biasTensor}, {out})
         {
@@ -1902,10 +1900,9 @@ TEST_F(DynamicOpsTest, IndexAddUB)
             goldenData[1 * s + j] = 1.0f;
         }
 
-        ProgramData::GetInstance().AppendInputs(
-            {RawTensorData::CreateConstantTensor<float>(self, 1.0),
-             RawTensorData::CreateConstantTensor<float>(source, 1.0),
-             RawTensorData::CreateConstantTensor<int32_t>(index, 0)});
+        ProgramData::GetInstance().AppendInputs({RawTensorData::CreateConstantTensor<float>(self, 1.0),
+                                                 RawTensorData::CreateConstantTensor<float>(source, 1.0),
+                                                 RawTensorData::CreateConstantTensor<int32_t>(index, 0)});
         ProgramData::GetInstance().AppendOutputs({
             RawTensorData::CreateConstantTensor<float>(out, 0.0),
         });
@@ -2144,11 +2141,13 @@ TEST_F(DynamicOpsTest, Topk)
         Tensor outIndex(DT_INT32, {b, k}, "outIndex");
 
         std::vector<float> inputData = {
-            31.0f, 15.0f, 27.0f, 8.0f, 19.0f, 3.0f,  23.0f, 11.0f, 7.0f, 28.0f, 16.0f, 2.0f,  24.0f, 9.0f,  30.0f, 14.0f,
-            22.0f, 5.0f,  18.0f, 1.0f, 26.0f, 10.0f, 29.0f, 13.0f, 6.0f, 20.0f, 12.0f, 25.0f, 4.0f,  21.0f, 0.0f,  17.0f,
+            31.0f, 15.0f, 27.0f, 8.0f,  19.0f, 3.0f,  23.0f, 11.0f, 7.0f, 28.0f, 16.0f,
+            2.0f,  24.0f, 9.0f,  30.0f, 14.0f, 22.0f, 5.0f,  18.0f, 1.0f, 26.0f, 10.0f,
+            29.0f, 13.0f, 6.0f,  20.0f, 12.0f, 25.0f, 4.0f,  21.0f, 0.0f, 17.0f,
 
-            31.0f, 15.0f, 27.0f, 8.0f, 19.0f, 3.0f,  23.0f, 11.0f, 7.0f, 28.0f, 16.0f, 2.0f,  24.0f, 9.0f,  30.0f, 14.0f,
-            22.0f, 5.0f,  18.0f, 1.0f, 26.0f, 10.0f, 29.0f, 13.0f, 6.0f, 20.0f, 12.0f, 25.0f, 4.0f,  21.0f, 0.0f,  17.0f,
+            31.0f, 15.0f, 27.0f, 8.0f,  19.0f, 3.0f,  23.0f, 11.0f, 7.0f, 28.0f, 16.0f,
+            2.0f,  24.0f, 9.0f,  30.0f, 14.0f, 22.0f, 5.0f,  18.0f, 1.0f, 26.0f, 10.0f,
+            29.0f, 13.0f, 6.0f,  20.0f, 12.0f, 25.0f, 4.0f,  21.0f, 0.0f, 17.0f,
         };
 
         // TopK(k=32, dim=1, largest=true)：按值降序取前 32 个；同值时与 torch::topk_out 一致，按索引升序

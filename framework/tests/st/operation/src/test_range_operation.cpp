@@ -18,9 +18,8 @@
 using namespace tile_fwk::test_operation;
 namespace {
 struct RangeOpFuncArgs : public OpFuncArgs {
-    RangeOpFuncArgs(
-        const Element& start, const Element& end, const Element& step, const std::vector<int64_t>& viewShape,
-        const std::vector<int64_t> tileShape)
+    RangeOpFuncArgs(const Element& start, const Element& end, const Element& step,
+                    const std::vector<int64_t>& viewShape, const std::vector<int64_t> tileShape)
         : start_(start), end_(end), step_(step), viewShape_(viewShape), tileShape_(tileShape)
     {}
     Element start_;
@@ -39,8 +38,8 @@ struct RangeOpMetaData {
     nlohmann::json test_data_;
 };
 
-static void RangeOperationExeFunc(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void RangeOperationExeFunc(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                  const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0], inputs[1], inputs[2]}, {outputs[0]})
     {
@@ -60,9 +59,8 @@ static void RangeOperationExeFunc(
 
 class RangeOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac_param<RangeOpMetaData> {};
 
-INSTANTIATE_TEST_SUITE_P(
-    TestRange, RangeOperationTest,
-    ::testing::ValuesIn(GetOpMetaData<RangeOpMetaData>({RangeOperationExeFunc}, "Range")));
+INSTANTIATE_TEST_SUITE_P(TestRange, RangeOperationTest,
+                         ::testing::ValuesIn(GetOpMetaData<RangeOpMetaData>({RangeOperationExeFunc}, "Range")));
 
 TEST_P(RangeOperationTest, TestRange)
 {

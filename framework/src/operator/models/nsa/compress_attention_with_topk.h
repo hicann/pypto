@@ -36,11 +36,12 @@ struct CmpAttnTopkTile {
     CmpTile cmpTile;
 };
 
-void CompressAttentionWithTopK(
-    const Tensor& qNope, const Tensor& qRope, const Tensor& cmpKvCache, const Tensor& cmpKrCache,
-    const Tensor& cmpBlockTable, const Tensor& actSeq, const Tensor& auxTensor, Tensor& cmpAttnOut, Tensor& topkRes,
-    const int blockSize, const int cmpBlockSize, const int cmpStride, const int slcBlockSize, const float softmaxScale,
-    const int n1, const int topk, const int front, const int near, CmpAttnTopkTile& tileConfig);
+void CompressAttentionWithTopK(const Tensor& qNope, const Tensor& qRope, const Tensor& cmpKvCache,
+                               const Tensor& cmpKrCache, const Tensor& cmpBlockTable, const Tensor& actSeq,
+                               const Tensor& auxTensor, Tensor& cmpAttnOut, Tensor& topkRes, const int blockSize,
+                               const int cmpBlockSize, const int cmpStride, const int slcBlockSize,
+                               const float softmaxScale, const int n1, const int topk, const int front, const int near,
+                               CmpAttnTopkTile& tileConfig);
 
 } // namespace npu::tile_fwk
 

@@ -295,9 +295,8 @@ static bool ShouldTerminateAtStage(const std::string& identifier)
     return false;
 }
 
-static void WarnUnmatchedDumpPassGraph(
-    const std::string& strategy, const std::vector<std::string>& dumpPassGraph,
-    const std::vector<std::string>& identifiers)
+static void WarnUnmatchedDumpPassGraph(const std::string& strategy, const std::vector<std::string>& dumpPassGraph,
+                                       const std::vector<std::string>& identifiers)
 {
     if (dumpPassGraph.empty()) {
         return;
@@ -305,8 +304,8 @@ static void WarnUnmatchedDumpPassGraph(
     std::vector<std::string> unmatchedPasses;
     for (const auto& passIdentifier : dumpPassGraph) {
         const bool matched = std::find(identifiers.begin(), identifiers.end(), passIdentifier) != identifiers.end();
-        const bool alreadyRecorded =
-            std::find(unmatchedPasses.begin(), unmatchedPasses.end(), passIdentifier) != unmatchedPasses.end();
+        const bool alreadyRecorded = std::find(unmatchedPasses.begin(), unmatchedPasses.end(), passIdentifier) !=
+                                     unmatchedPasses.end();
         if (!matched && !alreadyRecorded) {
             unmatchedPasses.push_back(passIdentifier);
         }
@@ -314,9 +313,9 @@ static void WarnUnmatchedDumpPassGraph(
     if (unmatchedPasses.empty()) {
         return;
     }
-    APASS_LOG_WARN_F(
-        Elements::Function, "debug.dump_pass_graph contains pass identifier(s) %s that do not exist in strategy %s.",
-        StringUtils::ToString(unmatchedPasses).c_str(), strategy.c_str());
+    APASS_LOG_WARN_F(Elements::Function,
+                     "debug.dump_pass_graph contains pass identifier(s) %s that do not exist in strategy %s.",
+                     StringUtils::ToString(unmatchedPasses).c_str(), strategy.c_str());
 }
 
 Status PassManager::RunPass(Program& program, Function& function, const std::string& strategy) const
@@ -325,9 +324,8 @@ Status PassManager::RunPass(Program& program, Function& function, const std::str
     const std::string strategyLogFolder = GetStrategyLogFolderName(strategy);
     std::unique_ptr<Pass> pass = nullptr;
     std::vector<std::string> identifiers;
-    std::transform(
-        strategyPasses.begin(), strategyPasses.end(), std::back_inserter(identifiers),
-        [](const PassEntry& elem) { return elem.identifier; });
+    std::transform(strategyPasses.begin(), strategyPasses.end(), std::back_inserter(identifiers),
+                   [](const PassEntry& elem) { return elem.identifier; });
     ConfigManager::Instance().PassConfigsDebugInfo(strategy, identifiers);
     const auto dumpPassGraph = config::GetDebugOption<std::vector<std::string>>(CFG_DUMP_PASS_GRAPH);
     WarnUnmatchedDumpPassGraph(strategy, dumpPassGraph, identifiers);
@@ -345,8 +343,8 @@ Status PassManager::RunPass(Program& program, Function& function, const std::str
         PassLogUtil logUtil(*pass, function, strategyLogFolder, i);
         auto passDfxCfg = ConfigManager::Instance().GetPassConfigs(strategy, identifier);
         if (!dumpPassGraph.empty()) {
-            const bool matched =
-                std::find(dumpPassGraph.begin(), dumpPassGraph.end(), identifier) != dumpPassGraph.end();
+            const bool matched = std::find(dumpPassGraph.begin(), dumpPassGraph.end(), identifier) !=
+                                 dumpPassGraph.end();
             passDfxCfg.dumpGraph = matched;
             passDfxCfg.printGraph = matched;
         }
@@ -356,12 +354,11 @@ Status PassManager::RunPass(Program& program, Function& function, const std::str
             passDfxCfg.printProgram = true;
         }
         pass->SetPassConfigs(passDfxCfg);
-        APASS_LOG_INFO_F(
-            Elements::Function, "Apply pass <%s> on function: %s.", identifier.c_str(),
-            function.GetMagicName().c_str());
-        MonitorPassCompileScope passCompileScope(
-            strategy, identifier, i, function.GetMagicName(), MonitorManager::Instance().GetCurrentFunctionIndex(),
-            MonitorManager::Instance().GetCurrentFuncOpSize());
+        APASS_LOG_INFO_F(Elements::Function, "Apply pass <%s> on function: %s.", identifier.c_str(),
+                         function.GetMagicName().c_str());
+        MonitorPassCompileScope passCompileScope(strategy, identifier, i, function.GetMagicName(),
+                                                 MonitorManager::Instance().GetCurrentFunctionIndex(),
+                                                 MonitorManager::Instance().GetCurrentFuncOpSize());
         Status status = pass->Run(function, strategy, identifier, i, strategyLogFolder);
         auto passEnd = std::chrono::high_resolution_clock::now();
         passCompileScope.FinishAt(status == SUCCESS, passEnd);
@@ -371,8 +368,7 @@ Status PassManager::RunPass(Program& program, Function& function, const std::str
         }
         if (identifier == "ExpandFunction") {
             // ExpandFunction 之后的图规模，作为后续 pass 的阈值基线。
-            MonitorManager::Instance().SetCurrentFuncOpSize(
-                static_cast<int>(function.GetOperationSize()), true);
+            MonitorManager::Instance().SetCurrentFuncOpSize(static_cast<int>(function.GetOperationSize()), true);
         }
         if (passDfxCfg.dumpPassTimeCost) {
             LogPassRuntime(identifier, program, function, passCompileScope.GetStartTime());
@@ -422,8 +418,7 @@ void PassManager::ResetAllPasses()
                 continue;
             }
 
-            APASS_LOG_DEBUG_F(Elements::Function, "ResetAllPasses: resetting pass: %s",
-                              PassNameStr(passName));
+            APASS_LOG_DEBUG_F(Elements::Function, "ResetAllPasses: resetting pass: %s", PassNameStr(passName));
 
             // 调用 Pass 的 Reset 方法
             pass->Reset();

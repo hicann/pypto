@@ -94,7 +94,7 @@ TEST(DeviceErrorTrackingTest, PyPTOExceptionInfoCallBackOutputsCorrectInfo)
     exceptionInfo.streamid = 456;
     exceptionInfo.deviceid = 0;
     exceptionInfo.retcode = PYPTO_DEVICE_ERROR_AICORE_EXCEPTION;
-    
+
     char kernelName[] = "test_kernel";
     exceptionInfo.expandInfo.u.aicoreInfo.exceptionArgs.exceptionKernelInfo.kernelName = kernelName;
 

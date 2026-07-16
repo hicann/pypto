@@ -76,8 +76,6 @@ static std::shared_ptr<LogicalTensor> CreateGatherInAuxTensor(int64_t rows = 1)
     return tensor;
 }
 
-
-
 /*
 TESTDuplicateViewSingleConsumer
 inCast{8,16}->view->ubTensor{1,8,16}->exp->outCast{1,8,16}
@@ -86,8 +84,8 @@ inCast{8,16}->view->ubTensor{1,8,16}->exp->outCast{1,8,16}
 */
 TEST_F(TestDuplicateOpPass, DuplicateViewUTest1)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestDuplicateView", "TestDuplicateView", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestDuplicateView", "TestDuplicateView",
+                                                      nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     // Prepare the graph
@@ -98,10 +96,10 @@ TEST_F(TestDuplicateOpPass, DuplicateViewUTest1)
     auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
 
     auto& tensorOffset = inCast->GetTensorOffset();
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {inCast}, {ubTensor},
-        [&tensorOffset, &ubTensor](Operation& op) {
-            op.SetOpAttribute(std::make_shared<ViewOpAttribute>(
-                tensorOffset.GetOffset(), tensorOffset.GetDynOffset(), ubTensor->GetDynValidShape()));
+    PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_VIEW, {inCast}, {ubTensor}, [&tensorOffset, &ubTensor](Operation& op) {
+            op.SetOpAttribute(std::make_shared<ViewOpAttribute>(tensorOffset.GetOffset(), tensorOffset.GetDynOffset(),
+                                                                ubTensor->GetDynValidShape()));
         });
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {ubTensor}, {outCast});
 
@@ -134,33 +132,36 @@ inCast{8,16}->view->ubTensor{1,8,16}->view->outCast2{8,16}
 */
 TEST_F(TestDuplicateOpPass, DuplicateViewUTest2)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestDuplicateView", "TestDuplicateView", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestDuplicateView", "TestDuplicateView",
+                                                      nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     // Prepare the graph
     std::vector<int64_t> shape1 = {kNumEight, kNumExpFour};
     std::vector<int64_t> shape2 = {kNumOne, kNumEight, kNumExpFour};
     auto inCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
-    inCast->UpdateDynValidShape({IRBuilder().CreateConstInt(1), IRBuilder().CreateConstInt(kNumEight), IRBuilder().CreateConstInt(kNumExpFour)});
+    inCast->UpdateDynValidShape({IRBuilder().CreateConstInt(1), IRBuilder().CreateConstInt(kNumEight),
+                                 IRBuilder().CreateConstInt(kNumExpFour)});
     auto ubTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
-    ubTensor->UpdateDynValidShape({IRBuilder().CreateConstInt(1), IRBuilder().CreateConstInt(kNumEight), IRBuilder().CreateConstInt(kNumExpFour)});
+    ubTensor->UpdateDynValidShape({IRBuilder().CreateConstInt(1), IRBuilder().CreateConstInt(kNumEight),
+                                   IRBuilder().CreateConstInt(kNumExpFour)});
     auto outCast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
     auto outCast2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
-    outCast2->UpdateDynValidShape({IRBuilder().CreateConstInt(1), IRBuilder().CreateConstInt(kNumEight), IRBuilder().CreateConstInt(kNumExpFour)});
+    outCast2->UpdateDynValidShape({IRBuilder().CreateConstInt(1), IRBuilder().CreateConstInt(kNumEight),
+                                   IRBuilder().CreateConstInt(kNumExpFour)});
     auto outCast3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
 
     auto& tensorOffset = inCast->GetTensorOffset();
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {inCast}, {ubTensor},
-        [&tensorOffset, &ubTensor](Operation& op) {
-            op.SetOpAttribute(std::make_shared<ViewOpAttribute>(
-                tensorOffset.GetOffset(), tensorOffset.GetDynOffset(), ubTensor->GetDynValidShape()));
+    PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_VIEW, {inCast}, {ubTensor}, [&tensorOffset, &ubTensor](Operation& op) {
+            op.SetOpAttribute(std::make_shared<ViewOpAttribute>(tensorOffset.GetOffset(), tensorOffset.GetDynOffset(),
+                                                                ubTensor->GetDynValidShape()));
         });
     auto& tensorOffset1 = ubTensor->GetTensorOffset();
-    auto& viewOp1 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {ubTensor}, {outCast2},
-        [&tensorOffset1, &outCast2](Operation& op) {
-            op.SetOpAttribute(std::make_shared<ViewOpAttribute>(
-                tensorOffset1.GetOffset(), tensorOffset1.GetDynOffset(), outCast2->GetDynValidShape()));
+    auto& viewOp1 = PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_VIEW, {ubTensor}, {outCast2}, [&tensorOffset1, &outCast2](Operation& op) {
+            op.SetOpAttribute(std::make_shared<ViewOpAttribute>(tensorOffset1.GetOffset(), tensorOffset1.GetDynOffset(),
+                                                                outCast2->GetDynValidShape()));
         });
     auto& sqrtOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_SQRT, {ubTensor}, {outCast3});
     auto& expOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {ubTensor}, {outCast1});
@@ -211,32 +212,35 @@ ubTensor5'+ubTensor6'->div->outCast3{1,8,16}
 */
 TEST_F(TestDuplicateOpPass, DuplicateViewUTest3)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestDuplicateView", "TestDuplicateView", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestDuplicateView", "TestDuplicateView",
+                                                      nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
     // Prepare the graph
     std::vector<int64_t> shape1 = {kNumEight, kNumExpFour};
     std::vector<int64_t> shape2 = {kNumOne, kNumEight, kNumExpFour};
     auto inCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
-    inCast->UpdateDynValidShape({IRBuilder().CreateConstInt(1), IRBuilder().CreateConstInt(kNumEight), IRBuilder().CreateConstInt(kNumExpFour)});
+    inCast->UpdateDynValidShape({IRBuilder().CreateConstInt(1), IRBuilder().CreateConstInt(kNumEight),
+                                 IRBuilder().CreateConstInt(kNumExpFour)});
     auto ubTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
-    ubTensor1->UpdateDynValidShape({IRBuilder().CreateConstInt(1), IRBuilder().CreateConstInt(kNumEight), IRBuilder().CreateConstInt(kNumExpFour)});
+    ubTensor1->UpdateDynValidShape({IRBuilder().CreateConstInt(1), IRBuilder().CreateConstInt(kNumEight),
+                                    IRBuilder().CreateConstInt(kNumExpFour)});
     auto ubTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
-    ubTensor2->UpdateDynValidShape({IRBuilder().CreateConstInt(1), IRBuilder().CreateConstInt(kNumEight), IRBuilder().CreateConstInt(kNumExpFour)});
+    ubTensor2->UpdateDynValidShape({IRBuilder().CreateConstInt(1), IRBuilder().CreateConstInt(kNumEight),
+                                    IRBuilder().CreateConstInt(kNumExpFour)});
     auto outCast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
     auto outCast2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
     auto outCast3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
     auto& tensorOffset = inCast->GetTensorOffset();
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {inCast}, {ubTensor1},
-        [&tensorOffset, &ubTensor1](Operation& op) {
-            op.SetOpAttribute(std::make_shared<ViewOpAttribute>(
-                tensorOffset.GetOffset(), tensorOffset.GetDynOffset(), ubTensor1->GetDynValidShape()));
+    PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_VIEW, {inCast}, {ubTensor1}, [&tensorOffset, &ubTensor1](Operation& op) {
+            op.SetOpAttribute(std::make_shared<ViewOpAttribute>(tensorOffset.GetOffset(), tensorOffset.GetDynOffset(),
+                                                                ubTensor1->GetDynValidShape()));
         });
     auto& tensorOffset1 = inCast->GetTensorOffset();
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {inCast}, {ubTensor2},
-        [&tensorOffset1, &ubTensor2](Operation& op) {
-            op.SetOpAttribute(std::make_shared<ViewOpAttribute>(
-                tensorOffset1.GetOffset(), tensorOffset1.GetDynOffset(), ubTensor2->GetDynValidShape()));
+    PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_VIEW, {inCast}, {ubTensor2}, [&tensorOffset1, &ubTensor2](Operation& op) {
+            op.SetOpAttribute(std::make_shared<ViewOpAttribute>(tensorOffset1.GetOffset(), tensorOffset1.GetDynOffset(),
+                                                                ubTensor2->GetDynValidShape()));
         });
     auto& div1 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_DIV, {ubTensor1, ubTensor1}, {outCast1});
     auto& div2 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_DIV, {ubTensor1, ubTensor2}, {outCast2});
@@ -281,8 +285,8 @@ incast    ->view  -> tensor1 -> exp  -> outcast1
 */
 TEST_F(TestDuplicateOpPass, TestDupViewL1)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestDupViewL1", "TestDupViewL1", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestDupViewL1", "TestDupViewL1",
+                                                      nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     std::vector<int64_t> shape = {8, 16};
@@ -290,12 +294,10 @@ TEST_F(TestDuplicateOpPass, TestDupViewL1)
     auto tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     auto outcast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     auto outcast2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
-    auto viewAttr = std::make_shared<ViewOpAttribute>(
-        std::vector<int64_t>{0, 0}, MEM_L1, std::vector<SymbolicScalar>(), std::vector<SymbolicScalar>());
+    auto viewAttr = std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}, MEM_L1, std::vector<SymbolicScalar>(),
+                                                      std::vector<SymbolicScalar>());
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {incast}, {tensor1},
-        [&viewAttr](Operation& op) {
-            op.SetOpAttribute(viewAttr);
-        });
+                                     [&viewAttr](Operation& op) { op.SetOpAttribute(viewAttr); });
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {tensor1}, {outcast1});
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {tensor1}, {outcast2});
     currFunctionPtr->inCasts_.push_back(incast);
@@ -321,8 +323,8 @@ inCast{8,16}->Gatherin->ubTensor{8,16}->exp->outCast{8,16}
 */
 TEST_F(TestDuplicateOpPass, DuplicateGatherInUTest1)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestDuplicateView", "TestDuplicateView", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestDuplicateView", "TestDuplicateView",
+                                                      nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     // Prepare the graph
@@ -337,10 +339,9 @@ TEST_F(TestDuplicateOpPass, DuplicateGatherInUTest1)
     auto blockTable = CreateGatherInAuxTensor(kNumOne);
 
     int64_t startOffset = 0;
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_GATHER_IN_L1, {inCast, offsets, blockTable}, {ubTensor},
-        [&startOffset](Operation& op) {
-            op.SetAttribute(OpAttributeKey::startOffset, startOffset);
-        });
+    PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_GATHER_IN_L1, {inCast, offsets, blockTable}, {ubTensor},
+        [&startOffset](Operation& op) { op.SetAttribute(OpAttributeKey::startOffset, startOffset); });
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {ubTensor}, {outCast});
 
     currFunctionPtr->inCasts_.push_back(inCast);
@@ -372,8 +373,8 @@ inCast{8,16}->Gatherin->ubTensor{1,8,16}->view->outCast2{8,16}
 */
 TEST_F(TestDuplicateOpPass, DuplicateGatherInUTest2)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestDuplicateView", "TestDuplicateView", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestDuplicateView", "TestDuplicateView",
+                                                      nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     int64_t j = 0;
@@ -390,16 +391,15 @@ TEST_F(TestDuplicateOpPass, DuplicateGatherInUTest2)
     auto offsets = CreateGatherInAuxTensor(kNumEight);
     auto blockTable = CreateGatherInAuxTensor(kNumOne);
 
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_GATHER_IN_L1, {inCast, offsets, blockTable}, {ubTensor},
-        [&j](Operation& op) {
-            op.SetAttribute(OpAttributeKey::startOffset, j);
-        });
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_GATHER_IN_L1, {inCast, offsets, blockTable},
+                                     {ubTensor},
+                                     [&j](Operation& op) { op.SetAttribute(OpAttributeKey::startOffset, j); });
     auto& expOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {ubTensor}, {outCast1});
     auto& tensorOffset1 = ubTensor->GetTensorOffset();
-    auto& viewOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {ubTensor}, {outCast2},
-        [&tensorOffset1, &outCast2](Operation& op) {
-            op.SetOpAttribute(std::make_shared<ViewOpAttribute>(
-                tensorOffset1.GetOffset(), tensorOffset1.GetDynOffset(), outCast2->GetDynValidShape()));
+    auto& viewOp = PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_VIEW, {ubTensor}, {outCast2}, [&tensorOffset1, &outCast2](Operation& op) {
+            op.SetOpAttribute(std::make_shared<ViewOpAttribute>(tensorOffset1.GetOffset(), tensorOffset1.GetDynOffset(),
+                                                                outCast2->GetDynValidShape()));
         });
     auto& sqrtOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_SQRT, {ubTensor}, {outCast3});
 
@@ -447,8 +447,8 @@ ubTensor4'+ubTensor4'->div->outCast3{1,8,16}
 */
 TEST_F(TestDuplicateOpPass, DuplicateGatherInUTest3)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestDuplicateView", "TestDuplicateView", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestDuplicateView", "TestDuplicateView",
+                                                      nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
     int64_t i = 0;
     int64_t j = 1;
@@ -468,17 +468,18 @@ TEST_F(TestDuplicateOpPass, DuplicateGatherInUTest3)
     auto offsets2 = CreateGatherInAuxTensor(kNumEight);
     auto blockTable2 = CreateGatherInAuxTensor(kNumOne);
 
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_GATHER_IN_L1, {inCast, offsets1, blockTable1}, {ubTensor1},
-        [&i](Operation& op) {
-            op.SetAttribute(OpAttributeKey::startOffset, i);
-        });
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_GATHER_IN_L1, {inCast, offsets2, blockTable2}, {ubTensor2},
-        [&j](Operation& op) {
-            op.SetAttribute(OpAttributeKey::startOffset, j);
-        });
-    auto& divOp1 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_DIV, {ubTensor1, ubTensor1}, {outCast1});
-    auto& divOp2 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_DIV, {ubTensor1, ubTensor2}, {outCast2});
-    auto& divOp3 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_DIV, {ubTensor2, ubTensor2}, {outCast3});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_GATHER_IN_L1, {inCast, offsets1, blockTable1},
+                                     {ubTensor1},
+                                     [&i](Operation& op) { op.SetAttribute(OpAttributeKey::startOffset, i); });
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_GATHER_IN_L1, {inCast, offsets2, blockTable2},
+                                     {ubTensor2},
+                                     [&j](Operation& op) { op.SetAttribute(OpAttributeKey::startOffset, j); });
+    auto& divOp1 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_DIV, {ubTensor1, ubTensor1},
+                                                    {outCast1});
+    auto& divOp2 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_DIV, {ubTensor1, ubTensor2},
+                                                    {outCast2});
+    auto& divOp3 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_DIV, {ubTensor2, ubTensor2},
+                                                    {outCast3});
 
     currFunctionPtr->inCasts_.push_back(inCast);
     currFunctionPtr->outCasts_.push_back(outCast1);
@@ -523,8 +524,8 @@ inCast{8,16}->Gatherin->ubTensor{1,8,16}->Gatherin->outCast{1,8,16}
 */
 TEST_F(TestDuplicateOpPass, DuplicateGatherInUTest4)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestDuplicateView", "TestDuplicateView", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestDuplicateView", "TestDuplicateView",
+                                                      nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     // Prepare the graph
@@ -542,14 +543,12 @@ TEST_F(TestDuplicateOpPass, DuplicateGatherInUTest4)
 
     int64_t startOffset1 = 0;
     int64_t startOffset2 = 0;
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_GATHER_IN_L1, {inCast, offsets1, blockTable1}, {ubTensor},
-        [&startOffset1](Operation& op) {
-            op.SetAttribute(OpAttributeKey::startOffset, startOffset1);
-        });
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_GATHER_IN_L1, {ubTensor, offsets2, blockTable2}, {outCast},
-        [&startOffset2](Operation& op) {
-            op.SetAttribute(OpAttributeKey::startOffset, startOffset2);
-        });
+    PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_GATHER_IN_L1, {inCast, offsets1, blockTable1}, {ubTensor},
+        [&startOffset1](Operation& op) { op.SetAttribute(OpAttributeKey::startOffset, startOffset1); });
+    PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_GATHER_IN_L1, {ubTensor, offsets2, blockTable2}, {outCast},
+        [&startOffset2](Operation& op) { op.SetAttribute(OpAttributeKey::startOffset, startOffset2); });
 
     currFunctionPtr->inCasts_.push_back(inCast);
     currFunctionPtr->outCasts_.push_back(outCast);
@@ -569,8 +568,8 @@ inCast{8,16}->Gatherin->ubTensor1{8,16}->exp->outCast1{8,16}
 */
 TEST_F(TestDuplicateOpPass, DuplicateViewGatherInUTest1)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestDuplicateView", "TestDuplicateView", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestDuplicateView", "TestDuplicateView",
+                                                      nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
     int64_t i = 0;
     // Prepare the graph
@@ -587,23 +586,22 @@ TEST_F(TestDuplicateOpPass, DuplicateViewGatherInUTest1)
     auto offsets = CreateGatherInAuxTensor(kNumEight);
     auto blockTable = CreateGatherInAuxTensor(kNumOne);
 
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_GATHER_IN_L1, {inCast, offsets, blockTable}, {ubTensor1},
-        [&i](Operation& op) {
-            op.SetAttribute(OpAttributeKey::startOffset, i);
-        });
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_GATHER_IN_L1, {inCast, offsets, blockTable},
+                                     {ubTensor1},
+                                     [&i](Operation& op) { op.SetAttribute(OpAttributeKey::startOffset, i); });
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {ubTensor1}, {outCast1});
     auto& tensorOffset1 = ubTensor1->GetTensorOffset();
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {ubTensor1}, {ubTensor2},
-        [&tensorOffset1, &ubTensor2](Operation& op) {
-            op.SetOpAttribute(std::make_shared<ViewOpAttribute>(
-                tensorOffset1.GetOffset(), tensorOffset1.GetDynOffset(), ubTensor2->GetDynValidShape()));
+    PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_VIEW, {ubTensor1}, {ubTensor2}, [&tensorOffset1, &ubTensor2](Operation& op) {
+            op.SetOpAttribute(std::make_shared<ViewOpAttribute>(tensorOffset1.GetOffset(), tensorOffset1.GetDynOffset(),
+                                                                ubTensor2->GetDynValidShape()));
         });
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {ubTensor2}, {outCast2});
     auto& tensorOffset2 = ubTensor2->GetTensorOffset();
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {ubTensor2}, {outCast3},
-        [&tensorOffset2, &outCast3](Operation& op) {
-            op.SetOpAttribute(std::make_shared<ViewOpAttribute>(
-                tensorOffset2.GetOffset(), tensorOffset2.GetDynOffset(), outCast3->GetDynValidShape()));
+    PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_VIEW, {ubTensor2}, {outCast3}, [&tensorOffset2, &outCast3](Operation& op) {
+            op.SetOpAttribute(std::make_shared<ViewOpAttribute>(tensorOffset2.GetOffset(), tensorOffset2.GetDynOffset(),
+                                                                outCast3->GetDynValidShape()));
         });
     currFunctionPtr->inCasts_.push_back(inCast);
     currFunctionPtr->outCasts_.push_back(outCast1);
@@ -626,8 +624,8 @@ inCast{8,16}->Gatherin->ubtensor0 ->view->ubtensor1 ->gatherIn->ubtensor2->sqrt-
 */
 TEST_F(TestDuplicateOpPass, DuplicateViewGatherInUTest2)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestDuplicateView", "TestDuplicateView", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestDuplicateView", "TestDuplicateView",
+                                                      nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
     int64_t i = 0;
     int64_t j = 0;
@@ -647,21 +645,19 @@ TEST_F(TestDuplicateOpPass, DuplicateViewGatherInUTest2)
     auto offsets2 = CreateGatherInAuxTensor(kNumEight);
     auto blockTable2 = CreateGatherInAuxTensor(kNumOne);
 
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_GATHER_IN_L1, {inCast, offsets1, blockTable1}, {ubTensor0},
-        [&i](Operation& op) {
-            op.SetAttribute(OpAttributeKey::startOffset, i);
-        });
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_GATHER_IN_L1, {inCast, offsets1, blockTable1},
+                                     {ubTensor0},
+                                     [&i](Operation& op) { op.SetAttribute(OpAttributeKey::startOffset, i); });
     auto& tensorOffset1 = ubTensor0->GetTensorOffset();
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {ubTensor0}, {ubTensor1},
-        [&tensorOffset1, &ubTensor1](Operation& op) {
-            op.SetOpAttribute(std::make_shared<ViewOpAttribute>(
-                tensorOffset1.GetOffset(), tensorOffset1.GetDynOffset(), ubTensor1->GetDynValidShape()));
+    PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_VIEW, {ubTensor0}, {ubTensor1}, [&tensorOffset1, &ubTensor1](Operation& op) {
+            op.SetOpAttribute(std::make_shared<ViewOpAttribute>(tensorOffset1.GetOffset(), tensorOffset1.GetDynOffset(),
+                                                                ubTensor1->GetDynValidShape()));
         });
     ubTensor1->UpdateDynValidShape({IRBuilder().CreateConstInt(kNumEight), IRBuilder().CreateConstInt(kNumExpFour)});
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_GATHER_IN_L1, {ubTensor1, offsets2, blockTable2}, {ubTensor2},
-        [&j](Operation& op) {
-            op.SetAttribute(OpAttributeKey::startOffset, j);
-        });
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_GATHER_IN_L1, {ubTensor1, offsets2, blockTable2},
+                                     {ubTensor2},
+                                     [&j](Operation& op) { op.SetAttribute(OpAttributeKey::startOffset, j); });
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_SQRT, {ubTensor2}, {outCast1});
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {ubTensor2}, {outCast2});
     currFunctionPtr->outCasts_.push_back(outCast1);
@@ -684,8 +680,8 @@ inCast{8,16}->View->ubtensor0 ->GatherIn->ubtensor1 ->View->ubtensor2->sqrt->out
 */
 TEST_F(TestDuplicateOpPass, DuplicateViewGatherInUTest3)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestDuplicateView", "TestDuplicateView", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestDuplicateView", "TestDuplicateView",
+                                                      nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
     int64_t i = 0;
     // Prepare the graph
@@ -703,21 +699,21 @@ TEST_F(TestDuplicateOpPass, DuplicateViewGatherInUTest3)
     auto blockTable = CreateGatherInAuxTensor(kNumOne);
 
     auto& tensorOffset1 = inCast->GetTensorOffset();
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {inCast}, {ubTensor0},
-        [&tensorOffset1, &ubTensor0](Operation& op) {
-            op.SetOpAttribute(std::make_shared<ViewOpAttribute>(
-                tensorOffset1.GetOffset(), tensorOffset1.GetDynOffset(), ubTensor0->GetDynValidShape()));
+    PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_VIEW, {inCast}, {ubTensor0}, [&tensorOffset1, &ubTensor0](Operation& op) {
+            op.SetOpAttribute(std::make_shared<ViewOpAttribute>(tensorOffset1.GetOffset(), tensorOffset1.GetDynOffset(),
+                                                                ubTensor0->GetDynValidShape()));
         });
     ubTensor0->UpdateDynValidShape({IRBuilder().CreateConstInt(kNumEight), IRBuilder().CreateConstInt(kNumExpFour)});
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_GATHER_IN_L1, {ubTensor0, offsets, blockTable}, {ubTensor1},
-        [&i](Operation& op) {
-            op.SetAttribute(OpAttributeKey::startOffset, i);
-        });
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_GATHER_IN_L1, {ubTensor0, offsets, blockTable},
+                                     {ubTensor1},
+                                     [&i](Operation& op) { op.SetAttribute(OpAttributeKey::startOffset, i); });
     auto& tensorOffset2 = ubTensor1->GetTensorOffset();
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {ubTensor1}, {ubTensor2},
+    PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_VIEW, {ubTensor1}, {ubTensor2},
         [&tensorOffset1, &tensorOffset2, &ubTensor2](Operation& op) {
-            op.SetOpAttribute(std::make_shared<ViewOpAttribute>(
-                tensorOffset1.GetOffset(), tensorOffset2.GetDynOffset(), ubTensor2->GetDynValidShape()));
+            op.SetOpAttribute(std::make_shared<ViewOpAttribute>(tensorOffset1.GetOffset(), tensorOffset2.GetDynOffset(),
+                                                                ubTensor2->GetDynValidShape()));
         });
 
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {ubTensor2}, {outCast2});
@@ -743,8 +739,8 @@ incast    ->view  -> tensor1 -> sqrt  -> tensor1 -> gatherIn -> tensor3 -> exp -
 */
 TEST_F(TestDuplicateOpPass, TestCheck1)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestPostCheck", "TestPostCheck", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestPostCheck", "TestPostCheck",
+                                                      nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     int64_t i = 0;
@@ -764,20 +760,17 @@ TEST_F(TestDuplicateOpPass, TestCheck1)
     auto offsets = CreateGatherInAuxTensor(8);
     auto blockTable = CreateGatherInAuxTensor(1);
 
-    auto viewAttr = std::make_shared<ViewOpAttribute>(
-        std::vector<int64_t>{0, 0}, MEM_L1, std::vector<SymbolicScalar>(), std::vector<SymbolicScalar>());
+    auto viewAttr = std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}, MEM_L1, std::vector<SymbolicScalar>(),
+                                                      std::vector<SymbolicScalar>());
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {incast}, {tensor1},
-        [&viewAttr](Operation& op) {
-            op.SetOpAttribute(viewAttr);
-        });
+                                     [&viewAttr](Operation& op) { op.SetOpAttribute(viewAttr); });
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {tensor3}, {outcast2});
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {tensor3}, {outcast3});
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_SQRT, {tensor1}, {tensor2});
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_SQRT, {tensor1}, {outcast1});
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_GATHER_IN_L1, {tensor2, offsets, blockTable}, {tensor3},
-        [&i](Operation& op) {
-            op.SetAttribute(OpAttributeKey::startOffset, i);
-        });
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_GATHER_IN_L1, {tensor2, offsets, blockTable},
+                                     {tensor3},
+                                     [&i](Operation& op) { op.SetAttribute(OpAttributeKey::startOffset, i); });
     currFunctionPtr->inCasts_.push_back(incast);
     currFunctionPtr->outCasts_.push_back(outcast1);
     currFunctionPtr->outCasts_.push_back(outcast2);
@@ -799,8 +792,8 @@ incast    ->gatherIn  -> tensor1 -> sqrt  -> tensor2 -> view -> tensor3 -> exp -
 */
 TEST_F(TestDuplicateOpPass, TestCheck2)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestPostCheck", "TestPostCheck", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestPostCheck", "TestPostCheck",
+                                                      nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     int64_t i = 0;
@@ -820,20 +813,17 @@ TEST_F(TestDuplicateOpPass, TestCheck2)
     auto offsets = CreateGatherInAuxTensor(8);
     auto blockTable = CreateGatherInAuxTensor(1);
 
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_GATHER_IN_L1, {incast, offsets, blockTable}, {tensor1},
-        [&i](Operation& op) {
-            op.SetAttribute(OpAttributeKey::startOffset, i);
-        });
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_GATHER_IN_L1, {incast, offsets, blockTable},
+                                     {tensor1},
+                                     [&i](Operation& op) { op.SetAttribute(OpAttributeKey::startOffset, i); });
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {tensor3}, {outcast2});
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {tensor3}, {outcast3});
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_SQRT, {tensor1}, {tensor2});
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_SQRT, {tensor1}, {outcast1});
-    auto viewAttr = std::make_shared<ViewOpAttribute>(
-        std::vector<int64_t>{0, 0}, MEM_VECTOR_REG, std::vector<SymbolicScalar>(), std::vector<SymbolicScalar>());
+    auto viewAttr = std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}, MEM_VECTOR_REG,
+                                                      std::vector<SymbolicScalar>(), std::vector<SymbolicScalar>());
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {tensor2}, {tensor3},
-        [&viewAttr](Operation& op) {
-            op.SetOpAttribute(viewAttr);
-        });
+                                     [&viewAttr](Operation& op) { op.SetOpAttribute(viewAttr); });
     currFunctionPtr->outCasts_.push_back(outcast1);
     currFunctionPtr->outCasts_.push_back(outcast2);
     currFunctionPtr->outCasts_.push_back(outcast3);
@@ -852,8 +842,8 @@ incast    ->view  -> tensor1 -> exp - >output1
 */
 TEST_F(TestDuplicateOpPass, TestCheck3)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestPostCheck", "TestPostCheck", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestPostCheck", "TestPostCheck",
+                                                      nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
     std::vector<int64_t> shape = {8, 16};
     auto incast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
@@ -873,8 +863,8 @@ incast    ->view  -> tensor1 -> exp - >output1
 */
 TEST_F(TestDuplicateOpPass, TestCheck4)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestPostCheck", "TestPostCheck", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestPostCheck", "TestPostCheck",
+                                                      nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
     std::vector<int64_t> shape = {8, 16};
     auto incast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
@@ -882,10 +872,10 @@ TEST_F(TestDuplicateOpPass, TestCheck4)
     auto outcast2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     auto tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     auto& tensorOffset = incast->GetTensorOffset();
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {incast}, {tensor1},
-        [&tensorOffset, &tensor1](Operation& op) {
-            op.SetOpAttribute(std::make_shared<ViewOpAttribute>(
-                tensorOffset.GetOffset(), tensorOffset.GetDynOffset(), tensor1->GetDynValidShape()));
+    PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_VIEW, {incast}, {tensor1}, [&tensorOffset, &tensor1](Operation& op) {
+            op.SetOpAttribute(std::make_shared<ViewOpAttribute>(tensorOffset.GetOffset(), tensorOffset.GetDynOffset(),
+                                                                tensor1->GetDynValidShape()));
         });
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {tensor1}, {outcast1});
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {tensor1}, {outcast2});
@@ -945,8 +935,8 @@ inCast{16,16}->gatherIn->ubTensor{16,16}->sqrt->outCast1{16,16}
 */
 TEST_F(TestDuplicateOpPass, TestSpan)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestDuplicateView", "TestDuplicateView", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestDuplicateView", "TestDuplicateView",
+                                                      nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
     int64_t i = 0;
     // Prepare the graph
@@ -961,8 +951,8 @@ TEST_F(TestDuplicateOpPass, TestSpan)
     auto offsets = CreateGatherInAuxTensor(kNumExpFour);
     auto blockTable = CreateGatherInAuxTensor(kNumOne);
 
-    auto& gatherIn = IRBuilder().CreateTensorOpStmt(*currFunctionPtr,
-        Opcode::OP_GATHER_IN_L1, {inCast, offsets, blockTable}, {ubTensor}, span);
+    auto& gatherIn = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_GATHER_IN_L1,
+                                                    {inCast, offsets, blockTable}, {ubTensor}, span);
     gatherIn.SetAttribute(OpAttributeKey::startOffset, i);
     gatherIn.SetScopeId(1);
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_SQRT, {ubTensor}, {outCast1});

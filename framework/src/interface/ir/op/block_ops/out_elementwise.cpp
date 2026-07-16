@@ -58,9 +58,9 @@ static void CheckScalarArg([[maybe_unused]] const std::vector<ExprPtr>& args, si
 }
 
 // Type deduction for (out:TileType, TileType, TileType) -> out.
-static TypePtr DeduceBlockOutBinaryTile(
-    [[maybe_unused]] const std::vector<ExprPtr>& args,
-    [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs, const std::string& op_name)
+static TypePtr DeduceBlockOutBinaryTile([[maybe_unused]] const std::vector<ExprPtr>& args,
+                                        [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs,
+                                        const std::string& op_name)
 {
     CHECK(args.size() == 0x3) << op_name << " requires 3 arguments (out, lhs, rhs)";
     CheckTileArg(args, 1, op_name);
@@ -69,9 +69,9 @@ static TypePtr DeduceBlockOutBinaryTile(
 }
 
 // Type deduction for (out:TileType, TileType, ScalarType) -> out.
-static TypePtr DeduceBlockOutBinaryScalar(
-    [[maybe_unused]] const std::vector<ExprPtr>& args,
-    [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs, const std::string& op_name)
+static TypePtr DeduceBlockOutBinaryScalar([[maybe_unused]] const std::vector<ExprPtr>& args,
+                                          [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs,
+                                          const std::string& op_name)
 {
     CHECK(args.size() == 0x3) << op_name << " requires 3 arguments (out, tile, scalar)";
     CheckTileArg(args, 1, op_name);
@@ -80,9 +80,9 @@ static TypePtr DeduceBlockOutBinaryScalar(
 }
 
 // Type deduction for (out:TileType, TileType) -> out  (unary).
-static TypePtr DeduceBlockOutUnary(
-    [[maybe_unused]] const std::vector<ExprPtr>& args,
-    [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs, const std::string& op_name)
+static TypePtr DeduceBlockOutUnary([[maybe_unused]] const std::vector<ExprPtr>& args,
+                                   [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs,
+                                   const std::string& op_name)
 {
     CHECK(args.size() == 0x2) << op_name << " requires 2 arguments (out, src)";
     CheckTileArg(args, 1, op_name);
@@ -430,9 +430,8 @@ REGISTER_OP("block.sel")
 // pto-isa TSELS: out[i] = src[i] if mask_bit[i] else scalar.
 REGISTER_OP("block.sels")
     .set_op_category("BlockOp")
-    .set_description(
-        "Block explicit-output mask selection between a source tile and a scalar: "
-        "out[i]=src[i] if mask[i] else scalar; tmp is scratch buffer")
+    .set_description("Block explicit-output mask selection between a source tile and a scalar: "
+                     "out[i]=src[i] if mask[i] else scalar; tmp is scratch buffer")
     .add_argument("out", "Pre-allocated output tile (TileType)")
     .add_argument("mask", "Predicate mask tile (TileType)")
     .add_argument("src", "Source tile selected where mask bit is 1 (TileType)")

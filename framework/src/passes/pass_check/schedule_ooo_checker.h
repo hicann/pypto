@@ -34,9 +34,9 @@ private:
     bool PreCheckTensorInfo(const LogicalTensorPtr tensor);
     bool PreCheckOpInfo(const Operation* op);
     bool PostCheckOpMagic(std::set<int> opSet, const Operation* op, const int programIdx);
-    bool PostCheckNewOpConnection(
-        const std::vector<Operation*> opListBeforePass, const std::vector<int> opMagicListBeforePass,
-        const Operation* op, const int programIdx);
+    bool PostCheckNewOpConnection(const std::vector<Operation*> opListBeforePass,
+                                  const std::vector<int> opMagicListBeforePass, const Operation* op,
+                                  const int programIdx);
     bool PostCheckSpecialOp(const Operation* opBeforeIncast);
     bool PostCheckTensorMagic(std::set<int> tensorSet, const LogicalTensorPtr tensor, const int programIdx);
     bool PostCheckLocalTensor(const LogicalTensorPtr tensor, const int programIdx);

@@ -45,16 +45,16 @@ public:
      */
     ~Serial() override = default;
 
-    ReturnStatus ComputeSchedule(BspSchedule<GraphT> &schedule) override
+    ReturnStatus ComputeSchedule(BspSchedule<GraphT>& schedule) override
     {
-        const auto &instance = schedule.GetInstance();
-        const auto &dag = instance.GetComputationalDag();
+        const auto& instance = schedule.GetInstance();
+        const auto& dag = instance.GetComputationalDag();
         const auto numVertices = dag.NumVertices();
         if (numVertices == 0) {
             return ReturnStatus::OSP_SUCCESS;
         }
 
-        const auto &arch = instance.GetArchitecture();
+        const auto& arch = instance.GetArchitecture();
 
         // Select one processor of each type
         const std::vector<unsigned> chosenProcs = SelectProcessor(arch);
@@ -63,8 +63,8 @@ public:
         }
 
         // Build compatibility matrix
-        const std::vector<std::vector<unsigned>> nodeTypeCompatibleProcessors =
-            BuildCompatibilityMatrix(instance, dag, chosenProcs);
+        const std::vector<std::vector<unsigned>> nodeTypeCompatibleProcessors = BuildCompatibilityMatrix(instance, dag,
+                                                                                                         chosenProcs);
 
         // Initialize scheduling state
         std::vector<VertexIdxT<GraphT>> inDegree(numVertices);
@@ -81,8 +81,8 @@ public:
                 VertexIdxT<GraphT> v = readyNodes.front();
                 readyNodes.pop_front();
 
-                if (TryScheduleNode(schedule, dag, v, nodeTypeCompatibleProcessors,
-                    currentSuperstep, inDegree, readyNodes, deferredNodes)) {
+                if (TryScheduleNode(schedule, dag, v, nodeTypeCompatibleProcessors, currentSuperstep, inDegree,
+                                    readyNodes, deferredNodes)) {
                     ++scheduledNodesCount;
                 }
             }
@@ -99,16 +99,14 @@ public:
     }
 
 private:
-
-    std::vector<std::vector<unsigned>> BuildCompatibilityMatrix(
-        const BspInstance<GraphT> &instance, const GraphT &dag,
-        const std::vector<unsigned> &chosenProcs)
+    std::vector<std::vector<unsigned>> BuildCompatibilityMatrix(const BspInstance<GraphT>& instance, const GraphT& dag,
+                                                                const std::vector<unsigned>& chosenProcs)
     {
         const unsigned numNodeTypes = dag.NumVertexTypes();
         std::vector<std::vector<unsigned>> nodeTypeCompatibleProcessors(numNodeTypes);
 
         for (VTypeT<GraphT> type = 0; type < numNodeTypes; ++type) {
-            for (const auto &p : chosenProcs) {
+            for (const auto& p : chosenProcs) {
                 if (instance.IsCompatibleType(type, instance.ProcessorType(p))) {
                     nodeTypeCompatibleProcessors[type].push_back(p);
                 }
@@ -118,12 +116,10 @@ private:
         return nodeTypeCompatibleProcessors;
     }
 
-    void InitializeScheduleState(
-        BspSchedule<GraphT> &schedule, const GraphT &dag,
-        std::vector<VertexIdxT<GraphT>> &inDegree,
-        std::deque<VertexIdxT<GraphT>> &readyNodes)
+    void InitializeScheduleState(BspSchedule<GraphT>& schedule, const GraphT& dag,
+                                 std::vector<VertexIdxT<GraphT>>& inDegree, std::deque<VertexIdxT<GraphT>>& readyNodes)
     {
-        for (const auto &v : dag.Vertices()) {
+        for (const auto& v : dag.Vertices()) {
             schedule.SetAssignedProcessor(v, std::numeric_limits<unsigned>::max());
             schedule.SetAssignedSuperstep(v, std::numeric_limits<unsigned>::max());
             inDegree[v] = dag.InDegree(v);
@@ -133,40 +129,35 @@ private:
         }
     }
 
-    bool AreParentsCompatible(
-        const BspSchedule<GraphT> &schedule, const GraphT &dag,
-        VertexIdxT<GraphT> v, unsigned p, unsigned currentSuperstep)
+    bool AreParentsCompatible(const BspSchedule<GraphT>& schedule, const GraphT& dag, VertexIdxT<GraphT> v, unsigned p,
+                              unsigned currentSuperstep)
     {
-        for (const auto &parent : dag.Parents(v)) {
-            if (schedule.AssignedSuperstep(parent) == currentSuperstep &&
-                schedule.AssignedProcessor(parent) != p) {
+        for (const auto& parent : dag.Parents(v)) {
+            if (schedule.AssignedSuperstep(parent) == currentSuperstep && schedule.AssignedProcessor(parent) != p) {
                 return false;
             }
         }
         return true;
     }
 
-    void UpdateDependencies(
-        const GraphT &dag, VertexIdxT<GraphT> v,
-        std::vector<VertexIdxT<GraphT>> &inDegree,
-        std::deque<VertexIdxT<GraphT>> &readyNodes)
+    void UpdateDependencies(const GraphT& dag, VertexIdxT<GraphT> v, std::vector<VertexIdxT<GraphT>>& inDegree,
+                            std::deque<VertexIdxT<GraphT>>& readyNodes)
     {
-        for (const auto &child : dag.Children(v)) {
+        for (const auto& child : dag.Children(v)) {
             if (--inDegree[child] == 0) {
                 readyNodes.push_back(child);
             }
         }
     }
 
-    bool TryScheduleNode(
-        BspSchedule<GraphT> &schedule, const GraphT &dag,
-        VertexIdxT<GraphT> v, const std::vector<std::vector<unsigned>> &nodeTypeCompatibleProcessors,
-        unsigned currentSuperstep, std::vector<VertexIdxT<GraphT>> &inDegree,
-        std::deque<VertexIdxT<GraphT>> &readyNodes, std::deque<VertexIdxT<GraphT>> &deferredNodes)
+    bool TryScheduleNode(BspSchedule<GraphT>& schedule, const GraphT& dag, VertexIdxT<GraphT> v,
+                         const std::vector<std::vector<unsigned>>& nodeTypeCompatibleProcessors,
+                         unsigned currentSuperstep, std::vector<VertexIdxT<GraphT>>& inDegree,
+                         std::deque<VertexIdxT<GraphT>>& readyNodes, std::deque<VertexIdxT<GraphT>>& deferredNodes)
     {
         unsigned vType = dag.VertexType(v);
 
-        for (const auto &p : nodeTypeCompatibleProcessors[vType]) {
+        for (const auto& p : nodeTypeCompatibleProcessors[vType]) {
             if (AreParentsCompatible(schedule, dag, v, p, currentSuperstep)) {
                 schedule.SetAssignedProcessor(v, p);
                 schedule.SetAssignedSuperstep(v, currentSuperstep);
@@ -179,7 +170,7 @@ private:
         return false;
     }
 
-    std::vector<unsigned> SelectProcessor(const BspArchitecture<GraphT> &arch)
+    std::vector<unsigned> SelectProcessor(const BspArchitecture<GraphT>& arch)
     {
         std::vector<unsigned> chosenProcs;
         if (arch.GetNumberOfProcessorTypes() > 0) {
@@ -194,6 +185,6 @@ private:
         return chosenProcs;
     }
 };
-}    // namespace osp
+} // namespace osp
 } // namespace npu::tile_fwk
 #endif // OSP_SERIAL_HPP

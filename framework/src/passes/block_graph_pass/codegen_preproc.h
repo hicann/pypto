@@ -41,22 +41,19 @@ private:
     // force combine axis
     Status ForceCombineAxisForAxisCombine(Function& func) const;
     bool IsCopyNeedSave(const Operation& op) const;
-    void SetTensorParamAddr(
-        LogicalTensor& tensor, int64_t tensorParamIdx, const SymbolicScalar& attrOffsetScalar,
-        const TensorAddrKey& key) const;
+    void SetTensorParamAddr(LogicalTensor& tensor, int64_t tensorParamIdx, const SymbolicScalar& attrOffsetScalar,
+                            const TensorAddrKey& key) const;
     void SetNeedAllocAttr(Function& function);
     void FixExpandDimForAxisCombine(Operation& op, int dimSize) const;
     std::string DumpOpList(Function& function);
-    GmOutOfRangeCheckInfo ComputeGmOoRCheckInfo(
-        const Operation& op,
-        const std::vector<SymbolicScalar>& dynOffset,
-        const std::vector<SymbolicScalar>& dynValidShape,
-        const std::vector<SymbolicScalar>& rawShapeScalar,
-        GmOutOfRangeCheckInfo::AccessType accessType) const;
+    GmOutOfRangeCheckInfo ComputeGmOoRCheckInfo(const Operation& op, const std::vector<SymbolicScalar>& dynOffset,
+                                                const std::vector<SymbolicScalar>& dynValidShape,
+                                                const std::vector<SymbolicScalar>& rawShapeScalar,
+                                                GmOutOfRangeCheckInfo::AccessType accessType) const;
     void GenGmOoRCheckInfoForOp(Operation& op) const;
     void GenGmOoRCheckInfo(Function& function) const;
-    Status CheckSingleTensorAddrRange(const Operation& op, LogicalTensorPtr tensor,
-                                      size_t tensorIdx, const std::string& tensorType) const;
+    Status CheckSingleTensorAddrRange(const Operation& op, LogicalTensorPtr tensor, size_t tensorIdx,
+                                      const std::string& tensorType) const;
     Status CheckTensorAddrRange(Function& function) const;
     bool combineAxis{false};
 };

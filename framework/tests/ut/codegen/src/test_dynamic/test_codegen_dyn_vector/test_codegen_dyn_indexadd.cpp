@@ -60,8 +60,8 @@ TEST_F(TestCodegenDynIndexAdd, TestIndexAddUB)
             output = IndexAddUB(inputSrc0, inputSrc1, inputIndex, axis, alphaVal);
         }
     }
-    auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX +
+                                                                HIDDEN_FUNC_SUFFIX);
     (void)GenCodeByFunction(*function);
 }
 
@@ -94,8 +94,8 @@ TEST_F(TestCodegenDynIndexAdd, TestIndexAddUBLayout)
             output = IndexAddUB(inputSrc0, inputSrc1, inputIndex, axis, alphaVal);
         }
     }
-    auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX +
+                                                                HIDDEN_FUNC_SUFFIX);
     (void)GenCodeByFunction(*function);
 }
 
@@ -128,8 +128,8 @@ TEST_F(TestCodegenDynIndexAdd, TestIndexAddLayout)
             IndexAdd_(inputSrc0, inputSrc1, inputIndex, axis, alphaVal);
         }
     }
-    auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX +
+                                                                HIDDEN_FUNC_SUFFIX);
     std::string res = GenCodeByFunction(*function);
     std::string expect =
         R"!!!(TIndexAdd<3>(gmTensor_4, gmTensor_6, ubTensor_0, ubTensor_2, ubTensor_5, Coord2Dim(0, 0), (float)1.f);)!!!";

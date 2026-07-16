@@ -68,9 +68,8 @@ int TaskGraph::AddTask(const std::string& name, ScheduleCoreType coreType, int l
 {
     int newTaskIdx = static_cast<int>(tasks.size());
     tasks.emplace_back(name, newTaskIdx, coreType, latency);
-    APASS_LOG_DEBUG_F(
-        Elements::Operation, "Create new taskNode with idx=%d and coreType=%s.", newTaskIdx,
-        ScheduleCoreTypeToString(coreType).c_str());
+    APASS_LOG_DEBUG_F(Elements::Operation, "Create new taskNode with idx=%d and coreType=%s.", newTaskIdx,
+                      ScheduleCoreTypeToString(coreType).c_str());
     return newTaskIdx;
 }
 
@@ -119,15 +118,14 @@ void TaskGraph::ClearSchedule()
 }
 
 // 寻找时间槽不重叠情况下的最早执行时间
-void CoreScheduler::FindEarliestSlot(
-    std::vector<std::pair<int, int>>& timeSlot, int earliestStart, int latency, int& currentIdx,
-    std::pair<int, int>& currentInterval)
+void CoreScheduler::FindEarliestSlot(std::vector<std::pair<int, int>>& timeSlot, int earliestStart, int latency,
+                                     int& currentIdx, std::pair<int, int>& currentInterval)
 {
     int currentEarliestStart = INT32_MAX;
     currentIdx = -1;
     currentInterval = std::make_pair(-1, -1);
-    APASS_LOG_DEBUG_F(
-        Elements::Operation, "Try to find earliest slot with earliestStart=%d and latency=%d.", earliestStart, latency);
+    APASS_LOG_DEBUG_F(Elements::Operation, "Try to find earliest slot with earliestStart=%d and latency=%d.",
+                      earliestStart, latency);
     for (int i = 0; i < static_cast<int>(timeSlot.size()); i++) {
         int validStart = std::max(timeSlot[i].first, earliestStart);
         if (timeSlot[i].second - validStart < latency) {
@@ -139,17 +137,17 @@ void CoreScheduler::FindEarliestSlot(
             currentIdx = i;
         }
     }
-    APASS_LOG_DEBUG_F(
-        Elements::Operation, "The earliest slot is from %d to %d.", currentInterval.first, currentInterval.second);
+    APASS_LOG_DEBUG_F(Elements::Operation, "The earliest slot is from %d to %d.", currentInterval.first,
+                      currentInterval.second);
 }
 
 // 更新空闲时间槽
-void CoreScheduler::UpdateInterval(
-    std::vector<std::pair<int, int>>& timeSlot, int& insertIdx, std::pair<int, int>& insertInterval)
+void CoreScheduler::UpdateInterval(std::vector<std::pair<int, int>>& timeSlot, int& insertIdx,
+                                   std::pair<int, int>& insertInterval)
 {
     auto origInterval = timeSlot[insertIdx];
-    APASS_LOG_DEBUG_F(
-        Elements::Operation, "The original slot [%d, %d] is removed.", origInterval.first, origInterval.second);
+    APASS_LOG_DEBUG_F(Elements::Operation, "The original slot [%d, %d] is removed.", origInterval.first,
+                      origInterval.second);
     timeSlot.erase(timeSlot.begin() + insertIdx);
     if (origInterval.first < insertInterval.first) {
         timeSlot.push_back(std::make_pair(origInterval.first, insertInterval.first));
@@ -157,8 +155,8 @@ void CoreScheduler::UpdateInterval(
     }
     if (origInterval.second > insertInterval.second) {
         timeSlot.push_back(std::make_pair(insertInterval.second, origInterval.second));
-        APASS_LOG_DEBUG_F(
-            Elements::Operation, "New slot [%d, %d] is added.", insertInterval.second, origInterval.second);
+        APASS_LOG_DEBUG_F(Elements::Operation, "New slot [%d, %d] is added.", insertInterval.second,
+                          origInterval.second);
     }
 }
 
@@ -227,12 +225,10 @@ void CoreScheduler::EFTWithInsertSchedule(TaskGraph& taskGraph, std::vector<int>
                 std::pair<int, int> currentIntervalAIV0{-1, -1};
                 int currentIdxAIV1 = -1;
                 std::pair<int, int> currentIntervalAIV1{-1, -1};
-                FindEarliestSlot(
-                    availTime[TargetCoreType::AIV0], evalDepTimeStart, task.latency, currentIdxAIV0,
-                    currentIntervalAIV0);
-                FindEarliestSlot(
-                    availTime[TargetCoreType::AIV1], evalDepTimeStart, task.latency, currentIdxAIV1,
-                    currentIntervalAIV1);
+                FindEarliestSlot(availTime[TargetCoreType::AIV0], evalDepTimeStart, task.latency, currentIdxAIV0,
+                                 currentIntervalAIV0);
+                FindEarliestSlot(availTime[TargetCoreType::AIV1], evalDepTimeStart, task.latency, currentIdxAIV1,
+                                 currentIntervalAIV1);
                 if (currentIntervalAIV0.first <= currentIntervalAIV1.first) {
                     evalCore = TargetCoreType::AIV0;
                     currentIdx = currentIdxAIV0;
@@ -275,8 +271,8 @@ void CoreScheduler::EFTSchedule(TaskGraph& taskGraph, std::vector<int>& topoSeq)
         }
         taskGraph.tasks[taskId].targetCoreTypeCandidate = evalCore;
         taskGraph.tasks[taskId].startTimeCandidate = std::max(evalDepTimeStart, currentTime[evalCore]);
-        taskGraph.tasks[taskId].endTimeCandidate =
-            taskGraph.tasks[taskId].startTimeCandidate + taskGraph.tasks[taskId].latency;
+        taskGraph.tasks[taskId].endTimeCandidate = taskGraph.tasks[taskId].startTimeCandidate +
+                                                   taskGraph.tasks[taskId].latency;
         currentTime[evalCore] = taskGraph.tasks[taskId].endTimeCandidate;
     }
     taskGraph.ApplyCandidate();
@@ -284,8 +280,8 @@ void CoreScheduler::EFTSchedule(TaskGraph& taskGraph, std::vector<int>& topoSeq)
 }
 
 // 对所有的拓扑序执行基于最早完成时间的任务排布
-void CoreScheduler::BruteForceScheduleRecursiveStep(
-    std::vector<bool>& visited, int recursiveLevel, TaskGraph& taskGraph, std::vector<int>& topoList)
+void CoreScheduler::BruteForceScheduleRecursiveStep(std::vector<bool>& visited, int recursiveLevel,
+                                                    TaskGraph& taskGraph, std::vector<int>& topoList)
 {
     if (recursiveLevel >= static_cast<int>(taskGraph.tasks.size())) {
         EFTSchedule(taskGraph, topoList);
@@ -312,9 +308,10 @@ void CoreScheduler::BruteForceScheduleRecursiveStep(
     }
 }
 
-void CoreScheduler::SelectAIVCore(
-    TaskGraph& taskGraph, int taskId, std::unordered_map<TargetCoreType, std::vector<std::pair<int, int>>>& availTime,
-    int evalDepTimeStart, int latency, TargetCoreType& evalCore, int& currentIdx, std::pair<int, int>& currentInterval)
+void CoreScheduler::SelectAIVCore(TaskGraph& taskGraph, int taskId,
+                                  std::unordered_map<TargetCoreType, std::vector<std::pair<int, int>>>& availTime,
+                                  int evalDepTimeStart, int latency, TargetCoreType& evalCore, int& currentIdx,
+                                  std::pair<int, int>& currentInterval)
 {
     int idxAIV0 = -1;
     std::pair<int, int> intervalAIV0{-1, -1};
@@ -370,9 +367,8 @@ int CoreScheduler::FindDepAIVLastEnd(const TaskGraph& taskGraph, int taskId) con
             }
             visited.insert(prevId);
             auto& prev = taskGraph.tasks[prevId];
-            bool prevIsAIV =
-                (prev.targetCoreTypeCandidate == TargetCoreType::AIV0 ||
-                 prev.targetCoreTypeCandidate == TargetCoreType::AIV1);
+            bool prevIsAIV = (prev.targetCoreTypeCandidate == TargetCoreType::AIV0 ||
+                              prev.targetCoreTypeCandidate == TargetCoreType::AIV1);
             if (prevIsAIV) {
                 result = std::max(result, prev.endTimeCandidate);
             } else {
@@ -386,9 +382,10 @@ int CoreScheduler::FindDepAIVLastEnd(const TaskGraph& taskGraph, int taskId) con
 
 // --------- GapMin: 启发式最小化相邻依赖边的等待间隔 ---------
 // 紧耦合调度单个任务
-void CoreScheduler::ScheduleOneTask(
-    TaskGraph& taskGraph, int taskId, std::unordered_map<TargetCoreType, std::vector<std::pair<int, int>>>& availTime,
-    std::function<bool(TargetCoreType)> /* isAicCore */, std::unordered_map<int, TargetCoreType>& vecBranchToCore)
+void CoreScheduler::ScheduleOneTask(TaskGraph& taskGraph, int taskId,
+                                    std::unordered_map<TargetCoreType, std::vector<std::pair<int, int>>>& availTime,
+                                    std::function<bool(TargetCoreType)> /* isAicCore */,
+                                    std::unordered_map<int, TargetCoreType>& vecBranchToCore)
 {
     auto& task = taskGraph.tasks[taskId];
     int evalDepTimeStart = 0;
@@ -411,8 +408,8 @@ void CoreScheduler::ScheduleOneTask(
             evalCore = pinnedCore;
             FindEarliestSlot(availTime[evalCore], evalDepTimeStart, task.latency, currentIdx, currentInterval);
         } else {
-            SelectAIVCore(
-                taskGraph, taskId, availTime, evalDepTimeStart, task.latency, evalCore, currentIdx, currentInterval);
+            SelectAIVCore(taskGraph, taskId, availTime, evalDepTimeStart, task.latency, evalCore, currentIdx,
+                          currentInterval);
         }
     }
     task.targetCoreTypeCandidate = evalCore;
@@ -427,8 +424,8 @@ void CoreScheduler::ScheduleOneTask(
 
 // 查找 AIV 任务是否因连通分支约束而必须钉在某个核上
 // 遍历已调度的 AIV 任务，若其 vecBranchId 与当前任务相同，则复用其核
-TargetCoreType CoreScheduler::LookupPinnedAIVCore(
-    const TaskNode& task, const std::unordered_map<int, TargetCoreType>& vecBranchToCore)
+TargetCoreType CoreScheduler::LookupPinnedAIVCore(const TaskNode& task,
+                                                  const std::unordered_map<int, TargetCoreType>& vecBranchToCore)
 {
     if (task.vecBranchId < 0) {
         return TargetCoreType::UNKNOWN;
@@ -566,9 +563,8 @@ void CoreScheduler::GapMinSchedule(TaskGraph& taskGraph, std::vector<int>& topoS
     GapMinForwardPass(taskGraph, topoSeq);
     GapMinBackwardShift(taskGraph, topoSeq);
     taskGraph.ApplyCandidateUnconditional();
-    APASS_LOG_INFO_F(
-        Elements::Operation, "GapMinSchedule total cross-core gap=%lld, endTime(max)=%d.",
-        static_cast<long long>(SumCrossCoreGap(taskGraph)), taskGraph.makespan);
+    APASS_LOG_INFO_F(Elements::Operation, "GapMinSchedule total cross-core gap=%lld, endTime(max)=%d.",
+                     static_cast<long long>(SumCrossCoreGap(taskGraph)), taskGraph.makespan);
 }
 
 // 计算 GapMin baseline 的总代价 = makespan + Σ_e (gap(e) * coeff(e))
@@ -620,9 +616,8 @@ void CoreScheduler::NormalizeSingleAIVBranches(TaskGraph& taskGraph)
             taskGraph.tasks[taskId].targetCoreType = TargetCoreType::AIV0;
             taskGraph.tasks[taskId].targetCoreTypeCandidate = TargetCoreType::AIV0;
         }
-        APASS_LOG_INFO_F(
-            Elements::Operation, "Normalize single-AIV: all %d AIV1 tasks changed to AIV0.",
-            static_cast<int>(aiv1TaskIds.size()));
+        APASS_LOG_INFO_F(Elements::Operation, "Normalize single-AIV: all %d AIV1 tasks changed to AIV0.",
+                         static_cast<int>(aiv1TaskIds.size()));
     }
 }
 
@@ -641,8 +636,8 @@ void CoreScheduler::OptimalScheduleWithSearch(TaskGraph& taskGraph, bool enableS
     GapMinSchedule(taskGraph, topoSeq);
     double baselineTotalCost = CalcBaselineCost(taskGraph, n);
     int baselineMakespan = taskGraph.makespan;
-    APASS_LOG_INFO_F(
-        Elements::Operation, "GapMin baseline: makespan=%d, total_cost=%.4f.", baselineMakespan, baselineTotalCost);
+    APASS_LOG_INFO_F(Elements::Operation, "GapMin baseline: makespan=%d, total_cost=%.4f.", baselineMakespan,
+                     baselineTotalCost);
 
     // Step 2: in-process local-search refinement (deterministic, no external solver)
     if (enableSearch) {
@@ -718,9 +713,9 @@ void CoreScheduler::HLFSchedule(TaskGraph& taskGraph)
     });
 
     for (int i = 0; i < n; i++) {
-        APASS_LOG_INFO_F(
-            Elements::Operation, "HLF order[%d] = task %d, revDepth=%d, coreType=%s.", i, order[i], revDepth[order[i]],
-            taskGraph.tasks[order[i]].coreType == ScheduleCoreType::AIC ? "AIC" : "AIV");
+        APASS_LOG_INFO_F(Elements::Operation, "HLF order[%d] = task %d, revDepth=%d, coreType=%s.", i, order[i],
+                         revDepth[order[i]],
+                         taskGraph.tasks[order[i]].coreType == ScheduleCoreType::AIC ? "AIC" : "AIV");
     }
 
     EFTWithInsertSchedule(taskGraph, order);

@@ -30,31 +30,31 @@
 namespace npu::tile_fwk {
 const std::unordered_map<size_t, size_t> BLOCK_PADDING_DIM = {{1, 32}, {2, 16}, {4, 8}, {8, 4}};
 
-#define DATA_TYPE_ALL                                          \
-    DTYPE_DESC(DT_INT4, 1, 4, false, int4, 29)                 \
-    DTYPE_DESC(DT_INT8, 1, 8, false, int8_t, 2)                \
-    DTYPE_DESC(DT_INT16, 2, 16, false, int16_t, 6)             \
-    DTYPE_DESC(DT_INT32, 4, 32, false, int32_t, 3)             \
-    DTYPE_DESC(DT_INT64, 8, 64, false, int64_t, 9)             \
-    DTYPE_DESC(DT_FP8, 1, 8, true, float8_t, 28)               \
-    DTYPE_DESC(DT_FP16, 2, 16, true, half, 1)                  \
-    DTYPE_DESC(DT_FP32, 4, 32, true, float, 0)                 \
-    DTYPE_DESC(DT_BF16, 2, 16, true, bfloat16_t, 27)           \
-    DTYPE_DESC(DT_HF4, 1, 4, true, hfloat4, 28)                \
-    DTYPE_DESC(DT_HF8, 1, 8, true, hifloat8_t, 34)             \
-    DTYPE_DESC(DT_UINT8, 1, 8, false, uint8_t, 4)              \
-    DTYPE_DESC(DT_UINT16, 2, 16, false, uint16_t, 7)           \
-    DTYPE_DESC(DT_UINT32, 4, 32, false, uint32_t, 8)           \
-    DTYPE_DESC(DT_UINT64, 8, 64, false, uint64_t, 10)          \
-    DTYPE_DESC(DT_BOOL, 1, 8, false, bool, 12)                 \
-    DTYPE_DESC(DT_DOUBLE, 8, 64, true, double, 11)             \
-    DTYPE_DESC(DT_FP8E4M3, 1, 8, true, float8_e4m3_t, 36)      \
-    DTYPE_DESC(DT_FP8E5M2, 1, 8, true, float8_e5m2_t, 35)      \
-    DTYPE_DESC(DT_FP8E8M0, 1, 8, true, float8_e8m0_t, 37)      \
-    /* cann中没有E2M1X2l类型，使用E2M1的cann_type:40 */           \
-    DTYPE_DESC(DT_FP4_E2M1X2, 1, 8, true, float4_e2m1x2_t, 40) \
-    DTYPE_DESC(DT_FP4_E1M2X2, 1, 8, true, float4_e1m2x2_t, 41) \
-    DTYPE_DESC(DT_FP4_E2M1, 1, 4, true, float4_e2m1x2_t, 40)   \
+#define DATA_TYPE_ALL                                            \
+    DTYPE_DESC(DT_INT4, 1, 4, false, int4, 29)                   \
+    DTYPE_DESC(DT_INT8, 1, 8, false, int8_t, 2)                  \
+    DTYPE_DESC(DT_INT16, 2, 16, false, int16_t, 6)               \
+    DTYPE_DESC(DT_INT32, 4, 32, false, int32_t, 3)               \
+    DTYPE_DESC(DT_INT64, 8, 64, false, int64_t, 9)               \
+    DTYPE_DESC(DT_FP8, 1, 8, true, float8_t, 28)                 \
+    DTYPE_DESC(DT_FP16, 2, 16, true, half, 1)                    \
+    DTYPE_DESC(DT_FP32, 4, 32, true, float, 0)                   \
+    DTYPE_DESC(DT_BF16, 2, 16, true, bfloat16_t, 27)             \
+    DTYPE_DESC(DT_HF4, 1, 4, true, hfloat4, 28)                  \
+    DTYPE_DESC(DT_HF8, 1, 8, true, hifloat8_t, 34)               \
+    DTYPE_DESC(DT_UINT8, 1, 8, false, uint8_t, 4)                \
+    DTYPE_DESC(DT_UINT16, 2, 16, false, uint16_t, 7)             \
+    DTYPE_DESC(DT_UINT32, 4, 32, false, uint32_t, 8)             \
+    DTYPE_DESC(DT_UINT64, 8, 64, false, uint64_t, 10)            \
+    DTYPE_DESC(DT_BOOL, 1, 8, false, bool, 12)                   \
+    DTYPE_DESC(DT_DOUBLE, 8, 64, true, double, 11)               \
+    DTYPE_DESC(DT_FP8E4M3, 1, 8, true, float8_e4m3_t, 36)        \
+    DTYPE_DESC(DT_FP8E5M2, 1, 8, true, float8_e5m2_t, 35)        \
+    DTYPE_DESC(DT_FP8E8M0, 1, 8, true, float8_e8m0_t, 37)        \
+    /* cann中没有E2M1X2l类型，使用E2M1的cann_type:40 */ \
+    DTYPE_DESC(DT_FP4_E2M1X2, 1, 8, true, float4_e2m1x2_t, 40)   \
+    DTYPE_DESC(DT_FP4_E1M2X2, 1, 8, true, float4_e1m2x2_t, 41)   \
+    DTYPE_DESC(DT_FP4_E2M1, 1, 4, true, float4_e2m1x2_t, 40)     \
     DTYPE_DESC(DT_FP4_E1M2, 1, 4, true, float4_e1m2x2_t, 41)
 
 enum DataType {
@@ -223,36 +223,35 @@ inline std::string DataType2VectorRegStr(DataType t)
     }
 }
 
-const std::unordered_map<std::string, DataType> STR_DATA_TYPE_MAP = {
-    {"int4", DT_INT4},
-    {"int8", DT_INT8},
-    {"int16", DT_INT16},
-    {"int32", DT_INT32},
-    {"int", DT_INT32},
-    {"int64", DT_INT64},
-    {"fp8", DT_FP8},
-    {"float8", DT_FP8},
-    {"fp16", DT_FP16},
-    {"float16", DT_FP16},
-    {"float", DT_FP32},
-    {"float32", DT_FP32},
-    {"bf16", DT_BF16},
-    {"bfloat16", DT_BF16},
-    {"hf4", DT_HF4},
-    {"hf8", DT_HF8},
-    {"uint8", DT_UINT8},
-    {"uint16", DT_UINT16},
-    {"uint32", DT_UINT32},
-    {"uint64", DT_UINT64},
-    {"bool", DT_BOOL},
-    {"double", DT_DOUBLE},
-    {"fp8e4m3", DT_FP8E4M3},
-    {"fp8e5m2", DT_FP8E5M2},
-    {"fp8e8m0", DT_FP8E8M0},
-    {"fp4_e2m1", DT_FP4_E2M1},
-    {"fp4_e2m1x2", DT_FP4_E2M1X2},
-    {"fp4_e1m2", DT_FP4_E1M2},
-    {"fp4_e1m2x2", DT_FP4_E1M2X2}};
+const std::unordered_map<std::string, DataType> STR_DATA_TYPE_MAP = {{"int4", DT_INT4},
+                                                                     {"int8", DT_INT8},
+                                                                     {"int16", DT_INT16},
+                                                                     {"int32", DT_INT32},
+                                                                     {"int", DT_INT32},
+                                                                     {"int64", DT_INT64},
+                                                                     {"fp8", DT_FP8},
+                                                                     {"float8", DT_FP8},
+                                                                     {"fp16", DT_FP16},
+                                                                     {"float16", DT_FP16},
+                                                                     {"float", DT_FP32},
+                                                                     {"float32", DT_FP32},
+                                                                     {"bf16", DT_BF16},
+                                                                     {"bfloat16", DT_BF16},
+                                                                     {"hf4", DT_HF4},
+                                                                     {"hf8", DT_HF8},
+                                                                     {"uint8", DT_UINT8},
+                                                                     {"uint16", DT_UINT16},
+                                                                     {"uint32", DT_UINT32},
+                                                                     {"uint64", DT_UINT64},
+                                                                     {"bool", DT_BOOL},
+                                                                     {"double", DT_DOUBLE},
+                                                                     {"fp8e4m3", DT_FP8E4M3},
+                                                                     {"fp8e5m2", DT_FP8E5M2},
+                                                                     {"fp8e8m0", DT_FP8E8M0},
+                                                                     {"fp4_e2m1", DT_FP4_E2M1},
+                                                                     {"fp4_e2m1x2", DT_FP4_E2M1X2},
+                                                                     {"fp4_e1m2", DT_FP4_E1M2},
+                                                                     {"fp4_e1m2x2", DT_FP4_E1M2X2}};
 
 inline size_t DataType2CannType(DataType t)
 {

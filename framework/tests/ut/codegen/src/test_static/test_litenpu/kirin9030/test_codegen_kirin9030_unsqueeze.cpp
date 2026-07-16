@@ -19,7 +19,7 @@ using namespace npu::tile_fwk;
 
 class TestCodeGenKirin9030Unsqueeze : public CodegenTestLiteNPU {
 public:
-    TestCodeGenKirin9030Unsqueeze() : CodegenTestLiteNPU("Kirin9030"){};
+    TestCodeGenKirin9030Unsqueeze() : CodegenTestLiteNPU("Kirin9030") {};
 };
 
 TEST_F(TestCodeGenKirin9030Unsqueeze, test_unsqueeze_fp16_001)

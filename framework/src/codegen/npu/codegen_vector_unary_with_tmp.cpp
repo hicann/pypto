@@ -473,9 +473,8 @@ std::string CodeGenOpNPU::GenOnlineSoftmaxOp() const
     ASSERT(OperErr::ATTRIBUTE_INVALID, (scalarAttr.has_value()) && (scalarAttr.type() == typeid(Element)))
         << "ONLINE_SOFTMAX requires scalar scale attribute.";
     auto scalar = AnyCast<Element>(scalarAttr);
-    params.emplace_back(
-        "(" + std::string(DataType2CCEStr(scalar.GetDataType())) + ")" +
-        FormatFloat(scalar.Cast<float>(), scalar.GetDataType()));
+    params.emplace_back("(" + std::string(DataType2CCEStr(scalar.GetDataType())) + ")" +
+                        FormatFloat(scalar.Cast<float>(), scalar.GetDataType()));
     std::ostringstream oss;
     oss << tileOpName << WrapParamByParentheses(params) << STMT_END;
     return oss.str();

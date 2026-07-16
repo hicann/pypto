@@ -36,8 +36,8 @@ struct AtanhOpMetaData {
     nlohmann::json test_data_;
 };
 
-static void AtanhOperationExeFunc2Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void AtanhOperationExeFunc2Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                       const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0]})
     {
@@ -50,8 +50,8 @@ static void AtanhOperationExeFunc2Dims(
             LOOP("LOOP_L0_bIdx", FunctionType::DYNAMIC_LOOP, bIdx, LoopRange(0, bloop, 1))
             {
                 std::vector<SymbolicScalar> offset = {bIdx * args->viewShape_[0]};
-                auto viewTensor = View(
-                    inputs[0], args->viewShape_, {std::min(firstDim - bIdx * firstViewShape, firstViewShape)}, offset);
+                auto viewTensor = View(inputs[0], args->viewShape_,
+                                       {std::min(firstDim - bIdx * firstViewShape, firstViewShape)}, offset);
                 TileShape::Current().SetVecTile(args->tileShape_);
                 auto res = Atanh(viewTensor);
                 Assemble(res, offset, outputs[0]);
@@ -70,11 +70,10 @@ static void AtanhOperationExeFunc2Dims(
                 LOOP("LOOP_L1_sIdx", FunctionType::DYNAMIC_LOOP, sIdx, LoopRange(0, sloop, 1))
                 {
                     std::vector<SymbolicScalar> offset = {bIdx * firstViewShape, sIdx * secondViewShape};
-                    auto viewTensor = View(
-                        inputs[0], args->viewShape_,
-                        {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                        std::min(secondDim - sIdx * secondViewShape, secondViewShape)},
-                        offset);
+                    auto viewTensor = View(inputs[0], args->viewShape_,
+                                           {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                            std::min(secondDim - sIdx * secondViewShape, secondViewShape)},
+                                           offset);
                     TileShape::Current().SetVecTile(args->tileShape_);
                     auto res = Atanh(viewTensor);
                     Assemble(res, offset, outputs[0]);
@@ -84,8 +83,8 @@ static void AtanhOperationExeFunc2Dims(
     }
 }
 
-static void AtanhOperationExeFunc3Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void AtanhOperationExeFunc3Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                       const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0]})
     {
@@ -106,15 +105,13 @@ static void AtanhOperationExeFunc3Dims(
             {
                 LOOP("LOOP_L2_nIdx", FunctionType::DYNAMIC_LOOP, nIdx, LoopRange(0, nloop, 1))
                 {
-                    std::vector<SymbolicScalar> offset = {
-                        bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape
-                    };
-                    auto viewTensor = View(
-                        inputs[0], args->viewShape_,
-                        {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                         std::min(secondDim - sIdx * secondViewShape, secondViewShape),
-                         std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape)},
-                        offset);
+                    std::vector<SymbolicScalar> offset = {bIdx * firstViewShape, sIdx * secondViewShape,
+                                                          nIdx * thirdViewShape};
+                    auto viewTensor = View(inputs[0], args->viewShape_,
+                                           {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                            std::min(secondDim - sIdx * secondViewShape, secondViewShape),
+                                            std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape)},
+                                           offset);
                     TileShape::Current().SetVecTile(args->tileShape_);
                     auto res = Atanh(viewTensor);
                     Assemble(res, offset, outputs[0]);
@@ -124,8 +121,8 @@ static void AtanhOperationExeFunc3Dims(
     }
 }
 
-static void AtanhOperationExeFunc4Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void AtanhOperationExeFunc4Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                       const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0]})
     {
@@ -152,17 +149,14 @@ static void AtanhOperationExeFunc4Dims(
                 {
                     LOOP("LOOP_L3_nIdx", FunctionType::DYNAMIC_LOOP, nIdx, LoopRange(0, nloop, 1))
                     {
-                        std::vector<SymbolicScalar> offset = {
-                            bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape,
-                            nIdx * fourthViewShape
-                        };
-                        auto viewTensor = View(
-                            inputs[0], args->viewShape_,
-                            {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                             std::min(secondDim - sIdx * secondViewShape, secondViewShape),
-                             std::min(thirdDim - mIdx * thirdViewShape, thirdViewShape),
-                             std::min(fourthDim - nIdx * fourthViewShape, fourthViewShape)},
-                            offset);
+                        std::vector<SymbolicScalar> offset = {bIdx * firstViewShape, sIdx * secondViewShape,
+                                                              mIdx * thirdViewShape, nIdx * fourthViewShape};
+                        auto viewTensor = View(inputs[0], args->viewShape_,
+                                               {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                                std::min(secondDim - sIdx * secondViewShape, secondViewShape),
+                                                std::min(thirdDim - mIdx * thirdViewShape, thirdViewShape),
+                                                std::min(fourthDim - nIdx * fourthViewShape, fourthViewShape)},
+                                               offset);
                         TileShape::Current().SetVecTile(args->tileShape_);
                         auto res = Atanh(viewTensor);
                         Assemble(res, offset, outputs[0]);
@@ -173,14 +167,12 @@ static void AtanhOperationExeFunc4Dims(
     }
 }
 
-
 class AtanhOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac_param<AtanhOpMetaData> {};
 
-INSTANTIATE_TEST_SUITE_P(
-    TestAtanh, AtanhOperationTest,
-    ::testing::ValuesIn(tile_fwk::test_operation::GetOpMetaData<AtanhOpMetaData>(
-        {AtanhOperationExeFunc2Dims, AtanhOperationExeFunc3Dims, AtanhOperationExeFunc4Dims},
-        "Atanh")));
+INSTANTIATE_TEST_SUITE_P(TestAtanh, AtanhOperationTest,
+                         ::testing::ValuesIn(tile_fwk::test_operation::GetOpMetaData<AtanhOpMetaData>(
+                             {AtanhOperationExeFunc2Dims, AtanhOperationExeFunc3Dims, AtanhOperationExeFunc4Dims},
+                             "Atanh")));
 
 TEST_P(AtanhOperationTest, TestAtanh)
 {
@@ -190,4 +182,4 @@ TEST_P(AtanhOperationTest, TestAtanh)
     tile_fwk::test_operation::TestExecutor::runTest(testCase);
 }
 
-} //namespace
+} // namespace

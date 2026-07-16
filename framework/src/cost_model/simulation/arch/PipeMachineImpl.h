@@ -31,8 +31,8 @@ public:
         }
         return 0;
     };
-    virtual uint64_t PostSimulateForPass(
-        const std::string& op, const std::vector<std::vector<int>>& shape, DataType dtype)
+    virtual uint64_t PostSimulateForPass(const std::string& op, const std::vector<std::vector<int>>& shape,
+                                         DataType dtype)
     {
         if (ValidateInput(op, shape, dtype)) {
             return 0;

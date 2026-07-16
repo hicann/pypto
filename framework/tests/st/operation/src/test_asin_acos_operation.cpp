@@ -51,8 +51,8 @@ static inline Tensor ApplyAsinAcosOp(AsinAcosOp op, const Tensor& t0)
     }
 }
 
-static void AsinAcosOpOperationExeFunc2Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void AsinAcosOpOperationExeFunc2Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                            const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0]})
     {
@@ -65,8 +65,8 @@ static void AsinAcosOpOperationExeFunc2Dims(
             LOOP("LOOP_L0_bIdx", FunctionType::DYNAMIC_LOOP, bIdx, LoopRange(0, bloop, 1))
             {
                 std::vector<SymbolicScalar> offset = {bIdx * args->viewShape_[0]};
-                auto viewTensor = View(
-                    inputs[0], args->viewShape_, {std::min(firstDim - bIdx * firstViewShape, firstViewShape)}, offset);
+                auto viewTensor = View(inputs[0], args->viewShape_,
+                                       {std::min(firstDim - bIdx * firstViewShape, firstViewShape)}, offset);
                 TileShape::Current().SetVecTile(args->tileShape_);
                 auto res = ApplyAsinAcosOp(args->op_, viewTensor);
                 Assemble(res, offset, outputs[0]);
@@ -85,11 +85,10 @@ static void AsinAcosOpOperationExeFunc2Dims(
                 LOOP("LOOP_L1_sIdx", FunctionType::DYNAMIC_LOOP, sIdx, LoopRange(0, sloop, 1))
                 {
                     std::vector<SymbolicScalar> offset = {bIdx * firstViewShape, sIdx * secondViewShape};
-                    auto viewTensor = View(
-                        inputs[0], args->viewShape_,
-                        {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                        std::min(secondDim - sIdx * secondViewShape, secondViewShape)},
-                        offset);
+                    auto viewTensor = View(inputs[0], args->viewShape_,
+                                           {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                            std::min(secondDim - sIdx * secondViewShape, secondViewShape)},
+                                           offset);
                     TileShape::Current().SetVecTile(args->tileShape_);
                     auto res = ApplyAsinAcosOp(args->op_, viewTensor);
                     Assemble(res, offset, outputs[0]);
@@ -99,8 +98,8 @@ static void AsinAcosOpOperationExeFunc2Dims(
     }
 }
 
-static void AsinAcosOpOperationExeFunc3Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void AsinAcosOpOperationExeFunc3Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                            const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0]})
     {
@@ -121,15 +120,13 @@ static void AsinAcosOpOperationExeFunc3Dims(
             {
                 LOOP("LOOP_L3_nIdx", FunctionType::DYNAMIC_LOOP, nIdx, LoopRange(0, nloop, 1))
                 {
-                    std::vector<SymbolicScalar> offset = {
-                        bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape
-                    };
-                    auto viewTensor = View(
-                        inputs[0], args->viewShape_,
-                        {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                         std::min(secondDim - sIdx * secondViewShape, secondViewShape),
-                         std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape)},
-                        offset);
+                    std::vector<SymbolicScalar> offset = {bIdx * firstViewShape, sIdx * secondViewShape,
+                                                          nIdx * thirdViewShape};
+                    auto viewTensor = View(inputs[0], args->viewShape_,
+                                           {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                            std::min(secondDim - sIdx * secondViewShape, secondViewShape),
+                                            std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape)},
+                                           offset);
                     TileShape::Current().SetVecTile(args->tileShape_);
                     auto res = ApplyAsinAcosOp(args->op_, viewTensor);
                     Assemble(res, offset, outputs[0]);
@@ -139,8 +136,8 @@ static void AsinAcosOpOperationExeFunc3Dims(
     }
 }
 
-static void AsinAcosOpOperationExeFunc4Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void AsinAcosOpOperationExeFunc4Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                            const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0]})
     {
@@ -167,17 +164,14 @@ static void AsinAcosOpOperationExeFunc4Dims(
                 {
                     LOOP("LOOP_L3_nIdx", FunctionType::DYNAMIC_LOOP, nIdx, LoopRange(0, nloop, 1))
                     {
-                        std::vector<SymbolicScalar> offset = {
-                            bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape,
-                            nIdx * fourthViewShape
-                        };
-                        auto viewTensor = View(
-                            inputs[0], args->viewShape_,
-                            {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                             std::min(secondDim - sIdx * secondViewShape, secondViewShape),
-                             std::min(thirdDim - mIdx * thirdViewShape, thirdViewShape),
-                             std::min(fourthDim - nIdx * fourthViewShape, fourthViewShape)},
-                            offset);
+                        std::vector<SymbolicScalar> offset = {bIdx * firstViewShape, sIdx * secondViewShape,
+                                                              mIdx * thirdViewShape, nIdx * fourthViewShape};
+                        auto viewTensor = View(inputs[0], args->viewShape_,
+                                               {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                                std::min(secondDim - sIdx * secondViewShape, secondViewShape),
+                                                std::min(thirdDim - mIdx * thirdViewShape, thirdViewShape),
+                                                std::min(fourthDim - nIdx * fourthViewShape, fourthViewShape)},
+                                               offset);
                         TileShape::Current().SetVecTile(args->tileShape_);
                         auto res = ApplyAsinAcosOp(args->op_, viewTensor);
                         Assemble(res, offset, outputs[0]);
@@ -188,14 +182,12 @@ static void AsinAcosOpOperationExeFunc4Dims(
     }
 }
 
-
 class AsinOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac_param<AsinAcosOpMetaData> {};
 
 INSTANTIATE_TEST_SUITE_P(
     TestAsin, AsinOperationTest,
     ::testing::ValuesIn(tile_fwk::test_operation::GetOpMetaData<AsinAcosOpMetaData>(
-        {AsinAcosOpOperationExeFunc2Dims, AsinAcosOpOperationExeFunc3Dims, AsinAcosOpOperationExeFunc4Dims},
-        "Asin")));
+        {AsinAcosOpOperationExeFunc2Dims, AsinAcosOpOperationExeFunc3Dims, AsinAcosOpOperationExeFunc4Dims}, "Asin")));
 
 TEST_P(AsinOperationTest, TestAsin)
 {
@@ -210,8 +202,7 @@ class AcosOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac
 INSTANTIATE_TEST_SUITE_P(
     TestAcos, AcosOperationTest,
     ::testing::ValuesIn(tile_fwk::test_operation::GetOpMetaData<AsinAcosOpMetaData>(
-        {AsinAcosOpOperationExeFunc2Dims, AsinAcosOpOperationExeFunc3Dims, AsinAcosOpOperationExeFunc4Dims},
-        "Acos")));
+        {AsinAcosOpOperationExeFunc2Dims, AsinAcosOpOperationExeFunc3Dims, AsinAcosOpOperationExeFunc4Dims}, "Acos")));
 
 TEST_P(AcosOperationTest, TestAcos)
 {
@@ -221,4 +212,4 @@ TEST_P(AcosOperationTest, TestAcos)
     tile_fwk::test_operation::TestExecutor::runTest(testCase);
 }
 
-} //namespace
+} // namespace

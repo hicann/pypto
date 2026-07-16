@@ -117,8 +117,8 @@ private:
     inline std::vector<std::pair<int, std::string>> GetMatchedInputFiles()
     {
         uint32_t targetTask = MakeTaskID(funcId_, opIdx_);
-        std::string patternStr =
-            std::to_string(targetTask) + "_" + std::to_string(seqNo_) + "_.*_input([0-9]+)\\.tdump";
+        std::string patternStr = std::to_string(targetTask) + "_" + std::to_string(seqNo_) +
+                                 "_.*_input([0-9]+)\\.tdump";
         std::regex filePattern(patternStr);
 
         DIR* dir = opendir(replayPath_.c_str());
@@ -200,9 +200,8 @@ private:
         }
     }
 
-    void LoadTensorFromData(
-        const DumpTensorInfo& info, const uint64_t stride[], uint32_t idx, uint64_t tensorAddr, const uint8_t* fileData,
-        uint32_t& bufferOffset)
+    void LoadTensorFromData(const DumpTensorInfo& info, const uint64_t stride[], uint32_t idx, uint64_t tensorAddr,
+                            const uint8_t* fileData, uint32_t& bufferOffset)
     {
         uint32_t dataByte = BytesOf(static_cast<DataType>(info.dataType));
 
@@ -215,9 +214,8 @@ private:
             uint64_t newAddr = tensorAddr + info.offset[idx] * dataByte;
             uint32_t dataSize = info.shape[idx] * dataByte;
 
-            RuntimeMemcpyDirect(
-                reinterpret_cast<void*>(newAddr), dataSize, fileData + bufferOffset, dataSize,
-                RtMemcpyKind::HOST_TO_DEVICE);
+            RuntimeMemcpyDirect(reinterpret_cast<void*>(newAddr), dataSize, fileData + bufferOffset, dataSize,
+                                RtMemcpyKind::HOST_TO_DEVICE);
 
             bufferOffset += dataSize;
         }

@@ -38,13 +38,11 @@ static std::vector<T> getGoldenVec(std::vector<int64_t> shape, std::string fileN
     return golden;
 }
 
-template <
-    typename T = npu::tile_fwk::float16, typename wDtype = int8_t, bool isSmooth = false, bool nz = false,
-    bool ci = false, bool debug = false>
-void TestNsa(
-    const NSAV1SimpleParams& params, const MlaTileConfig& prologConfig, WinAttenTileShapeConfig& winAttntileConfig,
-    SATileShapeConfig& saTileConfig, PostTileConfig& postConfig, CmpAttnTile& cmpTileConfig, float precision,
-    std::string cacheMode = "PA_BSND")
+template <typename T = npu::tile_fwk::float16, typename wDtype = int8_t, bool isSmooth = false, bool nz = false,
+          bool ci = false, bool debug = false>
+void TestNsa(const NSAV1SimpleParams& params, const MlaTileConfig& prologConfig,
+             WinAttenTileShapeConfig& winAttntileConfig, SATileShapeConfig& saTileConfig, PostTileConfig& postConfig,
+             CmpAttnTile& cmpTileConfig, float precision, std::string cacheMode = "PA_BSND")
 {
     (void)precision;
     SetPreConfig();
@@ -394,29 +392,28 @@ void TestNsa(
     std::vector<RawTensorDataPtr> outputDataList = {
         /*outKvCacheData, outKrCacheData,*/
         outputData, cmpAttn_v3, cmpSoftmax_v3, fullK_v3, cmpK_v3, topkRes_v3, topkInputData};
-    std::vector<RawTensorDataPtr> inputDataList = {
-        xData,
-        wDqData,
-        wUqQrData,
-        wUkData,
-        wDkvKrData,
-        gammaCqData,
-        gammaCkvData,
-        sinData,
-        cosData,
-        kvLenData,
-        kvCacheData,
-        krCacheData,
-        cmpKvCacheData_v3,
-        cmpKrCacheData_v3,
-        blockTableData,
-        cmpBlockTableData_v3,
-        actSeqData_v3,
-        actCmpSeqData_v3,
-        wk1Data_v3,
-        wk2Data_v3,
-        cosData_v3,
-        sinData_v3};
+    std::vector<RawTensorDataPtr> inputDataList = {xData,
+                                                   wDqData,
+                                                   wUqQrData,
+                                                   wUkData,
+                                                   wDkvKrData,
+                                                   gammaCqData,
+                                                   gammaCkvData,
+                                                   sinData,
+                                                   cosData,
+                                                   kvLenData,
+                                                   kvCacheData,
+                                                   krCacheData,
+                                                   cmpKvCacheData_v3,
+                                                   cmpKrCacheData_v3,
+                                                   blockTableData,
+                                                   cmpBlockTableData_v3,
+                                                   actSeqData_v3,
+                                                   actCmpSeqData_v3,
+                                                   wk1Data_v3,
+                                                   wk2Data_v3,
+                                                   cosData_v3,
+                                                   sinData_v3};
     MlaQuantInputs quantInputs;
     if (isQuant) {
         auto wQbScaleData = CreateTensorData<float>(wQbScale, "/w_qb_scale.bin");
@@ -437,11 +434,11 @@ void TestNsa(
         /*qNopeData, qRopeData, slcActSeqsData,*/               // slcAtten
         /*xData, */ gateW1Data,
         gateW2Data,
-        gateSimW1Data,    // gatedScore
+        gateSimW1Data, // gatedScore
         cmpAttenData,
         /*winAttenData,*/ // genAttn
         wUvData,
-        woData,           // post
+        woData, // post
     };
     inputDataList.insert(inputDataList.end(), tmpInputDataList.begin(), tmpInputDataList.end());
 
@@ -459,17 +456,16 @@ void TestNsa(
     PostTensors postTensors{
         wUv, wo, wUvQuant.scale.tensor, wUvQuant.smooth.tensor, wOQuant.scale.tensor, wOQuant.smooth.tensor};
     // 4. 计算接口
-    DynamicNsa(
-        x, wDq, wUqQr, wUk, wDkvKr, gammaCq, gammaCkv, sin, cos, cacheIndex, kvCache, krCache, quantInputs,
-        prologConfig, eps, eps, cacheMode, topkIndices, /*kvNopeCache, kRopeCache,*/ kvCacheActSeq, blockTable, front,
-        near, topk, slcBlockSize, blockSize,                      // genKvSlc
-        /*qNope, qRope, slcActSeqs,*/ softmaxScale, saTileConfig, // slcAttn
-        /*x, */ gateW1, gateW2, gateSimW1, GateMode::standard,    // gatedscore
-        cmpAtten, winSize, winAttntileConfig,                     // gen win
-        postTensors, postConfig,                                  // post
-        outputKvCache, outputKrCache, postOut, cmpKvCache_v2, cmpKrCache_v2, cmpBlockTable_v2, actSeqLen_v2,
-        actCmpSeqLen_v2, mlpWk1_v2, mlpWk2_v2, mlpCos_v2, mlpSin_v2, cmpAttn, cmpSoftmax, fullK, cmpK, firstRope,
-        firstRopeInput, topkRes, topkInput, cmpBlockSize, cmpStride, cmpTileConfig, debug);
+    DynamicNsa(x, wDq, wUqQr, wUk, wDkvKr, gammaCq, gammaCkv, sin, cos, cacheIndex, kvCache, krCache, quantInputs,
+               prologConfig, eps, eps, cacheMode, topkIndices, /*kvNopeCache, kRopeCache,*/ kvCacheActSeq, blockTable,
+               front, near, topk, slcBlockSize, blockSize,               // genKvSlc
+               /*qNope, qRope, slcActSeqs,*/ softmaxScale, saTileConfig, // slcAttn
+               /*x, */ gateW1, gateW2, gateSimW1, GateMode::standard,    // gatedscore
+               cmpAtten, winSize, winAttntileConfig,                     // gen win
+               postTensors, postConfig,                                  // post
+               outputKvCache, outputKrCache, postOut, cmpKvCache_v2, cmpKrCache_v2, cmpBlockTable_v2, actSeqLen_v2,
+               actCmpSeqLen_v2, mlpWk1_v2, mlpWk2_v2, mlpCos_v2, mlpSin_v2, cmpAttn, cmpSoftmax, fullK, cmpK, firstRope,
+               firstRopeInput, topkRes, topkInput, cmpBlockSize, cmpStride, cmpTileConfig, debug);
 
 #ifdef BUILD_WITH_CANN
     // 5. 更新输入输出list
@@ -494,13 +490,13 @@ void TestNsa(
         EXPECT_TRUE(resultCmp(attn16Golden, (T*)cmpAttn16_v3->data(), 0.005f, 100));
 
         std::cout << "=======================topkInput===============================" << std::endl;
-        EXPECT_TRUE(resultCmp(
-            topkInputGolden, (float*)topkInputData->data(), 0.008f, 0, 16, false, false, topkInputGolden.size()));
+        EXPECT_TRUE(resultCmp(topkInputGolden, (float*)topkInputData->data(), 0.008f, 0, 16, false, false,
+                              topkInputGolden.size()));
 
         std::cout << "=======================topkRes===============================" << std::endl;
         //    EXPECT_TRUE(resultCmp(topkIndicesGolden, (float *)topkRes_v3->data(), 0.05f, 0, 16, false, false, 20));
-        EXPECT_TRUE(resultCmp(
-            topkIndicesGolden, (uint32_t*)topkRes_v3->data(), 0.008f, 0, 16, false, false, topkIndicesGolden.size()));
+        EXPECT_TRUE(resultCmp(topkIndicesGolden, (uint32_t*)topkRes_v3->data(), 0.008f, 0, 16, false, false,
+                              topkIndicesGolden.size()));
 
         // std::cout << "attenOut ====== " << std::endl;
         // EXPECT_TRUE(resultCmp<T>(attenOutGolden, (T *)attenOutZeroData->data(), 0.05f));
@@ -508,8 +504,8 @@ void TestNsa(
         EXPECT_TRUE(resultCmp<T>(postGolden, (T*)outputData->data(), 0.05f));
     }
     std::cout << "post out ====== print" << std::endl;
-    EXPECT_TRUE(resultCmp<T>(
-        postGolden, (T*)outputData->data(), 0.13f, int(0.05 * postGolden.size()), 1000, false, false, 128));
+    EXPECT_TRUE(resultCmp<T>(postGolden, (T*)outputData->data(), 0.13f, int(0.05 * postGolden.size()), 1000, false,
+                             false, 128));
 #endif
 }
 
@@ -584,11 +580,11 @@ TEST_F(DynamicNSATest, nsa_b_16_s1_1_s2_8192_h_7168_fp16_quant)
 
     if (isQuant == 1) {
         if (isSmooth == 1) {
-            TestNsa<npu::tile_fwk::float16, int8_t, true>(
-                params, prologConfig, winAttnTileConfig, saTileConfig, postConfig, config, 0.06f, cacheMode);
+            TestNsa<npu::tile_fwk::float16, int8_t, true>(params, prologConfig, winAttnTileConfig, saTileConfig,
+                                                          postConfig, config, 0.06f, cacheMode);
         } else {
-            TestNsa<npu::tile_fwk::float16, int8_t, false>(
-                params, prologConfig, winAttnTileConfig, saTileConfig, postConfig, config, 0.06f, cacheMode);
+            TestNsa<npu::tile_fwk::float16, int8_t, false>(params, prologConfig, winAttnTileConfig, saTileConfig,
+                                                           postConfig, config, 0.06f, cacheMode);
         }
     } else {
         TestNsa<npu::tile_fwk::float16, npu::tile_fwk::float16, false>(

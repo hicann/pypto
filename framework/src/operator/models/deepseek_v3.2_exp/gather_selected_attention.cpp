@@ -17,11 +17,11 @@
 
 using namespace npu::tile_fwk;
 namespace npu::tile_fwk {
-void SelectedAttentionComputeV2(
-    const Tensor& qNope, const Tensor& qRope, const Tensor& kNope2D, const Tensor& kRope2D, const Tensor& kNopeScales,
-    const Tensor& topKIndcies, const Tensor& blockTable, const Tensor& kvSlcActSeqs, const int nQ, const int nKv,
-    const float softmaxScale, const int topk, const int blockSize, const int maxBlockNumPerBatch, Tensor& attentionOut,
-    SaTileShapeConfig tileConfig)
+void SelectedAttentionComputeV2(const Tensor& qNope, const Tensor& qRope, const Tensor& kNope2D, const Tensor& kRope2D,
+                                const Tensor& kNopeScales, const Tensor& topKIndcies, const Tensor& blockTable,
+                                const Tensor& kvSlcActSeqs, const int nQ, const int nKv, const float softmaxScale,
+                                const int topk, const int blockSize, const int maxBlockNumPerBatch,
+                                Tensor& attentionOut, SaTileShapeConfig tileConfig)
 {
     auto dtype = qNope.GetStorage()->Datatype();
     auto knDtype = kNope2D.GetStorage()->Datatype();
@@ -40,15 +40,15 @@ void SelectedAttentionComputeV2(
     SymbolicScalar s1Sym = s1N1GSym / nQ;                             // s1
     SymbolicScalar s1S2Sym = s1Sym * topk;                            // s1s2
     SymbolicScalar gLoopSym = group / gTile;
-    SymbolicScalar s2Sym = s1S2Sym / s1Sym;                           // s2
+    SymbolicScalar s2Sym = s1S2Sym / s1Sym; // s2
 
     LOOP("LOOP_L0_b_SA", FunctionType::DYNAMIC_LOOP, bIdx, LoopRange(0, batchSizeSym, 1), {}, true)
     {
         SymbolicScalar curKvSlcSeq = GetTensorData(kvSlcActSeqs, {bIdx});
         LOOP("LOOP_L1_s1_SA", FunctionType::DYNAMIC_LOOP, s1Idx, LoopRange(0, s1Sym, 1))
         {
-            SymbolicScalar curSeq = std::min(
-                std::max(curKvSlcSeq - s1Sym + 1 + s1Idx, 0), topk); // for MTP s1!= 1 casual计算, 并且与topk取min
+            SymbolicScalar curSeq = std::min(std::max(curKvSlcSeq - s1Sym + 1 + s1Idx, 0),
+                                             topk); // for MTP s1!= 1 casual计算, 并且与topk取min
             curSeq.AsIntermediateVariable();
             SymbolicScalar bnPerBatch = (curSeq + s2Tile - 1) / s2Tile;
             LOOP("LOOP_L2_n2_SA", FunctionType::DYNAMIC_LOOP, n2Idx, LoopRange(0, n2Sym, 1))
@@ -60,8 +60,8 @@ void SelectedAttentionComputeV2(
                     Tensor liUpdate(DT_FP32, {1, curGTile}, "liUpdate");
                     Tensor miUpdate(DT_FP32, {1, curGTile}, "miUpdate");
                     SymbolicScalar curOffset = bIdx * s1N1GSym + s1Idx * nQ + n2Idx * group + gIdx * curGTile;
-                    std::vector<SymbolicScalar> oiOffset = {
-                        bIdx, s1Idx, n2Idx * group + gIdx * curGTile, 0}; // 按最终结果(B,S1,N1,D)进行assemble
+                    std::vector<SymbolicScalar> oiOffset = {bIdx, s1Idx, n2Idx * group + gIdx * curGTile,
+                                                            0}; // 按最终结果(B,S1,N1,D)进行assemble
                     LOOP("LOOP_L4_s2_SA", FunctionType::DYNAMIC_LOOP, s2Idx, LoopRange(0, bnPerBatch, 1), PowersOf2(1))
                     {
                         int curS2Tile = s2Tile;
@@ -75,57 +75,53 @@ void SelectedAttentionComputeV2(
                         Assemble(qr, {0, dN}, qi);
 
                         SymbolicScalar bS1Idx = bIdx * s1Sym + s1Idx;
-                        auto curTopKIndcies = View(
-                            topKIndcies, {1, curS2Tile}, {1, std::min(curSeq - s2Idx * curS2Tile, curS2Tile)},
-                            {bS1Idx, s2Idx * curS2Tile});
+                        auto curTopKIndcies = View(topKIndcies, {1, curS2Tile},
+                                                   {1, std::min(curSeq - s2Idx * curS2Tile, curS2Tile)},
+                                                   {bS1Idx, s2Idx * curS2Tile});
                         auto curBlockTable = View(blockTable, {1, maxBlockNumPerBatch}, {bIdx, 0});
                         Tensor kn(dtype, {s2Tile, dN}, "kn");
                         if (knDtype == DataType::DT_INT8) {
                             // v0
                             TileShape::Current().SetVecTile(NUM_32, NUM_512);
                             // Gather tokNopeScales
-                            auto kNopeScalesView = View(
-                                kNopeScales, {curS2Tile, 4}, {std::min(curSeq - s2Idx * curS2Tile, curS2Tile), 4},
-                                {0, 0});
-                            auto knScale =
-                                experimental::GatherInUB(kNopeScalesView, curTopKIndcies, curBlockTable, blockSize, -2);
+                            auto kNopeScalesView = View(kNopeScales, {curS2Tile, 4},
+                                                        {std::min(curSeq - s2Idx * curS2Tile, curS2Tile), 4}, {0, 0});
+                            auto knScale = experimental::GatherInUB(kNopeScalesView, curTopKIndcies, curBlockTable,
+                                                                    blockSize, -2);
                             // Gather kNope2D
-                            auto kNope2DView = View(
-                                kNope2D, {curS2Tile, dN}, {std::min(curSeq - s2Idx * curS2Tile, curS2Tile), dN},
-                                {0, 0});
-                            auto knQuant =
-                                experimental::GatherInUB(kNope2DView, curTopKIndcies, curBlockTable, blockSize, -2);
+                            auto kNope2DView = View(kNope2D, {curS2Tile, dN},
+                                                    {std::min(curSeq - s2Idx * curS2Tile, curS2Tile), dN}, {0, 0});
+                            auto knQuant = experimental::GatherInUB(kNope2DView, curTopKIndcies, curBlockTable,
+                                                                    blockSize, -2);
                             auto knQuantF16 = Cast(knQuant, DT_FP16);
                             auto knQuantF32 = Cast(knQuantF16, DT_FP32);
                             // dequant
-                            auto knQuantF32Tmp =
-                                Reshape(knQuantF32, {s2Tile * 4, 128}); // 基于MLA prolog内krcache量化逻辑
+                            auto knQuantF32Tmp = Reshape(knQuantF32,
+                                                         {s2Tile * 4, 128}); // 基于MLA prolog内krcache量化逻辑
                             auto knScaleTmp = Reshape(knScale, {s2Tile * 4, 1});
                             TileShape::Current().SetVecTile(NUM_128, NUM_128);
                             auto knF32 = Mul(knQuantF32Tmp, knScaleTmp);
                             auto knF32Reshape = Reshape(knF32, {s2Tile, dN});
                             TileShape::Current().SetVecTile(NUM_32, NUM_512);
-                            auto curKnFp32 = View(
-                                knF32Reshape, {curS2Tile, dN}, {std::min(curSeq - s2Idx * curS2Tile, curS2Tile), dN},
-                                {0, 0});
+                            auto curKnFp32 = View(knF32Reshape, {curS2Tile, dN},
+                                                  {std::min(curSeq - s2Idx * curS2Tile, curS2Tile), dN}, {0, 0});
                             kn = Cast(curKnFp32, dtype);
                         } else {
-                            TileShape::Current().SetCubeTile(
-                                {c1Tile[0], c1Tile[1]}, {c1Tile[2], c1Tile[3]}, {c1Tile[4], c1Tile[5]});
-                            kn = experimental::GatherInL1<true, true>(
-                                kNope2D, curTopKIndcies, curBlockTable, blockSize, dN);
+                            TileShape::Current().SetCubeTile({c1Tile[0], c1Tile[1]}, {c1Tile[2], c1Tile[3]},
+                                                             {c1Tile[4], c1Tile[5]});
+                            kn = experimental::GatherInL1<true, true>(kNope2D, curTopKIndcies, curBlockTable, blockSize,
+                                                                      dN);
                         }
                         // C1
-                        TileShape::Current().SetCubeTile(
-                            {c1Tile[0], c1Tile[1]}, {c1Tile[2], c1Tile[3]}, {c1Tile[4], c1Tile[5]});
-                        auto kr =
-                            experimental::GatherInL1<true, true>(kRope2D, curTopKIndcies, curBlockTable, blockSize, dR);
+                        TileShape::Current().SetCubeTile({c1Tile[0], c1Tile[1]}, {c1Tile[2], c1Tile[3]},
+                                                         {c1Tile[4], c1Tile[5]});
+                        auto kr = experimental::GatherInL1<true, true>(kRope2D, curTopKIndcies, curBlockTable,
+                                                                       blockSize, dR);
                         Tensor kj(dtype, {curS2Tile, dN + dR}, "kj");
                         Assemble(kn, {0, 0}, kj);
                         Assemble(kr, {0, dN}, kj);
-                        auto kjView = View(
-                            kj, {curS2Tile, dN + dR}, {std::min(curSeq - s2Idx * curS2Tile, curS2Tile), dN + dR},
-                            {0, 0});
+                        auto kjView = View(kj, {curS2Tile, dN + dR},
+                                           {std::min(curSeq - s2Idx * curS2Tile, curS2Tile), dN + dR}, {0, 0});
                         auto sij = Matrix::Matmul(DataType::DT_FP32, qi, kjView, false, true);
 
                         // V1
@@ -143,20 +139,20 @@ void SelectedAttentionComputeV2(
                         auto tildaLij = Reshape(tildaLijReduce, {1, curGTile}); // (1, curGTile)
                         tildaLij.SetName("tildaLij");
                         config::SetSemanticLabel("Sa_KvMm");
-                        TileShape::Current().SetCubeTile(
-                            {c2Tile[0], c2Tile[1]}, {c2Tile[2], c2Tile[3]}, {c2Tile[4], c2Tile[5]}, false);
+                        TileShape::Current().SetCubeTile({c2Tile[0], c2Tile[1]}, {c2Tile[2], c2Tile[3]},
+                                                         {c2Tile[4], c2Tile[5]}, false);
                         TileShape::Current().SetMatrixSize(
                             {tildaPijF16.GetShape()[0], tildaPijF16.GetShape()[1], kn.GetShape()[1]});
 
                         // MQA场景: v=kn
                         Tensor q1(dtype, {curGTile, dN});
                         if (knDtype == DataType::DT_INT8) {
-                            auto vj = View(
-                                kn, {curS2Tile, dN}, {std::min(curSeq - s2Idx * curS2Tile, curS2Tile), dN}, {0, 0});
+                            auto vj = View(kn, {curS2Tile, dN}, {std::min(curSeq - s2Idx * curS2Tile, curS2Tile), dN},
+                                           {0, 0});
                             q1 = Matrix::Matmul(DataType::DT_FP32, tildaPijF16, vj, false, false);
                         } else {
-                            auto vj = experimental::GatherInL1<true, false>(
-                                kNope2D, curTopKIndcies, curBlockTable, blockSize, dN);
+                            auto vj = experimental::GatherInL1<true, false>(kNope2D, curTopKIndcies, curBlockTable,
+                                                                            blockSize, dN);
                             q1 = Matrix::Matmul(DataType::DT_FP32, tildaPijF16, vj, false, false);
                         }
                         IF(IsLoopBegin(s2Idx, 0))
@@ -221,19 +217,18 @@ void SelectedAttentionComputeV2(
     }
 }
 
-void SelectedAttentionV2(
-    const Tensor& qNope, const Tensor& qRope, const Tensor& kNope2D, const Tensor& kRope2D, const Tensor& kNopeScales,
-    const Tensor& topKIndcies, const Tensor& blockTable, const Tensor& kvSlcActSeqs, const int nQ, const int nKv,
-    const float softmaxScale, const int topk, const int blockSize, const int maxBlockNumPerBatch, Tensor& attentionOut,
-    SaTileShapeConfig tileConfig)
+void SelectedAttentionV2(const Tensor& qNope, const Tensor& qRope, const Tensor& kNope2D, const Tensor& kRope2D,
+                         const Tensor& kNopeScales, const Tensor& topKIndcies, const Tensor& blockTable,
+                         const Tensor& kvSlcActSeqs, const int nQ, const int nKv, const float softmaxScale,
+                         const int topk, const int blockSize, const int maxBlockNumPerBatch, Tensor& attentionOut,
+                         SaTileShapeConfig tileConfig)
 {
-    FUNCTION(
-        "R2_SA_MAIN_V2", {qNope, qRope, kNope2D, kRope2D, kNopeScales, topKIndcies, blockTable, kvSlcActSeqs},
-        {attentionOut})
+    FUNCTION("R2_SA_MAIN_V2", {qNope, qRope, kNope2D, kRope2D, kNopeScales, topKIndcies, blockTable, kvSlcActSeqs},
+             {attentionOut})
     {
-        SelectedAttentionComputeV2(
-            qNope, qRope, kNope2D, kRope2D, kNopeScales, topKIndcies, blockTable, kvSlcActSeqs, nQ, nKv, softmaxScale,
-            topk, blockSize, maxBlockNumPerBatch, attentionOut, tileConfig);
+        SelectedAttentionComputeV2(qNope, qRope, kNope2D, kRope2D, kNopeScales, topKIndcies, blockTable, kvSlcActSeqs,
+                                   nQ, nKv, softmaxScale, topk, blockSize, maxBlockNumPerBatch, attentionOut,
+                                   tileConfig);
     }
 }
 } // namespace npu::tile_fwk

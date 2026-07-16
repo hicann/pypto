@@ -57,6 +57,6 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(CoreTask, hashValue, syncMsg)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(WrapInfo, wrapID, coreTask)
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(MixInfo, mixId, wrapInfos)
-}
-}
-}
+} // namespace mix_info
+} // namespace tile_fwk
+} // namespace npu

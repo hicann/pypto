@@ -18,9 +18,10 @@
 
 namespace npu::tile_fwk {
 
-Operation& PassOperationUtils::AddOperation(
-    Function& function, Opcode opCode, LogicalTensors iOperands, const LogicalTensors& oOperands,
-    std::function<void(Operation&)> beforeInferShapeHandler, const ir::Span& span, bool inferShape)
+Operation& PassOperationUtils::AddOperation(Function& function, Opcode opCode, LogicalTensors iOperands,
+                                            const LogicalTensors& oOperands,
+                                            std::function<void(Operation&)> beforeInferShapeHandler,
+                                            const ir::Span& span, bool inferShape)
 {
     auto processedOperands = PreprocessOperationInputs(function, opCode, std::move(iOperands));
     IRBuilder builder;
@@ -37,8 +38,8 @@ Operation& PassOperationUtils::AddOperation(
     return op;
 }
 
-LogicalTensors PassOperationUtils::PreprocessOperationInputs(
-    Function& function, Opcode opCode, LogicalTensors iOperands)
+LogicalTensors PassOperationUtils::PreprocessOperationInputs(Function& function, Opcode opCode,
+                                                             LogicalTensors iOperands)
 {
     CheckTensorDynamicShape(iOperands, opCode);
     for (auto& iOperand : iOperands) {
@@ -48,8 +49,8 @@ LogicalTensors PassOperationUtils::PreprocessOperationInputs(
     return iOperands;
 }
 
-std::vector<std::vector<int64_t>> PassOperationUtils::ProcessOffsetAdjustment(
-    LogicalTensors& matches, std::vector<int64_t>& minimumOffsets)
+std::vector<std::vector<int64_t>> PassOperationUtils::ProcessOffsetAdjustment(LogicalTensors& matches,
+                                                                              std::vector<int64_t>& minimumOffsets)
 {
     std::vector<std::vector<int64_t>> offsetOfOverlaps;
     std::sort(matches.begin(), matches.end(), [](const auto& a, const auto& b) { return a->offset < b->offset; });
@@ -73,9 +74,9 @@ LogicalTensorPtr PassOperationUtils::HandlePerfectlyMatchWithAll(
     Function& function, LogicalTensorPtr iOperand, const LogicalTensors& matches,
     const std::vector<std::vector<int64_t>>& offsetOfOverlaps)
 {
-    auto assembleResult = std::make_shared<LogicalTensor>(
-        function, iOperand->Datatype(), iOperand->shape, iOperand->GetDynValidShape(), iOperand->Format(),
-        "Assemble_" + matches[0]->Symbol());
+    auto assembleResult = std::make_shared<LogicalTensor>(function, iOperand->Datatype(), iOperand->shape,
+                                                          iOperand->GetDynValidShape(), iOperand->Format(),
+                                                          "Assemble_" + matches[0]->Symbol());
     FE_ASSERT(FeError::NOT_EXIST, assembleResult->GetProducers().empty()) << "Assemble result should have no producers";
     IRBuilder builder;
     for (size_t idx = 0; idx < matches.size(); ++idx) {
@@ -86,33 +87,31 @@ LogicalTensorPtr PassOperationUtils::HandlePerfectlyMatchWithAll(
     return assembleResult;
 }
 
-LogicalTensorPtr PassOperationUtils::HandleBeCovered(
-    Function& function, LogicalTensorPtr iOperand, const LogicalTensors& matches)
+LogicalTensorPtr PassOperationUtils::HandleBeCovered(Function& function, LogicalTensorPtr iOperand,
+                                                     const LogicalTensors& matches)
 {
-    auto viewResult = std::make_shared<LogicalTensor>(
-        function, matches.front()->tensor->datatype, iOperand->shape, iOperand->Format(),
-        "View_" + matches.front()->tensor->symbol);
+    auto viewResult = std::make_shared<LogicalTensor>(function, matches.front()->tensor->datatype, iOperand->shape,
+                                                      iOperand->Format(), "View_" + matches.front()->tensor->symbol);
     IRBuilder irBuilder;
     auto& viewOp = irBuilder.CreateTensorOpStmt(function, Opcode::OP_VIEW, {matches.front()}, {viewResult});
-    viewOp.SetOpAttribute(std::make_shared<ViewOpAttribute>(
-        iOperand->GetOffset(), iOperand->GetDynOffset(), iOperand->GetDynValidShape()));
+    viewOp.SetOpAttribute(std::make_shared<ViewOpAttribute>(iOperand->GetOffset(), iOperand->GetDynOffset(),
+                                                            iOperand->GetDynValidShape()));
     if (!iOperand->GetDynValidShape().empty()) {
         viewResult->UpdateDynValidShape(iOperand->GetDynValidShape());
     }
     return viewResult;
 }
 
-LogicalTensorPtr PassOperationUtils::HandleBeCoveredByAll(
-    Function& function, LogicalTensorPtr iOperand, const LogicalTensors& matches,
-    const std::vector<std::vector<int64_t>>& offsetOfOverlaps)
+LogicalTensorPtr PassOperationUtils::HandleBeCoveredByAll(Function& function, LogicalTensorPtr iOperand,
+                                                          const LogicalTensors& matches,
+                                                          const std::vector<std::vector<int64_t>>& offsetOfOverlaps)
 {
     std::vector<int64_t> minimumOffset;
     std::vector<int64_t> maximumShape;
     CalcShapeAndOffsetOfGroup(matches, minimumOffset, maximumShape);
 
-    auto assembleResult = std::make_shared<LogicalTensor>(
-        function, matches[0]->Datatype(), maximumShape, iOperand->Format(),
-        "Assemble_" + matches[0]->Symbol());
+    auto assembleResult = std::make_shared<LogicalTensor>(function, matches[0]->Datatype(), maximumShape,
+                                                          iOperand->Format(), "Assemble_" + matches[0]->Symbol());
     FE_ASSERT(FeError::NOT_EXIST, assembleResult->GetProducers().empty()) << "Assemble result should have no producers";
     IRBuilder builder;
     for (size_t idx = 0; idx < matches.size(); ++idx) {
@@ -121,9 +120,8 @@ LogicalTensorPtr PassOperationUtils::HandleBeCoveredByAll(
             offsetOfOverlaps[idx], SymbolicScalar::FromConcrete(offsetOfOverlaps[idx])));
     }
 
-    auto viewResult = std::make_shared<LogicalTensor>(
-        function, assembleResult->Datatype(), iOperand->shape, iOperand->Format(),
-        "View_" + assembleResult->Symbol());
+    auto viewResult = std::make_shared<LogicalTensor>(function, assembleResult->Datatype(), iOperand->shape,
+                                                      iOperand->Format(), "View_" + assembleResult->Symbol());
     auto& viewOp = builder.CreateTensorOpStmt(function, Opcode::OP_VIEW, {assembleResult}, {viewResult});
     std::vector<int64_t> newOffset = TensorOffset::Sub(iOperand->GetOffset(), minimumOffset);
     std::vector<SymbolicScalar> newDynOffset = TensorOffset::Sub(iOperand->GetDynOffset(), minimumOffset);
@@ -137,13 +135,13 @@ LogicalTensorPtr PassOperationUtils::ConnectWithOverlap(Function& function, Logi
     if (matches.empty()) {
         return iOperand;
     }
-    
+
     auto overlapStatus = CalcOverlap(iOperand, matches);
     FE_ASSERT(!matches.empty()) << "Matches should not be empty";
-    
+
     std::vector<int64_t> minimumOffsets;
     auto offsetOfOverlaps = ProcessOffsetAdjustment(matches, minimumOffsets);
-    
+
     switch (overlapStatus) {
         case OverlapStatus::PERFECTLY_MATCH_WITH_ALL:
             return HandlePerfectlyMatchWithAll(function, iOperand, matches, offsetOfOverlaps);
@@ -156,7 +154,7 @@ LogicalTensorPtr PassOperationUtils::ConnectWithOverlap(Function& function, Logi
         default:
             FE_ASSERT(false) << "unexpected behavior";
     }
-    
+
     FE_ASSERT(false) << "unexpected behavior";
     return nullptr;
 }

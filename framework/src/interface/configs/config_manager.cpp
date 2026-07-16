@@ -125,7 +125,8 @@ void ConfigManager::RefreshGlobalPassCfg()
     }
 }
 
-static std::string GetHostName() {
+static std::string GetHostName()
+{
     char host[HOST_NAME_MAX] = {0};
     if (gethostname(host, sizeof(host)) == 0) {
         return std::string(host);
@@ -211,9 +212,8 @@ void ConfigManager::PassConfigsDebugInfo(const std::string& strategy, const std:
 {
     auto* node = GetJsonNode(json_, {"global", "pass_strategies", strategy});
     if (!node) {
-        FE_LOGI(
-            "[ConfigManager] Missing custom pass strategy < %s > configs. %s", strategy.c_str(),
-            "You may add your own custom strategy configs in 'tile_fwk_config.json'.");
+        FE_LOGI("[ConfigManager] Missing custom pass strategy < %s > configs. %s", strategy.c_str(),
+                "You may add your own custom strategy configs in 'tile_fwk_config.json'.");
         return;
     }
 
@@ -228,10 +228,9 @@ void ConfigManager::PassConfigsDebugInfo(const std::string& strategy, const std:
         if (node->find(identifier) != node->end()) {
             FE_LOGI("[ConfigManager] Pass instance %s<%s> configs loaded.", spaces.c_str(), identifier.c_str());
         } else {
-            FE_LOGI(
-                "[ConfigManager] Pass instance %s<%s> configs for pass strategy <%s> is missing. \
+            FE_LOGI("[ConfigManager] Pass instance %s<%s> configs for pass strategy <%s> is missing. \
             You may add your own custom strategy configs in 'tile_fwk_config.json'.",
-                spaces.c_str(), identifier.c_str(), strategy.c_str());
+                    spaces.c_str(), identifier.c_str(), strategy.c_str());
         }
     }
 }
@@ -252,8 +251,7 @@ static std::map<std::string, std::function<void(PassConfigs&, const nlohmann::js
      [](PassConfigs& configs, const nlohmann::json& node) { configs.disablePass = node.get<bool>(); }},
     {KEY_HEALTH_CHECK,
      [](PassConfigs& configs, const nlohmann::json& node) { configs.healthCheck = node.get<bool>(); }},
-    {KEY_ADDR_CHECK,
-     [](PassConfigs& configs, const nlohmann::json& node) { configs.addrCheck = node.get<bool>(); }},
+    {KEY_ADDR_CHECK, [](PassConfigs& configs, const nlohmann::json& node) { configs.addrCheck = node.get<bool>(); }},
     {KEY_RESUME_PARH,
      [](PassConfigs& configs, const nlohmann::json& node) { configs.resumePath = node.get<std::string>(); }},
 };

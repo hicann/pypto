@@ -23,9 +23,9 @@
 namespace pypto {
 namespace ir {
 
+using test_helpers::Node;
 using test_helpers::Scalar;
 using test_helpers::Sp;
-using test_helpers::Node;
 
 // ============================================================================
 // Expression equality
@@ -120,44 +120,39 @@ TEST_F(IRStructEqExprTest, TestAllStmtsEqual)
     auto call = std::make_shared<Call>("op", std::vector<ExprPtr>{v42a}, Sp());
 
     // AssignStmt
-    EXPECT_TRUE(structural_equal(
-        Node(std::make_shared<AssignStmt>(x, v42a, Sp())), Node(std::make_shared<AssignStmt>(x, v42b, Sp()))));
+    EXPECT_TRUE(structural_equal(Node(std::make_shared<AssignStmt>(x, v42a, Sp())),
+                                 Node(std::make_shared<AssignStmt>(x, v42b, Sp()))));
 
     // IfStmt without else
-    EXPECT_TRUE(structural_equal(
-        Node(std::make_shared<IfStmt>(cond, yield, std::nullopt, std::vector<VarPtr>{}, Sp())),
-        Node(std::make_shared<IfStmt>(cond, yield, std::nullopt, std::vector<VarPtr>{}, Sp()))));
+    EXPECT_TRUE(
+        structural_equal(Node(std::make_shared<IfStmt>(cond, yield, std::nullopt, std::vector<VarPtr>{}, Sp())),
+                         Node(std::make_shared<IfStmt>(cond, yield, std::nullopt, std::vector<VarPtr>{}, Sp()))));
 
     // IfStmt with else
     auto then = std::make_shared<AssignStmt>(x, v1, Sp());
     auto els = std::make_shared<AssignStmt>(x, v2, Sp());
-    EXPECT_TRUE(structural_equal(
-        Node(std::make_shared<IfStmt>(cond, then, els, std::vector<VarPtr>{}, Sp())),
-        Node(std::make_shared<IfStmt>(cond, then, els, std::vector<VarPtr>{}, Sp()))));
+    EXPECT_TRUE(structural_equal(Node(std::make_shared<IfStmt>(cond, then, els, std::vector<VarPtr>{}, Sp())),
+                                 Node(std::make_shared<IfStmt>(cond, then, els, std::vector<VarPtr>{}, Sp()))));
 
     // YieldStmt, ReturnStmt
-    EXPECT_TRUE(structural_equal(
-        Node(std::make_shared<YieldStmt>(std::vector<ExprPtr>{v1}, Sp())),
-        Node(std::make_shared<YieldStmt>(std::vector<ExprPtr>{v2}, Sp()))));
-    EXPECT_TRUE(structural_equal(
-        Node(std::make_shared<ReturnStmt>(std::vector<ExprPtr>{v42a}, Sp())),
-        Node(std::make_shared<ReturnStmt>(std::vector<ExprPtr>{v42b}, Sp()))));
+    EXPECT_TRUE(structural_equal(Node(std::make_shared<YieldStmt>(std::vector<ExprPtr>{v1}, Sp())),
+                                 Node(std::make_shared<YieldStmt>(std::vector<ExprPtr>{v2}, Sp()))));
+    EXPECT_TRUE(structural_equal(Node(std::make_shared<ReturnStmt>(std::vector<ExprPtr>{v42a}, Sp())),
+                                 Node(std::make_shared<ReturnStmt>(std::vector<ExprPtr>{v42b}, Sp()))));
 
     // ForStmt, WhileStmt
-    EXPECT_TRUE(structural_equal(
-        Node(std::make_shared<ForStmt>(
-            i, zero, ten, one, std::vector<IterArgPtr>{}, yield, std::vector<VarPtr>{}, Sp())),
-        Node(std::make_shared<ForStmt>(
-            i, zero, ten, one, std::vector<IterArgPtr>{}, yield, std::vector<VarPtr>{}, Sp()))));
+    EXPECT_TRUE(structural_equal(Node(std::make_shared<ForStmt>(i, zero, ten, one, std::vector<IterArgPtr>{}, yield,
+                                                                std::vector<VarPtr>{}, Sp())),
+                                 Node(std::make_shared<ForStmt>(i, zero, ten, one, std::vector<IterArgPtr>{}, yield,
+                                                                std::vector<VarPtr>{}, Sp()))));
     EXPECT_TRUE(structural_equal(
         Node(std::make_shared<WhileStmt>(cond, std::vector<IterArgPtr>{}, yield, std::vector<VarPtr>{}, Sp())),
         Node(std::make_shared<WhileStmt>(cond, std::vector<IterArgPtr>{}, yield, std::vector<VarPtr>{}, Sp()))));
 
     // SeqStmts
     auto a = std::make_shared<AssignStmt>(x, v1, Sp());
-    EXPECT_TRUE(structural_equal(
-        Node(std::make_shared<SeqStmts>(std::vector<StmtPtr>{a, a}, Sp())),
-        Node(std::make_shared<SeqStmts>(std::vector<StmtPtr>{a, a}, Sp()))));
+    EXPECT_TRUE(structural_equal(Node(std::make_shared<SeqStmts>(std::vector<StmtPtr>{a, a}, Sp())),
+                                 Node(std::make_shared<SeqStmts>(std::vector<StmtPtr>{a, a}, Sp()))));
 
     // BreakStmt, ContinueStmt, EvalStmt
     EXPECT_TRUE(structural_equal(Node(std::make_shared<BreakStmt>(Sp())), Node(std::make_shared<BreakStmt>(Sp()))));
@@ -180,17 +175,17 @@ TEST_F(IRStructEqExprTest, TestFunctionAndProgramEqual)
     auto body2 = std::make_shared<AssignStmt>(x, v2, Sp());
 
     // Function equal
-    auto f1 = std::make_shared<Function>(
-        "f", std::vector<VarPtr>{x}, std::vector<TypePtr>{Scalar(DataType::INT32)}, body1, Sp());
-    auto f2 = std::make_shared<Function>(
-        "f", std::vector<VarPtr>{x}, std::vector<TypePtr>{Scalar(DataType::INT32)}, body2, Sp());
+    auto f1 = std::make_shared<Function>("f", std::vector<VarPtr>{x}, std::vector<TypePtr>{Scalar(DataType::INT32)},
+                                         body1, Sp());
+    auto f2 = std::make_shared<Function>("f", std::vector<VarPtr>{x}, std::vector<TypePtr>{Scalar(DataType::INT32)},
+                                         body2, Sp());
     EXPECT_TRUE(structural_equal(Node(f1), Node(f2)));
 
     // Function not equal (different body)
     auto v99 = std::make_shared<ConstInt>(99, DataType::INT32, Sp());
     auto body3 = std::make_shared<AssignStmt>(x, v99, Sp());
-    auto f3 = std::make_shared<Function>(
-        "f", std::vector<VarPtr>{x}, std::vector<TypePtr>{Scalar(DataType::INT32)}, body3, Sp());
+    auto f3 = std::make_shared<Function>("f", std::vector<VarPtr>{x}, std::vector<TypePtr>{Scalar(DataType::INT32)},
+                                         body3, Sp());
     EXPECT_FALSE(structural_equal(Node(f1), Node(f3)));
 
     // Program equal
@@ -234,15 +229,14 @@ TEST_F(IRStructEqTypeTest, TestTupleAndOtherTypes)
     auto s32 = std::make_shared<ScalarType>(DataType::INT32);
 
     // TupleType size mismatch
-    EXPECT_FALSE(structural_equal(
-        std::make_shared<TupleType>(std::vector<TypePtr>{s32}),
-        std::make_shared<TupleType>(std::vector<TypePtr>{s32, s32})));
+    EXPECT_FALSE(structural_equal(std::make_shared<TupleType>(std::vector<TypePtr>{s32}),
+                                  std::make_shared<TupleType>(std::vector<TypePtr>{s32, s32})));
 
     // Type name mismatch
     EXPECT_FALSE(structural_equal(s32, std::make_shared<TupleType>(std::vector<TypePtr>{})));
     EXPECT_FALSE(structural_equal(
-        s32, std::make_shared<TensorType>(
-                 std::vector<ExprPtr>{std::make_shared<ConstInt>(16, DataType::INT64, Sp())}, DataType::FP32)));
+        s32, std::make_shared<TensorType>(std::vector<ExprPtr>{std::make_shared<ConstInt>(16, DataType::INT64, Sp())},
+                                          DataType::FP32)));
 
     // MemRefType singleton
     EXPECT_TRUE(structural_equal(GetMemRefType(), GetMemRefType()));
@@ -260,9 +254,8 @@ TEST_F(IRStructEqAssertTest, TestAssertExprMismatches)
     auto b = std::make_shared<ConstInt>(2, DataType::INT32, Sp());
 
     // Type mismatch (ConstInt vs ConstFloat)
-    EXPECT_THROW(
-        assert_structural_equal(Node(a), Node(std::make_shared<ConstFloat>(1.0, DataType::FP32, Sp()))),
-        npu::tile_fwk::Error);
+    EXPECT_THROW(assert_structural_equal(Node(a), Node(std::make_shared<ConstFloat>(1.0, DataType::FP32, Sp()))),
+                 npu::tile_fwk::Error);
 
     // Null mismatch
     EXPECT_THROW(assert_structural_equal(Node(a), nullptr), npu::tile_fwk::Error);
@@ -271,31 +264,24 @@ TEST_F(IRStructEqAssertTest, TestAssertExprMismatches)
     EXPECT_THROW(assert_structural_equal(Node(a), Node(b)), npu::tile_fwk::Error);
 
     // Float mismatch
-    EXPECT_THROW(
-        assert_structural_equal(
-            Node(std::make_shared<ConstFloat>(1.0, DataType::FP32, Sp())),
-            Node(std::make_shared<ConstFloat>(2.0, DataType::FP32, Sp()))),
-        npu::tile_fwk::Error);
+    EXPECT_THROW(assert_structural_equal(Node(std::make_shared<ConstFloat>(1.0, DataType::FP32, Sp())),
+                                         Node(std::make_shared<ConstFloat>(2.0, DataType::FP32, Sp()))),
+                 npu::tile_fwk::Error);
 
     // Bool mismatch
-    EXPECT_THROW(
-        assert_structural_equal(
-            Node(std::make_shared<ConstBool>(true, Sp())), Node(std::make_shared<ConstBool>(false, Sp()))),
-        npu::tile_fwk::Error);
+    EXPECT_THROW(assert_structural_equal(Node(std::make_shared<ConstBool>(true, Sp())),
+                                         Node(std::make_shared<ConstBool>(false, Sp()))),
+                 npu::tile_fwk::Error);
 
     // Call name mismatch
-    EXPECT_THROW(
-        assert_structural_equal(
-            Node(std::make_shared<Call>("op_a", std::vector<ExprPtr>{a}, Sp())),
-            Node(std::make_shared<Call>("op_b", std::vector<ExprPtr>{a}, Sp()))),
-        npu::tile_fwk::Error);
+    EXPECT_THROW(assert_structural_equal(Node(std::make_shared<Call>("op_a", std::vector<ExprPtr>{a}, Sp())),
+                                         Node(std::make_shared<Call>("op_b", std::vector<ExprPtr>{a}, Sp()))),
+                 npu::tile_fwk::Error);
 
     // Call arg count mismatch
-    EXPECT_THROW(
-        assert_structural_equal(
-            Node(std::make_shared<Call>("op", std::vector<ExprPtr>{a}, Sp())),
-            Node(std::make_shared<Call>("op", std::vector<ExprPtr>{a, b}, Sp()))),
-        npu::tile_fwk::Error);
+    EXPECT_THROW(assert_structural_equal(Node(std::make_shared<Call>("op", std::vector<ExprPtr>{a}, Sp())),
+                                         Node(std::make_shared<Call>("op", std::vector<ExprPtr>{a, b}, Sp()))),
+                 npu::tile_fwk::Error);
 }
 
 TEST_F(IRStructEqAssertTest, TestAssertStmtMismatches)
@@ -315,19 +301,16 @@ TEST_F(IRStructEqAssertTest, TestAssertStmtMismatches)
 
     // Optional field mismatch (IfStmt with/without else)
     EXPECT_THROW(
-        assert_structural_equal(
-            Node(std::make_shared<IfStmt>(cond, yield, std::nullopt, std::vector<VarPtr>{}, Sp())),
-            Node(std::make_shared<IfStmt>(cond, yield, yield, std::vector<VarPtr>{}, Sp()))),
+        assert_structural_equal(Node(std::make_shared<IfStmt>(cond, yield, std::nullopt, std::vector<VarPtr>{}, Sp())),
+                                Node(std::make_shared<IfStmt>(cond, yield, yield, std::vector<VarPtr>{}, Sp()))),
         npu::tile_fwk::Error);
 
     // Vector size mismatch (SeqStmts)
     auto a1 = std::make_shared<AssignStmt>(x, std::make_shared<ConstInt>(1, DataType::INT32, Sp()), Sp());
     auto a2 = std::make_shared<AssignStmt>(x, std::make_shared<ConstInt>(2, DataType::INT32, Sp()), Sp());
-    EXPECT_THROW(
-        assert_structural_equal(
-            Node(std::make_shared<SeqStmts>(std::vector<StmtPtr>{a1}, Sp())),
-            Node(std::make_shared<SeqStmts>(std::vector<StmtPtr>{a1, a2}, Sp()))),
-        npu::tile_fwk::Error);
+    EXPECT_THROW(assert_structural_equal(Node(std::make_shared<SeqStmts>(std::vector<StmtPtr>{a1}, Sp())),
+                                         Node(std::make_shared<SeqStmts>(std::vector<StmtPtr>{a1, a2}, Sp()))),
+                 npu::tile_fwk::Error);
 }
 
 TEST_F(IRStructEqAssertTest, TestAssertTypeMismatches)
@@ -335,49 +318,37 @@ TEST_F(IRStructEqAssertTest, TestAssertTypeMismatches)
     auto d = std::make_shared<ConstInt>(16, DataType::INT64, Sp());
 
     // Scalar dtype
-    EXPECT_THROW(
-        assert_structural_equal(
-            std::make_shared<ScalarType>(DataType::INT32), std::make_shared<ScalarType>(DataType::FP32)),
-        npu::tile_fwk::Error);
+    EXPECT_THROW(assert_structural_equal(std::make_shared<ScalarType>(DataType::INT32),
+                                         std::make_shared<ScalarType>(DataType::FP32)),
+                 npu::tile_fwk::Error);
 
     // Tuple elements
-    EXPECT_THROW(
-        assert_structural_equal(
-            std::make_shared<TupleType>(std::vector<TypePtr>{std::make_shared<ScalarType>(DataType::INT32)}),
-            std::make_shared<TupleType>(std::vector<TypePtr>{std::make_shared<ScalarType>(DataType::FP32)})),
-        npu::tile_fwk::Error);
+    EXPECT_THROW(assert_structural_equal(
+                     std::make_shared<TupleType>(std::vector<TypePtr>{std::make_shared<ScalarType>(DataType::INT32)}),
+                     std::make_shared<TupleType>(std::vector<TypePtr>{std::make_shared<ScalarType>(DataType::FP32)})),
+                 npu::tile_fwk::Error);
 
     // Tensor dtype / shape rank
-    EXPECT_THROW(
-        assert_structural_equal(
-            std::make_shared<TensorType>(std::vector<ExprPtr>{d}, DataType::FP32),
-            std::make_shared<TensorType>(std::vector<ExprPtr>{d}, DataType::FP16)),
-        npu::tile_fwk::Error);
-    EXPECT_THROW(
-        assert_structural_equal(
-            std::make_shared<TensorType>(std::vector<ExprPtr>{d}, DataType::FP32),
-            std::make_shared<TensorType>(std::vector<ExprPtr>{d, d}, DataType::FP32)),
-        npu::tile_fwk::Error);
+    EXPECT_THROW(assert_structural_equal(std::make_shared<TensorType>(std::vector<ExprPtr>{d}, DataType::FP32),
+                                         std::make_shared<TensorType>(std::vector<ExprPtr>{d}, DataType::FP16)),
+                 npu::tile_fwk::Error);
+    EXPECT_THROW(assert_structural_equal(std::make_shared<TensorType>(std::vector<ExprPtr>{d}, DataType::FP32),
+                                         std::make_shared<TensorType>(std::vector<ExprPtr>{d, d}, DataType::FP32)),
+                 npu::tile_fwk::Error);
 
     // Tile dtype / shape rank
-    EXPECT_THROW(
-        assert_structural_equal(
-            std::make_shared<TileType>(std::vector<ExprPtr>{d}, DataType::FP32),
-            std::make_shared<TileType>(std::vector<ExprPtr>{d}, DataType::FP16)),
-        npu::tile_fwk::Error);
-    EXPECT_THROW(
-        assert_structural_equal(
-            std::make_shared<TileType>(std::vector<ExprPtr>{d}, DataType::FP32),
-            std::make_shared<TileType>(std::vector<ExprPtr>{d, d}, DataType::FP32)),
-        npu::tile_fwk::Error);
+    EXPECT_THROW(assert_structural_equal(std::make_shared<TileType>(std::vector<ExprPtr>{d}, DataType::FP32),
+                                         std::make_shared<TileType>(std::vector<ExprPtr>{d}, DataType::FP16)),
+                 npu::tile_fwk::Error);
+    EXPECT_THROW(assert_structural_equal(std::make_shared<TileType>(std::vector<ExprPtr>{d}, DataType::FP32),
+                                         std::make_shared<TileType>(std::vector<ExprPtr>{d, d}, DataType::FP32)),
+                 npu::tile_fwk::Error);
 
     // Tuple size
     auto s = std::make_shared<ScalarType>(DataType::INT32);
-    EXPECT_THROW(
-        assert_structural_equal(
-            std::make_shared<TupleType>(std::vector<TypePtr>{s}),
-            std::make_shared<TupleType>(std::vector<TypePtr>{s, s})),
-        npu::tile_fwk::Error);
+    EXPECT_THROW(assert_structural_equal(std::make_shared<TupleType>(std::vector<TypePtr>{s}),
+                                         std::make_shared<TupleType>(std::vector<TypePtr>{s, s})),
+                 npu::tile_fwk::Error);
 }
 
 // ============================================================================
@@ -392,16 +363,16 @@ TEST_F(IRStructEqExprTest, TestVarAutoMappingEqual)
     auto v2 = std::make_shared<ConstInt>(1, DataType::INT32, Sp());
 
     // Auto-mapping: x↔y mapped, same structure
-    EXPECT_TRUE(structural_equal(
-        Node(std::make_shared<AssignStmt>(x, v1, Sp())), Node(std::make_shared<AssignStmt>(y, v2, Sp())), true));
+    EXPECT_TRUE(structural_equal(Node(std::make_shared<AssignStmt>(x, v1, Sp())),
+                                 Node(std::make_shared<AssignStmt>(y, v2, Sp())), true));
 
     // Without auto-mapping, distinct vars differ
     EXPECT_FALSE(structural_equal(Node(x), Node(y), false));
 
     // Auto-mapping with type mismatch
     auto z = std::make_shared<Var>("z", Scalar(DataType::FP32), Sp());
-    EXPECT_FALSE(structural_equal(
-        Node(std::make_shared<AssignStmt>(x, v1, Sp())), Node(std::make_shared<AssignStmt>(z, v1, Sp())), true));
+    EXPECT_FALSE(structural_equal(Node(std::make_shared<AssignStmt>(x, v1, Sp())),
+                                  Node(std::make_shared<AssignStmt>(z, v1, Sp())), true));
 }
 
 TEST_F(IRStructEqExprTest, TestVarConsistentMapping)
@@ -435,8 +406,8 @@ TEST_F(IRStructEqExprTest, TestForStmtWithIterArgs)
     auto yv = std::make_shared<ConstInt>(1, DataType::INT32, Sp());
 
     auto ia1 = std::make_shared<IterArg>("acc", Scalar(DataType::INT32), zero, Sp());
-    auto ia2 = std::make_shared<IterArg>(
-        "acc", Scalar(DataType::INT32), std::make_shared<ConstInt>(0, DataType::INT32, Sp()), Sp());
+    auto ia2 = std::make_shared<IterArg>("acc", Scalar(DataType::INT32),
+                                         std::make_shared<ConstInt>(0, DataType::INT32, Sp()), Sp());
     auto rv1 = std::make_shared<Var>("out", Scalar(DataType::INT32), Sp());
     auto rv2 = std::make_shared<Var>("out", Scalar(DataType::INT32), Sp());
 
@@ -444,19 +415,17 @@ TEST_F(IRStructEqExprTest, TestForStmtWithIterArgs)
     auto body2 = std::make_shared<YieldStmt>(std::vector<ExprPtr>{yv}, Sp());
 
     // Equal with same init
-    EXPECT_TRUE(structural_equal(
-        Node(std::make_shared<ForStmt>(
-            i1, zero, ten, one, std::vector<IterArgPtr>{ia1}, body1, std::vector<VarPtr>{rv1}, Sp())),
-        Node(std::make_shared<ForStmt>(
-            i2, zero, ten, one, std::vector<IterArgPtr>{ia2}, body2, std::vector<VarPtr>{rv2}, Sp()))));
+    EXPECT_TRUE(structural_equal(Node(std::make_shared<ForStmt>(i1, zero, ten, one, std::vector<IterArgPtr>{ia1}, body1,
+                                                                std::vector<VarPtr>{rv1}, Sp())),
+                                 Node(std::make_shared<ForStmt>(i2, zero, ten, one, std::vector<IterArgPtr>{ia2}, body2,
+                                                                std::vector<VarPtr>{rv2}, Sp()))));
 
     // Not equal with different init
     auto ia3 = std::make_shared<IterArg>("acc", Scalar(DataType::INT32), one, Sp());
-    EXPECT_FALSE(structural_equal(
-        Node(std::make_shared<ForStmt>(
-            i1, zero, ten, one, std::vector<IterArgPtr>{ia1}, body1, std::vector<VarPtr>{rv1}, Sp())),
-        Node(std::make_shared<ForStmt>(
-            i1, zero, ten, one, std::vector<IterArgPtr>{ia3}, body1, std::vector<VarPtr>{rv1}, Sp()))));
+    EXPECT_FALSE(structural_equal(Node(std::make_shared<ForStmt>(i1, zero, ten, one, std::vector<IterArgPtr>{ia1},
+                                                                 body1, std::vector<VarPtr>{rv1}, Sp())),
+                                  Node(std::make_shared<ForStmt>(i1, zero, ten, one, std::vector<IterArgPtr>{ia3},
+                                                                 body1, std::vector<VarPtr>{rv1}, Sp()))));
 }
 
 // ============================================================================
@@ -471,13 +440,11 @@ TEST_F(IRStructEqExprTest, TestSectionStmtEqual)
     auto body1 = std::make_shared<AssignStmt>(x, v1, Sp());
     auto body2 = std::make_shared<AssignStmt>(x, v2, Sp());
 
-    EXPECT_TRUE(structural_equal(
-        Node(std::make_shared<SectionStmt>(SectionKind::Vector, body1, Sp())),
-        Node(std::make_shared<SectionStmt>(SectionKind::Vector, body2, Sp()))));
+    EXPECT_TRUE(structural_equal(Node(std::make_shared<SectionStmt>(SectionKind::Vector, body1, Sp())),
+                                 Node(std::make_shared<SectionStmt>(SectionKind::Vector, body2, Sp()))));
 
-    EXPECT_FALSE(structural_equal(
-        Node(std::make_shared<SectionStmt>(SectionKind::Vector, body1, Sp())),
-        Node(std::make_shared<SectionStmt>(SectionKind::Cube, body1, Sp()))));
+    EXPECT_FALSE(structural_equal(Node(std::make_shared<SectionStmt>(SectionKind::Vector, body1, Sp())),
+                                  Node(std::make_shared<SectionStmt>(SectionKind::Cube, body1, Sp()))));
 }
 
 // ============================================================================
@@ -494,16 +461,13 @@ TEST_F(IRStructEqTypeTest, TestTileTypeWithTileView)
     TileView tv1({d16a}, {d16a}, off0a);
     TileView tv2({d16b}, {d16b}, off0b);
 
-    auto tl1 = std::make_shared<TileType>(
-        std::vector<ExprPtr>{d16a}, DataType::FP32, std::nullopt, tv1);
-    auto tl2 = std::make_shared<TileType>(
-        std::vector<ExprPtr>{d16b}, DataType::FP32, std::nullopt, tv2);
+    auto tl1 = std::make_shared<TileType>(std::vector<ExprPtr>{d16a}, DataType::FP32, std::nullopt, tv1);
+    auto tl2 = std::make_shared<TileType>(std::vector<ExprPtr>{d16b}, DataType::FP32, std::nullopt, tv2);
     EXPECT_TRUE(structural_equal(tl1, tl2));
 
     auto d32 = std::make_shared<ConstInt>(32, DataType::INT64, Sp());
     TileView tv3({d32}, {d16a}, off0a);
-    auto tl3 = std::make_shared<TileType>(
-        std::vector<ExprPtr>{d16a}, DataType::FP32, std::nullopt, tv3);
+    auto tl3 = std::make_shared<TileType>(std::vector<ExprPtr>{d16a}, DataType::FP32, std::nullopt, tv3);
     EXPECT_FALSE(structural_equal(tl1, tl3));
 }
 
@@ -514,15 +478,12 @@ TEST_F(IRStructEqTypeTest, TestTileTypeWithHardwareInfo)
     HardwareInfo hw1(TileLayout::row_major, TileLayout::none_box, 512, TilePad::null);
     HardwareInfo hw2(TileLayout::row_major, TileLayout::none_box, 512, TilePad::null);
 
-    auto tl1 = std::make_shared<TileType>(
-        std::vector<ExprPtr>{d16}, DataType::FP32, std::nullopt, std::nullopt, hw1);
-    auto tl2 = std::make_shared<TileType>(
-        std::vector<ExprPtr>{d16}, DataType::FP32, std::nullopt, std::nullopt, hw2);
+    auto tl1 = std::make_shared<TileType>(std::vector<ExprPtr>{d16}, DataType::FP32, std::nullopt, std::nullopt, hw1);
+    auto tl2 = std::make_shared<TileType>(std::vector<ExprPtr>{d16}, DataType::FP32, std::nullopt, std::nullopt, hw2);
     EXPECT_TRUE(structural_equal(tl1, tl2));
 
     HardwareInfo hw3(TileLayout::col_major, TileLayout::none_box, 512, TilePad::null);
-    auto tl3 = std::make_shared<TileType>(
-        std::vector<ExprPtr>{d16}, DataType::FP32, std::nullopt, std::nullopt, hw3);
+    auto tl3 = std::make_shared<TileType>(std::vector<ExprPtr>{d16}, DataType::FP32, std::nullopt, std::nullopt, hw3);
     EXPECT_FALSE(structural_equal(tl1, tl3));
     EXPECT_THROW(assert_structural_equal(tl1, tl3), npu::tile_fwk::Error);
 }
@@ -533,10 +494,8 @@ TEST_F(IRStructEqTypeTest, TestTileTypeTileViewPresenceMismatch)
     auto off0 = std::make_shared<ConstInt>(0, DataType::INT64, Sp());
     TileView tv({d16}, {d16}, off0);
 
-    auto tl1 = std::make_shared<TileType>(
-        std::vector<ExprPtr>{d16}, DataType::FP32, std::nullopt, tv);
-    auto tl2 = std::make_shared<TileType>(
-        std::vector<ExprPtr>{d16}, DataType::FP32);
+    auto tl1 = std::make_shared<TileType>(std::vector<ExprPtr>{d16}, DataType::FP32, std::nullopt, tv);
+    auto tl2 = std::make_shared<TileType>(std::vector<ExprPtr>{d16}, DataType::FP32);
     EXPECT_FALSE(structural_equal(tl1, tl2));
 }
 
@@ -545,10 +504,8 @@ TEST_F(IRStructEqTypeTest, TestTileTypeHardwareInfoPresenceMismatch)
     auto d16 = std::make_shared<ConstInt>(16, DataType::INT64, Sp());
     HardwareInfo hw(TileLayout::row_major);
 
-    auto tl1 = std::make_shared<TileType>(
-        std::vector<ExprPtr>{d16}, DataType::FP32, std::nullopt, std::nullopt, hw);
-    auto tl2 = std::make_shared<TileType>(
-        std::vector<ExprPtr>{d16}, DataType::FP32);
+    auto tl1 = std::make_shared<TileType>(std::vector<ExprPtr>{d16}, DataType::FP32, std::nullopt, std::nullopt, hw);
+    auto tl2 = std::make_shared<TileType>(std::vector<ExprPtr>{d16}, DataType::FP32);
     EXPECT_FALSE(structural_equal(tl1, tl2));
 }
 
@@ -558,14 +515,12 @@ TEST_F(IRStructEqTypeTest, TestTileTypeHardwareInfoPresenceMismatch)
 
 TEST_F(IRStructEqTypeTest, TestUnknownTypeEqual)
 {
-    EXPECT_TRUE(structural_equal(
-        std::make_shared<UnknownType>(), std::make_shared<UnknownType>()));
+    EXPECT_TRUE(structural_equal(std::make_shared<UnknownType>(), std::make_shared<UnknownType>()));
 }
 
 TEST_F(IRStructEqTypeTest, TestLogicalTensorTypeEqual)
 {
-    EXPECT_TRUE(structural_equal(
-        std::make_shared<LogicalTensorType>(), std::make_shared<LogicalTensorType>()));
+    EXPECT_TRUE(structural_equal(std::make_shared<LogicalTensorType>(), std::make_shared<LogicalTensorType>()));
 }
 
 // ============================================================================
@@ -594,7 +549,8 @@ TEST_F(IRStructEqExprTest, TestCallWithKwargsMismatch)
     EXPECT_FALSE(structural_equal(Node(c1), Node(c2)));
     EXPECT_THROW(assert_structural_equal(Node(c1), Node(c2)), npu::tile_fwk::Error);
 
-    std::vector<std::pair<std::string, std::any>> kwargs3 = {{"mode", std::any(std::string("round"))}, {"axis", std::any(int(0))}};
+    std::vector<std::pair<std::string, std::any>> kwargs3 = {{"mode", std::any(std::string("round"))},
+                                                             {"axis", std::any(int(0))}};
     auto c3 = std::make_shared<Call>("op", std::vector<ExprPtr>{a}, kwargs3, Scalar(DataType::INT32), Sp());
     EXPECT_FALSE(structural_equal(Node(c1), Node(c3)));
     EXPECT_THROW(assert_structural_equal(Node(c1), Node(c3)), npu::tile_fwk::Error);
@@ -705,8 +661,8 @@ TEST_F(IRStructEqExprTest, TestFunctionReturnTypesSizeMismatch)
     auto x = std::make_shared<Var>("x", Scalar(DataType::INT32), Sp());
     auto body = std::make_shared<AssignStmt>(x, std::make_shared<ConstInt>(1, DataType::INT32, Sp()), Sp());
 
-    auto f1 = std::make_shared<Function>(
-        "f", std::vector<VarPtr>{x}, std::vector<TypePtr>{Scalar(DataType::INT32)}, body, Sp());
+    auto f1 = std::make_shared<Function>("f", std::vector<VarPtr>{x}, std::vector<TypePtr>{Scalar(DataType::INT32)},
+                                         body, Sp());
     auto f2 = std::make_shared<Function>(
         "f", std::vector<VarPtr>{x}, std::vector<TypePtr>{Scalar(DataType::INT32), Scalar(DataType::FP32)}, body, Sp());
     EXPECT_FALSE(structural_equal(Node(f1), Node(f2)));
@@ -718,10 +674,10 @@ TEST_F(IRStructEqExprTest, TestFunctionReturnTypesElementMismatch)
     auto x = std::make_shared<Var>("x", Scalar(DataType::INT32), Sp());
     auto body = std::make_shared<AssignStmt>(x, std::make_shared<ConstInt>(1, DataType::INT32, Sp()), Sp());
 
-    auto f1 = std::make_shared<Function>(
-        "f", std::vector<VarPtr>{x}, std::vector<TypePtr>{Scalar(DataType::INT32)}, body, Sp());
-    auto f2 = std::make_shared<Function>(
-        "f", std::vector<VarPtr>{x}, std::vector<TypePtr>{Scalar(DataType::FP32)}, body, Sp());
+    auto f1 = std::make_shared<Function>("f", std::vector<VarPtr>{x}, std::vector<TypePtr>{Scalar(DataType::INT32)},
+                                         body, Sp());
+    auto f2 = std::make_shared<Function>("f", std::vector<VarPtr>{x}, std::vector<TypePtr>{Scalar(DataType::FP32)},
+                                         body, Sp());
     EXPECT_FALSE(structural_equal(Node(f1), Node(f2)));
 }
 
@@ -738,10 +694,10 @@ TEST_F(IRStructEqExprTest, TestForStmtIterArgSizeMismatch)
     auto yield = std::make_shared<YieldStmt>(std::vector<ExprPtr>{}, Sp());
     auto ia = std::make_shared<IterArg>("acc", Scalar(DataType::INT32), zero, Sp());
 
-    auto for1 = std::make_shared<ForStmt>(
-        i, zero, ten, one, std::vector<IterArgPtr>{}, yield, std::vector<VarPtr>{}, Sp());
-    auto for2 = std::make_shared<ForStmt>(
-        i, zero, ten, one, std::vector<IterArgPtr>{ia}, yield, std::vector<VarPtr>{}, Sp());
+    auto for1 = std::make_shared<ForStmt>(i, zero, ten, one, std::vector<IterArgPtr>{}, yield, std::vector<VarPtr>{},
+                                          Sp());
+    auto for2 = std::make_shared<ForStmt>(i, zero, ten, one, std::vector<IterArgPtr>{ia}, yield, std::vector<VarPtr>{},
+                                          Sp());
 
     EXPECT_FALSE(structural_equal(Node(for1), Node(for2)));
     EXPECT_THROW(assert_structural_equal(Node(for1), Node(for2)), npu::tile_fwk::Error);
@@ -760,11 +716,10 @@ TEST_F(IRStructEqExprTest, TestLoopVarInt64IndexNotEquivalent)
     auto one = std::make_shared<ConstInt>(1, DataType::INT32, Sp());
     auto yield = std::make_shared<YieldStmt>(std::vector<ExprPtr>{}, Sp());
 
-    EXPECT_FALSE(structural_equal(
-        Node(std::make_shared<ForStmt>(
-            i1, zero, ten, one, std::vector<IterArgPtr>{}, yield, std::vector<VarPtr>{}, Sp())),
-        Node(std::make_shared<ForStmt>(
-            i2, zero, ten, one, std::vector<IterArgPtr>{}, yield, std::vector<VarPtr>{}, Sp()))));
+    EXPECT_FALSE(structural_equal(Node(std::make_shared<ForStmt>(i1, zero, ten, one, std::vector<IterArgPtr>{}, yield,
+                                                                 std::vector<VarPtr>{}, Sp())),
+                                  Node(std::make_shared<ForStmt>(i2, zero, ten, one, std::vector<IterArgPtr>{}, yield,
+                                                                 std::vector<VarPtr>{}, Sp()))));
 }
 
 // ============================================================================
@@ -808,9 +763,8 @@ TEST_F(IRStructEqAssertTest, TestAssertProgramMapMismatch)
 
 TEST_F(IRStructEqAssertTest, TestAssertProgramMapSizeMismatch)
 {
-    auto body = std::make_shared<AssignStmt>(
-        std::make_shared<Var>("x", Scalar(DataType::INT32), Sp()),
-        std::make_shared<ConstInt>(1, DataType::INT32, Sp()), Sp());
+    auto body = std::make_shared<AssignStmt>(std::make_shared<Var>("x", Scalar(DataType::INT32), Sp()),
+                                             std::make_shared<ConstInt>(1, DataType::INT32, Sp()), Sp());
     auto f1 = std::make_shared<Function>("f", std::vector<VarPtr>{}, std::vector<TypePtr>{}, body, Sp());
     auto f2 = std::make_shared<Function>("g", std::vector<VarPtr>{}, std::vector<TypePtr>{}, body, Sp());
 
@@ -818,8 +772,6 @@ TEST_F(IRStructEqAssertTest, TestAssertProgramMapSizeMismatch)
     auto p2 = std::make_shared<Program>(std::vector<FunctionPtr>{f1, f2}, "prog", Sp());
     EXPECT_THROW(assert_structural_equal(Node(p1), Node(p2)), npu::tile_fwk::Error);
 }
-
-
 
 // ============================================================================
 // Equal: null node and type mismatch branches
@@ -895,14 +847,10 @@ TEST_F(IRStructEqExprTest, TestVarNoAutoMapping_InconsistentMapping)
     auto c1_rhs = std::make_shared<Call>("op", std::vector<ExprPtr>{y1}, Sp());
     auto c2_rhs = std::make_shared<Call>("op", std::vector<ExprPtr>{y2}, Sp());
 
-    auto seq1 = std::make_shared<SeqStmts>(std::vector<StmtPtr>{
-        std::make_shared<EvalStmt>(c1_lhs, Sp()),
-        std::make_shared<EvalStmt>(c2_lhs, Sp())
-    }, Sp());
-    auto seq2 = std::make_shared<SeqStmts>(std::vector<StmtPtr>{
-        std::make_shared<EvalStmt>(c1_rhs, Sp()),
-        std::make_shared<EvalStmt>(c2_rhs, Sp())
-    }, Sp());
+    auto seq1 = std::make_shared<SeqStmts>(
+        std::vector<StmtPtr>{std::make_shared<EvalStmt>(c1_lhs, Sp()), std::make_shared<EvalStmt>(c2_lhs, Sp())}, Sp());
+    auto seq2 = std::make_shared<SeqStmts>(
+        std::vector<StmtPtr>{std::make_shared<EvalStmt>(c1_rhs, Sp()), std::make_shared<EvalStmt>(c2_rhs, Sp())}, Sp());
 
     EXPECT_FALSE(structural_equal(Node(seq1), Node(seq2), true));
 }
@@ -913,14 +861,16 @@ TEST_F(IRStructEqExprTest, TestVarAutoMapping_ReverseInconsistent)
     auto x2 = std::make_shared<Var>("x", Scalar(DataType::INT32), Sp());
     auto y = std::make_shared<Var>("y", Scalar(DataType::INT32), Sp());
 
-    auto seq1 = std::make_shared<SeqStmts>(std::vector<StmtPtr>{
-        std::make_shared<EvalStmt>(std::make_shared<Call>("op", std::vector<ExprPtr>{x1}, Sp()), Sp()),
-        std::make_shared<EvalStmt>(std::make_shared<Call>("op", std::vector<ExprPtr>{x2}, Sp()), Sp())
-    }, Sp());
-    auto seq2 = std::make_shared<SeqStmts>(std::vector<StmtPtr>{
-        std::make_shared<EvalStmt>(std::make_shared<Call>("op", std::vector<ExprPtr>{y}, Sp()), Sp()),
-        std::make_shared<EvalStmt>(std::make_shared<Call>("op", std::vector<ExprPtr>{y}, Sp()), Sp())
-    }, Sp());
+    auto seq1 = std::make_shared<SeqStmts>(
+        std::vector<StmtPtr>{
+            std::make_shared<EvalStmt>(std::make_shared<Call>("op", std::vector<ExprPtr>{x1}, Sp()), Sp()),
+            std::make_shared<EvalStmt>(std::make_shared<Call>("op", std::vector<ExprPtr>{x2}, Sp()), Sp())},
+        Sp());
+    auto seq2 = std::make_shared<SeqStmts>(
+        std::vector<StmtPtr>{
+            std::make_shared<EvalStmt>(std::make_shared<Call>("op", std::vector<ExprPtr>{y}, Sp()), Sp()),
+            std::make_shared<EvalStmt>(std::make_shared<Call>("op", std::vector<ExprPtr>{y}, Sp()), Sp())},
+        Sp());
 
     EXPECT_FALSE(structural_equal(Node(seq1), Node(seq2), true));
     EXPECT_THROW(assert_structural_equal(Node(seq1), Node(seq2)), npu::tile_fwk::Error);
@@ -943,10 +893,10 @@ TEST_F(IRStructEqExprTest, TestIterArgInitValueMismatch)
     auto ia2 = std::make_shared<IterArg>("acc", Scalar(DataType::INT32), one_val, Sp());
     auto rv = std::make_shared<Var>("out", Scalar(DataType::INT32), Sp());
 
-    auto for1 = std::make_shared<ForStmt>(
-        i, zero, ten, step, std::vector<IterArgPtr>{ia1}, yield, std::vector<VarPtr>{rv}, Sp());
-    auto for2 = std::make_shared<ForStmt>(
-        i, zero, ten, step, std::vector<IterArgPtr>{ia2}, yield, std::vector<VarPtr>{rv}, Sp());
+    auto for1 = std::make_shared<ForStmt>(i, zero, ten, step, std::vector<IterArgPtr>{ia1}, yield,
+                                          std::vector<VarPtr>{rv}, Sp());
+    auto for2 = std::make_shared<ForStmt>(i, zero, ten, step, std::vector<IterArgPtr>{ia2}, yield,
+                                          std::vector<VarPtr>{rv}, Sp());
 
     EXPECT_FALSE(structural_equal(Node(for1), Node(for2)));
     EXPECT_THROW(assert_structural_equal(Node(for1), Node(for2)), npu::tile_fwk::Error);
@@ -1005,9 +955,8 @@ TEST_F(IRStructEqAssertTest, TestAssertSectionKindMismatch)
     auto body = std::make_shared<AssignStmt>(x, std::make_shared<ConstInt>(1, DataType::INT32, Sp()), Sp());
 
     try {
-        assert_structural_equal(
-            Node(std::make_shared<SectionStmt>(SectionKind::Vector, body, Sp())),
-            Node(std::make_shared<SectionStmt>(SectionKind::Cube, body, Sp())));
+        assert_structural_equal(Node(std::make_shared<SectionStmt>(SectionKind::Vector, body, Sp())),
+                                Node(std::make_shared<SectionStmt>(SectionKind::Cube, body, Sp())));
         FAIL() << "Expected npu::tile_fwk::Error";
     } catch (const npu::tile_fwk::Error& e) {
         std::string msg = e.what();
@@ -1022,9 +971,8 @@ TEST_F(IRStructEqAssertTest, TestAssertVarTypeMismatch)
     auto v1 = std::make_shared<ConstInt>(1, DataType::INT32, Sp());
 
     try {
-        assert_structural_equal(
-            Node(std::make_shared<AssignStmt>(x, v1, Sp())),
-            Node(std::make_shared<AssignStmt>(z, v1, Sp())));
+        assert_structural_equal(Node(std::make_shared<AssignStmt>(x, v1, Sp())),
+                                Node(std::make_shared<AssignStmt>(z, v1, Sp())));
         FAIL() << "Expected npu::tile_fwk::Error";
     } catch (const npu::tile_fwk::Error& e) {
         std::string msg = e.what();
@@ -1039,14 +987,16 @@ TEST_F(IRStructEqAssertTest, TestAssertVarMappingInconsistent)
     auto y2 = std::make_shared<Var>("z", Scalar(DataType::INT32), Sp());
     auto v1 = std::make_shared<ConstInt>(1, DataType::INT32, Sp());
 
-    auto seq1 = std::make_shared<SeqStmts>(std::vector<StmtPtr>{
-        std::make_shared<EvalStmt>(std::make_shared<Call>("op", std::vector<ExprPtr>{x}, Sp()), Sp()),
-        std::make_shared<EvalStmt>(std::make_shared<Call>("op", std::vector<ExprPtr>{x}, Sp()), Sp())
-    }, Sp());
-    auto seq2 = std::make_shared<SeqStmts>(std::vector<StmtPtr>{
-        std::make_shared<EvalStmt>(std::make_shared<Call>("op", std::vector<ExprPtr>{y1}, Sp()), Sp()),
-        std::make_shared<EvalStmt>(std::make_shared<Call>("op", std::vector<ExprPtr>{y2}, Sp()), Sp())
-    }, Sp());
+    auto seq1 = std::make_shared<SeqStmts>(
+        std::vector<StmtPtr>{
+            std::make_shared<EvalStmt>(std::make_shared<Call>("op", std::vector<ExprPtr>{x}, Sp()), Sp()),
+            std::make_shared<EvalStmt>(std::make_shared<Call>("op", std::vector<ExprPtr>{x}, Sp()), Sp())},
+        Sp());
+    auto seq2 = std::make_shared<SeqStmts>(
+        std::vector<StmtPtr>{
+            std::make_shared<EvalStmt>(std::make_shared<Call>("op", std::vector<ExprPtr>{y1}, Sp()), Sp()),
+            std::make_shared<EvalStmt>(std::make_shared<Call>("op", std::vector<ExprPtr>{y2}, Sp()), Sp())},
+        Sp());
 
     try {
         assert_structural_equal(Node(seq1), Node(seq2));
@@ -1056,8 +1006,6 @@ TEST_F(IRStructEqAssertTest, TestAssertVarMappingInconsistent)
         EXPECT_TRUE(msg.find("Variable") != std::string::npos || msg.find("mapping") != std::string::npos);
     }
 }
-
-
 
 TEST_F(IRStructEqAssertTest, TestAssertHardwareInfoSlayoutMismatch)
 {
@@ -1133,7 +1081,8 @@ TEST_F(IRStructEqAssertTest, TestAssertTileViewStartOffsetMismatch)
         FAIL() << "Expected npu::tile_fwk::Error";
     } catch (const npu::tile_fwk::Error& e) {
         std::string msg = e.what();
-        EXPECT_TRUE(msg.find("TileView") != std::string::npos || msg.find("start_offset") != std::string::npos || msg.find("int64_t") != std::string::npos);
+        EXPECT_TRUE(msg.find("TileView") != std::string::npos || msg.find("start_offset") != std::string::npos ||
+                    msg.find("int64_t") != std::string::npos);
     }
 }
 
@@ -1181,10 +1130,10 @@ TEST_F(IRStructEqAssertTest, TestAssertIterArgIterVarMismatch)
     auto ia2 = std::make_shared<IterArg>("acc", Scalar(DataType::FP32), zero, Sp());
     auto rv = std::make_shared<Var>("out", Scalar(DataType::INT32), Sp());
 
-    auto for1 = std::make_shared<ForStmt>(
-        i, zero, ten, step, std::vector<IterArgPtr>{ia1}, yield, std::vector<VarPtr>{rv}, Sp());
-    auto for2 = std::make_shared<ForStmt>(
-        i, zero, ten, step, std::vector<IterArgPtr>{ia2}, yield, std::vector<VarPtr>{rv}, Sp());
+    auto for1 = std::make_shared<ForStmt>(i, zero, ten, step, std::vector<IterArgPtr>{ia1}, yield,
+                                          std::vector<VarPtr>{rv}, Sp());
+    auto for2 = std::make_shared<ForStmt>(i, zero, ten, step, std::vector<IterArgPtr>{ia2}, yield,
+                                          std::vector<VarPtr>{rv}, Sp());
 
     EXPECT_THROW(assert_structural_equal(Node(for1), Node(for2)), npu::tile_fwk::Error);
 }
@@ -1205,8 +1154,7 @@ TEST_F(IRStructEqAssertTest, TestAssertTileTypeHardwareInfoPresenceMismatch)
     auto d16 = std::make_shared<ConstInt>(16, DataType::INT64, Sp());
     HardwareInfo hw(TileLayout::row_major);
 
-    auto t1 = std::make_shared<TileType>(
-        std::vector<ExprPtr>{d16}, DataType::FP32, std::nullopt, std::nullopt, hw);
+    auto t1 = std::make_shared<TileType>(std::vector<ExprPtr>{d16}, DataType::FP32, std::nullopt, std::nullopt, hw);
     auto t2 = std::make_shared<TileType>(std::vector<ExprPtr>{d16}, DataType::FP32);
     EXPECT_THROW(assert_structural_equal(t1, t2), npu::tile_fwk::Error);
 }
@@ -1258,16 +1206,10 @@ TEST_F(IRStructEqAssertTest, TestAssertVarDefFieldMappingInconsistent)
     auto rv_rhs1 = std::make_shared<Var>("r1", Scalar(DataType::INT32), Sp());
     auto rv_rhs2 = std::make_shared<Var>("r2", Scalar(DataType::INT32), Sp());
 
-    auto for_lhs = std::make_shared<ForStmt>(
-        loop_i1, zero, ten, one,
-        std::vector<IterArgPtr>{ia_lhs1, ia_lhs2},
-        yield1,
-        std::vector<VarPtr>{rv_lhs1, rv_lhs2}, Sp());
-    auto for_rhs = std::make_shared<ForStmt>(
-        loop_i2, zero, ten, one,
-        std::vector<IterArgPtr>{ia_rhs1, ia_rhs2},
-        yield2,
-        std::vector<VarPtr>{rv_rhs1, rv_rhs2}, Sp());
+    auto for_lhs = std::make_shared<ForStmt>(loop_i1, zero, ten, one, std::vector<IterArgPtr>{ia_lhs1, ia_lhs2}, yield1,
+                                             std::vector<VarPtr>{rv_lhs1, rv_lhs2}, Sp());
+    auto for_rhs = std::make_shared<ForStmt>(loop_i2, zero, ten, one, std::vector<IterArgPtr>{ia_rhs1, ia_rhs2}, yield2,
+                                             std::vector<VarPtr>{rv_rhs1, rv_rhs2}, Sp());
 
     EXPECT_FALSE(structural_equal(Node(for_lhs), Node(for_rhs), false));
     EXPECT_THROW(assert_structural_equal(Node(for_lhs), Node(for_rhs), false), npu::tile_fwk::Error);

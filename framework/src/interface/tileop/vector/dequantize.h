@@ -9,14 +9,14 @@
  */
 
 /*!
-* \file dequantize.h
-* \brief INT8/INT16 反量化 Tile 算子
-*
-* - INT8 -> FP32:  int8 -> half -> float, 然后 (src - offset) * scale
-* - INT16 -> FP32: int16 -> float, 然后 (src - offset) * scale
-*
-* 只支持逐行反量化 (axis=-1)，逐列反量化在 Operation 层通过 Transpose 实现
-*/
+ * \file dequantize.h
+ * \brief INT8/INT16 反量化 Tile 算子
+ *
+ * - INT8 -> FP32:  int8 -> half -> float, 然后 (src - offset) * scale
+ * - INT16 -> FP32: int16 -> float, 然后 (src - offset) * scale
+ *
+ * 只支持逐行反量化 (axis=-1)，逐列反量化在 Operation 层通过 Transpose 实现
+ */
 
 #ifndef TILEOP_TILE_OPERATOR_DEQUANTIZE__H
 #define TILEOP_TILE_OPERATOR_DEQUANTIZE__H
@@ -27,14 +27,14 @@
 
 namespace pto {
 enum class DequantType {
-    INT8 = 0,   // INT8 -> FP32
-    INT16 = 1   // INT16 -> FP32
+    INT8 = 0, // INT8 -> FP32
+    INT16 = 1 // INT16 -> FP32
 };
 } // namespace pto
 
 /// 向上取整到对齐边界
 #ifndef PTO_CEIL
-#define PTO_CEIL(x, y) ((((x) + (y)-1) / (y)) * (y))
+#define PTO_CEIL(x, y) ((((x) + (y) - 1) / (y)) * (y))
 #endif
 
 // =============================================================================
@@ -53,7 +53,8 @@ enum class DequantType {
  * 转换路径: int8 -> half -> float
  */
 template <typename T0, typename T1, typename T2, typename T3>
-TILEOP void TDequantInt8(T0 dst, T1 src, T2 scale, T3 offset) {
+TILEOP void TDequantInt8(T0 dst, T1 src, T2 scale, T3 offset)
+{
     constexpr size_t expectSize = 5;
 
     const auto dstLayout = dst.GetLayout();
@@ -110,20 +111,20 @@ TILEOP void TDequantInt8(T0 dst, T1 src, T2 scale, T3 offset) {
     constexpr int paddedRow_offset = PTO_CEIL(offsetTileW, static_cast<int>(TILE_ALIGNMENT_BYTES / sizeof(float)));
 
     // 数据类型
-    using DstDtype = typename T0::Type;      // float
-    using SrcDtype = typename T1::Type;      // int8_t
-    using ScaleDtype = typename T2::Type;    // float
-    using OffsetDtype = typename T3::Type;   // float
+    using DstDtype = typename T0::Type;    // float
+    using SrcDtype = typename T1::Type;    // int8_t
+    using ScaleDtype = typename T2::Type;  // float
+    using OffsetDtype = typename T3::Type; // float
 
     // 定义 Tile 类型
-    using DstTileDefine = pto::Tile<pto::TileType::Vec, DstDtype, dstTileH, paddedCol_dst,
-                                    pto::BLayout::RowMajor, -1, -1>;
-    using SrcTileDefine = pto::Tile<pto::TileType::Vec, SrcDtype, srcTileH, paddedCol_src,
-                                    pto::BLayout::RowMajor, -1, -1>;
-    using ScaleTileDefine = pto::Tile<pto::TileType::Vec, ScaleDtype, paddedRow_scale, 1,
-                                    pto::BLayout::ColMajor, -1, -1>;
-    using OffsetTileDefine = pto::Tile<pto::TileType::Vec, OffsetDtype, paddedRow_offset, 1,
-                                    pto::BLayout::ColMajor, -1, -1>;
+    using DstTileDefine = pto::Tile<pto::TileType::Vec, DstDtype, dstTileH, paddedCol_dst, pto::BLayout::RowMajor, -1,
+                                    -1>;
+    using SrcTileDefine = pto::Tile<pto::TileType::Vec, SrcDtype, srcTileH, paddedCol_src, pto::BLayout::RowMajor, -1,
+                                    -1>;
+    using ScaleTileDefine = pto::Tile<pto::TileType::Vec, ScaleDtype, paddedRow_scale, 1, pto::BLayout::ColMajor, -1,
+                                      -1>;
+    using OffsetTileDefine = pto::Tile<pto::TileType::Vec, OffsetDtype, paddedRow_offset, 1, pto::BLayout::ColMajor, -1,
+                                       -1>;
 
     // 遍历所有 Tile
     for (LoopVar n0Index = 0; n0Index < dstShape0; ++n0Index) {
@@ -166,7 +167,8 @@ TILEOP void TDequantInt8(T0 dst, T1 src, T2 scale, T3 offset) {
  * 转换路径: int16 -> float
  */
 template <typename T0, typename T1, typename T2, typename T3>
-TILEOP void TDequantInt16(T0 dst, T1 src, T2 scale, T3 offset) {
+TILEOP void TDequantInt16(T0 dst, T1 src, T2 scale, T3 offset)
+{
     constexpr size_t expectSize = 5;
 
     const auto dstLayout = dst.GetLayout();
@@ -223,20 +225,20 @@ TILEOP void TDequantInt16(T0 dst, T1 src, T2 scale, T3 offset) {
     constexpr int paddedRow_offset = PTO_CEIL(offsetTileW, static_cast<int>(TILE_ALIGNMENT_BYTES / sizeof(float)));
 
     // 数据类型
-    using DstDtype = typename T0::Type;      // float
-    using SrcDtype = typename T1::Type;      // int16_t
-    using ScaleDtype = typename T2::Type;    // float
-    using OffsetDtype = typename T3::Type;   // float
+    using DstDtype = typename T0::Type;    // float
+    using SrcDtype = typename T1::Type;    // int16_t
+    using ScaleDtype = typename T2::Type;  // float
+    using OffsetDtype = typename T3::Type; // float
 
     // 定义 Tile 类型
-    using DstTileDefine = pto::Tile<pto::TileType::Vec, DstDtype, dstTileH, paddedCol_dst,
-                                    pto::BLayout::RowMajor, -1, -1>;
-    using SrcTileDefine = pto::Tile<pto::TileType::Vec, SrcDtype, srcTileH, paddedCol_src,
-                                    pto::BLayout::RowMajor, -1, -1>;
-    using ScaleTileDefine = pto::Tile<pto::TileType::Vec, ScaleDtype, paddedRow_scale, 1,
-                                    pto::BLayout::ColMajor, -1, -1>;
-    using OffsetTileDefine = pto::Tile<pto::TileType::Vec, OffsetDtype, paddedRow_offset, 1,
-                                    pto::BLayout::ColMajor, -1, -1>;
+    using DstTileDefine = pto::Tile<pto::TileType::Vec, DstDtype, dstTileH, paddedCol_dst, pto::BLayout::RowMajor, -1,
+                                    -1>;
+    using SrcTileDefine = pto::Tile<pto::TileType::Vec, SrcDtype, srcTileH, paddedCol_src, pto::BLayout::RowMajor, -1,
+                                    -1>;
+    using ScaleTileDefine = pto::Tile<pto::TileType::Vec, ScaleDtype, paddedRow_scale, 1, pto::BLayout::ColMajor, -1,
+                                      -1>;
+    using OffsetTileDefine = pto::Tile<pto::TileType::Vec, OffsetDtype, paddedRow_offset, 1, pto::BLayout::ColMajor, -1,
+                                       -1>;
 
     // 遍历所有 Tile
     for (LoopVar n0Index = 0; n0Index < dstShape0; ++n0Index) {
@@ -276,14 +278,15 @@ TILEOP void TDequantInt16(T0 dst, T1 src, T2 scale, T3 offset) {
  * 对称量化时，offset 传全 0 的张量
  */
 template <pto::DequantType dequantType, typename T0, typename T1, typename T2, typename T3>
-TILEOP void TDequant(T0 dst, T1 src, T2 scale, T3 offset) {
+TILEOP void TDequant(T0 dst, T1 src, T2 scale, T3 offset)
+{
     if constexpr (dequantType == pto::DequantType::INT8) {
         TDequantInt8(dst, src, scale, offset);
     } else if constexpr (dequantType == pto::DequantType::INT16) {
         TDequantInt16(dst, src, scale, offset);
     } else {
         static_assert(dequantType == pto::DequantType::INT8 || dequantType == pto::DequantType::INT16,
-                    "TDequant only supports INT8 or INT16 type.");
+                      "TDequant only supports INT8 or INT16 type.");
     }
 }
 

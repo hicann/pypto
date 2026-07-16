@@ -67,10 +67,10 @@ struct DevStartArgs : DevStartArgsBase {
     void InitProgram(DevAscendProgram* prog, uint64_t base)
     {
         devProg = prog;
-        deviceRuntimeDataDesc.taskCtrlPool =
-            reinterpret_cast<DeviceTaskCtrl*>(base + devProg->GetDeviceRuntimeOffset().taskCtrlPoolOffset);
-        deviceRuntimeDataDesc.taskQueueList =
-            reinterpret_cast<DeviceTaskCtrlQueue*>(base + devProg->GetDeviceRuntimeOffset().taskQueueOffset);
+        deviceRuntimeDataDesc.taskCtrlPool = reinterpret_cast<DeviceTaskCtrl*>(
+            base + devProg->GetDeviceRuntimeOffset().taskCtrlPoolOffset);
+        deviceRuntimeDataDesc.taskQueueList = reinterpret_cast<DeviceTaskCtrlQueue*>(
+            base + devProg->GetDeviceRuntimeOffset().taskQueueOffset);
         deviceRuntimeDataDesc.generalAddr = base + devProg->GetDeviceRuntimeOffset().generalOffset;
         deviceRuntimeDataDesc.dynamicCellMatchAddr = devProg->devArgs.dynamicCellMatchAddr;
         deviceRuntimeDataDesc.stitchPoolAddr = base + devProg->GetDeviceRuntimeOffset().stitchPoolOffset;
@@ -179,8 +179,7 @@ public:
         while (Full()) {
             RuntimeYield();
 
-            __PYPTO_TIMEOUT_CHECK_WARN_ONLY(
-                "#ringbuffer.alloc: AllocateWait, ring buffer full.");
+            __PYPTO_TIMEOUT_CHECK_WARN_ONLY("#ringbuffer.alloc: AllocateWait, ring buffer full.");
         }
     }
 

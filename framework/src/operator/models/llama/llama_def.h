@@ -78,27 +78,27 @@ constexpr KeyConfig DFT_BASIC_CFG = {8192, 1024, 1, 1, 0, 128, 128};
 constexpr int DFT_SINGLE_M = 128;
 constexpr int DFT_SINGLE_N = 128;
 
-Tensor LlamaLayer(
-    Tensor hiddenStates, const Tensor& attnWight, const Tensor& denseWeight, const Tensor& ffnWeight,
-    const AttentionDims& atDims, const AttentionVecTileConfig& vecCfg, const AttentionCubeTileConfig& cubeCfg);
+Tensor LlamaLayer(Tensor hiddenStates, const Tensor& attnWight, const Tensor& denseWeight, const Tensor& ffnWeight,
+                  const AttentionDims& atDims, const AttentionVecTileConfig& vecCfg,
+                  const AttentionCubeTileConfig& cubeCfg);
 
-Tensor FlashAttention(
-    const Tensor& q, const Tensor& k, const Tensor& v, const Tensor& m, const Tensor& l, const AttentionDims& atDims,
-    const AttentionVecTileConfig& vecCfg, const AttentionCubeTileConfig& cubeCfg);
+Tensor FlashAttention(const Tensor& q, const Tensor& k, const Tensor& v, const Tensor& m, const Tensor& l,
+                      const AttentionDims& atDims, const AttentionVecTileConfig& vecCfg,
+                      const AttentionCubeTileConfig& cubeCfg);
 
-Tensor FlashAttentionNew(
-    const Tensor& q, const Tensor& k, const Tensor& v, const Tensor& m, const Tensor& l, const AttentionDims& atDims);
+Tensor FlashAttentionNew(const Tensor& q, const Tensor& k, const Tensor& v, const Tensor& m, const Tensor& l,
+                         const AttentionDims& atDims);
 
 static inline void SetC1CubeConfig(const AttentionCubeTileConfig& cubeCfg)
 {
-    TileShape::Current().SetCubeTile(
-        {cubeCfg.c1L0, cubeCfg.c1L1M}, {cubeCfg.c1L0, cubeCfg.c1L1K}, {cubeCfg.c1L0, cubeCfg.c1L1N});
+    TileShape::Current().SetCubeTile({cubeCfg.c1L0, cubeCfg.c1L1M}, {cubeCfg.c1L0, cubeCfg.c1L1K},
+                                     {cubeCfg.c1L0, cubeCfg.c1L1N});
 }
 
 static inline void SetC2CubeConfig(const AttentionCubeTileConfig& cubeCfg)
 {
-    TileShape::Current().SetCubeTile(
-        {cubeCfg.c2L0, cubeCfg.c2L1M}, {cubeCfg.c2L0, cubeCfg.c2L1K}, {cubeCfg.c2L0, cubeCfg.c2L1N});
+    TileShape::Current().SetCubeTile({cubeCfg.c2L0, cubeCfg.c2L1M}, {cubeCfg.c2L0, cubeCfg.c2L1K},
+                                     {cubeCfg.c2L0, cubeCfg.c2L1N});
 }
 
 } // namespace npu::tile_fwk

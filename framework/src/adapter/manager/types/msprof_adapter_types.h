@@ -1,5 +1,5 @@
 /**
-* Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
  * Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -29,12 +29,11 @@ enum class MsprofFunc {
     Bottom
 };
 const std::string kMsprofLibName = "libprofapi.so";
-const std::map<MsprofFunc, std::string> kMsprofFuncStrMap {
+const std::map<MsprofFunc, std::string> kMsprofFuncStrMap{
     {MsprofFunc::SysCycleTime, "MsprofSysCycleTime"},
     {MsprofFunc::GetHashId, "MsprofGetHashId"},
     {MsprofFunc::ReportApi, "MsprofReportApi"},
     {MsprofFunc::ReportCompactInfo, "MsprofReportCompactInfo"},
     {MsprofFunc::ReportAdditionalInfo, "MsprofReportAdditionalInfo"},
-    {MsprofFunc::RegisterCallback, "MsprofRegisterCallback"}
-};
-}
+    {MsprofFunc::RegisterCallback, "MsprofRegisterCallback"}};
+} // namespace npu::tile_fwk

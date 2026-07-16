@@ -233,7 +233,7 @@ INLINE uint64_t GetTensorAddr(CoreFuncParam* ctx, int idx)
 {
     auto func = ctx->funcData;
     auto desc = &func->rawTensorDesc[ctx->opAttrs[idx]];
-    if constexpr (mode == 2) {        // workspace
+    if constexpr (mode == 2) { // workspace
         return func->workspaceAddr + desc->offsetOrIndex;
     } else if constexpr (mode == 3) { // root function incast/outcast 内存
         return func->rawTensorAddr[desc->offsetOrIndex] & RAW_TENSOR_ADDR_MASK;
@@ -251,7 +251,7 @@ INLINE int64_t GetCoa(CoreFuncParam* ctx, int idx)
         return constval;
     }
     int64_t val = static_cast<int64_t>(ctx->opAttrs[idx]);
-    if constexpr (mode == 2) {        // 全变量
+    if constexpr (mode == 2) { // 全变量
         return ctx->exprTbl[SYM_VALUE(val)];
     } else if constexpr (mode == 3) { //  全常量，但是每次取值不一样
         return SYM_VALUE(val);
@@ -417,9 +417,9 @@ INLINE int32_t GetTensorDataInt32(CoreFuncParam* ctx, uint64_t address)
 #define RT_uint32 uint32_t
 #define RT_UB __ubuf__
 
-#define RT_FUNCTION(name)         \
-    extern "C"[aicore] void name( \
-        CoreFuncParam* param, int64_t GMStackBase, __gm__ int64_t* hcclContext, __gm__ TaskStat* taskStat)
+#define RT_FUNCTION(name)                                                                                \
+    extern "C"[aicore] void name(CoreFuncParam* param, int64_t GMStackBase, __gm__ int64_t* hcclContext, \
+                                 __gm__ TaskStat* taskStat)
 #define RT_OPERATION(opcode, ...) RT_OPERATION_##opcode(__VA_ARGS__)
 #define RT_OPERATION_MACRO(opcode, ...) RT_OPERATION_MACRO_##opcode(__VA_ARGS__)
 #define RT_DECL_TYPE_TILE(name, primType, space, dim, ...) \
@@ -441,16 +441,13 @@ INLINE int32_t GetTensorDataInt32(CoreFuncParam* ctx, uint64_t address)
 #define RT_INIT_VALUE_TENSOR_2(shape0, shape1) DynLayout2Dim(Shape2Dim((shape0), (shape1)), Stride2Dim((shape1), 1))
 #define RT_INIT_VALUE_TENSOR_3(shape0, shape1, shape2) \
     DynLayout3Dim(Shape3Dim((shape0), (shape1), (shape2)), Stride3Dim((shape1) * (shape2), (shape2), 1))
-#define RT_INIT_VALUE_TENSOR_4(shape0, shape1, shape2, shape3) \
-    DynLayout4Dim(                                             \
-        Shape4Dim((shape0), (shape1), (shape2), (shape3)),     \
-        Stride4Dim((shape1) * (shape2) * (shape3), (shape2) * (shape3), (shape3), 1))
-#define RT_INIT_VALUE_TENSOR_5(shape0, shape1, shape2, shape3, shape4)                                                \
-    DynLayout5Dim(                                                                                                    \
-        Shape5Dim((shape0), (shape1), (shape2), (shape3), (shape4)),                                                  \
-        Stride5Dim(                                                                                                   \
-            (shape1) * (shape2) * (shape3) * (shape4), (shape2) * (shape3) * (shape4), (shape3) * (shape4), (shape4), \
-            1))
+#define RT_INIT_VALUE_TENSOR_4(shape0, shape1, shape2, shape3)       \
+    DynLayout4Dim(Shape4Dim((shape0), (shape1), (shape2), (shape3)), \
+                  Stride4Dim((shape1) * (shape2) * (shape3), (shape2) * (shape3), (shape3), 1))
+#define RT_INIT_VALUE_TENSOR_5(shape0, shape1, shape2, shape3, shape4)                                  \
+    DynLayout5Dim(Shape5Dim((shape0), (shape1), (shape2), (shape3), (shape4)),                          \
+                  Stride5Dim((shape1) * (shape2) * (shape3) * (shape4), (shape2) * (shape3) * (shape4), \
+                             (shape3) * (shape4), (shape4), 1))
 #define RT_INIT_VALUE_TENSOR(name, defType, primType, addr, dim, ...) \
     name = defType((__gm__ RT_##primType*)(addr), RT_INIT_VALUE_TENSOR_##dim(__VA_ARGS__));
 

@@ -21,7 +21,7 @@
 namespace npu::tile_fwk {
 class DyndevFunctionAttribute;
 class Function;
-}
+} // namespace npu::tile_fwk
 
 namespace npu::tile_fwk::dynamic {
 
@@ -241,22 +241,21 @@ struct DevAscendProgram {
 
     std::tuple<const void*, uint64_t> GetDevControlFlowBinary() const
     {
-        return std::make_tuple(
-            reinterpret_cast<const void*>(devControlFlowBinary.Data()), (uint64_t)devControlFlowBinary.size());
+        return std::make_tuple(reinterpret_cast<const void*>(devControlFlowBinary.Data()),
+                               (uint64_t)devControlFlowBinary.size());
     }
 
     std::tuple<const void*, uint64_t> GetHostControlFlowBinary() const
     {
-        return std::make_tuple(
-            reinterpret_cast<const void*>(hostControlFlowBinary.Data()), (uint64_t)hostControlFlowBinary.size());
+        return std::make_tuple(reinterpret_cast<const void*>(hostControlFlowBinary.Data()),
+                               (uint64_t)hostControlFlowBinary.size());
     }
 
     std::tuple<const void*, uint64_t, const uint64_t*, uint64_t> GetExpressionTableBinary() const
     {
-        return std::make_tuple(
-            reinterpret_cast<const void*>(expressionTableBinary.Data()),
-            static_cast<uint64_t>(expressionTableBinary.size()), expressionTableOffsetList.Data(),
-            static_cast<uint64_t>(expressionTableOffsetList.size()));
+        return std::make_tuple(reinterpret_cast<const void*>(expressionTableBinary.Data()),
+                               static_cast<uint64_t>(expressionTableBinary.size()), expressionTableOffsetList.Data(),
+                               static_cast<uint64_t>(expressionTableOffsetList.size()));
     }
 
     uint64_t GetSymbolTableSize() const { return symbolTable.size(); }
@@ -347,8 +346,8 @@ struct DevAscendProgram {
         RelocOffset(shift, offset, controlFlowCache.inputTensorDataList);
         RelocOffset(shift, offset, controlFlowCache.outputTensorDataList);
         for (uint32_t i = 0; i < SCH_DEVTASK_MAX_PARALLELISM; i++) {
-            RelocOffset(
-                shift, offset, controlFlowCache.runtimeBackup.workspace.tensorAllocators[i].slottedOutcastsBlockList);
+            RelocOffset(shift, offset,
+                        controlFlowCache.runtimeBackup.workspace.tensorAllocators[i].slottedOutcastsBlockList);
         }
         RelocOffset(shift, offset, controlFlowCache.runtimeBackup.slotContext.slotList);
         RelocOffset(shift, offset, controlFlowCache.runtimeBackup.workspace.runtimeOutcastTensorPool);
@@ -475,37 +474,32 @@ struct DevAscendProgram {
             controlFlowCache.cacheData,
         };
         if ((uintptr_t)data != rangeList[0].begin) {
-            DEV_ERROR(
-                ProgEncodeErr::RANGE_VERIFY_FAILED,
-                "#ctrl.program.verify: Assertion failed: data (0x%p) != rangeList[0].begin (0x%p)", data,
-                (void*)rangeList[0].begin);
+            DEV_ERROR(ProgEncodeErr::RANGE_VERIFY_FAILED,
+                      "#ctrl.program.verify: Assertion failed: data (0x%p) != rangeList[0].begin (0x%p)", data,
+                      (void*)rangeList[0].begin);
         }
         DEV_ASSERT(ProgEncodeErr::RANGE_VERIFY_FAILED, (uintptr_t)data == rangeList[0].begin);
         if (rangeList[0].begin > rangeList[0].end) {
-            DEV_ERROR(
-                ProgEncodeErr::RANGE_VERIFY_FAILED,
-                "#ctrl.program.verify: Assertion failed: rangeList[0].begin (0x%p) > rangeList[0].end (0x%p)",
-                (void*)rangeList[0].begin, (void*)rangeList[0].end);
+            DEV_ERROR(ProgEncodeErr::RANGE_VERIFY_FAILED,
+                      "#ctrl.program.verify: Assertion failed: rangeList[0].begin (0x%p) > rangeList[0].end (0x%p)",
+                      (void*)rangeList[0].begin, (void*)rangeList[0].end);
         }
         DEV_ASSERT(ProgEncodeErr::RANGE_VERIFY_FAILED, rangeList[0].begin <= rangeList[0].end);
         for (size_t k = 1; k < rangeList.size(); k++) {
             if (rangeList[k - 1].end > rangeList[k].begin) {
-                DEV_ERROR(
-                    ProgEncodeErr::RANGE_VERIFY_FAILED,
-                    "#ctrl.program.verify: Ranges overlap: range[%d].end (0x%p) > range[%d].begin (0x%p)", (int)(k - 1),
-                    (void*)rangeList[k - 1].end, (int)k, (void*)rangeList[k].begin);
+                DEV_ERROR(ProgEncodeErr::RANGE_VERIFY_FAILED,
+                          "#ctrl.program.verify: Ranges overlap: range[%d].end (0x%p) > range[%d].begin (0x%p)",
+                          (int)(k - 1), (void*)rangeList[k - 1].end, (int)k, (void*)rangeList[k].begin);
             }
             if (rangeList[k].begin > rangeList[k].end) {
-                DEV_ERROR(
-                    ProgEncodeErr::RANGE_VERIFY_FAILED,
-                    "#ctrl.program.verify: Invalid range: range[%d].begin (0x%p) > range[%d].end (0x%p)", (int)k,
-                    (void*)rangeList[k].begin, (int)k, (void*)rangeList[k].end);
+                DEV_ERROR(ProgEncodeErr::RANGE_VERIFY_FAILED,
+                          "#ctrl.program.verify: Invalid range: range[%d].begin (0x%p) > range[%d].end (0x%p)", (int)k,
+                          (void*)rangeList[k].begin, (int)k, (void*)rangeList[k].end);
             }
-            DEV_ASSERT_MSG(
-                ProgEncodeErr::RANGE_VERIFY_FAILED, rangeList[k - 1].end <= rangeList[k].begin, "range:%d->%d",
-                (int)(k - 1), (int)(k));
-            DEV_ASSERT_MSG(
-                ProgEncodeErr::RANGE_VERIFY_FAILED, rangeList[k].begin <= rangeList[k].end, "range:%d", (int)k);
+            DEV_ASSERT_MSG(ProgEncodeErr::RANGE_VERIFY_FAILED, rangeList[k - 1].end <= rangeList[k].begin,
+                           "range:%d->%d", (int)(k - 1), (int)(k));
+            DEV_ASSERT_MSG(ProgEncodeErr::RANGE_VERIFY_FAILED, rangeList[k].begin <= rangeList[k].end, "range:%d",
+                           (int)k);
         }
         uintptr_t lastEnd = rangeList.back().end;
         uintptr_t dataEnd = (uintptr_t)(&data[dataSize]);
@@ -530,42 +524,39 @@ struct DevAscendProgram {
     uint32_t GetParallelism() { return memBudget.tensor.parallelism; }
 
     // Live boundary-outcast block count for ctrl-flow cache backup; falls back to outcastCacheDepthFallback.
-    uint64_t GetCtrlFlowCacheSlottedOutcastBlockCount(
-        uint64_t totalSlot, uint32_t outcastCacheDepthFallback = 0) const;
+    uint64_t GetCtrlFlowCacheSlottedOutcastBlockCount(uint64_t totalSlot, uint32_t outcastCacheDepthFallback = 0) const;
 
 private:
     friend struct EncodeDevAscendProgramInfo;
     friend void EncodeDevAscendProgram(Function* func, uint64_t& offset, DevAscendProgram* base);
     friend void EncodeDevAscendProgramSizeOnly(uint64_t& offset, EncodeDevAscendProgramInfo& encodeInfo);
-    friend void EncodeDevAscendProgramFull(
-        Function* func, DevAscendProgram* base, uint64_t& offset, EncodeDevAscendProgramInfo& encodeInfo);
+    friend void EncodeDevAscendProgramFull(Function* func, DevAscendProgram* base, uint64_t& offset,
+                                           EncodeDevAscendProgramInfo& encodeInfo);
 
     void InitSymbolTable(uintdevptr_t& initOffset, SymbolicSymbolTable* symbolTableInput, bool fillContent);
-    void InitExpressionTableBinary(
-        uintdevptr_t& initOffset, const std::vector<std::vector<uint8_t>>& expressionTableBinaryListInput,
-        bool fillContent);
-    void InitControlFlowBinary(
-        uintdevptr_t& initOffset, const std::vector<uint8_t>& hostControlFlowBinaryInput,
-        const std::vector<uint8_t>& devControlFlowBinaryInput, bool fillContent);
-    void InitDevEncodeList(
-        uintdevptr_t& initOffset, const std::vector<std::vector<uint8_t>>& devEncodeListInput, bool fillContent);
+    void InitExpressionTableBinary(uintdevptr_t& initOffset,
+                                   const std::vector<std::vector<uint8_t>>& expressionTableBinaryListInput,
+                                   bool fillContent);
+    void InitControlFlowBinary(uintdevptr_t& initOffset, const std::vector<uint8_t>& hostControlFlowBinaryInput,
+                               const std::vector<uint8_t>& devControlFlowBinaryInput, bool fillContent);
+    void InitDevEncodeList(uintdevptr_t& initOffset, const std::vector<std::vector<uint8_t>>& devEncodeListInput,
+                           bool fillContent);
     void InitCceCodeList(uintdevptr_t& initOffset, const std::vector<CceCodeInfo>& cceInfo, bool fillContent);
     void InitPrefetchInfoList(uintdevptr_t& initOffset, const std::vector<L2Info>& l2InfoList, bool fillContent);
     void InitDisableL2List(uintdevptr_t& initOffset, const std::vector<uint8_t>& disableL2, bool fillContent);
-    void InitStartArgsABIParamList(
-        uintdevptr_t& initOffset, const std::vector<int>& tStartArgsInputTensorSlotIndexList,
-        const std::vector<int>& tStartArgsOutputTensorSlotIndexList,
-        const std::vector<int>& tStartArgsInputSymbolIndexList, const std::vector<int>& tAsembleSlotIndexList,
-        const std::vector<int>& tInplaceSlotIndexList, bool fillContent);
-    void InitPartialUpdateSlot(
-        uintdevptr_t& initOffset, const std::vector<std::vector<uint8_t>>& devEncodeListInput,
-        const std::unordered_map<Function*, int>& rootFuncKeyDict,
-        const std::unordered_map<int, std::unordered_map<Function*, int>>& slotRootIncastDict,
-        const std::unordered_map<int, std::unordered_map<Function*, int>>& slotRootOutcastDict,
-        const std::vector<int>& tInputSlotIndexList, const std::vector<int>& tAssembleSlotIndexList,
-        const std::vector<int>& tPartialUpdateSlotIndexList, bool fillContent);
-    void InitControlFlowCache(
-        uintdevptr_t& initOffset, const std::shared_ptr<DyndevFunctionAttribute>& dyndevAttr, bool fillContent,
-        uint32_t outcastCacheDepthFallback = 0);
+    void InitStartArgsABIParamList(uintdevptr_t& initOffset, const std::vector<int>& tStartArgsInputTensorSlotIndexList,
+                                   const std::vector<int>& tStartArgsOutputTensorSlotIndexList,
+                                   const std::vector<int>& tStartArgsInputSymbolIndexList,
+                                   const std::vector<int>& tAsembleSlotIndexList,
+                                   const std::vector<int>& tInplaceSlotIndexList, bool fillContent);
+    void InitPartialUpdateSlot(uintdevptr_t& initOffset, const std::vector<std::vector<uint8_t>>& devEncodeListInput,
+                               const std::unordered_map<Function*, int>& rootFuncKeyDict,
+                               const std::unordered_map<int, std::unordered_map<Function*, int>>& slotRootIncastDict,
+                               const std::unordered_map<int, std::unordered_map<Function*, int>>& slotRootOutcastDict,
+                               const std::vector<int>& tInputSlotIndexList,
+                               const std::vector<int>& tAssembleSlotIndexList,
+                               const std::vector<int>& tPartialUpdateSlotIndexList, bool fillContent);
+    void InitControlFlowCache(uintdevptr_t& initOffset, const std::shared_ptr<DyndevFunctionAttribute>& dyndevAttr,
+                              bool fillContent, uint32_t outcastCacheDepthFallback = 0);
 };
 } // namespace npu::tile_fwk::dynamic

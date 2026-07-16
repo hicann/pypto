@@ -288,9 +288,8 @@ struct DecayImpl {
 template <typename Up>
 struct DecayImpl<Up, true> {
 public:
-    using type = conditional_t<
-        is_array<Up>::value, remove_extent_t<Up>*,
-        conditional_t<is_function<Up>::value, add_pointer_t<Up>, remove_cv_t<Up>>>;
+    using type = conditional_t<is_array<Up>::value, remove_extent_t<Up>*,
+                               conditional_t<is_function<Up>::value, add_pointer_t<Up>, remove_cv_t<Up>>>;
 };
 
 template <typename Tp>

@@ -432,8 +432,8 @@ const std::unordered_map<std::string, std::unordered_map<DataType, int>> INTRIN_
 const std::unordered_map<std::string, int> SYNC_OP_CYCLES{{"SYNC_SRC", 1}, {"SYNC_DST", 1}, {"BAR.V", 18}};
 
 int64_t CalcUBCompactCycles(const std::vector<std::vector<int64_t>>& shape, DataType dtype);
-const std::unordered_map<
-    std::string, std::function<int64_t(const std::vector<std::vector<int64_t>>& shape, DataType dtype)>>
+const std::unordered_map<std::string,
+                         std::function<int64_t(const std::vector<std::vector<int64_t>>& shape, DataType dtype)>>
     COMINE_INTRIN_CYCLES_IN_OP = {{"UB_COMPACT", [](const std::vector<std::vector<int64_t>>& shape, DataType dtype) {
                                        return CalcUBCompactCycles(shape, dtype);
                                    }}};

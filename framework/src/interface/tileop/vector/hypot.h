@@ -91,8 +91,8 @@ TILEOP HypotLayoutInfo ExtractHypotLayoutInfo(const T& src0, const T& src1, cons
 
 // result = max * sqrt(1 + (min/max)^2)
 template <typename TileType>
-TILEOP void ExecuteHypotRobust(
-    TileType& dstTile, TileType& src0Tile, TileType& src1Tile, TileType& maxTile, TileType& minTile)
+TILEOP void ExecuteHypotRobust(TileType& dstTile, TileType& src0Tile, TileType& src1Tile, TileType& maxTile,
+                               TileType& minTile)
 {
     pto::TABS(src0Tile, src0Tile);
     pto::TABS(src1Tile, src1Tile);
@@ -143,8 +143,8 @@ TILEOP void ExecuteHypotRobust(
 
 // result = (half) sqrt( (float)src0^2 + (float)src1^2 )
 template <typename DstTileType, typename SrcTileType, typename Fp32TileType>
-TILEOP void ExecuteHypotFp16(
-    DstTileType& dstTile, SrcTileType& src0Tile, SrcTileType& src1Tile, Fp32TileType& tmp0Fp32, Fp32TileType& tmp1Fp32)
+TILEOP void ExecuteHypotFp16(DstTileType& dstTile, SrcTileType& src0Tile, SrcTileType& src1Tile, Fp32TileType& tmp0Fp32,
+                             Fp32TileType& tmp1Fp32)
 {
     pto::TCVT(tmp0Fp32, src0Tile, pto::RoundMode::CAST_NONE);
     pto::TCVT(tmp1Fp32, src1Tile, pto::RoundMode::CAST_NONE);
@@ -175,15 +175,14 @@ TILEOP void ExecuteHypotFp16(
     pto::TCVT(dstTile, tmp0Fp32, pto::RoundMode::CAST_NONE);
 }
 
-TILEOP void CalcHypotOffsets(
-    const HypotLayoutInfo& info, size_t n0Index, size_t n1Index, size_t n2Index, size_t n3Index, size_t& src0Offset,
-    size_t& src1Offset, size_t& dstOffset)
+TILEOP void CalcHypotOffsets(const HypotLayoutInfo& info, size_t n0Index, size_t n1Index, size_t n2Index,
+                             size_t n3Index, size_t& src0Offset, size_t& src1Offset, size_t& dstOffset)
 {
-    dstOffset =
-        n0Index * info.dstStride0 + n1Index * info.dstStride1 + n2Index * info.dstStride2 + n3Index * info.dstStride3;
+    dstOffset = n0Index * info.dstStride0 + n1Index * info.dstStride1 + n2Index * info.dstStride2 +
+                n3Index * info.dstStride3;
     src0Offset = n0Index * info.stride0 + n1Index * info.stride1 + n2Index * info.stride2 + n3Index * info.stride3;
-    src1Offset =
-        n0Index * info.stride1_0 + n1Index * info.stride1_1 + n2Index * info.stride1_2 + n3Index * info.stride1_3;
+    src1Offset = n0Index * info.stride1_0 + n1Index * info.stride1_1 + n2Index * info.stride1_2 +
+                 n3Index * info.stride1_3;
 }
 
 template <typename T, typename TDst, typename TTmp>

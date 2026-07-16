@@ -53,10 +53,13 @@ static std::string EmitVFRegTensor(const ir::CallPtr& op, codegen::CodegenBase& 
 
 // Best-effort dtype extraction from an Expr's deduced type. Handles both
 // ScalarType (RegTensor outputs) and ShapedType (Tile / Tensor expressions).
-static DataType GetExprDtype(const ir::ExprPtr& expr, DataType fallback = DataType::UINT32) {
+static DataType GetExprDtype(const ir::ExprPtr& expr, DataType fallback = DataType::UINT32)
+{
     auto type = expr->GetType();
-    if (auto st = ir::As<ir::ScalarType>(type)) return st->dtype_;
-    if (auto sh = ir::As<ir::ShapedType>(type)) return sh->dtype_;
+    if (auto st = ir::As<ir::ScalarType>(type))
+        return st->dtype_;
+    if (auto sh = ir::As<ir::ShapedType>(type))
+        return sh->dtype_;
     return fallback;
 }
 
@@ -114,8 +117,8 @@ static std::string EmitVFDuplicate(const ir::CallPtr& op, codegen::CodegenBase& 
 // Helper: get __ubuf__ pointer from tile or tile-flavored GetItemExpr
 // ============================================================================
 
-static std::string GetUBufPtr(
-    codegen::CCECodegen& codegen, const ir::ExprPtr& expr, const std::string& cast_type = "float")
+static std::string GetUBufPtr(codegen::CCECodegen& codegen, const ir::ExprPtr& expr,
+                              const std::string& cast_type = "float")
 {
     std::string ptr = codegen.GetOrCreateVFTilePtr(expr, /*is_post_update=*/false);
     std::string tile_ctype = GetExprDtype(expr, DataType::FP32).ToCTypeString();
@@ -253,26 +256,23 @@ static std::string EmitVFStoreAlign(const ir::CallPtr& op, codegen::CodegenBase&
         }
         if (post_update) {
             std::string ptr_var = codegen.GetOrCreateVFTilePtr(op->args_[0], /*is_post_update=*/true);
-            codegen.Emit(
-                "vsstb(" + src_reg + ", " + ptr_var + ", " + "(" + block_stride + " << 16u) | (" + repeat_stride +
-                " & 0xFFFFU), " + mask_reg + ", POST_UPDATE);");
+            codegen.Emit("vsstb(" + src_reg + ", " + ptr_var + ", " + "(" + block_stride + " << 16u) | (" +
+                         repeat_stride + " & 0xFFFFU), " + mask_reg + ", POST_UPDATE);");
         } else {
             std::string dst_ptr = GetUBufPtr(codegen, op->args_[0], ptr_type);
-            codegen.Emit(
-                "vsstb(" + src_reg + ", " + dst_ptr + ", " + "(" + block_stride + " << 16u) | (" + repeat_stride +
-                " & 0xFFFFU), " + mask_reg + ");");
+            codegen.Emit("vsstb(" + src_reg + ", " + dst_ptr + ", " + "(" + block_stride + " << 16u) | (" +
+                         repeat_stride + " & 0xFFFFU), " + mask_reg + ");");
         }
     } else if (post_update) {
         std::string mask_reg = codegen.GetExprAsCode(op->args_[2]);
         std::string stride = (op->args_.size() >= 4) ? codegen.GetExprAsCode(op->args_[3]) : "0";
         std::string ptr_var = codegen.GetOrCreateVFTilePtr(op->args_[0], /*is_post_update=*/true);
-        codegen.Emit("vsts(" + src_reg + ", " + ptr_var + ", " +
-                     stride + ", " + dist + ", " + mask_reg + ", POST_UPDATE);");
+        codegen.Emit("vsts(" + src_reg + ", " + ptr_var + ", " + stride + ", " + dist + ", " + mask_reg +
+                     ", POST_UPDATE);");
     } else {
         std::string mask_reg = codegen.GetExprAsCode(op->args_[2]);
         std::string dst_ptr = GetUBufPtr(codegen, op->args_[0], ptr_type);
-        codegen.Emit("vsts(" + src_reg + ", " + dst_ptr + ", 0, " +
-                     dist + ", " + mask_reg + ");");
+        codegen.Emit("vsts(" + src_reg + ", " + dst_ptr + ", 0, " + dist + ", " + mask_reg + ");");
     }
     return "";
 }
@@ -352,17 +352,16 @@ static std::string EmitVFAnd(const ir::CallPtr& op, codegen::CodegenBase& codege
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
     CHECK(op->args_.size() == 4) << "vf.And requires 4 args (dst, src0, src1, mask)";
-    std::string dst  = codegen.GetExprAsCode(op->args_[0]);
+    std::string dst = codegen.GetExprAsCode(op->args_[0]);
     std::string src0 = codegen.GetExprAsCode(op->args_[1]);
     std::string src1 = codegen.GetExprAsCode(op->args_[2]);
     std::string mask = codegen.GetExprAsCode(op->args_[3]);
 
     // vand requires src1 to share dst's element type; reinterpret if needed
     // (mirrors the `(RegTensor<uint32_t>&)idxTmp` pattern in vf_topk_16_gather.h:213).
-    DataType dst_dt  = GetExprDtype(op->args_[0]);
-    DataType s1_dt   = GetExprDtype(op->args_[2]);
-    std::string s1_expr = (s1_dt == dst_dt) ? src1
-                        : ("(RegTensor<" + dst_dt.ToCTypeString() + "> &)" + src1);
+    DataType dst_dt = GetExprDtype(op->args_[0]);
+    DataType s1_dt = GetExprDtype(op->args_[2]);
+    std::string s1_expr = (s1_dt == dst_dt) ? src1 : ("(RegTensor<" + dst_dt.ToCTypeString() + "> &)" + src1);
 
     codegen.Emit("vand(" + dst + ", " + src0 + ", " + s1_expr + ", " + mask + ", MODE_ZEROING);");
     return "";
@@ -376,14 +375,14 @@ static std::string EmitVFXor(const ir::CallPtr& op, codegen::CodegenBase& codege
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
     CHECK(op->args_.size() == 4) << "vf.Xor requires 4 args (dst, src0, src1, mask)";
-    std::string dst  = codegen.GetExprAsCode(op->args_[0]);
+    std::string dst = codegen.GetExprAsCode(op->args_[0]);
     std::string src0 = codegen.GetExprAsCode(op->args_[1]);
     std::string src1 = codegen.GetExprAsCode(op->args_[2]);
     std::string mask = codegen.GetExprAsCode(op->args_[3]);
 
     DataType dst_dt = GetExprDtype(op->args_[0]);
-    DataType s0_dt  = GetExprDtype(op->args_[1]);
-    DataType s1_dt  = GetExprDtype(op->args_[2]);
+    DataType s0_dt = GetExprDtype(op->args_[1]);
+    DataType s1_dt = GetExprDtype(op->args_[2]);
     std::string cast_prefix = "(RegTensor<" + dst_dt.ToCTypeString() + "> &)";
     std::string s0_expr = (s0_dt == dst_dt) ? src0 : (cast_prefix + src0);
     std::string s1_expr = (s1_dt == dst_dt) ? src1 : (cast_prefix + src1);
@@ -578,11 +577,13 @@ static std::string EmitVFCast(const ir::CallPtr& op, codegen::CodegenBase& codeg
     if (src_dtype == DataType::UINT16 && dst_dtype == DataType::UINT32) {
         codegen.Emit("vcvt(" + dst + ", " + src + ", " + mask + ", " + part + ", " + mode_value + ");");
     } else if (src_dtype == DataType::FP32 && dst_dtype == DataType::FP16) {
-        codegen.Emit("vcvt(" + dst + ", " + src + ", " + mask + ", " + round + ", RS_DISABLE, " + part + ", " + mode_value + ");");
+        codegen.Emit("vcvt(" + dst + ", " + src + ", " + mask + ", " + round + ", RS_DISABLE, " + part + ", " +
+                     mode_value + ");");
     } else if (src_dtype == DataType::FP16 && dst_dtype == DataType::FP32) {
         codegen.Emit("vcvt(" + dst + ", " + src + ", " + mask + ", " + part + ", " + mode_value + ");");
     } else {
-        codegen.Emit("vcvt(" + dst + ", " + src + ", " + mask + ", " + round + ", RS_DISABLE, " + part + ", " + mode_value + ");");
+        codegen.Emit("vcvt(" + dst + ", " + src + ", " + mask + ", " + round + ", RS_DISABLE, " + part + ", " +
+                     mode_value + ");");
     }
     return "";
 }
@@ -635,7 +636,7 @@ static std::string EmitVFSelect(const ir::CallPtr& op, codegen::CodegenBase& cod
     DataType st_dt = GetExprDtype(op->args_[1]);
     DataType sf_dt = GetExprDtype(op->args_[2]);
     std::string cast_prefix = "(RegTensor<" + dst_dt.ToCTypeString() + "> &)";
-    std::string st_expr = (st_dt == dst_dt) ? src_true  : (cast_prefix + src_true);
+    std::string st_expr = (st_dt == dst_dt) ? src_true : (cast_prefix + src_true);
     std::string sf_expr = (sf_dt == dst_dt) ? src_false : (cast_prefix + src_false);
 
     codegen.Emit("vsel(" + dst + ", " + st_expr + ", " + sf_expr + ", " + mask + ");");
@@ -656,9 +657,8 @@ static std::string EmitVFUpdateMask(const ir::CallPtr& op, codegen::CodegenBase&
     bool use_b16 = false;
     if (op->HasKwarg("dtype")) {
         auto dtype = op->GetKwarg<DataType>("dtype");
-        use_b16 =
-            (dtype == DataType::FP16 || dtype == DataType::BF16 || dtype == DataType::UINT16 ||
-             dtype == DataType::INT16);
+        use_b16 = (dtype == DataType::FP16 || dtype == DataType::BF16 || dtype == DataType::UINT16 ||
+                   dtype == DataType::INT16);
     }
 
     // plt_b32/plt_b16 requires uint32_t& reference, so declare a variable first
@@ -708,12 +708,18 @@ static std::string EmitVFCompare(const ir::CallPtr& op, codegen::CodegenBase& co
 
     std::string cmp_mode = op->GetKwarg<std::string>("cmp_mode");
     std::string suffix = "eq";
-    if (cmp_mode == "EQ") suffix = "eq";
-    else if (cmp_mode == "NE") suffix = "ne";
-    else if (cmp_mode == "LT") suffix = "lt";
-    else if (cmp_mode == "GT") suffix = "gt";
-    else if (cmp_mode == "GE") suffix = "ge";
-    else if (cmp_mode == "LE") suffix = "le";
+    if (cmp_mode == "EQ")
+        suffix = "eq";
+    else if (cmp_mode == "NE")
+        suffix = "ne";
+    else if (cmp_mode == "LT")
+        suffix = "lt";
+    else if (cmp_mode == "GT")
+        suffix = "gt";
+    else if (cmp_mode == "GE")
+        suffix = "ge";
+    else if (cmp_mode == "LE")
+        suffix = "le";
 
     // vcmp_xx requires src0/src1 share the same vector element type. The caller
     // can pass an explicit `cmp_dtype` kwarg to pin the compare width (mirrors
@@ -785,9 +791,11 @@ static std::string EmitVFGather(const ir::CallPtr& op, codegen::CodegenBase& cod
     //   - 4-byte load (u32/s32/f32) -> u32 index
     //   - 2-byte load (u16/s16/f16/bf16) -> u16 index
     //   - 1-byte load (u8/s8/...)        -> u16 index (matches SDK macros)
-    std::string idx_c_type =
-        (dst_dt == DataType::UINT32 || dst_dt == DataType::INT32 || dst_dt == DataType::FP32) ? "uint32_t" : "uint16_t";
-    codegen.Emit("vgather2(" + dst + ", " + src_ub + ", (RegTensor<" + idx_c_type + "> &)" + indices + ", " + mask + ");");
+    std::string idx_c_type = (dst_dt == DataType::UINT32 || dst_dt == DataType::INT32 || dst_dt == DataType::FP32) ?
+                                 "uint32_t" :
+                                 "uint16_t";
+    codegen.Emit("vgather2(" + dst + ", " + src_ub + ", (RegTensor<" + idx_c_type + "> &)" + indices + ", " + mask +
+                 ");");
     return "";
 }
 
@@ -802,11 +810,9 @@ static std::string EmitVFStoreUnAlign(const ir::CallPtr& op, codegen::CodegenBas
     DataType cast_dt = src_dt;
     if (src_dt == DataType::UINT32) {
         cast_dt = DataType::INT32;
-    }
-    else if (src_dt == DataType::UINT16) {
+    } else if (src_dt == DataType::UINT16) {
         cast_dt = DataType::INT16;
-    }
-    else if (src_dt == DataType::UINT8) {
+    } else if (src_dt == DataType::UINT8) {
         cast_dt = DataType::INT8;
     }
     std::string base_c_type = cast_dt.ToCTypeString();
@@ -814,8 +820,7 @@ static std::string EmitVFStoreUnAlign(const ir::CallPtr& op, codegen::CodegenBas
     std::string src = codegen.GetExprAsCode(op->args_[1]);
     std::string align_reg = codegen.GetExprAsCode(op->args_[2]);
     // Reinterpret src reg to signed type when needed.
-    std::string src_expr = (cast_dt == src_dt) ? src
-                        : ("(RegTensor<" + base_c_type + "> &)" + src);
+    std::string src_expr = (cast_dt == src_dt) ? src : ("(RegTensor<" + base_c_type + "> &)" + src);
 
     codegen.Emit("vstur(" + align_reg + ", " + src_expr + ", " + dst_ptr + ", POST_UPDATE);");
     return "";
@@ -830,11 +835,9 @@ static std::string EmitVFStoreUnAlignPost(const ir::CallPtr& op, codegen::Codege
     DataType cast_dt = tile_dt;
     if (tile_dt == DataType::UINT32) {
         cast_dt = DataType::INT32;
-    }
-    else if (tile_dt == DataType::UINT16) {
+    } else if (tile_dt == DataType::UINT16) {
         cast_dt = DataType::INT16;
-    }
-    else if (tile_dt == DataType::UINT8) {
+    } else if (tile_dt == DataType::UINT8) {
         cast_dt = DataType::INT8;
     }
     std::string base_c_type = cast_dt.ToCTypeString();
@@ -900,15 +903,11 @@ REGISTER_BACKEND_OP(Backend910B_CCE, "vf.Sub")
 
 REGISTER_BACKEND_OP(Backend910B_CCE, "vf.And")
     .set_pipe(ir::PipeType::V)
-    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
-      return EmitVFAnd(op, codegen);
-    });
+    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) { return EmitVFAnd(op, codegen); });
 
 REGISTER_BACKEND_OP(Backend910B_CCE, "vf.Xor")
     .set_pipe(ir::PipeType::V)
-    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
-      return EmitVFXor(op, codegen);
-    });
+    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) { return EmitVFXor(op, codegen); });
 
 REGISTER_BACKEND_OP(Backend910B_CCE, "vf.Mul")
     .set_pipe(ir::PipeType::V)
@@ -924,9 +923,7 @@ REGISTER_BACKEND_OP(Backend910B_CCE, "vf.Div")
 
 REGISTER_BACKEND_OP(Backend910B_CCE, "vf.ShiftRights")
     .set_pipe(ir::PipeType::V)
-    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
-      return EmitVFShiftRights(op, codegen);
-    });
+    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) { return EmitVFShiftRights(op, codegen); });
 
 REGISTER_BACKEND_OP(Backend910B_CCE, "vf.Muls")
     .set_pipe(ir::PipeType::V)
@@ -962,57 +959,43 @@ REGISTER_BACKEND_OP(Backend910B_CCE, "vf.MemBar")
 
 REGISTER_BACKEND_OP(Backend910B_CCE, "vf.Histograms")
     .set_pipe(ir::PipeType::V)
-    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
-      return EmitVFHistograms(op, codegen);
-    });
+    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) { return EmitVFHistograms(op, codegen); });
 
 REGISTER_BACKEND_OP(Backend910B_CCE, "vf.Compare")
     .set_pipe(ir::PipeType::V)
-    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
-      return EmitVFCompare(op, codegen);
-    });
+    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) { return EmitVFCompare(op, codegen); });
 
 REGISTER_BACKEND_OP(Backend910B_CCE, "vf.Squeeze")
     .set_pipe(ir::PipeType::V)
-    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
-      return EmitVFSqueeze(op, codegen);
-    });
+    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) { return EmitVFSqueeze(op, codegen); });
 
 REGISTER_BACKEND_OP(Backend910B_CCE, "vf.Arange")
     .set_pipe(ir::PipeType::V)
-    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
-      return EmitVFArange(op, codegen);
-    });
+    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) { return EmitVFArange(op, codegen); });
 
 REGISTER_BACKEND_OP(Backend910B_CCE, "vf.Gather")
     .set_pipe(ir::PipeType::V)
-    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
-      return EmitVFGather(op, codegen);
-    });
+    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) { return EmitVFGather(op, codegen); });
 
 REGISTER_BACKEND_OP(Backend910B_CCE, "vf.StoreUnAlign")
     .set_pipe(ir::PipeType::V)
-    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
-      return EmitVFStoreUnAlign(op, codegen);
-    });
+    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) { return EmitVFStoreUnAlign(op, codegen); });
 
 REGISTER_BACKEND_OP(Backend910B_CCE, "vf.StoreUnAlignPost")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
-      return EmitVFStoreUnAlignPost(op, codegen);
+        return EmitVFStoreUnAlignPost(op, codegen);
     });
 
 REGISTER_BACKEND_OP(Backend910B_CCE, "vf.UnalignRegForStore")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
-      return EmitVFUnalignRegForStore(op, codegen);
+        return EmitVFUnalignRegForStore(op, codegen);
     });
 
 REGISTER_BACKEND_OP(Backend910B_CCE, "vf.ClearSpr")
     .set_pipe(ir::PipeType::V)
-    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
-      return EmitVFClearSpr(op, codegen);
-    });
+    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) { return EmitVFClearSpr(op, codegen); });
 
-}  // namespace backend
-}  // namespace pypto
+} // namespace backend
+} // namespace pypto

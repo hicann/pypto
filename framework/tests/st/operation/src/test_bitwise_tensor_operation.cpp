@@ -53,8 +53,8 @@ static inline Tensor ApplyBitwiseOp(BitwiseOp op, const Tensor& t0, const Tensor
     }
 }
 
-static void BitwiseOpOperationExeFunc2Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void BitwiseOpOperationExeFunc2Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                           const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0], inputs[1]}, {outputs[0]})
     {
@@ -93,9 +93,8 @@ static void BitwiseOpOperationExeFunc2Dims(
                 } else if (!input0_bcast_dim0 && input0_bcast_dim1) {
                     tileTensor0 = View(inputs[0], {firstViewShape, 1}, {fullSize0, 1}, {fullOffset0, 0});
                 } else {
-                    tileTensor0 = View(
-                        inputs[0], {firstViewShape, secondViewShape}, {fullSize0, fullSize1},
-                        {fullOffset0, fullOffset1});
+                    tileTensor0 = View(inputs[0], {firstViewShape, secondViewShape}, {fullSize0, fullSize1},
+                                       {fullOffset0, fullOffset1});
                 }
 
                 // 构造 input1 的 tile
@@ -104,9 +103,8 @@ static void BitwiseOpOperationExeFunc2Dims(
                 } else if (!input1_bcast_dim0 && input1_bcast_dim1) {
                     tileTensor1 = View(inputs[1], {firstViewShape, 1}, {fullSize0, 1}, {fullOffset0, 0});
                 } else {
-                    tileTensor1 = View(
-                        inputs[1], {firstViewShape, secondViewShape}, {fullSize0, fullSize1},
-                        {fullOffset0, fullOffset1});
+                    tileTensor1 = View(inputs[1], {firstViewShape, secondViewShape}, {fullSize0, fullSize1},
+                                       {fullOffset0, fullOffset1});
                 }
 
                 TileShape::Current().SetVecTile(args->tileShape_);
@@ -117,8 +115,8 @@ static void BitwiseOpOperationExeFunc2Dims(
     }
 }
 
-static void BitwiseOpOperationExeFunc3Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void BitwiseOpOperationExeFunc3Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                           const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0], inputs[1]}, {outputs[0]})
     {
@@ -162,39 +160,31 @@ static void BitwiseOpOperationExeFunc3Dims(
                     Tensor tileTensor0, tileTensor1;
                     // input0
                     if (i0_b0 && !i0_b1 && !i0_b2) {
-                        tileTensor0 = View(
-                            inputs[0], {1, secondViewShape, thirdViewShape}, {1, fullSize1, fullSize2},
-                            {0, fullOffset1, fullOffset2});
+                        tileTensor0 = View(inputs[0], {1, secondViewShape, thirdViewShape}, {1, fullSize1, fullSize2},
+                                           {0, fullOffset1, fullOffset2});
                     } else if (!i0_b0 && i0_b1 && !i0_b2) {
-                        tileTensor0 = View(
-                            inputs[0], {firstViewShape, 1, thirdViewShape}, {fullSize0, 1, fullSize2},
-                            {fullOffset0, 0, fullOffset2});
+                        tileTensor0 = View(inputs[0], {firstViewShape, 1, thirdViewShape}, {fullSize0, 1, fullSize2},
+                                           {fullOffset0, 0, fullOffset2});
                     } else if (!i0_b0 && !i0_b1 && i0_b2) {
-                        tileTensor0 = View(
-                            inputs[0], {firstViewShape, secondViewShape, 1}, {fullSize0, fullSize1, 1},
-                            {fullOffset0, fullOffset1, 0});
+                        tileTensor0 = View(inputs[0], {firstViewShape, secondViewShape, 1}, {fullSize0, fullSize1, 1},
+                                           {fullOffset0, fullOffset1, 0});
                     } else {
-                        tileTensor0 = View(
-                            inputs[0], {firstViewShape, secondViewShape, thirdViewShape},
-                            {fullSize0, fullSize1, fullSize2}, {fullOffset0, fullOffset1, fullOffset2});
+                        tileTensor0 = View(inputs[0], {firstViewShape, secondViewShape, thirdViewShape},
+                                           {fullSize0, fullSize1, fullSize2}, {fullOffset0, fullOffset1, fullOffset2});
                     }
                     // input1
                     if (i1_b0 && !i1_b1 && !i1_b2) {
-                        tileTensor1 = View(
-                            inputs[1], {1, secondViewShape, thirdViewShape}, {1, fullSize1, fullSize2},
-                            {0, fullOffset1, fullOffset2});
+                        tileTensor1 = View(inputs[1], {1, secondViewShape, thirdViewShape}, {1, fullSize1, fullSize2},
+                                           {0, fullOffset1, fullOffset2});
                     } else if (!i1_b0 && i1_b1 && !i1_b2) {
-                        tileTensor1 = View(
-                            inputs[1], {firstViewShape, 1, thirdViewShape}, {fullSize0, 1, fullSize2},
-                            {fullOffset0, 0, fullOffset2});
+                        tileTensor1 = View(inputs[1], {firstViewShape, 1, thirdViewShape}, {fullSize0, 1, fullSize2},
+                                           {fullOffset0, 0, fullOffset2});
                     } else if (!i1_b0 && !i1_b1 && i1_b2) {
-                        tileTensor1 = View(
-                            inputs[1], {firstViewShape, secondViewShape, 1}, {fullSize0, fullSize1, 1},
-                            {fullOffset0, fullOffset1, 0});
+                        tileTensor1 = View(inputs[1], {firstViewShape, secondViewShape, 1}, {fullSize0, fullSize1, 1},
+                                           {fullOffset0, fullOffset1, 0});
                     } else {
-                        tileTensor1 = View(
-                            inputs[1], {firstViewShape, secondViewShape, thirdViewShape},
-                            {fullSize0, fullSize1, fullSize2}, {fullOffset0, fullOffset1, fullOffset2});
+                        tileTensor1 = View(inputs[1], {firstViewShape, secondViewShape, thirdViewShape},
+                                           {fullSize0, fullSize1, fullSize2}, {fullOffset0, fullOffset1, fullOffset2});
                     }
 
                     TileShape::Current().SetVecTile(args->tileShape_);
@@ -206,8 +196,8 @@ static void BitwiseOpOperationExeFunc3Dims(
     }
 }
 
-static void BitwiseOpOperationExeFunc4Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void BitwiseOpOperationExeFunc4Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                           const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0], inputs[1]}, {outputs[0]})
     {
@@ -260,58 +250,57 @@ static void BitwiseOpOperationExeFunc4Dims(
                         Tensor tileTensor0, tileTensor1;
                         // input0
                         if (i0_b0 && !i0_b1 && !i0_b2 && !i0_b3) {
-                            tileTensor0 = View(
-                                inputs[0], {1, secondViewShape, thirdViewShape, fourthViewShape},
-                                {1, fullSize1, fullSize2, fullSize3}, {0, fullOffset1, fullOffset2, fullOffset3});
+                            tileTensor0 = View(inputs[0], {1, secondViewShape, thirdViewShape, fourthViewShape},
+                                               {1, fullSize1, fullSize2, fullSize3},
+                                               {0, fullOffset1, fullOffset2, fullOffset3});
                         } else if (!i0_b0 && i0_b1 && !i0_b2 && !i0_b3) {
-                            tileTensor0 = View(
-                                inputs[0], {firstViewShape, 1, thirdViewShape, fourthViewShape},
-                                {fullSize0, 1, fullSize2, fullSize3}, {fullOffset0, 0, fullOffset2, fullOffset3});
+                            tileTensor0 = View(inputs[0], {firstViewShape, 1, thirdViewShape, fourthViewShape},
+                                               {fullSize0, 1, fullSize2, fullSize3},
+                                               {fullOffset0, 0, fullOffset2, fullOffset3});
                         } else if (!i0_b0 && !i0_b1 && i0_b2 && !i0_b3) {
-                            tileTensor0 = View(
-                                inputs[0], {firstViewShape, secondViewShape, 1, fourthViewShape},
-                                {fullSize0, fullSize1, 1, fullSize3}, {fullOffset0, fullOffset1, 0, fullOffset3});
+                            tileTensor0 = View(inputs[0], {firstViewShape, secondViewShape, 1, fourthViewShape},
+                                               {fullSize0, fullSize1, 1, fullSize3},
+                                               {fullOffset0, fullOffset1, 0, fullOffset3});
                         } else if (!i0_b0 && !i0_b1 && !i0_b2 && i0_b3) {
-                            tileTensor0 = View(
-                                inputs[0], {firstViewShape, secondViewShape, thirdViewShape, 1},
-                                {fullSize0, fullSize1, fullSize2, 1}, {fullOffset0, fullOffset1, fullOffset2, 0});
+                            tileTensor0 = View(inputs[0], {firstViewShape, secondViewShape, thirdViewShape, 1},
+                                               {fullSize0, fullSize1, fullSize2, 1},
+                                               {fullOffset0, fullOffset1, fullOffset2, 0});
                         } else {
-                            tileTensor0 = View(
-                                inputs[0], {firstViewShape, secondViewShape, thirdViewShape, fourthViewShape},
-                                {fullSize0, fullSize1, fullSize2, fullSize3},
-                                {fullOffset0, fullOffset1, fullOffset2, fullOffset3});
+                            tileTensor0 = View(inputs[0],
+                                               {firstViewShape, secondViewShape, thirdViewShape, fourthViewShape},
+                                               {fullSize0, fullSize1, fullSize2, fullSize3},
+                                               {fullOffset0, fullOffset1, fullOffset2, fullOffset3});
                         }
                         // input1
                         if (i1_b0 && !i1_b1 && !i1_b2 && !i1_b3) {
-                            tileTensor1 = View(
-                                inputs[1], {1, secondViewShape, thirdViewShape, fourthViewShape},
-                                {1, fullSize1, fullSize2, fullSize3}, {0, fullOffset1, fullOffset2, fullOffset3});
+                            tileTensor1 = View(inputs[1], {1, secondViewShape, thirdViewShape, fourthViewShape},
+                                               {1, fullSize1, fullSize2, fullSize3},
+                                               {0, fullOffset1, fullOffset2, fullOffset3});
                         } else if (!i1_b0 && i1_b1 && !i1_b2 && !i1_b3) {
-                            tileTensor1 = View(
-                                inputs[1], {firstViewShape, 1, thirdViewShape, fourthViewShape},
-                                {fullSize0, 1, fullSize2, fullSize3}, {fullOffset0, 0, fullOffset2, fullOffset3});
+                            tileTensor1 = View(inputs[1], {firstViewShape, 1, thirdViewShape, fourthViewShape},
+                                               {fullSize0, 1, fullSize2, fullSize3},
+                                               {fullOffset0, 0, fullOffset2, fullOffset3});
                         } else if (!i1_b0 && !i1_b1 && i1_b2 && !i1_b3) {
-                            tileTensor1 = View(
-                                inputs[1], {firstViewShape, secondViewShape, 1, fourthViewShape},
-                                {fullSize0, fullSize1, 1, fullSize3}, {fullOffset0, fullOffset1, 0, fullOffset3});
+                            tileTensor1 = View(inputs[1], {firstViewShape, secondViewShape, 1, fourthViewShape},
+                                               {fullSize0, fullSize1, 1, fullSize3},
+                                               {fullOffset0, fullOffset1, 0, fullOffset3});
                         } else if (!i1_b0 && !i1_b1 && !i1_b2 && i1_b3) {
-                            tileTensor1 = View(
-                                inputs[1], {firstViewShape, secondViewShape, thirdViewShape, 1},
-                                {fullSize0, fullSize1, fullSize2, 1}, {fullOffset0, fullOffset1, fullOffset2, 0});
+                            tileTensor1 = View(inputs[1], {firstViewShape, secondViewShape, thirdViewShape, 1},
+                                               {fullSize0, fullSize1, fullSize2, 1},
+                                               {fullOffset0, fullOffset1, fullOffset2, 0});
                         } else {
-                            tileTensor1 = View(
-                                inputs[1], {firstViewShape, secondViewShape, thirdViewShape, fourthViewShape},
-                                {fullSize0, fullSize1, fullSize2, fullSize3},
-                                {fullOffset0, fullOffset1, fullOffset2, fullOffset3});
+                            tileTensor1 = View(inputs[1],
+                                               {firstViewShape, secondViewShape, thirdViewShape, fourthViewShape},
+                                               {fullSize0, fullSize1, fullSize2, fullSize3},
+                                               {fullOffset0, fullOffset1, fullOffset2, fullOffset3});
                         }
 
                         TileShape::Current().SetVecTile(args->tileShape_);
                         auto res = ApplyBitwiseOp(args->op_, tileTensor0, tileTensor1);
-                        Assemble(
-                            res,
-                            {bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape,
-                             nIdx * fourthViewShape},
-                            outputs[0]);
+                        Assemble(res,
+                                 {bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape,
+                                  nIdx * fourthViewShape},
+                                 outputs[0]);
                     }
                 }
             }
@@ -321,11 +310,11 @@ static void BitwiseOpOperationExeFunc4Dims(
 
 class BitwiseAndOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac_param<BitwiseOpMetaData> {};
 
-INSTANTIATE_TEST_SUITE_P(
-    TestBitwiseAnd, BitwiseAndOperationTest,
-    ::testing::ValuesIn(tile_fwk::test_operation::GetOpMetaData<BitwiseOpMetaData>(
-        {BitwiseOpOperationExeFunc2Dims, BitwiseOpOperationExeFunc3Dims, BitwiseOpOperationExeFunc4Dims},
-        "BitwiseAnd")));
+INSTANTIATE_TEST_SUITE_P(TestBitwiseAnd, BitwiseAndOperationTest,
+                         ::testing::ValuesIn(tile_fwk::test_operation::GetOpMetaData<BitwiseOpMetaData>(
+                             {BitwiseOpOperationExeFunc2Dims, BitwiseOpOperationExeFunc3Dims,
+                              BitwiseOpOperationExeFunc4Dims},
+                             "BitwiseAnd")));
 
 TEST_P(BitwiseAndOperationTest, TestBitwiseAnd)
 {
@@ -337,11 +326,11 @@ TEST_P(BitwiseAndOperationTest, TestBitwiseAnd)
 
 class BitwiseOrOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac_param<BitwiseOpMetaData> {};
 
-INSTANTIATE_TEST_SUITE_P(
-    TestBitwiseOr, BitwiseOrOperationTest,
-    ::testing::ValuesIn(tile_fwk::test_operation::GetOpMetaData<BitwiseOpMetaData>(
-        {BitwiseOpOperationExeFunc2Dims, BitwiseOpOperationExeFunc3Dims, BitwiseOpOperationExeFunc4Dims},
-        "BitwiseOr")));
+INSTANTIATE_TEST_SUITE_P(TestBitwiseOr, BitwiseOrOperationTest,
+                         ::testing::ValuesIn(tile_fwk::test_operation::GetOpMetaData<BitwiseOpMetaData>(
+                             {BitwiseOpOperationExeFunc2Dims, BitwiseOpOperationExeFunc3Dims,
+                              BitwiseOpOperationExeFunc4Dims},
+                             "BitwiseOr")));
 
 TEST_P(BitwiseOrOperationTest, TestBitwiseOr)
 {
@@ -353,11 +342,11 @@ TEST_P(BitwiseOrOperationTest, TestBitwiseOr)
 
 class BitwiseXorOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac_param<BitwiseOpMetaData> {};
 
-INSTANTIATE_TEST_SUITE_P(
-    TestBitwiseXor, BitwiseXorOperationTest,
-    ::testing::ValuesIn(tile_fwk::test_operation::GetOpMetaData<BitwiseOpMetaData>(
-        {BitwiseOpOperationExeFunc2Dims, BitwiseOpOperationExeFunc3Dims, BitwiseOpOperationExeFunc4Dims},
-        "BitwiseXor")));
+INSTANTIATE_TEST_SUITE_P(TestBitwiseXor, BitwiseXorOperationTest,
+                         ::testing::ValuesIn(tile_fwk::test_operation::GetOpMetaData<BitwiseOpMetaData>(
+                             {BitwiseOpOperationExeFunc2Dims, BitwiseOpOperationExeFunc3Dims,
+                              BitwiseOpOperationExeFunc4Dims},
+                             "BitwiseXor")));
 
 TEST_P(BitwiseXorOperationTest, TestBitwiseXor)
 {

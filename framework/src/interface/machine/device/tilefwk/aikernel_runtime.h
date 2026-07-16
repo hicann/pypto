@@ -106,8 +106,8 @@ INLINE T RuntimeGetInputData(__gm__ npu::tile_fwk::DevTensorData* input, int64_t
 }
 
 template <typename T>
-INLINE T
-RuntimeGetInputData(__gm__ npu::tile_fwk::DevTensorData* input, int64_t off0, int64_t off1, int64_t off2, int64_t off3)
+INLINE T RuntimeGetInputData(__gm__ npu::tile_fwk::DevTensorData* input, int64_t off0, int64_t off1, int64_t off2,
+                             int64_t off3)
 {
     int64_t off = input->shape.dim[1] * off0 + off1;
     off = off * input->shape.dim[2] + off2;

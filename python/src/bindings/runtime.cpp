@@ -57,8 +57,8 @@ namespace pypto {
 
 using npu::tile_fwk::dynamic::KernelBinary;
 
-std::string ValidateDynamicFunctionAndIO(
-    Function* func, const std::vector<DeviceTensorData>& inputs, const std::vector<DeviceTensorData>& outputs)
+std::string ValidateDynamicFunctionAndIO(Function* func, const std::vector<DeviceTensorData>& inputs,
+                                         const std::vector<DeviceTensorData>& outputs)
 {
     if (!func->IsFunctionTypeAndGraphType(FunctionType::DYNAMIC, GraphType::TENSOR_GRAPH)) {
         return "Invalid function format";
@@ -82,8 +82,8 @@ static bool IsUint8GoldenAndHf8InOut(const DeviceTensorData& inOutTensor, const 
     return inOutTensor.GetDataType() == DT_HF8 && goldenTensor.GetDataType() == DT_UINT8;
 }
 
-static void ValidateVerifyOutputAndGolden(
-    const std::vector<DeviceTensorData>& inOutTensors, const std::vector<DeviceTensorData>& goldens)
+static void ValidateVerifyOutputAndGolden(const std::vector<DeviceTensorData>& inOutTensors,
+                                          const std::vector<DeviceTensorData>& goldens)
 {
     auto ShapeToString = [](const std::vector<int64_t>& shape) {
         std::ostringstream oss;
@@ -109,9 +109,8 @@ static void ValidateVerifyOutputAndGolden(
             continue;
         }
 
-        ASSERT(
-            VerifyResultScene::VERIFY_RESULT_DTYPE_DIFF, inOutTensors[i].GetDataType() == goldens[i].GetDataType() ||
-                                                             IsUint8GoldenAndHf8InOut(inOutTensors[i], goldens[i]))
+        ASSERT(VerifyResultScene::VERIFY_RESULT_DTYPE_DIFF, inOutTensors[i].GetDataType() == goldens[i].GetDataType() ||
+                                                                IsUint8GoldenAndHf8InOut(inOutTensors[i], goldens[i]))
             << "dtype mismatch at index " << i << ", output dtype: " << DataType2String(inOutTensors[i].GetDataType())
             << ", golden dtype: " << DataType2String(goldens[i].GetDataType());
 
@@ -138,9 +137,8 @@ void CopyToDev(const DeviceTensorData& devTensor, DeviceTensorData& hostTensor)
     CopyHostToDev(devTensor, hostTensor);
 }
 
-void SetVerifyData(
-    const std::vector<DeviceTensorData>& inputs, const std::vector<DeviceTensorData>& outputs,
-    const std::vector<DeviceTensorData>& goldens)
+void SetVerifyData(const std::vector<DeviceTensorData>& inputs, const std::vector<DeviceTensorData>& outputs,
+                   const std::vector<DeviceTensorData>& goldens)
 {
     auto ToLogicalShape = [](DataType dtype, const std::vector<int64_t>& shape) -> std::vector<int64_t> {
         auto logical = shape;
@@ -159,8 +157,8 @@ void SetVerifyData(
     ProgramData::GetInstance().Reset();
     for (size_t i = 0; i < inputs.size(); i++) {
         auto logicalShape = ToLogicalShape(inputs[i].GetDataType(), inputs[i].GetShape());
-        auto rawData =
-            RawTensorData::CreateTensor(inputs[i].GetDataType(), logicalShape, (uint8_t*)inputs[i].GetAddr());
+        auto rawData = RawTensorData::CreateTensor(inputs[i].GetDataType(), logicalShape,
+                                                   (uint8_t*)inputs[i].GetAddr());
         ProgramData::GetInstance().AppendInput(rawData);
     }
     for (size_t i = 0; i < outputs.size(); i++) {
@@ -183,8 +181,8 @@ void SetVerifyData(
     }
 }
 
-static std::string ValidateFunctionAndIO(
-    Function* func, const std::vector<DeviceTensorData>& inputs, const std::vector<DeviceTensorData>& outputs)
+static std::string ValidateFunctionAndIO(Function* func, const std::vector<DeviceTensorData>& inputs,
+                                         const std::vector<DeviceTensorData>& outputs)
 {
     return ValidateDynamicFunctionAndIO(func, inputs, outputs);
 }
@@ -202,12 +200,12 @@ static ExportedOperator* GetValidatedOperator(uintptr_t opAddr)
     return reinterpret_cast<ExportedOperator*>(opAddr);
 }
 
-static void InitializeInputOutputData(
-    const std::vector<DeviceTensorData>& inputs, const std::vector<DeviceTensorData>& outputs)
+static void InitializeInputOutputData(const std::vector<DeviceTensorData>& inputs,
+                                      const std::vector<DeviceTensorData>& outputs)
 {
     for (size_t i = 0; i < inputs.size(); i++) {
-        auto rawData =
-            RawTensorData::CreateTensor(inputs[i].GetDataType(), inputs[i].GetShape(), (uint8_t*)inputs[i].GetAddr());
+        auto rawData = RawTensorData::CreateTensor(inputs[i].GetDataType(), inputs[i].GetShape(),
+                                                   (uint8_t*)inputs[i].GetAddr());
         ProgramData::GetInstance().AppendInput(rawData);
     }
     for (size_t i = 0; i < outputs.size(); i++) {
@@ -216,8 +214,8 @@ static void InitializeInputOutputData(
     }
 }
 
-std::string DeviceRunOnceDataFromHost(
-    const std::vector<DeviceTensorData>& inputs, const std::vector<DeviceTensorData>& outputs)
+std::string DeviceRunOnceDataFromHost(const std::vector<DeviceTensorData>& inputs,
+                                      const std::vector<DeviceTensorData>& outputs)
 {
     if (config::GetHostOption<int64_t>(COMPILE_STAGE) != CS_ALL_COMPLETE) {
         return "";
@@ -267,10 +265,12 @@ std::string DeviceRunOnceDataFromHost(
     return "";
 }
 
-std::string OperatorDeviceRunOnceDataFromDevice(
-    [[maybe_unused]] py::int_ pythonOperatorPython, [[maybe_unused]] const std::vector<DeviceTensorData>& inputs,
-    [[maybe_unused]] const std::vector<DeviceTensorData>& outputs, [[maybe_unused]] py::int_ incomingStreamPython,
-    [[maybe_unused]] py::int_ workspaceData, [[maybe_unused]] py::int_ devCtrlCache)
+std::string OperatorDeviceRunOnceDataFromDevice([[maybe_unused]] py::int_ pythonOperatorPython,
+                                                [[maybe_unused]] const std::vector<DeviceTensorData>& inputs,
+                                                [[maybe_unused]] const std::vector<DeviceTensorData>& outputs,
+                                                [[maybe_unused]] py::int_ incomingStreamPython,
+                                                [[maybe_unused]] py::int_ workspaceData,
+                                                [[maybe_unused]] py::int_ devCtrlCache)
 {
     if (config::GetHostOption<int64_t>(COMPILE_STAGE) != CS_ALL_COMPLETE) {
         return "";
@@ -332,8 +332,8 @@ std::string OperatorDeviceRunOnceDataFromDevice(
     return "";
 }
 
-uint64_t GetWorkSpaceSize(
-    uintptr_t opAddr, const std::vector<DeviceTensorData>& inputs, const std::vector<DeviceTensorData>& outputs)
+uint64_t GetWorkSpaceSize(uintptr_t opAddr, const std::vector<DeviceTensorData>& inputs,
+                          const std::vector<DeviceTensorData>& outputs)
 {
     ExportedOperator* op = GetValidatedOperator(opAddr);
     if (op) {
@@ -378,9 +378,8 @@ std::string OperatorEnd(uintptr_t opAddr)
     return "";
 }
 
-int64_t BuildCache(
-    uintptr_t opAddr, const std::vector<DeviceTensorData>& inputList, const std::vector<DeviceTensorData>& outputList,
-    [[maybe_unused]] bool isCapturing)
+int64_t BuildCache(uintptr_t opAddr, const std::vector<DeviceTensorData>& inputList,
+                   const std::vector<DeviceTensorData>& outputList, [[maybe_unused]] bool isCapturing)
 {
     ExportedOperator* op = GetValidatedOperator(opAddr);
     if (op == nullptr) {
@@ -393,8 +392,8 @@ int64_t BuildCache(
     if (ctrlCache == nullptr) {
         HOST_PERF_EVT_BEGIN(EventPhase::BuildCtrlFlowCache);
         DevControlFlowCache* hostCache = nullptr;
-        if (EmulationLauncher::BuildControlFlowCache(
-                op->GetFunction(), memUtils, inputList, outputList, &hostCache, config) != 0) {
+        if (EmulationLauncher::BuildControlFlowCache(op->GetFunction(), memUtils, inputList, outputList, &hostCache,
+                                                     config) != 0) {
             return 0;
         }
 
@@ -404,9 +403,8 @@ int64_t BuildCache(
         }
 
         if (hostCache) {
-            ctrlCache = CopyHostToDev(
-                reinterpret_cast<uint8_t*>(hostCache),
-                reinterpret_cast<DevControlFlowCache*>(hostCache)->usedCacheSize);
+            ctrlCache = CopyHostToDev(reinterpret_cast<uint8_t*>(hostCache),
+                                      reinterpret_cast<DevControlFlowCache*>(hostCache)->usedCacheSize);
         }
 
         if (isCapturing) {
@@ -428,10 +426,7 @@ int64_t BuildCache(
 
 class KernelModule {
 public:
-    KernelModule(py::object& module)
-    {
-        InitConfigOptions(module);
-    }
+    KernelModule(py::object& module) { InitConfigOptions(module); }
 
     ~KernelModule()
     {
@@ -440,9 +435,7 @@ public:
         }
     }
 
-    LaunchMode GetLaunchMode() {
-        return launchMode_;
-    } 
+    LaunchMode GetLaunchMode() { return launchMode_; }
 
     bool IsCompileStageAllComplete() { return compileStageAllComplete; }
 
@@ -461,8 +454,8 @@ public:
         COMPILER_LOGI("New frontend compile from torch begin once.");
         // Prepare stage starts here and ends at Program::UpdateCompileTask() for NEW
         // "Prepare" 在Initialize中设置
-        MonitorManager::Instance().Initialize(
-            compileMonitorEnable, intervalSec, timeoutSec, totalTimeoutSec, compileMonitorPassDetailEnable);
+        MonitorManager::Instance().Initialize(compileMonitorEnable, intervalSec, timeoutSec, totalTimeoutSec,
+                                              compileMonitorPassDetailEnable);
         auto compile = py::getattr(module, "compile");
         compile(torch_tensors, tensor_defs);
         return RegisterLastCompiledKernel();
@@ -498,28 +491,28 @@ public:
         }
         if (ProgramData::GetInstance().GetInputDataList().empty()) {
             for (size_t i = 0; i < inputSize; i++) {
-                RawTensorDataPtr rawDataPtr =
-                    std::make_shared<RawTensorData>(tensors.at(i).GetDataType(), tensors.at(i).GetShape());
+                RawTensorDataPtr rawDataPtr = std::make_shared<RawTensorData>(tensors.at(i).GetDataType(),
+                                                                              tensors.at(i).GetShape());
                 ProgramData::GetInstance().AppendInput(rawDataPtr);
             }
         }
         if (ProgramData::GetInstance().GetOutputDataList().empty()) {
             for (size_t i = inputSize; i < tensors.size(); i++) {
-                RawTensorDataPtr rawDataPtr =
-                    std::make_shared<RawTensorData>(tensors.at(i).GetDataType(), tensors.at(i).GetShape());
+                RawTensorDataPtr rawDataPtr = std::make_shared<RawTensorData>(tensors.at(i).GetDataType(),
+                                                                              tensors.at(i).GetShape());
                 ProgramData::GetInstance().AppendOutput(rawDataPtr);
             }
         }
     }
 
-    void Launch(
-        KernelBinary* kernel, AclRtStream aicoreStream, std::vector<DeviceTensorData>& tensors, uint8_t* ctrlFlowCache,
-        int64_t* workspace)
+    void Launch(KernelBinary* kernel, AclRtStream aicoreStream, std::vector<DeviceTensorData>& tensors,
+                uint8_t* ctrlFlowCache, int64_t* workspace)
     {
         SetTensorData(tensors);
 
         COMPILER_LOGD("Workspace %p cfgcache %p", workspace, ctrlFlowCache);
-        DeviceLauncher::LaunchKernel(aicoreStream, ctrlFlowCache, kernel, workspace, tensors, isDebugMode_, launchEarlyMode_);
+        DeviceLauncher::LaunchKernel(aicoreStream, ctrlFlowCache, kernel, workspace, tensors, isDebugMode_,
+                                     launchEarlyMode_);
     }
 
     bool IsAicoreModelMode() const { return launchMode_ == LaunchMode::AICORE_MODEL; }
@@ -566,8 +559,8 @@ private:
             auto host_options = module.attr("_host_options").cast<py::dict>();
             if (host_options.contains("compile_stage")) {
                 auto stage = host_options["compile_stage"];
-                int64_t stageValue =
-                    py::hasattr(stage, "value") ? stage.attr("value").cast<int64_t>() : stage.cast<int64_t>();
+                int64_t stageValue = py::hasattr(stage, "value") ? stage.attr("value").cast<int64_t>() :
+                                                                   stage.cast<int64_t>();
                 compileStageAllComplete = (stageValue == CS_ALL_COMPLETE);
             }
             if (host_options.contains("compile_monitor_enable")) {
@@ -619,9 +612,8 @@ private:
     std::optional<ConfigManagerNg::JitScopeGuard> jitScopeGuard;
 
 public:
-    KernelLauncher(
-        py::object& m, int64_t stream, py::sequence& torch_tensors, py::sequence& tensor_defs,
-        std::vector<DeviceTensorData>& tensors_ref, int devId)
+    KernelLauncher(py::object& m, int64_t stream, py::sequence& torch_tensors, py::sequence& tensor_defs,
+                   std::vector<DeviceTensorData>& tensors_ref, int devId)
         : module(m),
           torchTensors(torch_tensors),
           tensorDefs(tensor_defs),
@@ -732,9 +724,8 @@ void BindRuntime(py::module_& m)
     m.def("GetCompilerMonitorTotalElapsed", []() { return MonitorManager::Instance().GetTotalElapsed(); });
 
     py::class_<DeviceTensorData>(m, "DeviceTensorData")
-        .def(
-            py::init<DataType, uintptr_t, const std::vector<int64_t>&>(), py::arg("dtype"), py::arg("addr"),
-            py::arg("shape"))
+        .def(py::init<DataType, uintptr_t, const std::vector<int64_t>&>(), py::arg("dtype"), py::arg("addr"),
+             py::arg("shape"))
         .def("GetDataPtr", &DeviceTensorData::GetAddr)
         .def("GetShape", &DeviceTensorData::GetShape)
         .def("GetDataType", &DeviceTensorData::GetDataType);

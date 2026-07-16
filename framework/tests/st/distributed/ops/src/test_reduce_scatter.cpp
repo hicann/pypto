@@ -34,8 +34,8 @@ void TestReduceScatter(OpTestParam& testParam, std::string& goldenDir)
     Tensor in(dType, {row, col}, "in");
     Tensor out(dType, {rowOut, col}, "out");
 
-    std::vector<T> inData =
-        ReadToVector<T>(goldenDir + "/input_rank_" + std::to_string(testParam.rankId) + ".bin", {row, col});
+    std::vector<T> inData = ReadToVector<T>(goldenDir + "/input_rank_" + std::to_string(testParam.rankId) + ".bin",
+                                            {row, col});
 
     Shape shmemDataShape{rowOut, col};
     FUNCTION("ShmemReduceScatter", {in}, {out})

@@ -89,21 +89,28 @@ std::string CompileSourceCode(const std::string& sourceFilePath, const std::stri
         argsGcc.push_back(macro);
     }
     argsGcc.insert(argsGcc.end(), {"-I" + includePath, "-I" + GetPyptoLibPath() + "/include/",
-                        "-I" + includePath + "/tilefwk", "-S", sourceFilePath, "-o", assembleFilePath});
+                                   "-I" + includePath + "/tilefwk", "-S", sourceFilePath, "-o", assembleFilePath});
 
-    FE_LOGI("[RunCmd] %s", std::accumulate(argsGcc.begin(), argsGcc.end(), std::string(),
-        [](const std::string& a, const std::string& b) { return a.empty() ? b : a + " " + b; }).c_str());
+    FE_LOGI(
+        "[RunCmd] %s",
+        std::accumulate(argsGcc.begin(), argsGcc.end(), std::string(), [](const std::string& a, const std::string& b) {
+            return a.empty() ? b : a + " " + b;
+        }).c_str());
     FE_ASSERT(SafeExecCommand(argsGcc) == 0);
 
-    std::vector<std::string> argsAs = {gcc, "-fno-stack-protector", "-O2", "-c", assembleFilePath, "-o", objectFilePath};
-    FE_LOGI("[RunCmd] %s", std::accumulate(argsAs.begin(), argsAs.end(), std::string(),
-        [](const std::string& a, const std::string& b) { return a.empty() ? b : a + " " + b; }).c_str());
+    std::vector<std::string> argsAs = {gcc,  "-fno-stack-protector", "-O2", "-c", assembleFilePath,
+                                       "-o", objectFilePath};
+    FE_LOGI(
+        "[RunCmd] %s",
+        std::accumulate(argsAs.begin(), argsAs.end(), std::string(), [](const std::string& a, const std::string& b) {
+            return a.empty() ? b : a + " " + b;
+        }).c_str());
     FE_ASSERT(SafeExecCommand(argsAs) == 0);
     return objectFilePath;
 }
 
-std::vector<std::string> ParallelCompile(
-    const std::vector<std::string>& sourceFiles, const std::string& gcc, const std::string& extraCflag)
+std::vector<std::string> ParallelCompile(const std::vector<std::string>& sourceFiles, const std::string& gcc,
+                                         const std::string& extraCflag)
 {
     std::vector<std::string> objs(sourceFiles.size());
     std::vector<std::thread> threads;
@@ -133,10 +140,10 @@ std::vector<std::string> ParallelCompile(
     return objs;
 }
 
-std::vector<uint8_t> CompileAndLoadSection(
-    const std::string& code, const std::string& sourceFilePath, const std::string& aicpuPath,
-    std::vector<std::string>& exprSrcFiles, const std::string& gcc, const std::string& ld, const std::string& objcopy,
-    const std::string& sectionName, bool needDump, const std::string& extraCflag)
+std::vector<uint8_t> CompileAndLoadSection(const std::string& code, const std::string& sourceFilePath,
+                                           const std::string& aicpuPath, std::vector<std::string>& exprSrcFiles,
+                                           const std::string& gcc, const std::string& ld, const std::string& objcopy,
+                                           const std::string& sectionName, bool needDump, const std::string& extraCflag)
 {
     if (needDump) {
         FILE* fsrc = fopen(sourceFilePath.c_str(), "w");
@@ -157,14 +164,20 @@ std::vector<uint8_t> CompileAndLoadSection(
         argsLd.push_back(obj);
     }
     argsLd.insert(argsLd.end(), {"-o", objectFilePath, "-O2", "-T", aicpuPath + "/merge.link"});
-    FE_LOGI("[RunCmd] %s", std::accumulate(argsLd.begin(), argsLd.end(), std::string(),
-        [](const std::string& a, const std::string& b) { return a.empty() ? b : a + " " + b; }).c_str());
+    FE_LOGI(
+        "[RunCmd] %s",
+        std::accumulate(argsLd.begin(), argsLd.end(), std::string(), [](const std::string& a, const std::string& b) {
+            return a.empty() ? b : a + " " + b;
+        }).c_str());
     FE_ASSERT(SafeExecCommand(argsLd) == 0);
 
     std::string binaryFilePath = sourceFilePath + ".bin";
-    std::vector<std::string> argsObjcopy = {objcopy, "--dump-section", sectionName + "=" + binaryFilePath, objectFilePath};
-    FE_LOGI("[RunCmd] %s", std::accumulate(argsObjcopy.begin(), argsObjcopy.end(), std::string(),
-        [](const std::string& a, const std::string& b) { return a.empty() ? b : a + " " + b; }).c_str());
+    std::vector<std::string> argsObjcopy = {objcopy, "--dump-section", sectionName + "=" + binaryFilePath,
+                                            objectFilePath};
+    FE_LOGI("[RunCmd] %s",
+            std::accumulate(argsObjcopy.begin(), argsObjcopy.end(), std::string(),
+                            [](const std::string& a, const std::string& b) { return a.empty() ? b : a + " " + b; })
+                .c_str());
     FE_ASSERT(SafeExecCommand(argsObjcopy) == 0);
 
     FILE* fbin = fopen(binaryFilePath.c_str(), "rb");
@@ -209,10 +222,14 @@ std::string SymbolicExpressionTable::BuildExpression(const RawSymbolicScalarPtr&
 
 int SymbolicExpressionTable::CompareRaw(const RawSymbolicScalarPtr& lhs, const RawSymbolicScalarPtr& rhs)
 {
-    if (lhs.get() == rhs.get()) {return 0;}
+    if (lhs.get() == rhs.get()) {
+        return 0;
+    }
     auto kindLhs = static_cast<int>(lhs->Kind());
     auto kindRhs = static_cast<int>(rhs->Kind());
-    if (kindLhs != kindRhs) {return kindLhs - kindRhs;}
+    if (kindLhs != kindRhs) {
+        return kindLhs - kindRhs;
+    }
     switch (lhs->Kind()) {
         case SymbolicScalarKind::T_SCALAR_SYMBOLIC_IMMEDIATE: {
             auto immLhs = std::static_pointer_cast<RawSymbolicImmediate>(lhs)->Immediate();
@@ -294,26 +311,26 @@ RawSymbolicScalarPtr CloneAlongPathsWithReplacements(
 } // namespace
 
 std::string SymbolicExpressionTable::BuildExpressionWithPlaceholders(
-    const RawSymbolicScalarPtr& raw,
-    const std::vector<std::pair<std::vector<int>, RawSymbolicScalarPtr>>& replacements)
+    const RawSymbolicScalarPtr& raw, const std::vector<std::pair<std::vector<int>, RawSymbolicScalarPtr>>& replacements)
 {
     FE_ASSERT(!replacements.empty()) << "BuildExpressionWithPlaceholders requires at least one replacement";
     auto patched = CloneAlongPathsWithReplacements(raw, 0, replacements);
     return BuildExpressionByRaw(patched, {});
 }
 
-bool SymbolicExpressionTable::FindAllImmediateDifferences(
-    const RawSymbolicScalarPtr& lhs, const RawSymbolicScalarPtr& rhs,
-    std::vector<SymbolicExpressionTable::ImmediateDiff>& diffs)
+bool SymbolicExpressionTable::FindAllImmediateDifferences(const RawSymbolicScalarPtr& lhs,
+                                                          const RawSymbolicScalarPtr& rhs,
+                                                          std::vector<SymbolicExpressionTable::ImmediateDiff>& diffs)
 {
     diffs.clear();
     std::vector<int> currentPath;
     return CollectImmediateDifferences(lhs, rhs, currentPath, diffs);
 }
 
-bool SymbolicExpressionTable::CollectImmediateDifferences(
-    const RawSymbolicScalarPtr& lhs, const RawSymbolicScalarPtr& rhs, std::vector<int>& currentPath,
-    std::vector<SymbolicExpressionTable::ImmediateDiff>& diffs)
+bool SymbolicExpressionTable::CollectImmediateDifferences(const RawSymbolicScalarPtr& lhs,
+                                                          const RawSymbolicScalarPtr& rhs,
+                                                          std::vector<int>& currentPath,
+                                                          std::vector<SymbolicExpressionTable::ImmediateDiff>& diffs)
 {
     if (lhs.get() == rhs.get()) {
         return true;
@@ -349,8 +366,8 @@ bool SymbolicExpressionTable::CollectImmediateDifferences(
             }
             for (size_t operandIdx = 0; operandIdx < operandsLhs.size(); operandIdx++) {
                 currentPath.push_back(static_cast<int>(operandIdx));
-                bool ok =
-                    CollectImmediateDifferences(operandsLhs[operandIdx], operandsRhs[operandIdx], currentPath, diffs);
+                bool ok = CollectImmediateDifferences(operandsLhs[operandIdx], operandsRhs[operandIdx], currentPath,
+                                                      diffs);
                 currentPath.pop_back();
                 if (!ok) {
                     return false;
@@ -498,9 +515,9 @@ std::string SymbolicExpressionTable::BuildExpressionTempVarInit(int indent)
     return oss.str();
 }
 
-bool SymbolicExpressionTable::CheckExprDependCore(
-    const RawSymbolicScalarPtr& raw, const std::unordered_map<std::string, bool>& tensorNameToDependCore,
-    std::unordered_map<RawSymbolicScalarPtr, bool>& valDependMap)
+bool SymbolicExpressionTable::CheckExprDependCore(const RawSymbolicScalarPtr& raw,
+                                                  const std::unordered_map<std::string, bool>& tensorNameToDependCore,
+                                                  std::unordered_map<RawSymbolicScalarPtr, bool>& valDependMap)
 {
     switch (raw->Kind()) {
         case SymbolicScalarKind::T_SCALAR_SYMBOLIC_IMMEDIATE:
@@ -546,9 +563,8 @@ bool SymbolicExpressionTable::CheckExprDependCore(
     }
 }
 
-void RawSymbolicScalar::FlattenOperands(
-    const std::vector<RawSymbolicScalarPtr>& inOperandList, SymbolicOpcode objOpcode,
-    std::vector<RawSymbolicScalarPtr>& outOperandList)
+void RawSymbolicScalar::FlattenOperands(const std::vector<RawSymbolicScalarPtr>& inOperandList,
+                                        SymbolicOpcode objOpcode, std::vector<RawSymbolicScalarPtr>& outOperandList)
 {
     for (auto& operand : inOperandList) {
         if (!operand) {
@@ -569,8 +585,7 @@ void RawSymbolicScalar::FlattenOperands(
 
 ScalarImmediateType RawSymbolicScalar::GetImmediateValue() const
 {
-    FE_ASSERT(FeError::INVALID_TYPE, IsImmediate())
-        << "Mismatch immediate type: " << SymbolicScalarKind2Name(Kind());
+    FE_ASSERT(FeError::INVALID_TYPE, IsImmediate()) << "Mismatch immediate type: " << SymbolicScalarKind2Name(Kind());
     auto immediate = static_cast<const RawSymbolicImmediate*>(this);
     return immediate->Immediate();
 }
@@ -582,15 +597,13 @@ const std::string& RawSymbolicScalar::GetSymbolName() const
 }
 SymbolicOpcode RawSymbolicScalar::GetExpressionOpcode() const
 {
-    FE_ASSERT(FeError::INVALID_TYPE, IsExpression())
-        << "Mismatch expression type: " << SymbolicScalarKind2Name(Kind());
+    FE_ASSERT(FeError::INVALID_TYPE, IsExpression()) << "Mismatch expression type: " << SymbolicScalarKind2Name(Kind());
     auto expression = static_cast<const RawSymbolicExpression*>(this);
     return expression->Opcode();
 }
 const std::vector<RawSymbolicScalarPtr>& RawSymbolicScalar::GetExpressionOperandList() const
 {
-    FE_ASSERT(FeError::INVALID_TYPE, IsExpression())
-        << "Mismatch expression type: " << SymbolicScalarKind2Name(Kind());
+    FE_ASSERT(FeError::INVALID_TYPE, IsExpression()) << "Mismatch expression type: " << SymbolicScalarKind2Name(Kind());
     auto expression = static_cast<const RawSymbolicExpression*>(this);
     return expression->OperandList();
 }
@@ -762,24 +775,23 @@ SymbolicScalar SymbolicScalar::operator()(const SymbolicScalar& arg0, const Symb
     auto raw = RawSymbolicExpression::CreateMopCall(args);
     return SymbolicScalar(raw);
 }
-SymbolicScalar SymbolicScalar::operator()(
-    const SymbolicScalar& arg0, const SymbolicScalar& arg1, const SymbolicScalar& arg2) const
+SymbolicScalar SymbolicScalar::operator()(const SymbolicScalar& arg0, const SymbolicScalar& arg1,
+                                          const SymbolicScalar& arg2) const
 {
     std::vector<RawSymbolicScalarPtr> args = {raw_, arg0.raw_, arg1.raw_, arg2.raw_};
     auto raw = RawSymbolicExpression::CreateMopCall(args);
     return SymbolicScalar(raw);
 }
-SymbolicScalar SymbolicScalar::operator()(
-    const SymbolicScalar& arg0, const SymbolicScalar& arg1, const SymbolicScalar& arg2,
-    const SymbolicScalar& arg3) const
+SymbolicScalar SymbolicScalar::operator()(const SymbolicScalar& arg0, const SymbolicScalar& arg1,
+                                          const SymbolicScalar& arg2, const SymbolicScalar& arg3) const
 {
     std::vector<RawSymbolicScalarPtr> args = {raw_, arg0.raw_, arg1.raw_, arg2.raw_, arg3.raw_};
     auto raw = RawSymbolicExpression::CreateMopCall(args);
     return SymbolicScalar(raw);
 }
-SymbolicScalar SymbolicScalar::operator()(
-    const SymbolicScalar& arg0, const SymbolicScalar& arg1, const SymbolicScalar& arg2, const SymbolicScalar& arg3,
-    const SymbolicScalar& arg4) const
+SymbolicScalar SymbolicScalar::operator()(const SymbolicScalar& arg0, const SymbolicScalar& arg1,
+                                          const SymbolicScalar& arg2, const SymbolicScalar& arg3,
+                                          const SymbolicScalar& arg4) const
 {
     std::vector<RawSymbolicScalarPtr> args = {raw_, arg0.raw_, arg1.raw_, arg2.raw_, arg3.raw_, arg4.raw_};
     auto raw = RawSymbolicExpression::CreateMopCall(args);
@@ -917,19 +929,19 @@ SatStatus SymbolicScalar::Check(const std::vector<SymbolicScalar>& conds)
     std::vector<RawSymbolicScalarPtr> raws;
     raws.reserve(conds.size());
     for (const auto& c : conds) {
-        raws.push_back(c.Simplify().Raw());  // const-fold first: a & ~a -> 0, etc.
+        raws.push_back(c.Simplify().Raw()); // const-fold first: a & ~a -> 0, etc.
     }
     return SatChecker(raws).Check();
 }
 
-std::unordered_map<std::string, ScalarImmediateType> &SymbolicScalarTracker::GetSymbolDict()
+std::unordered_map<std::string, ScalarImmediateType>& SymbolicScalarTracker::GetSymbolDict()
 {
     static std::unordered_map<std::string, ScalarImmediateType> symbolDict;
     return symbolDict;
 }
 
-static void LookupExpressionByOpcode(
-    std::vector<RawSymbolicScalarPtr>& exprList, SymbolicOpcode opcode, const RawSymbolicScalarPtr& raw)
+static void LookupExpressionByOpcode(std::vector<RawSymbolicScalarPtr>& exprList, SymbolicOpcode opcode,
+                                     const RawSymbolicScalarPtr& raw)
 {
     switch (raw->Kind()) {
         case SymbolicScalarKind::T_SCALAR_SYMBOLIC_IMMEDIATE:

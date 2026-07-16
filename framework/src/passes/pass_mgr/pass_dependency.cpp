@@ -41,12 +41,10 @@ void PassDependency::RegisterPreDependencies()
     };
 
     registerDependency(PassName::EXPAND_FUNCTION, {PassName::AUTO_CAST, PassName::INFER_MEMORY_CONFLICT});
-    registerDependency(
-        PassName::GRAPH_PARTITION, {PassName::DUPLICATE_OP, PassName::SPLIT_LARGE_FANOUT_TENSOR,
-                                    PassName::SPLIT_RESHAPE, PassName::PROCESS_ATOMIC});
-    registerDependency(
-        PassName::SUBGRAPH_TO_FUNCTION,
-        {PassName::GRAPH_PARTITION, PassName::REPLACE_TENSOR, PassName::PRE_GRAPH_PROCESS, PassName::INFER_DYN_SHAPE});
+    registerDependency(PassName::GRAPH_PARTITION, {PassName::DUPLICATE_OP, PassName::SPLIT_LARGE_FANOUT_TENSOR,
+                                                   PassName::SPLIT_RESHAPE, PassName::PROCESS_ATOMIC});
+    registerDependency(PassName::SUBGRAPH_TO_FUNCTION, {PassName::GRAPH_PARTITION, PassName::REPLACE_TENSOR,
+                                                        PassName::PRE_GRAPH_PROCESS, PassName::INFER_DYN_SHAPE});
     registerDependency(PassName::INSERT_SYNC, {PassName::OOO_SCHEDULE, PassName::COPY_OUT_RESOLVE});
     registerDependency(PassName::REDUCE_COPY_MERGE, {PassName::GRAPH_PARTITION});
     registerDependency(PassName::N_BUFFER_MERGE, {PassName::GRAPH_PARTITION});
@@ -61,10 +59,9 @@ void PassDependency::RegisterSequenceDependencies()
         sequenceDependencies_[name] = std::move(dependencies);
     };
 
-    registerDependency(
-        PassName::GRAPH_PARTITION,
-        {PassName::GRAPH_PARTITION, PassName::REDUCE_COPY_MERGE, PassName::N_BUFFER_MERGE,
-         PassName::L1_COPY_IN_REUSE_MERGE, PassName::INTRA_SUBGRAPH_ADAPTER, PassName::GENERATE_MOVE_OP});
+    registerDependency(PassName::GRAPH_PARTITION, {PassName::GRAPH_PARTITION, PassName::REDUCE_COPY_MERGE,
+                                                   PassName::N_BUFFER_MERGE, PassName::L1_COPY_IN_REUSE_MERGE,
+                                                   PassName::INTRA_SUBGRAPH_ADAPTER, PassName::GENERATE_MOVE_OP});
 }
 
 Status PassDependency::CheckStrategyDependency(const std::string& strategyName, const std::vector<PassName>& passes)
@@ -104,12 +101,11 @@ Status PassDependency::CheckStrategyDependency(const std::string& strategyName, 
             continue;
         }
         needWarn = true;
-        APASS_LOG_WARN_F(
-            Elements::Manager,
-            "In strategy %s, %s is missing dependencies, %s are required; Please insert %s before %s.",
-            strategyName.c_str(), PassNameStr(pName),
-            CommonUtils::ContainerToStr<std::vector<PassName>>(it->second).c_str(),
-            CommonUtils::ContainerToStr<std::vector<PassName>>(missingDeps).c_str(), PassNameStr(pName));
+        APASS_LOG_WARN_F(Elements::Manager,
+                         "In strategy %s, %s is missing dependencies, %s are required; Please insert %s before %s.",
+                         strategyName.c_str(), PassNameStr(pName),
+                         CommonUtils::ContainerToStr<std::vector<PassName>>(it->second).c_str(),
+                         CommonUtils::ContainerToStr<std::vector<PassName>>(missingDeps).c_str(), PassNameStr(pName));
     }
     if (duplicates.size() != 0) {
         APASS_LOG_WARN_F(
@@ -121,8 +117,8 @@ Status PassDependency::CheckStrategyDependency(const std::string& strategyName, 
     return needWarn ? WARNING : SUCCESS;
 }
 
-Status PassDependency::CheckSequenceDependency(
-    size_t index, const std::string& strategyName, const std::vector<PassName>& passes)
+Status PassDependency::CheckSequenceDependency(size_t index, const std::string& strategyName,
+                                               const std::vector<PassName>& passes)
 {
     auto it = sequenceDependencies_.find(passes[index]);
     if (it == sequenceDependencies_.end()) {

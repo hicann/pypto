@@ -20,8 +20,8 @@
 #include "machine/utils/dynamic/dev_encode_function.h"
 
 namespace npu::tile_fwk {
-int CompileAICoreKernel(
-    std::map<uint64_t, Function*>& leafDict, dynamic::EncodeDevAscendFunctionParam& param, const std::string& ccePath,
-    const std::string& funcHash, const std::string& funcRawName, std::string& kernelPath);
+int CompileAICoreKernel(std::map<uint64_t, Function*>& leafDict, dynamic::EncodeDevAscendFunctionParam& param,
+                        const std::string& ccePath, const std::string& funcHash, const std::string& funcRawName,
+                        std::string& kernelPath);
 }
 #endif // TILEFRAMEWORK_AICORE_COMPILER_H

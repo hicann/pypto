@@ -203,9 +203,8 @@ std::string CodeGenOpNPU::PrintGatherDynamicUnaligned() const
     paramList.emplace_back(paramDtypeStr);
     paramList.emplace_back(indicesDtypeStr);
     paramList.emplace_back(std::to_string(NormalizeAxis(axis, paramDim)));
-    std::transform(
-        normalizedOutputRawShapes.begin() + 1, normalizedOutputRawShapes.end(), back_inserter(paramList),
-        [](int x) { return std::to_string(x); });
+    std::transform(normalizedOutputRawShapes.begin() + 1, normalizedOutputRawShapes.end(), back_inserter(paramList),
+                   [](int x) { return std::to_string(x); });
 
     std::string templateParam = JoinString(paramList, ", ");
     paramList.clear();
@@ -221,9 +220,8 @@ std::string CodeGenOpNPU::PrintGatherDynamicUnaligned() const
     paramList.emplace_back(indicesParamStr);
     NormalizeGatherShape<SymbolicScalar>(outputValidShapes, paramDim, indicesDim, axis);
 
-    std::transform(outputValidShapes.begin(), outputValidShapes.end(), back_inserter(paramList), [](SymbolicScalar x) {
-        return SymbolicExpressionTable::BuildExpression(x);
-    });
+    std::transform(outputValidShapes.begin(), outputValidShapes.end(), back_inserter(paramList),
+                   [](SymbolicScalar x) { return SymbolicExpressionTable::BuildExpression(x); });
 
     auto paramGMStride = GenParamIdxExprByIndex(paramIndex, paramDim, PREFIX_STR_RAW_SHAPE);
     auto paramStartOffsets = GenParamIdxExprByIndex(paramIndex, paramDim, PREFIX_STR_OFFSET);
@@ -273,8 +271,8 @@ std::string CodeGenOpNPU::PrintGatherLayout() const
 
     std::vector<std::string> paramList;
     paramList.emplace_back(std::to_string(NormalizeAxis(axis, paramDim)));
-    std::transform(
-        helpIndex.begin(), helpIndex.end(), back_inserter(paramList), [](size_t x) { return std::to_string(x); });
+    std::transform(helpIndex.begin(), helpIndex.end(), back_inserter(paramList),
+                   [](size_t x) { return std::to_string(x); });
 
     std::ostringstream oss;
     oss << tileOpName << WrapParamByAngleBrackets(paramList) << WrapParamByParentheses(tileOpParams) << STMT_END;

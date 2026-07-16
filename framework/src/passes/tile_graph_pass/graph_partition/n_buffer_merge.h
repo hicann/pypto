@@ -27,8 +27,8 @@
 #include "passes/tile_graph_pass/graph_partition/hash_order_utils.h"
 namespace npu::tile_fwk {
 
-constexpr int64_t VEC_NBUFFER_SETTING_DEFAULT_MERGE_NUM_KEY =
-    -1; // manualMerge模式配置默认合并粒度的key值，n个子图合并为一个
+constexpr int64_t
+    VEC_NBUFFER_SETTING_DEFAULT_MERGE_NUM_KEY = -1; // manualMerge模式配置默认合并粒度的key值，n个子图合并为一个
 
 constexpr int64_t MULITY_IN_OUT_MERGE_KEY = -2; // 多输入输出子图合并配置，{-2, 0} 自动合并，{-2, 1} 手动合并
 
@@ -44,45 +44,35 @@ private:
     void InitParam(OperationsViewer& opOriList);
     void GetOpHash(std::vector<uint64_t>& hashList, const std::string op, size_t idx);
     void GetOpHashReverse(std::vector<uint64_t>& hashList, const std::string op, int idx);
-    void GetColorHash(
-        const Function& func, const OperationsViewer& opOriList, std::vector<uint64_t>& hashColor,
-        std::map<uint64_t, std::vector<int>>& hashMap);
-    void SetHashOrderInfoOnOps(
-        int funcMagic, const OperationsViewer& opOriList,
-        const std::map<uint64_t, std::vector<int>>& hashMap,
-        const std::set<int32_t>& mulaccGraph);
-    Status CheckAndFixColorOrder(
-        OperationsViewer& opOriList, int& color1, std::vector<int>& colorCycles1,
-        std::vector<std::vector<int>>& colorNode1);
-    void UpdateOpColor(
-        OperationsViewer& opOriList, int& color, std::vector<int>& colorCycles,
-        std::vector<std::vector<int>>& colorNode);
+    void GetColorHash(const Function& func, const OperationsViewer& opOriList, std::vector<uint64_t>& hashColor,
+                      std::map<uint64_t, std::vector<int>>& hashMap);
+    void SetHashOrderInfoOnOps(int funcMagic, const OperationsViewer& opOriList,
+                               const std::map<uint64_t, std::vector<int>>& hashMap,
+                               const std::set<int32_t>& mulaccGraph);
+    Status CheckAndFixColorOrder(OperationsViewer& opOriList, int& color1, std::vector<int>& colorCycles1,
+                                 std::vector<std::vector<int>>& colorNode1);
+    void UpdateOpColor(OperationsViewer& opOriList, int& color, std::vector<int>& colorCycles,
+                       std::vector<std::vector<int>>& colorNode);
     std::map<uint64_t, size_t> GetIsoColorMergeNum(const std::map<uint64_t, std::vector<int>>& hashMap) const;
     std::vector<std::vector<int>> SortColorWithInput(std::vector<int>& colorValues) const;
-    Status MergeProcess(
-        const OperationsViewer& opOriList, std::map<uint64_t, std::vector<int>>& hashMap,
-        std::map<uint64_t, size_t>& hashMergeNum, std::vector<uint64_t>& hashColor);
-    Status ColorTopo(
-        int& color1, std::vector<std::vector<int>>& inputColor, std::vector<std::vector<int>>& outputColor,
-        OperationsViewer& opOriList);
-    void MergePingPong(
-        std::vector<std::vector<int>>& sortedColors, const OperationsViewer& opOriList,
-        std::vector<uint64_t>& hashColor, size_t& numDBmerge, int hashOrder);
-    std::map<uint64_t, size_t> SetNumDB(
-        const Function& func, std::map<uint64_t, std::vector<int>>& hashMap);
-    void ApplyByFuncNumDB(
-        int currentFuncMagic, std::map<uint64_t, size_t>& numDBMap,
-        std::map<uint64_t, std::vector<int>>& hashMap);
-    void ApplyGlobalNumDB(
-        std::map<uint64_t, size_t>& numDBMap, std::map<uint64_t, std::vector<int>>& hashMap);
+    Status MergeProcess(const OperationsViewer& opOriList, std::map<uint64_t, std::vector<int>>& hashMap,
+                        std::map<uint64_t, size_t>& hashMergeNum, std::vector<uint64_t>& hashColor);
+    Status ColorTopo(int& color1, std::vector<std::vector<int>>& inputColor, std::vector<std::vector<int>>& outputColor,
+                     OperationsViewer& opOriList);
+    void MergePingPong(std::vector<std::vector<int>>& sortedColors, const OperationsViewer& opOriList,
+                       std::vector<uint64_t>& hashColor, size_t& numDBmerge, int hashOrder);
+    std::map<uint64_t, size_t> SetNumDB(const Function& func, std::map<uint64_t, std::vector<int>>& hashMap);
+    void ApplyByFuncNumDB(int currentFuncMagic, std::map<uint64_t, size_t>& numDBMap,
+                          std::map<uint64_t, std::vector<int>>& hashMap);
+    void ApplyGlobalNumDB(std::map<uint64_t, size_t>& numDBMap, std::map<uint64_t, std::vector<int>>& hashMap);
     Status CheckVecNBufferSettingForManualMerge();
-    Status MergeProcessForMulityInOut(
-        const OperationsViewer& opOriList, const std::map<uint64_t, std::vector<int>>& hashMap,
-        const std::map<uint64_t, size_t>& hashMergeNum, std::vector<uint64_t>& hashColor);
+    Status MergeProcessForMulityInOut(const OperationsViewer& opOriList,
+                                      const std::map<uint64_t, std::vector<int>>& hashMap,
+                                      const std::map<uint64_t, size_t>& hashMergeNum, std::vector<uint64_t>& hashColor);
     Status InitVecNBufferModeBySetting();
-    Status ApplySemanticLabelSettings(
-        const OperationsViewer& opOriList, std::map<uint64_t, size_t>& hashMergeNum,
-        const std::map<uint64_t, std::vector<int>>& hashMap, const std::vector<uint64_t>& hashColor);
+    Status ApplySemanticLabelSettings(const OperationsViewer& opOriList, std::map<uint64_t, size_t>& hashMergeNum,
+                                      const std::map<uint64_t, std::vector<int>>& hashMap,
+                                      const std::vector<uint64_t>& hashColor);
 
 private:
     int colorNum_{0};
@@ -98,7 +88,7 @@ private:
     std::map<int64_t, int64_t> vecNBufferSetting_;
     std::map<std::string, int64_t> vecNBufferSettingByFunc_;
     std::map<std::string, int64_t> vecNBufferSettingByLabel_;
-    std::map<uint64_t, int> hashOrder_;  // Deterministic ordered map for compilation repeatability
+    std::map<uint64_t, int> hashOrder_; // Deterministic ordered map for compilation repeatability
     enum ModeType { noMerge = 0, autoMerge = 1, manualMerge = 2, autoMulityInOutMerge = 3, manualMulityInOutMerge = 4 };
 };
 } // namespace npu::tile_fwk

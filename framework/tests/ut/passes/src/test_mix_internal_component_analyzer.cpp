@@ -41,41 +41,35 @@ constexpr int64_t MS_SUB_BLOCK_IDX1 = 1;
 // 测试工具类：封装所有场景构建+结果校验辅助函数
 namespace test_utils {
 // 场景构建：创建Cube算子（isCube=true，指定InternalSubgraphID）
-Operation& CreateCubeOp(
-    Function& mixFunc, std::shared_ptr<LogicalTensor>& inTensor, std::shared_ptr<LogicalTensor>& outTensor,
-    int internalSubgraphId);
+Operation& CreateCubeOp(Function& mixFunc, std::shared_ptr<LogicalTensor>& inTensor,
+                        std::shared_ptr<LogicalTensor>& outTensor, int internalSubgraphId);
 
 // 场景构建：创建Vector算子（无isCube，指定AIVCore和InternalSubgraphID）
-Operation& CreateVectorOp(
-    Function& mixFunc, std::shared_ptr<LogicalTensor>& inTensor, std::shared_ptr<LogicalTensor>& outTensor,
-    AIVCore aivCore, int internalSubgraphId);
+Operation& CreateVectorOp(Function& mixFunc, std::shared_ptr<LogicalTensor>& inTensor,
+                          std::shared_ptr<LogicalTensor>& outTensor, AIVCore aivCore, int internalSubgraphId);
 
 // 场景构建：创建同步算子（初始InternalSubgraphID=-1，指定同步Opcode）
-Operation& CreateSyncOp(
-    Function& mixFunc, Opcode syncOpcode, std::shared_ptr<LogicalTensor>& inTensor,
-    std::shared_ptr<LogicalTensor>& outTensor);
+Operation& CreateSyncOp(Function& mixFunc, Opcode syncOpcode, std::shared_ptr<LogicalTensor>& inTensor,
+                        std::shared_ptr<LogicalTensor>& outTensor);
 
 // 场景构建：创建COPY_IN算子（PHASE1/PHASE2合并专用）
-Operation& CreateCopyInOp(
-    Function& mixFunc, std::shared_ptr<LogicalTensor>& inTensor, std::shared_ptr<LogicalTensor>& outTensor,
-    int internalSubgraphId);
+Operation& CreateCopyInOp(Function& mixFunc, std::shared_ptr<LogicalTensor>& inTensor,
+                          std::shared_ptr<LogicalTensor>& outTensor, int internalSubgraphId);
 
 // 场景构建：创建L0C_COPY_UB算子（CubeScope专用，subBlockIdx设置）
-Operation& CreateL0CCopyUbOp(
-    Function& mixFunc, std::shared_ptr<LogicalTensor>& inTensor, std::shared_ptr<LogicalTensor>& outTensor,
-    int internalSubgraphId);
+Operation& CreateL0CCopyUbOp(Function& mixFunc, std::shared_ptr<LogicalTensor>& inTensor,
+                             std::shared_ptr<LogicalTensor>& outTensor, int internalSubgraphId);
 
 // 场景构建：创建基础张量（默认FP32，16*16）
 std::shared_ptr<LogicalTensor> CreateBasicTensor();
 
 // 结果校验：Scope基础信息（数量、ID、类型）
-void VerifyScopeBasicInfo(
-    const std::vector<InternalComponentInfo>& components, int expectedCount,
-    const std::vector<int>& expectedInternalIds, const std::vector<ComponentType>& expectedTypes);
+void VerifyScopeBasicInfo(const std::vector<InternalComponentInfo>& components, int expectedCount,
+                          const std::vector<int>& expectedInternalIds, const std::vector<ComponentType>& expectedTypes);
 
 // 结果校验：Scope内算子属性（数量、isCube、AIVCore）
-void VerifyScopeOperands(
-    const InternalComponentInfo& component, int expectedOpCount, bool isCube, AIVCore expectedAivCore);
+void VerifyScopeOperands(const InternalComponentInfo& component, int expectedOpCount, bool isCube,
+                         AIVCore expectedAivCore);
 
 bool IsSyncOperation(const Operation* op);
 
@@ -127,9 +121,8 @@ protected:
 
 // -------------------------- 辅助函数实现 --------------------------
 namespace test_utils {
-Operation& CreateCubeOp(
-    Function& mixFunc, std::shared_ptr<LogicalTensor>& inTensor, std::shared_ptr<LogicalTensor>& outTensor,
-    int internalSubgraphId)
+Operation& CreateCubeOp(Function& mixFunc, std::shared_ptr<LogicalTensor>& inTensor,
+                        std::shared_ptr<LogicalTensor>& outTensor, int internalSubgraphId)
 {
     auto& op = IRBuilder().CreateTensorOpStmt(mixFunc, Opcode::OP_A_MUL_B, {inTensor}, {outTensor});
     op.UpdateInternalSubgraphID(internalSubgraphId);
@@ -138,9 +131,8 @@ Operation& CreateCubeOp(
     return op;
 }
 
-Operation& CreateVectorOp(
-    Function& mixFunc, std::shared_ptr<LogicalTensor>& inTensor, std::shared_ptr<LogicalTensor>& outTensor,
-    AIVCore aivCore, int internalSubgraphId)
+Operation& CreateVectorOp(Function& mixFunc, std::shared_ptr<LogicalTensor>& inTensor,
+                          std::shared_ptr<LogicalTensor>& outTensor, AIVCore aivCore, int internalSubgraphId)
 {
     auto& op = IRBuilder().CreateTensorOpStmt(mixFunc, Opcode::OP_ADD, {inTensor}, {outTensor});
     op.UpdateInternalSubgraphID(internalSubgraphId);
@@ -148,18 +140,16 @@ Operation& CreateVectorOp(
     return op;
 }
 
-Operation& CreateSyncOp(
-    Function& mixFunc, Opcode syncOpcode, std::shared_ptr<LogicalTensor>& inTensor,
-    std::shared_ptr<LogicalTensor>& outTensor)
+Operation& CreateSyncOp(Function& mixFunc, Opcode syncOpcode, std::shared_ptr<LogicalTensor>& inTensor,
+                        std::shared_ptr<LogicalTensor>& outTensor)
 {
     auto& op = IRBuilder().CreateTensorOpStmt(mixFunc, syncOpcode, {inTensor}, {outTensor});
     op.UpdateInternalSubgraphID(MS_NEG1); // 初始无ID，触发未分配逻辑
     return op;
 }
 
-Operation& CreateCopyInOp(
-    Function& mixFunc, std::shared_ptr<LogicalTensor>& inTensor, std::shared_ptr<LogicalTensor>& outTensor,
-    int internalSubgraphId)
+Operation& CreateCopyInOp(Function& mixFunc, std::shared_ptr<LogicalTensor>& inTensor,
+                          std::shared_ptr<LogicalTensor>& outTensor, int internalSubgraphId)
 {
     auto& op = IRBuilder().CreateTensorOpStmt(mixFunc, Opcode::OP_COPY_IN, {inTensor}, {outTensor});
     op.UpdateInternalSubgraphID(internalSubgraphId);
@@ -167,9 +157,8 @@ Operation& CreateCopyInOp(
     return op;
 }
 
-Operation& CreateL0CCopyUbOp(
-    Function& mixFunc, std::shared_ptr<LogicalTensor>& inTensor, std::shared_ptr<LogicalTensor>& outTensor,
-    int internalSubgraphId)
+Operation& CreateL0CCopyUbOp(Function& mixFunc, std::shared_ptr<LogicalTensor>& inTensor,
+                             std::shared_ptr<LogicalTensor>& outTensor, int internalSubgraphId)
 {
     auto& op = IRBuilder().CreateTensorOpStmt(mixFunc, Opcode::OP_L0C_COPY_UB, {inTensor}, {outTensor});
     op.UpdateInternalSubgraphID(internalSubgraphId);
@@ -180,12 +169,12 @@ Operation& CreateL0CCopyUbOp(
 
 std::shared_ptr<LogicalTensor> CreateBasicTensor()
 {
-    return npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, Shape({MS_TENSOR_DIM, MS_TENSOR_DIM}), CreateTestConstIntVector(Shape({MS_TENSOR_DIM, MS_TENSOR_DIM})));
+    return npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, Shape({MS_TENSOR_DIM, MS_TENSOR_DIM}),
+                                                      CreateTestConstIntVector(Shape({MS_TENSOR_DIM, MS_TENSOR_DIM})));
 }
 
-void VerifyScopeBasicInfo(
-    const std::vector<InternalComponentInfo>& components, int expectedCount,
-    const std::vector<int>& expectedInternalIds, const std::vector<ComponentType>& expectedTypes)
+void VerifyScopeBasicInfo(const std::vector<InternalComponentInfo>& components, int expectedCount,
+                          const std::vector<int>& expectedInternalIds, const std::vector<ComponentType>& expectedTypes)
 {
     ASSERT_EQ(components.size(), expectedCount) << "Scope count mismatch";
     for (int i = 0; i < expectedCount; ++i) {
@@ -197,8 +186,8 @@ void VerifyScopeBasicInfo(
     }
 }
 
-void VerifyScopeOperands(
-    const InternalComponentInfo& component, int expectedOpCount, bool isCube, AIVCore expectedAivCore)
+void VerifyScopeOperands(const InternalComponentInfo& component, int expectedOpCount, bool isCube,
+                         AIVCore expectedAivCore)
 {
     ASSERT_EQ(component.operations.size(), expectedOpCount) << "Scope inner op count mismatch";
     for (const auto* op : component.operations) {
@@ -293,8 +282,8 @@ TEST_F(MixInternalComponentsAnalyzerTest, TestMultiScopeBasicSplit_Cube_Vector)
 
     // 3. 结果校验
     ASSERT_EQ(status, SUCCESS) << "Multi scope analyze failed";
-    test_utils::VerifyScopeBasicInfo(
-        components, MS_NUM2, {MS_NUM0, MS_NUM2}, {ComponentType::C_SCOPE, ComponentType::V_SCOPE});
+    test_utils::VerifyScopeBasicInfo(components, MS_NUM2, {MS_NUM0, MS_NUM2},
+                                     {ComponentType::C_SCOPE, ComponentType::V_SCOPE});
     test_utils::VerifyScopeOperands(components[0], MS_NUM1, true, AIVCore::UNSPECIFIED);
     test_utils::VerifyScopeOperands(components[1], MS_NUM1, false, AIVCore::AIV1);
 }
@@ -337,7 +326,8 @@ TEST_F(MixInternalComponentsAnalyzerTest, TestSyncOpMerge_BarAll_Forward)
 
     // 3. 结果校验
     ASSERT_EQ(status, SUCCESS) << "OP_BAR_ALL merge failed";
-    test_utils::VerifyScopeBasicInfo(components, MS_NUM2, {MS_NUM2, MS_NUM3}, {ComponentType::V_SCOPE, ComponentType::C_SCOPE});
+    test_utils::VerifyScopeBasicInfo(components, MS_NUM2, {MS_NUM2, MS_NUM3},
+                                     {ComponentType::V_SCOPE, ComponentType::C_SCOPE});
     test_utils::VerifyScopeOperands(components[0], MS_NUM1, false, AIVCore::AIV1);
     test_utils::VerifyOpInternalId(barAllOp, MS_NUM3);
 }
@@ -380,8 +370,8 @@ TEST_F(MixInternalComponentsAnalyzerTest, TestCubeScope_WithL0CCopyUb_AIV1)
 
     // 3. 结果校验
     ASSERT_EQ(status, SUCCESS) << "CubeScope L0C_COPY_UB process failed";
-    test_utils::VerifyScopeBasicInfo(
-        components, MS_NUM2, {MS_NUM0, MS_NUM1}, {ComponentType::C_SCOPE, ComponentType::V_SCOPE});
+    test_utils::VerifyScopeBasicInfo(components, MS_NUM2, {MS_NUM0, MS_NUM1},
+                                     {ComponentType::C_SCOPE, ComponentType::V_SCOPE});
     test_utils::VerifyL0CCopyUbSubBlockIdx(copyUbOp, MS_SUB_BLOCK_IDX1);
 }
 

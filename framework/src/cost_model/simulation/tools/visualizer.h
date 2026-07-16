@@ -62,9 +62,8 @@ public:
     void DrawTileOp(std::ofstream& os, TileOpPtr tileop, FunctionPtr func, bool debug = false) const;
     void DrawTask(std::ofstream& os, std::shared_ptr<Task> task, bool detail);
     void DrawFunction(FunctionPtr func, const std::string& outdir, bool debug = false) const;
-    void DebugFunction(
-        FunctionPtr func, std::unordered_map<int, TilePtr>& tiles, std::unordered_map<int, TileOpPtr>& tileOps,
-        const std::string& outdir) const;
+    void DebugFunction(FunctionPtr func, std::unordered_map<int, TilePtr>& tiles,
+                       std::unordered_map<int, TileOpPtr>& tileOps, const std::string& outdir) const;
     void DrawTasks(const TaskMap& taskMap, bool drawDetail, std::string outPath);
     std::string GetColor(uint64_t color) const;
     std::string GetReverseColor(uint64_t color) const;

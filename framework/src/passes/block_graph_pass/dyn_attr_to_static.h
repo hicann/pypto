@@ -183,9 +183,8 @@ private:
      * @param currValIdxs 本次调用的「值-索引列表」
      * @return 是否有效
      */
-    bool IsCandidateValidInCurrCall(
-        const std::vector<size_t>& candidate,
-        const std::unordered_map<std::string, std::set<size_t>>& currValIdxs) const
+    bool IsCandidateValidInCurrCall(const std::vector<size_t>& candidate,
+                                    const std::unordered_map<std::string, std::set<size_t>>& currValIdxs) const
     {
         // 步骤1：查找第一个索引在当前args所在的索引组
         if (candidate.empty())
@@ -247,25 +246,24 @@ public:
 
 private:
     friend class LoopaxesProc;
-    
+
     std::unordered_map<Function*, std::vector<Operation*>> leaf2Caller;
 
     Status RunOnFunction(Function& function) override;
     std::vector<std::reference_wrapper<SymbolicScalar>> GetOpDynamicAttributeList(Operation& op);
     Status GetCallee(const Operation& callop, Function*& callFunc);
-    void RefSpecifiedValue(
-        std::vector<SymbolicScalar>& oriList, std::vector<std::reference_wrapper<SymbolicScalar>>& newList) const;
-    void FilterSpecifiedValue(
-        std::vector<OpImmediate>& oriList, std::vector<std::reference_wrapper<SymbolicScalar>>& newList) const;
+    void RefSpecifiedValue(std::vector<SymbolicScalar>& oriList,
+                           std::vector<std::reference_wrapper<SymbolicScalar>>& newList) const;
+    void FilterSpecifiedValue(std::vector<OpImmediate>& oriList,
+                              std::vector<std::reference_wrapper<SymbolicScalar>>& newList) const;
     Status BuildLeafToCaller(Function* func);
-    Status BuildNewCoa(
-        std::reference_wrapper<SymbolicScalar>& dynScalar,
-        std::vector<std::vector<SymbolicScalar>>& callopArglistOneDim);
+    Status BuildNewCoa(std::reference_wrapper<SymbolicScalar>& dynScalar,
+                       std::vector<std::vector<SymbolicScalar>>& callopArglistOneDim);
     Status TryRemoveDynAttr(Function* leafFunc, std::vector<Operation*> callList);
     Status GetTileFunction(Function* function, std::unordered_set<Function*>& tileFunctionSet);
     Status DumpFunctionJson(Function& function, const std::string& logFolder, bool beforeFunction = true) override;
     Status PrintFunction(Function& function, const std::string& logFolder, bool beforeFunction = true) override;
-    void BuildParamAddr(Operation &op);
+    void BuildParamAddr(Operation& op);
     std::set<LogicalTensorPtr> visitedTensors_;
     std::set<int> rootInOutCast_;
 };

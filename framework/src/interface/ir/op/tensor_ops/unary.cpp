@@ -31,9 +31,8 @@
 namespace pypto {
 namespace ir {
 
-TypePtr DeduceTensorExpType(
-    [[maybe_unused]] const std::vector<ExprPtr>& args,
-    [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
+TypePtr DeduceTensorExpType([[maybe_unused]] const std::vector<ExprPtr>& args,
+                            [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
 {
     CHECK(args.size() == 1) << "tensor.exp requires exactly 1 argument, but got " << args.size();
 
@@ -52,9 +51,8 @@ TypePtr DeduceTensorExpType(
     return std::make_shared<TensorType>(tensor_type->shape_, out_dtype);
 }
 
-TypePtr DeduceTensorCastType(
-    [[maybe_unused]] const std::vector<ExprPtr>& args,
-    [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
+TypePtr DeduceTensorCastType([[maybe_unused]] const std::vector<ExprPtr>& args,
+                             [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
 {
     CHECK(args.size() == 1) << "tensor.cast requires exactly 1 argument (input), but got " << args.size();
 

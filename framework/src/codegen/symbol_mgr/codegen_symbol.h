@@ -278,8 +278,8 @@ public:
 
     void operator=(const SymbolManager& other) = delete;
 
-    bool BindAddrWithVariableName(
-        const AllocKey& key, const std::string& varName, const std::string& varNameTileTensor);
+    bool BindAddrWithVariableName(const AllocKey& key, const std::string& varName,
+                                  const std::string& varNameTileTensor);
 
     void AddToTensorMap(int magicNum, const std::shared_ptr<LogicalTensor>& tensor)
     {

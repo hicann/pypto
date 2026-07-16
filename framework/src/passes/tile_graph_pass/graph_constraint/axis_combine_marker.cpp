@@ -41,8 +41,8 @@ bool AxisCombineMarker::IsTensorEnableAxisCombine(LogicalTensorPtr tensor) const
 void AxisCombineMarker::Init(Function& function)
 {
     tensorStatus_.clear();
- 	parent_.clear();
- 	rank_.clear();
+    parent_.clear();
+    rank_.clear();
     size_t i = 0U;
     std::map<int, size_t> opMagic2Idx;
     opList_ = function.Operations().DuplicatedOpList();
@@ -51,7 +51,7 @@ void AxisCombineMarker::Init(Function& function)
         i++;
     }
     opInGraph_.assign(opList_.size(), {});
- 	opOutGraph_.assign(opList_.size(), {});
+    opOutGraph_.assign(opList_.size(), {});
     for (size_t opIdx = 0; opIdx < opList_.size(); opIdx++) {
         const auto& op = opList_[opIdx];
         for (const auto producer : op->ProducerOpsOrdered()) {
@@ -143,7 +143,7 @@ void UpdateExpandStatus(Operation* op, std::unordered_map<LogicalTensorPtr, Axis
                 break;
             }
         }
-        
+
         if (!hasTailExpand) {
             tensorStatus[outputTensor] = AxisReorderStatus::ENABLE;
             return;
@@ -326,7 +326,7 @@ bool AxisCombineMarker::IsEligibleUnionOutput(Operation* op, OpCalcType calcType
 {
     bool isPropagationOp = propagationCalcType.find(calcType) != propagationCalcType.end();
     bool isTailPreserved = (op->GetOpcode() == Opcode::OP_VIEW || op->GetOpcode() == Opcode::OP_ASSEMBLE) &&
-        outputTensor->GetShape().back() == op->GetIOperands()[0]->GetShape().back();
+                           outputTensor->GetShape().back() == op->GetIOperands()[0]->GetShape().back();
     return isPropagationOp || isTailPreserved;
 }
 

@@ -129,9 +129,9 @@ VarPtr AsVarLikeExpr(const ExprPtr& expr, const Span& span, const std::string& c
 }
 
 /// Rebuild a Call while preserving kwargs_.
-ExprPtr ReconstructCallWithKwargs(
-    const std::string& name, std::vector<ExprPtr> args, const std::vector<std::pair<std::string, std::any>>& kwargs,
-    const TypePtr& type, const Span& span)
+ExprPtr ReconstructCallWithKwargs(const std::string& name, std::vector<ExprPtr> args,
+                                  const std::vector<std::pair<std::string, std::any>>& kwargs, const TypePtr& type,
+                                  const Span& span)
 {
     return std::make_shared<Call>(name, std::move(args), kwargs, type, span);
 }
@@ -162,9 +162,8 @@ FunctionPtr IRMutator::VisitFunction(const FunctionPtr& func)
     if (new_body.get() == func->body_.get()) {
         return func;
     }
-    return std::make_shared<const Function>(
-        func->name_, func->params_, func->returnTypes_, std::move(new_body), func->span_, func->funcType_,
-        func->entry_);
+    return std::make_shared<const Function>(func->name_, func->params_, func->returnTypes_, std::move(new_body),
+                                            func->span_, func->funcType_, func->entry_);
 }
 
 ExprPtr IRMutator::VisitExpr(const ExprPtr& expr) { return ExprFunctor<ExprPtr>::VisitExpr(expr); }
@@ -260,8 +259,8 @@ ExprPtr IRMutator::VisitBinaryExpr_(const BinaryExprPtr& op)
     if (new_left.get() != op->left_.get() || new_right.get() != op->right_.get()) {
         auto scalar_type = As<ScalarType>(op->GetType());
         INTERNAL_CHECK_SPAN(scalar_type, op->span_) << "BinaryExpr has null type";
-        return ReconstructBinaryExpr(
-            op->GetKind(), std::move(new_left), std::move(new_right), scalar_type->dtype_, op->span_);
+        return ReconstructBinaryExpr(op->GetKind(), std::move(new_left), std::move(new_right), scalar_type->dtype_,
+                                     op->span_);
     }
     return op;
 }
@@ -376,13 +375,11 @@ StmtPtr IRMutator::VisitStmt_(const IfStmtPtr& op)
 
     if (new_condition.get() != op->condition_.get() || then_changed || else_changed || return_vars_changed) {
         if (new_else_body.has_value()) {
-            return std::make_shared<const IfStmt>(
-                std::move(new_condition), std::move(new_then_body), *new_else_body, std::move(new_return_vars),
-                op->span_);
+            return std::make_shared<const IfStmt>(std::move(new_condition), std::move(new_then_body), *new_else_body,
+                                                  std::move(new_return_vars), op->span_);
         } else {
-            return std::make_shared<const IfStmt>(
-                std::move(new_condition), std::move(new_then_body), std::nullopt, std::move(new_return_vars),
-                op->span_);
+            return std::make_shared<const IfStmt>(std::move(new_condition), std::move(new_then_body), std::nullopt,
+                                                  std::move(new_return_vars), op->span_);
         }
     }
     return op;
@@ -504,9 +501,9 @@ StmtPtr IRMutator::VisitStmt_(const ForStmtPtr& op)
     if (new_loop_var.get() != op->loopVar_.get() || new_start.get() != op->start_.get() ||
         new_stop.get() != op->stop_.get() || new_step.get() != op->step_.get() || iter_args_changed || body_changed ||
         return_vars_changed) {
-        return std::make_shared<const ForStmt>(
-            std::move(new_loop_var), std::move(new_start), std::move(new_stop), std::move(new_step),
-            std::move(new_iter_args), std::move(new_body), std::move(new_return_vars), op->span_, op->attrs_);
+        return std::make_shared<const ForStmt>(std::move(new_loop_var), std::move(new_start), std::move(new_stop),
+                                               std::move(new_step), std::move(new_iter_args), std::move(new_body),
+                                               std::move(new_return_vars), op->span_, op->attrs_);
     }
     return op;
 }
@@ -570,9 +567,8 @@ StmtPtr IRMutator::VisitStmt_(const WhileStmtPtr& op)
     }
 
     if (condition_changed || iter_args_changed || body_changed || return_vars_changed) {
-        return std::make_shared<const WhileStmt>(
-            std::move(new_condition), std::move(new_iter_args), std::move(new_body), std::move(new_return_vars),
-            op->span_);
+        return std::make_shared<const WhileStmt>(std::move(new_condition), std::move(new_iter_args),
+                                                 std::move(new_body), std::move(new_return_vars), op->span_);
     }
     return op;
 }
@@ -654,8 +650,8 @@ StmtPtr IRMutator::VisitStmt_(const ScalarOpStmtPtr& op)
         new_args.push_back(new_arg);
     }
     if (changed) {
-        return std::make_shared<const ScalarOpStmt>(
-            std::move(new_result), std::move(new_token), std::move(op->opcode_), std::move(new_args), op->span_);
+        return std::make_shared<const ScalarOpStmt>(std::move(new_result), std::move(new_token), std::move(op->opcode_),
+                                                    std::move(new_args), op->span_);
     }
     return op;
 }
@@ -705,8 +701,8 @@ StmtPtr IRMutator::VisitStmt_(const TensorOpStmtPtr& op)
     }
 
     if (changed) {
-        return npu::tile_fwk::RebuildTensorOpStmt(
-            op, std::move(new_results), std::move(new_token), std::move(new_args), std::move(new_tokens), op->span_);
+        return npu::tile_fwk::RebuildTensorOpStmt(op, std::move(new_results), std::move(new_token), std::move(new_args),
+                                                  std::move(new_tokens), op->span_);
     }
     return op;
 }

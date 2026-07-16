@@ -43,9 +43,9 @@ struct IsIRNodeField<std::shared_ptr<const IRNodeType>, std::enable_if_t<std::is
 
 // Non-const shared_ptr<T> where T derives from IRNode (T must not be const)
 template <typename IRNodeType>
-struct IsIRNodeField<
-    std::shared_ptr<IRNodeType>,
-    std::enable_if_t<std::is_base_of_v<IRNode, IRNodeType> && !std::is_const_v<IRNodeType>>> : std::true_type {};
+struct IsIRNodeField<std::shared_ptr<IRNodeType>,
+                     std::enable_if_t<std::is_base_of_v<IRNode, IRNodeType> && !std::is_const_v<IRNodeType>>>
+    : std::true_type {};
 
 /**
  * \brief Type trait to check if a type is std::vector of IRNode pointers
@@ -158,8 +158,8 @@ public:
      * \param descriptors Field descriptor instances
      * \return Accumulated result from visiting all field pairs
      */
-    static ResultType Visit(
-        const NodeType& lhs, const NodeType& rhs, Visitor& visitor, const Descriptors&... descriptors)
+    static ResultType Visit(const NodeType& lhs, const NodeType& rhs, Visitor& visitor,
+                            const Descriptors&... descriptors)
     {
         ResultType result = visitor.InitResult();
         (VisitField(visitor, descriptors, result, lhs, rhs), ...);

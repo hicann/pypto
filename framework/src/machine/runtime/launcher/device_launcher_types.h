@@ -23,13 +23,12 @@ namespace npu::tile_fwk::dynamic {
 class DeviceTensorData {
 public:
     DeviceTensorData() = default;
-    DeviceTensorData(
-        DataType dtype, void* addr, const std::vector<int64_t>& shape, TileOpFormat format = TileOpFormat::TILEOP_ND)
+    DeviceTensorData(DataType dtype, void* addr, const std::vector<int64_t>& shape,
+                     TileOpFormat format = TileOpFormat::TILEOP_ND)
         : dtype_(dtype), addr_(addr), shape_(shape), format_(format)
     {}
-    DeviceTensorData(
-        DataType dtype, uintptr_t addr, const std::vector<int64_t>& shape,
-        TileOpFormat format = TileOpFormat::TILEOP_ND)
+    DeviceTensorData(DataType dtype, uintptr_t addr, const std::vector<int64_t>& shape,
+                     TileOpFormat format = TileOpFormat::TILEOP_ND)
         : dtype_(dtype), addr_((void*)addr), shape_(shape), format_(format)
     {}
 
@@ -87,7 +86,6 @@ struct DeviceLauncherConfig {
         return config;
     }
 };
-
 
 struct OperatorTensorPara {
     std::vector<DevTensorData> inputTensorParaList;
@@ -164,8 +162,8 @@ public:
         return cachedOperator == nullptr ? nullptr : &cachedOperator->binHandle_;
     }
 
-    uint8_t* FindCtrlFlowCache(
-        const std::vector<DeviceTensorData>& inputList, const std::vector<DeviceTensorData>& outputList)
+    uint8_t* FindCtrlFlowCache(const std::vector<DeviceTensorData>& inputList,
+                               const std::vector<DeviceTensorData>& outputList)
     {
         auto it = devCtrlFlowCacheMap_.find(BuildOperatorTensorPara(inputList, outputList));
         if (it != devCtrlFlowCacheMap_.end()) {
@@ -174,15 +172,15 @@ public:
         return nullptr;
     }
 
-    void InsertCtrlFlowCache(
-        const std::vector<DeviceTensorData>& inputList, const std::vector<DeviceTensorData>& outputList, uint8_t* cache)
+    void InsertCtrlFlowCache(const std::vector<DeviceTensorData>& inputList,
+                             const std::vector<DeviceTensorData>& outputList, uint8_t* cache)
     {
         devCtrlFlowCacheMap_[BuildOperatorTensorPara(inputList, outputList)] = cache;
     }
 
 private:
-    OperatorTensorPara BuildOperatorTensorPara(
-        const std::vector<DeviceTensorData>& inputList, const std::vector<DeviceTensorData>& outputList)
+    OperatorTensorPara BuildOperatorTensorPara(const std::vector<DeviceTensorData>& inputList,
+                                               const std::vector<DeviceTensorData>& outputList)
     {
         OperatorTensorPara para;
         for (const auto& input : inputList) {
@@ -202,4 +200,4 @@ private:
     void* binHandle_{nullptr};
     std::unordered_map<OperatorTensorPara, uint8_t*, OperatorTensorParaHash> devCtrlFlowCacheMap_;
 };
-}
+} // namespace npu::tile_fwk::dynamic

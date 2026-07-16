@@ -32,12 +32,12 @@
 #include "passes/pass_utils/graph_utils.h"
 #include "interface/tensor/irbuilder.h"
 
-
 using namespace npu::tile_fwk;
 
 namespace {
 
-void CheckFwkOpTileShape(const VecTile& vecTile, const std::shared_ptr<LogicalTensor>& tensor, const std::string& fwkOpName)
+void CheckFwkOpTileShape(const VecTile& vecTile, const std::shared_ptr<LogicalTensor>& tensor,
+                         const std::string& fwkOpName)
 {
     const auto& tensorShape = tensor->GetShape();
     CHECK_OP(vecTile.size() >= tensorShape.size()) << "FwkOp tile shape dimension mismatch! "
@@ -55,9 +55,8 @@ void CheckFwkOpTileShape(const VecTile& vecTile, const std::shared_ptr<LogicalTe
                                              << "Dump tensor: " << tensor->Dump();
 }
 
-void CheckViewValidShapesConstraint(
-    const std::vector<SymbolicScalar>& newValidShapes, const std::vector<int64_t>& shapes,
-    const std::vector<int64_t>& operandShape)
+void CheckViewValidShapesConstraint(const std::vector<SymbolicScalar>& newValidShapes,
+                                    const std::vector<int64_t>& shapes, const std::vector<int64_t>& operandShape)
 {
     CHECK_OP(newValidShapes.size() == operandShape.size())
         << "View operation failed: newValidShapes dimension count must match original tensor's dimension count. "
@@ -76,9 +75,8 @@ void CheckViewValidShapesConstraint(
     }
 }
 
-void TiledAssemble(
-    Function& function, const TileShape& tileShape, size_t cur, Input& input,
-    const std::shared_ptr<LogicalTensor>& result, std::shared_ptr<AssembleOpAttribute> attr)
+void TiledAssemble(Function& function, const TileShape& tileShape, size_t cur, Input& input,
+                   const std::shared_ptr<LogicalTensor>& result, std::shared_ptr<AssembleOpAttribute> attr)
 {
     if (cur == input.tensor.GetShape().size()) {
         auto tile = input.tensor.GetStorage()->View(function, input.tileInfo.shape, input.tileInfo.offset);
@@ -105,9 +103,8 @@ void TiledAssemble(
     }
 }
 
-void TiledAssemble(
-    Function& function, const TileShape& tileShape, const std::shared_ptr<LogicalTensor>& operand,
-    const std::shared_ptr<LogicalTensor>& result, std::shared_ptr<AssembleOpAttribute> attr)
+void TiledAssemble(Function& function, const TileShape& tileShape, const std::shared_ptr<LogicalTensor>& operand,
+                   const std::shared_ptr<LogicalTensor>& result, std::shared_ptr<AssembleOpAttribute> attr)
 {
     ASSERT(VectorErrorCode::ERR_PARAM_INVALID, operand->shape.size() == operand->offset.size())
         << "operand's shape size and offset size should be equal";
@@ -131,9 +128,8 @@ constexpr int SMALL_CHANNEL_8 = 8;
 constexpr int SMALL_CHANNEL_16 = 16;
 static const std::vector<NPUArch> ONLINE_SOFTMAX_SUPPORTED_ARCHITECTURES = {NPUArch::DAV_3510};
 
-void TiledMaxpool(
-    Function& function, const TileShape& tileShape, const std::shared_ptr<LogicalTensor>& input,
-    const std::shared_ptr<LogicalTensor>& output, const Operation& op)
+void TiledMaxpool(Function& function, const TileShape& tileShape, const std::shared_ptr<LogicalTensor>& input,
+                  const std::shared_ptr<LogicalTensor>& output, const Operation& op)
 {
     const int dimN = output->shape[NUM_VALUE_0];
     const int dimC1 = output->shape[NUM_VALUE_1];
@@ -179,8 +175,8 @@ void TiledMaxpool(
                     const int curPaddingLeft = startWIn > 0 ? 0 : paddingLeft;
                     const int curPaddingRight = endWIn < dimInW ? 0 : paddingRight;
 
-                    auto inTile = input->View(
-                        function, {tileN, tileC1, tileHIn, tileWIn, c0}, {n, c1, curStartHIn, curStartWIn, 0});
+                    auto inTile = input->View(function, {tileN, tileC1, tileHIn, tileWIn, c0},
+                                              {n, c1, curStartHIn, curStartWIn, 0});
                     auto outTile = output->View(function, {tileN, tileC1, tileHOut, tileWOut, c0}, {n, c1, h, w, 0});
                     if (isOnlyNeedCopy) {
                         function.AddOperation(Opcode::OP_COPY_UB_TO_UB, {inTile}, {outTile});
@@ -203,9 +199,9 @@ void TiledMaxpool(
     }
 }
 
-void TensorMaxpool(
-    Function& function, const std::shared_ptr<LogicalTensor>& operand, const std::shared_ptr<LogicalTensor>& result,
-    const std::vector<int>& pools, const std::vector<int>& strides, const std::vector<int>& paddings)
+void TensorMaxpool(Function& function, const std::shared_ptr<LogicalTensor>& operand,
+                   const std::shared_ptr<LogicalTensor>& result, const std::vector<int>& pools,
+                   const std::vector<int>& strides, const std::vector<int>& paddings)
 {
     const int paddingLeft = paddings[NUM_VALUE_0];
     const int paddingTop = paddings[NUM_VALUE_1];
@@ -227,15 +223,13 @@ void TensorMaxpool(
     maxpoolTensorOp.SetAttribute(PoolOpAttributeKey::poolw, poolW);
 }
 
-Tensor Maxpool(
-    const Tensor& operand, const std::vector<int>& pools, const std::vector<int>& strides,
-    const std::vector<int>& paddings)
+Tensor Maxpool(const Tensor& operand, const std::vector<int>& pools, const std::vector<int>& strides,
+               const std::vector<int>& paddings)
 {
     DECLARE_TRACER();
     // 目前只支持5D操作
-    CHECK_OP(
-        (operand.GetShape().size() == NC1HWC0_DIM_NUM) && pools.size() == NUM_VALUE_2 &&
-        strides.size() == STRIDE_DIM_NUM && paddings.size() == PADS_DIM_NUM);
+    CHECK_OP((operand.GetShape().size() == NC1HWC0_DIM_NUM) && pools.size() == NUM_VALUE_2 &&
+             strides.size() == STRIDE_DIM_NUM && paddings.size() == PADS_DIM_NUM);
 
     const int inDimH = operand.GetShape()[NUM_VALUE_2];
     const int inDimW = operand.GetShape()[NUM_VALUE_3];
@@ -249,13 +243,11 @@ Tensor Maxpool(
     const int kw = pools[NUM_VALUE_1];
     const int outHeight = CeilDiv(inDimH + paddingTop + paddingBottom - kh + 1, strideH);
     const int outWidth = CeilDiv(inDimW + paddingLeft + paddingRight - kw + 1, strideW);
-    const std::vector<int64_t> outShape = {
-        operand.GetShape()[NUM_VALUE_0], operand.GetShape()[NUM_VALUE_1], outHeight, outWidth,
-        operand.GetShape()[NUM_VALUE_4]};
+    const std::vector<int64_t> outShape = {operand.GetShape()[NUM_VALUE_0], operand.GetShape()[NUM_VALUE_1], outHeight,
+                                           outWidth, operand.GetShape()[NUM_VALUE_4]};
     Tensor result(operand.GetStorage()->tensor->datatype, outShape);
-    CALL(
-        Maxpool, *Program::GetInstance().GetCurrentFunction(), operand.GetStorage(), result.GetStorage(), pools,
-        strides, paddings);
+    CALL(Maxpool, *Program::GetInstance().GetCurrentFunction(), operand.GetStorage(), result.GetStorage(), pools,
+         strides, paddings);
 
     return result;
 }
@@ -263,7 +255,7 @@ Tensor Maxpool(
 static std::vector<int64_t> GetLineReduceWorkspaceShape(const std::vector<int64_t>& sourceShape, int axis)
 {
     return {(sourceShape[axis] + 1) / NUM_VALUE_2,
-        (sourceShape[sourceShape.size() - 1] + BLOCK_NUM - 1) / BLOCK_NUM * BLOCK_NUM};
+            (sourceShape[sourceShape.size() - 1] + BLOCK_NUM - 1) / BLOCK_NUM * BLOCK_NUM};
 }
 
 static int64_t GetOnlineSoftmaxFp32AlignedColumns(int64_t columns)
@@ -305,25 +297,24 @@ std::tuple<Tensor, Tensor, Tensor> OnlineSoftmax(const Tensor& scores, float sca
         columnMax.GetStorage()->UpdateDynValidShape(columnStatisticValidShape);
         columnSum.GetStorage()->UpdateDynValidShape(columnStatisticValidShape);
         scaledScores.GetStorage()->UpdateDynValidShape(scoresValidShape);
-        reduceWorkspace.GetStorage()->UpdateDynValidShape(
-            SymbolicScalar::FromConcrete(reduceWorkspace.GetShape()));
+        reduceWorkspace.GetStorage()->UpdateDynValidShape(SymbolicScalar::FromConcrete(reduceWorkspace.GetShape()));
     }
 
     auto& op = Program::GetInstance().GetCurrentFunction()->AddOperation(
         Opcode::OP_ONLINE_SOFTMAX, {scores.GetStorage()},
         {expScoresBf16.GetStorage(), columnMax.GetStorage(), columnSum.GetStorage(), scaledScores.GetStorage(),
-            reduceWorkspace.GetStorage()});
+         reduceWorkspace.GetStorage()});
     op.SetAttribute(OpAttributeKey::scalar, Element(DataType::DT_FP32, scale));
     op.SetAttribute(OpAttributeKey::excludeBufferReuse, true);
     return {expScoresBf16, columnMax, columnSum};
 }
 
-static void CheckOnlineSoftmaxUpdateStats(
-    const Tensor& previousMax, const Tensor& previousSum, const Tensor& previousOutput, const Tensor& currentMax,
-    const Tensor& currentSum, const Tensor& currentOutput)
+static void CheckOnlineSoftmaxUpdateStats(const Tensor& previousMax, const Tensor& previousSum,
+                                          const Tensor& previousOutput, const Tensor& currentMax,
+                                          const Tensor& currentSum, const Tensor& currentOutput)
 {
-    const std::vector<Tensor> inputTensors = {previousMax, previousSum, previousOutput, currentMax, currentSum,
-        currentOutput};
+    const std::vector<Tensor> inputTensors = {previousMax, previousSum, previousOutput,
+                                              currentMax,  currentSum,  currentOutput};
     for (const auto& tensor : inputTensors) {
         CheckTensorDataType(tensor.GetStorage(), {DT_FP32}, "ONLINE_SOFTMAX_UPDATE");
         CheckTensorDimRange(tensor.GetStorage(), NUM_VALUE_2, NUM_VALUE_2, "ONLINE_SOFTMAX_UPDATE");
@@ -331,23 +322,22 @@ static void CheckOnlineSoftmaxUpdateStats(
     }
     ASSERT(VectorErrorCode::ERR_PARAM_INVALID, previousOutput.GetShape() == currentOutput.GetShape())
         << "ONLINE_SOFTMAX_UPDATE requires previousOutput and currentOutput to have the same shape.";
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID,
-        previousMax.GetShape() == previousSum.GetShape() && previousMax.GetShape() == currentMax.GetShape() &&
-            previousMax.GetShape() == currentSum.GetShape())
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, previousMax.GetShape() == previousSum.GetShape() &&
+                                                   previousMax.GetShape() == currentMax.GetShape() &&
+                                                   previousMax.GetShape() == currentSum.GetShape())
         << "ONLINE_SOFTMAX_UPDATE requires previous/current max and sum tensors to have the same shape.";
     ASSERT(VectorErrorCode::ERR_PARAM_INVALID,
-        previousMax.GetShape()[0] == 1 && previousMax.GetShape()[1] == previousOutput.GetShape()[1])
+           previousMax.GetShape()[0] == 1 && previousMax.GetShape()[1] == previousOutput.GetShape()[1])
         << "ONLINE_SOFTMAX_UPDATE requires max/sum tensors with shape [1, q_len].";
 }
 
-std::tuple<Tensor, Tensor, Tensor> OnlineSoftmaxUpdate(
-    const Tensor& previousMax, const Tensor& previousSum, const Tensor& previousOutput, const Tensor& currentMax,
-    const Tensor& currentSum, const Tensor& currentOutput)
+std::tuple<Tensor, Tensor, Tensor> OnlineSoftmaxUpdate(const Tensor& previousMax, const Tensor& previousSum,
+                                                       const Tensor& previousOutput, const Tensor& currentMax,
+                                                       const Tensor& currentSum, const Tensor& currentOutput)
 {
     DECLARE_TRACER();
     CheckSupportedNPUArch(ONLINE_SOFTMAX_SUPPORTED_ARCHITECTURES, "OnlineSoftmaxUpdate");
-    CheckOnlineSoftmaxUpdateStats(
-        previousMax, previousSum, previousOutput, currentMax, currentSum, currentOutput);
+    CheckOnlineSoftmaxUpdateStats(previousMax, previousSum, previousOutput, currentMax, currentSum, currentOutput);
 
     Tensor updatedMax(DataType::DT_FP32, previousMax.GetShape());
     Tensor updatedSum(DataType::DT_FP32, previousSum.GetShape());
@@ -359,15 +349,16 @@ std::tuple<Tensor, Tensor, Tensor> OnlineSoftmaxUpdate(
     updateWorkspace.GetStorage()->UpdateDynValidShape(SymbolicScalar::FromConcrete(updateWorkspace.GetShape()));
 
     auto& op = Program::GetInstance().GetCurrentFunction()->AddOperation(
-        Opcode::OP_ONLINE_SOFTMAX_UPDATE, {previousMax.GetStorage(), previousSum.GetStorage(),
-            previousOutput.GetStorage(), currentMax.GetStorage(), currentSum.GetStorage(), currentOutput.GetStorage()},
+        Opcode::OP_ONLINE_SOFTMAX_UPDATE,
+        {previousMax.GetStorage(), previousSum.GetStorage(), previousOutput.GetStorage(), currentMax.GetStorage(),
+         currentSum.GetStorage(), currentOutput.GetStorage()},
         {updatedMax.GetStorage(), updatedSum.GetStorage(), updatedOutput.GetStorage(), updateWorkspace.GetStorage()});
     op.SetAttribute(OpAttributeKey::excludeBufferReuse, true);
     return {updatedMax, updatedSum, updatedOutput};
 }
 
 static void CheckOnlineSoftmaxTileShape(const std::vector<int64_t>& viewShape, const VecTile& vecTile,
-    const std::string& opName)
+                                        const std::string& opName)
 {
     ASSERT(VectorErrorCode::ERR_CONFIG_TILE, vecTile.size() >= viewShape.size())
         << opName << " expects vec tile rank >= tensor rank.";
@@ -376,9 +367,9 @@ static void CheckOnlineSoftmaxTileShape(const std::vector<int64_t>& viewShape, c
         << vecTile[0] << ").";
 }
 
-void OnlineSoftmaxOperationTileFunc(
-    Function& function, const TileShape& tileShape, const std::vector<LogicalTensorPtr>& iOperand,
-    const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
+void OnlineSoftmaxOperationTileFunc(Function& function, const TileShape& tileShape,
+                                    const std::vector<LogicalTensorPtr>& iOperand,
+                                    const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
 {
     ASSERT(VectorErrorCode::ERR_PARAM_INVALID, iOperand.size() == 1 && oOperand.size() == NUM_VALUE_5)
         << "ONLINE_SOFTMAX expects 1 input and 5 outputs including workspace tensors.";
@@ -392,11 +383,10 @@ void OnlineSoftmaxOperationTileFunc(
     ASSERT(VectorErrorCode::ERR_PARAM_INVALID, scores->shape.size() == NUM_VALUE_2)
         << "ONLINE_SOFTMAX only supports 2D tensor in v1.";
     ASSERT(VectorErrorCode::ERR_PARAM_INVALID,
-        expScoresBf16->shape == scores->shape && scaledScores->shape == scores->shape)
+           expScoresBf16->shape == scores->shape && scaledScores->shape == scores->shape)
         << "ONLINE_SOFTMAX requires expScoresBf16/scaledScores shape to match scores shape.";
     ASSERT(VectorErrorCode::ERR_PARAM_INVALID,
-        columnMax->shape == columnSum->shape && columnMax->shape[0] == 1 &&
-            columnMax->shape[1] == scores->shape[1])
+           columnMax->shape == columnSum->shape && columnMax->shape[0] == 1 && columnMax->shape[1] == scores->shape[1])
         << "ONLINE_SOFTMAX requires columnMax/columnSum shape [1, q_len].";
     CheckOnlineSoftmaxTileShape(scores->shape, vecTile, "ONLINE_SOFTMAX");
 
@@ -414,9 +404,9 @@ void OnlineSoftmaxOperationTileFunc(
         auto columnMaxTile = columnMax->View(function, statisticTileInfo.shape, statisticTileInfo.offset);
         auto columnSumTile = columnSum->View(function, statisticTileInfo.shape, statisticTileInfo.offset);
         auto scaledScoresTile = scaledScores->View(function, scoreTileInfo.shape, scoreTileInfo.offset);
-        auto reduceWorkspaceTile =
-            reduceWorkspace->View(function, reduceWorkspaceShape, reduceWorkspaceOffset);
-        auto& tileOp = function.AddOperation(Opcode::OP_ONLINE_SOFTMAX, {scoreTile},
+        auto reduceWorkspaceTile = reduceWorkspace->View(function, reduceWorkspaceShape, reduceWorkspaceOffset);
+        auto& tileOp = function.AddOperation(
+            Opcode::OP_ONLINE_SOFTMAX, {scoreTile},
             {expScoresTile, columnMaxTile, columnSumTile, scaledScoresTile, reduceWorkspaceTile});
         tileOp.SetAttribute(OpAttributeKey::scalar, op.GetElementAttribute(OpAttributeKey::scalar));
         tileOp.SetAttribute(OpAttributeKey::excludeBufferReuse, true);
@@ -436,32 +426,32 @@ struct OnlineSoftmaxUpdateTileOperands {
     LogicalTensorPtr updateWorkspace;
 };
 
-static OnlineSoftmaxUpdateTileOperands GetOnlineSoftmaxUpdateTileOperands(
-    const std::vector<LogicalTensorPtr>& iOperand, const std::vector<LogicalTensorPtr>& oOperand)
+static OnlineSoftmaxUpdateTileOperands GetOnlineSoftmaxUpdateTileOperands(const std::vector<LogicalTensorPtr>& iOperand,
+                                                                          const std::vector<LogicalTensorPtr>& oOperand)
 {
     ASSERT(VectorErrorCode::ERR_PARAM_INVALID, iOperand.size() == NUM_VALUE_6 && oOperand.size() == NUM_VALUE_4)
         << "ONLINE_SOFTMAX_UPDATE expects 6 inputs and 4 outputs including workspace tensor.";
-    return {iOperand[0], iOperand[1], iOperand[NUM_VALUE_2], iOperand[NUM_VALUE_3], iOperand[NUM_VALUE_4],
-        iOperand[NUM_VALUE_5], oOperand[0], oOperand[1], oOperand[NUM_VALUE_2], oOperand[NUM_VALUE_3]};
+    return {iOperand[0],           iOperand[1], iOperand[NUM_VALUE_2], iOperand[NUM_VALUE_3], iOperand[NUM_VALUE_4],
+            iOperand[NUM_VALUE_5], oOperand[0], oOperand[1],           oOperand[NUM_VALUE_2], oOperand[NUM_VALUE_3]};
 }
 
 static void CheckOnlineSoftmaxUpdateTileOperands(const OnlineSoftmaxUpdateTileOperands& tensors, const VecTile& vecTile)
 {
     ASSERT(VectorErrorCode::ERR_PARAM_INVALID, tensors.previousOutput->shape.size() == NUM_VALUE_2)
         << "ONLINE_SOFTMAX_UPDATE only supports 2D O tensor in v1.";
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID,
-        tensors.currentOutput->shape == tensors.previousOutput->shape &&
-            tensors.updatedOutput->shape == tensors.previousOutput->shape)
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, tensors.currentOutput->shape == tensors.previousOutput->shape &&
+                                                   tensors.updatedOutput->shape == tensors.previousOutput->shape)
         << "ONLINE_SOFTMAX_UPDATE requires previous/current/updated output tensors to have the same shape.";
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID,
-        tensors.previousMax->shape == tensors.previousSum->shape &&
-            tensors.previousMax->shape == tensors.currentMax->shape &&
-            tensors.previousMax->shape == tensors.currentSum->shape &&
-            tensors.previousMax->shape == tensors.updatedMax->shape &&
-            tensors.previousMax->shape == tensors.updatedSum->shape && tensors.previousMax->shape[0] == 1 &&
-            tensors.previousMax->shape[1] == tensors.previousOutput->shape[1])
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, tensors.previousMax->shape == tensors.previousSum->shape &&
+                                                   tensors.previousMax->shape == tensors.currentMax->shape &&
+                                                   tensors.previousMax->shape == tensors.currentSum->shape &&
+                                                   tensors.previousMax->shape == tensors.updatedMax->shape &&
+                                                   tensors.previousMax->shape == tensors.updatedSum->shape &&
+                                                   tensors.previousMax->shape[0] == 1 &&
+                                                   tensors.previousMax->shape[1] == tensors.previousOutput->shape[1])
         << "ONLINE_SOFTMAX_UPDATE requires all statistic tensors with shape [1, q_len].";
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID,
+    ASSERT(
+        VectorErrorCode::ERR_PARAM_INVALID,
         tensors.updateWorkspace->shape.size() == NUM_VALUE_2 &&
             tensors.updateWorkspace->shape[0] == tensors.previousOutput->shape[0] + NUM_VALUE_3 &&
             tensors.updateWorkspace->shape[1] == GetOnlineSoftmaxFp32AlignedColumns(tensors.previousOutput->shape[1]))
@@ -471,8 +461,8 @@ static void CheckOnlineSoftmaxUpdateTileOperands(const OnlineSoftmaxUpdateTileOp
         << "ONLINE_SOFTMAX_UPDATE requires vec tile last dim to be FP32 32-byte aligned.";
 }
 
-static void AddOnlineSoftmaxUpdateTileOp(
-    Function& function, const OnlineSoftmaxUpdateTileOperands& tensors, int64_t col, int64_t tileColumns)
+static void AddOnlineSoftmaxUpdateTileOp(Function& function, const OnlineSoftmaxUpdateTileOperands& tensors,
+                                         int64_t col, int64_t tileColumns)
 {
     const std::vector<int64_t> outputTileShape = {tensors.previousOutput->shape[0], tileColumns};
     const std::vector<int64_t> outputTileOffset = {0, col};
@@ -488,17 +478,19 @@ static void AddOnlineSoftmaxUpdateTileOp(
     auto updatedSumTile = tensors.updatedSum->View(function, statisticTileShape, statisticTileOffset);
     auto updatedOutputTile = tensors.updatedOutput->View(function, outputTileShape, outputTileOffset);
     auto alignedTileColumns = GetOnlineSoftmaxFp32AlignedColumns(tileColumns);
-    auto updateWorkspaceTile =
-        tensors.updateWorkspace->View(function, {outputTileShape[0] + NUM_VALUE_3, alignedTileColumns}, {0, col});
-    auto& tileOp = function.AddOperation(Opcode::OP_ONLINE_SOFTMAX_UPDATE,
+    auto updateWorkspaceTile = tensors.updateWorkspace->View(
+        function, {outputTileShape[0] + NUM_VALUE_3, alignedTileColumns}, {0, col});
+    auto& tileOp = function.AddOperation(
+        Opcode::OP_ONLINE_SOFTMAX_UPDATE,
         {previousMaxTile, previousSumTile, previousOutputTile, currentMaxTile, currentSumTile, currentOutputTile},
         {updatedMaxTile, updatedSumTile, updatedOutputTile, updateWorkspaceTile});
     tileOp.SetAttribute(OpAttributeKey::excludeBufferReuse, true);
 }
 
-void OnlineSoftmaxUpdateOperationTileFunc(
-    Function& function, const TileShape& tileShape, const std::vector<LogicalTensorPtr>& iOperand,
-    const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
+void OnlineSoftmaxUpdateOperationTileFunc(Function& function, const TileShape& tileShape,
+                                          const std::vector<LogicalTensorPtr>& iOperand,
+                                          const std::vector<LogicalTensorPtr>& oOperand,
+                                          [[maybe_unused]] const Operation& op)
 {
     const auto& vecTile = tileShape.GetVecTile();
     auto tensors = GetOnlineSoftmaxUpdateTileOperands(iOperand, oOperand);
@@ -510,8 +502,8 @@ void OnlineSoftmaxUpdateOperationTileFunc(
 }
 
 REGISTER_OPERATION_TILED_FUNC(OP_ONLINE_SOFTMAX, Opcode::OP_ONLINE_SOFTMAX, OnlineSoftmaxOperationTileFunc);
-REGISTER_OPERATION_TILED_FUNC(
-    OP_ONLINE_SOFTMAX_UPDATE, Opcode::OP_ONLINE_SOFTMAX_UPDATE, OnlineSoftmaxUpdateOperationTileFunc);
+REGISTER_OPERATION_TILED_FUNC(OP_ONLINE_SOFTMAX_UPDATE, Opcode::OP_ONLINE_SOFTMAX_UPDATE,
+                              OnlineSoftmaxUpdateOperationTileFunc);
 
 Tensor Compact(const Tensor& operand)
 {
@@ -525,9 +517,8 @@ Tensor Compact(const Tensor& operand)
     return result;
 }
 
-void experimental::Print(
-    SymbolicScalar cond, const std::string& format, const std::vector<Tensor>& tensors,
-    const std::vector<SymbolicScalar>& scalars)
+void experimental::Print(SymbolicScalar cond, const std::string& format, const std::vector<Tensor>& tensors,
+                         const std::vector<SymbolicScalar>& scalars)
 {
     auto function = Program::GetInstance().GetCurrentFunction();
     std::vector<LogicalTensorPtr> inputs;
@@ -541,8 +532,8 @@ void experimental::Print(
     function->UpdateTensorDataUsage(op);
 }
 
-void ToFile(
-    const Tensor& operand, const std::string& fname, const std::vector<SymbolicScalar>& scalars, SymbolicScalar cond)
+void ToFile(const Tensor& operand, const std::string& fname, const std::vector<SymbolicScalar>& scalars,
+            SymbolicScalar cond)
 {
     auto function = Program::GetInstance().GetCurrentFunction();
     auto& op = function->AddOperation(Opcode::OP_PRINT, {operand.GetStorage()}, {});
@@ -557,9 +548,8 @@ Tensor Unsqueeze(const Tensor& old, int unsqueezeDimNum)
 {
     DECLARE_TRACER();
 
-    CHECK_OP(
-        unsqueezeDimNum < static_cast<int>(old.GetShape().size()) + 1 &&
-        unsqueezeDimNum >= -static_cast<int>(old.GetShape().size()) - 1);
+    CHECK_OP(unsqueezeDimNum < static_cast<int>(old.GetShape().size()) + 1 &&
+             unsqueezeDimNum >= -static_cast<int>(old.GetShape().size()) - 1);
     size_t unsqueezeDim = unsqueezeDimNum;
     if (unsqueezeDimNum < 0) {
         unsqueezeDim = unsqueezeDimNum + old.GetShape().size() + 1;
@@ -653,9 +643,9 @@ Tensor Assign(const Tensor& operand)
 
 #define CALL(n, ...) Tensor##n(__VA_ARGS__)
 
-void TiledInnerRegisterCopy(
-    const int dimIdx, Function& function, const TileShape& tileShape, const LogicalTensorPtr& operand,
-    const LogicalTensorPtr& result, std::vector<int64_t> actTileShape, std::vector<int64_t> actOffset)
+void TiledInnerRegisterCopy(const int dimIdx, Function& function, const TileShape& tileShape,
+                            const LogicalTensorPtr& operand, const LogicalTensorPtr& result,
+                            std::vector<int64_t> actTileShape, std::vector<int64_t> actOffset)
 {
     if (static_cast<size_t>(dimIdx) == result->GetShape().size()) {
         auto inputTile = operand->View(function, actTileShape, actOffset);
@@ -673,21 +663,21 @@ void TiledInnerRegisterCopy(
     }
 }
 
-void TiledInnerRegisterCopy(
-    Function& function, const TileShape& tileShape, const LogicalTensorPtr& operand, const LogicalTensorPtr& result)
+void TiledInnerRegisterCopy(Function& function, const TileShape& tileShape, const LogicalTensorPtr& operand,
+                            const LogicalTensorPtr& result)
 {
     std::vector<int64_t> actOffset(result->GetShape().size(), 0);
     std::vector<int64_t> actTileShape(result->GetShape().size(), 1);
     TiledInnerRegisterCopy(0, function, tileShape, operand, result, actTileShape, actOffset);
 }
 
-void TiledInnerCompact(
-    Function& function, const TileShape& tileShape, const LogicalTensorPtr& operand, const LogicalTensorPtr& result)
+void TiledInnerCompact(Function& function, const TileShape& tileShape, const LogicalTensorPtr& operand,
+                       const LogicalTensorPtr& result)
 {
     ASSERT(VectorErrorCode::ERR_PARAM_INVALID, operand->shape.size() == operand->offset.size())
         << "operand's shape size and offset size should be equal";
-    auto workspace = std::make_shared<LogicalTensor>(
-        function, operand->tensor->datatype, std::vector<int64_t>{operand->shape[0], NUM_VALUE_8});
+    auto workspace = std::make_shared<LogicalTensor>(function, operand->tensor->datatype,
+                                                     std::vector<int64_t>{operand->shape[0], NUM_VALUE_8});
 
     // 目前只支持2维操作
     if (operand->shape.size() != 2) {
@@ -704,8 +694,8 @@ void TiledInnerCompact(
     }
 }
 
-void TensorInnerCompact(
-    Function& function, const TileShape& tileShape, const LogicalTensorPtr& operand, const LogicalTensorPtr& result)
+void TensorInnerCompact(Function& function, const TileShape& tileShape, const LogicalTensorPtr& operand,
+                        const LogicalTensorPtr& result)
 {
     TiledInnerCompact(function, tileShape, operand, result);
 }
@@ -715,9 +705,8 @@ Tensor NewCompact(const Tensor& operand)
     DECLARE_TRACER();
 
     Tensor result(operand.GetStorage()->tensor->datatype, {operand.GetShape()[0], 1});
-    CALL(
-        InnerCompact, *Program::GetInstance().GetCurrentFunction(), TileShape::Current(), operand.GetStorage(),
-        result.GetStorage());
+    CALL(InnerCompact, *Program::GetInstance().GetCurrentFunction(), TileShape::Current(), operand.GetStorage(),
+         result.GetStorage());
     return result;
 }
 
@@ -733,9 +722,8 @@ Tensor Reduce(const std::vector<Tensor>& aggregation, const ReduceMode reduceMod
     std::vector<LogicalTensorPtr> iOperand;
     std::vector<LogicalTensorPtr> oOperand;
     iOperand.reserve(aggregation.size());
-    std::transform(aggregation.begin(), aggregation.end(), std::back_inserter(iOperand), [](const Tensor& elem) {
-        return elem.GetStorage();
-    });
+    std::transform(aggregation.begin(), aggregation.end(), std::back_inserter(iOperand),
+                   [](const Tensor& elem) { return elem.GetStorage(); });
     auto o0 = iOperand[0];
     Tensor result(o0->Datatype(), o0->shape, "", o0->Format());
     auto& op = Program::GetInstance().AddOperation(Opcode::OP_REDUCE_ACC, iOperand, {result.GetStorage()});
@@ -743,15 +731,14 @@ Tensor Reduce(const std::vector<Tensor>& aggregation, const ReduceMode reduceMod
     return result;
 }
 
-void TiledReduceAcc(
-    Function& function, const TileShape& tileShape, size_t cur, std::vector<Input> inputVec,
-    const LogicalTensorPtr& result, TileInfo& resultTileInfo)
+void TiledReduceAcc(Function& function, const TileShape& tileShape, size_t cur, std::vector<Input> inputVec,
+                    const LogicalTensorPtr& result, TileInfo& resultTileInfo)
 {
     if (cur == inputVec[0].tensor.GetShape().size()) {
         std::vector<LogicalTensorPtr> inputTileVec;
         for (size_t index = 0; index < inputVec.size(); ++index) {
-            auto inputTile = inputVec[index].tensor.GetStorage()->View(
-                function, inputVec[index].tileInfo.shape, inputVec[index].tileInfo.offset);
+            auto inputTile = inputVec[index].tensor.GetStorage()->View(function, inputVec[index].tileInfo.shape,
+                                                                       inputVec[index].tileInfo.offset);
             inputTileVec.emplace_back(inputTile);
         }
 
@@ -766,16 +753,15 @@ void TiledReduceAcc(
         resultTileInfo.shape[cur] = std::min(result->shape[cur] - resultTileInfo.offset[cur], vecTile[cur]);
         for (size_t index = 0; index < inputVec.size(); ++index) {
             inputVec[index].tileInfo.offset[cur] = i % inputVec[index].tensor.GetShape()[cur];
-            inputVec[index].tileInfo.shape[cur] =
-                std::min(inputVec[index].tensor.GetShape()[cur] - inputVec[index].tileInfo.offset[cur], vecTile[cur]);
+            inputVec[index].tileInfo.shape[cur] = std::min(
+                inputVec[index].tensor.GetShape()[cur] - inputVec[index].tileInfo.offset[cur], vecTile[cur]);
         }
         TiledReduceAcc(function, tileShape, cur + 1, inputVec, result, resultTileInfo);
     }
 }
 
-void TiledReduceAcc(
-    Function& function, const TileShape& tileShape, std::vector<LogicalTensorPtr> operandVec,
-    const LogicalTensorPtr& result)
+void TiledReduceAcc(Function& function, const TileShape& tileShape, std::vector<LogicalTensorPtr> operandVec,
+                    const LogicalTensorPtr& result)
 {
     TileInfo tileInfo1(result->shape.size(), result->offset.size());
     TileInfo tileInfo2(result->shape.size(), result->offset.size());
@@ -794,9 +780,8 @@ const std::string SORT_ORDER = OP_ATTR_PREFIX + "order";
 const std::string SORT_START_INDEX = OP_ATTR_PREFIX + "start_index";
 const std::string SORT_FULL = OP_ATTR_PREFIX + "full_sort";
 
-void TiledSort(
-    Function& function, const LogicalTensorPtr& x, const LogicalTensorPtr& y, const LogicalTensorPtr& yIdx,
-    const LogicalTensorPtr& temp, int idxStart, int descending)
+void TiledSort(Function& function, const LogicalTensorPtr& x, const LogicalTensorPtr& y, const LogicalTensorPtr& yIdx,
+               const LogicalTensorPtr& temp, int idxStart, int descending)
 {
     auto& op = function.AddOperation(Opcode::OP_SORT, {x}, {y, yIdx, temp});
     op.SetAttribute(SORT_START_INDEX, static_cast<int>(idxStart));
@@ -813,16 +798,15 @@ std::tuple<Tensor, Tensor, Tensor> L1Sort(const Tensor& x, int idxStart, bool de
     auto y = Tensor(x.GetStorage()->tensor->datatype, x.GetShape());
     auto yIdx = Tensor(DataType::DT_INT32, x.GetShape());
     auto temp = Tensor(x.GetStorage()->tensor->datatype, tempShape);
-    TiledSort(
-        *Program::GetInstance().GetCurrentFunction(), x.GetStorage(), y.GetStorage(), yIdx.GetStorage(),
-        temp.GetStorage(), idxStart, descending);
+    TiledSort(*Program::GetInstance().GetCurrentFunction(), x.GetStorage(), y.GetStorage(), yIdx.GetStorage(),
+              temp.GetStorage(), idxStart, descending);
     return std::tie(y, yIdx, temp);
 }
 
-void TiledCompareAndSwap(
-    Function& function, const LogicalTensorPtr& x0, const LogicalTensorPtr& idx0, const LogicalTensorPtr& x1,
-    const LogicalTensorPtr& idx1, const LogicalTensorPtr& y0, const LogicalTensorPtr& yIdx0, const LogicalTensorPtr& y1,
-    const LogicalTensorPtr& yIdx1, int descending)
+void TiledCompareAndSwap(Function& function, const LogicalTensorPtr& x0, const LogicalTensorPtr& idx0,
+                         const LogicalTensorPtr& x1, const LogicalTensorPtr& idx1, const LogicalTensorPtr& y0,
+                         const LogicalTensorPtr& yIdx0, const LogicalTensorPtr& y1, const LogicalTensorPtr& yIdx1,
+                         int descending)
 {
     auto& op = function.AddOperation(Opcode::OP_COMPARE_SWAP, {x0, idx0, x1, idx1}, {y0, yIdx0, y1, yIdx1});
     op.SetAttribute(SORT_ORDER, static_cast<int>(descending));
@@ -830,22 +814,21 @@ void TiledCompareAndSwap(
     op.SetAttr(OpAttributeKey::inplaceInfo, inplaceInfo);
 }
 
-std::tuple<Tensor, Tensor, Tensor, Tensor> L1CompareAndSwap(
-    const Tensor& x0, const Tensor& idx0, const Tensor& x1, const Tensor& idx1, bool descending)
+std::tuple<Tensor, Tensor, Tensor, Tensor> L1CompareAndSwap(const Tensor& x0, const Tensor& idx0, const Tensor& x1,
+                                                            const Tensor& idx1, bool descending)
 {
     Tensor y0(x0.GetStorage()->Datatype(), x0.GetShape());
     Tensor yIdx0(idx0.GetStorage()->Datatype(), idx0.GetShape());
     Tensor y1(x1.GetStorage()->Datatype(), x1.GetShape());
     Tensor yIdx1(idx1.GetStorage()->Datatype(), idx1.GetShape());
-    TiledCompareAndSwap(
-        *Program::GetInstance().GetCurrentFunction(), x0.GetStorage(), idx0.GetStorage(), x1.GetStorage(),
-        idx1.GetStorage(), y0.GetStorage(), yIdx0.GetStorage(), y1.GetStorage(), yIdx1.GetStorage(), descending);
+    TiledCompareAndSwap(*Program::GetInstance().GetCurrentFunction(), x0.GetStorage(), idx0.GetStorage(),
+                        x1.GetStorage(), idx1.GetStorage(), y0.GetStorage(), yIdx0.GetStorage(), y1.GetStorage(),
+                        yIdx1.GetStorage(), descending);
     return std::tie(y0, yIdx0, y1, yIdx1);
 }
 
-void TiledMerge(
-    Function& function, const LogicalTensorPtr& x, const LogicalTensorPtr& idx, const LogicalTensorPtr& y,
-    const LogicalTensorPtr& yIdx, const LogicalTensorPtr& temp, int fullSort, int descending)
+void TiledMerge(Function& function, const LogicalTensorPtr& x, const LogicalTensorPtr& idx, const LogicalTensorPtr& y,
+                const LogicalTensorPtr& yIdx, const LogicalTensorPtr& temp, int fullSort, int descending)
 {
     auto& op = function.AddOperation(Opcode::OP_MERGE, {x, idx}, {y, yIdx, temp});
     op.SetAttribute(SORT_ORDER, static_cast<int>(descending));
@@ -862,9 +845,8 @@ std::tuple<Tensor, Tensor, Tensor> L1Merge(const Tensor& x, const Tensor& idx, b
     auto y = Tensor(x.GetStorage()->tensor->datatype, x.GetShape());
     auto yIdx = Tensor(idx.GetStorage()->tensor->datatype, idx.GetShape());
     auto temp = Tensor(x.GetStorage()->tensor->datatype, tempShape);
-    TiledMerge(
-        *Program::GetInstance().GetCurrentFunction(), x.GetStorage(), idx.GetStorage(), y.GetStorage(),
-        yIdx.GetStorage(), temp.GetStorage(), fullSort, descending);
+    TiledMerge(*Program::GetInstance().GetCurrentFunction(), x.GetStorage(), idx.GetStorage(), y.GetStorage(),
+               yIdx.GetStorage(), temp.GetStorage(), fullSort, descending);
     return std::tie(y, yIdx, temp);
 }
 
@@ -1086,9 +1068,8 @@ const std::string TOPK_MERGE_SIZE = OP_ATTR_PREFIX + "merge_size";
 const std::string TOPK_INDEX = OP_ATTR_PREFIX + "is_index";
 const std::string TOPK_K = OP_ATTR_PREFIX + "k";
 
-void TiledTopKSort(
-    Function& function, const LogicalTensorPtr& x, const LogicalTensorPtr& y, const LogicalTensorPtr& temp,
-    const SymbolicScalar& dynValue, int idxStart)
+void TiledTopKSort(Function& function, const LogicalTensorPtr& x, const LogicalTensorPtr& y,
+                   const LogicalTensorPtr& temp, const SymbolicScalar& dynValue, int idxStart)
 {
     auto& op = function.AddOperation(Opcode::OP_TOPK_SORT, {x}, {y, temp});
     op.SetAttribute(TOPK_START_INDEX, idxStart);
@@ -1104,9 +1085,8 @@ std::tuple<Tensor, Tensor> TopKSort(const Tensor& x, int idxStart)
     shape[1] *= kFactorSize;
     auto y = Tensor(x.GetStorage()->tensor->datatype, shape);
     auto temp = Tensor(x.GetStorage()->tensor->datatype, shape);
-    TiledTopKSort(
-        *Program::GetInstance().GetCurrentFunction(), x.GetStorage(), y.GetStorage(), temp.GetStorage(),
-        SymbolicScalar(), idxStart);
+    TiledTopKSort(*Program::GetInstance().GetCurrentFunction(), x.GetStorage(), y.GetStorage(), temp.GetStorage(),
+                  SymbolicScalar(), idxStart);
     return std::tie(y, temp);
 }
 
@@ -1117,8 +1097,8 @@ std::tuple<Tensor, Tensor> TopKSort(const Tensor& x, const SymbolicScalar& idxSt
     shape[1] *= kFactorSize;
     auto y = Tensor(x.GetStorage()->tensor->datatype, shape);
     auto temp = Tensor(x.GetStorage()->tensor->datatype, shape);
-    TiledTopKSort(
-        *Program::GetInstance().GetCurrentFunction(), x.GetStorage(), y.GetStorage(), temp.GetStorage(), idxStart, 0);
+    TiledTopKSort(*Program::GetInstance().GetCurrentFunction(), x.GetStorage(), y.GetStorage(), temp.GetStorage(),
+                  idxStart, 0);
     return std::tie(y, temp);
 }
 
@@ -1146,11 +1126,10 @@ void TiledTopKExtract(Function& function, const LogicalTensorPtr& x, const Logic
 Tensor View(const Tensor& operand, const std::vector<int64_t>& shapes, const std::vector<int64_t>& offsets)
 {
     DECLARE_TRACER();
-    Tensor result(
-        operand.GetStorage()->Datatype(), shapes, "View_" + operand.GetStorage()->GetRawTensor()->GetSymbol(),
-        operand.Format());
-    auto& op = Program::GetInstance().GetCurrentFunction()->AddOperation(
-        Opcode::OP_VIEW, {operand.GetStorage()}, {result.GetStorage()});
+    Tensor result(operand.GetStorage()->Datatype(), shapes, "View_" + operand.GetStorage()->GetRawTensor()->GetSymbol(),
+                  operand.Format());
+    auto& op = Program::GetInstance().GetCurrentFunction()->AddOperation(Opcode::OP_VIEW, {operand.GetStorage()},
+                                                                         {result.GetStorage()});
     auto validShape = GetViewValidShape(operand.GetStorage()->GetDynValidShape(), offsets, {}, shapes);
     result.GetStorage()->UpdateDynValidShape(validShape);
     auto newOffsets = SymbolicScalar::FromConcrete(offsets);
@@ -1182,8 +1161,8 @@ Tensor View(const Tensor& operand, const DataType dstDataType)
 {
     DECLARE_TRACER();
     auto originDType = operand.GetStorage()->Datatype();
-    float factor =
-        (float)BytesOf(originDType) / (float)BytesOf(dstDataType); // factor就代表了目标tensor尾部维度要扩展的倍数
+    float factor = (float)BytesOf(originDType) /
+                   (float)BytesOf(dstDataType); // factor就代表了目标tensor尾部维度要扩展的倍数
     FactorCheck(operand, factor);
 
     auto dstShape = operand.GetShape();
@@ -1193,18 +1172,17 @@ Tensor View(const Tensor& operand, const DataType dstDataType)
     auto changedDim = validShape[validShape.size() - 1] * BytesOf(originDType) / BytesOf(dstDataType);
     validShape[validShape.size() - 1] = changedDim;
 
-    Tensor result(
-        dstDataType, dstShape, "ViewType_" + operand.GetStorage()->GetRawTensor()->GetSymbol(), operand.Format());
+    Tensor result(dstDataType, dstShape, "ViewType_" + operand.GetStorage()->GetRawTensor()->GetSymbol(),
+                  operand.Format());
     result.GetStorage()->UpdateDynValidShape(validShape);
 
-    Program::GetInstance().GetCurrentFunction()->AddOperation(
-        Opcode::OP_VIEW_TYPE, {operand.GetStorage()}, {result.GetStorage()});
+    Program::GetInstance().GetCurrentFunction()->AddOperation(Opcode::OP_VIEW_TYPE, {operand.GetStorage()},
+                                                              {result.GetStorage()});
     return result;
 }
 
-void TiledViewTypeOperation(
-    Function& function, const TileShape& tileShape, const int cur, Input& input, float factor,
-    const LogicalTensorPtr& result)
+void TiledViewTypeOperation(Function& function, const TileShape& tileShape, const int cur, Input& input, float factor,
+                            const LogicalTensorPtr& result)
 {
     if (cur == static_cast<int>(input.tensor.GetShape().size())) {
         auto tile = input.tensor.GetStorage()->View(function, input.tileInfo.shape, input.tileInfo.offset);
@@ -1227,8 +1205,8 @@ void TiledViewTypeOperation(
     }
 }
 
-void TiledViewTypeOperation(
-    Function& function, const TileShape& tileShape, const LogicalTensorPtr& operand, const LogicalTensorPtr& result)
+void TiledViewTypeOperation(Function& function, const TileShape& tileShape, const LogicalTensorPtr& operand,
+                            const LogicalTensorPtr& result)
 {
     ASSERT(VectorErrorCode::ERR_PARAM_INVALID, operand->shape.size() == operand->offset.size())
         << "operand's shape size and offset size should be equal";
@@ -1246,14 +1224,12 @@ void TiledViewTypeOperation(
     TiledViewTypeOperation(function, tileShape, 0, input, factor, result);
 }
 
-Tensor View(
-    const Tensor& operand, const std::vector<int64_t>& shapes, const std::vector<SymbolicScalar>& newOffsets,
-    const void* lr)
+Tensor View(const Tensor& operand, const std::vector<int64_t>& shapes, const std::vector<SymbolicScalar>& newOffsets,
+            const void* lr)
 {
     DECLARE_TRACERX(lr);
-    Tensor result(
-        operand.GetStorage()->Datatype(), shapes, "View_" + operand.GetStorage()->GetRawTensor()->GetSymbol(),
-        operand.Format());
+    Tensor result(operand.GetStorage()->Datatype(), shapes, "View_" + operand.GetStorage()->GetRawTensor()->GetSymbol(),
+                  operand.Format());
     result.GetStorage()->UpdateDynValidShape(SymbolicScalar::FromConcrete(shapes));
     auto function = Program::GetInstance().GetCurrentFunction();
     auto& op = function->AddOperation(Opcode::OP_VIEW, {operand.GetStorage()}, {result.GetStorage()});
@@ -1271,24 +1247,22 @@ Tensor View(const Tensor& operand, const std::vector<int64_t>& shapes, const std
 }
 
 // 重载View，initializer_list避免歧义
-Tensor View(
-    const Tensor& operand, const std::vector<int64_t>& shapes, const std::initializer_list<SymbolicScalar>& newOffsets)
+Tensor View(const Tensor& operand, const std::vector<int64_t>& shapes,
+            const std::initializer_list<SymbolicScalar>& newOffsets)
 {
     return View(operand, shapes, std::vector<SymbolicScalar>(newOffsets), __builtin_return_address(0));
 }
 
-Tensor View(
-    const Tensor& operand, const std::vector<int64_t>& shapes, const std::vector<SymbolicScalar>& newValidShapes,
-    const std::vector<SymbolicScalar>& newOffsets)
+Tensor View(const Tensor& operand, const std::vector<int64_t>& shapes,
+            const std::vector<SymbolicScalar>& newValidShapes, const std::vector<SymbolicScalar>& newOffsets)
 {
     DECLARE_TRACER();
 
     const auto& operandShape = operand.GetShape();
     CheckViewValidShapesConstraint(newValidShapes, shapes, operandShape);
 
-    Tensor result(
-        operand.GetStorage()->Datatype(), shapes, "View_" + operand.GetStorage()->GetRawTensor()->GetSymbol(),
-        operand.Format());
+    Tensor result(operand.GetStorage()->Datatype(), shapes, "View_" + operand.GetStorage()->GetRawTensor()->GetSymbol(),
+                  operand.Format());
     auto function = Program::GetInstance().GetCurrentFunction();
     auto& op = function->AddOperation(Opcode::OP_VIEW, {operand.GetStorage()}, {result.GetStorage()});
     std::vector<int64_t> newOffsetsConcrete = SymbolicScalar::Concrete(newOffsets, 0);
@@ -1298,17 +1272,15 @@ Tensor View(
     return result;
 }
 
-void TensorInnerAssemble(
-    Function& function, const LogicalTensorPtr& operand, const LogicalTensorPtr& result,
-    const std::vector<int64_t>& offset)
+void TensorInnerAssemble(Function& function, const LogicalTensorPtr& operand, const LogicalTensorPtr& result,
+                         const std::vector<int64_t>& offset)
 {
     auto& op = function.AddOperation(Opcode::OP_ASSEMBLE, {operand}, {result});
     op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset));
 }
 
-void InnerAssemble(
-    Function& function, const LogicalTensorPtr& operand, const LogicalTensorPtr& result,
-    const std::vector<int64_t>& offset)
+void InnerAssemble(Function& function, const LogicalTensorPtr& operand, const LogicalTensorPtr& result,
+                   const std::vector<int64_t>& offset)
 {
     CALL(InnerAssemble, function, operand, result, offset);
 }
@@ -1365,9 +1337,8 @@ Tensor Assemble(const std::vector<std::pair<Tensor, std::vector<int64_t>>>& tens
     return result;
 }
 
-Operation& TensorDInnerAssemble(
-    Function& function, const LogicalTensorPtr& operand, const LogicalTensorPtr& result,
-    const std::vector<SymbolicScalar>& dynOffset)
+Operation& TensorDInnerAssemble(Function& function, const LogicalTensorPtr& operand, const LogicalTensorPtr& result,
+                                const std::vector<SymbolicScalar>& dynOffset)
 {
     std::vector<int64_t> offset = SymbolicScalar::Concrete(dynOffset, 0);
     auto& op = function.AddOperation(Opcode::OP_ASSEMBLE, {operand}, {result});
@@ -1394,7 +1365,7 @@ void Assemble(const Tensor& tensor, const std::vector<SymbolicScalar>& dynOffset
         << "Assemble: src and dest requires same format";
     CHECK_OP(dest.GetDataType() == tensor.GetDataType()) << "Assemble: src and dest requires same dtype";
 
-    auto &func = *Program::GetInstance().GetCurrentFunction();
+    auto& func = *Program::GetInstance().GetCurrentFunction();
     TensorDInnerAssemble(func, tensor.GetStorage(), dest.GetStorage(), dynOffset);
     Program::GetInstance().GetTensorSlotManager()->TensorWrite(dest, SlotProperty::ASSEMBLE_DST);
 }
@@ -1419,9 +1390,9 @@ void AtomicRMW(const Tensor& t, const std::vector<SymbolicScalar>& dynOffset, Te
     Program::GetInstance().GetTensorSlotManager()->TensorWrite(dest, SlotProperty::ASSEMBLE_DST);
 }
 
-void TiledInnerAssemble(
-    Function& function, const TileShape& tileShape, size_t cur, const std::vector<SymbolicScalar>& initialOffsets,
-    const LogicalTensorPtr& src, const LogicalTensorPtr& dst, const LogicalTensorPtr& result, TileInfo& tileInfo)
+void TiledInnerAssemble(Function& function, const TileShape& tileShape, size_t cur,
+                        const std::vector<SymbolicScalar>& initialOffsets, const LogicalTensorPtr& src,
+                        const LogicalTensorPtr& dst, const LogicalTensorPtr& result, TileInfo& tileInfo)
 {
     if (cur == src->GetShape().size()) {
         auto srcTile = src->View(function, tileInfo.shape, tileInfo.offset);
@@ -1462,9 +1433,8 @@ void TiledInnerAssemble(Function& function, const TileShape& tileShape, const Op
     TiledInnerAssemble(function, tileShape, 0, initialOffsets, src, dst, result, tileInfo);
 }
 
-void TensorInnerAssemble(
-    Function& function, const LogicalTensorPtr& value, const std::vector<SymbolicScalar>& offsets,
-    const LogicalTensorPtr& dst, const LogicalTensorPtr& result)
+void TensorInnerAssemble(Function& function, const LogicalTensorPtr& value, const std::vector<SymbolicScalar>& offsets,
+                         const LogicalTensorPtr& dst, const LogicalTensorPtr& result)
 {
     Offset staticOffsets = SymbolicScalar::Concrete(offsets, 0);
     auto& op = function.AddOperation(Opcode::OP_ASSEMBLE_SSA, {value, dst}, {result});
@@ -1492,16 +1462,14 @@ void Assemble(const std::vector<AssembleItem>& items, Tensor& src, bool parallel
         Tensor result(src.GetDataType(), src.GetShape(), "assemble_parallel_out", src.GetStorage()->Format());
         auto shapes = result.GetStorage()->GetShape();
         if (std::find(shapes.begin(), shapes.end(), -1) != shapes.end()) {
-            result = Tensor(
-                src.GetDataType(), src.GetStorage()->GetDynValidShape(), "assemble_parallel_out",
-                src.GetStorage()->Format());
+            result = Tensor(src.GetDataType(), src.GetStorage()->GetDynValidShape(), "assemble_parallel_out",
+                            src.GetStorage()->Format());
         }
         for (const auto& item : items) {
-            auto viewTensor = View(
-                src.GetStorage(), item.tensor.GetShape(), item.tensor.GetStorage()->GetDynValidShape(), item.offsets);
-            TensorInnerAssemble(
-                *Program::GetInstance().GetCurrentFunction(), item.tensor.GetStorage(), item.offsets,
-                viewTensor.GetStorage(), result.GetStorage());
+            auto viewTensor = View(src.GetStorage(), item.tensor.GetShape(),
+                                   item.tensor.GetStorage()->GetDynValidShape(), item.offsets);
+            TensorInnerAssemble(*Program::GetInstance().GetCurrentFunction(), item.tensor.GetStorage(), item.offsets,
+                                viewTensor.GetStorage(), result.GetStorage());
         }
         Program::GetInstance().GetCurrentFunction()->SetSameMemId(src.GetStorage(), result.GetStorage());
         src = result;
@@ -1511,19 +1479,17 @@ void Assemble(const std::vector<AssembleItem>& items, Tensor& src, bool parallel
     auto preResult = src.GetStorage();
     int i = 0;
     for (const auto& item : items) {
-        auto viewTensor =
-            View(preResult, item.tensor.GetShape(), item.tensor.GetStorage()->GetDynValidShape(), item.offsets);
-        Tensor curResult(
-            src.GetDataType(), src.GetShape(), "assemble_seq_out" + std::to_string(i), src.GetStorage()->Format());
+        auto viewTensor = View(preResult, item.tensor.GetShape(), item.tensor.GetStorage()->GetDynValidShape(),
+                               item.offsets);
+        Tensor curResult(src.GetDataType(), src.GetShape(), "assemble_seq_out" + std::to_string(i),
+                         src.GetStorage()->Format());
         auto shapes = curResult.GetStorage()->GetShape();
         if (std::find(shapes.begin(), shapes.end(), -1) != shapes.end()) {
-            curResult = Tensor(
-                src.GetDataType(), src.GetStorage()->GetDynValidShape(), "assemble_seq_out",
-                src.GetStorage()->Format());
+            curResult = Tensor(src.GetDataType(), src.GetStorage()->GetDynValidShape(), "assemble_seq_out",
+                               src.GetStorage()->Format());
         }
-        TensorInnerAssemble(
-            *Program::GetInstance().GetCurrentFunction(), item.tensor.GetStorage(), item.offsets,
-            viewTensor.GetStorage(), curResult.GetStorage());
+        TensorInnerAssemble(*Program::GetInstance().GetCurrentFunction(), item.tensor.GetStorage(), item.offsets,
+                            viewTensor.GetStorage(), curResult.GetStorage());
         preResult = curResult.GetStorage();
         i++;
     }
@@ -1533,9 +1499,9 @@ void Assemble(const std::vector<AssembleItem>& items, Tensor& src, bool parallel
 }
 
 template <bool isB, bool isTrans>
-void TiledGatherInL1(
-    Function& function, const TileShape& tileShape, const LogicalTensorPtr& src, const LogicalTensorPtr& offsets,
-    const LogicalTensorPtr& blockTable, const LogicalTensorPtr& dst, int blockSize)
+void TiledGatherInL1(Function& function, const TileShape& tileShape, const LogicalTensorPtr& src,
+                     const LogicalTensorPtr& offsets, const LogicalTensorPtr& blockTable, const LogicalTensorPtr& dst,
+                     int blockSize)
 {
     const auto& cubeTile = tileShape.GetCubeTile();
 
@@ -1551,8 +1517,8 @@ void TiledGatherInL1(
             auto shape1 = std::min(dst->GetShape()[1] - j, secondDimTileShape);
             auto dstTile = dst->View(function, {shape0, shape1}, {i, j});
             auto offsetsTile = offsets->View(function, {1, shape0}, {0, i});
-            auto blockTableTile =
-                blockTable->View(function, {blockTable->GetShape()[0], blockTable->GetShape()[1]}, {0, 0});
+            auto blockTableTile = blockTable->View(function, {blockTable->GetShape()[0], blockTable->GetShape()[1]},
+                                                   {0, 0});
             auto& op = function.AddOperation(Opcode::OP_GATHER_IN_L1, {src, offsetsTile, blockTableTile}, {dstTile});
             op.SetAttribute(OpAttributeKey::startOffset, j);
             op.SetAttribute(OP_ATTR_PREFIX + "blocksize", blockSize);
@@ -1561,8 +1527,8 @@ void TiledGatherInL1(
 }
 
 template <bool isB, bool isTrans>
-Tensor experimental::GatherInL1(
-    const Tensor& src, const Tensor& offsets, const Tensor& blockTable, int blockSize, const int size)
+Tensor experimental::GatherInL1(const Tensor& src, const Tensor& offsets, const Tensor& blockTable, int blockSize,
+                                const int size)
 {
     constexpr int32_t NUM_SIZE = 2;
     CHECK_OP(src.GetShape().size() == NUM_SIZE);
@@ -1598,8 +1564,8 @@ static int64_t CalculateCapacity(const std::vector<int64_t>& shape)
     return capacity;
 }
 
-void TiledInnerReshape(
-    Function& function, const LogicalTensorPtr& operand, const LogicalTensorPtr& result, const bool isInplace = false)
+void TiledInnerReshape(Function& function, const LogicalTensorPtr& operand, const LogicalTensorPtr& result,
+                       const bool isInplace = false)
 {
     auto& op = function.AddOperation("TILE_RESHAPE", {operand}, {result});
     op.SetAttribute(OP_ATTR_PREFIX + "isInplace", isInplace);
@@ -1607,9 +1573,8 @@ void TiledInnerReshape(
     op.oOperand.front()->SetIsDummy();
 }
 
-void TensorInnerReshape(
-    Function& function, const LogicalTensorPtr& operand, const LogicalTensorPtr& result,
-    const std::vector<SymbolicScalar>& validShape)
+void TensorInnerReshape(Function& function, const LogicalTensorPtr& operand, const LogicalTensorPtr& result,
+                        const std::vector<SymbolicScalar>& validShape)
 {
     auto& operation = function.AddOperation(Opcode::OP_RESHAPE, {operand}, {result});
     if (validShape.empty()) {
@@ -1620,8 +1585,8 @@ void TensorInnerReshape(
     operation.SetAttribute("reshape", result->shape);
 }
 
-static std::vector<int64_t> CheckAndInferShape(
-    const std::vector<int64_t>& oriShape, const std::vector<int64_t>& dstshape)
+static std::vector<int64_t> CheckAndInferShape(const std::vector<int64_t>& oriShape,
+                                               const std::vector<int64_t>& dstshape)
 {
     for (size_t i = 0; i < oriShape.size(); i++) {
         CHECK_OP(oriShape[i] != -1)
@@ -1744,9 +1709,8 @@ static bool ReshapeNeedCopy(const Tensor& operand)
     return false;
 }
 
-Tensor Reshape(
-    const Tensor& operand, const std::vector<int64_t>& dstshape, const std::vector<SymbolicScalar>& validShape,
-    const bool inplace, const void* lr)
+Tensor Reshape(const Tensor& operand, const std::vector<int64_t>& dstshape,
+               const std::vector<SymbolicScalar>& validShape, const bool inplace, const void* lr)
 {
     DECLARE_TRACERX(lr);
     CHECK_OP(!inplace)
@@ -1769,33 +1733,28 @@ Tensor Reshape(
         copyOperand.GetStorage()->UpdateDynValidShape(operand.GetStorage()->GetDynValidShape());
         CALL(InnerAssign, *Program::GetInstance().GetCurrentFunction(), operand.GetStorage(), copyOperand.GetStorage());
         Tensor result(copyOperand.GetStorage()->Datatype(), newShape, "", operand.Format());
-        CALL(
-            InnerReshape, *Program::GetInstance().GetCurrentFunction(), copyOperand.GetStorage(), result.GetStorage(),
-            validShapeDefault);
+        CALL(InnerReshape, *Program::GetInstance().GetCurrentFunction(), copyOperand.GetStorage(), result.GetStorage(),
+             validShapeDefault);
         return result;
     } else {
         Tensor result(operand.GetStorage()->Datatype(), newShape, "", operand.Format());
-        CALL(
-            InnerReshape, *Program::GetInstance().GetCurrentFunction(), operand.GetStorage(), result.GetStorage(),
-            validShapeDefault);
+        CALL(InnerReshape, *Program::GetInstance().GetCurrentFunction(), operand.GetStorage(), result.GetStorage(),
+             validShapeDefault);
         return result;
     }
 }
 
-Tensor Reshape(
-    const Tensor& operand, const std::vector<int64_t>& dstshape, const std::vector<SymbolicScalar>& validShape,
-    const bool inplace)
+Tensor Reshape(const Tensor& operand, const std::vector<int64_t>& dstshape,
+               const std::vector<SymbolicScalar>& validShape, const bool inplace)
 {
     return Reshape(operand, dstshape, validShape, inplace, __builtin_return_address(0));
 }
 
-Tensor Reshape(
-    const Tensor& operand, const std::initializer_list<int64_t>& dstshape,
-    const std::initializer_list<SymbolicScalar>& validShape, const bool inplace)
+Tensor Reshape(const Tensor& operand, const std::initializer_list<int64_t>& dstshape,
+               const std::initializer_list<SymbolicScalar>& validShape, const bool inplace)
 {
-    return Reshape(
-        operand, std::vector<int64_t>(dstshape), std::vector<SymbolicScalar>(validShape), inplace,
-        __builtin_return_address(0));
+    return Reshape(operand, std::vector<int64_t>(dstshape), std::vector<SymbolicScalar>(validShape), inplace,
+                   __builtin_return_address(0));
 }
 
 Tensor Reshape(const Tensor& operand, const std::vector<SymbolicScalar>& dstShape, const bool inplace)
@@ -1814,9 +1773,9 @@ Tensor Reshape(const Tensor& operand, const std::vector<SymbolicScalar>& dstShap
     return dst;
 }
 
-void TiledGatherInUB(
-    Function& function, const TileShape& tileShape, const LogicalTensorPtr& param, const LogicalTensorPtr& indices,
-    const LogicalTensorPtr& blockTable, const LogicalTensorPtr& result, int blockSize)
+void TiledGatherInUB(Function& function, const TileShape& tileShape, const LogicalTensorPtr& param,
+                     const LogicalTensorPtr& indices, const LogicalTensorPtr& blockTable,
+                     const LogicalTensorPtr& result, int blockSize)
 {
     const auto& vecTile = tileShape.GetVecTile();
     const int64_t firstDimTileShape = vecTile[0];
@@ -1827,11 +1786,11 @@ void TiledGatherInUB(
             auto shape1 = std::min(result->GetShape()[1] - j, secondDimTileShape);
             auto paramTile = param->View(function, {param->GetShape()[0], shape1}, {0, j});
             auto indicesTile = indices->View(function, {1, shape0}, {0, i});
-            auto blockTableTile =
-                blockTable->View(function, {blockTable->GetShape()[0], blockTable->GetShape()[1]}, {0, 0});
+            auto blockTableTile = blockTable->View(function, {blockTable->GetShape()[0], blockTable->GetShape()[1]},
+                                                   {0, 0});
             auto resultTile = result->View(function, {shape0, shape1}, {i, j});
-            auto& op =
-                function.AddOperation(Opcode::OP_GATHER_IN_UB, {paramTile, indicesTile, blockTableTile}, {resultTile});
+            auto& op = function.AddOperation(Opcode::OP_GATHER_IN_UB, {paramTile, indicesTile, blockTableTile},
+                                             {resultTile});
             op.SetAttribute(OpAttributeKey::blockSize, blockSize);
             (void)op;
         }
@@ -1846,8 +1805,8 @@ void TiledGatherInUB(
  * axis = -2
  * result [c,b]
  */
-Tensor experimental::GatherInUB(
-    const Tensor& params, const Tensor& indices, const Tensor& blockTable, int blockSize, int axis)
+Tensor experimental::GatherInUB(const Tensor& params, const Tensor& indices, const Tensor& blockTable, int blockSize,
+                                int axis)
 {
     (void)axis;
     Tensor result{params.GetStorage()->Datatype(), {indices.GetShape()[1], params.GetShape()[1]}};
@@ -1877,9 +1836,9 @@ void Reshape(const Tensor& operand, Tensor& dst)
     }
 }
 
-void ExpandOperationInto(
-    Function& function, const TileShape& tileShape, Opcode opCode, const std::vector<LogicalTensorPtr>& iOperand,
-    const std::vector<LogicalTensorPtr>& oOperand, const Operation& op)
+void ExpandOperationInto(Function& function, const TileShape& tileShape, Opcode opCode,
+                         const std::vector<LogicalTensorPtr>& iOperand, const std::vector<LogicalTensorPtr>& oOperand,
+                         const Operation& op)
 {
     auto tileFunc = TiledFuncRegistry::GetInstance().GetTiledFunc(opCode);
     if (tileFunc != nullptr) {
@@ -1892,19 +1851,19 @@ void ExpandOperationInto(
             int blocksize = op.GetIntAttribute(OP_ATTR_PREFIX + "blocksize");
             if (isB) {
                 if (isTrans) {
-                    TiledGatherInL1<true, true>(
-                        function, tileShape, iOperand[0], iOperand[1], iOperand[2], oOperand[0], blocksize);
+                    TiledGatherInL1<true, true>(function, tileShape, iOperand[0], iOperand[1], iOperand[2], oOperand[0],
+                                                blocksize);
                 } else {
-                    TiledGatherInL1<true, false>(
-                        function, tileShape, iOperand[0], iOperand[1], iOperand[2], oOperand[0], blocksize);
+                    TiledGatherInL1<true, false>(function, tileShape, iOperand[0], iOperand[1], iOperand[2],
+                                                 oOperand[0], blocksize);
                 }
             } else {
                 if (isTrans) {
-                    TiledGatherInL1<false, true>(
-                        function, tileShape, iOperand[0], iOperand[1], iOperand[2], oOperand[0], blocksize);
+                    TiledGatherInL1<false, true>(function, tileShape, iOperand[0], iOperand[1], iOperand[2],
+                                                 oOperand[0], blocksize);
                 } else {
-                    TiledGatherInL1<false, false>(
-                        function, tileShape, iOperand[0], iOperand[1], iOperand[2], oOperand[0], blocksize);
+                    TiledGatherInL1<false, false>(function, tileShape, iOperand[0], iOperand[1], iOperand[2],
+                                                  oOperand[0], blocksize);
                 }
             }
 
@@ -1961,9 +1920,8 @@ void ExpandOperationInto(
         }
         case Opcode::OP_COMPARE_SWAP: {
             int descending = op.GetIntAttribute(SORT_ORDER);
-            TiledCompareAndSwap(
-                function, iOperand[0], iOperand[1], iOperand[2], iOperand[3], oOperand[0], oOperand[1], oOperand[2],
-                oOperand[3], descending);
+            TiledCompareAndSwap(function, iOperand[0], iOperand[1], iOperand[2], iOperand[3], oOperand[0], oOperand[1],
+                                oOperand[2], oOperand[3], descending);
             break;
         }
         case Opcode::OP_MERGE: {
@@ -2038,8 +1996,8 @@ void ExpandOperationInto(
             break;
         }
         default: {
-            FE_LOGE(
-                FeError::NOT_EXIST, "Unsupported opcode %d, opmagic is %d", static_cast<int>(opCode), op.GetOpMagic());
+            FE_LOGE(FeError::NOT_EXIST, "Unsupported opcode %d, opmagic is %d", static_cast<int>(opCode),
+                    op.GetOpMagic());
             FE_ASSERT(false) << "Unsupported opcode " << static_cast<int>(opCode) << ", opmagic is " << op.GetOpMagic();
         }
     }

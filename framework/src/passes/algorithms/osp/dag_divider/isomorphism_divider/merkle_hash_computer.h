@@ -35,24 +35,18 @@ template <typename VertexType, std::size_t defautlVal = 11U>
 struct UniformNodeHashFunc {
     using ResultType = std::size_t;
 
-    constexpr ResultType operator()(const VertexType &)
-    {
-        return defautlVal;
-    }
+    constexpr ResultType operator()(const VertexType&) { return defautlVal; }
 };
 
 template <typename VertexType>
 struct VectorNodeHashFunc {
-    const std::vector<std::size_t> &nodeHashes_;
+    const std::vector<std::size_t>& nodeHashes_;
 
-    VectorNodeHashFunc(const std::vector<std::size_t> &nodeHashes) : nodeHashes_(nodeHashes) {}
+    VectorNodeHashFunc(const std::vector<std::size_t>& nodeHashes) : nodeHashes_(nodeHashes) {}
 
     using ResultType = std::size_t;
 
-    ResultType operator()(const VertexType &v) const
-    {
-        return nodeHashes_[v];
-    }
+    ResultType operator()(const VertexType& v) const { return nodeHashes_[v]; }
 };
 
 /**
@@ -78,12 +72,12 @@ class MerkleHashComputer : public HashComputer<VertexIdxT<GraphT>> {
 
     NodeHashFuncT nodeHashFunc_;
 
-    void ComputeHashesHelper(const VertexType &v, std::vector<std::size_t> &parentChildHashes)
+    void ComputeHashesHelper(const VertexType& v, std::vector<std::size_t>& parentChildHashes)
     {
         std::sort(parentChildHashes.begin(), parentChildHashes.end());
 
         std::size_t hash = nodeHashFunc_(v);
-        for (const auto &pcHash : parentChildHashes) {
+        for (const auto& pcHash : parentChildHashes) {
             HashCombine(hash, pcHash);
         }
 
@@ -97,16 +91,16 @@ class MerkleHashComputer : public HashComputer<VertexIdxT<GraphT>> {
     }
 
     template <typename RetT = void>
-    std::enable_if_t<forward, RetT> ComputeHashes(const GraphT &graph)
+    std::enable_if_t<forward, RetT> ComputeHashes(const GraphT& graph)
     {
         const size_t numVertices = graph.NumVertices();
         vertexHashes_.resize(numVertices);
         std::vector<std::size_t> neighborHashes;
 
         const auto topSort = GetTopOrder(graph);
-        for (const VertexType &v : topSort) {
+        for (const VertexType& v : topSort) {
             neighborHashes.clear();
-            for (const VertexType &parent : graph.Parents(v)) {
+            for (const VertexType& parent : graph.Parents(v)) {
                 neighborHashes.push_back(vertexHashes_[parent]);
             }
             ComputeHashesHelper(v, neighborHashes);
@@ -114,7 +108,7 @@ class MerkleHashComputer : public HashComputer<VertexIdxT<GraphT>> {
     }
 
     template <typename RetT = void>
-    std::enable_if_t<not forward, RetT> ComputeHashes(const GraphT &graph)
+    std::enable_if_t<not forward, RetT> ComputeHashes(const GraphT& graph)
     {
         const size_t numVertices = graph.NumVertices();
         vertexHashes_.resize(numVertices);
@@ -122,9 +116,9 @@ class MerkleHashComputer : public HashComputer<VertexIdxT<GraphT>> {
 
         const auto topSort = GetTopOrderReverse(graph);
         for (auto it = topSort.cbegin(); it != topSort.cend(); ++it) {
-            const VertexType &v = *it;
+            const VertexType& v = *it;
             neighborHashes.clear();
-            for (const VertexType &child : graph.Children(v)) {
+            for (const VertexType& child : graph.Children(v)) {
                 neighborHashes.push_back(vertexHashes_[child]);
             }
             ComputeHashesHelper(v, neighborHashes);
@@ -139,7 +133,7 @@ public:
      * @param args Arguments for the node hash function.
      */
     template <typename... Args>
-    MerkleHashComputer(const GraphT &graph, Args &&...args)
+    MerkleHashComputer(const GraphT& graph, Args&&... args)
         : HashComputer<VertexType>(), nodeHashFunc_(std::forward<Args>(args)...)
     {
         ComputeHashes(graph);
@@ -147,35 +141,20 @@ public:
 
     ~MerkleHashComputer() override = default;
 
-    std::size_t GetVertexHash(const VertexType &v) const override
-    {
-        return vertexHashes_[v];
-    }
+    std::size_t GetVertexHash(const VertexType& v) const override { return vertexHashes_[v]; }
 
-    const std::vector<std::size_t> &GetVertexHashes() const override
-    {
-        return vertexHashes_;
-    }
+    const std::vector<std::size_t>& GetVertexHashes() const override { return vertexHashes_; }
 
-    const std::vector<VertexType> &GetOrbit(const VertexType &v) const override
+    const std::vector<VertexType>& GetOrbit(const VertexType& v) const override
     {
         return this->GetOrbitFromHash(this->GetVertexHash(v));
     }
 
-    const std::unordered_map<std::size_t, std::vector<VertexType>> &GetOrbits() const override
-    {
-        return orbits_;
-    }
+    const std::unordered_map<std::size_t, std::vector<VertexType>>& GetOrbits() const override { return orbits_; }
 
-    const std::vector<VertexType> &GetOrbitFromHash(const std::size_t &hash) const override
-    {
-        return orbits_.at(hash);
-    }
+    const std::vector<VertexType>& GetOrbitFromHash(const std::size_t& hash) const override { return orbits_.at(hash); }
 
-    std::size_t NumOrbits() const override
-    {
-        return orbits_.size();
-    }
+    std::size_t NumOrbits() const override { return orbits_.size(); }
 };
 
 /**
@@ -191,7 +170,7 @@ public:
  * @return True if they have the same orbit structure, false otherwise.
  */
 template <typename GraphT, typename NodeHashFuncT = UniformNodeHashFunc<VertexIdxT<GraphT>>, bool forward = true>
-bool AreIsomorphicByMerkleHash(const GraphT &g1, const GraphT &g2)
+bool AreIsomorphicByMerkleHash(const GraphT& g1, const GraphT& g2)
 {
     if (g1.NumVertices() != g2.NumVertices() || g1.NumEdges() != g2.NumEdges()) {
         return false;
@@ -200,15 +179,15 @@ bool AreIsomorphicByMerkleHash(const GraphT &g1, const GraphT &g2)
     MerkleHashComputer<GraphT, NodeHashFuncT, forward> hash1(g1);
     MerkleHashComputer<GraphT, NodeHashFuncT, forward> hash2(g2);
 
-    const auto &orbits1 = hash1.GetOrbits();
-    const auto &orbits2 = hash2.GetOrbits();
+    const auto& orbits1 = hash1.GetOrbits();
+    const auto& orbits2 = hash2.GetOrbits();
     if (orbits1.size() != orbits2.size()) {
         return false;
     }
 
-    for (const auto &pair : orbits1) {
+    for (const auto& pair : orbits1) {
         const std::size_t hash = pair.first;
-        const auto &orbitVec = pair.second;
+        const auto& orbitVec = pair.second;
 
         auto it = orbits2.find(hash);
         if (it == orbits2.end() || it->second.size() != orbitVec.size()) {
@@ -223,26 +202,21 @@ template <typename GraphT>
 struct BwdMerkleNodeHashFunc {
     MerkleHashComputer<GraphT, UniformNodeHashFunc<VertexIdxT<GraphT>>, false> bwMerkleHash_;
 
-    BwdMerkleNodeHashFunc(const GraphT &graph) : bwMerkleHash_(graph) {}
+    BwdMerkleNodeHashFunc(const GraphT& graph) : bwMerkleHash_(graph) {}
 
-    std::size_t operator()(const VertexIdxT<GraphT> &v) const
-    {
-        return bwMerkleHash_.GetVertexHash(v);
-    }
+    std::size_t operator()(const VertexIdxT<GraphT>& v) const { return bwMerkleHash_.GetVertexHash(v); }
 };
 
 template <typename GraphT>
 struct PrecomBwdMerkleNodeHashFunc {
     MerkleHashComputer<GraphT, VectorNodeHashFunc<VertexIdxT<GraphT>>, false> bwMerkleHash_;
 
-    PrecomBwdMerkleNodeHashFunc(const GraphT &graph, const std::vector<std::size_t> &nodeHashes)
-        : bwMerkleHash_(graph, nodeHashes) {}
+    PrecomBwdMerkleNodeHashFunc(const GraphT& graph, const std::vector<std::size_t>& nodeHashes)
+        : bwMerkleHash_(graph, nodeHashes)
+    {}
 
-    std::size_t operator()(const VertexIdxT<GraphT> &v) const
-    {
-        return bwMerkleHash_.GetVertexHash(v);
-    }
+    std::size_t operator()(const VertexIdxT<GraphT>& v) const { return bwMerkleHash_.GetVertexHash(v); }
 };
-}    // namespace osp
+} // namespace osp
 } // namespace npu::tile_fwk
 #endif // OSP_MERKLEHASH_COMPUTER_HPP

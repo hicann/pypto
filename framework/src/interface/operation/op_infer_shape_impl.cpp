@@ -59,8 +59,8 @@ void ElewiseInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& o
     auto inputNum = op->GetIOperands().size();
     auto shapeDimNum = op->GetIOperands()[0]->GetDynValidShape().size();
     // 将每个输入的同一维shape值填充到一个vector中，便于后续对每一维进行筛选
-    std::vector<std::vector<SymbolicScalar>> dimValidShape(
-        shapeDimNum, std::vector<SymbolicScalar>(inputNum, SymbolicScalar()));
+    std::vector<std::vector<SymbolicScalar>> dimValidShape(shapeDimNum,
+                                                           std::vector<SymbolicScalar>(inputNum, SymbolicScalar()));
     std::vector<std::vector<int64_t>> dimShape(shapeDimNum, std::vector<int64_t>(inputNum, 0));
     for (size_t i = 0; i < op->GetIOperands().size(); ++i) {
         auto iOperand = op->GetInputOperand(i);
@@ -115,8 +115,8 @@ void ElewiseInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& o
 
     int64_t mode = 0;
     if (op->GetAttr(OP_ATTR_PREFIX + "cmp_mode", mode) && mode == 1) {
-        inputValidShape[inputValidShape.size() - 1] =
-            inputValidShape[inputValidShape.size() - 1] / 8; // 8 bit to 1 byte
+        inputValidShape[inputValidShape.size() - 1] = inputValidShape[inputValidShape.size() - 1] /
+                                                      8; // 8 bit to 1 byte
     }
 
     int64_t whereBitMode = 0;
@@ -307,8 +307,7 @@ void DeInterleaveSingleInferShapeFunc(Operation* op, std::vector<std::vector<Sym
         outValidShapes.push_back(outValidShape);
     }
 }
-REGISTER_INFER_SHAPE_FUNC(
-    OP_DEINTERLEAVE_SINGLE, Opcode::OP_DEINTERLEAVE_SINGLE, DeInterleaveSingleInferShapeFunc);
+REGISTER_INFER_SHAPE_FUNC(OP_DEINTERLEAVE_SINGLE, Opcode::OP_DEINTERLEAVE_SINGLE, DeInterleaveSingleInferShapeFunc);
 
 void FillPadInferShapeFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
 {
@@ -480,8 +479,8 @@ void ViewTypeInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& 
     auto outputOperand = op->GetOOperands()[0];
 
     auto validShape = inputOperand->GetDynValidShape();
-    auto changedDim =
-        validShape[validShape.size() - 1] * BytesOf(inputOperand->Datatype()) / BytesOf(outputOperand->Datatype());
+    auto changedDim = validShape[validShape.size() - 1] * BytesOf(inputOperand->Datatype()) /
+                      BytesOf(outputOperand->Datatype());
     validShape[validShape.size() - 1] = changedDim;
 
     outValidShapes.push_back(validShape);
@@ -588,10 +587,10 @@ void QuantizeInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& 
         // For axis=-2, align the second-to-last dimension to 32 bytes (8 int32 elements)
         int64_t axis = 0;
         if (op->GetAttr(OP_ATTR_PREFIX + "axis", axis) && axis == -2 && tmpValidShape.size() >= 2) {
-            constexpr int64_t alignElements = 8;  // 8 * 4 = 32 bytes
+            constexpr int64_t alignElements = 8; // 8 * 4 = 32 bytes
             size_t lastDimIndex = tmpValidShape.size() - 2;
-            tmpValidShape[lastDimIndex] =
-                (tmpValidShape[lastDimIndex] + alignElements - 1) / alignElements * alignElements;
+            tmpValidShape[lastDimIndex] = (tmpValidShape[lastDimIndex] + alignElements - 1) / alignElements *
+                                          alignElements;
         }
 
         outValidShapes.push_back(tmpValidShape);
@@ -606,10 +605,10 @@ void QuantizeInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& 
         // For axis=-2, align the second-to-last dimension to 32 bytes (8 int32 elements)
         int64_t axis = 0;
         if (op->GetAttr(OP_ATTR_PREFIX + "axis", axis) && axis == -2 && tmpValidShape.size() >= 2) {
-            constexpr int64_t alignElements = 8;  // 8 * 4 = 32 bytes
+            constexpr int64_t alignElements = 8; // 8 * 4 = 32 bytes
             size_t lastDimIndex = tmpValidShape.size() - 2;
-            tmpValidShape[lastDimIndex] =
-                (tmpValidShape[lastDimIndex] + alignElements - 1) / alignElements * alignElements;
+            tmpValidShape[lastDimIndex] = (tmpValidShape[lastDimIndex] + alignElements - 1) / alignElements *
+                                          alignElements;
         }
 
         outValidShapes.push_back(tmpValidShape);
@@ -846,9 +845,8 @@ void LoadL0C2L1InferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>
         auto fromValidShape = op->GetIOperands()[0]->GetDynValidShape();
         copyAttr->SetFromDynValidShape(OpImmediate::Specified(fromValidShape));
     } else {
-        VECTOR_LOGW(
-            "%s[%d] has no copy out attr, set output valid shape same as input.", op->GetOpcodeStr().c_str(),
-            op->GetOpMagic());
+        VECTOR_LOGW("%s[%d] has no copy out attr, set output valid shape same as input.", op->GetOpcodeStr().c_str(),
+                    op->GetOpMagic());
         outValidShapes.emplace_back(op->GetIOperands()[0]->GetDynValidShape());
         return;
     }
@@ -890,9 +888,8 @@ REGISTER_INFER_SHAPE_FUNC(OP_UB_COPY_ND2NZ, Opcode::OP_UB_COPY_ND2NZ, Load2L1Inf
 void Load2L1MXScaleInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
 {
     ASSERT(MatmulErrorCode::ERR_RUNTIME_NULLPTR, op != nullptr) << "op should not be nullptr";
-    ASSERT(
-        MatmulErrorCode::ERR_PARAM_INVALID, !op->GetIOperands().empty() && op->GetIOperands()[0] != nullptr &&
-                                                op->GetIOperands()[0]->GetDynValidShape().size() == SHAPE_DIM3)
+    ASSERT(MatmulErrorCode::ERR_PARAM_INVALID, !op->GetIOperands().empty() && op->GetIOperands()[0] != nullptr &&
+                                                   op->GetIOperands()[0]->GetDynValidShape().size() == SHAPE_DIM3)
         << "op->GetIOperands() should not be empty and GetDynValidShape().size() should be SHAPE_DIM3";
     auto copyOpAttribute = std::dynamic_pointer_cast<CopyOpAttribute>(op->GetOpAttribute());
     if (op->GetOOperands()[0] != nullptr && !(op->GetOOperands()[0]->GetDynValidShape().empty())) {
@@ -920,9 +917,8 @@ void LoadL0InferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& ou
         op->GetAttr(Matrix::L1_TO_L0_TILE, tile);
         ASSERT(MatmulErrorCode::ERR_CONFIG_TILE, offset.size() == SHAPE_DIM2) << "offset.size() should be SHAPE_DIM2";
         ASSERT(MatmulErrorCode::ERR_CONFIG_TILE, tile.size() == SHAPE_DIM2) << "tile.size() should be SHAPE_DIM2";
-        ASSERT(
-            MatmulErrorCode::ERR_PARAM_INVALID, !op->GetIOperands().empty() && op->GetIOperands()[0] != nullptr &&
-                                                    op->GetIOperands()[0]->GetDynValidShape().size() == SHAPE_DIM2)
+        ASSERT(MatmulErrorCode::ERR_PARAM_INVALID, !op->GetIOperands().empty() && op->GetIOperands()[0] != nullptr &&
+                                                       op->GetIOperands()[0]->GetDynValidShape().size() == SHAPE_DIM2)
             << "op->GetIOperands() check failed or GetDynValidShape().size() should be SHAPE_DIM2";
         std::vector<SymbolicScalar> srcValidShape = op->GetIOperands()[0]->GetDynValidShape();
         std::vector<SymbolicScalar> dstValidShape = GetViewValidShape(
@@ -971,13 +967,12 @@ void LoadL0MXInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& 
     op->GetAttr(Matrix::L1_TO_L0_TILE, tile);
     ASSERT(MatmulErrorCode::ERR_CONFIG_TILE, offset.size() == SHAPE_DIM3) << "offset.size() should be SHAPE_DIM3";
     ASSERT(MatmulErrorCode::ERR_CONFIG_TILE, tile.size() == SHAPE_DIM3) << "tile.size() should be SHAPE_DIM3";
-    ASSERT(
-        MatmulErrorCode::ERR_PARAM_INVALID, !op->GetIOperands().empty() && op->GetIOperands()[0] != nullptr &&
-                                                op->GetIOperands()[0]->GetDynValidShape().size() == SHAPE_DIM3)
+    ASSERT(MatmulErrorCode::ERR_PARAM_INVALID, !op->GetIOperands().empty() && op->GetIOperands()[0] != nullptr &&
+                                                   op->GetIOperands()[0]->GetDynValidShape().size() == SHAPE_DIM3)
         << "op->GetIOperands() check failed or GetDynValidShape().size() should be SHAPE_DIM3";
     std::vector<SymbolicScalar> srcValidShape = op->GetIOperands()[0]->GetDynValidShape();
-    std::vector<SymbolicScalar> dstValidShape = GetViewValidShape(
-        srcValidShape, SymbolicScalar::Concrete(offset, 0), offset, SymbolicScalar::Concrete(tile, 0));
+    std::vector<SymbolicScalar> dstValidShape = GetViewValidShape(srcValidShape, SymbolicScalar::Concrete(offset, 0),
+                                                                  offset, SymbolicScalar::Concrete(tile, 0));
     ASSERT(MatmulErrorCode::ERR_CONFIG_TILE, dstValidShape.size() == SHAPE_DIM3)
         << "dstValidShape.size() should be SHAPE_DIM3";
     for (auto output : op->GetOOperands()) {
@@ -1059,12 +1054,12 @@ void TransDataDefaultInferFunc(Operation* op, std::vector<std::vector<SymbolicSc
     SymbolicScalar validShapeC1 = validShapeC / validShapeC0;
 
     if (op->GetOpcode() == Opcode::OP_NCHW2NC1HWC0) {
-        std::vector<SymbolicScalar> outputValidShape = {
-            validShapeN, validShapeC1, validShapeH, validShapeW, validShapeC0};
+        std::vector<SymbolicScalar> outputValidShape = {validShapeN, validShapeC1, validShapeH, validShapeW,
+                                                        validShapeC0};
         outValidShapes.push_back(outputValidShape);
     } else if (op->GetOpcode() == Opcode::OP_NCHW2Fractal_Z) {
-        std::vector<SymbolicScalar> outputValidShape = {
-            validShapeC1 * validShapeH * validShapeW, validShapeN1, validShapeN0, validShapeC0};
+        std::vector<SymbolicScalar> outputValidShape = {validShapeC1 * validShapeH * validShapeW, validShapeN1,
+                                                        validShapeN0, validShapeC0};
         outValidShapes.push_back(outputValidShape);
     }
 
@@ -1123,8 +1118,8 @@ void TransDataNCDHW2Fractal_Z_3DInferFunc(Operation* op, std::vector<std::vector
     SymbolicScalar validShapeC1 = validShapeC / validShapeC0;
     SymbolicScalar validShapeN1 = validShapeN / validShapeN0;
 
-    std::vector<SymbolicScalar> outputValidShape = {
-        validShapeD * validShapeC1 * validShapeH * validShapeW, validShapeN1, validShapeN0, validShapeC0};
+    std::vector<SymbolicScalar> outputValidShape = {validShapeD * validShapeC1 * validShapeH * validShapeW,
+                                                    validShapeN1, validShapeN0, validShapeC0};
     outValidShapes.push_back(outputValidShape);
 
     std::vector<int64_t> tmpValidShape = op->GetOOperands()[1]->GetShape();
@@ -1499,9 +1494,8 @@ void ViewInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outV
             OpImmediate::NormalizeValue(inputValidShape, 0, shapeImm, 0, false);
         }
 
-        auto newDynValidShape = GetViewValidShape(
-            inputValidShape, viewOpAttribute->GetFromOffset(), viewOpAttribute->GetFromDynOffset(),
-            op->GetOOperands()[0]->oriShape);
+        auto newDynValidShape = GetViewValidShape(inputValidShape, viewOpAttribute->GetFromOffset(),
+                                                  viewOpAttribute->GetFromDynOffset(), op->GetOOperands()[0]->oriShape);
 
         for (auto output : op->GetOOperands()) {
             outValidShapes.push_back(newDynValidShape);
@@ -1656,9 +1650,8 @@ void QuantMXInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& o
         for (size_t i = 0; i + 2 < inputValidShapes[0].size(); ++i) {
             groupedValidShape.push_back(inputValidShapes[0][i]);
         }
-        groupedValidShape.push_back(
-            inputValidShapes[0][inputValidShapes[0].size() - 2] *
-            ((inputValidShapes[0].back() + kQuantMXGroupSize - 1) / kQuantMXGroupSize));
+        groupedValidShape.push_back(inputValidShapes[0][inputValidShapes[0].size() - 2] *
+                                    ((inputValidShapes[0].back() + kQuantMXGroupSize - 1) / kQuantMXGroupSize));
     }
     std::vector<SymbolicScalar> expValidShape = groupedValidShape;
     if (op->GetIntAttribute(OpAttributeKey::mxQuantPerformanceMode) == 0) {

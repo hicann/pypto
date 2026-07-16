@@ -42,7 +42,7 @@ public:
     void OnScheduleEnd(const ScheduleEndEvent& e) override;
     void OnInitDDRBuffer(const InitDDRBufferEvent& e) override;
     void OnMainLoopBegin() override { inMainLoop_ = true; }
-    void OnMainLoopEnd()   override { inMainLoop_ = false; }
+    void OnMainLoopEnd() override { inMainLoop_ = false; }
 
     // Writes <prefix>_OoO_Memory_Trace.json; no-op if prefix is unset.
     Status Flush(const std::string& folderPath);
@@ -58,7 +58,7 @@ private:
     int totalCycles_{0};
     bool succeeded_{false};
     bool ended_{false};
-    bool inMainLoop_{false};   // trace is MainLoop-only; SeqSchedule-side events dropped
+    bool inMainLoop_{false}; // trace is MainLoop-only; SeqSchedule-side events dropped
     // Spill copyouts whose launch/retire are absorbed by the owning SPILL event.
     std::unordered_set<int> spillCopyoutOpMagics_;
 };

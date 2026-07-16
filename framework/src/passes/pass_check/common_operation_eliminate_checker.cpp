@@ -49,14 +49,12 @@ Status CommonOperationEliminateChecker::DoPreCheck(Function& function)
 
             if (ioperands.size() != 1) {
                 APASS_LOG_ERROR_C(OperationErr::OP_INVALID_OPERAND_COUNT, Elements::Operation,
-                                 "View or Copy_In Operation %d with not one input operand.",
-                                 opMagic);
+                                  "View or Copy_In Operation %d with not one input operand.", opMagic);
                 return FAILED;
             }
             if (ioperands.front()->offset.size() != fromOffsetSize) {
                 APASS_LOG_ERROR_C(TensorErr::TENSOR_SHAPE_MISMATCH, Elements::Operation,
-                                 "View or Copy_In Operation %d with mismatch input offset shape.",
-                                 opMagic);
+                                  "View or Copy_In Operation %d with mismatch input offset shape.", opMagic);
                 return FAILED;
             }
         }

@@ -67,7 +67,7 @@ struct MlaTileConfig {
 };
 
 struct SaTileShapeConfig {
-    int gTile;                                   // 仅支持因子切分
+    int gTile; // 仅支持因子切分
     int sKvTile;
     std::array<int, TILE_CUBE_DIMS> c1TileShape; // (m, M), (k, K), (n, N)
     std::array<int, TILE_VEC_DIMS> v1TileShape;

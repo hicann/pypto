@@ -178,7 +178,7 @@ TEST_F(TestOutputDir, GetEmitPath_EmptyName)
 TEST_F(TestOutputDir, GetEmitPath_RepeatedCallsConsistent)
 {
     const char* workPath = "/tmp/test_ut_consistency";
-    mkdir(workPath, 0755);  // ensure parent dir exists for OutputBaseDir
+    mkdir(workPath, 0755); // ensure parent dir exists for OutputBaseDir
     SetEnv("ASCEND_WORK_PATH", workPath);
     ConfigManager::Instance().SetCodeGenConfig(KEY_FIXED_OUTPUT_PATH, true);
 

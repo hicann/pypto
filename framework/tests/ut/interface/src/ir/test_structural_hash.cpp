@@ -21,9 +21,9 @@
 namespace pypto {
 namespace ir {
 
+using test_helpers::Node;
 using test_helpers::Scalar;
 using test_helpers::Sp;
-using test_helpers::Node;
 
 class IRStructHashTest : public testing::Test {};
 
@@ -136,9 +136,8 @@ TEST_F(IRStructHashTest, TestHashCallKwargsAllTypes)
     expect_hash_contract(1.5f, 1.5f, 2.5f);
     expect_hash_contract(DataType::FP32, DataType::FP32, DataType::FP16);
     expect_hash_contract(std::vector<int>{1, 2, 3}, std::vector<int>{1, 2, 3}, std::vector<int>{1, 2, 4});
-    expect_hash_contract(
-        std::vector<std::string>{"a", "b"}, std::vector<std::string>{"a", "b"},
-        std::vector<std::string>{"a", "c"});
+    expect_hash_contract(std::vector<std::string>{"a", "b"}, std::vector<std::string>{"a", "b"},
+                         std::vector<std::string>{"a", "c"});
 }
 
 TEST_F(IRStructHashTest, TestHashMakeTuple)
@@ -227,10 +226,10 @@ TEST_F(IRStructHashTest, TestHashForStmt)
     auto one = std::make_shared<ConstInt>(1, DataType::INT32, Sp());
     auto yield = std::make_shared<YieldStmt>(std::vector<ExprPtr>{}, Sp());
 
-    auto f1 = std::make_shared<ForStmt>(
-        i, zero, ten, one, std::vector<IterArgPtr>{}, yield, std::vector<VarPtr>{}, Sp());
-    auto f2 = std::make_shared<ForStmt>(
-        i, zero, ten, one, std::vector<IterArgPtr>{}, yield, std::vector<VarPtr>{}, Sp());
+    auto f1 = std::make_shared<ForStmt>(i, zero, ten, one, std::vector<IterArgPtr>{}, yield, std::vector<VarPtr>{},
+                                        Sp());
+    auto f2 = std::make_shared<ForStmt>(i, zero, ten, one, std::vector<IterArgPtr>{}, yield, std::vector<VarPtr>{},
+                                        Sp());
     EXPECT_EQ(structural_hash(Node(f1)), structural_hash(Node(f2)));
 }
 
@@ -244,10 +243,10 @@ TEST_F(IRStructHashTest, TestHashForStmtWithIterArgs)
     auto rv = std::make_shared<Var>("out", Scalar(DataType::INT32), Sp());
     auto yield = std::make_shared<YieldStmt>(std::vector<ExprPtr>{zero}, Sp());
 
-    auto f1 = std::make_shared<ForStmt>(
-        i, zero, ten, one, std::vector<IterArgPtr>{ia}, yield, std::vector<VarPtr>{rv}, Sp());
-    auto f2 = std::make_shared<ForStmt>(
-        i, zero, ten, one, std::vector<IterArgPtr>{ia}, yield, std::vector<VarPtr>{rv}, Sp());
+    auto f1 = std::make_shared<ForStmt>(i, zero, ten, one, std::vector<IterArgPtr>{ia}, yield, std::vector<VarPtr>{rv},
+                                        Sp());
+    auto f2 = std::make_shared<ForStmt>(i, zero, ten, one, std::vector<IterArgPtr>{ia}, yield, std::vector<VarPtr>{rv},
+                                        Sp());
     EXPECT_EQ(structural_hash(Node(f1)), structural_hash(Node(f2)));
 }
 
@@ -307,8 +306,10 @@ TEST_F(IRStructHashTest, TestHashFunction)
     auto x = std::make_shared<Var>("x", Scalar(DataType::INT32), Sp());
     auto v = std::make_shared<ConstInt>(1, DataType::INT32, Sp());
     auto body = std::make_shared<AssignStmt>(x, v, Sp());
-    auto f1 = std::make_shared<Function>("f", std::vector<VarPtr>{x}, std::vector<TypePtr>{Scalar(DataType::INT32)}, body, Sp());
-    auto f2 = std::make_shared<Function>("f", std::vector<VarPtr>{x}, std::vector<TypePtr>{Scalar(DataType::INT32)}, body, Sp());
+    auto f1 = std::make_shared<Function>("f", std::vector<VarPtr>{x}, std::vector<TypePtr>{Scalar(DataType::INT32)},
+                                         body, Sp());
+    auto f2 = std::make_shared<Function>("f", std::vector<VarPtr>{x}, std::vector<TypePtr>{Scalar(DataType::INT32)},
+                                         body, Sp());
     EXPECT_EQ(structural_hash(Node(f1)), structural_hash(Node(f2)));
 }
 
@@ -375,14 +376,11 @@ TEST_F(IRStructHashTest, TestHashTileTypeWithTileView)
     auto off0 = std::make_shared<ConstInt>(0, DataType::INT64, Sp());
     TileView tv({d16}, {d16}, off0);
 
-    auto t1 = std::make_shared<TileType>(
-        std::vector<ExprPtr>{d16}, DataType::FP32, std::nullopt, tv);
-    auto t2 = std::make_shared<TileType>(
-        std::vector<ExprPtr>{d16}, DataType::FP32, std::nullopt, tv);
+    auto t1 = std::make_shared<TileType>(std::vector<ExprPtr>{d16}, DataType::FP32, std::nullopt, tv);
+    auto t2 = std::make_shared<TileType>(std::vector<ExprPtr>{d16}, DataType::FP32, std::nullopt, tv);
     EXPECT_EQ(structural_hash(t1), structural_hash(t2));
 
-    auto t3 = std::make_shared<TileType>(
-        std::vector<ExprPtr>{d16}, DataType::FP32);
+    auto t3 = std::make_shared<TileType>(std::vector<ExprPtr>{d16}, DataType::FP32);
     EXPECT_NE(structural_hash(t1), structural_hash(t3));
 }
 
@@ -393,12 +391,9 @@ TEST_F(IRStructHashTest, TestHashTileTypeWithHardwareInfo)
     HardwareInfo hw2(TileLayout::row_major, TileLayout::none_box, 512, TilePad::null);
     HardwareInfo hw3(TileLayout::col_major, TileLayout::none_box, 512, TilePad::null);
 
-    auto t1 = std::make_shared<TileType>(
-        std::vector<ExprPtr>{d16}, DataType::FP32, std::nullopt, std::nullopt, hw1);
-    auto t2 = std::make_shared<TileType>(
-        std::vector<ExprPtr>{d16}, DataType::FP32, std::nullopt, std::nullopt, hw2);
-    auto t3 = std::make_shared<TileType>(
-        std::vector<ExprPtr>{d16}, DataType::FP32, std::nullopt, std::nullopt, hw3);
+    auto t1 = std::make_shared<TileType>(std::vector<ExprPtr>{d16}, DataType::FP32, std::nullopt, std::nullopt, hw1);
+    auto t2 = std::make_shared<TileType>(std::vector<ExprPtr>{d16}, DataType::FP32, std::nullopt, std::nullopt, hw2);
+    auto t3 = std::make_shared<TileType>(std::vector<ExprPtr>{d16}, DataType::FP32, std::nullopt, std::nullopt, hw3);
     EXPECT_EQ(structural_hash(t1), structural_hash(t2));
     EXPECT_NE(structural_hash(t1), structural_hash(t3));
 }
@@ -436,10 +431,10 @@ TEST_F(IRStructHashTest, TestLoopVarInt64IndexDifferentHash)
     auto one = std::make_shared<ConstInt>(1, DataType::INT32, Sp());
     auto yield = std::make_shared<YieldStmt>(std::vector<ExprPtr>{}, Sp());
 
-    auto f1 = std::make_shared<ForStmt>(
-        i1, zero, ten, one, std::vector<IterArgPtr>{}, yield, std::vector<VarPtr>{}, Sp());
-    auto f2 = std::make_shared<ForStmt>(
-        i2, zero, ten, one, std::vector<IterArgPtr>{}, yield, std::vector<VarPtr>{}, Sp());
+    auto f1 = std::make_shared<ForStmt>(i1, zero, ten, one, std::vector<IterArgPtr>{}, yield, std::vector<VarPtr>{},
+                                        Sp());
+    auto f2 = std::make_shared<ForStmt>(i2, zero, ten, one, std::vector<IterArgPtr>{}, yield, std::vector<VarPtr>{},
+                                        Sp());
     EXPECT_NE(structural_hash(Node(f1)), structural_hash(Node(f2)));
 }
 
@@ -451,8 +446,7 @@ TEST_F(IRStructHashTest, TestHashWithVarIdentity)
 {
     auto a = std::make_shared<Var>("x", Scalar(DataType::INT32), Sp());
     auto b = std::make_shared<Var>("x", Scalar(DataType::INT32), Sp());
-    EXPECT_EQ(structural_hash_with_var_identity(Node(a), false),
-              structural_hash_with_var_identity(Node(b), false));
+    EXPECT_EQ(structural_hash_with_var_identity(Node(a), false), structural_hash_with_var_identity(Node(b), false));
 
     auto t = std::make_shared<ScalarType>(DataType::INT32);
     EXPECT_EQ(structural_hash_with_var_identity(t), structural_hash(t));

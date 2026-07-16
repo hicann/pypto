@@ -35,8 +35,8 @@ struct LogicalAndOpMetaData {
     nlohmann::json test_data_;
 };
 
-static void LogicalAndOperationExeFunc2Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void LogicalAndOperationExeFunc2Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                            const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0], inputs[1]}, {outputs[0]})
     {
@@ -72,10 +72,10 @@ static void LogicalAndOperationExeFunc2Dims(
                     }
                     return View(tensor, {inputviewshape0, inputviewshape1}, {validDim0, validDim1}, {offset0, offset1});
                 };
-                auto tileTensor0 = createTensorView(
-                    inputs[0], SymbolicScalar(bIdx * firstViewShape), SymbolicScalar(sIdx * secondViewShape));
-                auto tileTensor1 = createTensorView(
-                    inputs[1], SymbolicScalar(bIdx * firstViewShape), SymbolicScalar(sIdx * secondViewShape));
+                auto tileTensor0 = createTensorView(inputs[0], SymbolicScalar(bIdx * firstViewShape),
+                                                    SymbolicScalar(sIdx * secondViewShape));
+                auto tileTensor1 = createTensorView(inputs[1], SymbolicScalar(bIdx * firstViewShape),
+                                                    SymbolicScalar(sIdx * secondViewShape));
                 TileShape::Current().SetVecTile(args->tileShape_);
                 auto res = LogicalAnd(tileTensor0, tileTensor1);
                 Assemble(res, {bIdx * firstViewShape, sIdx * secondViewShape}, outputs[0]);
@@ -83,8 +83,8 @@ static void LogicalAndOperationExeFunc2Dims(
         }
     }
 }
-static void LogicalAndOperationExeFunc3Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void LogicalAndOperationExeFunc3Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                            const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0], inputs[1]}, {outputs[0]})
     {
@@ -131,16 +131,15 @@ static void LogicalAndOperationExeFunc3Dims(
                             offset2 = 0;
                             inputviewshape2 = 1;
                         }
-                        return View(
-                            tensor, {inputviewshape0, inputviewshape1, inputviewshape2},
-                            {validDim0, validDim1, validDim2}, {offset0, offset1, offset2});
+                        return View(tensor, {inputviewshape0, inputviewshape1, inputviewshape2},
+                                    {validDim0, validDim1, validDim2}, {offset0, offset1, offset2});
                     };
-                    auto tileTensor0 = createTensorView(
-                        inputs[0], SymbolicScalar(bIdx * firstViewShape), SymbolicScalar(sIdx * secondViewShape),
-                        SymbolicScalar(mIdx * thirdViewShape));
-                    auto tileTensor1 = createTensorView(
-                        inputs[1], SymbolicScalar(bIdx * firstViewShape), SymbolicScalar(sIdx * secondViewShape),
-                        SymbolicScalar(mIdx * thirdViewShape));
+                    auto tileTensor0 = createTensorView(inputs[0], SymbolicScalar(bIdx * firstViewShape),
+                                                        SymbolicScalar(sIdx * secondViewShape),
+                                                        SymbolicScalar(mIdx * thirdViewShape));
+                    auto tileTensor1 = createTensorView(inputs[1], SymbolicScalar(bIdx * firstViewShape),
+                                                        SymbolicScalar(sIdx * secondViewShape),
+                                                        SymbolicScalar(mIdx * thirdViewShape));
                     TileShape::Current().SetVecTile(args->tileShape_);
                     auto res = LogicalAnd(tileTensor0, tileTensor1);
                     Assemble(res, {bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape}, outputs[0]);
@@ -150,8 +149,8 @@ static void LogicalAndOperationExeFunc3Dims(
     }
 }
 
-static void LogicalAndOperationExeFunc4Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void LogicalAndOperationExeFunc4Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                            const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0], inputs[1]}, {outputs[0]})
     {
@@ -212,9 +211,9 @@ static void LogicalAndOperationExeFunc4Dims(
                                 offset3 = 0;
                                 inputviewshape3 = 1;
                             }
-                            return View(
-                                tensor, {inputviewshape0, inputviewshape1, inputviewshape2, inputviewshape3},
-                                {validDim0, validDim1, validDim2, validDim3}, {offset0, offset1, offset2, offset3});
+                            return View(tensor, {inputviewshape0, inputviewshape1, inputviewshape2, inputviewshape3},
+                                        {validDim0, validDim1, validDim2, validDim3},
+                                        {offset0, offset1, offset2, offset3});
                         };
                         auto tileTensor0 = createTensorView(
                             inputs[0], SymbolicScalar(bIdx * firstViewShape), SymbolicScalar(sIdx * secondViewShape),
@@ -224,11 +223,10 @@ static void LogicalAndOperationExeFunc4Dims(
                             SymbolicScalar(mIdx * thirdViewShape), SymbolicScalar(nIdx * fourthViewShape));
                         TileShape::Current().SetVecTile(args->tileShape_);
                         auto res = LogicalAnd(tileTensor0, tileTensor1);
-                        Assemble(
-                            res,
-                            {bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape,
-                             nIdx * fourthViewShape},
-                            outputs[0]);
+                        Assemble(res,
+                                 {bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape,
+                                  nIdx * fourthViewShape},
+                                 outputs[0]);
                     }
                 }
             }
@@ -238,11 +236,11 @@ static void LogicalAndOperationExeFunc4Dims(
 
 class LogicalAndOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac_param<LogicalAndOpMetaData> {};
 
-INSTANTIATE_TEST_SUITE_P(
-    TestLogicalAnd, LogicalAndOperationTest,
-    ::testing::ValuesIn(GetOpMetaData<LogicalAndOpMetaData>(
-        {LogicalAndOperationExeFunc2Dims, LogicalAndOperationExeFunc3Dims, LogicalAndOperationExeFunc4Dims},
-        "LogicalAnd")));
+INSTANTIATE_TEST_SUITE_P(TestLogicalAnd, LogicalAndOperationTest,
+                         ::testing::ValuesIn(GetOpMetaData<LogicalAndOpMetaData>({LogicalAndOperationExeFunc2Dims,
+                                                                                  LogicalAndOperationExeFunc3Dims,
+                                                                                  LogicalAndOperationExeFunc4Dims},
+                                                                                 "LogicalAnd")));
 
 TEST_P(LogicalAndOperationTest, TestLogicalAnd)
 {

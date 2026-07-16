@@ -33,8 +33,7 @@ bool MemoryPathUtils::IsDifferentKnownRequirement(MemoryType requirement, Memory
     return requirement != MemoryType::MEM_UNKNOWN && requirement != targetType;
 }
 
-bool MemoryPathUtils::ShouldUseDdrForSpecialPath(
-    bool hasParallelDifferentRequirement, MemoryType from, MemoryType to)
+bool MemoryPathUtils::ShouldUseDdrForSpecialPath(bool hasParallelDifferentRequirement, MemoryType from, MemoryType to)
 {
     return hasParallelDifferentRequirement && IsSpecialDirectMemoryPath(from, to);
 }
@@ -66,9 +65,8 @@ MemoryType MemoryPathUtils::ResolveEffectiveConsumerRequirement(
         auto assembleOpAttribute = std::dynamic_pointer_cast<AssembleOpAttribute>(consumerOp->GetOpAttribute());
         if (assembleOpAttribute != nullptr) {
             MemoryType fromType = assembleOpAttribute->GetFrom();
-            if (IsSpecialDirectMemoryPath(fromType, targetType) &&
-                !consumerOp->oOperand.empty() && consumerOp->oOperand.front() != nullptr &&
-                !consumerOp->oOperand.front()->GetConsumers().empty()) {
+            if (IsSpecialDirectMemoryPath(fromType, targetType) && !consumerOp->oOperand.empty() &&
+                consumerOp->oOperand.front() != nullptr && !consumerOp->oOperand.front()->GetConsumers().empty()) {
                 addRequirement(targetType);
             }
         }

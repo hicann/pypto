@@ -1,5 +1,5 @@
 /**
-* Copyright (c) 2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) 2026 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
  * Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -129,14 +129,20 @@ TEST_F(TestAdapterApi, test_acl_adapter)
     EXPECT_EQ(AdapterManager::Instance().GetAclAdapter().GetFunction(AclFunc::RtResetDevice) != nullptr, hasCann);
     EXPECT_EQ(AdapterManager::Instance().GetAclAdapter().GetFunction(AclFunc::RtCreateEvent) != nullptr, hasCann);
     EXPECT_EQ(AdapterManager::Instance().GetAclAdapter().GetFunction(AclFunc::RtRecordEvent) != nullptr, hasCann);
-    EXPECT_EQ(AdapterManager::Instance().GetAclAdapter().GetFunction(AclFunc::RtCreateEventExWithFlag) != nullptr, hasCann);
+    EXPECT_EQ(AdapterManager::Instance().GetAclAdapter().GetFunction(AclFunc::RtCreateEventExWithFlag) != nullptr,
+              hasCann);
     EXPECT_EQ(AdapterManager::Instance().GetAclAdapter().GetFunction(AclFunc::RtStreamWaitEvent) != nullptr, hasCann);
     EXPECT_EQ(AdapterManager::Instance().GetAclAdapter().GetFunction(AclFunc::RtGetStreamResLimit) != nullptr, hasCann);
-    EXPECT_EQ(AdapterManager::Instance().GetAclAdapter().GetFunction(AclFunc::RtGetStreamAttribute) != nullptr, hasCann);
-    EXPECT_EQ(AdapterManager::Instance().GetAclAdapter().GetFunction(AclFunc::RtCacheLastTaskOpInfo) != nullptr, hasCann);
-    EXPECT_EQ(AdapterManager::Instance().GetAclAdapter().GetFunction(AclFunc::RtSetExceptionInfoCallback) != nullptr, hasCann);
+    EXPECT_EQ(AdapterManager::Instance().GetAclAdapter().GetFunction(AclFunc::RtGetStreamAttribute) != nullptr,
+              hasCann);
+    EXPECT_EQ(AdapterManager::Instance().GetAclAdapter().GetFunction(AclFunc::RtCacheLastTaskOpInfo) != nullptr,
+              hasCann);
+    EXPECT_EQ(AdapterManager::Instance().GetAclAdapter().GetFunction(AclFunc::RtSetExceptionInfoCallback) != nullptr,
+              hasCann);
     EXPECT_EQ(AdapterManager::Instance().GetAclAdapter().GetFunction(AclFunc::MdlRICaptureGetInfo) != nullptr, hasCann);
-    EXPECT_EQ(AdapterManager::Instance().GetAclAdapter().GetFunction(AclFunc::MdlRICaptureThreadExchangeMode) != nullptr, hasCann);
+    EXPECT_EQ(
+        AdapterManager::Instance().GetAclAdapter().GetFunction(AclFunc::MdlRICaptureThreadExchangeMode) != nullptr,
+        hasCann);
     EXPECT_EQ(AdapterManager::Instance().GetAclAdapter().GetFunction(AclFunc::SysGetVersionStr) != nullptr, hasCann);
 }
 
@@ -160,34 +166,56 @@ TEST_F(TestAdapterApi, test_msprof_adapter)
     EXPECT_EQ(AdapterManager::Instance().GetMsprofAdapter().GetFunction(MsprofFunc::SysCycleTime) != nullptr, hasCann);
     EXPECT_EQ(AdapterManager::Instance().GetMsprofAdapter().GetFunction(MsprofFunc::GetHashId) != nullptr, hasCann);
     EXPECT_EQ(AdapterManager::Instance().GetMsprofAdapter().GetFunction(MsprofFunc::ReportApi) != nullptr, hasCann);
-    EXPECT_EQ(AdapterManager::Instance().GetMsprofAdapter().GetFunction(MsprofFunc::ReportCompactInfo) != nullptr, hasCann);
-    EXPECT_EQ(AdapterManager::Instance().GetMsprofAdapter().GetFunction(MsprofFunc::ReportAdditionalInfo) != nullptr, hasCann);
-    EXPECT_EQ(AdapterManager::Instance().GetMsprofAdapter().GetFunction(MsprofFunc::RegisterCallback) != nullptr, hasCann);
+    EXPECT_EQ(AdapterManager::Instance().GetMsprofAdapter().GetFunction(MsprofFunc::ReportCompactInfo) != nullptr,
+              hasCann);
+    EXPECT_EQ(AdapterManager::Instance().GetMsprofAdapter().GetFunction(MsprofFunc::ReportAdditionalInfo) != nullptr,
+              hasCann);
+    EXPECT_EQ(AdapterManager::Instance().GetMsprofAdapter().GetFunction(MsprofFunc::RegisterCallback) != nullptr,
+              hasCann);
 }
 
 TEST_F(TestAdapterApi, test_runtime_adapter)
 {
     bool hasCann = std::getenv("ASCEND_HOME_PATH") != nullptr;
     EXPECT_EQ(AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::Malloc) != nullptr, hasCann);
-    EXPECT_EQ(AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::MemCopyAsync) != nullptr, hasCann);
+    EXPECT_EQ(AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::MemCopyAsync) != nullptr,
+              hasCann);
     EXPECT_EQ(AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::Free) != nullptr, hasCann);
     EXPECT_EQ(AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::SetDevice) != nullptr, hasCann);
     EXPECT_EQ(AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::GetDevice) != nullptr, hasCann);
     EXPECT_EQ(AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::GetSocSpec) != nullptr, hasCann);
-    EXPECT_EQ(AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::GetSocVersion) != nullptr, hasCann);
-    EXPECT_EQ(AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::GetAiCpuCount) != nullptr, hasCann);
-    EXPECT_EQ(AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::GetL2CacheOffset) != nullptr, hasCann);
-    EXPECT_EQ(AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::GetLogicDevIdByUserDevId) != nullptr, hasCann);
-    EXPECT_EQ(AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::FuncGetByName) != nullptr, hasCann);
-    EXPECT_EQ(AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::BinaryLoadFromFile) != nullptr, hasCann);
-    EXPECT_EQ(AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::StreamCreate) != nullptr, hasCann);
-    EXPECT_EQ(AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::StreamDestroy) != nullptr, hasCann);
-    EXPECT_EQ(AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::StreamAddToModel) != nullptr, hasCann);
-    EXPECT_EQ(AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::StreamSynchronize) != nullptr, hasCann);
-    EXPECT_EQ(AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::DevBinaryUnRegister) != nullptr, hasCann);
-    EXPECT_EQ(AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::RegisterAllKernel) != nullptr, hasCann);
-    EXPECT_EQ(AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::LaunchCpuKernel) != nullptr, hasCann);
-    EXPECT_EQ(AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::KernelLaunchWithHandleV2) != nullptr, hasCann);
-    EXPECT_EQ(AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::AicpuKernelLaunchExWithArgs) != nullptr, hasCann);
+    EXPECT_EQ(AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::GetSocVersion) != nullptr,
+              hasCann);
+    EXPECT_EQ(AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::GetAiCpuCount) != nullptr,
+              hasCann);
+    EXPECT_EQ(AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::GetL2CacheOffset) != nullptr,
+              hasCann);
+    EXPECT_EQ(
+        AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::GetLogicDevIdByUserDevId) != nullptr,
+        hasCann);
+    EXPECT_EQ(AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::FuncGetByName) != nullptr,
+              hasCann);
+    EXPECT_EQ(AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::BinaryLoadFromFile) != nullptr,
+              hasCann);
+    EXPECT_EQ(AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::StreamCreate) != nullptr,
+              hasCann);
+    EXPECT_EQ(AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::StreamDestroy) != nullptr,
+              hasCann);
+    EXPECT_EQ(AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::StreamAddToModel) != nullptr,
+              hasCann);
+    EXPECT_EQ(AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::StreamSynchronize) != nullptr,
+              hasCann);
+    EXPECT_EQ(AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::DevBinaryUnRegister) != nullptr,
+              hasCann);
+    EXPECT_EQ(AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::RegisterAllKernel) != nullptr,
+              hasCann);
+    EXPECT_EQ(AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::LaunchCpuKernel) != nullptr,
+              hasCann);
+    EXPECT_EQ(
+        AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::KernelLaunchWithHandleV2) != nullptr,
+        hasCann);
+    EXPECT_EQ(
+        AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::AicpuKernelLaunchExWithArgs) != nullptr,
+        hasCann);
 }
-}
+} // namespace npu::tile_fwk

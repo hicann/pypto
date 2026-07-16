@@ -31,21 +31,19 @@ public: // public api for torch
 
     static Program& GetInstance();
     void Reset();
-    bool BeginFunction(
-        const std::string& funcName, const FunctionType funcType = FunctionType::STATIC,
-        const GraphType graphType = GraphType::TENSOR_GRAPH,
-        const std::vector<std::reference_wrapper<const Tensor>>& explicitOpArgs = {}, bool isHiddenFunction = false);
+    bool BeginFunction(const std::string& funcName, const FunctionType funcType = FunctionType::STATIC,
+                       const GraphType graphType = GraphType::TENSOR_GRAPH,
+                       const std::vector<std::reference_wrapper<const Tensor>>& explicitOpArgs = {},
+                       bool isHiddenFunction = false);
     std::tuple<Function*, Operation*, bool> EndFunction(const std::string& funcName, bool generateCall = true);
 
     Operation& ConnectCallerGusket(Function& caller, FunctionCallArgs& args) const;
 
-    Operation& AddOperation(
-        const std::string& opName, const std::vector<std::shared_ptr<LogicalTensor>>& iOperand,
-        const std::vector<std::shared_ptr<LogicalTensor>>& oOperand);
+    Operation& AddOperation(const std::string& opName, const std::vector<std::shared_ptr<LogicalTensor>>& iOperand,
+                            const std::vector<std::shared_ptr<LogicalTensor>>& oOperand);
 
-    Operation& AddOperation(
-        const Opcode opCode, const std::vector<std::shared_ptr<LogicalTensor>>& iOperand,
-        const std::vector<std::shared_ptr<LogicalTensor>>& oOperand);
+    Operation& AddOperation(const Opcode opCode, const std::vector<std::shared_ptr<LogicalTensor>>& iOperand,
+                            const std::vector<std::shared_ptr<LogicalTensor>>& oOperand);
 
     bool QueryAndUpdateCurrentFunction();
 

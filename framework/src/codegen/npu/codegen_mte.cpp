@@ -126,11 +126,11 @@ std::string CodeGenOpNPU::GenMemL1SpillToGM(bool isLocalToGM, unsigned uf) const
 
         return oss.str();
     } else {
-        ret = sprintf_s(
-            buffer, BUFFER_SIZE_1024, "%s<%s, %s, %d, %d, %d, %d>((%s %s*)%s, (%s %s*)%s, %u);\n", tileOpName.c_str(),
-            typeExpr[gmIdx].c_str(), typeExpr[l1Idx].c_str(), tileShape0, tileShape1, gmShape[ID0], gmShape[ID1],
-            addrTypeHead[ID0].c_str(), typeExpr[ID0].c_str(), addrExpr[ID0].c_str(), addrTypeHead[ID1].c_str(),
-            typeExpr[ID1].c_str(), addrExpr[ID1].c_str(), uf);
+        ret = sprintf_s(buffer, BUFFER_SIZE_1024, "%s<%s, %s, %d, %d, %d, %d>((%s %s*)%s, (%s %s*)%s, %u);\n",
+                        tileOpName.c_str(), typeExpr[gmIdx].c_str(), typeExpr[l1Idx].c_str(), tileShape0, tileShape1,
+                        gmShape[ID0], gmShape[ID1], addrTypeHead[ID0].c_str(), typeExpr[ID0].c_str(),
+                        addrExpr[ID0].c_str(), addrTypeHead[ID1].c_str(), typeExpr[ID1].c_str(), addrExpr[ID1].c_str(),
+                        uf);
     }
     ASSERT(GenCodeErr::PRINT_FAILED, ret >= 0) << "sprintf_s failed in genMemOp_L1, return value:" << ret;
     return buffer;
@@ -158,17 +158,16 @@ std::string CodeGenOpNPU::GenL0CToUBTileTensor() const
         std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::DST_IDX));
         // TMP_IDX is do not use in this case
         std::string src0Tensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::SRC0_IDX));
-        auto [coordDst, coordSrc] =
-            PrintDstSrcCoordFromAttr(ToUnderlying(MIMOIdx::DST_IDX), ToUnderlying(MIMOIdx::SRC0_IDX));
+        auto [coordDst, coordSrc] = PrintDstSrcCoordFromAttr(ToUnderlying(MIMOIdx::DST_IDX),
+                                                             ToUnderlying(MIMOIdx::SRC0_IDX));
         cpModeStr = "CopyMode::EXTRACT";
-        tileOpParamList = {
-            dstTensor,
-            src0Tensor,
-            src0Tensor,
-            coordDst,
-            coordSrc,
-            std::to_string(aivId),
-            std::to_string(scaleValue.GetUnsignedData())};
+        tileOpParamList = {dstTensor,
+                           src0Tensor,
+                           src0Tensor,
+                           coordDst,
+                           coordSrc,
+                           std::to_string(aivId),
+                           std::to_string(scaleValue.GetUnsignedData())};
         int64_t splitMN = 0;
         GetOpAttr(OpAttributeKey::splitMN, splitMN);
         dualDstMode = (splitMN == 0) ? "DualDstMode::DUAL_DST_SPLIT_M" : "DualDstMode::DUAL_DST_SPLIT_N";
@@ -180,14 +179,13 @@ std::string CodeGenOpNPU::GenL0CToUBTileTensor() const
         if ((!scaleValue.GetUnsignedData()) && ((operandDtype[ID1] == DT_INT32) && (operandDtype[ID0] == DT_FP16))) {
             src1Tensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC1_IDX));
         }
-        tileOpParamList = {
-            dstTensor,
-            src0Tensor,
-            src1Tensor,
-            coordDst,
-            coordSrc,
-            std::to_string(aivId),
-            std::to_string(scaleValue.GetUnsignedData())};
+        tileOpParamList = {dstTensor,
+                           src0Tensor,
+                           src1Tensor,
+                           coordDst,
+                           coordSrc,
+                           std::to_string(aivId),
+                           std::to_string(scaleValue.GetUnsignedData())};
     }
     templateParam.emplace_back(cpModeStr);
     templateParam.emplace_back(dualDstMode);
@@ -487,9 +485,8 @@ std::string CodeGenOpNPU::GenMemCopyVar(bool isCopyLocalToGM, bool isSpillToGm, 
     if (localType == BUF_L0C) {
         return PrintMemCopyWithL0C({uf, gmIdx, localIdx, addrTypeHead, addrExpr, gmShape, localRawShape, dataTypeExpr});
     } else if (localType == BUF_L1) {
-        return PrintMemCopyWithL1(
-            {isCopyLocalToGM, isSpillToGm, uf, gmIdx, localIdx, addrTypeHead, addrExpr, gmShape, localRawShape,
-             dataTypeExpr});
+        return PrintMemCopyWithL1({isCopyLocalToGM, isSpillToGm, uf, gmIdx, localIdx, addrTypeHead, addrExpr, gmShape,
+                                   localRawShape, dataTypeExpr});
     } else if (localType == BUF_UB) {
         PrintMemCopyWithUBParam param = {gmIdx, localIdx, isSpillToGm, addrTypeHead, addrExpr, dataTypeExpr};
         return PrintMemCopyWithUB(param);
@@ -525,9 +522,8 @@ std::string CodeGenOpNPU::PrintMemCopyWithL0CTileTensor(const PrintMemCopyWithL0
         GetOpAttr(OP_ATTR_PREFIX + "scale_value", scaleValue);
     }
 
-    bool isFixBuf =
-        (((operandDtype[param.localIdx] == DT_INT32) && (operandDtype[param.gmIdx] == DT_FP16)) ||
-         (operandDtype[param.gmIdx] == DT_INT8));
+    bool isFixBuf = (((operandDtype[param.localIdx] == DT_INT32) && (operandDtype[param.gmIdx] == DT_FP16)) ||
+                     (operandDtype[param.gmIdx] == DT_INT8));
     if ((!scaleValue.GetUnsignedData()) && isFixBuf) {
         src1Tensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC1_IDX));
     }
@@ -602,22 +598,22 @@ std::string CodeGenOpNPU::PrintMemCopyWithL0CStatic(const PrintMemCopyWithL0CPar
     int oriTileShape1 = std::min(shape[localIdx][ID1], localRawShape[ID1]);
 
     char buffer[BUFFER_SIZE_1024] = "CG_ERROR";
-    int printRet = sprintf_s(
-        buffer, BUFFER_SIZE_1024, "%s<%s, %s, %u, %u, %d, %d, %s, %s, %d, %d>((%s %s*)%s, (%s %s*)%s, %u);\n",
-        tileOpName.c_str(), dataTypeExpr[gmIdx].c_str(), dataTypeExpr[localIdx].c_str(), localRawShape[ID0],
-        localRawShape[ID1], gmShape[ID0], gmShape[ID1],
-        SymbolicExpressionTable::BuildExpression(outputOffset[ID0]).c_str(),
-        SymbolicExpressionTable::BuildExpression(outputOffset[ID1]).c_str(), oriTileShape0, oriTileShape1,
-        addrTypeHead[ID0].c_str(), dataTypeExpr[ID0].c_str(), addrExpr[ID0].c_str(), addrTypeHead[ID1].c_str(),
-        dataTypeExpr[ID1].c_str(), addrExpr[ID1].c_str(), uf);
+    int printRet = sprintf_s(buffer, BUFFER_SIZE_1024,
+                             "%s<%s, %s, %u, %u, %d, %d, %s, %s, %d, %d>((%s %s*)%s, (%s %s*)%s, %u);\n",
+                             tileOpName.c_str(), dataTypeExpr[gmIdx].c_str(), dataTypeExpr[localIdx].c_str(),
+                             localRawShape[ID0], localRawShape[ID1], gmShape[ID0], gmShape[ID1],
+                             SymbolicExpressionTable::BuildExpression(outputOffset[ID0]).c_str(),
+                             SymbolicExpressionTable::BuildExpression(outputOffset[ID1]).c_str(), oriTileShape0,
+                             oriTileShape1, addrTypeHead[ID0].c_str(), dataTypeExpr[ID0].c_str(), addrExpr[ID0].c_str(),
+                             addrTypeHead[ID1].c_str(), dataTypeExpr[ID1].c_str(), addrExpr[ID1].c_str(), uf);
     ASSERT(GenCodeErr::PRINT_FAILED, printRet >= 0)
         << "sprintf_s failed in genMemCopyVar(BUF_L0C), return value:" << printRet;
     return buffer;
 }
 
-std::string CodeGenOpNPU::PrintL0CCopyOutDynamicUnalign(
-    const PrintMemCopyWithL0CParam& param, std::vector<std::string>& gmShapeExpr,
-    std::vector<std::string>& gmOffsetExpr) const
+std::string CodeGenOpNPU::PrintL0CCopyOutDynamicUnalign(const PrintMemCopyWithL0CParam& param,
+                                                        std::vector<std::string>& gmShapeExpr,
+                                                        std::vector<std::string>& gmOffsetExpr) const
 {
     std::ostringstream os;
     std::vector<std::string> paramList;
@@ -709,8 +705,9 @@ std::string CodeGenOpNPU::PrintMemCopyWithL0CDynamic(const PrintMemCopyWithL0CPa
     return PrintL0CCopyOutDynamicUnalign(param, gmShapeExpr, gmOffsetExpr);
 }
 
-std::pair<std::string, std::string> CodeGenOpNPU::GetOuterInnerValueStr(
-    unsigned gmIdx, const std::vector<int64_t>& gmShape, bool isSpillingToGM) const
+std::pair<std::string, std::string> CodeGenOpNPU::GetOuterInnerValueStr(unsigned gmIdx,
+                                                                        const std::vector<int64_t>& gmShape,
+                                                                        bool isSpillingToGM) const
 {
     int64_t outerValue = 0;
     int64_t innerValue = 0;
@@ -722,8 +719,8 @@ std::pair<std::string, std::string> CodeGenOpNPU::GetOuterInnerValueStr(
                                   GenParamIdxExprByIndex(gmIdx, SHAPE_DIM2, PREFIX_STR_RAW_SHAPE) :
                                   GenDynRawShapePacked(gmIdx);
 
-    auto getValueStr = [useStaticShape, &gmShapeExprByIndex](
-                           int64_t value, size_t idx, int64_t shapeValue) -> std::string {
+    auto getValueStr = [useStaticShape, &gmShapeExprByIndex](int64_t value, size_t idx,
+                                                             int64_t shapeValue) -> std::string {
         if (value != 0) {
             return std::to_string(value);
         }
@@ -851,8 +848,8 @@ std::string CodeGenOpNPU::PrintMemCopyWithL1Static(const PrintMemCopyWithL1Param
     if (ret && nzValue == 1) {
         opName = "TileOp::L1CopyInNZ2NZ";
         std::string curAddrBuffer = GenGmParamVar(gmIdx);
-        printRet = sprintf_s(
-            oriAddrBuffer, BUFFER_SIZE_1024, "(__gm__ %s*)%s", dataTypeExpr[ID1].c_str(), curAddrBuffer.c_str());
+        printRet = sprintf_s(oriAddrBuffer, BUFFER_SIZE_1024, "(__gm__ %s*)%s", dataTypeExpr[ID1].c_str(),
+                             curAddrBuffer.c_str());
         ASSERT(GenCodeErr::PRINT_FAILED, printRet >= 0)
             << "sprintf_s failed in PrintMemCopyWithL1Static, return value:" << printRet;
         printRet = sprintf_s(addrBuffer, BUFFER_SIZE_1024, "%s", addrExpr[ID1].c_str());
@@ -870,13 +867,13 @@ std::string CodeGenOpNPU::PrintMemCopyWithL1Static(const PrintMemCopyWithL1Param
         printRet = sprintf_s(addrBuffer, BUFFER_SIZE_1024, "%s", addrExpr[ID1].c_str());
         ASSERT(GenCodeErr::PRINT_FAILED, printRet >= 0)
             << "sprintf_s failed in PrintMemCopyWithL1Static, return value:" << printRet;
-        printRet = sprintf_s(
-            buffer, BUFFER_SIZE_1024, "%s<%s, %s, %u, %u, %s, %s, %d, %d>((%s %s*)%s, (%s %s*)%s, %u);\n",
-            opName.c_str(), dataTypeExpr[gmIdx].c_str(), dataTypeExpr[localIdx].c_str(), localRawShape[ID0],
-            localRawShape[ID1], SymbolicExpressionTable::BuildExpression(gmOffset[ID0]).c_str(),
-            SymbolicExpressionTable::BuildExpression(gmOffset[ID1]).c_str(), gmShape[ID0], gmShape[ID1],
-            addrTypeHead[ID0].c_str(), dataTypeExpr[ID0].c_str(), addrExpr[ID0].c_str(), addrTypeHead[ID1].c_str(),
-            dataTypeExpr[ID1].c_str(), addrBuffer, uf);
+        printRet = sprintf_s(buffer, BUFFER_SIZE_1024,
+                             "%s<%s, %s, %u, %u, %s, %s, %d, %d>((%s %s*)%s, (%s %s*)%s, %u);\n", opName.c_str(),
+                             dataTypeExpr[gmIdx].c_str(), dataTypeExpr[localIdx].c_str(), localRawShape[ID0],
+                             localRawShape[ID1], SymbolicExpressionTable::BuildExpression(gmOffset[ID0]).c_str(),
+                             SymbolicExpressionTable::BuildExpression(gmOffset[ID1]).c_str(), gmShape[ID0],
+                             gmShape[ID1], addrTypeHead[ID0].c_str(), dataTypeExpr[ID0].c_str(), addrExpr[ID0].c_str(),
+                             addrTypeHead[ID1].c_str(), dataTypeExpr[ID1].c_str(), addrBuffer, uf);
     }
     ASSERT(GenCodeErr::PRINT_FAILED, printRet >= 0)
         << "sprintf_s failed in PrintMemCopyWithL1Static, return value:" << printRet;
@@ -996,14 +993,14 @@ std::string CodeGenOpNPU::PrintMemCopyWithUBStatic(const PrintMemCopyWithUBParam
         srcStride[SHAPE_DIM5 - 1] *= numAlign;
         dstStride[SHAPE_DIM5 - 1] *= numAlign;
     }
-    int printRet = sprintf_s(
-        buffer, BUFFER_SIZE_1024,
-        "%s<%s, %u, %u, %u, %u, %u, /*dst stride*/ %u, %u, %u, %u,"
-        "/*src stride*/ %u, %u, %u, %u %s>((%s %s*)%s, (%s %s*)%s);\n",
-        tileOpName.c_str(), dataTypeExpr[localIdx].c_str(), os[ID0], os[ID1], os[ID2], os[ID3], os[4], dstStride[ID1],
-        dstStride[ID2], dstStride[ID3], dstStride[4], srcStride[ID1], srcStride[ID2], srcStride[ID3], srcStride[4],
-        GenOpAttr().c_str(), addrTypeHead[ID0].c_str(), dataTypeExpr[localIdx].c_str(), addrExpr[ID0].c_str(),
-        addrTypeHead[ID1].c_str(), dataTypeExpr[localIdx].c_str(), addrExpr[ID1].c_str());
+    int printRet = sprintf_s(buffer, BUFFER_SIZE_1024,
+                             "%s<%s, %u, %u, %u, %u, %u, /*dst stride*/ %u, %u, %u, %u,"
+                             "/*src stride*/ %u, %u, %u, %u %s>((%s %s*)%s, (%s %s*)%s);\n",
+                             tileOpName.c_str(), dataTypeExpr[localIdx].c_str(), os[ID0], os[ID1], os[ID2], os[ID3],
+                             os[4], dstStride[ID1], dstStride[ID2], dstStride[ID3], dstStride[4], srcStride[ID1],
+                             srcStride[ID2], srcStride[ID3], srcStride[4], GenOpAttr().c_str(),
+                             addrTypeHead[ID0].c_str(), dataTypeExpr[localIdx].c_str(), addrExpr[ID0].c_str(),
+                             addrTypeHead[ID1].c_str(), dataTypeExpr[localIdx].c_str(), addrExpr[ID1].c_str());
     ASSERT(GenCodeErr::PRINT_FAILED, printRet >= 0)
         << "sprintf_s failed in PrintMemCopyWithUBStatic, return value:" << printRet;
     return buffer;

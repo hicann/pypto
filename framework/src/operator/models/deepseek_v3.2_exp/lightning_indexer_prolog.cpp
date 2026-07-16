@@ -71,9 +71,8 @@ Tensor RotateHalfValidShape(const Tensor& input)
 Tensor Rope3D(const Tensor& x, const Tensor& cos, const Tensor& sin, const RopeTileShapeConfig& tileConfig)
 {
     (void)tileConfig;
-    ASSERT(
-        x.GetShape().size() == SHAPE_DIM3 && cos.GetShape().size() == SHAPE_DIM2 &&
-        sin.GetShape().size() == SHAPE_DIM2);
+    ASSERT(x.GetShape().size() == SHAPE_DIM3 && cos.GetShape().size() == SHAPE_DIM2 &&
+           sin.GetShape().size() == SHAPE_DIM2);
 
     TileShape::Current().SetVecTile(NUM_1, NUM_32, NUM_128);
     auto castX = Cast(x, DT_FP32);
@@ -103,9 +102,8 @@ Tensor Rope3D(const Tensor& x, const Tensor& cos, const Tensor& sin, const RopeT
 Tensor Rope(const Tensor& x, const Tensor& cos, const Tensor& sin, const RopeTileShapeConfig& tileConfig)
 {
     (void)tileConfig;
-    ASSERT(
-        x.GetShape().size() == SHAPE_DIM2 && cos.GetShape().size() == SHAPE_DIM2 &&
-        sin.GetShape().size() == SHAPE_DIM2);
+    ASSERT(x.GetShape().size() == SHAPE_DIM2 && cos.GetShape().size() == SHAPE_DIM2 &&
+           sin.GetShape().size() == SHAPE_DIM2);
 
     auto seqSize = x.GetShape()[NUM_VALUE_0];
     auto dR = x.GetShape()[NUM_VALUE_1];
@@ -120,9 +118,8 @@ Tensor Rope(const Tensor& x, const Tensor& cos, const Tensor& sin, const RopeTil
     auto castSin = Cast(sin, DT_FP32);
 
     auto xView = Reshape(castX, {1, seqSize, dR / NUM_VALUE_2, NUM_VALUE_2});
-    TileShape::Current().SetVecTile(
-        tileConfig.fourDim[NUM_VALUE_0], tileConfig.fourDim[NUM_VALUE_1], tileConfig.fourDim[NUM_VALUE_2],
-        tileConfig.fourDim[NUM_VALUE_3]);
+    TileShape::Current().SetVecTile(tileConfig.fourDim[NUM_VALUE_0], tileConfig.fourDim[NUM_VALUE_1],
+                                    tileConfig.fourDim[NUM_VALUE_2], tileConfig.fourDim[NUM_VALUE_3]);
     auto xTrans = Transpose(xView, {NUM_VALUE_2, NUM_VALUE_3});
     auto xReSecond = Reshape(xTrans, {seqSize, dR});
 
@@ -133,8 +130,8 @@ Tensor Rope(const Tensor& x, const Tensor& cos, const Tensor& sin, const RopeTil
     return res;
 }
 
-void LightningIndexerPrologCompute(
-    const IndexerPrologInput& inputs, IndexerPrologOutput& outputs, const IndexerShapeParams& params)
+void LightningIndexerPrologCompute(const IndexerPrologInput& inputs, IndexerPrologOutput& outputs,
+                                   const IndexerShapeParams& params)
 {
     SymbolicScalar b = GetInputShape(inputs.x, 0);
     SymbolicScalar seq = GetInputShape(inputs.x, 1);
@@ -174,9 +171,9 @@ void LightningIndexerPrologCompute(
                 auto v1Tile = params.indexerTileConfigs.v1TileShape;
 
                 config::SetSemanticLabel("QMatmul");
-                TileShape::Current().SetCubeTile(
-                    {c1Tile[NUM_VALUE_0], c1Tile[NUM_VALUE_1]}, {c1Tile[NUM_VALUE_2], c1Tile[NUM_VALUE_3]},
-                    {c1Tile[NUM_VALUE_4], c1Tile[NUM_VALUE_5]});
+                TileShape::Current().SetCubeTile({c1Tile[NUM_VALUE_0], c1Tile[NUM_VALUE_1]},
+                                                 {c1Tile[NUM_VALUE_2], c1Tile[NUM_VALUE_3]},
+                                                 {c1Tile[NUM_VALUE_4], c1Tile[NUM_VALUE_5]});
                 auto qrBlock = View(qr2D, {tileBS, qLoraRank}, {actBS, qLoraRank}, {bsIdx, 0});
                 // {tileBS, qLoraRank} * {qLoraRank, headNum * headDim} = {tileBS, headNum * headDim}
                 auto q32 = Matrix::Matmul(DT_FP32, qrBlock, inputs.qW, false, false);
@@ -185,16 +182,15 @@ void LightningIndexerPrologCompute(
                 TileShape::Current().SetVecTile(std::min(tileBS, NUM_4), NUM_32, v1Tile[NUM_VALUE_1]);
                 auto q = Cast(Reshape(q32, {tileBS, headNum, headDim}), qrBlock.GetStorage()->Datatype());
                 Tensor qRope = View(q, {tileBS, headNum, ropeHeadDim}, {actBS, headNum, ropeHeadDim}, {0, 0, 0});
-                Tensor qNope = View(
-                    q, {tileBS, headNum, headDim - ropeHeadDim}, {actBS, headNum, headDim - ropeHeadDim},
-                    {0, 0, ropeHeadDim});
+                Tensor qNope = View(q, {tileBS, headNum, headDim - ropeHeadDim},
+                                    {actBS, headNum, headDim - ropeHeadDim}, {0, 0, ropeHeadDim});
                 qNope = Cast(Cast(qNope, DT_FP32), qNope.GetDataType());
 
                 config::SetSemanticLabel("KMatmul");
                 auto c2Tile = params.indexerTileConfigs.c2TileShape;
-                TileShape::Current().SetCubeTile(
-                    {c2Tile[NUM_VALUE_0], c2Tile[NUM_VALUE_1]}, {c2Tile[NUM_VALUE_2], c2Tile[NUM_VALUE_3]},
-                    {c2Tile[NUM_VALUE_4], c2Tile[NUM_VALUE_5]});
+                TileShape::Current().SetCubeTile({c2Tile[NUM_VALUE_0], c2Tile[NUM_VALUE_1]},
+                                                 {c2Tile[NUM_VALUE_2], c2Tile[NUM_VALUE_3]},
+                                                 {c2Tile[NUM_VALUE_4], c2Tile[NUM_VALUE_5]});
                 TileShape::Current().SetVecTile(v1Tile[NUM_VALUE_0], v1Tile[NUM_VALUE_1], v1Tile[NUM_VALUE_1]);
                 auto xBlock = View(x2D, {tileBS, dim}, {actBS, dim}, {bsIdx, 0});
                 // {tileBS, dim} * {dim, headNum} = {tileBS, headNum}
@@ -205,8 +201,8 @@ void LightningIndexerPrologCompute(
                 auto k = Matrix::Matmul(DT_FP32, xBlock, inputs.kW, false, false);
                 k = Cast(LayerNorm(k, lnW2D, lnBias2D, -1), xBlock.GetStorage()->Datatype()); // {tileBS, headDim}
                 Tensor kRope = View(k, {tileBS, ropeHeadDim}, {actBS, ropeHeadDim}, {0, 0});
-                Tensor kNope =
-                    View(k, {tileBS, headDim - ropeHeadDim}, {actBS, headDim - ropeHeadDim}, {0, ropeHeadDim});
+                Tensor kNope = View(k, {tileBS, headDim - ropeHeadDim}, {actBS, headDim - ropeHeadDim},
+                                    {0, ropeHeadDim});
 
                 TileShape::Current().SetVecTile(v1Tile[NUM_VALUE_0], v1Tile[NUM_VALUE_1], v1Tile[NUM_VALUE_2]);
                 auto cos2DView = View(cos2D, {tileBS, ropeHeadDim}, {actBS, ropeHeadDim}, {bsIdx, 0});
@@ -215,8 +211,8 @@ void LightningIndexerPrologCompute(
                 config::SetSemanticLabel("QRope");
                 // qRope{tileBS * headNum, ropeHeadDim}  cos{tileBS, ropeHeadDim}   sin{tileBS, ropeHeadDim}
                 config::SetSemanticLabel("KRope");
-                auto qRoped =
-                    Rope3D(qRope, cos2DView, sin2DView, params.ropeTileConfigs); // {tileBS, headNum, ropeHeadDim}
+                auto qRoped = Rope3D(qRope, cos2DView, sin2DView,
+                                     params.ropeTileConfigs); // {tileBS, headNum, ropeHeadDim}
                 TileShape::Current().SetVecTile(v1Tile[NUM_VALUE_0], v1Tile[NUM_VALUE_1]);
                 // kRope{tileBS, ropeHeadDim}  cos{tileBS, ropeHeadDim}   sin{tileBS, ropeHeadDim}
                 auto kRoped = Rope(kRope, cos2DView, sin2DView, params.ropeTileConfigs); // {tileBS, ropeHeadDim}
@@ -233,21 +229,20 @@ void LightningIndexerPrologCompute(
                 auto index = View(inputs.kCacheIndex, {tileBS, 1}, {actBS, 1}, {bsIdx, 0});
 
                 TileShape::Current().SetVecTile(tileBS, NUM_128, NUM_128, NUM_128);
-                outputs.kCacheOut =
-                    ScatterUpdate(inputs.kCache, index, kUpdate4D, SCATTER_UPADATE_DIM, "PA_BSND", params.blockSize);
+                outputs.kCacheOut = ScatterUpdate(inputs.kCache, index, kUpdate4D, SCATTER_UPADATE_DIM, "PA_BSND",
+                                                  params.blockSize);
             }
         }
     }
 }
 
-void LightningIndexerProlog(
-    const IndexerPrologInput& inputs, IndexerPrologOutput& outputs, const IndexerShapeParams& params)
+void LightningIndexerProlog(const IndexerPrologInput& inputs, IndexerPrologOutput& outputs,
+                            const IndexerShapeParams& params)
 {
-    FUNCTION(
-        "LightningIndexerProlog",
-        {inputs.x, inputs.qr, inputs.qW, inputs.kW, inputs.projW, inputs.lnW, inputs.lnBias, inputs.cos, inputs.sin,
-         inputs.kCache, inputs.kCacheIndex, inputs.blockTable},
-        {outputs.query, outputs.weight}, {{outputs.kCacheOut, inputs.kCache}})
+    FUNCTION("LightningIndexerProlog",
+             {inputs.x, inputs.qr, inputs.qW, inputs.kW, inputs.projW, inputs.lnW, inputs.lnBias, inputs.cos,
+              inputs.sin, inputs.kCache, inputs.kCacheIndex, inputs.blockTable},
+             {outputs.query, outputs.weight}, {{outputs.kCacheOut, inputs.kCache}})
     {
         LightningIndexerPrologCompute(inputs, outputs, params);
     }

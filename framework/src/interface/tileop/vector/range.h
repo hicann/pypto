@@ -53,8 +53,8 @@ TILEOP inline void TRangePropagate(__ubuf__ T* base, int32_t loopN, int32_t tail
 }
 
 template <typename TileType>
-TILEOP void TRange(
-    TileType dst, unsigned size, typename TileType::Type start, typename TileType::Type step, int64_t tileIdx)
+TILEOP void TRange(TileType dst, unsigned size, typename TileType::Type start, typename TileType::Type step,
+                   int64_t tileIdx)
 {
     using T = typename TileType::Type;
     const T baseStart = start + step * static_cast<T>(tileIdx);
@@ -97,7 +97,7 @@ TILEOP void TRange(
     // repeat
     loopN = static_cast<int32_t>(N) / kRepElems - 1;
     tailSize = static_cast<int32_t>(N) % kRepElems;
-    TRangePropagate<T, (ONE_BLK_SIZE * DEFAULT_REPEAT_STRIDE) / sizeof(T)>(
-        dst_ptr, loopN, tailSize, step * static_cast<T>(kRepElems));
+    TRangePropagate<T, (ONE_BLK_SIZE * DEFAULT_REPEAT_STRIDE) / sizeof(T)>(dst_ptr, loopN, tailSize,
+                                                                           step * static_cast<T>(kRepElems));
 }
 #endif

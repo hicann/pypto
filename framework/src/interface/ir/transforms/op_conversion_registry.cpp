@@ -57,10 +57,9 @@ OpConversionRegistry::OpConversionRegistry()
 void OpConversionRegistry::RegisterSimple(const std::string& from_op, const std::string& to_op)
 {
     // Capture to_op by value for the lambda
-    conversions_[from_op] = [to_op](
-                                const std::vector<ExprPtr>& args,
-                                const std::vector<std::pair<std::string, std::any>>& kwargs,
-                                const Span& span) -> ConversionResult {
+    conversions_[from_op] = [to_op](const std::vector<ExprPtr>& args,
+                                    const std::vector<std::pair<std::string, std::any>>& kwargs,
+                                    const Span& span) -> ConversionResult {
         auto& reg = OpRegistry::GetInstance();
         CallPtr call;
         if (kwargs.empty()) {

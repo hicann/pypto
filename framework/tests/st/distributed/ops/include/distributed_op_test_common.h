@@ -36,16 +36,16 @@ std::array<DstT, N> GetParams(const std::string& filePath)
     std::vector<SrcT> srcParams(N);
     readInput(filePath, srcParams);
     std::array<DstT, N> dstParams;
-    std::transform(
-        srcParams.begin(), srcParams.begin() + N, dstParams.begin(), [](SrcT v) { return static_cast<DstT>(v); });
+    std::transform(srcParams.begin(), srcParams.begin() + N, dstParams.begin(),
+                   [](SrcT v) { return static_cast<DstT>(v); });
     return dstParams;
 }
 
 inline DataType GetDataTypeNum(const int64_t typeNum)
 {
     if ((typeNum < 0) || (typeNum >= static_cast<int64_t>(DataType::DT_BOTTOM))) {
-        DISTRIBUTED_LOGE(DistributedErrorCode::UNKNOW_ERROR,
-            "Invalid type code: %ld (Valid range: [0-%ld])", typeNum, static_cast<int64_t>(DataType::DT_BOTTOM));
+        DISTRIBUTED_LOGE(DistributedErrorCode::UNKNOW_ERROR, "Invalid type code: %ld (Valid range: [0-%ld])", typeNum,
+                         static_cast<int64_t>(DataType::DT_BOTTOM));
         return DataType::DT_BOTTOM;
     }
     return static_cast<DataType>(typeNum);
@@ -62,9 +62,8 @@ std::vector<T> ReadToVector(const std::string& filePath, const std::vector<int64
 }
 
 template <typename T, typename PtrType>
-bool DoCompare(
-    const std::string& goldenFilename, const uint64_t outSize, const size_t dTypeSize, const PtrType& outPtrs,
-    const OpTestParam& testParam, float threshold)
+bool DoCompare(const std::string& goldenFilename, const uint64_t outSize, const size_t dTypeSize,
+               const PtrType& outPtrs, const OpTestParam& testParam, float threshold)
 {
     std::vector<T> res(outSize);
     std::vector<T> resGolden(outSize);
@@ -75,8 +74,7 @@ bool DoCompare(
         for (int32_t i = 0; i < testParam.rankSize; ++i) {
             const size_t chunkSize = outSize / testParam.rankSize;
             const size_t offset = i * chunkSize;
-            CopyFromTensor(
-                reinterpret_cast<uint8_t*>(res.data() + offset), outPtrs[i], chunkSize * dTypeSize);
+            CopyFromTensor(reinterpret_cast<uint8_t*>(res.data() + offset), outPtrs[i], chunkSize * dTypeSize);
         }
     }
     // 读取Golden数据并比较
@@ -85,9 +83,8 @@ bool DoCompare(
 }
 
 template <typename PtrType>
-bool CompareWithGolden(
-    const DataType dType, const std::string& goldenFilename, const uint64_t outSize, const PtrType& outPtrs,
-    const OpTestParam& testParam, float threshold = 0.001f)
+bool CompareWithGolden(const DataType dType, const std::string& goldenFilename, const uint64_t outSize,
+                       const PtrType& outPtrs, const OpTestParam& testParam, float threshold = 0.001f)
 {
     CHECK((std::is_same_v<PtrType, uint8_t*>) || (std::is_same_v<PtrType, std::vector<uint8_t*>>))
         << "PtrType must be either uint8_t* or std::vector<uint8_t*>";
@@ -100,18 +97,19 @@ bool CompareWithGolden(
             result = DoCompare<float>(goldenFilename, outSize, dTypeSize, outPtrs, testParam, threshold);
             break;
         case DataType::DT_FP16:
-            result =
-                DoCompare<npu::tile_fwk::float16>(goldenFilename, outSize, dTypeSize, outPtrs, testParam, threshold);
+            result = DoCompare<npu::tile_fwk::float16>(goldenFilename, outSize, dTypeSize, outPtrs, testParam,
+                                                       threshold);
             break;
         case DataType::DT_BF16:
-            result =
-                DoCompare<npu::tile_fwk::bfloat16>(goldenFilename, outSize, dTypeSize, outPtrs, testParam, threshold);
+            result = DoCompare<npu::tile_fwk::bfloat16>(goldenFilename, outSize, dTypeSize, outPtrs, testParam,
+                                                        threshold);
             break;
         case DataType::DT_INT32:
             result = DoCompare<int32_t>(goldenFilename, outSize, dTypeSize, outPtrs, testParam, threshold);
             break;
         default:
-            DISTRIBUTED_LOGE(DistributedErrorCode::UNKNOW_ERROR, "Unsupported dType: %lu", static_cast<uint64_t>(dType));
+            DISTRIBUTED_LOGE(DistributedErrorCode::UNKNOW_ERROR, "Unsupported dType: %lu",
+                             static_cast<uint64_t>(dType));
             break;
     }
     return result;
@@ -144,9 +142,8 @@ public:
             count = maxDataCnt - offset;
         }
         std::vector<T> result(count, 0);
-        RuntimeMemcpy(
-            result.data(), count * sizeof(T), (uint8_t*)devAddr + offset * sizeof(T), count * sizeof(T),
-            RtMemcpyKind::DEVICE_TO_HOST);
+        RuntimeMemcpy(result.data(), count * sizeof(T), (uint8_t*)devAddr + offset * sizeof(T), count * sizeof(T),
+                      RtMemcpyKind::DEVICE_TO_HOST);
         return result;
     }
 

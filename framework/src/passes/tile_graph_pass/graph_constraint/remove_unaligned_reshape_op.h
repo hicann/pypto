@@ -60,23 +60,25 @@ private:
     bool ProcessMultipleCopyOuts(std::vector<Operation*>& copyOutOps);
     void ProcessCopyInOfDDRReshape(std::vector<Operation*>& copyInOps);
     std::unordered_set<int> processedReshapeOps;
-    Operation* CopyBranchBetweenCopyOut2Reshape(Function& function,
-        const std::vector<std::pair<Operation*, LogicalTensorPtr>>& toCopyProducerTensor, const int& consumerIndex);
+    Operation* CopyBranchBetweenCopyOut2Reshape(
+        Function& function, const std::vector<std::pair<Operation*, LogicalTensorPtr>>& toCopyProducerTensor,
+        const int& consumerIndex);
     LogicalTensorPtr HandleNoCopyOutInProducer(Function& function, Operation& op, bool& checkOverUbSize);
     int FindConsumerIndex(LogicalTensorPtr input, Operation* consumerOp);
     void GetPathBetweenSingleCopyOutAndReshape(
-        Operation* op, std::vector<std::pair<Operation*, LogicalTensorPtr>>& toCopyProducerTensor,
-        bool& findCopyOut, bool& needToCopy, int& index);
+        Operation* op, std::vector<std::pair<Operation*, LogicalTensorPtr>>& toCopyProducerTensor, bool& findCopyOut,
+        bool& needToCopy, int& index);
     void FindAllProducerCopyOuts(LogicalTensorPtr tensor, std::vector<Operation*>& copyOutOps);
     bool checkNonCopyInConsumerExists(LogicalTensorPtr tensor, std::vector<Operation*>& copyInOps);
-    void HandleNoCopyInConsumer(Function& function, Operation& op, LogicalTensorPtr output, std::vector<Operation*>& copyInOps, bool& checkOverUbSize);
+    void HandleNoCopyInConsumer(Function& function, Operation& op, LogicalTensorPtr output,
+                                std::vector<Operation*>& copyInOps, bool& checkOverUbSize);
     bool CheckUnaligned(Operation& op);
     bool CheckAllCopyOutInputsNonUb(const std::vector<Operation*>& copyOutOps);
-    void CollectSiblingCopyInConsumersOfDDRReshapeInput(
-        LogicalTensorPtr reshapeInput, Operation& reshapeOp, std::vector<Operation*>& copyInOps);
-    LogicalTensorPtr InsertIOTensor(
-        Function& function, Operation& op, std::unordered_map<OverlaprawMagic, std::shared_ptr<RawTensor>>& rawIO,
-        LogicalTensorPtr& ioTensor);
+    void CollectSiblingCopyInConsumersOfDDRReshapeInput(LogicalTensorPtr reshapeInput, Operation& reshapeOp,
+                                                        std::vector<Operation*>& copyInOps);
+    LogicalTensorPtr InsertIOTensor(Function& function, Operation& op,
+                                    std::unordered_map<OverlaprawMagic, std::shared_ptr<RawTensor>>& rawIO,
+                                    LogicalTensorPtr& ioTensor);
     std::vector<CopyOutOpMemUnalign> copyOuts;
     std::vector<CopyInOpMemUnalign> copyIns;
     std::unordered_map<OverlaprawMagic, std::shared_ptr<RawTensor>> reshapeRawOutputs;

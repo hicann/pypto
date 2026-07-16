@@ -40,15 +40,12 @@ class ThueMorseSequence {
 public:
     bool GetFlip();
 
-    ThueMorseSequence(long unsigned int shift = 0U) : next_(shift)
-    {
-        sequence_.emplace_back(false);
-    }
+    ThueMorseSequence(long unsigned int shift = 0U) : next_(shift) { sequence_.emplace_back(false); }
 
 private:
     long unsigned int next_;
     std::vector<bool> sequence_;
 };
-}    // namespace osp
-}    // namespace npu::tile_fwk
-#endif    // OSP_BALANCED_COIN_FLIPS_H
+} // namespace osp
+} // namespace npu::tile_fwk
+#endif // OSP_BALANCED_COIN_FLIPS_H

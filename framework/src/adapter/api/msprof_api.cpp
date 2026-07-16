@@ -1,5 +1,5 @@
 /**
-* Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
  * Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -25,34 +25,35 @@ namespace npu::tile_fwk {
 uint64_t MspfSysCycleTime(void)
 {
 #ifdef BUILD_WITH_CANN
-    void *func = AdapterManager::Instance().GetMsprofAdapter().GetFunction(MsprofFunc::SysCycleTime);
+    void* func = AdapterManager::Instance().GetMsprofAdapter().GetFunction(MsprofFunc::SysCycleTime);
     if (func != nullptr) {
-        uint64_t(*msprofFunc)(void) = reinterpret_cast<uint64_t(*)(void)>(func);
+        uint64_t (*msprofFunc)(void) = reinterpret_cast<uint64_t (*)(void)>(func);
         return msprofFunc();
     }
 #endif
     return StubProfSysCycleTime();
 }
 
-uint64_t MspfGetHashId(const char *hashInfo, size_t length)
+uint64_t MspfGetHashId(const char* hashInfo, size_t length)
 {
 #ifdef BUILD_WITH_CANN
-    void *func = AdapterManager::Instance().GetMsprofAdapter().GetFunction(MsprofFunc::GetHashId);
+    void* func = AdapterManager::Instance().GetMsprofAdapter().GetFunction(MsprofFunc::GetHashId);
     if (func != nullptr) {
-        uint64_t(*msprofFunc)(const char*, size_t) = reinterpret_cast<uint64_t(*)(const char*, size_t)>(func);
+        uint64_t (*msprofFunc)(const char*, size_t) = reinterpret_cast<uint64_t (*)(const char*, size_t)>(func);
         return msprofFunc(hashInfo, length);
     }
 #endif
     return StubProfGetHashId(hashInfo, length);
 }
 
-int32_t MspfReportApi(uint32_t nonPersistantFlag, const struct MspfApi *api)
+int32_t MspfReportApi(uint32_t nonPersistantFlag, const struct MspfApi* api)
 {
 #ifdef BUILD_WITH_CANN
-    void *func = AdapterManager::Instance().GetMsprofAdapter().GetFunction(MsprofFunc::ReportApi);
+    void* func = AdapterManager::Instance().GetMsprofAdapter().GetFunction(MsprofFunc::ReportApi);
     if (func != nullptr) {
-        uint64_t(*msprofFunc)(uint32_t, const struct MsprofApi*) =
-            reinterpret_cast<uint64_t(*)(uint32_t, const struct MsprofApi*)>(func);
+        uint64_t (*msprofFunc)(
+            uint32_t,
+            const struct MsprofApi*) = reinterpret_cast<uint64_t (*)(uint32_t, const struct MsprofApi*)>(func);
         return msprofFunc(nonPersistantFlag, reinterpret_cast<const struct MsprofApi*>(api));
     }
 #endif
@@ -62,10 +63,10 @@ int32_t MspfReportApi(uint32_t nonPersistantFlag, const struct MspfApi *api)
 int32_t MspfReportCompactInfo(uint32_t nonPersistantFlag, const void* data, uint32_t length)
 {
 #ifdef BUILD_WITH_CANN
-    void *func = AdapterManager::Instance().GetMsprofAdapter().GetFunction(MsprofFunc::ReportCompactInfo);
+    void* func = AdapterManager::Instance().GetMsprofAdapter().GetFunction(MsprofFunc::ReportCompactInfo);
     if (func != nullptr) {
-        uint64_t(*msprofFunc)(uint32_t, const void*, uint32_t) =
-            reinterpret_cast<uint64_t(*)(uint32_t, const void*, uint32_t)>(func);
+        uint64_t (*msprofFunc)(uint32_t, const void*,
+                               uint32_t) = reinterpret_cast<uint64_t (*)(uint32_t, const void*, uint32_t)>(func);
         return msprofFunc(nonPersistantFlag, data, length);
     }
 #endif
@@ -75,10 +76,10 @@ int32_t MspfReportCompactInfo(uint32_t nonPersistantFlag, const void* data, uint
 int32_t MspfReportAdditionalInfo(uint32_t nonPersistantFlag, const void* data, uint32_t length)
 {
 #ifdef BUILD_WITH_CANN
-    void *func = AdapterManager::Instance().GetMsprofAdapter().GetFunction(MsprofFunc::ReportAdditionalInfo);
+    void* func = AdapterManager::Instance().GetMsprofAdapter().GetFunction(MsprofFunc::ReportAdditionalInfo);
     if (func != nullptr) {
-        uint64_t(*msprofFunc)(uint32_t, const void*, uint32_t) =
-            reinterpret_cast<uint64_t(*)(uint32_t, const void*, uint32_t)>(func);
+        uint64_t (*msprofFunc)(uint32_t, const void*,
+                               uint32_t) = reinterpret_cast<uint64_t (*)(uint32_t, const void*, uint32_t)>(func);
         return msprofFunc(nonPersistantFlag, data, length);
     }
 #endif
@@ -88,10 +89,10 @@ int32_t MspfReportAdditionalInfo(uint32_t nonPersistantFlag, const void* data, u
 int32_t MspfRegisterCallback(uint32_t moduleId, MspfCommandHandleFunc handle)
 {
 #ifdef BUILD_WITH_CANN
-    void *func = AdapterManager::Instance().GetMsprofAdapter().GetFunction(MsprofFunc::RegisterCallback);
+    void* func = AdapterManager::Instance().GetMsprofAdapter().GetFunction(MsprofFunc::RegisterCallback);
     if (func != nullptr) {
-        uint64_t(*msprofFunc)(uint32_t, ProfCommandHandle) =
-            reinterpret_cast<uint64_t(*)(uint32_t, ProfCommandHandle)>(func);
+        uint64_t (*msprofFunc)(uint32_t,
+                               ProfCommandHandle) = reinterpret_cast<uint64_t (*)(uint32_t, ProfCommandHandle)>(func);
         return msprofFunc(moduleId, reinterpret_cast<ProfCommandHandle>(handle));
     }
 #endif
@@ -107,4 +108,4 @@ static_assert(sizeof(MspfCompactInfo) == sizeof(MsprofCompactInfo));
 static_assert(sizeof(MspfCommandHandle) == sizeof(MsprofCommandHandle));
 static_assert(sizeof(MspfCommandHandleFunc) == sizeof(ProfCommandHandle));
 #endif
-}
+} // namespace npu::tile_fwk

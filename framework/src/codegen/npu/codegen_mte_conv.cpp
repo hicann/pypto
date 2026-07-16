@@ -23,9 +23,9 @@
 
 namespace npu::tile_fwk {
 
-void CodeGenOpNPU::GetDynamicOffsetExpr(
-    const std::vector<SymbolicScalar>& dynOffset, bool isConv3D, std::vector<std::string>& gmOffsetExpr,
-    std::vector<int64_t>& staticOffsets) const
+void CodeGenOpNPU::GetDynamicOffsetExpr(const std::vector<SymbolicScalar>& dynOffset, bool isConv3D,
+                                        std::vector<std::string>& gmOffsetExpr,
+                                        std::vector<int64_t>& staticOffsets) const
 {
     // 统一输出为 SHAPE_DIM5 维，conv2d 的第 5 维(d)初始化为 0
     size_t inputDim = isConv3D ? SHAPE_DIM5 : SHAPE_DIM4;
@@ -45,9 +45,9 @@ void CodeGenOpNPU::GetDynamicOffsetExpr(
     }
 }
 
-void CodeGenOpNPU::GetNZ2NZDynamicOffsetExpr(
-    const std::vector<SymbolicScalar>& dynOffset, bool isConv3D, bool isFmap, std::vector<std::string>& gmOffsetExpr,
-    std::vector<std::string>& staticOffsets) const
+void CodeGenOpNPU::GetNZ2NZDynamicOffsetExpr(const std::vector<SymbolicScalar>& dynOffset, bool isConv3D, bool isFmap,
+                                             std::vector<std::string>& gmOffsetExpr,
+                                             std::vector<std::string>& staticOffsets) const
 {
     // 统一输出为 SHAPE_DIM5 维, conv3d fmap 删除第 6 维, weight 的第 5 维初始化为 0
     size_t inputDim = isFmap ? SHAPE_DIM5 : SHAPE_DIM4;
@@ -70,9 +70,11 @@ void CodeGenOpNPU::GetNZ2NZDynamicOffsetExpr(
     }
 }
 
-std::vector<std::string> CodeGenOpNPU::BuildCopyInParamList(
-    const std::string& dstTensor, const std::string& srcTensor, const std::vector<std::string>& gmOffsetExpr,
-    const std::vector<int64_t>& staticOffsets, const std::vector<std::string>& srcShape, bool isConv3D) const
+std::vector<std::string> CodeGenOpNPU::BuildCopyInParamList(const std::string& dstTensor, const std::string& srcTensor,
+                                                            const std::vector<std::string>& gmOffsetExpr,
+                                                            const std::vector<int64_t>& staticOffsets,
+                                                            const std::vector<std::string>& srcShape,
+                                                            bool isConv3D) const
 {
     std::vector<std::string> tileOpCopyInParamList;
     tileOpCopyInParamList.emplace_back(dstTensor);
@@ -102,10 +104,11 @@ std::vector<std::string> CodeGenOpNPU::BuildCopyInParamList(
     return tileOpCopyInParamList;
 }
 
-std::vector<std::string> CodeGenOpNPU::BuildCopyOutParamList(
-    const std::string& dstTensor, const std::string& srcTensor, const std::vector<std::string>& gmOffsetExpr,
-    const std::vector<int64_t>& staticOffsets, const std::string& realM, const std::string& realN,
-    const std::string& realCutW, const std::string& cutW) const
+std::vector<std::string> CodeGenOpNPU::BuildCopyOutParamList(const std::string& dstTensor, const std::string& srcTensor,
+                                                             const std::vector<std::string>& gmOffsetExpr,
+                                                             const std::vector<int64_t>& staticOffsets,
+                                                             const std::string& realM, const std::string& realN,
+                                                             const std::string& realCutW, const std::string& cutW) const
 {
     std::vector<std::string> tileOpCopyOutParamList;
     tileOpCopyOutParamList.emplace_back(dstTensor);
@@ -136,8 +139,8 @@ int64_t CodeGenOpNPU::GetConvCopyInMode() const
     int64_t copyInMode = -1;
     auto ret = GetOpAttr(Conv::LoadStoreConvOpAttributeKey::copyInMode, copyInMode);
     ASSERT(ConvCodenGenError::CODEGEN_GET_ATTR_FAILED, ret) << "GenMemL1CopyInConv get CopyInMode failed.";
-    bool isValidMode =
-        copyInMode >= ToUnderlying(Matrix::CopyInMode::ND2NZ) && copyInMode <= ToUnderlying(Matrix::CopyInMode::DN2NZ);
+    bool isValidMode = copyInMode >= ToUnderlying(Matrix::CopyInMode::ND2NZ) &&
+                       copyInMode <= ToUnderlying(Matrix::CopyInMode::DN2NZ);
     ASSERT(ConvCodenGenError::CODEGEN_CHECK_ATTR_INVALID, isValidMode)
         << "GenMemL1CopyInConv CopyInMode is invalid: " << copyInMode;
     return copyInMode;
@@ -149,8 +152,8 @@ std::string CodeGenOpNPU::GenMemL1CopyInConv() const
     int64_t copyInMode = GetConvCopyInMode();
     std::string copyInModeStr = CopyInModeToString(static_cast<Matrix::CopyInMode>(copyInMode));
     if (copyInMode == ToUnderlying(Matrix::CopyInMode::NZ2NZ)) {
-        return GenMemL1CopyInConvNZ2NZ(
-            tileOpParams[ToUnderlying(MISOIdx::DST_IDX)], tileOpParams[ToUnderlying(MISOIdx::SRC0_IDX)], copyInModeStr);
+        return GenMemL1CopyInConvNZ2NZ(tileOpParams[ToUnderlying(MISOIdx::DST_IDX)],
+                                       tileOpParams[ToUnderlying(MISOIdx::SRC0_IDX)], copyInModeStr);
     }
 
     bool isFmap = true, isConv3D = false;
@@ -180,9 +183,9 @@ std::string CodeGenOpNPU::GenMemL1CopyInConv() const
     std::vector<std::string> gmOffsetExpr;
     GetDynamicOffsetExpr(dynOffset, isConv3D, gmOffsetExpr, staticOffsets);
 
-    std::vector<std::string> tileOpParamList = BuildCopyInParamList(
-        tileOpParams[ToUnderlying(MISOIdx::DST_IDX)], tileOpParams[ToUnderlying(MISOIdx::SRC0_IDX)], gmOffsetExpr,
-        staticOffsets, srcShape, isConv3D);
+    std::vector<std::string> tileOpParamList = BuildCopyInParamList(tileOpParams[ToUnderlying(MISOIdx::DST_IDX)],
+                                                                    tileOpParams[ToUnderlying(MISOIdx::SRC0_IDX)],
+                                                                    gmOffsetExpr, staticOffsets, srcShape, isConv3D);
 
     std::ostringstream oss;
     oss << tileOpName << WrapParamByAngleBrackets({copyInModeStr, std::to_string(isConv3D), std::to_string(isFmap)});
@@ -190,8 +193,8 @@ std::string CodeGenOpNPU::GenMemL1CopyInConv() const
     return oss.str();
 }
 
-std::string CodeGenOpNPU::GenMemL1CopyInConvNZ2NZ(
-    const std::string& dstTensor, const std::string& srcTensor, const std::string& copyInModeStr) const
+std::string CodeGenOpNPU::GenMemL1CopyInConvNZ2NZ(const std::string& dstTensor, const std::string& srcTensor,
+                                                  const std::string& copyInModeStr) const
 {
     bool isFmap = true, isConv3D = false;
     GetOpAttr(Conv::LoadStoreConvOpAttributeKey::isFmap, isFmap);

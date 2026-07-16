@@ -86,9 +86,8 @@ struct PrintHelper {
     }
 };
 
-void Print(
-    SymbolicScalar cond, const std::string& format, const std::vector<Tensor>& tensors,
-    const std::vector<SymbolicScalar>& scalars);
+void Print(SymbolicScalar cond, const std::string& format, const std::vector<Tensor>& tensors,
+           const std::vector<SymbolicScalar>& scalars);
 
 template <bool isB, bool isTrans>
 Tensor GatherInL1(const Tensor& src, const Tensor& offsets, const Tensor& blockTable, int blockSize, int size);
@@ -119,18 +118,16 @@ void PrintIf(SymbolicScalar cond, Args... args)
  * \param fname filename, {S} can be used as scalar placeholder
  * \param scalars scalars to dump
  */
-void ToFile(
-    const Tensor& operand, const std::string& fname, const std::vector<SymbolicScalar>& scalars = {},
-    SymbolicScalar cond = 1);
+void ToFile(const Tensor& operand, const std::string& fname, const std::vector<SymbolicScalar>& scalars = {},
+            SymbolicScalar cond = 1);
 
 Tensor View(const Tensor& operand, const std::vector<int64_t>& shapes, const std::vector<int64_t>& offsets);
 Tensor View(const Tensor& operand, const DataType dstDataType);
 Tensor View(const Tensor& operand, const std::vector<int64_t>& shapes, const std::vector<SymbolicScalar>& newOffsets);
-Tensor View(
-    const Tensor& operand, const std::vector<int64_t>& shapes, const std::initializer_list<SymbolicScalar>& newOffsets);
-Tensor View(
-    const Tensor& operand, const std::vector<int64_t>& shapes, const std::vector<SymbolicScalar>& newValidShapes,
-    const std::vector<SymbolicScalar>& newOffsets);
+Tensor View(const Tensor& operand, const std::vector<int64_t>& shapes,
+            const std::initializer_list<SymbolicScalar>& newOffsets);
+Tensor View(const Tensor& operand, const std::vector<int64_t>& shapes,
+            const std::vector<SymbolicScalar>& newValidShapes, const std::vector<SymbolicScalar>& newOffsets);
 
 Tensor Assemble(const std::vector<std::pair<Tensor, std::vector<int64_t>>>& tensors);
 void Assemble(const Tensor& tensor, const std::vector<SymbolicScalar>& dynOffset, Tensor& dest);
@@ -144,30 +141,26 @@ void Assemble(const std::vector<AssembleItem>& items, Tensor& src, bool parallel
 
 void AtomicRMW(const Tensor& tensor, const std::vector<SymbolicScalar>& dynOffset, Tensor& dest, AtomicRMWMode mode);
 
-Tensor Reshape(
-    const Tensor& operand, const std::vector<int64_t>& dstshape, const std::vector<SymbolicScalar>& validShape = {},
-    const bool inplace = false);
-Tensor Reshape(
-    const Tensor& operand, const std::initializer_list<int64_t>& dstshape,
-    const std::initializer_list<SymbolicScalar>& validShape = {}, const bool inplace = false);
+Tensor Reshape(const Tensor& operand, const std::vector<int64_t>& dstshape,
+               const std::vector<SymbolicScalar>& validShape = {}, const bool inplace = false);
+Tensor Reshape(const Tensor& operand, const std::initializer_list<int64_t>& dstshape,
+               const std::initializer_list<SymbolicScalar>& validShape = {}, const bool inplace = false);
 Tensor Reshape(const Tensor& operand, const std::vector<SymbolicScalar>& dstShape, const bool inplace);
 
 void Reshape(const Tensor& operand, Tensor& dst);
 
-Tensor Full(
-    const Element& src, DataType dtype, const std::vector<int64_t>& dstShape,
-    std::vector<SymbolicScalar> validShape = {});
-Tensor Full(
-    const SymbolicScalar& src, DataType dtype, const std::vector<int64_t>& dstShape,
-    std::vector<SymbolicScalar> validShape = {});
+Tensor Full(const Element& src, DataType dtype, const std::vector<int64_t>& dstShape,
+            std::vector<SymbolicScalar> validShape = {});
+Tensor Full(const SymbolicScalar& src, DataType dtype, const std::vector<int64_t>& dstShape,
+            std::vector<SymbolicScalar> validShape = {});
 Tensor Transpose(const Tensor& self, std::vector<int> perm);
-Tensor TransData(
-    const Tensor& self, TileOpFormat transDataType, const std::vector<int64_t>& outputShape,
-    const std::vector<SymbolicScalar>& validShape, int group = 1);
-std::shared_ptr<LogicalTensor> TransData(
-    Function& function, const std::shared_ptr<LogicalTensor>& self, const std::shared_ptr<LogicalTensor>& fakeDstTensor, TileOpFormat transDataType, int group = 1);
-Tensor Cast(
-    const Tensor& self, DataType dstDataType, CastMode mode = CAST_NONE, SaturationMode satmode = SaturationMode::OFF);
+Tensor TransData(const Tensor& self, TileOpFormat transDataType, const std::vector<int64_t>& outputShape,
+                 const std::vector<SymbolicScalar>& validShape, int group = 1);
+std::shared_ptr<LogicalTensor> TransData(Function& function, const std::shared_ptr<LogicalTensor>& self,
+                                         const std::shared_ptr<LogicalTensor>& fakeDstTensor,
+                                         TileOpFormat transDataType, int group = 1);
+Tensor Cast(const Tensor& self, DataType dstDataType, CastMode mode = CAST_NONE,
+            SaturationMode satmode = SaturationMode::OFF);
 Tensor Permute(const Tensor& self, std::vector<int> perm);
 Tensor Permute(Function& function, const Tensor& self, std::vector<int> perm);
 
@@ -183,9 +176,8 @@ Tensor Neg(const Tensor& self);
 Tensor Round(const Tensor& self, const int& decimals = 0);
 Tensor Rsqrt(const Tensor& self, PrecisionType precisionType = PrecisionType::INTRINSIC);
 Tensor Relu(const Tensor& self);
-Tensor Pad(
-    const Tensor& self, const std::vector<int64_t>& padding, std::string mode = "constant",
-    const Element& value = Element(DT_FP32, 0.0));
+Tensor Pad(const Tensor& self, const std::vector<int64_t>& padding, std::string mode = "constant",
+           const Element& value = Element(DT_FP32, 0.0));
 Tensor FillPad(const Tensor& self, std::string mode = "constant", const Element& value = Element(DT_FP32, 0.0));
 Tensor BitwiseNot(const Tensor& self);
 Tensor Sqrt(const Tensor& self, PrecisionType precisionType = PrecisionType::INTRINSIC);
@@ -234,16 +226,15 @@ enum class ScatterMode {
  * \param reduce : scatter reduction mode to be applied. Support NONE, ADD, MULTIPLY. NONE is default.
  * \return Tensor
  */
-Tensor Scatter(
-    const Tensor& self, const Tensor& indices, const Element& src, int axis, ScatterMode reduce = ScatterMode::NONE);
-Tensor Scatter(
-    const Tensor& self, const Tensor& indices, const Tensor& src, int axis, ScatterMode reduce = ScatterMode::NONE);
+Tensor Scatter(const Tensor& self, const Tensor& indices, const Element& src, int axis,
+               ScatterMode reduce = ScatterMode::NONE);
+Tensor Scatter(const Tensor& self, const Tensor& indices, const Tensor& src, int axis,
+               ScatterMode reduce = ScatterMode::NONE);
 void IndexPut_(Tensor& self, const std::vector<Tensor>& indices, const Tensor& values, bool accumulate = false);
-Tensor IndexAddUB(
-    const Tensor& self, const Tensor& src, const Tensor& indices, int axis,
-    const Element& alpha = Element(DT_FP32, 1.0f));
-void IndexAdd_(
-    Tensor& self, const Tensor& src, const Tensor& indices, int axis, const Element& alpha = Element(DT_FP32, 1.0f));
+Tensor IndexAddUB(const Tensor& self, const Tensor& src, const Tensor& indices, int axis,
+                  const Element& alpha = Element(DT_FP32, 1.0f));
+void IndexAdd_(Tensor& self, const Tensor& src, const Tensor& indices, int axis,
+               const Element& alpha = Element(DT_FP32, 1.0f));
 Tensor RowSumExpand(const Tensor& operand);
 Tensor RowMaxExpand(const Tensor& operand);
 
@@ -254,9 +245,9 @@ Tensor ArgMin(const Tensor& self, int axis = -1, bool keepDim = false);
 Tensor Amin(const Tensor& self, int axis = -1, bool keepDim = false);
 Tensor Prod(const Tensor& self, int axis = -1, bool keepDim = false);
 std::tuple<Tensor, Tensor, Tensor> OnlineSoftmax(const Tensor& scores, float scale);
-std::tuple<Tensor, Tensor, Tensor> OnlineSoftmaxUpdate(
-    const Tensor& previousMax, const Tensor& previousSum, const Tensor& previousOutput, const Tensor& currentMax,
-    const Tensor& currentSum, const Tensor& currentOutput);
+std::tuple<Tensor, Tensor, Tensor> OnlineSoftmaxUpdate(const Tensor& previousMax, const Tensor& previousSum,
+                                                       const Tensor& previousOutput, const Tensor& currentMax,
+                                                       const Tensor& currentSum, const Tensor& currentOutput);
 
 Tensor Compact(const Tensor& operand);
 
@@ -299,7 +290,6 @@ std::tuple<Tensor, Tensor> Interleave(const Tensor& self, const Tensor& other);
 std::tuple<Tensor, Tensor> DeInterleave(const Tensor& self, const Tensor& other);
 std::tuple<Tensor, Tensor> DeInterleave(const Tensor& self);
 
-
 Tensor BitwiseRightShift(const Tensor& self, const Tensor& other);
 Tensor BitwiseRightShift(const Tensor& self, const Element& other);
 Tensor BitwiseRightShift(const Element& self, const Tensor& other);
@@ -318,9 +308,8 @@ Tensor Unsqueeze(const Tensor& old, int unsqueezeDimNum);
 Tensor Squeeze(const Tensor& input, const std::vector<int>& dim = {});
 
 Tensor TensorIndex(const Tensor& params, const Tensor& indices);
-Tensor ScatterUpdate(
-    const Tensor& dst, const Tensor& index, const Tensor& src, int axis = -2, std::string cacheMode = "PA_BNSD",
-    int chunkSize = 1);
+Tensor ScatterUpdate(const Tensor& dst, const Tensor& index, const Tensor& src, int axis = -2,
+                     std::string cacheMode = "PA_BNSD", int chunkSize = 1);
 
 Tensor Expand(const Tensor& self, const std::vector<int64_t>& dstShape, std::vector<SymbolicScalar> validShape = {});
 
@@ -336,16 +325,15 @@ Tensor LogicalAnd(const Tensor& self, const Tensor& other);
 Tensor IsFinite(const Tensor& self);
 Tensor Assign(const Tensor& operand);
 
-Tensor Uniform(
-    const Element& key, const SymbolicScalar& counter0, const Element& counter1, const std::vector<int64_t>& shape,
-    const Element& rounds, DataType dtype = DT_FP32);
+Tensor Uniform(const Element& key, const SymbolicScalar& counter0, const Element& counter1,
+               const std::vector<int64_t>& shape, const Element& rounds, DataType dtype = DT_FP32);
 
 // Implementation of `Tensor` type should be placed at first, so that it can be routed when only single input.
 Tensor Clip(const Tensor& self, const Tensor& min = {}, const Tensor& max = {});
 Tensor Clip(const Tensor& self, const Element& min = {}, const Element& max = {});
 
-std::tuple<Tensor, Tensor> TopK(
-    const Tensor& self, int k, int axis = -1, bool isLargest = true, TopKAlgo algo = TopKAlgo::MERGE_SORT);
+std::tuple<Tensor, Tensor> TopK(const Tensor& self, int k, int axis = -1, bool isLargest = true,
+                                TopKAlgo algo = TopKAlgo::MERGE_SORT);
 Tensor ArgSort(const Tensor& self, int axis = -1, bool descending = false);
 Tensor Sort32(const Tensor& self, int idxStart = 0);
 Tensor MrgSort(const Tensor& self, int mergeSize);
@@ -386,12 +374,11 @@ Tensor RotateHalf(const Tensor& input);
 // moe
 Tensor Sigmoid(Tensor& input);
 
-std::tuple<Tensor, Tensor> Quant(
-    const Tensor& input, bool isSymmetry = true, bool hasSmoothFactor = false, const Tensor& smoothFactor = Tensor());
-std::tuple<Tensor, Tensor> QuantMX(
-    const Tensor& input, DataType quantDtype = DataType::DT_FP8E4M3,
-    DequantScaleRoundingMode mode = DequantScaleRoundingMode::ROUND_DOWN, int64_t axis = -1,
-    bool performanceMode = true);
+std::tuple<Tensor, Tensor> Quant(const Tensor& input, bool isSymmetry = true, bool hasSmoothFactor = false,
+                                 const Tensor& smoothFactor = Tensor());
+std::tuple<Tensor, Tensor> QuantMX(const Tensor& input, DataType quantDtype = DataType::DT_FP8E4M3,
+                                   DequantScaleRoundingMode mode = DequantScaleRoundingMode::ROUND_DOWN,
+                                   int64_t axis = -1, bool performanceMode = true);
 
 Tensor ScalarDivS(const Tensor& operand, const Element& value, bool reverseOperand = false);
 Tensor ScalarAddS(const Tensor& operand, const Element& value, bool reverseOperand = false);
@@ -422,17 +409,16 @@ enum class ReduceMode {
 // template <ReduceMode reduceMode>
 Tensor Reduce(const std::vector<Tensor>& aggregation, const ReduceMode reduceMode);
 
-Tensor Maxpool(
-    const Tensor& operand, const std::vector<int>& pools, const std::vector<int>& strides,
-    const std::vector<int>& paddings);
+Tensor Maxpool(const Tensor& operand, const std::vector<int>& pools, const std::vector<int>& strides,
+               const std::vector<int>& paddings);
 
 enum class LogBaseType {
     LOG_E,
     LOG_2,
     LOG_10,
 };
-Tensor Log(
-    const Tensor& self, LogBaseType base = LogBaseType::LOG_E, PrecisionType precisionType = PrecisionType::INTRINSIC);
+Tensor Log(const Tensor& self, LogBaseType base = LogBaseType::LOG_E,
+           PrecisionType precisionType = PrecisionType::INTRINSIC);
 Tensor Log1p(const Tensor& self);
 
 Tensor OneHot(const Tensor& self, int numClasses);
@@ -461,33 +447,30 @@ struct RoPETileShapeConfigNew {
     std::vector<int64_t> fiveDimsTileShape;
 };
 
-void ApplyRotaryPosEmb(
-    const Tensor& q, const Tensor& k, const Tensor& cos, const Tensor& sin, const Tensor& positionIds, Tensor& qEmbed,
-    Tensor& kEmbed, const int unsqueezeDim = 1, const RoPETileShapeConfig& ropeTileShapeConfig = {});
+void ApplyRotaryPosEmb(const Tensor& q, const Tensor& k, const Tensor& cos, const Tensor& sin,
+                       const Tensor& positionIds, Tensor& qEmbed, Tensor& kEmbed, const int unsqueezeDim = 1,
+                       const RoPETileShapeConfig& ropeTileShapeConfig = {});
 
-void ApplyRotaryPosEmbV2(
-    const Tensor& q, const Tensor& k, const Tensor& cos, const Tensor& sin, Tensor& qEmbed, Tensor& kEmbed,
-    const int unsqueezeDim = 2, const RoPETileShapeConfigNew& ropeTileShapeConfig = {});
+void ApplyRotaryPosEmbV2(const Tensor& q, const Tensor& k, const Tensor& cos, const Tensor& sin, Tensor& qEmbed,
+                         Tensor& kEmbed, const int unsqueezeDim = 2,
+                         const RoPETileShapeConfigNew& ropeTileShapeConfig = {});
 
-void IncreFlashAttention(
-    Tensor& qNope, Tensor& kNopeCache, Tensor& vNopeCache, Tensor& qRope, Tensor& kRopeCache,
-    std::vector<std::vector<int>>& blockTable, std::vector<int>& actSeqs, float softmaxScale, Tensor& attentionOut,
-    IfaTileShapeConfig& tileConfig);
+void IncreFlashAttention(Tensor& qNope, Tensor& kNopeCache, Tensor& vNopeCache, Tensor& qRope, Tensor& kRopeCache,
+                         std::vector<std::vector<int>>& blockTable, std::vector<int>& actSeqs, float softmaxScale,
+                         Tensor& attentionOut, IfaTileShapeConfig& tileConfig);
 
-void PageAttentionAddS(
-    Tensor& qNope, Tensor& kNopeCache, Tensor& vNopeCache, Tensor& qRope, Tensor& kRopeCache, Tensor& blockTable,
-    Tensor& actSeqs, int blockSize, float softmaxScale, Tensor& attentionOut, Tensor& postOut,
-    PaTileShapeConfig& tileConfig, int maxUnrollTimes = 1);
+void PageAttentionAddS(Tensor& qNope, Tensor& kNopeCache, Tensor& vNopeCache, Tensor& qRope, Tensor& kRopeCache,
+                       Tensor& blockTable, Tensor& actSeqs, int blockSize, float softmaxScale, Tensor& attentionOut,
+                       Tensor& postOut, PaTileShapeConfig& tileConfig, int maxUnrollTimes = 1);
 
-void PageAttentionAddSSingleOutput(
-    Tensor& qNope, Tensor& kNopeCache, Tensor& vNopeCache, Tensor& qRope, Tensor& kRopeCache, Tensor& blockTable,
-    Tensor& actSeqs, int blockSize, float softmaxScale, Tensor& attentionOut, Tensor& postOut,
-    PaTileShapeConfig& tileConfig, int maxUnrollTimes = 1);
+void PageAttentionAddSSingleOutput(Tensor& qNope, Tensor& kNopeCache, Tensor& vNopeCache, Tensor& qRope,
+                                   Tensor& kRopeCache, Tensor& blockTable, Tensor& actSeqs, int blockSize,
+                                   float softmaxScale, Tensor& attentionOut, Tensor& postOut,
+                                   PaTileShapeConfig& tileConfig, int maxUnrollTimes = 1);
 
-void PrologPost(
-    Tensor& qNope, Tensor& kNopeCache, Tensor& vNopeCache, Tensor& qRope, Tensor& kRopeCache, Tensor& blockTable,
-    Tensor& actSeqs, Tensor& weightUV, Tensor& weightO, int blockSize, float softmaxScale, Tensor& postOut,
-    PaTileShapeConfig& tileConfig);
+void PrologPost(Tensor& qNope, Tensor& kNopeCache, Tensor& vNopeCache, Tensor& qRope, Tensor& kRopeCache,
+                Tensor& blockTable, Tensor& actSeqs, Tensor& weightUV, Tensor& weightO, int blockSize,
+                float softmaxScale, Tensor& postOut, PaTileShapeConfig& tileConfig);
 
 namespace Matrix {
 
@@ -513,41 +496,36 @@ struct MatmulExtendParam {
     MatmulExtendParam() = default;
 };
 
-Tensor Matmul(
-    DataType outType, const Tensor& aMatrix, const Tensor& bMatrix, bool isATrans = false, bool isBTrans = false,
-    bool isCMatrixNZ = false);
+Tensor Matmul(DataType outType, const Tensor& aMatrix, const Tensor& bMatrix, bool isATrans = false,
+              bool isBTrans = false, bool isCMatrixNZ = false);
 
-Tensor Matmul(
-    DataType outType, const Tensor& aMatrix, const Tensor& bMatrix, const MatmulExtendParam& extendParam,
-    bool isATrans = false, bool isBTrans = false, bool isCMatrixNZ = false);
+Tensor Matmul(DataType outType, const Tensor& aMatrix, const Tensor& bMatrix, const MatmulExtendParam& extendParam,
+              bool isATrans = false, bool isBTrans = false, bool isCMatrixNZ = false);
 
-Tensor MatmulMX(
-    DataType outType, const Tensor& aMatrix, const Tensor& aScale, const Tensor& bMatrix, const Tensor& bScale,
-    bool isATrans = false, bool isAScaleTrans = false, bool isBTrans = false, bool isBScaleTrans = false,
-    bool isCMatrixNZ = false);
+Tensor MatmulMX(DataType outType, const Tensor& aMatrix, const Tensor& aScale, const Tensor& bMatrix,
+                const Tensor& bScale, bool isATrans = false, bool isAScaleTrans = false, bool isBTrans = false,
+                bool isBScaleTrans = false, bool isCMatrixNZ = false);
 
-Tensor MatmulMX(
-    DataType outType, const Tensor& aMatrix, const Tensor& aScale, const Tensor& bMatrix, const Tensor& bScale,
-    const MatmulExtendParam& extendParam, bool isATrans = false, bool isAScaleTrans = false, bool isBTrans = false,
-    bool isBScaleTrans = false, bool isCMatrixNZ = false);
+Tensor MatmulMX(DataType outType, const Tensor& aMatrix, const Tensor& aScale, const Tensor& bMatrix,
+                const Tensor& bScale, const MatmulExtendParam& extendParam, bool isATrans = false,
+                bool isAScaleTrans = false, bool isBTrans = false, bool isBScaleTrans = false,
+                bool isCMatrixNZ = false);
 
-Tensor BatchMatmul(
-    DataType dataType, const Tensor& aMatrix, const Tensor& bMatrix, bool isATrans = false, bool isBTrans = false,
-    bool isCMatrixNZ = false);
+Tensor BatchMatmul(DataType dataType, const Tensor& aMatrix, const Tensor& bMatrix, bool isATrans = false,
+                   bool isBTrans = false, bool isCMatrixNZ = false);
 
-Tensor BatchMatmul(
-    DataType dataType, const Tensor& aMatrix, const Tensor& bMatrix, const MatmulExtendParam& extendParam,
-    bool isATrans = false, bool isBTrans = false, bool isCMatrixNZ = false);
+Tensor BatchMatmul(DataType dataType, const Tensor& aMatrix, const Tensor& bMatrix,
+                   const MatmulExtendParam& extendParam, bool isATrans = false, bool isBTrans = false,
+                   bool isCMatrixNZ = false);
 
-Tensor BatchMatmulMX(
-    DataType dataType, const Tensor& aMatrix, const Tensor& aScale, const Tensor& bMatrix, const Tensor& bScale,
-    bool isTransA = false, bool isAScaleTrans = false, bool isTransB = false, bool isBScaleTrans = false,
-    bool isCMatrixNZ = false);
+Tensor BatchMatmulMX(DataType dataType, const Tensor& aMatrix, const Tensor& aScale, const Tensor& bMatrix,
+                     const Tensor& bScale, bool isTransA = false, bool isAScaleTrans = false, bool isTransB = false,
+                     bool isBScaleTrans = false, bool isCMatrixNZ = false);
 
-Tensor BatchMatmulMX(
-    DataType dataType, const Tensor& aMatrix, const Tensor& aScale, const Tensor& bMatrix, const Tensor& bScale,
-    const MatmulExtendParam& extendParam, bool isTransA = false, bool isAScaleTrans = false, bool isTransB = false,
-    bool isBScaleTrans = false, bool isCMatrixNZ = false);
+Tensor BatchMatmulMX(DataType dataType, const Tensor& aMatrix, const Tensor& aScale, const Tensor& bMatrix,
+                     const Tensor& bScale, const MatmulExtendParam& extendParam, bool isTransA = false,
+                     bool isAScaleTrans = false, bool isTransB = false, bool isBScaleTrans = false,
+                     bool isCMatrixNZ = false);
 
 Tensor TransposedBatchMatmul(DataType dataType, const Tensor& aMatrix, const Tensor& bMatrix);
 
@@ -566,9 +544,8 @@ struct TileL1Info {
     int64_t tileN{0};
     int64_t tileBatch{0};
 
-    TileL1Info(
-        int64_t hin, int64_t hout, int64_t win, int64_t wout, int64_t cinFmap, int64_t cinWeight, int64_t cout,
-        int64_t n)
+    TileL1Info(int64_t hin, int64_t hout, int64_t win, int64_t wout, int64_t cinFmap, int64_t cinWeight, int64_t cout,
+               int64_t n)
         : tileHin(hin),
           tileHout(hout),
           tileWin(win),
@@ -608,10 +585,9 @@ struct ConvExtendParam {
     ConvExtendParam() = default;
 };
 
-Tensor Conv(
-    DataType outType, const Tensor& inputTensor, const Tensor& weightTensor, const std::vector<int64_t>& strides,
-    const std::vector<SymbolicScalar>& paddings, const std::vector<int64_t>& dilations,
-    const ConvExtendParam& extendParam, const int64_t groups = 1);
+Tensor Conv(DataType outType, const Tensor& inputTensor, const Tensor& weightTensor,
+            const std::vector<int64_t>& strides, const std::vector<SymbolicScalar>& paddings,
+            const std::vector<int64_t>& dilations, const ConvExtendParam& extendParam, const int64_t groups = 1);
 
 } // namespace Conv
 
@@ -635,41 +611,35 @@ ShmemTensor CreateShmemTensor(const char* group, int64_t worldSize, DataType dat
 void CreateShmemTensor(const char* group, int64_t worldSize, DataType dataType, const Shape& shape, ShmemTensor& t);
 ShmemTensor CreateShmemSignal(const char* group, int64_t worldSize);
 void CreateShmemSignal(const char* group, int64_t worldSize, ShmemTensor& t);
-ShmemTensor ShmemView(
-    const ShmemTensor& operand, const std::vector<int64_t>& shapes, const std::vector<int64_t>& offsets);
-ShmemTensor ShmemView(
-    const ShmemTensor& operand, const std::vector<int64_t>& shapes, const std::vector<SymbolicScalar>& offsets);
-ShmemTensor ShmemView(
-    const ShmemTensor& operand, const std::vector<int64_t>& shapes, const std::vector<SymbolicScalar>& newValidShapes,
-    const std::vector<SymbolicScalar>& newOffsets);
-ShmemTensor ShmemView(
-    const ShmemTensor& operand, const std::vector<int64_t>& shapes,
-    const std::initializer_list<SymbolicScalar>& newOffsets);
-Tensor ShmemPut(
-    const Tensor& src, const ShmemTensor& dst, const SymbolicScalar& dstRank, AtomicType putOp, const Tensor& pred);
-Tensor ShmemGet(
-    const ShmemTensor& src, const SymbolicScalar& srcRank, const Tensor& pred,
-    DataType targetDataType = DataType::DT_BOTTOM);
-Tensor ShmemSignal(
-    const ShmemTensor& src, const SymbolicScalar& srcRank, const SymbolicScalar& targetRank, int32_t signal,
-    AtomicType sigOp, const Tensor& pred);
-Tensor ShmemSignalAll(
-    const ShmemTensor& src, const SymbolicScalar& srcRank, int32_t signal, AtomicType sigOp, const Tensor& pred);
-Tensor ShmemWaitUntil(
-    const ShmemTensor& src, const SymbolicScalar& srcRank, OpType cmp, int32_t cmpValue, bool clearSignal,
-    const Tensor& pred);
+ShmemTensor ShmemView(const ShmemTensor& operand, const std::vector<int64_t>& shapes,
+                      const std::vector<int64_t>& offsets);
+ShmemTensor ShmemView(const ShmemTensor& operand, const std::vector<int64_t>& shapes,
+                      const std::vector<SymbolicScalar>& offsets);
+ShmemTensor ShmemView(const ShmemTensor& operand, const std::vector<int64_t>& shapes,
+                      const std::vector<SymbolicScalar>& newValidShapes, const std::vector<SymbolicScalar>& newOffsets);
+ShmemTensor ShmemView(const ShmemTensor& operand, const std::vector<int64_t>& shapes,
+                      const std::initializer_list<SymbolicScalar>& newOffsets);
+Tensor ShmemPut(const Tensor& src, const ShmemTensor& dst, const SymbolicScalar& dstRank, AtomicType putOp,
+                const Tensor& pred);
+Tensor ShmemGet(const ShmemTensor& src, const SymbolicScalar& srcRank, const Tensor& pred,
+                DataType targetDataType = DataType::DT_BOTTOM);
+Tensor ShmemSignal(const ShmemTensor& src, const SymbolicScalar& srcRank, const SymbolicScalar& targetRank,
+                   int32_t signal, AtomicType sigOp, const Tensor& pred);
+Tensor ShmemSignalAll(const ShmemTensor& src, const SymbolicScalar& srcRank, int32_t signal, AtomicType sigOp,
+                      const Tensor& pred);
+Tensor ShmemWaitUntil(const ShmemTensor& src, const SymbolicScalar& srcRank, OpType cmp, int32_t cmpValue,
+                      bool clearSignal, const Tensor& pred);
 Tensor ShmemClearData(const ShmemTensor& src, Tensor& pred);
 Tensor ShmemClearSignal(const ShmemTensor& src, Tensor& pred);
 Tensor ShmemBarrier(const ShmemTensor& src, const Tensor& pred);
-Tensor ShmemLoad(
-    const ShmemTensor& src, const SymbolicScalar& srcRank, const Tensor& pred,
-    DataType targetDataType = DataType::DT_BOTTOM);
-Tensor ShmemStore(
-    const Tensor& src, const ShmemTensor& dst, const SymbolicScalar& dstRank, AtomicType putOp, const Tensor& pred);
+Tensor ShmemLoad(const ShmemTensor& src, const SymbolicScalar& srcRank, const Tensor& pred,
+                 DataType targetDataType = DataType::DT_BOTTOM);
+Tensor ShmemStore(const Tensor& src, const ShmemTensor& dst, const SymbolicScalar& dstRank, AtomicType putOp,
+                  const Tensor& pred);
 
 void AllGather(const Tensor& predToken, const Tensor& in, ShmemTensor& shmemTensor, Tensor& out);
-void ReduceScatter(
-    const Tensor& predToken, const Tensor& in, ShmemTensor& shmemTensor, DistReduceType reduceType, Tensor& out);
+void ReduceScatter(const Tensor& predToken, const Tensor& in, ShmemTensor& shmemTensor, DistReduceType reduceType,
+                   Tensor& out);
 void OneShotAllReduce(const Tensor& predToken, const Tensor& in, ShmemTensor& shmemTensor, Tensor& out);
 void TwoShotAllReduce(const Tensor& predToken, const Tensor& in, ShmemTensor& shmemTensor, Tensor& out);
 

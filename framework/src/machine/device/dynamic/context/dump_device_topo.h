@@ -10,7 +10,7 @@
 
 /*!
  * \file dump_device_topo.h
- * \brief 
+ * \brief
  */
 #pragma once
 
@@ -23,23 +23,18 @@
 
 namespace npu::tile_fwk::dynamic::topo_dump {
 
-
-void DumpProducerCellAccess(
-    uint32_t devTaskId, int slotIdx, uint32_t devNextIdx,
-    DevAscendFunction& devRootSrc, DevAscendFunctionOutcast& outcast,
-    const DeviceExecuteSlot& slot, const uint64_t* expressionList);
+void DumpProducerCellAccess(uint32_t devTaskId, int slotIdx, uint32_t devNextIdx, DevAscendFunction& devRootSrc,
+                            DevAscendFunctionOutcast& outcast, const DeviceExecuteSlot& slot,
+                            const uint64_t* expressionList);
 
 /// Dump a single consumer cell access event (read) for one (slot, op).
-void DumpConsumerCellAccess(
-    uint32_t devTaskId, int slotIdx, uint32_t devNextIdx,
-    DevAscendFunction& nextSrc, const DevAscendFunctionCallOperandUse& consumer,
-    const DevCellMatchTableDesc& cellMatchTableDesc,
-    const uint64_t* expressionList);
+void DumpConsumerCellAccess(uint32_t devTaskId, int slotIdx, uint32_t devNextIdx, DevAscendFunction& nextSrc,
+                            const DevAscendFunctionCallOperandUse& consumer,
+                            const DevCellMatchTableDesc& cellMatchTableDesc, const uint64_t* expressionList);
 
 /// Dump a single stitch edge to dyn_stitch_edges.csv.
-void DumpStitchEdge(
-    const DevAscendFunctionDupped& producerDup, const DevAscendFunctionDupped& consumerDup,
-    size_t producerOperationIdx, size_t consumerIdx, size_t consumerOperationIdx,
-    DeviceStitchContext::StitchKind stitchKind, int slotIdx);
+void DumpStitchEdge(const DevAscendFunctionDupped& producerDup, const DevAscendFunctionDupped& consumerDup,
+                    size_t producerOperationIdx, size_t consumerIdx, size_t consumerOperationIdx,
+                    DeviceStitchContext::StitchKind stitchKind, int slotIdx);
 
 } // namespace npu::tile_fwk::dynamic::topo_dump

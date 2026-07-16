@@ -72,11 +72,10 @@ void FloatSpecValMgr::PrintFloatSpecVal(std::ostringstream& oss)
 
 void PrintOperand(const std::string& operIO, std::shared_ptr<LogicalTensor> operand)
 {
-    CODEGEN_LOGI(
-        "insert %s magic: %d, tensor: %s, memory map is: ", operIO.c_str(), operand->GetMagic(),
-        operand->Dump().c_str());
-    CODEGEN_LOGI(
-        "range is [%zu, %zu, %d]\n", operand->memoryrange.start, operand->memoryrange.end, operand->memoryrange.memId);
+    CODEGEN_LOGI("insert %s magic: %d, tensor: %s, memory map is: ", operIO.c_str(), operand->GetMagic(),
+                 operand->Dump().c_str());
+    CODEGEN_LOGI("range is [%zu, %zu, %d]\n", operand->memoryrange.start, operand->memoryrange.end,
+                 operand->memoryrange.memId);
 }
 
 bool HasAllocAttr(const std::shared_ptr<LogicalTensor>& tensor)
@@ -154,9 +153,8 @@ inline __aicore__ void  CheckInvalidAccessOfDDR(uint64_t ddr_size, uint64_t acce
     oss << checkFunc << "\n";
 }
 
-void CodeGenNPU::GenFuncBodyBefore(
-    const std::pair<uint64_t, Function*>& subFuncPair, Function& topFunc, CompileInfo& compileInfo,
-    std::ostringstream& oss) const
+void CodeGenNPU::GenFuncBodyBefore(const std::pair<uint64_t, Function*>& subFuncPair, Function& topFunc,
+                                   CompileInfo& compileInfo, std::ostringstream& oss) const
 {
     GenInclude(topFunc, oss);
     GenCommentBeforeFuncHeader(*subFuncPair.second, oss);
@@ -189,9 +187,9 @@ void CodeGenNPU::GenAllocForLocalBuffer(const Operation& op, const std::shared_p
 
 std::string BuildDynParamInfo(const DynParamInfo& info)
 {
-    std::vector<std::string> params{
-        "param", std::to_string(info.tensorIndex), std::to_string(info.tensorBaseAddrCoaIndex),
-        std::to_string(info.dimSize), std::to_string(info.dimIndex)};
+    std::vector<std::string> params{"param", std::to_string(info.tensorIndex),
+                                    std::to_string(info.tensorBaseAddrCoaIndex), std::to_string(info.dimSize),
+                                    std::to_string(info.dimIndex)};
     auto res = WrapParamByParentheses(params);
     return res;
 }
@@ -233,9 +231,8 @@ void CodeGenNPU::GenDynParamForExpr(std::ostringstream& oss, const Function& fun
 
 void CodeGenNPU::GenCode(Function& topFunc)
 {
-    COMPILER_LOGI(
-        "Start Generate AI_CORE code for topFunc: %s, hash: %s", topFunc.GetMagicName().c_str(),
-        topFunc.GetFunctionHash().c_str());
+    COMPILER_LOGI("Start Generate AI_CORE code for topFunc: %s, hash: %s", topFunc.GetMagicName().c_str(),
+                  topFunc.GetFunctionHash().c_str());
 
     Prepare(topFunc);
 
@@ -328,8 +325,8 @@ std::string CodeGenNPU::PrepareCmd(const CompileInfo& compileInfo, const std::st
     return compileCmd;
 }
 
-void CodeGenNPU::GenCodeToBinaryTask(
-    std::ostringstream& code, const CompileInfo& compileInfo, const std::string& compileOptions) const
+void CodeGenNPU::GenCodeToBinaryTask(std::ostringstream& code, const CompileInfo& compileInfo,
+                                     const std::string& compileOptions) const
 {
     std::string compileCmd = PrepareCmd(compileInfo, compileOptions);
     code << "\n\n\n// kernel compilation command:\n// " << compileCmd << "\n";
@@ -345,8 +342,8 @@ void CodeGenNPU::GenCodeToBinaryTask(
 
 bool CodeGenNPU::IsNeedDumpCode(const std::string& inputFile) const
 {
-    bool forceOverwrite =
-        ConfigManager::Instance().GetCodeGenConfig(KEY_FORCE_OVERWRITE, true) && !config::IsFixedCceMode();
+    bool forceOverwrite = ConfigManager::Instance().GetCodeGenConfig(KEY_FORCE_OVERWRITE, true) &&
+                          !config::IsFixedCceMode();
     if (forceOverwrite) {
         // force dump, default is true
         return true;
@@ -372,24 +369,23 @@ void CodeGenNPU::DumpCode(const std::string& fileName, std::ostringstream& code)
         codeFile.flush();
         codeFile.close();
     } catch (const std::ofstream::failure& e) {
-        CODEGEN_LOGE(
-            CmpCodeErr::FILE_IO_FAILED, "Code file operation failed: %s, error: %s, errno: %d", fileName.c_str(),
-            e.what(), errno);
+        CODEGEN_LOGE(CmpCodeErr::FILE_IO_FAILED, "Code file operation failed: %s, error: %s, errno: %d",
+                     fileName.c_str(), e.what(), errno);
         codeFile.close();
         std::remove(fileName.c_str());
         return;
     }
 }
 
-void CodeGenNPU::GenExtraAlloc(
-    const std::shared_ptr<SymbolManager>& symbolMgr, const std::shared_ptr<LogicalTensor>& tensor)
+void CodeGenNPU::GenExtraAlloc(const std::shared_ptr<SymbolManager>& symbolMgr,
+                               const std::shared_ptr<LogicalTensor>& tensor)
 {
     auto memType = tensor->GetMemoryTypeOriginal();
     auto iter = OPERAND_TYPE_TO_MEMORY_TYPE.find(memType);
     if (iter == OPERAND_TYPE_TO_MEMORY_TYPE.end()) {
-        CODEGEN_LOGE(
-            OperErr::OPERAND_TYPE_UNSUPPORTED, " memory type(%u) of tensor from PASS is invalid, tensor is: %s",
-            ToUnderlying(memType), tensor->Dump().c_str());
+        CODEGEN_LOGE(OperErr::OPERAND_TYPE_UNSUPPORTED,
+                     " memory type(%u) of tensor from PASS is invalid, tensor is: %s", ToUnderlying(memType),
+                     tensor->Dump().c_str());
         return;
     }
 
@@ -412,8 +408,8 @@ std::pair<std::string, std::string> GenAllocVarName(const std::string& prefix, c
     return std::make_pair(varName, varName + "_T");
 }
 
-void CodeGenNPU::GenAlloc(
-    const std::shared_ptr<SymbolManager>& sm, BufferType bufferType, const std::shared_ptr<LogicalTensor>& tensor)
+void CodeGenNPU::GenAlloc(const std::shared_ptr<SymbolManager>& sm, BufferType bufferType,
+                          const std::shared_ptr<LogicalTensor>& tensor)
 {
     if ((BUFFER_TYPE_TO_PREFIX.count(bufferType) == 0) || (OPERAND_TYPE_TO_ADDR_TYPE.count(bufferType) == 0)) {
         ASSERT(OperErr::OPERAND_TYPE_UNSUPPORTED, false) << "invalid bufferType: " << static_cast<size_t>(bufferType);
@@ -596,8 +592,8 @@ void CodeGenNPU::AppendVFOptions(std::ostringstream& oss, NPUArch platform, bool
     }
 }
 
-void CodeGenNPU::BuildExtraOptions(
-    std::ostringstream& oss, const CompileInfo& compileInfo, const std::string& compileOptions) const
+void CodeGenNPU::BuildExtraOptions(std::ostringstream& oss, const CompileInfo& compileInfo,
+                                   const std::string& compileOptions) const
 {
     oss << "-mllvm -cce-aicore-stack-size=0x8000 "
         << "-mllvm -cce-aicore-function-stack-size=0x8000 "
@@ -634,9 +630,8 @@ int CodeGenNPU::DoCompileCmd(const std::string& compileCmd) const
         ret = std::system(compileCmd.c_str());
     }
     if (ret != 0) {
-        CODEGEN_LOGE(
-            CmpCodeErr::COMPILE_CODE_FAILED, "kernel compilation failed, ret = %d\ncompile cmd is:\n %s", ret,
-            compileCmd.c_str());
+        CODEGEN_LOGE(CmpCodeErr::COMPILE_CODE_FAILED, "kernel compilation failed, ret = %d\ncompile cmd is:\n %s", ret,
+                     compileCmd.c_str());
     }
     return ret;
 }
@@ -819,9 +814,8 @@ void CodeGenNPU::ExecuteParallelCompile(const Function& topFunc)
 
     makeCmd << " -f " << makefilePath;
 
-    CODEGEN_LOGI(
-        "Top Function magic: %d, hash: %s: Starting parallel compilation: %u jobs, %zu tasks", topFunc.GetFuncMagic(),
-        topFunc.GetFunctionHash().c_str(), parallelJobs, compileTasks_.size());
+    CODEGEN_LOGI("Top Function magic: %d, hash: %s: Starting parallel compilation: %u jobs, %zu tasks",
+                 topFunc.GetFuncMagic(), topFunc.GetFunctionHash().c_str(), parallelJobs, compileTasks_.size());
     CODEGEN_LOGI("Execute: %s", makeCmd.str().c_str());
 
     int ret = DoCompileCmd(makeCmd.str());

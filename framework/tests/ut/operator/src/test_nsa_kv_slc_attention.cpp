@@ -107,9 +107,8 @@ void TestKvSlcAttn(const NSAV1SimpleParams& params, SATileShapeConfig& saTileCon
 
     Tensor attenOut(DT_FP32, shape_selAtten, "attenOut");
 
-    SelectedAttention(
-        topkIndices, kvNopeCache, kRopeCache, kvCacheActSeq, blockTable, qNope, qRope, attenOut, n1, n2, softmaxScale,
-        front, near, topk, blockSize, cmpBlockSize, slcBlockSize, saTileConfig);
+    SelectedAttention(topkIndices, kvNopeCache, kRopeCache, kvCacheActSeq, blockTable, qNope, qRope, attenOut, n1, n2,
+                      softmaxScale, front, near, topk, blockSize, cmpBlockSize, slcBlockSize, saTileConfig);
 }
 
 TEST_F(KvSlcAttnUtest, kv_slc_attn_ut)

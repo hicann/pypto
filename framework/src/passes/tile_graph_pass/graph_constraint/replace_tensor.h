@@ -136,15 +136,13 @@ private:
     bool CheckInplace(const Operation& op);
 
     std::unordered_map<LogicalTensorPtr, int> BuildTensorOrderIndexMap(Function& function);
-    Status FindBaseTensor(
-        Function& function, const std::unordered_map<LogicalTensorPtr, int>& tensorToOderIndex, LogicalTensors& group,
-        LogicalTensorPtr& baseTensor);
+    Status FindBaseTensor(Function& function, const std::unordered_map<LogicalTensorPtr, int>& tensorToOderIndex,
+                          LogicalTensors& group, LogicalTensorPtr& baseTensor);
     Status ProcessHubOp(Function& function);
-    void ProcessHubAssembleOp(
-        Function& function, Operation& hubOp, Operation& assembleOp, std::shared_ptr<LogicalTensor> hubInput,
-        std::shared_ptr<LogicalTensor> hubOutput);
-    LogicalTensorPtr FindReplaceSource(
-        Function& function, Operation& op, std::unordered_map<Operation*, LogicalTensorPtr>& visited);
+    void ProcessHubAssembleOp(Function& function, Operation& hubOp, Operation& assembleOp,
+                              std::shared_ptr<LogicalTensor> hubInput, std::shared_ptr<LogicalTensor> hubOutput);
+    LogicalTensorPtr FindReplaceSource(Function& function, Operation& op,
+                                       std::unordered_map<Operation*, LogicalTensorPtr>& visited);
     Status RefactorViewConnectForReplace(Function& function);
     void UniteTensor(Function& function, UnionFind& uf);
 
@@ -172,26 +170,23 @@ private:
 
     Status ForUpdateView(Operation* op);
     Status BackUpdateAssemble(Operation* op);
-    std::vector<OpImmediate> SumOffsetForCopyIn(
-        const std::vector<OpImmediate> offset1, const std::vector<OpImmediate> offset2);
+    std::vector<OpImmediate> SumOffsetForCopyIn(const std::vector<OpImmediate> offset1,
+                                                const std::vector<OpImmediate> offset2);
     Status UpdateCopyInAttr(Operation* copyInOp);
 
     Status MarkTensorAsPartialMem(Function& function);
 
     Status InsertCopyUBOp(Function& function, Operation* needInsertCopyAssOp, LogicalTensorPtr& input);
     Status InsertCopyDDROp(Function& function, Operation* needInsertCopyAssOp, LogicalTensorPtr& input);
-    Status FindNeedToCopyAssemble(
-        std::unordered_set<Operation*>& needInsertCopyAssOps, std::unordered_set<int>& visitedAssOps, Operation& op,
-        Function& function);
-    Status FindNeedToCopyReshape(std::unordered_set<Operation*>& needInsertCopyAssOps, 
-        std::unordered_set<int>& visitedReshapeOps, Operation& op, Function &function);
+    Status FindNeedToCopyAssemble(std::unordered_set<Operation*>& needInsertCopyAssOps,
+                                  std::unordered_set<int>& visitedAssOps, Operation& op, Function& function);
+    Status FindNeedToCopyReshape(std::unordered_set<Operation*>& needInsertCopyAssOps,
+                                 std::unordered_set<int>& visitedReshapeOps, Operation& op, Function& function);
     Status InsertNeedCopy(Function& function);
-    bool isBoundTensor(LogicalTensorPtr &curTensor);
+    bool isBoundTensor(LogicalTensorPtr& curTensor);
 
-    std::unordered_map<DataType, int> viewTypeTable = {
-        {DT_INT8, 1}, {DT_BF16, 2}, {DT_FP16, 2}, {DT_FP32, 4},
-        {DT_FP8E4M3, 1}, {DT_FP8E5M2, 1}, {DT_FP8E8M0, 1}
-    };
+    std::unordered_map<DataType, int> viewTypeTable = {{DT_INT8, 1},    {DT_BF16, 2},    {DT_FP16, 2},   {DT_FP32, 4},
+                                                       {DT_FP8E4M3, 1}, {DT_FP8E5M2, 1}, {DT_FP8E8M0, 1}};
     std::queue<LogicalTensorPtr> backRoots;
     std::queue<LogicalTensorPtr> forRoots;
     std::unordered_set<int> processedOp;

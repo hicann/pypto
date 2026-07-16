@@ -28,9 +28,8 @@
  * offset4: 0 (占位)
  */
 template <typename T, typename U>
-INLINE void TStoreConv2DNZ2DN(
-    T& dst, U& src, const OffsetInfo& offsetInfo, const int64_t& realM, const int64_t& realN, const int64_t& realCutW,
-    const int64_t& cutW)
+INLINE void TStoreConv2DNZ2DN(T& dst, U& src, const OffsetInfo& offsetInfo, const int64_t& realM, const int64_t& realN,
+                              const int64_t& realCutW, const int64_t& cutW)
 {
     constexpr auto srcM = Std::tuple_element<CONV_IDX_0, typename U::TileShape>::type::value;
     constexpr auto srcN = Std::tuple_element<CONV_IDX_1, typename U::TileShape>::type::value;
@@ -47,15 +46,14 @@ INLINE void TStoreConv2DNZ2DN(
 
     using shapeDim4 = pto::Shape<1, -1, -1, -1, -1>;
     using strideDim4 = pto::Stride<1, -1, -1, -1, -1>;
-    using tileData = pto::Tile<
-        pto::TileType::Acc, typename U::Type, srcM, srcN, pto::BLayout::ColMajor, -1, -1, pto::SLayout::RowMajor,
-        pto::TileConfig::fractalCSize, pto::PadValue::Null, pto::CompactMode::Null>;
+    using tileData = pto::Tile<pto::TileType::Acc, typename U::Type, srcM, srcN, pto::BLayout::ColMajor, -1, -1,
+                               pto::SLayout::RowMajor, pto::TileConfig::fractalCSize, pto::PadValue::Null,
+                               pto::CompactMode::Null>;
     using globalData = pto::GlobalTensor<typename T::Type, shapeDim4, strideDim4, pto::Layout::NCHW>;
     // 分块搬出，每次搬出cutW大小的数据
     for (int64_t loopH = 0; loopH < (realM / realCutW); loopH++) {
-        globalData dstGlobal(
-            (__gm__ typename T::Type*)(dst.GetAddr() + gmOffset), shapeDim4(dstN, dstC, dstH, dstW),
-            strideDim4(dstStrideN, dstStrideC, dstStrideH, dstStrideW));
+        globalData dstGlobal((__gm__ typename T::Type*)(dst.GetAddr() + gmOffset), shapeDim4(dstN, dstC, dstH, dstW),
+                             strideDim4(dstStrideN, dstStrideC, dstStrideH, dstStrideW));
         tileData srcL0C(realCutW, realN);
         pto::TASSIGN(srcL0C, (uint64_t)src.GetAddr() + loopH * cutW * BLOCK_CUBE_M_N * sizeof(typename U::Type));
         pto::TSTORE(dstGlobal, srcL0C);
@@ -74,9 +72,8 @@ INLINE void TStoreConv2DNZ2DN(
  * offset4: dst_w_offset
  */
 template <typename T, typename U>
-INLINE void TStoreConv3DNZ2DN(
-    T& dst, U& src, const OffsetInfo& offsetInfo, const int64_t& realM, const int64_t& realN, const int64_t& realCutW, 
-    const int64_t& cutW)
+INLINE void TStoreConv3DNZ2DN(T& dst, U& src, const OffsetInfo& offsetInfo, const int64_t& realM, const int64_t& realN,
+                              const int64_t& realCutW, const int64_t& cutW)
 {
     constexpr auto srcM = Std::tuple_element<CONV_IDX_0, typename U::TileShape>::type::value;
     constexpr auto srcN = Std::tuple_element<CONV_IDX_1, typename U::TileShape>::type::value;
@@ -93,16 +90,16 @@ INLINE void TStoreConv3DNZ2DN(
     ShapeInfo shapeInfo{dstC, dstD, dstH, dstW};
     using shapeDim5 = pto::Shape<1, -1, -1, -1, -1>;
     using strideDim5 = pto::Stride<-1, -1, -1, -1, -1>;
-    using tileData = pto::Tile<
-        pto::TileType::Acc, typename U::Type, srcM, srcN, pto::BLayout::ColMajor, -1, -1, pto::SLayout::RowMajor,
-        pto::TileConfig::fractalCSize, pto::PadValue::Null, pto::CompactMode::Null>;
+    using tileData = pto::Tile<pto::TileType::Acc, typename U::Type, srcM, srcN, pto::BLayout::ColMajor, -1, -1,
+                               pto::SLayout::RowMajor, pto::TileConfig::fractalCSize, pto::PadValue::Null,
+                               pto::CompactMode::Null>;
     using globalData = pto::GlobalTensor<typename T::Type, shapeDim5, strideDim5, pto::Layout::NCDHW>;
     // 分块搬出，每次搬出cutW大小的数据
     for (int64_t loopH = 0; loopH < (realM / realCutW); loopH++) {
         int64_t gmOffset = CalStoreOffsetNCDHW(shapeInfo, offsetInfo, loopH);
-        globalData dstGlobal(
-            (__gm__ typename T::Type*)(dst.GetAddr() + gmOffset), shapeDim5(dstN, dstC, dstD, dstH, dstW),
-            strideDim5(dstStrideN, dstStrideC, dstStrideD, dstStrideH, dstStrideW));
+        globalData dstGlobal((__gm__ typename T::Type*)(dst.GetAddr() + gmOffset),
+                             shapeDim5(dstN, dstC, dstD, dstH, dstW),
+                             strideDim5(dstStrideN, dstStrideC, dstStrideD, dstStrideH, dstStrideW));
         tileData srcL0C(realCutW, realN);
         pto::TASSIGN(srcL0C, (uint64_t)src.GetAddr() + loopH * cutW * BLOCK_CUBE_M_N * sizeof(typename U::Type));
         pto::TSTORE(dstGlobal, srcL0C);
@@ -110,9 +107,8 @@ INLINE void TStoreConv3DNZ2DN(
 }
 
 template <bool isConv3D, typename T, typename U>
-INLINE void TStoreConvNZ2DN(
-    T& dst, U& src, const OffsetInfo& offsetInfo, const int64_t& realM, const int64_t& realN, const int64_t& realCutW,
-    const int64_t& cutW)
+INLINE void TStoreConvNZ2DN(T& dst, U& src, const OffsetInfo& offsetInfo, const int64_t& realM, const int64_t& realN,
+                            const int64_t& realCutW, const int64_t& cutW)
 {
     if constexpr (isConv3D) {
         TStoreConv3DNZ2DN(dst, src, offsetInfo, realM, realN, realCutW, cutW);

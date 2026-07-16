@@ -141,8 +141,8 @@ class TransposeMatCollector : public IRVisitor {
     using IRVisitor::VisitStmt_;
 
 public:
-    std::set<std::string> candidates;         // Mat allocations reached by a reversed Mat->L0 move
-    std::set<std::string> transpose_loaded;   // Mat allocations already filled by an is_transpose load
+    std::set<std::string> candidates;       // Mat allocations reached by a reversed Mat->L0 move
+    std::set<std::string> transpose_loaded; // Mat allocations already filled by an is_transpose load
 
     // Targets are reversed-move candidates, minus any Mat that is already fed by an
     // is_transpose load. An is_transpose load fills the Mat in the physical (transposed)
@@ -381,8 +381,8 @@ public:
             if (dst && IsTarget(dst) && !already_transpose) {
                 std::vector<std::pair<std::string, std::any>> new_kwargs = call->kwargs_;
                 new_kwargs.emplace_back("is_transpose", std::any(true));
-                return std::make_shared<const Call>(call->name_, call->args_, std::move(new_kwargs),
-                                                    call->GetType(), call->span_);
+                return std::make_shared<const Call>(call->name_, call->args_, std::move(new_kwargs), call->GetType(),
+                                                    call->span_);
             }
         }
 
@@ -452,8 +452,8 @@ private:
         HardwareInfo hw = tt->hardwareInfo_.value_or(HardwareInfo{});
         std::swap(hw.blayout, hw.slayout);
 
-        return std::make_shared<const TileType>(
-            std::move(new_shape), tt->dtype_, tt->memref_, std::move(new_view), std::make_optional(hw));
+        return std::make_shared<const TileType>(std::move(new_shape), tt->dtype_, tt->memref_, std::move(new_view),
+                                                std::make_optional(hw));
     }
 
     std::set<std::string> targets_;
@@ -475,8 +475,8 @@ FunctionPtr TransformNormalizeMatTranspose(const FunctionPtr& func)
     auto new_body = rewriter.VisitStmt(func->body_);
     if (new_body.get() == func->body_.get())
         return func;
-    return std::make_shared<Function>(
-        func->name_, func->params_, func->returnTypes_, new_body, func->span_, func->funcType_);
+    return std::make_shared<Function>(func->name_, func->params_, func->returnTypes_, new_body, func->span_,
+                                      func->funcType_);
 }
 
 } // namespace

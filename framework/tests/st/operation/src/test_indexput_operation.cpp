@@ -41,8 +41,8 @@ struct IndexPut_OpMetaData {
 
 /* inputs:{self, values, indices[0]} */
 template <typename T>
-static void IndexPut_OperationExeFunc1Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void IndexPut_OperationExeFunc1Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                           const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0], inputs[1], inputs[2]}, {outputs[0]})
     {
@@ -62,8 +62,8 @@ static void IndexPut_OperationExeFunc1Dims(
             valuesValidShapes[0] = std::min(valuesShapes[0] - bIdx * viewShape, viewShape);
             valuesNewOffsets[0] = bIdx * viewShape;
             auto viewValues = View(inputs[1], valuesViewShapes, valuesValidShapes, valuesNewOffsets);
-            auto viewIndices1 = View(
-                inputs[2], {viewShape}, {std::min(indicesFirstDim - bIdx * viewShape, viewShape)}, {bIdx * viewShape});
+            auto viewIndices1 = View(inputs[2], {viewShape}, {std::min(indicesFirstDim - bIdx * viewShape, viewShape)},
+                                     {bIdx * viewShape});
             std::vector<Tensor> viewIndices = {viewIndices1};
             TileShape::Current().SetVecTile(args->tileShape_);
             IndexPut_(outputs[0], viewIndices, viewValues, args->accumulate_);
@@ -73,8 +73,8 @@ static void IndexPut_OperationExeFunc1Dims(
 
 /* inputs:{self, values, indices[0], indices[1]} */
 template <typename T>
-static void IndexPut_OperationExeFunc2Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void IndexPut_OperationExeFunc2Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                           const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0], inputs[1], inputs[2], inputs[3]}, {outputs[0]})
     {
@@ -97,10 +97,10 @@ static void IndexPut_OperationExeFunc2Dims(
             valuesValidShapes[0] = std::min(valuesShapes[0] - bIdx * viewShape, viewShape);
             valuesNewOffsets[0] = bIdx * viewShape;
             auto viewValues = View(inputs[1], valuesViewShapes, valuesValidShapes, valuesNewOffsets);
-            auto viewIndices1 = View(
-                inputs[2], {viewShape}, {std::min(indicesFirstDim - bIdx * viewShape, viewShape)}, {bIdx * viewShape});
-            auto viewIndices2 = View(
-                inputs[3], {viewShape}, {std::min(indicesSecondDim - bIdx * viewShape, viewShape)}, {bIdx * viewShape});
+            auto viewIndices1 = View(inputs[2], {viewShape}, {std::min(indicesFirstDim - bIdx * viewShape, viewShape)},
+                                     {bIdx * viewShape});
+            auto viewIndices2 = View(inputs[3], {viewShape}, {std::min(indicesSecondDim - bIdx * viewShape, viewShape)},
+                                     {bIdx * viewShape});
             std::vector<Tensor> viewIndices = {viewIndices1, viewIndices2};
             TileShape::Current().SetVecTile(args->tileShape_);
             IndexPut_(outputs[0], viewIndices, viewValues, args->accumulate_);
@@ -110,8 +110,8 @@ static void IndexPut_OperationExeFunc2Dims(
 
 /* inputs: self, values, indices[0], indices[1], indices[2] */
 template <typename T>
-static void IndexPut_OperationExeFunc3Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void IndexPut_OperationExeFunc3Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                           const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0], inputs[1], inputs[2], inputs[3], inputs[4]}, {outputs[0]})
     {
@@ -134,12 +134,12 @@ static void IndexPut_OperationExeFunc3Dims(
         {
             valuesValidShapes[0] = std::min(valuesShapes[0] - bIdx * viewShape, viewShape);
             valuesNewOffsets[0] = bIdx * viewShape;
-            auto viewIndices1 = View(
-                inputs[2], {viewShape}, {std::min(indicesFirstDim - bIdx * viewShape, viewShape)}, {bIdx * viewShape});
-            auto viewIndices2 = View(
-                inputs[3], {viewShape}, {std::min(indicesSecondDim - bIdx * viewShape, viewShape)}, {bIdx * viewShape});
-            auto viewIndices3 = View(
-                inputs[4], {viewShape}, {std::min(indicesThirdDim - bIdx * viewShape, viewShape)}, {bIdx * viewShape});
+            auto viewIndices1 = View(inputs[2], {viewShape}, {std::min(indicesFirstDim - bIdx * viewShape, viewShape)},
+                                     {bIdx * viewShape});
+            auto viewIndices2 = View(inputs[3], {viewShape}, {std::min(indicesSecondDim - bIdx * viewShape, viewShape)},
+                                     {bIdx * viewShape});
+            auto viewIndices3 = View(inputs[4], {viewShape}, {std::min(indicesThirdDim - bIdx * viewShape, viewShape)},
+                                     {bIdx * viewShape});
             auto viewValues = View(inputs[1], valuesViewShapes, valuesValidShapes, valuesNewOffsets);
             std::vector<Tensor> viewIndices = {viewIndices1, viewIndices2, viewIndices3};
             TileShape::Current().SetVecTile(args->tileShape_);
@@ -150,8 +150,8 @@ static void IndexPut_OperationExeFunc3Dims(
 
 /* inputs: self, values, indices[0], indices[1], indices[2], indices[3] */
 template <typename T>
-static void IndexPut_OperationExeFunc4Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void IndexPut_OperationExeFunc4Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                           const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0], inputs[1], inputs[2], inputs[3], inputs[4], inputs[5]}, {outputs[0]})
     {
@@ -176,14 +176,14 @@ static void IndexPut_OperationExeFunc4Dims(
             valuesValidShapes[0] = std::min(valuesShapes[0] - bIdx * viewShape, viewShape);
             valuesNewOffsets[0] = bIdx * viewShape;
             auto viewValues = View(inputs[1], valuesViewShapes, valuesValidShapes, valuesNewOffsets);
-            auto viewIndices1 = View(
-                inputs[2], {viewShape}, {std::min(indicesFirstDim - bIdx * viewShape, viewShape)}, {bIdx * viewShape});
-            auto viewIndices2 = View(
-                inputs[3], {viewShape}, {std::min(indicesSecondDim - bIdx * viewShape, viewShape)}, {bIdx * viewShape});
-            auto viewIndices3 = View(
-                inputs[4], {viewShape}, {std::min(indicesThirdDim - bIdx * viewShape, viewShape)}, {bIdx * viewShape});
-            auto viewIndices4 = View(
-                inputs[5], {viewShape}, {std::min(indicesForthDim - bIdx * viewShape, viewShape)}, {bIdx * viewShape});
+            auto viewIndices1 = View(inputs[2], {viewShape}, {std::min(indicesFirstDim - bIdx * viewShape, viewShape)},
+                                     {bIdx * viewShape});
+            auto viewIndices2 = View(inputs[3], {viewShape}, {std::min(indicesSecondDim - bIdx * viewShape, viewShape)},
+                                     {bIdx * viewShape});
+            auto viewIndices3 = View(inputs[4], {viewShape}, {std::min(indicesThirdDim - bIdx * viewShape, viewShape)},
+                                     {bIdx * viewShape});
+            auto viewIndices4 = View(inputs[5], {viewShape}, {std::min(indicesForthDim - bIdx * viewShape, viewShape)},
+                                     {bIdx * viewShape});
             std::vector<Tensor> viewIndices = {viewIndices1, viewIndices2, viewIndices3, viewIndices4};
             TileShape::Current().SetVecTile(args->tileShape_);
             IndexPut_(outputs[0], viewIndices, viewValues, args->accumulate_);
@@ -208,9 +208,8 @@ void IndexPutTestCase(TestCaseDesc& testCase_, const nlohmann::json& test_data)
     bool accumulate = GetValueByName<bool>(test_data, "accumulate");
     T args(GetViewShape(test_data), GetTileShape(test_data), accumulate);
     testCase_.args = &args;
-    std::vector<OpFunc> func{
-        IndexPut_OperationExeFunc1Dims<T>, IndexPut_OperationExeFunc2Dims<T>, IndexPut_OperationExeFunc3Dims<T>,
-        IndexPut_OperationExeFunc4Dims<T>};
+    std::vector<OpFunc> func{IndexPut_OperationExeFunc1Dims<T>, IndexPut_OperationExeFunc2Dims<T>,
+                             IndexPut_OperationExeFunc3Dims<T>, IndexPut_OperationExeFunc4Dims<T>};
     size_t sizeIndices = testCase_.inputTensors.size() - NUM2;
     size_t sizeIndicesMax = 4;
     size_t sizeIndicesMin = 1;
@@ -219,12 +218,11 @@ void IndexPutTestCase(TestCaseDesc& testCase_, const nlohmann::json& test_data)
         ASSERT(testCase_.inputTensors[i + NUM2].GetShape().size() == 1) << "indices must be a one-dimensional array";
     }
     testCase_.opFunc = func[sizeIndices - 1];
-    std::vector<std::string> paths = {
-        GetGoldenDir() + "/" + testCase_.inputTensors[0].GetStorage()->Symbol() + ".bin",
-        GetGoldenDir() + "/" + testCase_.inputTensors[1].GetStorage()->Symbol() + ".bin"};
+    std::vector<std::string> paths = {GetGoldenDir() + "/" + testCase_.inputTensors[0].GetStorage()->Symbol() + ".bin",
+                                      GetGoldenDir() + "/" + testCase_.inputTensors[1].GetStorage()->Symbol() + ".bin"};
     for (size_t indicesIdx = 0; indicesIdx < sizeIndices; indicesIdx++) {
-        paths.push_back(
-            GetGoldenDir() + "/" + testCase_.inputTensors[indicesIdx + NUM2].GetStorage()->Symbol() + ".bin");
+        paths.push_back(GetGoldenDir() + "/" + testCase_.inputTensors[indicesIdx + NUM2].GetStorage()->Symbol() +
+                        ".bin");
     }
     testCase_.inputPaths = paths;
     testCase_.goldenPaths = {GetGoldenDir() + "/" + testCase_.outputTensors[0].GetStorage()->Symbol() + ".bin"};

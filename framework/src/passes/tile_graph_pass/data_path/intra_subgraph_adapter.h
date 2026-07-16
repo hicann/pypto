@@ -37,17 +37,16 @@ public:
 private:
     Status CheckColorCount(Function& function, LogicalTensorPtr tensor, size_t commonColorCount);
     Status CheckBoundaryTensor(LogicalTensorPtr tensor);
-    Status SplitBoundaryTensor(
-        Function& function, LogicalTensorPtr tensor, int mainSubgraphID, LogicalTensors& newBoundaryTensors);
+    Status SplitBoundaryTensor(Function& function, LogicalTensorPtr tensor, int mainSubgraphID,
+                               LogicalTensors& newBoundaryTensors);
     LogicalTensors CollectBoundaryTensors(Function& function);
     Status ProcessBoundaryTensors(Function& function, LogicalTensors tensors);
     Status ProcessBoundaryTensor(Function& function, LogicalTensorPtr tensor);
     Status AdapteTensorProducers(Function& function, LogicalTensorPtr tensor);
     Status AdapteTensorConsumers(Function& function, LogicalTensorPtr tensor);
     LogicalTensorPtr InsertOpBetween(Function& function, Opcode opcode, Operation& op, LogicalTensorPtr tensor);
-    LogicalTensorPtr InsertOpBetween(
-        Function& function, Opcode opcode, LogicalTensorPtr tensor, const std::vector<Operation*>& ops,
-        int newOpSubgraphID = -1);
+    LogicalTensorPtr InsertOpBetween(Function& function, Opcode opcode, LogicalTensorPtr tensor,
+                                     const std::vector<Operation*>& ops, int newOpSubgraphID = -1);
     void CollectProducerColors(LogicalTensorPtr tensor, std::set<int>& colors);
     void CollectConsumerColors(LogicalTensorPtr tensor, std::set<int>& colors);
     std::set<int> SetIntersection(std::set<int>& a, std::set<int>& b);

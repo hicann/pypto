@@ -116,8 +116,8 @@ public:
 
     static constexpr auto GetFieldDescriptors()
     {
-        return std::tuple_cat(
-            Type::GetFieldDescriptors(), std::make_tuple(reflection::UsualField(&ScalarType::dtype_, "dtype")));
+        return std::tuple_cat(Type::GetFieldDescriptors(),
+                              std::make_tuple(reflection::UsualField(&ScalarType::dtype_, "dtype")));
     }
 };
 
@@ -176,10 +176,9 @@ struct TensorView {
 
     static constexpr auto GetFieldDescriptors()
     {
-        return std::make_tuple(
-            reflection::UsualField(&TensorView::validShape, "valid_shape"),
-            reflection::UsualField(&TensorView::stride, "stride"),
-            reflection::UsualField(&TensorView::layout, "layout"));
+        return std::make_tuple(reflection::UsualField(&TensorView::validShape, "valid_shape"),
+                               reflection::UsualField(&TensorView::stride, "stride"),
+                               reflection::UsualField(&TensorView::layout, "layout"));
     }
 };
 
@@ -245,20 +244,19 @@ struct HardwareInfo {
 
     HardwareInfo() = default;
 
-    HardwareInfo(
-        TileLayout blayoutIn, TileLayout slayoutIn = TileLayout::none_box, uint64_t fractalIn = kDefaultFractal,
-        TilePad padIn = TilePad::null, CompactMode compactIn = CompactMode::null)
+    HardwareInfo(TileLayout blayoutIn, TileLayout slayoutIn = TileLayout::none_box,
+                 uint64_t fractalIn = kDefaultFractal, TilePad padIn = TilePad::null,
+                 CompactMode compactIn = CompactMode::null)
         : blayout(blayoutIn), slayout(slayoutIn), fractal(fractalIn), pad(padIn), compact(compactIn)
     {}
 
     static constexpr auto GetFieldDescriptors()
     {
-        return std::make_tuple(
-            reflection::UsualField(&HardwareInfo::blayout, "blayout"),
-            reflection::UsualField(&HardwareInfo::slayout, "slayout"),
-            reflection::UsualField(&HardwareInfo::fractal, "fractal"),
-            reflection::UsualField(&HardwareInfo::pad, "pad"),
-            reflection::UsualField(&HardwareInfo::compact, "compact"));
+        return std::make_tuple(reflection::UsualField(&HardwareInfo::blayout, "blayout"),
+                               reflection::UsualField(&HardwareInfo::slayout, "slayout"),
+                               reflection::UsualField(&HardwareInfo::fractal, "fractal"),
+                               reflection::UsualField(&HardwareInfo::pad, "pad"),
+                               reflection::UsualField(&HardwareInfo::compact, "compact"));
     }
 };
 
@@ -282,10 +280,9 @@ struct TileView {
 
     static constexpr auto GetFieldDescriptors()
     {
-        return std::make_tuple(
-            reflection::UsualField(&TileView::validShape, "valid_shape"),
-            reflection::UsualField(&TileView::stride, "stride"),
-            reflection::UsualField(&TileView::startOffset, "start_offset"));
+        return std::make_tuple(reflection::UsualField(&TileView::validShape, "valid_shape"),
+                               reflection::UsualField(&TileView::stride, "stride"),
+                               reflection::UsualField(&TileView::startOffset, "start_offset"));
     }
 };
 
@@ -346,11 +343,10 @@ public:
 
     static constexpr auto GetFieldDescriptors()
     {
-        return std::tuple_cat(
-            Type::GetFieldDescriptors(), std::make_tuple(
-                                             reflection::UsualField(&ShapedType::dtype_, "dtype"),
-                                             reflection::UsualField(&ShapedType::shape_, "shape"),
-                                             reflection::UsualField(&ShapedType::memref_, "memref")));
+        return std::tuple_cat(Type::GetFieldDescriptors(),
+                              std::make_tuple(reflection::UsualField(&ShapedType::dtype_, "dtype"),
+                                              reflection::UsualField(&ShapedType::shape_, "shape"),
+                                              reflection::UsualField(&ShapedType::memref_, "memref")));
     }
 };
 
@@ -388,15 +384,13 @@ public:
         : ShapedType(dtype, shape, std::move(memref)), tensor_view_(std::nullopt)
     {}
 
-    TensorType(
-        std::vector<ExprPtr> shape, DataType dtype, std::optional<MemRefPtr> memref,
-        std::optional<TensorView> tensorView)
+    TensorType(std::vector<ExprPtr> shape, DataType dtype, std::optional<MemRefPtr> memref,
+               std::optional<TensorView> tensorView)
         : ShapedType(dtype, std::move(shape), std::move(memref)), tensor_view_(std::move(tensorView))
     {}
 
-    TensorType(
-        const std::vector<int64_t>& shape, DataType dtype, std::optional<MemRefPtr> memref,
-        std::optional<TensorView> tensorView)
+    TensorType(const std::vector<int64_t>& shape, DataType dtype, std::optional<MemRefPtr> memref,
+               std::optional<TensorView> tensorView)
         : ShapedType(dtype, shape, std::move(memref)), tensor_view_(std::move(tensorView))
     {}
 
@@ -405,9 +399,8 @@ public:
 
     static constexpr auto GetFieldDescriptors()
     {
-        return std::tuple_cat(
-            ShapedType::GetFieldDescriptors(),
-            std::make_tuple(reflection::UsualField(&TensorType::tensor_view_, "tensor_view")));
+        return std::tuple_cat(ShapedType::GetFieldDescriptors(),
+                              std::make_tuple(reflection::UsualField(&TensorType::tensor_view_, "tensor_view")));
     }
 };
 
@@ -437,25 +430,22 @@ public:
         : ShapedType(dtype, std::move(shape), std::move(memref)), tileView_(std::nullopt), hardwareInfo_(std::nullopt)
     {}
 
-    TileType(
-        const std::vector<int64_t>& shape, DataType dtype, std::optional<MemRefPtr> memref,
-        std::optional<TileView> tileView, std::optional<HardwareInfo> hardwareInfo = std::nullopt)
+    TileType(const std::vector<int64_t>& shape, DataType dtype, std::optional<MemRefPtr> memref,
+             std::optional<TileView> tileView, std::optional<HardwareInfo> hardwareInfo = std::nullopt)
         : ShapedType(dtype, shape, std::move(memref)),
           tileView_(std::move(tileView)),
           hardwareInfo_(std::move(hardwareInfo))
     {}
 
-    TileType(
-        std::vector<ExprPtr> shape, DataType dtype, MemRefPtr memref, std::optional<TileView> tileView,
-        std::optional<HardwareInfo> hardwareInfo = std::nullopt)
+    TileType(std::vector<ExprPtr> shape, DataType dtype, MemRefPtr memref, std::optional<TileView> tileView,
+             std::optional<HardwareInfo> hardwareInfo = std::nullopt)
         : ShapedType(dtype, std::move(shape), std::move(memref)),
           tileView_(std::move(tileView)),
           hardwareInfo_(std::move(hardwareInfo))
     {}
 
-    TileType(
-        std::vector<ExprPtr> shape, DataType dtype, std::optional<MemRefPtr> memref, std::optional<TileView> tileView,
-        std::optional<HardwareInfo> hardwareInfo = std::nullopt)
+    TileType(std::vector<ExprPtr> shape, DataType dtype, std::optional<MemRefPtr> memref,
+             std::optional<TileView> tileView, std::optional<HardwareInfo> hardwareInfo = std::nullopt)
         : ShapedType(dtype, std::move(shape), std::move(memref)),
           tileView_(std::move(tileView)),
           hardwareInfo_(std::move(hardwareInfo))
@@ -466,10 +456,9 @@ public:
 
     static constexpr auto GetFieldDescriptors()
     {
-        return std::tuple_cat(
-            ShapedType::GetFieldDescriptors(), std::make_tuple(
-                                                   reflection::UsualField(&TileType::tileView_, "tile_view"),
-                                                   reflection::UsualField(&TileType::hardwareInfo_, "hardware_info")));
+        return std::tuple_cat(ShapedType::GetFieldDescriptors(),
+                              std::make_tuple(reflection::UsualField(&TileType::tileView_, "tile_view"),
+                                              reflection::UsualField(&TileType::hardwareInfo_, "hardware_info")));
     }
 };
 
@@ -501,8 +490,8 @@ public:
 
     static constexpr auto GetFieldDescriptors()
     {
-        return std::tuple_cat(
-            Type::GetFieldDescriptors(), std::make_tuple(reflection::UsualField(&TupleType::types_, "types")));
+        return std::tuple_cat(Type::GetFieldDescriptors(),
+                              std::make_tuple(reflection::UsualField(&TupleType::types_, "types")));
     }
 };
 
@@ -583,8 +572,8 @@ public:
     // Only dtype_ participates in structural equality; base_ptr/offset are codegen annotations.
     static constexpr auto GetFieldDescriptors()
     {
-        return std::tuple_cat(
-            Type::GetFieldDescriptors(), std::make_tuple(reflection::UsualField(&PtrType::dtype_, "dtype")));
+        return std::tuple_cat(Type::GetFieldDescriptors(),
+                              std::make_tuple(reflection::UsualField(&PtrType::dtype_, "dtype")));
     }
 };
 

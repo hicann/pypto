@@ -27,10 +27,10 @@ class GraphPartition : public Pass {
 public:
     GraphPartition() : Pass("GraphPartition") {}
     ~GraphPartition() override = default;
-    Status PreCheck(Function &function) override;
-    Status PostCheck(Function &function) override;
-    Status RunOnFunction(Function &function) override;
+    Status PreCheck(Function& function) override;
+    Status PostCheck(Function& function) override;
+    Status RunOnFunction(Function& function) override;
 };
 
-}  // namespace npu::tile_fwk
+} // namespace npu::tile_fwk
 #endif

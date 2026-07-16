@@ -47,8 +47,8 @@ TEST_F(TestCodegenDynScatter, TestDynOpScatterElement)
     std::vector<SymbolicScalar> dynValidShape = {64, 64};
     std::vector<SymbolicScalar> dynValidShapeIdx = {32};
     auto localTensorSrc = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
-    auto localTensorIdx =
-        CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, {32}, dynValidShapeIdx});
+    auto localTensorIdx = CreateLogicalTensor(
+        {*function, DataType::DT_FP32, MemoryType::MEM_UB, {32}, dynValidShapeIdx});
     auto localTensorDst = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
 
     auto& op = function->AddOperation(Opcode::OP_SCATTER_ELEMENT, {localTensorSrc, localTensorIdx}, {localTensorDst});
@@ -70,16 +70,16 @@ TEST_F(TestCodegenDynScatter, TestOpDynScatter)
     std::vector<int64_t> shape = {64, 64};
     std::vector<SymbolicScalar> dynValidShape = {64, 64};
     std::vector<SymbolicScalar> dynValidShapeIdx = {32};
-    auto localTensorSelf =
-        CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
+    auto localTensorSelf = CreateLogicalTensor(
+        {*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
     auto localTensorSrc = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
-    auto localTensorIdx =
-        CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, {32}, dynValidShapeIdx});
+    auto localTensorIdx = CreateLogicalTensor(
+        {*function, DataType::DT_FP32, MemoryType::MEM_UB, {32}, dynValidShapeIdx});
     auto localTensorDst = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
     auto localTensorTmp = CreateLogicalTensor({*function, DataType::DT_INT32, MemoryType::MEM_UB, {32}});
 
-    auto& op = function->AddOperation(
-        Opcode::OP_SCATTER, {localTensorSelf, localTensorIdx, localTensorSrc}, {localTensorDst, localTensorTmp});
+    auto& op = function->AddOperation(Opcode::OP_SCATTER, {localTensorSelf, localTensorIdx, localTensorSrc},
+                                      {localTensorDst, localTensorTmp});
     op.SetAttribute(OP_ATTR_PREFIX + "axis", 0);
     op.SetAttribute(OP_ATTR_PREFIX + "scatter_mode", 0);
 

@@ -56,17 +56,17 @@ void PrintGraphInfoRemoveRedundantOp(Function* func)
 void SetUpPassStrategy()
 {
     PassManager& passManager = PassManager::Instance();
-    passManager.RegisterStrategy(
-        "RemoveRedundantOpTestStrategy", {
-                                             {"RemoveRedundantReshape", PassName::REMOVE_REDUNDANT_RESHAPE},
-                                             {"InferMemoryConflict", PassName::INFER_MEMORY_CONFLICT},
-                                             {"ExpandFunction", PassName::EXPAND_FUNCTION},
-                                             {"DuplicateOp", PassName::DUPLICATE_OP},
-                                             {"MergeViewAssemble", PassName::MERGE_VIEW_ASSEMBLE},
-                                             {"AssignMemoryType", PassName::ASSIGN_MEMORY_TYPE},
-                                             {"SplitLargeFanoutTensor", PassName::SPLIT_LARGE_FANOUT_TENSOR},
-                                             {"SplitReshape", PassName::SPLIT_RESHAPE},
-                                         });
+    passManager.RegisterStrategy("RemoveRedundantOpTestStrategy",
+                                 {
+                                     {"RemoveRedundantReshape", PassName::REMOVE_REDUNDANT_RESHAPE},
+                                     {"InferMemoryConflict", PassName::INFER_MEMORY_CONFLICT},
+                                     {"ExpandFunction", PassName::EXPAND_FUNCTION},
+                                     {"DuplicateOp", PassName::DUPLICATE_OP},
+                                     {"MergeViewAssemble", PassName::MERGE_VIEW_ASSEMBLE},
+                                     {"AssignMemoryType", PassName::ASSIGN_MEMORY_TYPE},
+                                     {"SplitLargeFanoutTensor", PassName::SPLIT_LARGE_FANOUT_TENSOR},
+                                     {"SplitReshape", PassName::SPLIT_RESHAPE},
+                                 });
 }
 
 class RemoveRedundantOpTest : public testing::Test {
@@ -204,23 +204,27 @@ TEST_F(RemoveRedundantOpTest, TestInternalAssembleView)
 
 std::shared_ptr<Function> SetUpParallelAssembleWithReshapeGraph()
 {
-    auto func = std::make_shared<Function>(
-        Program::GetInstance(), "ProcessRedundantOpParallelAssembleWithReshape",
-        "ProcessRedundantOpParallelAssembleWithReshape", nullptr);
+    auto func = std::make_shared<Function>(Program::GetInstance(), "ProcessRedundantOpParallelAssembleWithReshape",
+                                           "ProcessRedundantOpParallelAssembleWithReshape", nullptr);
 
     std::vector<int64_t> inputShape = {32, 128};
     std::vector<int64_t> outputShape1 = {64, 128};
     std::vector<int64_t> outputShape2 = {32, 128};
 
-    auto oriInput = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inputShape, CreateTestConstIntVector(inputShape));
+    auto oriInput = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inputShape,
+                                                               CreateTestConstIntVector(inputShape));
     oriInput->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
-    auto sharedInput = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inputShape, CreateTestConstIntVector(inputShape));
+    auto sharedInput = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inputShape,
+                                                                  CreateTestConstIntVector(inputShape));
     sharedInput->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
-    auto anotherInput = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inputShape, CreateTestConstIntVector(inputShape));
+    auto anotherInput = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inputShape,
+                                                                   CreateTestConstIntVector(inputShape));
     anotherInput->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
-    auto outputA = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, outputShape1, CreateTestConstIntVector(outputShape1));
+    auto outputA = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, outputShape1,
+                                                              CreateTestConstIntVector(outputShape1));
     outputA->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
-    auto outputB = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, outputShape2, CreateTestConstIntVector(outputShape2));
+    auto outputB = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, outputShape2,
+                                                              CreateTestConstIntVector(outputShape2));
     outputB->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
 
     IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_ADDS, {oriInput}, {sharedInput});
@@ -234,7 +238,8 @@ std::shared_ptr<Function> SetUpParallelAssembleWithReshapeGraph()
     assemble3.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
 
     std::vector<int64_t> reshapeShape = {4096};
-    auto reshapeOut = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshapeShape, CreateTestConstIntVector(reshapeShape));
+    auto reshapeOut = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshapeShape,
+                                                                 CreateTestConstIntVector(reshapeShape));
     reshapeOut->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
     IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_RESHAPE, {outputB}, {reshapeOut});
 

@@ -84,30 +84,30 @@ void PrintGraphInfoPreGraph(Function* func, std::set<int>& tensorMagicWithColorS
 void SetUpPassStrategy()
 {
     PassManager& passManager = PassManager::Instance();
-    passManager.RegisterStrategy(
-        "PreGraphTestStrategy", {
-                                    {"RemoveRedundantReshape", PassName::REMOVE_REDUNDANT_RESHAPE},
-                                    {"InferMemoryConflict", PassName::INFER_MEMORY_CONFLICT},
-                                    {"ExpandFunction", PassName::EXPAND_FUNCTION},
-                                    {"DuplicateOp", PassName::DUPLICATE_OP},
-                                    {"MergeViewAssemble", PassName::MERGE_VIEW_ASSEMBLE},
-                                    {"SplitReshape", PassName::SPLIT_RESHAPE},
-                                    {"SplitRawTensor", PassName::SPLIT_RAW_TENSOR},
-                                    {"SplitLargeFanoutTensor", PassName::SPLIT_LARGE_FANOUT_TENSOR},
-                                    {"InferDiscontinuousInput", PassName::INFER_DISCONTINUOUS_INPUT},
-                                    {"AssignMemoryType", PassName::ASSIGN_MEMORY_TYPE},
-                                    {"RemoveRedundantOp", PassName::REMOVE_REDUNDANT_OP},
-                                    {"ProcessAtomic", PassName::PROCESS_ATOMIC},
-                                    {"GraphPartition", PassName::GRAPH_PARTITION},
-                                    {"NBufferMerge", PassName::N_BUFFER_MERGE},
-                                    {"IntraSubgraphAdapter", PassName::INTRA_SUBGRAPH_ADAPTER},
-                                    {"GenerateMoveOp", PassName::GENERATE_MOVE_OP},
-                                    {"CommonOperationEliminate", PassName::COMMON_OPERATION_ELIMINATE},
-                                    {"L1CopyInReuseMerge", PassName::L1_COPY_IN_REUSE_MERGE},
-                                    {"PadLocalBuffer", PassName::PAD_LOCAL_BUFFER},
-                                    {"RemoveUnalignedReshape", PassName::REMOVE_UNALIGNED_RESHAPE},
-                                    {"ReplaceTensor", PassName::REPLACE_TENSOR},
-                                });
+    passManager.RegisterStrategy("PreGraphTestStrategy",
+                                 {
+                                     {"RemoveRedundantReshape", PassName::REMOVE_REDUNDANT_RESHAPE},
+                                     {"InferMemoryConflict", PassName::INFER_MEMORY_CONFLICT},
+                                     {"ExpandFunction", PassName::EXPAND_FUNCTION},
+                                     {"DuplicateOp", PassName::DUPLICATE_OP},
+                                     {"MergeViewAssemble", PassName::MERGE_VIEW_ASSEMBLE},
+                                     {"SplitReshape", PassName::SPLIT_RESHAPE},
+                                     {"SplitRawTensor", PassName::SPLIT_RAW_TENSOR},
+                                     {"SplitLargeFanoutTensor", PassName::SPLIT_LARGE_FANOUT_TENSOR},
+                                     {"InferDiscontinuousInput", PassName::INFER_DISCONTINUOUS_INPUT},
+                                     {"AssignMemoryType", PassName::ASSIGN_MEMORY_TYPE},
+                                     {"RemoveRedundantOp", PassName::REMOVE_REDUNDANT_OP},
+                                     {"ProcessAtomic", PassName::PROCESS_ATOMIC},
+                                     {"GraphPartition", PassName::GRAPH_PARTITION},
+                                     {"NBufferMerge", PassName::N_BUFFER_MERGE},
+                                     {"IntraSubgraphAdapter", PassName::INTRA_SUBGRAPH_ADAPTER},
+                                     {"GenerateMoveOp", PassName::GENERATE_MOVE_OP},
+                                     {"CommonOperationEliminate", PassName::COMMON_OPERATION_ELIMINATE},
+                                     {"L1CopyInReuseMerge", PassName::L1_COPY_IN_REUSE_MERGE},
+                                     {"PadLocalBuffer", PassName::PAD_LOCAL_BUFFER},
+                                     {"RemoveUnalignedReshape", PassName::REMOVE_UNALIGNED_RESHAPE},
+                                     {"ReplaceTensor", PassName::REPLACE_TENSOR},
+                                 });
 }
 
 class PreGraphTest : public testing::Test {
@@ -128,8 +128,8 @@ public:
 
     // input[B, N, S] --> Copy_In --> input_ub[1, 1, S] --> Transpose_Datamove --> outputGm, [N, B, S](i, j, 0) -->
     // Assemble --> output[N, B, S]
-    void TileExpandTransposeDatamove(
-        ComputationalGraphBuilder& G, const int B, const int N, const int S, bool isInner = false)
+    void TileExpandTransposeDatamove(ComputationalGraphBuilder& G, const int B, const int N, const int S,
+                                     bool isInner = false)
     {
         std::vector<int64_t> tileShape{1, 1, S};
         // 所有transpose_datamove输出partial结果都要指向同一个raw tensor
@@ -161,9 +161,8 @@ public:
                 outputGm->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
                 outputGm->tensor = tempOut->tensor;
                 outputGm->UpdateOffset(offsetNew);
-                G.AddOp(
-                    Opcode::OP_TRANSPOSE_MOVEOUT, {input_ub}, {outputPartial},
-                    "Transpose_Datamove_" + std::to_string(subgraphId));
+                G.AddOp(Opcode::OP_TRANSPOSE_MOVEOUT, {input_ub}, {outputPartial},
+                        "Transpose_Datamove_" + std::to_string(subgraphId));
                 auto transposeOp = G.GetOp("Transpose_Datamove_" + std::to_string(subgraphId));
                 transposeOp->UpdateSubgraphID(subgraphId);
 
@@ -175,11 +174,10 @@ public:
 
                 if (isInner) {
                     auto outInnerTemp = G.GetTensor("outInnerTemp");
-                    G.AddOp(
-                        Opcode::OP_ASSEMBLE, {outputPartial}, {"outInnerTemp"},
-                        "Assemble_Inner_" + std::to_string(subgraphId));
-                    auto attrAssembleInner =
-                        std::make_shared<AssembleOpAttribute>(MemoryType::MEM_DEVICE_DDR, offsetNew);
+                    G.AddOp(Opcode::OP_ASSEMBLE, {outputPartial}, {"outInnerTemp"},
+                            "Assemble_Inner_" + std::to_string(subgraphId));
+                    auto attrAssembleInner = std::make_shared<AssembleOpAttribute>(MemoryType::MEM_DEVICE_DDR,
+                                                                                   offsetNew);
                     auto assembleOpInner = G.GetOp("Assemble_Inner_" + std::to_string(subgraphId));
                     assembleOpInner->SetOpAttribute(attrAssembleInner);
                     assembleOpInner->UpdateSubgraphID(subgraphId);
@@ -250,9 +248,9 @@ public:
                 tensorA->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
                 G.AddOp(Opcode::OP_COPY_IN, {"a"}, {localA}, "Copy_In_A_" + std::to_string(idx));
                 auto copyInA = G.GetOp("Copy_In_A_" + std::to_string(idx));
-                auto attrCopyInA = std::make_shared<CopyOpAttribute>(
-                    OpImmediate::Specified(offset), MemoryType::MEM_UB, OpImmediate::Specified(a->GetShape()),
-                    OpImmediate::Specified(a->tensor->GetRawShape()));
+                auto attrCopyInA = std::make_shared<CopyOpAttribute>(OpImmediate::Specified(offset), MemoryType::MEM_UB,
+                                                                     OpImmediate::Specified(a->GetShape()),
+                                                                     OpImmediate::Specified(a->tensor->GetRawShape()));
                 copyInA->SetOpAttribute(attrCopyInA);
                 copyInA->UpdateSubgraphID(0);
 
@@ -262,9 +260,9 @@ public:
                 tensorB->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
                 G.AddOp(Opcode::OP_COPY_IN, {"b"}, {localB}, "Copy_In_B_" + std::to_string(idx));
                 auto copyInB = G.GetOp("Copy_In_B_" + std::to_string(idx));
-                auto attrCopyInB = std::make_shared<CopyOpAttribute>(
-                    OpImmediate::Specified(offset), MemoryType::MEM_UB, OpImmediate::Specified(b->GetShape()),
-                    OpImmediate::Specified(b->tensor->GetRawShape()));
+                auto attrCopyInB = std::make_shared<CopyOpAttribute>(OpImmediate::Specified(offset), MemoryType::MEM_UB,
+                                                                     OpImmediate::Specified(b->GetShape()),
+                                                                     OpImmediate::Specified(b->tensor->GetRawShape()));
                 copyInB->SetOpAttribute(attrCopyInB);
                 copyInB->UpdateSubgraphID(0);
 
@@ -571,9 +569,9 @@ TEST_F(PreGraphTest, TestAddExp)
 
     G.AddOp(Opcode::OP_COPY_OUT, {"expOutUb"}, {"out2"}, "Copy_Out_Exp");
     auto copyOutOp = G.GetOp("Copy_Out_Exp");
-    auto attrCopyOut = std::make_shared<CopyOpAttribute>(
-        OpImmediate::Specified(std::vector<int64_t>{0, 0}), MemoryType::MEM_UB,
-        OpImmediate::Specified(out2->GetShape()), OpImmediate::Specified(out2->tensor->GetRawShape()));
+    auto attrCopyOut = std::make_shared<CopyOpAttribute>(OpImmediate::Specified(std::vector<int64_t>{0, 0}),
+                                                         MemoryType::MEM_UB, OpImmediate::Specified(out2->GetShape()),
+                                                         OpImmediate::Specified(out2->tensor->GetRawShape()));
     copyOutOp->SetOpAttribute(attrCopyOut);
     copyOutOp->UpdateSubgraphID(0);
 
@@ -644,8 +642,8 @@ TEST_F(PreGraphTest, TestFixPipeReconnectGraph)
 {
     Program::GetInstance().Reset();
     config::Reset();
-    auto funcPtr = std::make_shared<Function>(
-        Program::GetInstance(), "TestFixPipeReconnectGraph", "TestFixPipeReconnectGraph", nullptr);
+    auto funcPtr = std::make_shared<Function>(Program::GetInstance(), "TestFixPipeReconnectGraph",
+                                              "TestFixPipeReconnectGraph", nullptr);
 
     // Build graph
     std::vector<int64_t> shape = {NUM16, NUM16};
@@ -798,9 +796,8 @@ void ConstructDynamicValidShapeReshapeCopyInGraph(ComputationalGraphBuilder& G, 
     G.AddOp(Opcode::OP_VIEW, {"input"}, {"view_out"}, "VIEW");
     auto view = G.GetOp("VIEW");
     std::vector<int64_t> viewOffset{1, 0, 0};
-    auto viewAttr = std::make_shared<ViewOpAttribute>(
-        viewOffset, MemoryType::MEM_UNKNOWN,
-        OpImmediate::ToSpecified(OpImmediate::Specified(viewOffset)));
+    auto viewAttr = std::make_shared<ViewOpAttribute>(viewOffset, MemoryType::MEM_UNKNOWN,
+                                                      OpImmediate::ToSpecified(OpImmediate::Specified(viewOffset)));
     view->SetOpAttribute(viewAttr);
     G.AddOp(Opcode::OP_RESHAPE, {"view_out"}, {"reshape_out"}, "RESHAPE");
     G.AddOp(Opcode::OP_COPY_IN, {"reshape_out"}, {"copy_in_out"}, "COPYIN");
@@ -1059,10 +1056,9 @@ TEST_F(PreGraphTest, TestRemoveRedundantAssemble)
         G.AddTensor(DataType::DT_FP16, {64, 128}, tensorName);
         G.AddOp(Opcode::OP_COPY_OUT, {tensorName}, {"t2"}, copyName);
         auto copy = G.GetOp(copyName);
-        auto copyAttr = std::make_shared<CopyOpAttribute>(
-            MemoryType::MEM_L0C, OpImmediate::Specified(offsets[i]),
-            OpImmediate::Specified(std::vector<int64_t>{64, 128}),
-            OpImmediate::Specified(std::vector<int64_t>{64, 128}));
+        auto copyAttr = std::make_shared<CopyOpAttribute>(MemoryType::MEM_L0C, OpImmediate::Specified(offsets[i]),
+                                                          OpImmediate::Specified(std::vector<int64_t>{64, 128}),
+                                                          OpImmediate::Specified(std::vector<int64_t>{64, 128}));
         copy->SetOpAttribute(copyAttr);
     }
 
@@ -1106,8 +1102,7 @@ TEST_F(PreGraphTest, TestRemoveRedundantAssembleNormalizesCopyOutRawShape)
     auto copyOut = G.GetOp("COPYOUT");
     auto copyAttr = std::make_shared<CopyOpAttribute>(
         MemoryType::MEM_L0C, OpImmediate::Specified(std::vector<int64_t>{0, 0}),
-        OpImmediate::Specified(std::vector<int64_t>{64, 128}),
-        OpImmediate::Specified(std::vector<int64_t>{64, 128}));
+        OpImmediate::Specified(std::vector<int64_t>{64, 128}), OpImmediate::Specified(std::vector<int64_t>{64, 128}));
     copyOut->SetOpAttribute(copyAttr);
 
     G.AddOp(Opcode::OP_RESHAPE, {"reshape_input"}, {"reshape_output"}, "RESHAPE");
@@ -1341,15 +1336,15 @@ TEST_F(PreGraphTest, TestSetTensorBoundary)
     auto vec_out = G.GetTensor("vec_out");
     // add copyin
     G.AddOp(Opcode::OP_COPY_IN, {"vec_in"}, {"copy_in1"}, "op_copy_in1");
-    auto attrCopyIn1 = std::make_shared<CopyOpAttribute>(
-        OpImmediate::Specified({0, 0}), MemoryType::MEM_DEVICE_DDR, OpImmediate::Specified(copy_in1->GetShape()),
-        OpImmediate::Specified(vec_in->tensor->GetRawShape()));
+    auto attrCopyIn1 = std::make_shared<CopyOpAttribute>(OpImmediate::Specified({0, 0}), MemoryType::MEM_DEVICE_DDR,
+                                                         OpImmediate::Specified(copy_in1->GetShape()),
+                                                         OpImmediate::Specified(vec_in->tensor->GetRawShape()));
     G.GetOp("op_copy_in1")->SetOpAttribute(attrCopyIn1);
     G.GetOp("op_copy_in1")->UpdateSubgraphID(SUBGRAPHID0);
     G.AddOp(Opcode::OP_COPY_IN, {"vec_in"}, {"copy_in2"}, "op_copy_in2");
-    auto attrCopyIn2 = std::make_shared<CopyOpAttribute>(
-        OpImmediate::Specified({32, 0}), MemoryType::MEM_DEVICE_DDR, OpImmediate::Specified(copy_in2->GetShape()),
-        OpImmediate::Specified(vec_in->tensor->GetRawShape()));
+    auto attrCopyIn2 = std::make_shared<CopyOpAttribute>(OpImmediate::Specified({32, 0}), MemoryType::MEM_DEVICE_DDR,
+                                                         OpImmediate::Specified(copy_in2->GetShape()),
+                                                         OpImmediate::Specified(vec_in->tensor->GetRawShape()));
     G.GetOp("op_copy_in2")->SetOpAttribute(attrCopyIn2);
     G.GetOp("op_copy_in2")->UpdateSubgraphID(SUBGRAPHID1);
     // add exp
@@ -1359,15 +1354,15 @@ TEST_F(PreGraphTest, TestSetTensorBoundary)
     G.GetOp("exp2")->UpdateSubgraphID(SUBGRAPHID1);
     // add copyout
     G.AddOp(Opcode::OP_COPY_OUT, {"e1"}, {"copy_out"}, "op_copy_out1");
-    auto attrCopyOut1 = std::make_shared<CopyOpAttribute>(
-        MemoryType::MEM_DEVICE_DDR, OpImmediate::Specified({0, 0}), OpImmediate::Specified(copy_out->GetShape()),
-        OpImmediate::Specified(copy_out->tensor->GetRawShape()));
+    auto attrCopyOut1 = std::make_shared<CopyOpAttribute>(MemoryType::MEM_DEVICE_DDR, OpImmediate::Specified({0, 0}),
+                                                          OpImmediate::Specified(copy_out->GetShape()),
+                                                          OpImmediate::Specified(copy_out->tensor->GetRawShape()));
     G.GetOp("op_copy_out1")->SetOpAttribute(attrCopyOut1);
     G.GetOp("op_copy_out1")->UpdateSubgraphID(SUBGRAPHID0);
     G.AddOp(Opcode::OP_COPY_OUT, {"e2"}, {"copy_out"}, "op_copy_out2");
-    auto attrCopyOut2 = std::make_shared<CopyOpAttribute>(
-        MemoryType::MEM_DEVICE_DDR, OpImmediate::Specified({32, 0}), OpImmediate::Specified(copy_out->GetShape()),
-        OpImmediate::Specified(copy_out->tensor->GetRawShape()));
+    auto attrCopyOut2 = std::make_shared<CopyOpAttribute>(MemoryType::MEM_DEVICE_DDR, OpImmediate::Specified({32, 0}),
+                                                          OpImmediate::Specified(copy_out->GetShape()),
+                                                          OpImmediate::Specified(copy_out->tensor->GetRawShape()));
     G.GetOp("op_copy_out2")->SetOpAttribute(attrCopyOut2);
     G.GetOp("op_copy_out2")->UpdateSubgraphID(SUBGRAPHID1);
     // add reshape and copyout
@@ -1423,9 +1418,9 @@ TEST_F(PreGraphTest, PreGraphReduceReShape)
         OpImmediate::ToSpecified(OpImmediate::Specified(std::vector<int64_t>{0, 0})));
     assemble->SetOpAttribute(assembleAttr);
     G.AddOp(Opcode::OP_COPY_OUT, {"inCast2"}, {"outCast"}, "COPYOUT2");
-    auto attrCopyOut = std::make_shared<CopyOpAttribute>(
-        MemoryType::MEM_DEVICE_DDR, OpImmediate::Specified({0, 64}), OpImmediate::Specified(outCast->GetShape()),
-        OpImmediate::Specified(outCast->tensor->GetRawShape()));
+    auto attrCopyOut = std::make_shared<CopyOpAttribute>(MemoryType::MEM_DEVICE_DDR, OpImmediate::Specified({0, 64}),
+                                                         OpImmediate::Specified(outCast->GetShape()),
+                                                         OpImmediate::Specified(outCast->tensor->GetRawShape()));
     G.GetOp("COPYOUT2")->SetOpAttribute(attrCopyOut);
     // set incast and outcast
     G.SetInCast({"inCast1"});
@@ -1480,9 +1475,9 @@ TEST_F(PreGraphTest, PreGraphReduceExpand)
     G.AddOp(Opcode::OP_COPY_OUT, {"ubTensor"}, {"ddrTensor1"}, "COPYOUT1");
     G.AddOp(Opcode::OP_RESHAPE, {"ddrTensor1"}, {"ddrTensor2"}, "RESHAPE");
     G.AddOp(Opcode::OP_COPY_OUT, {"inCast2"}, {"outCast"}, "COPYOUT2");
-    auto attrCopyOut = std::make_shared<CopyOpAttribute>(
-        MemoryType::MEM_DEVICE_DDR, OpImmediate::Specified({0, 0, 8}), OpImmediate::Specified(outCast->GetShape()),
-        OpImmediate::Specified(outCast->tensor->GetRawShape()));
+    auto attrCopyOut = std::make_shared<CopyOpAttribute>(MemoryType::MEM_DEVICE_DDR, OpImmediate::Specified({0, 0, 8}),
+                                                         OpImmediate::Specified(outCast->GetShape()),
+                                                         OpImmediate::Specified(outCast->tensor->GetRawShape()));
     G.GetOp("COPYOUT2")->SetOpAttribute(attrCopyOut);
     G.AddOp(Opcode::OP_ASSEMBLE, {"ddrTensor2"}, {"outCast"}, "ASSEMBLE");
     auto assemble = G.GetOp("ASSEMBLE");
@@ -1542,9 +1537,9 @@ TEST_F(PreGraphTest, PreGraphMutiConsumerExpand)
     G.AddOp(Opcode::OP_COPY_OUT, {"ubTensor"}, {"ddrTensor1"}, "COPYOUT1");
     G.AddOp(Opcode::OP_RESHAPE, {"ddrTensor1"}, {"ddrTensor2"}, "RESHAPE");
     G.AddOp(Opcode::OP_COPY_OUT, {"ddrTensor2"}, {"outCast"}, "COPYOUT2");
-    auto attrCopyOut = std::make_shared<CopyOpAttribute>(
-        MemoryType::MEM_DEVICE_DDR, OpImmediate::Specified({0, 0, 16}), OpImmediate::Specified(outCast->GetShape()),
-        OpImmediate::Specified(outCast->tensor->GetRawShape()));
+    auto attrCopyOut = std::make_shared<CopyOpAttribute>(MemoryType::MEM_DEVICE_DDR, OpImmediate::Specified({0, 0, 16}),
+                                                         OpImmediate::Specified(outCast->GetShape()),
+                                                         OpImmediate::Specified(outCast->tensor->GetRawShape()));
     G.GetOp("COPYOUT2")->SetOpAttribute(attrCopyOut);
     G.AddOp(Opcode::OP_ASSEMBLE, {"ddrTensor2"}, {"outCast"}, "ASSEMBLE");
     auto assemble = G.GetOp("ASSEMBLE");
@@ -1603,9 +1598,9 @@ TEST_F(PreGraphTest, PreGraphMutiConsumerReduce)
     G.AddOp(Opcode::OP_COPY_OUT, {"ubTensor"}, {"ddrTensor1"}, "COPYOUT1");
     G.AddOp(Opcode::OP_RESHAPE, {"ddrTensor1"}, {"ddrTensor2"}, "RESHAPE");
     G.AddOp(Opcode::OP_COPY_OUT, {"ddrTensor2"}, {"outCast"}, "COPYOUT2");
-    auto attrCopyOut = std::make_shared<CopyOpAttribute>(
-        MemoryType::MEM_DEVICE_DDR, OpImmediate::Specified({0, 16}), OpImmediate::Specified(outCast->GetShape()),
-        OpImmediate::Specified(outCast->tensor->GetRawShape()));
+    auto attrCopyOut = std::make_shared<CopyOpAttribute>(MemoryType::MEM_DEVICE_DDR, OpImmediate::Specified({0, 16}),
+                                                         OpImmediate::Specified(outCast->GetShape()),
+                                                         OpImmediate::Specified(outCast->tensor->GetRawShape()));
     G.GetOp("COPYOUT2")->SetOpAttribute(attrCopyOut);
     G.AddOp(Opcode::OP_ASSEMBLE, {"ddrTensor2"}, {"outCast"}, "ASSEMBLE");
     auto assemble = G.GetOp("ASSEMBLE");
@@ -1670,9 +1665,9 @@ TEST_F(PreGraphTest, MutiConsumerDeleteSingleAssemble)
     G.AddOp(Opcode::OP_COPY_OUT, {"ubTensor"}, {"ddrTensor_1"}, "COPYOUT_1");
     G.AddOp(Opcode::OP_RESHAPE, {"ddrTensor_1"}, {"ddrTensor_2"}, "RESHAPE");
     G.AddOp(Opcode::OP_COPY_OUT, {"ddrTensor_2"}, {"outCast_2"}, "COPYOUT_2");
-    auto attrCopyOut = std::make_shared<CopyOpAttribute>(
-        MemoryType::MEM_DEVICE_DDR, OpImmediate::Specified({0, 0}), OpImmediate::Specified(outCast_2->GetShape()),
-        OpImmediate::Specified(outCast_2->tensor->GetRawShape()));
+    auto attrCopyOut = std::make_shared<CopyOpAttribute>(MemoryType::MEM_DEVICE_DDR, OpImmediate::Specified({0, 0}),
+                                                         OpImmediate::Specified(outCast_2->GetShape()),
+                                                         OpImmediate::Specified(outCast_2->tensor->GetRawShape()));
     G.GetOp("COPYOUT_2")->SetOpAttribute(attrCopyOut);
     G.AddOp(Opcode::OP_ASSEMBLE, {"ddrTensor_2"}, {"outCast_1"}, "ASSEMBLE");
     auto assemble = G.GetOp("ASSEMBLE");

@@ -34,9 +34,8 @@
 namespace pypto {
 namespace ir {
 
-TypePtr DeduceAddPtrType(
-    [[maybe_unused]] const std::vector<ExprPtr>& args,
-    [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
+TypePtr DeduceAddPtrType([[maybe_unused]] const std::vector<ExprPtr>& args,
+                         [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
 {
     // ptr.addptr: Advance a pointer by an integer offset
     // Args: (ptr, offset)
@@ -65,11 +64,11 @@ TypePtr DeduceAddPtrType(
         new_base_ptr = *ptr_type->base_ptr;
         if (auto c1 = As<ConstInt>(*ptr_type->offset)) {
             if (auto c2 = As<ConstInt>(args[1])) {
-                new_offset =
-                    std::make_shared<ConstInt>(c1->value_ + c2->value_, DataType(DataType::INDEX), args[1]->span_);
+                new_offset = std::make_shared<ConstInt>(c1->value_ + c2->value_, DataType(DataType::INDEX),
+                                                        args[1]->span_);
             } else {
-                new_offset =
-                    std::make_shared<Add>(*ptr_type->offset, args[1], DataType(DataType::INDEX), args[1]->span_);
+                new_offset = std::make_shared<Add>(*ptr_type->offset, args[1], DataType(DataType::INDEX),
+                                                   args[1]->span_);
             }
         } else {
             new_offset = std::make_shared<Add>(*ptr_type->offset, args[1], DataType(DataType::INDEX), args[1]->span_);
@@ -93,9 +92,8 @@ REGISTER_OP("ptr.addptr")
         return DeduceAddPtrType(args, kwargs);
     });
 
-TypePtr DeduceMakePtrType(
-    [[maybe_unused]] const std::vector<ExprPtr>& args,
-    [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
+TypePtr DeduceMakePtrType([[maybe_unused]] const std::vector<ExprPtr>& args,
+                          [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
 {
     // ptr.make_ptr: Reinterpret a pointer as a (usually different) element dtype.
     // Args: (ptr); kwarg: dtype
@@ -129,14 +127,13 @@ REGISTER_OP("ptr.make_ptr")
         return DeduceMakePtrType(args, kwargs);
     });
 
-TypePtr DeduceMakeTensorType(
-    [[maybe_unused]] const std::vector<ExprPtr>& args,
-    [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
+TypePtr DeduceMakeTensorType([[maybe_unused]] const std::vector<ExprPtr>& args,
+                             [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
 {
     // ptr.make_tensor: Create a tensor view from a pointer (or an existing tensor) with explicit
     // shape and strides. Args: (ptr_or_tensor, shape_tuple, stride_tuple)
     CHECK(args.size() == 0x3) << "ptr.make_tensor requires exactly 3 arguments (ptr, shape, stride), but got "
-                            << args.size();
+                              << args.size();
 
     // First argument is either:
     //   - a PtrType: a raw pointer to typed global memory, or
@@ -177,9 +174,8 @@ TypePtr DeduceMakeTensorType(
 
 REGISTER_OP("ptr.make_tensor")
     .set_op_category("PtrOp")
-    .set_description(
-        "Create a tensor view from a pointer or an existing tensor with explicit shape and strides"
-        " (emits pto.make_tensor_view)")
+    .set_description("Create a tensor view from a pointer or an existing tensor with explicit shape and strides"
+                     " (emits pto.make_tensor_view)")
     .add_argument("ptr", "Input raw pointer (PtrType) or source tensor (TensorType)")
     .add_argument("shape", "New shape dimensions (MakeTuple of ConstInt)")
     .add_argument("stride", "Stride per dimension (MakeTuple of ConstInt or Var)")

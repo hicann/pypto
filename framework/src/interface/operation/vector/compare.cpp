@@ -21,9 +21,8 @@
 
 namespace npu::tile_fwk {
 
-void TiledCompareOperationImpl(
-    Function& function, const TileShape& tileShape, size_t cur, Input& input1, Input& input2,
-    const LogicalTensorPtr& result, TileInfo& resultTileInfo, OpType operation, OutType mode)
+void TiledCompareOperationImpl(Function& function, const TileShape& tileShape, size_t cur, Input& input1, Input& input2,
+                               const LogicalTensorPtr& result, TileInfo& resultTileInfo, OpType operation, OutType mode)
 {
     if (cur == result->shape.size()) {
         auto inputTile1 = input1.tensor.GetStorage()->View(function, input1.tileInfo.shape, input1.tileInfo.offset);
@@ -70,14 +69,14 @@ void TiledCompareOperationImpl(
             resultTileInfo.shape[cur] = std::min(result->shape[cur] - i, step);
 
             input1.tileInfo.offset[cur] = (i * NUM_VALUE_8) % input1.tensor.GetShape()[cur];
-            input1.tileInfo.shape[cur] =
-                std::min(input1.tensor.GetShape()[cur] - input1.tileInfo.offset[cur], actualInputStep);
+            input1.tileInfo.shape[cur] = std::min(input1.tensor.GetShape()[cur] - input1.tileInfo.offset[cur],
+                                                  actualInputStep);
             input2.tileInfo.offset[cur] = (i * NUM_VALUE_8) % input2.tensor.GetShape()[cur];
-            input2.tileInfo.shape[cur] =
-                std::min(input2.tensor.GetShape()[cur] - input2.tileInfo.offset[cur], actualInputStep);
+            input2.tileInfo.shape[cur] = std::min(input2.tensor.GetShape()[cur] - input2.tileInfo.offset[cur],
+                                                  actualInputStep);
 
-            TiledCompareOperationImpl(
-                function, tileShape, cur + 1, input1, input2, result, resultTileInfo, operation, mode);
+            TiledCompareOperationImpl(function, tileShape, cur + 1, input1, input2, result, resultTileInfo, operation,
+                                      mode);
         }
     } else {
         for (int i = 0; i < result->shape[cur]; i += step) {
@@ -90,15 +89,14 @@ void TiledCompareOperationImpl(
             input2.tileInfo.offset[cur] = i % input2.tensor.GetShape()[cur];
             input2.tileInfo.shape[cur] = std::min(input2.tensor.GetShape()[cur] - input2.tileInfo.offset[cur], step);
 
-            TiledCompareOperationImpl(
-                function, tileShape, cur + 1, input1, input2, result, resultTileInfo, operation, mode);
+            TiledCompareOperationImpl(function, tileShape, cur + 1, input1, input2, result, resultTileInfo, operation,
+                                      mode);
         }
     }
 }
 
-void TiledCompareOperation(
-    Function& function, const TileShape& tileShape, LogicalTensorPtr operand1, LogicalTensorPtr operand2,
-    const LogicalTensorPtr& result, OpType operation, OutType mode)
+void TiledCompareOperation(Function& function, const TileShape& tileShape, LogicalTensorPtr operand1,
+                           LogicalTensorPtr operand2, const LogicalTensorPtr& result, OpType operation, OutType mode)
 {
     auto broadcastOperand = [&](LogicalTensorPtr& operand, LogicalTensorPtr& other) {
         auto dstShape = result->shape;
@@ -124,8 +122,8 @@ void TiledCompareOperation(
     TiledCompareOperationImpl(function, tileShape, 0, input1, input2, result, resultTileInfo, operation, mode);
 }
 
-LogicalTensorPtr TensorCompareOperation(
-    Function& function, const Tensor& self, const Tensor& other, OpType operation, OutType mode)
+LogicalTensorPtr TensorCompareOperation(Function& function, const Tensor& self, const Tensor& other, OpType operation,
+                                        OutType mode)
 {
     auto operandT1 = self.GetStorage();
     auto operandT2 = other.GetStorage();
@@ -166,8 +164,8 @@ LogicalTensorPtr TensorCompareOperation(
     return result;
 }
 
-LogicalTensorPtr TensorCompareOperationScalar(
-    Function& function, const Tensor& operand1, const Element& value, OpType operation, OutType mode)
+LogicalTensorPtr TensorCompareOperationScalar(Function& function, const Tensor& operand1, const Element& value,
+                                              OpType operation, OutType mode)
 {
     DECLARE_TRACER();
     auto operandT1 = operand1.GetStorage();
@@ -198,8 +196,8 @@ LogicalTensorPtr TensorCompareOperationScalar(
     return result;
 }
 
-LogicalTensorPtr TensorCompareOperationScalar(
-    Function& function, const Element& value, const Tensor& operand1, OpType operation, OutType mode)
+LogicalTensorPtr TensorCompareOperationScalar(Function& function, const Element& value, const Tensor& operand1,
+                                              OpType operation, OutType mode)
 {
     switch (operation) {
         case OpType::LT:
@@ -222,9 +220,9 @@ LogicalTensorPtr TensorCompareOperationScalar(
     return TensorCompareOperationScalar(function, operand1, converted_value, operation, mode);
 }
 
-void TiledCmpsOperationImpl(
-    Function& function, const TileShape& tileShape, size_t cur, Input& input, const Element& scalar,
-    const LogicalTensorPtr& result, TileInfo& resultTileInfo, OpType operation, OutType mode)
+void TiledCmpsOperationImpl(Function& function, const TileShape& tileShape, size_t cur, Input& input,
+                            const Element& scalar, const LogicalTensorPtr& result, TileInfo& resultTileInfo,
+                            OpType operation, OutType mode)
 {
     if (cur == result->shape.size()) {
         auto inputTile = input.tensor.GetStorage()->View(function, input.tileInfo.shape, input.tileInfo.offset);
@@ -271,11 +269,11 @@ void TiledCmpsOperationImpl(
             resultTileInfo.shape[cur] = std::min(result->shape[cur] - i, step);
 
             input.tileInfo.offset[cur] = (i * NUM_VALUE_8) % input.tensor.GetShape()[cur];
-            input.tileInfo.shape[cur] =
-                std::min(input.tensor.GetShape()[cur] - input.tileInfo.offset[cur], actualInputStep);
+            input.tileInfo.shape[cur] = std::min(input.tensor.GetShape()[cur] - input.tileInfo.offset[cur],
+                                                 actualInputStep);
 
-            TiledCmpsOperationImpl(
-                function, tileShape, cur + 1, input, scalar, result, resultTileInfo, operation, mode);
+            TiledCmpsOperationImpl(function, tileShape, cur + 1, input, scalar, result, resultTileInfo, operation,
+                                   mode);
         }
     } else {
         for (int i = 0; i < result->shape[cur]; i += step) {
@@ -285,15 +283,14 @@ void TiledCmpsOperationImpl(
             input.tileInfo.offset[cur] = i % input.tensor.GetShape()[cur];
             input.tileInfo.shape[cur] = std::min(input.tensor.GetShape()[cur] - input.tileInfo.offset[cur], step);
 
-            TiledCmpsOperationImpl(
-                function, tileShape, cur + 1, input, scalar, result, resultTileInfo, operation, mode);
+            TiledCmpsOperationImpl(function, tileShape, cur + 1, input, scalar, result, resultTileInfo, operation,
+                                   mode);
         }
     }
 }
 
-void TiledCmpsOperation(
-    Function& function, const TileShape& tileShape, LogicalTensorPtr operand, const Element& scalar,
-    const LogicalTensorPtr& result, OpType operation, OutType mode)
+void TiledCmpsOperation(Function& function, const TileShape& tileShape, LogicalTensorPtr operand, const Element& scalar,
+                        const LogicalTensorPtr& result, OpType operation, OutType mode)
 {
     TileInfo tileInfo(result->shape.size(), result->offset.size());
     TileInfo resultTileInfo(result->shape.size(), result->offset.size());
@@ -344,9 +341,9 @@ Tensor Compare(const Element& self, const Tensor& other, OpType op, OutType mode
     RETURN_CALL(CompareOperationScalar, *Program::GetInstance().GetCurrentFunction(), self, other, op, mode);
 }
 
-void CompareOperationTileFunc(
-    Function& function, const TileShape& tileShape, const std::vector<LogicalTensorPtr>& iOperand,
-    const std::vector<LogicalTensorPtr>& oOperand, const Operation& op)
+void CompareOperationTileFunc(Function& function, const TileShape& tileShape,
+                              const std::vector<LogicalTensorPtr>& iOperand,
+                              const std::vector<LogicalTensorPtr>& oOperand, const Operation& op)
 {
     BinaryOperationOperandCheck(iOperand, oOperand);
     auto operation = static_cast<OpType>(op.GetIntAttribute(OP_ATTR_PREFIX + "cmp_operation"));
@@ -354,14 +351,14 @@ void CompareOperationTileFunc(
     TiledCompareOperation(function, tileShape, iOperand[0], iOperand[1], oOperand[0], operation, mode);
 }
 
-void CmpsOperationTileFunc(
-    Function& function, const TileShape& tileShape, const std::vector<LogicalTensorPtr>& iOperand,
-    const std::vector<LogicalTensorPtr>& oOperand, const Operation& op)
+void CmpsOperationTileFunc(Function& function, const TileShape& tileShape,
+                           const std::vector<LogicalTensorPtr>& iOperand, const std::vector<LogicalTensorPtr>& oOperand,
+                           const Operation& op)
 {
     auto operation = static_cast<OpType>(op.GetIntAttribute(OP_ATTR_PREFIX + "cmp_operation"));
     auto mode = static_cast<OutType>(op.GetIntAttribute(OP_ATTR_PREFIX + "cmp_mode"));
-    TiledCmpsOperation(
-        function, tileShape, iOperand[0], op.GetElementAttribute(OpAttributeKey::scalar), oOperand[0], operation, mode);
+    TiledCmpsOperation(function, tileShape, iOperand[0], op.GetElementAttribute(OpAttributeKey::scalar), oOperand[0],
+                       operation, mode);
 }
 
 REGISTER_OPERATION_TILED_FUNC(OP_CMP, Opcode::OP_CMP, CompareOperationTileFunc);

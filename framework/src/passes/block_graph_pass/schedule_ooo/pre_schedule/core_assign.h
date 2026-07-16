@@ -53,11 +53,10 @@ inline std::string ScheduleCoreTypeToString(ScheduleCoreType coreType)
 
 inline std::string TargetCoreTypeToString(TargetCoreType coreType)
 {
-    static const std::unordered_map<TargetCoreType, std::string> targetToString{
-        {TargetCoreType::AIC, "AIC"},
-        {TargetCoreType::AIV0, "AIV0"},
-        {TargetCoreType::AIV1, "AIV1"},
-        {TargetCoreType::UNKNOWN, "UNKNOWN"}};
+    static const std::unordered_map<TargetCoreType, std::string> targetToString{{TargetCoreType::AIC, "AIC"},
+                                                                                {TargetCoreType::AIV0, "AIV0"},
+                                                                                {TargetCoreType::AIV1, "AIV1"},
+                                                                                {TargetCoreType::UNKNOWN, "UNKNOWN"}};
     auto it = targetToString.find(coreType);
     return it != targetToString.end() ? it->second : "UNKNOWN";
 }
@@ -107,16 +106,15 @@ public:
 // 用于将切分后的AIC和AIV子图调度到AIC,AIV0和AIV1核心上
 class CoreScheduler {
 public:
-    static void FindEarliestSlot(
-        std::vector<std::pair<int, int>>& timeSlot, int earliestStart, int latency, int& currentIdx,
-        std::pair<int, int>& currentInterval);
-    static void UpdateInterval(
-        std::vector<std::pair<int, int>>& timeSlot, int& insertIdx, std::pair<int, int>& insertInterval);
+    static void FindEarliestSlot(std::vector<std::pair<int, int>>& timeSlot, int earliestStart, int latency,
+                                 int& currentIdx, std::pair<int, int>& currentInterval);
+    static void UpdateInterval(std::vector<std::pair<int, int>>& timeSlot, int& insertIdx,
+                               std::pair<int, int>& insertInterval);
     std::vector<int> GetDFSTopoSeq(TaskGraph& taskGraph);
     void EFTWithInsertSchedule(TaskGraph& taskGraph, std::vector<int>& topoSeq);
     void EFTSchedule(TaskGraph& taskGraph, std::vector<int>& topoSeq);
-    void BruteForceScheduleRecursiveStep(
-        std::vector<bool>& visited, int recursiveLevel, TaskGraph& taskGraph, std::vector<int>& topoList);
+    void BruteForceScheduleRecursiveStep(std::vector<bool>& visited, int recursiveLevel, TaskGraph& taskGraph,
+                                         std::vector<int>& topoList);
     void Schedule(TaskGraph& taskGraph, const std::string& schedMode = "");
     void OptimalScheduleWithSearch(TaskGraph& taskGraph, bool enableSearch = true);
     double CalcBaselineCost(const TaskGraph& taskGraph, int n);
@@ -125,23 +123,21 @@ public:
     void GapMinForwardPass(TaskGraph& taskGraph, std::vector<int>& topoSeq);
     static void GapMinBackwardShift(TaskGraph& taskGraph, const std::vector<int>& topoSeq);
     int64_t SumCrossCoreGap(const TaskGraph& g) const;
-    void SelectAIVCore(
-        TaskGraph& taskGraph, int taskId,
-        std::unordered_map<TargetCoreType, std::vector<std::pair<int, int>>>& availTime, int evalDepTimeStart,
-        int latency, TargetCoreType& evalCore, int& currentIdx, std::pair<int, int>& currentInterval);
+    void SelectAIVCore(TaskGraph& taskGraph, int taskId,
+                       std::unordered_map<TargetCoreType, std::vector<std::pair<int, int>>>& availTime,
+                       int evalDepTimeStart, int latency, TargetCoreType& evalCore, int& currentIdx,
+                       std::pair<int, int>& currentInterval);
     int FindDepAIVLastEnd(const TaskGraph& taskGraph, int taskId) const;
-    void ScheduleOneTask(
-        TaskGraph& taskGraph, int taskId,
-        std::unordered_map<TargetCoreType, std::vector<std::pair<int, int>>>& availTime,
-        std::function<bool(TargetCoreType)> isAicCore,
-        std::unordered_map<int, TargetCoreType>& vecBranchToCore);
-    TargetCoreType LookupPinnedAIVCore(
-        const TaskNode& task, const std::unordered_map<int, TargetCoreType>& vecBranchToCore);
-    void TryScheduleSuccessors(
-        TaskGraph& taskGraph, int taskId,
-        std::unordered_map<TargetCoreType, std::vector<std::pair<int, int>>>& availTime, std::set<int>& scheduledTasks,
-        std::function<bool(TargetCoreType)> isAicCore,
-        std::unordered_map<int, TargetCoreType>& vecBranchToCore);
+    void ScheduleOneTask(TaskGraph& taskGraph, int taskId,
+                         std::unordered_map<TargetCoreType, std::vector<std::pair<int, int>>>& availTime,
+                         std::function<bool(TargetCoreType)> isAicCore,
+                         std::unordered_map<int, TargetCoreType>& vecBranchToCore);
+    TargetCoreType LookupPinnedAIVCore(const TaskNode& task,
+                                       const std::unordered_map<int, TargetCoreType>& vecBranchToCore);
+    void TryScheduleSuccessors(TaskGraph& taskGraph, int taskId,
+                               std::unordered_map<TargetCoreType, std::vector<std::pair<int, int>>>& availTime,
+                               std::set<int>& scheduledTasks, std::function<bool(TargetCoreType)> isAicCore,
+                               std::unordered_map<int, TargetCoreType>& vecBranchToCore);
     void HLFSchedule(TaskGraph& taskGraph);
     static bool HasOooScopeTasks(const TaskGraph& taskGraph);
     void NormalizeSingleAIVBranches(TaskGraph& taskGraph);

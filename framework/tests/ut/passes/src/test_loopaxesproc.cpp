@@ -80,11 +80,11 @@ bool EqualSymShape(const std::vector<SymbolicScalar>& A, const std::vector<Symbo
 
 TEST_F(TestLoopaxesProcPass, LoopaxesProcUTest1)
 {
-    auto rootFuncPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestLoopaxesProcPass", "TestLoopaxesProcPass", nullptr);
+    auto rootFuncPtr = std::make_shared<Function>(Program::GetInstance(), "TestLoopaxesProcPass",
+                                                  "TestLoopaxesProcPass", nullptr);
     rootFuncPtr->rootFunc_ = rootFuncPtr.get();
-    auto currFunctionPtr = std::make_shared<Function>(
-        Program::GetInstance(), "TestLoopaxesProcPassLeaf", "TestLoopaxesProcPassLeaf", rootFuncPtr.get());
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestLoopaxesProcPassLeaf",
+                                                      "TestLoopaxesProcPassLeaf", rootFuncPtr.get());
     // Register the leaf function in Program's functionmap_ so GetFunctionByMagicName can find it
     Program::GetInstance().InsertFuncToFunctionMap(currFunctionPtr->GetMagicName(), currFunctionPtr);
     rootFuncPtr->rootFunc_->programs_.emplace(currFunctionPtr->GetFuncMagic(), currFunctionPtr.get());
@@ -132,7 +132,8 @@ TEST_F(TestLoopaxesProcPass, LoopaxesProcUTest1)
     auto rootInCast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
     auto rootInCast2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
     auto rootOutCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape3, CreateTestConstIntVector(shape3));
-    auto& callOp = IRBuilder().CreateTensorOpStmt(*rootFuncPtr, Opcode::OP_CALL, {rootInCast1, rootInCast2}, {rootOutCast});
+    auto& callOp = IRBuilder().CreateTensorOpStmt(*rootFuncPtr, Opcode::OP_CALL, {rootInCast1, rootInCast2},
+                                                  {rootOutCast});
     std::vector<std::vector<SymbolicScalar>> argList;
     std::map<int, SymbolicScalar> outIndexToExpr;
     callOp.SetOpAttribute(currFunctionPtr->CreateCallOpAttribute(argList, outIndexToExpr));
@@ -166,8 +167,8 @@ TEST_F(TestLoopaxesProcPass, LoopaxesProcUTest1)
 
 TEST_F(TestLoopaxesProcPass, LoopaxesProcSubProgramNullptr)
 {
-    auto rootFuncPtr =
-        std::make_shared<Function>(Program::GetInstance(), "LoopaxesProcNullTest", "LoopaxesProcNullTest", nullptr);
+    auto rootFuncPtr = std::make_shared<Function>(Program::GetInstance(), "LoopaxesProcNullTest",
+                                                  "LoopaxesProcNullTest", nullptr);
     rootFuncPtr->rootFunc_ = rootFuncPtr.get();
     rootFuncPtr->SetFunctionType(FunctionType::DYNAMIC_LOOP_PATH);
     rootFuncPtr->programs_[0] = nullptr;

@@ -60,12 +60,12 @@ TestContext prepareSortParamForUT(Opcode opcode)
     auto function = GenMockFuncDyn(OpcodeManager::Inst().GetOpcodeStr(opcode));
     std::vector<int64_t> shape = {64, 64};
     std::vector<SymbolicScalar> dynValidShape = {64, 64};
-    auto localTensor =
-        CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, OP_MAGIC3, dynValidShape});
-    auto localOutTensor =
-        CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, OP_MAGIC4, dynValidShape});
-    auto localTmpTensor =
-        CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, OP_MAGIC5, dynValidShape});
+    auto localTensor = CreateLogicalTensor(
+        {*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, OP_MAGIC3, dynValidShape});
+    auto localOutTensor = CreateLogicalTensor(
+        {*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, OP_MAGIC4, dynValidShape});
+    auto localTmpTensor = CreateLogicalTensor(
+        {*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, OP_MAGIC5, dynValidShape});
 
     TestContext param;
     param.function = function;
@@ -132,18 +132,18 @@ TEST_F(TestCodegenDynSort, TestDynTiledMgrSort)
 
     Element scalaVal(DataType::DT_FP32, 1.0);
 
-    auto localTensorInput1 =
-        CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
-    auto localTensorInput2 =
-        CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
-    auto localTensorInput3 =
-        CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
+    auto localTensorInput1 = CreateLogicalTensor(
+        {*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
+    auto localTensorInput2 = CreateLogicalTensor(
+        {*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
+    auto localTensorInput3 = CreateLogicalTensor(
+        {*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
     auto localTensorRes = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
     auto localTensorTmp = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
 
-    auto& op = function->AddOperation(
-        Opcode::OP_TILEDMRGSORT, {localTensorInput1, localTensorInput2, localTensorInput3, localTensorInput3},
-        {localTensorRes, localTensorTmp});
+    auto& op = function->AddOperation(Opcode::OP_TILEDMRGSORT,
+                                      {localTensorInput1, localTensorInput2, localTensorInput3, localTensorInput3},
+                                      {localTensorRes, localTensorTmp});
     op.SetAttribute(OP_ATTR_PREFIX + "axis", 0);
     op.SetAttribute(OpAttributeKey::scalar, scalaVal);
 
@@ -157,8 +157,8 @@ TEST_F(TestCodegenDynSort, TestDynTiledMgrSort)
 Operation& GetTopkOp(Function* function, Opcode opCode, const LogicalTensors& tensors)
 {
     if (opCode == Opcode::OP_TOPK_SORT) {
-        auto& op = function->AddOperation(
-            opCode, {tensors[TOPK_OP_Y_IDX]}, {tensors[TOPK_OP_TMP_IDX], tensors[TOPK_OP_X_IDX]});
+        auto& op = function->AddOperation(opCode, {tensors[TOPK_OP_Y_IDX]},
+                                          {tensors[TOPK_OP_TMP_IDX], tensors[TOPK_OP_X_IDX]});
         op.SetAttribute(OP_ATTR_PREFIX + "axis", 0);
         SymbolicScalar startIdx(1);
         op.SetAttribute(OpAttributeKey::dynScalar, startIdx);
@@ -244,16 +244,16 @@ TEST_F(TestCodegenDynSort, TestRadixSelectFP32)
     std::vector<SymbolicScalar> tmpDynValidShape = {64, 1024};
     TileShape::Current().SetVecTile({64, 64});
     auto function = GenMockFuncDyn("TestRadixSelectFP32");
-    auto localTensorInput =
-        CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, srcShape, srcDynValidShape});
-    auto localTensorValue =
-        CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, dstShape, dstDynValidShape});
-    auto localTensorIndex =
-        CreateLogicalTensor({*function, DataType::DT_INT32, MemoryType::MEM_UB, dstShape, dstDynValidShape});
-    auto localTensorTmp =
-        CreateLogicalTensor({*function, DataType::DT_UINT8, MemoryType::MEM_UB, tmpShape, tmpDynValidShape});
-    auto& op = function->AddOperation(
-        Opcode::OP_RADIX_SELECT, {localTensorInput}, {localTensorValue, localTensorIndex, localTensorTmp});
+    auto localTensorInput = CreateLogicalTensor(
+        {*function, DataType::DT_FP32, MemoryType::MEM_UB, srcShape, srcDynValidShape});
+    auto localTensorValue = CreateLogicalTensor(
+        {*function, DataType::DT_FP32, MemoryType::MEM_UB, dstShape, dstDynValidShape});
+    auto localTensorIndex = CreateLogicalTensor(
+        {*function, DataType::DT_INT32, MemoryType::MEM_UB, dstShape, dstDynValidShape});
+    auto localTensorTmp = CreateLogicalTensor(
+        {*function, DataType::DT_UINT8, MemoryType::MEM_UB, tmpShape, tmpDynValidShape});
+    auto& op = function->AddOperation(Opcode::OP_RADIX_SELECT, {localTensorInput},
+                                      {localTensorValue, localTensorIndex, localTensorTmp});
     op.SetAttribute(OP_ATTR_PREFIX + "kvalue", 16);
     op.SetAttribute(OP_ATTR_PREFIX + "order", 1);
 

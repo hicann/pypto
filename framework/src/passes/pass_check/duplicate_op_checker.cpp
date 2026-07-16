@@ -29,19 +29,23 @@ Status DuplicateOpChecker::PreCheckGatherIn(const Operation& op)
 {
     for (const auto& oOperand : op.GetOOperands()) {
         if (oOperand == nullptr) {
-            APASS_LOG_ERROR_C(OperationErr::OP_NULL_POINTER, Elements::Operation, "%s[%d]'s oOperand cannot be nullptr; Please check if the oOperand of %s[%d] is nullptr.%s",
-            op.GetOpcodeStr().c_str(), op.GetOpMagic(), op.GetOpcodeStr().c_str(), op.GetOpMagic(), GetFormatBacktrace(op).c_str());
+            APASS_LOG_ERROR_C(
+                OperationErr::OP_NULL_POINTER, Elements::Operation,
+                "%s[%d]'s oOperand cannot be nullptr; Please check if the oOperand of %s[%d] is nullptr.%s",
+                op.GetOpcodeStr().c_str(), op.GetOpMagic(), op.GetOpcodeStr().c_str(), op.GetOpMagic(),
+                GetFormatBacktrace(op).c_str());
             return FAILED;
         }
         auto consumers = oOperand->GetConsumers();
         for (auto& consumer : consumers) {
             if (consumer == nullptr) {
-                APASS_LOG_ERROR_C(TensorErr::TENSOR_NULL_POINTER, Elements::Tensor, "OP_GATHER_IN_L1[%d]'s consumer cannot be nullptr.", oOperand->GetMagic());
+                APASS_LOG_ERROR_C(TensorErr::TENSOR_NULL_POINTER, Elements::Tensor,
+                                  "OP_GATHER_IN_L1[%d]'s consumer cannot be nullptr.", oOperand->GetMagic());
                 return FAILED;
             }
             if (consumer->GetOpcode() == Opcode::OP_GATHER_IN_L1) {
                 APASS_LOG_ERROR_C(OperationErr::OP_SPECIAL_CONSTRAINT, Elements::Tensor,
-                "OP_GATHER_IN_L1[%d]'s consumer cannot be OP_GATHER_IN_L1.", oOperand->GetMagic());
+                                  "OP_GATHER_IN_L1[%d]'s consumer cannot be OP_GATHER_IN_L1.", oOperand->GetMagic());
                 return FAILED;
             }
         }
@@ -71,9 +75,9 @@ Status DuplicateOpChecker::PostCheckGatherIn(const Operation& op)
             return FAILED;
         }
         if (oOperand->GetConsumers().size() != kNumOne) {
-            APASS_LOG_ERROR_F(
-                Elements::Operation, "There can not be more than one node among its consumers for op[%d].%s",
-                op.opmagic, GetFormatBacktrace(op).c_str());
+            APASS_LOG_ERROR_F(Elements::Operation,
+                              "There can not be more than one node among its consumers for op[%d].%s", op.opmagic,
+                              GetFormatBacktrace(op).c_str());
             return FAILED;
         }
     }
@@ -111,9 +115,9 @@ Status DuplicateOpChecker::PostCheckView(const Operation& op)
             consumerNum++;
         }
         if (consumerNum == kNumTwo) {
-            APASS_LOG_ERROR_F(
-                Elements::Operation, "There can not be more than one non-view node among its consumers for op[%d].%s",
-                op.opmagic, GetFormatBacktrace(op).c_str());
+            APASS_LOG_ERROR_F(Elements::Operation,
+                              "There can not be more than one non-view node among its consumers for op[%d].%s",
+                              op.opmagic, GetFormatBacktrace(op).c_str());
             return FAILED;
         }
     }
@@ -148,8 +152,8 @@ Status DuplicateOpChecker::DoPreCheck(Function& function)
     }
     for (const auto& op : function.Operations()) {
         if (ProcessPreCheck(op) != SUCCESS) {
-            APASS_LOG_ERROR_F(
-                Elements::Operation, "PreCheck for DuplicateOp failed.%s", GetFormatBacktrace(op).c_str());
+            APASS_LOG_ERROR_F(Elements::Operation, "PreCheck for DuplicateOp failed.%s",
+                              GetFormatBacktrace(op).c_str());
             return FAILED;
         }
     }
@@ -165,8 +169,8 @@ Status DuplicateOpChecker::DoPostCheck(Function& function)
     }
     for (const auto& op : function.Operations()) {
         if (ProcessPostCheck(op) != SUCCESS) {
-            APASS_LOG_ERROR_F(
-                Elements::Operation, "PostCheck for DuplicateOp failed.%s", GetFormatBacktrace(op).c_str());
+            APASS_LOG_ERROR_F(Elements::Operation, "PostCheck for DuplicateOp failed.%s",
+                              GetFormatBacktrace(op).c_str());
             return FAILED;
         }
     }

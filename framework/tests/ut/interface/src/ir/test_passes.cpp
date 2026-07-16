@@ -42,8 +42,8 @@ protected:
     {
         auto x = std::make_shared<Var>("x", Scalar(DataType::INT32), Sp());
         auto body = std::make_shared<AssignStmt>(x, std::make_shared<ConstInt>(value, DataType::INT32, Sp()), Sp());
-        return std::make_shared<Function>(
-            name, std::vector<VarPtr>{x}, std::vector<TypePtr>{Scalar(DataType::INT32)}, body, Sp());
+        return std::make_shared<Function>(name, std::vector<VarPtr>{x}, std::vector<TypePtr>{Scalar(DataType::INT32)},
+                                          body, Sp());
     }
 
     ProgramPtr MakeSimpleProgram()
@@ -53,8 +53,8 @@ protected:
 
     ProgramPtr MakeTwoFunctionProgram()
     {
-        return std::make_shared<Program>(
-            std::vector<FunctionPtr>{MakeFunction("f", 1), MakeFunction("g", 2)}, "prog", Sp());
+        return std::make_shared<Program>(std::vector<FunctionPtr>{MakeFunction("f", 1), MakeFunction("g", 2)}, "prog",
+                                         Sp());
     }
 };
 
@@ -140,8 +140,8 @@ TEST_F(PassesTest, TestCreateProgramPassTransformAndProperties)
             auto x = std::make_shared<Var>("x", std::make_shared<ScalarType>(DataType::INT32), Span("test", 1, 1));
             auto body = std::make_shared<AssignStmt>(
                 x, std::make_shared<ConstInt>(7, DataType::INT32, Span("test", 1, 1)), Span("test", 1, 1));
-            auto func = std::make_shared<Function>(
-                "rewritten", std::vector<VarPtr>{x}, std::vector<TypePtr>{}, body, Span("test", 1, 1));
+            auto func = std::make_shared<Function>("rewritten", std::vector<VarPtr>{x}, std::vector<TypePtr>{}, body,
+                                                   Span("test", 1, 1));
             return std::make_shared<Program>(std::vector<FunctionPtr>{func}, prog->name_, prog->span_);
         },
         "RewriteProgram", properties);
@@ -236,20 +236,18 @@ TEST_F(PassesTest, TestPassPipelineRun)
 {
     int call_count = 0;
     PassPipeline pipeline;
-    pipeline.AddPass(
-        pass::CreateProgramPass(
-            [&call_count](const ProgramPtr& prog) {
-                call_count++;
-                return prog;
-            },
-            "Counter1"));
-    pipeline.AddPass(
-        pass::CreateProgramPass(
-            [&call_count](const ProgramPtr& prog) {
-                call_count++;
-                return prog;
-            },
-            "Counter2"));
+    pipeline.AddPass(pass::CreateProgramPass(
+        [&call_count](const ProgramPtr& prog) {
+            call_count++;
+            return prog;
+        },
+        "Counter1"));
+    pipeline.AddPass(pass::CreateProgramPass(
+        [&call_count](const ProgramPtr& prog) {
+            call_count++;
+            return prog;
+        },
+        "Counter2"));
     auto prog = MakeSimpleProgram();
     auto result = pipeline.Run(prog);
     EXPECT_NE(result, nullptr);

@@ -19,7 +19,7 @@ using namespace npu::tile_fwk;
 
 class TestCodeGenKirinX90Reciprocal : public CodegenTestLiteNPU {
 public:
-    TestCodeGenKirinX90Reciprocal() : CodegenTestLiteNPU("KirinX90"){};
+    TestCodeGenKirinX90Reciprocal() : CodegenTestLiteNPU("KirinX90") {};
 };
 
 TEST_F(TestCodeGenKirinX90Reciprocal, test_Reciprocal_fp16_001)

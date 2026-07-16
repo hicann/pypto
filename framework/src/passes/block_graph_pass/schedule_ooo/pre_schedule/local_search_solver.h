@@ -70,17 +70,16 @@ private:
     };
 
     // --- 解码器 ---
-    double DecodeAndScore(
-        TaskGraph& taskGraph, const std::vector<int>& topoOrder, const std::map<int, TargetCoreType>& pinIn,
-        std::map<int, TargetCoreType>& pinOut, int& makespan);
-    void ForwardPassWithPin(
-        TaskGraph& taskGraph, const std::vector<int>& topoOrder, std::map<int, TargetCoreType>& pin);
-    void ScheduleOneTask(
-        TaskNode& task, std::map<int, TargetCoreType>& pin,
-        std::unordered_map<TargetCoreType, std::vector<std::pair<int, int>>>& availTime);
-    void SelectBestAIVCore(
-        TaskNode& task, std::map<int, TargetCoreType>& pin,
-        std::unordered_map<TargetCoreType, std::vector<std::pair<int, int>>>& availTime, int depStart);
+    double DecodeAndScore(TaskGraph& taskGraph, const std::vector<int>& topoOrder,
+                          const std::map<int, TargetCoreType>& pinIn, std::map<int, TargetCoreType>& pinOut,
+                          int& makespan);
+    void ForwardPassWithPin(TaskGraph& taskGraph, const std::vector<int>& topoOrder,
+                            std::map<int, TargetCoreType>& pin);
+    void ScheduleOneTask(TaskNode& task, std::map<int, TargetCoreType>& pin,
+                         std::unordered_map<TargetCoreType, std::vector<std::pair<int, int>>>& availTime);
+    void SelectBestAIVCore(TaskNode& task, std::map<int, TargetCoreType>& pin,
+                           std::unordered_map<TargetCoreType, std::vector<std::pair<int, int>>>& availTime,
+                           int depStart);
     double CalcCandidateCost(const TaskGraph& taskGraph) const;
 
     // --- 快照 ---

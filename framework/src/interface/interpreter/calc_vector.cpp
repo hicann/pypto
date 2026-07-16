@@ -27,9 +27,8 @@ void ExecuteOpBinary(ExecuteOperationContext* ctx)
     if (opcode == Opcode::OP_ADD_BRC || opcode == Opcode::OP_SUB_BRC || opcode == Opcode::OP_MUL_BRC ||
         opcode == Opcode::OP_DIV_BRC) {
         ASSERT(ExecuteOperationScene::CTX_OUTPUT_COUNT_MISMATCH, ctx->ooperandInplaceDataViewList->size() == SIZE_TWO);
-    } else if (
-        opcode == Opcode::OP_BITWISEXOR || opcode == Opcode::OP_COPYSIGN || opcode == Opcode::OP_POW ||
-        opcode == Opcode::OP_FLOORDIV || opcode == Opcode::OP_REM) {
+    } else if (opcode == Opcode::OP_BITWISEXOR || opcode == Opcode::OP_COPYSIGN || opcode == Opcode::OP_POW ||
+               opcode == Opcode::OP_FLOORDIV || opcode == Opcode::OP_REM) {
         ASSERT(ExecuteOperationScene::CTX_OUTPUT_COUNT_MISMATCH, ctx->ooperandInplaceDataViewList->size() <= SIZE_TWO);
     } else {
         ASSERT(ExecuteOperationScene::CTX_OUTPUT_COUNT_MISMATCH, ctx->ooperandInplaceDataViewList->size() == 1);
@@ -42,10 +41,10 @@ void ExecuteOpBinary(ExecuteOperationContext* ctx)
     auto rhs = trhs;
     auto lhsTensor = ctx->op->GetIOperands()[0];
     auto rhsTensor = ctx->op->GetIOperands()[1];
-    bool lhsFromBrcb =
-        !lhsTensor->GetProducers().empty() && (*lhsTensor->GetProducers().begin())->GetOpcode() == Opcode::OP_BRCB;
-    bool rhsFromBrcb =
-        !rhsTensor->GetProducers().empty() && (*rhsTensor->GetProducers().begin())->GetOpcode() == Opcode::OP_BRCB;
+    bool lhsFromBrcb = !lhsTensor->GetProducers().empty() &&
+                       (*lhsTensor->GetProducers().begin())->GetOpcode() == Opcode::OP_BRCB;
+    bool rhsFromBrcb = !rhsTensor->GetProducers().empty() &&
+                       (*rhsTensor->GetProducers().begin())->GetOpcode() == Opcode::OP_BRCB;
 
     // BRCB pads the last dim to block size; interpreter must view it as last-dim=1 for broadcast.
     // Preserve leading dims so 3D (e.g. [1,4,8] -> [1,4,1]) works the same as 2D ([4,8] -> [4,1]).
@@ -63,14 +62,12 @@ void ExecuteOpBinary(ExecuteOperationContext* ctx)
     }
 
     if (lhsFromBrcb || rhsFromBrcb) {
-        INTERPRETER_LOGI(
-            "AxisCombine: detected by BRCB, opcode=%s lhsFromBrcb=%d rhsFromBrcb=%d", ctx->op->GetOpcodeStr().c_str(),
-            static_cast<int>(lhsFromBrcb), static_cast<int>(rhsFromBrcb));
-        INTERPRETER_LOGI(
-            "AxisCombine: lhs(shape=%s validShape=%s offset=%s) rhs(shape=%s validShape=%s offset=%s)",
-            IntVecToStr(lhs->GetShape()).c_str(), IntVecToStr(lhs->GetValidShape()).c_str(),
-            IntVecToStr(lhs->GetOffset()).c_str(), IntVecToStr(rhs->GetShape()).c_str(),
-            IntVecToStr(rhs->GetValidShape()).c_str(), IntVecToStr(rhs->GetOffset()).c_str());
+        INTERPRETER_LOGI("AxisCombine: detected by BRCB, opcode=%s lhsFromBrcb=%d rhsFromBrcb=%d",
+                         ctx->op->GetOpcodeStr().c_str(), static_cast<int>(lhsFromBrcb), static_cast<int>(rhsFromBrcb));
+        INTERPRETER_LOGI("AxisCombine: lhs(shape=%s validShape=%s offset=%s) rhs(shape=%s validShape=%s offset=%s)",
+                         IntVecToStr(lhs->GetShape()).c_str(), IntVecToStr(lhs->GetValidShape()).c_str(),
+                         IntVecToStr(lhs->GetOffset()).c_str(), IntVecToStr(rhs->GetShape()).c_str(),
+                         IntVecToStr(rhs->GetValidShape()).c_str(), IntVecToStr(rhs->GetOffset()).c_str());
     }
 
     if (opcode == Opcode::OP_ADD_BRC || opcode == Opcode::OP_SUB_BRC || opcode == Opcode::OP_MUL_BRC ||
@@ -374,10 +371,14 @@ void ExecuteOpArgReduceWithValue(ExecuteOperationContext* ctx)
             ASSERT(ExecuteOperationScene::UNSUPPORTED_OPCODE, false) << "opcode not support" << ctx->op->GetOpcodeStr();
     }
 }
-REGISTER_CALC_OP(OP_ROWARGMAXWITHVALUE_SINGLE, Opcode::OP_ROWARGMAXWITHVALUE_SINGLE, ExecuteOpReduce<Opcode::OP_ROWARGMAXWITHVALUE_SINGLE>);
-REGISTER_CALC_OP(OP_ROWARGMAXWITHVALUE_LINE, Opcode::OP_ROWARGMAXWITHVALUE_LINE, ExecuteOpReduce<Opcode::OP_ROWARGMAXWITHVALUE_LINE>);
-REGISTER_CALC_OP(OP_ROWARGMINWITHVALUE_SINGLE, Opcode::OP_ROWARGMINWITHVALUE_SINGLE, ExecuteOpReduce<Opcode::OP_ROWARGMINWITHVALUE_SINGLE>);
-REGISTER_CALC_OP(OP_ROWARGMINWITHVALUE_LINE, Opcode::OP_ROWARGMINWITHVALUE_LINE, ExecuteOpReduce<Opcode::OP_ROWARGMINWITHVALUE_LINE>);
+REGISTER_CALC_OP(OP_ROWARGMAXWITHVALUE_SINGLE, Opcode::OP_ROWARGMAXWITHVALUE_SINGLE,
+                 ExecuteOpReduce<Opcode::OP_ROWARGMAXWITHVALUE_SINGLE>);
+REGISTER_CALC_OP(OP_ROWARGMAXWITHVALUE_LINE, Opcode::OP_ROWARGMAXWITHVALUE_LINE,
+                 ExecuteOpReduce<Opcode::OP_ROWARGMAXWITHVALUE_LINE>);
+REGISTER_CALC_OP(OP_ROWARGMINWITHVALUE_SINGLE, Opcode::OP_ROWARGMINWITHVALUE_SINGLE,
+                 ExecuteOpReduce<Opcode::OP_ROWARGMINWITHVALUE_SINGLE>);
+REGISTER_CALC_OP(OP_ROWARGMINWITHVALUE_LINE, Opcode::OP_ROWARGMINWITHVALUE_LINE,
+                 ExecuteOpReduce<Opcode::OP_ROWARGMINWITHVALUE_LINE>);
 
 template <Opcode opcode>
 void ExecuteOpPairArgRedyce(ExecuteOperationContext* ctx)
@@ -669,8 +670,8 @@ void ExecuteOpTransposeMoveOut(ExecuteOperationContext* ctx)
             auto oopCopy = std::make_shared<LogicalTensorData>(oop->GetData(), iopShape, toOffset);
             return calc::Transpose(oopCopy, iop, axises[0], axises[1]);
         } else {
-            std::vector<int64_t> fromOffset =
-                ctx->opInter->EvaluateOpImmediate(ctx->frame, copyoutAttr->GetFromOffset());
+            std::vector<int64_t> fromOffset = ctx->opInter->EvaluateOpImmediate(ctx->frame,
+                                                                                copyoutAttr->GetFromOffset());
             std::vector<int64_t> oopShape = oop->GetShape();
             std::swap(oopShape[axises[0]], oopShape[axises[1]]);
             auto iopCopy = std::make_shared<LogicalTensorData>(iop->GetData(), oopShape, fromOffset);
@@ -741,9 +742,8 @@ void ExecuteOpIndexOutcast(ExecuteOperationContext* ctx)
     auto actualOop = std::make_shared<LogicalTensorData>(dst->GetData());
     if (dst->GetSize() != oop->GetSize()) {
         INTERPRETER_EVENT("%s", ctx->op->Dump().c_str());
-        INTERPRETER_EVENT(
-            "dst validShape: %s ---> oop validShape: %s", IntVecToStr(dst->GetShape()).c_str(),
-            IntVecToStr(oop->GetShape()).c_str());
+        INTERPRETER_EVENT("dst validShape: %s ---> oop validShape: %s", IntVecToStr(dst->GetShape()).c_str(),
+                          IntVecToStr(oop->GetShape()).c_str());
         INTERPRETER_EVENT("IndexOutcast: oop validShape is not equal to dst validShape");
         calc::ScatterUpdate(actualOop, src, index, dst, axis, cacheMode, blockSize);
     } else {
@@ -864,9 +864,8 @@ void ExecuteOpQuantMX(ExecuteOperationContext* ctx)
     ASSERT(ExecuteOperationScene::RUNTIME_EXCEPTION, ctx->op->GetAttr(OpAttributeKey::mxQuantAxis, axis))
         << "QuantMX missing required attribute: " << OpAttributeKey::mxQuantAxis;
     int64_t performanceMode = 0;
-    ASSERT(
-        ExecuteOperationScene::RUNTIME_EXCEPTION,
-        ctx->op->GetAttr(OpAttributeKey::mxQuantPerformanceMode, performanceMode))
+    ASSERT(ExecuteOperationScene::RUNTIME_EXCEPTION,
+           ctx->op->GetAttr(OpAttributeKey::mxQuantPerformanceMode, performanceMode))
         << "QuantMX missing required attribute: " << OpAttributeKey::mxQuantPerformanceMode;
     auto out = ctx->ooperandInplaceDataViewList->at(0);
     auto exp = ctx->ooperandInplaceDataViewList->at(1);
@@ -1186,9 +1185,8 @@ REGISTER_CALC_OP(OP_TILEDMRGSORT, Opcode::OP_TILEDMRGSORT, ExecuteOpTiledMrgSort
 void ExecuteOpTopkSort(ExecuteOperationContext* ctx)
 {
     ASSERT(ExecuteOperationScene::CTX_INPUT_COUNT_MISMATCH, ctx->ioperandDataViewList->size() == 1);
-    ASSERT(
-        ExecuteOperationScene::CTX_OUTPUT_COUNT_MISMATCH,
-        ctx->ooperandInplaceDataViewList->size() == 0x2); // value + temp
+    ASSERT(ExecuteOperationScene::CTX_OUTPUT_COUNT_MISMATCH,
+           ctx->ooperandInplaceDataViewList->size() == 0x2); // value + temp
 
     auto iop = ctx->ioperandDataViewList->at(0);
     auto oop_value = ctx->ooperandInplaceDataViewList->at(0);
@@ -1407,15 +1405,15 @@ void ExecuteOpBitwiseShiftScalar(ExecuteOperationContext* ctx)
             ASSERT(ExecuteOperationScene::UNSUPPORTED_OPCODE, false);
     }
 }
-REGISTER_CALC_OP(
-    OP_BITWISERIGHTSHIFT, Opcode::OP_BITWISERIGHTSHIFT, ExecuteOpBitwiseShift<Opcode::OP_BITWISERIGHTSHIFT>);
+REGISTER_CALC_OP(OP_BITWISERIGHTSHIFT, Opcode::OP_BITWISERIGHTSHIFT,
+                 ExecuteOpBitwiseShift<Opcode::OP_BITWISERIGHTSHIFT>);
 REGISTER_CALC_OP(OP_BITWISELEFTSHIFT, Opcode::OP_BITWISELEFTSHIFT, ExecuteOpBitwiseShift<Opcode::OP_BITWISELEFTSHIFT>);
-REGISTER_CALC_OP(
-    OP_BITWISERIGHTSHIFTS, Opcode::OP_BITWISERIGHTSHIFTS, ExecuteOpBitwiseShiftScalar<Opcode::OP_BITWISERIGHTSHIFTS>);
-REGISTER_CALC_OP(
-    OP_BITWISELEFTSHIFTS, Opcode::OP_BITWISELEFTSHIFTS, ExecuteOpBitwiseShiftScalar<Opcode::OP_BITWISELEFTSHIFTS>);
-REGISTER_CALC_OP(
-    OP_SBITWISERIGHTSHIFT, Opcode::OP_SBITWISERIGHTSHIFT, ExecuteOpBitwiseShiftScalar<Opcode::OP_SBITWISERIGHTSHIFT>);
-REGISTER_CALC_OP(
-    OP_SBITWISELEFTSHIFT, Opcode::OP_SBITWISELEFTSHIFT, ExecuteOpBitwiseShiftScalar<Opcode::OP_SBITWISELEFTSHIFT>);
+REGISTER_CALC_OP(OP_BITWISERIGHTSHIFTS, Opcode::OP_BITWISERIGHTSHIFTS,
+                 ExecuteOpBitwiseShiftScalar<Opcode::OP_BITWISERIGHTSHIFTS>);
+REGISTER_CALC_OP(OP_BITWISELEFTSHIFTS, Opcode::OP_BITWISELEFTSHIFTS,
+                 ExecuteOpBitwiseShiftScalar<Opcode::OP_BITWISELEFTSHIFTS>);
+REGISTER_CALC_OP(OP_SBITWISERIGHTSHIFT, Opcode::OP_SBITWISERIGHTSHIFT,
+                 ExecuteOpBitwiseShiftScalar<Opcode::OP_SBITWISERIGHTSHIFT>);
+REGISTER_CALC_OP(OP_SBITWISELEFTSHIFT, Opcode::OP_SBITWISELEFTSHIFT,
+                 ExecuteOpBitwiseShiftScalar<Opcode::OP_SBITWISELEFTSHIFT>);
 } // namespace npu::tile_fwk

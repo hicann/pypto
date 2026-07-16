@@ -145,8 +145,8 @@ struct LockableQueueGeneric : public QueueGeneric<T> {
     __attribute__((always_inline)) inline bool TryEnqueue(const T* x, uint32_t count)
     {
         std::scoped_lock slock(*this);
-        uint32_t t =
-            __atomic_fetch_add(&this->tail_, count, std::memory_order_release); // Is release order necessary here?
+        uint32_t t = __atomic_fetch_add(&this->tail_, count,
+                                        std::memory_order_release); // Is release order necessary here?
         if (unlikely(t + count > this->Capacity())) {
             __atomic_store_n(&this->tail_, t, std::memory_order_release); // Is release order necessary here?
             return false;

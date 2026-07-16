@@ -53,11 +53,9 @@ enum PerfOpType {
     PERF_L1_COPY_IN = 9,
     PERF_L0C_COPY_OUT = 10,
 };
-inline const char* PERF_OP_TYPE_NAMES[] = {
-    "matmul", "elem-binary", "elem-unary", "elem-relu", "elem-reduce",
-    "elem-sort", "elem-select", "ub-copyin", "ub-copyout", "l1-copyin",
-    "l0c-copyout"
-};
+inline const char* PERF_OP_TYPE_NAMES[] = {"matmul",      "elem-binary", "elem-unary",  "elem-relu",
+                                           "elem-reduce", "elem-sort",   "elem-select", "ub-copyin",
+                                           "ub-copyout",  "l1-copyin",   "l0c-copyout"};
 
 using MachinePtr = std::shared_ptr<Machine>;
 using DevicePtr = std::shared_ptr<DeviceMachine>;
@@ -193,8 +191,8 @@ public:
     void OutputPerfMetrics(std::string prefix = "");
     void ProcessTaskMap(TaskMap& taskMap, std::string prefix = "");
     void DrawTasks(const TaskMap& taskMap, std::string prefix = "");
-    void DebugDrawFunc(
-        FunctionPtr func, std::unordered_map<int, TilePtr>& tiles, std::unordered_map<int, TileOpPtr>& tileOps);
+    void DebugDrawFunc(FunctionPtr func, std::unordered_map<int, TilePtr>& tiles,
+                       std::unordered_map<int, TileOpPtr>& tileOps);
     void DumpTasksTopo(const TaskMap& taskMap, std::string prefix = "");
     void ResetStat(bool start);
     void PrintCoreStat();
@@ -203,8 +201,8 @@ public:
     void GetDeviceReadyQueueInfo(size_t& devicePid, std::set<uint64_t>& readyQueueTidSet);
 
     static std::string GetFileName(const std::string& file);
-    static std::string GetFileName(
-        const std::string& dir, const std::string& inputFile, const std::string& preFix, const std::string& suffix);
+    static std::string GetFileName(const std::string& dir, const std::string& inputFile, const std::string& preFix,
+                                   const std::string& suffix);
 
 private:
     std::map<uint64_t, std::vector<uint64_t>> ComputeTaskAmounts(const TaskMap& taskMap);
@@ -212,11 +210,9 @@ private:
         std::map<uint64_t, std::vector<uint64_t>> longestPath;
         std::map<uint64_t, std::vector<uint64_t>> chosenPred;
     };
-    LongestPathResult ComputeLongestPaths(
-        const TaskMap& taskMap,
-        const std::map<uint64_t, std::vector<uint64_t>>& computeAmountMap);
-    Json FormatPerfMetricsJson(
-        const std::map<uint64_t, std::vector<uint64_t>>& longestPath,
-        const std::map<uint64_t, std::vector<uint64_t>>& chosenPred);
+    LongestPathResult ComputeLongestPaths(const TaskMap& taskMap,
+                                          const std::map<uint64_t, std::vector<uint64_t>>& computeAmountMap);
+    Json FormatPerfMetricsJson(const std::map<uint64_t, std::vector<uint64_t>>& longestPath,
+                               const std::map<uint64_t, std::vector<uint64_t>>& chosenPred);
 };
 } // namespace CostModel

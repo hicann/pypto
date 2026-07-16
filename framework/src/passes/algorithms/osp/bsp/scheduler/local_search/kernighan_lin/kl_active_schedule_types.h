@@ -36,14 +36,15 @@ struct KlMoveStruct {
     KlMoveStruct() : node_(0), gain_(0), fromProc_(0), fromStep_(0), toProc_(0), toStep_(0) {}
 
     KlMoveStruct(VertexIdxT node, CostT gain, unsigned fromProc, unsigned fromStep, unsigned toProc, unsigned toStep)
-        : node_(node), gain_(gain), fromProc_(fromProc), fromStep_(fromStep), toProc_(toProc), toStep_(toStep) {}
+        : node_(node), gain_(gain), fromProc_(fromProc), fromStep_(fromStep), toProc_(toProc), toStep_(toStep)
+    {}
 
-    bool operator<(KlMoveStruct<CostT, VertexIdxT> const &rhs) const
+    bool operator<(KlMoveStruct<CostT, VertexIdxT> const& rhs) const
     {
         return (gain_ < rhs.gain_) or (gain_ == rhs.gain_ and node_ > rhs.node_);
     }
 
-    bool operator>(KlMoveStruct<CostT, VertexIdxT> const &rhs) const
+    bool operator>(KlMoveStruct<CostT, VertexIdxT> const& rhs) const
     {
         return (gain_ > rhs.gain_) or (gain_ >= rhs.gain_ and node_ < rhs.node_);
     }
@@ -66,26 +67,24 @@ struct PreMoveWorkData {
 
     PreMoveWorkData() {}
 
-    PreMoveWorkData(WorkWeightT fromStepMaxWork,
-                    WorkWeightT fromStepSecondMaxWork,
-                    unsigned fromStepMaxWorkProcessorCount,
-                    WorkWeightT toStepMaxWork,
-                    WorkWeightT toStepSecondMaxWork,
+    PreMoveWorkData(WorkWeightT fromStepMaxWork, WorkWeightT fromStepSecondMaxWork,
+                    unsigned fromStepMaxWorkProcessorCount, WorkWeightT toStepMaxWork, WorkWeightT toStepSecondMaxWork,
                     unsigned toStepMaxWorkProcessorCount)
         : fromStepMaxWork_(fromStepMaxWork),
           fromStepSecondMaxWork_(fromStepSecondMaxWork),
           fromStepMaxWorkProcessorCount_(fromStepMaxWorkProcessorCount),
           toStepMaxWork_(toStepMaxWork),
           toStepSecondMaxWork_(toStepSecondMaxWork),
-          toStepMaxWorkProcessorCount_(toStepMaxWorkProcessorCount) {}
+          toStepMaxWorkProcessorCount_(toStepMaxWorkProcessorCount)
+    {}
 };
 
 template <typename GraphT>
 struct KlActiveScheduleWorkDatastructures {
     using WorkWeightT = VWorkwT<GraphT>;
 
-    const BspInstance<GraphT> *instance_;
-    const SetSchedule<GraphT> *setSchedule_;
+    const BspInstance<GraphT>* instance_;
+    const SetSchedule<GraphT>* setSchedule_;
 
     struct WeightProc {
         WorkWeightT work_;
@@ -95,7 +94,7 @@ struct KlActiveScheduleWorkDatastructures {
 
         WeightProc(WorkWeightT work, unsigned proc) : work_(work), proc_(proc) {}
 
-        bool operator<(WeightProc const &rhs) const
+        bool operator<(WeightProc const& rhs) const
         {
             return (work_ > rhs.work_) or (work_ == rhs.work_ and proc_ < rhs.proc_);
         }
@@ -107,10 +106,7 @@ struct KlActiveScheduleWorkDatastructures {
     WorkWeightT maxWorkWeight_;
     WorkWeightT totalWorkWeight_;
 
-    inline WorkWeightT StepMaxWork(unsigned step) const
-    {
-        return stepProcessorWork_[step][0].work_;
-    }
+    inline WorkWeightT StepMaxWork(unsigned step) const { return stepProcessorWork_[step][0].work_; }
 
     inline WorkWeightT StepSecondMaxWork(unsigned step) const
     {
@@ -122,7 +118,7 @@ struct KlActiveScheduleWorkDatastructures {
         return stepProcessorWork_[step][stepProcessorPosition_[step][proc]].work_;
     }
 
-    inline WorkWeightT &StepProcWork(unsigned step, unsigned proc)
+    inline WorkWeightT& StepProcWork(unsigned step, unsigned proc)
     {
         return stepProcessorWork_[step][stepProcessorPosition_[step][proc]].work_;
     }
@@ -130,15 +126,12 @@ struct KlActiveScheduleWorkDatastructures {
     template <typename CostT, typename VertexIdxT>
     inline PreMoveWorkData<WorkWeightT> GetPreMoveWorkData(KlMoveStruct<CostT, VertexIdxT> move)
     {
-        return PreMoveWorkData<WorkWeightT>(StepMaxWork(move.fromStep_),
-                                            StepSecondMaxWork(move.fromStep_),
-                                            stepMaxWorkProcessorCount_[move.fromStep_],
-                                            StepMaxWork(move.toStep_),
-                                            StepSecondMaxWork(move.toStep_),
-                                            stepMaxWorkProcessorCount_[move.toStep_]);
+        return PreMoveWorkData<WorkWeightT>(StepMaxWork(move.fromStep_), StepSecondMaxWork(move.fromStep_),
+                                            stepMaxWorkProcessorCount_[move.fromStep_], StepMaxWork(move.toStep_),
+                                            StepSecondMaxWork(move.toStep_), stepMaxWorkProcessorCount_[move.toStep_]);
     }
 
-    inline void Initialize(const SetSchedule<GraphT> &sched, const BspInstance<GraphT> &inst, unsigned numSteps)
+    inline void Initialize(const SetSchedule<GraphT>& sched, const BspInstance<GraphT>& inst, unsigned numSteps)
     {
         instance_ = &inst;
         setSchedule_ = &sched;
@@ -162,7 +155,7 @@ struct KlActiveScheduleWorkDatastructures {
         unsigned pos = 0;
         const WorkWeightT maxWorkTo = stepProcessorWork_[step][0].work_;
 
-        for (const auto &wp : stepProcessorWork_[step]) {
+        for (const auto& wp : stepProcessorWork_[step]) {
             stepProcessorPosition_[step][wp.proc_] = pos++;
 
             if (wp.work_ == maxWorkTo && pos < instance_->NumberOfProcessors()) {
@@ -227,7 +220,7 @@ struct KlActiveScheduleWorkDatastructures {
                 stepProcessorWork_[step][proc].work_ = 0;
                 stepProcessorWork_[step][proc].proc_ = proc;
 
-                for (const auto &node : setSchedule_->GetProcessorStepVertices()[step][proc]) {
+                for (const auto& node : setSchedule_->GetProcessorStepVertices()[step][proc]) {
                     const WorkWeightT vertexWorkWeight = instance_->GetComputationalDag().VertexWorkWeight(node);
                     totalWorkWeight_ += vertexWorkWeight;
                     maxWorkWeight_ = std::max(vertexWorkWeight, maxWorkWeight_);
@@ -237,15 +230,15 @@ struct KlActiveScheduleWorkDatastructures {
                 if (stepProcessorWork_[step][proc].work_ > maxWork) {
                     maxWork = stepProcessorWork_[step][proc].work_;
                     stepMaxWorkProcessorCount_[step] = 1;
-                } else if (stepProcessorWork_[step][proc].work_ == maxWork
-                           && stepMaxWorkProcessorCount_[step] < (instance_->NumberOfProcessors() - 1)) {
+                } else if (stepProcessorWork_[step][proc].work_ == maxWork &&
+                           stepMaxWorkProcessorCount_[step] < (instance_->NumberOfProcessors() - 1)) {
                     stepMaxWorkProcessorCount_[step]++;
                 }
             }
 
             std::sort(stepProcessorWork_[step].begin(), stepProcessorWork_[step].end());
             unsigned pos = 0;
-            for (const auto &wp : stepProcessorWork_[step]) {
+            for (const auto& wp : stepProcessorWork_[step]) {
                 stepProcessorPosition_[step][wp.proc_] = pos++;
             }
         }
@@ -290,6 +283,6 @@ struct ThreadLocalActiveScheduleData {
         }
     }
 };
-}    // namespace osp
+} // namespace osp
 } // namespace npu::tile_fwk
 #endif // OSP_KL_ACTIVE_SCHEDULE_TYPES_H

@@ -10,7 +10,8 @@
 
 /*!
  * \file test_monitor_util.cpp
- * \brief Unit tests for monitor_util.h formatting functions (FormatElapsed, PadRight, PadLabel, PadStageName, PadElapsed)
+ * \brief Unit tests for monitor_util.h formatting functions (FormatElapsed, PadRight, PadLabel, PadStageName,
+ * PadElapsed)
  */
 
 #include <string>
@@ -64,10 +65,7 @@ TEST_F(TestFormatElapsed, Over3600Seconds)
     EXPECT_NE(result.find("(7325s)"), std::string::npos);
 }
 
-TEST_F(TestFormatElapsed, VerySmallValue)
-{
-    EXPECT_EQ(FormatElapsed(0.001), "0.0s");
-}
+TEST_F(TestFormatElapsed, VerySmallValue) { EXPECT_EQ(FormatElapsed(0.001), "0.0s"); }
 
 class TestPadRight : public testing::Test {
 public:

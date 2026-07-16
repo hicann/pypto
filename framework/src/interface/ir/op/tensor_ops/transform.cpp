@@ -64,9 +64,8 @@ int NormalizeAxis(int axis, size_t ndim)
 // Type Inference Functions
 // ============================================================================
 
-TypePtr DeduceTensorReshapeType(
-    [[maybe_unused]] const std::vector<ExprPtr>& args,
-    [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
+TypePtr DeduceTensorReshapeType([[maybe_unused]] const std::vector<ExprPtr>& args,
+                                [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
 {
     // tensor.reshape requires exactly 2 arguments: input tensor and shape tuple
     CHECK(args.size() == 2) << "tensor.reshape requires exactly 2 arguments (input, shape), but got " << args.size();
@@ -119,13 +118,12 @@ TypePtr DeduceTensorReshapeType(
     return std::make_shared<TensorType>(new_shape, tensor_type->dtype_);
 }
 
-TypePtr DeduceTensorTransposeType(
-    [[maybe_unused]] const std::vector<ExprPtr>& args,
-    [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
+TypePtr DeduceTensorTransposeType([[maybe_unused]] const std::vector<ExprPtr>& args,
+                                  [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
 {
     // tensor.transpose requires exactly 3 arguments: input tensor, axis1, axis2
     CHECK(args.size() == 0x3) << "tensor.transpose requires exactly 3 arguments (input, axis1, axis2), but got "
-                            << args.size();
+                              << args.size();
 
     // First argument must be TensorType
     auto tensor_type = As<TensorType>(args[0]->GetType());

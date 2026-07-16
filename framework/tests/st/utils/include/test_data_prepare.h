@@ -82,9 +82,9 @@ struct QuantTensorWithData {
     TensorWithData scale;
     TensorWithData smooth;
 
-    QuantTensorWithData(
-        bool isQuantT, bool isSmoothT, std::vector<int64_t> scaleShapeT, std::vector<int64_t> smoothShapeT,
-        std::string scaleName, std::string smoothName, std::string scalePath, std::string smoothPath)
+    QuantTensorWithData(bool isQuantT, bool isSmoothT, std::vector<int64_t> scaleShapeT,
+                        std::vector<int64_t> smoothShapeT, std::string scaleName, std::string smoothName,
+                        std::string scalePath, std::string smoothPath)
         : isQuant(isQuantT),
           isSmooth(isSmoothT),
           scaleShape(scaleShapeT),
@@ -112,9 +112,8 @@ inline void CreateQuantTensorAndData(QuantTensorWithData& quant)
 }
 
 template <typename T>
-TensorWithData CreateTensorAndData(
-    const std::vector<int64_t>& shape, DataType dType, std::string name, TileOpFormat format, std::string binPath,
-    const std::vector<int>& dynamicAxises = {})
+TensorWithData CreateTensorAndData(const std::vector<int64_t>& shape, DataType dType, std::string name,
+                                   TileOpFormat format, std::string binPath, const std::vector<int>& dynamicAxises = {})
 {
     std::vector<int64_t> dynamicShape = shape;
     for (int axis : dynamicAxises) {
@@ -128,17 +127,15 @@ TensorWithData CreateTensorAndData(
 }
 
 template <typename T>
-TensorWithData CreateTensorAndData(
-    const std::vector<int64_t>& shape, DataType dType, std::string name, std::string binPath,
-    const std::vector<int>& dynamicAxises = {})
+TensorWithData CreateTensorAndData(const std::vector<int64_t>& shape, DataType dType, std::string name,
+                                   std::string binPath, const std::vector<int>& dynamicAxises = {})
 {
     return CreateTensorAndData<T>(shape, dType, name, TileOpFormat::TILEOP_ND, binPath, dynamicAxises);
 }
 
 template <typename T>
-TensorWithData CreateDynamicOutputTensor(
-    const std::vector<int64_t>& shape, DataType dType, std::string name, std::string binPath,
-    const std::vector<SymbolicScalar>& dynamicShape = {})
+TensorWithData CreateDynamicOutputTensor(const std::vector<int64_t>& shape, DataType dType, std::string name,
+                                         std::string binPath, const std::vector<SymbolicScalar>& dynamicShape = {})
 {
     ASSERT(dynamicShape.size() == 0 || dynamicShape.size() == shape.size());
 
@@ -154,9 +151,8 @@ TensorWithData CreateDynamicOutputTensor(
 }
 
 template <typename T>
-TensorWithData CreateConstantDynamicOutputTensor(
-    const std::vector<int64_t>& shape, DataType dType, std::string name, T value,
-    const std::vector<SymbolicScalar>& dynamicShape = {})
+TensorWithData CreateConstantDynamicOutputTensor(const std::vector<int64_t>& shape, DataType dType, std::string name,
+                                                 T value, const std::vector<SymbolicScalar>& dynamicShape = {})
 {
     ASSERT(dynamicShape.size() == 0 || dynamicShape.size() == shape.size());
 
@@ -172,9 +168,8 @@ TensorWithData CreateConstantDynamicOutputTensor(
 }
 
 template <typename T>
-TensorWithData CreateConstantTensorAndData(
-    const std::vector<int64_t>& shape, DataType dType, std::string name, T value,
-    const std::vector<int>& dynamicAxises = {})
+TensorWithData CreateConstantTensorAndData(const std::vector<int64_t>& shape, DataType dType, std::string name, T value,
+                                           const std::vector<int>& dynamicAxises = {})
 {
     std::vector<int64_t> dynamicShape = shape;
     for (int axis : dynamicAxises) {

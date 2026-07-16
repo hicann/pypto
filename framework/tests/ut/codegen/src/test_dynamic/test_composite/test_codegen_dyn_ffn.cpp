@@ -54,9 +54,8 @@ void testffnquant()
     Tensor ffnScale3(DT_FP32, {1, H}, "ffnScale3");
     Tensor ffnout(DT_FP32, OutShape, "ffnout");
 
-    DynamicFFNQuant(
-        hiddenStates, hiddenStatesScale, ffnWeight1, ffnWeight2, ffnWeight3, ffnScale1, ffnScale2, ffnScale3, ffnout,
-        BASIC_BATCH);
+    DynamicFFNQuant(hiddenStates, hiddenStatesScale, ffnWeight1, ffnWeight2, ffnWeight3, ffnScale1, ffnScale2,
+                    ffnScale3, ffnout, BASIC_BATCH);
 }
 
 TEST_F(TestCodegenDynFFN, FFNQuantDynamicTest) { testffnquant(); }

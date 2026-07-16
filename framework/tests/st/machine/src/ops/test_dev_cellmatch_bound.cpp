@@ -109,22 +109,20 @@ TEST_F(DynamicStitchCellMatchBoundTest, test_cellmatch_tail_valid_shape)
         }
 
         int offSet = 32;
-        LOOP(
-            "L2", FunctionType::DYNAMIC_LOOP, loopIdx,
-            LoopRange((GetInputShape(addTmp, 0) * GetInputShape(addTmp, 1) + offSet - 1) / offSet))
+        LOOP("L2", FunctionType::DYNAMIC_LOOP, loopIdx,
+             LoopRange((GetInputShape(addTmp, 0) * GetInputShape(addTmp, 1) + offSet - 1) / offSet))
         {
             TileShape::Current().SetVecTile(4, 32);
-            Tensor tmp0 = View(
-                qReshape, {offSet, d},
-                {min(GetInputShape(addTmp, 0) * GetInputShape(addTmp, 1) - loopIdx * offSet, offSet), d},
-                {loopIdx * offSet, 0});
+            Tensor tmp0 = View(qReshape, {offSet, d},
+                               {min(GetInputShape(addTmp, 0) * GetInputShape(addTmp, 1) - loopIdx * offSet, offSet), d},
+                               {loopIdx * offSet, 0});
             Tensor tmp = Add(tmp0, Element(tmp0.GetStorage()->Datatype(), 0.01));
             Assemble(tmp, {loopIdx * offSet, 0}, out);
         }
     }
 
-    DevFuncRunner::Run(
-        Program::GetInstance().GetLastFunction(), DeviceLauncherConfig(qReal.GetStorage()->GetDataSize()));
+    DevFuncRunner::Run(Program::GetInstance().GetLastFunction(),
+                       DeviceLauncherConfig(qReal.GetStorage()->GetDataSize()));
     auto outs = npu::tile_fwk::ProgramData::GetInstance().GetOutputData(0);
     EXPECT_TRUE(resultCmp(golden, (float*)outs->data(), 0.001f));
 }

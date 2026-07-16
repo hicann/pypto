@@ -12,23 +12,25 @@
 #include <sys/mman.h>
 
 #ifndef PAGE_SIZE
-#define PAGE_SIZE       4096
+#define PAGE_SIZE 4096
 #endif
 
 namespace npu::tile_fwk::dynamic {
-HardBranchManager &HardBranchManager::GetInstance() {
+HardBranchManager& HardBranchManager::GetInstance()
+{
     static HardBranchManager manager;
     return manager;
 }
 
-int HardBranchManager::ProtectGetRange(uint64_t &base, uint64_t &size) {
+int HardBranchManager::ProtectGetRange(uint64_t& base, uint64_t& size)
+{
     uint64_t minAddr = ~0x0;
     uint64_t maxAddr = 0;
     int total = 0;
     for (size_t groupIndex = 0; groupIndex < Size(); groupIndex++) {
-        HardBranchGroup &group = At(groupIndex);
+        HardBranchGroup& group = At(groupIndex);
         for (size_t branchIndex = 0; branchIndex < group.Size(); branchIndex++) {
-            HardBranch &branch = group.At(branchIndex);
+            HardBranch& branch = group.At(branchIndex);
             if (minAddr > branch.source) {
                 minAddr = branch.source;
             }
@@ -48,18 +50,20 @@ int HardBranchManager::ProtectGetRange(uint64_t &base, uint64_t &size) {
     return total;
 }
 
-int HardBranchManager::ProtectRange(uint64_t base, uint64_t size, bool enableWrite) {
+int HardBranchManager::ProtectRange(uint64_t base, uint64_t size, bool enableWrite)
+{
     int prot = PROT_READ | PROT_EXEC;
     if (enableWrite) {
         prot |= PROT_WRITE;
     }
-    if (mprotect((void *)base, size, prot) != 0) {
+    if (mprotect((void*)base, size, prot) != 0) {
         return -1;
     }
     return 0;
 }
 
-int HardBranchManager::SwitchTo(bool toJump) {
+int HardBranchManager::SwitchTo(bool toJump)
+{
     uint64_t base = 0;
     uint64_t size = 0;
     if (ProtectGetRange(base, size) == 0) {
@@ -69,25 +73,26 @@ int HardBranchManager::SwitchTo(bool toJump) {
         return error;
     }
     for (size_t groupIndex = 0; groupIndex < Size(); groupIndex++) {
-        HardBranchGroup &group = At(groupIndex);
+        HardBranchGroup& group = At(groupIndex);
         for (size_t branchIndex = 0; branchIndex < group.Size(); branchIndex++) {
-            HardBranch &branch = group.At(branchIndex);
+            HardBranch& branch = group.At(branchIndex);
             if (toJump) {
-                ArchCreateJump(reinterpret_cast<uint8_t *>(branch.source), branch.source, branch.target);
+                ArchCreateJump(reinterpret_cast<uint8_t*>(branch.source), branch.source, branch.target);
             } else {
-                ArchCreateNop(reinterpret_cast<uint8_t *>(branch.source));
+                ArchCreateNop(reinterpret_cast<uint8_t*>(branch.source));
             }
         }
     }
     if (const int error = ProtectRange(base, size, false)) {
         return error;
     }
-    __builtin___clear_cache(reinterpret_cast<char *>(base), reinterpret_cast<char *>(base) + size);
+    __builtin___clear_cache(reinterpret_cast<char*>(base), reinterpret_cast<char*>(base) + size);
     return 0;
 }
 
-void HardBranchManager::Placeholder() {
+void HardBranchManager::Placeholder()
+{
     HardBranchTrue(verboseInfo);
     HardBranchTrue(verboseDebug);
 }
-}
+} // namespace npu::tile_fwk::dynamic

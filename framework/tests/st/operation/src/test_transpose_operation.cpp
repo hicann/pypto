@@ -18,8 +18,8 @@
 using namespace tile_fwk::test_operation;
 namespace {
 struct TransposeOpFuncArgs : public OpFuncArgs {
-    TransposeOpFuncArgs(
-        int first_dim, int second_dim, const std::vector<int64_t>& viewShape, const std::vector<int64_t> tileShape)
+    TransposeOpFuncArgs(int first_dim, int second_dim, const std::vector<int64_t>& viewShape,
+                        const std::vector<int64_t> tileShape)
         : first_dim_(first_dim), second_dim_(second_dim), viewShape_(viewShape), tileShape_(tileShape)
     {}
     int first_dim_;
@@ -36,8 +36,8 @@ struct TransposeOpMetaData {
     nlohmann::json test_data_;
 };
 
-static void TransposeOperationExeFunc2Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void TransposeOperationExeFunc2Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                           const OpFuncArgs* opArgs)
 {
     const TransposeOpFuncArgs* transposeInfo = static_cast<const TransposeOpFuncArgs*>(opArgs);
     const int firstViewShape = transposeInfo->viewShape_[0];
@@ -50,11 +50,10 @@ static void TransposeOperationExeFunc2Dims(
         {
             LOOP("LOOP_L1_sIdx", FunctionType::DYNAMIC_LOOP, sIdx, LoopRange(0, CeilDiv(secondDim, secondViewShape), 1))
             {
-                Tensor tileTensor0 = View(
-                    inputs[0], {firstViewShape, secondViewShape},
-                    {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                     std::min(secondDim - sIdx * secondViewShape, secondViewShape)},
-                    {bIdx * firstViewShape, sIdx * secondViewShape});
+                Tensor tileTensor0 = View(inputs[0], {firstViewShape, secondViewShape},
+                                          {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                           std::min(secondDim - sIdx * secondViewShape, secondViewShape)},
+                                          {bIdx * firstViewShape, sIdx * secondViewShape});
                 TileShape::Current().SetVecTile(transposeInfo->tileShape_);
                 auto res = Transpose(tileTensor0, {transposeInfo->first_dim_, transposeInfo->second_dim_});
                 Assemble(res, {sIdx * secondViewShape, bIdx * firstViewShape}, outputs[0]);
@@ -63,8 +62,8 @@ static void TransposeOperationExeFunc2Dims(
     }
 }
 
-static void TransposeOperationExeFunc3Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void TransposeOperationExeFunc3Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                           const OpFuncArgs* opArgs)
 {
     const TransposeOpFuncArgs* transposeInfo = static_cast<const TransposeOpFuncArgs*>(opArgs);
     const int firstViewShape = transposeInfo->viewShape_[0];
@@ -83,20 +82,18 @@ static void TransposeOperationExeFunc3Dims(
         {
             LOOP("LOOP_L1_sIdx", FunctionType::DYNAMIC_LOOP, sIdx, LoopRange(0, CeilDiv(secondDim, secondViewShape), 1))
             {
-                LOOP(
-                    "LOOP_L2_tIdx", FunctionType::DYNAMIC_LOOP, tIdx,
-                    LoopRange(0, CeilDiv(thirdDim, thirdViewShape), 1))
+                LOOP("LOOP_L2_tIdx", FunctionType::DYNAMIC_LOOP, tIdx,
+                     LoopRange(0, CeilDiv(thirdDim, thirdViewShape), 1))
                 {
-                    Tensor tileTensor0 = View(
-                        inputs[0], {firstViewShape, secondViewShape, thirdViewShape},
-                        {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                         std::min(secondDim - sIdx * secondViewShape, secondViewShape),
-                         std::min(thirdDim - tIdx * thirdViewShape, thirdViewShape)},
-                        {bIdx * firstViewShape, sIdx * secondViewShape, tIdx * thirdViewShape});
+                    Tensor tileTensor0 = View(inputs[0], {firstViewShape, secondViewShape, thirdViewShape},
+                                              {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                               std::min(secondDim - sIdx * secondViewShape, secondViewShape),
+                                               std::min(thirdDim - tIdx * thirdViewShape, thirdViewShape)},
+                                              {bIdx * firstViewShape, sIdx * secondViewShape, tIdx * thirdViewShape});
                     TileShape::Current().SetVecTile(transposeInfo->tileShape_);
                     auto res = Transpose(tileTensor0, {transposeInfo->first_dim_, transposeInfo->second_dim_});
-                    std::vector<SymbolicScalar> viewOffset = {
-                        bIdx * firstViewShape, sIdx * secondViewShape, tIdx * thirdViewShape};
+                    std::vector<SymbolicScalar> viewOffset = {bIdx * firstViewShape, sIdx * secondViewShape,
+                                                              tIdx * thirdViewShape};
                     std::swap(viewOffset[first_dim], viewOffset[second_dim]);
                     Assemble(res, viewOffset, outputs[0]);
                 }
@@ -105,8 +102,8 @@ static void TransposeOperationExeFunc3Dims(
     }
 }
 
-static void TransposeOperationExeFunc4Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void TransposeOperationExeFunc4Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                           const OpFuncArgs* opArgs)
 {
     const TransposeOpFuncArgs* transposeInfo = static_cast<const TransposeOpFuncArgs*>(opArgs);
     const int firstViewShape = transposeInfo->viewShape_[0];
@@ -127,27 +124,24 @@ static void TransposeOperationExeFunc4Dims(
         {
             LOOP("LOOP_L1_sIdx", FunctionType::DYNAMIC_LOOP, sIdx, LoopRange(0, CeilDiv(secondDim, secondViewShape), 1))
             {
-                LOOP(
-                    "LOOP_L2_tIdx", FunctionType::DYNAMIC_LOOP, tIdx,
-                    LoopRange(0, CeilDiv(thirdDim, thirdViewShape), 1))
+                LOOP("LOOP_L2_tIdx", FunctionType::DYNAMIC_LOOP, tIdx,
+                     LoopRange(0, CeilDiv(thirdDim, thirdViewShape), 1))
                 {
-                    LOOP(
-                        "LOOP_L3_tIdx", FunctionType::DYNAMIC_LOOP, pIdx,
-                        LoopRange(0, CeilDiv(forthDim, forthViewShape), 1))
+                    LOOP("LOOP_L3_tIdx", FunctionType::DYNAMIC_LOOP, pIdx,
+                         LoopRange(0, CeilDiv(forthDim, forthViewShape), 1))
                     {
-                        Tensor tileTensor0 = View(
-                            inputs[0], {firstViewShape, secondViewShape, thirdViewShape, forthViewShape},
-                            {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                             std::min(secondDim - sIdx * secondViewShape, secondViewShape),
-                             std::min(thirdDim - tIdx * thirdViewShape, thirdViewShape),
-                             std::min(forthDim - pIdx * forthViewShape, forthViewShape)},
-                            {bIdx * firstViewShape, sIdx * secondViewShape, tIdx * thirdViewShape,
-                             pIdx * forthViewShape});
+                        Tensor tileTensor0 = View(inputs[0],
+                                                  {firstViewShape, secondViewShape, thirdViewShape, forthViewShape},
+                                                  {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                                   std::min(secondDim - sIdx * secondViewShape, secondViewShape),
+                                                   std::min(thirdDim - tIdx * thirdViewShape, thirdViewShape),
+                                                   std::min(forthDim - pIdx * forthViewShape, forthViewShape)},
+                                                  {bIdx * firstViewShape, sIdx * secondViewShape, tIdx * thirdViewShape,
+                                                   pIdx * forthViewShape});
                         TileShape::Current().SetVecTile(transposeInfo->tileShape_);
                         auto res = Transpose(tileTensor0, {transposeInfo->first_dim_, transposeInfo->second_dim_});
-                        std::vector<SymbolicScalar> viewOffset = {
-                            bIdx * firstViewShape, sIdx * secondViewShape, tIdx * thirdViewShape,
-                            pIdx * forthViewShape};
+                        std::vector<SymbolicScalar> viewOffset = {bIdx * firstViewShape, sIdx * secondViewShape,
+                                                                  tIdx * thirdViewShape, pIdx * forthViewShape};
                         std::swap(viewOffset[first_dim], viewOffset[second_dim]);
                         Assemble(res, viewOffset, outputs[0]);
                     }
@@ -157,8 +151,8 @@ static void TransposeOperationExeFunc4Dims(
     }
 }
 
-static void TransposeOperationExeFunc5Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void TransposeOperationExeFunc5Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                           const OpFuncArgs* opArgs)
 {
     const TransposeOpFuncArgs* transposeInfo = static_cast<const TransposeOpFuncArgs*>(opArgs);
     const int firstViewShape = transposeInfo->viewShape_[0];
@@ -181,17 +175,14 @@ static void TransposeOperationExeFunc5Dims(
         {
             LOOP("LOOP_L1_sIdx", FunctionType::DYNAMIC_LOOP, sIdx, LoopRange(0, CeilDiv(secondDim, secondViewShape), 1))
             {
-                LOOP(
-                    "LOOP_L2_tIdx", FunctionType::DYNAMIC_LOOP, tIdx,
-                    LoopRange(0, CeilDiv(thirdDim, thirdViewShape), 1))
+                LOOP("LOOP_L2_tIdx", FunctionType::DYNAMIC_LOOP, tIdx,
+                     LoopRange(0, CeilDiv(thirdDim, thirdViewShape), 1))
                 {
-                    LOOP(
-                        "LOOP_L3_pIdx", FunctionType::DYNAMIC_LOOP, pIdx,
-                        LoopRange(0, CeilDiv(forthDim, forthViewShape), 1))
+                    LOOP("LOOP_L3_pIdx", FunctionType::DYNAMIC_LOOP, pIdx,
+                         LoopRange(0, CeilDiv(forthDim, forthViewShape), 1))
                     {
-                        LOOP(
-                            "LOOP_L4_qIdx", FunctionType::DYNAMIC_LOOP, qIdx,
-                            LoopRange(0, CeilDiv(fifthDim, fifthViewShape), 1))
+                        LOOP("LOOP_L4_qIdx", FunctionType::DYNAMIC_LOOP, qIdx,
+                             LoopRange(0, CeilDiv(fifthDim, fifthViewShape), 1))
                         {
                             Tensor tileTensor0 = View(
                                 inputs[0],
@@ -205,9 +196,9 @@ static void TransposeOperationExeFunc5Dims(
                                  pIdx * forthViewShape, qIdx * fifthViewShape});
                             TileShape::Current().SetVecTile(transposeInfo->tileShape_);
                             auto res = Transpose(tileTensor0, {transposeInfo->first_dim_, transposeInfo->second_dim_});
-                            std::vector<SymbolicScalar> viewOffset = {
-                                bIdx * firstViewShape, sIdx * secondViewShape, tIdx * thirdViewShape,
-                                pIdx * forthViewShape, qIdx * fifthViewShape};
+                            std::vector<SymbolicScalar> viewOffset = {bIdx * firstViewShape, sIdx * secondViewShape,
+                                                                      tIdx * thirdViewShape, pIdx * forthViewShape,
+                                                                      qIdx * fifthViewShape};
                             std::swap(viewOffset[first_dim], viewOffset[second_dim]);
                             Assemble(res, viewOffset, outputs[0]);
                         }
@@ -220,12 +211,11 @@ static void TransposeOperationExeFunc5Dims(
 
 class TransposeOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac_param<TransposeOpMetaData> {};
 
-INSTANTIATE_TEST_SUITE_P(
-    TestTranspose, TransposeOperationTest,
-    ::testing::ValuesIn(GetOpMetaData<TransposeOpMetaData>(
-        {TransposeOperationExeFunc2Dims, TransposeOperationExeFunc3Dims, TransposeOperationExeFunc4Dims,
-         TransposeOperationExeFunc5Dims},
-        "Transpose")));
+INSTANTIATE_TEST_SUITE_P(TestTranspose, TransposeOperationTest,
+                         ::testing::ValuesIn(GetOpMetaData<TransposeOpMetaData>(
+                             {TransposeOperationExeFunc2Dims, TransposeOperationExeFunc3Dims,
+                              TransposeOperationExeFunc4Dims, TransposeOperationExeFunc5Dims},
+                             "Transpose")));
 
 TEST_P(TransposeOperationTest, TestTranspose)
 {

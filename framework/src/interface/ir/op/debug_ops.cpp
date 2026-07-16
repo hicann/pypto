@@ -33,7 +33,8 @@ namespace {
 
 bool IsSupportedPrintfConversion(char conversion)
 {
-    return conversion == 'd' || conversion == 'i' || conversion == 'u' || conversion == 'x' || conversion == 'f' || conversion == 'p';
+    return conversion == 'd' || conversion == 'i' || conversion == 'u' || conversion == 'x' || conversion == 'f' ||
+           conversion == 'p';
 }
 
 std::vector<char> ParsePrintfConversions(const std::string& format)
@@ -103,12 +104,11 @@ bool IsPrintfIndexType(const DataType& dtype) { return dtype == DataType::INDEX;
 
 bool IsPrintfBoolType(const DataType& dtype) { return dtype == DataType::BOOL; }
 
-TypePtr DeduceDebugDumpTensorType(
-    [[maybe_unused]] const std::vector<ExprPtr>& args,
-    [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
+TypePtr DeduceDebugDumpTensorType([[maybe_unused]] const std::vector<ExprPtr>& args,
+                                  [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
 {
     CHECK(args.size() == 0x3) << "debug.dump_tensor requires exactly 3 arguments (tensor, offsets, shapes), but got "
-                            << args.size();
+                              << args.size();
 
     auto tensor_type = As<TensorType>(args[0]->GetType());
     CHECK(tensor_type) << "debug.dump_tensor requires first argument to be a TensorType, but got "
@@ -172,9 +172,8 @@ TypePtr DeduceDebugDumpTensorType(
     return GetUnknownType();
 }
 
-TypePtr DeduceDebugDumpTileType(
-    [[maybe_unused]] const std::vector<ExprPtr>& args,
-    [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
+TypePtr DeduceDebugDumpTileType([[maybe_unused]] const std::vector<ExprPtr>& args,
+                                [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
 {
     CHECK(args.size() == 1 || args.size() == 0x3 || args.size() == 0x4)
         << "debug.dump_tile requires 1 argument (tile), 3 arguments (tile, offsets, shapes), "
@@ -224,10 +223,9 @@ TypePtr DeduceDebugDumpTileType(
         CHECK(workspace_type) << "debug.dump_tile workspace (4th argument) must be a TensorType, but got "
                               << args[3]->GetType()->TypeName();
         CHECK(workspace_type->dtype_ == tile_type->dtype_)
-            << "debug.dump_tile workspace dtype must match tile dtype (tile: "
-            << tile_type->dtype_.ToString() << ", workspace: " << workspace_type->dtype_.ToString() << ")";
-        CHECK(tile_type->memref_.has_value())
-            << "debug.dump_tile workspace requires tile to have a memref";
+            << "debug.dump_tile workspace dtype must match tile dtype (tile: " << tile_type->dtype_.ToString()
+            << ", workspace: " << workspace_type->dtype_.ToString() << ")";
+        CHECK(tile_type->memref_.has_value()) << "debug.dump_tile workspace requires tile to have a memref";
         auto tile_space = (*tile_type->memref_)->memorySpace_;
         CHECK(tile_space == MemorySpace::Acc)
             << "debug.dump_tile workspace is only supported for Acc tiles, but got tile in "
@@ -237,9 +235,8 @@ TypePtr DeduceDebugDumpTileType(
     return GetUnknownType();
 }
 
-TypePtr DeduceDebugPrintfType(
-    [[maybe_unused]] const std::vector<ExprPtr>& args,
-    [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
+TypePtr DeduceDebugPrintfType([[maybe_unused]] const std::vector<ExprPtr>& args,
+                              [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
 {
     bool found_format = false;
     std::string format;
@@ -290,9 +287,8 @@ TypePtr DeduceDebugPrintfType(
     return GetUnknownType();
 }
 
-TypePtr DeduceDebugAssertType(
-    [[maybe_unused]] const std::vector<ExprPtr>& args,
-    [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
+TypePtr DeduceDebugAssertType([[maybe_unused]] const std::vector<ExprPtr>& args,
+                              [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
 {
     CHECK(args.size() >= 1) << "debug.assert requires at least 1 argument (condition), but got " << args.size();
 
@@ -355,9 +351,8 @@ TypePtr DeduceDebugAssertType(
 
 REGISTER_OP("debug.dump_tensor")
     .set_op_category("DebugOp")
-    .set_description(
-        "Print a tensor or tensor window for debugging. Supports full dumps and window dumps "
-        "with dynamic offsets/shapes when the innermost stride is statically 1.")
+    .set_description("Print a tensor or tensor window for debugging. Supports full dumps and window dumps "
+                     "with dynamic offsets/shapes when the innermost stride is statically 1.")
     .add_argument("tensor", "Input tensor (TensorType)")
     .add_argument("offsets", "Offsets per dimension (MakeTuple of integer scalars)")
     .add_argument("shapes", "Shape per dimension (MakeTuple of integer scalars)")
@@ -369,11 +364,10 @@ REGISTER_OP("debug.dump_tensor")
 
 REGISTER_OP("debug.dump_tile")
     .set_op_category("DebugOp")
-    .set_description(
-        "Print a tile or tile window for debugging. Full dumps support tiles with dynamic valid-shape; "
-        "window dumps support dynamic offsets on PTO and CCE, and dynamic shapes on CCE only; "
-        "PTO window shapes remain static-only. Tile windows are currently 2D-only. "
-        "Acc tiles require a workspace Tensor (GM temporary space).")
+    .set_description("Print a tile or tile window for debugging. Full dumps support tiles with dynamic valid-shape; "
+                     "window dumps support dynamic offsets on PTO and CCE, and dynamic shapes on CCE only; "
+                     "PTO window shapes remain static-only. Tile windows are currently 2D-only. "
+                     "Acc tiles require a workspace Tensor (GM temporary space).")
     .add_argument("tile", "Input tile (TileType)")
     .add_argument("offsets", "Optional offsets per dimension (MakeTuple of integer scalars)")
     .add_argument("shapes", "Optional shape per dimension (MakeTuple of integer scalars; dynamic only on CCE)")

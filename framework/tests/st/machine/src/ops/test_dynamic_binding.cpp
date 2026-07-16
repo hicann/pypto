@@ -168,9 +168,9 @@ TEST_F(DynamicBindingTest, TestDeviceCompute)
     }
 
     RuntimeMemcpy(inputADevAddr, inputAData.size() * sizeof(int32_t), inputAData.data(),
-        inputAData.size() * sizeof(int32_t), RtMemcpyKind::HOST_TO_DEVICE);
+                  inputAData.size() * sizeof(int32_t), RtMemcpyKind::HOST_TO_DEVICE);
     RuntimeMemcpy(inputBDevAddr, inputBData.size() * sizeof(int32_t), inputBData.data(),
-        inputAData.size() * sizeof(int32_t), RtMemcpyKind::HOST_TO_DEVICE);
+                  inputAData.size() * sizeof(int32_t), RtMemcpyKind::HOST_TO_DEVICE);
 
     Tensor inputA(DT_INT32, {n, m}, "inputA");
     Tensor inputB(DT_INT32, {n, m}, "inputB");
@@ -214,7 +214,7 @@ TEST_F(DynamicBindingTest, TestDeviceCompute)
     EXPECT_EQ(0, ExportedOperatorDeviceLaunchOnceWithDeviceTensorData(op, inputList, outputList, aicoreStream, true));
 
     RuntimeMemcpy(outputData.data(), outputData.size() * sizeof(int32_t), outputDevAddr,
-        outputData.size() * sizeof(int32_t), RtMemcpyKind::DEVICE_TO_HOST);
+                  outputData.size() * sizeof(int32_t), RtMemcpyKind::DEVICE_TO_HOST);
 
     EXPECT_TRUE(resultCmp(outputGolden, (int32_t*)outputData.data(), 0.001f));
 }

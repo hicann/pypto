@@ -16,9 +16,8 @@
 #include "color_graph.h"
 
 namespace npu::tile_fwk {
-Status DFSVisit(
-    std::unordered_set<int>& visited, int preColor, std::unordered_map<int, int>& newColorMap,
-    std::vector<std::set<int>>& colorInGraph, std::vector<std::set<int>>& colorOutGraph)
+Status DFSVisit(std::unordered_set<int>& visited, int preColor, std::unordered_map<int, int>& newColorMap,
+                std::vector<std::set<int>>& colorInGraph, std::vector<std::set<int>>& colorOutGraph)
 {
     std::vector<int> visitStack{preColor};
     std::unordered_set<int> inStack;

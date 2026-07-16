@@ -18,37 +18,29 @@ namespace npu::tile_fwk {
 
 class PassOperationUtils {
 public:
-    static Operation& AddOperation(
-        Function& function, Opcode opCode, LogicalTensors iOperands, const LogicalTensors& oOperands,
-        std::function<void(Operation&)> beforeInferShapeHandler = nullptr,
-        const ir::Span& span = ir::Span::Unknown(),
-        bool inferShape = true);
+    static Operation& AddOperation(Function& function, Opcode opCode, LogicalTensors iOperands,
+                                   const LogicalTensors& oOperands,
+                                   std::function<void(Operation&)> beforeInferShapeHandler = nullptr,
+                                   const ir::Span& span = ir::Span::Unknown(), bool inferShape = true);
 
 private:
     static LogicalTensors PreprocessOperationInputs(Function& function, Opcode opCode, LogicalTensors iOperands);
 
     static LogicalTensorPtr ConnectWithOverlap(Function& function, LogicalTensorPtr iOperand);
-    
-    static std::vector<std::vector<int64_t>> ProcessOffsetAdjustment(
-        LogicalTensors& matches,
-        std::vector<int64_t>& minimumOffsets);
-    
-    static LogicalTensorPtr HandlePerfectlyMatchWithAll(
-        Function& function,
-        LogicalTensorPtr iOperand,
-        const LogicalTensors& matches,
-        const std::vector<std::vector<int64_t>>& offsetOfOverlaps);
-    
-    static LogicalTensorPtr HandleBeCovered(
-        Function& function,
-        LogicalTensorPtr iOperand,
-        const LogicalTensors& matches);
-    
-    static LogicalTensorPtr HandleBeCoveredByAll(
-        Function& function,
-        LogicalTensorPtr iOperand,
-        const LogicalTensors& matches,
-        const std::vector<std::vector<int64_t>>& offsetOfOverlaps);
+
+    static std::vector<std::vector<int64_t>> ProcessOffsetAdjustment(LogicalTensors& matches,
+                                                                     std::vector<int64_t>& minimumOffsets);
+
+    static LogicalTensorPtr HandlePerfectlyMatchWithAll(Function& function, LogicalTensorPtr iOperand,
+                                                        const LogicalTensors& matches,
+                                                        const std::vector<std::vector<int64_t>>& offsetOfOverlaps);
+
+    static LogicalTensorPtr HandleBeCovered(Function& function, LogicalTensorPtr iOperand,
+                                            const LogicalTensors& matches);
+
+    static LogicalTensorPtr HandleBeCoveredByAll(Function& function, LogicalTensorPtr iOperand,
+                                                 const LogicalTensors& matches,
+                                                 const std::vector<std::vector<int64_t>>& offsetOfOverlaps);
 };
 
 } // namespace npu::tile_fwk

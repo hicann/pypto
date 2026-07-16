@@ -68,15 +68,15 @@ INLINE void Trap()
 #endif
 
 #define AICORE_TIMEOUT_CHECK_BEGIN(t0, loop_count) \
-    uint64_t t0 = get_sys_cnt(); \
+    uint64_t t0 = get_sys_cnt();                   \
     uint64_t loop_count = 0;
 
 #define AICORE_TIMEOUT_CHECK_IMPL(t0, loop_count, timelen, lastStatus, action) \
-    ++loop_count; \
-    if ((loop_count % 1000 == 0) && (get_sys_cnt() - t0 > timelen)) { \
-        SetLastWordStatus(args, lastStatus); \
-        Trap(); \
-        action; \
+    ++loop_count;                                                              \
+    if ((loop_count % 1000 == 0) && (get_sys_cnt() - t0 > timelen)) {          \
+        SetLastWordStatus(args, lastStatus);                                   \
+        Trap();                                                                \
+        action;                                                                \
     }
 
 #define AICORE_TIMEOUT_CHECK_RETURN(t0, loop_count, timelen, lastStatus, retval) \
@@ -102,9 +102,7 @@ INLINE uint64_t GetDataMainBase()
 }
 #endif
 
-INLINE uint32_t GetLeafTaskId() {
-    return ((GetDataMainBase() & 0xFFFFFFFF) - 1);
-}
+INLINE uint32_t GetLeafTaskId() { return ((GetDataMainBase() & 0xFFFFFFFF) - 1); }
 
 INLINE uint32_t GetNextLeafTask(uint32_t lastTaskIdx)
 {
@@ -127,7 +125,7 @@ INLINE uint32_t GetRegHighValue(__gm__ KernelArgs* args, uint32_t lastHighRegVal
     uint32_t highRegVal = 0;
     uint64_t regValue = 0;
     AICORE_TIMEOUT_CHECK_BEGIN(t0, loop_count);
-    do{
+    do {
         regValue = GetDataMainBase();
         highRegVal = (uint32_t)(regValue >> REG_HIGH_DTASKID_SHIFT);
         AICORE_TIMEOUT_CHECK_RETURN(t0, loop_count, AICORE_GET_LEAF_HIGHREG_TIMEOUT, STAGE_GET_HIGH_REG_TIMEOUT, 0);
@@ -141,21 +139,26 @@ enum class MixResourceType { MIX_UNKNOWN = 0, MIX_1C1V = 1, MIX_1C2V = 2 };
 
 __aicore__ inline uint16_t GetffstMsg(uint16_t mode, uint16_t flagId)
 {
-  return (0x1 + ((mode & 0x3) << SYNC_MODE_SHIFT_VALUE) + ((flagId & 0xf) << SYNC_FLAG_SHIFT_VALUE));
+    return (0x1 + ((mode & 0x3) << SYNC_MODE_SHIFT_VALUE) + ((flagId & 0xf) << SYNC_FLAG_SHIFT_VALUE));
 }
 
 #ifdef __ENABLE_MIX_PENDING
 INLINE void PipeSyncPre(uint8_t mixResourceType, uint8_t lastMixResourceType)
 {
     // only lastTask is mix should insert sync
-    if (lastMixResourceType == static_cast<uint8_t>(MixResourceType::MIX_UNKNOWN) || mixResourceType != static_cast<uint8_t>(MixResourceType::MIX_1C2V)) {
+    if (lastMixResourceType == static_cast<uint8_t>(MixResourceType::MIX_UNKNOWN) ||
+        mixResourceType != static_cast<uint8_t>(MixResourceType::MIX_1C2V)) {
         return;
     }
 #if defined(__AIV__)
     wait_flag_dev(PIPE_S, EVENT_ID7);
-    ffts_cross_core_sync(PIPE_MTE3, GetffstMsg(2, EVENT_ID7)); // 模式2:Block内CV之间的同步，插在callop开始，这里pipe不重要，前面流水必然已执行完
+    ffts_cross_core_sync(
+        PIPE_MTE3,
+        GetffstMsg(2, EVENT_ID7)); // 模式2:Block内CV之间的同步，插在callop开始，这里pipe不重要，前面流水必然已执行完
 #else
-    ffts_cross_core_sync(PIPE_FIX, GetffstMsg(2, EVENT_ID7)); // 模式2:Block内CV之间的同步，插在callop开始，这里pipe不重要，前面流水必然已执行完
+    ffts_cross_core_sync(
+        PIPE_FIX,
+        GetffstMsg(2, EVENT_ID7)); // 模式2:Block内CV之间的同步，插在callop开始，这里pipe不重要，前面流水必然已执行完
     wait_flag_dev(PIPE_S, EVENT_ID7);
 #endif
 }
@@ -253,8 +256,8 @@ INLINE void ExecDynCoreFunctionKernel(ExecuteContext* ctx, uint32_t taskId, uint
 #endif
 
 #ifdef __DAV_V310
-   // for mix coretasks, use cube's stackworkspace
-    int index = __MAIN_BLOCK ? (opAttrs[0] + 1) / 2 :opAttrs[0];
+    // for mix coretasks, use cube's stackworkspace
+    int index = __MAIN_BLOCK ? (opAttrs[0] + 1) / 2 : opAttrs[0];
     uint8_t mixResourceType = ctx->cachedDevTasks[ctx->curLeafTaskParallelIdx].cceBinary[index].mixResourceType;
     int64_t blockIndex = (mixResourceType != 0) ? get_block_idx() : ctx->blockIdx;
     int64_t gmStackAddr = funcData->stackWorkSpaceAddr + blockIndex * funcData->stackWorkSpaceSize;
@@ -271,10 +274,8 @@ INLINE void ExecDynCoreFunctionKernel(ExecuteContext* ctx, uint32_t taskId, uint
 #else
     (void)lastMixResourceType;
 #endif
-    CallSubFuncTask(
-        opAttrs[0] + funcData->exprTbl[0], &param,
-        gmStackAddr,
-        (__gm__ int64_t*)funcData->startArgs->commContexts, taskStat);
+    CallSubFuncTask(opAttrs[0] + funcData->exprTbl[0], &param, gmStackAddr,
+                    (__gm__ int64_t*)funcData->startArgs->commContexts, taskStat);
     SetStatus(ctx->args, STAGE_FINISH_EXEC_COREFUNC_KERNEL);
     PipeSync();
     SetStatus(ctx->args, STAGE_FINISH_PIPE_SYNC);
@@ -287,15 +288,14 @@ INLINE void ExecDynCoreFunctionKernel(ExecuteContext* ctx, uint32_t taskId, uint
 }
 #endif
 
-INLINE void InitCtx(ExecuteContext *ctx, __gm__ Metrics* metric, volatile __gm__ ParallelDevTask* prallelDevTask)
+INLINE void InitCtx(ExecuteContext* ctx, __gm__ Metrics* metric, volatile __gm__ ParallelDevTask* prallelDevTask)
 {
-    ctx->curLeafTaskParallelIdx = 0; // default init first devtask 
-    PerfTraceRecord(
-        ctx->SeqNo(), ctx->aicoreDevTaskMetric.devTaskMetric, PERF_TRACE_CORE_DEV_TASK_RCV_MODEL);
+    ctx->curLeafTaskParallelIdx = 0; // default init first devtask
+    PerfTraceRecord(ctx->SeqNo(), ctx->aicoreDevTaskMetric.devTaskMetric, PERF_TRACE_CORE_DEV_TASK_RCV_MODEL);
     ctx->lastTaskFinishCycle = 0;
     ctx->parallelDevTask = prallelDevTask;
 #if ENABLE_AICORE_PRINT
-    auto buffer = reinterpret_cast<__gm__ uint8_t *>(ctx->args->shakeBuffer[SHAK_BUF_PRINT_BUFFER_INDEX]);
+    auto buffer = reinterpret_cast<__gm__ uint8_t*>(ctx->args->shakeBuffer[SHAK_BUF_PRINT_BUFFER_INDEX]);
     if (buffer != 0 && ctx->logger.GetBuffer() != buffer) {
         ctx->logger.Init(buffer, PRINT_BUFFER_SIZE);
     }
@@ -325,14 +325,15 @@ INLINE uint32_t WaitWaveSignal(__gm__ KernelArgs* args)
         if (*waveBuffer == AICORE_SAY_GOODBYE) {
             return 0;
         }
-        AICORE_TIMEOUT_CHECK_RETURN(t0, loop_count, AICORE_WAVEFLAG_WAIT_TIMEOUT, STAGE_WAVE_TIMEOUT, AICORE_TASK_ABNORMAL_STOP);
+        AICORE_TIMEOUT_CHECK_RETURN(t0, loop_count, AICORE_WAVEFLAG_WAIT_TIMEOUT, STAGE_WAVE_TIMEOUT,
+                                    AICORE_TASK_ABNORMAL_STOP);
     }
 }
 
 #include "tilefwk/aicore_entry_devtask.h"
 
-INLINE void KernelEntry(
-    int64_t ffts_addr, int64_t inputs, int64_t outputs, int64_t workspace, int64_t tilingdata, int64_t cfgdata)
+INLINE void KernelEntry(int64_t ffts_addr, int64_t inputs, int64_t outputs, int64_t workspace, int64_t tilingdata,
+                        int64_t cfgdata)
 {
     uint64_t start = get_sys_cnt();
     UNUSED(ffts_addr);
@@ -351,14 +352,13 @@ INLINE void KernelEntry(
     ExecuteContext ctx = {};
     ctx.args = args;
     ctx.blockIdx = blockIdx;
-    ctx.aicoreDevTaskMetric.devTaskMetricEnable = 
-        (((__gm__ DevDfxArgs*)devArgs->devDfxArgAddr)->isOpenPerfTrace != 0);
-    if (ctx.aicoreDevTaskMetric.devTaskMetricEnable  && metric->turnNum < MAX_ROUND_NUM) {
+    ctx.aicoreDevTaskMetric.devTaskMetricEnable = (((__gm__ DevDfxArgs*)devArgs->devDfxArgAddr)->isOpenPerfTrace != 0);
+    if (ctx.aicoreDevTaskMetric.devTaskMetricEnable && metric->turnNum < MAX_ROUND_NUM) {
         uint64_t round = metric->turnNum;
         ctx.aicoreDevTaskMetric.devTaskMetric = &(metric->aicoreDevTaskInfo[round]);
         PerfTraceRecord(INVALID_DEV_TASK_ID, ctx.aicoreDevTaskMetric.devTaskMetric, PERF_TRACE_CORE_BEGIN, start);
     }
-    
+
     bool isFirstTask = true;
     SetStatus(args, STAGE_HANDSHAKE_START);
     HandshakeClient(args->shakeBuffer);
@@ -413,7 +413,8 @@ INLINE void KernelEntry(
         ctx.curLeafTaskParallelIdx = npu::tile_fwk::ParallelIndex(curTaskIdx);
 
         if (isFirstTask) {
-            PerfTraceRecord(ctx.SeqNo(), ctx.aicoreDevTaskMetric.devTaskMetric, PERF_TRACE_CORE_DEV_TASK_WAIT_RCV_FIRST_LEAF_TASK);
+            PerfTraceRecord(ctx.SeqNo(), ctx.aicoreDevTaskMetric.devTaskMetric,
+                            PERF_TRACE_CORE_DEV_TASK_WAIT_RCV_FIRST_LEAF_TASK);
             isFirstTask = false;
             ctx.profLevel = args->taskEntry.reserved[0];
         }

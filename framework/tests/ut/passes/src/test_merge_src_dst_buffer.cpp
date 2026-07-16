@@ -57,37 +57,42 @@ TEST_F(MergeSrcDstBufferTest, AppointInplace)
     auto shapeImme = OpImmediate::Specified(shape);
     std::vector<int64_t> offset = {0, 0};
 
-    std::shared_ptr<LogicalTensor> tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DataType::DT_FP32, shape, CreateTestConstIntVector(shape));
+    std::shared_ptr<LogicalTensor> tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DataType::DT_FP32, shape, CreateTestConstIntVector(shape));
     tensor1->SetMemoryTypeOriginal(MEM_DEVICE_DDR);
     tensor1->SetMemoryTypeToBe(MEM_DEVICE_DDR);
 
-    std::shared_ptr<LogicalTensor> tensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DataType::DT_FP32, shape, CreateTestConstIntVector(shape));
+    std::shared_ptr<LogicalTensor> tensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DataType::DT_FP32, shape, CreateTestConstIntVector(shape));
     tensor2->SetMemoryTypeOriginal(MEM_DEVICE_DDR);
     tensor2->SetMemoryTypeToBe(MEM_DEVICE_DDR);
 
-    std::shared_ptr<LogicalTensor> tensor3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DataType::DT_FP32, shape, CreateTestConstIntVector(shape));
+    std::shared_ptr<LogicalTensor> tensor3 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DataType::DT_FP32, shape, CreateTestConstIntVector(shape));
     tensor3->SetMemoryTypeOriginal(MEM_UB);
     tensor3->SetMemoryTypeToBe(MEM_UB);
 
-    std::shared_ptr<LogicalTensor> tensor4 = npu::tile_fwk::IRBuilder().CreateTensorVar(DataType::DT_FP32, shape, CreateTestConstIntVector(shape));
+    std::shared_ptr<LogicalTensor> tensor4 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DataType::DT_FP32, shape, CreateTestConstIntVector(shape));
     tensor4->SetMemoryTypeOriginal(MEM_UB);
     tensor4->SetMemoryTypeToBe(MEM_UB);
 
-    std::shared_ptr<LogicalTensor> tensor5 = npu::tile_fwk::IRBuilder().CreateTensorVar(DataType::DT_FP32, shape, CreateTestConstIntVector(shape));
+    std::shared_ptr<LogicalTensor> tensor5 = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DataType::DT_FP32, shape, CreateTestConstIntVector(shape));
     tensor5->SetMemoryTypeOriginal(MEM_UB);
     tensor5->SetMemoryTypeToBe(MEM_UB);
 
     auto& alloc1 = PassOperationUtils::AddOperation(function, Opcode::OP_UB_ALLOC, {}, {tensor3});
     alloc1.UpdateLatency(1);
     auto& copyin1 = PassOperationUtils::AddOperation(function, Opcode::OP_COPY_IN, {tensor1}, {tensor3});
-    copyin1.SetOpAttribute(std::make_shared<CopyOpAttribute>(
-        OpImmediate::Specified(offset), MEM_UB, shapeImme, shapeImme, std::vector<npu::tile_fwk::OpImmediate>()));
+    copyin1.SetOpAttribute(std::make_shared<CopyOpAttribute>(OpImmediate::Specified(offset), MEM_UB, shapeImme,
+                                                             shapeImme, std::vector<npu::tile_fwk::OpImmediate>()));
 
     auto& alloc2 = PassOperationUtils::AddOperation(function, Opcode::OP_UB_ALLOC, {}, {tensor4});
     alloc2.UpdateLatency(1);
     auto& copyin2 = PassOperationUtils::AddOperation(function, Opcode::OP_COPY_IN, {tensor2}, {tensor4});
-    copyin2.SetOpAttribute(std::make_shared<CopyOpAttribute>(
-        OpImmediate::Specified(offset), MEM_UB, shapeImme, shapeImme, std::vector<npu::tile_fwk::OpImmediate>()));
+    copyin2.SetOpAttribute(std::make_shared<CopyOpAttribute>(OpImmediate::Specified(offset), MEM_UB, shapeImme,
+                                                             shapeImme, std::vector<npu::tile_fwk::OpImmediate>()));
 
     auto& alloc3 = PassOperationUtils::AddOperation(function, Opcode::OP_UB_ALLOC, {}, {tensor5});
     alloc3.UpdateLatency(1);
@@ -532,22 +537,21 @@ void ConstructGrapgForUnReuseMultiCons(ComputationalGraphBuilder& G)
     std::vector<std::string> opNames{"CopyIn1",     "CopyIn2",  "L1ToL0A1", "L1ToL0B1", "Mul1",
                                      "L0CToL11",    "L1ToL0B2", "CopyIn3",  "L1ToL0A2", "Mul2",
                                      "L0CCopyOut1", "CopyIn4",  "L1ToL0A3", "Mul3",     "L0CCopyOut2"};
-    std::vector<std::vector<std::string>> iOperands{
-        {"matA1DDR"},
-        {"matB1DDR"},
-        {"matA1L1"},
-        {"matB1L1"},
-        {"matA1L0A", "matB1L0B"},
-        {"matC1L0C"},
-        {"matB2L1"},
-        {"matA2DDR"},
-        {"matA2L1"},
-        {"matA2L0A", "matB2L0B"},
-        {"matC2L0C"},
-        {"matA3DDR"},
-        {"matA3L1"},
-        {"matA3L0A", "matB1L0B"},
-        {"matC3L0C"}};
+    std::vector<std::vector<std::string>> iOperands{{"matA1DDR"},
+                                                    {"matB1DDR"},
+                                                    {"matA1L1"},
+                                                    {"matB1L1"},
+                                                    {"matA1L0A", "matB1L0B"},
+                                                    {"matC1L0C"},
+                                                    {"matB2L1"},
+                                                    {"matA2DDR"},
+                                                    {"matA2L1"},
+                                                    {"matA2L0A", "matB2L0B"},
+                                                    {"matC2L0C"},
+                                                    {"matA3DDR"},
+                                                    {"matA3L1"},
+                                                    {"matA3L0A", "matB1L0B"},
+                                                    {"matC3L0C"}};
     std::vector<std::vector<std::string>> oOperands{
         {"matA1L1"},  {"matB1L1"},  {"matA1L0A"}, {"matB1L0B"}, {"matC1L0C"}, {"matB2L1"},  {"matB2L0B"}, {"matA2L1"},
         {"matA2L0A"}, {"matC2L0C"}, {"outcast1"}, {"matA3L1"},  {"matA3L0A"}, {"matC3L0C"}, {"outcast2"}};

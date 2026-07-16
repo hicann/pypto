@@ -49,8 +49,8 @@ bool Overlap(const std::shared_ptr<LogicalTensor>& t0, const std::shared_ptr<Log
     return CalcOverlap(t0, t1) != OverlapStatus::NO_OVER_LAP;
 }
 
-bool TensorPtrComparator::operator()(
-    const std::shared_ptr<LogicalTensor>& lhs, const std::shared_ptr<LogicalTensor>& rhs) const
+bool TensorPtrComparator::operator()(const std::shared_ptr<LogicalTensor>& lhs,
+                                     const std::shared_ptr<LogicalTensor>& rhs) const
 {
     return lhs->magic > rhs->magic;
 }
@@ -156,9 +156,8 @@ std::shared_ptr<RawTensor> TensorMap::GetRawTensorByRawMagic(int rawMagic) const
     return firstTensor->tensor;
 }
 
-void CalcShapeAndOffsetOfGroup(
-    const std::vector<std::shared_ptr<LogicalTensor>>& tensors, std::vector<int64_t>& resultOffset,
-    std::vector<int64_t>& resultShape)
+void CalcShapeAndOffsetOfGroup(const std::vector<std::shared_ptr<LogicalTensor>>& tensors,
+                               std::vector<int64_t>& resultOffset, std::vector<int64_t>& resultShape)
 {
     resultOffset = tensors.front()->offset;
     std::vector<int64_t> maximumOffset;
@@ -204,9 +203,8 @@ int CalcOverlapSize(const std::shared_ptr<LogicalTensor>& pTensor, const std::sh
 // For each dimension, treat it as a closed interval [offset, offset + shape - 1]. If any
 // dimension has no intersection, return NO_OVER_LAP; otherwise return PERFECTLY_MATCH,
 // COVERED (P covers Q), BE_COVERED (Q covers P), or PARTIAL_OVERLAP.
-OverlapStatus CalcOverlapByOffsetShape(
-    const std::vector<int64_t>& pOffset, const std::vector<int64_t>& pShape, const std::vector<int64_t>& qOffset,
-    const std::vector<int64_t>& qShape) noexcept
+OverlapStatus CalcOverlapByOffsetShape(const std::vector<int64_t>& pOffset, const std::vector<int64_t>& pShape,
+                                       const std::vector<int64_t>& qOffset, const std::vector<int64_t>& qShape) noexcept
 {
     // Check if tensors have same number of dimensions
     if (pOffset.size() != qOffset.size() || pShape.size() != qShape.size() || pOffset.size() != pShape.size()) {
@@ -248,8 +246,8 @@ OverlapStatus CalcOverlapByOffsetShape(
     }
 }
 
-OverlapStatus CalcOverlap(
-    const std::shared_ptr<LogicalTensor>& pTensor, const std::shared_ptr<LogicalTensor>& qTensor, bool loose)
+OverlapStatus CalcOverlap(const std::shared_ptr<LogicalTensor>& pTensor, const std::shared_ptr<LogicalTensor>& qTensor,
+                          bool loose)
 {
     if (!pTensor || !qTensor)
         return OverlapStatus::NO_OVER_LAP;
@@ -262,9 +260,8 @@ OverlapStatus CalcOverlap(
     return CalcOverlapByOffsetShape(pTensor->offset, pTensor->shape, qTensor->offset, qTensor->shape);
 }
 
-OverlapStatus CalcOverlap(
-    const std::shared_ptr<LogicalTensor>& pTensor, const std::vector<std::shared_ptr<LogicalTensor>>& pGroup,
-    bool loose)
+OverlapStatus CalcOverlap(const std::shared_ptr<LogicalTensor>& pTensor,
+                          const std::vector<std::shared_ptr<LogicalTensor>>& pGroup, bool loose)
 {
     OverlapStatus status = OverlapStatus::NO_OVER_LAP;
 

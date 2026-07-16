@@ -23,13 +23,11 @@ static RawSymbolicScalarPtr Imm(int64_t v) { return RawSymbolicImmediate::Create
 static RawSymbolicScalarPtr Sym(const std::string& n) { return RawSymbolicSymbol::Create(n); }
 static RawSymbolicScalarPtr Add(const RawSymbolicScalarPtr& a, const RawSymbolicScalarPtr& b)
 {
-    return std::make_shared<RawSymbolicExpression>(
-        SymbolicOpcode::T_BOP_ADD, std::vector<RawSymbolicScalarPtr>{a, b});
+    return std::make_shared<RawSymbolicExpression>(SymbolicOpcode::T_BOP_ADD, std::vector<RawSymbolicScalarPtr>{a, b});
 }
 static RawSymbolicScalarPtr Mul(const RawSymbolicScalarPtr& a, const RawSymbolicScalarPtr& b)
 {
-    return std::make_shared<RawSymbolicExpression>(
-        SymbolicOpcode::T_BOP_MUL, std::vector<RawSymbolicScalarPtr>{a, b});
+    return std::make_shared<RawSymbolicExpression>(SymbolicOpcode::T_BOP_MUL, std::vector<RawSymbolicScalarPtr>{a, b});
 }
 
 // 同指针 / 内容相等不同指针 / 单点浅差异 / 多处深差异 / 同值 imm 出现在不同位置无误报
@@ -68,13 +66,13 @@ TEST(TestFindAllImmediateDifferences, EqualAndDiffs)
 TEST(TestFindAllImmediateDifferences, StructuralRejection)
 {
     std::vector<ImmediateDiff> diffs;
-    EXPECT_FALSE(SymbolicExpressionTable::FindAllImmediateDifferences(
-        Add(Sym("a"), Imm(4)), Add(Sym("b"), Imm(4)), diffs));
-    EXPECT_FALSE(SymbolicExpressionTable::FindAllImmediateDifferences(
-        Add(Sym("a"), Imm(4)), Mul(Sym("a"), Imm(4)), diffs));
+    EXPECT_FALSE(
+        SymbolicExpressionTable::FindAllImmediateDifferences(Add(Sym("a"), Imm(4)), Add(Sym("b"), Imm(4)), diffs));
+    EXPECT_FALSE(
+        SymbolicExpressionTable::FindAllImmediateDifferences(Add(Sym("a"), Imm(4)), Mul(Sym("a"), Imm(4)), diffs));
     EXPECT_FALSE(SymbolicExpressionTable::FindAllImmediateDifferences(Add(Sym("a"), Imm(4)), Imm(4), diffs));
-    auto call1 = std::make_shared<RawSymbolicExpression>(
-        SymbolicOpcode::T_MOP_CALL, std::vector<RawSymbolicScalarPtr>{Sym("F"), Sym("a")});
+    auto call1 = std::make_shared<RawSymbolicExpression>(SymbolicOpcode::T_MOP_CALL,
+                                                         std::vector<RawSymbolicScalarPtr>{Sym("F"), Sym("a")});
     auto call2 = std::make_shared<RawSymbolicExpression>(
         SymbolicOpcode::T_MOP_CALL, std::vector<RawSymbolicScalarPtr>{Sym("F"), Sym("a"), Sym("b")});
     EXPECT_FALSE(SymbolicExpressionTable::FindAllImmediateDifferences(call1, call2, diffs));

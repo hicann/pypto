@@ -24,7 +24,7 @@
 namespace npu::tile_fwk {
 class CodeGen {
 public:
-    explicit CodeGen(const CodeGenCtx& ctx) : ctx_(ctx.includePath, ctx.cceDir, ctx.isMainBlock){};
+    explicit CodeGen(const CodeGenCtx& ctx) : ctx_(ctx.includePath, ctx.cceDir, ctx.isMainBlock) {};
 
     void GenCode(Function& topFunc);
 

@@ -55,11 +55,10 @@ static std::vector<T> getGoldenVec(std::vector<int64_t> shape, std::string fileN
     return golden;
 }
 
-template <
-    typename T = npu::tile_fwk::float16, typename wDtype = int8_t, bool isQuantA = false, bool isQuantB = true,
-    bool nz = true>
-void TestMlaPrologQuantV32(
-    const TestShapeParams& params, const MlaTileConfig& tileConfig, std::string layoutKey = "PA_NZ")
+template <typename T = npu::tile_fwk::float16, typename wDtype = int8_t, bool isQuantA = false, bool isQuantB = true,
+          bool nz = true>
+void TestMlaPrologQuantV32(const TestShapeParams& params, const MlaTileConfig& tileConfig,
+                           std::string layoutKey = "PA_NZ")
 {
     int b = params.b;
     int s = params.s;
@@ -189,21 +188,20 @@ void TestMlaPrologQuantV32(
         krCacheData, kScaleCacheData};
     ProgramData::GetInstance().AppendInputs({inputDataList});
 
-    std::vector<RawTensorDataPtr> outputDataList = {
-        outputQNormData, outputQNormScaleData, outputQNopeData, outputQRopeData};
+    std::vector<RawTensorDataPtr> outputDataList = {outputQNormData, outputQNormScaleData, outputQNopeData,
+                                                    outputQRopeData};
     ProgramData::GetInstance().AppendOutputs({outputDataList});
 
-    std::vector<RawTensorDataPtr> goldenDataList = {
-        RawTensorData::CreateTensor<kvDtype>(outputQNorm, golden6),
-        RawTensorData::CreateTensor<float>(outputQNormScale, golden7),
-        RawTensorData::CreateTensor<T>(outputQNope, golden1), RawTensorData::CreateTensor<T>(outputQRope, golden2)};
+    std::vector<RawTensorDataPtr> goldenDataList = {RawTensorData::CreateTensor<kvDtype>(outputQNorm, golden6),
+                                                    RawTensorData::CreateTensor<float>(outputQNormScale, golden7),
+                                                    RawTensorData::CreateTensor<T>(outputQNope, golden1),
+                                                    RawTensorData::CreateTensor<T>(outputQRope, golden2)};
     ProgramData::GetInstance().AppendGoldens({goldenDataList});
 
-    MlaPrologQuantV32(
-        dynamicTokenX, wDq, wUqQr, dequantScaleWUqQr, wUk, wDkvKr, rmsnormGammaCq, rmsnormGammaCkv, dynamicRopeCos,
-        dynamicRopeSin, dynamicCacheIndex, kvCache, krCache, kScaleCache, dynamicOutputQNorm, dynamicOutputQNormScale,
-        dynamicOutputQNope, dynamicOutputQRope, outputKvCache, outputKrCache, outputKScaleCache, 1e-5f, 1e-5f,
-        layoutKey, tileConfig);
+    MlaPrologQuantV32(dynamicTokenX, wDq, wUqQr, dequantScaleWUqQr, wUk, wDkvKr, rmsnormGammaCq, rmsnormGammaCkv,
+                      dynamicRopeCos, dynamicRopeSin, dynamicCacheIndex, kvCache, krCache, kScaleCache,
+                      dynamicOutputQNorm, dynamicOutputQNormScale, dynamicOutputQNope, dynamicOutputQRope,
+                      outputKvCache, outputKrCache, outputKScaleCache, 1e-5f, 1e-5f, layoutKey, tileConfig);
 
     DevFuncRunner::Run(Program::GetInstance().GetLastFunction(), inputDataList, outputDataList);
     std::cout << "qNope ====== " << std::endl;

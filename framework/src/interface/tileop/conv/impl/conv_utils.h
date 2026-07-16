@@ -64,11 +64,9 @@ INLINE int64_t GetConvStride(const U& tileTensor)
 template <bool isConv3D, typename U, int64_t elements, int64_t c0Size>
 using select_srcTensor = std::conditional_t<
     isConv3D,
-    pto::ConvTile<
-        pto::TileType::Mat, typename U::Type, elements * c0Size * sizeof(typename U::Type), pto::Layout::NDC1HWC0,
-        pto::ConvTileShape<-1, -1, -1, -1, -1, c0Size>>,
-    pto::ConvTile<
-        pto::TileType::Mat, typename U::Type, elements * sizeof(typename U::Type), pto::Layout::NC1HWC0,
-        pto::ConvTileShape<-1, -1, -1, -1, -1>>>;
+    pto::ConvTile<pto::TileType::Mat, typename U::Type, elements * c0Size * sizeof(typename U::Type),
+                  pto::Layout::NDC1HWC0, pto::ConvTileShape<-1, -1, -1, -1, -1, c0Size>>,
+    pto::ConvTile<pto::TileType::Mat, typename U::Type, elements * sizeof(typename U::Type), pto::Layout::NC1HWC0,
+                  pto::ConvTileShape<-1, -1, -1, -1, -1>>>;
 
 #endif // TILEOP_TILE_OPERATOR_CONV_UTILS__H

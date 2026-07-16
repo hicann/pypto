@@ -34,8 +34,8 @@ public:
 public:
     // [workspaceAddr, workspaceAddr + workspaceSize)
     // -> [root function internal workspace | slot pool]
-    void InitTensorAllocator(
-        uintdevptr_t workspaceAddr, size_t slotNum, uint64_t slotStandardMemReq, WsMetadataAllocator& allocator)
+    void InitTensorAllocator(uintdevptr_t workspaceAddr, size_t slotNum, uint64_t slotStandardMemReq,
+                             WsMetadataAllocator& allocator)
     {
         workspaceAddr_ = workspaceAddr;
         slotNum_ = slotNum;
@@ -58,9 +58,8 @@ public:
 
     WsAllocation Allocate()
     {
-        DEV_ASSERT_MSG(
-            WsErr::WORKSPACE_INIT_RESOURCE_ERROR, freeListHeader_ != nullptr, "Available slot: %zu/%zu",
-            availableSlots_, slotNum_);
+        DEV_ASSERT_MSG(WsErr::WORKSPACE_INIT_RESOURCE_ERROR, freeListHeader_ != nullptr, "Available slot: %zu/%zu",
+                       availableSlots_, slotNum_);
 
         BlockHeader* node = freeListHeader_;
         freeListHeader_ = freeListHeader_->listNext;
@@ -101,13 +100,11 @@ public:
 
     void Deallocate(uintdevptr_t ptr)
     {
-        DEV_ASSERT_MSG(
-            WsErr::WS_TENSOR_ADDRESS_OUT_OF_RANGE,
-            workspaceAddr_ <= ptr && ptr < workspaceAddr_ + slotNum_ * slotStandardMemReq_,
-            "Pointer to deallocate is out of range");
-        DEV_ASSERT_MSG(
-            WsErr::WORKSPACE_INIT_RESOURCE_ERROR, notInUseHeaders_ != nullptr,
-            "Blocks are all free, there shouldn't be any deallocation request.");
+        DEV_ASSERT_MSG(WsErr::WS_TENSOR_ADDRESS_OUT_OF_RANGE,
+                       workspaceAddr_ <= ptr && ptr < workspaceAddr_ + slotNum_ * slotStandardMemReq_,
+                       "Pointer to deallocate is out of range");
+        DEV_ASSERT_MSG(WsErr::WORKSPACE_INIT_RESOURCE_ERROR, notInUseHeaders_ != nullptr,
+                       "Blocks are all free, there shouldn't be any deallocation request.");
 
         BlockHeader* node = notInUseHeaders_;
         notInUseHeaders_ = notInUseHeaders_->listNext;
@@ -131,12 +128,10 @@ public:
     {
 #if DEBUG_MEM_DUMP_LEVEL >= DEBUG_MEM_DUMP_LIGHT
         DEV_MEM_DUMP("Slot tensor memory usage (%s)\n", hint);
-        DEV_MEM_DUMP(
-            "            Memory pool size: %10lu bytes (%zu x %lu bytes)\n", slotNum_ * slotStandardMemReq_, slotNum_,
-            slotStandardMemReq_);
-        DEV_MEM_DUMP(
-            "    Total memory requirement: %10lu bytes (%zu x %lu bytes)\n",
-            dfx_.historicalAllocated_ * slotStandardMemReq_, dfx_.historicalAllocated_, slotStandardMemReq_);
+        DEV_MEM_DUMP("            Memory pool size: %10lu bytes (%zu x %lu bytes)\n", slotNum_ * slotStandardMemReq_,
+                     slotNum_, slotStandardMemReq_);
+        DEV_MEM_DUMP("    Total memory requirement: %10lu bytes (%zu x %lu bytes)\n",
+                     dfx_.historicalAllocated_ * slotStandardMemReq_, dfx_.historicalAllocated_, slotStandardMemReq_);
 #endif // DEBUG_MEM_DUMP_LEVEL >= DEBUG_MEM_DUMP_LIGHT
         (void)hint;
     }

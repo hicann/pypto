@@ -23,15 +23,12 @@
 #include "interface/configs/config_manager.h"
 
 namespace npu::tile_fwk {
-void Expand(
-    Function& function, const TileShape& tileShape, const LogicalTensorPtr& operand,
-    const std::vector<LogicalTensorPtr>& other, const LogicalTensorPtr& result);
-void ExpandWithResultValidShape(
-    Function& function, const TileShape& tileShape, const LogicalTensorPtr& operand, const LogicalTensorPtr& result,
-    const std::vector<SymbolicScalar> resultValidShape);
-Tensor TensorFullOperation(
-    Function& function, const Element& src, const SymbolicScalar& dynValue, DataType dtype,
-    const std::vector<int64_t>& dstShape, const std::vector<SymbolicScalar>& validShape);
+void Expand(Function& function, const TileShape& tileShape, const LogicalTensorPtr& operand,
+            const std::vector<LogicalTensorPtr>& other, const LogicalTensorPtr& result);
+void ExpandWithResultValidShape(Function& function, const TileShape& tileShape, const LogicalTensorPtr& operand,
+                                const LogicalTensorPtr& result, const std::vector<SymbolicScalar> resultValidShape);
+Tensor TensorFullOperation(Function& function, const Element& src, const SymbolicScalar& dynValue, DataType dtype,
+                           const std::vector<int64_t>& dstShape, const std::vector<SymbolicScalar>& validShape);
 
 enum class CastOpType {
     CAST,
@@ -54,9 +51,9 @@ Opcode GetCastOpName()
 }
 
 template <CastOpType T>
-LogicalTensorPtr TensorCastOperation(
-    Function& function, LogicalTensorPtr self, const DataType& dstDataType, const CastMode& mode = CAST_NONE,
-    const SaturationMode& satmode = SaturationMode::OFF)
+LogicalTensorPtr TensorCastOperation(Function& function, LogicalTensorPtr self, const DataType& dstDataType,
+                                     const CastMode& mode = CAST_NONE,
+                                     const SaturationMode& satmode = SaturationMode::OFF)
 {
     auto result = std::make_shared<LogicalTensor>(function, dstDataType, self->shape, self->dynValidShape_);
     auto& op = function.AddOperation(GetCastOpName<T>(), {self}, {result});

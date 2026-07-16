@@ -47,4 +47,4 @@ inline uint32_t CalcSchAicpuNumByBlockDim(uint32_t blockDim, uint32_t aiCpuNum, 
 const int DEVICE_MAX_AICPU_NUM = 7;
 const uint16_t AICPU_EXECUTE_TIMEOUT = 1080; // 18min
 
-} // namespace npu::tile_fwk
+} // namespace npu::tile_fwk::dynamic

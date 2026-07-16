@@ -37,12 +37,12 @@ std::tuple<Tensor, Tensor, Tensor, Tensor> InitializeTestData(OpTestParam& testP
     Tensor wOut(dtype, wOutShape, "wOut");
     Tensor out(dtype, outShape, "out");
 
-    std::vector<bfloat16> agInPtr =
-        ReadToVector<bfloat16>(goldenDir + "/ag_in_rank_" + std::to_string(testParam.rankId) + ".bin", agInShape);
-    std::vector<bfloat16> wLoraPtr =
-        ReadToVector<bfloat16>(goldenDir + "/w_lora_rank_" + std::to_string(testParam.rankId) + ".bin", wLoraShape);
-    std::vector<bfloat16> wOutPtr =
-        ReadToVector<bfloat16>(goldenDir + "/w_out_rank_" + std::to_string(testParam.rankId) + ".bin", wOutShape);
+    std::vector<bfloat16> agInPtr = ReadToVector<bfloat16>(
+        goldenDir + "/ag_in_rank_" + std::to_string(testParam.rankId) + ".bin", agInShape);
+    std::vector<bfloat16> wLoraPtr = ReadToVector<bfloat16>(
+        goldenDir + "/w_lora_rank_" + std::to_string(testParam.rankId) + ".bin", wLoraShape);
+    std::vector<bfloat16> wOutPtr = ReadToVector<bfloat16>(
+        goldenDir + "/w_out_rank_" + std::to_string(testParam.rankId) + ".bin", wOutShape);
 
     ProgramData::GetInstance().AppendInputs({RawTensorData::CreateTensor<bfloat16>(agIn, agInPtr)});
     ProgramData::GetInstance().AppendInputs({RawTensorData::CreateTensor<bfloat16>(wLora, wLoraPtr)});
@@ -98,16 +98,16 @@ void TestAllGatherAttentionPostReducescatter(OpTestParam& testParam, std::string
             DataType shmemDataType = (attnOut.GetDataType() == DT_BF16 || attnOut.GetDataType() == DT_FP16) ?
                                          DT_FP32 :
                                          attnOut.GetDataType();
-            ShmemTensor shmemTensor =
-                CreateShmemTensor(testParam.group, testParam.rankSize, shmemDataType, {outRow, h});
+            ShmemTensor shmemTensor = CreateShmemTensor(testParam.group, testParam.rankSize, shmemDataType,
+                                                        {outRow, h});
             TileShape::Current().SetVecTile({16, h});
             Distributed::ReduceScatter(attnOut, attnOut, shmemTensor, DistReduceType::DIST_REDUCE_ADD, out);
         }
     }
     RunTest();
     auto output = ProgramData::GetInstance().GetOutputData(0);
-    EXPECT_TRUE(CompareWithGolden<uint8_t*>(
-        dtype, goldenDir + "/rs_out_rank_", outRow * h, output->GetDevPtr(), testParam, 0.1f));
+    EXPECT_TRUE(CompareWithGolden<uint8_t*>(dtype, goldenDir + "/rs_out_rank_", outRow * h, output->GetDevPtr(),
+                                            testParam, 0.1f));
 }
 
 } // namespace Distributed

@@ -72,10 +72,9 @@ bool MainBlockCondBulider::CheckShapeEquality(const Shape& shape, const std::vec
         std::string exprKey = dynShape[i].Dump();
         auto it = exprConstMap_.find(exprKey);
         if (it != exprConstMap_.end() && it->second != shape[i]) {
-            MACHINE_LOGW(
-                "mainBlock condition contradiction: same expression %s requires "
-                "shape to be both %ld and %ld, disabling mainblock",
-                exprKey.c_str(), it->second, static_cast<int64_t>(shape[i]));
+            MACHINE_LOGW("mainBlock condition contradiction: same expression %s requires "
+                         "shape to be both %ld and %ld, disabling mainblock",
+                         exprKey.c_str(), it->second, static_cast<int64_t>(shape[i]));
             DisableMainBlock();
             return false;
         }
@@ -89,8 +88,8 @@ bool MainBlockCondBulider::CheckShapeEquality(const Shape& shape, const std::vec
     return true;
 }
 
-bool MainBlockCondBulider::GetValidShapeFromCoa(
-    const std::vector<SymbolicScalar>& argList, Shape& shape, std::vector<SymbolicScalar>& dynValidShape)
+bool MainBlockCondBulider::GetValidShapeFromCoa(const std::vector<SymbolicScalar>& argList, Shape& shape,
+                                                std::vector<SymbolicScalar>& dynValidShape)
 {
     if (argList.empty() || (argList.size() <= COA_INDEX_TYPE_COUNT)) {
         MACHINE_LOGW("argList is invalid!");
@@ -129,9 +128,8 @@ void MainBlockCondBulider::CollectCallopMainBlockConds(Function* func)
     auto checkOperand = [&](auto& op, auto& shape, auto& validshape, const char* tag) -> bool {
         auto cond = CheckShapeEquality(shape, validshape);
         if (!cond) {
-            MACHINE_LOGW(
-                "get mainBlock flag false, op code %s, %s shape is %s, validShape is %s", op.GetOpcodeStr().c_str(),
-                tag, IntVecToStr(shape).c_str(), IntVecToStr(validshape).c_str());
+            MACHINE_LOGW("get mainBlock flag false, op code %s, %s shape is %s, validShape is %s",
+                         op.GetOpcodeStr().c_str(), tag, IntVecToStr(shape).c_str(), IntVecToStr(validshape).c_str());
         }
         return cond;
     };
@@ -160,8 +158,8 @@ bool MainBlockCondBulider::CheckReshapeCopy(Function* func)
     return false;
 }
 
-void MainBlockCondBulider::CollectCoaMainBlockConds(
-    const std::vector<std::vector<SymbolicScalar>>& argList, Function* func)
+void MainBlockCondBulider::CollectCoaMainBlockConds(const std::vector<std::vector<SymbolicScalar>>& argList,
+                                                    Function* func)
 {
     bool enableVF = Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510;
     enableVF = enableVF && config::GetPassGlobalConfig(KEY_ENABLE_VF, false);
@@ -179,9 +177,8 @@ void MainBlockCondBulider::CollectCoaMainBlockConds(
         }
         auto cond = CheckShapeEquality(shape, dynValidShape);
         if (!cond) {
-            MACHINE_LOGW(
-                "get mainBlock flag false, coa shape is %s, validShape is %s", IntVecToStr(shape).c_str(),
-                IntVecToStr(dynValidShape).c_str());
+            MACHINE_LOGW("get mainBlock flag false, coa shape is %s, validShape is %s", IntVecToStr(shape).c_str(),
+                         IntVecToStr(dynValidShape).c_str());
             return;
         }
     }

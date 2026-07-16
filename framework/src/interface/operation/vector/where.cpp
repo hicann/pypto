@@ -22,9 +22,8 @@
 namespace npu::tile_fwk {
 
 template <typename U, typename W>
-void TiledWhereOperation(
-    Function& function, const TileShape& tileShape, size_t cur, Input& condition, U& input, W& other,
-    const LogicalTensorPtr& result, TileInfo& resultTileInfo)
+void TiledWhereOperation(Function& function, const TileShape& tileShape, size_t cur, Input& condition, U& input,
+                         W& other, const LogicalTensorPtr& result, TileInfo& resultTileInfo)
 {
     if (cur == result->shape.size()) {
         auto inputDatatype = DT_FP32;
@@ -46,14 +45,14 @@ void TiledWhereOperation(
         int64_t startAddrUBTensorSize = 1;
         int64_t inputTempTensorSize = 1024;
         int64_t otherTempTensorSize = 1024;
-        int64_t tempByteSize =
-            (castConditionTensorSize + compareConditionTensorSize) * BytesOf(DT_FP16) +
-            vcmpBitResultTensorSize * BytesOf(DT_UINT8) +
-            ((startAddrUBTensorSize * BytesOf(DT_UINT64) + ALIGN_SIZE - 1) / ALIGN_SIZE) * ALIGN_SIZE +
-            (inputTempTensorSize + otherTempTensorSize) * BytesOf(selectDtype);
+        int64_t tempByteSize = (castConditionTensorSize + compareConditionTensorSize) * BytesOf(DT_FP16) +
+                               vcmpBitResultTensorSize * BytesOf(DT_UINT8) +
+                               ((startAddrUBTensorSize * BytesOf(DT_UINT64) + ALIGN_SIZE - 1) / ALIGN_SIZE) *
+                                   ALIGN_SIZE +
+                               (inputTempTensorSize + otherTempTensorSize) * BytesOf(selectDtype);
 
-        auto conditionTile =
-            condition.tensor.GetStorage()->View(function, condition.tileInfo.shape, condition.tileInfo.offset);
+        auto conditionTile = condition.tensor.GetStorage()->View(function, condition.tileInfo.shape,
+                                                                 condition.tileInfo.offset);
         auto resultTile = result->View(function, resultTileInfo.shape, resultTileInfo.offset);
         std::vector<int64_t> tempShape({static_cast<int64_t>(tempByteSize)});
         auto tempTensor = std::make_shared<LogicalTensor>(function, DT_UINT8, tempShape);
@@ -85,8 +84,8 @@ void TiledWhereOperation(
         if constexpr (std::is_same_v<U, Input> && std::is_same_v<W, Input>) {
             auto inputTile = input.tensor.GetStorage()->View(function, input.tileInfo.shape, input.tileInfo.offset);
             auto otherTile = other.tensor.GetStorage()->View(function, other.tileInfo.shape, other.tileInfo.offset);
-            auto& op = function.AddOperation(
-                Opcode::OP_WHERE_TT, {conditionTile, inputTile, otherTile}, {resultTile, tempTensor});
+            auto& op = function.AddOperation(Opcode::OP_WHERE_TT, {conditionTile, inputTile, otherTile},
+                                             {resultTile, tempTensor});
             op.SetAttribute(OP_ATTR_PREFIX + "whereBitMode", static_cast<int64_t>(whereBitMode));
         } else if constexpr (std::is_same_v<U, Input> && std::is_same_v<W, const Element>) {
             auto inputTile = input.tensor.GetStorage()->View(function, input.tileInfo.shape, input.tileInfo.offset);
@@ -119,18 +118,18 @@ void TiledWhereOperation(
                 condition.tensor.GetStorage()->shape[cur] - condition.tileInfo.offset[cur], vecTile[cur] / NUM_VALUE_8);
         } else {
             condition.tileInfo.offset[cur] = i % condition.tensor.GetStorage()->shape[cur];
-            condition.tileInfo.shape[cur] =
-                std::min(condition.tensor.GetStorage()->shape[cur] - condition.tileInfo.offset[cur], vecTile[cur]);
+            condition.tileInfo.shape[cur] = std::min(
+                condition.tensor.GetStorage()->shape[cur] - condition.tileInfo.offset[cur], vecTile[cur]);
         }
         if constexpr (std::is_same_v<U, Input>) {
             input.tileInfo.offset[cur] = i % input.tensor.GetStorage()->shape[cur];
-            input.tileInfo.shape[cur] =
-                std::min(input.tensor.GetStorage()->shape[cur] - input.tileInfo.offset[cur], vecTile[cur]);
+            input.tileInfo.shape[cur] = std::min(input.tensor.GetStorage()->shape[cur] - input.tileInfo.offset[cur],
+                                                 vecTile[cur]);
         }
         if constexpr (std::is_same_v<W, Input>) {
             other.tileInfo.offset[cur] = i % other.tensor.GetStorage()->shape[cur];
-            other.tileInfo.shape[cur] =
-                std::min(other.tensor.GetStorage()->shape[cur] - other.tileInfo.offset[cur], vecTile[cur]);
+            other.tileInfo.shape[cur] = std::min(other.tensor.GetStorage()->shape[cur] - other.tileInfo.offset[cur],
+                                                 vecTile[cur]);
         }
         TiledWhereOperation(function, tileShape, cur + 1, condition, input, other, result, resultTileInfo);
     }
@@ -155,9 +154,8 @@ void ShrinkTensorLastDimension(const LogicalTensorPtr& TensorPtr)
 }
 
 template <typename U, typename W>
-void TiledWhereOperation(
-    Function& function, const TileShape& tileShape, const LogicalTensorPtr& condition, const U& input, const W& other,
-    const LogicalTensorPtr& result)
+void TiledWhereOperation(Function& function, const TileShape& tileShape, const LogicalTensorPtr& condition,
+                         const U& input, const W& other, const LogicalTensorPtr& result)
 {
     LogicalTensorPtr conditionPtr = condition;
     LogicalTensorPtr inputPtr = nullptr;
@@ -223,8 +221,8 @@ void TiledWhereOperation(
 }
 
 template <typename U, typename W>
-std::vector<SymbolicScalar> GetResultValidShape(
-    const LogicalTensorPtr& condition, const U& input, const W& other, std::vector<int64_t> resultShape)
+std::vector<SymbolicScalar> GetResultValidShape(const LogicalTensorPtr& condition, const U& input, const W& other,
+                                                std::vector<int64_t> resultShape)
 {
     std::vector<SymbolicScalar> resultValidShape;
     for (size_t i = 0; i < resultShape.size(); ++i) {
@@ -270,8 +268,8 @@ std::vector<int64_t> GetBroadCastShapeReturnInt64_t(LogicalTensorPtr& operand1, 
     return broadCastShape;
 }
 
-std::vector<int64_t> GetBroadCastShape(
-    LogicalTensorPtr& operand1, LogicalTensorPtr& operand2, LogicalTensorPtr& operand3)
+std::vector<int64_t> GetBroadCastShape(LogicalTensorPtr& operand1, LogicalTensorPtr& operand2,
+                                       LogicalTensorPtr& operand3)
 {
     std::vector<int64_t> opShape1(operand1->shape);
     std::vector<int64_t> opShape2(operand2->shape);
@@ -308,8 +306,8 @@ LogicalTensorPtr BinaryOperationUnsqueeze(const LogicalTensorPtr& operand, const
     return operand;
 }
 
-LogicalTensorPtr TensorWhereOperation(
-    Function& function, const Tensor& condition, const Tensor& input, const Tensor& other)
+LogicalTensorPtr TensorWhereOperation(Function& function, const Tensor& condition, const Tensor& input,
+                                      const Tensor& other)
 {
     CHECK(VectorErrorCode::ERR_PARAM_INVALID, condition.GetShape().size() == condition.GetStorage()->offset.size())
         << "The shape size of condition and offset must be equal";
@@ -321,13 +319,11 @@ LogicalTensorPtr TensorWhereOperation(
     if (condition.GetStorage()->Datatype() == DT_UINT8) {
         int bitsNumOfByte = 8;
         int broadcastFlag = 1;
-        CHECK(
-            VectorErrorCode::ERR_CONFIG_ALIGNMENT,
-            input.GetStorage()->shape.back() % bitsNumOfByte == 0 || input.GetStorage()->shape.back() == broadcastFlag)
+        CHECK(VectorErrorCode::ERR_CONFIG_ALIGNMENT, input.GetStorage()->shape.back() % bitsNumOfByte == 0 ||
+                                                         input.GetStorage()->shape.back() == broadcastFlag)
             << "The input shape of last axis need to 8 align or equal to 1";
-        CHECK(
-            VectorErrorCode::ERR_CONFIG_ALIGNMENT,
-            other.GetStorage()->shape.back() % bitsNumOfByte == 0 || other.GetStorage()->shape.back() == broadcastFlag)
+        CHECK(VectorErrorCode::ERR_CONFIG_ALIGNMENT, other.GetStorage()->shape.back() % bitsNumOfByte == 0 ||
+                                                         other.GetStorage()->shape.back() == broadcastFlag)
             << "The other shape of last axis need to 8 align or equal to 1";
     }
     auto conditionT0 = condition.GetStorage();
@@ -350,15 +346,15 @@ LogicalTensorPtr TensorWhereOperation(
     inputT1 = BinaryOperationUnsqueeze(inputT1, resultShape);
     otherT2 = BinaryOperationUnsqueeze(otherT2, resultShape);
     std::vector<SymbolicScalar> resultValidShape = GetResultValidShape(conditionT0, inputT1, otherT2, resultShape);
-    auto result =
-        std::make_shared<LogicalTensor>(function, input.GetStorage()->Datatype(), resultShape, resultValidShape);
+    auto result = std::make_shared<LogicalTensor>(function, input.GetStorage()->Datatype(), resultShape,
+                                                  resultValidShape);
     function.AddOperation(Opcode::OP_WHERE_TT, {conditionT0, inputT1, otherT2}, {result});
     result->UpdateDynValidShape(resultValidShape);
     return result;
 }
 
-LogicalTensorPtr TensorWhereOperation(
-    Function& function, const Tensor& condition, const Tensor& input, const Element& other)
+LogicalTensorPtr TensorWhereOperation(Function& function, const Tensor& condition, const Tensor& input,
+                                      const Element& other)
 {
     CHECK(VectorErrorCode::ERR_PARAM_INVALID, condition.GetShape().size() == condition.GetStorage()->offset.size())
         << "The shape size of condition and offset must be equal";
@@ -367,9 +363,8 @@ LogicalTensorPtr TensorWhereOperation(
     if (condition.GetStorage()->Datatype() == DT_UINT8) {
         int bitsNumOfByte = 8;
         int broadcastFlag = 1;
-        CHECK(
-            VectorErrorCode::ERR_CONFIG_ALIGNMENT,
-            input.GetStorage()->shape.back() % bitsNumOfByte == 0 || input.GetStorage()->shape.back() == broadcastFlag)
+        CHECK(VectorErrorCode::ERR_CONFIG_ALIGNMENT, input.GetStorage()->shape.back() % bitsNumOfByte == 0 ||
+                                                         input.GetStorage()->shape.back() == broadcastFlag)
             << "The input shape of last axis need to 8 align or equal to 1";
     }
     auto conditionT0 = condition.GetStorage();
@@ -396,8 +391,8 @@ LogicalTensorPtr TensorWhereOperation(
     return result;
 }
 
-LogicalTensorPtr TensorWhereOperation(
-    Function& function, const Tensor& condition, const Element& input, const Tensor& other)
+LogicalTensorPtr TensorWhereOperation(Function& function, const Tensor& condition, const Element& input,
+                                      const Tensor& other)
 {
     CHECK(VectorErrorCode::ERR_PARAM_INVALID, condition.GetShape().size() == condition.GetStorage()->offset.size())
         << "The shape size of condition and offset must be equal";
@@ -406,9 +401,8 @@ LogicalTensorPtr TensorWhereOperation(
     if (condition.GetStorage()->Datatype() == DT_UINT8) {
         int bitsNumOfByte = 8;
         int broadcastFlag = 1;
-        CHECK(
-            VectorErrorCode::ERR_CONFIG_ALIGNMENT,
-            other.GetStorage()->shape.back() % bitsNumOfByte == 0 || other.GetStorage()->shape.back() == broadcastFlag)
+        CHECK(VectorErrorCode::ERR_CONFIG_ALIGNMENT, other.GetStorage()->shape.back() % bitsNumOfByte == 0 ||
+                                                         other.GetStorage()->shape.back() == broadcastFlag)
             << "The other shape of last axis need to 8 align or equal to 1";
     }
     auto conditionT0 = condition.GetStorage();
@@ -436,8 +430,8 @@ LogicalTensorPtr TensorWhereOperation(
     return result;
 }
 
-LogicalTensorPtr TensorWhereOperation(
-    Function& function, const Tensor& condition, const Element& input, const Element& other)
+LogicalTensorPtr TensorWhereOperation(Function& function, const Tensor& condition, const Element& input,
+                                      const Element& other)
 {
     CHECK(VectorErrorCode::ERR_PARAM_INVALID, condition.GetShape().size() == condition.GetStorage()->offset.size())
         << "The shape size of condition and offset must be equal";
@@ -478,8 +472,8 @@ Tensor Where(const Tensor& condition, const Tensor& input, const Tensor& other)
     static const std::unordered_set<DataType> conditionTypes = {DT_BOOL, DT_UINT8};
     CheckTensorDataType(condition.GetStorage(), conditionTypes, "WHERE");
     static const std::unordered_set<DataType> a2a3InputTypes = {DT_INT32, DT_INT16, DT_FP16, DT_FP32, DT_BF16};
-    static const std::unordered_set<DataType> a5InputTypes = {DT_INT32, DT_FP32,  DT_INT16,
-                                                              DT_FP16,  DT_BF16,   DT_UINT8, DT_INT8};
+    static const std::unordered_set<DataType> a5InputTypes = {DT_INT32, DT_FP32,  DT_INT16, DT_FP16,
+                                                              DT_BF16,  DT_UINT8, DT_INT8};
     const auto& inputTypes = GetSupportedDataTypesByArch(a2a3InputTypes, a5InputTypes);
     CheckTensorDataType(input.GetStorage(), inputTypes, "WHERE");
     CheckTensorDimRange(condition.GetStorage(), 1, 4, "WHERE");
@@ -502,8 +496,8 @@ Tensor Where(const Tensor& condition, const Tensor& input, const Element& otherV
     static const std::unordered_set<DataType> conditionTypes = {DT_BOOL, DT_UINT8};
     CheckTensorDataType(condition.GetStorage(), conditionTypes, "WHERE");
     static const std::unordered_set<DataType> a2a3InputTypes = {DT_INT32, DT_INT16, DT_FP16, DT_FP32, DT_BF16};
-    static const std::unordered_set<DataType> a5InputTypes = {DT_INT32, DT_FP32,  DT_INT16,
-                                                              DT_FP16,  DT_BF16,   DT_UINT8, DT_INT8};
+    static const std::unordered_set<DataType> a5InputTypes = {DT_INT32, DT_FP32,  DT_INT16, DT_FP16,
+                                                              DT_BF16,  DT_UINT8, DT_INT8};
     const auto& inputTypes = GetSupportedDataTypesByArch(a2a3InputTypes, a5InputTypes);
     CheckTensorDataType(input.GetStorage(), inputTypes, "WHERE");
     CheckTensorDimRange(condition.GetStorage(), 1, 4, "WHERE");
@@ -523,8 +517,8 @@ Tensor Where(const Tensor& condition, const Element& inputValue, const Tensor& o
     static const std::unordered_set<DataType> conditionTypes = {DT_BOOL, DT_UINT8};
     CheckTensorDataType(condition.GetStorage(), conditionTypes, "WHERE");
     static const std::unordered_set<DataType> a2a3InputTypes = {DT_INT32, DT_INT16, DT_FP16, DT_FP32, DT_BF16};
-    static const std::unordered_set<DataType> a5InputTypes = {DT_INT32, DT_FP32,  DT_INT16,
-                                                              DT_FP16,  DT_BF16,   DT_UINT8, DT_INT8};
+    static const std::unordered_set<DataType> a5InputTypes = {DT_INT32, DT_FP32,  DT_INT16, DT_FP16,
+                                                              DT_BF16,  DT_UINT8, DT_INT8};
     const auto& inputTypes = GetSupportedDataTypesByArch(a2a3InputTypes, a5InputTypes);
     CheckTensorDataType(other.GetStorage(), inputTypes, "WHERE");
     CheckTensorDimRange(condition.GetStorage(), 1, 4, "WHERE");
@@ -547,36 +541,35 @@ Tensor Where(const Tensor& condition, const Element& inputValue, const Element& 
     RETURN_CALL(WhereOperation, *Program::GetInstance().GetCurrentFunction(), condition, inputValue, otherValue);
 }
 
-void WhereOperationTileFuncTT(
-    Function& function, const TileShape& tileShape, const std::vector<LogicalTensorPtr>& iOperand,
-    const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
+void WhereOperationTileFuncTT(Function& function, const TileShape& tileShape,
+                              const std::vector<LogicalTensorPtr>& iOperand,
+                              const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
 {
     TiledWhereOperation(function, tileShape, iOperand[0], iOperand[1], iOperand[2], oOperand[0]);
 }
 
-void WhereOperationTileFuncTS(
-    Function& function, const TileShape& tileShape, const std::vector<LogicalTensorPtr>& iOperand,
-    const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
+void WhereOperationTileFuncTS(Function& function, const TileShape& tileShape,
+                              const std::vector<LogicalTensorPtr>& iOperand,
+                              const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
 {
-    TiledWhereOperation(
-        function, tileShape, iOperand[0], iOperand[1], op.GetElementAttribute(OpAttributeKey::scalar), oOperand[0]);
+    TiledWhereOperation(function, tileShape, iOperand[0], iOperand[1], op.GetElementAttribute(OpAttributeKey::scalar),
+                        oOperand[0]);
 }
 
-void WhereOperationTileFuncST(
-    Function& function, const TileShape& tileShape, const std::vector<LogicalTensorPtr>& iOperand,
-    const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
+void WhereOperationTileFuncST(Function& function, const TileShape& tileShape,
+                              const std::vector<LogicalTensorPtr>& iOperand,
+                              const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
 {
-    TiledWhereOperation(
-        function, tileShape, iOperand[0], op.GetElementAttribute(OpAttributeKey::scalar), iOperand[1], oOperand[0]);
+    TiledWhereOperation(function, tileShape, iOperand[0], op.GetElementAttribute(OpAttributeKey::scalar), iOperand[1],
+                        oOperand[0]);
 }
 
-void WhereOperationTileFuncSS(
-    Function& function, const TileShape& tileShape, const std::vector<LogicalTensorPtr>& iOperand,
-    const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
+void WhereOperationTileFuncSS(Function& function, const TileShape& tileShape,
+                              const std::vector<LogicalTensorPtr>& iOperand,
+                              const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
 {
-    TiledWhereOperation(
-        function, tileShape, iOperand[0], op.GetVectorElementAttribute(OpAttributeKey::vectorScalar)[0],
-        op.GetVectorElementAttribute(OpAttributeKey::vectorScalar)[1], oOperand[0]);
+    TiledWhereOperation(function, tileShape, iOperand[0], op.GetVectorElementAttribute(OpAttributeKey::vectorScalar)[0],
+                        op.GetVectorElementAttribute(OpAttributeKey::vectorScalar)[1], oOperand[0]);
 }
 
 REGISTER_OPERATION_TILED_FUNC(OP_WHERE_TT, Opcode::OP_WHERE_TT, WhereOperationTileFuncTT);

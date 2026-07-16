@@ -42,7 +42,7 @@ const std::unordered_set<Opcode>& CommonOperationEliminateUtils::GetSkipEliminat
 void CommonOperationEliminateUtils::SortedProducer(std::vector<Operation*>& sortedProducers) const
 {
     // Keep the original producer order for ties so hash generation stays deterministic.
- 	std::stable_sort(sortedProducers.begin(), sortedProducers.end(), [](const Operation* op1, const Operation* op2) {
+    std::stable_sort(sortedProducers.begin(), sortedProducers.end(), [](const Operation* op1, const Operation* op2) {
         const auto& iOp1 = op1->GetIOperands();
         const auto& iOp2 = op2->GetIOperands();
         size_t minLen = std::min(iOp1.size(), iOp2.size());
@@ -67,9 +67,10 @@ void CommonOperationEliminateUtils::SortedProducer(std::vector<Operation*>& sort
     });
 }
 
-void CommonOperationEliminateUtils::CollectProducerInfo(
-    const std::vector<Operation*>& sortedProducers, const LogicalTensorPtr& curTensor,
-    std::vector<std::string>& opStrList, std::stringstream& ss) const
+void CommonOperationEliminateUtils::CollectProducerInfo(const std::vector<Operation*>& sortedProducers,
+                                                        const LogicalTensorPtr& curTensor,
+                                                        std::vector<std::string>& opStrList,
+                                                        std::stringstream& ss) const
 {
     for (const auto& op : sortedProducers) {
         if (op == nullptr) {
@@ -121,8 +122,8 @@ void CommonOperationEliminateUtils::CollectProducerInfo(
     }
 }
 
-unsigned long CommonOperationEliminateUtils::ComputeHash(
-    const std::vector<Operation*>& producers, LogicalTensorPtr curTensor) const
+unsigned long CommonOperationEliminateUtils::ComputeHash(const std::vector<Operation*>& producers,
+                                                         LogicalTensorPtr curTensor) const
 {
     std::vector<std::string> opStrList;
     std::stringstream ss;
@@ -187,8 +188,8 @@ std::unordered_map<LogicalTensorPtr, std::vector<Operation*>> CommonOperationEli
             visitedTensors.insert(tensor->GetMagic());
             for (const auto& producer : tensor->GetProducers()) {
                 if (producer == nullptr) {
-                    APASS_LOG_ERROR_F(
-                        Elements::Operation, "Producer operation nullptr for Tensor[%d].", tensor->GetMagic());
+                    APASS_LOG_ERROR_F(Elements::Operation, "Producer operation nullptr for Tensor[%d].",
+                                      tensor->GetMagic());
                     continue;
                 }
                 if (tensorProducerMap.count(tensor) == 0) {
@@ -228,8 +229,8 @@ std::pair<LogicalTensorPtr, std::vector<Operation*>> CommonOperationEliminateUti
     }
     uint64_t groupHash = ComputeHash(producers, orderedTensor);
     if (hashCache_.count(groupHash) != 0) {
-        APASS_LOG_DEBUG_F(
-            Elements::Operation, "Tensor[%d] are marked as hash already existed tensor.", orderedTensor->GetMagic());
+        APASS_LOG_DEBUG_F(Elements::Operation, "Tensor[%d] are marked as hash already existed tensor.",
+                          orderedTensor->GetMagic());
         return hashCache_[groupHash];
     }
     hashCache_.emplace(groupHash, std::make_pair(orderedTensor, producers));
@@ -245,9 +246,9 @@ std::pair<LogicalTensorPtr, std::vector<Operation*>> CommonOperationEliminateUti
     return {nullptr, {}};
 }
 
-void CommonOperationEliminateUtils::UpdateView(
-    ViewOpAttribute* viewOpAttribute, const std::shared_ptr<LogicalTensor> oldTensor,
-    const std::shared_ptr<LogicalTensor> newTensor) const
+void CommonOperationEliminateUtils::UpdateView(ViewOpAttribute* viewOpAttribute,
+                                               const std::shared_ptr<LogicalTensor> oldTensor,
+                                               const std::shared_ptr<LogicalTensor> newTensor) const
 {
     auto& fromOffset = viewOpAttribute->GetFromOffset();
     for (size_t j = 0; j < fromOffset.size(); j++) {
@@ -255,9 +256,9 @@ void CommonOperationEliminateUtils::UpdateView(
     }
 }
 
-void CommonOperationEliminateUtils::UpdateCopy(
-    CopyOpAttribute* copyOpAttribute, const std::shared_ptr<LogicalTensor> oldTensor,
-    const std::shared_ptr<LogicalTensor> newTensor) const
+void CommonOperationEliminateUtils::UpdateCopy(CopyOpAttribute* copyOpAttribute,
+                                               const std::shared_ptr<LogicalTensor> oldTensor,
+                                               const std::shared_ptr<LogicalTensor> newTensor) const
 {
     if (!copyOpAttribute->IsCopyOut()) {
         auto [fromOffset, memType] = copyOpAttribute->GetCopyInAttr();
@@ -315,8 +316,8 @@ uint32_t CommonOperationEliminateUtils::GetTensorCoreFlag(const LogicalTensorPtr
     }
 }
 
-void CommonOperationEliminateUtils::CollectSubgraphIds(
-    const std::set<Operation*, LogicalTensor::CompareOp>& ops, std::unordered_set<int>& subgraphIds) const
+void CommonOperationEliminateUtils::CollectSubgraphIds(const std::set<Operation*, LogicalTensor::CompareOp>& ops,
+                                                       std::unordered_set<int>& subgraphIds) const
 {
     for (const auto& op : ops) {
         if (op == nullptr) {
@@ -459,16 +460,17 @@ bool CommonOperationEliminateUtils::TensorProducersMerge(
         return false;
     }
     if (WouldExposeMixInternalTensorAfterMerge(oldTensor, newTensor, mixSubgraphIds_)) {
-        APASS_LOG_DEBUG_F(Elements::Operation,
+        APASS_LOG_DEBUG_F(
+            Elements::Operation,
             "Skip eliminating Tensor[%d] to avoid exposing mix subgraph internal Tensor[%d] to other subgraphs.",
             oldTensor->GetMagic(), newTensor->GetMagic());
         return false;
     }
     UpdateConnection(oldTensor, newTensor);
     oldTensor->GetConsumers().clear();
-    APASS_LOG_DEBUG_F(
-        Elements::Operation, "In CommonOperationEliminateUtils, Tensor[%d] and producersgroup are marked as redundant.",
-        oldTensor->GetMagic());
+    APASS_LOG_DEBUG_F(Elements::Operation,
+                      "In CommonOperationEliminateUtils, Tensor[%d] and producersgroup are marked as redundant.",
+                      oldTensor->GetMagic());
     return true;
 }
 } // namespace npu::tile_fwk

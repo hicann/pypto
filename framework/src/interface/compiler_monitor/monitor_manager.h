@@ -64,8 +64,8 @@ class MonitorManager {
 public:
     static MonitorManager& Instance();
 
-    void Initialize(
-        bool enable, int intervalSec, double timeoutSec, int totalTimeoutSec, bool passDetailEnable = false);
+    void Initialize(bool enable, int intervalSec, double timeoutSec, int totalTimeoutSec,
+                    bool passDetailEnable = false);
     void Shutdown();
 
     void StartStage(const std::string& name, int rootFuncIndex = -1, const std::string& rootFuncName = "",
@@ -98,8 +98,8 @@ public:
 
     void NotifyCompilationFinished();
 
-    void SetCompilerMonitorOptions(
-        bool enable, int intervalSec, double timeoutSec, int totalTimeoutSec, bool passDetailEnable = false);
+    void SetCompilerMonitorOptions(bool enable, int intervalSec, double timeoutSec, int totalTimeoutSec,
+                                   bool passDetailEnable = false);
     bool IsEnabled() const;
     bool IsPassDetailEnabled() const;
     int GetIntervalSec() const;
@@ -132,16 +132,14 @@ public:
     int GetProgressWidth() const;
     static double CalcPassStageTimeoutSec(int opSize);
     static std::string FormatPassDurationForLog(double seconds);
-    void StartPassCompile(
-        const std::string& strategy, const std::string& passIdentifier, size_t passIndex,
-        const std::string& functionName, int functionIndex, int functionOpSize);
-    void EndPassCompile(
-        const std::string& strategy, const std::string& passIdentifier, size_t passIndex,
-        const std::string& functionName, int functionIndex);
+    void StartPassCompile(const std::string& strategy, const std::string& passIdentifier, size_t passIndex,
+                          const std::string& functionName, int functionIndex, int functionOpSize);
+    void EndPassCompile(const std::string& strategy, const std::string& passIdentifier, size_t passIndex,
+                        const std::string& functionName, int functionIndex);
     std::string GetCurrentPassDescription() const;
-    void RecordPassCompileTime(
-        const std::string& strategy, const std::string& passIdentifier, size_t passIndex,
-        const std::string& functionName, int functionIndex, int functionOpSize, double elapsedSec, bool success);
+    void RecordPassCompileTime(const std::string& strategy, const std::string& passIdentifier, size_t passIndex,
+                               const std::string& functionName, int functionIndex, int functionOpSize,
+                               double elapsedSec, bool success);
     std::vector<PassCompileTiming> GetPassCompileTimings() const;
     std::map<std::string, double> GetPassElapsedTotals() const;
 
@@ -153,16 +151,14 @@ public:
 private:
     void MaybeStartTotalClock();
     void PrintCompilationFinished();
-    void EndStageInternal(
-        const std::string& name, int rootFuncIndex, const std::string& rootFuncName,
-        const std::chrono::steady_clock::time_point& startTime, int rootFuncIndexOriginal, int rootFuncOpSize,
-        int functionIndex, const std::string& functionName, int functionOpSize);
+    void EndStageInternal(const std::string& name, int rootFuncIndex, const std::string& rootFuncName,
+                          const std::chrono::steady_clock::time_point& startTime, int rootFuncIndexOriginal,
+                          int rootFuncOpSize, int functionIndex, const std::string& functionName, int functionOpSize);
     std::string BuildPassCompileTimingsForFunction(int functionIndex, const std::string& functionName) const;
-    std::string BuildPassFunctionHeaderLocked(
-        int functionIndex, const std::string& functionName, const std::string& strategy = "") const;
-    std::string BuildPassProgressLineLocked(
-        const std::string& passIdentifier, size_t passIndex, int functionOpSize, const std::string& status,
-        double elapsedSec, bool success) const;
+    std::string BuildPassFunctionHeaderLocked(int functionIndex, const std::string& functionName,
+                                              const std::string& strategy = "") const;
+    std::string BuildPassProgressLineLocked(const std::string& passIdentifier, size_t passIndex, int functionOpSize,
+                                            const std::string& status, double elapsedSec, bool success) const;
 
     mutable std::mutex mutex_;
     mutable std::mutex passDetailPrintMutex_;

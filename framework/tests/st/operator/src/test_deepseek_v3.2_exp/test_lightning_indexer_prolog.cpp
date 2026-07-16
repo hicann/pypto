@@ -41,8 +41,8 @@ void PerformanceConfig()
     config::SetPassOption(MG_COPYIN_UPPER_BOUND, 2 * 1024 * 1024);
 }
 
-static IndexerShapeParams ReadParams(
-    const RopeTileShapeConfig& ropeTileConfigs, const IndexerTileShapeConfig& indexerConfigs, int tileBS)
+static IndexerShapeParams ReadParams(const RopeTileShapeConfig& ropeTileConfigs,
+                                     const IndexerTileShapeConfig& indexerConfigs, int tileBS)
 {
     int paramsSize = 11;
     std::vector<int32_t> input_param(paramsSize);

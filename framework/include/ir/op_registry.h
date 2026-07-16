@@ -148,8 +148,8 @@ public:
      * \return Const reference to the type deduction function
      * \throws ValueError if the type deduction function is not set
      */
-    [[nodiscard]] inline const std::function<
-        TypePtr(const std::vector<ExprPtr>&, const std::vector<std::pair<std::string, std::any>>&)>&
+    [[nodiscard]] inline const std::function<TypePtr(const std::vector<ExprPtr>&,
+                                                     const std::vector<std::pair<std::string, std::any>>&)>&
     GetDeduceType() const
     {
         CHECK(deduce_type_.has_value()) << "Operator '" + name_ + "' has no type deduction function";
@@ -393,9 +393,8 @@ public:
      * \return Shared pointer to Call expression with deduced type
      * \throws ValueError if operator not found or invalid arguments
      */
-    [[nodiscard]] CallPtr Create(
-        const std::string& op_name, const std::vector<ExprPtr>& args,
-        const std::vector<std::pair<std::string, std::any>>& kwargs, Span span) const;
+    [[nodiscard]] CallPtr Create(const std::string& op_name, const std::vector<ExprPtr>& args,
+                                 const std::vector<std::pair<std::string, std::any>>& kwargs, Span span) const;
 
     /**
      * \brief Check if an operator is registered
@@ -446,9 +445,8 @@ private:
  * \throws ValueError if unknown kwarg
  * \throws TypeError if type mismatch
  */
-void ValidateKwargs(
-    const std::vector<std::pair<std::string, std::any>>& kwargs,
-    const std::unordered_map<std::string, std::type_index>& allowed_kwargs, const std::string& op_name);
+void ValidateKwargs(const std::vector<std::pair<std::string, std::any>>& kwargs,
+                    const std::unordered_map<std::string, std::type_index>& allowed_kwargs, const std::string& op_name);
 
 /**
  * \brief Helper macro for operator registration
@@ -459,9 +457,9 @@ void ValidateKwargs(
  * REGISTER_OP("TensorAdd");
  * @endcode
  */
-#define REGISTER_OP(OpName)                                                                             \
-    static PYPTO_STR_CONCAT(PYPTO_UNUSED ::pypto::ir::OpRegistryEntry& OpRegistryEntry_, __COUNTER__) = \
-        ::pypto::ir::OpRegistry::GetInstance().Register(OpName)
+#define REGISTER_OP(OpName)                                                              \
+    static PYPTO_STR_CONCAT(PYPTO_UNUSED ::pypto::ir::OpRegistryEntry& OpRegistryEntry_, \
+                            __COUNTER__) = ::pypto::ir::OpRegistry::GetInstance().Register(OpName)
 
 } // namespace ir
 } // namespace pypto

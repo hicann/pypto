@@ -129,8 +129,8 @@ TraceDependGraph TraceDeviceTask::BuildDependGraph() const
             leafTaskList.push_back(leafTask);
         }
     }
-    std::vector<std::vector<int>> reachDict(
-        leafTaskList.size(), std::vector<int>(leafTaskList.size(), INVALID_TRACE_TASK_DEPEND_INDEX));
+    std::vector<std::vector<int>> reachDict(leafTaskList.size(),
+                                            std::vector<int>(leafTaskList.size(), INVALID_TRACE_TASK_DEPEND_INDEX));
     TraceDependGraph graph(leafTaskList, leafTaskDependIndexDict, reachDict);
     std::vector<bool> visitDict(leafTaskList.size(), false);
     for (int i = 0; i < graph.GetLeafTaskSize(); i++) {
@@ -155,9 +155,8 @@ std::vector<TraceRace> TraceDeviceTask::CheckRace(const TraceDependGraph& graph)
                     auto& dstCopy = dstLeafTask->GetCopyOutList()[j];
                     // RW-race
                     if (TraceCopy::Overlap(srcCopy, dstCopy)) {
-                        raceList.emplace_back(
-                            TraceRaceKind::RACE_READ_WRITE, TraceRacePart{srcLeafTask, false, i},
-                            TraceRacePart{dstLeafTask, true, j});
+                        raceList.emplace_back(TraceRaceKind::RACE_READ_WRITE, TraceRacePart{srcLeafTask, false, i},
+                                              TraceRacePart{dstLeafTask, true, j});
                     }
                 }
             }
@@ -167,9 +166,8 @@ std::vector<TraceRace> TraceDeviceTask::CheckRace(const TraceDependGraph& graph)
                     auto& dstCopy = dstLeafTask->GetCopyInList()[j];
                     // RW-race
                     if (TraceCopy::Overlap(srcCopy, dstCopy)) {
-                        raceList.emplace_back(
-                            TraceRaceKind::RACE_READ_WRITE, TraceRacePart{srcLeafTask, true, i},
-                            TraceRacePart{dstLeafTask, false, j});
+                        raceList.emplace_back(TraceRaceKind::RACE_READ_WRITE, TraceRacePart{srcLeafTask, true, i},
+                                              TraceRacePart{dstLeafTask, false, j});
                     }
                 }
             }
@@ -180,13 +178,11 @@ std::vector<TraceRace> TraceDeviceTask::CheckRace(const TraceDependGraph& graph)
                     // RW-race
                     if (TraceCopy::Overlap(srcCopy, dstCopy)) {
                         if (srcCopy.IsAtomicAdd() && dstCopy.IsAtomicAdd()) {
-                            raceList.emplace_back(
-                                TraceRaceKind::RACE_ATOMIC_ADD, TraceRacePart{srcLeafTask, true, i},
-                                TraceRacePart{dstLeafTask, true, j});
+                            raceList.emplace_back(TraceRaceKind::RACE_ATOMIC_ADD, TraceRacePart{srcLeafTask, true, i},
+                                                  TraceRacePart{dstLeafTask, true, j});
                         } else {
-                            raceList.emplace_back(
-                                TraceRaceKind::RACE_WRITE_WRITE, TraceRacePart{srcLeafTask, true, i},
-                                TraceRacePart{dstLeafTask, true, j});
+                            raceList.emplace_back(TraceRaceKind::RACE_WRITE_WRITE, TraceRacePart{srcLeafTask, true, i},
+                                                  TraceRacePart{dstLeafTask, true, j});
                         }
                     }
                 }
@@ -261,10 +257,8 @@ static TraceMemoryRange LoadTraceMemoryRange(const std::shared_ptr<SchemaNode>& 
 {
     std::string beginStr = node->at(0)->GetName();
     std::string endStr = node->at(1)->GetName();
-    ASSERT(
-        ControlFlowScene::INVALID_FUNC_IO_SPEC, beginStr.substr(0, 0x2) == SCHEMA_ADDRESS_PREFIX);
-    ASSERT(
-        ControlFlowScene::INVALID_FUNC_IO_SPEC, endStr.substr(0, 0x2) == SCHEMA_ADDRESS_PREFIX);
+    ASSERT(ControlFlowScene::INVALID_FUNC_IO_SPEC, beginStr.substr(0, 0x2) == SCHEMA_ADDRESS_PREFIX);
+    ASSERT(ControlFlowScene::INVALID_FUNC_IO_SPEC, endStr.substr(0, 0x2) == SCHEMA_ADDRESS_PREFIX);
     uintptr_t begin = std::stoull(beginStr, nullptr, 16);
     uintptr_t end = std::stoull(endStr, nullptr, 16);
     return TraceMemoryRange(begin, end);

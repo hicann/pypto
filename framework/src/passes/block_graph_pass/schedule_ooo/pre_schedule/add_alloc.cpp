@@ -20,8 +20,8 @@
 #define MODULE_NAME "AddAlloc"
 
 namespace npu::tile_fwk {
-Status AddAlloc::GenTensorAllocMsgMap(
-    Function& function, std::unordered_map<int, TensorAllocMsg>& tensorAllocMsgMap) const
+Status AddAlloc::GenTensorAllocMsgMap(Function& function,
+                                      std::unordered_map<int, TensorAllocMsg>& tensorAllocMsgMap) const
 {
     for (auto& op : function.Operations(false).DuplicatedOpList()) {
         if (FindTensorAllocMsg(*op, tensorAllocMsgMap) != SUCCESS) {
@@ -75,14 +75,13 @@ TensorAllocMsg AddAlloc::ConstructTensorAllocMsg(Operation& op, size_t i, int me
     return tensorAllocMsg;
 }
 
-Status AddAlloc::UpdateTensorAllocMsg(
-    Operation& op, size_t i, std::unordered_map<int, TensorAllocMsg>& tensorAllocMsgMap) const
+Status AddAlloc::UpdateTensorAllocMsg(Operation& op, size_t i,
+                                      std::unordered_map<int, TensorAllocMsg>& tensorAllocMsgMap) const
 {
     auto memId = op.GetOutputOperand(i)->memoryrange.memId;
     if (memId == -1) {
-        APASS_LOG_ERROR_F(
-            Elements::Tensor, "Get memId in memoryrange failed, op:%d, operand: %zu.%s", op.GetOpMagic(), i,
-            GetFormatBacktrace(op).c_str());
+        APASS_LOG_ERROR_F(Elements::Tensor, "Get memId in memoryrange failed, op:%d, operand: %zu.%s", op.GetOpMagic(),
+                          i, GetFormatBacktrace(op).c_str());
         return FAILED;
     }
     if (tensorAllocMsgMap.find(memId) == tensorAllocMsgMap.end()) {
@@ -123,8 +122,8 @@ Status AddAlloc::GenAllocOpcode(const Opcode& allocOpcode, const TensorAllocMsg&
         if (oOperand->memoryrange.memId != tensorAllocMsg.memId) {
             continue;
         }
-        PassOperationUtils::AddOperation(
-            function, allocOpcode, {}, std::vector<std::shared_ptr<LogicalTensor>>({oOperand}));
+        PassOperationUtils::AddOperation(function, allocOpcode, {},
+                                         std::vector<std::shared_ptr<LogicalTensor>>({oOperand}));
     }
     return SUCCESS;
 }
@@ -133,8 +132,8 @@ Status AddAlloc::CreateAllocNode(const TensorAllocMsg& tensorAllocMsg, Function&
 {
     auto iter = allocOpcodeMap.find(tensorAllocMsg.memType);
     if (iter != allocOpcodeMap.end()) {
-        APASS_LOG_DEBUG_F(
-            Elements::Tensor, "Create alloc node for memtype [%d]", static_cast<int>(tensorAllocMsg.memType));
+        APASS_LOG_DEBUG_F(Elements::Tensor, "Create alloc node for memtype [%d]",
+                          static_cast<int>(tensorAllocMsg.memType));
         if (tensorAllocMsg.producer.size() == 0) {
             APASS_LOG_ERROR_F(Elements::Tensor, "TensorAllocMsg's producer size cannot be 0.");
             return FAILED;

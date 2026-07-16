@@ -65,9 +65,9 @@ static std::vector<int64_t> GetBroadcastedViewShape(std::vector<int64_t> viewSha
     return res;
 }
 
-static std::vector<SymbolicScalar> GetBrcedValidShape(
-    std::vector<int64_t>& broadcastInfo, std::vector<SymbolicScalar>& indices, std::vector<int64_t> inputViewShape,
-    const Tensor& input)
+static std::vector<SymbolicScalar> GetBrcedValidShape(std::vector<int64_t>& broadcastInfo,
+                                                      std::vector<SymbolicScalar>& indices,
+                                                      std::vector<int64_t> inputViewShape, const Tensor& input)
 {
     std::vector<SymbolicScalar> res;
     for (size_t i = 0; i < inputViewShape.size(); i++) {
@@ -79,8 +79,9 @@ static std::vector<SymbolicScalar> GetBrcedValidShape(
     return res;
 }
 
-static std::vector<SymbolicScalar> GetBrcedOffset(
-    std::vector<int64_t>& broadcastInfo, std::vector<SymbolicScalar>& indices, std::vector<int64_t> inputViewShape)
+static std::vector<SymbolicScalar> GetBrcedOffset(std::vector<int64_t>& broadcastInfo,
+                                                  std::vector<SymbolicScalar>& indices,
+                                                  std::vector<int64_t> inputViewShape)
 {
     std::vector<SymbolicScalar> res;
     for (size_t i = 0; i < inputViewShape.size(); i++) {
@@ -90,8 +91,8 @@ static std::vector<SymbolicScalar> GetBrcedOffset(
     return res;
 }
 
-static void GcdOperationExeFuncDoubleCut(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void GcdOperationExeFuncDoubleCut(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                         const OpFuncArgs* opArgs)
 {
     auto args = static_cast<const GcdOpFuncArgs*>(opArgs);
 
@@ -146,12 +147,12 @@ static void GcdOperationExeFuncDoubleCut(
                     auto tensor0Offset = GetBrcedOffset(broadcastInfo[0], indices, input0ViewShape);
                     auto tensor1Offset = GetBrcedOffset(broadcastInfo[1], indices, input1ViewShape);
 
-                    tileTensor0 = View(
-                        inputs[0], {input0ViewShape[0], input0ViewShape[1]},
-                        {tensor0ValidShape[0], tensor0ValidShape[1]}, {tensor0Offset[0], tensor0Offset[1]});
-                    tileTensor1 = View(
-                        inputs[1], {input1ViewShape[0], input1ViewShape[1]},
-                        {tensor1ValidShape[0], tensor1ValidShape[1]}, {tensor1Offset[0], tensor1Offset[1]});
+                    tileTensor0 = View(inputs[0], {input0ViewShape[0], input0ViewShape[1]},
+                                       {tensor0ValidShape[0], tensor0ValidShape[1]},
+                                       {tensor0Offset[0], tensor0Offset[1]});
+                    tileTensor1 = View(inputs[1], {input1ViewShape[0], input1ViewShape[1]},
+                                       {tensor1ValidShape[0], tensor1ValidShape[1]},
+                                       {tensor1Offset[0], tensor1Offset[1]});
                     TileShape::Current().SetVecTile(args->tileShape_);
                     auto res = Gcd(tileTensor0, tileTensor1);
                     Assemble(res, {bIdx * firstViewShape, sIdx * secondViewShape}, outputs[0]);
@@ -161,8 +162,8 @@ static void GcdOperationExeFuncDoubleCut(
     }
 }
 
-static void GcdOperationExeFuncTripleCut(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void GcdOperationExeFuncTripleCut(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                         const OpFuncArgs* opArgs)
 {
     auto args = static_cast<const GcdOpFuncArgs*>(opArgs);
 
@@ -196,14 +197,12 @@ static void GcdOperationExeFuncTripleCut(
                     auto tensor0Offset = GetBrcedOffset(broadcastInfo[0], indices, input0ViewShape);
                     auto tensor1Offset = GetBrcedOffset(broadcastInfo[1], indices, input1ViewShape);
 
-                    tileTensor0 = View(
-                        inputs[0], {input0ViewShape[0], input0ViewShape[1], input0ViewShape[2]},
-                        {tensor0ValidShape[0], tensor0ValidShape[1], tensor0ValidShape[2]},
-                        {tensor0Offset[0], tensor0Offset[1], tensor0Offset[2]});
-                    tileTensor1 = View(
-                        inputs[1], {input1ViewShape[0], input1ViewShape[1], input1ViewShape[2]},
-                        {tensor1ValidShape[0], tensor1ValidShape[1], tensor1ValidShape[2]},
-                        {tensor1Offset[0], tensor1Offset[1], tensor1Offset[2]});
+                    tileTensor0 = View(inputs[0], {input0ViewShape[0], input0ViewShape[1], input0ViewShape[2]},
+                                       {tensor0ValidShape[0], tensor0ValidShape[1], tensor0ValidShape[2]},
+                                       {tensor0Offset[0], tensor0Offset[1], tensor0Offset[2]});
+                    tileTensor1 = View(inputs[1], {input1ViewShape[0], input1ViewShape[1], input1ViewShape[2]},
+                                       {tensor1ValidShape[0], tensor1ValidShape[1], tensor1ValidShape[2]},
+                                       {tensor1Offset[0], tensor1Offset[1], tensor1Offset[2]});
                     TileShape::Current().SetVecTile(args->tileShape_);
                     auto res = Gcd(tileTensor0, tileTensor1);
                     Assemble(res, {bIdx * firstViewShape, sIdx * secondViewShape, kIdx * thirdViewShape}, outputs[0]);
@@ -213,8 +212,8 @@ static void GcdOperationExeFuncTripleCut(
     }
 }
 
-static void GcdOperationExeFuncQuadraticCut(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void GcdOperationExeFuncQuadraticCut(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                            const OpFuncArgs* opArgs)
 {
     auto args = static_cast<const GcdOpFuncArgs*>(opArgs);
 
@@ -248,10 +247,10 @@ static void GcdOperationExeFuncQuadraticCut(
                         Tensor tileTensor0;
                         Tensor tileTensor1;
                         std::vector<SymbolicScalar> indices = {bIdx, sIdx, kIdx, mIdx};
-                        auto tensor0ValidShape =
-                            GetBrcedValidShape(broadcastInfo[0], indices, input0ViewShape, inputs[0]);
-                        auto tensor1ValidShape =
-                            GetBrcedValidShape(broadcastInfo[1], indices, input1ViewShape, inputs[1]);
+                        auto tensor0ValidShape = GetBrcedValidShape(broadcastInfo[0], indices, input0ViewShape,
+                                                                    inputs[0]);
+                        auto tensor1ValidShape = GetBrcedValidShape(broadcastInfo[1], indices, input1ViewShape,
+                                                                    inputs[1]);
                         auto tensor0Offset = GetBrcedOffset(broadcastInfo[0], indices, input0ViewShape);
                         auto tensor1Offset = GetBrcedOffset(broadcastInfo[1], indices, input1ViewShape);
 
@@ -265,11 +264,10 @@ static void GcdOperationExeFuncQuadraticCut(
                             {tensor1Offset[0], tensor1Offset[1], tensor1Offset[2], tensor1Offset[3]});
                         TileShape::Current().SetVecTile(args->tileShape_);
                         auto res = Gcd(tileTensor0, tileTensor1);
-                        Assemble(
-                            res,
-                            {bIdx * firstViewShape, sIdx * secondViewShape, kIdx * thirdViewShape,
-                             mIdx * fourthViewShape},
-                            outputs[0]);
+                        Assemble(res,
+                                 {bIdx * firstViewShape, sIdx * secondViewShape, kIdx * thirdViewShape,
+                                  mIdx * fourthViewShape},
+                                 outputs[0]);
                     }
                 }
             }
@@ -277,8 +275,8 @@ static void GcdOperationExeFuncQuadraticCut(
     }
 }
 
-static void GcdOperationExeFuncPentaCut(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void GcdOperationExeFuncPentaCut(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                        const OpFuncArgs* opArgs)
 {
     auto args = static_cast<const GcdOpFuncArgs*>(opArgs);
 
@@ -317,36 +315,33 @@ static void GcdOperationExeFuncPentaCut(
                             Tensor tileTensor0;
                             Tensor tileTensor1;
                             std::vector<SymbolicScalar> indices = {bIdx, sIdx, kIdx, mIdx, nIdx};
-                            auto tensor0ValidShape =
-                                GetBrcedValidShape(broadcastInfo[0], indices, input0ViewShape, inputs[0]);
-                            auto tensor1ValidShape =
-                                GetBrcedValidShape(broadcastInfo[1], indices, input1ViewShape, inputs[1]);
+                            auto tensor0ValidShape = GetBrcedValidShape(broadcastInfo[0], indices, input0ViewShape,
+                                                                        inputs[0]);
+                            auto tensor1ValidShape = GetBrcedValidShape(broadcastInfo[1], indices, input1ViewShape,
+                                                                        inputs[1]);
                             auto tensor0Offset = GetBrcedOffset(broadcastInfo[0], indices, input0ViewShape);
                             auto tensor1Offset = GetBrcedOffset(broadcastInfo[1], indices, input1ViewShape);
 
-                            tileTensor0 = View(
-                                inputs[0],
-                                {input0ViewShape[0], input0ViewShape[1], input0ViewShape[2], input0ViewShape[3],
-                                 input0ViewShape[4]},
-                                {tensor0ValidShape[0], tensor0ValidShape[1], tensor0ValidShape[2], tensor0ValidShape[3],
-                                 tensor0ValidShape[4]},
-                                {tensor0Offset[0], tensor0Offset[1], tensor0Offset[2], tensor0Offset[3],
-                                 tensor0Offset[4]});
-                            tileTensor1 = View(
-                                inputs[1],
-                                {input1ViewShape[0], input1ViewShape[1], input1ViewShape[2], input1ViewShape[3],
-                                 input1ViewShape[4]},
-                                {tensor1ValidShape[0], tensor1ValidShape[1], tensor1ValidShape[2], tensor1ValidShape[3],
-                                 tensor1ValidShape[4]},
-                                {tensor1Offset[0], tensor1Offset[1], tensor1Offset[2], tensor1Offset[3],
-                                 tensor1Offset[4]});
+                            tileTensor0 = View(inputs[0],
+                                               {input0ViewShape[0], input0ViewShape[1], input0ViewShape[2],
+                                                input0ViewShape[3], input0ViewShape[4]},
+                                               {tensor0ValidShape[0], tensor0ValidShape[1], tensor0ValidShape[2],
+                                                tensor0ValidShape[3], tensor0ValidShape[4]},
+                                               {tensor0Offset[0], tensor0Offset[1], tensor0Offset[2], tensor0Offset[3],
+                                                tensor0Offset[4]});
+                            tileTensor1 = View(inputs[1],
+                                               {input1ViewShape[0], input1ViewShape[1], input1ViewShape[2],
+                                                input1ViewShape[3], input1ViewShape[4]},
+                                               {tensor1ValidShape[0], tensor1ValidShape[1], tensor1ValidShape[2],
+                                                tensor1ValidShape[3], tensor1ValidShape[4]},
+                                               {tensor1Offset[0], tensor1Offset[1], tensor1Offset[2], tensor1Offset[3],
+                                                tensor1Offset[4]});
                             TileShape::Current().SetVecTile(args->tileShape_);
                             auto res = Gcd(tileTensor0, tileTensor1);
-                            Assemble(
-                                res,
-                                {bIdx * firstViewShape, sIdx * secondViewShape, kIdx * thirdViewShape,
-                                 mIdx * fourthViewShape, nIdx * fifthViewShape},
-                                outputs[0]);
+                            Assemble(res,
+                                     {bIdx * firstViewShape, sIdx * secondViewShape, kIdx * thirdViewShape,
+                                      mIdx * fourthViewShape, nIdx * fifthViewShape},
+                                     outputs[0]);
                         }
                     }
                 }
@@ -359,10 +354,9 @@ class GcdOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac_
 
 INSTANTIATE_TEST_SUITE_P(
     TestGcd, GcdOperationTest,
-    ::testing::ValuesIn(GetOpMetaData<GcdOpMetaData>(
-        {GcdOperationExeFuncDoubleCut, GcdOperationExeFuncTripleCut, GcdOperationExeFuncQuadraticCut,
-         GcdOperationExeFuncPentaCut},
-        "Gcd")));
+    ::testing::ValuesIn(GetOpMetaData<GcdOpMetaData>({GcdOperationExeFuncDoubleCut, GcdOperationExeFuncTripleCut,
+                                                      GcdOperationExeFuncQuadraticCut, GcdOperationExeFuncPentaCut},
+                                                     "Gcd")));
 
 TEST_P(GcdOperationTest, TestGcd)
 {

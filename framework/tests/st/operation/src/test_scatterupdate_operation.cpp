@@ -39,8 +39,8 @@ struct ScatterUpdateOpMetaData {
     nlohmann::json test_data_;
 };
 
-static void ScatterUpdateOperationExeFunc4Dims(
-    const std::vector<Tensor>& input, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void ScatterUpdateOperationExeFunc4Dims(const std::vector<Tensor>& input, std::vector<Tensor>& outputs,
+                                               const OpFuncArgs* opArgs)
 {
     std::vector<Tensor>& inputs = const_cast<std::vector<Tensor>&>(input);
     FUNCTION("main", {inputs[0], inputs[1], inputs[2]}, {outputs[0]})
@@ -77,8 +77,8 @@ static void ScatterUpdateOperationExeFunc4Dims(
     }
 }
 
-static void ScatterUpdateOperationExeFunc2Dims(
-    const std::vector<Tensor>& input, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void ScatterUpdateOperationExeFunc2Dims(const std::vector<Tensor>& input, std::vector<Tensor>& outputs,
+                                               const OpFuncArgs* opArgs)
 {
     std::vector<Tensor>& inputs = const_cast<std::vector<Tensor>&>(input);
     FUNCTION("main", {inputs[0], inputs[1], inputs[2]}, {outputs[0]})
@@ -94,11 +94,10 @@ static void ScatterUpdateOperationExeFunc2Dims(
         LOOP("LOOP_L0_bsIdx", FunctionType::DYNAMIC_LOOP, bIdx, LoopRange(0, bloop, 1))
         {
             TileShape::Current().SetVecTile(args->tileShape_);
-            Tensor srcView = View(
-                inputs[0], {bsViewShape, d}, {std::min(bs - bIdx * bsViewShape, bsViewShape), d},
-                {bIdx * bsViewShape, 0});
-            Tensor indexView = View(
-                inputs[1], {bViewShape, s}, {std::min(b - bIdx * bViewShape, bViewShape), s}, {bIdx * bViewShape, 0});
+            Tensor srcView = View(inputs[0], {bsViewShape, d}, {std::min(bs - bIdx * bsViewShape, bsViewShape), d},
+                                  {bIdx * bsViewShape, 0});
+            Tensor indexView = View(inputs[1], {bViewShape, s}, {std::min(b - bIdx * bViewShape, bViewShape), s},
+                                    {bIdx * bViewShape, 0});
             Tensor dst = View(inputs[2], inputs[2].GetShape(), {0, 0});
             dst = ScatterUpdate(dst, indexView, srcView, -2, "PA_BSND", 1);
             TileShape::Current().SetVecTile({32, d});
@@ -110,11 +109,11 @@ static void ScatterUpdateOperationExeFunc2Dims(
 class ScatterUpdateOperationTest
     : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac_param<ScatterUpdateOpMetaData> {};
 
-INSTANTIATE_TEST_SUITE_P(
-    TestScatterUpdate, ScatterUpdateOperationTest,
-    ::testing::ValuesIn(GetOpMetaData<ScatterUpdateOpMetaData>(
-        {ScatterUpdateOperationExeFunc2Dims, ScatterUpdateOperationExeFunc4Dims, ScatterUpdateOperationExeFunc4Dims},
-        "ScatterUpdate")));
+INSTANTIATE_TEST_SUITE_P(TestScatterUpdate, ScatterUpdateOperationTest,
+                         ::testing::ValuesIn(GetOpMetaData<ScatterUpdateOpMetaData>(
+                             {ScatterUpdateOperationExeFunc2Dims, ScatterUpdateOperationExeFunc4Dims,
+                              ScatterUpdateOperationExeFunc4Dims},
+                             "ScatterUpdate")));
 
 TEST_P(ScatterUpdateOperationTest, TestScatterUpdate)
 {

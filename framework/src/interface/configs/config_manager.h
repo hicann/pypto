@@ -87,7 +87,8 @@ const std::string KEY_ENABLE_VF = "enable_vf";
 
 /* CodeGen KEYs */
 const std::string KEY_PARALLEL_COMPILE = "parallel_compile";
-const std::string KEY_FIXED_OUTPUT_PATH = "fixed_output_path"; // if true, dump cce to fixed directory (respects ASCEND_WORK_PATH/pypto)
+const std::string KEY_FIXED_OUTPUT_PATH = "fixed_output_path"; // if true, dump cce to fixed directory (respects
+                                                               // ASCEND_WORK_PATH/pypto)
 const std::string KEY_FORCE_OVERWRITE = "force_overwrite";     // if true, don't dump cce when file exists
 const std::string KEY_CODEGEN_SUPPORT_TILE_TENSOR = "codegen_support_tile_tensor"; // if true, gen code with layout mode
 const std::string KEY_ENABLE_PMU_TRACE = "enable_pmu_trace";                       // if true, enable pmu trace
@@ -160,8 +161,8 @@ public:
     }
 
     template <typename T>
-    auto GetPassConfig(
-        const std::string& strategy, const std::string& identifier, const std::string& key, const T& defaultValue)
+    auto GetPassConfig(const std::string& strategy, const std::string& identifier, const std::string& key,
+                       const T& defaultValue)
     {
         return GetConfig(json_, {"global", "pass_strategies", strategy, identifier, key}, defaultValue);
     }
@@ -211,8 +212,8 @@ public:
     }
 
     template <typename T>
-    void SetPassConfig(
-        const std::string& strategy, const std::string& identifier, const std::string& key, const T& value)
+    void SetPassConfig(const std::string& strategy, const std::string& identifier, const std::string& key,
+                       const T& value)
     {
         SetConfig(json_, {"global", "pass_strategies", strategy, identifier, key}, value);
     }
@@ -259,8 +260,8 @@ private:
     }
 
     template <typename T>
-    static ConvertedConfigType<T> GetConfig(
-        const nlohmann::json& root, const std::vector<std::string>& keys, const T& defaultValue)
+    static ConvertedConfigType<T> GetConfig(const nlohmann::json& root, const std::vector<std::string>& keys,
+                                            const T& defaultValue)
     {
         if (auto* node = GetJsonNode(root, keys)) {
             return node->get<ConvertedConfigType<T>>();
@@ -322,8 +323,8 @@ auto GetHostConfig(const std::string& key, const T& defaultValue)
 }
 
 template <typename T>
-auto GetPassConfig(
-    const std::string& strategy, const std::string& identifier, const std::string& key, const T& defaultValue)
+auto GetPassConfig(const std::string& strategy, const std::string& identifier, const std::string& key,
+                   const T& defaultValue)
 {
     return ConfigManager::Instance().GetPassConfig(strategy, identifier, key, defaultValue);
 }

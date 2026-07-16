@@ -126,9 +126,8 @@ void TestWinAtten(WinAttenTileShapeConfig& tileConfig)
         RawTensorData::CreateTensor<float>(attentionOut, golden),
     });
 
-    WinAttention(
-        qNope, vNopeCache, qRope, kRopeCache, nQ, nKV, blockTable, actSeqs, windowSize, blockSize, softmaxScale,
-        attentionOut, tileConfig);
+    WinAttention(qNope, vNopeCache, qRope, kRopeCache, nQ, nKV, blockTable, actSeqs, windowSize, blockSize,
+                 softmaxScale, attentionOut, tileConfig);
 
     DevFuncRunner::Run(Program::GetInstance().GetLastFunction());
     auto outs = npu::tile_fwk::ProgramData::GetInstance().GetOutputData(0);

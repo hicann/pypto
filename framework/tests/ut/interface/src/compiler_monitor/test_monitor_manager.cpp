@@ -378,8 +378,10 @@ TEST_F(TestMonitorManagerState, StartStageFuncToBinRemovesCodeGen)
     bool hasCodeGen = false;
     bool hasFuncToBin = false;
     for (const auto& s : stages) {
-        if (s.stageName == "CodeGen") hasCodeGen = true;
-        if (s.stageName == STAGE_FUNC_TO_BIN) hasFuncToBin = true;
+        if (s.stageName == "CodeGen")
+            hasCodeGen = true;
+        if (s.stageName == STAGE_FUNC_TO_BIN)
+            hasFuncToBin = true;
     }
     EXPECT_FALSE(hasCodeGen);
     EXPECT_TRUE(hasFuncToBin);
@@ -403,8 +405,10 @@ TEST_F(TestMonitorManagerState, StartStageHostMachineRemovesCodeGen)
     bool hasCodeGen = false;
     bool hasHostMachine = false;
     for (const auto& s : stages) {
-        if (s.stageName == "CodeGen") hasCodeGen = true;
-        if (s.stageName == STAGE_HOST_MACHINE) hasHostMachine = true;
+        if (s.stageName == "CodeGen")
+            hasCodeGen = true;
+        if (s.stageName == STAGE_HOST_MACHINE)
+            hasHostMachine = true;
     }
     EXPECT_FALSE(hasCodeGen);
     EXPECT_TRUE(hasHostMachine);
@@ -643,10 +647,7 @@ TEST_F(TestMonitorManagerState, NotifyCompilationFinishedNotInitialized)
     MonitorManager::Instance().NotifyCompilationFinished();
 }
 
-TEST_F(TestMonitorManagerState, ShutdownNotInitialized)
-{
-    MonitorManager::Instance().Shutdown();
-}
+TEST_F(TestMonitorManagerState, ShutdownNotInitialized) { MonitorManager::Instance().Shutdown(); }
 
 TEST_F(TestMonitorManagerState, EndStageNoMatchStillCompletes)
 {

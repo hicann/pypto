@@ -48,11 +48,12 @@ struct UnionFindObject {
      * @param parentIndex Index of the parent object.
      * @param weight Weight of the object. Default is 0.
      */
-    explicit UnionFindObject(const T &name, IndexT parentIndex, WorkwT weight = 0)
-        : name_(name), parentIndex_(parentIndex), rank_(1), weight_(weight) {}
+    explicit UnionFindObject(const T& name, IndexT parentIndex, WorkwT weight = 0)
+        : name_(name), parentIndex_(parentIndex), rank_(1), weight_(weight)
+    {}
 
-    UnionFindObject(const UnionFindObject &other) = default;
-    UnionFindObject &operator=(const UnionFindObject &other) = default;
+    UnionFindObject(const UnionFindObject& other) = default;
+    UnionFindObject& operator=(const UnionFindObject& other) = default;
 };
 
 /**
@@ -70,10 +71,10 @@ class UnionFindUniverse {
 public:
     explicit UnionFindUniverse() = default;
 
-    UnionFindUniverse(const UnionFindUniverse &other) = default;
-    UnionFindUniverse &operator=(const UnionFindUniverse &other) = default;
-    UnionFindUniverse(UnionFindUniverse &&other) noexcept = default;
-    UnionFindUniverse &operator=(UnionFindUniverse &&other) noexcept = default;
+    UnionFindUniverse(const UnionFindUniverse& other) = default;
+    UnionFindUniverse& operator=(const UnionFindUniverse& other) = default;
+    UnionFindUniverse(UnionFindUniverse&& other) noexcept = default;
+    UnionFindUniverse& operator=(UnionFindUniverse&& other) noexcept = default;
     ~UnionFindUniverse() = default;
 
     /**
@@ -81,28 +82,28 @@ public:
      * @param name Name of the object.
      * @param weight Weight of the object.
      */
-    void AddObject(const T &name, const WorkwT weight = 0);
+    void AddObject(const T& name, const WorkwT weight = 0);
 
     /**
      * @brief Joins the components containing the two objects.
      * @param name Name of the first object.
      * @param otherName Name of the second object.
      */
-    void JoinByName(const T &name, const T &otherName);
+    void JoinByName(const T& name, const T& otherName);
 
     /**
      * @brief Checks if an object exists in the universe.
      * @param name The name of the object.
      * @return True if the object exists, false otherwise.
      */
-    [[nodiscard]] bool IsInUniverse(const T &name) const noexcept;
+    [[nodiscard]] bool IsInUniverse(const T& name) const noexcept;
 
     /**
      * @brief Finds the representative name of the component containing the object.
      * @param name The name of the object.
      * @return The name of the component's representative.
      */
-    [[nodiscard]] T FindOriginByName(const T &name);
+    [[nodiscard]] T FindOriginByName(const T& name);
 
     /**
      * @brief Retrieves the current number of connected components.
@@ -121,11 +122,11 @@ public:
      * @param name Name of the object.
      * @return Total weight of the component.
      */
-    [[nodiscard]] WorkwT GetWeightOfComponentByName(const T &name);
+    [[nodiscard]] WorkwT GetWeightOfComponentByName(const T& name);
 
     /**
-    * @brief Resets the universe, clearing all objects and components.
-    */
+     * @brief Resets the universe, clearing all objects and components.
+     */
     void Reset();
 
 private:
@@ -136,8 +137,8 @@ private:
     IndexT FindOrigin(IndexT index);
     bool Join(IndexT index, IndexT otherIndex);
 
-    IndexT GetIndexFromName(const T &name) const;
-    void AddObjectInternal(const T &name, WorkwT weight);
+    IndexT GetIndexFromName(const T& name) const;
+    void AddObjectInternal(const T& name, WorkwT weight);
 };
 
 template <typename T, typename IndexT, typename WorkwT>
@@ -176,13 +177,13 @@ bool UnionFindUniverse<T, IndexT, WorkwT>::Join(IndexT index, IndexT otherIndex)
 }
 
 template <typename T, typename IndexT, typename WorkwT>
-IndexT UnionFindUniverse<T, IndexT, WorkwT>::GetIndexFromName(const T &name) const
+IndexT UnionFindUniverse<T, IndexT, WorkwT>::GetIndexFromName(const T& name) const
 {
     return namesToIndices_.at(name);
 }
 
 template <typename T, typename IndexT, typename WorkwT>
-void UnionFindUniverse<T, IndexT, WorkwT>::AddObjectInternal(const T &name, WorkwT weight)
+void UnionFindUniverse<T, IndexT, WorkwT>::AddObjectInternal(const T& name, WorkwT weight)
 {
     if (namesToIndices_.find(name) != namesToIndices_.end()) {
         return;
@@ -202,19 +203,19 @@ void UnionFindUniverse<T, IndexT, WorkwT>::Reset()
 }
 
 template <typename T, typename IndexT, typename WorkwT>
-bool UnionFindUniverse<T, IndexT, WorkwT>::IsInUniverse(const T &name) const noexcept
+bool UnionFindUniverse<T, IndexT, WorkwT>::IsInUniverse(const T& name) const noexcept
 {
     return namesToIndices_.find(name) != namesToIndices_.end();
 }
 
 template <typename T, typename IndexT, typename WorkwT>
-T UnionFindUniverse<T, IndexT, WorkwT>::FindOriginByName(const T &name)
+T UnionFindUniverse<T, IndexT, WorkwT>::FindOriginByName(const T& name)
 {
     return universe_[FindOrigin(namesToIndices_.at(name))].name_;
 }
 
 template <typename T, typename IndexT, typename WorkwT>
-void UnionFindUniverse<T, IndexT, WorkwT>::JoinByName(const T &name, const T &otherName)
+void UnionFindUniverse<T, IndexT, WorkwT>::JoinByName(const T& name, const T& otherName)
 {
     Join(namesToIndices_.at(name), namesToIndices_.at(otherName));
 }
@@ -226,7 +227,7 @@ std::size_t UnionFindUniverse<T, IndexT, WorkwT>::GetNumberOfConnectedComponents
 }
 
 template <typename T, typename IndexT, typename WorkwT>
-WorkwT UnionFindUniverse<T, IndexT, WorkwT>::GetWeightOfComponentByName(const T &name)
+WorkwT UnionFindUniverse<T, IndexT, WorkwT>::GetWeightOfComponentByName(const T& name)
 {
     IndexT index = GetIndexFromName(name);
     index = FindOrigin(index);
@@ -245,13 +246,13 @@ std::vector<std::vector<T>> UnionFindUniverse<T, IndexT, WorkwT>::GetConnectedCo
     std::vector<std::vector<T>> connectedComponentsByName;
     connectedComponentsByName.reserve(componentIndices_.size());
 
-    for (auto &comp : connectedComponentsByIndex) {
+    for (auto& comp : connectedComponentsByIndex) {
         if (comp.empty()) {
             continue;
         }
         std::vector<T> namesInComp;
         namesInComp.reserve(comp.size());
-        for (const auto &indx : comp) {
+        for (const auto& indx : comp) {
             namesInComp.emplace_back(universe_[indx].name_);
         }
         connectedComponentsByName.push_back(std::move(namesInComp));
@@ -261,7 +262,7 @@ std::vector<std::vector<T>> UnionFindUniverse<T, IndexT, WorkwT>::GetConnectedCo
 }
 
 template <typename T, typename IndexT, typename WorkwT>
-void UnionFindUniverse<T, IndexT, WorkwT>::AddObject(const T &name, const WorkwT weight)
+void UnionFindUniverse<T, IndexT, WorkwT>::AddObject(const T& name, const WorkwT weight)
 {
     AddObjectInternal(name, weight);
 }

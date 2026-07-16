@@ -40,9 +40,8 @@ public:
     TileOpFormat format;
     std::string symbol;
     uint64_t addrOffset = UINT64_MAX;
-    RawTensor(
-        DataType t, std::vector<int64_t> tshape, TileOpFormat format = TileOpFormat::TILEOP_ND, std::string tname = "",
-        int trawmagic = -1);
+    RawTensor(DataType t, std::vector<int64_t> tshape, TileOpFormat format = TileOpFormat::TILEOP_ND,
+              std::string tname = "", int trawmagic = -1);
 
     RawTensor(RawTensor&&) = delete;
     RawTensor(const RawTensor& other) = delete;

@@ -63,8 +63,8 @@ TEST_F(TestCodegenDynBinary, TestCodegenAddDim2SrcNotSameShape)
     TestAddDynBody("TestCodegenAddDim2SrcNotSameShape", true);
 }
 
-void TestAddSDynBody(
-    const std::string& testName, float scalar, bool isSupportTileTensor, const std::vector<std::string>& expect)
+void TestAddSDynBody(const std::string& testName, float scalar, bool isSupportTileTensor,
+                     const std::vector<std::string>& expect)
 {
     if (isSupportTileTensor) {
         config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
@@ -87,8 +87,8 @@ void TestAddSDynBody(
         }
     }
 
-    auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX +
+                                                                HIDDEN_FUNC_SUFFIX);
 
     const std::string res = GenCodeByFunction(*function);
     for (auto& e : expect) {
@@ -151,8 +151,8 @@ TEST_F(TestCodegenDynBinary, TestGatherEle)
             outputTensor = GatherElements(inputTmpScores, inputScores, 1); // [b*s,8]
         }
     }
-    auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX +
+                                                                HIDDEN_FUNC_SUFFIX);
 
     std::string res = GenCodeByFunction(*function);
     std::string expect =
@@ -186,8 +186,8 @@ TEST_F(TestCodegenDynBinary, TestGatherEleTileTensor)
             outputTensor = GatherElements(inputTmpScores, inputScores, 1); // [b*s,8]
         }
     }
-    auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX +
+                                                                HIDDEN_FUNC_SUFFIX);
 
     std::string res = GenCodeByFunction(*function);
     std::string expect = R"!!!(TgatherElement<4>(ubTensor_4, ubTensor_0, ubTensor_2, ubTensor_5);
@@ -214,8 +214,8 @@ TEST_F(TestCodegenDynBinary, TestAtan2FP32)
             output = Atan2(input1, input2);
         }
     }
-    auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX +
+                                                                HIDDEN_FUNC_SUFFIX);
 
     const std::string res = GenCodeByFunction(*function);
     std::string expect = R"!!!(TAtan2(ubTensor_4, ubTensor_0, ubTensor_2, ubTensor_5);
@@ -265,8 +265,8 @@ TEST_F(TestCodegenDynBinary, AddUnalignTileTensor)
     });
 
 #if ENABLE_HIDDENLOOP
-    auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + loopName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + loopName + SUB_FUNC_SUFFIX +
+                                                                HIDDEN_FUNC_SUFFIX);
 #else
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + loopName + SUB_FUNC_SUFFIX);
 #endif
@@ -340,12 +340,12 @@ TEST_F(TestCodegenDynBinary, TestAddTileTensor)
 
     std::vector<int64_t> addShape = {64, 64};
     std::vector<SymbolicScalar> dynValidShape = {64, 64};
-    auto localTensorA =
-        CreateLogicalTensor({*function, DataType::DT_FP16, MemoryType::MEM_UB, addShape, dynValidShape});
-    auto localTensorB =
-        CreateLogicalTensor({*function, DataType::DT_FP16, MemoryType::MEM_UB, addShape, dynValidShape});
-    auto localOutTensor =
-        CreateLogicalTensor({*function, DataType::DT_FP16, MemoryType::MEM_UB, addShape, dynValidShape});
+    auto localTensorA = CreateLogicalTensor(
+        {*function, DataType::DT_FP16, MemoryType::MEM_UB, addShape, dynValidShape});
+    auto localTensorB = CreateLogicalTensor(
+        {*function, DataType::DT_FP16, MemoryType::MEM_UB, addShape, dynValidShape});
+    auto localOutTensor = CreateLogicalTensor(
+        {*function, DataType::DT_FP16, MemoryType::MEM_UB, addShape, dynValidShape});
 
     auto& op = function->AddOperation(Opcode::OP_ADD, {localTensorA, localTensorB}, {localOutTensor});
     std::vector<int64_t> initVec(addShape.size(), false);
@@ -383,8 +383,8 @@ TEST_F(TestCodegenDynBinary, TestDivHighPrecisionFP16)
         }
     }
 
-    auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX +
+                                                                HIDDEN_FUNC_SUFFIX);
 
     const std::string res = GenCodeByFunction(*function);
     std::string expect =
@@ -413,8 +413,8 @@ TEST_F(TestCodegenDynBinary, TestDivIntrinsicPrecision)
         }
     }
 
-    auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX +
+                                                                HIDDEN_FUNC_SUFFIX);
 
     const std::string res = GenCodeByFunction(*function);
     std::string expect =
@@ -442,8 +442,8 @@ TEST_F(TestCodegenDynBinary, TestPowHighPrecision)
         }
     }
 
-    auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX +
+                                                                HIDDEN_FUNC_SUFFIX);
 
     const std::string res = GenCodeByFunction(*function);
     std::string expect =
@@ -471,8 +471,8 @@ TEST_F(TestCodegenDynBinary, TestPowIntrinsicPrecision)
         }
     }
 
-    auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX +
+                                                                HIDDEN_FUNC_SUFFIX);
 
     const std::string res = GenCodeByFunction(*function);
     std::string expect =

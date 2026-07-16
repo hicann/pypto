@@ -38,46 +38,51 @@ constexpr const char* BISHENG_PROGRAM_CMD = "bisheng";
 constexpr const char* BISHENG_LD_CMD = "ld.lld";
 } // namespace
 
-static int CompileCoreMachine(
-    const std::string& objFile, bool isCube, uint64_t tilingKey, const std::string& headFile, const std::string& aicoreSrcFile,
-    bool enableMixPending, const std::string& funcRawName)
+static int CompileCoreMachine(const std::string& objFile, bool isCube, uint64_t tilingKey, const std::string& headFile,
+                              const std::string& aicoreSrcFile, bool enableMixPending, const std::string& funcRawName)
 {
     MACHINE_LOGI("Compile src file is [%s], kernel type[%d].", aicoreSrcFile.c_str(), isCube);
-    const std::string cc_opt = isCube ?
-        Platform::Instance().GetSoc().GetCCECVersion("AIC") : Platform::Instance().GetSoc().GetCCECVersion("AIV");
+    const std::string cc_opt = isCube ? Platform::Instance().GetSoc().GetCCECVersion("AIC") :
+                                        Platform::Instance().GetSoc().GetCCECVersion("AIV");
     const std::string coreType = isCube ? "-D__AIC__" : "-D__AIV__";
     const auto& opType = OpInfoManager::GetInstance().GetOpType();
     std::string hasSubFunc = headFile.empty() ? "" : "-D__HAS_SUB_FUNC__";
-    const std::string davArch = (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_2201) ? "-D__DAV_V220" : "-D__DAV_V310";
+    const std::string davArch = (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_2201) ? "-D__DAV_V220" :
+                                                                                                    "-D__DAV_V310";
     const std::string enableMainBlock = ((config::GetPassGlobalConfig(KEY_ENABLE_VF, false) ||
-        config::GetRuntimeOption<int64_t>(CFG_VALID_SHAPE_OPTIMIZE) == 1)) ? "-D__ENABLE_MAIN_BLOCK" : "";
+                                          config::GetRuntimeOption<int64_t>(CFG_VALID_SHAPE_OPTIMIZE) == 1)) ?
+                                            "-D__ENABLE_MAIN_BLOCK" :
+                                            "";
     const std::string enableMixPendingStr = enableMixPending ? "-D__ENABLE_MIX_PENDING" : "";
     std::string ccecCmd;
     ccecCmd.resize(CMD_SIZE_2K);
     std::string includePath = GetPyptoLibPath() + "/../include/tile_fwk";
-    int ret = snprintf_s(
-        ccecCmd.data(), CMD_SIZE_2K, CMD_SIZE_2K - 1,
-        "%s -c -O3 -g -x cce -Wall -Werror -std=c++17 "
-        "--cce-aicore-only "
-        "--cce-aicore-arch=%s "
-        "-mllvm -cce-aicore-stack-size=0x8000 "
-        "-mllvm -cce-aicore-function-stack-size=0x8000 "
-        "-mllvm -cce-aicore-record-overflow=false "
-        "-mllvm -cce-aicore-addr-transform "
-        "-mllvm -cce-aicore-dcci-insert-for-scalar=false "
-        "-D__MIX__ "
-        "-D__TILINGKEY__=%s "
-        "-D__OPTYPE__=%s "
-        "-D__OPNAME__=%s "
-        "-D__HEAD_FILE__=%s "
-        "%s " "%s "
-        "-I%s/tileop/arch32 "
-        "-I%s/ " "-I%s/include/tileop/arch32 "
-        "-I%s/include/ " "-o %s %s %s %s %s",
-        BISHENG_PROGRAM_CMD, cc_opt.c_str(), std::to_string(tilingKey).c_str(), opType.c_str(), funcRawName.c_str(),
-        headFile.c_str(), hasSubFunc.c_str(), coreType.c_str(), includePath.c_str(), includePath.c_str(),
-        GetPyptoLibPath().c_str(), GetPyptoLibPath().c_str(), objFile.c_str(),
-        aicoreSrcFile.c_str(), davArch.c_str(), enableMainBlock.c_str(), enableMixPendingStr.c_str());
+    int ret = snprintf_s(ccecCmd.data(), CMD_SIZE_2K, CMD_SIZE_2K - 1,
+                         "%s -c -O3 -g -x cce -Wall -Werror -std=c++17 "
+                         "--cce-aicore-only "
+                         "--cce-aicore-arch=%s "
+                         "-mllvm -cce-aicore-stack-size=0x8000 "
+                         "-mllvm -cce-aicore-function-stack-size=0x8000 "
+                         "-mllvm -cce-aicore-record-overflow=false "
+                         "-mllvm -cce-aicore-addr-transform "
+                         "-mllvm -cce-aicore-dcci-insert-for-scalar=false "
+                         "-D__MIX__ "
+                         "-D__TILINGKEY__=%s "
+                         "-D__OPTYPE__=%s "
+                         "-D__OPNAME__=%s "
+                         "-D__HEAD_FILE__=%s "
+                         "%s "
+                         "%s "
+                         "-I%s/tileop/arch32 "
+                         "-I%s/ "
+                         "-I%s/include/tileop/arch32 "
+                         "-I%s/include/ "
+                         "-o %s %s %s %s %s",
+                         BISHENG_PROGRAM_CMD, cc_opt.c_str(), std::to_string(tilingKey).c_str(), opType.c_str(),
+                         funcRawName.c_str(), headFile.c_str(), hasSubFunc.c_str(), coreType.c_str(),
+                         includePath.c_str(), includePath.c_str(), GetPyptoLibPath().c_str(), GetPyptoLibPath().c_str(),
+                         objFile.c_str(), aicoreSrcFile.c_str(), davArch.c_str(), enableMainBlock.c_str(),
+                         enableMixPendingStr.c_str());
     if (ret < 0) {
         MACHINE_LOGE(HostBackEndErr::COMPILE_AICORE_FAILED, "Compile aicore construct cmd failed.");
         return ret;
@@ -88,13 +93,15 @@ static int CompileCoreMachine(
         return ret;
     }
     ret = std::system(ccecCmd.c_str());
-    if (ret != 0) {MACHINE_LOGE(HostBackEndErr::COMPILE_CCEC_FAILED, "Compile ccec failed.");}
+    if (ret != 0) {
+        MACHINE_LOGE(HostBackEndErr::COMPILE_CCEC_FAILED, "Compile ccec failed.");
+    }
     return ret;
 }
 
-std::string GenSubFuncCall(
-    std::map<uint64_t, Function*>& leafDict, CoreType coreType, dynamic::EncodeDevAscendFunctionParam& param,
-    const std::string& ccePath, uint64_t tilingKey, std::stringstream& src_obj)
+std::string GenSubFuncCall(std::map<uint64_t, Function*>& leafDict, CoreType coreType,
+                           dynamic::EncodeDevAscendFunctionParam& param, const std::string& ccePath, uint64_t tilingKey,
+                           std::stringstream& src_obj)
 {
     std::stringstream code;
     std::map<int, std::string> idxNameMap;
@@ -161,7 +168,8 @@ static int RunLdViaSecureTempScript(const std::string& ccePath, const std::strin
     }
     const std::string linkScript(linkScriptBuffer.data());
     if (fchmod(fd, S_IRUSR | S_IWUSR | S_IXUSR) != 0) {
-        MACHINE_LOGE(HostBackEndErr::LINK_FAILED, "Set secure link script permission failed, file[%s].", linkScript.c_str());
+        MACHINE_LOGE(HostBackEndErr::LINK_FAILED, "Set secure link script permission failed, file[%s].",
+                     linkScript.c_str());
         (void)close(fd);
         (void)unlink(linkScript.c_str());
         return -1;
@@ -195,19 +203,17 @@ static int RunLdViaSecureTempScript(const std::string& ccePath, const std::strin
     return ret;
 }
 
-static int LinkObject(
-    const std::string& src_objs, std::string& objPath, const std::string& ccePath, bool relocate,
-    const std::string& key)
+static int LinkObject(const std::string& src_objs, std::string& objPath, const std::string& ccePath, bool relocate,
+                      const std::string& key)
 {
     size_t cmdSize = src_objs.size() + objPath.size() + CMD_SIZE_1K;
     std::string ccecCmd;
     ccecCmd.resize(cmdSize);
-    int ret = snprintf_s(
-        ccecCmd.data(), cmdSize, cmdSize - 1,
-        "%s -m aicorelinux -Ttext=0 -static %s -o "
-        "%s "
-        "%s",
-        BISHENG_LD_CMD, relocate ? "-r" : "", objPath.c_str(), src_objs.c_str());
+    int ret = snprintf_s(ccecCmd.data(), cmdSize, cmdSize - 1,
+                         "%s -m aicorelinux -Ttext=0 -static %s -o "
+                         "%s "
+                         "%s",
+                         BISHENG_LD_CMD, relocate ? "-r" : "", objPath.c_str(), src_objs.c_str());
     if (ret < 0) {
         MACHINE_LOGE(HostBackEndErr::LINK_FAILED, "LinkCoreMachine construct cmd failed.");
         return ret;
@@ -216,9 +222,9 @@ static int LinkObject(
     return RunLdViaSecureTempScript(ccePath, key, ccecCmd);
 }
 
-int CompileAICoreKernel(
-    std::map<uint64_t, Function*>& leafDict, dynamic::EncodeDevAscendFunctionParam& param, const std::string& ccePath,
-    const std::string& funcHash, const std::string& funcRawName, std::string& kernelPath)
+int CompileAICoreKernel(std::map<uint64_t, Function*>& leafDict, dynamic::EncodeDevAscendFunctionParam& param,
+                        const std::string& ccePath, const std::string& funcHash, const std::string& funcRawName,
+                        std::string& kernelPath)
 {
     if (ccePath.empty()) {
         MACHINE_LOGE(DevCommonErr::FILE_ERROR, "No cce path.");
@@ -234,12 +240,14 @@ int CompileAICoreKernel(
     }
     bool enableMixPending = CheckAll1c2vMixTask(param.cceCodeInfoList);
     std::deque<std::function<void(void)>> tasks;
-    std::function task = [&ccePath, &funcHash, &funcRawName, &leafDict, &param, &aic_obj, &aicoreSrcFile, &tilingKey, enableMixPending]() {
+    std::function task = [&ccePath, &funcHash, &funcRawName, &leafDict, &param, &aic_obj, &aicoreSrcFile, &tilingKey,
+                          enableMixPending]() {
         // gen switch case func
         std::stringstream src_aic_obj;
         auto headFile = GenSubFuncCall(leafDict, CoreType::AIC, param, ccePath, tilingKey, src_aic_obj);
         std::string mid_aic_obj = ccePath + "mid_kernel_" + funcHash + "_aic_" + std::to_string(tilingKey) + ".o";
-        auto ret = CompileCoreMachine(mid_aic_obj, true, tilingKey, headFile, aicoreSrcFile, enableMixPending, funcRawName);
+        auto ret = CompileCoreMachine(mid_aic_obj, true, tilingKey, headFile, aicoreSrcFile, enableMixPending,
+                                      funcRawName);
         ASSERT(HostBackEndErr::COMPILE_AICORE_FAILED, ret == 0)
             << "CompileCoreMachine failed with return code  " << ret;
         src_aic_obj << mid_aic_obj;
@@ -249,11 +257,13 @@ int CompileAICoreKernel(
     };
     tasks.push_back(task);
 
-    std::function task1 = [&ccePath, &funcHash, &funcRawName, &leafDict, &param, &aiv_obj, &aicoreSrcFile, &tilingKey, enableMixPending]() {
+    std::function task1 = [&ccePath, &funcHash, &funcRawName, &leafDict, &param, &aiv_obj, &aicoreSrcFile, &tilingKey,
+                           enableMixPending]() {
         std::stringstream src_aiv_obj;
         auto headFile = GenSubFuncCall(leafDict, CoreType::AIV, param, ccePath, tilingKey, src_aiv_obj);
         std::string mid_aiv_obj = ccePath + "mid_kernel_" + funcHash + "_aiv_" + std::to_string(tilingKey) + ".o";
-        auto ret = CompileCoreMachine(mid_aiv_obj, false, tilingKey, headFile, aicoreSrcFile, enableMixPending, funcRawName);
+        auto ret = CompileCoreMachine(mid_aiv_obj, false, tilingKey, headFile, aicoreSrcFile, enableMixPending,
+                                      funcRawName);
         ASSERT(HostBackEndErr::COMPILE_AICORE_FAILED, ret == 0)
             << "CompileCoreMachine failed with return code  " << ret;
         src_aiv_obj << mid_aiv_obj;

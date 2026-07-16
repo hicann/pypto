@@ -52,13 +52,11 @@ void HealthCheckTensorGraph(Function& function, const std::string& reportPath, c
 void HealthCheckTileGraph(Function& function, const std::string& reportPath, const std::string& fileName);
 void CalcOperatorInfo(Function& function, nlohmann::json& report);
 void CalcTensorInfo(Function& function, nlohmann::json& report);
-void GetOpConnectionMap(
-    Function& function, std::vector<std::vector<int>>& inMap, std::vector<std::vector<int>>& outMap,
-    std::vector<bool>& actualMagic);
+void GetOpConnectionMap(Function& function, std::vector<std::vector<int>>& inMap, std::vector<std::vector<int>>& outMap,
+                        std::vector<bool>& actualMagic);
 void TraversePathUp(const int parent, const std::vector<std::vector<int>>& outMap, std::vector<int>& layerMap);
-void CalcGraphMetrics(
-    const std::vector<std::vector<int>>& inMap, const std::vector<std::vector<int>>& outMap,
-    const std::vector<bool>& actualVertex, nlohmann::json& report);
+void CalcGraphMetrics(const std::vector<std::vector<int>>& inMap, const std::vector<std::vector<int>>& outMap,
+                      const std::vector<bool>& actualVertex, nlohmann::json& report);
 } // namespace tile_fwk
 } // namespace npu
 

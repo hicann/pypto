@@ -47,10 +47,10 @@ INLINE void TExtractL1ToL0Impl(DstTileData& dst, SrcTileData& src, const int64_t
     // L1 Tile内模板参数对应含义：
     // Tile类型为Cube用于Matmul，矩阵数据类型，TileShape0，TileShape1，大分型RowMajor表明Z，ColMajor表明N,
     // validShape0, validShape1, 小分型
-    using tileL1Tensor = pto::Tile<
-        pto::TileType::Mat, typename SrcTileData::Type, isTrans ? staticL1W : staticL1H,
-        isTrans ? staticL1H : staticL1W, isTrans ? pto::BLayout::RowMajor : pto::BLayout::ColMajor, -1, -1,
-        isTrans ? pto::SLayout::ColMajor : pto::SLayout::RowMajor>;
+    using tileL1Tensor = pto::Tile<pto::TileType::Mat, typename SrcTileData::Type, isTrans ? staticL1W : staticL1H,
+                                   isTrans ? staticL1H : staticL1W,
+                                   isTrans ? pto::BLayout::RowMajor : pto::BLayout::ColMajor, -1, -1,
+                                   isTrans ? pto::SLayout::ColMajor : pto::SLayout::RowMajor>;
     // L0 TileLeft为L0A的Tile，TileRight为L0B的Tile，传入的值分别为：
     // 矩阵数据类型，tileShape0，tileShape1，validShape0，validShape0（-1表明传递动态值，在声明时传入）
     using tileL0Tensor = std::conditional_t<

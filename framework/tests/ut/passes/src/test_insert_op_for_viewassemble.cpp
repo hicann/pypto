@@ -55,8 +55,8 @@ public:
 
 TEST_F(TestInsertCopyPass, TestNormalCase)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestNormalCase", "TestNormalCase", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestNormalCase", "TestNormalCase",
+                                                      nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
     /*
                | ------- view --- t0 --- assemble ------- |
@@ -112,8 +112,8 @@ TEST_F(TestInsertCopyPass, TestNormalCase)
 
 TEST_F(TestInsertCopyPass, TestNoEqualSize)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestNormalCase", "TestNormalCase", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestNormalCase", "TestNormalCase",
+                                                      nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
     /*
                | ------- view --- t0 --- assemble ------- |
@@ -169,8 +169,8 @@ TEST_F(TestInsertCopyPass, TestNoEqualSize)
 
 TEST_F(TestInsertCopyPass, TestInsert)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestNormalCase", "TestNormalCase", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestNormalCase", "TestNormalCase",
+                                                      nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
     /*
 

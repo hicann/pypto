@@ -104,8 +104,8 @@ std::shared_ptr<Function> BuildMultiInputOutputFunction()
 
 TEST_F(NBufferMergeTest, TestNBufferMerge)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestNBufferMerge", "TestNBufferMerge", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestNBufferMerge", "TestNBufferMerge",
+                                                      nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     // Prepare the graph
@@ -166,8 +166,7 @@ TEST_F(NBufferMergeTest, TestMulityInputOutputByFuncHashOrder)
     currFunctionPtr->paramConfigs_.mgVecParallelLb = vecParallelNum;
     const auto funcMagic = currFunctionPtr->GetFuncMagic();
     currFunctionPtr->paramConfigs_.vecNBufferSettingByFunc = {
-        {"func" + std::to_string(funcMagic) + "_0", vecParallelNum}
-    };
+        {"func" + std::to_string(funcMagic) + "_0", vecParallelNum}};
     currFunctionPtr->SetTotalSubGraphCount(4);
     EXPECT_EQ(NBM.RunOnFunction(*currFunctionPtr), SUCCESS);
     EXPECT_EQ(currFunctionPtr->inCasts_.size(), 2);
@@ -187,9 +186,8 @@ TEST_F(NBufferMergeTest, TestMode4)
     const int subGraphNum = 20;
     for (int i = 1; i < subGraphNum; i++) {
         std::string strID = std::to_string(i);
-        EXPECT_EQ(
-            G.AddTensors(DataType::DT_FP32, tileShape, {"tensor1" + strID, "tensor2" + strID, "tensor3" + strID}),
-            true);
+        EXPECT_EQ(G.AddTensors(DataType::DT_FP32, tileShape, {"tensor1" + strID, "tensor2" + strID, "tensor3" + strID}),
+                  true);
         std::vector<Opcode> opLists{Opcode::OP_ABS, Opcode::OP_EXP, Opcode::OP_ADDS, Opcode::OP_ASSEMBLE};
         std::vector<std::vector<std::string>> iOperands{
             {"incast1"}, {"tensor1" + strID}, {"tensor2" + strID}, {"tensor3" + strID}};
@@ -267,9 +265,8 @@ Status NBufferMergeTest::TestNBufferMergeWithDifferentVecBufferSetting(std::map<
     const int subGraphNum = 10;
     for (int i = 1; i < subGraphNum; i++) {
         std::string strID = std::to_string(i);
-        EXPECT_EQ(
-            G.AddTensors(DataType::DT_FP32, tileShape, {"tensor1" + strID, "tensor2" + strID, "tensor3" + strID}),
-            true);
+        EXPECT_EQ(G.AddTensors(DataType::DT_FP32, tileShape, {"tensor1" + strID, "tensor2" + strID, "tensor3" + strID}),
+                  true);
         std::vector<std::vector<std::string>> iOperands{
             {"incast1"}, {"tensor1" + strID}, {"tensor2" + strID}, {"tensor3" + strID}};
         std::vector<std::vector<std::string>> oOperands{
@@ -292,8 +289,8 @@ Status NBufferMergeTest::TestNBufferMergeWithDifferentVecBufferSetting(std::map<
     return NBM.RunOnFunction(*function);
 }
 
-Function* BuildFunctionWithSubgraphs(
-    ComputationalGraphBuilder& G, const std::vector<int64_t>& tileShape, int subGraphNum)
+Function* BuildFunctionWithSubgraphs(ComputationalGraphBuilder& G, const std::vector<int64_t>& tileShape,
+                                     int subGraphNum)
 {
     EXPECT_EQ(G.AddTensors(DataType::DT_FP32, tileShape, {"incast0", "incast1", "outcast"}), true);
     EXPECT_EQ(G.AddOps({Opcode::OP_COPY_IN}, {{"incast0"}}, {{"incast1"}}, {"copy_in"}, true), true);
@@ -392,10 +389,7 @@ TEST_F(NBufferMergeTest, ByFuncMergeFuncSpecificOverride)
     Function* function = BuildFunctionWithSubgraphs(G, {16, 16}, subGraphNum);
 
     int fm = function->GetFuncMagic();
-    function->paramConfigs_.vecNBufferSettingByFunc = {
-        {"DEFAULT", 4},
-        {"func" + std::to_string(fm) + "_1", 2}
-    };
+    function->paramConfigs_.vecNBufferSettingByFunc = {{"DEFAULT", 4}, {"func" + std::to_string(fm) + "_1", 2}};
     function->paramConfigs_.mgVecParallelLb = mgVecParallelLb;
     function->SetTotalSubGraphCount(subGraphNum + 1);
     NBufferMerge NBM;

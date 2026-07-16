@@ -25,8 +25,8 @@ namespace npu::tile_fwk {
 std::shared_ptr<LogicalTensor> CreateLogicalTensor(const LogicalTensorInfo& info)
 {
     if (info.memType == MemoryType::MEM_DEVICE_DDR) {
-        std::shared_ptr<RawTensor> ddrRawTensor =
-            std::make_shared<RawTensor>(info.dType, info.shape, TileOpFormat::TILEOP_ND, info.tensorName, info.magic);
+        std::shared_ptr<RawTensor> ddrRawTensor = std::make_shared<RawTensor>(
+            info.dType, info.shape, TileOpFormat::TILEOP_ND, info.tensorName, info.magic);
         std::vector<int64_t> offset = std::vector<int64_t>(info.shape.size(), 0);
         IRBuilder builder;
         auto ddrTensor = builder.CreateTensorVar(info.function, ddrRawTensor, offset, info.shape, info.dynValidShape);
@@ -36,8 +36,8 @@ std::shared_ptr<LogicalTensor> CreateLogicalTensor(const LogicalTensorInfo& info
     }
 
     IRBuilder builder;
-    auto localTensor = builder.CreateTensorVar(
-        info.function, info.dType, info.shape, info.dynValidShape, TileOpFormat::TILEOP_ND, info.tensorName);
+    auto localTensor = builder.CreateTensorVar(info.function, info.dType, info.shape, info.dynValidShape,
+                                               TileOpFormat::TILEOP_ND, info.tensorName);
     localTensor->SetMemoryTypeOriginal(info.memType);
     localTensor->SetMemoryTypeToBe(info.memType);
     localTensor->SetAttr(OpAttributeKey::needAlloc, true);
@@ -104,8 +104,8 @@ Function* GenMockFuncDyn(const std::string& funcName, const std::vector<int64_t>
             output = Add(inputA, inputB);
         }
     }
-    auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX +
+                                                                HIDDEN_FUNC_SUFFIX);
     function->SetUnderDynamicFunction(true);
     return function;
 }
@@ -124,19 +124,19 @@ Function* GenMockFuncStatic(const std::string& funcName, const std::vector<int64
     return function;
 }
 
-std::shared_ptr<LogicalTensor> CreateConvTensor(
-    Function& function, const DataType& dtype, const std::vector<int64_t>& shape, const MemoryType& memType,
-    const bool& isCopyIn)
+std::shared_ptr<LogicalTensor> CreateConvTensor(Function& function, const DataType& dtype,
+                                                const std::vector<int64_t>& shape, const MemoryType& memType,
+                                                const bool& isCopyIn)
 {
     IRBuilder builder;
     std::shared_ptr<LogicalTensor> tensorPtr = nullptr;
     if (isCopyIn) {
         if (memType == MemoryType::MEM_DEVICE_DDR) {
-            tensorPtr = builder.CreateTensorVar(
-                function, dtype, shape, SymbolicScalar::FromConcrete(shape), TileOpFormat::TILEOP_ND, "GmTensor");
+            tensorPtr = builder.CreateTensorVar(function, dtype, shape, SymbolicScalar::FromConcrete(shape),
+                                                TileOpFormat::TILEOP_ND, "GmTensor");
         } else {
-            tensorPtr = builder.CreateTensorVar(
-                function, dtype, shape, SymbolicScalar::FromConcrete(shape), TileOpFormat::TILEOP_NZ, "L1Tensor");
+            tensorPtr = builder.CreateTensorVar(function, dtype, shape, SymbolicScalar::FromConcrete(shape),
+                                                TileOpFormat::TILEOP_NZ, "L1Tensor");
             tensorPtr->SetAttr(OpAttributeKey::needAlloc, true);
             tensorPtr->memoryrange.memId = 0;
             tensorPtr->memoryrange.start = 0;
@@ -144,11 +144,11 @@ std::shared_ptr<LogicalTensor> CreateConvTensor(
         }
     } else {
         if (memType == MemoryType::MEM_DEVICE_DDR) {
-            tensorPtr = builder.CreateTensorVar(
-                function, dtype, shape, SymbolicScalar::FromConcrete(shape), TileOpFormat::TILEOP_ND, "GmTensor");
+            tensorPtr = builder.CreateTensorVar(function, dtype, shape, SymbolicScalar::FromConcrete(shape),
+                                                TileOpFormat::TILEOP_ND, "GmTensor");
         } else {
-            tensorPtr = builder.CreateTensorVar(
-                function, dtype, shape, SymbolicScalar::FromConcrete(shape), TileOpFormat::TILEOP_NZ, "L0CTensor");
+            tensorPtr = builder.CreateTensorVar(function, dtype, shape, SymbolicScalar::FromConcrete(shape),
+                                                TileOpFormat::TILEOP_NZ, "L0CTensor");
             tensorPtr->SetAttr(OpAttributeKey::needAlloc, true);
             tensorPtr->memoryrange.memId = 0;
             tensorPtr->memoryrange.start = 0;
@@ -172,9 +172,8 @@ std::string GenOpCodeFromOp(Function& function, const Operation& op, const GenOp
     return cop.GenOpCode();
 }
 
-CodeGenOpCloudNPU GenOpCloudNPUFromOp(
-    Function& function, const Operation& op, std::shared_ptr<SymbolManager>& outSymbolManager,
-    const GenOpCodeOptions& options)
+CodeGenOpCloudNPU GenOpCloudNPUFromOp(Function& function, const Operation& op,
+                                      std::shared_ptr<SymbolManager>& outSymbolManager, const GenOpCodeOptions& options)
 {
     outSymbolManager = std::make_shared<SymbolManager>();
     CodeGenCtx ctx;

@@ -50,8 +50,8 @@ TEST_F(TestCodegenDynErf, ErfLayout)
             output = Erf(input_a);
         }
     }
-    auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX +
+                                                                HIDDEN_FUNC_SUFFIX);
     std::string res = GenCodeByFunction(*function);
     std::string expect = R"(TErf(ubTensor_2, ubTensor_3, ubTensor_0);)";
     CheckStringExist(expect, res);

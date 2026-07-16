@@ -52,9 +52,8 @@ const std::set<Opcode> SPECIAL_OPCODE_SET = {Opcode::OP_INDEX_OUTCAST, Opcode::O
                                              Opcode::OP_CALL,          Opcode::OP_CONVERT, Opcode::OP_COPY_IN,
                                              Opcode::OP_COPY_OUT};
 struct ViewKey {
-    ViewKey(
-        const int magic, const std::vector<int64_t>& newShape, const std::vector<int64_t>& newOffset,
-        const std::vector<SymbolicScalar>& tmpDynOffset)
+    ViewKey(const int magic, const std::vector<int64_t>& newShape, const std::vector<int64_t>& newOffset,
+            const std::vector<SymbolicScalar>& tmpDynOffset)
         : rawMagic(magic), shape(newShape), offset(newOffset), dynOffset(tmpDynOffset)
     {}
 
@@ -98,9 +97,8 @@ struct SortContext {
 
 class LightweightOperationSorter {
 public:
-    LightweightOperationSorter(
-        const Function& function, const std::vector<std::shared_ptr<Operation>>& operations,
-        const LogicalTensors& inCasts, const LogicalTensors& outCasts)
+    LightweightOperationSorter(const Function& function, const std::vector<std::shared_ptr<Operation>>& operations,
+                               const LogicalTensors& inCasts, const LogicalTensors& outCasts)
         : function_(function), operations_(operations), inCasts_(inCasts), outCasts_(outCasts)
     {}
 
@@ -209,9 +207,8 @@ private:
                 readyList.push_back(static_cast<int>(idx));
             }
         }
-        std::sort(readyList.begin(), readyList.end(), [this](int a, int b) {
-            return operations_[a]->GetOpMagic() < operations_[b]->GetOpMagic();
-        });
+        std::sort(readyList.begin(), readyList.end(),
+                  [this](int a, int b) { return operations_[a]->GetOpMagic() < operations_[b]->GetOpMagic(); });
         std::queue<int> readyOps;
         for (int idx : readyList) {
             readyOps.emplace(idx);
@@ -445,8 +442,8 @@ void DynloopFunctionAttribute::CreateCurrCond()
     currIndex = 0;
 }
 
-Function::Function(
-    const Program& belongTo, const std::string& funcMagicName, const std::string& funcRawName, Function* parentFunc)
+Function::Function(const Program& belongTo, const std::string& funcMagicName, const std::string& funcRawName,
+                   Function* parentFunc)
     : ir::Function(ir::Span::Unknown()),
       funcMagicName_(funcMagicName),
       funcRawName_(funcRawName),
@@ -621,8 +618,8 @@ GetTensorDataIODescDict Function::GetTensorDataForTensorGraph()
         auto import = importDict[getTensorDataIndex];
         int outcastIndex = GetTensorDataLookupOutcast(this, import);
         if (outcastIndex != INVALID_IOINDEX) {
-            iodescDict[getTensorDataIndex] =
-                GetTensorDataIODesc(GET_TENSOR_DATA_OPERAND_IOTYPE_OUTCAST, outcastIndex, 0);
+            iodescDict[getTensorDataIndex] = GetTensorDataIODesc(GET_TENSOR_DATA_OPERAND_IOTYPE_OUTCAST, outcastIndex,
+                                                                 0);
         } else {
             int incastIndex = GetTensorDataLookupIncast(this, import);
             FE_ASSERT(FeError::INVALID_VAL, incastIndex != INVALID_IOINDEX)
@@ -732,9 +729,8 @@ static bool IsRemovableOutcast(Function& func, size_t outcastIdx)
     return true;
 }
 
-void CalleeSlotNoConsumer(
-    Function& calleeFunc, Function& func, const std::map<size_t, size_t>& outcasts,
-    std::map<size_t, size_t>& outcastIdx2parent)
+void CalleeSlotNoConsumer(Function& calleeFunc, Function& func, const std::map<size_t, size_t>& outcasts,
+                          std::map<size_t, size_t>& outcastIdx2parent)
 {
     for (size_t calleeOutcastIdx = 0; calleeOutcastIdx < calleeFunc.GetOutcast().size(); calleeOutcastIdx++) {
         auto caleeOutcast = calleeFunc.GetOutcast()[calleeOutcastIdx];
@@ -787,8 +783,8 @@ void Function::CheckAndUpdateGetTensorData(size_t currOutcastIdx, size_t newOutc
     }
 }
 
-void Function::CleanRedundantOutcast(
-    std::map<Function*, std::set<size_t>>& removeRecord, std::map<Function*, std::set<size_t>>& getTensorDataRecord)
+void Function::CleanRedundantOutcast(std::map<Function*, std::set<size_t>>& removeRecord,
+                                     std::map<Function*, std::set<size_t>>& getTensorDataRecord)
 {
     for (auto& [func, removeList] : removeRecord) {
         for (auto it = removeList.rbegin(); it != removeList.rend(); ++it) {
@@ -810,9 +806,9 @@ void Function::CleanRedundantOutcast(
     }
 }
 
-void RedundantOutCastCheck(
-    std::map<Function*, std::set<size_t>>& removeRecord, std::map<Function*, std::set<size_t>>& getTensorDataRecord,
-    Function* func, std::map<size_t, size_t>& outcasts)
+void RedundantOutCastCheck(std::map<Function*, std::set<size_t>>& removeRecord,
+                           std::map<Function*, std::set<size_t>>& getTensorDataRecord, Function* func,
+                           std::map<size_t, size_t>& outcasts)
 {
     for (auto calleeFunc : func->GetCalleeFunctionList()) {
         FE_ASSERT(FeError::INVALID_PTR, calleeFunc != nullptr) << func->GetMagicName() << "has nullptr calleeFunc";
@@ -947,12 +943,14 @@ FunctionCallArgs Function::EndFunction(const std::shared_ptr<TensorSlotScope>& s
 {
     // Deduce Incast and Outcast here, need by TENSOR_GRAPH & STATIC_TILE_GRAPH
     std::vector<Operation*> operationList = Operations(false).DuplicatedOpList();
-    if (IsGraphType(GraphType::TENSOR_GRAPH) || IsFunctionTypeAndGraphType(FunctionType::STATIC, GraphType::TILE_GRAPH)) {
+    if (IsGraphType(GraphType::TENSOR_GRAPH) ||
+        IsFunctionTypeAndGraphType(FunctionType::STATIC, GraphType::TILE_GRAPH)) {
         FillOriginInOutCast(operationList);
     }
 
     LogicalTensors inArgumentList, outArgumentList;
-    if (IsGraphType(GraphType::TENSOR_GRAPH) || IsFunctionTypeAndGraphType(FunctionType::STATIC, GraphType::TILE_GRAPH)) {
+    if (IsGraphType(GraphType::TENSOR_GRAPH) ||
+        IsFunctionTypeAndGraphType(FunctionType::STATIC, GraphType::TILE_GRAPH)) {
         SetCallOpSlot();
         inArgumentList = MakeIncasts(scope);
         outArgumentList = MakeOutcasts(scope);
@@ -995,16 +993,15 @@ FunctionCallArgs Function::EndFunction(const std::shared_ptr<TensorSlotScope>& s
             std::move(oOpAttr),        std::move(outIndexToExpr),  std::move(argList)};
 }
 
-void Function::AddWhenNotExistOrAssert(
-    const std::shared_ptr<LogicalTensor>& tensor, std::map<int, int>& magicToRawMagic,
-    std::map<int, std::shared_ptr<LogicalTensor>>& magicToLogicalTensor)
+void Function::AddWhenNotExistOrAssert(const std::shared_ptr<LogicalTensor>& tensor,
+                                       std::map<int, int>& magicToRawMagic,
+                                       std::map<int, std::shared_ptr<LogicalTensor>>& magicToLogicalTensor)
 {
     if (auto it = magicToRawMagic.find(tensor->magic); it != magicToRawMagic.end()) {
         if (it->second != tensor->tensor->GetRawMagic()) {
-            FE_LOGI(
-                "Diff Magic Same RawMagic: %d %s %d %s", it->second,
-                magicToLogicalTensor[tensor->magic]->Dump().c_str(), tensor->tensor->GetRawMagic(),
-                tensor->Dump().c_str());
+            FE_LOGI("Diff Magic Same RawMagic: %d %s %d %s", it->second,
+                    magicToLogicalTensor[tensor->magic]->Dump().c_str(), tensor->tensor->GetRawMagic(),
+                    tensor->Dump().c_str());
         }
     }
     magicToRawMagic[tensor->magic] = tensor->tensor->GetRawMagic();
@@ -1072,8 +1069,10 @@ void Function::OperationLoopCheck(const std::string& errorMsg)
                 for (auto* consumer : consumers[oop.get()]) {
                     if (self(consumer, self)) {
                         if (dupOpMagic != -1) {
-                            FE_LOGE(InternalError::FE_INNER_ERROR, "[OperationLoopCheck]     Tensor:    %s", oop->Dump().c_str());
-                            FE_LOGE(InternalError::FE_INNER_ERROR, "[OperationLoopCheck]     Operation: %s", curr->Dump().c_str());
+                            FE_LOGE(InternalError::FE_INNER_ERROR, "[OperationLoopCheck]     Tensor:    %s",
+                                    oop->Dump().c_str());
+                            FE_LOGE(InternalError::FE_INNER_ERROR, "[OperationLoopCheck]     Operation: %s",
+                                    curr->Dump().c_str());
                             if (magic == dupOpMagic) {
                                 dupOpMagic = -1; // stop dumpping
                             }
@@ -1125,10 +1124,10 @@ bool Function::OperationLoopCheck()
     return true;
 }
 
-void Function::GetAnIslandIncastsOutcasts(
-    const std::map<int, int>& opToSubgraph, const int subgraphID, const std::vector<Operation*>& operations,
-    std::vector<std::shared_ptr<LogicalTensor>>& iOperands,
-    std::vector<std::shared_ptr<LogicalTensor>>& oOperands) const
+void Function::GetAnIslandIncastsOutcasts(const std::map<int, int>& opToSubgraph, const int subgraphID,
+                                          const std::vector<Operation*>& operations,
+                                          std::vector<std::shared_ptr<LogicalTensor>>& iOperands,
+                                          std::vector<std::shared_ptr<LogicalTensor>>& oOperands) const
 {
     std::set<std::shared_ptr<LogicalTensor>> allLogicalTensors;
     std::set<std::shared_ptr<LogicalTensor>> notOutcasts;
@@ -1163,16 +1162,13 @@ void Function::GetAnIslandIncastsOutcasts(
             notIncasts.insert(operand);
         }
     }
-    std::set_difference(
-        allLogicalTensors.begin(), allLogicalTensors.end(), notIncasts.begin(), notIncasts.end(),
-        std::inserter(iOperands, iOperands.begin()));
+    std::set_difference(allLogicalTensors.begin(), allLogicalTensors.end(), notIncasts.begin(), notIncasts.end(),
+                        std::inserter(iOperands, iOperands.begin()));
     std::set<std::shared_ptr<LogicalTensor>> tryOOperands;
-    std::set_difference(
-        allLogicalTensors.begin(), allLogicalTensors.end(), notOutcasts.begin(), notOutcasts.end(),
-        std::inserter(tryOOperands, tryOOperands.begin()));
-    std::set_difference(
-        tryOOperands.begin(), tryOOperands.end(), iOperands.begin(), iOperands.end(),
-        std::inserter(oOperands, oOperands.begin()));
+    std::set_difference(allLogicalTensors.begin(), allLogicalTensors.end(), notOutcasts.begin(), notOutcasts.end(),
+                        std::inserter(tryOOperands, tryOOperands.begin()));
+    std::set_difference(tryOOperands.begin(), tryOOperands.end(), iOperands.begin(), iOperands.end(),
+                        std::inserter(oOperands, oOperands.begin()));
 
     std::sort(iOperands.begin(), iOperands.end(), TensorPtrComparator());
     std::sort(oOperands.begin(), oOperands.end(), TensorPtrComparator());
@@ -1271,12 +1267,14 @@ std::unordered_set<int> Function::LoopCheck()
                 for (int consumer : consumers[oop.get()]) {
                     if (self(consumer, self)) {
                         if (duplicatedSubgraphID != -2) {
-                            FE_LOGE(InternalError::FE_INNER_ERROR, "[Cycle Detection]     tensor:      %s", oop->Dump().c_str());
+                            FE_LOGE(InternalError::FE_INNER_ERROR, "[Cycle Detection]     tensor:      %s",
+                                    oop->Dump().c_str());
                             FE_LOGE(InternalError::FE_INNER_ERROR, "[producer]=");
                             for (const auto& producer : oop->GetProducers()) {
                                 FE_LOGE(InternalError::FE_INNER_ERROR, "%d", producer->GetOpMagic());
                             }
-                            FE_LOGE(InternalError::FE_INNER_ERROR, "[Cycle Detection]     subgraph id: %d", currSubgraph);
+                            FE_LOGE(InternalError::FE_INNER_ERROR, "[Cycle Detection]     subgraph id: %d",
+                                    currSubgraph);
                             subGraphInCycle.emplace(currSubgraph);
                             if (currSubgraph == duplicatedSubgraphID) {
                                 duplicatedSubgraphID = -2; // stop dumpping
@@ -1501,10 +1499,10 @@ void Function::RefreshOpPosition()
 bool Function::enableMagicLookupRecord_{false};
 std::map<std::pair<int, int>, std::set<Operation*, LogicalTensor::CompareOp>> Function::tensorAndSubgraphToProducer_;
 
-void Function::ProducerMagicLookup(
-    const Function* function, const LogicalTensorPtr& tensor,
-    const std::set<Operation*, LogicalTensor::CompareOp>& producers, const int subGraphId, int& index,
-    std::unordered_map<int, int>& magic2index, std::stringstream& ss)
+void Function::ProducerMagicLookup(const Function* function, const LogicalTensorPtr& tensor,
+                                   const std::set<Operation*, LogicalTensor::CompareOp>& producers,
+                                   const int subGraphId, int& index, std::unordered_map<int, int>& magic2index,
+                                   std::stringstream& ss)
 {
     for (auto& op : producers) {
         if (subGraphId != INT32_MIN && op->GetSubgraphID() != subGraphId) {
@@ -1544,9 +1542,8 @@ void Function::ProducerMagicLookup(
                 }
             } else if (function->GetGraphType() == GraphType::BLOCK_GRAPH) {
                 ss << " " << op->GetOpAttribute()->Dump();
-            } else if (
-                (!IsCopyIn(op->GetOpcode()) && !IsCopyOut(op->GetOpcode())) ||
-                function->GetGraphType() != GraphType::BLOCK_GRAPH) {
+            } else if ((!IsCopyIn(op->GetOpcode()) && !IsCopyOut(op->GetOpcode())) ||
+                       function->GetGraphType() != GraphType::BLOCK_GRAPH) {
                 ss << " " << op->GetOpAttribute()->Dump();
             }
         }
@@ -1554,9 +1551,8 @@ void Function::ProducerMagicLookup(
     }
 }
 
-void Function::MagicLookup(
-    const Function* function, const std::vector<LogicalTensorPtr>& operand, const int subGraphId, int& index,
-    std::unordered_map<int, int>& magic2index, std::stringstream& ss)
+void Function::MagicLookup(const Function* function, const std::vector<LogicalTensorPtr>& operand, const int subGraphId,
+                           int& index, std::unordered_map<int, int>& magic2index, std::stringstream& ss)
 {
     for (auto& t : operand) {
         if (magic2index.count(t->GetMagic()) && (function->inCastsSet_.count(t) == 0) &&
@@ -1583,9 +1579,8 @@ void Function::MagicLookup(
         if (!enableMagicLookupRecord_) {
             ProducerMagicLookup(function, t, t->GetProducers(), subGraphId, index, magic2index, ss);
         } else if (tensorAndSubgraphToProducer_.count({t->GetMagic(), subGraphId}) > 0) {
-            ProducerMagicLookup(
-                function, t, tensorAndSubgraphToProducer_[{t->GetMagic(), subGraphId}], subGraphId, index, magic2index,
-                ss);
+            ProducerMagicLookup(function, t, tensorAndSubgraphToProducer_[{t->GetMagic(), subGraphId}], subGraphId,
+                                index, magic2index, ss);
         }
         ss << ")";
     }
@@ -1607,8 +1602,8 @@ unsigned long Function::ComputeHashOrderless() const
     // 只有leaf graph需要判断边界
     if (graphType_ == GraphType::BLOCK_GRAPH) {
         if (operations_.size()) {
-            MagicLookup(
-                this, GetOutcast(), operations_[operations_.size() - 1]->GetSubgraphID(), index, magic2index, ss);
+            MagicLookup(this, GetOutcast(), operations_[operations_.size() - 1]->GetSubgraphID(), index, magic2index,
+                        ss);
         }
     } else {
         MagicLookup(this, GetOutcast(), INT32_MIN, index, magic2index, ss);
@@ -1661,9 +1656,8 @@ unsigned long Function::ComputeHashOrderless() const
     }
     std::hash<std::string> hasher;
     auto result = hasher(ss.str());
-    FE_LOGD(
-        "Hash for function %d %s is %s hash value is %lu\n", functionMagic_, GetMagicName().c_str(), ss.str().c_str(),
-        result);
+    FE_LOGD("Hash for function %d %s is %s hash value is %lu\n", functionMagic_, GetMagicName().c_str(),
+            ss.str().c_str(), result);
     return result;
 }
 
@@ -1779,14 +1773,13 @@ Operation& Function::AddOperation(const Opcode opCode, LogicalTensors iOperands,
         t->dynOffset_ = std::vector<SymbolicScalar>(dim, SymbolicScalar(0));
     };
 
-    auto cmp = [](ir::VarPtr a, ir::VarPtr b) {
-        return a->name_ < b->name_;
-    };
+    auto cmp = [](ir::VarPtr a, ir::VarPtr b) { return a->name_ < b->name_; };
     std::set<ir::VarPtr, decltype(cmp)> tokenSets(cmp);
     for (auto& iOp : iOperands) {
         LogicalTensorPtr parent = nullptr;
         if (iOp->GetAttr("SLICE_PARENT", parent)) {
-            auto newRaw = std::make_shared<RawTensor> (iOp->tensor->datatype, iOp->shape, iOp->tensor->format, iOp->tensor->symbol);
+            auto newRaw = std::make_shared<RawTensor>(iOp->tensor->datatype, iOp->shape, iOp->tensor->format,
+                                                      iOp->tensor->symbol);
             auto& op = AddRawOperation(Opcode::OP_VIEW, {parent}, {iOp});
             op.SetOpAttribute(std::make_shared<ViewOpAttribute>(iOp->offset, iOp->dynOffset_, iOp->dynValidShape_));
             ClearOffset(iOp);
@@ -1803,7 +1796,8 @@ Operation& Function::AddOperation(const Opcode opCode, LogicalTensors iOperands,
     for (auto& oOp : oOperands) {
         LogicalTensorPtr parent = nullptr;
         if (oOp->GetAttr("SLICE_PARENT", parent)) {
-            auto newRaw = std::make_shared<RawTensor> (oOp->tensor->datatype, oOp->shape, oOp->tensor->format, oOp->tensor->symbol);
+            auto newRaw = std::make_shared<RawTensor>(oOp->tensor->datatype, oOp->shape, oOp->tensor->format,
+                                                      oOp->tensor->symbol);
             auto& op = AddRawOperation(Opcode::OP_ASSEMBLE, {oOp}, {parent});
             op.SetAssembleOpAttribute(oOp->offset, oOp->dynOffset_);
             ClearOffset(oOp);
@@ -1851,8 +1845,8 @@ void Function::UpdateTensorDataUsage(Operation& op)
     }
 }
 
-Operation& Function::AddRawOperation(
-    const Opcode opCode, const LogicalTensors& iOperands, const LogicalTensors& oOperands, ir::Span span)
+Operation& Function::AddRawOperation(const Opcode opCode, const LogicalTensors& iOperands,
+                                     const LogicalTensors& oOperands, ir::Span span)
 {
     if (IsFunctionTypeAndGraphType(FunctionType::STATIC, {GraphType::EXECUTE_GRAPH, GraphType::BLOCK_GRAPH})) {
         sorted_ = true;
@@ -1869,7 +1863,7 @@ Operation& Function::AddRawOperation(
     } else {
         operations_.back()->SetScopeId(-1);
     }
-    
+
     auto oooScopeConfig = config::GetPassOption<std::vector<int64_t>>(SG_SET_OOO_SCOPE);
     if (oooScopeConfig.size() >= 1) {
         operations_.back()->SetOooScopeId(static_cast<int>(oooScopeConfig[0]));
@@ -2029,9 +2023,8 @@ void Function::RemoveOriginIncastConsumer(const std::shared_ptr<LogicalTensor>& 
     }
 }
 
-void Function::UpdateLinkMap(
-    const std::shared_ptr<LogicalTensor>& oriLogicalTensor, const std::shared_ptr<LogicalTensor>& newLogicalTensor,
-    const bool isOutCast)
+void Function::UpdateLinkMap(const std::shared_ptr<LogicalTensor>& oriLogicalTensor,
+                             const std::shared_ptr<LogicalTensor>& newLogicalTensor, const bool isOutCast)
 {
     if (isOutCast) {
         //  update outcast
@@ -2059,9 +2052,9 @@ std::shared_ptr<LogicalTensor> Function::CreateIncastTensor(const std::shared_pt
     if (newSymbol == "") {
         newSymbol = "INCAST_SYMBOL" + std::to_string(idx);
     }
-    auto incastSymbol = std::make_shared<LogicalTensor>(
-        *this, inArgument->tensor->datatype, inArgument->shape, inArgument->tensor->GetDynRawShape(),
-        inArgument->Format(), newSymbol);
+    auto incastSymbol = std::make_shared<LogicalTensor>(*this, inArgument->tensor->datatype, inArgument->shape,
+                                                        inArgument->tensor->GetDynRawShape(), inArgument->Format(),
+                                                        newSymbol);
     incastSymbol->tensor->UpdateDynRawShape(inArgument->tensor->GetDynRawShape());
     inCasts_.push_back(incastSymbol);
 
@@ -2069,9 +2062,9 @@ std::shared_ptr<LogicalTensor> Function::CreateIncastTensor(const std::shared_pt
     return incastSymbol;
 }
 
-void Function::CreateFromIncast(
-    const std::shared_ptr<LogicalTensor>& symbol, const std::shared_ptr<LogicalTensor>& newIncast,
-    const std::shared_ptr<LogicalTensor>& origin)
+void Function::CreateFromIncast(const std::shared_ptr<LogicalTensor>& symbol,
+                                const std::shared_ptr<LogicalTensor>& newIncast,
+                                const std::shared_ptr<LogicalTensor>& origin)
 {
     ir::Span::SetCurrent(ir::Span(__FILE__, __LINE__, 0));
     auto& incastOp = AddOperation(Opcode::OP_VIEW, {symbol}, {newIncast});
@@ -2130,8 +2123,8 @@ LogicalTensors Function::MakeIncasts(const std::shared_ptr<TensorSlotScope>& sco
             slotScope_->ioslot.incastSlot.push_back(slotScope_->originalIocastsSlot.incastSlot[idx]);
         }
 
-        auto newIncast = std::make_shared<LogicalTensor>(
-            *this, origin->tensor->datatype, origin->shape, origin->Format(), "INCAST_LOCAL_BUF" + std::to_string(idx));
+        auto newIncast = std::make_shared<LogicalTensor>(*this, origin->tensor->datatype, origin->shape,
+                                                         origin->Format(), "INCAST_LOCAL_BUF" + std::to_string(idx));
 
         CreateFromIncast(incastSymbol, newIncast, origin);
         Substitute(origin, newIncast);
@@ -2151,9 +2144,9 @@ std::shared_ptr<LogicalTensor> Function::CreateOutcastTensor(const std::shared_p
     if (newSymbol == "") {
         newSymbol = "OUTCAST_SYMBOL" + std::to_string(idx);
     }
-    auto outSymbol = std::make_shared<LogicalTensor>(
-        *this, outArgument->tensor->datatype, outArgument->shape, outArgument->tensor->GetDynRawShape(),
-        outArgument->Format(), newSymbol);
+    auto outSymbol = std::make_shared<LogicalTensor>(*this, outArgument->tensor->datatype, outArgument->shape,
+                                                     outArgument->tensor->GetDynRawShape(), outArgument->Format(),
+                                                     newSymbol);
     outSymbol->tensor->UpdateDynRawShape(outArgument->tensor->GetDynRawShape());
 
     outCasts_.push_back(outSymbol);
@@ -2162,8 +2155,8 @@ std::shared_ptr<LogicalTensor> Function::CreateOutcastTensor(const std::shared_p
     return outSymbol;
 }
 
-void Function::CreateFromOutcast(
-    const LogicalTensorPtr& symbol, const LogicalTensorPtr& newOutcast, const LogicalTensorPtr& origin)
+void Function::CreateFromOutcast(const LogicalTensorPtr& symbol, const LogicalTensorPtr& newOutcast,
+                                 const LogicalTensorPtr& origin)
 {
     ir::Span::SetCurrent(ir::Span(__FILE__, __LINE__, 0));
     auto& op = AddOperation(Opcode::OP_ASSEMBLE, {newOutcast}, {symbol});
@@ -2231,8 +2224,8 @@ LogicalTensors Function::MakeOutcasts(const std::shared_ptr<TensorSlotScope>& sc
         auto origin = originOutCasts_[idx];
         int rank = origin->shape.size();
         std::vector<int64_t> zeroOffset(rank, 0);
-        auto outArgument = std::make_shared<LogicalTensor>(
-            Parent(), origin->tensor, zeroOffset, origin->shape, origin->tensor->GetDynRawShape());
+        auto outArgument = std::make_shared<LogicalTensor>(Parent(), origin->tensor, zeroOffset, origin->shape,
+                                                           origin->tensor->GetDynRawShape());
         Parent().tensorMap_.Insert(outArgument);
         outArgumentList.push_back(outArgument);
 
@@ -2254,9 +2247,9 @@ LogicalTensors Function::MakeOutcasts(const std::shared_ptr<TensorSlotScope>& sc
                 scope->partialUpdateOutcastDict[outSymbol] = true;
             }
         } else {
-            auto newOutcast = std::make_shared<LogicalTensor>(
-                *this, origin->tensor->datatype, origin->shape, origin->Format(),
-                "OUTCAST_LOCAL_BUF" + std::to_string(idx));
+            auto newOutcast = std::make_shared<LogicalTensor>(*this, origin->tensor->datatype, origin->shape,
+                                                              origin->Format(),
+                                                              "OUTCAST_LOCAL_BUF" + std::to_string(idx));
             CreateFromOutcast(outSymbol, newOutcast, origin);
             Substitute(origin, newOutcast);
             originOutCasts_[idx] = newOutcast;
@@ -2496,9 +2489,8 @@ Json Function::DumpJson(bool useTable)
         }
         std::vector<std::shared_ptr<RawTensor>> rawTensorList(rawTensorSet.begin(), rawTensorSet.end());
         std::vector<std::shared_ptr<LogicalTensor>> tensorList(tensorSet.begin(), tensorSet.end());
-        std::sort(rawTensorList.begin(), rawTensorList.end(), [](auto l, auto r) {
-            return l->GetRawMagic() < r->GetRawMagic();
-        });
+        std::sort(rawTensorList.begin(), rawTensorList.end(),
+                  [](auto l, auto r) { return l->GetRawMagic() < r->GetRawMagic(); });
         std::sort(tensorList.begin(), tensorList.end(), [](auto l, auto r) { return l->GetMagic() < r->GetMagic(); });
 
         Json rawtensors = Json::array();
@@ -2583,10 +2575,9 @@ Json Function::DumpJson(bool useTable)
     return funcJson;
 }
 
-void Function::LoadTensorJson(
-    const std::shared_ptr<Function>& func, const Json& tensorJson,
-    const std::unordered_map<int, std::shared_ptr<RawTensor>>& rawTensorDict,
-    std::unordered_map<int, std::shared_ptr<LogicalTensor>>& tensorDict)
+void Function::LoadTensorJson(const std::shared_ptr<Function>& func, const Json& tensorJson,
+                              const std::unordered_map<int, std::shared_ptr<RawTensor>>& rawTensorDict,
+                              std::unordered_map<int, std::shared_ptr<LogicalTensor>>& tensorDict)
 {
     if (tensorJson.count("tensors") != 0) {
         for (auto& tensorDump : tensorJson["tensors"]) {
@@ -2640,8 +2631,8 @@ std::shared_ptr<Function> Function::LoadJson(Program& belongTo, const Json& func
         << "Invalid function kind in JSON";
     int funcmagic = funcJson["funcmagic"].get<int>();
     std::string rawname = funcJson["rawname"].get<std::string>();
-    std::shared_ptr<Function> func =
-        std::make_shared<Function>(belongTo, rawname + "_" + std::to_string(funcmagic), rawname, nullptr);
+    std::shared_ptr<Function> func = std::make_shared<Function>(belongTo, rawname + "_" + std::to_string(funcmagic),
+                                                                rawname, nullptr);
     func->funcMagicName_ = funcJson["func_magicname"];
     func->functionMagic_ = funcmagic;
     func->functionType_ = static_cast<FunctionType>(funcJson["functype"].get<int>());
@@ -2810,24 +2801,23 @@ static int64_t MakeTensorIndex(int64_t magic)
     return magic | (1UL << 62);
 } // Create tensor index by setting bit 62 of magic number
 
-static void MaybeNormalizeValue(
-    const SymbolicScalar& coaFunc, std::vector<SymbolicScalar>& operandCoaList, int operandCoaIndex,
-    std::vector<OpImmediate>& opImmList, int coaIndex, bool valueToIndex)
+static void MaybeNormalizeValue(const SymbolicScalar& coaFunc, std::vector<SymbolicScalar>& operandCoaList,
+                                int operandCoaIndex, std::vector<OpImmediate>& opImmList, int coaIndex,
+                                bool valueToIndex)
 {
     for (size_t dimIndex = 0; dimIndex < opImmList.size(); dimIndex++) {
         auto& opImm = opImmList[dimIndex];
         SymbolicScalar scalar = opImm.GetSpecifiedValue();
         auto getTensorDataDict = GetTensorDataDict(scalar);
         if (getTensorDataDict.size() == 0) {
-            OpImmediate::NormalizeValue(
-                operandCoaList[operandCoaIndex + dimIndex], opImm, coaFunc(opImmList.size(), coaIndex, dimIndex),
-                valueToIndex);
+            OpImmediate::NormalizeValue(operandCoaList[operandCoaIndex + dimIndex], opImm,
+                                        coaFunc(opImmList.size(), coaIndex, dimIndex), valueToIndex);
         }
     }
 };
 
-static void MaybeNormalizeValue(
-    std::vector<SymbolicScalar>& valueCoa, SymbolicScalar& value, int coaIndex, bool valueToIndex)
+static void MaybeNormalizeValue(std::vector<SymbolicScalar>& valueCoa, SymbolicScalar& value, int coaIndex,
+                                bool valueToIndex)
 {
     auto getTensorDataDict = GetTensorDataDict(value);
     if (getTensorDataDict.size() == 0) {
@@ -2838,14 +2828,12 @@ static void MaybeNormalizeValue(
     }
 }
 
-static void NormalizeReshapeCopyDynValidShape(
-    Operation* op, std::vector<std::vector<SymbolicScalar>>& coaLists, int& coaIndex, bool valueToIndex)
+static void NormalizeReshapeCopyDynValidShape(Operation* op, std::vector<std::vector<SymbolicScalar>>& coaLists,
+                                              int& coaIndex, bool valueToIndex)
 {
     Opcode opcode = op->GetOpcode();
-    if (opcode != Opcode::OP_RESHAPE_COPY_OUT &&
-        opcode != Opcode::OP_RESHAPE_COPY_IN &&
-        opcode != Opcode::OP_L0C_RESHAPE_COPY_OUT &&
-        opcode != Opcode::OP_L1_RESHAPE_COPY_IN) {
+    if (opcode != Opcode::OP_RESHAPE_COPY_OUT && opcode != Opcode::OP_RESHAPE_COPY_IN &&
+        opcode != Opcode::OP_L0C_RESHAPE_COPY_OUT && opcode != Opcode::OP_L1_RESHAPE_COPY_IN) {
         return;
     }
     auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(op->GetOpAttribute());
@@ -2853,8 +2841,9 @@ static void NormalizeReshapeCopyDynValidShape(
         << "Normalize reshape copy dyn valid shape failed: copyAttr is null.\n"
         << "Operation: " << op->Dump();
 
-    bool useToDynValidShape = op->GetOpcode() == Opcode::OP_RESHAPE_COPY_OUT || op->GetOpcode() == Opcode::OP_L0C_RESHAPE_COPY_OUT;
-       const char* dynValidShapeName = useToDynValidShape ? "toDynValidShape" : "fromDynValidShape";
+    bool useToDynValidShape = op->GetOpcode() == Opcode::OP_RESHAPE_COPY_OUT ||
+                              op->GetOpcode() == Opcode::OP_L0C_RESHAPE_COPY_OUT;
+    const char* dynValidShapeName = useToDynValidShape ? "toDynValidShape" : "fromDynValidShape";
     auto opImmList = useToDynValidShape ? copyAttr->GetToDynValidShape() : copyAttr->GetFromDynValidShape();
     FE_ASSERT(FeError::INVALID_PTR, !opImmList.empty())
         << "Normalize reshape copy dyn valid shape failed: " << dynValidShapeName << " is empty.\n"
@@ -2900,8 +2889,8 @@ static std::vector<SymbolicScalar> NormalizeCopyIn(Operation* op, int coaIndexBa
     coaIndex += dim;
 
     opImmList = copyAttr->GetRawShape();
-    MaybeNormalizeValue(
-        RUNTIME_COA_GetRawShape, operandCoaList, operandCoaIndex, opImmList, coaIndexBase, valueToIndex);
+    MaybeNormalizeValue(RUNTIME_COA_GetRawShape, operandCoaList, operandCoaIndex, opImmList, coaIndexBase,
+                        valueToIndex);
     copyAttr->SetRawShape(opImmList);
     operandCoaIndex += dim;
     coaIndex += dim;
@@ -2916,8 +2905,8 @@ static std::vector<SymbolicScalar> NormalizeCopyIn(Operation* op, int coaIndexBa
         operandCoaList.erase(operandCoaList.end() - valueCoaList.size(), operandCoaList.end());
         operandCoaList.insert(operandCoaList.end(), valueCoaList.begin(), valueCoaList.end());
     } else {
-        MaybeNormalizeValue(
-            RUNTIME_COA_GetValidShape, operandCoaList, operandCoaIndex, opImmList, coaIndexBase, valueToIndex);
+        MaybeNormalizeValue(RUNTIME_COA_GetValidShape, operandCoaList, operandCoaIndex, opImmList, coaIndexBase,
+                            valueToIndex);
     }
     copyAttr->SetToDynValidShape(opImmList);
 
@@ -2949,8 +2938,8 @@ static std::vector<SymbolicScalar> NormalizeCopyOut(Operation* op, int coaIndexB
     coaIndex += dim;
 
     opImmList = copyAttr->GetRawShape();
-    MaybeNormalizeValue(
-        RUNTIME_COA_GetRawShape, operandCoaList, operandCoaIndex, opImmList, coaIndexBase, valueToIndex);
+    MaybeNormalizeValue(RUNTIME_COA_GetRawShape, operandCoaList, operandCoaIndex, opImmList, coaIndexBase,
+                        valueToIndex);
     copyAttr->SetRawShape(opImmList);
     operandCoaIndex += dim;
     coaIndex += dim;
@@ -2965,16 +2954,16 @@ static std::vector<SymbolicScalar> NormalizeCopyOut(Operation* op, int coaIndexB
         operandCoaList.erase(operandCoaList.end() - valueCoaList.size(), operandCoaList.end());
         operandCoaList.insert(operandCoaList.end(), valueCoaList.begin(), valueCoaList.end());
     } else {
-        MaybeNormalizeValue(
-            RUNTIME_COA_GetValidShape, operandCoaList, operandCoaIndex, opImmList, coaIndexBase, valueToIndex);
+        MaybeNormalizeValue(RUNTIME_COA_GetValidShape, operandCoaList, operandCoaIndex, opImmList, coaIndexBase,
+                            valueToIndex);
     }
     copyAttr->SetFromDynValidShape(opImmList);
 
     return operandCoaList;
 }
 
-static std::vector<SymbolicScalar> NormalizeTensor(
-    LogicalTensorPtr operand, int coaIndexBase, bool valueToIndex, bool isNop = false)
+static std::vector<SymbolicScalar> NormalizeTensor(LogicalTensorPtr operand, int coaIndexBase, bool valueToIndex,
+                                                   bool isNop = false)
 {
     auto offset = OpImmediate::Specified(operand->GetOffset());
     auto dynOffset = OpImmediate::Specified(operand->GetDynOffset());
@@ -2999,8 +2988,8 @@ static std::vector<SymbolicScalar> NormalizeTensor(
     }
 
     if (!dynOffset.empty()) {
-        MaybeNormalizeValue(
-            RUNTIME_COA_GetOffset, operandCoaList, operandCoaIndex, dynOffset, coaIndexBase, valueToIndex);
+        MaybeNormalizeValue(RUNTIME_COA_GetOffset, operandCoaList, operandCoaIndex, dynOffset, coaIndexBase,
+                            valueToIndex);
         operand->UpdateOffset(TensorOffset{operand->GetOffset(), OpImmediate::ToSpecified(dynOffset)});
     } else {
         OpImmediate::NormalizeValue(operandCoaList, operandCoaIndex, offset, coaIndex, false);
@@ -3021,8 +3010,8 @@ static std::vector<SymbolicScalar> NormalizeTensor(
     coaIndex += dim;
 
     if (!dynValidShape.empty()) {
-        MaybeNormalizeValue(
-            RUNTIME_COA_GetValidShape, operandCoaList, operandCoaIndex, dynValidShape, coaIndexBase, valueToIndex);
+        MaybeNormalizeValue(RUNTIME_COA_GetValidShape, operandCoaList, operandCoaIndex, dynValidShape, coaIndexBase,
+                            valueToIndex);
         operand->UpdateDynValidShape(OpImmediate::ToSpecified(dynValidShape));
     } else {
         OpImmediate::NormalizeValue(operandCoaList, operandCoaIndex, shape, coaIndex, false);
@@ -3045,8 +3034,8 @@ void Function::GetOutcastSymbolicExpr(std::map<int, SymbolicScalar>& tabel)
     }
 }
 
-std::vector<std::vector<SymbolicScalar>> Function::NormalizeCoa(
-    std::vector<OperandAttribute>& iOpAttr, std::vector<OperandAttribute>& oOpAttr)
+std::vector<std::vector<SymbolicScalar>> Function::NormalizeCoa(std::vector<OperandAttribute>& iOpAttr,
+                                                                std::vector<OperandAttribute>& oOpAttr)
 {
     std::unordered_map<int, Operation*> opmagicToOp;
     std::unordered_map<LogicalTensorPtr, int> processedOperands;
@@ -3085,10 +3074,10 @@ static bool IsInplaceIncast(Operation* op, std::vector<Operation*>& copyInList)
     return true;
 }
 
-void Function::NormalizeCoaForInCasts(
-    std::vector<OperandAttribute>& iOpAttr, std::vector<std::vector<SymbolicScalar>>& coaLists, int& coaIndex,
-    std::unordered_map<LogicalTensorPtr, int>& processedOperands,
-    const std::unordered_map<int, Operation*>& opmagicToOp)
+void Function::NormalizeCoaForInCasts(std::vector<OperandAttribute>& iOpAttr,
+                                      std::vector<std::vector<SymbolicScalar>>& coaLists, int& coaIndex,
+                                      std::unordered_map<LogicalTensorPtr, int>& processedOperands,
+                                      const std::unordered_map<int, Operation*>& opmagicToOp)
 {
     bool valueToIndex = parent_->GetFunctionType() == FunctionType::DYNAMIC_LOOP_PATH;
     iOpAttr.reserve(incastPosition.size());
@@ -3144,10 +3133,10 @@ void Function::NormalizeCoaForInCasts(
     }
 }
 
-void Function::NormalizeCoaForOutCasts(
-    std::vector<OperandAttribute>& oOpAttr, std::vector<std::vector<SymbolicScalar>>& coaLists, int& coaIndex,
-    std::unordered_map<LogicalTensorPtr, int>& processedOperands,
-    const std::unordered_map<int, Operation*>& opmagicToOp)
+void Function::NormalizeCoaForOutCasts(std::vector<OperandAttribute>& oOpAttr,
+                                       std::vector<std::vector<SymbolicScalar>>& coaLists, int& coaIndex,
+                                       std::unordered_map<LogicalTensorPtr, int>& processedOperands,
+                                       const std::unordered_map<int, Operation*>& opmagicToOp)
 {
     bool valueToIndex = parent_->GetFunctionType() == FunctionType::DYNAMIC_LOOP_PATH;
     oOpAttr.reserve(outcastPosition.size());
@@ -3178,9 +3167,8 @@ void Function::NormalizeCoaForOutCasts(
     }
 }
 
-void Function::NormalizeCoaForNormalOperands(
-    std::vector<std::vector<SymbolicScalar>>& coaLists, int& coaIndex,
-    std::unordered_map<LogicalTensorPtr, int>& processedOperands)
+void Function::NormalizeCoaForNormalOperands(std::vector<std::vector<SymbolicScalar>>& coaLists, int& coaIndex,
+                                             std::unordered_map<LogicalTensorPtr, int>& processedOperands)
 {
     std::unordered_set<LogicalTensorPtr> inOutCasts;
     inOutCasts.insert(inCasts_.begin(), inCasts_.end());
@@ -3255,10 +3243,9 @@ void Function::NormalizeCoaForSpecialInfo(std::vector<std::vector<SymbolicScalar
                 coaLists.emplace_back(valueCoaList);
                 coaIndex += 1;
             }
-        } else if (
-            op->GetOpcode() == Opcode::OP_NCHW2NC1HWC0 || op->GetOpcode() == Opcode::OP_NCHW2Fractal_Z ||
-            op->GetOpcode() == Opcode::OP_NC1HWC02NCHW || op->GetOpcode() == Opcode::OP_NCDHW2NDC1HWC0 ||
-            op->GetOpcode() == Opcode::OP_NCDHW2FRACTAL_Z_3D || op->GetOpcode() == Opcode::OP_NDC1HWC02NCDHW) {
+        } else if (op->GetOpcode() == Opcode::OP_NCHW2NC1HWC0 || op->GetOpcode() == Opcode::OP_NCHW2Fractal_Z ||
+                   op->GetOpcode() == Opcode::OP_NC1HWC02NCHW || op->GetOpcode() == Opcode::OP_NCDHW2NDC1HWC0 ||
+                   op->GetOpcode() == Opcode::OP_NCDHW2FRACTAL_Z_3D || op->GetOpcode() == Opcode::OP_NDC1HWC02NCDHW) {
             if (op->HasAttr(OpAttributeKey::transDataOffset)) {
                 std::vector<SymbolicScalar> offsets;
                 op->GetAttr(OpAttributeKey::transDataOffset, offsets);
@@ -3270,11 +3257,10 @@ void Function::NormalizeCoaForSpecialInfo(std::vector<std::vector<SymbolicScalar
                 }
                 op->SetAttribute(OpAttributeKey::transDataOffset, offsets);
             }
-        } else if (
-            op->GetOpcode() == Opcode::OP_L1_TO_L0A || op->GetOpcode() == Opcode::OP_L1_TO_L0B ||
-            op->GetOpcode() == Opcode::OP_L1_TO_L0_AT || op->GetOpcode() == Opcode::OP_L1_TO_L0_BT ||
-            op->GetOpcode() == Opcode::OP_L1_TO_FIX_QUANT_PRE || op->GetOpcode() == Opcode::OP_L1_TO_L0A_SCALE ||
-            op->GetOpcode() == Opcode::OP_L1_TO_L0B_SCALE || op->GetOpcode() == Opcode::OP_L1_TO_BT) {
+        } else if (op->GetOpcode() == Opcode::OP_L1_TO_L0A || op->GetOpcode() == Opcode::OP_L1_TO_L0B ||
+                   op->GetOpcode() == Opcode::OP_L1_TO_L0_AT || op->GetOpcode() == Opcode::OP_L1_TO_L0_BT ||
+                   op->GetOpcode() == Opcode::OP_L1_TO_FIX_QUANT_PRE || op->GetOpcode() == Opcode::OP_L1_TO_L0A_SCALE ||
+                   op->GetOpcode() == Opcode::OP_L1_TO_L0B_SCALE || op->GetOpcode() == Opcode::OP_L1_TO_BT) {
             auto operandCoaList = NormalizeCopyIn(op.get(), coaIndex, valueToIndex);
             coaIndex += operandCoaList.size();
             coaLists.emplace_back(std::move(operandCoaList));
@@ -3541,8 +3527,8 @@ bool Function::TensorReuse(const LogicalTensorPtr& dstTensor, const LogicalTenso
     if (dstTensor->tensor->rawshape == srcTensor->tensor->rawshape) {
         dstTensor->tensor = srcTensor->tensor;
     } else {
-        dstTensor->tensor->actualRawmagic =
-            srcTensor->tensor->actualRawmagic == -1 ? srcTensor->tensor->rawmagic : srcTensor->tensor->actualRawmagic;
+        dstTensor->tensor->actualRawmagic = srcTensor->tensor->actualRawmagic == -1 ? srcTensor->tensor->rawmagic :
+                                                                                      srcTensor->tensor->actualRawmagic;
     }
     return true;
 }
@@ -3636,9 +3622,8 @@ TensorGraphInfo Function::GetGraphInfo()
         callopOutCasts.emplace_back(outcasts);
     }
     operations_ = operations;
-    return std::make_tuple(
-        std::move(callopInCasts), std::move(callopOutCasts), std::move(viewOpSet), std::move(assembleOpSet),
-        std::move(iOperandSet), std::move(oOperandSet));
+    return std::make_tuple(std::move(callopInCasts), std::move(callopOutCasts), std::move(viewOpSet),
+                           std::move(assembleOpSet), std::move(iOperandSet), std::move(oOperandSet));
 }
 
 void Function::ClearUselessLink(TensorGraphInfo& graphInfo)
@@ -3732,8 +3717,8 @@ void Function::UpdateOriIocastSlot(const std::shared_ptr<TensorSlotScope> scope)
 void Function::SetCallOpSlot()
 {
     // op all OP_CALL
-    bool isAllCallOp = std::all_of(
-        operations_.begin(), operations_.end(), [](const auto& op) { return op->GetOpcode() == Opcode::OP_CALL; });
+    bool isAllCallOp = std::all_of(operations_.begin(), operations_.end(),
+                                   [](const auto& op) { return op->GetOpcode() == Opcode::OP_CALL; });
     if (!isAllCallOp) {
         return;
     }
@@ -3826,9 +3811,8 @@ std::vector<OriArgInfo> Function::GetOpOriginArgsInfo()
             continue;
         }
         maxSubscript = std::max(maxSubscript, subscript);
-        OriArgInfo info{
-            reinterpret_cast<uint64_t>(GetParamAddress(subscript)), incast->MemorySize(),
-            incast->GetCachePolicy(CachePolicy::PREFETCH)};
+        OriArgInfo info{reinterpret_cast<uint64_t>(GetParamAddress(subscript)), incast->MemorySize(),
+                        incast->GetCachePolicy(CachePolicy::PREFETCH)};
         if (args.count(subscript) > 0) {
             FE_ASSERT(args.at(subscript) == info)
                 << "args.at(subscript): " << args.at(subscript).Dump() << ", info: " << info.Dump();
@@ -3842,9 +3826,8 @@ std::vector<OriArgInfo> Function::GetOpOriginArgsInfo()
             continue;
         }
         maxSubscript = std::max(maxSubscript, subscript);
-        OriArgInfo info{
-            reinterpret_cast<uint64_t>(GetParamAddress(subscript)), outcast->MemorySize(),
-            outcast->GetCachePolicy(CachePolicy::PREFETCH)};
+        OriArgInfo info{reinterpret_cast<uint64_t>(GetParamAddress(subscript)), outcast->MemorySize(),
+                        outcast->GetCachePolicy(CachePolicy::PREFETCH)};
         if (args.count(subscript) > 0) {
             FE_ASSERT(args.at(subscript) == info)
                 << "args.at(subscript): " << args.at(subscript).Dump() << ", info: " << info.Dump();
@@ -3952,8 +3935,8 @@ DyndevFunctionAttribute::ValueDependDesc Function::LookupValueDepend()
     struct ValueDependSearcher {
         static void Search(DyndevFunctionAttribute::ValueDependDesc& desc, const SymbolicScalar& attr)
         {
-            std::vector<RawSymbolicScalarPtr> callList =
-                LookupExpressionByOpcode(attr.Raw(), SymbolicOpcode::T_MOP_CALL);
+            std::vector<RawSymbolicScalarPtr> callList = LookupExpressionByOpcode(attr.Raw(),
+                                                                                  SymbolicOpcode::T_MOP_CALL);
             for (auto& call : callList) {
                 auto caller = call->GetExpressionOperandList()[0];
                 if (!caller->IsSymbol()) {
@@ -4027,8 +4010,8 @@ void Function::ValidCheck() const
     }
 }
 
-std::shared_ptr<OpAttribute> Function::CreateCallOpAttribute(
-    const std::vector<std::vector<SymbolicScalar>>& argList, const std::map<int, SymbolicScalar>& outIndexToExpr)
+std::shared_ptr<OpAttribute> Function::CreateCallOpAttribute(const std::vector<std::vector<SymbolicScalar>>& argList,
+                                                             const std::map<int, SymbolicScalar>& outIndexToExpr)
 {
     FunctionHash hash;
     if (rootFunc_ != nullptr) {
@@ -4081,9 +4064,9 @@ void Function::DoMergeFunctionDupIncast()
         FE_ASSERT(FeError::INVALID_VAL, slotSetIndex.size() > 1) << "Slot set index should have more than one element";
         removeIdx.insert(removeIdx.end(), slotSetIndex.begin() + 1, slotSetIndex.end());
         auto oriIncast = inCasts_[slotSetIndex[0]];
-        auto newIncast = std::make_shared<LogicalTensor>(
-            *this, oriIncast->tensor->datatype, oriIncast->shape, oriIncast->tensor->GetDynRawShape(),
-            oriIncast->Format(), oriIncast->tensor->GetSymbol());
+        auto newIncast = std::make_shared<LogicalTensor>(*this, oriIncast->tensor->datatype, oriIncast->shape,
+                                                         oriIncast->tensor->GetDynRawShape(), oriIncast->Format(),
+                                                         oriIncast->tensor->GetSymbol());
         newIncast->tensor->UpdateDynRawShape(oriIncast->tensor->GetDynRawShape());
         for (auto incastIdx : slotSetIndex) {
             FE_ASSERT(FeError::NOT_EXIST, inCasts_[incastIdx]->GetConsumers().size() > 0)
@@ -4108,9 +4091,9 @@ void Function::DoMergeFunctionDupOutcast()
         FE_ASSERT(FeError::INVALID_VAL, slotSetIndex.size() > 1) << "Slot set index should have more than one element";
         removeIdx.insert(removeIdx.end(), slotSetIndex.begin() + 1, slotSetIndex.end());
         auto oriOutcast = outCasts_[slotSetIndex[0]];
-        auto newOutcast = std::make_shared<LogicalTensor>(
-            *this, oriOutcast->tensor->datatype, oriOutcast->shape, oriOutcast->tensor->GetDynRawShape(),
-            oriOutcast->Format(), oriOutcast->tensor->GetSymbol());
+        auto newOutcast = std::make_shared<LogicalTensor>(*this, oriOutcast->tensor->datatype, oriOutcast->shape,
+                                                          oriOutcast->tensor->GetDynRawShape(), oriOutcast->Format(),
+                                                          oriOutcast->tensor->GetSymbol());
         newOutcast->tensor->UpdateDynRawShape(oriOutcast->tensor->GetDynRawShape());
         for (auto incastIdx : slotSetIndex) {
             FE_ASSERT(FeError::NOT_EXIST, outCasts_[incastIdx]->GetProducers().size() > 0)

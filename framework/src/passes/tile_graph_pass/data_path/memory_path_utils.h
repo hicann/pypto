@@ -40,9 +40,9 @@ public:
     //              无下游消费者（如 outcast）则保留 output MemoryTypeOriginal。
     // resolver 的语义与阶段相关：AssignMemoryType 阶段可递归穿透 view 消费者，
     // ConvertInserter 阶段应基于 tensorTobeMap 中已经规划好的直接需求判断。
-    static MemoryType ResolveEffectiveConsumerRequirement(
-        Operation* consumerOp, MemoryType directRequirement, MemoryType targetType,
-        const OutputRequirementResolver& resolveOutputRequirement);
+    static MemoryType ResolveEffectiveConsumerRequirement(Operation* consumerOp, MemoryType directRequirement,
+                                                          MemoryType targetType,
+                                                          const OutputRequirementResolver& resolveOutputRequirement);
 };
 
 } // namespace npu::tile_fwk

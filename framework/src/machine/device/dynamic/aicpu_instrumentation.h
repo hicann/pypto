@@ -24,13 +24,15 @@ namespace npu::tile_fwk::dynamic {
 #define ARCH_AMD64_NOP_OPDATA 0x0000441f
 #define ARCH_AMD64_JUMP_OPCODE 0xe9
 
-static inline void ArchAmd64CreateJump(uint8_t *addr, uint64_t source, uint64_t target) {
+static inline void ArchAmd64CreateJump(uint8_t* addr, uint64_t source, uint64_t target)
+{
     *addr = ARCH_AMD64_JUMP_OPCODE;
-    *(uint32_t *)(addr + 1) = (uint32_t)(target - (source + ARCH_AMD64_NOP_SIZE));
+    *(uint32_t*)(addr + 1) = (uint32_t)(target - (source + ARCH_AMD64_NOP_SIZE));
 }
-static inline void ArchAmd64CreateNop(uint8_t *addr) {
+static inline void ArchAmd64CreateNop(uint8_t* addr)
+{
     *addr = ARCH_AMD64_NOP_OPCODE;
-    *(uint32_t *)(addr + 1) = (uint32_t)ARCH_AMD64_NOP_OPDATA;
+    *(uint32_t*)(addr + 1) = (uint32_t)ARCH_AMD64_NOP_OPDATA;
 }
 
 #define ARCH_ARM64_NOP "nop"
@@ -38,55 +40,56 @@ static inline void ArchAmd64CreateNop(uint8_t *addr) {
 #define ARCH_ARM64_NOP_OPCODE 0xd503201f
 #define ARCH_ARM64_JUMP_OPCODE (0x5 << 26)
 #define ARCH_ARM64_JUMP_MASK ((1 << 26) - 1)
-static inline void ArchArm64CreateJump(uint8_t *addr, uint64_t source, uint64_t target) {
-    *(uint32_t *)addr = ARCH_ARM64_JUMP_OPCODE | (((target - source) / ARCH_ARM64_NOP_SIZE) & ARCH_ARM64_JUMP_MASK);
+static inline void ArchArm64CreateJump(uint8_t* addr, uint64_t source, uint64_t target)
+{
+    *(uint32_t*)addr = ARCH_ARM64_JUMP_OPCODE | (((target - source) / ARCH_ARM64_NOP_SIZE) & ARCH_ARM64_JUMP_MASK);
 }
-static inline void ArchArm64CreateNop(uint8_t *addr) {
-    *(uint32_t *)addr = ARCH_ARM64_NOP_OPCODE;
-}
+static inline void ArchArm64CreateNop(uint8_t* addr) { *(uint32_t*)addr = ARCH_ARM64_NOP_OPCODE; }
 
 #if defined(__x86_64__)
-#define ARCH_NOP        ARCH_AMD64_NOP
-#define ARCH_NOP_SIZE   ARCH_AMD64_NOP_SIZE
-#define ArchCreateJump  ArchAmd64CreateJump
-#define ArchCreateNop   ArchAmd64CreateNop
+#define ARCH_NOP ARCH_AMD64_NOP
+#define ARCH_NOP_SIZE ARCH_AMD64_NOP_SIZE
+#define ArchCreateJump ArchAmd64CreateJump
+#define ArchCreateNop ArchAmd64CreateNop
 
 #elif defined(__aarch64__)
-#define ARCH_NOP        ARCH_ARM64_NOP
-#define ARCH_NOP_SIZE   ARCH_ARM64_NOP_SIZE
-#define ArchCreateJump  ArchArm64CreateJump
-#define ArchCreateNop   ArchArm64CreateNop
+#define ARCH_NOP ARCH_ARM64_NOP
+#define ARCH_NOP_SIZE ARCH_ARM64_NOP_SIZE
+#define ArchCreateJump ArchArm64CreateJump
+#define ArchCreateNop ArchArm64CreateNop
 
 #else
 #error "Unknow architecture"
 #endif
 
-__attribute__((always_inline)) inline
-bool HardBranchTrueAndRecordLabel() {
+__attribute__((always_inline)) inline bool HardBranchTrueAndRecordLabel()
+{
     bool ret;
-    asm goto(
-        "\n5:"
-        "\n\t" ARCH_NOP
-        "\n6:"
-        "\n\t" ".previous"
-        "\n\t" ".8byte 5b, %l0"
-        "\n\t" ".popsection"
-        :::: dst);
+    asm goto("\n5:"
+             "\n\t" ARCH_NOP "\n6:"
+             "\n\t"
+             ".previous"
+             "\n\t"
+             ".8byte 5b, %l0"
+             "\n\t"
+             ".popsection" :: ::dst);
     ret = true;
     for (;;) {
         break;
-dst:    ret = false;
+    dst:
+        ret = false;
         break;
     }
     return ret;
 }
 
-#define HardBranchTrue(name)                                                                                      \
-    ({                                                                                                            \
-        asm volatile(                                                                                             \
-            "\n\t" ".pushsection _hard_branch_" #name ", \"awG\", @progbits, \"_hard_branch_" #name "\", comdat"  \
-            "\n\t" ".previous");                                                                                  \
-        npu::tile_fwk::dynamic::HardBranchTrueAndRecordLabel();                                                   \
+#define HardBranchTrue(name)                                                                                       \
+    ({                                                                                                             \
+        asm volatile("\n\t"                                                                                        \
+                     ".pushsection _hard_branch_" #name ", \"awG\", @progbits, \"_hard_branch_" #name "\", comdat" \
+                     "\n\t"                                                                                        \
+                     ".previous");                                                                                 \
+        npu::tile_fwk::dynamic::HardBranchTrueAndRecordLabel();                                                    \
     })
 
 struct HardBranch {
@@ -97,45 +100,49 @@ struct HardBranch {
 class HardBranchGroup {
 public:
     HardBranchGroup() = default;
-    HardBranchGroup(HardBranch *begin, HardBranch *end) {
+    HardBranchGroup(HardBranch* begin, HardBranch* end)
+    {
         base_ = begin;
         size_ = end - begin;
     }
 
-    HardBranch &At(uint64_t index) { return base_[index]; }
+    HardBranch& At(uint64_t index) { return base_[index]; }
     uint64_t Size() { return size_; }
+
 private:
-    HardBranch *base_{nullptr};
+    HardBranch* base_{nullptr};
     uint64_t size_{0};
 };
 
-#define HardBranchGroupDefine(name)                                                                               \
-    extern "C" npu::tile_fwk::dynamic::HardBranch __start__hard_branch_##name[];                                  \
-    extern "C" npu::tile_fwk::dynamic::HardBranch __stop__hard_branch_##name[];                                   \
-    static inline npu::tile_fwk::dynamic::HardBranchGroup HardBranchGroup##name() {                               \
-        return npu::tile_fwk::dynamic::HardBranchGroup(__start__hard_branch_##name, __stop__hard_branch_##name);  \
+#define HardBranchGroupDefine(name)                                                                              \
+    extern "C" npu::tile_fwk::dynamic::HardBranch __start__hard_branch_##name[];                                 \
+    extern "C" npu::tile_fwk::dynamic::HardBranch __stop__hard_branch_##name[];                                  \
+    static inline npu::tile_fwk::dynamic::HardBranchGroup HardBranchGroup##name()                                \
+    {                                                                                                            \
+        return npu::tile_fwk::dynamic::HardBranchGroup(__start__hard_branch_##name, __stop__hard_branch_##name); \
     }
 
 #define HardBranchGroupCreate(name) HardBranchGroup##name()
 
 class HardBranchManager {
 public:
-    void AddGroup(const HardBranchGroup &group) {
+    void AddGroup(const HardBranchGroup& group)
+    {
         groupList_[groupSize_] = group;
         groupSize_++;
     }
 
-    HardBranchGroup &At(const uint64_t index) { return groupList_[index]; }
+    HardBranchGroup& At(const uint64_t index) { return groupList_[index]; }
     uint64_t Size() const { return groupSize_; }
     void Clear() { groupSize_ = 0; }
 
-    int ProtectGetRange(uint64_t &base, uint64_t &size);
+    int ProtectGetRange(uint64_t& base, uint64_t& size);
     int ProtectRange(uint64_t base, uint64_t size, bool enableWrite);
 
     int SwitchToJump() { return SwitchTo(true); }
     int SwitchToNop() { return SwitchTo(false); }
 
-    static HardBranchManager &GetInstance();
+    static HardBranchManager& GetInstance();
 
 private:
     static void Placeholder();

@@ -27,8 +27,8 @@ template <typename T>
 void TestAllReduce(OpTestParam& testParam, std::string& goldenDir)
 {
     constexpr size_t paramsSize = 8;
-    auto [row, col, validRow, validCol, typeNum, tileRow, tileCol, useTwoShot]
-        = GetParams<paramsSize>(goldenDir + "/params.bin");
+    auto [row, col, validRow, validCol, typeNum, tileRow, tileCol,
+          useTwoShot] = GetParams<paramsSize>(goldenDir + "/params.bin");
     DataType dType = GetDataTypeNum(typeNum);
 
     int32_t outSize = row * col;
@@ -37,8 +37,8 @@ void TestAllReduce(OpTestParam& testParam, std::string& goldenDir)
     Tensor in(dType, shape, "in");
     Tensor out(dType, shape, "out");
 
-    std::vector<T> inPtr =
-        ReadToVector<T>(goldenDir + "/input_rank_" + std::to_string(testParam.rankId) + ".bin", {row, col});
+    std::vector<T> inPtr = ReadToVector<T>(goldenDir + "/input_rank_" + std::to_string(testParam.rankId) + ".bin",
+                                           {row, col});
 
     ProgramData::GetInstance().AppendInputs({
         RawTensorData::CreateTensor<T>(in, inPtr),

@@ -196,8 +196,8 @@ TEST_F(GraphTest, Test_deepseekAttention_s_1)
     ConfigManager::Instance();
     FUNCTION("A")
     {
-        res = deepseekAttention.Forward(
-            hidden_states, atten_mask, position_ids, cos, sin, kv_len, past_key_states, ropeTileConfig);
+        res = deepseekAttention.Forward(hidden_states, atten_mask, position_ids, cos, sin, kv_len, past_key_states,
+                                        ropeTileConfig);
     }
 }
 
@@ -239,16 +239,16 @@ TEST_F(GraphTest, Test_deepseekAttention_pre)
     ConfigManager::Instance();
     FUNCTION("A")
     {
-        res = deepseekAttention.AtentionPreForward(
-            hidden_states, atten_mask, position_ids, cos, sin, kv_len, past_key_states, ropeTileConfig);
+        res = deepseekAttention.AtentionPreForward(hidden_states, atten_mask, position_ids, cos, sin, kv_len,
+                                                   past_key_states, ropeTileConfig);
     }
 }
 
 TEST_F(GraphTest, test_operation_rope_subgraph_deepseekv3_bf16)
 {
     RoPETileShapeConfig ropeTileConfig{
-        {64, 64},         // for cos/sin->cast
-        {1, 64, 64},      // for gather,unsqueeze
+        {64, 64},    // for cos/sin->cast
+        {1, 64, 64}, // for gather,unsqueeze
         {1, 64, 1, 64},
         {1, 64, 1, 32, 2} // for transpose
     };
@@ -373,25 +373,21 @@ void TestMlaPrologV2(std::vector<int>& params, int inputType, bool isQuant = fal
             quantInputs.dequantScaleWUqQr = w_qb_scale;
 
             config::SetBuildStatic(true);
-            FUNCTION(
-                "MlaProlog_T", {x, w_qa, w_qb, w_qb_scale, w_kv_b_k, w_kv_a, gamma_cq, gamma_ckv, sin, cos, kv_len,
-                                kv_cache, kr_cache, output_q, output_q_rope})
+            FUNCTION("MlaProlog_T", {x, w_qa, w_qb, w_qb_scale, w_kv_b_k, w_kv_a, gamma_cq, gamma_ckv, sin, cos, kv_len,
+                                     kv_cache, kr_cache, output_q, output_q_rope})
             {
-                MlaProlog(
-                    x, w_qa, w_qb, w_kv_b_k, w_kv_a, gamma_cq, gamma_ckv, sin, cos, kv_len, kv_cache, kr_cache,
-                    quantInputs, ropeConfig, output_q, output_q_rope, kv_cache, kr_cache, 1e-5f, 1e-5f, "BNSD",
-                    splitReduceLastDim, splitK);
+                MlaProlog(x, w_qa, w_qb, w_kv_b_k, w_kv_a, gamma_cq, gamma_ckv, sin, cos, kv_len, kv_cache, kr_cache,
+                          quantInputs, ropeConfig, output_q, output_q_rope, kv_cache, kr_cache, 1e-5f, 1e-5f, "BNSD",
+                          splitReduceLastDim, splitK);
             };
         } else {
             config::SetBuildStatic(true);
-            FUNCTION(
-                "MlaProlog_T", {x, w_qa, w_qb, w_kv_b_k, w_kv_a, gamma_cq, gamma_ckv, sin, cos, kv_len, kv_cache,
-                                kr_cache, output_q, output_q_rope})
+            FUNCTION("MlaProlog_T", {x, w_qa, w_qb, w_kv_b_k, w_kv_a, gamma_cq, gamma_ckv, sin, cos, kv_len, kv_cache,
+                                     kr_cache, output_q, output_q_rope})
             {
-                MlaProlog(
-                    x, w_qa, w_qb, w_kv_b_k, w_kv_a, gamma_cq, gamma_ckv, sin, cos, kv_len, kv_cache, kr_cache,
-                    quantInputs, ropeConfig, output_q, output_q_rope, kv_cache, kr_cache, 1e-5f, 1e-5f, "BNSD",
-                    splitReduceLastDim, splitK);
+                MlaProlog(x, w_qa, w_qb, w_kv_b_k, w_kv_a, gamma_cq, gamma_ckv, sin, cos, kv_len, kv_cache, kr_cache,
+                          quantInputs, ropeConfig, output_q, output_q_rope, kv_cache, kr_cache, 1e-5f, 1e-5f, "BNSD",
+                          splitReduceLastDim, splitK);
             };
         }
     }
@@ -462,8 +458,8 @@ void TestMlaProlog(std::vector<int>& params)
         };
 
         config::SetBuildStatic(true);
-        FUNCTION(
-            "MlaProlog_T", {x, w_qa, w_qb, w_kv_a, w_kv_b_k, position_ids, cos, sin, past_key_states, kv_len, output_q})
+        FUNCTION("MlaProlog_T",
+                 {x, w_qa, w_qb, w_kv_a, w_kv_b_k, position_ids, cos, sin, past_key_states, kv_len, output_q})
         {
             auto q_kv = Attention.MlaPrologFoward(x, position_ids, cos, sin, kv_len, past_key_states, ropeTileConfig);
             output_q = q_kv[0];
@@ -569,7 +565,7 @@ TEST_F(GraphTest, TestTranspose_MLA_3D_2_reshape)
         FUNCTION("MLA_3D_2", {input, output1, output2})
         {
             TileShape::Current().SetVecTile(NUM_2, NUM_2, NUM_128);
-            output1 = Transpose(input, {0, 1});   // [8, 32, 128] --> [32, 8, 128]
+            output1 = Transpose(input, {0, 1}); // [8, 32, 128] --> [32, 8, 128]
             TileShape::Current().SetVecTile(NUM_8, NUM_8, NUM_128);
             output2 = Reshape(output1, resShape); // [32, 8, 128] --> [32, 1024]
             output3 = Reshape(output1, {-1});     // [32, 8, 128] --> [32 * 8 * 128]

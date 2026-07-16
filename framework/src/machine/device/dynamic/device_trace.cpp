@@ -31,12 +31,14 @@ namespace npu::tile_fwk::dynamic {
 constexpr uint8_t MAX_HANDLE_NUM = 5;
 std::atomic<int8_t> g_thread_idx{0};
 
-DeviceTrace& DeviceTrace::GetInstance() {
+DeviceTrace& DeviceTrace::GetInstance()
+{
     static DeviceTrace deviceTrace;
     return deviceTrace;
 }
 
-DeviceTrace::~DeviceTrace() {
+DeviceTrace::~DeviceTrace()
+{
     if (handle_ != nullptr) {
         dlclose(handle_);
         handle_ = nullptr;
@@ -52,7 +54,8 @@ DeviceTrace::~DeviceTrace() {
     }
 }
 
-void* DeviceTrace::LoadLibrary(const std::string& libraryName) {
+void* DeviceTrace::LoadLibrary(const std::string& libraryName)
+{
     void* handle = dlopen(libraryName.c_str(), RTLD_NOW);
     if (handle == nullptr) {
         const char* error = dlerror();
@@ -61,7 +64,8 @@ void* DeviceTrace::LoadLibrary(const std::string& libraryName) {
     return handle;
 }
 
-void* DeviceTrace::GetSymbol(const std::string& symbolName) {
+void* DeviceTrace::GetSymbol(const std::string& symbolName)
+{
     if (handle_ == nullptr) {
         DEV_WARN("Cannot get symbol %s from null handle", symbolName.c_str());
         return nullptr;
@@ -75,7 +79,8 @@ void* DeviceTrace::GetSymbol(const std::string& symbolName) {
     return symbol;
 }
 
-int32_t DeviceTrace::InitializeAtraceFunctions() {
+int32_t DeviceTrace::InitializeAtraceFunctions()
+{
     TraceCreate = reinterpret_cast<TraHandle (*)(TracerType, const char*)>(GetSymbol("AtraceCreate"));
     if (TraceCreate == nullptr) {
         return static_cast<int32_t>(DevCommonErr::CANN_API_NOT_FOUND);
@@ -129,7 +134,8 @@ int32_t DeviceTrace::InitializeAtraceFunctions() {
     return 0;
 }
 
-int32_t DeviceTrace::InitializeUtraceFunctions() {
+int32_t DeviceTrace::InitializeUtraceFunctions()
+{
     TraceCreate = reinterpret_cast<TraHandle (*)(TracerType, const char*)>(GetSymbol("UtraceCreate"));
     if (TraceCreate == nullptr) {
         return static_cast<int32_t>(DevCommonErr::CANN_API_NOT_FOUND);
@@ -178,15 +184,15 @@ int32_t DeviceTrace::InitializeUtraceFunctions() {
     return 0;
 }
 
-int32_t DeviceTrace::AtraceInitialize() {
+int32_t DeviceTrace::AtraceInitialize()
+{
     handle_ = LoadLibrary("libascend_trace.so");
     if (handle_ != nullptr) {
         DEV_INFO("Successfully loaded libascend_trace.so");
         int32_t ret = InitializeAtraceFunctions();
         if (ret != 0) {
-            DEV_TRACE_LOG_ERROR(
-                DevCommonErr::INIT_FAILED, "Failed to initialize Atrace functions, error code: %d",
-                static_cast<int>(ret));
+            DEV_TRACE_LOG_ERROR(DevCommonErr::INIT_FAILED, "Failed to initialize Atrace functions, error code: %d",
+                                static_cast<int>(ret));
             dlclose(handle_);
             handle_ = nullptr;
             return ret;
@@ -197,15 +203,15 @@ int32_t DeviceTrace::AtraceInitialize() {
     return static_cast<int32_t>(DevCommonErr::LOAD_LIBRARY_FAILED);
 }
 
-int32_t DeviceTrace::UtraceInitialize() {
+int32_t DeviceTrace::UtraceInitialize()
+{
     handle_ = LoadLibrary("libutrace.so");
     if (handle_ != nullptr) {
         DEV_INFO("Successfully loaded libutrace.so");
         int32_t ret = InitializeUtraceFunctions();
         if (ret != 0) {
-            DEV_TRACE_LOG_ERROR(
-                DevCommonErr::INIT_FAILED, "Failed to initialize Utrace functions, error code: %d",
-                static_cast<int>(ret));
+            DEV_TRACE_LOG_ERROR(DevCommonErr::INIT_FAILED, "Failed to initialize Utrace functions, error code: %d",
+                                static_cast<int>(ret));
             dlclose(handle_);
             handle_ = nullptr;
             return ret;
@@ -217,7 +223,8 @@ int32_t DeviceTrace::UtraceInitialize() {
     return static_cast<int32_t>(DevCommonErr::LOAD_LIBRARY_FAILED);
 }
 
-int32_t DeviceTrace::Initialize(void* targ) {
+int32_t DeviceTrace::Initialize(void* targ)
+{
     if (handle_ != nullptr) {
         DEV_DEBUG("Device trace already initialized");
         return 0;
@@ -234,11 +241,13 @@ int32_t DeviceTrace::Initialize(void* targ) {
         DEV_INFO("Current using so is libutrace.so");
         return ConnectTraceD2H(targ);
     }
-    DEV_TRACE_LOG_ERROR(DevCommonErr::LOAD_LIBRARY_FAILED, "Failed to initialize device trace: no trace library available");
+    DEV_TRACE_LOG_ERROR(DevCommonErr::LOAD_LIBRARY_FAILED,
+                        "Failed to initialize device trace: no trace library available");
     return static_cast<int32_t>(DevCommonErr::LOAD_LIBRARY_FAILED);
 }
 
-int32_t DeviceTrace::ConnectTraceD2H(void* targ) {
+int32_t DeviceTrace::ConnectTraceD2H(void* targ)
+{
     DeviceKernelArgs* kargs = (DeviceKernelArgs*)targ;
     DeviceArgs* devArgs = reinterpret_cast<DeviceArgs*>(kargs->cfgdata);
     if (devArgs->devDfxArgAddr != 0) {
@@ -253,9 +262,8 @@ int32_t DeviceTrace::ConnectTraceD2H(void* targ) {
         drvQueryProcessHostPid(getpid(), nullptr, nullptr, &hostPid, nullptr);
         traceAttr.deviceId = static_cast<uint8_t>(localDevId);
         traceAttr.pid = hostPid;
-        DEV_INFO(
-            "ArgsAddr: %lu, Set deviceId: %u.", devArgs->devDfxArgAddr, devDfxArgs->deviceId);
-            
+        DEV_INFO("ArgsAddr: %lu, Set deviceId: %u.", devArgs->devDfxArgAddr, devDfxArgs->deviceId);
+
         if (TraceSetGlobalAttr(&traceAttr) != 0) {
             return static_cast<int32_t>(DevCommonErr::LOAD_LIBRARY_FAILED);
         }
@@ -275,7 +283,8 @@ int32_t DeviceTrace::ConnectTraceD2H(void* targ) {
     return 0;
 }
 
-int32_t DeviceTrace::BindHandleToEventHandle(TraHandle handle, uint8_t threadIdx) {
+int32_t DeviceTrace::BindHandleToEventHandle(TraHandle handle, uint8_t threadIdx)
+{
     // Primarily, each AICPU creates one obj handle.
     //  The trace module limits each event handle to binding at most 5 obj handles.
     auto status = TraceEventBindTrace(eventHandleArry_[threadIdx / MAX_HANDLE_NUM], handle);
@@ -286,7 +295,8 @@ int32_t DeviceTrace::BindHandleToEventHandle(TraHandle handle, uint8_t threadIdx
     return 0;
 }
 
-TraHandle DeviceTrace::CreateTraceHandle() {
+TraHandle DeviceTrace::CreateTraceHandle()
+{
     thread_local TraHandle pyptoHandle = -1;
     if (pyptoHandle >= 0) {
         return pyptoHandle;
@@ -314,7 +324,8 @@ TraHandle DeviceTrace::CreateTraceHandle() {
     return pyptoHandle;
 }
 
-void DeviceTrace::SubmitTraceMsg(const std::string& traceMsg) {
+void DeviceTrace::SubmitTraceMsg(const std::string& traceMsg)
+{
     auto pyptoHandle = CreateTraceHandle();
     if (pyptoHandle < 0 || traceMsg.empty()) {
         DEV_WARN("pypto Handle is null or traceMsg is empty, cann't to submit");
@@ -329,9 +340,10 @@ void DeviceTrace::SubmitTraceMsg(const std::string& traceMsg) {
     }
 }
 
-void DeviceTrace::ReportTraceMsg() {
+void DeviceTrace::ReportTraceMsg()
+{
     for (auto enventHandle : eventHandleArry_) {
-        if(enventHandle < 0) {
+        if (enventHandle < 0) {
             continue;
         }
         auto ret = TraceEventReport(enventHandle);
@@ -344,7 +356,8 @@ void DeviceTrace::ReportTraceMsg() {
 } // namespace npu::tile_fwk::dynamic
 #else
 namespace npu::tile_fwk::dynamic {
-DeviceTrace& DeviceTrace::GetInstance() {
+DeviceTrace& DeviceTrace::GetInstance()
+{
     static DeviceTrace deviceTrace;
     return deviceTrace;
 }

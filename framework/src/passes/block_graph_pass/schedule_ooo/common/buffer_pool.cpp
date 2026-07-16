@@ -73,9 +73,8 @@ size_t BufferPool::ObtainStartAddr(size_t i, const std::vector<std::tuple<int, s
     return std::get<START_ADDR_IDX>(allocatedBufs[i - 1]);
 }
 
-size_t BufferPool::UpdateIdx(
-    size_t& i, size_t sizeNeedSpill, size_t startAddr,
-    const std::vector<std::tuple<int, size_t, size_t>>& allocatedBufs)
+size_t BufferPool::UpdateIdx(size_t& i, size_t sizeNeedSpill, size_t startAddr,
+                             const std::vector<std::tuple<int, size_t, size_t>>& allocatedBufs)
 {
     size_t j = i;
     while (j < allocatedBufs.size() && (std::get<1>(allocatedBufs[j]) - startAddr) < sizeNeedSpill) {
@@ -97,11 +96,10 @@ std::vector<std::tuple<int, size_t, size_t>> BufferPool::GetSortedAllocatedBufs(
     for (auto& [memId, bufferSlice] : bufferSlices) {
         allocatedBufs.push_back(std::make_tuple(memId, bufferSlice.offset, bufferSlice.offset + bufferSlice.size));
     }
-    std::sort(
-        allocatedBufs.begin(), allocatedBufs.end(),
-        [&](std::tuple<int, size_t, size_t>& a, std::tuple<int, size_t, size_t>& b) {
-            return std::get<1>(a) < std::get<1>(b);
-        });
+    std::sort(allocatedBufs.begin(), allocatedBufs.end(),
+              [&](std::tuple<int, size_t, size_t>& a, std::tuple<int, size_t, size_t>& b) {
+                  return std::get<1>(a) < std::get<1>(b);
+              });
     return allocatedBufs;
 }
 
@@ -149,14 +147,13 @@ Status BufferPool::MakeBufferSlice(LocalBufferPtr tensor, BufferSlice& newSlice)
     bufferSlices[tensor->id] = newSlice;
     tensor->start = newSlice.offset;
     tensor->end = newSlice.offset + newSlice.size;
-    APASS_LOG_DEBUG_F(
-        Elements::Tensor, " Allocate Tensor[%d], range [%lu, %lu].", tensor->id, newSlice.offset,
-        newSlice.size + newSlice.offset);
+    APASS_LOG_DEBUG_F(Elements::Tensor, " Allocate Tensor[%d], range [%lu, %lu].", tensor->id, newSlice.offset,
+                      newSlice.size + newSlice.offset);
     return SUCCESS;
 }
 
-void BufferPool::SelectHeadAndTail(
-    LocalBufferPtr tensor, bool& head, bool& tail, std::map<uint64_t, std::map<uint64_t, uint64_t>> freeIntervals)
+void BufferPool::SelectHeadAndTail(LocalBufferPtr tensor, bool& head, bool& tail,
+                                   std::map<uint64_t, std::map<uint64_t, uint64_t>> freeIntervals)
 {
     for (auto& interval : freeIntervals) {
         if (interval.first < tensor->size) {
@@ -225,8 +222,8 @@ std::vector<int> BufferPool::GetAddrSortedBufs()
         (void)slice;
         memIds.push_back(memId);
     }
-    std::sort(
-        memIds.begin(), memIds.end(), [&](int a, int b) { return bufferSlices[a].offset < bufferSlices[b].offset; });
+    std::sort(memIds.begin(), memIds.end(),
+              [&](int a, int b) { return bufferSlices[a].offset < bufferSlices[b].offset; });
     return memIds;
 }
 
@@ -246,9 +243,8 @@ Status BufferPool::Free(const int tensorId)
         APASS_LOG_ERROR_F(Elements::Tensor, "Tensor[%d] not in bufferSlices.", tensorId);
         return FAILED;
     }
-    APASS_LOG_DEBUG_F(
-        Elements::Tensor, "    Free tensor[%d], range:[%lu, %lu]", tensorId, bufferSlices[tensorId].offset,
-        bufferSlices[tensorId].size + bufferSlices[tensorId].offset);
+    APASS_LOG_DEBUG_F(Elements::Tensor, "    Free tensor[%d], range:[%lu, %lu]", tensorId,
+                      bufferSlices[tensorId].offset, bufferSlices[tensorId].size + bufferSlices[tensorId].offset);
     bufferSlices.erase(tensorId);
     return SUCCESS;
 }
@@ -345,8 +341,8 @@ Status BufferPool::ModifyBufferRange(LocalBufferPtr localBuffer, size_t offset)
     return SUCCESS;
 }
 
-Status BufferPool::CompactBufferSlices(
-    std::unordered_map<int, LocalBufferPtr>& localBufferMap, std::vector<BufferAddrChange>& changes)
+Status BufferPool::CompactBufferSlices(std::unordered_map<int, LocalBufferPtr>& localBufferMap,
+                                       std::vector<BufferAddrChange>& changes)
 {
     if (bufferSlices.empty()) {
         return SUCCESS;
@@ -404,26 +400,23 @@ void BufferPool::PrintStatus()
         (void)slice;
         memIdList.push_back(memId);
     }
-    std::sort(memIdList.begin(), memIdList.end(), [&](int a, int b) {
-        return bufferSlices[a].offset < bufferSlices[b].offset;
-    });
+    std::sort(memIdList.begin(), memIdList.end(),
+              [&](int a, int b) { return bufferSlices[a].offset < bufferSlices[b].offset; });
 
     uint64_t lastEnd = 0;
     for (auto memId : memIdList) {
         auto& slice = bufferSlices[memId];
         if (slice.offset != lastEnd) {
-            APASS_LOG_DEBUG_F(
-                Elements::Tensor, "      |--- Space : [%lu, %lu], Size : %lu", lastEnd, slice.offset,
-                slice.offset - lastEnd);
+            APASS_LOG_DEBUG_F(Elements::Tensor, "      |--- Space : [%lu, %lu], Size : %lu", lastEnd, slice.offset,
+                              slice.offset - lastEnd);
         }
-        APASS_LOG_DEBUG_F(
-            Elements::Tensor, "  |--- MemId : %d, Span : [%lu, %lu], Size : %lu", memId, slice.offset,
-            slice.offset + slice.size, slice.size);
+        APASS_LOG_DEBUG_F(Elements::Tensor, "  |--- MemId : %d, Span : [%lu, %lu], Size : %lu", memId, slice.offset,
+                          slice.offset + slice.size, slice.size);
         lastEnd = slice.offset + slice.size;
     }
     if (lastEnd != memSize_) {
-        APASS_LOG_DEBUG_F(
-            Elements::Tensor, "      |--- Space : [%lu, %lu], Size : %lu", lastEnd, memSize_, memSize_ - lastEnd);
+        APASS_LOG_DEBUG_F(Elements::Tensor, "      |--- Space : [%lu, %lu], Size : %lu", lastEnd, memSize_,
+                          memSize_ - lastEnd);
     }
 }
 
@@ -441,10 +434,9 @@ std::vector<std::pair<uint64_t, uint64_t>> BufferPool::GetSortedFreeIntervals()
             v.emplace_back(kv.first, kv.second);
         }
     }
-    std::sort(v.begin(), v.end(),
-        [](const std::pair<uint64_t, uint64_t>& a, const std::pair<uint64_t, uint64_t>& b) {
-            return a.first < b.first;
-        });
+    std::sort(v.begin(), v.end(), [](const std::pair<uint64_t, uint64_t>& a, const std::pair<uint64_t, uint64_t>& b) {
+        return a.first < b.first;
+    });
     return v;
 }
 
@@ -455,14 +447,13 @@ Status BufferPool::AllocateAtOffset(LocalBufferPtr tensor, uint64_t offset)
         return FAILED;
     }
     if (offset + tensor->size > memSize_) {
-        APASS_LOG_ERROR_F(
-            Elements::Tensor, "AllocateAtOffset: Tensor[%d] (offset %lu, size %lu) exceeds pool size %lu.",
-            tensor->id, offset, tensor->size, memSize_);
+        APASS_LOG_ERROR_F(Elements::Tensor,
+                          "AllocateAtOffset: Tensor[%d] (offset %lu, size %lu) exceeds pool size %lu.", tensor->id,
+                          offset, tensor->size, memSize_);
         return FAILED;
     }
     if (bufferSlices.find(tensor->id) != bufferSlices.end()) {
-        APASS_LOG_ERROR_F(
-            Elements::Tensor, "AllocateAtOffset: Tensor[%d] already allocated.", tensor->id);
+        APASS_LOG_ERROR_F(Elements::Tensor, "AllocateAtOffset: Tensor[%d] already allocated.", tensor->id);
         return FAILED;
     }
     // 先保存 start/end 旧值, 用于 overlap 检查失败时回滚, 避免 tensor 处于
@@ -475,17 +466,15 @@ Status BufferPool::AllocateAtOffset(LocalBufferPtr tensor, uint64_t offset)
     tensor->start = offset;
     tensor->end = offset + tensor->size;
     if (CheckBufferSlicesOverlap()) {
-        APASS_LOG_WARN_F(
-            Elements::Tensor, "AllocateAtOffset: Tensor[%d] at offset %lu overlaps existing slices.",
-            tensor->id, offset);
+        APASS_LOG_WARN_F(Elements::Tensor, "AllocateAtOffset: Tensor[%d] at offset %lu overlaps existing slices.",
+                         tensor->id, offset);
         bufferSlices.erase(tensor->id);
         tensor->start = savedStart;
         tensor->end = savedEnd;
         return FAILED;
     }
-    APASS_LOG_DEBUG_F(
-        Elements::Tensor, " AllocateAtOffset Tensor[%d], range [%lu, %lu].", tensor->id, offset,
-        offset + tensor->size);
+    APASS_LOG_DEBUG_F(Elements::Tensor, " AllocateAtOffset Tensor[%d], range [%lu, %lu].", tensor->id, offset,
+                      offset + tensor->size);
     return SUCCESS;
 }
 

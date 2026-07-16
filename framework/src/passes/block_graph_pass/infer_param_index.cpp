@@ -38,29 +38,29 @@ std::string InferParamIndex::DumpParamIndex(const std::map<std::string, DynParam
     return ss.str();
 }
 
-bool InferParamIndex::HandleCopyOpShape(Operation& op, Function &function, bool &isCopyIn) 
-{ 
-    auto operands = isCopyIn ? op.GetIOperands() : op.GetOOperands(); 
-    auto &casts = isCopyIn ? function.inCasts_ : function.outCasts_; 
-    auto operand = operands.front(); 
-    if (find(casts.begin(), casts.end(), operand) == casts.end()) { 
-        bool* distCopyType = op.GetAttr<bool>(OpAttributeKey::isDistCopyOut); 
-        int tensorBaseAddrCoaIndex = IsCopyIn(op.GetOpcode()) ? op.GetIOpAttrOffset(0) : op.GetOOpAttrOffset(0); 
-        tensorBaseAddrCoaIndex = (distCopyType && !*distCopyType) ? op.GetIOpAttrOffset(1) : tensorBaseAddrCoaIndex; 
-        if (tensorBaseAddrCoaIndex != -1) { 
-            return true; 
-        } 
-        std::vector<SymbolicScalar> validShape; 
-        op.GetOOperands().front()->UpdateDynValidShape(validShape); 
-        auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(op.GetOpAttribute()); 
-        if (isCopyIn) { 
-            copyAttr->SetToDynValidShape(OpImmediate::Specified(validShape)); 
-        } else { 
-            copyAttr->SetFromDynValidShape(OpImmediate::Specified(validShape)); 
-        } 
-        return true; 
-    } 
-    return false; 
+bool InferParamIndex::HandleCopyOpShape(Operation& op, Function& function, bool& isCopyIn)
+{
+    auto operands = isCopyIn ? op.GetIOperands() : op.GetOOperands();
+    auto& casts = isCopyIn ? function.inCasts_ : function.outCasts_;
+    auto operand = operands.front();
+    if (find(casts.begin(), casts.end(), operand) == casts.end()) {
+        bool* distCopyType = op.GetAttr<bool>(OpAttributeKey::isDistCopyOut);
+        int tensorBaseAddrCoaIndex = IsCopyIn(op.GetOpcode()) ? op.GetIOpAttrOffset(0) : op.GetOOpAttrOffset(0);
+        tensorBaseAddrCoaIndex = (distCopyType && !*distCopyType) ? op.GetIOpAttrOffset(1) : tensorBaseAddrCoaIndex;
+        if (tensorBaseAddrCoaIndex != -1) {
+            return true;
+        }
+        std::vector<SymbolicScalar> validShape;
+        op.GetOOperands().front()->UpdateDynValidShape(validShape);
+        auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(op.GetOpAttribute());
+        if (isCopyIn) {
+            copyAttr->SetToDynValidShape(OpImmediate::Specified(validShape));
+        } else {
+            copyAttr->SetFromDynValidShape(OpImmediate::Specified(validShape));
+        }
+        return true;
+    }
+    return false;
 }
 
 static bool IsInGMSpill(Operation& op)
@@ -89,46 +89,49 @@ static bool IsOutGMSpill(Operation& op)
 
 Status InferParamIndex::ResetOutputDynValidShape(Operation& op, Function& function)
 {
-    const std::set<Opcode> specifiedOps = {Opcode::OP_VEC_DUP, Opcode::OP_EXPAND, Opcode::OP_RESHAPE,	 
-                                        Opcode::OP_GATHER, Opcode::OP_GATHER_IN_UB, Opcode::OP_GATHER_IN_L1,	 
-                                        Opcode::OP_PERMUTE, Opcode::OP_PERMUTE_ELEMENT, Opcode::OP_UB_COPY_L1};	 
-    bool isCopyIn = IsInGMSpill(op); 
-    bool isCopyOut = IsOutGMSpill(op); 
-    if ((isCopyIn || isCopyOut)) { 
-        if (HandleCopyOpShape(op, function, isCopyIn)) { 
-            return SUCCESS; 
-        } 
-    }	 
-    for (auto outOperand : op.GetOOperands()) {	 
-        if (op.GetOpcode() == Opcode::OP_INDEX_ADD && 
-            !Program::GetInstance().GetCurrentFunction()->IsFromOutCast(outOperand)) continue; 
-        std::vector<SymbolicScalar> validShape;	 
-        if (OpcodeManager::Inst().IsCopyInOrOut(op.GetOpcode()) || specifiedOps.count(op.GetOpcode())) {	 
-            for (size_t dimIdx = 0U; dimIdx < outOperand->GetShape().size(); ++dimIdx) {	 
-                validShape.emplace_back("sym_" + std::to_string(outOperand->GetMagic()) + "_dim_" + std::to_string(dimIdx));	 
-            }	 
-        }	 
-        bool shouldUpdateDynValidShape = op.GetOpcode() != Opcode::OP_ASSEMBLE && op.GetOpcode() != Opcode::OP_L0C_COPY_UB 
-            && op.GetOpcode() != Opcode::OP_VIEW && !function.IsFromOutCast(outOperand);	 
-        if (shouldUpdateDynValidShape) {	 
-            outOperand->UpdateDynValidShape(validShape);	 
-        }	 
-        // 通信类Op的输出需要GetTensorData格式从CopyAttr拿而不是Coa拿出，需要特殊处理 
-        bool* distCopyType = op.GetAttr<bool>(OpAttributeKey::isDistCopyOut); 
-        if (distCopyType && function.IsFromOutCast(outOperand)) { 
-            if (*distCopyType) { 
-                auto attr = std::static_pointer_cast<CopyOpAttribute>(op.GetOpAttribute()); 
-                if (attr->GetFromDynValidShape().size() != 0) { 
-                    outOperand->UpdateDynValidShape(OpImmediate::ToSpecified(attr->GetFromDynValidShape())); 
-                } 
-            } else if (!*distCopyType) { 
-                auto attr = std::static_pointer_cast<CopyOpAttribute>(op.GetOpAttribute()); 
-                if (attr->GetToDynValidShape().size() != 0 && attr->GetToDynValidShape()[0].IsSpecified()) { 
-                    outOperand->UpdateDynValidShape(OpImmediate::ToSpecified(attr->GetToDynValidShape())); 
-                } 
-            } 
-        } 
-    }	 
+    const std::set<Opcode> specifiedOps = {Opcode::OP_VEC_DUP, Opcode::OP_EXPAND,          Opcode::OP_RESHAPE,
+                                           Opcode::OP_GATHER,  Opcode::OP_GATHER_IN_UB,    Opcode::OP_GATHER_IN_L1,
+                                           Opcode::OP_PERMUTE, Opcode::OP_PERMUTE_ELEMENT, Opcode::OP_UB_COPY_L1};
+    bool isCopyIn = IsInGMSpill(op);
+    bool isCopyOut = IsOutGMSpill(op);
+    if ((isCopyIn || isCopyOut)) {
+        if (HandleCopyOpShape(op, function, isCopyIn)) {
+            return SUCCESS;
+        }
+    }
+    for (auto outOperand : op.GetOOperands()) {
+        if (op.GetOpcode() == Opcode::OP_INDEX_ADD &&
+            !Program::GetInstance().GetCurrentFunction()->IsFromOutCast(outOperand))
+            continue;
+        std::vector<SymbolicScalar> validShape;
+        if (OpcodeManager::Inst().IsCopyInOrOut(op.GetOpcode()) || specifiedOps.count(op.GetOpcode())) {
+            for (size_t dimIdx = 0U; dimIdx < outOperand->GetShape().size(); ++dimIdx) {
+                validShape.emplace_back("sym_" + std::to_string(outOperand->GetMagic()) + "_dim_" +
+                                        std::to_string(dimIdx));
+            }
+        }
+        bool shouldUpdateDynValidShape = op.GetOpcode() != Opcode::OP_ASSEMBLE &&
+                                         op.GetOpcode() != Opcode::OP_L0C_COPY_UB &&
+                                         op.GetOpcode() != Opcode::OP_VIEW && !function.IsFromOutCast(outOperand);
+        if (shouldUpdateDynValidShape) {
+            outOperand->UpdateDynValidShape(validShape);
+        }
+        // 通信类Op的输出需要GetTensorData格式从CopyAttr拿而不是Coa拿出，需要特殊处理
+        bool* distCopyType = op.GetAttr<bool>(OpAttributeKey::isDistCopyOut);
+        if (distCopyType && function.IsFromOutCast(outOperand)) {
+            if (*distCopyType) {
+                auto attr = std::static_pointer_cast<CopyOpAttribute>(op.GetOpAttribute());
+                if (attr->GetFromDynValidShape().size() != 0) {
+                    outOperand->UpdateDynValidShape(OpImmediate::ToSpecified(attr->GetFromDynValidShape()));
+                }
+            } else if (!*distCopyType) {
+                auto attr = std::static_pointer_cast<CopyOpAttribute>(op.GetOpAttribute());
+                if (attr->GetToDynValidShape().size() != 0 && attr->GetToDynValidShape()[0].IsSpecified()) {
+                    outOperand->UpdateDynValidShape(OpImmediate::ToSpecified(attr->GetToDynValidShape()));
+                }
+            }
+        }
+    }
     return SUCCESS;
 }
 
@@ -138,16 +141,16 @@ Status InferParamIndex::ResetViewDynValidShape(const Operation& op)
     if (viewOpAttribute == nullptr) {
         return SUCCESS;
     }
-    auto newDynValidShape = viewOpAttribute->GetToDynValidShape(); 
-    std::vector<int> newValidShape; 
-    for (auto validSym : newDynValidShape) { 
-        if (validSym.ConcreteValid()) { 
-            newValidShape.push_back(validSym.Concrete()); 
-        } 
-    } 
-    if (newValidShape.size() == newDynValidShape.size()) { 
-        op.GetOOperands()[0]->UpdateDynValidShape(newDynValidShape); 
-        return SUCCESS; 
+    auto newDynValidShape = viewOpAttribute->GetToDynValidShape();
+    std::vector<int> newValidShape;
+    for (auto validSym : newDynValidShape) {
+        if (validSym.ConcreteValid()) {
+            newValidShape.push_back(validSym.Concrete());
+        }
+    }
+    if (newValidShape.size() == newDynValidShape.size()) {
+        op.GetOOperands()[0]->UpdateDynValidShape(newDynValidShape);
+        return SUCCESS;
     }
     viewOpAttribute->SetToDynValidShape(op.GetOOperands()[0]->GetDynValidShape());
     return SUCCESS;
@@ -176,20 +179,18 @@ Status InferParamIndex::ResetDynValidShape(Function& function)
         }
         if (op.GetOpcode() == Opcode::OP_VIEW) {
             if (ResetViewDynValidShape(op) != SUCCESS) {
-                APASS_LOG_ERROR_F(
-                    Elements::Operation,
-                    "Fail to reset the output operand shape of VIEW operation %d in function %s. %s", op.GetOpMagic(),
-                    function.GetRawName().c_str(), GetFormatBacktrace(op).c_str());
+                APASS_LOG_ERROR_F(Elements::Operation,
+                                  "Fail to reset the output operand shape of VIEW operation %d in function %s. %s",
+                                  op.GetOpMagic(), function.GetRawName().c_str(), GetFormatBacktrace(op).c_str());
                 return FAILED;
             }
         }
         // 清空assemble的属性中的dynvalidshape，以便后续重新推导符号化的dynvalidshape
         if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
             if (ResetAssembleDynValidShape(op) != SUCCESS) {
-                APASS_LOG_ERROR_F(
-                    Elements::Operation,
-                    "Fail to reset the output operand shape of ASSEMBLE operation %d in function %s. %s",
-                    op.GetOpMagic(), function.GetRawName().c_str(), GetFormatBacktrace(op).c_str());
+                APASS_LOG_ERROR_F(Elements::Operation,
+                                  "Fail to reset the output operand shape of ASSEMBLE operation %d in function %s. %s",
+                                  op.GetOpMagic(), function.GetRawName().c_str(), GetFormatBacktrace(op).c_str());
                 return FAILED;
             }
         }
@@ -203,10 +204,9 @@ Status InferParamIndex::InferShape(Function& function)
     std::map<int, size_t> opMagic2Idx;
     std::vector<Operation*> opList = function.Operations(false).DuplicatedOpList();
     if (opList.empty()) {
-        APASS_LOG_ERROR_F(
-            Elements::Tensor,
-            "There is no operation in function %s. Please check the operation list of the input graph",
-            function.GetRawName().c_str());
+        APASS_LOG_ERROR_F(Elements::Tensor,
+                          "There is no operation in function %s. Please check the operation list of the input graph",
+                          function.GetRawName().c_str());
         return FAILED;
     }
     for (auto op : opList) {
@@ -226,8 +226,9 @@ Status InferParamIndex::InferShape(Function& function)
     return SUCCESS;
 }
 
-Status InferParamIndex::InsertAddr2ValidShapeSpecified(Operation& op, std::map<int, std::vector<SymbolicScalar>>& addr2ValidShape,
-    std::map<int, std::vector<SymbolicScalar>>& addr2ValidShapeSpecified) 
+Status InferParamIndex::InsertAddr2ValidShapeSpecified(
+    Operation& op, std::map<int, std::vector<SymbolicScalar>>& addr2ValidShape,
+    std::map<int, std::vector<SymbolicScalar>>& addr2ValidShapeSpecified)
 {
     bool* distCopyType = op.GetAttr<bool>(OpAttributeKey::isDistCopyOut);
     // 暂不处理输入个数小于输出个数的copyIn，原因是coaIndex不够分
@@ -235,12 +236,13 @@ Status InferParamIndex::InsertAddr2ValidShapeSpecified(Operation& op, std::map<i
         auto ioNum = op.GetIOperands().size();
         auto ooNum = op.GetOOperands().size();
         if (ioNum < ooNum) {
-            APASS_LOG_ERROR_F(Elements::Operation, "Copyin[%d] does not support fewer inputs than outputs.", op.GetOpMagic());
+            APASS_LOG_ERROR_F(Elements::Operation, "Copyin[%d] does not support fewer inputs than outputs.",
+                              op.GetOpMagic());
             return FAILED;
         }
     }
-    
-    for (size_t i = 0 ; i < op.GetOOperands().size(); i++) {
+
+    for (size_t i = 0; i < op.GetOOperands().size(); i++) {
         int tensorBaseAddrCoaIndex = IsCopyIn(op.GetOpcode()) ? op.GetIOpAttrOffset(0) : op.GetOOpAttrOffset(i);
         tensorBaseAddrCoaIndex = (distCopyType && !*distCopyType) ? op.GetIOpAttrOffset(0) : tensorBaseAddrCoaIndex;
         if (tensorBaseAddrCoaIndex == -1) {
@@ -251,15 +253,15 @@ Status InferParamIndex::InsertAddr2ValidShapeSpecified(Operation& op, std::map<i
             if (IsCopyIn(op.GetOpcode())) {
                 auto attr = std::static_pointer_cast<CopyOpAttribute>(op.GetOpAttribute());
                 if (attr->GetToDynValidShape().size() != 0 && attr->GetToDynValidShape()[0].IsSpecified()) {
-                    addr2ValidShapeSpecified[tensorBaseAddrCoaIndex] =
-                        OpImmediate::ToSpecified(attr->GetToDynValidShape());
+                    addr2ValidShapeSpecified[tensorBaseAddrCoaIndex] = OpImmediate::ToSpecified(
+                        attr->GetToDynValidShape());
                 }
             }
             if (distCopyType && *distCopyType) {
                 auto attr = std::static_pointer_cast<CopyOpAttribute>(op.GetOpAttribute());
                 if (attr->GetFromDynValidShape().size() != 0) {
-                    addr2ValidShapeSpecified[tensorBaseAddrCoaIndex] =
-                        OpImmediate::ToSpecified(attr->GetFromDynValidShape());
+                    addr2ValidShapeSpecified[tensorBaseAddrCoaIndex] = OpImmediate::ToSpecified(
+                        attr->GetFromDynValidShape());
                 }
             }
         }
@@ -267,9 +269,8 @@ Status InferParamIndex::InsertAddr2ValidShapeSpecified(Operation& op, std::map<i
     return SUCCESS;
 }
 
-Status InferParamIndex::UpdateValidShape(
-    Function& subFunc, std::map<int, std::vector<SymbolicScalar>>& addr2ValidShape,
-    std::map<int, std::vector<SymbolicScalar>>& addr2ValidShapeSpecified)
+Status InferParamIndex::UpdateValidShape(Function& subFunc, std::map<int, std::vector<SymbolicScalar>>& addr2ValidShape,
+                                         std::map<int, std::vector<SymbolicScalar>>& addr2ValidShapeSpecified)
 {
     for (auto& op : subFunc.Operations(false)) {
         if (InsertAddr2ValidShapeSpecified(op, addr2ValidShape, addr2ValidShapeSpecified) != SUCCESS) {
@@ -280,9 +281,8 @@ Status InferParamIndex::UpdateValidShape(
     return SUCCESS;
 }
 
-Status InferParamIndex::SetSubValidShape(
-    Function& subFunc, std::map<int, std::vector<SymbolicScalar>>& addr2ValidShape,
-    std::map<int, std::vector<SymbolicScalar>>& addr2ValidShapeSpecified)
+Status InferParamIndex::SetSubValidShape(Function& subFunc, std::map<int, std::vector<SymbolicScalar>>& addr2ValidShape,
+                                         std::map<int, std::vector<SymbolicScalar>>& addr2ValidShapeSpecified)
 {
     std::set<std::string> visitedSymbol;
     int tensorIndex{0};
@@ -300,15 +300,14 @@ Status InferParamIndex::SetSubValidShape(
             if (addr2ValidShapeSpecified.count(tensorBaseAddrCoaIndex)) {
                 dynDim = addr2ValidShapeSpecified[tensorBaseAddrCoaIndex][dimIdx];
             }
-            auto paramInfo = DynParamInfo{
-                static_cast<int>(validShape.second.size()),
-                tensorIndex,
-                tensorBaseAddrCoaIndex,
-                DynParamInfoType::VALID_SHAPE,
-                dimIdx,
-                dynDim,
-                false,
-                ""};
+            auto paramInfo = DynParamInfo{static_cast<int>(validShape.second.size()),
+                                          tensorIndex,
+                                          tensorBaseAddrCoaIndex,
+                                          DynParamInfoType::VALID_SHAPE,
+                                          dimIdx,
+                                          dynDim,
+                                          false,
+                                          ""};
             subFunc.InsertDynParam(dim.Dump(), paramInfo);
             dimIdx++;
         }
@@ -322,8 +321,8 @@ Status InferParamIndex::UpdateParamIndex(Function& function)
     for (auto& subProgram : function.rootFunc_->programs_) {
         auto& subFunc = *subProgram.second;
         if (ResetDynValidShape(subFunc) != SUCCESS) {
-            APASS_LOG_ERROR_F(
-                Elements::Function, "ResetDynValidShape failed; Please check the ResetDynValidShape method.");
+            APASS_LOG_ERROR_F(Elements::Function,
+                              "ResetDynValidShape failed; Please check the ResetDynValidShape method.");
             return FAILED;
         }
         if (InferShape(subFunc) != SUCCESS) {
@@ -334,22 +333,19 @@ Status InferParamIndex::UpdateParamIndex(Function& function)
         std::map<int, std::vector<SymbolicScalar>> addr2ValidShape;
         std::map<int, std::vector<SymbolicScalar>> addr2ValidShapeSpecified;
         if (UpdateValidShape(subFunc, addr2ValidShape, addr2ValidShapeSpecified) != SUCCESS) {
-            APASS_LOG_ERROR_F(
-                Elements::Function,
-                "Update valid shape for the function %s failed. Please check above for more information.",
-                function.GetRawName().c_str());
+            APASS_LOG_ERROR_F(Elements::Function,
+                              "Update valid shape for the function %s failed. Please check above for more information.",
+                              function.GetRawName().c_str());
             return FAILED;
         }
         if (SetSubValidShape(subFunc, addr2ValidShape, addr2ValidShapeSpecified) != SUCCESS) {
-            APASS_LOG_ERROR_F(
-                Elements::Function,
-                "Update valid shape for the function %s failed. Please check above for more information.",
-                function.GetRawName().c_str());
+            APASS_LOG_ERROR_F(Elements::Function,
+                              "Update valid shape for the function %s failed. Please check above for more information.",
+                              function.GetRawName().c_str());
             return FAILED;
         }
-        APASS_LOG_DEBUG_F(
-            Elements::Function, "Print function after update: %s\n",
-            DumpParamIndex(subFunc.GetDynParamTable()).c_str());
+        APASS_LOG_DEBUG_F(Elements::Function, "Print function after update: %s\n",
+                          DumpParamIndex(subFunc.GetDynParamTable()).c_str());
     }
     return SUCCESS;
 }

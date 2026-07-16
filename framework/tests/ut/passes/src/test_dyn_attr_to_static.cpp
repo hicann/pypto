@@ -164,8 +164,8 @@ TEST_F(DynAttrToStaticTest, TestGetTensorData)
         auto operationViewer = leafFunc->Operations(false);
         for (size_t j = 0; j < operationViewer.size(); j++) {
             auto& op = operationViewer[j];
-            std::vector<std::reference_wrapper<SymbolicScalar>> dynScalarList =
-                passDynAttrToStatic.GetOpDynamicAttributeList(op);
+            std::vector<std::reference_wrapper<SymbolicScalar>> dynScalarList = passDynAttrToStatic
+                                                                                    .GetOpDynamicAttributeList(op);
             for (auto dynScalar : dynScalarList) {
                 EXPECT_EQ(VerifyNewMacroExpr(dynScalar), true);
             }
@@ -222,8 +222,8 @@ TEST_F(DynAttrToStaticTest, TestSetTensorData)
         auto operationViewer = leafFunc->Operations(false);
         for (size_t j = 0; j < operationViewer.size(); j++) {
             auto& op = operationViewer[j];
-            std::vector<std::reference_wrapper<SymbolicScalar>> dynScalarList =
-                passDynAttrToStatic.GetOpDynamicAttributeList(op);
+            std::vector<std::reference_wrapper<SymbolicScalar>> dynScalarList = passDynAttrToStatic
+                                                                                    .GetOpDynamicAttributeList(op);
             for (auto dynScalar : dynScalarList) {
                 EXPECT_EQ(VerifyNewMacroExpr(dynScalar), true);
             }
@@ -304,14 +304,16 @@ TEST_F(DynAttrToStaticTest, EdgeCases)
     // 场景2：首次调用生成重复索引组（验证去重逻辑）
     // 调用值：{5,5,5} → 理论上生成 {0}, {1}, {2}, {0,1}, {0,2}, {1,2}, {0,1,2}？
     // 实际代码逻辑：首次调用按「值-索引列表」生成，仅 {0,1,2} 一个候选组（因为所有索引值相同）
-    EXPECT_TRUE(checker.RegisterCall({IRBuilder().CreateConstInt(5), IRBuilder().CreateConstInt(5), IRBuilder().CreateConstInt(5)}));
+    EXPECT_TRUE(checker.RegisterCall(
+        {IRBuilder().CreateConstInt(5), IRBuilder().CreateConstInt(5), IRBuilder().CreateConstInt(5)}));
     allGroups = checker.GetAllConsistentIndexGroups();
     ASSERT_EQ(allGroups.size(), 1);
 
     // 场景3：候选组索引无序（验证去重时的排序逻辑）
     checker.Reset();
     // 第一次调用：{1,2,1} → 候选组 {0,2}, {1}
-    EXPECT_TRUE(checker.RegisterCall({IRBuilder().CreateConstInt(1), IRBuilder().CreateConstInt(2), IRBuilder().CreateConstInt(1)}));
+    EXPECT_TRUE(checker.RegisterCall(
+        {IRBuilder().CreateConstInt(1), IRBuilder().CreateConstInt(2), IRBuilder().CreateConstInt(1)}));
     allGroups = checker.GetAllConsistentIndexGroups();
     ASSERT_EQ(allGroups.size(), 2);
 }
@@ -324,7 +326,8 @@ TEST_F(DynAttrToStaticTest, IntBasicCases)
     EXPECT_FALSE(checker.RegisterCall({}));
 
     // 场景2：首次注册有效vector（长度3）→ 成功，候选组为所有值对应的索引组
-    std::vector<SymbolicScalar> call1 = {IRBuilder().CreateConstInt(10), IRBuilder().CreateConstInt(10), IRBuilder().CreateConstInt(20)};
+    std::vector<SymbolicScalar> call1 = {IRBuilder().CreateConstInt(10), IRBuilder().CreateConstInt(10),
+                                         IRBuilder().CreateConstInt(20)};
     EXPECT_TRUE(checker.RegisterCall(call1));
     // 首次调用候选组：{0,1}（值10）、{2}（值20）
     auto allGroups = checker.GetAllConsistentIndexGroups();
@@ -342,13 +345,16 @@ TEST_F(DynAttrToStaticTest, IntBasicCases)
 
     // 场景4：多次注册长度一致，筛选有效候选组
     // 第一次调用：{1,1,2} → 候选组 {0,1}, {2}
-    EXPECT_TRUE(checker.RegisterCall({IRBuilder().CreateConstInt(1), IRBuilder().CreateConstInt(1), IRBuilder().CreateConstInt(2)}));
+    EXPECT_TRUE(checker.RegisterCall(
+        {IRBuilder().CreateConstInt(1), IRBuilder().CreateConstInt(1), IRBuilder().CreateConstInt(2)}));
     // 第二次调用：{3,3,4} → 候选组仍为 {0,1}, {2}（组内值仍相同）
-    EXPECT_TRUE(checker.RegisterCall({IRBuilder().CreateConstInt(3), IRBuilder().CreateConstInt(3), IRBuilder().CreateConstInt(4)}));
+    EXPECT_TRUE(checker.RegisterCall(
+        {IRBuilder().CreateConstInt(3), IRBuilder().CreateConstInt(3), IRBuilder().CreateConstInt(4)}));
     allGroups = checker.GetAllConsistentIndexGroups();
     ASSERT_EQ(allGroups.size(), 2);
     // 第三次调用：{5,6,5} → 仅 {2} 有效（0和1值不同，{0,1} 被过滤）
-    EXPECT_TRUE(checker.RegisterCall({IRBuilder().CreateConstInt(5), IRBuilder().CreateConstInt(6), IRBuilder().CreateConstInt(5)}));
+    EXPECT_TRUE(checker.RegisterCall(
+        {IRBuilder().CreateConstInt(5), IRBuilder().CreateConstInt(6), IRBuilder().CreateConstInt(5)}));
     allGroups = checker.GetAllConsistentIndexGroups();
     ASSERT_EQ(allGroups.size(), 1);
     std::vector<std::vector<size_t>> groups = {{0, 1}, {2}};

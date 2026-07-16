@@ -97,19 +97,27 @@ TILEOP void RadixSelectCalcB4(VAL value, IDX index, TMP tmp, SRC src)
         for (LoopVar n1Index = 0; n1Index < srcShape[1]; ++n1Index) {
             for (LoopVar n2Index = 0; n2Index < srcShape[2]; ++n2Index) {
                 for (LoopVar n3Index = 0; n3Index < srcShape[3]; ++n3Index) {
-                    uint64_t srcAddr = src.GetAddr() + (n0Index * srcStride[0] + n1Index * srcStride[1] + n2Index * srcStride[2] + n3Index * srcStride[3]) * srcTypeSize;
-                    uint64_t valAddr = value.GetAddr() + (n0Index * valStride[0] + n1Index * valStride[1] + n2Index * valStride[2] + n3Index * valStride[3]) * srcTypeSize;
-                    uint64_t idxAddr = index.GetAddr() + (n0Index * idxStride[0] + n1Index * idxStride[1] + n2Index * idxStride[2] + n3Index * idxStride[3]) * idxTypeSize;
+                    uint64_t srcAddr = src.GetAddr() + (n0Index * srcStride[0] + n1Index * srcStride[1] +
+                                                        n2Index * srcStride[2] + n3Index * srcStride[3]) *
+                                                           srcTypeSize;
+                    uint64_t valAddr = value.GetAddr() + (n0Index * valStride[0] + n1Index * valStride[1] +
+                                                          n2Index * valStride[2] + n3Index * valStride[3]) *
+                                                             srcTypeSize;
+                    uint64_t idxAddr = index.GetAddr() + (n0Index * idxStride[0] + n1Index * idxStride[1] +
+                                                          n2Index * idxStride[2] + n3Index * idxStride[3]) *
+                                                             idxTypeSize;
                     pto::TASSIGN(srcIntTile, srcAddr);
                     pto::TASSIGN(valIntTile, valAddr);
                     pto::TASSIGN(idxTile, idxAddr);
-                    RadixSelectTwiddle<isLargest, true, isUInt, isFloat, SrcDType>(twiddleIntTile, srcIntTile, srcMaskInt32Tile, cmpTile, uselessTile);
+                    RadixSelectTwiddle<isLargest, true, isUInt, isFloat, SrcDType>(
+                        twiddleIntTile, srcIntTile, srcMaskInt32Tile, cmpTile, uselessTile);
                     pto::TEXPANDS(kthValueIntTile, static_cast<int32_t>(0));
                     pto::TEXPANDS(high1Tile, static_cast<uint8_t>(0));
                     pto::THISTOGRAM<pto::HistByte::BYTE_3>(histogramUInt32Tile, twiddleUIntTile, high1Tile);
                     pto::TEXPANDS(remindKTile, static_cast<int32_t>(srcShape[4] - k));
                     pto::TCMPS(cmpTile, histogramInt32Tile, remindKTile, pto::CmpMode::GT);
-                    pto::TCI<RSTile<uint32_t>::U, RSTile<uint32_t>::U, uint32_t, 0>(histogramTmpUInt32Tile, static_cast<uint32_t>(0), histogramTmpUInt32Tile);
+                    pto::TCI<RSTile<uint32_t>::U, RSTile<uint32_t>::U, uint32_t, 0>(
+                        histogramTmpUInt32Tile, static_cast<uint32_t>(0), histogramTmpUInt32Tile);
                     pto::TSELS(histogramTmpUInt32Tile, cmpTile, histogramTmpUInt32Tile, uselessTile, 0x7fffffffu);
                     pto::TROWMIN(rowMinTile, histogramTmpInt32Tile, uselessTile);
                     pto::TEXPANDS(gatherIntTile, 0);
@@ -125,7 +133,8 @@ TILEOP void RadixSelectCalcB4(VAL value, IDX index, TMP tmp, SRC src)
                     pto::TSUB(remindKTile, remindKTile, gatherIntTile);
                     pto::THISTOGRAM<pto::HistByte::BYTE_2>(histogramUInt32Tile, twiddleUIntTile, high1Tile);
                     pto::TCMPS(cmpTile, histogramInt32Tile, remindKTile, pto::CmpMode::GT);
-                    pto::TCI<RSTile<uint32_t>::U, RSTile<uint32_t>::U, uint32_t, 0>(histogramTmpUInt32Tile, static_cast<uint32_t>(0), histogramTmpUInt32Tile);
+                    pto::TCI<RSTile<uint32_t>::U, RSTile<uint32_t>::U, uint32_t, 0>(
+                        histogramTmpUInt32Tile, static_cast<uint32_t>(0), histogramTmpUInt32Tile);
                     pto::TSELS(histogramTmpUInt32Tile, cmpTile, histogramTmpUInt32Tile, uselessTile, 0x7fffffffu);
                     pto::TROWMIN(rowMinTile, histogramTmpInt32Tile, uselessTile);
                     pto::TEXPANDS(gatherIntTile, 0);
@@ -141,7 +150,8 @@ TILEOP void RadixSelectCalcB4(VAL value, IDX index, TMP tmp, SRC src)
                     pto::TSUB(remindKTile, remindKTile, gatherIntTile);
                     pto::THISTOGRAM<pto::HistByte::BYTE_1>(histogramUInt32Tile, twiddleUIntTile, high2Tile);
                     pto::TCMPS(cmpTile, histogramInt32Tile, remindKTile, pto::CmpMode::GT);
-                    pto::TCI<RSTile<uint32_t>::U, RSTile<uint32_t>::U, uint32_t, 0>(histogramTmpUInt32Tile, static_cast<uint32_t>(0), histogramTmpUInt32Tile);
+                    pto::TCI<RSTile<uint32_t>::U, RSTile<uint32_t>::U, uint32_t, 0>(
+                        histogramTmpUInt32Tile, static_cast<uint32_t>(0), histogramTmpUInt32Tile);
                     pto::TSELS(histogramTmpUInt32Tile, cmpTile, histogramTmpUInt32Tile, uselessTile, 0x7fffffffu);
                     pto::TROWMIN(rowMinTile, histogramTmpInt32Tile, uselessTile);
                     pto::TEXPANDS(gatherIntTile, 0);
@@ -157,7 +167,8 @@ TILEOP void RadixSelectCalcB4(VAL value, IDX index, TMP tmp, SRC src)
                     pto::TSUB(remindKTile, remindKTile, gatherIntTile);
                     pto::THISTOGRAM<pto::HistByte::BYTE_0>(histogramUInt32Tile, twiddleUIntTile, high3Tile);
                     pto::TCMPS(cmpTile, histogramInt32Tile, remindKTile, pto::CmpMode::GT);
-                    pto::TCI<RSTile<uint32_t>::U, RSTile<uint32_t>::U, uint32_t, 0>(histogramTmpUInt32Tile, static_cast<uint32_t>(0), histogramTmpUInt32Tile);
+                    pto::TCI<RSTile<uint32_t>::U, RSTile<uint32_t>::U, uint32_t, 0>(
+                        histogramTmpUInt32Tile, static_cast<uint32_t>(0), histogramTmpUInt32Tile);
                     pto::TSELS(histogramTmpUInt32Tile, cmpTile, histogramTmpUInt32Tile, uselessTile, 0x7fffffffu);
                     pto::TROWMIN(rowMinTile, histogramTmpInt32Tile, uselessTile);
                     pto::TEXPANDS(gatherIntTile, 0);
@@ -165,19 +176,24 @@ TILEOP void RadixSelectCalcB4(VAL value, IDX index, TMP tmp, SRC src)
                     pto::TOR(kthValueIntTile, kthValueIntTile, high2IntTile);
                     pto::TEXPANDS(srcMaskInt32MaxTile, static_cast<int32_t>(0));
                     pto::TMOV(srcMaskInt32Tile, twiddleIntTile);
-                    RadixSelectGather<pto::CmpMode::GT>(selectInt32GTTile, twiddleUIntTile, kthValueUInt32Tile, selectCountUInt32GTTile, uselessTile);
-                    RadixSelectGather<pto::CmpMode::EQ>(selectInt32EQTile, twiddleUIntTile, kthValueUInt32Tile, selectCountUInt32EQTile, uselessTile);
-                    pto::TCONCAT(idxTile, selectInt32GTTile, selectInt32EQTile, selectCountUInt32GTTile, selectCountUInt32EQTile);
+                    RadixSelectGather<pto::CmpMode::GT>(selectInt32GTTile, twiddleUIntTile, kthValueUInt32Tile,
+                                                        selectCountUInt32GTTile, uselessTile);
+                    RadixSelectGather<pto::CmpMode::EQ>(selectInt32EQTile, twiddleUIntTile, kthValueUInt32Tile,
+                                                        selectCountUInt32EQTile, uselessTile);
+                    pto::TCONCAT(idxTile, selectInt32GTTile, selectInt32EQTile, selectCountUInt32GTTile,
+                                 selectCountUInt32EQTile);
                     pto::TEXPANDS(srcMaskInt32MaxTile, static_cast<int32_t>(0));
                     pto::TGATHER(srcMaskInt32KTile, twiddleIntTile, idxTile, uselessTile);
-                    RadixSelectSortPrepare(sortTempInt32MaxTile, number0UInt32Tile, number1UInt32Tile, number2UInt32Tile, number3UInt32Tile);
+                    RadixSelectSortPrepare(sortTempInt32MaxTile, number0UInt32Tile, number1UInt32Tile,
+                                           number2UInt32Tile, number3UInt32Tile);
                     RadixSelectSortTwoBit<0, 32>(
-                        srcMaskInt32KTile, indexInt32Tile, sortTempInt32KTile, sortTempUInt32KTile, uselessTile, select1Int32Tile, select2Int32Tile, select3Int32Tile,
-                        cnt1UInt32Tile, cnt2UInt32Tile, cnt3UInt32Tile, number0UInt32Tile, number1UInt32Tile, number2UInt32Tile, number3UInt32Tile
-                    );
+                        srcMaskInt32KTile, indexInt32Tile, sortTempInt32KTile, sortTempUInt32KTile, uselessTile,
+                        select1Int32Tile, select2Int32Tile, select3Int32Tile, cnt1UInt32Tile, cnt2UInt32Tile,
+                        cnt3UInt32Tile, number0UInt32Tile, number1UInt32Tile, number2UInt32Tile, number3UInt32Tile);
                     pto::TGATHER(select1Int32Tile, idxTile, indexInt32Tile, uselessTile);
                     pto::TMOV(idxTile, select1Int32Tile);
-                    RadixSelectTwiddle<isLargest, false, isUInt, isFloat, SrcDType>(valIntTile, srcMaskInt32KTile, twiddleIntKTile, cmpTile, uselessTile);
+                    RadixSelectTwiddle<isLargest, false, isUInt, isFloat, SrcDType>(
+                        valIntTile, srcMaskInt32KTile, twiddleIntKTile, cmpTile, uselessTile);
                 }
             }
         }

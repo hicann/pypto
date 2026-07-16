@@ -65,49 +65,63 @@ struct BranchReshapeTensors {
 
 std::shared_ptr<CopyOpAttribute> CreateUbCopyOutAttr(const std::vector<int64_t>& shape)
 {
-    return std::make_shared<CopyOpAttribute>(MEM_UB, OpImmediate::Specified({0, 0}),
-        OpImmediate::Specified(shape), OpImmediate::Specified(shape), std::vector<npu::tile_fwk::OpImmediate>());
+    return std::make_shared<CopyOpAttribute>(MEM_UB, OpImmediate::Specified({0, 0}), OpImmediate::Specified(shape),
+                                             OpImmediate::Specified(shape), std::vector<npu::tile_fwk::OpImmediate>());
 }
 
 BranchReshapeTensors CreateBranchReshapeTensors(DataType dataType, const std::vector<int64_t>& inShape,
-    const std::vector<int64_t>& reshapeShape, const std::vector<int64_t>& outShape)
+                                                const std::vector<int64_t>& reshapeShape,
+                                                const std::vector<int64_t>& outShape)
 {
     BranchReshapeTensors tensors;
     tensors.incast = npu::tile_fwk::IRBuilder().CreateTensorVar(dataType, inShape, CreateTestConstIntVector(inShape));
     tensors.incast->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    tensors.copyInTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(dataType, inShape, CreateTestConstIntVector(inShape));
+    tensors.copyInTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(dataType, inShape,
+                                                                       CreateTestConstIntVector(inShape));
     tensors.copyInTensor1->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
-    tensors.copyOutTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(dataType, inShape, CreateTestConstIntVector(inShape));
+    tensors.copyOutTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(dataType, inShape,
+                                                                        CreateTestConstIntVector(inShape));
     tensors.copyOutTensor1->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    tensors.assembleTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(dataType, inShape, CreateTestConstIntVector(inShape));
+    tensors.assembleTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(dataType, inShape,
+                                                                        CreateTestConstIntVector(inShape));
     tensors.assembleTensor->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    tensors.assembleTensor->UpdateDynValidShape({CreateTestScalarVar("Input_1_Dim_0"), CreateTestScalarVar("Input_1_Dim_1")});
-    tensors.reshapeTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(dataType, reshapeShape, CreateTestConstIntVector(reshapeShape));
+    tensors.assembleTensor->UpdateDynValidShape(
+        {CreateTestScalarVar("Input_1_Dim_0"), CreateTestScalarVar("Input_1_Dim_1")});
+    tensors.reshapeTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(dataType, reshapeShape,
+                                                                       CreateTestConstIntVector(reshapeShape));
     tensors.reshapeTensor->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    tensors.reshapeTensor->UpdateDynValidShape({CreateTestScalarVar("Input_2_Dim_0"), CreateTestScalarVar("Input_2_Dim_1")});
-    tensors.copyInTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(dataType, reshapeShape, CreateTestConstIntVector(reshapeShape));
+    tensors.reshapeTensor->UpdateDynValidShape(
+        {CreateTestScalarVar("Input_2_Dim_0"), CreateTestScalarVar("Input_2_Dim_1")});
+    tensors.copyInTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(dataType, reshapeShape,
+                                                                       CreateTestConstIntVector(reshapeShape));
     tensors.copyInTensor2->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
-    tensors.copyInTensor3 = npu::tile_fwk::IRBuilder().CreateTensorVar(dataType, reshapeShape, CreateTestConstIntVector(reshapeShape));
+    tensors.copyInTensor3 = npu::tile_fwk::IRBuilder().CreateTensorVar(dataType, reshapeShape,
+                                                                       CreateTestConstIntVector(reshapeShape));
     tensors.copyInTensor3->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
-    tensors.outcast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(dataType, outShape, CreateTestConstIntVector(outShape));
+    tensors.outcast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(dataType, outShape,
+                                                                  CreateTestConstIntVector(outShape));
     tensors.outcast1->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    tensors.outcast2 = npu::tile_fwk::IRBuilder().CreateTensorVar(dataType, outShape, CreateTestConstIntVector(outShape));
+    tensors.outcast2 = npu::tile_fwk::IRBuilder().CreateTensorVar(dataType, outShape,
+                                                                  CreateTestConstIntVector(outShape));
     tensors.outcast2->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
     return tensors;
 }
 
 void AddBranchCopyOutReshapePath(const std::shared_ptr<Function>& currFunctionPtr, const BranchReshapeTensors& tensors,
-    const std::shared_ptr<CopyOpAttribute>& copyoutAttr, bool branchFromAssemble)
+                                 const std::shared_ptr<CopyOpAttribute>& copyoutAttr, bool branchFromAssemble)
 {
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {tensors.incast}, {tensors.copyInTensor1});
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {tensors.copyInTensor1}, {tensors.copyOutTensor1},
-        [&copyoutAttr](Operation& op) {
-            op.SetOpAttribute(copyoutAttr);
-        });
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {tensors.copyOutTensor1}, {tensors.assembleTensor});
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {tensors.assembleTensor}, {tensors.reshapeTensor});
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {tensors.reshapeTensor}, {tensors.copyInTensor2});
-    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {tensors.copyInTensor2}, {tensors.outcast1});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {tensors.copyInTensor1},
+                                     {tensors.copyOutTensor1},
+                                     [&copyoutAttr](Operation& op) { op.SetOpAttribute(copyoutAttr); });
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {tensors.copyOutTensor1},
+                                     {tensors.assembleTensor});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {tensors.assembleTensor},
+                                     {tensors.reshapeTensor});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {tensors.reshapeTensor},
+                                     {tensors.copyInTensor2});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {tensors.copyInTensor2},
+                                     {tensors.outcast1});
     auto branchInput = branchFromAssemble ? tensors.assembleTensor : tensors.copyOutTensor1;
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {branchInput}, {tensors.outcast2});
 }
@@ -125,10 +139,9 @@ struct MultiConsumerReshapeTensors {
     std::shared_ptr<LogicalTensor> outcast2;
 };
 
-MultiConsumerReshapeTensors BuildMultiConsumerReshapeGraph(
-    const std::shared_ptr<Function>& currFunctionPtr,
-    const std::vector<int64_t>& inShape,
-    const std::vector<int64_t>& reshapeShape)
+MultiConsumerReshapeTensors BuildMultiConsumerReshapeGraph(const std::shared_ptr<Function>& currFunctionPtr,
+                                                           const std::vector<int64_t>& inShape,
+                                                           const std::vector<int64_t>& reshapeShape)
 {
     MultiConsumerReshapeTensors t;
     t.incast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inShape, CreateTestConstIntVector(inShape));
@@ -138,20 +151,27 @@ MultiConsumerReshapeTensors BuildMultiConsumerReshapeGraph(
     t.copyoutTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inShape, CreateTestConstIntVector(inShape));
     t.copyoutTensor->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
     t.copyoutTensor->UpdateDynValidShape({CreateTestScalarVar("Input_0_Dim_0"), CreateTestScalarVar("Input_0_Dim_1")});
-    t.reshapeTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshapeShape, CreateTestConstIntVector(reshapeShape));
+    t.reshapeTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshapeShape,
+                                                                 CreateTestConstIntVector(reshapeShape));
     t.reshapeTensor->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
     t.reshapeTensor->UpdateDynValidShape({CreateTestScalarVar("Input_1_Dim_0"), CreateTestScalarVar("Input_1_Dim_1")});
-    t.addInput2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshapeShape, CreateTestConstIntVector(reshapeShape));
+    t.addInput2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshapeShape,
+                                                             CreateTestConstIntVector(reshapeShape));
     t.addInput2->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    t.addTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshapeShape, CreateTestConstIntVector(reshapeShape));
+    t.addTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshapeShape,
+                                                             CreateTestConstIntVector(reshapeShape));
     t.addTensor->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    t.mulInput2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshapeShape, CreateTestConstIntVector(reshapeShape));
+    t.mulInput2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshapeShape,
+                                                             CreateTestConstIntVector(reshapeShape));
     t.mulInput2->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    t.mulTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshapeShape, CreateTestConstIntVector(reshapeShape));
+    t.mulTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshapeShape,
+                                                             CreateTestConstIntVector(reshapeShape));
     t.mulTensor->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    t.outcast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshapeShape, CreateTestConstIntVector(reshapeShape));
+    t.outcast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshapeShape,
+                                                            CreateTestConstIntVector(reshapeShape));
     t.outcast1->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    t.outcast2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshapeShape, CreateTestConstIntVector(reshapeShape));
+    t.outcast2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshapeShape,
+                                                            CreateTestConstIntVector(reshapeShape));
     t.outcast2->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
 
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {t.incast}, {t.copyinTensor});
@@ -174,8 +194,8 @@ struct SiblingCopyInReshapeGraph {
     Operation* siblingCopyInOp;
 };
 
-SiblingCopyInReshapeGraph BuildDDRReshapeGraphWithSiblingCopyIn(
-    const std::shared_ptr<Function>& currFunctionPtr, MemoryType siblingCopyInOutputMemType)
+SiblingCopyInReshapeGraph BuildDDRReshapeGraphWithSiblingCopyIn(const std::shared_ptr<Function>& currFunctionPtr,
+                                                                MemoryType siblingCopyInOutputMemType)
 {
     std::vector<int64_t> inShape = {8, 8};
     std::vector<int64_t> reshapeShape = {4, 16};
@@ -189,7 +209,8 @@ SiblingCopyInReshapeGraph BuildDDRReshapeGraphWithSiblingCopyIn(
     auto reshapeOutput = IRBuilder().CreateTensorVar(DT_FP32, reshapeShape, CreateTestConstIntVector(reshapeShape));
     reshapeOutput->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
     reshapeOutput->UpdateDynValidShape({CreateTestScalarVar("Input_1_Dim_0"), CreateTestScalarVar("Input_1_Dim_1")});
-    auto outputCopyInTensor = IRBuilder().CreateTensorVar(DT_FP32, reshapeShape, CreateTestConstIntVector(reshapeShape));
+    auto outputCopyInTensor = IRBuilder().CreateTensorVar(DT_FP32, reshapeShape,
+                                                          CreateTestConstIntVector(reshapeShape));
     outputCopyInTensor->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
     auto siblingCopyInTensor = IRBuilder().CreateTensorVar(DT_FP32, inShape, CreateTestConstIntVector(inShape));
     siblingCopyInTensor->SetMemoryTypeBoth(siblingCopyInOutputMemType, true);
@@ -199,25 +220,26 @@ SiblingCopyInReshapeGraph BuildDDRReshapeGraphWithSiblingCopyIn(
     siblingOutcast->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
 
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {incast}, {ubTensor});
-    auto& copyOutOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {ubTensor}, {reshapeInput});
-    copyOutOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(
-        MemoryType::MEM_UB, OpImmediate::Specified(reshapeInput->GetTensorOffset()),
-        OpImmediate::Specified(reshapeInput->GetShape()),
-        OpImmediate::Specified(reshapeInput->GetRawTensor()->GetDynRawShape())));
+    auto& copyOutOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {ubTensor},
+                                                       {reshapeInput});
+    copyOutOp.SetOpAttribute(
+        std::make_shared<CopyOpAttribute>(MemoryType::MEM_UB, OpImmediate::Specified(reshapeInput->GetTensorOffset()),
+                                          OpImmediate::Specified(reshapeInput->GetShape()),
+                                          OpImmediate::Specified(reshapeInput->GetRawTensor()->GetDynRawShape())));
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {reshapeInput}, {reshapeOutput});
-    auto& outputCopyInOp = PassOperationUtils::AddOperation(
-        *currFunctionPtr, Opcode::OP_COPY_IN, {reshapeOutput}, {outputCopyInTensor});
-    outputCopyInOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(
-        OpImmediate::Specified(reshapeOutput->GetTensorOffset()), MemoryType::MEM_UB,
-        OpImmediate::Specified(reshapeOutput->GetShape()),
-        OpImmediate::Specified(reshapeOutput->GetRawTensor()->GetDynRawShape())));
+    auto& outputCopyInOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {reshapeOutput},
+                                                            {outputCopyInTensor});
+    outputCopyInOp.SetOpAttribute(
+        std::make_shared<CopyOpAttribute>(OpImmediate::Specified(reshapeOutput->GetTensorOffset()), MemoryType::MEM_UB,
+                                          OpImmediate::Specified(reshapeOutput->GetShape()),
+                                          OpImmediate::Specified(reshapeOutput->GetRawTensor()->GetDynRawShape())));
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {outputCopyInTensor}, {outcast});
-    auto& siblingCopyInOp = PassOperationUtils::AddOperation(
-        *currFunctionPtr, Opcode::OP_COPY_IN, {reshapeInput}, {siblingCopyInTensor});
-    siblingCopyInOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(
-        OpImmediate::Specified(reshapeInput->GetTensorOffset()), siblingCopyInOutputMemType,
-        OpImmediate::Specified(reshapeInput->GetShape()),
-        OpImmediate::Specified(reshapeInput->GetRawTensor()->GetDynRawShape())));
+    auto& siblingCopyInOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {reshapeInput},
+                                                             {siblingCopyInTensor});
+    siblingCopyInOp.SetOpAttribute(
+        std::make_shared<CopyOpAttribute>(OpImmediate::Specified(reshapeInput->GetTensorOffset()),
+                                          siblingCopyInOutputMemType, OpImmediate::Specified(reshapeInput->GetShape()),
+                                          OpImmediate::Specified(reshapeInput->GetRawTensor()->GetDynRawShape())));
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {siblingCopyInTensor}, {siblingOutcast});
 
     currFunctionPtr->inCasts_.push_back(incast);
@@ -226,23 +248,25 @@ SiblingCopyInReshapeGraph BuildDDRReshapeGraphWithSiblingCopyIn(
     return {&copyOutOp, &outputCopyInOp, &siblingCopyInOp};
 }
 
-inline void ConstructGraphWithCopyInAndReshape(
-    std::shared_ptr<Function>& currFunctionPtr, const std::vector<int64_t>& shape,
-    const std::vector<int64_t>& reshape_shape)
+inline void ConstructGraphWithCopyInAndReshape(std::shared_ptr<Function>& currFunctionPtr,
+                                               const std::vector<int64_t>& shape,
+                                               const std::vector<int64_t>& reshape_shape)
 {
     auto shapeImme = OpImmediate::Specified(shape);
     auto incast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     auto ubTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     ubTensor1->SetMemoryTypeBoth(MEM_UB);
-    auto ubTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshape_shape, CreateTestConstIntVector(reshape_shape));
+    auto ubTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshape_shape,
+                                                                CreateTestConstIntVector(reshape_shape));
     ubTensor2->SetMemoryTypeBoth(MEM_UB);
-    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshape_shape, CreateTestConstIntVector(reshape_shape));
+    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshape_shape,
+                                                              CreateTestConstIntVector(reshape_shape));
     outCast->UpdateDynValidShape({CreateTestScalarVar("output_0_Dim_0"), CreateTestScalarVar("output_0_Dim_1")});
     auto& copy_op1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_COPY_IN, {incast1}, {ubTensor1});
-    auto copyin1Attr = std::make_shared<CopyOpAttribute>(
-        OpImmediate::Specified({0, 0}), MEM_UB, shapeImme, shapeImme, std::vector<npu::tile_fwk::OpImmediate>());
-    std::vector<npu::tile_fwk::OpImmediate> toValidShape = {
-        OpImmediate(CreateTestScalarVar("Input_0_Dim_0")), OpImmediate(CreateTestScalarVar("Input_0_Dim_1"))};
+    auto copyin1Attr = std::make_shared<CopyOpAttribute>(OpImmediate::Specified({0, 0}), MEM_UB, shapeImme, shapeImme,
+                                                         std::vector<npu::tile_fwk::OpImmediate>());
+    std::vector<npu::tile_fwk::OpImmediate> toValidShape = {OpImmediate(CreateTestScalarVar("Input_0_Dim_0")),
+                                                            OpImmediate(CreateTestScalarVar("Input_0_Dim_1"))};
     copyin1Attr->SetToDynValidShape(toValidShape);
     copy_op1.SetOpAttribute(copyin1Attr);
     auto& reshape_op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_RESHAPE, {ubTensor1}, {ubTensor2});
@@ -269,15 +293,17 @@ inline void ConstructGraph2(std::shared_ptr<Function>& currFunctionPtr)
     auto incast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     auto ubTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     ubTensor1->SetMemoryTypeBoth(MEM_UB);
-    auto ubTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshape_shape, CreateTestConstIntVector(reshape_shape));
+    auto ubTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshape_shape,
+                                                                CreateTestConstIntVector(reshape_shape));
     ubTensor2->SetMemoryTypeBoth(MEM_UB);
-    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshape_shape, CreateTestConstIntVector(reshape_shape));
+    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshape_shape,
+                                                              CreateTestConstIntVector(reshape_shape));
     outCast->UpdateDynValidShape({CreateTestScalarVar("output_0_Dim_0"), CreateTestScalarVar("output_0_Dim_1")});
     auto& copy_op1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_COPY_IN, {incast1}, {ubTensor1});
-    auto copyin1Attr = std::make_shared<CopyOpAttribute>(
-        OpImmediate::Specified({0, 0}), MEM_UB, shapeImme, shapeImme, std::vector<npu::tile_fwk::OpImmediate>());
-    std::vector<npu::tile_fwk::OpImmediate> toValidShape = {
-        OpImmediate(CreateTestScalarVar("Input_0_Dim_0")), OpImmediate(CreateTestScalarVar("Input_0_Dim_1"))};
+    auto copyin1Attr = std::make_shared<CopyOpAttribute>(OpImmediate::Specified({0, 0}), MEM_UB, shapeImme, shapeImme,
+                                                         std::vector<npu::tile_fwk::OpImmediate>());
+    std::vector<npu::tile_fwk::OpImmediate> toValidShape = {OpImmediate(CreateTestScalarVar("Input_0_Dim_0")),
+                                                            OpImmediate(CreateTestScalarVar("Input_0_Dim_1"))};
     copyin1Attr->SetToDynValidShape(toValidShape);
     copy_op1.SetOpAttribute(copyin1Attr);
     auto& reshape_op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_RESHAPE, {ubTensor1}, {ubTensor2});
@@ -299,7 +325,8 @@ inline void ConstructGraph3(std::shared_ptr<Function>& currFunctionPtr)
     incast1->SetMemoryTypeBoth(MEM_DEVICE_DDR);
     auto ubTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     ubTensor1->SetMemoryTypeBoth(MEM_UB);
-    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshape_shape, CreateTestConstIntVector(reshape_shape));
+    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshape_shape,
+                                                              CreateTestConstIntVector(reshape_shape));
     outCast->UpdateDynValidShape({CreateTestScalarVar("output_0_Dim_0"), CreateTestScalarVar("output_0_Dim_1")});
     auto& reshape_op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_RESHAPE, {incast1}, {ubTensor1});
     (void)reshape_op;
@@ -317,9 +344,11 @@ inline void ConstructGraph4(std::shared_ptr<Function>& currFunctionPtr)
     incast1->SetMemoryTypeBoth(MEM_DEVICE_DDR);
     auto ubTensor0 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     ubTensor0->SetMemoryTypeBoth(MEM_UB);
-    auto ubTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshape_shape, CreateTestConstIntVector(reshape_shape));
+    auto ubTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshape_shape,
+                                                                CreateTestConstIntVector(reshape_shape));
     ubTensor1->SetMemoryTypeBoth(MEM_UB);
-    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshape_shape, CreateTestConstIntVector(reshape_shape));
+    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshape_shape,
+                                                              CreateTestConstIntVector(reshape_shape));
     outCast->UpdateDynValidShape({CreateTestScalarVar("output_0_Dim_0"), CreateTestScalarVar("output_0_Dim_1")});
     auto& copy_in_op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_COPY_IN, {incast1}, {ubTensor0});
     (void)copy_in_op;
@@ -358,8 +387,8 @@ after:
 */
 TEST_F(TestRemoveUnalignedReshapeOp, reshaped_padded_ub)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestPadLocalBuffer", "TestPadLocalBuffer", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestPadLocalBuffer",
+                                                      "TestPadLocalBuffer", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
     std::vector<int64_t> shape = {7, 15};
     std::vector<int64_t> reshape_shape = {15, 7};
@@ -416,8 +445,8 @@ after:
 */
 TEST_F(TestRemoveUnalignedReshapeOp, reshaped_unpadded_ub)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestPadLocalBuffer", "TestPadLocalBuffer", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestPadLocalBuffer",
+                                                      "TestPadLocalBuffer", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
     std::vector<int64_t> shape = {8, 16};
     std::vector<int64_t> reshape_shape = {16, 8};
@@ -474,8 +503,8 @@ after:
 */
 TEST_F(TestRemoveUnalignedReshapeOp, reshaped_unpadded_ub_gm)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestPadLocalBuffer", "TestPadLocalBuffer", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestPadLocalBuffer",
+                                                      "TestPadLocalBuffer", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
     std::vector<int64_t> shape = {8, 16};
     std::vector<int64_t> reshape_shape = {16, 8};
@@ -530,8 +559,8 @@ after:
 */
 TEST_F(TestRemoveUnalignedReshapeOp, reshaped_unpadded_ub_gm_last_dim_1)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestPadLocalBuffer", "TestPadLocalBuffer", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestPadLocalBuffer",
+                                                      "TestPadLocalBuffer", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
     std::vector<int64_t> shape = {64, 1};
     std::vector<int64_t> reshape_shape = {1, 64};
@@ -571,8 +600,8 @@ TEST_F(TestRemoveUnalignedReshapeOp, reshaped_unpadded_ub_gm_last_dim_1)
 //                                                           - RESHAPECOPYIN - COPYOUT - COPYIN - COPYOUT - out
 TEST_F(TestRemoveUnalignedReshapeOp, TestCopyToReshapeCopyOnL1)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestCopyToReshapeCopy", "TestCopyToReshapeCopy", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestCopyToReshapeCopy",
+                                                      "TestCopyToReshapeCopy", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     // Prepare the graph
@@ -580,19 +609,26 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestCopyToReshapeCopyOnL1)
     std::vector<int64_t> reshapeShape = {2, 8};
     std::vector<int64_t> outShape = {4, 8};
     auto incast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inShape, CreateTestConstIntVector(inShape));
-    auto copyinTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inShape, CreateTestConstIntVector(inShape));
+    auto copyinTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inShape,
+                                                                    CreateTestConstIntVector(inShape));
     copyinTensor1->SetMemoryTypeBoth(MemoryType::MEM_L1, true);
-    auto copyoutTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inShape, CreateTestConstIntVector(inShape));
+    auto copyoutTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inShape,
+                                                                     CreateTestConstIntVector(inShape));
     copyoutTensor1->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    std::vector<SymbolicScalar> validShape1 = {CreateTestScalarVar("Input_0_Dim_0"), CreateTestScalarVar("Input_0_Dim_1")};
+    std::vector<SymbolicScalar> validShape1 = {CreateTestScalarVar("Input_0_Dim_0"),
+                                               CreateTestScalarVar("Input_0_Dim_1")};
     copyoutTensor1->UpdateDynValidShape(validShape1);
-    auto reshapeTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshapeShape, CreateTestConstIntVector(reshapeShape));
+    auto reshapeTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshapeShape,
+                                                                    CreateTestConstIntVector(reshapeShape));
     reshapeTensor->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    std::vector<SymbolicScalar> validShape2 = {CreateTestScalarVar("Input_1_Dim_0"), CreateTestScalarVar("Input_1_Dim_1")};
+    std::vector<SymbolicScalar> validShape2 = {CreateTestScalarVar("Input_1_Dim_0"),
+                                               CreateTestScalarVar("Input_1_Dim_1")};
     reshapeTensor->UpdateDynValidShape(validShape2);
-    auto copyinTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshapeShape, CreateTestConstIntVector(reshapeShape));
+    auto copyinTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshapeShape,
+                                                                    CreateTestConstIntVector(reshapeShape));
     copyinTensor2->SetMemoryTypeBoth(MemoryType::MEM_L1, true);
-    auto copyinTensor3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshapeShape, CreateTestConstIntVector(reshapeShape));
+    auto copyinTensor3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshapeShape,
+                                                                    CreateTestConstIntVector(reshapeShape));
     copyinTensor3->SetMemoryTypeBoth(MemoryType::MEM_L1, true);
     auto outcast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, outShape, CreateTestConstIntVector(outShape));
     outcast->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
@@ -628,8 +664,8 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestCopyToReshapeCopyOnL1)
 //                                        - RESHAPECOPYIN - COPYOUT - out
 TEST_F(TestRemoveUnalignedReshapeOp, TestCopyToReshapeCopyOnUB)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestCopyToReshapeCopy", "TestCopyToReshapeCopy", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestCopyToReshapeCopy",
+                                                      "TestCopyToReshapeCopy", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     // Prepare the graph
@@ -637,28 +673,38 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestCopyToReshapeCopyOnUB)
     std::vector<int64_t> reshapeShape = {2, 8};
     std::vector<int64_t> outShape = {4, 8};
     auto incast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inShape, CreateTestConstIntVector(inShape));
-    auto copyin_Tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inShape, CreateTestConstIntVector(inShape));
+    auto copyin_Tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inShape,
+                                                                     CreateTestConstIntVector(inShape));
     copyin_Tensor1->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
-    auto copyout_Tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inShape, CreateTestConstIntVector(inShape));
+    auto copyout_Tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inShape,
+                                                                      CreateTestConstIntVector(inShape));
     copyout_Tensor1->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    std::vector<SymbolicScalar> validShape1 = {CreateTestScalarVar("Input_00_Dim_0"), CreateTestScalarVar("Input_00_Dim_1")};
+    std::vector<SymbolicScalar> validShape1 = {CreateTestScalarVar("Input_00_Dim_0"),
+                                               CreateTestScalarVar("Input_00_Dim_1")};
     copyout_Tensor1->UpdateDynValidShape(validShape1);
-    auto reshape_Tensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshapeShape, CreateTestConstIntVector(reshapeShape));
+    auto reshape_Tensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshapeShape,
+                                                                     CreateTestConstIntVector(reshapeShape));
     reshape_Tensor->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    std::vector<SymbolicScalar> validShape2 = {CreateTestScalarVar("Input_01_Dim_0"), CreateTestScalarVar("Input_01_Dim_1")};
+    std::vector<SymbolicScalar> validShape2 = {CreateTestScalarVar("Input_01_Dim_0"),
+                                               CreateTestScalarVar("Input_01_Dim_1")};
     reshape_Tensor->UpdateDynValidShape(validShape2);
-    auto copyin_Tensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshapeShape, CreateTestConstIntVector(reshapeShape));
+    auto copyin_Tensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshapeShape,
+                                                                     CreateTestConstIntVector(reshapeShape));
     copyin_Tensor2->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
-    auto copyin_Tensor3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshapeShape, CreateTestConstIntVector(reshapeShape));
+    auto copyin_Tensor3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshapeShape,
+                                                                     CreateTestConstIntVector(reshapeShape));
     copyin_Tensor3->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
     auto outcast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, outShape, CreateTestConstIntVector(outShape));
     outcast->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
 
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {incast}, {copyin_Tensor1});
-    auto& copyoutOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {copyin_Tensor1}, {copyout_Tensor1});
+    auto& copyoutOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {copyin_Tensor1},
+                                                       {copyout_Tensor1});
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {copyout_Tensor1}, {reshape_Tensor});
-    auto& copyinOp1 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {reshape_Tensor}, {copyin_Tensor2});
-    auto& copyinOp2 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {reshape_Tensor}, {copyin_Tensor3});
+    auto& copyinOp1 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {reshape_Tensor},
+                                                       {copyin_Tensor2});
+    auto& copyinOp2 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {reshape_Tensor},
+                                                       {copyin_Tensor3});
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {copyin_Tensor2}, {outcast});
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {copyin_Tensor3}, {outcast});
 
@@ -680,30 +726,38 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestCopyToReshapeCopyOnUB)
 // 不变
 TEST_F(TestRemoveUnalignedReshapeOp, TestCopyToReshapeBeforeMultCopyOutOnL1)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestCopyToReshapeCopy", "TestCopyToReshapeCopy", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestCopyToReshapeCopy",
+                                                      "TestCopyToReshapeCopy", nullptr);
     // Prepare the graph
     std::vector<int64_t> copyoutShape = {2, 4};
     std::vector<int64_t> reshapeShape = {4, 2};
     std::vector<int64_t> inShape = {2, 2};
     std::vector<int64_t> outShape = {4, 4};
 
-    auto copyin_Tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inShape, CreateTestConstIntVector(inShape));
+    auto copyin_Tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inShape,
+                                                                     CreateTestConstIntVector(inShape));
     copyin_Tensor1->SetMemoryTypeBoth(MemoryType::MEM_L1, true);
     auto incast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inShape, CreateTestConstIntVector(inShape));
-    auto copyout_Tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, copyoutShape, CreateTestConstIntVector(copyoutShape));
+    auto copyout_Tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, copyoutShape,
+                                                                      CreateTestConstIntVector(copyoutShape));
     copyout_Tensor1->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    std::vector<SymbolicScalar> validShape1 = {CreateTestScalarVar("Input_00_Dim_0"), CreateTestScalarVar("Input_00_Dim_1")};
+    std::vector<SymbolicScalar> validShape1 = {CreateTestScalarVar("Input_00_Dim_0"),
+                                               CreateTestScalarVar("Input_00_Dim_1")};
     copyout_Tensor1->UpdateDynValidShape(validShape1);
-    auto copyin_Tensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inShape, CreateTestConstIntVector(inShape));
+    auto copyin_Tensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inShape,
+                                                                     CreateTestConstIntVector(inShape));
     copyin_Tensor2->SetMemoryTypeBoth(MemoryType::MEM_L1, true);
-    auto reshape_Tensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshapeShape, CreateTestConstIntVector(reshapeShape));
+    auto reshape_Tensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshapeShape,
+                                                                     CreateTestConstIntVector(reshapeShape));
     reshape_Tensor->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    std::vector<SymbolicScalar> validShape3 = {CreateTestScalarVar("Input_02_Dim_0"), CreateTestScalarVar("Input_02_Dim_1")};
+    std::vector<SymbolicScalar> validShape3 = {CreateTestScalarVar("Input_02_Dim_0"),
+                                               CreateTestScalarVar("Input_02_Dim_1")};
     reshape_Tensor->UpdateDynValidShape(validShape3);
-    auto copyin_Tensor3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshapeShape, CreateTestConstIntVector(reshapeShape));
+    auto copyin_Tensor3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshapeShape,
+                                                                     CreateTestConstIntVector(reshapeShape));
     copyin_Tensor3->SetMemoryTypeBoth(MemoryType::MEM_L1, true);
-    auto copyin_Tensor4 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshapeShape, CreateTestConstIntVector(reshapeShape));
+    auto copyin_Tensor4 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshapeShape,
+                                                                     CreateTestConstIntVector(reshapeShape));
     copyin_Tensor4->SetMemoryTypeBoth(MemoryType::MEM_L1, true);
     auto outcast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, outShape, CreateTestConstIntVector(outShape));
     outcast->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
@@ -743,8 +797,8 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestCopyToReshapeBeforeMultCopyOutOnL1)
 //                                        - RESHAPECOPYIN - COPYOUT - ASSEMBLE - out2
 TEST_F(TestRemoveUnalignedReshapeOp, TestCopyToReshapeConsumerAssembleOnUB)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestCopyToReshapeCopy", "TestCopyToReshapeCopy", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestCopyToReshapeCopy",
+                                                      "TestCopyToReshapeCopy", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     // Prepare the graph
@@ -752,17 +806,23 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestCopyToReshapeConsumerAssembleOnUB)
     std::vector<int64_t> reshapeShape = {4, 16};
     std::vector<int64_t> outShape = {8, 16};
     auto incast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inShape, CreateTestConstIntVector(inShape));
-    auto copyInTensor_1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inShape, CreateTestConstIntVector(inShape));
+    auto copyInTensor_1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inShape,
+                                                                     CreateTestConstIntVector(inShape));
     copyInTensor_1->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
-    auto copyOutTensor_1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inShape, CreateTestConstIntVector(inShape));
+    auto copyOutTensor_1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inShape,
+                                                                      CreateTestConstIntVector(inShape));
     copyOutTensor_1->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    std::vector<SymbolicScalar> validShape_1 = {CreateTestScalarVar("Input_0_Dim_0"), CreateTestScalarVar("Input_0_Dim_1")};
+    std::vector<SymbolicScalar> validShape_1 = {CreateTestScalarVar("Input_0_Dim_0"),
+                                                CreateTestScalarVar("Input_0_Dim_1")};
     copyOutTensor_1->UpdateDynValidShape(validShape_1);
-    auto reshapeTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshapeShape, CreateTestConstIntVector(reshapeShape));
+    auto reshapeTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshapeShape,
+                                                                    CreateTestConstIntVector(reshapeShape));
     reshapeTensor->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    std::vector<SymbolicScalar> validShape_2 = {CreateTestScalarVar("Input_1_Dim_0"), CreateTestScalarVar("Input_1_Dim_1")};
+    std::vector<SymbolicScalar> validShape_2 = {CreateTestScalarVar("Input_1_Dim_0"),
+                                                CreateTestScalarVar("Input_1_Dim_1")};
     reshapeTensor->UpdateDynValidShape(validShape_2);
-    auto copyInTensor_2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshapeShape, CreateTestConstIntVector(reshapeShape));
+    auto copyInTensor_2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshapeShape,
+                                                                     CreateTestConstIntVector(reshapeShape));
     copyInTensor_2->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
     auto outcast_1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, outShape, CreateTestConstIntVector(outShape));
     outcast_1->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
@@ -789,8 +849,8 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestCopyToReshapeConsumerAssembleOnUB)
 //                       - ASSEMBLE - out2
 TEST_F(TestRemoveUnalignedReshapeOp, TestBranchBetweenCopyOutReshape1)
 {
-    auto currFunctionPtr = std::make_shared<Function>(
-        Program::GetInstance(), "TestBranchBetweenCopyOutReshape1", "TestBranchBetweenCopyOutReshape1", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestBranchBetweenCopyOutReshape1",
+                                                      "TestBranchBetweenCopyOutReshape1", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     std::vector<int64_t> inShape = {8, 8};
@@ -798,7 +858,8 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestBranchBetweenCopyOutReshape1)
     std::vector<int64_t> outShape = {8, 16};
     DataType dataType = DT_FP32;
     auto tensors = CreateBranchReshapeTensors(dataType, inShape, reshapeShape, outShape);
-    tensors.copyInTensor1->UpdateDynValidShape({CreateTestScalarVar("Input_0_Dim_0"), CreateTestScalarVar("Input_0_Dim_1")});
+    tensors.copyInTensor1->UpdateDynValidShape(
+        {CreateTestScalarVar("Input_0_Dim_0"), CreateTestScalarVar("Input_0_Dim_1")});
     auto copyoutAttr = CreateUbCopyOutAttr(inShape);
     AddBranchCopyOutReshapePath(currFunctionPtr, tensors, copyoutAttr, false);
 
@@ -818,14 +879,15 @@ before:
     inCast(DDR) - COPYIN(UB) - COPYOUT(DDR) - RESHAPE(DDR) - ADD(DDR) - outCast(DDR)
 
 after:
-    inCast(DDR) - COPYIN(UB) - RESHAPECOPYOUT(DDR) - RESHAPE(DDR) - RESHAPECOPYIN(UB) - COPYOUT(DDR) - ADD(DDR) - outCast(DDR)
+    inCast(DDR) - COPYIN(UB) - RESHAPECOPYOUT(DDR) - RESHAPE(DDR) - RESHAPECOPYIN(UB) - COPYOUT(DDR) - ADD(DDR) -
+outCast(DDR)
 
 Test HandleNoCopyInConsumer: reshape output has no COPY_IN consumer, only ADD consumer.
 */
 TEST_F(TestRemoveUnalignedReshapeOp, TestHandleNoCopyInConsumerWithAddOp)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestHandleNoCopyInConsumer", "TestHandleNoCopyInConsumer", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestHandleNoCopyInConsumer",
+                                                      "TestHandleNoCopyInConsumer", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     std::vector<int64_t> inShape = {8, 8};
@@ -835,19 +897,26 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestHandleNoCopyInConsumerWithAddOp)
 
     auto incast = npu::tile_fwk::IRBuilder().CreateTensorVar(dataType, inShape, CreateTestConstIntVector(inShape));
     incast->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    auto copyinTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(dataType, inShape, CreateTestConstIntVector(inShape));
+    auto copyinTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(dataType, inShape,
+                                                                   CreateTestConstIntVector(inShape));
     copyinTensor->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
-    auto copyoutTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(dataType, inShape, CreateTestConstIntVector(inShape));
+    auto copyoutTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(dataType, inShape,
+                                                                    CreateTestConstIntVector(inShape));
     copyoutTensor->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    std::vector<SymbolicScalar> validShape1 = {CreateTestScalarVar("Input_0_Dim_0"), CreateTestScalarVar("Input_0_Dim_1")};
+    std::vector<SymbolicScalar> validShape1 = {CreateTestScalarVar("Input_0_Dim_0"),
+                                               CreateTestScalarVar("Input_0_Dim_1")};
     copyoutTensor->UpdateDynValidShape(validShape1);
-    auto reshapeTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(dataType, reshapeShape, CreateTestConstIntVector(reshapeShape));
+    auto reshapeTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(dataType, reshapeShape,
+                                                                    CreateTestConstIntVector(reshapeShape));
     reshapeTensor->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    std::vector<SymbolicScalar> validShape2 = {CreateTestScalarVar("Input_1_Dim_0"), CreateTestScalarVar("Input_1_Dim_1")};
+    std::vector<SymbolicScalar> validShape2 = {CreateTestScalarVar("Input_1_Dim_0"),
+                                               CreateTestScalarVar("Input_1_Dim_1")};
     reshapeTensor->UpdateDynValidShape(validShape2);
-    auto addInput2 = npu::tile_fwk::IRBuilder().CreateTensorVar(dataType, reshapeShape, CreateTestConstIntVector(reshapeShape));
+    auto addInput2 = npu::tile_fwk::IRBuilder().CreateTensorVar(dataType, reshapeShape,
+                                                                CreateTestConstIntVector(reshapeShape));
     addInput2->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    auto addTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(dataType, reshapeShape, CreateTestConstIntVector(reshapeShape));
+    auto addTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(dataType, reshapeShape,
+                                                                CreateTestConstIntVector(reshapeShape));
     addTensor->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
     auto outcast = npu::tile_fwk::IRBuilder().CreateTensorVar(dataType, outShape, CreateTestConstIntVector(outShape));
     outcast->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
@@ -882,15 +951,17 @@ before:
                                             - MUL(DDR) - outCast2(DDR)
 
 after:
-    inCast(DDR) - COPYIN(UB) - RESHAPECOPYOUT(DDR) - RESHAPE(DDR) - RESHAPECOPYIN(UB) - COPYOUT(DDR) - ADD(DDR) - outCast1(DDR)
-                                                                                                     - MUL(DDR) - outCast2(DDR)
+    inCast(DDR) - COPYIN(UB) - RESHAPECOPYOUT(DDR) - RESHAPE(DDR) - RESHAPECOPYIN(UB) - COPYOUT(DDR) - ADD(DDR) -
+outCast1(DDR)
+                                                                                                     - MUL(DDR) -
+outCast2(DDR)
 
 Test HandleNoCopyInConsumer: reshape output has no COPY_IN consumer, has multiple other consumers (ADD, MUL).
 */
 TEST_F(TestRemoveUnalignedReshapeOp, TestHandleNoCopyInConsumerWithMultiOps)
 {
-    auto currFunctionPtr = std::make_shared<Function>(
-        Program::GetInstance(), "TestHandleNoCopyInConsumerMulti", "TestHandleNoCopyInConsumerMulti", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestHandleNoCopyInConsumerMulti",
+                                                      "TestHandleNoCopyInConsumerMulti", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     std::vector<int64_t> inShape = {8, 8};
@@ -920,16 +991,18 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestHandleNoCopyInConsumerWithMultiOps)
 //                                  - ASSEMBLE - out2
 TEST_F(TestRemoveUnalignedReshapeOp, TestBranchBetweenCopyOutReshape2)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestBranchBetweenCopyOutReshape2", "TestBranchBetweenCopyOutReshape2", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestBranchBetweenCopyOutReshape2",
+                                                      "TestBranchBetweenCopyOutReshape2", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     std::vector<int64_t> inShape = {8, 8};
     std::vector<int64_t> reshapeShape = {4, 16};
     std::vector<int64_t> outShape = {8, 16};
     auto tensors = CreateBranchReshapeTensors(DT_FP32, inShape, reshapeShape, outShape);
-    tensors.assembleTensor->UpdateDynValidShape({CreateTestScalarVar("Input_0_Dim_0"), CreateTestScalarVar("Input_0_Dim_1")});
-    tensors.reshapeTensor->UpdateDynValidShape({CreateTestScalarVar("Input_1_Dim_0"), CreateTestScalarVar("Input_1_Dim_1")});
+    tensors.assembleTensor->UpdateDynValidShape(
+        {CreateTestScalarVar("Input_0_Dim_0"), CreateTestScalarVar("Input_0_Dim_1")});
+    tensors.reshapeTensor->UpdateDynValidShape(
+        {CreateTestScalarVar("Input_1_Dim_0"), CreateTestScalarVar("Input_1_Dim_1")});
     auto copyoutAttr = CreateUbCopyOutAttr(inShape);
     AddBranchCopyOutReshapePath(currFunctionPtr, tensors, copyoutAttr, true);
 
@@ -944,7 +1017,8 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestBranchBetweenCopyOutReshape2)
     EXPECT_EQ(currFunctionPtr->Operations().size(), expSize);
 }
 
-inline void CheckTestMutiProducerBetweenCopyOutReshape(std::shared_ptr<Function> currFunctionPtr) {
+inline void CheckTestMutiProducerBetweenCopyOutReshape(std::shared_ptr<Function> currFunctionPtr)
+{
     RemoveUnalignedReshape removeUnalignedReshapeOpTest;
     int curSize = currFunctionPtr->Operations().size();
     EXPECT_EQ(removeUnalignedReshapeOpTest.RunOnFunction(*currFunctionPtr), SUCCESS);
@@ -957,8 +1031,8 @@ inline void CheckTestMutiProducerBetweenCopyOutReshape(std::shared_ptr<Function>
 
 TEST_F(TestRemoveUnalignedReshapeOp, TestMutiProducerBetweenCopyOutReshape)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestMutiProducerBetweenCopyOutReshape", "TestMutiProducerBetweenCopyOutReshape", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestMutiProducerBetweenCopyOutReshape",
+                                                      "TestMutiProducerBetweenCopyOutReshape", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     // Prepare the graph
@@ -966,37 +1040,47 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestMutiProducerBetweenCopyOutReshape)
     std::vector<int64_t> reshapeShape = {4, 16};
     std::vector<int64_t> outShape = {8, 16};
     DataType dataTypeFp32 = DT_FP32;
-    auto incast_1 = npu::tile_fwk::IRBuilder().CreateTensorVar(dataTypeFp32, inShape, CreateTestConstIntVector(inShape));
+    auto incast_1 = npu::tile_fwk::IRBuilder().CreateTensorVar(dataTypeFp32, inShape,
+                                                               CreateTestConstIntVector(inShape));
     incast_1->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    auto incast_2 = npu::tile_fwk::IRBuilder().CreateTensorVar(dataTypeFp32, inShape, CreateTestConstIntVector(inShape));
+    auto incast_2 = npu::tile_fwk::IRBuilder().CreateTensorVar(dataTypeFp32, inShape,
+                                                               CreateTestConstIntVector(inShape));
     incast_2->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    auto copyInTensor_1 = npu::tile_fwk::IRBuilder().CreateTensorVar(dataTypeFp32, inShape, CreateTestConstIntVector(inShape));
+    auto copyInTensor_1 = npu::tile_fwk::IRBuilder().CreateTensorVar(dataTypeFp32, inShape,
+                                                                     CreateTestConstIntVector(inShape));
     copyInTensor_1->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
-    auto copyOutTensor_1 = npu::tile_fwk::IRBuilder().CreateTensorVar(dataTypeFp32, inShape, CreateTestConstIntVector(inShape));
+    auto copyOutTensor_1 = npu::tile_fwk::IRBuilder().CreateTensorVar(dataTypeFp32, inShape,
+                                                                      CreateTestConstIntVector(inShape));
     copyOutTensor_1->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    auto assembleTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(dataTypeFp32, inShape, CreateTestConstIntVector(inShape));
+    auto assembleTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(dataTypeFp32, inShape,
+                                                                     CreateTestConstIntVector(inShape));
     assembleTensor->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    std::vector<SymbolicScalar> validShape_1 = {CreateTestScalarVar("Input_0_Dim_0"), CreateTestScalarVar("Input_0_Dim_1")};
+    std::vector<SymbolicScalar> validShape_1 = {CreateTestScalarVar("Input_0_Dim_0"),
+                                                CreateTestScalarVar("Input_0_Dim_1")};
     assembleTensor->UpdateDynValidShape(validShape_1);
-    auto reshapeTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(dataTypeFp32, reshapeShape, CreateTestConstIntVector(reshapeShape));
+    auto reshapeTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(dataTypeFp32, reshapeShape,
+                                                                    CreateTestConstIntVector(reshapeShape));
     reshapeTensor->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    std::vector<SymbolicScalar> validShape_2 = {CreateTestScalarVar("Input_1_Dim_0"), CreateTestScalarVar("Input_1_Dim_1")};
+    std::vector<SymbolicScalar> validShape_2 = {CreateTestScalarVar("Input_1_Dim_0"),
+                                                CreateTestScalarVar("Input_1_Dim_1")};
     reshapeTensor->UpdateDynValidShape(validShape_2);
-    auto copyInTensor_2 = npu::tile_fwk::IRBuilder().CreateTensorVar(dataTypeFp32, reshapeShape, CreateTestConstIntVector(reshapeShape));
+    auto copyInTensor_2 = npu::tile_fwk::IRBuilder().CreateTensorVar(dataTypeFp32, reshapeShape,
+                                                                     CreateTestConstIntVector(reshapeShape));
     copyInTensor_2->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
-    auto copyInTensor_3 = npu::tile_fwk::IRBuilder().CreateTensorVar(dataTypeFp32, reshapeShape, CreateTestConstIntVector(reshapeShape));
+    auto copyInTensor_3 = npu::tile_fwk::IRBuilder().CreateTensorVar(dataTypeFp32, reshapeShape,
+                                                                     CreateTestConstIntVector(reshapeShape));
     copyInTensor_3->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
-    auto outcast_1 = npu::tile_fwk::IRBuilder().CreateTensorVar(dataTypeFp32, outShape, CreateTestConstIntVector(outShape));
+    auto outcast_1 = npu::tile_fwk::IRBuilder().CreateTensorVar(dataTypeFp32, outShape,
+                                                                CreateTestConstIntVector(outShape));
     outcast_1->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    auto outcast_2 = npu::tile_fwk::IRBuilder().CreateTensorVar(dataTypeFp32, outShape, CreateTestConstIntVector(outShape));
+    auto outcast_2 = npu::tile_fwk::IRBuilder().CreateTensorVar(dataTypeFp32, outShape,
+                                                                CreateTestConstIntVector(outShape));
     outcast_2->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
 
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {incast_1}, {copyInTensor_1});
     auto copyoutAttr = CreateUbCopyOutAttr(inShape);
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {copyInTensor_1}, {copyOutTensor_1},
-        [&copyoutAttr](Operation& op) {
-            op.SetOpAttribute(copyoutAttr);
-        });
+                                     [&copyoutAttr](Operation& op) { op.SetOpAttribute(copyoutAttr); });
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {copyOutTensor_1}, {assembleTensor});
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {incast_2}, {assembleTensor});
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {assembleTensor}, {reshapeTensor});
@@ -1009,9 +1093,9 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestMutiProducerBetweenCopyOutReshape)
     currFunctionPtr->outCasts_.push_back(outcast_1);
     currFunctionPtr->outCasts_.push_back(outcast_2);
     CheckTestMutiProducerBetweenCopyOutReshape(currFunctionPtr);
-
 }
-inline void CheckTestMutiConsumersBetweenCopyOutReshape(std::shared_ptr<Function> currFunctionPtr) {
+inline void CheckTestMutiConsumersBetweenCopyOutReshape(std::shared_ptr<Function> currFunctionPtr)
+{
     RemoveUnalignedReshape removeUnalignedReshapeOpTest;
     int curSize = currFunctionPtr->Operations().size();
     EXPECT_EQ(removeUnalignedReshapeOpTest.RunOnFunction(*currFunctionPtr), SUCCESS);
@@ -1025,8 +1109,8 @@ inline void CheckTestMutiConsumersBetweenCopyOutReshape(std::shared_ptr<Function
 
 TEST_F(TestRemoveUnalignedReshapeOp, TestMutiConsumersBetweenCopyOutReshape)
 {
-    auto currFunctionPtr = std::make_shared<Function>(
-        Program::GetInstance(), "TestMutiProducerBetweenCopyOutReshape", "TestMutiProducerBetweenCopyOutReshape", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestMutiProducerBetweenCopyOutReshape",
+                                                      "TestMutiProducerBetweenCopyOutReshape", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     // Prepare the graph
@@ -1036,35 +1120,44 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestMutiConsumersBetweenCopyOutReshape)
     DataType dataTypeFP32 = DT_FP32;
     auto incast = npu::tile_fwk::IRBuilder().CreateTensorVar(dataTypeFP32, inShape, CreateTestConstIntVector(inShape));
     incast->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    auto copyInTensor_1 = npu::tile_fwk::IRBuilder().CreateTensorVar(dataTypeFP32, inShape, CreateTestConstIntVector(inShape));
+    auto copyInTensor_1 = npu::tile_fwk::IRBuilder().CreateTensorVar(dataTypeFP32, inShape,
+                                                                     CreateTestConstIntVector(inShape));
     copyInTensor_1->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
-    auto copyOutTensor_1 = npu::tile_fwk::IRBuilder().CreateTensorVar(dataTypeFP32, inShape, CreateTestConstIntVector(inShape));
+    auto copyOutTensor_1 = npu::tile_fwk::IRBuilder().CreateTensorVar(dataTypeFP32, inShape,
+                                                                      CreateTestConstIntVector(inShape));
     copyOutTensor_1->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    auto assembleTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(dataTypeFP32, inShape, CreateTestConstIntVector(inShape));
+    auto assembleTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(dataTypeFP32, inShape,
+                                                                     CreateTestConstIntVector(inShape));
     assembleTensor->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    std::vector<SymbolicScalar> validShape_1 = {CreateTestScalarVar("Input_0_Dim_0"), CreateTestScalarVar("Input_0_Dim_1")};
+    std::vector<SymbolicScalar> validShape_1 = {CreateTestScalarVar("Input_0_Dim_0"),
+                                                CreateTestScalarVar("Input_0_Dim_1")};
     assembleTensor->UpdateDynValidShape(validShape_1);
-    auto reshapeTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(dataTypeFP32, reshapeShape, CreateTestConstIntVector(reshapeShape));
+    auto reshapeTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(dataTypeFP32, reshapeShape,
+                                                                    CreateTestConstIntVector(reshapeShape));
     reshapeTensor->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    std::vector<SymbolicScalar> validShape_2 = {CreateTestScalarVar("Input_1_Dim_0"), CreateTestScalarVar("Input_1_Dim_1")};
+    std::vector<SymbolicScalar> validShape_2 = {CreateTestScalarVar("Input_1_Dim_0"),
+                                                CreateTestScalarVar("Input_1_Dim_1")};
     reshapeTensor->UpdateDynValidShape(validShape_2);
-    auto copyInTensor_2 = npu::tile_fwk::IRBuilder().CreateTensorVar(dataTypeFP32, reshapeShape, CreateTestConstIntVector(reshapeShape));
+    auto copyInTensor_2 = npu::tile_fwk::IRBuilder().CreateTensorVar(dataTypeFP32, reshapeShape,
+                                                                     CreateTestConstIntVector(reshapeShape));
     copyInTensor_2->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
-    auto copyInTensor_3 = npu::tile_fwk::IRBuilder().CreateTensorVar(dataTypeFP32, reshapeShape, CreateTestConstIntVector(reshapeShape));
+    auto copyInTensor_3 = npu::tile_fwk::IRBuilder().CreateTensorVar(dataTypeFP32, reshapeShape,
+                                                                     CreateTestConstIntVector(reshapeShape));
     copyInTensor_3->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
-    auto outcast_1 = npu::tile_fwk::IRBuilder().CreateTensorVar(dataTypeFP32, outShape, CreateTestConstIntVector(outShape));
+    auto outcast_1 = npu::tile_fwk::IRBuilder().CreateTensorVar(dataTypeFP32, outShape,
+                                                                CreateTestConstIntVector(outShape));
     outcast_1->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    auto outcast_2 = npu::tile_fwk::IRBuilder().CreateTensorVar(dataTypeFP32, outShape, CreateTestConstIntVector(outShape));
+    auto outcast_2 = npu::tile_fwk::IRBuilder().CreateTensorVar(dataTypeFP32, outShape,
+                                                                CreateTestConstIntVector(outShape));
     outcast_2->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    auto outcast_3 = npu::tile_fwk::IRBuilder().CreateTensorVar(dataTypeFP32, inShape, CreateTestConstIntVector(inShape));
+    auto outcast_3 = npu::tile_fwk::IRBuilder().CreateTensorVar(dataTypeFP32, inShape,
+                                                                CreateTestConstIntVector(inShape));
     outcast_3->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
 
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {incast}, {copyInTensor_1});
     auto copyoutAttr = CreateUbCopyOutAttr(inShape);
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {copyInTensor_1}, {copyOutTensor_1},
-        [&copyoutAttr](Operation& op) {
-            op.SetOpAttribute(copyoutAttr);
-        });
+                                     [&copyoutAttr](Operation& op) { op.SetOpAttribute(copyoutAttr); });
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {copyOutTensor_1}, {assembleTensor});
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {assembleTensor}, {reshapeTensor});
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {reshapeTensor}, {copyInTensor_2});
@@ -1085,32 +1178,42 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestMutiConsumersBetweenCopyOutReshape)
 // 搬运超过了UB限额，不进行修改
 TEST_F(TestRemoveUnalignedReshapeOp, TestCopyToReshapeCopyOnL1OverUB)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestCopyToReshapeCopyOnL1OverUB", "TestCopyToReshapeCopyOnL1OverUB", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestCopyToReshapeCopyOnL1OverUB",
+                                                      "TestCopyToReshapeCopyOnL1OverUB", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     // Prepare the graph
     std::vector<int64_t> inShapeOverUB = {2024, 32};
     std::vector<int64_t> reshapeShapeOverUB = {1024, 64};
     std::vector<int64_t> outShapeOverUB = {2024, 64};
-    auto incast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inShapeOverUB, CreateTestConstIntVector(inShapeOverUB));
-    auto copyinTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inShapeOverUB, CreateTestConstIntVector(inShapeOverUB));
+    auto incast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inShapeOverUB,
+                                                             CreateTestConstIntVector(inShapeOverUB));
+    auto copyinTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inShapeOverUB,
+                                                                    CreateTestConstIntVector(inShapeOverUB));
     copyinTensor1->SetMemoryTypeBoth(MemoryType::MEM_L1, true);
-    auto copyoutTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inShapeOverUB, CreateTestConstIntVector(inShapeOverUB));
+    auto copyoutTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inShapeOverUB,
+                                                                     CreateTestConstIntVector(inShapeOverUB));
     copyoutTensor1->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    std::vector<SymbolicScalar> validShape1 = {CreateTestScalarVar("Input_0_Dim_0"), CreateTestScalarVar("Input_0_Dim_1")};
+    std::vector<SymbolicScalar> validShape1 = {CreateTestScalarVar("Input_0_Dim_0"),
+                                               CreateTestScalarVar("Input_0_Dim_1")};
     copyoutTensor1->UpdateDynValidShape(validShape1);
-    auto reshapeTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshapeShapeOverUB, CreateTestConstIntVector(reshapeShapeOverUB));
+    auto reshapeTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshapeShapeOverUB,
+                                                                    CreateTestConstIntVector(reshapeShapeOverUB));
     reshapeTensor->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    std::vector<SymbolicScalar> validShape2 = {CreateTestScalarVar("Input_1_Dim_0"), CreateTestScalarVar("Input_1_Dim_1")};
+    std::vector<SymbolicScalar> validShape2 = {CreateTestScalarVar("Input_1_Dim_0"),
+                                               CreateTestScalarVar("Input_1_Dim_1")};
     reshapeTensor->UpdateDynValidShape(validShape2);
-    auto copyinTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshapeShapeOverUB, CreateTestConstIntVector(reshapeShapeOverUB));
+    auto copyinTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshapeShapeOverUB,
+                                                                    CreateTestConstIntVector(reshapeShapeOverUB));
     copyinTensor2->SetMemoryTypeBoth(MemoryType::MEM_L1, true);
-    auto copyinTensor3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshapeShapeOverUB, CreateTestConstIntVector(reshapeShapeOverUB));
+    auto copyinTensor3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshapeShapeOverUB,
+                                                                    CreateTestConstIntVector(reshapeShapeOverUB));
     copyinTensor3->SetMemoryTypeBoth(MemoryType::MEM_L1, true);
-    auto outcast_1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, outShapeOverUB, CreateTestConstIntVector(outShapeOverUB));
+    auto outcast_1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, outShapeOverUB,
+                                                                CreateTestConstIntVector(outShapeOverUB));
     outcast_1->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    auto outcast_2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, outShapeOverUB, CreateTestConstIntVector(outShapeOverUB));
+    auto outcast_2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, outShapeOverUB,
+                                                                CreateTestConstIntVector(outShapeOverUB));
     outcast_2->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
 
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {incast}, {copyinTensor1});
@@ -1131,11 +1234,10 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestCopyToReshapeCopyOnL1OverUB)
     EXPECT_EQ(currFunctionPtr->Operations().size(), curSize);
 }
 
-
 TEST_F(TestRemoveUnalignedReshapeOp, TestCopyToReshapeCopyOnL0CToL1)
 {
-    auto currFunctionPtr = std::make_shared<Function>(
-        Program::GetInstance(), "TestCopyToReshapeCopyOnL0CToL1", "TestCopyToReshapeCopyOnL0CToL1", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestCopyToReshapeCopyOnL0CToL1",
+                                                      "TestCopyToReshapeCopyOnL0CToL1", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     std::vector<int64_t> inShape = {4, 4};
@@ -1155,13 +1257,15 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestCopyToReshapeCopyOnL0CToL1)
     outcast->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
 
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {incast}, {l0cTensor});
-    auto& copyOutOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {l0cTensor}, {reshapeInput});
+    auto& copyOutOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {l0cTensor},
+                                                       {reshapeInput});
     copyOutOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(
         l0cTensor->GetMemoryTypeOriginal(), OpImmediate::Specified(reshapeInput->GetTensorOffset()),
         OpImmediate::Specified(reshapeInput->GetShape()),
         OpImmediate::Specified(reshapeInput->GetRawTensor()->GetDynRawShape())));
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {reshapeInput}, {reshapeOutput});
-    auto& copyInOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {reshapeOutput}, {l1Tensor});
+    auto& copyInOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {reshapeOutput},
+                                                      {l1Tensor});
     copyInOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(
         OpImmediate::Specified(reshapeOutput->GetTensorOffset()), l1Tensor->GetMemoryTypeOriginal(),
         OpImmediate::Specified(reshapeOutput->GetShape()),
@@ -1188,9 +1292,9 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestCopyToReshapeCopyOnL0CToL1)
 
 TEST_F(TestRemoveUnalignedReshapeOp, TestSiblingCopyInConsumerToReshapeCopyInOnUB)
 {
-    auto currFunctionPtr = std::make_shared<Function>(
-        Program::GetInstance(), "TestSiblingCopyInConsumerToReshapeCopyInOnUB",
-        "TestSiblingCopyInConsumerToReshapeCopyInOnUB", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(),
+                                                      "TestSiblingCopyInConsumerToReshapeCopyInOnUB",
+                                                      "TestSiblingCopyInConsumerToReshapeCopyInOnUB", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
     auto ops = BuildDDRReshapeGraphWithSiblingCopyIn(currFunctionPtr, MemoryType::MEM_UB);
 
@@ -1209,9 +1313,9 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestSiblingCopyInConsumerToReshapeCopyInOnU
 
 TEST_F(TestRemoveUnalignedReshapeOp, TestSiblingCopyInConsumerToL1ReshapeCopyIn)
 {
-    auto currFunctionPtr = std::make_shared<Function>(
-        Program::GetInstance(), "TestSiblingCopyInConsumerToL1ReshapeCopyIn",
-        "TestSiblingCopyInConsumerToL1ReshapeCopyIn", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(),
+                                                      "TestSiblingCopyInConsumerToL1ReshapeCopyIn",
+                                                      "TestSiblingCopyInConsumerToL1ReshapeCopyIn", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
     auto ops = BuildDDRReshapeGraphWithSiblingCopyIn(currFunctionPtr, MemoryType::MEM_L1);
 
@@ -1230,29 +1334,36 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestSiblingCopyInConsumerToL1ReshapeCopyIn)
 
 TEST_F(TestRemoveUnalignedReshapeOp, TestValidShapeInfer)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestValidShapeInfer", "TestValidShapeInfer", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestValidShapeInfer",
+                                                      "TestValidShapeInfer", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
-    auto inCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{128, 64}, CreateTestConstIntVector(std::vector<int64_t>{128, 64}));
+    auto inCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{128, 64},
+                                                             CreateTestConstIntVector(std::vector<int64_t>{128, 64}));
     inCast->SetMemoryTypeOriginal(MemoryType::MEM_UB, false);
     inCast->UpdateDynValidShape({IRBuilder().CreateConstInt(128), IRBuilder().CreateConstInt(64)});
 
-    auto reshapeInput = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{128, 64}, CreateTestConstIntVector(std::vector<int64_t>{128, 64}));
+    auto reshapeInput = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{128, 64}, CreateTestConstIntVector(std::vector<int64_t>{128, 64}));
     reshapeInput->SetMemoryTypeOriginal(MemoryType::MEM_UB, false);
     reshapeInput->UpdateDynValidShape({IRBuilder().CreateConstInt(128), IRBuilder().CreateConstInt(64)});
 
-    auto reshapeOutput = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{64, 128}, CreateTestConstIntVector(std::vector<int64_t>{64, 128}));
+    auto reshapeOutput = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, std::vector<int64_t>{64, 128}, CreateTestConstIntVector(std::vector<int64_t>{64, 128}));
     reshapeOutput->SetMemoryTypeOriginal(MemoryType::MEM_UB, false);
     reshapeOutput->UpdateDynValidShape({IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
 
-    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{64, 128}, CreateTestConstIntVector(std::vector<int64_t>{64, 128}), TileOpFormat::TILEOP_ND, "outCast");
+    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{64, 128},
+                                                              CreateTestConstIntVector(std::vector<int64_t>{64, 128}),
+                                                              TileOpFormat::TILEOP_ND, "outCast");
     outCast->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
 
-    auto& reshapeOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {reshapeInput}, {reshapeOutput});
+    auto& reshapeOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {reshapeInput},
+                                                       {reshapeOutput});
     reshapeOp.UpdateSubgraphID(0);
 
-    auto& copyOutOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {reshapeOutput}, {outCast});
+    auto& copyOutOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {reshapeOutput},
+                                                       {outCast});
     copyOutOp.UpdateSubgraphID(0);
 
     currFunctionPtr->inCasts_.push_back(inCast);
@@ -1274,11 +1385,11 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestValidShapeInfer)
 //    - COPYIN - COPYOUT           - COPYIN - COPYOUT - out
 TEST_F(TestRemoveUnalignedReshapeOp, TestCopyToReshapeBeforeMultCopyOutOnUB)
 {
-    auto currFunctionPtr =
- 	    std::make_shared<Function>(Program::GetInstance(), "TestCopyToReshapeCopy", "TestCopyToReshapeCopy", nullptr);
- 	EXPECT_TRUE(currFunctionPtr != nullptr);
- 	 
- 	// Prepare the graph
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestCopyToReshapeCopy",
+                                                      "TestCopyToReshapeCopy", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    // Prepare the graph
     std::vector<int64_t> inShape = {2, 2};
     std::vector<int64_t> copyoutShape = {2, 4};
     std::vector<int64_t> reshapeShape = {4, 2};
@@ -1289,17 +1400,15 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestCopyToReshapeBeforeMultCopyOutOnUB)
     auto copyin_Tensor1 = builder.CreateTensorVar(DT_FP32, inShape, CreateTestConstIntVector(inShape));
     copyin_Tensor1->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
 
-    auto copyout_Tensor1 = builder.CreateTensorVar(DT_FP32, copyoutShape, {
-        CreateTestScalarVar("Input_00_Dim_0"), CreateTestScalarVar("Input_00_Dim_1")
-    });
+    auto copyout_Tensor1 = builder.CreateTensorVar(
+        DT_FP32, copyoutShape, {CreateTestScalarVar("Input_00_Dim_0"), CreateTestScalarVar("Input_00_Dim_1")});
     copyout_Tensor1->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
 
     auto copyin_Tensor2 = builder.CreateTensorVar(DT_FP32, inShape, CreateTestConstIntVector(inShape));
     copyin_Tensor2->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
 
-    auto reshape_Tensor = builder.CreateTensorVar(DT_FP32, reshapeShape, {
-        CreateTestScalarVar("Input_02_Dim_0"), CreateTestScalarVar("Input_02_Dim_1")
-    });
+    auto reshape_Tensor = builder.CreateTensorVar(
+        DT_FP32, reshapeShape, {CreateTestScalarVar("Input_02_Dim_0"), CreateTestScalarVar("Input_02_Dim_1")});
     reshape_Tensor->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
 
     auto copyin_Tensor3 = builder.CreateTensorVar(DT_FP32, reshapeShape, CreateTestConstIntVector(reshapeShape));
@@ -1310,7 +1419,7 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestCopyToReshapeBeforeMultCopyOutOnUB)
 
     auto outcast = builder.CreateTensorVar(DT_FP32, outShape, CreateTestConstIntVector(outShape));
     outcast->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-        
+
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {incast}, {copyin_Tensor1});
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {incast}, {copyin_Tensor2});
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {copyin_Tensor1}, {copyout_Tensor1});
@@ -1320,10 +1429,10 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestCopyToReshapeBeforeMultCopyOutOnUB)
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {reshape_Tensor}, {copyin_Tensor4});
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {copyin_Tensor4}, {outcast});
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {copyin_Tensor3}, {outcast});
-        
+
     currFunctionPtr->inCasts_.push_back(incast);
     currFunctionPtr->outCasts_.push_back(outcast);
-        
+
     RemoveUnalignedReshape removeUnalignedReshapeOpTest;
     EXPECT_EQ(removeUnalignedReshapeOpTest.RunOnFunction(*currFunctionPtr), SUCCESS);
 }

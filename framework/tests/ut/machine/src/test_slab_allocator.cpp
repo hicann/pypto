@@ -382,7 +382,6 @@ TEST_F(SlabWsAllocatorTest, ObjAddressAlignment)
         void* obj = allocator.Alloc(i % 3);
         ASSERT_NE(obj, nullptr);
         uintptr_t addr = reinterpret_cast<uintptr_t>(obj);
-        EXPECT_EQ(addr % SLAB_ALIGN_GRANULARITY, 0u)
-            << "obj " << i << " addr=" << addr << " not 64-byte aligned";
+        EXPECT_EQ(addr % SLAB_ALIGN_GRANULARITY, 0u) << "obj " << i << " addr=" << addr << " not 64-byte aligned";
     }
 }

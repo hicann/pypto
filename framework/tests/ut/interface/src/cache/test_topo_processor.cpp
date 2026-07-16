@@ -32,7 +32,8 @@ static size_t TopoEntrySize(uint64_t depNum, uint64_t extParamNum)
 }
 
 static std::shared_ptr<CoreFunctionTopoCache> BuildTopoCache(
-    const std::vector<std::tuple<uint64_t, uint64_t, uint64_t, int64_t, uint64_t, uint64_t, std::vector<uint64_t>>>& entries)
+    const std::vector<std::tuple<uint64_t, uint64_t, uint64_t, int64_t, uint64_t, uint64_t, std::vector<uint64_t>>>&
+        entries)
 {
     uint64_t topoNum = entries.size();
     size_t offsetsSize = (1 + topoNum) * sizeof(uint64_t);

@@ -126,9 +126,8 @@ public:
         // 使用首次适应算法
 
         // 按地址排序内存块
-        std::sort(memoryBlocks.begin(), memoryBlocks.end(), [](const MemoryBlock& a, const MemoryBlock& b) {
-            return a.startAddr < b.startAddr;
-        });
+        std::sort(memoryBlocks.begin(), memoryBlocks.end(),
+                  [](const MemoryBlock& a, const MemoryBlock& b) { return a.startAddr < b.startAddr; });
 
         // 寻找合适的空闲区域
         for (size_t i = 0; i < memoryBlocks.size() - 1; ++i) {
@@ -185,9 +184,8 @@ public:
 
         // 按地址排序内存块
         std::vector<MemoryBlock> sorted_blocks = memoryBlocks;
-        std::sort(sorted_blocks.begin(), sorted_blocks.end(), [](const MemoryBlock& a, const MemoryBlock& b) {
-            return a.startAddr < b.startAddr;
-        });
+        std::sort(sorted_blocks.begin(), sorted_blocks.end(),
+                  [](const MemoryBlock& a, const MemoryBlock& b) { return a.startAddr < b.startAddr; });
 
         for (const auto& block : sorted_blocks) {
             std::cout << "0x" << std::hex << block.startAddr << " - 0x" << (block.startAddr + block.size) << " ("

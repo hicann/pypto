@@ -32,7 +32,8 @@ using namespace pypto;
 namespace npu::tile_fwk {
 
 RootFunctionBuilder::RootFunctionBuilder(Function* parentFunc)
-    : program_(Program::GetInstance()), parentFunc_(parentFunc) {}
+    : program_(Program::GetInstance()), parentFunc_(parentFunc)
+{}
 
 std::shared_ptr<Function> RootFunctionBuilder::Build(const ir::FunctionPtr& irFunc)
 {
@@ -85,7 +86,7 @@ void RootFunctionBuilder::FinalizeDynFunc(const ir::FunctionPtr& irFunc)
         dynFunc_->params_.push_back(std::static_pointer_cast<const ir::Var>(param));
     }
     dynFunc_->ComputeHash();
-    BuildDynSlotScope();  // CleanRedundantOutCast 会过滤 outCasts_ 中的中间输出
+    BuildDynSlotScope(); // CleanRedundantOutCast 会过滤 outCasts_ 中的中间输出
 }
 
 bool RootFunctionBuilder::IsPureTensorOpSeq(const ir::SeqStmtsPtr& seq)
@@ -122,11 +123,10 @@ std::vector<std::vector<ir::StmtPtr>> RootFunctionBuilder::SplitIntoTensorOpSegm
     return segments;
 }
 
-ir::StmtPtr RootFunctionBuilder::ProcessTensorOp(
-    std::shared_ptr<Function> pathFunc, const ir::StmtPtr& stmt,
-    std::unordered_set<std::shared_ptr<LogicalTensor>>& allInputs,
-    std::unordered_set<std::shared_ptr<LogicalTensor>>& allOutputs,
-    std::unordered_set<std::shared_ptr<LogicalTensor>>& definedOutputs)
+ir::StmtPtr RootFunctionBuilder::ProcessTensorOp(std::shared_ptr<Function> pathFunc, const ir::StmtPtr& stmt,
+                                                 std::unordered_set<std::shared_ptr<LogicalTensor>>& allInputs,
+                                                 std::unordered_set<std::shared_ptr<LogicalTensor>>& allOutputs,
+                                                 std::unordered_set<std::shared_ptr<LogicalTensor>>& definedOutputs)
 {
     if (stmt->GetKind() != ir::ObjectKind::TensorOpStmt) {
         return stmt;
@@ -159,9 +159,9 @@ ir::StmtPtr RootFunctionBuilder::ProcessTensorOp(
         definedOutputs.insert(op);
     }
 
-    ir::StmtPtr opStmt = RebuildTensorOpStmt(
-        tensorOpStmt, tensorOpStmt->result_, tensorOpStmt->result_token_, tensorOpStmt->args_, tensorOpStmt->tokens_,
-        tensorOpStmt->span_, pathFunc.get());
+    ir::StmtPtr opStmt = RebuildTensorOpStmt(tensorOpStmt, tensorOpStmt->result_, tensorOpStmt->result_token_,
+                                             tensorOpStmt->args_, tensorOpStmt->tokens_, tensorOpStmt->span_,
+                                             pathFunc.get());
     if (tensorOpStmt->result_token_) {
         pathFunc->GetVarDependency().AddProducer(tensorOpStmt->result_token_, opStmt);
     }
@@ -171,10 +171,9 @@ ir::StmtPtr RootFunctionBuilder::ProcessTensorOp(
     return opStmt;
 }
 
-void RootFunctionBuilder::ComputeIncast(
-    Function& pathFunc,
-    const std::unordered_set<std::shared_ptr<LogicalTensor>>& allInputs,
-    const std::unordered_set<std::shared_ptr<LogicalTensor>>& definedOutputs)
+void RootFunctionBuilder::ComputeIncast(Function& pathFunc,
+                                        const std::unordered_set<std::shared_ptr<LogicalTensor>>& allInputs,
+                                        const std::unordered_set<std::shared_ptr<LogicalTensor>>& definedOutputs)
 {
     std::unordered_set<std::shared_ptr<LogicalTensor>> incastPtrs;
     for (auto& input : allInputs) {
@@ -185,9 +184,8 @@ void RootFunctionBuilder::ComputeIncast(
     }
 }
 
-void RootFunctionBuilder::ComputeOutcast(
-    Function& pathFunc,
-    const std::unordered_set<std::shared_ptr<LogicalTensor>>& allOutputs)
+void RootFunctionBuilder::ComputeOutcast(Function& pathFunc,
+                                         const std::unordered_set<std::shared_ptr<LogicalTensor>>& allOutputs)
 {
     std::unordered_set<std::shared_ptr<LogicalTensor>> outcastPtrs;
     for (auto& output : allOutputs) {
@@ -202,12 +200,12 @@ void RootFunctionBuilder::ComputeOutcast(
     }
 }
 
-std::shared_ptr<Function> RootFunctionBuilder::CreateHiddenFunc(
-    const ir::SeqStmtsPtr& seq, const std::string& loopVarName)
+std::shared_ptr<Function> RootFunctionBuilder::CreateHiddenFunc(const ir::SeqStmtsPtr& seq,
+                                                                const std::string& loopVarName)
 {
     auto pathFuncId = IdGen<IdType::FUNCTION>::Inst().NewId();
-    std::string pathSuffix =
-        loopVarName.empty() ? std::to_string(pathFuncId) : loopVarName + "_PATH" + std::to_string(pathFuncId);
+    std::string pathSuffix = loopVarName.empty() ? std::to_string(pathFuncId) :
+                                                   loopVarName + "_PATH" + std::to_string(pathFuncId);
     auto hiddenRawName = dynFunc_->GetRawName() + "_" + pathSuffix + "_hiddenfunc";
     auto hiddenMagicName = hiddenRawName + "_" + std::to_string(IdGen<IdType::FUNCTION>::Inst().NewId());
     auto hiddenFunc = std::make_shared<Function>(program_, hiddenMagicName, hiddenRawName, dynFunc_.get());
@@ -215,7 +213,6 @@ std::shared_ptr<Function> RootFunctionBuilder::CreateHiddenFunc(
     hiddenFunc->SetGraphType(GraphType::TENSOR_GRAPH);
     hiddenFunc->SetUnderDynamicFunction(true);
     program_.InsertFuncToFunctionMap(hiddenMagicName, hiddenFunc);
-
 
     std::unordered_set<std::shared_ptr<LogicalTensor>> definedOutputs;
     std::unordered_set<std::shared_ptr<LogicalTensor>> allInputs;
@@ -229,9 +226,9 @@ std::shared_ptr<Function> RootFunctionBuilder::CreateHiddenFunc(
     return hiddenFunc;
 }
 
-int RootFunctionBuilder::FindOrCreateSlot(
-    const std::shared_ptr<LogicalTensor>& lt, const std::shared_ptr<TensorSlotManager>& slotManager, Function* func,
-    bool isAssembleOut)
+int RootFunctionBuilder::FindOrCreateSlot(const std::shared_ptr<LogicalTensor>& lt,
+                                          const std::shared_ptr<TensorSlotManager>& slotManager, Function* func,
+                                          bool isAssembleOut)
 {
     int rawMagic = lt->tensor->GetRawMagic();
     int existingSlot = slotManager->LookupSlotIndexByRawMagic(rawMagic);
@@ -256,9 +253,9 @@ int RootFunctionBuilder::FindOrCreateSlot(
     return tensorSlot;
 }
 
-void RootFunctionBuilder::BuildPathFuncSlotScope(
-    Function* pathFunc, const std::shared_ptr<TensorSlotScope>& scope,
-    const LogicalTensors& originalIncasts, const LogicalTensors& originalOutcasts)
+void RootFunctionBuilder::BuildPathFuncSlotScope(Function* pathFunc, const std::shared_ptr<TensorSlotScope>& scope,
+                                                 const LogicalTensors& originalIncasts,
+                                                 const LogicalTensors& originalOutcasts)
 {
     auto slotManager = program_.GetTensorSlotManager();
 
@@ -292,8 +289,7 @@ void RootFunctionBuilder::BuildPathFuncSlotScope(
     std::unordered_set<int> addedSlots;
     for (auto& op : pathFunc->Operations()) {
         if ((op.GetOpcode() == Opcode::OP_ASSEMBLE && op.HasAttr("dassemble")) ||
-            op.GetOpcode() == Opcode::OP_ASSEMBLE_SSA ||
-            op.GetOpcode() == Opcode::OP_ATOMIC_RMW) {
+            op.GetOpcode() == Opcode::OP_ASSEMBLE_SSA || op.GetOpcode() == Opcode::OP_ATOMIC_RMW) {
             for (auto& oOperand : op.GetOOperands()) {
                 int slotIndex = FindOrCreateSlot(oOperand, slotManager, pathFunc, true);
                 if (funcParamSet.count(oOperand) != 0) {
@@ -370,8 +366,8 @@ std::unordered_set<std::shared_ptr<LogicalTensor>> RootFunctionBuilder::CollectA
     return allOutputs;
 }
 
-ir::StmtPtr RootFunctionBuilder::CreatePathFuncAndPlaceholder(
-    const ir::SeqStmtsPtr& seq, const std::string& loopVarName)
+ir::StmtPtr RootFunctionBuilder::CreatePathFuncAndPlaceholder(const ir::SeqStmtsPtr& seq,
+                                                              const std::string& loopVarName)
 {
     auto pathFunc = CreateHiddenFunc(seq, loopVarName);
 
@@ -380,24 +376,18 @@ ir::StmtPtr RootFunctionBuilder::CreatePathFuncAndPlaceholder(
     }
 
     auto placeholderStmt = std::make_shared<ir::TensorOpStmt>(
-        std::vector<ir::VarPtr>{}, nullptr, "CALL",
-        std::vector<ir::ExprPtr>{}, std::vector<ir::VarPtr>{},
-        std::vector<std::pair<std::string, std::any>>{{"placeholder_funcname", pathFunc->GetMagicName()}},
-        seq->span_);
+        std::vector<ir::VarPtr>{}, nullptr, "CALL", std::vector<ir::ExprPtr>{}, std::vector<ir::VarPtr>{},
+        std::vector<std::pair<std::string, std::any>>{{"placeholder_funcname", pathFunc->GetMagicName()}}, seq->span_);
 
     return placeholderStmt;
 }
 
-void RootFunctionBuilder::CreateAndFinalizePathFunc(
-    Function* pathFunc,
-    Function* hiddenFunc,
-    const LogicalTensors& hiddenInArgs,
-    const LogicalTensors& hiddenOutArgs,
-    const ir::StmtPtr& placeholder)
+void RootFunctionBuilder::CreateAndFinalizePathFunc(Function* pathFunc, Function* hiddenFunc,
+                                                    const LogicalTensors& hiddenInArgs,
+                                                    const LogicalTensors& hiddenOutArgs, const ir::StmtPtr& placeholder)
 {
     // 1. pathFunc 中创建 OP_CALL 指向 hiddenFunc
-    auto& callOp = pathFunc->AddRawOperation(
-        Opcode::OP_CALL, hiddenInArgs, hiddenOutArgs, placeholder->span_);
+    auto& callOp = pathFunc->AddRawOperation(Opcode::OP_CALL, hiddenInArgs, hiddenOutArgs, placeholder->span_);
     callOp.SetOpAttribute(hiddenFunc->CreateCallOpAttribute({}, {}));
     pathFunc->AppendCalleeMagicName(hiddenFunc->GetMagicName());
     callOp.attrs_.emplace_back("callee", hiddenFunc->GetMagicName());
@@ -484,13 +474,12 @@ ir::StmtPtr RootFunctionBuilder::FinalizePathFunc(const ir::StmtPtr& placeholder
     DumpFunctionGraph(hiddenFunc);
 
     // 4. pathFunc 处理（独立函数）
-    CreateAndFinalizePathFunc(
-        pathFunc.get(), hiddenFunc, hiddenInArgs, hiddenOutArgs, placeholder);
+    CreateAndFinalizePathFunc(pathFunc.get(), hiddenFunc, hiddenInArgs, hiddenOutArgs, placeholder);
     pathFunc->GetSlotScope()->constructAssembleSlotList = hiddenScope->constructAssembleSlotList;
 
     // 5. dynFunc 的 CALL op
-    auto& callOperation = dynFunc_->AddRawOperation(
-        Opcode::OP_CALL, originalIncasts, originalOutcasts, placeholder->span_);
+    auto& callOperation = dynFunc_->AddRawOperation(Opcode::OP_CALL, originalIncasts, originalOutcasts,
+                                                    placeholder->span_);
     callOperation.SetOpAttribute(pathFunc->CreateCallOpAttribute({}, {}));
     dynFunc_->AppendCalleeMagicName(pathFunc->GetMagicName());
     callOperation.attrs_.emplace_back("callee", pathFunc->GetMagicName());
@@ -526,9 +515,9 @@ ir::StmtPtr RootFunctionBuilder::TransformStmts(ir::StmtPtr stmt, const std::str
             int64_t stepValue = stepConst ? stepConst->value_ : 1;
             currentLoopVarName += "_Unroll" + std::to_string(stepValue);
             auto transformedBody = TransformStmts(forStmt->body_, currentLoopVarName);
-            return std::make_shared<ir::ForStmt>(
-                forStmt->loopVar_, forStmt->start_, forStmt->stop_, forStmt->step_, forStmt->iterArgs_, transformedBody,
-                forStmt->returnVars_, forStmt->span_, forStmt->attrs_);
+            return std::make_shared<ir::ForStmt>(forStmt->loopVar_, forStmt->start_, forStmt->stop_, forStmt->step_,
+                                                 forStmt->iterArgs_, transformedBody, forStmt->returnVars_,
+                                                 forStmt->span_, forStmt->attrs_);
         }
         case ir::ObjectKind::IfStmt: {
             auto ifStmt = std::static_pointer_cast<const ir::IfStmt>(stmt);
@@ -537,8 +526,8 @@ ir::StmtPtr RootFunctionBuilder::TransformStmts(ir::StmtPtr stmt, const std::str
             if (ifStmt->elseBody_) {
                 transformedElse = TransformStmts(ifStmt->elseBody_.value(), loopVarName);
             }
-            return std::make_shared<ir::IfStmt>(
-                ifStmt->condition_, transformedThen, transformedElse, ifStmt->returnVars_, ifStmt->span_);
+            return std::make_shared<ir::IfStmt>(ifStmt->condition_, transformedThen, transformedElse,
+                                                ifStmt->returnVars_, ifStmt->span_);
         }
         default:
             return stmt;

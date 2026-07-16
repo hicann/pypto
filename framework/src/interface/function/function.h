@@ -44,13 +44,12 @@ constexpr int FUNCTION_MAX_CV_CORES = 10000;
 
 inline const BiMap<FunctionType>& GetFunctionTypeNameDict()
 {
-    static BiMap<FunctionType> dict{
-        {{FunctionType::INVALID, "INVALID"},
-         {FunctionType::EAGER, "EAGER"},
-         {FunctionType::STATIC, "STATIC"},
-         {FunctionType::DYNAMIC, "DYNAMIC"},
-         {FunctionType::DYNAMIC_LOOP, "DYNAMIC_LOOP"},
-         {FunctionType::DYNAMIC_LOOP_PATH, "DYNAMIC_LOOP_PATH"}}};
+    static BiMap<FunctionType> dict{{{FunctionType::INVALID, "INVALID"},
+                                     {FunctionType::EAGER, "EAGER"},
+                                     {FunctionType::STATIC, "STATIC"},
+                                     {FunctionType::DYNAMIC, "DYNAMIC"},
+                                     {FunctionType::DYNAMIC_LOOP, "DYNAMIC_LOOP"},
+                                     {FunctionType::DYNAMIC_LOOP_PATH, "DYNAMIC_LOOP_PATH"}}};
     return dict;
 }
 
@@ -58,13 +57,12 @@ enum class GraphType { TENSOR_GRAPH, TILE_GRAPH, EXECUTE_GRAPH, BLOCK_GRAPH, LEA
 
 inline const BiMap<GraphType>& GetGraphTypeNameDict()
 {
-    static BiMap<GraphType> dict{
-        {{GraphType::TENSOR_GRAPH, "TENSOR_GRAPH"},
-         {GraphType::TILE_GRAPH, "TILE_GRAPH"},
-         {GraphType::EXECUTE_GRAPH, "EXECUTE_GRAPH"},
-         {GraphType::BLOCK_GRAPH, "BLOCK_GRAPH"},
-         {GraphType::LEAF_VF_GRAPH, "LEAF_VF_GRAPH"},
-         {GraphType::INVALID, "INVALID"}}};
+    static BiMap<GraphType> dict{{{GraphType::TENSOR_GRAPH, "TENSOR_GRAPH"},
+                                  {GraphType::TILE_GRAPH, "TILE_GRAPH"},
+                                  {GraphType::EXECUTE_GRAPH, "EXECUTE_GRAPH"},
+                                  {GraphType::BLOCK_GRAPH, "BLOCK_GRAPH"},
+                                  {GraphType::LEAF_VF_GRAPH, "LEAF_VF_GRAPH"},
+                                  {GraphType::INVALID, "INVALID"}}};
     return dict;
 }
 
@@ -92,10 +90,9 @@ struct FunctionCallArgs {
 
 using OperationDeleter = std::function<bool(std::shared_ptr<Operation>&, Function&)>;
 
-using TensorGraphInfo = std::tuple<
-    std::vector<LogicalTensors>, std::vector<LogicalTensors>, std::set<std::shared_ptr<Operation>>,
-    std::set<std::shared_ptr<Operation>>, std::set<std::shared_ptr<LogicalTensor>>,
-    std::set<std::shared_ptr<LogicalTensor>>>;
+using TensorGraphInfo = std::tuple<std::vector<LogicalTensors>, std::vector<LogicalTensors>,
+                                   std::set<std::shared_ptr<Operation>>, std::set<std::shared_ptr<Operation>>,
+                                   std::set<std::shared_ptr<LogicalTensor>>, std::set<std::shared_ptr<LogicalTensor>>>;
 
 class OperationsViewer {
     friend class SubgraphToFunction;
@@ -103,8 +100,7 @@ class OperationsViewer {
     friend class VFFusionPass;
 
 public:
-    class IteratorDelimiter {
-    };
+    class IteratorDelimiter {};
     class Iterator {
     public:
         explicit Iterator(const std::vector<std::shared_ptr<Operation>>& operations) : operations_(operations) {}
@@ -130,9 +126,8 @@ public:
     };
 
 public:
-    OperationsViewer(
-        const std::vector<std::shared_ptr<Operation>>& operations,
-        const std::unordered_map<const Operation*, int>& opPosition)
+    OperationsViewer(const std::vector<std::shared_ptr<Operation>>& operations,
+                     const std::unordered_map<const Operation*, int>& opPosition)
         : operations_(operations), opPosition_(opPosition)
     {}
     [[nodiscard]] auto size() const { return operations_.size(); }
@@ -204,8 +199,8 @@ struct DynloopFunctionPathCondition {
     int GetLine() const { return line_; }
 
     DynloopFunctionPathCondition() {}
-    DynloopFunctionPathCondition(
-        bool isSat, bool isConst, const SymbolicScalar& cond, const std::string& file, int line)
+    DynloopFunctionPathCondition(bool isSat, bool isConst, const SymbolicScalar& cond, const std::string& file,
+                                 int line)
         : isSat_(isSat), isConst_(isConst), cond_(cond), file_(file), line_(line)
     {}
 };
@@ -215,8 +210,8 @@ struct DynloopFunctionPath {
     std::vector<DynloopFunctionPathCondition> pathCondList;
     Operation* callop;
 
-    DynloopFunctionPath(
-        Function* pathRoot, const std::vector<DynloopFunctionPathCondition>& pathConds, Operation* operation)
+    DynloopFunctionPath(Function* pathRoot, const std::vector<DynloopFunctionPathCondition>& pathConds,
+                        Operation* operation)
         : root(pathRoot), pathCondList(pathConds), callop(operation)
     {}
 
@@ -250,9 +245,8 @@ struct DynloopFunctionAttribute {
     std::vector<Operation*> underDynLoopCallOpGroup_;
     size_t currIndex{0};
 
-    DynloopFunctionAttribute(
-        const std::string& symbolName, const LoopRange& range, const LoopRange& originRange, bool submit = false,
-        bool parallelMode = false)
+    DynloopFunctionAttribute(const std::string& symbolName, const LoopRange& range, const LoopRange& originRange,
+                             bool submit = false, bool parallelMode = false)
         : iterSymbolName(symbolName),
           loopRange(range),
           originalRange(originRange),
@@ -329,18 +323,18 @@ struct CceCodeInfo {
     uint32_t mixResourceType{0};
 };
 
-static inline bool CheckAll1c2vMixTask(const std::vector<CceCodeInfo>& cceCodeInfo) {
+static inline bool CheckAll1c2vMixTask(const std::vector<CceCodeInfo>& cceCodeInfo)
+{
     if (cceCodeInfo.empty()) {
         return false;
     }
     for (size_t i = 0; i < cceCodeInfo.size(); i++) {
-        if (cceCodeInfo[i].coreType != static_cast<uint32_t>(CoreType::AIV) 
-            && cceCodeInfo[i].coreType != static_cast<uint32_t>(CoreType::AIC)
-            && cceCodeInfo[i].coreType != static_cast<uint32_t>(CoreType::MIX)) {
+        if (cceCodeInfo[i].coreType != static_cast<uint32_t>(CoreType::AIV) &&
+            cceCodeInfo[i].coreType != static_cast<uint32_t>(CoreType::AIC) &&
+            cceCodeInfo[i].coreType != static_cast<uint32_t>(CoreType::MIX)) {
             continue;
         }
-        if (cceCodeInfo[i].mixResourceType !=
-            static_cast<uint32_t>(MixResourceType::ONE_CUBE_TWO_VECTOR)) {
+        if (cceCodeInfo[i].mixResourceType != static_cast<uint32_t>(MixResourceType::ONE_CUBE_TWO_VECTOR)) {
             return false;
         }
     }
@@ -624,9 +618,8 @@ public:
     std::unordered_map<Operation*, Operation*> waitOpMap;
     std::vector<Operation*> oriOpList;
 
-    Function(
-        const Program& belongTo, const std::string& funcMagicName, const std::string& funcRawName,
-        Function* parentFunc);
+    Function(const Program& belongTo, const std::string& funcMagicName, const std::string& funcRawName,
+             Function* parentFunc);
 
     Function(const Function& other) = delete;
     Function(Function&& other) = delete;
@@ -674,15 +667,13 @@ public:
 
     Operation& AddOperation(const std::string& opName, LogicalTensors iOperands, const LogicalTensors& oOperands);
     Operation& AddOperation(const Opcode opCode, LogicalTensors iOperands, const LogicalTensors& oOperands);
-    Operation& AddRawOperation(
-        const Opcode opCode, const LogicalTensors& iOperands, const LogicalTensors& oOperands,
-        ir::Span span = ir::Span::Unknown());
+    Operation& AddRawOperation(const Opcode opCode, const LogicalTensors& iOperands, const LogicalTensors& oOperands,
+                               ir::Span span = ir::Span::Unknown());
 
     std::map<std::shared_ptr<RawTensor>, std::shared_ptr<RawTensor>> outIncastLinkMap; // 记录outcast 共享地址的 incast
     void SetSameMemId(const LogicalTensorPtr& operand, LogicalTensorPtr& dst);
-    void UpdateLinkMap(
-        const std::shared_ptr<LogicalTensor>& oriLogicalTensor, const std::shared_ptr<LogicalTensor>& newLogicalTensor,
-        const bool isOutCast = false);
+    void UpdateLinkMap(const std::shared_ptr<LogicalTensor>& oriLogicalTensor,
+                       const std::shared_ptr<LogicalTensor>& newLogicalTensor, const bool isOutCast = false);
 
     std::vector<Operation*> GetAllInputOperations(const Operation& op) const;
     std::vector<Operation*> GetAllOutputOperations(const Operation& op) const;
@@ -703,19 +694,18 @@ public:
     Json DumpJson(bool useTable = true);
     static std::shared_ptr<Function> LoadJson(Program& belongTo, const Json& funcJson);
 
-    std::vector<std::vector<SymbolicScalar>> NormalizeCoa(
-        std::vector<OperandAttribute>& iOpAttr, std::vector<OperandAttribute>& oOpAttr);
-    void NormalizeCoaForInCasts(
-        std::vector<OperandAttribute>& iOpAttr, std::vector<std::vector<SymbolicScalar>>& coaLists, int& coaIndex,
-        std::unordered_map<LogicalTensorPtr, int>& processedOperands,
-        const std::unordered_map<int, Operation*>& opmagicToOp);
-    void NormalizeCoaForOutCasts(
-        std::vector<OperandAttribute>& oOpAttr, std::vector<std::vector<SymbolicScalar>>& coaLists, int& coaIndex,
-        std::unordered_map<LogicalTensorPtr, int>& processedOperands,
-        const std::unordered_map<int, Operation*>& opmagicToOp);
-    void NormalizeCoaForNormalOperands(
-        std::vector<std::vector<SymbolicScalar>>& coaLists, int& coaIndex,
-        std::unordered_map<LogicalTensorPtr, int>& processedOperands);
+    std::vector<std::vector<SymbolicScalar>> NormalizeCoa(std::vector<OperandAttribute>& iOpAttr,
+                                                          std::vector<OperandAttribute>& oOpAttr);
+    void NormalizeCoaForInCasts(std::vector<OperandAttribute>& iOpAttr,
+                                std::vector<std::vector<SymbolicScalar>>& coaLists, int& coaIndex,
+                                std::unordered_map<LogicalTensorPtr, int>& processedOperands,
+                                const std::unordered_map<int, Operation*>& opmagicToOp);
+    void NormalizeCoaForOutCasts(std::vector<OperandAttribute>& oOpAttr,
+                                 std::vector<std::vector<SymbolicScalar>>& coaLists, int& coaIndex,
+                                 std::unordered_map<LogicalTensorPtr, int>& processedOperands,
+                                 const std::unordered_map<int, Operation*>& opmagicToOp);
+    void NormalizeCoaForNormalOperands(std::vector<std::vector<SymbolicScalar>>& coaLists, int& coaIndex,
+                                       std::unordered_map<LogicalTensorPtr, int>& processedOperands);
     void NormalizeCoaForSpecialInfo(std::vector<std::vector<SymbolicScalar>>& coaLists, int& coaIndex);
     void GetOutcastSymbolicExpr(std::map<int, SymbolicScalar>& tabel);
 
@@ -734,8 +724,8 @@ public:
 
     DyndevFunctionAttribute::ValueDependDesc LookupValueDepend();
 
-    std::shared_ptr<OpAttribute> CreateCallOpAttribute(
-        const std::vector<std::vector<SymbolicScalar>>& argList, const std::map<int, SymbolicScalar>& outIndexToExpr);
+    std::shared_ptr<OpAttribute> CreateCallOpAttribute(const std::vector<std::vector<SymbolicScalar>>& argList,
+                                                       const std::map<int, SymbolicScalar>& outIndexToExpr);
 
     bool IsEager() const { return functionType_ == FunctionType::EAGER; }
     bool IsStatic() const { return functionType_ == FunctionType::STATIC; }
@@ -806,10 +796,10 @@ public:
     std::set<Operation*, LogicalTensor::CompareOp> FindConsumers(const Operation& op) const;
     std::set<Operation*, LogicalTensor::CompareOp> FindProducers(const Operation& op) const;
     const SubfuncInvokeInfoTy& GetSubFuncInvokeInfo(const size_t i) const;
-    void GetAnIslandIncastsOutcasts(
-        const std::map<int, int>& opToSubgraph, const int subgraphID, const std::vector<Operation*>& operations,
-        std::vector<std::shared_ptr<LogicalTensor>>& iOperands,
-        std::vector<std::shared_ptr<LogicalTensor>>& oOperands) const;
+    void GetAnIslandIncastsOutcasts(const std::map<int, int>& opToSubgraph, const int subgraphID,
+                                    const std::vector<Operation*>& operations,
+                                    std::vector<std::shared_ptr<LogicalTensor>>& iOperands,
+                                    std::vector<std::shared_ptr<LogicalTensor>>& oOperands) const;
 
     void SetDynloopAttribute(const std::shared_ptr<DynloopFunctionAttribute>& attr) { dynloopAttr_ = attr; }
     const std::shared_ptr<DynloopFunctionAttribute>& GetDynloopAttribute() const { return dynloopAttr_; }
@@ -1082,29 +1072,28 @@ private:
     void OpValidCheck(Operation& op) const;
     void RemoveOriginIncastConsumer(const std::shared_ptr<LogicalTensor>& originIncast) const;
     std::shared_ptr<LogicalTensor> CreateIncastTensor(const std::shared_ptr<LogicalTensor>& inArgument);
-    void CreateFromIncast(
-        const LogicalTensorPtr& symbol, const LogicalTensorPtr& newIncast, const LogicalTensorPtr& originIncast);
+    void CreateFromIncast(const LogicalTensorPtr& symbol, const LogicalTensorPtr& newIncast,
+                          const LogicalTensorPtr& originIncast);
     // 将 operationCountBefore 之后新插入的 op 移到 operations_ 最前面。
     // MakeIncasts 中 CreateFromIncast 会在尾部追加 VIEW op，提前到程序开头后前端无需再排序。
     void MoveNewlyInsertedOpsToFront(size_t operationCountBefore);
     std::shared_ptr<LogicalTensor> CreateOutcastTensor(const std::shared_ptr<LogicalTensor>& outArgument);
-    void CreateFromOutcast(
-        const LogicalTensorPtr& symbol, const LogicalTensorPtr& newOutcast, const LogicalTensorPtr& originOutcast);
+    void CreateFromOutcast(const LogicalTensorPtr& symbol, const LogicalTensorPtr& newOutcast,
+                           const LogicalTensorPtr& originOutcast);
 
-    static void AddWhenNotExistOrAssert(
-        const std::shared_ptr<LogicalTensor>& tensor, std::map<int, int>& magicToRawMagic,
-        std::map<int, std::shared_ptr<LogicalTensor>>& magicToLogicalTensor);
-    static void MagicLookup(
-        const Function* function, const std::vector<LogicalTensorPtr>& operand, const int subGraphId, int& index,
-        std::unordered_map<int, int>& magic2index, std::stringstream& ss);
-    static void ProducerMagicLookup(
-        const Function* function, const LogicalTensorPtr& tensor,
-        const std::set<Operation*, LogicalTensor::CompareOp>& producers, const int subGraphId, int& index,
-        std::unordered_map<int, int>& magic2index, std::stringstream& ss);
-    static void LoadTensorJson(
-        const std::shared_ptr<Function>& func, const Json& tensorJson,
-        const std::unordered_map<int, std::shared_ptr<RawTensor>>& rawTensorDict,
-        std::unordered_map<int, std::shared_ptr<LogicalTensor>>& tensorDict);
+    static void AddWhenNotExistOrAssert(const std::shared_ptr<LogicalTensor>& tensor,
+                                        std::map<int, int>& magicToRawMagic,
+                                        std::map<int, std::shared_ptr<LogicalTensor>>& magicToLogicalTensor);
+    static void MagicLookup(const Function* function, const std::vector<LogicalTensorPtr>& operand,
+                            const int subGraphId, int& index, std::unordered_map<int, int>& magic2index,
+                            std::stringstream& ss);
+    static void ProducerMagicLookup(const Function* function, const LogicalTensorPtr& tensor,
+                                    const std::set<Operation*, LogicalTensor::CompareOp>& producers,
+                                    const int subGraphId, int& index, std::unordered_map<int, int>& magic2index,
+                                    std::stringstream& ss);
+    static void LoadTensorJson(const std::shared_ptr<Function>& func, const Json& tensorJson,
+                               const std::unordered_map<int, std::shared_ptr<RawTensor>>& rawTensorDict,
+                               std::unordered_map<int, std::shared_ptr<LogicalTensor>>& tensorDict);
 
     std::string DumpSSATitle() const;
     std::string DumpSSARawTensor(int indent = 2) const;
@@ -1127,8 +1116,7 @@ private:
     void LinkIoWithCallOp(std::vector<LogicalTensors>& callopInCasts, std::vector<LogicalTensors>& callopOutCasts);
     void EraseCallOpOpnd(const FunctionHash& calleeHash, size_t index);
     void CheckAndUpdateGetTensorData(size_t currOutcastIdx, size_t newOutcastIdx);
-    void CleanRedundantOutcast(
-        std::map<Function*, std::set<size_t>>& removeRecord,
-        std::map<Function*, std::set<size_t>>& getTensorDataRecord);
+    void CleanRedundantOutcast(std::map<Function*, std::set<size_t>>& removeRecord,
+                               std::map<Function*, std::set<size_t>>& getTensorDataRecord);
 };
 } // namespace npu::tile_fwk

@@ -64,8 +64,8 @@ Cluster::Cluster(const Core& core, int count) : core_counts_({{core, count}}) {}
 
 int Cluster::TotalCoreCount() const
 {
-    return std::accumulate(
-        core_counts_.begin(), core_counts_.end(), 0, [](int sum, const auto& pair) { return sum + pair.second; });
+    return std::accumulate(core_counts_.begin(), core_counts_.end(), 0,
+                           [](int sum, const auto& pair) { return sum + pair.second; });
 }
 
 bool Cluster::operator<(const Cluster& other) const { return core_counts_ < other.core_counts_; }
@@ -80,15 +80,14 @@ Die::Die(const Cluster& cluster, int count) : cluster_counts_({{cluster, count}}
 
 int Die::TotalClusterCount() const
 {
-    return std::accumulate(
-        cluster_counts_.begin(), cluster_counts_.end(), 0, [](int sum, const auto& pair) { return sum + pair.second; });
+    return std::accumulate(cluster_counts_.begin(), cluster_counts_.end(), 0,
+                           [](int sum, const auto& pair) { return sum + pair.second; });
 }
 
 int Die::TotalCoreCount() const
 {
-    return std::accumulate(cluster_counts_.begin(), cluster_counts_.end(), 0, [](int sum, const auto& pair) {
-        return sum + pair.first.TotalCoreCount() * pair.second;
-    });
+    return std::accumulate(cluster_counts_.begin(), cluster_counts_.end(), 0,
+                           [](int sum, const auto& pair) { return sum + pair.first.TotalCoreCount() * pair.second; });
 }
 
 bool Die::operator<(const Die& other) const { return cluster_counts_ < other.cluster_counts_; }
@@ -107,8 +106,8 @@ SoC::SoC(const Die& die, int count, std::map<ir::MemorySpace, std::vector<ir::Me
 
 int SoC::TotalDieCount() const
 {
-    return std::accumulate(
-        die_counts_.begin(), die_counts_.end(), 0, [](int sum, const auto& pair) { return sum + pair.second; });
+    return std::accumulate(die_counts_.begin(), die_counts_.end(), 0,
+                           [](int sum, const auto& pair) { return sum + pair.second; });
 }
 
 int SoC::TotalClusterCount() const
@@ -120,9 +119,8 @@ int SoC::TotalClusterCount() const
 
 int SoC::TotalCoreCount() const
 {
-    return std::accumulate(die_counts_.begin(), die_counts_.end(), 0, [](int sum, const auto& pair) {
-        return sum + pair.first.TotalCoreCount() * pair.second;
-    });
+    return std::accumulate(die_counts_.begin(), die_counts_.end(), 0,
+                           [](int sum, const auto& pair) { return sum + pair.first.TotalCoreCount() * pair.second; });
 }
 
 // ========== 910B SoC Factory ==========
@@ -143,16 +141,16 @@ const SoC& Create910BSoC()
         };
 
         // AIC (CUBE) core configuration
-        Core aic_core(
-            ir::CoreType::CUBE, {Mem(ir::MemorySpace::Mat, query_u64("AICoreSpec", "l1_size", 512ULL * 1024), 128),
-                                 Mem(ir::MemorySpace::Left, query_u64("AICoreSpec", "l0_a_size", 64ULL * 1024), 64),
-                                 Mem(ir::MemorySpace::Right, query_u64("AICoreSpec", "l0_b_size", 64ULL * 1024), 64),
-                                 Mem(ir::MemorySpace::Scaling, query_u64("AICoreSpec", "fbuf_size", 7ULL * 1024), 32),
-                                 Mem(ir::MemorySpace::Acc, query_u64("AICoreSpec", "l0_c_size", 128ULL * 1024), 128)});
+        Core aic_core(ir::CoreType::CUBE,
+                      {Mem(ir::MemorySpace::Mat, query_u64("AICoreSpec", "l1_size", 512ULL * 1024), 128),
+                       Mem(ir::MemorySpace::Left, query_u64("AICoreSpec", "l0_a_size", 64ULL * 1024), 64),
+                       Mem(ir::MemorySpace::Right, query_u64("AICoreSpec", "l0_b_size", 64ULL * 1024), 64),
+                       Mem(ir::MemorySpace::Scaling, query_u64("AICoreSpec", "fbuf_size", 7ULL * 1024), 32),
+                       Mem(ir::MemorySpace::Acc, query_u64("AICoreSpec", "l0_c_size", 128ULL * 1024), 128)});
 
         // AIV (VECTOR) core configuration
-        Core aiv_core(
-            ir::CoreType::VECTOR, {Mem(ir::MemorySpace::Vec, query_u64("AICoreSpec", "ub_size", 192ULL * 1024), 128)});
+        Core aiv_core(ir::CoreType::VECTOR,
+                      {Mem(ir::MemorySpace::Vec, query_u64("AICoreSpec", "ub_size", 192ULL * 1024), 128)});
 
         Cluster aic_cluster(aic_core, 1); // 1 core per cluster
         Cluster aiv_cluster(aiv_core, 1); // 1 core per cluster

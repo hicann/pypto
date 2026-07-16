@@ -38,8 +38,8 @@ private:
     bool CheckShapeEquality(const Shape& shape, const std::vector<SymbolicScalar>& dynShape);
     void DisableMainBlock();
 
-    bool GetValidShapeFromCoa(
-        const std::vector<SymbolicScalar>& argList, Shape& shape, std::vector<SymbolicScalar>& dynValidShape);
+    bool GetValidShapeFromCoa(const std::vector<SymbolicScalar>& argList, Shape& shape,
+                              std::vector<SymbolicScalar>& dynValidShape);
 
 private:
     std::vector<SymbolicScalar> mainBlockCondGroup_;

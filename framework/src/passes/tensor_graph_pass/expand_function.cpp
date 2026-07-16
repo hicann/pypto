@@ -38,8 +38,8 @@ namespace npu::tile_fwk {
 
 // 不需要展开的操作码集合
 // 这些操作在展开过程中保持原样，不进行 tile-level 展开
-const std::unordered_set<Opcode> ExpandFunction::kNotNeedExpandOps = {
-    Opcode::OP_VIEW, Opcode::OP_ASSEMBLE, Opcode::OP_NOP, Opcode::OP_ATOMIC_RMW};
+const std::unordered_set<Opcode> ExpandFunction::kNotNeedExpandOps = {Opcode::OP_VIEW, Opcode::OP_ASSEMBLE,
+                                                                      Opcode::OP_NOP, Opcode::OP_ATOMIC_RMW};
 
 Status ExpandFunction::ClearIOOperand(const std::vector<OperationPtr>& tensorOperations) const
 {
@@ -47,9 +47,8 @@ Status ExpandFunction::ClearIOOperand(const std::vector<OperationPtr>& tensorOpe
         // clear consumers and producers
         for (auto& iOperand : op->GetIOperands()) {
             if (iOperand == nullptr) {
-                APASS_LOG_ERROR_F(
-                    Elements::Operation, "Op:%s[%d] input is null.%s", op->GetOpcodeStr().c_str(), op->GetOpMagic(),
-                    GetFormatBacktrace(*op).c_str());
+                APASS_LOG_ERROR_F(Elements::Operation, "Op:%s[%d] input is null.%s", op->GetOpcodeStr().c_str(),
+                                  op->GetOpMagic(), GetFormatBacktrace(*op).c_str());
                 return FAILED;
             }
             iOperand->GetConsumers().clear();
@@ -57,9 +56,8 @@ Status ExpandFunction::ClearIOOperand(const std::vector<OperationPtr>& tensorOpe
         }
         for (auto& oOperand : op->GetOOperands()) {
             if (oOperand == nullptr) {
-                APASS_LOG_ERROR_F(
-                    Elements::Operation, "Op:%s[%d] output is null.%s", op->GetOpcodeStr().c_str(), op->GetOpMagic(),
-                    GetFormatBacktrace(*op).c_str());
+                APASS_LOG_ERROR_F(Elements::Operation, "Op:%s[%d] output is null.%s", op->GetOpcodeStr().c_str(),
+                                  op->GetOpMagic(), GetFormatBacktrace(*op).c_str());
                 return FAILED;
             }
             oOperand->GetConsumers().clear();
@@ -71,7 +69,8 @@ Status ExpandFunction::ClearIOOperand(const std::vector<OperationPtr>& tensorOpe
 
 void ExpandFunction::ProcessForNotExpandOp(Function& function, Operation& op) const
 {
-    auto& newOp = PassOperationUtils::AddOperation(function, op.GetOpcode(), op.GetIOperands(), op.GetOOperands(), nullptr, ir::Span::Unknown(), false);
+    auto& newOp = PassOperationUtils::AddOperation(function, op.GetOpcode(), op.GetIOperands(), op.GetOOperands(),
+                                                   nullptr, ir::Span::Unknown(), false);
     newOp.SetOpAttribute(op.GetOpAttribute());
     newOp.SetScopeInfo(op.GetScopeInfo());
     newOp.SetOooScopeId(op.GetOooScopeId());
@@ -142,9 +141,9 @@ Status ExpandFunction::RunOnFunction(Function& function)
     APASS_LOG_INFO_F(Elements::Function, "Start ExpandFunction function [%s].", function.GetRawName().c_str());
     std::ostringstream oss;
     if (VerifyScopeInfo(function, oss) != SUCCESS) {
-        APASS_LOG_ERROR_C(
-            OperationErr::OP_SCOPE_ERROR, Elements::Function, "Function[%s] ScopeInfo verification failed: %s",
-            function.GetRawName().c_str(), oss.str().c_str());
+        APASS_LOG_ERROR_C(OperationErr::OP_SCOPE_ERROR, Elements::Function,
+                          "Function[%s] ScopeInfo verification failed: %s", function.GetRawName().c_str(),
+                          oss.str().c_str());
         return FAILED;
     }
     bool verifyResult = true;
@@ -155,18 +154,16 @@ Status ExpandFunction::RunOnFunction(Function& function)
         }
     }
     if (!verifyResult) {
-        APASS_LOG_ERROR_F(
-            Elements::Function, "FUnction[%s] ExpandFunction failed: %s", function.GetRawName().c_str(),
-            oss.str().c_str());
+        APASS_LOG_ERROR_F(Elements::Function, "FUnction[%s] ExpandFunction failed: %s", function.GetRawName().c_str(),
+                          oss.str().c_str());
         return FAILED;
     }
     if (Expandfunction(function) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Function, "Function[%s] ExpandFunction failed.", function.GetRawName().c_str());
         return FAILED;
     }
-    APASS_LOG_INFO_F(
-        Elements::Function, "Function[%s] operation size is: %zu after expansion.", function.GetMagicName().c_str(),
-        function.Operations(false).size());
+    APASS_LOG_INFO_F(Elements::Function, "Function[%s] operation size is: %zu after expansion.",
+                     function.GetMagicName().c_str(), function.Operations(false).size());
     function.SortOperations(SortOperationsMode::LIGHTWEIGHT);
     APASS_LOG_INFO_F(Elements::Function, "End ExpandFunction function [%s].", function.GetRawName().c_str());
     return SUCCESS;
@@ -175,7 +172,8 @@ Status ExpandFunction::RunOnFunction(Function& function)
 Status ExpandFunction::Expandfunction(Function& function) const
 {
     if (!function.IsGraphType(GraphType::TENSOR_GRAPH)) {
-        APASS_LOG_INFO_F(Elements::Function, "Function %s is not static tensor graph, skip expanding.", function.GetRawName().c_str());
+        APASS_LOG_INFO_F(Elements::Function, "Function %s is not static tensor graph, skip expanding.",
+                         function.GetRawName().c_str());
         return SUCCESS;
     }
     function.expandFunctionAccelerate = true;
@@ -230,9 +228,8 @@ Status ExpandFunction::Expandfunction(Function& function) const
 Status ExpandFunction::ExpandOperation(Function& function, Operation& op) const
 {
     const auto& info = op.GetScopeInfo();
-    std::vector<int64_t> scopeVec = {
-        static_cast<int64_t>(info.scopeId), static_cast<int64_t>(info.allowParallelMerge),
-        static_cast<int64_t>(info.allowCrossScopeMerge)};
+    std::vector<int64_t> scopeVec = {static_cast<int64_t>(info.scopeId), static_cast<int64_t>(info.allowParallelMerge),
+                                     static_cast<int64_t>(info.allowCrossScopeMerge)};
     config::SetPassOption(SG_SET_SCOPE, scopeVec);
     config::SetPassOption(SG_SET_OOO_SCOPE, std::vector<int64_t>{static_cast<int64_t>(op.GetOooScopeId())});
     ExpandOperationInto(function, op.GetTileShape(), op.GetOpcode(), op.GetIOperands(), op.GetOOperands(), op);

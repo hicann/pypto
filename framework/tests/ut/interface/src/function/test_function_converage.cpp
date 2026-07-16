@@ -290,8 +290,8 @@ TEST_F(FunctionCoverageTest, TestFunctionHash)
 
 TEST_F(FunctionCoverageTest, TestOpValidCheckViewOp)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestOpValidCheckView", "TestOpValidCheckView", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestOpValidCheckView",
+                                                      "TestOpValidCheckView", nullptr);
     ASSERT_NE(currFunctionPtr, nullptr);
 
     std::vector<int64_t> shape = {64, 64};
@@ -329,8 +329,8 @@ TEST_F(FunctionCoverageTest, TestOpValidCheckViewOp)
 
 TEST_F(FunctionCoverageTest, TestOpValidCheckAssembleOp)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestOpValidCheckAssemble", "TestOpValidCheckAssemble", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestOpValidCheckAssemble",
+                                                      "TestOpValidCheckAssemble", nullptr);
     ASSERT_NE(currFunctionPtr, nullptr);
 
     std::vector<int64_t> shape = {64, 64};
@@ -435,7 +435,6 @@ TEST_F(FunctionCoverageTest, TestLightweightSortIdempotent)
 
     EXPECT_EQ(baselineMagics.size(), shuffledMagics.size());
     for (size_t i = 0; i < baselineMagics.size(); i++) {
-        EXPECT_EQ(baselineMagics[i], shuffledMagics[i])
-            << "Topo sort order differs at index " << i;
+        EXPECT_EQ(baselineMagics[i], shuffledMagics[i]) << "Topo sort order differs at index " << i;
     }
 }

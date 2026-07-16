@@ -60,8 +60,8 @@ public:
     {
         return AddRaw<SymbolicScalar, int64_t, SymbolicScalar>(lhs, rhs);
     }
-    static std::vector<SymbolicScalar> Add(
-        const std::vector<SymbolicScalar>& lhs, const std::vector<SymbolicScalar>& rhs)
+    static std::vector<SymbolicScalar> Add(const std::vector<SymbolicScalar>& lhs,
+                                           const std::vector<SymbolicScalar>& rhs)
     {
         return AddRaw<SymbolicScalar, SymbolicScalar, SymbolicScalar>(lhs, rhs);
     }
@@ -69,9 +69,10 @@ public:
     static std::vector<int64_t> Zero(const std::vector<int64_t>& off) { return std::vector<int64_t>(off.size(), 0); }
     static bool IsZero(const std::vector<int64_t>& off) { return Zero(off) == off; }
 
-    static std::pair<std::vector<int64_t>, std::vector<SymbolicScalar>> Add(
-        const std::vector<int64_t>& lhs, const std::vector<SymbolicScalar>& lhsDyn, const std::vector<int64_t>& rhs,
-        const std::vector<SymbolicScalar>& rhsDyn)
+    static std::pair<std::vector<int64_t>, std::vector<SymbolicScalar>> Add(const std::vector<int64_t>& lhs,
+                                                                            const std::vector<SymbolicScalar>& lhsDyn,
+                                                                            const std::vector<int64_t>& rhs,
+                                                                            const std::vector<SymbolicScalar>& rhsDyn)
     {
         FE_ASSERT(FeError::INVALID_VAL, lhs.size() == rhs.size())
             << "lhs.size():" << lhs.size() << ", rhs.size():" << rhs.size();
@@ -106,8 +107,8 @@ public:
         FE_ASSERT(FeError::INVALID_VAL, lhs.size() == rhs.size())
             << "lhs.size():" << lhs.size() << ", rhs.size():" << rhs.size();
         std::vector<SymbolicScalar> result(lhs.size());
-        std::transform(
-            lhs.begin(), lhs.end(), rhs.begin(), result.begin(), [](const SymbolicScalar& a, int b) { return a - b; });
+        std::transform(lhs.begin(), lhs.end(), rhs.begin(), result.begin(),
+                       [](const SymbolicScalar& a, int b) { return a - b; });
         return result;
     }
 

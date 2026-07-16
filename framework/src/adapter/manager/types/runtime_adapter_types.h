@@ -1,5 +1,5 @@
 /**
-* Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
  * Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -54,7 +54,7 @@ const std::string kRuntimeLibName = "libruntime_camodel.so";
 #else
 const std::string kRuntimeLibName = "libruntime.so";
 #endif
-const std::map<RuntimeFunc, std::string> kRuntimeFuncStrMap {
+const std::map<RuntimeFunc, std::string> kRuntimeFuncStrMap{
     {RuntimeFunc::Malloc, "rtMalloc"},
     {RuntimeFunc::Memset, "rtMemset"},
     {RuntimeFunc::MemCopy, "rtMemcpy"},
@@ -83,4 +83,4 @@ const std::map<RuntimeFunc, std::string> kRuntimeFuncStrMap {
     {RuntimeFunc::KernelLaunch, "rtKernelLaunch"},
     {RuntimeFunc::GetExceptionRegInfo, "rtGetExceptionRegInfo"},
 };
-}
+} // namespace npu::tile_fwk

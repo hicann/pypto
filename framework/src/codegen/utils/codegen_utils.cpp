@@ -38,8 +38,8 @@ std::vector<int64_t> NormalizeShape(const std::vector<int64_t>& shapeVec, unsign
     return normalizedVec;
 }
 
-std::vector<int> NormalizeExpandAxes(
-    const std::vector<int64_t>& expandAxes, unsigned originalDimSize, unsigned targetDimSize)
+std::vector<int> NormalizeExpandAxes(const std::vector<int64_t>& expandAxes, unsigned originalDimSize,
+                                     unsigned targetDimSize)
 {
     std::vector<int> normalizedAxesList;
     for (auto axis : expandAxes) {
@@ -84,8 +84,7 @@ std::string FormatScalarLiteral(const Element& scalar)
         return FormatFloat(scalar.Cast<float>(), scalar.GetDataType());
     }
     if (scalar.IsUnsigned() || scalar.IsSigned()) {
-        return std::visit(
-            [](const auto& val) -> std::string { return std::to_string(val); }, scalar.GetVariantData());
+        return std::visit([](const auto& val) -> std::string { return std::to_string(val); }, scalar.GetVariantData());
     }
     return "";
 }
@@ -173,9 +172,8 @@ std::string CopyModeToString(Matrix::CopyMode copyMode)
 int64_t CalcLinearOffset(const std::vector<int64_t>& shape, const std::vector<int64_t>& offset)
 {
     if (shape.empty() || offset.empty() || shape.size() != offset.size()) {
-        CODEGEN_LOGE(
-            GenCodeErr::TENSOR_SHAPE_INVALID, "Invalid Input! shape: %s, offset: %s", IntVecToStr(shape).c_str(),
-            IntVecToStr(offset).c_str());
+        CODEGEN_LOGE(GenCodeErr::TENSOR_SHAPE_INVALID, "Invalid Input! shape: %s, offset: %s",
+                     IntVecToStr(shape).c_str(), IntVecToStr(offset).c_str());
         return 0;
     }
 

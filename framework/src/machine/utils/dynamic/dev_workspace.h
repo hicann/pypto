@@ -46,7 +46,7 @@ public:
         rootFuncMaxCallOpsize_ = devProg_->rootFuncMaxCallOpsize;
         if (stitchCacheAddr_ != 0) {
             (void)memset_s(reinterpret_cast<void*>(stitchCacheAddr_), devProg_->memBudget.metadata.stitchCacheSize, 0,
-                devProg_->memBudget.metadata.stitchCacheSize);
+                           devProg_->memBudget.metadata.stitchCacheSize);
         }
     }
     uint64_t* StitchCacheAddr() const { return reinterpret_cast<uint64_t*>(stitchCacheAddr_); }
@@ -72,9 +72,7 @@ public:
         pool.Init(metadataAllocators_.general, count, category);
     }
 
-    void SwitchWParallelWorkSpace(uint32_t parallelWsId) {
-        curParallelWsId = parallelWsId;
-    }
+    void SwitchWParallelWorkSpace(uint32_t parallelWsId) { curParallelWsId = parallelWsId; }
 
 private:
     struct MemoryInfo {
@@ -104,12 +102,12 @@ public:
     void VerifyStitchedListMemory(DevStartArgs& args, const DevAscendFunctionDupped* stitchedList, size_t size);
 
 private:
-    void AllocateFunctionInnerWorkspace(
-        DevAscendFunctionDupped dup, uint64_t rootInnerMemReq, [[maybe_unused]] WsAllocatorCounter* dfxCounter);
+    void AllocateFunctionInnerWorkspace(DevAscendFunctionDupped dup, uint64_t rootInnerMemReq,
+                                        [[maybe_unused]] WsAllocatorCounter* dfxCounter);
 
     // Helper: allocate outcast workspace for a duplicated root function
-    void AllocateOutcastWorkspaceForDup(
-        DevAscendFunctionDupped devRootDup, [[maybe_unused]] WsAllocatorCounter* pDfxCounter);
+    void AllocateOutcastWorkspaceForDup(DevAscendFunctionDupped devRootDup,
+                                        [[maybe_unused]] WsAllocatorCounter* pDfxCounter);
 
     // Helper: allocate inner workspace for a duplicated root function
     void AllocateInnerWorkspaceForDup(DevAscendFunctionDupped devRootDup, WsAllocatorCounter* pDfxCounter);
@@ -118,9 +116,9 @@ private:
     void AssignIncastAddresses(DevAscendFunctionDupped devRootDup, DeviceExecuteSlot* slotList);
 
     // Helper: assign outcast address descriptors for a duplicated root function
-    void ResolveOutcastAddress(
-        DevAscendFunctionDupped devRootDup, DevAscendFunction* devRootSrc, DeviceExecuteSlot* slotList, size_t outcastIdx,
-        int outputSlotIndex, int assembleSlotIndex, uintdevptr_t outcastBaseAddr, AddressDescriptor& outcastDesc);
+    void ResolveOutcastAddress(DevAscendFunctionDupped devRootDup, DevAscendFunction* devRootSrc,
+                               DeviceExecuteSlot* slotList, size_t outcastIdx, int outputSlotIndex,
+                               int assembleSlotIndex, uintdevptr_t outcastBaseAddr, AddressDescriptor& outcastDesc);
 
     void AssignOutcastAddresses(DevAscendFunctionDupped devRootDup, DeviceExecuteSlot* slotList);
 
@@ -158,9 +156,8 @@ public:
 #if DEBUG_INFINITE_LIFETIME
     WsAllocation DebugDumpTensorAllocate(size_t memReq, WsMemCategory category = WsMemCategory::UNCLASSIFIED)
     {
-        DEV_ASSERT_MSG(
-            WsErr::WORKSPACE_INIT_RESOURCE_ERROR, dumpTensorWsAllocator_.CanAllocate(memReq),
-            "dumpTensorWsAllocator_ cannot allocate requested memory unexpectedly, memReq=%zu", memReq);
+        DEV_ASSERT_MSG(WsErr::WORKSPACE_INIT_RESOURCE_ERROR, dumpTensorWsAllocator_.CanAllocate(memReq),
+                       "dumpTensorWsAllocator_ cannot allocate requested memory unexpectedly, memReq=%zu", memReq);
         WsAllocation allocation = dumpTensorWsAllocator_.Malloc(memReq, category);
         *dumpTensorWsAllocatorCounter_ = dumpTensorWsAllocator_.AllocatedSize();
         return allocation;
@@ -202,14 +199,13 @@ public:
 
     WsAllocation AllocateBoundaryOutcastSlot([[maybe_unused]] const char* rootFuncName = nullptr)
     {
-        return AllocateFromOutcastSlotPool(
-            tensorAllocators_[curParallelWsId].devTaskBoundaryOutcasts, rootFuncName);
+        return AllocateFromOutcastSlotPool(tensorAllocators_[curParallelWsId].devTaskBoundaryOutcasts, rootFuncName);
     }
 
     WsAllocation AllocateInnerTemporalOutcastSlot([[maybe_unused]] const char* rootFuncName = nullptr)
     {
-        return AllocateFromOutcastSlotPool(
-            tensorAllocators_[curParallelWsId].devTaskInnerTemporalOutcasts, rootFuncName);
+        return AllocateFromOutcastSlotPool(tensorAllocators_[curParallelWsId].devTaskInnerTemporalOutcasts,
+                                           rootFuncName);
     }
 
     ItemPoolIter MakeRuntimeOutcastTensor(WsAllocation allocation, RuntimeTensorMemProperty property)
@@ -222,10 +218,7 @@ public:
         return reinterpret_cast<ItemPool<RuntimeOutcastTensor>::ItemBlock*>(&runtimeOutcastTensorPool_.At(0));
     }
 
-    ItemPool<RuntimeOutcastTensor>* GetRuntimeOutcastTensorPool()
-    {
-        return &runtimeOutcastTensorPool_;
-    }
+    ItemPool<RuntimeOutcastTensor>* GetRuntimeOutcastTensorPool() { return &runtimeOutcastTensorPool_; }
 
     RuntimeOutcastTensor& GetRuntimeOutcastTensor(ItemPoolIter iter)
     {
@@ -248,9 +241,8 @@ public:
     {
         DEV_ASSERT(WsErr::WORKSPACE_ITER_INVALID, iter != ITEM_POOL_INVALID_INDEX);
         auto& outcast = runtimeOutcastTensorPool_.At(iter);
-        DEV_ASSERT_MSG(
-            WsErr::WORKSPACE_REFCOUNT_INVALID, outcast.refCnt > 0,
-            "Shouldn't ref a possibly destroyed tensor, iter=%" PRId64, iter);
+        DEV_ASSERT_MSG(WsErr::WORKSPACE_REFCOUNT_INVALID, outcast.refCnt > 0,
+                       "Shouldn't ref a possibly destroyed tensor, iter=%" PRId64, iter);
         outcast.refCnt++;
     }
 
@@ -278,8 +270,8 @@ public:
         RuntimeOutcastTensorRefSafe(src);
     }
 
-    void RuntimeOutcastTensorReplaceAddrWithoutRecycle(
-        ItemPoolIter iter, WsAllocation allocation, RuntimeTensorMemProperty property)
+    void RuntimeOutcastTensorReplaceAddrWithoutRecycle(ItemPoolIter iter, WsAllocation allocation,
+                                                       RuntimeTensorMemProperty property)
     {
         DEV_ASSERT(WsErr::WORKSPACE_ITER_INVALID, iter != ITEM_POOL_INVALID_INDEX);
         auto& outcast = runtimeOutcastTensorPool_.At(iter);
@@ -345,9 +337,8 @@ public:
     template <typename T>
     WsAllocation Allocate(uint64_t count, WsMemCategory category)
     {
-        DEV_ASSERT_MSG(
-            WsErr::WORKSPACE_CATEGORY_INVALID, category == WsMemCategory::VECTOR_STITCHED_LIST,
-            "Unexpected category=%s", GetCategoryName(category));
+        DEV_ASSERT_MSG(WsErr::WORKSPACE_CATEGORY_INVALID, category == WsMemCategory::VECTOR_STITCHED_LIST,
+                       "Unexpected category=%s", GetCategoryName(category));
         uint64_t size = count * sizeof(T);
         return ControlFlowAllocateSlab(devProg_, size, SlabAlloc(size, WsAicpuSlabMemType::VEC_STITCHED_LIST));
     }
@@ -388,8 +379,7 @@ private:
 
     uint32_t WrapOffsetListSlabMemObjSize();
 
-    uint32_t (
-        DeviceWorkspaceAllocator::* slabMemObjSizeFunc[ToUnderlying(WsAicpuSlabMemType::SLAB_MEM_TYPE_BUTT)])() = {
+    uint32_t (DeviceWorkspaceAllocator::*slabMemObjSizeFunc[ToUnderlying(WsAicpuSlabMemType::SLAB_MEM_TYPE_BUTT)])() = {
         &DeviceWorkspaceAllocator::DevFunctionDuppedSlabMemObjSize,
         &DeviceWorkspaceAllocator::DynFuncDataSlabMemObjSize,
         &DeviceWorkspaceAllocator::VecStitchListSLabMemObjSize,
@@ -419,16 +409,15 @@ private:
     bool DeviceTaskMemTryRecycle();
 
 private:
-    WsAllocation AllocateFromOutcastSlotPool(
-        WsSlotAllocator& pool, [[maybe_unused]] const char* rootFuncName = nullptr)
+    WsAllocation AllocateFromOutcastSlotPool(WsSlotAllocator& pool, [[maybe_unused]] const char* rootFuncName = nullptr)
     {
         WsAllocation allocation;
 #if !DEBUG_INFINITE_LIFETIME
         allocation = pool.Allocate();
         allocation.parallelWsId = curParallelWsId;
 #else
-        allocation = DebugDumpTensorAllocate(
-            devProg_->memBudget.tensor.MaxOutcastMem(), WsMemCategory::TENSOR_ROOTFUNC_OUTCAST_SLOT);
+        allocation = DebugDumpTensorAllocate(devProg_->memBudget.tensor.MaxOutcastMem(),
+                                             WsMemCategory::TENSOR_ROOTFUNC_OUTCAST_SLOT);
 #endif
 #if DEBUG_MEM_DUMP_LEVEL >= DEBUG_MEM_DUMP_FULL
         wsMemDelayedDumper_.LogTensorMalloc(rootFuncName == nullptr ? "unspecified_root" : rootFuncName, allocation);

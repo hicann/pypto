@@ -43,8 +43,8 @@ void TestTransposeDataMoveBody(int dim = 3)
         dynValidShape = {2, 2, 2, 8};
     }
     auto function = GenMockFuncDyn("TestCodegenDynTransposeDataMove_dim" + std::to_string(dim), shape);
-    auto ddrTensor =
-        CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_DEVICE_DDR, shape, "TransposeDataMove"});
+    auto ddrTensor = CreateLogicalTensor(
+        {*function, DataType::DT_FP32, MemoryType::MEM_DEVICE_DDR, shape, "TransposeDataMove"});
     auto localTensor = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
 
     auto& op = function->AddOperation(Opcode::OP_TRANSPOSE_MOVEOUT, {localTensor}, {ddrTensor});
@@ -89,8 +89,8 @@ TEST_F(TestCodegenLayoutTransposeDataMove, TransposeDataMoveLayout)
             output = Transpose(input, {dim0, dim1});
         }
     }
-    auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX +
+                                                                HIDDEN_FUNC_SUFFIX);
     (void)GenCodeByFunction(*function);
 }
 

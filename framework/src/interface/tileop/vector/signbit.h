@@ -61,12 +61,12 @@ TILEOP void TSignbit(T0 dst, T1 src, T2 tmp)
     constexpr auto tmpTileW32Bit = (srcTileW + ALIGN32FLOAT - 1) / ALIGN32FLOAT * ALIGN32FLOAT;
 
     using DstTile = pto::Tile<pto::TileType::Vec, uint8_t, dstTileH, dstTileW, pto::BLayout::RowMajor, -1, -1>;
-    using SrcTile =
-        pto::Tile<pto::TileType::Vec, typename T1::Type, srcTileH, srcTileW, pto::BLayout::RowMajor, -1, -1>;
-    using SrcUint32Tile =
-        pto::Tile<pto::TileType::Vec, uint32_t, srcTileH, tmpTileW32Bit, pto::BLayout::RowMajor, -1, -1>;
-    using SrcInt32Tile =
-        pto::Tile<pto::TileType::Vec, int32_t, srcTileH, tmpTileW32Bit, pto::BLayout::RowMajor, -1, -1>;
+    using SrcTile = pto::Tile<pto::TileType::Vec, typename T1::Type, srcTileH, srcTileW, pto::BLayout::RowMajor, -1,
+                              -1>;
+    using SrcUint32Tile = pto::Tile<pto::TileType::Vec, uint32_t, srcTileH, tmpTileW32Bit, pto::BLayout::RowMajor, -1,
+                                    -1>;
+    using SrcInt32Tile = pto::Tile<pto::TileType::Vec, int32_t, srcTileH, tmpTileW32Bit, pto::BLayout::RowMajor, -1,
+                                   -1>;
     using SrcUint16Tile = pto::Tile<pto::TileType::Vec, uint16_t, srcTileH, tmpTileW, pto::BLayout::RowMajor, -1, -1>;
     using SrcInt16Tile = pto::Tile<pto::TileType::Vec, int16_t, srcTileH, tmpTileW, pto::BLayout::RowMajor, -1, -1>;
     using SrcUint8Tile = pto::Tile<pto::TileType::Vec, uint8_t, srcTileH, dstTileW, pto::BLayout::RowMajor, -1, -1>;
@@ -102,14 +102,14 @@ TILEOP void TSignbit(T0 dst, T1 src, T2 tmp)
                 pto::TASSIGN(srcTile, (uint64_t)(src.GetAddr() + srcOffset * srcTypeSize));
 
                 if constexpr (std::is_same<typename T1::Type, uint8_t>::value) {
-                    using DstUint16Tile =
-                        pto::Tile<pto::TileType::Vec, uint16_t, srcTileH, srcTileW / 2, pto::BLayout::RowMajor, -1, -1>;
+                    using DstUint16Tile = pto::Tile<pto::TileType::Vec, uint16_t, srcTileH, srcTileW / 2,
+                                                    pto::BLayout::RowMajor, -1, -1>;
                     DstUint16Tile dstUint16Tile(dstShape3, dstShape4);
                     pto::TASSIGN(dstUint16Tile, (uint64_t)(dst.GetAddr() + dstOffset * dstTypeSize));
                     pto::TEXPANDS(dstUint16Tile, static_cast<uint16_t>(zero));
                     continue;
-                } else if constexpr (
-                    std::is_same<typename T1::Type, float>::value || std::is_same<typename T1::Type, int32_t>::value) {
+                } else if constexpr (std::is_same<typename T1::Type, float>::value ||
+                                     std::is_same<typename T1::Type, int32_t>::value) {
                     pto::TASSIGN(srcUint32Tile, (uint64_t)(src.GetAddr() + srcOffset * srcTypeSize));
                     pto::TASSIGN(srcInt32Tile, (uint64_t)(src.GetAddr() + srcOffset * srcTypeSize));
                     pto::TSHRS(srcUint32Tile, srcUint32Tile, static_cast<uint16_t>(shiftAmountUint32));
@@ -117,14 +117,13 @@ TILEOP void TSignbit(T0 dst, T1 src, T2 tmp)
                     pipe_barrier(PIPE_V);
 #endif
                     pto::TCVT(tempInt16Tile, srcInt32Tile, pto::RoundMode::CAST_NONE);
-                } else if constexpr (
-                    std::is_same<typename T1::Type, half>::value ||
-                    std::is_same<typename T1::Type, bfloat16_t>::value ||
-                    std::is_same<typename T1::Type, int16_t>::value) {
+                } else if constexpr (std::is_same<typename T1::Type, half>::value ||
+                                     std::is_same<typename T1::Type, bfloat16_t>::value ||
+                                     std::is_same<typename T1::Type, int16_t>::value) {
                     pto::TASSIGN(srcUint16Tile, (uint64_t)(src.GetAddr() + srcOffset * srcTypeSize));
                     pto::TSHRS(tempUint16Tile, srcUint16Tile, shiftAmountUint16);
-                } else if constexpr (
-                    std::is_same<typename T1::Type, int8_t>::value || std::is_same<typename T1::Type, bool>::value) {
+                } else if constexpr (std::is_same<typename T1::Type, int8_t>::value ||
+                                     std::is_same<typename T1::Type, bool>::value) {
                     pto::TASSIGN(srcInt8Tile, (uint64_t)(src.GetAddr() + srcOffset * srcTypeSize));
                     pto::TCVT(tempFp16Tile, srcInt8Tile, pto::RoundMode::CAST_NONE);
 #ifdef __DAV_V220

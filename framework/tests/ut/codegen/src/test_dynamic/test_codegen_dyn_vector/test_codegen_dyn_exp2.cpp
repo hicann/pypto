@@ -40,8 +40,8 @@ public:
 TEST_F(TestCodegenDynExp2, TestDynOpExp2)
 {
     std::vector<int64_t> shape = {64, 64};
-    auto function =
-        GenMockFuncDynUnary("TestDynOpExp2", {shape}, [](Tensor& input, Tensor& output) { output = Exp2(input); });
+    auto function = GenMockFuncDynUnary("TestDynOpExp2", {shape},
+                                        [](Tensor& input, Tensor& output) { output = Exp2(input); });
     std::string res = GenCodeByFunction(*function);
     std::string expect = R"!!!(TExp2(ubTensor_0, ubTensor_3, ubTensor_4, ubTensor_0);)!!!";
     CheckStringExist(expect, res);

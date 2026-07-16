@@ -76,20 +76,18 @@ json BuildSyncEventsJson(const TaskStat& taskStat, const uint8_t* perfDataPtr)
         }
     }
 
-    std::sort(syncEventsArr.begin(), syncEventsArr.end(), [](const json& a, const json &b) {
-        return a.value("time", 0) < b.value("time", 0);
-    });
+    std::sort(syncEventsArr.begin(), syncEventsArr.end(),
+              [](const json& a, const json& b) { return a.value("time", 0) < b.value("time", 0); });
     return syncEventsArr;
 }
 
-void ConstructTaskInfo(
-    const uint32_t& index, json& rootTaskStats, const std::vector<void*>& perfData, const std::string& coreType)
+void ConstructTaskInfo(const uint32_t& index, json& rootTaskStats, const std::vector<void*>& perfData,
+                       const std::string& coreType)
 {
     void* devPtr = perfData[index];
     size_t dataSize = PERF_DATA_TOTAL_SIZE;
     std::vector<uint8_t> hostBuffer(dataSize);
-    auto ret = NormalizedRtMemcpy(
-        hostBuffer.data(), dataSize, devPtr, dataSize, RtMemcpyKind::DEVICE_TO_HOST);
+    auto ret = NormalizedRtMemcpy(hostBuffer.data(), dataSize, devPtr, dataSize, RtMemcpyKind::DEVICE_TO_HOST);
     if (ret != 0) {
         MACHINE_LOGW("task perf D2H copy failed ret: %d, index: %u", ret, index);
     }
@@ -126,8 +124,8 @@ void ConstructTaskInfo(
         rootTaskStats.push_back(coreObj);
     }
     aicpuMetric->taskCount = 0;
-    ret = NormalizedRtMemcpy(
-        perfData[index], sizeof(Metrics), aicpuMetric, sizeof(Metrics), RtMemcpyKind::HOST_TO_DEVICE);
+    ret = NormalizedRtMemcpy(perfData[index], sizeof(Metrics), aicpuMetric, sizeof(Metrics),
+                             RtMemcpyKind::HOST_TO_DEVICE);
     if (ret != 0) {
         MACHINE_LOGW("task perf H2D copy failed ret: %d, index: %u", ret, index);
     }
@@ -156,8 +154,8 @@ void DumpAicoreTaskExectInfo(const DeviceArgs& args, const std::vector<void*>& p
     std::string program_json_path = npu::tile_fwk::config::LogTopFolder() + "/program.json";
     std::string mix_event_path = npu::tile_fwk::config::GetAbsoluteTopFolder() + "/mix_event_info.json";
     std::string draw_swim_lane_py_path = GetPyptoLibPath() + "/scripts/draw_swim_lane.py";
-    npu::tile_fwk::config::SetRunDataOption(
-        KEY_SWIM_GRAPH_PATH, npu::tile_fwk::config::GetAbsoluteTopFolder() + "/merged_swimlane.json");
+    npu::tile_fwk::config::SetRunDataOption(KEY_SWIM_GRAPH_PATH,
+                                            npu::tile_fwk::config::GetAbsoluteTopFolder() + "/merged_swimlane.json");
     uint64_t freq = (args.archInfo == ArchInfo::DAV_2201) ? FREQ_DAV_2201 : FREQ_DAV_3510;
 
     if (IsPathExist(program_json_path) && IsPathExist(topo_txt_path)) {
@@ -179,8 +177,8 @@ void DumpAicoreTaskExectInfo(const DeviceArgs& args, const std::vector<void*>& p
     }
 }
 
-inline void DevTaskPerfFormat(
-    uint32_t tid, uint32_t type, json& devTaskJson, const MetricPerf* aicpuPer, const uint32_t& turnIdx)
+inline void DevTaskPerfFormat(uint32_t tid, uint32_t type, json& devTaskJson, const MetricPerf* aicpuPer,
+                              const uint32_t& turnIdx)
 {
     json per_dev_task;
     uint32_t idx = DEVTASK_PERF_ARRY_INDEX(type);
@@ -242,9 +240,8 @@ inline void ConstructAicorePerfInfo(json& tasksArr, Metrics* aicoreMetric, const
     }
 }
 
-inline void DumpAicoreDevTask(
-    DeviceArgs& args, json& aicpuPrefArray, const std::vector<void*>& perfData, const uint32_t& freq,
-    const uint32_t& turnNum)
+inline void DumpAicoreDevTask(DeviceArgs& args, json& aicpuPrefArray, const std::vector<void*>& perfData,
+                              const uint32_t& freq, const uint32_t& turnNum)
 {
     std::vector<int> coreArray;
     coreArray.resize(args.GetBlockNum());
@@ -256,8 +253,7 @@ inline void DumpAicoreDevTask(
         void* devPtr = perfData[i];
         size_t dataSize = PERF_DATA_TOTAL_SIZE;
         std::vector<uint8_t> hostBuffer(dataSize);
-        auto ret = NormalizedRtMemcpy(
-            hostBuffer.data(), dataSize, devPtr, dataSize, RtMemcpyKind::DEVICE_TO_HOST);
+        auto ret = NormalizedRtMemcpy(hostBuffer.data(), dataSize, devPtr, dataSize, RtMemcpyKind::DEVICE_TO_HOST);
         if (ret != 0) {
             MACHINE_LOGW("aicore perf D2H copy failed ret: %d, block: %u", ret, i);
         }
@@ -283,17 +279,16 @@ inline std::unique_ptr<MetricPerf> GetAicpuPrefAddr(const DeviceArgs& args, cons
         return aicpuMetric;
     }
 
-    auto ret = NormalizedRtMemcpy(
-        PtrToPtr<MetricPerf, void>(aicpuMetric.get()), sizeof(MetricPerf), aicpuPer, sizeof(MetricPerf),
-        RtMemcpyKind::DEVICE_TO_HOST);
+    auto ret = NormalizedRtMemcpy(PtrToPtr<MetricPerf, void>(aicpuMetric.get()), sizeof(MetricPerf), aicpuPer,
+                                  sizeof(MetricPerf), RtMemcpyKind::DEVICE_TO_HOST);
     if (ret != 0) {
         MACHINE_LOGW("aicpu meter copy failed ret: %d", ret);
     }
     return aicpuMetric;
 }
 
-inline void DumpAicpuDevTask(
-    const DeviceArgs& args, json& aicpuPrefArray, const uint32_t& freq, const uint32_t& turnNum)
+inline void DumpAicpuDevTask(const DeviceArgs& args, json& aicpuPrefArray, const uint32_t& freq,
+                             const uint32_t& turnNum)
 {
     for (uint32_t i = 0; i < args.nrAicpu - 1; i++) {
         json aicpu;
@@ -334,8 +329,7 @@ void DumpAicpuPerfInfo(DeviceArgs& args, const std::vector<void*>& perfData, uin
     void* devPtr = perfData[0];
     size_t dataSize = PERF_DATA_TOTAL_SIZE;
     std::vector<uint8_t> hostBuffer(dataSize);
-    auto memcpyRet = NormalizedRtMemcpy(
-        hostBuffer.data(), dataSize, devPtr, dataSize, RtMemcpyKind::DEVICE_TO_HOST);
+    auto memcpyRet = NormalizedRtMemcpy(hostBuffer.data(), dataSize, devPtr, dataSize, RtMemcpyKind::DEVICE_TO_HOST);
     if (memcpyRet != 0) {
         MACHINE_LOGW("aicpu perf header D2H copy failed ret: %d", memcpyRet);
     }
@@ -352,8 +346,8 @@ void DumpAicpuPerfInfo(DeviceArgs& args, const std::vector<void*>& perfData, uin
     DumpAicpuDevTask(args, aicpuPrefArray, freq, sumRoundNum);
     DumpAicoreDevTask(args, aicpuPrefArray, perfData, freq, sumRoundNum);
 
-    std::string aicpuPerfilePath =
-        config::LogTopFolder() + "/machine_trace_perf_data_" + std::to_string(g_last_round_num) + ".json";
+    std::string aicpuPerfilePath = config::LogTopFolder() + "/machine_trace_perf_data_" +
+                                   std::to_string(g_last_round_num) + ".json";
     if (!SaveFile(aicpuPerfilePath, aicpuPrefArray.dump(DUMP_LEVEL_FOUR))) {
         MACHINE_LOGW("Contrust custom op json failed");
         return;
@@ -374,8 +368,8 @@ void DumpAicpuPerfInfo(DeviceArgs& args, const std::vector<void*>& perfData, uin
         MACHINE_LOGW("Failed to execute machine_perf_trace.py, cannot get aicpu perfetto.json.");
     }
     g_last_round_num = sumRoundNum;
-    npu::tile_fwk::config::SetRunDataOption(
-        KEY_AICPU_PERF_GRAPH_PATH, npu::tile_fwk::config::GetAbsoluteTopFolder() + "/machine_runtime_operator_trace_" +
-                                       std::to_string(g_last_round_num) + ".json");
+    npu::tile_fwk::config::SetRunDataOption(KEY_AICPU_PERF_GRAPH_PATH, npu::tile_fwk::config::GetAbsoluteTopFolder() +
+                                                                           "/machine_runtime_operator_trace_" +
+                                                                           std::to_string(g_last_round_num) + ".json");
 }
 } // namespace npu::tile_fwk::dynamic

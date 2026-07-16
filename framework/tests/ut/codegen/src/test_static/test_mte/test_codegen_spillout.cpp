@@ -50,9 +50,8 @@ TEST_F(TestCodegenSpillOut, UBSpillOut)
     auto function = GenMockFuncStatic("UBSpillOut");
     std::vector<int64_t> shape = {64, 64};
     const std::vector<SymbolicScalar> dynValidShape = {64, 64};
-    auto ddrTensor = CreateLogicalTensor(
-        {*function, DataType::DT_FP32, MemoryType::MEM_DEVICE_DDR, shape, "UBSpillOut", SYMBOL_STACK_BASE,
-         dynValidShape});
+    auto ddrTensor = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_DEVICE_DDR, shape, "UBSpillOut",
+                                          SYMBOL_STACK_BASE, dynValidShape});
     int64_t baseOffset{0};
     ddrTensor->SetAttr(OpAttributeKey::workspaceBaseOffset, baseOffset);
     auto ubTensor = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape});
@@ -76,9 +75,8 @@ TEST_F(TestCodegenSpillOut, UBSpillOutTileTensor)
     auto function = GenMockFuncStatic("UBSpillOutTileTensor");
     std::vector<int64_t> shape = {64, 64};
     const std::vector<SymbolicScalar> dynValidShape = {64, 64};
-    auto ddrTensor = CreateLogicalTensor(
-        {*function, DataType::DT_FP32, MemoryType::MEM_DEVICE_DDR, shape, "UBSpillOutTileTensor", SYMBOL_STACK_BASE,
-         dynValidShape});
+    auto ddrTensor = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_DEVICE_DDR, shape,
+                                          "UBSpillOutTileTensor", SYMBOL_STACK_BASE, dynValidShape});
     int64_t baseOffset{16};
     ddrTensor->SetAttr(OpAttributeKey::workspaceBaseOffset, baseOffset);
     auto ubTensor = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape});
@@ -110,9 +108,8 @@ TEST_F(TestCodegenSpillOut, L1SpillOut)
     auto function = GenMockFuncStatic("L1SpillOut");
     std::vector<int64_t> shape = {64, 64};
     const std::vector<SymbolicScalar> dynValidShape = {64, 64};
-    auto ddrTensor = CreateLogicalTensor(
-        {*function, DataType::DT_FP32, MemoryType::MEM_DEVICE_DDR, shape, "L1SpillOut", SYMBOL_STACK_BASE,
-         dynValidShape});
+    auto ddrTensor = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_DEVICE_DDR, shape, "L1SpillOut",
+                                          SYMBOL_STACK_BASE, dynValidShape});
     int64_t baseOffset{0};
     ddrTensor->SetAttr(OpAttributeKey::workspaceBaseOffset, baseOffset);
     auto l1Tensor = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_L1, shape, dynValidShape});

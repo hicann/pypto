@@ -31,15 +31,13 @@ struct Evaluator : npu::tile_fwk::SymbolicClosure {
     const std::vector<DeviceTensorData>* inputs{nullptr};
     const std::vector<DeviceTensorData>* outputs{nullptr};
 
-    Evaluator(
-        std::unordered_map<std::string, ScalarImmediateType>& symbolDictArg,
-        const std::vector<DeviceTensorData>* inputsArg,
-        const std::vector<DeviceTensorData>* outputsArg)
+    Evaluator(std::unordered_map<std::string, ScalarImmediateType>& symbolDictArg,
+              const std::vector<DeviceTensorData>* inputsArg, const std::vector<DeviceTensorData>* outputsArg)
     {
         ASSERT(DevCommonErr::PARAM_CHECK_FAILED, inputsArg != nullptr && outputsArg != nullptr);
         inputs = inputsArg;
         outputs = outputsArg;
-        symbolValueDict = std::shared_ptr<SymbolValueDictType>(&symbolDictArg, [](SymbolValueDictType*){});
+        symbolValueDict = std::shared_ptr<SymbolValueDictType>(&symbolDictArg, [](SymbolValueDictType*) {});
     }
 
 private:
@@ -52,7 +50,8 @@ private:
         return (*outputs)[outIdx].GetShape()[static_cast<size_t>(dim)];
     }
 
-    ScalarImmediateType GetViewValidShapeDim(ScalarImmediateType validshape, ScalarImmediateType viewoffset, ScalarImmediateType viewshape) const
+    ScalarImmediateType GetViewValidShapeDim(ScalarImmediateType validshape, ScalarImmediateType viewoffset,
+                                             ScalarImmediateType viewshape) const
     {
         validshape -= viewoffset;
         if (validshape > viewshape)
@@ -93,8 +92,8 @@ public:
 
     Function* GetFunction() const { return func_.get(); }
 
-    uint64_t GetWorkSpaceSize(
-        const std::vector<DeviceTensorData>& inputs, const std::vector<DeviceTensorData>& outputs) const
+    uint64_t GetWorkSpaceSize(const std::vector<DeviceTensorData>& inputs,
+                              const std::vector<DeviceTensorData>& outputs) const
     {
         auto dynAttr = func_->GetDyndevAttribute();
         std::vector<uint8_t>& devProgData = dynAttr->devProgBinary;
@@ -112,16 +111,17 @@ private:
     std::shared_ptr<Function> func_;
 };
 
-int ExportedOperatorDeviceLaunchOnceWithDeviceTensorData(
-    ExportedOperator* op, const std::vector<DeviceTensorData>& inputList,
-    const std::vector<DeviceTensorData>& outputList,
-    DeviceStream aicoreStream, bool streamSynchronize, uint8_t* devCtrlCache = nullptr,
-    const DeviceLauncherConfig& config = DeviceLauncherConfig());
+int ExportedOperatorDeviceLaunchOnceWithDeviceTensorData(ExportedOperator* op,
+                                                         const std::vector<DeviceTensorData>& inputList,
+                                                         const std::vector<DeviceTensorData>& outputList,
+                                                         DeviceStream aicoreStream, bool streamSynchronize,
+                                                         uint8_t* devCtrlCache = nullptr,
+                                                         const DeviceLauncherConfig& config = DeviceLauncherConfig());
 
 int DeviceSynchronize(DeviceStream aicpuStream);
 
-int DeviceRunOnce(
-    Function* function, uint8_t* hostCtrlCache = nullptr, const DeviceLauncherConfig& config = DeviceLauncherConfig());
+int DeviceRunOnce(Function* function, uint8_t* hostCtrlCache = nullptr,
+                  const DeviceLauncherConfig& config = DeviceLauncherConfig());
 
 int HasInplaceArgs(Function* function);
 

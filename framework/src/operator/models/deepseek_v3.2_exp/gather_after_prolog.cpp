@@ -19,9 +19,9 @@ using namespace npu::tile_fwk;
 
 namespace npu::tile_fwk {
 
-void GatherAfterPrologCompute(
-    Tensor& topKIndcies, Tensor& kNopeCache, Tensor& kRopeCache, Tensor& blockTable, Tensor& actSeqs, Tensor& gatherRes,
-    const DSIASimpleParams& params, SymbolicScalar b, SymbolicScalar s1)
+void GatherAfterPrologCompute(Tensor& topKIndcies, Tensor& kNopeCache, Tensor& kRopeCache, Tensor& blockTable,
+                              Tensor& actSeqs, Tensor& gatherRes, const DSIASimpleParams& params, SymbolicScalar b,
+                              SymbolicScalar s1)
 {
     int dN = kNopeCache.GetShape()[kNopeCache.GetShape().size() - 1];
     int dR = kRopeCache.GetShape()[kRopeCache.GetShape().size() - 1];
@@ -39,8 +39,8 @@ void GatherAfterPrologCompute(
             {
                 config::SetSemanticLabel("gather0");
                 SymbolicScalar curKvSeq = GetTensorData(actSeqs, {bIdx});
-                SymbolicScalar topkLoop = std::min(
-                    std::max(curKvSeq - s1 + 1 + s1Idx, 0), topk); // for MTP s1!= 1 casual计算, 并且与topk取min
+                SymbolicScalar topkLoop = std::min(std::max(curKvSeq - s1 + 1 + s1Idx, 0),
+                                                   topk); // for MTP s1!= 1 casual计算, 并且与topk取min
                 LOOP("loop_k_gather", FunctionType::DYNAMIC_LOOP, topKIdx, LoopRange(0, topkLoop, 1), unrollList)
                 {
                     SymbolicScalar topkIndex;

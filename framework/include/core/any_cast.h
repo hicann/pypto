@@ -71,8 +71,8 @@ inline std::string DemangleTypeName(const char* mangledName)
  * \param context Optional context string for error messages
  * \throws TypeError with detailed type information
  */
-[[noreturn]] inline void ThrowAnyCastError(
-    const char* expectedTypeName, const char* actualTypeName, const std::string& context)
+[[noreturn]] inline void ThrowAnyCastError(const char* expectedTypeName, const char* actualTypeName,
+                                           const std::string& context)
 {
     std::string expectedType = DemangleTypeName(expectedTypeName);
     std::string actualType = DemangleTypeName(actualTypeName);

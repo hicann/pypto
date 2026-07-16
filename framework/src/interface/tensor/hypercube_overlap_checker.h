@@ -34,12 +34,12 @@ template <typename T>
 class HypercubeOverlapCheckerBlock {
 public:
     void Insert(const std::vector<int>& hypercube, T value);
-    std::vector<T> Find(
-        const std::vector<int>& hypercube, int64_t* overlapSumPtr = nullptr); // [x_min, x_max, y_min, y_max, ...]
+    std::vector<T> Find(const std::vector<int>& hypercube,
+                        int64_t* overlapSumPtr = nullptr); // [x_min, x_max, y_min, y_max, ...]
     std::vector<T> FindWithGuaranteeNoRedundant(const std::vector<int>& hypercube);
     void Erase(const std::vector<int>& hypercube, T value);
-    void Shape2Keys(
-        const std::vector<int>& hypercube, std::vector<uint64_t>& result, int dimIdx = 0, uint64_t currValue = 0);
+    void Shape2Keys(const std::vector<int>& hypercube, std::vector<uint64_t>& result, int dimIdx = 0,
+                    uint64_t currValue = 0);
     bool NoOverlap(const std::vector<int>& hypercube1, const std::vector<int>& hypercube2);
     bool SamePairVal(const std::pair<std::vector<int>, T>& pairVal1, const std::pair<std::vector<int>, T>& pairVal2);
     void Clear();
@@ -61,8 +61,8 @@ void HypercubeOverlapCheckerBlock<T>::Clear()
 
 // 判断两个（hypercube, value）中是否为同一个value
 template <typename T>
-bool HypercubeOverlapCheckerBlock<T>::SamePairVal(
-    const std::pair<std::vector<int>, T>& pairVal1, const std::pair<std::vector<int>, T>& pairVal2)
+bool HypercubeOverlapCheckerBlock<T>::SamePairVal(const std::pair<std::vector<int>, T>& pairVal1,
+                                                  const std::pair<std::vector<int>, T>& pairVal2)
 {
     if (pairVal1.second != pairVal2.second) {
         return false;
@@ -110,8 +110,8 @@ int HypercubeOverlapCheckerBlock<T>::CalOverlap(const std::vector<int>& hypercub
 
 // 将hypercube转换成一个或多个哈希值
 template <typename T>
-void HypercubeOverlapCheckerBlock<T>::Shape2Keys(
-    const std::vector<int>& hypercube, std::vector<uint64_t>& result, int dimIdx, uint64_t currValue) NO_UBSAN
+void HypercubeOverlapCheckerBlock<T>::Shape2Keys(const std::vector<int>& hypercube, std::vector<uint64_t>& result,
+                                                 int dimIdx, uint64_t currValue) NO_UBSAN
 {
     if ((dimIdx * elementOfDim + 1) >= static_cast<int>(hypercube.size())) {
         result.push_back(currValue);
@@ -139,9 +139,8 @@ void HypercubeOverlapCheckerBlock<T>::Erase(const std::vector<int>& hypercube, T
     Shape2Keys(hypercube, keys);
     std::pair<std::vector<int>, T> pairVal{hypercube, value};
     for (auto key : keys) {
-        auto newEnd = std::remove_if(
-            hashBucket_[key].begin(), hashBucket_[key].end(),
-            [this, &pairVal](auto& pairVal2) { return SamePairVal(pairVal, pairVal2); });
+        auto newEnd = std::remove_if(hashBucket_[key].begin(), hashBucket_[key].end(),
+                                     [this, &pairVal](auto& pairVal2) { return SamePairVal(pairVal, pairVal2); });
         hashBucket_[key].erase(newEnd, hashBucket_[key].end());
     }
     container_.erase(value);
@@ -187,8 +186,8 @@ template <typename T>
 class HypercubeOverlapChecker {
 public:
     bool Insert(const std::vector<int>& hypercube, T value);
-    std::vector<T> Find(
-        const std::vector<int>& hypercube, int64_t* overlapSumPtr = nullptr); // [x_min, x_max, y_min, y_max, ...]
+    std::vector<T> Find(const std::vector<int>& hypercube,
+                        int64_t* overlapSumPtr = nullptr); // [x_min, x_max, y_min, y_max, ...]
     bool Erase(const std::vector<int>& hypercube, T value);
     void Clear();
     std::vector<int> Hypercube2Shape(const std::vector<int>& hypercube);

@@ -101,36 +101,33 @@ TILEOP void BinaryBrcDispatch(T0 dst, T1 src0, T2 src1)
     }
 }
 
-template <
-    BrcMode brcmode, typename Src0Tensor, typename Src1Tensor, typename Src0TileInfo, typename Src1TileInfo,
-    int... BrcOperands, typename T1, typename T2>
+template <BrcMode brcmode, typename Src0Tensor, typename Src1Tensor, typename Src0TileInfo, typename Src1TileInfo,
+          int... BrcOperands, typename T1, typename T2>
 TILEOP void A5Expand1DimBrcWSrc(T1 src0, T2 src1, uint64_t src0Addr, uint64_t src1Addr)
 {
     constexpr bool src0NeedExpand = brcmode == BrcMode::BRC_W &&
                                     GetBrcOperandAt<DIM_5TH, BrcOperands...>() == BRC_LEFT &&
-                                    Std::tuple_size<typename Src0Tensor::Shape>::value == 1 &&
-                                    Src0TileInfo::tileW != 1;
+                                    Std::tuple_size<typename Src0Tensor::Shape>::value == 1 && Src0TileInfo::tileW != 1;
     constexpr bool src1NeedExpand = brcmode == BrcMode::BRC_W &&
                                     GetBrcOperandAt<DIM_5TH, BrcOperands...>() == BRC_RIGHT &&
-                                    Std::tuple_size<typename Src1Tensor::Shape>::value == 1 &&
-                                    Src1TileInfo::tileW != 1;
+                                    Std::tuple_size<typename Src1Tensor::Shape>::value == 1 && Src1TileInfo::tileW != 1;
     if constexpr (src0NeedExpand) {
-        using FillDst = pto::Tile<pto::TileType::Vec, typename T1::DType, T1::Rows, T1::Cols,
-                                  pto::BLayout::RowMajor, T1::Rows, T1::Cols>;
+        using FillDst = pto::Tile<pto::TileType::Vec, typename T1::DType, T1::Rows, T1::Cols, pto::BLayout::RowMajor,
+                                  T1::Rows, T1::Cols>;
         FillDst fillDst;
         pto::TASSIGN(fillDst, src0Addr);
         pto::TROWEXPAND(fillDst, src0);
     } else if constexpr (src1NeedExpand) {
-        using FillDst = pto::Tile<pto::TileType::Vec, typename T2::DType, T2::Rows, T2::Cols,
-                                  pto::BLayout::RowMajor, T2::Rows, T2::Cols>;
+        using FillDst = pto::Tile<pto::TileType::Vec, typename T2::DType, T2::Rows, T2::Cols, pto::BLayout::RowMajor,
+                                  T2::Rows, T2::Cols>;
         FillDst fillDst;
         pto::TASSIGN(fillDst, src1Addr);
         pto::TROWEXPAND(fillDst, src1);
     }
 }
 
-template <
-    BinaryOp op, auto PrecisionType = 0, typename LastUse, int ...BrcOperands, typename T0, typename T1, typename T2>
+template <BinaryOp op, auto PrecisionType = 0, typename LastUse, int... BrcOperands, typename T0, typename T1,
+          typename T2>
 TILEOP void BinaryCompute(T0 dst, T1 src0, T2 src1)
 {
     const auto dstLayout = dst.GetLayout();
@@ -146,8 +143,7 @@ TILEOP void BinaryCompute(T0 dst, T1 src0, T2 src1)
     if constexpr (brcmode == BrcMode::BRC_HW) {
         BinaryMixBrcCompute<op, PrecisionType, Src0TileInfo, Src1TileInfo, LastUse, BrcOperands...>(dst, src0, src1);
         return;
-    } else if constexpr (TileOp::IsConstContinous<T0, T1, T2>() == true &&
-                         !TileOp::HasBrcOperand<BrcOperands...>()) {
+    } else if constexpr (TileOp::IsConstContinous<T0, T1, T2>() == true && !TileOp::HasBrcOperand<BrcOperands...>()) {
         auto dstTile = PtoTile<T0, pto::BLayout::RowMajor, true>().Data();
         using Src0PtoTile = typename std::conditional<
             (Src0TileInfo::tileW == 1 && GetBrcOperandAt<DIM_5TH, BrcOperands...>() == BRC_LEFT),
@@ -164,12 +160,12 @@ TILEOP void BinaryCompute(T0 dst, T1 src0, T2 src1)
         return;
     }
 
-    using Src0PtoTile = typename std::conditional<
-        (Src0TileInfo::tileW == 1 && GetBrcOperandAt<DIM_5TH, BrcOperands...>() == BRC_LEFT),
-        PtoTile<T1, pto::BLayout::ColMajor>, PtoTile<T1>>::type;
-    using Src1PtoTile = typename std::conditional<
-        (Src1TileInfo::tileW == 1 && GetBrcOperandAt<DIM_5TH, BrcOperands...>() == BRC_RIGHT),
-        PtoTile<T2, pto::BLayout::ColMajor>, PtoTile<T2>>::type;
+    using Src0PtoTile = typename std::conditional<(Src0TileInfo::tileW == 1 &&
+                                                   GetBrcOperandAt<DIM_5TH, BrcOperands...>() == BRC_LEFT),
+                                                  PtoTile<T1, pto::BLayout::ColMajor>, PtoTile<T1>>::type;
+    using Src1PtoTile = typename std::conditional<(Src1TileInfo::tileW == 1 &&
+                                                   GetBrcOperandAt<DIM_5TH, BrcOperands...>() == BRC_RIGHT),
+                                                  PtoTile<T2, pto::BLayout::ColMajor>, PtoTile<T2>>::type;
     auto dstTile = PtoTile<T0>(dst);
     auto src0Tile = Src0PtoTile(src0);
     auto src1Tile = Src1PtoTile(src1);
@@ -184,7 +180,8 @@ TILEOP void BinaryCompute(T0 dst, T1 src0, T2 src1)
                 auto src1tileOffsets = TileOffset(
                     (Src1TileInfo::tile0 == 1 || GetBrcOperandAt<DIM_1ST, BrcOperands...>() == BRC_RIGHT) ? 0 : n0Index,
                     (Src1TileInfo::tile1 == 1 || GetBrcOperandAt<DIM_2ND, BrcOperands...>() == BRC_RIGHT) ? 0 : n1Index,
-                    (Src1TileInfo::tile2 == 1 || GetBrcOperandAt<DIM_3RD, BrcOperands...>() == BRC_RIGHT) ? 0 : n2Index);
+                    (Src1TileInfo::tile2 == 1 || GetBrcOperandAt<DIM_3RD, BrcOperands...>() == BRC_RIGHT) ? 0 :
+                                                                                                            n2Index);
                 dstTile.Assign(dst, dsttileOffsets);
                 src0Tile.Assign(src0, src0tileOffsets);
                 src1Tile.Assign(src1, src1tileOffsets);
@@ -194,73 +191,65 @@ TILEOP void BinaryCompute(T0 dst, T1 src0, T2 src1)
                         src0Tile.Data(), src1Tile.Data(), (uint64_t)src0.GetAddr(), (uint64_t)src1.GetAddr());
                 }
 #endif
-                BinaryBrcDispatch<op, PrecisionType, brcmode, LastUse>(
-                    dstTile.Data(), src0Tile.Data(), src1Tile.Data());
+                BinaryBrcDispatch<op, PrecisionType, brcmode, LastUse>(dstTile.Data(), src0Tile.Data(),
+                                                                       src1Tile.Data());
             }
         }
     }
 }
 
 #define OP_TILE_OP_ADD TAdd
-template <
-    typename LastUse = LastUse3Dim<0, 0, 0>, int... BrcOperands, typename T0, typename T1, typename T2>
+template <typename LastUse = LastUse3Dim<0, 0, 0>, int... BrcOperands, typename T0, typename T1, typename T2>
 TILEOP void TAdd(T0 dst, T1 src0, T2 src1)
 {
     BinaryCompute<BinaryOp::ADD, 0, LastUse, BrcOperands...>(dst, src0, src1);
 }
 
 #define OP_TILE_OP_SUB TSub
-template <
-    typename LastUse = LastUse3Dim<0, 0, 0>, int... BrcOperands, typename T0, typename T1, typename T2>
+template <typename LastUse = LastUse3Dim<0, 0, 0>, int... BrcOperands, typename T0, typename T1, typename T2>
 TILEOP void TSub(T0 dst, T1 src0, T2 src1)
 {
     BinaryCompute<BinaryOp::SUB, 0, LastUse, BrcOperands...>(dst, src0, src1);
 }
 
 #define OP_TILE_OP_MUL TMul
-template <
-    typename LastUse = LastUse3Dim<0, 0, 0>, int... BrcOperands, typename T0, typename T1, typename T2>
+template <typename LastUse = LastUse3Dim<0, 0, 0>, int... BrcOperands, typename T0, typename T1, typename T2>
 TILEOP void TMul(T0 dst, T1 src0, T2 src1)
 {
     BinaryCompute<BinaryOp::MUL, 0, LastUse, BrcOperands...>(dst, src0, src1);
 }
 
 #define OP_TILE_OP_DIV TDiv
-template <
-    auto PrecisionType = pto::DivAlgorithm::DEFAULT, typename LastUse = LastUse3Dim<0, 0, 0>,
-    int ...BrcOperands, typename T0, typename T1, typename T2>
+template <auto PrecisionType = pto::DivAlgorithm::DEFAULT, typename LastUse = LastUse3Dim<0, 0, 0>, int... BrcOperands,
+          typename T0, typename T1, typename T2>
 TILEOP void TDiv(T0 dst, T1 src0, T2 src1)
 {
     BinaryCompute<BinaryOp::DIV, PrecisionType, LastUse, BrcOperands...>(dst, src0, src1);
 }
 
 #define OP_TILE_OP_MAX TMax
-template <
-    typename LastUse = LastUse3Dim<0, 0, 0>, int... BrcOperands, typename T0, typename T1, typename T2>
+template <typename LastUse = LastUse3Dim<0, 0, 0>, int... BrcOperands, typename T0, typename T1, typename T2>
 TILEOP void TMax(T0 dst, T1 src0, T2 src1)
 {
     BinaryCompute<BinaryOp::MAX, 0, LastUse, BrcOperands...>(dst, src0, src1);
 }
 
 #define OP_TILE_OP_MIN TMin
-template <
-    typename LastUse = LastUse3Dim<0, 0, 0>, int... BrcOperands, typename T0, typename T1, typename T2>
+template <typename LastUse = LastUse3Dim<0, 0, 0>, int... BrcOperands, typename T0, typename T1, typename T2>
 TILEOP void TMin(T0 dst, T1 src0, T2 src1)
 {
     BinaryCompute<BinaryOp::MIN, 0, LastUse, BrcOperands...>(dst, src0, src1);
 }
 
 #define OP_TILE_OP_BITWISEAND TBitwiseAnd
-template <
-    typename LastUse = LastUse3Dim<0, 0, 0>, int... BrcOperands, typename T0, typename T1, typename T2>
+template <typename LastUse = LastUse3Dim<0, 0, 0>, int... BrcOperands, typename T0, typename T1, typename T2>
 TILEOP void TBitwiseAnd(T0 dst, T1 src0, T2 src1)
 {
     BinaryCompute<BinaryOp::BITWISEAND, 0, LastUse, BrcOperands...>(dst, src0, src1);
 }
 
 #define OP_TILE_OP_BITWISEOR TBitwiseOr
-template <
-    typename LastUse = LastUse3Dim<0, 0, 0>, int... BrcOperands, typename T0, typename T1, typename T2>
+template <typename LastUse = LastUse3Dim<0, 0, 0>, int... BrcOperands, typename T0, typename T1, typename T2>
 TILEOP void TBitwiseOr(T0 dst, T1 src0, T2 src1)
 {
     BinaryCompute<BinaryOp::BITWISEOR, 0, LastUse, BrcOperands...>(dst, src0, src1);
@@ -283,8 +272,7 @@ TILEOP int gcd(int a, int b)
 }
 
 #define OP_TILE_OP_GCD TGcd
-template <
-    int... BrcOperands, typename T0, typename T1, typename T2>
+template <int... BrcOperands, typename T0, typename T1, typename T2>
 TILEOP void TGcd(T0 dst, T1 src0, T2 src1)
 {
     const auto dstLayout = dst.GetLayout();
@@ -322,9 +310,8 @@ TILEOP void TGcd(T0 dst, T1 src0, T2 src1)
 }
 
 #define OP_TILE_OP_Mod TMod
-template <
-    auto PrecisionType = pto::FmodAlgorithm::DEFAULT, typename LastUse = LastUse3Dim<0, 0, 0>,
-    int ...BrcOperands, typename T0, typename T1, typename T2>
+template <auto PrecisionType = pto::FmodAlgorithm::DEFAULT, typename LastUse = LastUse3Dim<0, 0, 0>, int... BrcOperands,
+          typename T0, typename T1, typename T2>
 TILEOP void TMod(T0 dst, T1 src0, T2 src1)
 {
     BinaryCompute<BinaryOp::MOD, PrecisionType, LastUse, BrcOperands...>(dst, src0, src1);
@@ -379,8 +366,8 @@ TILEOP void BinaryTmpCompute(T0 dst, T1 src0, T2 src1, T3 tmp)
                 src0Tile.Assign(src0, tileOffsets);
                 src1Tile.Assign(src1, tileOffsets);
                 tmpTile.Assign(tmp, tileOffsets);
-                BinaryTmpComputeImpl<op, PrecisionType>(
-                    dstTile.Data(), src0Tile.Data(), src1Tile.Data(), tmpTile.Data());
+                BinaryTmpComputeImpl<op, PrecisionType>(dstTile.Data(), src0Tile.Data(), src1Tile.Data(),
+                                                        tmpTile.Data());
             }
         }
     }
@@ -418,9 +405,9 @@ TILEOP void TAxpy(T0 dst, T1 src0, Scalar alpha)
 
     using SrcTileInfo = TensorTileInfo<T1>;
 
-    using SrcPtoTile = typename std::conditional<
-        (SrcTileInfo::tileW == 1 && GetBrcOperandAt<DIM_5TH, BrcOperands...>() == BRC_RIGHT),
-        PtoTile<T1, pto::BLayout::ColMajor>, PtoTile<T1>>::type;
+    using SrcPtoTile = typename std::conditional<(SrcTileInfo::tileW == 1 &&
+                                                  GetBrcOperandAt<DIM_5TH, BrcOperands...>() == BRC_RIGHT),
+                                                 PtoTile<T1, pto::BLayout::ColMajor>, PtoTile<T1>>::type;
 
     auto dstTile = PtoTile<T0>(dst);
     auto src0Tile = SrcPtoTile(src0);
@@ -441,9 +428,10 @@ TILEOP void TAxpy(T0 dst, T1 src0, Scalar alpha)
     }
 }
 
-template <auto pos, auto neg, typename T0, typename T1, typename T2, typename T3, typename T4, typename T5,
-    typename T6, typename T7>
-TILEOP void IntFloorDiv(T0 dst, T1 src0, T2 src1, T3 tmp0, T4 tmp1, T5 tmp2, T6 tmp3, T7 tmp4) {
+template <auto pos, auto neg, typename T0, typename T1, typename T2, typename T3, typename T4, typename T5, typename T6,
+          typename T7>
+TILEOP void IntFloorDiv(T0 dst, T1 src0, T2 src1, T3 tmp0, T4 tmp1, T5 tmp2, T6 tmp3, T7 tmp4)
+{
     // MaskTile: tmp3, tmp4
     // DataTile: tmp0-tmp2
     // reuse tmp address: tmp2=tmp4
@@ -458,12 +446,12 @@ TILEOP void IntFloorDiv(T0 dst, T1 src0, T2 src1, T3 tmp0, T4 tmp1, T5 tmp2, T6 
     pto::TSELS(tmp1, tmp3, src1, tmp2, 1);
 
     /*
-    * After zero-divisor handling:
-    * sign_differ = (src0 < 0) != (src1 < 0)
-    * quot = src0 / src1
-    * rem = src0 - quot * src1
-    * dst = (sign_differ && rem != 0) ? quot - 1 : quot
-    */
+     * After zero-divisor handling:
+     * sign_differ = (src0 < 0) != (src1 < 0)
+     * quot = src0 / src1
+     * rem = src0 - quot * src1
+     * dst = (sign_differ && rem != 0) ? quot - 1 : quot
+     */
     pto::TCMPS(tmp3, tmp0, 0, pto::CmpMode::LT);
     pto::TCMPS(tmp4, tmp1, 0, pto::CmpMode::LT);
     pto::TXOR(tmp3, tmp3, tmp4, tmp4);
@@ -480,16 +468,15 @@ TILEOP void IntFloorDiv(T0 dst, T1 src0, T2 src1, T3 tmp0, T4 tmp1, T5 tmp2, T6 
 }
 
 template <typename TmpTensor>
-TILEOP uint64_t FloorDivTmpAddr(
-    TmpTensor tmp, size_t tileOffset, size_t tileShapeSize, size_t tileIndex, size_t elementSize)
+TILEOP uint64_t FloorDivTmpAddr(TmpTensor tmp, size_t tileOffset, size_t tileShapeSize, size_t tileIndex,
+                                size_t elementSize)
 {
     return (uint64_t)(tmp.GetAddr() + (tileOffset + tileIndex * tileShapeSize) * elementSize);
 }
 
 template <typename T0, typename T3, auto tileH, auto tileW, typename SrcTile, typename DstTile>
-TILEOP void FloorDivFp32TmpCompute(
-    DstTile dstTile, SrcTile src0Tile, SrcTile src1Tile, T3 tmp, size_t offset, size_t dstShape3,
-    size_t dstShape4, size_t tileShapeSize)
+TILEOP void FloorDivFp32TmpCompute(DstTile dstTile, SrcTile src0Tile, SrcTile src1Tile, T3 tmp, size_t offset,
+                                   size_t dstShape3, size_t dstShape4, size_t tileShapeSize)
 {
     using Fp32TileDefine = pto::Tile<pto::TileType::Vec, float, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
     Fp32TileDefine tmp0Tile(dstShape3, dstShape4);
@@ -520,9 +507,8 @@ TILEOP void FloorDivFloatCompute(DstTile dstTile, SrcTile src0Tile, SrcTile src1
 
 #ifdef __DAV_V220
 template <typename T0, typename T3, auto tileH, auto tileW, typename SrcTile, typename DstTile>
-TILEOP void FloorDivV220Int8Compute(
-    DstTile dstTile, SrcTile src0Tile, SrcTile src1Tile, T3 tmp, size_t offset, size_t dstShape3,
-    size_t dstShape4, size_t tileShapeSize)
+TILEOP void FloorDivV220Int8Compute(DstTile dstTile, SrcTile src0Tile, SrcTile src1Tile, T3 tmp, size_t offset,
+                                    size_t dstShape3, size_t dstShape4, size_t tileShapeSize)
 {
     using HalfTileDefine = pto::Tile<pto::TileType::Vec, half, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
     using Fp32TileDefine = pto::Tile<pto::TileType::Vec, float, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
@@ -551,9 +537,8 @@ TILEOP void FloorDivV220Int8Compute(
     SyncV();
 }
 template <typename T0, typename T3, auto tileH, auto tileW, typename SrcTile, typename DstTile>
-TILEOP void FloorDivV220Int32Compute(
-    DstTile dstTile, SrcTile src0Tile, SrcTile src1Tile, T3 tmp, size_t offset, size_t dstShape3,
-    size_t dstShape4, size_t tileShapeSize)
+TILEOP void FloorDivV220Int32Compute(DstTile dstTile, SrcTile src0Tile, SrcTile src1Tile, T3 tmp, size_t offset,
+                                     size_t dstShape3, size_t dstShape4, size_t tileShapeSize)
 {
     using Fp32TileDefine = pto::Tile<pto::TileType::Vec, float, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
     using Int32TileDefine = pto::Tile<pto::TileType::Vec, int32_t, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
@@ -669,9 +654,8 @@ TILEOP void FloorDivV220Int32Compute(
 }
 #else
 template <typename T0, typename T3, auto tileH, auto tileW, typename SrcTile, typename DstTile>
-TILEOP void FloorDivNonV220Uint8Compute(
-    DstTile dstTile, SrcTile src0Tile, SrcTile src1Tile, T3 tmp, size_t offset, size_t dstShape3,
-    size_t dstShape4, size_t tileShapeSize)
+TILEOP void FloorDivNonV220Uint8Compute(DstTile dstTile, SrcTile src0Tile, SrcTile src1Tile, T3 tmp, size_t offset,
+                                        size_t dstShape3, size_t dstShape4, size_t tileShapeSize)
 {
     using HalfTileDefine = pto::Tile<pto::TileType::Vec, half, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
     using Int16TileDefine = pto::Tile<pto::TileType::Vec, int16_t, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
@@ -694,9 +678,8 @@ TILEOP void FloorDivNonV220Uint8Compute(
 }
 
 template <typename T0, typename T3, auto tileH, auto tileW, typename SrcTile, typename DstTile>
-TILEOP void FloorDivNonV220Int8Compute(
-    DstTile dstTile, SrcTile src0Tile, SrcTile src1Tile, T3 tmp, size_t offset, size_t dstShape3,
-    size_t dstShape4, size_t tileShapeSize)
+TILEOP void FloorDivNonV220Int8Compute(DstTile dstTile, SrcTile src0Tile, SrcTile src1Tile, T3 tmp, size_t offset,
+                                       size_t dstShape3, size_t dstShape4, size_t tileShapeSize)
 {
     using HalfTileDefine = pto::Tile<pto::TileType::Vec, half, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
     using Uint8TileDefine = pto::Tile<pto::TileType::Vec, uint8_t, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
@@ -717,9 +700,8 @@ TILEOP void FloorDivNonV220Int8Compute(
 }
 
 template <typename T0, typename T3, auto tileH, auto tileW, typename SrcTile, typename DstTile>
-TILEOP void FloorDivNonV220Int32Compute(
-    DstTile dstTile, SrcTile src0Tile, SrcTile src1Tile, T3 tmp, size_t offset, size_t dstShape3,
-    size_t dstShape4, size_t tileShapeSize)
+TILEOP void FloorDivNonV220Int32Compute(DstTile dstTile, SrcTile src0Tile, SrcTile src1Tile, T3 tmp, size_t offset,
+                                        size_t dstShape3, size_t dstShape4, size_t tileShapeSize)
 {
     using Int32TileDefine = pto::Tile<pto::TileType::Vec, int32_t, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
     using Uint8TileDefine = pto::Tile<pto::TileType::Vec, uint8_t, tileH, 4 * tileW, pto::BLayout::RowMajor, -1, -1>;
@@ -734,8 +716,8 @@ TILEOP void FloorDivNonV220Int32Compute(
     pto::TASSIGN(tmp3MaskTile, FloorDivTmpAddr(tmp, offset, tileShapeSize, 2, sizeof(int32_t)));
     pto::TASSIGN(tmp4MaskTile, FloorDivTmpAddr(tmp, offset, tileShapeSize, 3, sizeof(int32_t)));
 
-    IntFloorDiv<(int32_t)0x7FFF7F7F, (int32_t)0x80008080>(
-        dstTile, src0Tile, src1Tile, tmp0DataTile, tmp1DataTile, tmp2DataTile, tmp3MaskTile, tmp4MaskTile);
+    IntFloorDiv<(int32_t)0x7FFF7F7F, (int32_t)0x80008080>(dstTile, src0Tile, src1Tile, tmp0DataTile, tmp1DataTile,
+                                                          tmp2DataTile, tmp3MaskTile, tmp4MaskTile);
 }
 #endif
 
@@ -754,11 +736,11 @@ TILEOP void TFloorDiv(T0 dst, T1 src0, T2 src1, T3 tmp)
     constexpr auto tileW = TileOp::GetTensorTileShapeDim<T0, DIM_5TH, MAX_DIMS>();
     constexpr auto dstTypeSize = sizeof(typename T0::Type);
 
-    constexpr auto tileShapeSize =
-        TileOp::GetAnyAxisMergeResult<DIM_1ST, Std::tuple_size<typename T0::TileShape>::value, typename T0::TileShape>();
+    constexpr auto tileShapeSize = TileOp::GetAnyAxisMergeResult<
+        DIM_1ST, Std::tuple_size<typename T0::TileShape>::value, typename T0::TileShape>();
 
-    using DataTileDefine =
-        pto::Tile<pto::TileType::Vec, typename T0::Type, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
+    using DataTileDefine = pto::Tile<pto::TileType::Vec, typename T0::Type, tileH, tileW, pto::BLayout::RowMajor, -1,
+                                     -1>;
     DataTileDefine src0Tile(dstShape3, dstShape4);
     DataTileDefine src1Tile(dstShape3, dstShape4);
     DataTileDefine dstTile(dstShape3, dstShape4);
@@ -773,33 +755,35 @@ TILEOP void TFloorDiv(T0 dst, T1 src0, T2 src1, T3 tmp)
                 pto::TASSIGN(src1Tile, (uint64_t)(src1.GetAddr() + srcOffset * dstTypeSize));
                 pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + dstOffset * dstTypeSize));
 
-                if constexpr (std::is_same_v<typename T0::Type, half> || std::is_same_v<typename T0::Type, bfloat16_t>) {
-                    FloorDivFp32TmpCompute<T0, T3, tileH, tileW>(
-                        dstTile, src0Tile, src1Tile, tmp, dstOffset, dstShape3, dstShape4, tileShapeSize);
+                if constexpr (std::is_same_v<typename T0::Type, half> ||
+                              std::is_same_v<typename T0::Type, bfloat16_t>) {
+                    FloorDivFp32TmpCompute<T0, T3, tileH, tileW>(dstTile, src0Tile, src1Tile, tmp, dstOffset, dstShape3,
+                                                                 dstShape4, tileShapeSize);
                 } else if constexpr (std::is_same_v<typename T0::Type, float>) {
                     FloorDivFloatCompute(dstTile, src0Tile, src1Tile);
                 }
 
-                #ifdef __DAV_V220
-                    if constexpr (std::is_same_v<typename T0::Type, int32_t>) {
-                        FloorDivV220Int32Compute<T0, T3, tileH, tileW>(
-                            dstTile, src0Tile, src1Tile, tmp, dstOffset, dstShape3, dstShape4, tileShapeSize);
-                    } else if constexpr (std::is_same_v<typename T0::Type, int8_t> || std::is_same_v<typename T0::Type, uint8_t>) {
-                        FloorDivV220Int8Compute<T0, T3, tileH, tileW>(
-                            dstTile, src0Tile, src1Tile, tmp, dstOffset, dstShape3, dstShape4, tileShapeSize);
-                    }
-                #else
-                    if constexpr (std::is_same_v<typename T0::Type, uint8_t>) {
-                        FloorDivNonV220Uint8Compute<T0, T3, tileH, tileW>(
-                            dstTile, src0Tile, src1Tile, tmp, dstOffset, dstShape3, dstShape4, tileShapeSize);
-                    } else if constexpr (std::is_same_v<typename T0::Type, int8_t>) {
-                        FloorDivNonV220Int8Compute<T0, T3, tileH, tileW>(
-                            dstTile, src0Tile, src1Tile, tmp, dstOffset, dstShape3, dstShape4, tileShapeSize);
-                    } else if constexpr (std::is_same_v<typename T0::Type, int32_t>) {
-                        FloorDivNonV220Int32Compute<T0, T3, tileH, tileW>(
-                            dstTile, src0Tile, src1Tile, tmp, dstOffset, dstShape3, dstShape4, tileShapeSize);
-                    }
-                #endif
+#ifdef __DAV_V220
+                if constexpr (std::is_same_v<typename T0::Type, int32_t>) {
+                    FloorDivV220Int32Compute<T0, T3, tileH, tileW>(dstTile, src0Tile, src1Tile, tmp, dstOffset,
+                                                                   dstShape3, dstShape4, tileShapeSize);
+                } else if constexpr (std::is_same_v<typename T0::Type, int8_t> ||
+                                     std::is_same_v<typename T0::Type, uint8_t>) {
+                    FloorDivV220Int8Compute<T0, T3, tileH, tileW>(dstTile, src0Tile, src1Tile, tmp, dstOffset,
+                                                                  dstShape3, dstShape4, tileShapeSize);
+                }
+#else
+                if constexpr (std::is_same_v<typename T0::Type, uint8_t>) {
+                    FloorDivNonV220Uint8Compute<T0, T3, tileH, tileW>(dstTile, src0Tile, src1Tile, tmp, dstOffset,
+                                                                      dstShape3, dstShape4, tileShapeSize);
+                } else if constexpr (std::is_same_v<typename T0::Type, int8_t>) {
+                    FloorDivNonV220Int8Compute<T0, T3, tileH, tileW>(dstTile, src0Tile, src1Tile, tmp, dstOffset,
+                                                                     dstShape3, dstShape4, tileShapeSize);
+                } else if constexpr (std::is_same_v<typename T0::Type, int32_t>) {
+                    FloorDivNonV220Int32Compute<T0, T3, tileH, tileW>(dstTile, src0Tile, src1Tile, tmp, dstOffset,
+                                                                      dstShape3, dstShape4, tileShapeSize);
+                }
+#endif
             }
         }
     }

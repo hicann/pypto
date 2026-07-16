@@ -16,4 +16,4 @@
 namespace pypto::ir {
 std::string DumpScalarExpr(const ScalarExprPtr& op);
 std::string DumpTensorVar(const VarPtr& tensor);
-}
+} // namespace pypto::ir

@@ -39,7 +39,8 @@ inline ExprPtr MakeScalarVar(const std::string& name, DataType dt, Span sp = Spa
     return std::make_shared<Var>(name, std::make_shared<ScalarType>(dt), sp);
 }
 
-inline ExprPtr MakeTileVar(const std::string& name, std::vector<int64_t> dims, DataType dt, Span sp = Span("test", 1, 1))
+inline ExprPtr MakeTileVar(const std::string& name, std::vector<int64_t> dims, DataType dt,
+                           Span sp = Span("test", 1, 1))
 {
     std::vector<ExprPtr> shape;
     shape.reserve(dims.size());
@@ -49,7 +50,8 @@ inline ExprPtr MakeTileVar(const std::string& name, std::vector<int64_t> dims, D
     return std::make_shared<Var>(name, std::make_shared<TileType>(shape, dt), sp);
 }
 
-inline ExprPtr MakeTensorVar(const std::string& name, std::vector<int64_t> dims, DataType dt, Span sp = Span("test", 1, 1))
+inline ExprPtr MakeTensorVar(const std::string& name, std::vector<int64_t> dims, DataType dt,
+                             Span sp = Span("test", 1, 1))
 {
     std::vector<ExprPtr> shape;
     shape.reserve(dims.size());
@@ -69,17 +71,18 @@ inline ExprPtr MakeOffsetsTuple(std::vector<int64_t> offsets, Span sp = Span("te
     return std::make_shared<MakeTuple>(elems, sp);
 }
 
-inline ExprPtr MakeTileVarWithHwInfo(
-    const std::string& name, std::vector<int64_t> dims, DataType dt, TilePad pad, Span sp = Span("test", 1, 1))
+inline ExprPtr MakeTileVarWithHwInfo(const std::string& name, std::vector<int64_t> dims, DataType dt, TilePad pad,
+                                     Span sp = Span("test", 1, 1))
 {
     HardwareInfo hw(TileLayout::row_major, TileLayout::none_box, 512, pad, CompactMode::null);
-    return std::make_shared<Var>(
-        name, std::make_shared<TileType>(dims, dt, std::optional<MemRefPtr>(std::nullopt), std::nullopt, std::optional<HardwareInfo>(hw)), sp);
+    return std::make_shared<Var>(name,
+                                 std::make_shared<TileType>(dims, dt, std::optional<MemRefPtr>(std::nullopt),
+                                                            std::nullopt, std::optional<HardwareInfo>(hw)),
+                                 sp);
 }
 
-inline ExprPtr MakeTileVarWithMemRef(
-    const std::string& name, std::vector<int64_t> dims, DataType dt,
-    MemorySpace ms, int64_t addr, uint64_t size, Span sp = Span("test", 1, 1))
+inline ExprPtr MakeTileVarWithMemRef(const std::string& name, std::vector<int64_t> dims, DataType dt, MemorySpace ms,
+                                     int64_t addr, uint64_t size, Span sp = Span("test", 1, 1))
 {
     std::vector<ExprPtr> shape;
     shape.reserve(dims.size());
@@ -96,10 +99,7 @@ inline ExprPtr MakePtrVar(const std::string& name, DataType dt, Span sp = Span("
     return std::make_shared<Var>(name, std::make_shared<PtrType>(dt), sp);
 }
 
-inline ExprPtr MakeIntTuple(std::vector<int64_t> vals)
-{
-    return MakeOffsetsTuple(vals);
-}
+inline ExprPtr MakeIntTuple(std::vector<int64_t> vals) { return MakeOffsetsTuple(vals); }
 
 inline TypePtr Scalar(DataType dt) { return std::make_shared<ScalarType>(dt); }
 

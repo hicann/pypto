@@ -157,9 +157,10 @@ double Fp8StorageToDouble(uint8_t bits, DataType fmt)
 } // namespace
 
 // uint8-backed low-precision float formats: DT_FP8*, DT_HF8. Decodes each byte with Fp8StorageToDouble(fmt).
-FlowVerifier::CompareResult FlowVerifier::CompareFp8TensorData(
-    const std::shared_ptr<LogicalTensorData>& goldenDataView, const std::shared_ptr<LogicalTensorData>& outputDataView,
-    DataType fp8Format, float rtol, float atol, int errorCountThreshold, int failNum)
+FlowVerifier::CompareResult FlowVerifier::CompareFp8TensorData(const std::shared_ptr<LogicalTensorData>& goldenDataView,
+                                                               const std::shared_ptr<LogicalTensorData>& outputDataView,
+                                                               DataType fp8Format, float rtol, float atol,
+                                                               int errorCountThreshold, int failNum)
 {
     auto& validShape = goldenDataView->GetValidShape();
     const auto size = std::accumulate(validShape.begin(), validShape.end(), 1, std::multiplies<>());
@@ -172,24 +173,22 @@ FlowVerifier::CompareResult FlowVerifier::CompareFp8TensorData(
             const uint8_t* gp = &gv->Get<uint8_t>(gOff);
             const uint8_t* op = &ov->Get<uint8_t>(outOff);
             for (size_t i = 0; i < lastCount; i++) {
-                CompareScalarPair(
-                    cr, index + static_cast<int64_t>(i), Fp8StorageToDouble(gp[i], fp8Format),
-                    Fp8StorageToDouble(op[i], fp8Format));
+                CompareScalarPair(cr, index + static_cast<int64_t>(i), Fp8StorageToDouble(gp[i], fp8Format),
+                                  Fp8StorageToDouble(op[i], fp8Format));
             }
         });
     compareResult.UpdateErrorCountThreshold();
     return compareResult;
 }
 
-FlowVerifier::CompareResult FlowVerifier::VerifyResult(
-    const std::shared_ptr<LogicalTensorData>& goldenDataView, const std::shared_ptr<LogicalTensorData>& outputDataView,
-    float rtol, float atol)
+FlowVerifier::CompareResult FlowVerifier::VerifyResult(const std::shared_ptr<LogicalTensorData>& goldenDataView,
+                                                       const std::shared_ptr<LogicalTensorData>& outputDataView,
+                                                       float rtol, float atol)
 {
     // tensor maybe padded during PadLocalBuffer Pass, tensor shape maybe changed, just check the valid data
     goldenDataView->UpdateValidShape(outputDataView->GetValidShape());
-    ASSERT(
-        VerifyResultScene::VERIFY_RESULT_SHAPE_DIFF,
-        goldenDataView->GetValidShape() == outputDataView->GetValidShape());
+    ASSERT(VerifyResultScene::VERIFY_RESULT_SHAPE_DIFF,
+           goldenDataView->GetValidShape() == outputDataView->GetValidShape());
     ASSERT(VerifyResultScene::VERIFY_RESULT_DTYPE_DIFF, goldenDataView->GetDataType() == outputDataView->GetDataType());
     switch (goldenDataView->GetDataType()) {
         case DT_INT8:
@@ -231,11 +230,12 @@ FlowVerifier::CompareResult FlowVerifier::VerifyResult(
     return CompareResult();
 }
 
-bool FlowVerifier::VerifyResult(
-    const std::vector<std::shared_ptr<LogicalTensor>>& tensorDatalist,
-    const std::vector<std::shared_ptr<LogicalTensor>>& goldenDatalist, const std::string& key,
-    const std::string tensorName, const std::vector<std::shared_ptr<LogicalTensorData>>& goldenDataViewList,
-    const std::vector<std::shared_ptr<LogicalTensorData>>& tensorDataViewList, float rtol, float atol)
+bool FlowVerifier::VerifyResult(const std::vector<std::shared_ptr<LogicalTensor>>& tensorDatalist,
+                                const std::vector<std::shared_ptr<LogicalTensor>>& goldenDatalist,
+                                const std::string& key, const std::string tensorName,
+                                const std::vector<std::shared_ptr<LogicalTensorData>>& goldenDataViewList,
+                                const std::vector<std::shared_ptr<LogicalTensorData>>& tensorDataViewList, float rtol,
+                                float atol)
 {
     bool result = true;
     if (goldenDataViewList.size() != tensorDataViewList.size()) {
@@ -244,9 +244,8 @@ bool FlowVerifier::VerifyResult(
     }
     for (size_t k = 0; k < tensorDataViewList.size(); k++) {
         if (!goldenDataViewList[k]) {
-            INTERPRETER_EVENT(
-                "%s Verify for %zu data view list index %zu result NO_COMPARE", key.c_str(), goldenDataViewList.size(),
-                k);
+            INTERPRETER_EVENT("%s Verify for %zu data view list index %zu result NO_COMPARE", key.c_str(),
+                              goldenDataViewList.size(), k);
             continue;
         }
         struct timeval tv;
@@ -259,30 +258,32 @@ bool FlowVerifier::VerifyResult(
         std::vector<std::string> ProgrameInfo(toIndex(ProgrameInfoCsvHeader::COL_COUNT));
         ProgrameInfo[toIndex(ProgrameInfoCsvHeader::passName)] = functionInterpreter_->execDumpPassName;
         ProgrameInfo[toIndex(ProgrameInfoCsvHeader::pathFuncMagicName)] = functionInterpreter_->execDumpFunPath;
-        ProgrameInfo[toIndex(ProgrameInfoCsvHeader::pathFuncMagic)] =
-            std::to_string(functionInterpreter_->pathFuncMagic);
-        ProgrameInfo[toIndex(ProgrameInfoCsvHeader::pathFuncHash)] =
-            std::to_string(functionInterpreter_->pathFuncHash) + "'";
-        ProgrameInfo[toIndex(ProgrameInfoCsvHeader::outputRawShape)] =
-            functionInterpreter_->ShapeToString(tensorDataViewList[k]->GetData()->GetShape());
-        ProgrameInfo[toIndex(ProgrameInfoCsvHeader::outputShape)] =
-            functionInterpreter_->ShapeToString(tensorDataViewList[k]->GetShape());
-        ProgrameInfo[toIndex(ProgrameInfoCsvHeader::outputValidShape)] =
-            functionInterpreter_->ShapeToString(tensorDataViewList[k]->GetValidShape());
-        ProgrameInfo[toIndex(ProgrameInfoCsvHeader::outputDtype)] =
-            DataType2String(tensorDataViewList[k]->GetDataType(), true);
-        ProgrameInfo[toIndex(ProgrameInfoCsvHeader::outputFormat)] =
-            std::to_string(tensorDatalist[k]->GetRawTensor()->format);
-        ProgrameInfo[toIndex(ProgrameInfoCsvHeader::outputRawMagic)] =
-            std::to_string(tensorDatalist[k]->GetRawTensor()->GetRawMagic());
+        ProgrameInfo[toIndex(ProgrameInfoCsvHeader::pathFuncMagic)] = std::to_string(
+            functionInterpreter_->pathFuncMagic);
+        ProgrameInfo[toIndex(ProgrameInfoCsvHeader::pathFuncHash)] = std::to_string(
+                                                                         functionInterpreter_->pathFuncHash) +
+                                                                     "'";
+        ProgrameInfo[toIndex(ProgrameInfoCsvHeader::outputRawShape)] = functionInterpreter_->ShapeToString(
+            tensorDataViewList[k]->GetData()->GetShape());
+        ProgrameInfo[toIndex(ProgrameInfoCsvHeader::outputShape)] = functionInterpreter_->ShapeToString(
+            tensorDataViewList[k]->GetShape());
+        ProgrameInfo[toIndex(ProgrameInfoCsvHeader::outputValidShape)] = functionInterpreter_->ShapeToString(
+            tensorDataViewList[k]->GetValidShape());
+        ProgrameInfo[toIndex(ProgrameInfoCsvHeader::outputDtype)] = DataType2String(
+            tensorDataViewList[k]->GetDataType(), true);
+        ProgrameInfo[toIndex(ProgrameInfoCsvHeader::outputFormat)] = std::to_string(
+            tensorDatalist[k]->GetRawTensor()->format);
+        ProgrameInfo[toIndex(ProgrameInfoCsvHeader::outputRawMagic)] = std::to_string(
+            tensorDatalist[k]->GetRawTensor()->GetRawMagic());
         ProgrameInfo[toIndex(ProgrameInfoCsvHeader::outputSymbol)] = tensorDatalist[k]->GetRawTensor()->GetSymbol();
         ProgrameInfo[toIndex(ProgrameInfoCsvHeader::outputTensor)] = fileName;
         ProgrameInfo[toIndex(ProgrameInfoCsvHeader::verifyResult)] = "PASS";
         ProgrameInfo[toIndex(ProgrameInfoCsvHeader::aTimeStamp)] = std::to_string(ts) + "'";
         ProgrameInfo[toIndex(ProgrameInfoCsvHeader::bTimeStamp)] = std::to_string(ts) + "'";
         ProgrameInfo[toIndex(ProgrameInfoCsvHeader::loopInfo)] = functionInterpreter_->GetLoopSymbolString();
-        ProgrameInfo[toIndex(ProgrameInfoCsvHeader::rtolAndAtol)] =
-            functionInterpreter_->ToStrWithPrecision(rtol) + "/" + functionInterpreter_->ToStrWithPrecision(atol);
+        ProgrameInfo[toIndex(ProgrameInfoCsvHeader::rtolAndAtol)] = functionInterpreter_->ToStrWithPrecision(rtol) +
+                                                                    "/" +
+                                                                    functionInterpreter_->ToStrWithPrecision(atol);
         if (functionInterpreter_->execDumpPassName == "tensor_graph") {
             ProgrameInfo[toIndex(ProgrameInfoCsvHeader::goldenPassName)] = "user_golden";
             ProgrameInfo[toIndex(ProgrameInfoCsvHeader::ioflag)] = "a" + std::to_string(k);
@@ -291,45 +292,46 @@ bool FlowVerifier::VerifyResult(
             ProgrameInfo[toIndex(ProgrameInfoCsvHeader::goldenPassName)] = "tensor_graph";
             ProgrameInfo[toIndex(ProgrameInfoCsvHeader::ioflag)] = "o" + std::to_string(k);
             goldenFileName = tensorName + "~" + std::to_string(k) + "~" + "golden" + "~" + std::to_string(ts) + ".data";
-            ProgrameInfo[toIndex(ProgrameInfoCsvHeader::goldenRawMagic)] =
-                std::to_string(goldenDatalist[k]->GetRawTensor()->GetRawMagic());
+            ProgrameInfo[toIndex(ProgrameInfoCsvHeader::goldenRawMagic)] = std::to_string(
+                goldenDatalist[k]->GetRawTensor()->GetRawMagic());
         }
         ProgrameInfo[toIndex(ProgrameInfoCsvHeader::goldenTensor)] = goldenFileName;
         functionInterpreter_->DumpTensorBinary(goldenDataViewList[k], goldenFileName);
 
         auto tensorGraphResult = VerifyResult(goldenDataViewList[k], tensorDataViewList[k], rtol, atol);
         if (!tensorGraphResult.Check()) {
-            INTERPRETER_LOGE_FULL(
-                VerifyResultScene::VERIFY_RESULT_MISMATCH, "%s Verify for %zu data view list index %zu result FAILED",
-                key.c_str(), goldenDataViewList.size(), k);
-            fprintf(
-                functionInterpreter_->execDumpErrorFile, "[VERIFY:FAIL] %s, %s, %s, %s, %s\n",
-                functionInterpreter_->execDumpPassName.c_str(), functionInterpreter_->execDumpFunPath.c_str(),
-                functionInterpreter_->GetLoopSymbolString().c_str(),
-                std::to_string(tensorDatalist[k]->GetRawTensor()->GetRawMagic()).c_str(),
-                tensorDatalist[k]->GetRawTensor()->GetSymbol().c_str());
+            INTERPRETER_LOGE_FULL(VerifyResultScene::VERIFY_RESULT_MISMATCH,
+                                  "%s Verify for %zu data view list index %zu result FAILED", key.c_str(),
+                                  goldenDataViewList.size(), k);
+            fprintf(functionInterpreter_->execDumpErrorFile, "[VERIFY:FAIL] %s, %s, %s, %s, %s\n",
+                    functionInterpreter_->execDumpPassName.c_str(), functionInterpreter_->execDumpFunPath.c_str(),
+                    functionInterpreter_->GetLoopSymbolString().c_str(),
+                    std::to_string(tensorDatalist[k]->GetRawTensor()->GetRawMagic()).c_str(),
+                    tensorDatalist[k]->GetRawTensor()->GetSymbol().c_str());
             std::ostringstream oss;
             tensorGraphResult.DumpDataDetail(oss);
             fprintf(functionInterpreter_->execDumpErrorFile, "%s", oss.str().c_str());
             ProgrameInfo[toIndex(ProgrameInfoCsvHeader::verifyResult)] = "FAIL";
             result = false;
         } else {
-            INTERPRETER_EVENT(
-                "%s Verify for %zu data view list index %zu result PASS", key.c_str(), goldenDataViewList.size(), k);
+            INTERPRETER_EVENT("%s Verify for %zu data view list index %zu result PASS", key.c_str(),
+                              goldenDataViewList.size(), k);
         }
         CompareResultDetail res = tensorGraphResult.Dump();
-        ProgrameInfo[toIndex(ProgrameInfoCsvHeader::failCnt)] =
-            std::to_string(res.failNum) + "/" + std::to_string(res.warnNum) + "/" + std::to_string(res.toleranceCnt);
-        ProgrameInfo[toIndex(ProgrameInfoCsvHeader::totalCnt)] =
-            std::to_string(res.totalCnt) + "/" + std::to_string(res.zeroCnt) + "/" + std::to_string(res.infnanCnt);
+        ProgrameInfo[toIndex(ProgrameInfoCsvHeader::failCnt)] = std::to_string(res.failNum) + "/" +
+                                                                std::to_string(res.warnNum) + "/" +
+                                                                std::to_string(res.toleranceCnt);
+        ProgrameInfo[toIndex(ProgrameInfoCsvHeader::totalCnt)] = std::to_string(res.totalCnt) + "/" +
+                                                                 std::to_string(res.zeroCnt) + "/" +
+                                                                 std::to_string(res.infnanCnt);
         ProgrameInfo[toIndex(ProgrameInfoCsvHeader::mre)] = functionInterpreter_->ToStrWithPrecision(res.mre);
         ProgrameInfo[toIndex(ProgrameInfoCsvHeader::mreTop8)] = functionInterpreter_->ToStrWithPrecision(res.mreTop8);
-        ProgrameInfo[toIndex(ProgrameInfoCsvHeader::mreTop1Permil)] =
-            functionInterpreter_->ToStrWithPrecision(res.mreTop1Permil);
+        ProgrameInfo[toIndex(ProgrameInfoCsvHeader::mreTop1Permil)] = functionInterpreter_->ToStrWithPrecision(
+            res.mreTop1Permil);
         ProgrameInfo[toIndex(ProgrameInfoCsvHeader::mae)] = functionInterpreter_->ToStrWithPrecision(res.mae);
         ProgrameInfo[toIndex(ProgrameInfoCsvHeader::maeTop8)] = functionInterpreter_->ToStrWithPrecision(res.maeTop8);
-        ProgrameInfo[toIndex(ProgrameInfoCsvHeader::maeTop1Permil)] =
-            functionInterpreter_->ToStrWithPrecision(res.maeTop1Permil);
+        ProgrameInfo[toIndex(ProgrameInfoCsvHeader::maeTop1Permil)] = functionInterpreter_->ToStrWithPrecision(
+            res.maeTop1Permil);
         ProgrameInfo[toIndex(ProgrameInfoCsvHeader::aMax)] = functionInterpreter_->ToStrWithPrecision(res.aMax);
         ProgrameInfo[toIndex(ProgrameInfoCsvHeader::aMin)] = functionInterpreter_->ToStrWithPrecision(res.aMin);
         ProgrameInfo[toIndex(ProgrameInfoCsvHeader::aAvg)] = functionInterpreter_->ToStrWithPrecision(res.aAvg);
@@ -342,8 +344,8 @@ bool FlowVerifier::VerifyResult(
         ProgrameInfo[toIndex(ProgrameInfoCsvHeader::bAavg)] = functionInterpreter_->ToStrWithPrecision(res.bAavg);
         ProgrameInfo[toIndex(ProgrameInfoCsvHeader::bZero)] = std::to_string(res.bZero);
         ProgrameInfo[toIndex(ProgrameInfoCsvHeader::bInfnan)] = std::to_string(res.bInfnan);
-        functionInterpreter_->WriteCsvRow(
-            ProgrameInfo, functionInterpreter_->ProgrameRowNum, functionInterpreter_->execProgrameResultFile);
+        functionInterpreter_->WriteCsvRow(ProgrameInfo, functionInterpreter_->ProgrameRowNum,
+                                          functionInterpreter_->execProgrameResultFile);
     }
     return result;
 }
@@ -382,8 +384,8 @@ void FlowVerifier::WriteUserGolden(const std::vector<std::shared_ptr<LogicalTens
         OpInfo[toIndex(OpInfoCsvHeader::timeStamp)] = std::to_string(ts) + "'";
         OpInfo[toIndex(OpInfoCsvHeader::ioflag)] = "a" + std::to_string(k);
     }
-    functionInterpreter_->WriteCsvRow(
-        OpInfo, functionInterpreter_->opInfoRowNum, functionInterpreter_->execOpResultFile);
+    functionInterpreter_->WriteCsvRow(OpInfo, functionInterpreter_->opInfoRowNum,
+                                      functionInterpreter_->execOpResultFile);
 }
 
 void FlowVerifier::WriteException()
@@ -392,8 +394,8 @@ void FlowVerifier::WriteException()
     ProgrameInfo[toIndex(ProgrameInfoCsvHeader::passName)] = functionInterpreter_->execDumpPassName;
     ProgrameInfo[toIndex(ProgrameInfoCsvHeader::pathFuncMagicName)] = functionInterpreter_->execDumpFunPath;
     ProgrameInfo[toIndex(ProgrameInfoCsvHeader::pathFuncMagic)] = std::to_string(functionInterpreter_->pathFuncMagic);
-    ProgrameInfo[toIndex(ProgrameInfoCsvHeader::pathFuncHash)] =
-        std::to_string(functionInterpreter_->pathFuncHash) + "'";
+    ProgrameInfo[toIndex(ProgrameInfoCsvHeader::pathFuncHash)] = std::to_string(functionInterpreter_->pathFuncHash) +
+                                                                 "'";
     ProgrameInfo[toIndex(ProgrameInfoCsvHeader::loopInfo)] = functionInterpreter_->GetLoopSymbolString();
     ProgrameInfo[toIndex(ProgrameInfoCsvHeader::verifyResult)] = "EXCEPTION";
     if (functionInterpreter_->execDumpPassName == "tensor_graph") {
@@ -401,15 +403,15 @@ void FlowVerifier::WriteException()
     } else {
         ProgrameInfo[toIndex(ProgrameInfoCsvHeader::goldenPassName)] = "tensor_graph";
     }
-    functionInterpreter_->WriteCsvRow(
-        ProgrameInfo, functionInterpreter_->ProgrameRowNum, functionInterpreter_->execProgrameResultFile);
+    functionInterpreter_->WriteCsvRow(ProgrameInfo, functionInterpreter_->ProgrameRowNum,
+                                      functionInterpreter_->execProgrameResultFile);
 }
 
-void FlowVerifier::VerifyTensorGraph(
-    Function* entry, const std::vector<std::shared_ptr<LogicalTensorData>>& inputDataViewList,
-    const std::vector<std::shared_ptr<LogicalTensorData>>& outputDataViewList,
-    const std::vector<std::shared_ptr<LogicalTensorData>>& goldenDataViewList,
-    const std::shared_ptr<TensorSlotManager>& slotManager)
+void FlowVerifier::VerifyTensorGraph(Function* entry,
+                                     const std::vector<std::shared_ptr<LogicalTensorData>>& inputDataViewList,
+                                     const std::vector<std::shared_ptr<LogicalTensorData>>& outputDataViewList,
+                                     const std::vector<std::shared_ptr<LogicalTensorData>>& goldenDataViewList,
+                                     const std::shared_ptr<TensorSlotManager>& slotManager)
 {
     const std::vector<std::string> groupNames = Distributed::CommGroupRecorder::GetInstance().Output();
     if (!groupNames.empty()) {
@@ -502,13 +504,11 @@ void FlowVerifier::VerifyTensorGraph(
         float rtol = static_cast<float>(tolerance[0]);
         float atol = static_cast<float>(tolerance[1]);
         if (outputDataViewList.size() == 0) {
-            res = VerifyResult(
-                attr->startArgsInputLogicalTensorList, {}, "tensor_graph", "tensor_graph", goldenDataViewList_,
-                inputDataViewList_, rtol, atol);
+            res = VerifyResult(attr->startArgsInputLogicalTensorList, {}, "tensor_graph", "tensor_graph",
+                               goldenDataViewList_, inputDataViewList_, rtol, atol);
         } else {
-            res = VerifyResult(
-                attr->startArgsOutputLogicalTensorList, {}, "tensor_graph", "tensor_graph", goldenDataViewList_,
-                outputDataViewList_, rtol, atol);
+            res = VerifyResult(attr->startArgsOutputLogicalTensorList, {}, "tensor_graph", "tensor_graph",
+                               goldenDataViewList_, outputDataViewList_, rtol, atol);
         }
         if (!res) {
             checkResult = false;
@@ -591,17 +591,16 @@ void FlowVerifier::VerifyPass(Function* func, int passIndex, const std::string& 
             std::string tensorName = "tensor~" + func->GetMagicName() + "~" + passIdentifier + "~" +
                                      functionInterpreter_->GetLoopSymbolString(false);
 
-            auto res = VerifyResult(
-                func->GetOutcast(), capture->func->GetOutcast(), key, tensorName, goldenDataViewList,
-                executeDataViewList, rtol, atol);
+            auto res = VerifyResult(func->GetOutcast(), capture->func->GetOutcast(), key, tensorName,
+                                    goldenDataViewList, executeDataViewList, rtol, atol);
             if (!res) {
                 checkResult = false;
             }
         } catch (std::exception& e) {
-            INTERPRETER_LOGE_FULL(
-                VerifyResultScene::VERIFY_RESULT_MISMATCH,
-                "VerifyPass failed for function %s, pass %s (passIndex: %d, captureIndex: %zu): %s",
-                func->GetMagicName().c_str(), passIdentifier.c_str(), passIndex, captureIndex, e.what());
+            INTERPRETER_LOGE_FULL(VerifyResultScene::VERIFY_RESULT_MISMATCH,
+                                  "VerifyPass failed for function %s, pass %s (passIndex: %d, captureIndex: %zu): %s",
+                                  func->GetMagicName().c_str(), passIdentifier.c_str(), passIndex, captureIndex,
+                                  e.what());
             std::string msg = e.what();
             fprintf(functionInterpreter_->execDumpErrorFile, "%s\n", ParseErrorMsg(msg).c_str());
             WriteException();

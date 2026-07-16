@@ -72,7 +72,8 @@ void GetExecuteFunc(Function* func, std::map<int, std::set<Function*>>& leafFunc
     return;
 }
 
-void DumpMixInfoToJson(const std::map<uint64_t, std::map<int, WrapInfo>>& wrapInfos) {
+void DumpMixInfoToJson(const std::map<uint64_t, std::map<int, WrapInfo>>& wrapInfos)
+{
     std::vector<MixInfo> wrapinfoList;
     for (auto& [mixId, rootWrapinfo] : wrapInfos) {
         MixInfo mixInfo;
@@ -83,7 +84,7 @@ void DumpMixInfoToJson(const std::map<uint64_t, std::map<int, WrapInfo>>& wrapIn
         }
         wrapinfoList.push_back(mixInfo);
     }
-json j = wrapinfoList;
+    json j = wrapinfoList;
     std::string path = npu::tile_fwk::config::GetAbsoluteTopFolder() + "/mix_event_info.json";
     std::ofstream of(path);
     if (of.is_open()) {
@@ -109,8 +110,7 @@ int DumpMixInfo(Function* topFunc)
                 continue;
             }
             auto mixId = leafAttr->mixId;
-            if (wrapInfos.find(mixId) == wrapInfos.end() ||
-                wrapInfos[mixId].find(wrapID) == wrapInfos[mixId].end()) {
+            if (wrapInfos.find(mixId) == wrapInfos.end() || wrapInfos[mixId].find(wrapID) == wrapInfos[mixId].end()) {
                 WrapInfo info;
                 info.wrapID = wrapID;
                 wrapInfos[mixId][wrapID] = info;
@@ -136,11 +136,11 @@ int DumpMixInfo(Function* topFunc)
     }
     DumpMixInfoToJson(wrapInfos);
     ASSERT(DevCommonErr::PARAM_CHECK_FAILED, totalSetEventCount <= MAX_TOTAL_EVENT_NUMS)
-        << "TotalSetEventCount (" << totalSetEventCount
-        << ") is larger than MAX_TOTAL_EVENT_NUMS(" << MAX_TOTAL_EVENT_NUMS << ")";
+        << "TotalSetEventCount (" << totalSetEventCount << ") is larger than MAX_TOTAL_EVENT_NUMS("
+        << MAX_TOTAL_EVENT_NUMS << ")";
     ASSERT(DevCommonErr::PARAM_CHECK_FAILED, totalWaitEventCount <= MAX_TOTAL_EVENT_NUMS)
-        << "TotalWaitEventCount (" << totalWaitEventCount
-        << ") is larger than MAX_TOTAL_EVENT_NUMS(" << MAX_TOTAL_EVENT_NUMS << ")";
+        << "TotalWaitEventCount (" << totalWaitEventCount << ") is larger than MAX_TOTAL_EVENT_NUMS("
+        << MAX_TOTAL_EVENT_NUMS << ")";
     return 0;
 }
 } // namespace mix_info

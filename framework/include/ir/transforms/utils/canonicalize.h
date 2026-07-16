@@ -25,7 +25,7 @@ namespace ir {
 /// unused returnVars from IfStmt. Also filters corresponding
 /// YieldStmt/BreakStmt/ContinueStmt values.
 /// Recurses into nested control flow.
-SeqStmtsPtr CanonicalizeSeqStmts(const SeqStmtsPtr& body, const std::vector<size_t>& keptIndices={});
+SeqStmtsPtr CanonicalizeSeqStmts(const SeqStmtsPtr& body, const std::vector<size_t>& keptIndices = {});
 
 } // namespace ir
 } // namespace pypto

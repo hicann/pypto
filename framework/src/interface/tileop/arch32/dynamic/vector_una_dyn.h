@@ -28,15 +28,13 @@ TILEOP void T_UNA(__ubuf__ T* dst, __ubuf__ T* src, unsigned T0, unsigned T1)
         for (int i = 0; i < T0; i++) {
             if (numLoop) {
                 for (int j = 0; j < numLoop; j++) {
-                    V_UNA_FUNC(
-                        dst + i * DS + j * simdw * REPEAT_MAX, src + i * SS + j * simdw * REPEAT_MAX, REPEAT_MAX, 1, 1,
-                        8, 8);
+                    V_UNA_FUNC(dst + i * DS + j * simdw * REPEAT_MAX, src + i * SS + j * simdw * REPEAT_MAX, REPEAT_MAX,
+                               1, 1, 8, 8);
                 }
             }
             if (remainAfterLoop) {
-                V_UNA_FUNC(
-                    dst + i * DS + simdw * REPEAT_MAX * numLoop, src + i * SS + simdw * REPEAT_MAX * numLoop,
-                    remainAfterLoop, 1, 1, 8, 8);
+                V_UNA_FUNC(dst + i * DS + simdw * REPEAT_MAX * numLoop, src + i * SS + simdw * REPEAT_MAX * numLoop,
+                           remainAfterLoop, 1, 1, 8, 8);
             }
         }
     }
@@ -48,34 +46,31 @@ TILEOP void T_UNA(__ubuf__ T* dst, __ubuf__ T* src, unsigned T0, unsigned T1)
     if (numRemainPerLine) {
         unsigned numLoop = T0 / REPEAT_MAX;
         unsigned remainAfterLoop = T0 % REPEAT_MAX;
-        constexpr bool strideOverFlag =
-            (DS / nElemPerBlock > REPEAT_STRIDE_MAX) || (SS / nElemPerBlock > REPEAT_STRIDE_MAX);
+        constexpr bool strideOverFlag = (DS / nElemPerBlock > REPEAT_STRIDE_MAX) ||
+                                        (SS / nElemPerBlock > REPEAT_STRIDE_MAX);
         SetContinuousMask(numRemainPerLine);
         if (numLoop) {
             for (int i = 0; i < numLoop; i++) {
                 if constexpr (strideOverFlag) {
                     for (uint64_t j = 0; j < REPEAT_MAX; j++) {
-                        V_UNA_FUNC(
-                            dst + i * REPEAT_MAX * DS + j * DS, src + i * REPEAT_MAX * SS + j * SS, 1, 1, 1, 1, 1);
+                        V_UNA_FUNC(dst + i * REPEAT_MAX * DS + j * DS, src + i * REPEAT_MAX * SS + j * SS, 1, 1, 1, 1,
+                                   1);
                     }
                 } else {
-                    V_UNA_FUNC(
-                        dst + i * REPEAT_MAX * DS, src + i * REPEAT_MAX * SS, REPEAT_MAX, 1, 1, DS / nElemPerBlock,
-                        SS / nElemPerBlock);
+                    V_UNA_FUNC(dst + i * REPEAT_MAX * DS, src + i * REPEAT_MAX * SS, REPEAT_MAX, 1, 1,
+                               DS / nElemPerBlock, SS / nElemPerBlock);
                 }
             }
         }
         if (remainAfterLoop) {
             if constexpr (strideOverFlag) {
                 for (unsigned j = 0; j < remainAfterLoop; j++) {
-                    V_UNA_FUNC(
-                        dst + numLoop * REPEAT_MAX * DS + j * DS, src + numLoop * REPEAT_MAX * SS + j * SS, 1, 1, 1, 1,
-                        1);
+                    V_UNA_FUNC(dst + numLoop * REPEAT_MAX * DS + j * DS, src + numLoop * REPEAT_MAX * SS + j * SS, 1, 1,
+                               1, 1, 1);
                 }
             } else {
-                V_UNA_FUNC(
-                    dst + numLoop * REPEAT_MAX * DS, src + numLoop * REPEAT_MAX * SS, remainAfterLoop, 1, 1,
-                    DS / nElemPerBlock, SS / nElemPerBlock);
+                V_UNA_FUNC(dst + numLoop * REPEAT_MAX * DS, src + numLoop * REPEAT_MAX * SS, remainAfterLoop, 1, 1,
+                           DS / nElemPerBlock, SS / nElemPerBlock);
             }
         }
         set_vector_mask(-1, -1);

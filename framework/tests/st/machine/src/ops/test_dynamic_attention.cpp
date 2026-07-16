@@ -22,12 +22,10 @@ using namespace npu::tile_fwk::dynamic;
 class DynamicAttention : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac {};
 
 namespace {
-template <
-    typename T = npu::tile_fwk::float16, typename wDtype = int8_t, bool splitK = false, bool nz = false,
-    bool usePrefetch = false>
-void TestDynamicAttention(
-    std::vector<int>& params, PaTileShapeConfig& paTileConfig, string dataPath, uint64_t timeThreshold,
-    bool isQuant = false, bool isSmooth = false)
+template <typename T = npu::tile_fwk::float16, typename wDtype = int8_t, bool splitK = false, bool nz = false,
+          bool usePrefetch = false>
+void TestDynamicAttention(std::vector<int>& params, PaTileShapeConfig& paTileConfig, string dataPath,
+                          uint64_t timeThreshold, bool isQuant = false, bool isSmooth = false)
 {
     (void)timeThreshold;
 
@@ -286,19 +284,17 @@ void TestDynamicAttention(
             quantInputs.smoothScalesCq = smooth_cq;
         }
     }
-    Attention(
-        x, wDq, wUqQr, wUk, wDkvKr, gamma_cq, gamma_ckv, sin, cos, kv_len, kv_cache, kr_cache, output_q, output_q_rope,
-        output_kv_cache, output_kr_cache, quantInputs, ropeConfig,         /*---*/
-        blockTable, actSeqs, paOut, blockSize, softmaxScale, paTileConfig, /*---*/
-        weightUV, weightO, weightOScaleW, postOut, 1e-5f, 1e-5f, cacheMode);
+    Attention(x, wDq, wUqQr, wUk, wDkvKr, gamma_cq, gamma_ckv, sin, cos, kv_len, kv_cache, kr_cache, output_q,
+              output_q_rope, output_kv_cache, output_kr_cache, quantInputs, ropeConfig, /*---*/
+              blockTable, actSeqs, paOut, blockSize, softmaxScale, paTileConfig,        /*---*/
+              weightUV, weightO, weightOScaleW, postOut, 1e-5f, 1e-5f, cacheMode);
 
 #ifdef BUILD_WITH_CANN
-    DevFuncRunner::Run(
-        Program::GetInstance().GetLastFunction(),
-        {xData, wDqData, wUqQrData, wUkData, wDkvKrData, gammaCqData, gammaCkvData, sinData, cosData, kvLenData,
-         kvCacheData, krCacheData, wQbScaleData, smoothCqData, blockTableData, actSeqsData, weightUVData, weightOData,
-         weightOScaleWData},
-        {postOutData});
+    DevFuncRunner::Run(Program::GetInstance().GetLastFunction(),
+                       {xData, wDqData, wUqQrData, wUkData, wDkvKrData, gammaCqData, gammaCkvData, sinData, cosData,
+                        kvLenData, kvCacheData, krCacheData, wQbScaleData, smoothCqData, blockTableData, actSeqsData,
+                        weightUVData, weightOData, weightOScaleWData},
+                       {postOutData});
 
     std::cout << "====== kvCacheData out: " << std::endl;
     EXPECT_TRUE(resultCmp<T>(kv_cache_golden, (T*)kvCacheData->data(), 0.001f));
@@ -314,7 +310,7 @@ TEST_F(DynamicAttention, dynamic_attention_low)
     int b = 4;
     int s = 1;
     int s2 = 256;
-    int h = 7168;         // 7168
+    int h = 7168; // 7168
     int n = 32;
     int qLoraRank = 1536; // 1536
     int qkNopeHeadDim = 128;
@@ -337,8 +333,8 @@ TEST_F(DynamicAttention, dynamic_attention_low)
     tileConfig.c2TileShape = {nTile, nTile, 64, 64, 128, 128};
     tileConfig.v2TileShape = {nTile, 64};
 
-    TestDynamicAttention<npu::tile_fwk::float16, npu::tile_fwk::float16, splitK, nz>(
-        params, tileConfig, GetGoldenDir(), 10000, false);
+    TestDynamicAttention<npu::tile_fwk::float16, npu::tile_fwk::float16, splitK, nz>(params, tileConfig, GetGoldenDir(),
+                                                                                     10000, false);
 }
 
 TEST_F(DynamicAttention, dynamic_attention_high)
@@ -369,8 +365,8 @@ TEST_F(DynamicAttention, dynamic_attention_high)
     paTileConfig.c2TileShape = {nTile, nTile, 256, 256, 128, 128};
     paTileConfig.v2TileShape = {16, 256};
 
-    TestDynamicAttention<npu::tile_fwk::float16, npu::tile_fwk::float16, splitK, nz>(
-        params, paTileConfig, GetGoldenDir(), 10000, false);
+    TestDynamicAttention<npu::tile_fwk::float16, npu::tile_fwk::float16, splitK, nz>(params, paTileConfig,
+                                                                                     GetGoldenDir(), 10000, false);
 }
 
 TEST_F(DynamicAttention, low_latency_quant_smooth_nz)
@@ -403,8 +399,8 @@ TEST_F(DynamicAttention, low_latency_quant_smooth_nz)
     paTileConfig.c2TileShape = {nTile, nTile, 64, 64, 128, 128};
     paTileConfig.v2TileShape = {nTile, 64};
 
-    TestDynamicAttention<npu::tile_fwk::float16, int8_t, splitK, nz>(
-        params, paTileConfig, GetGoldenDir(), 10000, isQuant, isSmooth);
+    TestDynamicAttention<npu::tile_fwk::float16, int8_t, splitK, nz>(params, paTileConfig, GetGoldenDir(), 10000,
+                                                                     isQuant, isSmooth);
 }
 
 TEST_F(DynamicAttention, high_throughput_quant_smooth_nz)
@@ -437,8 +433,8 @@ TEST_F(DynamicAttention, high_throughput_quant_smooth_nz)
     paTileConfig.c2TileShape = {nTile, nTile, 256, 256, 128, 128};
     paTileConfig.v2TileShape = {16, 256};
 
-    TestDynamicAttention<npu::tile_fwk::float16, int8_t, splitK, nz>(
-        params, paTileConfig, GetGoldenDir(), 10000, isQuant, isSmooth);
+    TestDynamicAttention<npu::tile_fwk::float16, int8_t, splitK, nz>(params, paTileConfig, GetGoldenDir(), 10000,
+                                                                     isQuant, isSmooth);
 }
 
 } // namespace

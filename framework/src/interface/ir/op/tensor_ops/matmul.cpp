@@ -38,9 +38,8 @@ namespace ir {
 
 // Helper to get kwargs value with default (uses vector to preserve order)
 template <typename T>
-T GetKwarg(
-    [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs, const std::string& key,
-    const std::optional<T>& default_value = std::nullopt)
+T GetKwarg([[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs, const std::string& key,
+           const std::optional<T>& default_value = std::nullopt)
 {
     for (const auto& [k, v] : kwargs) {
         if (k == key) {
@@ -53,9 +52,8 @@ T GetKwarg(
     throw ValueError("Missing kwarg: " + key);
 }
 
-TypePtr DeduceTensorMatMulType(
-    [[maybe_unused]] const std::vector<ExprPtr>& args,
-    [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
+TypePtr DeduceTensorMatMulType([[maybe_unused]] const std::vector<ExprPtr>& args,
+                               [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
 {
     // tensor.matmul requires exactly 2 Expr arguments (lhs, rhs)
     CHECK(args.size() == 0x2) << "tensor.matmul requires exactly 2 arguments (lhs, rhs), but got " << args.size();

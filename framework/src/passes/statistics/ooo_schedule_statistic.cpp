@@ -28,10 +28,7 @@ constexpr float decimal = 10000.f; // 保留四位小数
 
 // === ScheduleObserver callback implementations ===
 
-void OoOScheduleStatistic::OnOpLaunch(const OpLaunchEvent& e)
-{
-    pipeUsageCount[e.pipeType] += (e.cycleEnd - e.clock);
-}
+void OoOScheduleStatistic::OnOpLaunch(const OpLaunchEvent& e) { pipeUsageCount[e.pipeType] += (e.cycleEnd - e.clock); }
 
 void OoOScheduleStatistic::OnAllocExec(const AllocExecEvent& e)
 {
@@ -47,7 +44,8 @@ void OoOScheduleStatistic::OnOpRetire(const OpRetireEvent& e)
 {
     for (int memId : e.freedMemIds) {
         auto it = bufferMeta_.find(memId);
-        if (it == bufferMeta_.end()) continue;
+        if (it == bufferMeta_.end())
+            continue;
         auto memType = it->second.memType;
         auto size = it->second.size;
         bufferTotalUsage[memType] += bufferLastUsage[memType] * (e.clock - lastClock[memType]);
@@ -96,8 +94,10 @@ void OoOScheduleStatistic::HealthCheckSpillInfo()
         spillDetails["spillEventIdx"] = spillIdx++;
         spillDetails["spillBufferType"] = MemoryTypeToString(spillInfo.spillType);
         spillDetails["bufferCurrentUsage"] = spillInfo.bufferCurrUsage;
-        spillDetails["bufferCurrentUsageRate"] = spillInfo.bufferCapacity == 0 ? 0.0f
-            : static_cast<float>(spillInfo.bufferCurrUsage) / spillInfo.bufferCapacity;
+        spillDetails["bufferCurrentUsageRate"] = spillInfo.bufferCapacity == 0 ?
+                                                     0.0f :
+                                                     static_cast<float>(spillInfo.bufferCurrUsage) /
+                                                         spillInfo.bufferCapacity;
         spillDetails["bufferOccupiedByAllocSize"] = spillInfo.allocOccupiedSize;
         spillDetails["spillTensorSize"] = spillInfo.spillTensorSize;
         spillDetails["spillTensorMagic"] = spillInfo.spillTensorMagic;
@@ -113,8 +113,8 @@ double OoOScheduleStatistic::FormatUsageRate(double value) { return std::round(v
 Status OoOScheduleStatistic::HealthCheckOoOSchedule()
 {
     auto memorySize = CommonUtils::GetLocalMemorySize();
-    for (auto memType : {MemoryType::MEM_UB, MemoryType::MEM_L1,
-             MemoryType::MEM_L0A, MemoryType::MEM_L0B, MemoryType::MEM_L0C}) {
+    for (auto memType :
+         {MemoryType::MEM_UB, MemoryType::MEM_L1, MemoryType::MEM_L0A, MemoryType::MEM_L0B, MemoryType::MEM_L0C}) {
         if (memorySize[memType] == 0) {
             APASS_LOG_ERROR_F(Elements::Function, "Max buffer size is 0, HealthCheckOoOSchedule failed!");
             return FAILED;
@@ -136,9 +136,9 @@ Status OoOScheduleStatistic::HealthCheckOoOSchedule()
 void OoOScheduleStatistic::ReportPipeUsage()
 {
     static const std::vector<std::pair<PipeType, std::string>> pipeNames = {
-        {PipeType::PIPE_S, "PIPE_S"}, {PipeType::PIPE_V, "PIPE_V"}, {PipeType::PIPE_M, "PIPE_M"},
-        {PipeType::PIPE_MTE1, "PIPE_MTE1"}, {PipeType::PIPE_MTE2, "PIPE_MTE2"},
-        {PipeType::PIPE_MTE3, "PIPE_MTE3"}, {PipeType::PIPE_FIX, "PIPE_FIX"}};
+        {PipeType::PIPE_S, "PIPE_S"},       {PipeType::PIPE_V, "PIPE_V"},       {PipeType::PIPE_M, "PIPE_M"},
+        {PipeType::PIPE_MTE1, "PIPE_MTE1"}, {PipeType::PIPE_MTE2, "PIPE_MTE2"}, {PipeType::PIPE_MTE3, "PIPE_MTE3"},
+        {PipeType::PIPE_FIX, "PIPE_FIX"}};
     Json pipeUsageRate;
     uint64_t maxUsage = 0;
     for (const auto& [pipeType, name] : pipeNames) {
@@ -152,16 +152,18 @@ void OoOScheduleStatistic::ReportPipeUsage()
 
 void OoOScheduleStatistic::ReportMemoryUsage(const std::unordered_map<MemoryType, int64_t>& memorySize)
 {
-    static const std::vector<std::pair<MemoryType, std::string>> memNames = {
-        {MemoryType::MEM_UB, "MEM_UB"}, {MemoryType::MEM_L1, "MEM_L1"}, {MemoryType::MEM_L0A, "MEM_L0A"},
-        {MemoryType::MEM_L0B, "MEM_L0B"}, {MemoryType::MEM_L0C, "MEM_L0C"}};
+    static const std::vector<std::pair<MemoryType, std::string>> memNames = {{MemoryType::MEM_UB, "MEM_UB"},
+                                                                             {MemoryType::MEM_L1, "MEM_L1"},
+                                                                             {MemoryType::MEM_L0A, "MEM_L0A"},
+                                                                             {MemoryType::MEM_L0B, "MEM_L0B"},
+                                                                             {MemoryType::MEM_L0C, "MEM_L0C"}};
     Json memoryUsage;
     for (const auto& [memType, name] : memNames) {
         auto maxSize = memorySize.at(memType);
-        memoryUsage[name + "_Peak_Usage"] =
-            FormatUsageRate(static_cast<double>(bufferMaxUsage.at(memType)) / maxSize * percent);
-        memoryUsage[name + "_Average_Usage"] =
-            FormatUsageRate(static_cast<double>(bufferTotalUsage.at(memType)) / clock / maxSize * percent);
+        memoryUsage[name + "_Peak_Usage"] = FormatUsageRate(static_cast<double>(bufferMaxUsage.at(memType)) / maxSize *
+                                                            percent);
+        memoryUsage[name + "_Average_Usage"] = FormatUsageRate(static_cast<double>(bufferTotalUsage.at(memType)) /
+                                                               clock / maxSize * percent);
     }
     report["memoryUsage"] = memoryUsage;
 }
@@ -175,12 +177,14 @@ void OoOScheduleStatistic::HealthCheckBlockGraph(Function* function)
     std::vector<int> maxProducersTensors;
     std::vector<int> maxConsumersTensors;
     for (auto& tensor : tensors) {
-        if (!tensor) continue;
+        if (!tensor)
+            continue;
         maxProducers = std::max(tensor->GetProducers().size(), maxProducers);
         maxConsumers = std::max(tensor->GetConsumers().size(), maxConsumers);
     }
     for (auto& tensor : tensors) {
-        if (!tensor) continue;
+        if (!tensor)
+            continue;
         if (tensor->GetProducers().size() == maxProducers) {
             maxProducersTensors.emplace_back(tensor->GetMagic());
         }

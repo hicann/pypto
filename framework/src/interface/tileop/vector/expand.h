@@ -19,18 +19,13 @@
 #include "utils/layout.h"
 #include "utils/tile_tensor.h"
 
-enum class ExpandTile : uint8_t {
-    NONE,
-    H,
-    W,
-    HW
-};
+enum class ExpandTile : uint8_t { NONE, H, W, HW };
 
 template <unsigned... Axes>
 TILEOP constexpr ExpandTile GetExpandTile()
 {
     constexpr auto expandAxesNum = sizeof...(Axes);
-    constexpr unsigned axesList[] = { Axes... };
+    constexpr unsigned axesList[] = {Axes...};
     bool hasH = false;
     bool hasW = false;
     for (size_t i = 0; i < expandAxesNum; i++) {
@@ -41,7 +36,7 @@ TILEOP constexpr ExpandTile GetExpandTile()
             hasW = true;
         }
     }
-    
+
     if (hasH && hasW) {
         return ExpandTile::HW;
     } else if (hasH) {
@@ -52,7 +47,8 @@ TILEOP constexpr ExpandTile GetExpandTile()
     return ExpandTile::NONE;
 }
 
-template <typename LastUse = LastUse2Dim<0, 0>, ExpandTile expandTile, typename TileDst, typename TileSrc, typename TileTmp>
+template <typename LastUse = LastUse2Dim<0, 0>, ExpandTile expandTile, typename TileDst, typename TileSrc,
+          typename TileTmp>
 TILEOP void ExpandImpl(TileDst& dstTile, TileSrc& srcTile, TileTmp& tmpTile)
 {
     constexpr auto n1 = Std::tuple_element<DIM_1ST, LastUse>::type::value;
@@ -94,7 +90,7 @@ TILEOP void TExpand(T0 dst, T1 src)
     using DstDtype = std::conditional_t<std::is_same_v<typename T0::Type, bool>, uint8_t, typename T0::Type>;
     using SrcDtype = std::conditional_t<std::is_same_v<typename T1::Type, bool>, uint8_t, typename T1::Type>;
     constexpr auto typeSize = sizeof(DstDtype);
-    
+
     constexpr auto dstTileHOrigin = TileOp::GetTensorTileShapeDim<T0, DIM_4TH, MAX_DIMS>();
     constexpr auto srcTileHOrigin = TileOp::GetTensorTileShapeDim<T1, DIM_4TH, MAX_DIMS>();
     constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, DIM_5TH, MAX_DIMS>();
@@ -116,8 +112,9 @@ TILEOP void TExpand(T0 dst, T1 src)
         for (LoopVar n1Index = 0; n1Index < dstShape1; ++n1Index) {
             for (LoopVar n2Index = 0; n2Index < dstShape2; ++n2Index) {
                 auto dstOffset = GenTileOffset(dst, TileOffset(n0Index, n1Index, n2Index));
-                auto srcOffset = GenTileOffset(src, TileOffset(((Axes == DIM_1ST) || ...) ? 0 : n0Index, ((Axes == DIM_2ND) || ...) ? 0 : n1Index,
-                                                               ((Axes == DIM_3RD) || ...) ? 0 : n2Index));
+                auto srcOffset = GenTileOffset(
+                    src, TileOffset(((Axes == DIM_1ST) || ...) ? 0 : n0Index, ((Axes == DIM_2ND) || ...) ? 0 : n1Index,
+                                    ((Axes == DIM_3RD) || ...) ? 0 : n2Index));
                 pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + dstOffset * typeSize));
                 pto::TASSIGN(srcTile, (uint64_t)(src.GetAddr() + srcOffset * typeSize));
                 pto::TASSIGN(tmpTile, (uint64_t)(dst.GetAddr() + dstOffset * typeSize));

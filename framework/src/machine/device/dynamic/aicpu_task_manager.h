@@ -60,12 +60,11 @@ public:
 
     inline int32_t Init(DynDeviceTask* deviceTask, bool profSwitch, uint32_t parallelIdx = 0)
     {
-        auto cache =
-            reinterpret_cast<npu::tile_fwk::Distributed::ShmemWaitUntilCache*>(deviceTask->shmemWaitUntilCacheBackup);
+        auto cache = reinterpret_cast<npu::tile_fwk::Distributed::ShmemWaitUntilCache*>(
+            deviceTask->shmemWaitUntilCacheBackup);
         if (cache != nullptr) {
-            DEV_INFO(
-                "MachineFlow: loading cache with pre-built hashTable, taskCount=%u, parallelIdx=%u", cache->taskCount,
-                parallelIdx);
+            DEV_INFO("MachineFlow: loading cache with pre-built hashTable, taskCount=%u, parallelIdx=%u",
+                     cache->taskCount, parallelIdx);
             shmemWaitUntil_.LoadCache(cache, parallelIdx);
             DEV_INFO("MachineFlow: cache loaded successfully for parallelIdx=%u", parallelIdx);
 
@@ -112,8 +111,8 @@ public:
                 return ret;
             }
             __PYPTO_TIMEOUT_CHECK_EXIT_ONLY(DistributedErrorCode::AICPU_TASK_TIMEOUT,
-                return DEVICE_MACHINE_TIMEOUT_SYNC_AICPU_FINISH,
-                "#sche.task.end.sync: SyncAicpuTaskFinish.");
+                                            return DEVICE_MACHINE_TIMEOUT_SYNC_AICPU_FINISH,
+                                            "#sche.task.end.sync: SyncAicpuTaskFinish.");
         }
         return DEVICE_MACHINE_OK;
     }

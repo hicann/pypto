@@ -117,9 +117,10 @@ private:
 /**
  * \brief Helper macro for simple op conversion registration
  */
-#define REGISTER_OP_CONVERSION(FromOp, ToOp)                  \
-    static bool PYPTO_STR_CONCAT(op_conv_reg_, __COUNTER__) = \
-        (::pypto::ir::OpConversionRegistry::GetInstance().RegisterSimple(FromOp, ToOp), true)
+#define REGISTER_OP_CONVERSION(FromOp, ToOp)                                                                         \
+    static bool PYPTO_STR_CONCAT(                                                                                    \
+        op_conv_reg_, __COUNTER__) = (::pypto::ir::OpConversionRegistry::GetInstance().RegisterSimple(FromOp, ToOp), \
+                                      true)
 
 } // namespace ir
 } // namespace pypto

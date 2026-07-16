@@ -90,9 +90,8 @@ void TestWinAttenUt(WinAttenTileShapeConfig& tileConfig)
     Tensor blockTable(DT_INT32, blockTableShape, "blockTable");
     Tensor attentionOut(DT_FP32, attentionOutShape, "attentionOut");
 
-    WinAttentionDebug(
-        qNope, vNopeCache, qRope, kRopeCache, nQ, nKV, blockTable, actSeqs, windowSize, blockSize, softmaxScale,
-        attentionOut, tileConfig);
+    WinAttentionDebug(qNope, vNopeCache, qRope, kRopeCache, nQ, nKV, blockTable, actSeqs, windowSize, blockSize,
+                      softmaxScale, attentionOut, tileConfig);
 }
 
 TEST_F(DynamicTestWinAttenDebugUt, TestOnboardWinAttnTest_FP16)

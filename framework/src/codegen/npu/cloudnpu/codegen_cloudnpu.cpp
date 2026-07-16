@@ -91,14 +91,12 @@ void CodeGenCloudNPU::GenFuncBody(Function& subFunc, Function& topFunc, std::ost
 
     OperationsViewer operationList = subFunc.Operations(false);
     if (operationList.IsEmpty()) {
-        CODEGEN_LOGW(
-            "operationList from PASS is empty, func magic name: %s, func hash: %s", subFunc.GetMagicName().c_str(),
-            subFunc.GetFunctionHash().c_str());
+        CODEGEN_LOGW("operationList from PASS is empty, func magic name: %s, func hash: %s",
+                     subFunc.GetMagicName().c_str(), subFunc.GetFunctionHash().c_str());
     }
 
-    CODEGEN_LOGI(
-        "TopFunc Type is %s\nFunction to codegen:\n %s\n", topFunc.GetFunctionTypeStr().c_str(),
-        subFunc.Dump().c_str());
+    CODEGEN_LOGI("TopFunc Type is %s\nFunction to codegen:\n %s\n", topFunc.GetFunctionTypeStr().c_str(),
+                 subFunc.Dump().c_str());
 
     std::shared_ptr<SymbolManager> symbolMgr = std::make_shared<SymbolManager>();
     std::shared_ptr<ForBlockManager> forBlkMgr = std::make_shared<ForBlockManager>(symbolMgr);
@@ -106,8 +104,8 @@ void CodeGenCloudNPU::GenFuncBody(Function& subFunc, Function& topFunc, std::ost
     std::string tileOpSourceRegion;
     tileOpSourceRegion.reserve(CODE_RESERVED_SIZE);
     for (const auto& op : operationList) {
-        CODEGEN_LOGI(
-            "======================== Op CodeGenNPU Start ========================\nGen OP IS: %s", op.Dump().c_str());
+        CODEGEN_LOGI("======================== Op CodeGenNPU Start ========================\nGen OP IS: %s",
+                     op.Dump().c_str());
         if (SKIP_OPCODE_FOR_CODEGEN.find(op.GetOpcode()) != SKIP_OPCODE_FOR_CODEGEN.end()) {
             CODEGEN_LOGI("ignore this op\n------------------------ Op CodeGenNPU Finish -----------------------");
             continue;

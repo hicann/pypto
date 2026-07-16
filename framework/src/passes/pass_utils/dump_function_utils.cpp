@@ -28,8 +28,8 @@ Status DumpFunctionUtils::GetCallee(const Operation& callop, Function*& callFunc
     auto callopAttr = std::static_pointer_cast<CallOpAttribute>(callop.GetOpAttribute());
     callFunc = Program::GetInstance().GetFunctionByMagicName(callopAttr->GetCalleeMagicName());
     if (callFunc == nullptr) {
-        APASS_LOG_ERROR_F(
-            Elements::Function, "Get callee function %s failed.", callopAttr->GetCalleeMagicName().c_str());
+        APASS_LOG_ERROR_F(Elements::Function, "Get callee function %s failed.",
+                          callopAttr->GetCalleeMagicName().c_str());
         return FAILED;
     }
     return SUCCESS;
@@ -40,21 +40,19 @@ Status DumpFunctionUtils::GetTileFunction(Function* function, std::unordered_set
     for (auto callop : function->GetCallopList()) {
         Function* nextFunc = nullptr;
         if (GetCallee(*callop, nextFunc) != SUCCESS) {
-            APASS_LOG_ERROR_F(
-                Elements::Operation, "GetTileFunction, currFunc: %s, %s[%d] GetCallee failed.",
-                function->GetRawName().c_str(), callop->GetOpcodeStr().c_str(), callop->GetOpMagic());
+            APASS_LOG_ERROR_F(Elements::Operation, "GetTileFunction, currFunc: %s, %s[%d] GetCallee failed.",
+                              function->GetRawName().c_str(), callop->GetOpcodeStr().c_str(), callop->GetOpMagic());
             return FAILED;
         }
-        APASS_LOG_DEBUG_F(
-            Elements::Function, "GetTileFunction, %s --%s[%d]--> %s", function->GetRawName().c_str(),
-            callop->GetOpcodeStr().c_str(), callop->GetOpMagic(), nextFunc->GetRawName().c_str());
+        APASS_LOG_DEBUG_F(Elements::Function, "GetTileFunction, %s --%s[%d]--> %s", function->GetRawName().c_str(),
+                          callop->GetOpcodeStr().c_str(), callop->GetOpMagic(), nextFunc->GetRawName().c_str());
         if (nextFunc->GetGraphType() == GraphType::TILE_GRAPH) {
             tileFunctionSet.emplace(nextFunc);
         } else {
             if (GetTileFunction(nextFunc, tileFunctionSet) != SUCCESS) {
-                APASS_LOG_ERROR_F(
-                    Elements::Operation, "GetTileFunction, currFunc: %s, nextFunc: %s, recursive search failed",
-                    function->GetRawName().c_str(), nextFunc->GetRawName().c_str());
+                APASS_LOG_ERROR_F(Elements::Operation,
+                                  "GetTileFunction, currFunc: %s, nextFunc: %s, recursive search failed",
+                                  function->GetRawName().c_str(), nextFunc->GetRawName().c_str());
                 return FAILED;
             }
         }
@@ -62,11 +60,8 @@ Status DumpFunctionUtils::GetTileFunction(Function* function, std::unordered_set
     return SUCCESS;
 }
 
-Status DumpFunctionUtils::DumpTileFunctionsJson(
-    Function& function,
-    const std::string& logFolder,
-    bool beforeFunction,
-    std::function<Status(Function&, const std::string&, bool)> dumpFunc)
+Status DumpFunctionUtils::DumpTileFunctionsJson(Function& function, const std::string& logFolder, bool beforeFunction,
+                                                std::function<Status(Function&, const std::string&, bool)> dumpFunc)
 {
     std::unordered_set<Function*> tileFunctionSet;
     if (GetTileFunction(&function, tileFunctionSet) != SUCCESS) {
@@ -83,11 +78,8 @@ Status DumpFunctionUtils::DumpTileFunctionsJson(
     return SUCCESS;
 }
 
-Status DumpFunctionUtils::PrintTileFunctions(
-    Function& function,
-    const std::string& logFolder,
-    bool beforeFunction,
-    std::function<Status(Function&, const std::string&, bool)> printFunc)
+Status DumpFunctionUtils::PrintTileFunctions(Function& function, const std::string& logFolder, bool beforeFunction,
+                                             std::function<Status(Function&, const std::string&, bool)> printFunc)
 {
     std::unordered_set<Function*> tileFunctionSet;
     if (GetTileFunction(&function, tileFunctionSet) != SUCCESS) {

@@ -173,9 +173,9 @@ std::vector<typename Config::IndexType> make_topk_indices(const Config& cfg, uin
 
 // ----------------- 逻辑 index -> 物理 index 的核心函数 -----------------
 template <typename Config>
-typename Config::IndexType compute_physical_index(
-    typename Config::IndexType logical_index, const std::vector<typename Config::IndexType>& page_table,
-    const Config& cfg)
+typename Config::IndexType compute_physical_index(typename Config::IndexType logical_index,
+                                                  const std::vector<typename Config::IndexType>& page_table,
+                                                  const Config& cfg)
 {
     using IndexType = typename Config::IndexType;
 
@@ -192,10 +192,10 @@ typename Config::IndexType compute_physical_index(
 // buffer         : [num_buffer_tokens, hidden_dim] -> size = num_buffer_tokens * hidden_dim
 // 输出 result    : [topk_count, hidden_dim] -> size = topk_count * hidden_dim
 template <typename Config>
-void gather_golden(
-    const std::vector<typename Config::IndexType>& topk_indices,
-    const std::vector<typename Config::IndexType>& page_table, const std::vector<typename Config::DataType>& buffer,
-    const Config& cfg, std::vector<typename Config::DataType>& result)
+void gather_golden(const std::vector<typename Config::IndexType>& topk_indices,
+                   const std::vector<typename Config::IndexType>& page_table,
+                   const std::vector<typename Config::DataType>& buffer, const Config& cfg,
+                   std::vector<typename Config::DataType>& result)
 {
     using IndexType = typename Config::IndexType;
     // using DataType = typename Config::DataType;
@@ -290,9 +290,9 @@ void BasicGatherTest(Config& cfg)
     }
     std::cout << "compile finished" << std::endl;
 
-    ProgramData::GetInstance().AppendInputs(
-        {RawTensorData::CreateTensor<float16>(src, srcData), RawTensorData::CreateTensor<int32_t>(offsets, offsetsData),
-         RawTensorData::CreateTensor<int32_t>(pageTable, pageTableData)});
+    ProgramData::GetInstance().AppendInputs({RawTensorData::CreateTensor<float16>(src, srcData),
+                                             RawTensorData::CreateTensor<int32_t>(offsets, offsetsData),
+                                             RawTensorData::CreateTensor<int32_t>(pageTable, pageTableData)});
     ProgramData::GetInstance().AppendOutputs({
         RawTensorData::CreateConstantTensor<float16>(dst, 0),
     });

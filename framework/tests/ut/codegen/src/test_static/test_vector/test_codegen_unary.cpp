@@ -37,8 +37,8 @@ public:
     static void TearDownTestCase() { config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true); }
 };
 
-void TestRowMaxSingleBody(
-    std::vector<int64_t> shape, std::vector<int64_t> outShape, std::vector<int64_t> tileShape, std::string name)
+void TestRowMaxSingleBody(std::vector<int64_t> shape, std::vector<int64_t> outShape, std::vector<int64_t> tileShape,
+                          std::string name)
 {
     TileShape::Current().SetVecTile(tileShape);
     Tensor input_a(DT_FP32, shape, "A");
@@ -62,8 +62,8 @@ TEST_F(TestCodegenUnary, RowMaxSingleDim4)
     TestRowMaxSingleBody({8, 4, 4, 128}, {8, 4, 4, 1}, {2, 1, 1, 64}, "ROWMAXSINGLE_DIM4");
 }
 
-void TestRowSumSingleBody(
-    std::vector<int64_t> shape, std::vector<int64_t> outShape, std::vector<int64_t> tileShape, std::string name)
+void TestRowSumSingleBody(std::vector<int64_t> shape, std::vector<int64_t> outShape, std::vector<int64_t> tileShape,
+                          std::string name)
 {
     TileShape::Current().SetVecTile(tileShape);
     Tensor input_a(DT_FP32, shape, "A");
@@ -87,9 +87,9 @@ TEST_F(TestCodegenUnary, RowSumSingleDim4)
     TestRowSumSingleBody({8, 4, 4, 128}, {8, 4, 4, 1}, {2, 1, 1, 64}, "ROWSUMSINGLE_DIM4");
 }
 
-void TestTransposeVnchwconvBody(
-    std::vector<int64_t> shape, std::vector<int64_t> outShape, std::vector<int> transposeShape,
-    std::vector<int64_t> tileShape, std::string name, bool isSupportTileTensor = false)
+void TestTransposeVnchwconvBody(std::vector<int64_t> shape, std::vector<int64_t> outShape,
+                                std::vector<int> transposeShape, std::vector<int64_t> tileShape, std::string name,
+                                bool isSupportTileTensor = false)
 {
     if (isSupportTileTensor) {
         config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
@@ -116,8 +116,8 @@ TEST_F(TestCodegenUnary, TransposeVnchwconvDim4)
 
 TEST_F(TestCodegenUnary, TransposeVnchwconvDim5)
 {
-    TestTransposeVnchwconvBody(
-        {1, 1, 2, 32, 16}, {1, 1, 2, 16, 32}, {3, 4}, {1, 1, 1, 16, 16}, "TRANSPOSE_VNCHWCONV_DIM5");
+    TestTransposeVnchwconvBody({1, 1, 2, 32, 16}, {1, 1, 2, 16, 32}, {3, 4}, {1, 1, 1, 16, 16},
+                               "TRANSPOSE_VNCHWCONV_DIM5");
 }
 
 TEST_F(TestCodegenUnary, TransposeVnchwconvDim2TileTensor)
@@ -125,8 +125,8 @@ TEST_F(TestCodegenUnary, TransposeVnchwconvDim2TileTensor)
     TestTransposeVnchwconvBody({16, 32}, {32, 16}, {0, 1}, {16, 16}, "TransposeVnchwconvDim2TileTensor", true);
 }
 
-Function& TestFullBody(
-    std::vector<int64_t> shape, std::vector<int64_t> tileShape, std::string name, bool isSupportTileTensor = false)
+Function& TestFullBody(std::vector<int64_t> shape, std::vector<int64_t> tileShape, std::string name,
+                       bool isSupportTileTensor = false)
 {
     if (isSupportTileTensor) {
         config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
@@ -152,9 +152,8 @@ TEST_F(TestCodegenUnary, FullDim2TileTensor)
     CheckStringExist(expect, res);
 }
 
-Function& TestCastBody(
-    std::vector<int64_t> shape, std::vector<int64_t> outShape, std::vector<int64_t> tileShape, std::string name,
-    bool isSupportTileTensor = false)
+Function& TestCastBody(std::vector<int64_t> shape, std::vector<int64_t> outShape, std::vector<int64_t> tileShape,
+                       std::string name, bool isSupportTileTensor = false)
 {
     if (isSupportTileTensor) {
         config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
@@ -181,9 +180,8 @@ TEST_F(TestCodegenUnary, CastDim1TileTensor)
     CheckStringExist(expect, res);
 }
 
-Function& TestExpandBody(
-    std::vector<int64_t> shape, std::vector<int64_t> outShape, std::vector<int64_t> tileShape, std::string name,
-    bool isSupportTileTensor = false)
+Function& TestExpandBody(std::vector<int64_t> shape, std::vector<int64_t> outShape, std::vector<int64_t> tileShape,
+                         std::string name, bool isSupportTileTensor = false)
 {
     if (isSupportTileTensor) {
         config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
@@ -223,9 +221,8 @@ TEST_F(TestCodegenUnary, ExpandDim4Axis1)
     TestExpandBody({4, 1, 8, 17}, {4, 22, 8, 17}, {2, 16, 4, 8}, "ExpandDim4Axis1");
 }
 
-void TestRowSumBody(
-    std::vector<int64_t> shape, std::vector<int64_t> outShape, std::vector<int64_t> tileShape, std::string name,
-    unsigned axis)
+void TestRowSumBody(std::vector<int64_t> shape, std::vector<int64_t> outShape, std::vector<int64_t> tileShape,
+                    std::string name, unsigned axis)
 {
     TileShape::Current().SetVecTile(tileShape);
 

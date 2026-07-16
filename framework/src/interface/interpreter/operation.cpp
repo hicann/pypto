@@ -64,12 +64,11 @@ void LogTensorList(const char* role, Operation* op, const LogicalTensors& tensor
         auto offsetStr = DumpShapeVec(tensor->offset);
         auto dynValidShapeStr = DumpSymbolicVec(tensor->GetDynValidShape());
         auto dynOffsetStr = DumpSymbolicVec(tensor->GetDynOffset());
-        INTERPRETER_LOGE_FULL(
-            ExecuteOperationScene::RUNTIME_EXCEPTION,
-            "ExecuteOperation error: op %s (magic=%d) %s[%zu] tensorMagic=%d, "
-            "shape=%s, offset=%s, dynValidShape=%s, dynOffset=%s",
-            op->GetOpcodeStr().c_str(), op->GetOpMagic(), role, i, tensor->magic, shapeStr.c_str(), offsetStr.c_str(),
-            dynValidShapeStr.c_str(), dynOffsetStr.c_str());
+        INTERPRETER_LOGE_FULL(ExecuteOperationScene::RUNTIME_EXCEPTION,
+                              "ExecuteOperation error: op %s (magic=%d) %s[%zu] tensorMagic=%d, "
+                              "shape=%s, offset=%s, dynValidShape=%s, dynOffset=%s",
+                              op->GetOpcodeStr().c_str(), op->GetOpMagic(), role, i, tensor->magic, shapeStr.c_str(),
+                              offsetStr.c_str(), dynValidShapeStr.c_str(), dynOffsetStr.c_str());
     }
 }
 
@@ -99,8 +98,8 @@ static int64_t GetAsParameterCoaIndex(const RawSymbolicScalarPtr& value)
     return -1;
 }
 
-std::vector<int64_t> OperationInterpreter::EvaluateOpImmediate(
-    FunctionFrame* frame, const std::vector<OpImmediate>& opImmList)
+std::vector<int64_t> OperationInterpreter::EvaluateOpImmediate(FunctionFrame* frame,
+                                                               const std::vector<OpImmediate>& opImmList)
 {
     std::vector<int64_t> result;
     for (auto& opImm : opImmList) {
@@ -157,9 +156,9 @@ void OperationInterpreter::ExecuteOperation(ExecuteOperationContext* ctx)
                 errMsg = errMsg.substr(0, secondNl);
             }
         }
-        throw std::runtime_error(
-            std::to_string(ctx->frame->rootFuncHash) + ", " + std::to_string(ctx->frame->funcHash) + ", " +
-            std::to_string(op->GetOpMagic()) + ", " + op->GetOpcodeStr() + "OpError\n" + ctx->Dump() + errMsg);
+        throw std::runtime_error(std::to_string(ctx->frame->rootFuncHash) + ", " +
+                                 std::to_string(ctx->frame->funcHash) + ", " + std::to_string(op->GetOpMagic()) + ", " +
+                                 op->GetOpcodeStr() + "OpError\n" + ctx->Dump() + errMsg);
     }
 }
 
@@ -191,10 +190,7 @@ std::string ExecuteOperationContext::Dump() const
 }
 
 namespace {
-int InterpreterSyncSimEventKey(const OpSyncQueue& q)
-{
-    return q.eventId_;
-}
+int InterpreterSyncSimEventKey(const OpSyncQueue& q) { return q.eventId_; }
 
 std::string FormatInterpreterCvSyncSimLogCtx(const OpSyncQueue& q)
 {
@@ -218,8 +214,8 @@ void InterpreterSyncSimulationState::Reset()
     std::lock_guard<std::mutex> lock(interpreterSyncSimMutex_);
     interpreterSyncSimPending_.clear();
     interpreterSyncSimCv_.notify_all();
-    INTERPRETER_LOGI(
-        "[InterpreterCvSyncSim] RESET cleared_all_pending thread=%s", CurrentInterpreterThreadTag().c_str());
+    INTERPRETER_LOGI("[InterpreterCvSyncSim] RESET cleared_all_pending thread=%s",
+                     CurrentInterpreterThreadTag().c_str());
 }
 
 void InterpreterSyncSimulationState::Set(const OpSyncQueue& sq, int opMagic)
@@ -231,8 +227,8 @@ void InterpreterSyncSimulationState::Set(const OpSyncQueue& sq, int opMagic)
     interpreterSyncSimCv_.notify_all();
     const std::string desc = FormatInterpreterCvSyncSimLogCtx(sq);
     INTERPRETER_LOGI(
-        "[InterpreterCvSyncSim] SET opMagic=%d eventId=%d key=eventId pending_after=%u detail={%s} thread=%s",
-        opMagic, evKey, static_cast<unsigned>(cnt), desc.c_str(), CurrentInterpreterThreadTag().c_str());
+        "[InterpreterCvSyncSim] SET opMagic=%d eventId=%d key=eventId pending_after=%u detail={%s} thread=%s", opMagic,
+        evKey, static_cast<unsigned>(cnt), desc.c_str(), CurrentInterpreterThreadTag().c_str());
 }
 
 void InterpreterSyncSimulationState::Wait(const OpSyncQueue& sq, int opMagic)
@@ -242,23 +238,23 @@ void InterpreterSyncSimulationState::Wait(const OpSyncQueue& sq, int opMagic)
     const auto prefIt = interpreterSyncSimPending_.find(evKey);
     const bool preflightReady = prefIt != interpreterSyncSimPending_.end() && prefIt->second > 0;
 
-    const auto deadline =
-        std::chrono::steady_clock::now() + std::chrono::milliseconds(INTERPRETER_SYNC_SIM_WAIT_TIMEOUT_MS);
+    const auto deadline = std::chrono::steady_clock::now() +
+                          std::chrono::milliseconds(INTERPRETER_SYNC_SIM_WAIT_TIMEOUT_MS);
     const auto tWaitStart = std::chrono::steady_clock::now();
     const bool ready = interpreterSyncSimCv_.wait_until(lock, deadline, [this, evKey] {
         auto it = interpreterSyncSimPending_.find(evKey);
         return it != interpreterSyncSimPending_.end() && it->second > 0;
     });
-    const auto waitUs = std::chrono::duration_cast<std::chrono::microseconds>(
-        std::chrono::steady_clock::now() - tWaitStart).count();
+    const auto waitUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() -
+                                                                              tWaitStart)
+                            .count();
 
     ASSERT(ControlFlowScene::INTERPRETER_SYNC_SIM_WAIT_TIMEOUT, ready)
         << "Timeout waiting for interpreter CV sync set (mix parallel / ordering), timeoutMs="
         << INTERPRETER_SYNC_SIM_WAIT_TIMEOUT_MS << ", opMagic=" << opMagic << ", eventId=" << evKey
         << ", sync_queue=" << sq.Dump();
     auto it = interpreterSyncSimPending_.find(evKey);
-    ASSERT(
-        ExecuteOperationScene::RUNTIME_EXCEPTION, it != interpreterSyncSimPending_.end() && it->second > 0)
+    ASSERT(ExecuteOperationScene::RUNTIME_EXCEPTION, it != interpreterSyncSimPending_.end() && it->second > 0)
         << "Interpreter CV sync wait race after wake, opMagic=" << opMagic << ", eventId=" << evKey
         << ", sync_queue=" << sq.Dump();
     const uint32_t pendingBefore = it->second;
@@ -276,19 +272,10 @@ void InterpreterSyncSimulationState::Wait(const OpSyncQueue& sq, int opMagic)
         CurrentInterpreterThreadTag().c_str());
 }
 
-void OperationInterpreter::ResetInterpreterSyncSimulation()
-{
-    syncSim_->Reset();
-}
+void OperationInterpreter::ResetInterpreterSyncSimulation() { syncSim_->Reset(); }
 
-void OperationInterpreter::InterpreterSyncSimSet(const OpSyncQueue& sq, int opMagic)
-{
-    syncSim_->Set(sq, opMagic);
-}
+void OperationInterpreter::InterpreterSyncSimSet(const OpSyncQueue& sq, int opMagic) { syncSim_->Set(sq, opMagic); }
 
-void OperationInterpreter::InterpreterSyncSimWait(const OpSyncQueue& sq, int opMagic)
-{
-    syncSim_->Wait(sq, opMagic);
-}
+void OperationInterpreter::InterpreterSyncSimWait(const OpSyncQueue& sq, int opMagic) { syncSim_->Wait(sq, opMagic); }
 
 } // namespace npu::tile_fwk

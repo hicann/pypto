@@ -23,9 +23,8 @@ constexpr int biasIndex = 3;
 constexpr int l0cToL1Index = 4;
 
 struct MatmulOpFuncArgs : public OpFuncArgs {
-    MatmulOpFuncArgs(
-        const std::vector<int64_t>& viewShape, const std::vector<std::vector<int64_t>>& tileShape,
-        const MatmulTestCaseParam& param)
+    MatmulOpFuncArgs(const std::vector<int64_t>& viewShape, const std::vector<std::vector<int64_t>>& tileShape,
+                     const MatmulTestCaseParam& param)
         : viewShape_(viewShape), tileShape_(tileShape), param_(param)
     {}
 
@@ -43,60 +42,58 @@ struct MatmulOpMetaData {
     nlohmann::json test_data_;
 };
 
-static Tensor CallMatmulOp(
-    const Tensor& tensorA, const Tensor& tensorB, const MatmulTestCaseParam& param,
-    const Matrix::MatmulExtendParam& matmulExtendParam)
+static Tensor CallMatmulOp(const Tensor& tensorA, const Tensor& tensorB, const MatmulTestCaseParam& param,
+                           const Matrix::MatmulExtendParam& matmulExtendParam)
 {
-    return Matrix::Matmul(
-        param.outDtype, tensorA, tensorB, matmulExtendParam, param.transA, param.transB, param.isCMatrixNz);
+    return Matrix::Matmul(param.outDtype, tensorA, tensorB, matmulExtendParam, param.transA, param.transB,
+                          param.isCMatrixNz);
 }
 
-static Tensor CallMatmulOpWithL0C2L1(
-    const Tensor& tensorA, const Tensor& tensorB, const vector<int>& transInfo, const bool& isCMatrixNz,
-    const DataType& outDtype)
+static Tensor CallMatmulOpWithL0C2L1(const Tensor& tensorA, const Tensor& tensorB, const vector<int>& transInfo,
+                                     const bool& isCMatrixNz, const DataType& outDtype)
 {
     // 2: transinfo vector has two elements
     ASSERT(transInfo.size() == 2);
     return Matrix::Matmul(outDtype, tensorA, tensorB, transInfo.at(0), transInfo.at(1), isCMatrixNz);
 }
 
-static Tensor CallMatmulOpWithL0C2L1AndScale(
-    const Tensor& tensorA, const Tensor& tensorB, const vector<int>& transInform, const bool& isCMatrixNz,
-    const DataType& outDtype, const Matrix::MatmulExtendParam& matmulExtendParam)
+static Tensor CallMatmulOpWithL0C2L1AndScale(const Tensor& tensorA, const Tensor& tensorB,
+                                             const vector<int>& transInform, const bool& isCMatrixNz,
+                                             const DataType& outDtype,
+                                             const Matrix::MatmulExtendParam& matmulExtendParam)
 {
     // 2: transinfo vector has two elements
     ASSERT(transInform.size() == 2);
-    return Matrix::Matmul(
-        outDtype, tensorA, tensorB, matmulExtendParam, transInform.at(0), transInform.at(1), isCMatrixNz);
+    return Matrix::Matmul(outDtype, tensorA, tensorB, matmulExtendParam, transInform.at(0), transInform.at(1),
+                          isCMatrixNz);
 }
 
-static void MatmulOperationExeFuncNoSplitWithL0C2L1(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void MatmulOperationExeFuncNoSplitWithL0C2L1(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                                    const OpFuncArgs* opArgs)
 {
     auto args = static_cast<const MatmulOpFuncArgs*>(opArgs);
     SymbolicScalar mDim = args->param_.transA ? inputs[0].GetShape()[1] : inputs[0].GetShape()[0];
     SymbolicScalar kDim = args->param_.transA ? inputs[0].GetShape()[0] : inputs[0].GetShape()[1];
     SymbolicScalar nDim = args->param_.transB ? inputs[1].GetShape()[0] : inputs[1].GetShape()[1];
-    SymbolicScalar tensorcMdim =
-        args->param_.l0c2l1IsTrans ? inputs[l0cToL1Index].GetShape()[1] : inputs[l0cToL1Index].GetShape()[0];
-    SymbolicScalar tensorcNdim =
-        args->param_.l0c2l1IsTrans ? inputs[l0cToL1Index].GetShape()[0] : inputs[l0cToL1Index].GetShape()[1];
+    SymbolicScalar tensorcMdim = args->param_.l0c2l1IsTrans ? inputs[l0cToL1Index].GetShape()[1] :
+                                                              inputs[l0cToL1Index].GetShape()[0];
+    SymbolicScalar tensorcNdim = args->param_.l0c2l1IsTrans ? inputs[l0cToL1Index].GetShape()[0] :
+                                                              inputs[l0cToL1Index].GetShape()[1];
 
-    FUNCTION(
-        "testNoSplit", {inputs[0], inputs[1], inputs[scaleIndex], inputs[biasIndex], inputs[l0cToL1Index]},
-        {outputs[0]})
+    FUNCTION("testNoSplit", {inputs[0], inputs[1], inputs[scaleIndex], inputs[biasIndex], inputs[l0cToL1Index]},
+             {outputs[0]})
     {
         LOOP("mLoop", FunctionType::DYNAMIC_LOOP, mIdx, LoopRange(1))
         {
             Tensor tensorL0c2L1;
             if (args->param_.l0c2l1IsTrans) {
                 // 2: l0c2l1的tensor的index
-                tensorL0c2L1 =
-                    View(inputs[l0cToL1Index], {tensorcNdim, tensorcMdim}, {tensorcNdim, tensorcMdim}, {0, 0});
+                tensorL0c2L1 = View(inputs[l0cToL1Index], {tensorcNdim, tensorcMdim}, {tensorcNdim, tensorcMdim},
+                                    {0, 0});
             } else {
                 // 2: l0c2l1的tensor的index
-                tensorL0c2L1 =
-                    View(inputs[l0cToL1Index], {tensorcMdim, tensorcNdim}, {tensorcMdim, tensorcNdim}, {0, 0});
+                tensorL0c2L1 = View(inputs[l0cToL1Index], {tensorcMdim, tensorcNdim}, {tensorcMdim, tensorcNdim},
+                                    {0, 0});
             }
             Tensor tensorB;
             if (args->param_.transB) {
@@ -119,24 +116,24 @@ static void MatmulOperationExeFuncNoSplitWithL0C2L1(
             if (args->param_.hasScale) {
                 param.scaleTensor = View(inputs[scaleIndex], {1, nDim}, {1, nDim}, {0, 0});
             }
-            Tensor tensorTmp = CallMatmulOpWithL0C2L1AndScale(
-                tensorA, tensorB, {args->param_.transA, args->param_.transB}, args->param_.l0c2l1IsNz,
-                args->param_.outDtype, param);
+            Tensor tensorTmp = CallMatmulOpWithL0C2L1AndScale(tensorA, tensorB,
+                                                              {args->param_.transA, args->param_.transB},
+                                                              args->param_.l0c2l1IsNz, args->param_.outDtype, param);
             if (args->param_.l0c2l1AsLeftMatrix) {
-                outputs[0] = CallMatmulOpWithL0C2L1(
-                    tensorL0c2L1, tensorTmp, {args->param_.l0c2l1IsTrans, args->param_.l0c2l1TmpIsTrans},
-                    args->param_.isCMatrixNz, args->param_.outDtype);
+                outputs[0] = CallMatmulOpWithL0C2L1(tensorL0c2L1, tensorTmp,
+                                                    {args->param_.l0c2l1IsTrans, args->param_.l0c2l1TmpIsTrans},
+                                                    args->param_.isCMatrixNz, args->param_.outDtype);
             } else {
-                outputs[0] = CallMatmulOpWithL0C2L1(
-                    tensorTmp, tensorL0c2L1, {args->param_.l0c2l1TmpIsTrans, args->param_.l0c2l1IsTrans},
-                    args->param_.isCMatrixNz, args->param_.outDtype);
+                outputs[0] = CallMatmulOpWithL0C2L1(tensorTmp, tensorL0c2L1,
+                                                    {args->param_.l0c2l1TmpIsTrans, args->param_.l0c2l1IsTrans},
+                                                    args->param_.isCMatrixNz, args->param_.outDtype);
             }
         }
     }
 }
 
-static void MatmulOperationExeFuncNoSplit(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void MatmulOperationExeFuncNoSplit(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                          const OpFuncArgs* opArgs)
 {
     auto args = static_cast<const MatmulOpFuncArgs*>(opArgs);
     bool transA = args->param_.transA;
@@ -178,8 +175,8 @@ static void MatmulOperationExeFuncNoSplit(
     }
 }
 
-static void MatmulOperationExeFuncSplitM(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void MatmulOperationExeFuncSplitM(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                         const OpFuncArgs* opArgs)
 {
     auto args = static_cast<const MatmulOpFuncArgs*>(opArgs);
     const int64_t mView = args->viewShape_[0];
@@ -198,11 +195,11 @@ static void MatmulOperationExeFuncSplitM(
         {
             Tensor tensorA;
             if (transA) {
-                tensorA =
-                    View(inputs[0], {kDim, mView}, {kDim, std::min(mDim - mView * mIdx, mView)}, {0, mIdx * mView});
+                tensorA = View(inputs[0], {kDim, mView}, {kDim, std::min(mDim - mView * mIdx, mView)},
+                               {0, mIdx * mView});
             } else {
-                tensorA =
-                    View(inputs[0], {mView, kDim}, {std::min(mDim - mView * mIdx, mView), kDim}, {mIdx * mView, 0});
+                tensorA = View(inputs[0], {mView, kDim}, {std::min(mDim - mView * mIdx, mView), kDim},
+                               {mIdx * mView, 0});
             }
             Tensor tensorB;
             if (transB) {
@@ -225,8 +222,8 @@ static void MatmulOperationExeFuncSplitM(
     }
 }
 
-static void MatmulOperationExeFuncSplitN(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void MatmulOperationExeFuncSplitN(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                         const OpFuncArgs* opArgs)
 {
     auto args = static_cast<const MatmulOpFuncArgs*>(opArgs);
     bool transA = args->param_.transA;
@@ -251,22 +248,22 @@ static void MatmulOperationExeFuncSplitN(
             }
             Tensor tensorB;
             if (transB) {
-                tensorB =
-                    View(inputs[1], {nView, kDim}, {std::min(nDim - nIdx * nView, nView), kDim}, {nIdx * nView, 0});
+                tensorB = View(inputs[1], {nView, kDim}, {std::min(nDim - nIdx * nView, nView), kDim},
+                               {nIdx * nView, 0});
             } else {
-                tensorB =
-                    View(inputs[1], {kDim, nView}, {kDim, std::min(nDim - nIdx * nView, nView)}, {0, nIdx * nView});
+                tensorB = View(inputs[1], {kDim, nView}, {kDim, std::min(nDim - nIdx * nView, nView)},
+                               {0, nIdx * nView});
             }
             Matrix::MatmulExtendParam param;
             param.reluType = reluType;
             param.scaleValue = scaleValue;
             if (args->param_.hasBias) {
-                param.biasTensor =
-                    View(inputs[biasIndex], {1, nView}, {1, std::min(nDim - nIdx * nView, nView)}, {0, nIdx * nView});
+                param.biasTensor = View(inputs[biasIndex], {1, nView}, {1, std::min(nDim - nIdx * nView, nView)},
+                                        {0, nIdx * nView});
             }
             if (args->param_.hasScale) {
-                param.scaleTensor =
-                    View(inputs[scaleIndex], {1, nView}, {1, std::min(nDim - nIdx * nView, nView)}, {0, nIdx * nView});
+                param.scaleTensor = View(inputs[scaleIndex], {1, nView}, {1, std::min(nDim - nIdx * nView, nView)},
+                                         {0, nIdx * nView});
             }
             Tensor tensorC = CallMatmulOp(tensorA, tensorB, args->param_, param);
             Assemble(tensorC, {0, nIdx * nView}, outputs[0]);
@@ -274,8 +271,8 @@ static void MatmulOperationExeFuncSplitN(
     }
 }
 
-static void MatmulOperationExeFuncSplitMN(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void MatmulOperationExeFuncSplitMN(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                          const OpFuncArgs* opArgs)
 {
     auto args = static_cast<const MatmulOpFuncArgs*>(opArgs);
     float scaleValue = args->param_.scaleValue;
@@ -297,28 +294,28 @@ static void MatmulOperationExeFuncSplitMN(
             {
                 Tensor tensorA;
                 if (transA) {
-                    tensorA =
-                        View(inputs[0], {kDim, mView}, {kDim, std::min(mDim - mView * mIdx, mView)}, {0, mIdx * mView});
+                    tensorA = View(inputs[0], {kDim, mView}, {kDim, std::min(mDim - mView * mIdx, mView)},
+                                   {0, mIdx * mView});
                 } else {
-                    tensorA =
-                        View(inputs[0], {mView, kDim}, {std::min(mDim - mView * mIdx, mView), kDim}, {mIdx * mView, 0});
+                    tensorA = View(inputs[0], {mView, kDim}, {std::min(mDim - mView * mIdx, mView), kDim},
+                                   {mIdx * mView, 0});
                 }
                 Tensor tensorB;
                 if (transB) {
-                    tensorB =
-                        View(inputs[1], {nView, kDim}, {std::min(nDim - nIdx * nView, nView), kDim}, {nIdx * nView, 0});
+                    tensorB = View(inputs[1], {nView, kDim}, {std::min(nDim - nIdx * nView, nView), kDim},
+                                   {nIdx * nView, 0});
                 } else {
-                    tensorB =
-                        View(inputs[1], {kDim, nView}, {kDim, std::min(nDim - nIdx * nView, nView)}, {0, nIdx * nView});
+                    tensorB = View(inputs[1], {kDim, nView}, {kDim, std::min(nDim - nIdx * nView, nView)},
+                                   {0, nIdx * nView});
                 }
                 Matrix::MatmulExtendParam param;
                 if (args->param_.hasScale) {
-                    param.scaleTensor = View(
-                        inputs[scaleIndex], {1, nView}, {1, std::min(nDim - nIdx * nView, nView)}, {0, nIdx * nView});
+                    param.scaleTensor = View(inputs[scaleIndex], {1, nView}, {1, std::min(nDim - nIdx * nView, nView)},
+                                             {0, nIdx * nView});
                 }
                 if (args->param_.hasBias) {
-                    param.biasTensor = View(
-                        inputs[biasIndex], {1, nView}, {1, std::min(nDim - nIdx * nView, nView)}, {0, nIdx * nView});
+                    param.biasTensor = View(inputs[biasIndex], {1, nView}, {1, std::min(nDim - nIdx * nView, nView)},
+                                            {0, nIdx * nView});
                 }
                 param.reluType = reluType;
                 param.scaleValue = scaleValue;
@@ -329,20 +326,20 @@ static void MatmulOperationExeFuncSplitMN(
     }
 }
 
-static void MatmulOperationExeFunc(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void MatmulOperationExeFunc(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                   const OpFuncArgs* opArgs)
 {
     auto args = static_cast<const MatmulOpFuncArgs*>(opArgs);
     if (args->param_.hasScale || args->param_.hasBias) {
-        int64_t nTile =
-            (args->tileShape_[2][0] < args->tileShape_[2][1]) ? args->tileShape_[2][0] : args->tileShape_[2][1];
-        TileShape::Current().SetCubeTile(
-            {args->tileShape_[0][0], args->tileShape_[0][1]}, {args->tileShape_[1][0], args->tileShape_[1][1]},
-            {nTile, nTile}, args->param_.enableKSplit);
+        int64_t nTile = (args->tileShape_[2][0] < args->tileShape_[2][1]) ? args->tileShape_[2][0] :
+                                                                            args->tileShape_[2][1];
+        TileShape::Current().SetCubeTile({args->tileShape_[0][0], args->tileShape_[0][1]},
+                                         {args->tileShape_[1][0], args->tileShape_[1][1]}, {nTile, nTile},
+                                         args->param_.enableKSplit);
     } else {
-        TileShape::Current().SetCubeTile(
-            {args->tileShape_[0][0], args->tileShape_[0][1]}, {args->tileShape_[1][0], args->tileShape_[1][1]},
-            {args->tileShape_[2][0], args->tileShape_[2][1]}, args->param_.enableKSplit);
+        TileShape::Current().SetCubeTile({args->tileShape_[0][0], args->tileShape_[0][1]},
+                                         {args->tileShape_[1][0], args->tileShape_[1][1]},
+                                         {args->tileShape_[2][0], args->tileShape_[2][1]}, args->param_.enableKSplit);
     }
 
     const size_t MM_VIEW_SHAPE_DIM = 2;
@@ -377,9 +374,8 @@ static void CheckBTransNZUnaligned(bool transB, bool isCMatrixNz, const Tensor& 
 
 class MatmulOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac_param<MatmulOpMetaData> {};
 
-INSTANTIATE_TEST_SUITE_P(
-    TestMatmul, MatmulOperationTest,
-    ::testing::ValuesIn(GetOpMetaData<MatmulOpMetaData>({MatmulOperationExeFunc}, "Matmul")));
+INSTANTIATE_TEST_SUITE_P(TestMatmul, MatmulOperationTest,
+                         ::testing::ValuesIn(GetOpMetaData<MatmulOpMetaData>({MatmulOperationExeFunc}, "Matmul")));
 
 TEST_P(MatmulOperationTest, TestMatmul)
 {
@@ -390,9 +386,8 @@ TEST_P(MatmulOperationTest, TestMatmul)
     auto args = MatmulOpFuncArgs(GetViewShape(test_data), GetMatmulTileShape(test_data), GetMatmulParam(test_data));
     testCase.args = &args;
     testCase.opFunc = GetParam().opFunc_;
-    testCase.inputPaths = {
-        GetGoldenDir() + "/" + testCase.inputTensors[0].GetStorage()->Symbol() + ".bin",
-        GetGoldenDir() + "/" + testCase.inputTensors[1].GetStorage()->Symbol() + ".bin"};
+    testCase.inputPaths = {GetGoldenDir() + "/" + testCase.inputTensors[0].GetStorage()->Symbol() + ".bin",
+                           GetGoldenDir() + "/" + testCase.inputTensors[1].GetStorage()->Symbol() + ".bin"};
     // scale tensor
     Tensor scaleTensor = GetParamTensor(test_data, "scale_tensors");
     testCase.inputTensors.push_back(scaleTensor);
@@ -415,8 +410,8 @@ TEST_P(MatmulOperationTest, TestMatmul)
         testCase.inputPaths.push_back(GetGoldenDir() + "/" + l0c2L1Tensor.GetStorage()->Symbol() + ".bin");
     }
     testCase.goldenPaths = {GetGoldenDir() + "/" + testCase.outputTensors[0].GetStorage()->Symbol() + ".bin"};
-    CheckBTransNZUnaligned(
-        args.param_.transB, args.param_.isCMatrixNz, testCase.inputTensors[1], testCase.outputTensors[0]);
+    CheckBTransNZUnaligned(args.param_.transB, args.param_.isCMatrixNz, testCase.inputTensors[1],
+                           testCase.outputTensors[0]);
     if (args.param_.enableKSplit) {
         TestExecutor::setGMNotClear();
     }
@@ -425,9 +420,9 @@ TEST_P(MatmulOperationTest, TestMatmul)
 
 class MatmulVerifyOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac_param<MatmulOpMetaData> {};
 
-INSTANTIATE_TEST_SUITE_P(
-    TestMatmulVerify, MatmulVerifyOperationTest,
-    ::testing::ValuesIn(GetOpMetaData<MatmulOpMetaData>({MatmulOperationExeFunc}, "MatmulVerify")));
+INSTANTIATE_TEST_SUITE_P(TestMatmulVerify, MatmulVerifyOperationTest,
+                         ::testing::ValuesIn(GetOpMetaData<MatmulOpMetaData>({MatmulOperationExeFunc},
+                                                                             "MatmulVerify")));
 
 TEST_P(MatmulVerifyOperationTest, TestMatmulVerify)
 {
@@ -438,9 +433,8 @@ TEST_P(MatmulVerifyOperationTest, TestMatmulVerify)
     auto args = MatmulOpFuncArgs(GetViewShape(test_data), GetMatmulTileShape(test_data), GetMatmulParam(test_data));
     testCase.args = &args;
     testCase.opFunc = GetParam().opFunc_;
-    testCase.inputPaths = {
-        GetGoldenDir() + "/" + testCase.inputTensors[0].GetStorage()->Symbol() + ".bin",
-        GetGoldenDir() + "/" + testCase.inputTensors[1].GetStorage()->Symbol() + ".bin"};
+    testCase.inputPaths = {GetGoldenDir() + "/" + testCase.inputTensors[0].GetStorage()->Symbol() + ".bin",
+                           GetGoldenDir() + "/" + testCase.inputTensors[1].GetStorage()->Symbol() + ".bin"};
     Tensor biasTensor = GetParamTensor(test_data, "bias_tensors");
     Tensor scaleTensor = GetParamTensor(test_data, "scale_tensors");
     if (scaleTensor.GetStorage() == nullptr) {
@@ -455,8 +449,8 @@ TEST_P(MatmulVerifyOperationTest, TestMatmulVerify)
     }
     testCase.inputTensors.push_back(scaleTensor);
     testCase.inputTensors.push_back(biasTensor);
-    CheckBTransNZUnaligned(
-        args.param_.transB, args.param_.isCMatrixNz, testCase.inputTensors[1], testCase.outputTensors[0]);
+    CheckBTransNZUnaligned(args.param_.transB, args.param_.isCMatrixNz, testCase.inputTensors[1],
+                           testCase.outputTensors[0]);
     testCase.goldenPaths = {GetGoldenDir() + "/" + testCase.outputTensors[0].GetStorage()->Symbol() + ".bin"};
     if (args.param_.enable_l0c2l1) {
         Tensor l0c2L1Tensor = GetParamTensor(test_data, "l0c2l1_tensor");

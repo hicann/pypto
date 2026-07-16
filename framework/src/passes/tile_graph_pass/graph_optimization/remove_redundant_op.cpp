@@ -64,9 +64,8 @@ bool EqualInOut(const Operation& op)
 bool RemoveRedundantOp::ProcessRedundantOpWithDynShape(Operation& op) const
 {
     if (!EqualInOut(op)) {
-        APASS_LOG_DEBUG_F(
-            Elements::Operation, "op[%d]'s input and output has unequal shape and dynshape, skip removing.",
-            op.GetOpMagic());
+        APASS_LOG_DEBUG_F(Elements::Operation,
+                          "op[%d]'s input and output has unequal shape and dynshape, skip removing.", op.GetOpMagic());
         return false;
     }
     return true;
@@ -75,15 +74,15 @@ bool RemoveRedundantOp::ProcessRedundantOpWithDynShape(Operation& op) const
 bool RemoveRedundantOp::ProcessRedundantOpWithoutDynShape(Operation& op) const
 {
     if (!EqualInOutShape(op)) {
-        APASS_LOG_DEBUG_F(
-            Elements::Operation, "op[%d]'s input and output has unequal shape, skip removing.", op.opmagic);
+        APASS_LOG_DEBUG_F(Elements::Operation, "op[%d]'s input and output has unequal shape, skip removing.",
+                          op.opmagic);
         return false;
     }
     if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
         auto assembleOutput = op.GetOOperands().front();
         if (assembleOutput->GetProducers().size() > 1) {
             APASS_LOG_DEBUG_F(Elements::Operation, "assembleOutput[%d] has more than one producer, skip removing.",
-                assembleOutput->GetMagic());
+                              assembleOutput->GetMagic());
             return false;
         }
         auto assembleInput = op.GetIOperands().front();
@@ -101,7 +100,8 @@ bool RemoveRedundantOp::ProcessRedundantOpWithoutDynShape(Operation& op) const
                 break;
             }
         }
-        if (hasParallelAssemble && hasReshapeConsumer) return false;
+        if (hasParallelAssemble && hasReshapeConsumer)
+            return false;
     }
     return true;
 }
@@ -220,10 +220,9 @@ Status RemoveRedundantOp::ProcessViewAssemble(Function& function)
                 //       startTensor(inshape) ---> view1  ---> tempTensor1  --->  assemble1  ---> endTensor(outshape =
                 //       inshape)
                 //                            ---> view2  ---> tempTensor2  --->  assemble2
-                APASS_LOG_DEBUG_F(
-                    Elements::Operation,
-                    "CASE1: Process OP_VIEW[%d]'s input and OP_ASSEMBLE[%d]'s output perfectMatch.", op->opmagic,
-                    consumer->GetOpMagic());
+                APASS_LOG_DEBUG_F(Elements::Operation,
+                                  "CASE1: Process OP_VIEW[%d]'s input and OP_ASSEMBLE[%d]'s output perfectMatch.",
+                                  op->opmagic, consumer->GetOpMagic());
                 ProcessPerfectMatch(function, startTensor, endTensor);
             } else {
                 // 对于输入输出存在动轴的场景无法做级联的冗余删除
@@ -235,9 +234,9 @@ Status RemoveRedundantOp::ProcessViewAssemble(Function& function)
                 //        startTensor(inshape) ---> view1  ---> tempTensor1  --->  assemble1  ---> endTensor(outshape <
                 //        inshape)
                 //                             ---> view2  ---> tempTensor2  --->  assemble2
-                APASS_LOG_DEBUG_F(
-                    Elements::Operation, "CASE2: Process OP_VIEW[%d]'s input is a part of OP_ASSEMBLE[%d]'s output.",
-                    op->opmagic, consumer->GetOpMagic());
+                APASS_LOG_DEBUG_F(Elements::Operation,
+                                  "CASE2: Process OP_VIEW[%d]'s input is a part of OP_ASSEMBLE[%d]'s output.",
+                                  op->opmagic, consumer->GetOpMagic());
                 GenerateNewView(function, *op, startTensor, endTensor);
             }
         }
@@ -246,8 +245,8 @@ Status RemoveRedundantOp::ProcessViewAssemble(Function& function)
     return SUCCESS;
 }
 
-void RemoveRedundantOp::RemoveViewAssembleForOutcast(
-    Function& function, LogicalTensorPtr& startTensor, LogicalTensorPtr& endTensor)
+void RemoveRedundantOp::RemoveViewAssembleForOutcast(Function& function, LogicalTensorPtr& startTensor,
+                                                     LogicalTensorPtr& endTensor)
 {
     bool canRemove;
     std::set<Operation*> removeOp;
@@ -275,8 +274,8 @@ void RemoveRedundantOp::RemoveViewAssembleForOutcast(
 }
 
 // 处理view输入和assemble输出完美匹配场景
-void RemoveRedundantOp::ProcessPerfectMatch(
-    Function& function, LogicalTensorPtr& startTensor, LogicalTensorPtr& endTensor)
+void RemoveRedundantOp::ProcessPerfectMatch(Function& function, LogicalTensorPtr& startTensor,
+                                            LogicalTensorPtr& endTensor)
 {
     if (!IsValidViewAssemble(startTensor, endTensor)) {
         APASS_LOG_DEBUG_F(Elements::Tensor, "Not valid view-assemble case.");
@@ -361,9 +360,9 @@ bool RemoveRedundantOp::IsValidViewAssemble(LogicalTensorPtr& startTensor, Logic
     // step1：排除view输入非同源场景
     bool isNotSameViewInput = IsNotSameViewInput(startTensor, endTensor); // true表示view的输入非同源
     if (isNotSameViewInput) {
-        APASS_LOG_DEBUG_F(
-            Elements::Tensor, "OP_ASSEMBLE'S output endTensor[%d] has different input except startTesnor[%d].",
-            startTensor->magic, endTensor->magic);
+        APASS_LOG_DEBUG_F(Elements::Tensor,
+                          "OP_ASSEMBLE'S output endTensor[%d] has different input except startTesnor[%d].",
+                          startTensor->magic, endTensor->magic);
         return false;
     }
     // step2：排除endTensor不是startTensor一部分的场景，每个维度的shape应小于等于startTensor
@@ -378,17 +377,16 @@ bool RemoveRedundantOp::IsValidViewAssemble(LogicalTensorPtr& startTensor, Logic
     // step3:排除assemble数据重排场景
     bool isDataRepalce = IsDataReplace(endTensor); // true表示assemble后数据重排布
     if (isDataRepalce) {
-        APASS_LOG_DEBUG_F(
-            Elements::Tensor, "OP_ASSEMBLE'S output endTensor[%d] is repalced comparing with startTesnor[%d].",
-            startTensor->magic, endTensor->magic);
+        APASS_LOG_DEBUG_F(Elements::Tensor,
+                          "OP_ASSEMBLE'S output endTensor[%d] is repalced comparing with startTesnor[%d].",
+                          startTensor->magic, endTensor->magic);
         return false;
     }
     return true;
 }
 
-void RemoveRedundantOp::CalculateViewOffset(
-    Operation& op, LogicalTensorPtr& startTensor, LogicalTensorPtr& endTensor, std::vector<long>& newoffset,
-    std::vector<SymbolicScalar>& newDynoffset)
+void RemoveRedundantOp::CalculateViewOffset(Operation& op, LogicalTensorPtr& startTensor, LogicalTensorPtr& endTensor,
+                                            std::vector<long>& newoffset, std::vector<SymbolicScalar>& newDynoffset)
 {
     for (size_t m = 0; m < op.iOperand[0]->offset.size(); m++) {
         for (auto& comsumerView : startTensor->GetConsumers()) {
@@ -426,8 +424,8 @@ void RemoveRedundantOp::CalculateViewOffset(
     }
 }
 
-void RemoveRedundantOp::GenerateNewView(
-    Function& function, Operation& op, LogicalTensorPtr& startTensor, LogicalTensorPtr& endTensor)
+void RemoveRedundantOp::GenerateNewView(Function& function, Operation& op, LogicalTensorPtr& startTensor,
+                                        LogicalTensorPtr& endTensor)
 {
     // 查找最小的offset
     if (!IsValidViewAssemble(startTensor, endTensor)) {
@@ -444,8 +442,8 @@ void RemoveRedundantOp::GenerateNewView(
     // 新建一个logical tensor并更新图链接关系:清除endTensor的消费者，清除endTensor，将assemble的消费者连接到newView
     LogicalTensorPtr newViewTensor;
     std::vector<long> curOffset(endTensor->shape.size(), 0);
-    newViewTensor = irBuilder_.CreateTensorVar(
-        endTensor->GetRawTensor(), curOffset, endTensor->shape, std::vector<SymbolicScalar>{});
+    newViewTensor = irBuilder_.CreateTensorVar(endTensor->GetRawTensor(), curOffset, endTensor->shape,
+                                               std::vector<SymbolicScalar>{});
     newViewTensor->SetMemoryTypeBoth(endTensor->GetMemoryTypeOriginal());
     for (auto& assembleConsumer : endTensor->GetConsumers()) {
         assembleConsumer->iOperand = {newViewTensor};
@@ -453,13 +451,12 @@ void RemoveRedundantOp::GenerateNewView(
     }
     endTensor->GetConsumers().clear();
     // 新建一个view op
-    std::shared_ptr<ViewOpAttribute> viewAttribute =
-        std::make_shared<ViewOpAttribute>(newoffset, newDynoffset, newViewTensor->GetDynValidShape());
+    std::shared_ptr<ViewOpAttribute> viewAttribute = std::make_shared<ViewOpAttribute>(
+        newoffset, newDynoffset, newViewTensor->GetDynValidShape());
     viewAttribute->SetToType(endTensor->GetMemoryTypeToBe());
-    auto& newViewOp = PassOperationUtils::AddOperation(function, Opcode::OP_VIEW, {startTensor}, {newViewTensor},
-        [&viewAttribute](Operation& newOp) {
-            newOp.SetOpAttribute(viewAttribute);
-        });
+    auto& newViewOp = PassOperationUtils::AddOperation(
+        function, Opcode::OP_VIEW, {startTensor}, {newViewTensor},
+        [&viewAttribute](Operation& newOp) { newOp.SetOpAttribute(viewAttribute); });
     newOps_.push_back(&newViewOp);
     operationUpdated = true;
 }

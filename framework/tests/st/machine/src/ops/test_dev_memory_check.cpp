@@ -51,13 +51,13 @@ void GenAttentionCompute1(TestDataLoader& data, GenAttenTileShapeConfig& tileCon
     DataType dType = CostModel::ToDataType(dTypeStr);
 
     GenAttentionCompute(
-        data.InputTensorCheck(
-            "cmp_atten", dType, {b, s1, n, d}), // 也可以使用 data.InputTensor("cmp_atten"), 不做二次校验
+        data.InputTensorCheck("cmp_atten", dType,
+                              {b, s1, n, d}), // 也可以使用 data.InputTensor("cmp_atten"), 不做二次校验
         data.InputTensorCheck("sel_atten", dType, {b, s1, n, d}),
         data.InputTensorCheck("win_atten", dType, {b, s1, n, d}),
         data.InputTensorCheck("gating_score", dType, {b, s1, n, NUM_3}),
-        data.OutputTensorCheck(
-            "attention_out", dType, {b, s1, n, d}), // 也可以使用 data.OutputTensor("attention_out"), 不做二次校验
+        data.OutputTensorCheck("attention_out", dType,
+                               {b, s1, n, d}), // 也可以使用 data.OutputTensor("attention_out"), 不做二次校验
         tileConfig);
 }
 
@@ -80,8 +80,8 @@ void genAtten1(TestDataLoader& data, GenAttenTileShapeConfig& tileConfig)
         GenAttentionCompute1(data, tileConfig);
     }
 
-    auto goldenData =
-        data.GoldenDataCheck("attention_out", dType, {b, s1, n, d}); // 也可以使用 data.GoldenData("attention_out")
+    auto goldenData = data.GoldenDataCheck("attention_out", dType,
+                                           {b, s1, n, d}); // 也可以使用 data.GoldenData("attention_out")
     auto outputData = data.GetOutputDataList()[data.GetOutputNameToIdx("attention_out")];
 
 #ifdef BUILD_WITH_CANN

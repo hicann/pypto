@@ -45,15 +45,15 @@ TEST_F(TestCodegenDynWhere, TestDynOpWhere)
     std::vector<SymbolicScalar> dynValidShape = {64, 64};
     auto localTensorRes = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
     auto localTensorTmp = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
-    auto localTensorCond =
-        CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
-    auto localTensorSrc0 =
-        CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
-    auto localTensorSrc1 =
-        CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
+    auto localTensorCond = CreateLogicalTensor(
+        {*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
+    auto localTensorSrc0 = CreateLogicalTensor(
+        {*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
+    auto localTensorSrc1 = CreateLogicalTensor(
+        {*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
 
-    auto& op = function->AddOperation(
-        Opcode::OP_WHERE_TT, {localTensorCond, localTensorSrc0, localTensorSrc1}, {localTensorRes, localTensorTmp});
+    auto& op = function->AddOperation(Opcode::OP_WHERE_TT, {localTensorCond, localTensorSrc0, localTensorSrc1},
+                                      {localTensorRes, localTensorTmp});
 
     std::string res = GenOpCodeFromOp(*function, op);
     std::string expect =

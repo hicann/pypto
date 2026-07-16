@@ -28,7 +28,7 @@ namespace osp {
 template <typename GraphT>
 class CompatibleProcessorRange {
     std::vector<std::vector<unsigned>> typeProcessorIdx_;
-    const BspInstance<GraphT> *instance_ = nullptr;
+    const BspInstance<GraphT>* instance_ = nullptr;
 
 public:
     /**
@@ -41,17 +41,14 @@ public:
      *
      * @param inst The BspInstance.
      */
-    CompatibleProcessorRange(const BspInstance<GraphT> &inst)
-    {
-        Initialize(inst);
-    }
+    CompatibleProcessorRange(const BspInstance<GraphT>& inst) { Initialize(inst); }
 
     /**
      * @brief Initializes the CompatibleProcessorRange with a BspInstance.
      *
      * @param inst The BspInstance.
      */
-    void Initialize(const BspInstance<GraphT> &inst)
+    void Initialize(const BspInstance<GraphT>& inst)
     {
         instance_ = &inst;
 
@@ -71,7 +68,7 @@ public:
      * @param type The node type.
      * @return A const reference to a vector of compatible processor indices.
      */
-    [[nodiscard]] const auto &CompatibleProcessorsType(const VTypeT<GraphT> type) const
+    [[nodiscard]] const auto& CompatibleProcessorsType(const VTypeT<GraphT> type) const
     {
         return typeProcessorIdx_[type];
     }
@@ -82,11 +79,11 @@ public:
      * @param vertex The vertex index.
      * @return A const reference to a vector of compatible processor indices.
      */
-    [[nodiscard]] const auto &CompatibleProcessorsVertex(const VertexIdxT<GraphT> vertex) const
+    [[nodiscard]] const auto& CompatibleProcessorsVertex(const VertexIdxT<GraphT> vertex) const
     {
         return CompatibleProcessorsType(instance_->GetComputationalDag().VertexType(vertex));
     }
 };
-}    // namespace osp
+} // namespace osp
 } // namespace npu::tile_fwk
 #endif // OSP_COMPATIBLE_PROCESSOR_RANGE_H

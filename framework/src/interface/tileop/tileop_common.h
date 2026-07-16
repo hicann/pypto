@@ -69,7 +69,7 @@ enum class CopyOutMode : int64_t { NZ2ND = 0, NZ2NZ = 1, ND2ND = 2, NZ2DN = 3 };
 
 enum class CopyMode : int64_t { UNKNOWN = 0, EXTRACT = 1, INSERT = 2, MOVE = 3 };
 
-enum class DualDstMode : int64_t { DUAL_DST_DISABLE = 0, DUAL_DST_SPLIT_M = 1, DUAL_DST_SPLIT_N = 2};
+enum class DualDstMode : int64_t { DUAL_DST_DISABLE = 0, DUAL_DST_SPLIT_M = 1, DUAL_DST_SPLIT_N = 2 };
 
 enum class TransMode : int64_t { CAST_NONE = 0, CAST_RINT = 1, CAST_ROUND = 2 };
 
@@ -196,30 +196,29 @@ inline TILEOP void SetContinuousMask(unsigned n)
     set_vector_mask(
         static_cast<uint64_t>(
             (n > MASK_LEN) ? (((static_cast<uint64_t>(1)) << static_cast<uint32_t>(n - MASK_LEN)) - 1) : 0),
-        static_cast<uint64_t>(
-            (n >= MASK_LEN) ? 0xffffffffffffffff : (((static_cast<uint64_t>(1)) << static_cast<uint32_t>(n)) - 1)));
+        static_cast<uint64_t>((n >= MASK_LEN) ? 0xffffffffffffffff :
+                                                (((static_cast<uint64_t>(1)) << static_cast<uint32_t>(n)) - 1)));
 }
 
 // Calculation linear offset for multi-dimension tensor
-INLINE unsigned CalcLinearOffset(
-    unsigned GmShape1, unsigned GmShape2, unsigned GmShape3, unsigned GmShape4, unsigned Offset0, unsigned Offset1,
-    unsigned Offset2, unsigned Offset3, unsigned Offset4)
+INLINE unsigned CalcLinearOffset(unsigned GmShape1, unsigned GmShape2, unsigned GmShape3, unsigned GmShape4,
+                                 unsigned Offset0, unsigned Offset1, unsigned Offset2, unsigned Offset3,
+                                 unsigned Offset4)
 {
     return Offset4 + Offset3 * GmShape4 + Offset2 * (GmShape3 * GmShape4) + Offset1 * (GmShape2 * GmShape3 * GmShape4) +
            Offset0 * (GmShape1 * GmShape2 * GmShape3 * GmShape4);
 }
 
 // Calculation linear offset for multi-dimension tensor
-INLINE unsigned CalcLinearOffset(
-    unsigned GmShape1, unsigned GmShape2, unsigned GmShape3, unsigned Offset0, unsigned Offset1, unsigned Offset2,
-    unsigned Offset3)
+INLINE unsigned CalcLinearOffset(unsigned GmShape1, unsigned GmShape2, unsigned GmShape3, unsigned Offset0,
+                                 unsigned Offset1, unsigned Offset2, unsigned Offset3)
 {
     return Offset3 + Offset2 * GmShape3 + Offset1 * (GmShape2 * GmShape3) + Offset0 * (GmShape1 * GmShape2 * GmShape3);
 }
 
 // Calculation linear offset for multi-dimension tensor
-INLINE unsigned CalcLinearOffset(
-    unsigned GmShape1, unsigned GmShape2, unsigned Offset0, unsigned Offset1, unsigned Offset2)
+INLINE unsigned CalcLinearOffset(unsigned GmShape1, unsigned GmShape2, unsigned Offset0, unsigned Offset1,
+                                 unsigned Offset2)
 {
     return Offset2 + Offset1 * GmShape2 + Offset0 * (GmShape1 * GmShape2);
 }

@@ -26,7 +26,7 @@
 namespace npu::tile_fwk {
 namespace osp {
 template <typename GraphT>
-std::vector<VertexIdxT<GraphT>> GetTopOrder(const GraphT &graph)
+std::vector<VertexIdxT<GraphT>> GetTopOrder(const GraphT& graph)
 {
     if constexpr (hasVerticesInTopOrderV<GraphT>) {
         std::vector<VertexIdxT<GraphT>> topOrd(graph.NumVertices());
@@ -42,7 +42,7 @@ std::vector<VertexIdxT<GraphT>> GetTopOrder(const GraphT &graph)
         std::queue<VertexType> next;
 
         // Find source nodes
-        for (const VertexType &v : graph.Vertices()) {
+        for (const VertexType& v : graph.Vertices()) {
             if (graph.InDegree(v) == 0) {
                 next.push(v);
             }
@@ -54,7 +54,7 @@ std::vector<VertexIdxT<GraphT>> GetTopOrder(const GraphT &graph)
             next.pop();
             topOrder.push_back(node);
 
-            for (const VertexType &current : graph.Children(node)) {
+            for (const VertexType& current : graph.Children(node)) {
                 ++predecessorsCount[current];
                 if (predecessorsCount[current] == graph.InDegree(current)) {
                     next.push(current);
@@ -64,14 +64,12 @@ std::vector<VertexIdxT<GraphT>> GetTopOrder(const GraphT &graph)
 
         if (static_cast<VertexType>(topOrder.size()) != graph.NumVertices()) {
             APASS_LOG_ERROR_F(Elements::Config,
-                "Error during topological ordering: "
-                "TopOrder.size() != graph.NumVertices() [%d != %d]",
-                static_cast<int>(topOrder.size()),
-                static_cast<int>(graph.NumVertices()));
-            throw std::runtime_error(
-                "Error during topological ordering: TopOrder.size() != graph.NumVertices() ["
-                + std::to_string(topOrder.size()) + " != "
-                + std::to_string(graph.NumVertices()) + "]");
+                              "Error during topological ordering: "
+                              "TopOrder.size() != graph.NumVertices() [%d != %d]",
+                              static_cast<int>(topOrder.size()), static_cast<int>(graph.NumVertices()));
+            throw std::runtime_error("Error during topological ordering: TopOrder.size() != graph.NumVertices() [" +
+                                     std::to_string(topOrder.size()) + " != " + std::to_string(graph.NumVertices()) +
+                                     "]");
         }
 
         return topOrder;
@@ -79,12 +77,12 @@ std::vector<VertexIdxT<GraphT>> GetTopOrder(const GraphT &graph)
 }
 
 template <typename GraphT>
-std::vector<VertexIdxT<GraphT>> GetTopOrderReverse(const GraphT &graph)
+std::vector<VertexIdxT<GraphT>> GetTopOrderReverse(const GraphT& graph)
 {
     std::vector<VertexIdxT<GraphT>> topOrder = GetTopOrder(graph);
     std::reverse(topOrder.begin(), topOrder.end());
     return topOrder;
 }
-}    // namespace osp
-}    // namespace npu::tile_fwk
-#endif    // PASS_OSP_DIRECTED_GRAPH_TOP_SORT_HPP
+} // namespace osp
+} // namespace npu::tile_fwk
+#endif // PASS_OSP_DIRECTED_GRAPH_TOP_SORT_HPP

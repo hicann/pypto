@@ -73,8 +73,8 @@ TEST(RawTensorDataFp4RWTest, Fp4E2M1ReadWithLogicalOffset)
         RawTensorData::CreateTensor<uint8_t>(fp4Tensor, std::vector<uint8_t>{0x12, 0x34, 0x9A, 0xBC}));
 
     // Read sub-view starting from logical offset col=2, shape [1,4]
-    auto subView = std::make_shared<LogicalTensorData>(
-        fullFp4->GetData(), std::vector<int64_t>{1, 4}, std::vector<int64_t>{1, 4}, std::vector<int64_t>{0, 2});
+    auto subView = std::make_shared<LogicalTensorData>(fullFp4->GetData(), std::vector<int64_t>{1, 4},
+                                                       std::vector<int64_t>{1, 4}, std::vector<int64_t>{0, 2});
 
     Tensor outTensor(DT_FP32, {1, 4});
     auto outFp32 = std::make_shared<LogicalTensorData>(

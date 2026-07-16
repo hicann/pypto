@@ -50,7 +50,8 @@ public:
     using VertexIdx = typename GraphT::VertexIdx;
 
     GrowLocalAutoCores(GrowLocalAutoCoresParams<VWorkwT<GraphT>> params = GrowLocalAutoCoresParams<VWorkwT<GraphT>>())
-        : params_(params) {}
+        : params_(params)
+    {}
 
     virtual ~GrowLocalAutoCores() = default;
 
@@ -68,14 +69,14 @@ public:
         double desiredParallelism;
     };
 
-    void InitializeScheduleDataStructures(BspSchedule<GraphT> &schedule, ScheduleState &state)
+    void InitializeScheduleDataStructures(BspSchedule<GraphT>& schedule, ScheduleState& state)
     {
-        const auto &instance = schedule.GetInstance();
-        const auto &g = instance.GetComputationalDag();
+        const auto& instance = schedule.GetInstance();
+        const auto& g = instance.GetComputationalDag();
         const auto n = instance.NumberOfVertices();
         const unsigned p = instance.NumberOfProcessors();
 
-        for (const auto &v : g.Vertices()) {
+        for (const auto& v : g.Vertices()) {
             schedule.SetAssignedProcessor(v, std::numeric_limits<unsigned>::max());
             schedule.SetAssignedSuperstep(v, std::numeric_limits<unsigned>::max());
         }
@@ -92,16 +93,16 @@ public:
         state.desiredParallelism = static_cast<double>(p);
     }
 
-    virtual ReturnStatus ComputeSchedule(BspSchedule<GraphT> &schedule) override
+    virtual ReturnStatus ComputeSchedule(BspSchedule<GraphT>& schedule) override
     {
         constexpr unsigned kLimitGrowthDivisor = 2;
-        const auto &instance = schedule.GetInstance();
-        const auto &g = instance.GetComputationalDag();
+        const auto& instance = schedule.GetInstance();
+        const auto& g = instance.GetComputationalDag();
         const auto n = instance.NumberOfVertices();
         const unsigned p = instance.NumberOfProcessors();
 
-        auto &nodeToProc = schedule.AssignedProcessors();
-        auto &nodeToSupstep = schedule.AssignedSupersteps();
+        auto& nodeToProc = schedule.AssignedProcessors();
+        auto& nodeToSupstep = schedule.AssignedSupersteps();
 
         ScheduleState state;
         InitializeScheduleDataStructures(schedule, state);
@@ -116,19 +117,20 @@ public:
             bool continueSuperstepAttempts = true;
 
             while (continueSuperstepAttempts) {
-                PrepareSuperstepAttempt(state.newAssignments, state.procReady, state.newReady,
-                    state.allReady, state.ready, p);
+                PrepareSuperstepAttempt(state.newAssignments, state.procReady, state.newReady, state.allReady,
+                                        state.ready, p);
 
                 VertexIdx newTotalAssigned = 0;
-                VWorkwT<GraphT> weightLimit = ScheduleProcessorZero(g, limit, state.allReady, state.procReady[0], 
-                    state.newAssignments[0], nodeToProc, state.predec, state.newReady, newTotalAssigned, p);
-                VWorkwT<GraphT> totalWeightAssigned = ScheduleRemainingProcessors(g, p, weightLimit,
-                    state.allReady, state.procReady, state.newAssignments, nodeToProc, state.predec,
+                VWorkwT<GraphT> weightLimit = ScheduleProcessorZero(g, limit, state.allReady, state.procReady[0],
+                                                                    state.newAssignments[0], nodeToProc, state.predec,
+                                                                    state.newReady, newTotalAssigned, p);
+                VWorkwT<GraphT> totalWeightAssigned = ScheduleRemainingProcessors(
+                    g, p, weightLimit, state.allReady, state.procReady, state.newAssignments, nodeToProc, state.predec,
                     state.newReady, newTotalAssigned);
 
-                auto result = EvaluateSuperstep(totalWeightAssigned, weightLimit, instance, bestScore,
-                    bestParallelism, state.minWeightParallelCheck, state.minSuperstepWeight,
-                    state.desiredParallelism, totalAssigned, newTotalAssigned, n);
+                auto result = EvaluateSuperstep(totalWeightAssigned, weightLimit, instance, bestScore, bestParallelism,
+                                                state.minWeightParallelCheck, state.minSuperstepWeight,
+                                                state.desiredParallelism, totalAssigned, newTotalAssigned, n);
 
                 RollbackAssignments(state.newAssignments, g, nodeToProc, state.predec, p);
 
@@ -144,10 +146,11 @@ public:
                 limit += (limit / kLimitGrowthDivisor);
             }
 
-            CommitBestAssignments(state.bestNewReady, state.bestNewAssignments, state.ready,
-                nodeToProc, nodeToSupstep, state.predec, g, supstep, totalAssigned, p);
-            state.desiredParallelism = (desiredParallelismHistoryWeight_ * state.desiredParallelism) + (desiredParallelismCurrentWeight_ * bestParallelism)
-                + (desiredParallelismProcessorWeight_  * static_cast<double>(p));
+            CommitBestAssignments(state.bestNewReady, state.bestNewAssignments, state.ready, nodeToProc, nodeToSupstep,
+                                  state.predec, g, supstep, totalAssigned, p);
+            state.desiredParallelism = (desiredParallelismHistoryWeight_ * state.desiredParallelism) +
+                                       (desiredParallelismCurrentWeight_ * bestParallelism) +
+                                       (desiredParallelismProcessorWeight_ * static_cast<double>(p));
             ++supstep;
         }
 
@@ -165,10 +168,9 @@ private:
 
     GrowLocalAutoCoresParams<VWorkwT<GraphT>> params_;
 
-    void InitializeReadyQueue(const GraphT &g, std::unordered_set<VertexIdx> &ready,
-                              std::vector<VertexIdx> &predec)
+    void InitializeReadyQueue(const GraphT& g, std::unordered_set<VertexIdx>& ready, std::vector<VertexIdx>& predec)
     {
-        for (const auto &node : g.Vertices()) {
+        for (const auto& node : g.Vertices()) {
             predec[node] = g.InDegree(node);
             if (predec[node] == 0) {
                 ready.insert(node);
@@ -176,7 +178,7 @@ private:
         }
     }
 
-    VertexIdx ChooseNode(std::vector<VertexIdx> &procReady, std::vector<VertexIdx> &allReady)
+    VertexIdx ChooseNode(std::vector<VertexIdx>& procReady, std::vector<VertexIdx>& allReady)
     {
         VertexIdx chosenNode = std::numeric_limits<VertexIdx>::max();
 
@@ -193,11 +195,11 @@ private:
         return chosenNode;
     }
 
-    void UpdateSuccessors(const GraphT &g, VertexIdx node, unsigned proc, unsigned p,
-                         std::vector<unsigned> &nodeToProc, std::vector<VertexIdx> &predec,
-                         std::vector<VertexIdx> &newReady, std::vector<VertexIdx> &procReady)
+    void UpdateSuccessors(const GraphT& g, VertexIdx node, unsigned proc, unsigned p, std::vector<unsigned>& nodeToProc,
+                          std::vector<VertexIdx>& predec, std::vector<VertexIdx>& newReady,
+                          std::vector<VertexIdx>& procReady)
     {
-        for (const auto &succ : g.Children(node)) {
+        for (const auto& succ : g.Children(node)) {
             if (nodeToProc[succ] == std::numeric_limits<unsigned>::max()) {
                 nodeToProc[succ] = proc;
             } else if (nodeToProc[succ] != proc) {
@@ -216,12 +218,10 @@ private:
         }
     }
 
-    void PrepareSuperstepAttempt(std::vector<std::vector<VertexIdx>> &newAssignments,
-                                std::vector<std::vector<VertexIdx>> &procReady,
-                                std::vector<VertexIdx> &newReady,
-                                std::vector<VertexIdx> &allReady,
-                                const std::unordered_set<VertexIdx> &ready,
-                                unsigned p)
+    void PrepareSuperstepAttempt(std::vector<std::vector<VertexIdx>>& newAssignments,
+                                 std::vector<std::vector<VertexIdx>>& procReady, std::vector<VertexIdx>& newReady,
+                                 std::vector<VertexIdx>& allReady, const std::unordered_set<VertexIdx>& ready,
+                                 unsigned p)
     {
         for (unsigned pIdx = 0; pIdx < p; pIdx++) {
             newAssignments[pIdx].clear();
@@ -232,15 +232,10 @@ private:
         std::make_heap(allReady.begin(), allReady.end(), std::greater<VertexIdx>());
     }
 
-    VWorkwT<GraphT> ScheduleProcessorZero(const GraphT &g, unsigned limit,
-                                         std::vector<VertexIdx> &allReady,
-                                         std::vector<VertexIdx> &procReady,
-                                         std::vector<VertexIdx> &assignments,
-                                         std::vector<unsigned> &nodeToProc,
-                                         std::vector<VertexIdx> &predec,
-                                         std::vector<VertexIdx> &newReady,
-                                         VertexIdx &newTotalAssigned,
-                                         unsigned p)
+    VWorkwT<GraphT> ScheduleProcessorZero(const GraphT& g, unsigned limit, std::vector<VertexIdx>& allReady,
+                                          std::vector<VertexIdx>& procReady, std::vector<VertexIdx>& assignments,
+                                          std::vector<unsigned>& nodeToProc, std::vector<VertexIdx>& predec,
+                                          std::vector<VertexIdx>& newReady, VertexIdx& newTotalAssigned, unsigned p)
     {
         VWorkwT<GraphT> weightLimit = 0;
 
@@ -261,14 +256,12 @@ private:
         return weightLimit;
     }
 
-    VWorkwT<GraphT> ScheduleRemainingProcessors(const GraphT &g, unsigned p, VWorkwT<GraphT> weightLimit,
-                                               std::vector<VertexIdx> &allReady,
-                                               std::vector<std::vector<VertexIdx>> &procReady,
-                                               std::vector<std::vector<VertexIdx>> &newAssignments,
-                                               std::vector<unsigned> &nodeToProc,
-                                               std::vector<VertexIdx> &predec,
-                                               std::vector<VertexIdx> &newReady,
-                                               VertexIdx &newTotalAssigned)
+    VWorkwT<GraphT> ScheduleRemainingProcessors(const GraphT& g, unsigned p, VWorkwT<GraphT> weightLimit,
+                                                std::vector<VertexIdx>& allReady,
+                                                std::vector<std::vector<VertexIdx>>& procReady,
+                                                std::vector<std::vector<VertexIdx>>& newAssignments,
+                                                std::vector<unsigned>& nodeToProc, std::vector<VertexIdx>& predec,
+                                                std::vector<VertexIdx>& newReady, VertexIdx& newTotalAssigned)
     {
         VWorkwT<GraphT> totalWeightAssigned = weightLimit;
 
@@ -304,10 +297,10 @@ private:
     };
 
     SuperstepEvaluation EvaluateSuperstep(VWorkwT<GraphT> totalWeightAssigned, VWorkwT<GraphT> weightLimit,
-                                         const BspInstance<GraphT> &instance, double currentBestScore,
-                                         double currentBestParallelism, VWorkwT<GraphT> minWeightParallelCheck,
-                                         VWorkwT<GraphT> minSuperstepWeight, double desiredParallelism,
-                                         VertexIdx totalAssigned, VertexIdx newTotalAssigned, VertexIdx n)
+                                          const BspInstance<GraphT>& instance, double currentBestScore,
+                                          double currentBestParallelism, VWorkwT<GraphT> minWeightParallelCheck,
+                                          VWorkwT<GraphT> minSuperstepWeight, double desiredParallelism,
+                                          VertexIdx totalAssigned, VertexIdx newTotalAssigned, VertexIdx n)
     {
         SuperstepEvaluation result;
         result.acceptStep = false;
@@ -316,7 +309,7 @@ private:
         result.bestParallelism = currentBestParallelism;
 
         double score = static_cast<double>(totalWeightAssigned) /
-                      static_cast<double>(weightLimit + instance.SynchronisationCosts());
+                       static_cast<double>(weightLimit + instance.SynchronisationCosts());
         double parallelism = 0;
         if (weightLimit > 0) {
             parallelism = static_cast<double>(totalWeightAssigned) / static_cast<double>(weightLimit);
@@ -351,15 +344,14 @@ private:
         return result;
     }
 
-    void RollbackAssignments(const std::vector<std::vector<VertexIdx>> &newAssignments,
-                            const GraphT &g, std::vector<unsigned> &nodeToProc,
-                            std::vector<VertexIdx> &predec, unsigned p)
+    void RollbackAssignments(const std::vector<std::vector<VertexIdx>>& newAssignments, const GraphT& g,
+                             std::vector<unsigned>& nodeToProc, std::vector<VertexIdx>& predec, unsigned p)
     {
         for (unsigned proc = 0; proc < p; ++proc) {
-            for (const auto &node : newAssignments[proc]) {
+            for (const auto& node : newAssignments[proc]) {
                 nodeToProc[node] = std::numeric_limits<unsigned>::max();
 
-                for (const auto &succ : g.Children(node)) {
+                for (const auto& succ : g.Children(node)) {
                     predec[succ]++;
                     nodeToProc[succ] = std::numeric_limits<unsigned>::max();
                 }
@@ -367,33 +359,30 @@ private:
         }
     }
 
-    void CommitBestAssignments(const std::vector<VertexIdx> &bestNewReady,
-                              const std::vector<std::vector<VertexIdx>> &bestNewAssignments,
-                              std::unordered_set<VertexIdx> &ready,
-                              std::vector<unsigned> &nodeToProc,
-                              std::vector<unsigned> &nodeToSupstep,
-                              std::vector<VertexIdx> &predec,
-                              const GraphT &g, unsigned supstep,
-                              VertexIdx &totalAssigned, unsigned p)
+    void CommitBestAssignments(const std::vector<VertexIdx>& bestNewReady,
+                               const std::vector<std::vector<VertexIdx>>& bestNewAssignments,
+                               std::unordered_set<VertexIdx>& ready, std::vector<unsigned>& nodeToProc,
+                               std::vector<unsigned>& nodeToSupstep, std::vector<VertexIdx>& predec, const GraphT& g,
+                               unsigned supstep, VertexIdx& totalAssigned, unsigned p)
     {
-        for (const auto &node : bestNewReady) {
+        for (const auto& node : bestNewReady) {
             ready.insert(node);
         }
 
         for (unsigned proc = 0; proc < p; ++proc) {
-            for (const auto &node : bestNewAssignments[proc]) {
+            for (const auto& node : bestNewAssignments[proc]) {
                 nodeToProc[node] = proc;
                 nodeToSupstep[node] = supstep;
                 ready.erase(node);
                 ++totalAssigned;
 
-                for (const auto &succ : g.Children(node)) {
+                for (const auto& succ : g.Children(node)) {
                     predec[succ]--;
                 }
             }
         }
     }
 };
-}    // namespace osp
+} // namespace osp
 } // namespace npu::tile_fwk
 #endif // OSP_GROW_LOCAL_AUTO_CORES_HPP

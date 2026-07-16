@@ -26,10 +26,7 @@ constexpr size_t MAX_MSG_LENGTH = 1024;
 }
 ErrorManager::ErrorManager() : isInit_(true) {}
 
-ErrorManager::~ErrorManager()
-{
-    isInit_ = false;
-}
+ErrorManager::~ErrorManager() { isInit_ = false; }
 
 ErrorManager& ErrorManager::Instance()
 {
@@ -37,7 +34,7 @@ ErrorManager& ErrorManager::Instance()
     return instance;
 }
 
-void ErrorManager::ReportErrorMessage(const char *fmt, ...)
+void ErrorManager::ReportErrorMessage(const char* fmt, ...)
 {
     if (!IsAlive()) {
         return;
@@ -48,7 +45,7 @@ void ErrorManager::ReportErrorMessage(const char *fmt, ...)
     va_end(list);
 }
 
-void ErrorManager::ReportInnerErrMsg(const char *fmt, va_list list)
+void ErrorManager::ReportInnerErrMsg(const char* fmt, va_list list)
 {
     std::vector<char> msgbuf(MAX_MSG_LENGTH, '\0');
     int ret = vsprintf_s(msgbuf.data(), MAX_MSG_LENGTH, fmt, list);
@@ -59,7 +56,8 @@ void ErrorManager::ReportInnerErrMsg(const char *fmt, va_list list)
     SaveErrMsg(std::string(msgbuf.data()));
 }
 
-void ErrorManager::SaveErrMsg(const std::string &errMsg) {
+void ErrorManager::SaveErrMsg(const std::string& errMsg)
+{
     if (errMsg.empty()) {
         return;
     }
@@ -86,7 +84,7 @@ void ErrorManager::OutputErrorMessage(const bool outputAll)
     }
 }
 
-bool ErrorManager::GetFirstErrorMessage(std::string &errMsg)
+bool ErrorManager::GetFirstErrorMessage(std::string& errMsg)
 {
     const std::lock_guard<std::mutex> lockGuard(reportMutex_);
     if (errorMsgQueue_.empty()) {

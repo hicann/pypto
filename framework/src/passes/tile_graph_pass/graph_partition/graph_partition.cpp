@@ -24,7 +24,7 @@ namespace npu::tile_fwk {
 
 namespace {
 
-Status RunIsoPartition(Function &function)
+Status RunIsoPartition(Function& function)
 {
     APASS_LOG_INFO_F(Elements::Function, "===> Start GraphPartition. Mode: IsoPartitioner.");
     IsoPartitioner partitioner;
@@ -45,10 +45,9 @@ Status RunIsoPartition(Function &function)
     return SUCCESS;
 }
 
-Status RunOspPartition(Function &function, const std::string &partitionMode)
+Status RunOspPartition(Function& function, const std::string& partitionMode)
 {
-    APASS_LOG_INFO_F(Elements::Function,
-        "===> Start GraphPartition. Mode: %s", partitionMode.c_str());
+    APASS_LOG_INFO_F(Elements::Function, "===> Start GraphPartition. Mode: %s", partitionMode.c_str());
     OspMode mode = (partitionMode == "OspBsp") ? OspMode::MERKLEBSP : OspMode::SARKAR;
 
     OspPartitioner partitioner(mode);
@@ -64,9 +63,9 @@ Status RunOspPartition(Function &function, const std::string &partitionMode)
     return SUCCESS;
 }
 
-}  // namespace
+} // namespace
 
-Status GraphPartition::RunOnFunction(Function &function)
+Status GraphPartition::RunOnFunction(Function& function)
 {
     const std::string partitionMode = function.paramConfigs_.sgPartitionAlgorithm;
 
@@ -80,16 +79,16 @@ Status GraphPartition::RunOnFunction(Function &function)
     }
 }
 
-Status GraphPartition::PreCheck(Function &function)
+Status GraphPartition::PreCheck(Function& function)
 {
     GraphPartitionChecker checker;
     return checker.DoPreCheck(function);
 }
 
-Status GraphPartition::PostCheck(Function &function)
+Status GraphPartition::PostCheck(Function& function)
 {
     GraphPartitionChecker checker;
     return checker.DoPostCheck(function);
 }
 
-}  // namespace npu::tile_fwk
+} // namespace npu::tile_fwk

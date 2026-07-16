@@ -45,10 +45,10 @@ public:
 TEST_F(TestExpandFunction, ExpandFunctionTest)
 {
     PassManager& passManager = PassManager::Instance();
-    passManager.RegisterStrategy(
-        "ExpandFunctionTestStrategy", {
-                                          {"RemoveRedundantReshape", PassName::REMOVE_REDUNDANT_RESHAPE},
-                                      });
+    passManager.RegisterStrategy("ExpandFunctionTestStrategy",
+                                 {
+                                     {"RemoveRedundantReshape", PassName::REMOVE_REDUNDANT_RESHAPE},
+                                 });
 
     std::vector<int64_t> shape{64, 64};
     Tensor a(DT_FP32, shape, "a");

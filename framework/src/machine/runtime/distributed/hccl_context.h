@@ -67,7 +67,7 @@ struct AlgoTopoInfo {
     uint32_t deviceNumPerAggregation; // 每个Module中的Device数量
     uint32_t superPodNum;             // 集群中总的超节点数
     uint32_t devicePhyId;
-    uint32_t topoType;                // TopoType
+    uint32_t topoType; // TopoType
     uint32_t deviceType;
     uint32_t serverNum;
     uint32_t meshAggregationRankSize;
@@ -99,15 +99,15 @@ enum class rtFloatOverflowMode_t {
 };
 
 struct HcclOpConfig {
-    uint8_t deterministic;   // 确定性计算开关
-    uint8_t retryEnable;     // 是否重执行
+    uint8_t deterministic; // 确定性计算开关
+    uint8_t retryEnable;   // 是否重执行
     uint8_t highPerfEnable;
     uint8_t padding[5];      // 大小需要64By对齐，未来添加参数时减小padding
     uint8_t linkTimeOut[8];  // 发送超时时长
     uint64_t notifyWaitTime; // 超时时长，同HCCL_EXEC_TIMEOUT
     uint32_t retryHoldTime;
     uint32_t retryIntervalTime;
-    bool interXLinkDisable = false;  // 使能rdma开关
+    bool interXLinkDisable = false; // 使能rdma开关
     rtFloatOverflowMode_t floatOverflowMode = rtFloatOverflowMode_t::RT_OVERFLOW_MODE_UNDEF;
     uint32_t multiQpThreshold = 512; // 多QP每个QP分担数据量最小阈值
 };
@@ -220,7 +220,7 @@ struct HcclCombinOpParamA5 {
 
 struct HcclCombinOpParam {
     HcclMC2WorkSpace mc2WorkSpace;
-    uint32_t rankId = 0;  // 当前卡rankId
+    uint32_t rankId = 0; // 当前卡rankId
     uint32_t rankNum = 0;
     uint64_t winSize = 0; // 每个win大小
     uint64_t windowsIn[AICPU_MAX_RANK_NUM_V1];
@@ -228,7 +228,7 @@ struct HcclCombinOpParam {
     char hcomId[128] = "\0";
     HcclStreamInfo streamInfo[AICPU_MAX_RANK_NUM_V1];
     HcclCombinOpSignalParam signalInfo;
-    HcclOpConfig config;  // 配置参数
+    HcclOpConfig config; // 配置参数
     uint64_t overFlowAddr = 0;
     uint8_t onlyRead = 0; // 只使用读模式，不使用写模式
 

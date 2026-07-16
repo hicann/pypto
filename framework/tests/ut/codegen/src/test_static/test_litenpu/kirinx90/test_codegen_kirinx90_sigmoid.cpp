@@ -19,18 +19,12 @@ using namespace npu::tile_fwk;
 
 class TestCodeGenKirinX90Sigmoid : public CodegenTestLiteNPU {
 public:
-    TestCodeGenKirinX90Sigmoid() : CodegenTestLiteNPU("KirinX90"){};
+    TestCodeGenKirinX90Sigmoid() : CodegenTestLiteNPU("KirinX90") {};
 };
 
-TEST_F(TestCodeGenKirinX90Sigmoid, test_sigmoid_fp16_001)
-{
-    TestCodeGenSigmoid::Instance().test_sigmoid_fp16_001();
-}
+TEST_F(TestCodeGenKirinX90Sigmoid, test_sigmoid_fp16_001) { TestCodeGenSigmoid::Instance().test_sigmoid_fp16_001(); }
 
-TEST_F(TestCodeGenKirinX90Sigmoid, DISABLED_test_sigmoid_002)
-{
-    TestCodeGenSigmoid::Instance().test_sigmoid_002();
-}
+TEST_F(TestCodeGenKirinX90Sigmoid, DISABLED_test_sigmoid_002) { TestCodeGenSigmoid::Instance().test_sigmoid_002(); }
 
 TEST_F(TestCodeGenKirinX90Sigmoid, DISABLED_test_sigmoid_fp16_003)
 {

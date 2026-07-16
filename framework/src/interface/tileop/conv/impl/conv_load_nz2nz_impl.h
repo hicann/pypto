@@ -55,12 +55,12 @@ INLINE void TLoadConv2DNZ2NZ(T& dst, U& src, const OffsetInfo& offsetInfo, const
         using strideDim = pto::Stride<-1, -1, -1, -1, 1>;
         using globalData = pto::GlobalTensor<typename U::Type, shapeDim, strideDim, pto::Layout::NC1HWC0>;
         globalData srcGlobal((__gm__ typename U::Type*)(src.GetAddr() + gmOffset),
-                              shapeDim(srcShapeInfo.shape1, srcShapeInfo.shape2, srcShapeInfo.shape3, c0Size),
-                              strideDim(srcStride0, srcStride1, srcStride2, srcStride3));
+                             shapeDim(srcShapeInfo.shape1, srcShapeInfo.shape2, srcShapeInfo.shape3, c0Size),
+                             strideDim(srcStride0, srcStride1, srcStride2, srcStride3));
 
         constexpr auto bufferSize = stcDstShape0 * stcDstShape1 * stcDstShape2 * stcDstShape3 * BLOCK_ALIGN_BYTE;
         using tileData = pto::ConvTile<pto::TileType::Mat, typename T::Type, bufferSize, pto::Layout::NC1HWC0,
-            pto::ConvTileShape<-1, -1, -1, -1, c0Size>>;
+                                       pto::ConvTileShape<-1, -1, -1, -1, c0Size>>;
         tileData dstL1(dstShape0, dstShape1, dstShape2, dstShape3);
         pto::TASSIGN(dstL1, (uint64_t)dst.GetAddr());
         pto::TLOAD(dstL1, srcGlobal);
@@ -71,11 +71,11 @@ INLINE void TLoadConv2DNZ2NZ(T& dst, U& src, const OffsetInfo& offsetInfo, const
         using strideDim = pto::Stride<1, -1, -1, -1, -1>;
         using globalData = pto::GlobalTensor<typename U::Type, shapeDim, strideDim, pto::Layout::FRACTAL_Z>;
         globalData srcGlobal((__gm__ typename U::Type*)(src.GetAddr() + gmOffset),
-                              shapeDim(srcShapeInfo.shape0, srcShapeInfo.shape1),
-                              strideDim(srcStride0, srcStride1, srcStride2, srcStride3));
+                             shapeDim(srcShapeInfo.shape0, srcShapeInfo.shape1),
+                             strideDim(srcStride0, srcStride1, srcStride2, srcStride3));
         constexpr auto bufferSize = stcDstShape0 * stcDstShape1 * stcDstShape2 * BLOCK_ALIGN_BYTE;
         using tileData = pto::ConvTile<pto::TileType::Mat, typename T::Type, bufferSize, pto::Layout::FRACTAL_Z,
-            pto::ConvTileShape<-1, -1, MKN_N_VALUE, c0Size>>;
+                                       pto::ConvTileShape<-1, -1, MKN_N_VALUE, c0Size>>;
         tileData dstL1(dstShape0, dstShape1);
         pto::TASSIGN(dstL1, (uint64_t)dst.GetAddr());
         pto::TLOAD(dstL1, srcGlobal);
@@ -118,18 +118,19 @@ INLINE void TLoadConv3DNZ2NZ(T& dst, U& src, const OffsetInfo& offsetInfo, const
         int64_t gmOffset = offsetInfo.offset0 * srcStride0 + offsetInfo.offset1 * srcStride1 +
                            offsetInfo.offset2 * srcStride2 + offsetInfo.offset3 * srcStride3 +
                            offsetInfo.offset4 * srcStride4;
-        // Shape: N=1, D, C1, H, W, C0(由于Shape只支持5维，且C0可以根据dtype计算得出，所以这里不配置C0) 
+        // Shape: N=1, D, C1, H, W, C0(由于Shape只支持5维，且C0可以根据dtype计算得出，所以这里不配置C0)
         using shapeDim = pto::Shape<1, -1, -1, -1, -1>;
         using strideDim = pto::Stride<-1, -1, -1, -1, -1>;
         using globalData = pto::GlobalTensor<typename U::Type, shapeDim, strideDim, pto::Layout::NDC1HWC0>;
-        globalData srcGlobal((__gm__ typename U::Type*)(src.GetAddr() + gmOffset),
+        globalData srcGlobal(
+            (__gm__ typename U::Type*)(src.GetAddr() + gmOffset),
             shapeDim(srcShapeInfo.shape1, srcShapeInfo.shape2, srcShapeInfo.shape3, srcShapeInfo.shape4),
             strideDim(srcStride0, srcStride1, srcStride2, srcStride3, srcStride4));
 
-        constexpr auto bufferSize =
-            stcDstShape0 * stcDstShape1 * stcDstShape2 * stcDstShape3 * stcDstShape4 * BLOCK_ALIGN_BYTE;
+        constexpr auto bufferSize = stcDstShape0 * stcDstShape1 * stcDstShape2 * stcDstShape3 * stcDstShape4 *
+                                    BLOCK_ALIGN_BYTE;
         using tileData = pto::ConvTile<pto::TileType::Mat, typename T::Type, bufferSize, pto::Layout::NDC1HWC0,
-            pto::ConvTileShape<-1, -1, -1, -1, -1, c0Size>>;
+                                       pto::ConvTileShape<-1, -1, -1, -1, -1, c0Size>>;
         tileData dstL1(dstShape0, dstShape1, dstShape2, dstShape3, dstShape4);
         pto::TASSIGN(dstL1, (uint64_t)dst.GetAddr());
         pto::TLOAD(dstL1, srcGlobal);
@@ -140,11 +141,11 @@ INLINE void TLoadConv3DNZ2NZ(T& dst, U& src, const OffsetInfo& offsetInfo, const
         using strideDim = pto::Stride<1, -1, -1, -1, -1>;
         using globalData = pto::GlobalTensor<typename U::Type, shapeDim, strideDim, pto::Layout::FRACTAL_Z_3D>;
         globalData srcGlobal((__gm__ typename U::Type*)(src.GetAddr() + gmOffset),
-                              shapeDim(srcShapeInfo.shape0, srcShapeInfo.shape1),
-                              strideDim(srcStride0, srcStride1, srcStride2, srcStride3));
+                             shapeDim(srcShapeInfo.shape0, srcShapeInfo.shape1),
+                             strideDim(srcStride0, srcStride1, srcStride2, srcStride3));
         constexpr auto bufferSize = stcDstShape0 * stcDstShape1 * stcDstShape2 * BLOCK_ALIGN_BYTE;
         using tileData = pto::ConvTile<pto::TileType::Mat, typename T::Type, bufferSize, pto::Layout::FRACTAL_Z_3D,
-            pto::ConvTileShape<-1, -1, MKN_N_VALUE, c0Size>>;
+                                       pto::ConvTileShape<-1, -1, MKN_N_VALUE, c0Size>>;
         tileData dstL1(dstShape0, dstShape1);
         pto::TASSIGN(dstL1, (uint64_t)dst.GetAddr());
         pto::TLOAD(dstL1, srcGlobal);

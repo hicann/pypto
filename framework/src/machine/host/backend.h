@@ -26,9 +26,8 @@ struct Linker {
     DyndevFunctionAttribute::FunctionGroup& funcGroup_;
     DyndevFunctionAttribute::ExpressionTableDictGroup& exprTableDictGroup_;
 
-    Linker(
-        SymbolicSymbolTable& symbolTable, DyndevFunctionAttribute::FunctionGroup& funcGroup,
-        DyndevFunctionAttribute::ExpressionTableDictGroup& exprTableDictGroup)
+    Linker(SymbolicSymbolTable& symbolTable, DyndevFunctionAttribute::FunctionGroup& funcGroup,
+           DyndevFunctionAttribute::ExpressionTableDictGroup& exprTableDictGroup)
         : symbolTable_(symbolTable), funcGroup_(funcGroup), exprTableDictGroup_(exprTableDictGroup)
     {}
 
@@ -138,7 +137,6 @@ struct ValDependTensorMeta {
     bool disableCtrlFlowCache{false};
 };
 
-void InsertWaitCoreStart(
-    SymbolicExpressionTable* exprTable, std::ostringstream& controlFlowOss, ValDependTensorMeta& valDependTensorMeta,
-    int indent);
+void InsertWaitCoreStart(SymbolicExpressionTable* exprTable, std::ostringstream& controlFlowOss,
+                         ValDependTensorMeta& valDependTensorMeta, int indent);
 } // namespace npu::tile_fwk

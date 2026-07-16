@@ -34,27 +34,27 @@ int CompileCCEForSingleOpTest(const std::string& srcFile, const std::string& obj
     char ccecCmd[2048];
     std::string compileOptions = "";
 
-    int ret = snprintf_s(
-        ccecCmd, sizeof(ccecCmd), sizeof(ccecCmd) - 1,
-        "ccec %s -lstdc++ -O2 -g -x cce -std=c++17 --shared -fPIC "
-        "--cce-aicore-arch=%s "
-        "--cce-enable-print "
-        "-mllvm -cce-aicore-stack-size=0x8000 "
-        "-mllvm -cce-aicore-function-stack-size=0x8000 "
-        "-mllvm -cce-aicore-record-overflow=false "
-        "-mllvm -cce-aicore-addr-transform "
-        "-mllvm -cce-aicore-dcci-insert-for-scalar=false "
-        "-L%s "
-        "-lruntime "
-        "-I%s "
-        "-I%s/framework/src/interface/tileop/arch32 "
-        "-I%s/framework/src/machine/kernel/ "
-        "-I%s/framework/src/ "
-        "-I%s/framework/src/interface "
-        "-o %s "
-        "%s",
-        compileOptions.c_str(), coreType.c_str(), lib64Path.c_str(), runtimePath.c_str(), codeSrcPath.c_str(),
-        codeSrcPath.c_str(), codeSrcPath.c_str(), codeSrcPath.c_str(), objFile.c_str(), srcFile.c_str());
+    int ret = snprintf_s(ccecCmd, sizeof(ccecCmd), sizeof(ccecCmd) - 1,
+                         "ccec %s -lstdc++ -O2 -g -x cce -std=c++17 --shared -fPIC "
+                         "--cce-aicore-arch=%s "
+                         "--cce-enable-print "
+                         "-mllvm -cce-aicore-stack-size=0x8000 "
+                         "-mllvm -cce-aicore-function-stack-size=0x8000 "
+                         "-mllvm -cce-aicore-record-overflow=false "
+                         "-mllvm -cce-aicore-addr-transform "
+                         "-mllvm -cce-aicore-dcci-insert-for-scalar=false "
+                         "-L%s "
+                         "-lruntime "
+                         "-I%s "
+                         "-I%s/framework/src/interface/tileop/arch32 "
+                         "-I%s/framework/src/machine/kernel/ "
+                         "-I%s/framework/src/ "
+                         "-I%s/framework/src/interface "
+                         "-o %s "
+                         "%s",
+                         compileOptions.c_str(), coreType.c_str(), lib64Path.c_str(), runtimePath.c_str(),
+                         codeSrcPath.c_str(), codeSrcPath.c_str(), codeSrcPath.c_str(), codeSrcPath.c_str(),
+                         objFile.c_str(), srcFile.c_str());
     ret = std::system(ccecCmd);
     return ret;
 }

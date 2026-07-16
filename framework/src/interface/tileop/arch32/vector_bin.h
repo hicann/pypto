@@ -41,17 +41,16 @@ TILEOP void T_BIN_PAIR(__ubuf__ T* dst, __ubuf__ T* src0, __ubuf__ T* src1)
         for (int i = 0; i < T0; i++) {
             if constexpr (numLoop) {
                 for (int j = 0; j < numLoop; j++) {
-                    V_BIN_FUNC(
-                        dst + i * DS + j * elementsPerRepeat * REPEAT_MAX,
-                        src0 + i * SS0 + j * elementsPerRepeat * REPEAT_MAX,
-                        src1 + i * SS1 + j * elementsPerRepeat * REPEAT_MAX, REPEAT_MAX, 1, 1, 1, 8, 8, 8);
+                    V_BIN_FUNC(dst + i * DS + j * elementsPerRepeat * REPEAT_MAX,
+                               src0 + i * SS0 + j * elementsPerRepeat * REPEAT_MAX,
+                               src1 + i * SS1 + j * elementsPerRepeat * REPEAT_MAX, REPEAT_MAX, 1, 1, 1, 8, 8, 8);
                 }
             }
             if constexpr (remainAfterLoop) {
-                V_BIN_FUNC(
-                    dst + i * DS + numLoop * elementsPerRepeat * REPEAT_MAX,
-                    src0 + i * SS0 + numLoop * elementsPerRepeat * REPEAT_MAX,
-                    src1 + i * SS1 + numLoop * elementsPerRepeat * REPEAT_MAX, remainAfterLoop, 1, 1, 1, 8, 8, 8);
+                V_BIN_FUNC(dst + i * DS + numLoop * elementsPerRepeat * REPEAT_MAX,
+                           src0 + i * SS0 + numLoop * elementsPerRepeat * REPEAT_MAX,
+                           src1 + i * SS1 + numLoop * elementsPerRepeat * REPEAT_MAX, remainAfterLoop, 1, 1, 1, 8, 8,
+                           8);
             }
         }
     }
@@ -72,29 +71,25 @@ TILEOP void T_BIN_PAIR(__ubuf__ T* dst, __ubuf__ T* src0, __ubuf__ T* src1)
             for (int i = 0; i < numLoop; i++) {
                 if constexpr (strideOverFlag) {
                     for (uint64_t j = 0; j < REPEAT_MAX; j++) {
-                        V_BIN_FUNC(
-                            dst + i * REPEAT_MAX * DS + j * DS, src0 + i * REPEAT_MAX * SS0 + j * SS0,
-                            src1 + i * REPEAT_MAX * SS1 + j * SS1, 1, 1, 1, 1, 1, 1, 1);
+                        V_BIN_FUNC(dst + i * REPEAT_MAX * DS + j * DS, src0 + i * REPEAT_MAX * SS0 + j * SS0,
+                                   src1 + i * REPEAT_MAX * SS1 + j * SS1, 1, 1, 1, 1, 1, 1, 1);
                     }
                 } else {
-                    V_BIN_FUNC(
-                        dst + i * REPEAT_MAX * DS, src0 + i * REPEAT_MAX * SS0, src1 + i * REPEAT_MAX * SS1, REPEAT_MAX,
-                        1, 1, 1, DS / blockSizeElem, SS0 / blockSizeElem, SS1 / blockSizeElem);
+                    V_BIN_FUNC(dst + i * REPEAT_MAX * DS, src0 + i * REPEAT_MAX * SS0, src1 + i * REPEAT_MAX * SS1,
+                               REPEAT_MAX, 1, 1, 1, DS / blockSizeElem, SS0 / blockSizeElem, SS1 / blockSizeElem);
                 }
             }
         }
         if constexpr (remainAfterLoop) {
             if constexpr (strideOverFlag) {
                 for (unsigned j = 0; j < remainAfterLoop; j++) {
-                    V_BIN_FUNC(
-                        dst + numLoop * REPEAT_MAX * DS + j * DS, src0 + numLoop * REPEAT_MAX * SS0 + j * SS0,
-                        src1 + numLoop * REPEAT_MAX * SS1 + j * SS1, 1, 1, 1, 1, 1, 1, 1);
+                    V_BIN_FUNC(dst + numLoop * REPEAT_MAX * DS + j * DS, src0 + numLoop * REPEAT_MAX * SS0 + j * SS0,
+                               src1 + numLoop * REPEAT_MAX * SS1 + j * SS1, 1, 1, 1, 1, 1, 1, 1);
                 }
             } else {
-                V_BIN_FUNC(
-                    dst + numLoop * REPEAT_MAX * DS, src0 + numLoop * REPEAT_MAX * SS0,
-                    src1 + numLoop * REPEAT_MAX * SS1, remainAfterLoop, 1, 1, 1, DS / blockSizeElem,
-                    SS0 / blockSizeElem, SS1 / blockSizeElem);
+                V_BIN_FUNC(dst + numLoop * REPEAT_MAX * DS, src0 + numLoop * REPEAT_MAX * SS0,
+                           src1 + numLoop * REPEAT_MAX * SS1, remainAfterLoop, 1, 1, 1, DS / blockSizeElem,
+                           SS0 / blockSizeElem, SS1 / blockSizeElem);
             }
         }
         set_vector_mask(-1, -1);
@@ -102,10 +97,9 @@ TILEOP void T_BIN_PAIR(__ubuf__ T* dst, __ubuf__ T* src0, __ubuf__ T* src1)
 }
 
 // dim4
-template <
-    typename T, unsigned S0T0, unsigned S0T1, unsigned S0T2, unsigned S0T3, unsigned S1T0, unsigned S1T1, unsigned S1T2,
-    unsigned S1T3, unsigned DS0, unsigned DS1, unsigned DS2, unsigned DS3, unsigned S0S0, unsigned S0S1, unsigned S0S2,
-    unsigned S0S3, unsigned S1S0, unsigned S1S1, unsigned S1S2, unsigned S1S3>
+template <typename T, unsigned S0T0, unsigned S0T1, unsigned S0T2, unsigned S0T3, unsigned S1T0, unsigned S1T1,
+          unsigned S1T2, unsigned S1T3, unsigned DS0, unsigned DS1, unsigned DS2, unsigned DS3, unsigned S0S0,
+          unsigned S0S1, unsigned S0S2, unsigned S0S3, unsigned S1S0, unsigned S1S1, unsigned S1S2, unsigned S1S3>
 TILEOP void T_BIN_PAIR(__ubuf__ T* dst, __ubuf__ T* src0, __ubuf__ T* src1)
 {
     static_assert((DS3 * sizeof(T)) % BLOCK_SIZE == 0);
@@ -128,9 +122,8 @@ TILEOP void T_BIN_PAIR(__ubuf__ T* dst, __ubuf__ T* src0, __ubuf__ T* src1)
 }
 
 // dim2 & dim1 (T0 = 1 for dim1)
-template <
-    typename T, unsigned T0, unsigned S0T1, unsigned S1T1, unsigned DS, unsigned S0S0, unsigned S0S1, unsigned S1S0,
-    unsigned S1S1, BroadcastOperand OPERAND = BroadcastOperand::NONE>
+template <typename T, unsigned T0, unsigned S0T1, unsigned S1T1, unsigned DS, unsigned S0S0, unsigned S0S1,
+          unsigned S1S0, unsigned S1S1, BroadcastOperand OPERAND = BroadcastOperand::NONE>
 TILEOP void T_BIN(__ubuf__ T* dst, __ubuf__ T* src0, __ubuf__ T* src1)
 {
     constexpr unsigned T1 = S0T1 < S1T1 ? S1T1 : S0T1;
@@ -169,19 +162,17 @@ TILEOP void T_BIN(__ubuf__ T* dst, __ubuf__ T* src0, __ubuf__ T* src1)
             for (int i = 0; i < T0; i++) {
                 if constexpr (numLoop) {
                     for (int j = 0; j < numLoop; j++) {
-                        V_BIN_FUNC(
-                            dst + i * DS + j * elementsPerRepeat * REPEAT_MAX,
-                            src0 + i * src0Row + j * src0RowOffset * REPEAT_MAX,
-                            src1 + i * src1Row + j * src1RowOffset * REPEAT_MAX, REPEAT_MAX, 1, src0BlockStride,
-                            src1BlockStride, 8, src0RepeatStride, src1RepeatStride);
+                        V_BIN_FUNC(dst + i * DS + j * elementsPerRepeat * REPEAT_MAX,
+                                   src0 + i * src0Row + j * src0RowOffset * REPEAT_MAX,
+                                   src1 + i * src1Row + j * src1RowOffset * REPEAT_MAX, REPEAT_MAX, 1, src0BlockStride,
+                                   src1BlockStride, 8, src0RepeatStride, src1RepeatStride);
                     }
                 }
                 if constexpr (remainAfterLoop) {
-                    V_BIN_FUNC(
-                        dst + i * DS + numLoop * elementsPerRepeat * REPEAT_MAX,
-                        src0 + i * src0Row + numLoop * src0RowOffset * REPEAT_MAX,
-                        src1 + i * src1Row + numLoop * src1RowOffset * REPEAT_MAX, remainAfterLoop, 1, src0BlockStride,
-                        src1BlockStride, 8, src0RepeatStride, src1RepeatStride);
+                    V_BIN_FUNC(dst + i * DS + numLoop * elementsPerRepeat * REPEAT_MAX,
+                               src0 + i * src0Row + numLoop * src0RowOffset * REPEAT_MAX,
+                               src1 + i * src1Row + numLoop * src1RowOffset * REPEAT_MAX, remainAfterLoop, 1,
+                               src0BlockStride, src1BlockStride, 8, src0RepeatStride, src1RepeatStride);
                 }
             }
         } else {
@@ -191,19 +182,19 @@ TILEOP void T_BIN(__ubuf__ T* dst, __ubuf__ T* src0, __ubuf__ T* src1)
             for (int i = 0; i < numRepeatPerLine; i++) {
                 if constexpr (numLoop) {
                     for (int j = 0; j < numLoop; j++) {
-                        V_BIN_FUNC(
-                            dst + i * elementsPerRepeat + j * REPEAT_MAX * DS,
-                            src0 + i * src0RowOffset + j * src0Row * REPEAT_MAX,
-                            src1 + i * src1RowOffset + j * src1Row * REPEAT_MAX, REPEAT_MAX, 1, src0BlockStride,
-                            src1BlockStride, DS / blockSizeElem, src0Row / blockSizeElem, src1Row / blockSizeElem);
+                        V_BIN_FUNC(dst + i * elementsPerRepeat + j * REPEAT_MAX * DS,
+                                   src0 + i * src0RowOffset + j * src0Row * REPEAT_MAX,
+                                   src1 + i * src1RowOffset + j * src1Row * REPEAT_MAX, REPEAT_MAX, 1, src0BlockStride,
+                                   src1BlockStride, DS / blockSizeElem, src0Row / blockSizeElem,
+                                   src1Row / blockSizeElem);
                     }
                 }
                 if constexpr (remainAfterLoop) {
-                    V_BIN_FUNC(
-                        dst + i * elementsPerRepeat + numLoop * REPEAT_MAX * DS,
-                        src0 + i * src0RowOffset + numLoop * src0Row * REPEAT_MAX,
-                        src1 + i * src1RowOffset + numLoop * src1Row * REPEAT_MAX, remainAfterLoop, 1, src0BlockStride,
-                        src1BlockStride, DS / blockSizeElem, src0Row / blockSizeElem, src1Row / blockSizeElem);
+                    V_BIN_FUNC(dst + i * elementsPerRepeat + numLoop * REPEAT_MAX * DS,
+                               src0 + i * src0RowOffset + numLoop * src0Row * REPEAT_MAX,
+                               src1 + i * src1RowOffset + numLoop * src1Row * REPEAT_MAX, remainAfterLoop, 1,
+                               src0BlockStride, src1BlockStride, DS / blockSizeElem, src0Row / blockSizeElem,
+                               src1Row / blockSizeElem);
                 }
             }
         }
@@ -222,32 +213,29 @@ TILEOP void T_BIN(__ubuf__ T* dst, __ubuf__ T* src0, __ubuf__ T* src1)
             for (int i = 0; i < numLoop; i++) {
                 if constexpr (strideOverFlag) {
                     for (uint64_t j = 0; j < REPEAT_MAX; j++) {
-                        V_BIN_FUNC(
-                            dst + i * REPEAT_MAX * DS + j * DS, src0 + i * REPEAT_MAX * src0Row + j * src0Row,
-                            src1 + i * REPEAT_MAX * src1Row + j * src1Row, 1, 1, src0BlockStride, src1BlockStride, 1, 1,
-                            1);
+                        V_BIN_FUNC(dst + i * REPEAT_MAX * DS + j * DS, src0 + i * REPEAT_MAX * src0Row + j * src0Row,
+                                   src1 + i * REPEAT_MAX * src1Row + j * src1Row, 1, 1, src0BlockStride,
+                                   src1BlockStride, 1, 1, 1);
                     }
                 } else {
-                    V_BIN_FUNC(
-                        dst + i * REPEAT_MAX * DS, src0 + i * REPEAT_MAX * src0Row, src1 + i * REPEAT_MAX * src1Row,
-                        REPEAT_MAX, 1, src0BlockStride, src1BlockStride, DS / blockSizeElem, src0Row / blockSizeElem,
-                        src1Row / blockSizeElem);
+                    V_BIN_FUNC(dst + i * REPEAT_MAX * DS, src0 + i * REPEAT_MAX * src0Row,
+                               src1 + i * REPEAT_MAX * src1Row, REPEAT_MAX, 1, src0BlockStride, src1BlockStride,
+                               DS / blockSizeElem, src0Row / blockSizeElem, src1Row / blockSizeElem);
                 }
             }
         }
         if constexpr (remainAfterLoop) {
             if constexpr (strideOverFlag) {
                 for (unsigned j = 0; j < remainAfterLoop; j++) {
-                    V_BIN_FUNC(
-                        dst + numLoop * REPEAT_MAX * DS + j * DS, src0 + numLoop * REPEAT_MAX * src0Row + j * src0Row,
-                        src1 + numLoop * REPEAT_MAX * src1Row + j * src1Row, 1, 1, src0BlockStride, src1BlockStride, 1,
-                        1, 1);
+                    V_BIN_FUNC(dst + numLoop * REPEAT_MAX * DS + j * DS,
+                               src0 + numLoop * REPEAT_MAX * src0Row + j * src0Row,
+                               src1 + numLoop * REPEAT_MAX * src1Row + j * src1Row, 1, 1, src0BlockStride,
+                               src1BlockStride, 1, 1, 1);
                 }
             } else {
-                V_BIN_FUNC(
-                    dst + numLoop * REPEAT_MAX * DS, src0 + numLoop * REPEAT_MAX * src0Row,
-                    src1 + numLoop * REPEAT_MAX * src1Row, remainAfterLoop, 1, src0BlockStride, src1BlockStride,
-                    DS / blockSizeElem, src0Row / blockSizeElem, src1Row / blockSizeElem);
+                V_BIN_FUNC(dst + numLoop * REPEAT_MAX * DS, src0 + numLoop * REPEAT_MAX * src0Row,
+                           src1 + numLoop * REPEAT_MAX * src1Row, remainAfterLoop, 1, src0BlockStride, src1BlockStride,
+                           DS / blockSizeElem, src0Row / blockSizeElem, src1Row / blockSizeElem);
             }
         }
         set_vector_mask(-1, -1);
@@ -255,11 +243,10 @@ TILEOP void T_BIN(__ubuf__ T* dst, __ubuf__ T* src0, __ubuf__ T* src1)
 }
 
 // dim4
-template <
-    typename T, unsigned S0T0, unsigned S0T1, unsigned S0T2, unsigned S0T3, unsigned S1T0, unsigned S1T1, unsigned S1T2,
-    unsigned S1T3, unsigned DS0, unsigned DS1, unsigned DS2, unsigned DS3, unsigned S0S0, unsigned S0S1, unsigned S0S2,
-    unsigned S0S3, unsigned S1S0, unsigned S1S1, unsigned S1S2, unsigned S1S3,
-    BroadcastOperand OPERAND = BroadcastOperand::NONE>
+template <typename T, unsigned S0T0, unsigned S0T1, unsigned S0T2, unsigned S0T3, unsigned S1T0, unsigned S1T1,
+          unsigned S1T2, unsigned S1T3, unsigned DS0, unsigned DS1, unsigned DS2, unsigned DS3, unsigned S0S0,
+          unsigned S0S1, unsigned S0S2, unsigned S0S3, unsigned S1S0, unsigned S1S1, unsigned S1S2, unsigned S1S3,
+          BroadcastOperand OPERAND = BroadcastOperand::NONE>
 TILEOP void T_BIN(__ubuf__ T* dst, __ubuf__ T* src0, __ubuf__ T* src1)
 {
     static_assert((DS3 * sizeof(T)) % BLOCK_SIZE == 0);
@@ -308,15 +295,14 @@ TILEOP void T_BIN_VS(__ubuf__ T* dst, __ubuf__ T* src0, T src1)
         for (int i = 0; i < T0; i++) {
             if constexpr (numLoop) {
                 for (int j = 0; j < numLoop; j++) {
-                    V_BIN_FUNC_VS(
-                        dst + i * DS + j * elementsPerRepeat * REPEAT_MAX,
-                        src0 + i * SS0 + j * elementsPerRepeat * REPEAT_MAX, src1, REPEAT_MAX, 1, 1, 8, 8);
+                    V_BIN_FUNC_VS(dst + i * DS + j * elementsPerRepeat * REPEAT_MAX,
+                                  src0 + i * SS0 + j * elementsPerRepeat * REPEAT_MAX, src1, REPEAT_MAX, 1, 1, 8, 8);
                 }
             }
             if constexpr (remainAfterLoop) {
-                V_BIN_FUNC_VS(
-                    dst + i * DS + elementsPerRepeat * REPEAT_MAX * numLoop,
-                    src0 + i * SS0 + elementsPerRepeat * REPEAT_MAX * numLoop, src1, remainAfterLoop, 1, 1, 8, 8);
+                V_BIN_FUNC_VS(dst + i * DS + elementsPerRepeat * REPEAT_MAX * numLoop,
+                              src0 + i * SS0 + elementsPerRepeat * REPEAT_MAX * numLoop, src1, remainAfterLoop, 1, 1, 8,
+                              8);
             }
         }
     }
@@ -334,28 +320,24 @@ TILEOP void T_BIN_VS(__ubuf__ T* dst, __ubuf__ T* src0, T src1)
             for (int i = 0; i < numLoop; i++) {
                 if (strideOverFlag) {
                     for (uint64_t j = 0; j < REPEAT_MAX; j++) {
-                        V_BIN_FUNC_VS(
-                            dst + i * REPEAT_MAX * DS + j * DS, src0 + i * REPEAT_MAX * SS0 + j * SS0, src1, 1, 1, 1, 1,
-                            1);
+                        V_BIN_FUNC_VS(dst + i * REPEAT_MAX * DS + j * DS, src0 + i * REPEAT_MAX * SS0 + j * SS0, src1,
+                                      1, 1, 1, 1, 1);
                     }
                 } else {
-                    V_BIN_FUNC_VS(
-                        dst + i * REPEAT_MAX * DS, src0 + i * REPEAT_MAX * SS0, src1, REPEAT_MAX, 1, 1,
-                        DS / blockSizeElem, SS0 / blockSizeElem);
+                    V_BIN_FUNC_VS(dst + i * REPEAT_MAX * DS, src0 + i * REPEAT_MAX * SS0, src1, REPEAT_MAX, 1, 1,
+                                  DS / blockSizeElem, SS0 / blockSizeElem);
                 }
             }
         }
         if constexpr (remainAfterLoop) {
             if (strideOverFlag) {
                 for (unsigned j = 0; j < remainAfterLoop; j++) {
-                    V_BIN_FUNC_VS(
-                        (__ubuf__ T*)(dst + numLoop * REPEAT_MAX * DS + j * DS),
-                        src0 + numLoop * REPEAT_MAX * SS0 + j * SS0, src1, 1, 1, 1, 1, 1);
+                    V_BIN_FUNC_VS((__ubuf__ T*)(dst + numLoop * REPEAT_MAX * DS + j * DS),
+                                  src0 + numLoop * REPEAT_MAX * SS0 + j * SS0, src1, 1, 1, 1, 1, 1);
                 }
             } else {
-                V_BIN_FUNC_VS(
-                    (__ubuf__ T*)(dst + numLoop * REPEAT_MAX * DS), src0 + numLoop * REPEAT_MAX * SS0, src1,
-                    remainAfterLoop, 1, 1, DS / blockSizeElem, SS0 / blockSizeElem);
+                V_BIN_FUNC_VS((__ubuf__ T*)(dst + numLoop * REPEAT_MAX * DS), src0 + numLoop * REPEAT_MAX * SS0, src1,
+                              remainAfterLoop, 1, 1, DS / blockSizeElem, SS0 / blockSizeElem);
             }
         }
         set_vector_mask(-1, -1);
@@ -363,9 +345,8 @@ TILEOP void T_BIN_VS(__ubuf__ T* dst, __ubuf__ T* src0, T src1)
 }
 
 // dim4
-template <
-    typename T, unsigned T0, unsigned T1, unsigned T2, unsigned T3, unsigned DS0, unsigned DS1, unsigned DS2,
-    unsigned S0S0, unsigned S0S1, unsigned S0S2>
+template <typename T, unsigned T0, unsigned T1, unsigned T2, unsigned T3, unsigned DS0, unsigned DS1, unsigned DS2,
+          unsigned S0S0, unsigned S0S1, unsigned S0S2>
 TILEOP void T_BIN_VS(__ubuf__ T* dst, __ubuf__ T* src0, T src1)
 {
     static_assert((DS2 * sizeof(T)) % BLOCK_SIZE == 0);

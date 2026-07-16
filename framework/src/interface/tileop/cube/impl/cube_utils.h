@@ -55,9 +55,8 @@ INLINE int64_t GetStride(const U& tileTensor)
     return tileLayout.template GetStrideDim<idx>();
 }
 
-INLINE int64_t CalNZOffset(
-    const int64_t& srcShape0, const int64_t& srcShape1, const int64_t& offset0, const int64_t& offset1,
-    const int64_t& c0Size)
+INLINE int64_t CalNZOffset(const int64_t& srcShape0, const int64_t& srcShape1, const int64_t& offset0,
+                           const int64_t& offset1, const int64_t& c0Size)
 {
     int64_t batchSize = srcShape0 * srcShape1;
     int64_t offsetElem = offset1 + offset0 * srcShape1;
@@ -107,13 +106,13 @@ template <typename FpTileData>
 INLINE auto CreateScaleTileData(FpTileData& fixbuf)
 {
     constexpr uint64_t shapeSize = Std::tuple_size<typename FpTileData::Shape>::value;
-    constexpr int64_t scaleTileH =
-        Std::tuple_element<shapeSize - SHAPE_DIM2, typename FpTileData::TileShape>::type::value;
+    constexpr int64_t
+        scaleTileH = Std::tuple_element<shapeSize - SHAPE_DIM2, typename FpTileData::TileShape>::type::value;
     constexpr int64_t scaleTileW = Std::tuple_element<shapeSize - 1, typename FpTileData::TileShape>::type::value;
     int64_t scaleShape0 = GetShape<0>(fixbuf);
     int64_t scaleShape1 = GetShape<1>(fixbuf);
-    using scaleTileData =
-        pto::Tile<pto::TileType::Scaling, uint64_t, scaleTileH, scaleTileW, pto::BLayout::RowMajor, -1, -1>;
+    using scaleTileData = pto::Tile<pto::TileType::Scaling, uint64_t, scaleTileH, scaleTileW, pto::BLayout::RowMajor,
+                                    -1, -1>;
     return scaleTileData(scaleShape0, scaleShape1);
 }
 
@@ -143,11 +142,11 @@ INLINE bool HandleZeroKScenario(TileData& dst)
             int64_t validK = GetShape<kIndex>(dst);
             if (validK == 0) {
                 TFillPadZeroK(dst);
-                return true;  // Signal that early return is needed
+                return true; // Signal that early return is needed
             }
         }
     }
-    return false;  // No early return needed
+    return false; // No early return needed
 }
 
 #endif // TILEOP_TILE_OPERATOR_CUBE_UTILS__H

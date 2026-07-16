@@ -134,7 +134,6 @@ public:
  */
 class LineLogger : public std::vector<std::string> {
 public:
-
     /**
      * \brief Log a string value
      * \param t String to store
@@ -320,7 +319,7 @@ public:
             static const char* MSG = "DIWEFVN";
             auto now = std::chrono::system_clock::now();
             auto time = std::chrono::system_clock::to_time_t(now);
-            std::tm tm {};
+            std::tm tm{};
             (void)localtime_r(&time, &tm);
 
             // Format timestamp

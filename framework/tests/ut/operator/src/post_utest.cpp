@@ -47,9 +47,8 @@ struct TestPostParams {
     int vHeadDim;
 };
 
-template <
-    typename T = npu::tile_fwk::float16, bool nz = true, typename wUvDtype = int8_t, bool isSmoothWuv = false,
-    typename wODtype = int8_t, bool isSmoothWo = false>
+template <typename T = npu::tile_fwk::float16, bool nz = true, typename wUvDtype = int8_t, bool isSmoothWuv = false,
+          typename wODtype = int8_t, bool isSmoothWo = false>
 void TestAttentionPostUt(const TestPostParams& params, const PostTileConfig& tileConfig)
 {
     int b = params.b;

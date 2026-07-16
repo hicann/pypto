@@ -57,9 +57,7 @@ void BindEnum(py::module_& m)
         .value("TILEOP_NZ", TileOpFormat::TILEOP_NZ)
         .export_values();
 
-    py::enum_<CachePolicy>(m, "CachePolicy")
-        .value("NONE_CACHEABLE", CachePolicy::NONE_CACHEABLE)
-        .export_values();
+    py::enum_<CachePolicy>(m, "CachePolicy").value("NONE_CACHEABLE", CachePolicy::NONE_CACHEABLE).export_values();
 
     py::enum_<ReduceMode>(m, "ReduceMode").value("ATOMIC_ADD", ReduceMode::ATOMIC_ADD).export_values();
 
@@ -75,9 +73,7 @@ void BindEnum(py::module_& m)
         .value("DYNAMIC_LOOP", FunctionType::DYNAMIC_LOOP)
         .export_values();
 
-    py::enum_<GraphType>(m, "GraphType")
-        .value("TENSOR_GRAPH", GraphType::TENSOR_GRAPH)
-        .export_values();
+    py::enum_<GraphType>(m, "GraphType").value("TENSOR_GRAPH", GraphType::TENSOR_GRAPH).export_values();
 
     py::enum_<CastMode>(m, "CastMode")
         .value("CAST_NONE", CastMode::CAST_NONE)
@@ -126,10 +122,7 @@ void BindEnum(py::module_& m)
         .value("GE", OpType::GE)
         .export_values();
 
-    py::enum_<OutType>(m, "OutType")
-        .value("BOOL", OutType::BOOL)
-        .value("BIT", OutType::BIT)
-        .export_values();
+    py::enum_<OutType>(m, "OutType").value("BOOL", OutType::BOOL).value("BIT", OutType::BIT).export_values();
 
     py::enum_<TopKAlgo>(m, "TopKAlgo")
         .value("MERGE_SORT", TopKAlgo::MERGE_SORT)

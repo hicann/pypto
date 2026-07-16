@@ -59,15 +59,15 @@ TEST_F(RuntimeOutcastTensorTest, DumpFormatWithZeroAddr)
 TEST_F(RuntimeOutcastTensorTest, GetRuntimeTensorMemPropertyNameMatchesEnum)
 {
     EXPECT_STREQ(GetRuntimeTensorMemPropertyName(RuntimeTensorMemProperty::EXTERNAL), "EXTERNAL");
-    EXPECT_STREQ(
-        GetRuntimeTensorMemPropertyName(RuntimeTensorMemProperty::DEVTASK_INNER_OUTCAST), "DEVTASK_INNER_OUTCAST");
+    EXPECT_STREQ(GetRuntimeTensorMemPropertyName(RuntimeTensorMemProperty::DEVTASK_INNER_OUTCAST),
+                 "DEVTASK_INNER_OUTCAST");
     EXPECT_STREQ(GetRuntimeTensorMemPropertyName(RuntimeTensorMemProperty::BOUNDARY_OUTCAST), "BOUNDARY_OUTCAST");
 }
 
 // Helper to construct and initialize a DeviceWorkspaceAllocator with reasonable
 // metadata budgets so `InitAicpuStitchSlabAllocator` won't assert.
-static void InitDeviceWorkspaceAllocatorForTest(
-    DeviceWorkspaceAllocator& d, DevAscendProgram& devProg, std::vector<uint8_t>& workspace)
+static void InitDeviceWorkspaceAllocatorForTest(DeviceWorkspaceAllocator& d, DevAscendProgram& devProg,
+                                                std::vector<uint8_t>& workspace)
 {
     DevStartArgs args;
 
@@ -79,8 +79,8 @@ static void InitDeviceWorkspaceAllocatorForTest(
 
     args.deviceRuntimeDataDesc.generalAddr = reinterpret_cast<uint64_t>(workspace.data());
     // Put stitch pool at an offset within the same workspace region
-    args.deviceRuntimeDataDesc.stitchPoolAddr =
-        reinterpret_cast<uint64_t>(workspace.data()) + devProg.memBudget.metadata.general; // offset 256KB
+    args.deviceRuntimeDataDesc.stitchPoolAddr = reinterpret_cast<uint64_t>(workspace.data()) +
+                                                devProg.memBudget.metadata.general; // offset 256KB
 
     devProg.devArgs.nrAic = 1;
     devProg.devArgs.nrAiv = 1;
@@ -126,7 +126,8 @@ TEST_F(RuntimeOutcastTensorTest, DeviceWorkspaceAllocatorBasicOps)
     d.RuntimeOutcastTensorDeref(a);
     EXPECT_EQ(t.refCnt, 1u);
 
-    d.RuntimeOutcastTensorReplaceAddrWithoutRecycle(a, WsAllocation(0xBBull, 0), RuntimeTensorMemProperty::BOUNDARY_OUTCAST);
+    d.RuntimeOutcastTensorReplaceAddrWithoutRecycle(a, WsAllocation(0xBBull, 0),
+                                                    RuntimeTensorMemProperty::BOUNDARY_OUTCAST);
     EXPECT_EQ(t.Addr(), static_cast<uintdevptr_t>(0xBBull));
     EXPECT_EQ(t.property, RuntimeTensorMemProperty::BOUNDARY_OUTCAST);
 
@@ -295,11 +296,13 @@ TEST_F(RuntimeOutcastTensorTest, AllPropertyTypesUsage)
     EXPECT_EQ(d.GetRuntimeOutcastTensor(ext).property, RuntimeTensorMemProperty::EXTERNAL);
 
     // Test DEVTASK_INNER_OUTCAST
-    ItemPoolIter inner = d.MakeRuntimeOutcastTensor(WsAllocation(0x2000ull, 0), RuntimeTensorMemProperty::DEVTASK_INNER_OUTCAST);
+    ItemPoolIter inner = d.MakeRuntimeOutcastTensor(WsAllocation(0x2000ull, 0),
+                                                    RuntimeTensorMemProperty::DEVTASK_INNER_OUTCAST);
     EXPECT_EQ(d.GetRuntimeOutcastTensor(inner).property, RuntimeTensorMemProperty::DEVTASK_INNER_OUTCAST);
 
     // Test BOUNDARY_OUTCAST
-    ItemPoolIter boundary = d.MakeRuntimeOutcastTensor(WsAllocation(0x3000ull, 0), RuntimeTensorMemProperty::BOUNDARY_OUTCAST);
+    ItemPoolIter boundary = d.MakeRuntimeOutcastTensor(WsAllocation(0x3000ull, 0),
+                                                       RuntimeTensorMemProperty::BOUNDARY_OUTCAST);
     EXPECT_EQ(d.GetRuntimeOutcastTensor(boundary).property, RuntimeTensorMemProperty::BOUNDARY_OUTCAST);
 
     // Verify all are tracked correctly
@@ -368,16 +371,19 @@ TEST_F(RuntimeOutcastTensorTest, MultipleReplaceAddrWithoutRecycle)
     EXPECT_EQ(d.rtBoundaryOutcastToBeFree_.size(), 0u);
 
     // Multiple replacements
-    d.RuntimeOutcastTensorReplaceAddrWithoutRecycle(a, WsAllocation(0x2000ull, 0), RuntimeTensorMemProperty::BOUNDARY_OUTCAST);
+    d.RuntimeOutcastTensorReplaceAddrWithoutRecycle(a, WsAllocation(0x2000ull, 0),
+                                                    RuntimeTensorMemProperty::BOUNDARY_OUTCAST);
     EXPECT_EQ(t.Addr(), static_cast<uintdevptr_t>(0x2000ull));
     EXPECT_EQ(t.property, RuntimeTensorMemProperty::BOUNDARY_OUTCAST);
 
-    d.RuntimeOutcastTensorReplaceAddrWithoutRecycle(a, WsAllocation(0x3000ull, 0), RuntimeTensorMemProperty::DEVTASK_INNER_OUTCAST);
+    d.RuntimeOutcastTensorReplaceAddrWithoutRecycle(a, WsAllocation(0x3000ull, 0),
+                                                    RuntimeTensorMemProperty::DEVTASK_INNER_OUTCAST);
     EXPECT_EQ(t.Addr(), static_cast<uintdevptr_t>(0x3000ull));
     EXPECT_EQ(t.property, RuntimeTensorMemProperty::DEVTASK_INNER_OUTCAST);
 
     // Replace back to BOUNDARY_OUTCAST before deref
-    d.RuntimeOutcastTensorReplaceAddrWithoutRecycle(a, WsAllocation(0x4000ull, 0), RuntimeTensorMemProperty::BOUNDARY_OUTCAST);
+    d.RuntimeOutcastTensorReplaceAddrWithoutRecycle(a, WsAllocation(0x4000ull, 0),
+                                                    RuntimeTensorMemProperty::BOUNDARY_OUTCAST);
     EXPECT_EQ(t.Addr(), static_cast<uintdevptr_t>(0x4000ull));
     EXPECT_EQ(t.property, RuntimeTensorMemProperty::BOUNDARY_OUTCAST);
 
@@ -444,7 +450,8 @@ TEST_F(RuntimeOutcastTensorTest, ComplexUsageSequence)
     EXPECT_EQ(d.GetRuntimeOutcastTensor(a).refCnt, 3u);
 
     // Replace addr on b
-    d.RuntimeOutcastTensorReplaceAddrWithoutRecycle(b, WsAllocation(0x2500ull, 0), RuntimeTensorMemProperty::DEVTASK_INNER_OUTCAST);
+    d.RuntimeOutcastTensorReplaceAddrWithoutRecycle(b, WsAllocation(0x2500ull, 0),
+                                                    RuntimeTensorMemProperty::DEVTASK_INNER_OUTCAST);
     EXPECT_EQ(d.GetRuntimeOutcastTensor(b).Addr(), static_cast<uintdevptr_t>(0x2500ull));
 
     // Assign operations - c now points to a (EXTERNAL), so original c (BOUNDARY_OUTCAST) is destroyed
@@ -601,8 +608,10 @@ TEST_F(RuntimeOutcastTensorTest, DelayedRecycleListBehavior)
 
     // Create different property types and verify only BOUNDARY_OUTCAST is added
     ItemPoolIter ext1 = d.MakeRuntimeOutcastTensor(WsAllocation(0x1000ull, 0), RuntimeTensorMemProperty::EXTERNAL);
-    ItemPoolIter inner1 = d.MakeRuntimeOutcastTensor(WsAllocation(0x2000ull, 0), RuntimeTensorMemProperty::DEVTASK_INNER_OUTCAST);
-    ItemPoolIter boundary1 = d.MakeRuntimeOutcastTensor(WsAllocation(0x3000ull, 0), RuntimeTensorMemProperty::BOUNDARY_OUTCAST);
+    ItemPoolIter inner1 = d.MakeRuntimeOutcastTensor(WsAllocation(0x2000ull, 0),
+                                                     RuntimeTensorMemProperty::DEVTASK_INNER_OUTCAST);
+    ItemPoolIter boundary1 = d.MakeRuntimeOutcastTensor(WsAllocation(0x3000ull, 0),
+                                                        RuntimeTensorMemProperty::BOUNDARY_OUTCAST);
 
     // Destroy EXTERNAL - should NOT be added
     d.RuntimeOutcastTensorDeref(ext1);
@@ -618,11 +627,14 @@ TEST_F(RuntimeOutcastTensorTest, DelayedRecycleListBehavior)
     EXPECT_EQ(d.rtBoundaryOutcastToBeFree_[0].Addr(), static_cast<uintdevptr_t>(0x3000ull));
 
     // Create more BOUNDARY_OUTCAST tensors
-    ItemPoolIter boundary2 = d.MakeRuntimeOutcastTensor(WsAllocation(0x4000ull, 0), RuntimeTensorMemProperty::BOUNDARY_OUTCAST);
-    ItemPoolIter boundary3 = d.MakeRuntimeOutcastTensor(WsAllocation(0x5000ull, 0), RuntimeTensorMemProperty::BOUNDARY_OUTCAST);
+    ItemPoolIter boundary2 = d.MakeRuntimeOutcastTensor(WsAllocation(0x4000ull, 0),
+                                                        RuntimeTensorMemProperty::BOUNDARY_OUTCAST);
+    ItemPoolIter boundary3 = d.MakeRuntimeOutcastTensor(WsAllocation(0x5000ull, 0),
+                                                        RuntimeTensorMemProperty::BOUNDARY_OUTCAST);
 
     // Replace property before destroy - if changed to non-BOUNDARY_OUTCAST, should NOT be added
-    d.RuntimeOutcastTensorReplaceAddrWithoutRecycle(boundary2, WsAllocation(0x4000ull, 0), RuntimeTensorMemProperty::EXTERNAL);
+    d.RuntimeOutcastTensorReplaceAddrWithoutRecycle(boundary2, WsAllocation(0x4000ull, 0),
+                                                    RuntimeTensorMemProperty::EXTERNAL);
     d.RuntimeOutcastTensorDeref(boundary2);
     // Should still have only 1 (boundary1), boundary2 was EXTERNAL when destroyed
     EXPECT_EQ(d.rtBoundaryOutcastToBeFree_.size(), 1u);
@@ -637,7 +649,8 @@ TEST_F(RuntimeOutcastTensorTest, DelayedRecycleListBehavior)
 
     // Create and replace to BOUNDARY_OUTCAST, then destroy
     ItemPoolIter ext2 = d.MakeRuntimeOutcastTensor(WsAllocation(0x6000ull, 0), RuntimeTensorMemProperty::EXTERNAL);
-    d.RuntimeOutcastTensorReplaceAddrWithoutRecycle(ext2, WsAllocation(0x6000ull, 0), RuntimeTensorMemProperty::BOUNDARY_OUTCAST);
+    d.RuntimeOutcastTensorReplaceAddrWithoutRecycle(ext2, WsAllocation(0x6000ull, 0),
+                                                    RuntimeTensorMemProperty::BOUNDARY_OUTCAST);
     d.RuntimeOutcastTensorDeref(ext2);
     // Should now have 3 items
     EXPECT_EQ(d.rtBoundaryOutcastToBeFree_.size(), 3u);

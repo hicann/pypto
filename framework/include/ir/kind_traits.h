@@ -191,8 +191,8 @@ struct KindTrait<BinaryExpr> {
 // UnaryExpr base class - matches any unary expression kind
 template <>
 struct KindTrait<UnaryExpr> {
-    static constexpr ObjectKind kinds[] = {
-        ObjectKind::Abs, ObjectKind::Neg, ObjectKind::Not, ObjectKind::BitNot, ObjectKind::Cast};
+    static constexpr ObjectKind kinds[] = {ObjectKind::Abs, ObjectKind::Neg, ObjectKind::Not, ObjectKind::BitNot,
+                                           ObjectKind::Cast};
     static constexpr size_t count = sizeof(kinds) / sizeof(ObjectKind);
 };
 

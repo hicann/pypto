@@ -17,9 +17,9 @@
 #include "operator/models/deepseek/deepseek_mla.h"
 
 namespace npu::tile_fwk {
-std::vector<Tensor> QkvPre(
-    const Tensor& tokenX, const Tensor& wDq, const Tensor& wUqQr, const Tensor& wDkvKr, const Tensor& gammaCq,
-    float epsilonCq, MlaQuantInputs quantInputs, bool splitReduceLastDim, bool splitK)
+std::vector<Tensor> QkvPre(const Tensor& tokenX, const Tensor& wDq, const Tensor& wUqQr, const Tensor& wDkvKr,
+                           const Tensor& gammaCq, float epsilonCq, MlaQuantInputs quantInputs, bool splitReduceLastDim,
+                           bool splitK)
 {
     // quant
     Tensor dequantScaleWUqQr = quantInputs.dequantScaleWUqQr;
@@ -99,17 +99,16 @@ std::vector<Tensor> QkvPre(
     return qkvPreRes;
 }
 
-void MlaProlog(
-    Tensor tokenX, const Tensor& wDq, const Tensor& wUqQr, const Tensor& wUk, const Tensor& wDkvKr,
-    const Tensor& gammaCq, const Tensor& gammaCkv, const Tensor& sin, const Tensor& cos, const Tensor& cacheIndex,
-    Tensor& kvCache, Tensor& krCache, MlaQuantInputs quantInputs, const RoPETileShapeConfigNew& ropeConfig,
-    Tensor& queryOut, Tensor& queryRopeOut, Tensor& kvCacheOut, Tensor& krCacheOut, float epsilonCq, float epsilonCkv,
-    std::string cacheMode, bool splitReduceLastDim, bool splitK)
+void MlaProlog(Tensor tokenX, const Tensor& wDq, const Tensor& wUqQr, const Tensor& wUk, const Tensor& wDkvKr,
+               const Tensor& gammaCq, const Tensor& gammaCkv, const Tensor& sin, const Tensor& cos,
+               const Tensor& cacheIndex, Tensor& kvCache, Tensor& krCache, MlaQuantInputs quantInputs,
+               const RoPETileShapeConfigNew& ropeConfig, Tensor& queryOut, Tensor& queryRopeOut, Tensor& kvCacheOut,
+               Tensor& krCacheOut, float epsilonCq, float epsilonCkv, std::string cacheMode, bool splitReduceLastDim,
+               bool splitK)
 {
     // params check
-    assert(
-        tokenX.GetShape().size() == SHAPE_DIM3 && wUk.GetShape().size() == SHAPE_DIM3 &&
-        sin.GetShape().size() == SHAPE_DIM3);
+    assert(tokenX.GetShape().size() == SHAPE_DIM3 && wUk.GetShape().size() == SHAPE_DIM3 &&
+           sin.GetShape().size() == SHAPE_DIM3);
     assert(kvCache.GetShape().size() == SHAPE_DIM4 && krCache.GetShape().size() == SHAPE_DIM4);
     assert(cacheMode == "BNSD" || cacheMode == "PA_BSND" || cacheMode == "PA_NZ");
 
@@ -155,7 +154,7 @@ void MlaProlog(
     Tensor qNopeRes = Reshape(qNope, {bs, n, qkNopeHeadDim}); // [bs,n,qkNopeHeadDim]
     tileShape = {bs, 1, qkNopeHeadDim};                       // {NUM_2, NUM_32, qkNopeHeadDim}
     TileShape::Current().SetVecTile(tileShape);
-    Tensor qNopeTrans = Transpose(qNopeRes, {0, 1});          // [n,bs,qkNopeHeadDim]
+    Tensor qNopeTrans = Transpose(qNopeRes, {0, 1}); // [n,bs,qkNopeHeadDim]
 
     int c0 = NUM_16;
     int m = (bs + c0 - 1) / c0 * c0;
@@ -163,7 +162,7 @@ void MlaProlog(
     // bmm: (n,bs,qkNopeHeadDim) * (n, qkNopeHeadDim, kvLoraRank) = (n, bs, kvLoraRank)
     Tensor qNopeNew = Matrix::BatchMatmul(dType, qNopeTrans, wUk);
 
-    tileShape = {1, bs, kvLoraRank};                          // {NUM_16, NUM_2, kvLoraRank}
+    tileShape = {1, bs, kvLoraRank}; // {NUM_16, NUM_2, kvLoraRank}
     TileShape::Current().SetVecTile(tileShape);
     Tensor qNopeNewTrans = Transpose(qNopeNew, {0, 1});       // [bs,n,kvLoraRank]
     queryOut = Reshape(qNopeNewTrans, {b, s, n, kvLoraRank}); // [b,s,n,kvLoraRank], output1
@@ -179,7 +178,7 @@ void MlaProlog(
     Tensor kPe = View(kvTmp, {b, s, qkRopeHeadDim}, {0, 0, kvLoraRank});         // [b,s,qkRopeHeadDim]
     tileShape = {bs, 1, NUM_64};
     TileShape::Current().SetVecTile(tileShape);
-    Tensor kPeRes = Reshape(kPe, {b, s, 1, qkRopeHeadDim});                           // [b,s,1,qkRopeHeadDim]
+    Tensor kPeRes = Reshape(kPe, {b, s, 1, qkRopeHeadDim}); // [b,s,1,qkRopeHeadDim]
 
     Tensor kRope(kPeRes.GetStorage()->Datatype(), {b, s, 1, qkRopeHeadDim}, "kRope"); // [b,1,s,qkRopeHeadDim]
     // queryRopeOut: [b,s,n,qkRopeHeadDim], output2

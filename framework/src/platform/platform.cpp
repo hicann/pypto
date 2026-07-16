@@ -96,10 +96,7 @@ bool Die::FindNearestPath(MemoryType from, MemoryType to, std::vector<MemoryType
     return false;
 }
 
-bool Die::HasDirectPath(MemoryType from, MemoryType to) const
-{
-    return memoryGraph_.HasDirectPath(from, to);
-}
+bool Die::HasDirectPath(MemoryType from, MemoryType to) const { return memoryGraph_.HasDirectPath(from, to); }
 
 void SoC::SetNPUArch(const std::string& versionStr)
 {
@@ -172,9 +169,8 @@ std::shared_ptr<MemoryNode> MemoryGraph::GetNode(MemoryType type)
     return node;
 }
 
-void MemoryGraph::DFS(
-    MemoryType target, const std::shared_ptr<MemoryNode>& node, std::vector<MemoryType>& candidate,
-    std::vector<MemoryType>& paths) const
+void MemoryGraph::DFS(MemoryType target, const std::shared_ptr<MemoryNode>& node, std::vector<MemoryType>& candidate,
+                      std::vector<MemoryType>& paths) const
 {
     for (auto& dest : node->dests) {
         if (std::find(candidate.begin(), candidate.end(), dest) != candidate.end()) {

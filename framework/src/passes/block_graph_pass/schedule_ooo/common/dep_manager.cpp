@@ -22,42 +22,47 @@
 
 namespace npu::tile_fwk {
 
-void DependencyManager::RegisterOp(Operation *op) {
+void DependencyManager::RegisterOp(Operation* op)
+{
     if (op == nullptr) {
         return;
     }
     if (inGraph_.find(op) == inGraph_.end()) {
-        inGraph_[op] = std::set<Operation *, Operation::OperationComparator>();
+        inGraph_[op] = std::set<Operation*, Operation::OperationComparator>();
     }
     if (outGraph_.find(op) == outGraph_.end()) {
-        outGraph_[op] = std::set<Operation *, Operation::OperationComparator>();
+        outGraph_[op] = std::set<Operation*, Operation::OperationComparator>();
     }
 }
 
-void DependencyManager::Clear() {
+void DependencyManager::Clear()
+{
     inGraph_.clear();
     outGraph_.clear();
 }
 
-void DependencyManager::ClearDependencies() {
-    for (auto &[op, preds] : inGraph_) {
+void DependencyManager::ClearDependencies()
+{
+    for (auto& [op, preds] : inGraph_) {
         (void)op;
         preds.clear();
     }
-    for (auto &[op, succs] : outGraph_) {
+    for (auto& [op, succs] : outGraph_) {
         (void)op;
         succs.clear();
     }
 }
 
-bool DependencyManager::IsOpAlloc(Operation *op) {
+bool DependencyManager::IsOpAlloc(Operation* op)
+{
     if (op == nullptr) {
         return false;
     }
     return op->GetOpcodeStr().find("ALLOC") != std::string::npos;
 }
 
-void DependencyManager::AddDependency(Operation *preOp, Operation *postOp) {
+void DependencyManager::AddDependency(Operation* preOp, Operation* postOp)
+{
     if (preOp == nullptr || postOp == nullptr) {
         return;
     }
@@ -67,7 +72,8 @@ void DependencyManager::AddDependency(Operation *preOp, Operation *postOp) {
     }
 }
 
-void DependencyManager::AddAllocDependency(Operation *preOp, Operation *postOp) {
+void DependencyManager::AddAllocDependency(Operation* preOp, Operation* postOp)
+{
     if (preOp == nullptr || postOp == nullptr) {
         return;
     }
@@ -75,7 +81,8 @@ void DependencyManager::AddAllocDependency(Operation *preOp, Operation *postOp) 
     inGraph_[postOp].insert(preOp);
 }
 
-bool DependencyManager::RemoveDependency(Operation *preOp, Operation *postOp) {
+bool DependencyManager::RemoveDependency(Operation* preOp, Operation* postOp)
+{
     if (preOp == nullptr || postOp == nullptr) {
         return false;
     }
@@ -92,7 +99,8 @@ bool DependencyManager::RemoveDependency(Operation *preOp, Operation *postOp) {
     return removedFromSucc && removedFromPred;
 }
 
-int DependencyManager::InsertSuccessor(Operation *op, Operation *succ) {
+int DependencyManager::InsertSuccessor(Operation* op, Operation* succ)
+{
     if (op == nullptr || succ == nullptr) {
         return 0;
     }
@@ -100,18 +108,18 @@ int DependencyManager::InsertSuccessor(Operation *op, Operation *succ) {
     return result.second ? 1 : 0;
 }
 
-int DependencyManager::RemoveSuccessor(Operation *op, Operation *succ) {
+int DependencyManager::RemoveSuccessor(Operation* op, Operation* succ)
+{
     if (op == nullptr || succ == nullptr) {
         return 0;
     }
     return outGraph_[op].erase(succ);
 }
 
-void DependencyManager::RemoveSuccessorOp(Operation *op) {
-    opConsumers.erase(op);
-}
+void DependencyManager::RemoveSuccessorOp(Operation* op) { opConsumers.erase(op); }
 
-int DependencyManager::InsertPredecessor(Operation *op, Operation *pred) {
+int DependencyManager::InsertPredecessor(Operation* op, Operation* pred)
+{
     if (op == nullptr || pred == nullptr) {
         return 0;
     }
@@ -119,46 +127,45 @@ int DependencyManager::InsertPredecessor(Operation *op, Operation *pred) {
     return result.second ? 1 : 0;
 }
 
-int DependencyManager::RemovePredecessor(Operation *op, Operation *pred) {
+int DependencyManager::RemovePredecessor(Operation* op, Operation* pred)
+{
     if (op == nullptr || pred == nullptr) {
         return 0;
     }
     return inGraph_[op].erase(pred);
 }
 
-void DependencyManager::RemovePredecessorOp(Operation *op) {
-    opProducers.erase(op);
-}
+void DependencyManager::RemovePredecessorOp(Operation* op) { opProducers.erase(op); }
 
-std::set<Operation *, Operation::OperationComparator> &DependencyManager::GetSuccessors(Operation *op)
+std::set<Operation*, Operation::OperationComparator>& DependencyManager::GetSuccessors(Operation* op)
 {
     return outGraph_[op];
 }
 
-std::set<Operation *, Operation::OperationComparator> &DependencyManager::GetPredecessors(Operation *op)
+std::set<Operation*, Operation::OperationComparator>& DependencyManager::GetPredecessors(Operation* op)
 {
     return inGraph_[op];
 }
 
-bool DependencyManager::HasOp(Operation *op) const {
-    return inGraph_.find(op) != inGraph_.end();
-}
+bool DependencyManager::HasOp(Operation* op) const { return inGraph_.find(op) != inGraph_.end(); }
 
-std::string DependencyManager::PrintOp(Operation *op) {
+std::string DependencyManager::PrintOp(Operation* op)
+{
     return op->GetOpcodeStr() + "[" + std::to_string(op->GetOpMagic()) + "]";
 }
 
-void DependencyManager::PrintDependencies(const std::vector<Operation *> &ops) {
-    for (const auto &op : ops) {
+void DependencyManager::PrintDependencies(const std::vector<Operation*>& ops)
+{
+    for (const auto& op : ops) {
         if (inGraph_.find(op) == inGraph_.end() || outGraph_.find(op) == outGraph_.end()) {
             continue;
         }
         APASS_LOG_DEBUG_F(Elements::Operation, "%s", PrintOp(op).c_str());
-        for (const auto &preOp : inGraph_.at(op)) {
+        for (const auto& preOp : inGraph_.at(op)) {
             APASS_LOG_DEBUG_F(Elements::Operation, "    |--- Predecessors:");
             APASS_LOG_DEBUG_F(Elements::Operation, "        |--- %s", PrintOp(preOp).c_str());
         }
-        for (const auto &succOp : outGraph_.at(op)) {
+        for (const auto& succOp : outGraph_.at(op)) {
             APASS_LOG_DEBUG_F(Elements::Operation, "    |--- Successors:");
             APASS_LOG_DEBUG_F(Elements::Operation, "        |--- %s", PrintOp(succOp).c_str());
         }
@@ -166,20 +173,21 @@ void DependencyManager::PrintDependencies(const std::vector<Operation *> &ops) {
     }
 }
 
-Operation *DependencyManager::SkipViewChain(Operation *start, bool followProducers) {
+Operation* DependencyManager::SkipViewChain(Operation* start, bool followProducers)
+{
     if (start == nullptr)
         return nullptr;
-    Operation *op = start;
-    Operation *lastView = nullptr;
+    Operation* op = start;
+    Operation* lastView = nullptr;
     while (op != nullptr && IsViewOp(*op)) {
         lastView = op;
         if (followProducers) {
-            const auto &nextOps = op->GetInputOperand(0)->GetProducers();
+            const auto& nextOps = op->GetInputOperand(0)->GetProducers();
             if (nextOps.size() != 1)
                 break;
             op = *nextOps.begin();
         } else {
-            const auto &nextOps = op->GetOutputOperand(0)->GetConsumers();
+            const auto& nextOps = op->GetOutputOperand(0)->GetConsumers();
             if (nextOps.size() != 1)
                 break;
             op = *nextOps.begin();
@@ -188,14 +196,14 @@ Operation *DependencyManager::SkipViewChain(Operation *start, bool followProduce
     return lastView;
 }
 
-Status DependencyManager::InitAllocDependencies(
-    Operation *op, std::unordered_map<int, Operation *> &tensor2AllocOpMap) {
-    for (auto &tensor : op->GetOOperands()) {
+Status DependencyManager::InitAllocDependencies(Operation* op, std::unordered_map<int, Operation*>& tensor2AllocOpMap)
+{
+    for (auto& tensor : op->GetOOperands()) {
         int memId = tensor->memoryrange.memId;
         if (tensor->GetMemoryTypeOriginal() < MemoryType::MEM_DEVICE_DDR) {
             if (tensor2AllocOpMap.find(memId) == tensor2AllocOpMap.end()) {
                 APASS_LOG_ERROR_F(Elements::Operation, "Tensor[%d] must have alloc. magic: %d, op: %s", memId,
-                    tensor->GetMagic(), PrintOp(op).c_str());
+                                  tensor->GetMagic(), PrintOp(op).c_str());
                 return FAILED;
             }
             AddAllocDependency(tensor2AllocOpMap[memId], op);
@@ -204,44 +212,48 @@ Status DependencyManager::InitAllocDependencies(
     return SUCCESS;
 }
 
-void DependencyManager::HandleScaleOpDependency(Operation *op, MemoryType memType) {
+void DependencyManager::HandleScaleOpDependency(Operation* op, MemoryType memType)
+{
     auto matmulOp = *(op->GetOutputOperand(0))->GetConsumers().begin();
     if (matmulOp == nullptr) {
         return;
     }
-    for (auto &input : matmulOp->GetIOperands()) {
+    for (auto& input : matmulOp->GetIOperands()) {
         if (input->GetMemoryTypeOriginal() == memType) {
             AddDependency(*input->GetProducers().begin(), op);
         }
     }
 }
 
-void DependencyManager::AddProducerDependencies(Operation *op) {
-    for (auto &producer : op->ProducerOps()) {
-        Operation *lastView = SkipViewChain(producer, true);
+void DependencyManager::AddProducerDependencies(Operation* op)
+{
+    for (auto& producer : op->ProducerOps()) {
+        Operation* lastView = SkipViewChain(producer, true);
         if (lastView == nullptr) {
-            AddDependency(producer, op);  // producer 不是 view，直接连
+            AddDependency(producer, op); // producer 不是 view，直接连
             continue;
         }
-        for (auto *realProd : lastView->ProducerOps()) {
+        for (auto* realProd : lastView->ProducerOps()) {
             AddDependency(realProd, op);
         }
     }
 }
 
-void DependencyManager::AddConsumerDependencies(Operation *op) {
-    for (auto &consumer : op->ConsumerOps()) {
-        Operation *lastView = SkipViewChain(consumer, false);
+void DependencyManager::AddConsumerDependencies(Operation* op)
+{
+    for (auto& consumer : op->ConsumerOps()) {
+        Operation* lastView = SkipViewChain(consumer, false);
         if (lastView == nullptr) {
-            continue;  // 非 view consumer 的边由它自己的 AddProducerDependencies 补
+            continue; // 非 view consumer 的边由它自己的 AddProducerDependencies 补
         }
-        for (auto *realCon : lastView->ConsumerOps()) {
+        for (auto* realCon : lastView->ConsumerOps()) {
             AddDependency(op, realCon);
         }
     }
 }
 
-void DependencyManager::FindDependencies(Operation *op, bool needView) {
+void DependencyManager::FindDependencies(Operation* op, bool needView)
+{
     if (op->GetOpcode() == Opcode::OP_L1_TO_L0A_SCALE) {
         HandleScaleOpDependency(op, MemoryType::MEM_L0A);
     }
@@ -250,10 +262,10 @@ void DependencyManager::FindDependencies(Operation *op, bool needView) {
     }
 
     if (needView) {
-        for (auto &producer : opProducers[op]) {
+        for (auto& producer : opProducers[op]) {
             AddDependency(producer, op);
         }
-        for (auto &consumer : opConsumers[op]) {
+        for (auto& consumer : opConsumers[op]) {
             AddDependency(op, consumer);
         }
         return;
@@ -263,10 +275,11 @@ void DependencyManager::FindDependencies(Operation *op, bool needView) {
     AddConsumerDependencies(op);
 }
 
-void DependencyManager::InitOpConsumerAndProducer(const std::vector<Operation *> &ops) {
+void DependencyManager::InitOpConsumerAndProducer(const std::vector<Operation*>& ops)
+{
     opConsumers.clear();
     opProducers.clear();
-    std::unordered_set<Operation *> opSet;
+    std::unordered_set<Operation*> opSet;
     for (auto op : ops) {
         opSet.insert(op);
     }
@@ -284,10 +297,11 @@ void DependencyManager::InitOpConsumerAndProducer(const std::vector<Operation *>
     }
 }
 
-Status DependencyManager::InitDependencies(const std::vector<Operation *> &ops, bool needView) {
-    std::unordered_map<int, Operation *> tensor2AllocOpMap;
+Status DependencyManager::InitDependencies(const std::vector<Operation*>& ops, bool needView)
+{
+    std::unordered_map<int, Operation*> tensor2AllocOpMap;
     InitOpConsumerAndProducer(ops);
-    for (const auto &op : ops) {
+    for (const auto& op : ops) {
         if (IsOpAlloc(op)) {
             if (op->GetOOperands().size() != 1) {
                 APASS_LOG_ERROR_F(Elements::Operation, "Alloc[%d] oOperand must be 1.", op->GetOpMagic());
@@ -301,18 +315,20 @@ Status DependencyManager::InitDependencies(const std::vector<Operation *> &ops, 
     // === DualDst 兼容: 融合后 OP_L0C_COPY_UB_DUAL_DST 的某个输出失去独立 ALLOC,
     // 把它的 memId 也指向同 op 兄弟输出的 ALLOC, 这样下游 consumer (含 in-place
     // 复用同 memId 的 ADDS 等) 在 InitAllocDependencies 里都能查到。
-    for (const auto &op : ops) {
-        if (op == nullptr || op->GetOpcode() != Opcode::OP_L0C_COPY_UB_DUAL_DST) continue;
-        Operation *dualAlloc = nullptr;
-        for (auto &outTensor : op->GetOOperands()) {
+    for (const auto& op : ops) {
+        if (op == nullptr || op->GetOpcode() != Opcode::OP_L0C_COPY_UB_DUAL_DST)
+            continue;
+        Operation* dualAlloc = nullptr;
+        for (auto& outTensor : op->GetOOperands()) {
             auto it = tensor2AllocOpMap.find(outTensor->memoryrange.memId);
             if (it != tensor2AllocOpMap.end()) {
                 dualAlloc = it->second;
                 break;
             }
         }
-        if (dualAlloc == nullptr) continue;
-        for (auto &outTensor : op->GetOOperands()) {
+        if (dualAlloc == nullptr)
+            continue;
+        for (auto& outTensor : op->GetOOperands()) {
             int mid = outTensor->memoryrange.memId;
             if (!tensor2AllocOpMap.count(mid)) {
                 tensor2AllocOpMap[mid] = dualAlloc;
@@ -321,11 +337,11 @@ Status DependencyManager::InitDependencies(const std::vector<Operation *> &ops, 
     }
 
     Clear();
-    for (const auto &op : ops) {
+    for (const auto& op : ops) {
         RegisterOp(op);
     }
 
-    for (const auto &op : ops) {
+    for (const auto& op : ops) {
         if (!IsOpAlloc(op)) {
             FindDependencies(op, needView);
             if (InitAllocDependencies(op, tensor2AllocOpMap) != SUCCESS) {

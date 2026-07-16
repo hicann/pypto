@@ -58,9 +58,9 @@ public:
      *                    If outDynShape is empty, uses SetDynShape to calculate the DynValidShape of each output.
      * @return the operation to be added
      */
-    static Operation& AddDynOperation(
-        Function& function, const Opcode opCode, LogicalTensors iOperands, const LogicalTensors& oOperands,
-        const std::vector<std::vector<SymbolicScalar>>& outDynShape = {});
+    static Operation& AddDynOperation(Function& function, const Opcode opCode, LogicalTensors iOperands,
+                                      const LogicalTensors& oOperands,
+                                      const std::vector<std::vector<SymbolicScalar>>& outDynShape = {});
     /**
      * @brief Add an assemble operation.
      *        Update the AssembleOpAttribute of the assemble operation. The fromDynValidShape value is set by the
@@ -78,9 +78,8 @@ public:
      * executed at last.
      * @return the operation to be added
      */
-    static Operation& AddAssembleOperation(
-        Function& function, const AssembleOp& assemble,
-        const std::vector<std::vector<SymbolicScalar>>& outDynShape = {});
+    static Operation& AddAssembleOperation(Function& function, const AssembleOp& assemble,
+                                           const std::vector<std::vector<SymbolicScalar>>& outDynShape = {});
     /**
      * @brief Add a reshape operation.
      *        Set the DynValidShape of the output.
@@ -96,9 +95,9 @@ public:
      *                    If outDynShape is empty, uses CallInferShapeFunc to calculate the DynValidShape.
      * @return the operation to be added
      */
-    static Operation& AddReshapeOperation(
-        Function& function, const LogicalTensorPtr iOperand, const LogicalTensorPtr& oOperand,
-        const ReshapeOp& reshapeOp, const std::vector<SymbolicScalar>& outDynShape = {});
+    static Operation& AddReshapeOperation(Function& function, const LogicalTensorPtr iOperand,
+                                          const LogicalTensorPtr& oOperand, const ReshapeOp& reshapeOp,
+                                          const std::vector<SymbolicScalar>& outDynShape = {});
     /**
      * @brief Set the DynValidShape of dstTensor by the DynValidShape of srcTensor.
      *

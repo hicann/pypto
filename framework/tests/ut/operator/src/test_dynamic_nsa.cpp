@@ -28,9 +28,8 @@ class DyNsa : public testing::Test {
     }
 };
 
-template <
-    typename T = npu::tile_fwk::float16, typename wDtype = int8_t, bool splitK = false, bool nz = true,
-    bool isSmooth = true, bool usePrefetch = true>
+template <typename T = npu::tile_fwk::float16, typename wDtype = int8_t, bool splitK = false, bool nz = true,
+          bool isSmooth = true, bool usePrefetch = true>
 void TestNsa(const SimpleParams& params)
 {
     int b = params.b;
@@ -57,9 +56,8 @@ void TestNsa(const SimpleParams& params)
     GenGatedScoreCompute(x, gateW1, gateW2, gateSimW1, gatingScore, GateMode::standard);
 }
 
-template <
-    typename T = npu::tile_fwk::float16, typename wDtype = int8_t, bool splitK = false, bool nz = true,
-    bool isSmooth = true, bool usePrefetch = true>
+template <typename T = npu::tile_fwk::float16, typename wDtype = int8_t, bool splitK = false, bool nz = true,
+          bool isSmooth = true, bool usePrefetch = true>
 void TestGenslc(const SimpleParams& params, int topk_actual_len = 0, bool isGenSlc = false)
 {
     int n2 = params.n2;

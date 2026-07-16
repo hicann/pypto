@@ -52,8 +52,8 @@ std::string DevAscendFunction::DumpTensor(int tensorIndex) const
     return oss.str();
 }
 
-std::string DevAscendFunction::DumpOperationAttr(
-    int operationIndex, uint64_t* runtimeExpressionList, bool dumpIndex) const
+std::string DevAscendFunction::DumpOperationAttr(int operationIndex, uint64_t* runtimeExpressionList,
+                                                 bool dumpIndex) const
 {
     std::ostringstream oss;
     oss << SchemaGetCoa(operationIndex, runtimeExpressionList, dumpIndex).Dump();
@@ -65,8 +65,8 @@ std::string DevAscendFunction::DumpOperationAttr(
     }
     oss << " " << schema::succ(succDataList).Dump();
 
-    const DevLocalVector<int>& copyOutResolveCounterIndexList =
-        GetOperationDepGraphCopyOutResolveSuccIndexList(operationIndex);
+    const DevLocalVector<int>& copyOutResolveCounterIndexList = GetOperationDepGraphCopyOutResolveSuccIndexList(
+        operationIndex);
     std::vector<int64_t> outSuccIndexDataList;
     for (size_t j = 0; j < copyOutResolveCounterIndexList.size(); j++) {
         outSuccIndexDataList.push_back(At(copyOutResolveCounterIndexList, j));
@@ -77,9 +77,10 @@ std::string DevAscendFunction::DumpOperationAttr(
     return oss.str();
 }
 
-std::string DevAscendFunction::DumpOperation(
-    int operationIndex, int& totalAttrStartIdx, const std::vector<uintdevptr_t>& ooperandAddrList,
-    const std::vector<uintdevptr_t>& ioperandAddrList, uint64_t* runtimeExpressionList) const
+std::string DevAscendFunction::DumpOperation(int operationIndex, int& totalAttrStartIdx,
+                                             const std::vector<uintdevptr_t>& ooperandAddrList,
+                                             const std::vector<uintdevptr_t>& ioperandAddrList,
+                                             uint64_t* runtimeExpressionList) const
 {
     std::ostringstream oss;
     for (size_t j = 0; j < GetOperationOOperandSize(operationIndex); j++) {
@@ -116,9 +117,8 @@ std::string DevAscendFunction::DumpRawTensor(int rawIndex, uintdevptr_t addr) co
     return oss.str();
 }
 
-std::string DevAscendFunction::DumpIncast(
-    int incastIndex, const std::string& indent, uint64_t* runtimeExpressionList,
-    const std::vector<uintdevptr_t>& slotAddrList) const
+std::string DevAscendFunction::DumpIncast(int incastIndex, const std::string& indent, uint64_t* runtimeExpressionList,
+                                          const std::vector<uintdevptr_t>& slotAddrList) const
 {
     std::ostringstream oss;
     const DevAscendFunctionIncast& incast = GetIncast(incastIndex);
@@ -159,9 +159,8 @@ std::string DevAscendFunction::DumpIncast(
     return oss.str();
 }
 
-std::string DevAscendFunction::DumpOutcast(
-    int outcastIndex, const std::string& indent, uint64_t* runtimeExpressionList,
-    const std::vector<uintdevptr_t>& slotAddrList) const
+std::string DevAscendFunction::DumpOutcast(int outcastIndex, const std::string& indent, uint64_t* runtimeExpressionList,
+                                           const std::vector<uintdevptr_t>& slotAddrList) const
 {
     std::ostringstream oss;
     const DevAscendFunctionOutcast& outcast = GetOutcast(outcastIndex);
@@ -303,9 +302,8 @@ std::vector<int> DevAscendFunction::LookupOutcastBySlotIndexList(const std::vect
     return resultList;
 }
 
-void DevAscendFunction::AppendOutcastConnections(
-    std::vector<std::tuple<int, int, int>>& connectionList, int fromSlot, int incastIndex,
-    const DevAscendFunction* func) const
+void DevAscendFunction::AppendOutcastConnections(std::vector<std::tuple<int, int, int>>& connectionList, int fromSlot,
+                                                 int incastIndex, const DevAscendFunction* func) const
 {
     for (size_t outcastIndex = 0; outcastIndex < func->GetOutcastSize(); outcastIndex++) {
         const DevAscendFunctionOutcast& outcast = func->GetOutcast(outcastIndex);

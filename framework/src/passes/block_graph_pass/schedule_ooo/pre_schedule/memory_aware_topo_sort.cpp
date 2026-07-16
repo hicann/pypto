@@ -26,14 +26,14 @@ namespace npu::tile_fwk {
 // 内存状态阈值与调度权重常量
 constexpr double kLargeConstraintBaseWeight = 2.0;
 constexpr double kMediumConstraintBaseWeight = 1.0;
-constexpr double kSmallConstraintBaseWeight = 0.5;         
+constexpr double kSmallConstraintBaseWeight = 0.5;
 constexpr double kCriticalUsageRatio = 0.9;
 constexpr double kTightUsageRatio = 0.7;
 constexpr double kNormalUsageRatio = 0.3;
-constexpr double kCriticalAdjustFactor = 1.5;       // Critical 状态调整因子
-constexpr double kTightAdjustFactor = 1.2;          // Tight 状态调整因子
-constexpr double kNormalAdjustFactor = 1.0;        // Normal/默认状态调整因子
-constexpr double kAbundantAdjustFactor = 0.5;       // Abundant 状态调整因子
+constexpr double kCriticalAdjustFactor = 1.5; // Critical 状态调整因子
+constexpr double kTightAdjustFactor = 1.2;    // Tight 状态调整因子
+constexpr double kNormalAdjustFactor = 1.0;   // Normal/默认状态调整因子
+constexpr double kAbundantAdjustFactor = 0.5; // Abundant 状态调整因子
 
 static ConstraintType GetConstraintType(MemoryType mem_type)
 {
@@ -41,14 +41,9 @@ static ConstraintType GetConstraintType(MemoryType mem_type)
         return ConstraintType::HardConstraint;
     }
 
-    if (mem_type == MemoryType::MEM_L0A ||
-        mem_type == MemoryType::MEM_L0B ||
-        mem_type == MemoryType::MEM_L0C ||
-        mem_type == MemoryType::MEM_L1 ||
-        mem_type == MemoryType::MEM_UB ||
-        mem_type == MemoryType::MEM_L0AMX ||
-        mem_type == MemoryType::MEM_L0BMX ||
-        mem_type == MemoryType::MEM_FIX ||
+    if (mem_type == MemoryType::MEM_L0A || mem_type == MemoryType::MEM_L0B || mem_type == MemoryType::MEM_L0C ||
+        mem_type == MemoryType::MEM_L1 || mem_type == MemoryType::MEM_UB || mem_type == MemoryType::MEM_L0AMX ||
+        mem_type == MemoryType::MEM_L0BMX || mem_type == MemoryType::MEM_FIX ||
         mem_type == MemoryType::MEM_FIX_QUANT_PRE) {
         return ConstraintType::SoftConstraint;
     }
@@ -129,8 +124,8 @@ double CalcDynamicTypeWeight(MemoryType mem_type, const SchedulingContext& conte
     return base_weight * state_factor * spill_factor;
 }
 
-double CalcReleaseContribution(int memId, Operation* node,
-    const SchedulingContext& context, const ScoringParams& params)
+double CalcReleaseContribution(int memId, Operation* node, const SchedulingContext& context,
+                               const ScoringParams& params)
 {
     if (node == nullptr) {
         return 0.0;
@@ -318,13 +313,10 @@ static void UpdateMemoryPoolState(SchedulingContext& context, Operation* op)
     }
 }
 
-static void InitSchedulingState(
-    const std::vector<Operation*>& operations,
-    DependencyManager& depManager,
-    std::unordered_map<Operation*, int>& in_degree,
-    std::unordered_map<Operation*, int>& topo_depth,
-    std::unordered_map<Operation*, int>& op_index,
-    std::vector<Operation*>& ready_queue)
+static void InitSchedulingState(const std::vector<Operation*>& operations, DependencyManager& depManager,
+                                std::unordered_map<Operation*, int>& in_degree,
+                                std::unordered_map<Operation*, int>& topo_depth,
+                                std::unordered_map<Operation*, int>& op_index, std::vector<Operation*>& ready_queue)
 {
     for (auto op : operations) {
         in_degree[op] = 0;
@@ -338,7 +330,7 @@ static void InitSchedulingState(
             }
         }
     }
-    
+
     // 计算拓扑深度（依赖深度）
     std::queue<Operation*> depth_queue;
     for (auto op : operations) {
@@ -347,12 +339,12 @@ static void InitSchedulingState(
             depth_queue.push(op);
         }
     }
-    
+
     std::unordered_map<Operation*, int> temp_in_degree = in_degree;
     while (!depth_queue.empty()) {
         Operation* current = depth_queue.front();
         depth_queue.pop();
-        
+
         auto& successors = depManager.GetSuccessors(current);
         for (auto succ : successors) {
             if (temp_in_degree.find(succ) != temp_in_degree.end()) {
@@ -368,13 +360,13 @@ static void InitSchedulingState(
     for (size_t i = 0; i < operations.size(); i++) {
         op_index[operations[i]] = static_cast<int>(i);
     }
-    
+
     for (auto op : operations) {
         if (in_degree[op] == 0) {
             ready_queue.push_back(op);
         }
     }
-    
+
     // 确定性：按node_id排序ready_queue
     std::sort(ready_queue.begin(), ready_queue.end(), [&op_index](Operation* a, Operation* b) {
         int id_a = op_index.find(a) != op_index.end() ? op_index[a] : INT_MAX;
@@ -383,12 +375,9 @@ static void InitSchedulingState(
     });
 }
 
-static bool SelectAllocFromReadyQueue(
-    const std::vector<Operation*>& ready_queue,
-    const std::unordered_map<Operation*, int>& op_index,
-    bool mem_bt_full,
-    int& best_idx,
-    int& best_node_id)
+static bool SelectAllocFromReadyQueue(const std::vector<Operation*>& ready_queue,
+                                      const std::unordered_map<Operation*, int>& op_index, bool mem_bt_full,
+                                      int& best_idx, int& best_node_id)
 {
     best_idx = -1;
     best_node_id = INT_MAX;
@@ -411,23 +400,20 @@ static bool SelectAllocFromReadyQueue(
     return (best_idx != -1);
 }
 
-static void SelectScoredFromReadyQueue(
-    const std::vector<Operation*>& ready_queue,
-    const std::unordered_map<Operation*, int>& op_index,
-    const std::unordered_map<Operation*, int>& topo_depth,
-    SchedulingContext& context,
-    const ScoringParams& params,
-    bool mem_bt_full,
-    double& best_score,
-    int& best_idx,
-    int& best_node_id)
+static void SelectScoredFromReadyQueue(const std::vector<Operation*>& ready_queue,
+                                       const std::unordered_map<Operation*, int>& op_index,
+                                       const std::unordered_map<Operation*, int>& topo_depth,
+                                       SchedulingContext& context, const ScoringParams& params, bool mem_bt_full,
+                                       double& best_score, int& best_idx, int& best_node_id)
 {
     best_score = -1e300;
 
     auto evaluate = [&](Operation* candidate, size_t i) {
         int node_id = 0;
         auto idx_it = op_index.find(candidate);
-        if (idx_it != op_index.end()) { node_id = idx_it->second; }
+        if (idx_it != op_index.end()) {
+            node_id = idx_it->second;
+        }
         int topo_priority = CalcTopoPriority(candidate, topo_depth);
         double base_score = CalcNodeScore(candidate, context, params, node_id);
         double score = static_cast<double>(topo_priority) * 1000.0 + base_score;
@@ -443,7 +429,9 @@ static void SelectScoredFromReadyQueue(
         Operation* candidate = ready_queue[i];
 
         if (HasMemBtOutputOp(candidate) && mem_bt_full) {
-            if (CanReleaseMemBt(candidate)) { evaluate(candidate, i); }
+            if (CanReleaseMemBt(candidate)) {
+                evaluate(candidate, i);
+            }
             continue;
         }
 
@@ -451,16 +439,12 @@ static void SelectScoredFromReadyQueue(
     }
 }
 
-static bool HandleNoSelectableCandidate(
-    const std::vector<Operation*>& ready_queue,
-    bool mem_bt_full,
-    const SchedulingContext& context,
-    int executed_count,
-    size_t total_ops)
+static bool HandleNoSelectableCandidate(const std::vector<Operation*>& ready_queue, bool mem_bt_full,
+                                        const SchedulingContext& context, int executed_count, size_t total_ops)
 {
     bool all_blocked = true;
     bool has_releaser = false;
-    
+
     for (auto op : ready_queue) {
         if (HasMemBtOutputOp(op) && mem_bt_full) {
             if (CanReleaseMemBt(op)) {
@@ -475,36 +459,29 @@ static bool HandleNoSelectableCandidate(
     if (all_blocked && !has_releaser && executed_count < static_cast<int>(total_ops)) {
         auto pool_it = context.memory_pools.find(MemoryType::MEM_BT);
         APASS_LOG_ERROR_F(Elements::Operation,
-            "MemoryAwareTopologicalSort: MEM_BT slot exhausted. "
-            "Executed %d / %zu ops, ready_queue=%zu, mem_bt_full=%d, "
-            "mem_bt_slots=%lu/%lu.",
-            executed_count, total_ops, ready_queue.size(),
-            mem_bt_full ? 1 : 0,
-            pool_it != context.memory_pools.end() ? pool_it->second.current_slot_count : 0,
-            pool_it != context.memory_pools.end() ? pool_it->second.max_slot_count : 0);
+                          "MemoryAwareTopologicalSort: MEM_BT slot exhausted. "
+                          "Executed %d / %zu ops, ready_queue=%zu, mem_bt_full=%d, "
+                          "mem_bt_slots=%lu/%lu.",
+                          executed_count, total_ops, ready_queue.size(), mem_bt_full ? 1 : 0,
+                          pool_it != context.memory_pools.end() ? pool_it->second.current_slot_count : 0,
+                          pool_it != context.memory_pools.end() ? pool_it->second.max_slot_count : 0);
         return true;
     }
 
     if (executed_count < static_cast<int>(total_ops)) {
         APASS_LOG_ERROR_F(Elements::Operation,
-            "MemoryAwareTopologicalSort: no selectable candidate. "
-            "Executed %d / %zu ops, ready_queue=%zu, mem_bt_full=%d.",
-            executed_count, total_ops, ready_queue.size(),
-            mem_bt_full ? 1 : 0);
+                          "MemoryAwareTopologicalSort: no selectable candidate. "
+                          "Executed %d / %zu ops, ready_queue=%zu, mem_bt_full=%d.",
+                          executed_count, total_ops, ready_queue.size(), mem_bt_full ? 1 : 0);
         return true;
     }
     return false;
 }
 
-static void CommitCandidate(
-    int best_idx,
-    std::vector<Operation*>& ready_queue,
-    std::vector<Operation*>& result,
-    int& executed_count,
-    SchedulingContext& context,
-    DependencyManager& depManager,
-    std::unordered_map<Operation*, int>& in_degree,
-    const std::unordered_map<Operation*, int>& op_index)
+static void CommitCandidate(int best_idx, std::vector<Operation*>& ready_queue, std::vector<Operation*>& result,
+                            int& executed_count, SchedulingContext& context, DependencyManager& depManager,
+                            std::unordered_map<Operation*, int>& in_degree,
+                            const std::unordered_map<Operation*, int>& op_index)
 {
     Operation* selected = ready_queue[best_idx];
     ready_queue.erase(ready_queue.begin() + best_idx);
@@ -524,7 +501,7 @@ static void CommitCandidate(
             }
         }
     }
-    
+
     // 确定性：按node_id排序新加入的节点，然后插入到ready_queue末尾
     std::sort(new_ready_nodes.begin(), new_ready_nodes.end(), [&op_index](Operation* a, Operation* b) {
         auto it_a = op_index.find(a);
@@ -533,17 +510,15 @@ static void CommitCandidate(
         int id_b = (it_b != op_index.end()) ? it_b->second : INT_MAX;
         return id_a < id_b;
     });
-    
+
     for (auto node : new_ready_nodes) {
         ready_queue.push_back(node);
     }
 }
 
-std::vector<Operation*> MemoryAwareTopologicalSort(
-    const std::vector<Operation*>& operations,
-    DependencyManager& depManager,
-    SchedulingContext& context,
-    const ScoringParams& params)
+std::vector<Operation*> MemoryAwareTopologicalSort(const std::vector<Operation*>& operations,
+                                                   DependencyManager& depManager, SchedulingContext& context,
+                                                   const ScoringParams& params)
 {
     std::vector<Operation*> result;
 
@@ -562,9 +537,8 @@ std::vector<Operation*> MemoryAwareTopologicalSort(
 
     int executed_count = 0;
 
-    APASS_LOG_EVENT_F(Elements::Operation,
-        "MemoryAwareTopologicalSort: ENTER, ops=%zu, ready=%zu",
-        operations.size(), ready_queue.size());
+    APASS_LOG_EVENT_F(Elements::Operation, "MemoryAwareTopologicalSort: ENTER, ops=%zu, ready=%zu", operations.size(),
+                      ready_queue.size());
 
     while (!ready_queue.empty()) {
         double best_score;
@@ -573,18 +547,17 @@ std::vector<Operation*> MemoryAwareTopologicalSort(
 
         auto pool_it = context.memory_pools.find(MemoryType::MEM_BT);
         bool mem_bt_full = (pool_it != context.memory_pools.end()) &&
-            (pool_it->second.current_slot_count >= pool_it->second.max_slot_count);
-        
-        APASS_LOG_DEBUG_F(Elements::Operation,
-            "Iteration %d: ready_queue=%zu, mem_bt_full=%d, mem_bt_slots=%lu/%lu",
-            executed_count, ready_queue.size(), mem_bt_full ? 1 : 0,
-            pool_it != context.memory_pools.end() ? pool_it->second.current_slot_count : 0,
-            pool_it != context.memory_pools.end() ? pool_it->second.max_slot_count : 0);
-        
+                           (pool_it->second.current_slot_count >= pool_it->second.max_slot_count);
+
+        APASS_LOG_DEBUG_F(Elements::Operation, "Iteration %d: ready_queue=%zu, mem_bt_full=%d, mem_bt_slots=%lu/%lu",
+                          executed_count, ready_queue.size(), mem_bt_full ? 1 : 0,
+                          pool_it != context.memory_pools.end() ? pool_it->second.current_slot_count : 0,
+                          pool_it != context.memory_pools.end() ? pool_it->second.max_slot_count : 0);
+
         bool found = SelectAllocFromReadyQueue(ready_queue, op_index, mem_bt_full, best_idx, best_node_id);
         if (!found) {
-            SelectScoredFromReadyQueue(ready_queue, op_index, topo_depth, context, params,
-                mem_bt_full, best_score, best_idx, best_node_id);
+            SelectScoredFromReadyQueue(ready_queue, op_index, topo_depth, context, params, mem_bt_full, best_score,
+                                       best_idx, best_node_id);
         }
 
         if (best_idx == -1) {
@@ -598,9 +571,8 @@ std::vector<Operation*> MemoryAwareTopologicalSort(
     }
 
     if (executed_count != static_cast<int>(operations.size())) {
-        APASS_LOG_ERROR_F(Elements::Operation,
-            "MemoryAwareTopologicalSort: incomplete sort. Executed %d / %zu.",
-            executed_count, operations.size());
+        APASS_LOG_ERROR_F(Elements::Operation, "MemoryAwareTopologicalSort: incomplete sort. Executed %d / %zu.",
+                          executed_count, operations.size());
         return std::vector<Operation*>();
     }
 
@@ -616,7 +588,7 @@ Status MemoryAwareTopoSort::InitContext()
     Status init_res = depManager_.InitDependencies(operations, false);
     if (init_res != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation,
-            "MemoryAwareTopoSort::InitContext: DependencyManager.InitDependencies failed.");
+                          "MemoryAwareTopoSort::InitContext: DependencyManager.InitDependencies failed.");
         return FAILED;
     }
 
@@ -659,15 +631,9 @@ Status MemoryAwareTopoSort::InitContext()
     return SUCCESS;
 }
 
-void MemoryAwareTopoSort::UpdateMemoryState(Operation* op)
-{
-    UpdateMemoryPoolState(context_, op);
-}
+void MemoryAwareTopoSort::UpdateMemoryState(Operation* op) { UpdateMemoryPoolState(context_, op); }
 
-bool MemoryAwareTopoSort::HasMemBtOutput(Operation* op) const
-{
-    return npu::tile_fwk::HasMemBtOutputOp(op);
-}
+bool MemoryAwareTopoSort::HasMemBtOutput(Operation* op) const { return npu::tile_fwk::HasMemBtOutputOp(op); }
 
 Status MemoryAwareTopoSort::SortOps()
 {
@@ -680,8 +646,7 @@ Status MemoryAwareTopoSort::SortOps()
         return FAILED;
     }
 
-    std::vector<Operation*> sorted = MemoryAwareTopologicalSort(
-        operations, depManager_, context_, params_);
+    std::vector<Operation*> sorted = MemoryAwareTopologicalSort(operations, depManager_, context_, params_);
     if (sorted.empty() && !operations.empty()) {
         APASS_LOG_ERROR_F(Elements::Operation, "MemoryAwareTopoSort::SortOps failed.");
         return FAILED;

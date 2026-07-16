@@ -73,8 +73,8 @@ INLINE void FillShapeDims(int64_t (&dims)[AicorePrintConst::MAX_SHAPE_DIMS], con
 }
 
 template <size_t N>
-INLINE void LogShapeDims(
-    LogContext* ctx, const int64_t (&dims)[AicorePrintConst::MAX_SHAPE_DIMS], __gm__ const char* name = nullptr)
+INLINE void LogShapeDims(LogContext* ctx, const int64_t (&dims)[AicorePrintConst::MAX_SHAPE_DIMS],
+                         __gm__ const char* name = nullptr)
 {
     // PrintRaw avoids DispatchPrint's is_pointer_v→PrintInt64 path which leaks ^C into output.
     auto* logger = reinterpret_cast<AicoreLogger*>(ctx);
@@ -151,22 +151,22 @@ INLINE void AiCorePrintShape(LogContext* ctx, const TileOp::Shape<Dims...>& shap
 #endif
 
 template <typename T>
-INLINE void AiCorePrintGmTensor(
-    LogContext* ctx, __gm__ const T* data, int64_t end, int64_t begin, __gm__ const char* name)
+INLINE void AiCorePrintGmTensor(LogContext* ctx, __gm__ const T* data, int64_t end, int64_t begin,
+                                __gm__ const char* name)
 {
     PrintTensorImpl<T>(ctx, data, end, begin, name);
 }
 
 #if IS_AICORE
 template <typename T>
-INLINE void AiCorePrintUbTensor(
-    LogContext* ctx, __ubuf__ const T* data, int64_t end, int64_t begin, __gm__ const char* name)
+INLINE void AiCorePrintUbTensor(LogContext* ctx, __ubuf__ const T* data, int64_t end, int64_t begin,
+                                __gm__ const char* name)
 {
 #ifdef __AIC__
-    static_assert(
-        !std::is_same_v<T, T>, "[AIC UB Print Error] AiCorePrintUbTensor is not supported on AIC (Cube) kernel. "
-                               "AIC Scalar Processor cannot scalar-load from UB address space. "
-                               "Please use AiCorePrintUbTensor in AIV (Vector) kernel instead. ");
+    static_assert(!std::is_same_v<T, T>,
+                  "[AIC UB Print Error] AiCorePrintUbTensor is not supported on AIC (Cube) kernel. "
+                  "AIC Scalar Processor cannot scalar-load from UB address space. "
+                  "Please use AiCorePrintUbTensor in AIV (Vector) kernel instead. ");
 #else
     PrintTensorImpl<T>(ctx, data, end, begin, name);
 #endif
@@ -188,8 +188,8 @@ __aicore__ void L0CRawCopyToGM(__gm__ T* dst, __cc__ const T* src, int64_t l0cSh
     uint16_t srcStride = (mSize + kFractal - 1) / kFractal * kFractal;
     uint32_t dstStride = nSize;
 
-    uint64_t xmReg =
-        ((uint64_t)(nSize & 0xfff) << 4) | ((uint64_t)(mSize & 0xffff) << 16) | ((uint64_t)(dstStride) << 32);
+    uint64_t xmReg = ((uint64_t)(nSize & 0xfff) << 4) | ((uint64_t)(mSize & 0xffff) << 16) |
+                     ((uint64_t)(dstStride) << 32);
 
 #if SUPPORT_L1_COPY
     // A2/A3: matches TStoreAccNz2nd in pto-isa.
@@ -222,9 +222,8 @@ __aicore__ void L0CRawCopyToGM(__gm__ T* dst, __cc__ const T* src, int64_t l0cSh
 }
 
 template <typename T>
-INLINE void AiCorePrintL0CTensor(
-    LogContext* ctx, __cc__ const T* data, int64_t end, int64_t begin, int64_t l0cShape0, int64_t l0cShape1,
-    __gm__ T* staging, __gm__ const char* name)
+INLINE void AiCorePrintL0CTensor(LogContext* ctx, __cc__ const T* data, int64_t end, int64_t begin, int64_t l0cShape0,
+                                 int64_t l0cShape1, __gm__ T* staging, __gm__ const char* name)
 {
     int64_t count = end - begin;
 
@@ -233,21 +232,19 @@ INLINE void AiCorePrintL0CTensor(
     }
 
     if (staging == nullptr) {
-        AiCoreLogF(
-            ctx, "[WARNING] AiCorePrintL0CTensor: Parameter 7 (L0C staging address) is nullptr. "
-                 "Unable to print L0C data. Please provide a valid staging buffer.");
+        AiCoreLogF(ctx, "[WARNING] AiCorePrintL0CTensor: Parameter 7 (L0C staging address) is nullptr. "
+                        "Unable to print L0C data. Please provide a valid staging buffer.");
         return;
     }
 
     uint64_t stagingAddr = reinterpret_cast<uint64_t>(staging);
 
     if ((stagingAddr & 0x1F) != 0) {
-        AiCoreLogF(
-            ctx,
-            "[WARNING] AiCorePrintL0CTensor: Parameter 7 (L0C staging address) is not aligned to 32 bytes. "
-            "Unable to print L0C data. The address must be 32-byte aligned. Please adjust and retry. "
-            "Current L0C staging address: 0x%lx",
-            stagingAddr);
+        AiCoreLogF(ctx,
+                   "[WARNING] AiCorePrintL0CTensor: Parameter 7 (L0C staging address) is not aligned to 32 bytes. "
+                   "Unable to print L0C data. The address must be 32-byte aligned. Please adjust and retry. "
+                   "Current L0C staging address: 0x%lx",
+                   stagingAddr);
         return;
     }
 
@@ -296,8 +293,8 @@ __aicore__ void L1RawCopyToGM(__gm__ T* dst, __cbuf__ const T* src, int64_t coun
 }
 
 template <typename T>
-INLINE void AiCorePrintL1Tensor(
-    LogContext* ctx, __cbuf__ const T* data, int64_t end, int64_t begin, __gm__ T* staging, __gm__ const char* name)
+INLINE void AiCorePrintL1Tensor(LogContext* ctx, __cbuf__ const T* data, int64_t end, int64_t begin, __gm__ T* staging,
+                                __gm__ const char* name)
 {
     int64_t count = end - begin;
 
@@ -306,21 +303,19 @@ INLINE void AiCorePrintL1Tensor(
     }
 
     if (staging == nullptr) {
-        AiCoreLogF(
-            ctx, "[WARNING] AiCorePrintL1Tensor: Parameter 5 (L1 staging address) is nullptr. "
-                 "Unable to print L1 data. Please provide a valid staging buffer.");
+        AiCoreLogF(ctx, "[WARNING] AiCorePrintL1Tensor: Parameter 5 (L1 staging address) is nullptr. "
+                        "Unable to print L1 data. Please provide a valid staging buffer.");
         return;
     }
 
     uint64_t stagingAddr = reinterpret_cast<uint64_t>(staging);
 
     if ((stagingAddr & 0x1F) != 0) {
-        AiCoreLogF(
-            ctx,
-            "[WARNING] AiCorePrintL1Tensor: Parameter 5 (L1 staging address) is not aligned to 32 bytes. "
-            "Unable to print L1 data. The address must be 32-byte aligned. Please adjust and retry. "
-            "Current L1 staging address: 0x%lx",
-            stagingAddr);
+        AiCoreLogF(ctx,
+                   "[WARNING] AiCorePrintL1Tensor: Parameter 5 (L1 staging address) is not aligned to 32 bytes. "
+                   "Unable to print L1 data. The address must be 32-byte aligned. Please adjust and retry. "
+                   "Current L1 staging address: 0x%lx",
+                   stagingAddr);
         return;
     }
 

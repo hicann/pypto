@@ -34,9 +34,8 @@ void TaskSplitter::BuildSameLayerConnectionWithBack()
             continue;
         }
         ScheduleCoreType srcCoreType = opCoreTypes_[i];
-        APASS_LOG_DEBUG_F(
-            Elements::Operation, "Found alloc op %s[%d].", opList_[i]->GetOpcodeStr().c_str(),
-            opList_[i]->GetOpMagic());
+        APASS_LOG_DEBUG_F(Elements::Operation, "Found alloc op %s[%d].", opList_[i]->GetOpcodeStr().c_str(),
+                          opList_[i]->GetOpMagic());
         bool withBack = true;
         for (auto& oop : opList_[i]->GetOOperands()) {
             for (auto& sameLayerOpPtr : oop->GetProducers()) {
@@ -48,9 +47,9 @@ void TaskSplitter::BuildSameLayerConnectionWithBack()
                     opList_[i]->GetOpMagic() == sameLayerOpPtr->GetOpMagic()) {
                     continue;
                 }
-                APASS_LOG_DEBUG_F(
-                    Elements::Operation, "-- add %s[%d] to same layer connection because of the alloc op.",
-                    sameLayerOpPtr->GetOpcodeStr().c_str(), sameLayerOpPtr->GetOpMagic());
+                APASS_LOG_DEBUG_F(Elements::Operation,
+                                  "-- add %s[%d] to same layer connection because of the alloc op.",
+                                  sameLayerOpPtr->GetOpcodeStr().c_str(), sameLayerOpPtr->GetOpMagic());
                 sameLayerConnection_.push_back({i, opMagicToIdx_[sameLayerOpPtr->GetOpMagic()]});
                 withBack = false;
             }
@@ -69,9 +68,9 @@ void TaskSplitter::BuildSameLayerConnectionWithBack()
                 if (opCoreTypes_[opMagicToIdx_[dstOpMagic]] != srcCoreType) {
                     continue;
                 }
-                APASS_LOG_DEBUG_F(
-                    Elements::Operation, "-- add %s[%d] to same layer connection because of the alloc op.",
-                    sameLayerOpPtr->GetOpcodeStr().c_str(), sameLayerOpPtr->GetOpMagic());
+                APASS_LOG_DEBUG_F(Elements::Operation,
+                                  "-- add %s[%d] to same layer connection because of the alloc op.",
+                                  sameLayerOpPtr->GetOpcodeStr().c_str(), sameLayerOpPtr->GetOpMagic());
                 sameLayerConnection_.push_back({i, opMagicToIdx_[sameLayerOpPtr->GetOpMagic()]});
             }
         }
@@ -85,18 +84,17 @@ void TaskSplitter::BuildSameLayerConnectionWithFront()
         if (ALLOC_OPCODE.count(opList_[i]->GetOpcode()) == 0) {
             continue;
         }
-        APASS_LOG_DEBUG_F(
-            Elements::Operation, "Found alloc op %s[%d].", opList_[i]->GetOpcodeStr().c_str(),
-            opList_[i]->GetOpMagic());
+        APASS_LOG_DEBUG_F(Elements::Operation, "Found alloc op %s[%d].", opList_[i]->GetOpcodeStr().c_str(),
+                          opList_[i]->GetOpMagic());
         for (auto& oop : opList_[i]->GetOOperands()) {
             for (auto& sameLayerOpPtr : oop->GetProducers()) {
                 int dstOpMagic = sameLayerOpPtr->GetOpMagic();
                 if (opMagicToIdx_.count(dstOpMagic) == 0) {
                     continue;
                 }
-                APASS_LOG_DEBUG_F(
-                    Elements::Operation, "-- add %s[%d] to same layer connection because of the alloc op.",
-                    sameLayerOpPtr->GetOpcodeStr().c_str(), sameLayerOpPtr->GetOpMagic());
+                APASS_LOG_DEBUG_F(Elements::Operation,
+                                  "-- add %s[%d] to same layer connection because of the alloc op.",
+                                  sameLayerOpPtr->GetOpcodeStr().c_str(), sameLayerOpPtr->GetOpMagic());
                 sameLayerConnection_.push_back({i, opMagicToIdx_[sameLayerOpPtr->GetOpMagic()]});
                 opCoreTypes_[i] = opCoreTypes_[opMagicToIdx_[dstOpMagic]];
             }
@@ -128,9 +126,8 @@ void TaskSplitter::BuildOpGraph()
             bool isCube = opList_[i]->GetBoolAttribute(OpAttributeKey::isCube);
             opCoreTypes_[i] = isCube ? ScheduleCoreType::AIC : ScheduleCoreType::AIV;
         }
-        APASS_LOG_DEBUG_F(
-            Elements::Operation, "Mark %s[%d] as %s core type.", opList_[i]->GetOpcodeStr().c_str(),
-            opList_[i]->GetOpMagic(), opCoreTypes_[i] == ScheduleCoreType::AIC ? "AIC" : "AIV");
+        APASS_LOG_DEBUG_F(Elements::Operation, "Mark %s[%d] as %s core type.", opList_[i]->GetOpcodeStr().c_str(),
+                          opList_[i]->GetOpMagic(), opCoreTypes_[i] == ScheduleCoreType::AIC ? "AIC" : "AIV");
     }
     APASS_LOG_INFO_F(Elements::Operation, "Mark core type finished.");
     opInGraph_.resize(opNum);
@@ -149,8 +146,8 @@ void TaskSplitter::BuildOpGraph()
 }
 
 // 记录成环的 Cluster 对
-void TaskSplitter::RecordCycledClusters(
-    const std::vector<ScheduleCoreType>& clusterCoreTypes, const std::vector<std::vector<int>>& sccResult)
+void TaskSplitter::RecordCycledClusters(const std::vector<ScheduleCoreType>& clusterCoreTypes,
+                                        const std::vector<std::vector<int>>& sccResult)
 {
     cycledTaskNodePairs_.clear();
     for (int sccId = 0; sccId < static_cast<int>(sccResult.size()); sccId++) {
@@ -173,8 +170,8 @@ void TaskSplitter::RecordCycledClusters(
                               std::to_string(sccResult[sccId].size()) + " clusters: [";
         for (size_t j = 0; j < sccResult[sccId].size(); j++) {
             int cid = sccResult[sccId][j];
-            sccInfo +=
-                "(cluster=" + std::to_string(cid) + ", core=" + ScheduleCoreTypeToString(clusterCoreTypes[cid]) + ")";
+            sccInfo += "(cluster=" + std::to_string(cid) + ", core=" + ScheduleCoreTypeToString(clusterCoreTypes[cid]) +
+                       ")";
             if (j + 1 < sccResult[sccId].size()) {
                 sccInfo += ", ";
             }
@@ -198,10 +195,9 @@ void TaskSplitter::RecordCycledClusters(
     if (cycledSCCClusters_.empty()) {
         APASS_LOG_INFO_F(Elements::Operation, "No AIC-AIV mixed cycles detected in SCC results.");
     } else {
-        APASS_LOG_WARN_F(
-            Elements::Operation,
-            "Detected %zu SCC(s) with AIC-AIV mixed cycles, will record for post-schedule reorder.",
-            cycledSCCClusters_.size());
+        APASS_LOG_WARN_F(Elements::Operation,
+                         "Detected %zu SCC(s) with AIC-AIV mixed cycles, will record for post-schedule reorder.",
+                         cycledSCCClusters_.size());
     }
 }
 // mix子图切分主函数
@@ -244,10 +240,10 @@ void TaskSplitter::SplitGraph(const std::vector<Operation*>& opList)
 }
 
 // 将强连通分量展开，避免成环
-inline int FlattenSCC(
-    std::vector<ScheduleCoreType>& clusterCoreTypes, std::vector<std::vector<int>>& sccResult,
-    std::unordered_map<int, int>& oldClusterIdToSCCId, std::unordered_map<int, std::vector<int>>& sccIdToNewClusters,
-    std::unordered_map<int, int>& oldClusterToNewCluster)
+inline int FlattenSCC(std::vector<ScheduleCoreType>& clusterCoreTypes, std::vector<std::vector<int>>& sccResult,
+                      std::unordered_map<int, int>& oldClusterIdToSCCId,
+                      std::unordered_map<int, std::vector<int>>& sccIdToNewClusters,
+                      std::unordered_map<int, int>& oldClusterToNewCluster)
 {
     int currNewClusterIdx = 0;
     for (int sccId = 0; sccId < static_cast<int>(sccResult.size()); sccId++) {
@@ -291,8 +287,8 @@ inline int FlattenSCC(
 }
 
 // 将 cycledSCCClusters_ 中记录的旧 Cluster ID 映射为新 TaskNode ID, 形成 cycledTaskNodePairs_
-void TaskSplitter::RecordIDMap(
-    std::unordered_map<int, int>& oldClusterToNewCluster, std::vector<ScheduleCoreType>& clusterCoreTypes)
+void TaskSplitter::RecordIDMap(std::unordered_map<int, int>& oldClusterToNewCluster,
+                               std::vector<ScheduleCoreType>& clusterCoreTypes)
 {
     for (auto& oldClusters : cycledSCCClusters_) {
         std::set<int> aicNewIds;
@@ -315,17 +311,17 @@ void TaskSplitter::RecordIDMap(
 }
 
 // 将强连通分量展开，并构建新的连接图
-void TaskSplitter::CombineSCC(
-    std::vector<int>& clusterIds, std::vector<ScheduleCoreType>& clusterCoreTypes, std::vector<std::set<int>>& inGraph,
-    std::vector<std::set<int>>& outGraph, std::vector<std::vector<int>>& sccResult)
+void TaskSplitter::CombineSCC(std::vector<int>& clusterIds, std::vector<ScheduleCoreType>& clusterCoreTypes,
+                              std::vector<std::set<int>>& inGraph, std::vector<std::set<int>>& outGraph,
+                              std::vector<std::vector<int>>& sccResult)
 {
     std::unordered_map<int, int> oldClusterIdToSCCId;
     std::unordered_map<int, std::vector<int>> sccIdToNewClusters;
     std::unordered_map<int, int> oldClusterToNewCluster;
-    int newClusterNum =
-        FlattenSCC(clusterCoreTypes, sccResult, oldClusterIdToSCCId, sccIdToNewClusters, oldClusterToNewCluster);
-    APASS_LOG_INFO_F(
-        Elements::Operation, "Cluster num after flatten strongly connected components is %d.", newClusterNum);
+    int newClusterNum = FlattenSCC(clusterCoreTypes, sccResult, oldClusterIdToSCCId, sccIdToNewClusters,
+                                   oldClusterToNewCluster);
+    APASS_LOG_INFO_F(Elements::Operation, "Cluster num after flatten strongly connected components is %d.",
+                     newClusterNum);
     RecordIDMap(oldClusterToNewCluster, clusterCoreTypes);
     std::set<std::pair<int, int>> sccConnection;
     for (size_t oldIdx = 0; oldIdx < inGraph.size(); oldIdx++) {
@@ -356,8 +352,8 @@ void TaskSplitter::CombineSCC(
 }
 
 // 获得有向图中所有强连通分量
-void StrongConnectionComponentFinder::Find(
-    std::vector<std::set<int>>& inGraph, std::vector<std::set<int>>& outGraph, std::vector<std::vector<int>>& sccResult)
+void StrongConnectionComponentFinder::Find(std::vector<std::set<int>>& inGraph, std::vector<std::set<int>>& outGraph,
+                                           std::vector<std::vector<int>>& sccResult)
 {
     sccResult.clear();
     index_ = 0;
@@ -378,8 +374,8 @@ void StrongConnectionComponentFinder::Find(
 }
 
 // 递归使用TarJan算法获得强连通分量
-void StrongConnectionComponentFinder::TarJanAlg(
-    int idx, std::vector<std::set<int>>& outGraph, std::vector<std::vector<int>>& sccResult)
+void StrongConnectionComponentFinder::TarJanAlg(int idx, std::vector<std::set<int>>& outGraph,
+                                                std::vector<std::vector<int>>& sccResult)
 {
     index_++;
     dfn_[idx] = index_;
@@ -408,9 +404,8 @@ void StrongConnectionComponentFinder::TarJanAlg(
 }
 
 // 获得taskNode的连接图
-void TaskSplitter::BuildInOutGraph(
-    std::vector<std::set<int>>& inGraph, std::vector<std::set<int>>& outGraph, std::vector<int>& clusterIds,
-    int clusterNum)
+void TaskSplitter::BuildInOutGraph(std::vector<std::set<int>>& inGraph, std::vector<std::set<int>>& outGraph,
+                                   std::vector<int>& clusterIds, int clusterNum)
 {
     inGraph.clear();
     inGraph.resize(clusterNum);
@@ -456,8 +451,8 @@ TaskGraph TaskSplitter::BuildTaskGraph()
 // 判断op的ioperand为AIC类型且ooperand为AIV类型
 inline bool IsFromAICToAIV(Operation* op)
 {
-    const std::unordered_set<MemoryType> AICmem{
-        MemoryType::MEM_L0C, MemoryType::MEM_L1, MemoryType::MEM_L0A, MemoryType::MEM_L0B};
+    const std::unordered_set<MemoryType> AICmem{MemoryType::MEM_L0C, MemoryType::MEM_L1, MemoryType::MEM_L0A,
+                                                MemoryType::MEM_L0B};
     const std::unordered_set<MemoryType> AIVmem{MemoryType::MEM_UB};
     for (auto iop : op->GetIOperands()) {
         if (AICmem.count(iop->GetMemoryTypeToBe()) == 0) {
@@ -469,16 +464,16 @@ inline bool IsFromAICToAIV(Operation* op)
             return false;
         }
     }
-    APASS_LOG_DEBUG_F(
-        Elements::Operation, "op %s[%d] is from AIC to AIV.", op->GetOpcodeStr().c_str(), op->GetOpMagic());
+    APASS_LOG_DEBUG_F(Elements::Operation, "op %s[%d] is from AIC to AIV.", op->GetOpcodeStr().c_str(),
+                      op->GetOpMagic());
     return true;
 }
 
 // 判断op的ioperand为AIV类型且ooperand为AIC类型
 inline bool IsFromAIVToAIC(Operation* op)
 {
-    const std::unordered_set<MemoryType> AICmem{
-        MemoryType::MEM_L0C, MemoryType::MEM_L1, MemoryType::MEM_L0A, MemoryType::MEM_L0B};
+    const std::unordered_set<MemoryType> AICmem{MemoryType::MEM_L0C, MemoryType::MEM_L1, MemoryType::MEM_L0A,
+                                                MemoryType::MEM_L0B};
     const std::unordered_set<MemoryType> AIVmem{MemoryType::MEM_UB};
     for (auto iop : op->GetIOperands()) {
         if (AIVmem.count(iop->GetMemoryTypeToBe()) == 0) {
@@ -490,14 +485,14 @@ inline bool IsFromAIVToAIC(Operation* op)
             return false;
         }
     }
-    APASS_LOG_DEBUG_F(
-        Elements::Operation, "op %s[%d] is from AIV to AIC.", op->GetOpcodeStr().c_str(), op->GetOpMagic());
+    APASS_LOG_DEBUG_F(Elements::Operation, "op %s[%d] is from AIV to AIC.", op->GetOpcodeStr().c_str(),
+                      op->GetOpMagic());
     return true;
 }
 
 // 反向DFS查找产出指定MemoryType tensor的前驱op
-void TaskSplitter::ReverseDFSFindByOutputMemType(
-    int opIdx, MemoryType targetMemType, std::vector<int>& result, std::vector<bool>& visited)
+void TaskSplitter::ReverseDFSFindByOutputMemType(int opIdx, MemoryType targetMemType, std::vector<int>& result,
+                                                 std::vector<bool>& visited)
 {
     if (visited[opIdx]) {
         return;
@@ -525,9 +520,8 @@ inline bool TaskSplitter::IsL1MultiConsumerSkip(size_t idx) const
 {
     if (opList_[idx]->GetOutputOperand(0)->GetMemoryTypeOriginal() == MemoryType::MEM_L1 &&
         opOutGraph_[idx].size() > 1) {
-        APASS_LOG_DEBUG_F(
-            Elements::Operation, "Skip union op: %s[%d]", opList_[idx]->GetOpcodeStr().c_str(),
-            opList_[idx]->GetOpMagic());
+        APASS_LOG_DEBUG_F(Elements::Operation, "Skip union op: %s[%d]", opList_[idx]->GetOpcodeStr().c_str(),
+                          opList_[idx]->GetOpMagic());
         return true;
     }
     return false;
@@ -609,8 +603,8 @@ void TaskSplitter::UnionCombineOps(DSUWithOrder& dsu)
 }
 
 // 获取 DSU 中的 cluster ID 映射和 cluster 的核类型
-int TaskSplitter::CollectClusters(
-    DSUWithOrder& dsu, std::unordered_map<int, int>& rootToCluster, std::vector<ScheduleCoreType>& coreTypes) const
+int TaskSplitter::CollectClusters(DSUWithOrder& dsu, std::unordered_map<int, int>& rootToCluster,
+                                  std::vector<ScheduleCoreType>& coreTypes) const
 {
     int currIdx = 0;
     for (size_t idx = 0; idx < opOutGraph_.size(); idx++) {
@@ -625,8 +619,8 @@ int TaskSplitter::CollectClusters(
 }
 
 // 获取每个 op 所在的临时 cluster ID
-void TaskSplitter::GetOpClusterIds(
-    DSUWithOrder& dsu, const std::unordered_map<int, int>& rootToCluster, std::vector<int>& opCluster) const
+void TaskSplitter::GetOpClusterIds(DSUWithOrder& dsu, const std::unordered_map<int, int>& rootToCluster,
+                                   std::vector<int>& opCluster) const
 {
     opCluster.resize(opOutGraph_.size());
     for (size_t idx = 0; idx < opOutGraph_.size(); idx++) {
@@ -668,8 +662,8 @@ void TaskSplitter::UnionVecClustersByDep(DSUWithOrder& dsu)
 }
 
 // 构建 cluster 之间的依赖图（入边），并计算传递闭包
-void TaskSplitter::BuildClusterDepGraph(
-    const std::vector<int>& opCluster, int clusterNum, std::vector<std::set<int>>& clusterIn) const
+void TaskSplitter::BuildClusterDepGraph(const std::vector<int>& opCluster, int clusterNum,
+                                        std::vector<std::set<int>>& clusterIn) const
 {
     // Step 1: 构建直接依赖图
     for (size_t i = 0; i < opOutGraph_.size(); i++) {
@@ -715,8 +709,8 @@ void TaskSplitter::BuildClusterDepGraph(
     clusterIn.swap(clusterInTransitive);
 }
 
-void TaskSplitter::BuildClusterInOutGraph(
-    const std::vector<std::set<int>>& clusterIn, int clusterNum, std::vector<std::set<int>>& clusterOut) const
+void TaskSplitter::BuildClusterInOutGraph(const std::vector<std::set<int>>& clusterIn, int clusterNum,
+                                          std::vector<std::set<int>>& clusterOut) const
 {
     for (int i = 0; i < clusterNum; i++) {
         for (int j : clusterIn[i]) {
@@ -752,8 +746,8 @@ void TaskSplitter::GroupAIVClustersByDep(
     }
 }
 
-void TaskSplitter::MergeVecClusterGroup(
-    DSUWithOrder& dsu, const std::vector<int>& opCluster, const std::vector<int>& vecClusters)
+void TaskSplitter::MergeVecClusterGroup(DSUWithOrder& dsu, const std::vector<int>& opCluster,
+                                        const std::vector<int>& vecClusters)
 {
     if (vecClusters.size() <= 1) {
         return;
@@ -802,8 +796,8 @@ void TaskSplitter::GroupAICClustersByDep(
     }
 }
 
-void TaskSplitter::MergeCubeClusterGroup(
-    DSUWithOrder& dsu, const std::vector<int>& opCluster, const std::vector<int>& cubeClusters)
+void TaskSplitter::MergeCubeClusterGroup(DSUWithOrder& dsu, const std::vector<int>& opCluster,
+                                         const std::vector<int>& cubeClusters)
 {
     if (cubeClusters.size() <= 1) {
         return;
@@ -826,10 +820,9 @@ void TaskSplitter::MergeCubeClusterGroup(
         }
         if (baseRep >= 0 && otherRep >= 0) {
             dsu.Union(otherRep, baseRep);
-            APASS_LOG_DEBUG_F(
-                Elements::Operation,
-                "Merge cube cluster %d into cluster %d (same bidirectional AIV dependency pattern).", otherCluster,
-                baseCluster);
+            APASS_LOG_DEBUG_F(Elements::Operation,
+                              "Merge cube cluster %d into cluster %d (same bidirectional AIV dependency pattern).",
+                              otherCluster, baseCluster);
         }
     }
 }
@@ -955,9 +948,8 @@ void TaskSplitter::UnionCubeClustersByDep(DSUWithOrder& dsu)
 }
 
 // 构建 cluster 间完整有向图
-void TaskSplitter::BuildClusterGraph(
-    const std::vector<int>& opCluster, int /* clusterNum */, std::vector<std::set<int>>& clIn,
-    std::vector<std::set<int>>& clOut) const
+void TaskSplitter::BuildClusterGraph(const std::vector<int>& opCluster, int /* clusterNum */,
+                                     std::vector<std::set<int>>& clIn, std::vector<std::set<int>>& clOut) const
 {
     for (size_t i = 0; i < opOutGraph_.size(); i++) {
         int src = opCluster[i];
@@ -972,8 +964,8 @@ void TaskSplitter::BuildClusterGraph(
 }
 
 // 估算每个 cluster 的总 cycle
-void TaskSplitter::EstimateClusterCycles(
-    const std::vector<int>& opCluster, int /* clusterNum */, std::vector<int>& clusterCycle) const
+void TaskSplitter::EstimateClusterCycles(const std::vector<int>& opCluster, int /* clusterNum */,
+                                         std::vector<int>& clusterCycle) const
 {
     for (size_t i = 0; i < opList_.size(); i++) {
         clusterCycle[opCluster[i]] += opList_[i]->GetLatency();
@@ -981,8 +973,8 @@ void TaskSplitter::EstimateClusterCycles(
 }
 
 // cluster 拓扑排序（Kahn 算法）
-std::vector<int> TaskSplitter::TopoSortClusters(
-    int clusterNum, const std::vector<std::set<int>>& clIn, const std::vector<std::set<int>>& clOut) const
+std::vector<int> TaskSplitter::TopoSortClusters(int clusterNum, const std::vector<std::set<int>>& clIn,
+                                                const std::vector<std::set<int>>& clOut) const
 {
     std::vector<int> inDeg(clusterNum, 0);
     for (int c = 0; c < clusterNum; c++) {
@@ -1011,9 +1003,9 @@ std::vector<int> TaskSplitter::TopoSortClusters(
 
 // 找到小 vec cluster 的最佳合并目标（in 中编号最大或 out 中编号最小中 cycle 较小者）
 // 如果候选目标都是 cube cluster，则不合并
-int TaskSplitter::FindMergeTarget(
-    int clusterId, const std::vector<ScheduleCoreType>& coreTypes, const std::vector<int>& cycle,
-    const std::vector<std::set<int>>& clIn, const std::vector<std::set<int>>& clOut) const
+int TaskSplitter::FindMergeTarget(int clusterId, const std::vector<ScheduleCoreType>& coreTypes,
+                                  const std::vector<int>& cycle, const std::vector<std::set<int>>& clIn,
+                                  const std::vector<std::set<int>>& clOut) const
 {
     int targetIn = -1;
     int targetOut = -1;
@@ -1056,7 +1048,8 @@ int TaskSplitter::FindMergeTarget(
 }
 
 // 合并两个 cluster：将 src 中的所有 op union 到 dst 的代表 op
-void TaskSplitter::UnionTwoClusters(DSUWithOrder& dsu, const std::vector<int>& opCluster, int srcCluster, int dstCluster)
+void TaskSplitter::UnionTwoClusters(DSUWithOrder& dsu, const std::vector<int>& opCluster, int srcCluster,
+                                    int dstCluster)
 {
     int dstRep = -1;
     for (size_t i = 0; i < opCluster.size(); i++) {
@@ -1076,9 +1069,9 @@ void TaskSplitter::UnionTwoClusters(DSUWithOrder& dsu, const std::vector<int>& o
 }
 
 // 更新 cluster 图：合并 src 到 dst 后更新边和 cycle
-void TaskSplitter::UpdateClusterGraphAfterMerge(
-    int src, int dst, std::vector<int>& cycle, std::vector<std::set<int>>& clIn,
-    std::vector<std::set<int>>& clOut) const
+void TaskSplitter::UpdateClusterGraphAfterMerge(int src, int dst, std::vector<int>& cycle,
+                                                std::vector<std::set<int>>& clIn,
+                                                std::vector<std::set<int>>& clOut) const
 {
     cycle[dst] += cycle[src];
     // 将 src 的 in/out 边转移给 dst
@@ -1106,10 +1099,10 @@ void TaskSplitter::UpdateClusterGraphAfterMerge(
 }
 
 // 执行碎子图迭代合并
-void TaskSplitter::RunSmallClusterMerge(
-    DSUWithOrder& dsu, const std::vector<int>& topoOrder, std::vector<ScheduleCoreType>& coreTypes,
-    std::vector<int>& cycle, std::vector<std::set<int>>& clIn, std::vector<std::set<int>>& clOut, int clusterNum,
-    const std::unordered_set<int>& protectedClusterIds)
+void TaskSplitter::RunSmallClusterMerge(DSUWithOrder& dsu, const std::vector<int>& topoOrder,
+                                        std::vector<ScheduleCoreType>& coreTypes, std::vector<int>& cycle,
+                                        std::vector<std::set<int>>& clIn, std::vector<std::set<int>>& clOut,
+                                        int clusterNum, const std::unordered_set<int>& protectedClusterIds)
 {
     std::vector<bool> removed(clusterNum, false);
     for (int iter = 0; iter < OOO_SMALL_CLUSTER_MERGE_MAX_ITER; iter++) {
@@ -1134,9 +1127,8 @@ void TaskSplitter::RunSmallClusterMerge(
             if (target < 0 || protectedClusterIds.count(target) > 0) {
                 continue;
             }
-            APASS_LOG_DEBUG_F(
-                Elements::Operation, "Merge small vec cluster %d (cycle=%d) into cluster %d (cycle=%d).", c, cycle[c],
-                target, cycle[target]);
+            APASS_LOG_DEBUG_F(Elements::Operation, "Merge small vec cluster %d (cycle=%d) into cluster %d (cycle=%d).",
+                              c, cycle[c], target, cycle[target]);
             UnionTwoClusters(dsu, opCluster2, c, target);
             UpdateClusterGraphAfterMerge(c, target, cycle, clIn, clOut);
             removed[c] = true;
@@ -1174,18 +1166,16 @@ void TaskSplitter::PropagateOooScopeToReshape()
         // 如果所有 producer 的 oooScopeId 都相同且 > 0，直接继承
         if (inScope.size() == 1 && *inScope.begin() > 0) {
             opList_[i]->SetOooScopeId(*inScope.begin());
-            APASS_LOG_INFO_F(
-                Elements::Operation, "PropagateOooScopeToReshape(prod): %s[%d] -> oooScope=%d.",
-                opList_[i]->GetOpcodeStr().c_str(), opList_[i]->GetOpMagic(), *inScope.begin());
+            APASS_LOG_INFO_F(Elements::Operation, "PropagateOooScopeToReshape(prod): %s[%d] -> oooScope=%d.",
+                             opList_[i]->GetOpcodeStr().c_str(), opList_[i]->GetOpMagic(), *inScope.begin());
             continue;
         }
 
         // 如果所有 consumer 的 oooScopeId 都相同且 > 0，直接继承
         if (outScope.size() == 1 && *outScope.begin() > 0) {
             opList_[i]->SetOooScopeId(*outScope.begin());
-            APASS_LOG_INFO_F(
-                Elements::Operation, "PropagateOooScopeToReshape(cons): %s[%d] -> oooScope=%d.",
-                opList_[i]->GetOpcodeStr().c_str(), opList_[i]->GetOpMagic(), *outScope.begin());
+            APASS_LOG_INFO_F(Elements::Operation, "PropagateOooScopeToReshape(cons): %s[%d] -> oooScope=%d.",
+                             opList_[i]->GetOpcodeStr().c_str(), opList_[i]->GetOpMagic(), *outScope.begin());
             continue;
         }
     }
@@ -1217,10 +1207,8 @@ void TaskSplitter::UnionByOooScope(DSUWithOrder& dsu)
                 }
             }
         }
-        APASS_LOG_INFO_F(
-            Elements::Operation, "UnionByOooScope: oooScopeId=%d coreType=%s, %zu ops, %d edge unions.",
-            key.first, key.second == ScheduleCoreType::AIC ? "AIC" : "AIV",
-            opIndices.size(), mergeCount);
+        APASS_LOG_INFO_F(Elements::Operation, "UnionByOooScope: oooScopeId=%d coreType=%s, %zu ops, %d edge unions.",
+                         key.first, key.second == ScheduleCoreType::AIC ? "AIC" : "AIV", opIndices.size(), mergeCount);
     }
 }
 
@@ -1233,9 +1221,8 @@ std::unordered_set<int> TaskSplitter::CollectOooScopeProtectedClusters(DSUWithOr
             protectedRoots.insert(dsu.Find(static_cast<int>(i)));
         }
     }
-    APASS_LOG_INFO_F(
-        Elements::Operation, "CollectOooScopeProtectedClusters: %zu protected clusters.",
-        protectedRoots.size());
+    APASS_LOG_INFO_F(Elements::Operation, "CollectOooScopeProtectedClusters: %zu protected clusters.",
+                     protectedRoots.size());
     return protectedRoots;
 }
 
@@ -1315,9 +1302,8 @@ std::vector<std::vector<int>> TaskSplitter::FindMergeableTaskNodes()
         targetTypeToTasks[taskGraph_.tasks[i].targetCoreType].push_back(i);
     }
     for (auto& tasksPair : targetTypeToTasks) {
-        std::sort(tasksPair.second.begin(), tasksPair.second.end(), [this](int i, int j) {
-            return taskGraph_.tasks[i].startTime < taskGraph_.tasks[j].startTime;
-        });
+        std::sort(tasksPair.second.begin(), tasksPair.second.end(),
+                  [this](int i, int j) { return taskGraph_.tasks[i].startTime < taskGraph_.tasks[j].startTime; });
         std::vector<int> oldTasks;
         for (int currTaskId : tasksPair.second) {
             if (oldTasks.empty() || NoDepDetached(oldTasks, currTaskId, reachableJudger)) {
@@ -1352,9 +1338,9 @@ void TaskSplitter::MergeTask()
         for (int oldTaskId : newTaskToOldTasks[newTaskIdx]) {
             oldTaskToNewTask[oldTaskId] = newTaskIdx;
             s.tasks[newTaskId].latency += taskGraph_.tasks[oldTaskId].latency;
-            s.tasks[newTaskId].opList_.insert(
-                s.tasks[newTaskId].opList_.end(), taskGraph_.tasks[oldTaskId].opList_.begin(),
-                taskGraph_.tasks[oldTaskId].opList_.end());
+            s.tasks[newTaskId].opList_.insert(s.tasks[newTaskId].opList_.end(),
+                                              taskGraph_.tasks[oldTaskId].opList_.begin(),
+                                              taskGraph_.tasks[oldTaskId].opList_.end());
         }
     }
     for (int oldTaskId = 0; oldTaskId < static_cast<int>(taskGraph_.tasks.size()); oldTaskId++) {
@@ -1384,9 +1370,8 @@ void TaskSplitter::MergeTaskByTargetCoreType()
         if (tasksPair.second.size() == 0) {
             continue;
         }
-        std::sort(tasksPair.second.begin(), tasksPair.second.end(), [this](int i, int j) {
-            return taskGraph_.tasks[i].startTime < taskGraph_.tasks[j].startTime;
-        });
+        std::sort(tasksPair.second.begin(), tasksPair.second.end(),
+                  [this](int i, int j) { return taskGraph_.tasks[i].startTime < taskGraph_.tasks[j].startTime; });
         int newTaskId = s.AddTask(std::to_string(newTaskIdx), targetTypeToScheduleType[tasksPair.first], 0);
         newTaskIdx++;
         s.tasks[newTaskId].targetCoreType = tasksPair.first;
@@ -1394,9 +1379,9 @@ void TaskSplitter::MergeTaskByTargetCoreType()
         s.tasks[newTaskId].endTime = taskGraph_.tasks[tasksPair.second.back()].endTime;
         for (int oldTaskId : tasksPair.second) {
             s.tasks[newTaskId].latency += taskGraph_.tasks[oldTaskId].latency;
-            s.tasks[newTaskId].opList_.insert(
-                s.tasks[newTaskId].opList_.end(), taskGraph_.tasks[oldTaskId].opList_.begin(),
-                taskGraph_.tasks[oldTaskId].opList_.end());
+            s.tasks[newTaskId].opList_.insert(s.tasks[newTaskId].opList_.end(),
+                                              taskGraph_.tasks[oldTaskId].opList_.begin(),
+                                              taskGraph_.tasks[oldTaskId].opList_.end());
         }
     }
     taskGraph_ = s;
@@ -1447,16 +1432,14 @@ void TaskSplitter::ComputeTaskLevelBranches()
 // 根据划分结果标记op的AIVCore与internalSubgraphID
 void TaskSplitter::MarkInternalSubgraphID()
 {
-    std::unordered_map<TargetCoreType, AIVCore> targetMap{
-        {TargetCoreType::AIC, AIVCore::UNSPECIFIED},
-        {TargetCoreType::UNKNOWN, AIVCore::UNSPECIFIED},
-        {TargetCoreType::AIV0, AIVCore::AIV0},
-        {TargetCoreType::AIV1, AIVCore::AIV1}};
-    std::unordered_map<TargetCoreType, int> subGraphIdMap{
-        {TargetCoreType::AIC, NEGATIVE_ONE},
-        {TargetCoreType::AIV0, NEGATIVE_ONE},
-        {TargetCoreType::AIV1, NEGATIVE_ONE},
-        {TargetCoreType::UNKNOWN, NEGATIVE_ONE}};
+    std::unordered_map<TargetCoreType, AIVCore> targetMap{{TargetCoreType::AIC, AIVCore::UNSPECIFIED},
+                                                          {TargetCoreType::UNKNOWN, AIVCore::UNSPECIFIED},
+                                                          {TargetCoreType::AIV0, AIVCore::AIV0},
+                                                          {TargetCoreType::AIV1, AIVCore::AIV1}};
+    std::unordered_map<TargetCoreType, int> subGraphIdMap{{TargetCoreType::AIC, NEGATIVE_ONE},
+                                                          {TargetCoreType::AIV0, NEGATIVE_ONE},
+                                                          {TargetCoreType::AIV1, NEGATIVE_ONE},
+                                                          {TargetCoreType::UNKNOWN, NEGATIVE_ONE}};
     int id = 0;
     for (auto& task : taskGraph_.tasks) {
         if (task.targetCoreType == TargetCoreType::UNKNOWN) {
@@ -1481,8 +1464,8 @@ void TaskSplitter::MarkInternalSubgraphID()
 // 将多个taskNode的opList在保持内部顺序的前提下合并成符合拓扑序的一个opList
 std::vector<Operation*> TaskSplitter::GetMergedOperations()
 {
-    std::priority_queue<
-        std::pair<int, Operation*>, std::vector<std::pair<int, Operation*>>, std::greater<std::pair<int, Operation*>>>
+    std::priority_queue<std::pair<int, Operation*>, std::vector<std::pair<int, Operation*>>,
+                        std::greater<std::pair<int, Operation*>>>
         pQueue;
     std::unordered_map<Operation*, int> opPriority;
     std::unordered_map<Operation*, int> inLinkNum;

@@ -24,26 +24,30 @@ protected:
     SymbolIdGen gen_;
 };
 
-TEST_F(TestSymbolIdGen, TestNewId) {
+TEST_F(TestSymbolIdGen, TestNewId)
+{
     EXPECT_EQ(gen_.NewId(), 0);
     EXPECT_EQ(gen_.NewId(), 1);
     EXPECT_EQ(gen_.NewId(), 2);
 }
 
-TEST_F(TestSymbolIdGen, TestCurId) {
+TEST_F(TestSymbolIdGen, TestCurId)
+{
     gen_.NewId();
     gen_.NewId();
     EXPECT_EQ(gen_.CurId(), 2);
 }
 
-TEST_F(TestSymbolIdGen, TestReset) {
+TEST_F(TestSymbolIdGen, TestReset)
+{
     gen_.NewId();
     gen_.NewId();
     gen_.Reset();
     EXPECT_EQ(gen_.CurId(), 0);
 }
 
-TEST_F(TestSymbolIdGen, TestSetId) {
+TEST_F(TestSymbolIdGen, TestSetId)
+{
     gen_.SetId(100);
     EXPECT_EQ(gen_.CurId(), 100);
     EXPECT_EQ(gen_.NewId(), 100);
@@ -55,33 +59,38 @@ protected:
     SymbolIdGenMgr mgr_;
 };
 
-TEST_F(TestSymbolIdGenMgr, TestNewIdUsingName) {
+TEST_F(TestSymbolIdGenMgr, TestNewIdUsingName)
+{
     EXPECT_EQ(mgr_.NewId<SymbolIdType::CG_USING_NAME>(), 0);
     EXPECT_EQ(mgr_.NewId<SymbolIdType::CG_USING_NAME>(), 1);
     EXPECT_EQ(mgr_.NewId<SymbolIdType::CG_USING_NAME>(), 2);
 }
 
-TEST_F(TestSymbolIdGenMgr, TestNewIdVarName) {
+TEST_F(TestSymbolIdGenMgr, TestNewIdVarName)
+{
     EXPECT_EQ(mgr_.NewId<SymbolIdType::CG_VAR_NAME>(), 0);
     EXPECT_EQ(mgr_.NewId<SymbolIdType::CG_VAR_NAME>(), 1);
     EXPECT_EQ(mgr_.NewId<SymbolIdType::CG_VAR_NAME>(), 2);
 }
 
-TEST_F(TestSymbolIdGenMgr, TestDifferentTypesIndependent) {
+TEST_F(TestSymbolIdGenMgr, TestDifferentTypesIndependent)
+{
     EXPECT_EQ(mgr_.NewId<SymbolIdType::CG_USING_NAME>(), 0);
     EXPECT_EQ(mgr_.NewId<SymbolIdType::CG_VAR_NAME>(), 0);
     EXPECT_EQ(mgr_.NewId<SymbolIdType::CG_USING_NAME>(), 1);
     EXPECT_EQ(mgr_.NewId<SymbolIdType::CG_VAR_NAME>(), 1);
 }
 
-TEST_F(TestSymbolIdGenMgr, TestCurId) {
+TEST_F(TestSymbolIdGenMgr, TestCurId)
+{
     mgr_.NewId<SymbolIdType::CG_USING_NAME>();
     mgr_.NewId<SymbolIdType::CG_USING_NAME>();
     EXPECT_EQ(mgr_.CurId<SymbolIdType::CG_USING_NAME>(), 2);
     EXPECT_EQ(mgr_.CurId<SymbolIdType::CG_VAR_NAME>(), 0);
 }
 
-TEST_F(TestSymbolIdGenMgr, TestReset) {
+TEST_F(TestSymbolIdGenMgr, TestReset)
+{
     mgr_.NewId<SymbolIdType::CG_USING_NAME>();
     mgr_.NewId<SymbolIdType::CG_VAR_NAME>();
     mgr_.Reset<SymbolIdType::CG_USING_NAME>();
@@ -89,7 +98,8 @@ TEST_F(TestSymbolIdGenMgr, TestReset) {
     EXPECT_EQ(mgr_.CurId<SymbolIdType::CG_VAR_NAME>(), 1);
 }
 
-TEST_F(TestSymbolIdGenMgr, TestSetId) {
+TEST_F(TestSymbolIdGenMgr, TestSetId)
+{
     mgr_.SetId<SymbolIdType::CG_USING_NAME>(50);
     mgr_.SetId<SymbolIdType::CG_VAR_NAME>(100);
     EXPECT_EQ(mgr_.CurId<SymbolIdType::CG_USING_NAME>(), 50);

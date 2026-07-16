@@ -30,9 +30,8 @@ public:
     void MergeCopyOutGroup(int srcCopyOutIdx, int curCopyOutIdx, std::map<int, int>& copyOutSeq);
     void TileInsertQueue(TilePtr tile, std::vector<std::vector<int>>& tileAllocSequence);
     void TileOpInsertQueue(TileOpPtr tileOp);
-    void SortTile(
-        std::unordered_map<int, TilePtr>& tiles, std::unordered_map<int, TileOpPtr>& tileOps,
-        std::vector<std::vector<int>>& tileAllocSequence);
+    void SortTile(std::unordered_map<int, TilePtr>& tiles, std::unordered_map<int, TileOpPtr>& tileOps,
+                  std::vector<std::vector<int>>& tileAllocSequence);
     std::shared_ptr<SimSys> GetSim();
 };
 } // namespace CostModel

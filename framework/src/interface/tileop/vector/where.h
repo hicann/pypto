@@ -19,15 +19,14 @@
 #include "utils/tile_tensor.h"
 
 template <unsigned elementsCount>
-TILEOP void CaculateMask(
-    uint64_t condition, __ubuf__ half* castCondition, __ubuf__ half* compareCondition, __ubuf__ uint8_t* vcmpBitResult,
-    const unsigned curCount)
+TILEOP void CaculateMask(uint64_t condition, __ubuf__ half* castCondition, __ubuf__ half* compareCondition,
+                         __ubuf__ uint8_t* vcmpBitResult, const unsigned curCount)
 {
     constexpr unsigned bitsOfByte = 8;
     using TileCondition = pto::Tile<pto::TileType::Vec, uint8_t, 1, elementsCount, pto::BLayout::RowMajor, -1, -1>;
     using TileConditionHalf = pto::Tile<pto::TileType::Vec, half, 1, elementsCount, pto::BLayout::RowMajor, -1, -1>;
-    using TileVCmpBitResult =
-        pto::Tile<pto::TileType::Vec, uint8_t, 1, elementsCount / bitsOfByte, pto::BLayout::RowMajor, -1, -1>;
+    using TileVCmpBitResult = pto::Tile<pto::TileType::Vec, uint8_t, 1, elementsCount / bitsOfByte,
+                                        pto::BLayout::RowMajor, -1, -1>;
 
     TileCondition conditionTile(1, curCount);
     TileConditionHalf castConditionTile(1, curCount);
@@ -48,14 +47,14 @@ TILEOP void CaculateMask(
 }
 
 template <typename T, unsigned elementsCount>
-TILEOP void ProcessWhere(
-    uint64_t dst, uint64_t vcmpBitResult, uint64_t src0, uint64_t src1, uint64_t startAddrUB, const unsigned curCount)
+TILEOP void ProcessWhere(uint64_t dst, uint64_t vcmpBitResult, uint64_t src0, uint64_t src1, uint64_t startAddrUB,
+                         const unsigned curCount)
 {
     constexpr unsigned bitsOfByte = 8;
     constexpr unsigned addressUsed = 4;
     constexpr unsigned alignUint8 = 32;
-    using TileVCmpBitResult =
-        pto::Tile<pto::TileType::Vec, uint8_t, 1, elementsCount / bitsOfByte, pto::BLayout::RowMajor, -1, -1>;
+    using TileVCmpBitResult = pto::Tile<pto::TileType::Vec, uint8_t, 1, elementsCount / bitsOfByte,
+                                        pto::BLayout::RowMajor, -1, -1>;
     TileVCmpBitResult vcmpBitResultTile(1, curCount / bitsOfByte);
     pto::TASSIGN(vcmpBitResultTile, (uint64_t)(vcmpBitResult));
     using TileStartAddrUB = pto::Tile<pto::TileType::Vec, uint8_t, 1, alignUint8, pto::BLayout::RowMajor, -1, -1>;
@@ -161,16 +160,15 @@ TILEOP void TWhereTT(TDst dst, TTmp tmpbuf, TCond condition, TSrc0 src0, TSrc1 s
                     } else {
                         constexpr unsigned addressUsed = 4;
                         constexpr unsigned alignUint8 = 32;
-                        using TileStartAddrUB =
-                            pto::Tile<pto::TileType::Vec, uint8_t, 1, alignUint8, pto::BLayout::RowMajor, -1, -1>;
+                        using TileStartAddrUB = pto::Tile<pto::TileType::Vec, uint8_t, 1, alignUint8,
+                                                          pto::BLayout::RowMajor, -1, -1>;
                         TileStartAddrUB startAddrUBTile(1, addressUsed);
                         pto::TASSIGN(startAddrUBTile, (uint64_t)(startAddrUB));
 
-                        using TileDst = pto::Tile<
-                            pto::TileType::Vec, typename TDst::Type, 1, tileW, pto::BLayout::RowMajor, -1, -1>;
-                        using TileMask = pto::Tile<
-                            pto::TileType::Vec, typename TCond::Type, 1, conditionTileW, pto::BLayout::RowMajor, -1,
-                            -1>;
+                        using TileDst = pto::Tile<pto::TileType::Vec, typename TDst::Type, 1, tileW,
+                                                  pto::BLayout::RowMajor, -1, -1>;
+                        using TileMask = pto::Tile<pto::TileType::Vec, typename TCond::Type, 1, conditionTileW,
+                                                   pto::BLayout::RowMajor, -1, -1>;
                         TileDst dstTile(1, shape4);
                         TileMask maskTile(1, conditionShape);
                         TileDst src0Tile(1, shape4);
@@ -205,8 +203,8 @@ TILEOP void TWhereTS(TDst dst, TTmp tmpbuf, TCond condition, TSrc0 src0, TSrc1 s
     __ubuf__ half* castCondition = reinterpret_cast<__ubuf__ half*>(tmpbufAddr);
     __ubuf__ half* compareCondition = castCondition + elementsPerCount;
     __ubuf__ uint8_t* vcmpBitResult = reinterpret_cast<__ubuf__ uint8_t*>(compareCondition + elementsPerCount);
-    __ubuf__ typename TDst::Type* otherTempTensor =
-        (__ubuf__ typename TDst::Type*)(vcmpBitResult + elementsPerCount / bitsOfByte);
+    __ubuf__ typename TDst::Type* otherTempTensor = (__ubuf__ typename TDst::Type*)(vcmpBitResult +
+                                                                                    elementsPerCount / bitsOfByte);
     __ubuf__ uint8_t* startAddrUB = reinterpret_cast<__ubuf__ uint8_t*>(otherTempTensor + elementsPerCount);
 
     using TileTSrc1 = pto::Tile<pto::TileType::Vec, TSrc1, 1, elementsPerCount, pto::BLayout::RowMajor, -1, -1>;
@@ -321,8 +319,8 @@ TILEOP void TWhereST(TDst dst, TTmp tmpbuf, TCond condition, TSrc0 src0, TSrc1 s
     __ubuf__ half* castCondition = reinterpret_cast<__ubuf__ half*>(tmpbufAddr);
     __ubuf__ half* compareCondition = castCondition + elementsPerCount;
     __ubuf__ uint8_t* vcmpBitResult = reinterpret_cast<__ubuf__ uint8_t*>(compareCondition + elementsPerCount);
-    __ubuf__ typename TDst::Type* inputTempTensor =
-        (__ubuf__ typename TDst::Type*)(vcmpBitResult + elementsPerCount / bitsOfByte);
+    __ubuf__ typename TDst::Type* inputTempTensor = (__ubuf__ typename TDst::Type*)(vcmpBitResult +
+                                                                                    elementsPerCount / bitsOfByte);
     __ubuf__ uint8_t* startAddrUB = reinterpret_cast<__ubuf__ uint8_t*>(inputTempTensor + elementsPerCount);
 
     using TileTSrc0 = pto::Tile<pto::TileType::Vec, TSrc0, 1, elementsPerCount, pto::BLayout::RowMajor, -1, -1>;
@@ -437,8 +435,8 @@ TILEOP void TWhereSS(TDst dst, TTmp tmpbuf, TCond condition, TSrc0 src0, TSrc1 s
     __ubuf__ half* castCondition = reinterpret_cast<__ubuf__ half*>(tmpbufAddr);
     __ubuf__ half* compareCondition = castCondition + elementsPerCount;
     __ubuf__ uint8_t* vcmpBitResult = reinterpret_cast<__ubuf__ uint8_t*>(compareCondition + elementsPerCount);
-    __ubuf__ typename TDst::Type* inputTempTensor =
-        (__ubuf__ typename TDst::Type*)(vcmpBitResult + elementsPerCount / bitsOfByte);
+    __ubuf__ typename TDst::Type* inputTempTensor = (__ubuf__ typename TDst::Type*)(vcmpBitResult +
+                                                                                    elementsPerCount / bitsOfByte);
     __ubuf__ typename TDst::Type* otherTempTensor = (__ubuf__ typename TDst::Type*)(inputTempTensor + elementsPerCount);
     __ubuf__ uint8_t* startAddrUB = reinterpret_cast<__ubuf__ uint8_t*>(otherTempTensor + elementsPerCount);
 

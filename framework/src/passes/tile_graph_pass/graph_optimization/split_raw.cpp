@@ -32,8 +32,8 @@ std::vector<int64_t> SplitRawTensor::UpdateOffset(std::vector<int64_t>& offset, 
     return result;
 }
 
-std::vector<SymbolicScalar> SplitRawTensor::UpdateDynOffset(
-    std::vector<SymbolicScalar>& offset, const std::vector<SymbolicScalar>& diff) const
+std::vector<SymbolicScalar> SplitRawTensor::UpdateDynOffset(std::vector<SymbolicScalar>& offset,
+                                                            const std::vector<SymbolicScalar>& diff) const
 {
     std::vector<SymbolicScalar> result = offset;
     for (size_t i = 0; i < offset.size(); i++) {
@@ -44,17 +44,16 @@ std::vector<SymbolicScalar> SplitRawTensor::UpdateDynOffset(
     return result;
 }
 
-std::vector<OpImmediate> SplitRawTensor::UpdateImmediateOffset(
-    std::vector<OpImmediate>& offset, const TensorOffset& tensorOffset) const
+std::vector<OpImmediate> SplitRawTensor::UpdateImmediateOffset(std::vector<OpImmediate>& offset,
+                                                               const TensorOffset& tensorOffset) const
 {
     std::vector<OpImmediate> result = offset;
     std::vector<SymbolicScalar> diff = tensorOffset.GetDynOffset().empty() ?
                                            OpImmediate::ToSpecified(OpImmediate::Specified(tensorOffset.GetOffset())) :
                                            tensorOffset.GetDynOffset();
     if (offset.size() != diff.size()) {
-        APASS_LOG_WARN_F(
-            Elements::Operation, "Copy op offset size[%zu] is not equal to tensor offset size[%zu].", offset.size(),
-            diff.size());
+        APASS_LOG_WARN_F(Elements::Operation, "Copy op offset size[%zu] is not equal to tensor offset size[%zu].",
+                         offset.size(), diff.size());
         return result;
     }
     std::vector<size_t> specifiedIndex;
@@ -86,9 +85,9 @@ void SplitRawTensor::UpdateConsumerView(Function& function, const LogicalTensorP
         }
         auto& output = viewOp->oOperand[0];
         if (function.IsFromOutCast(output)) {
-            APASS_LOG_WARN_F(
-                Elements::Tensor, "OP_VIEW oOperand tensor[%d] is outCast; Please check if it is an external output.",
-                output->GetMagic());
+            APASS_LOG_WARN_F(Elements::Tensor,
+                             "OP_VIEW oOperand tensor[%d] is outCast; Please check if it is an external output.",
+                             output->GetMagic());
             continue;
         }
         auto viewOpAttribute = dynamic_cast<ViewOpAttribute*>(viewOp->GetOpAttribute().get());
@@ -123,10 +122,9 @@ void SplitRawTensor::UpdateProducerAssemble(Function& function, const LogicalTen
         }
         auto& input = assembleOp->iOperand[0];
         if (function.IsFromInCast(input)) {
-            APASS_LOG_WARN_F(
-                Elements::Operation,
-                "OP_ASSEMBLE iOperand tensor[%d] is inCast; Please check if it is an external input.",
-                input->GetMagic());
+            APASS_LOG_WARN_F(Elements::Operation,
+                             "OP_ASSEMBLE iOperand tensor[%d] is inCast; Please check if it is an external input.",
+                             input->GetMagic());
             continue;
         }
         auto assembleOpAttribute = dynamic_cast<AssembleOpAttribute*>(assembleOp->GetOpAttribute().get());
@@ -160,10 +158,9 @@ void SplitRawTensor::UpdateProducerShmemGet(Function& function, const LogicalTen
         }
         auto& output = shmemGetOp->oOperand[0];
         if (function.IsFromOutCast(output)) {
-            APASS_LOG_WARN_F(
-                Elements::Operation,
-                "OP_SHMEM_GET oOperand tensor[%d] is outCast; Please check if it is an external output.",
-                output->GetMagic());
+            APASS_LOG_WARN_F(Elements::Operation,
+                             "OP_SHMEM_GET oOperand tensor[%d] is outCast; Please check if it is an external output.",
+                             output->GetMagic());
             continue;
         }
         auto copyOpAttribute = dynamic_cast<CopyOpAttribute*>(shmemGetOp->GetOpAttribute().get());
@@ -183,9 +180,9 @@ bool SplitRawTensor::ShouldProcessTensor(Function& function, const LogicalTensor
     }
     // 检查是否为InCast或OutCast
     if (function.IsFromOutCast(singleTensor) || function.IsFromInCast(singleTensor)) {
-        APASS_LOG_WARN_F(
-            Elements::Tensor, "Tensor[%d] is inCast or outCast; Please check if it is an external input/output",
-            singleTensor->GetMagic());
+        APASS_LOG_WARN_F(Elements::Tensor,
+                         "Tensor[%d] is inCast or outCast; Please check if it is an external input/output",
+                         singleTensor->GetMagic());
         return false;
     }
     return true;
@@ -196,11 +193,11 @@ bool SplitRawTensor::SplitLogicalTensor(Function& function, const LogicalTensorP
     if (!ShouldProcessTensor(function, logicalTensor)) {
         return false;
     }
-    logicalTensor->tensor = std::make_shared<RawTensor>(
-        logicalTensor->tensor->datatype, logicalTensor->GetShape(), logicalTensor->Format(), logicalTensor->Symbol());
-    APASS_LOG_DEBUG_F(
-        Elements::Operation, "SplitRawTensor::SplitRaw: tensor[%d] updated new raw tensor[%d] with the same raw shape.",
-        logicalTensor->GetMagic(), logicalTensor->GetRawMagic());
+    logicalTensor->tensor = std::make_shared<RawTensor>(logicalTensor->tensor->datatype, logicalTensor->GetShape(),
+                                                        logicalTensor->Format(), logicalTensor->Symbol());
+    APASS_LOG_DEBUG_F(Elements::Operation,
+                      "SplitRawTensor::SplitRaw: tensor[%d] updated new raw tensor[%d] with the same raw shape.",
+                      logicalTensor->GetMagic(), logicalTensor->GetRawMagic());
     UpdateConsumerView(function, logicalTensor);
     UpdateProducerAssemble(function, logicalTensor);
     UpdateProducerShmemGet(function, logicalTensor);

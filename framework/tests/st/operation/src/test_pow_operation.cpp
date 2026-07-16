@@ -35,11 +35,11 @@ struct PowOpMetaData {
     nlohmann::json test_data_;
 };
 
-static inline void DoPow(
-    const std::vector<int64_t>& shape0, const std::vector<int64_t>& shape1,
-    const std::vector<SymbolicScalar>& validShape0, const std::vector<SymbolicScalar>& validShape1,
-    const std::vector<SymbolicScalar>& offset0, const std::vector<SymbolicScalar>& offset1,
-    const std::vector<SymbolicScalar>& offset2, const Tensor& input0, const Tensor& input1, Tensor& output)
+static inline void DoPow(const std::vector<int64_t>& shape0, const std::vector<int64_t>& shape1,
+                         const std::vector<SymbolicScalar>& validShape0, const std::vector<SymbolicScalar>& validShape1,
+                         const std::vector<SymbolicScalar>& offset0, const std::vector<SymbolicScalar>& offset1,
+                         const std::vector<SymbolicScalar>& offset2, const Tensor& input0, const Tensor& input1,
+                         Tensor& output)
 {
     Tensor tileTensor0 = View(input0, shape0, validShape0, offset0);
     Tensor tileTensor1 = View(input1, shape1, validShape1, offset1);
@@ -58,8 +58,8 @@ static inline void CalcWillBroadcast(bool willBroadcast[][shapeDim], const std::
     }
 }
 
-static void PowOperationExeFunc2Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void PowOperationExeFunc2Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                     const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0], inputs[1]}, {outputs[0]})
     {
@@ -73,10 +73,10 @@ static void PowOperationExeFunc2Dims(
         auto args = static_cast<const PowOpFuncArgs*>(opArgs);
         const int64_t firstViewShape = args->viewShape_[0];
         const int64_t secondViewShape = args->viewShape_[1];
-        const std::vector<int64_t> shape0 = {
-            willBroadcast[0][0] ? 1 : firstViewShape, willBroadcast[0][1] ? 1 : secondViewShape};
-        const std::vector<int64_t> shape1 = {
-            willBroadcast[1][0] ? 1 : firstViewShape, willBroadcast[1][1] ? 1 : secondViewShape};
+        const std::vector<int64_t> shape0 = {willBroadcast[0][0] ? 1 : firstViewShape,
+                                             willBroadcast[0][1] ? 1 : secondViewShape};
+        const std::vector<int64_t> shape1 = {willBroadcast[1][0] ? 1 : firstViewShape,
+                                             willBroadcast[1][1] ? 1 : secondViewShape};
         const int bloop = CeilDiv(firstDim, firstViewShape);
         const int sloop = CeilDiv(secondDim, secondViewShape);
         LOOP("LOOP_L0_bIdx", FunctionType::DYNAMIC_LOOP, bIdx, LoopRange(0, bloop, 1))
@@ -101,16 +101,15 @@ static void PowOperationExeFunc2Dims(
                     willBroadcast[1][1] ? SymbolicScalar(1) :
                                           std::min(secondDim - sIdx * secondViewShape, secondViewShape)};
                 TileShape::Current().SetVecTile(args->tileShape_);
-                DoPow(
-                    shape0, shape1, validShape0, validShape1, offset0, offset1, offset2, inputs[0], inputs[1],
-                    outputs[0]);
+                DoPow(shape0, shape1, validShape0, validShape1, offset0, offset1, offset2, inputs[0], inputs[1],
+                      outputs[0]);
             }
         }
     }
 }
 
-static void PowOperationExeFunc3Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void PowOperationExeFunc3Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                     const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0], inputs[1]}, {outputs[0]})
     {
@@ -126,12 +125,12 @@ static void PowOperationExeFunc3Dims(
         const int64_t firstViewShape = args->viewShape_[0];
         const int64_t secondViewShape = args->viewShape_[1];
         const int64_t thirdViewShape = args->viewShape_[2];
-        const std::vector<int64_t> shape0 = {
-            willBroadcast[0][0] ? 1 : firstViewShape, willBroadcast[0][1] ? 1 : secondViewShape,
-            willBroadcast[0][2] ? 1 : thirdViewShape};
-        const std::vector<int64_t> shape1 = {
-            willBroadcast[1][0] ? 1 : firstViewShape, willBroadcast[1][1] ? 1 : secondViewShape,
-            willBroadcast[1][2] ? 1 : thirdViewShape};
+        const std::vector<int64_t> shape0 = {willBroadcast[0][0] ? 1 : firstViewShape,
+                                             willBroadcast[0][1] ? 1 : secondViewShape,
+                                             willBroadcast[0][2] ? 1 : thirdViewShape};
+        const std::vector<int64_t> shape1 = {willBroadcast[1][0] ? 1 : firstViewShape,
+                                             willBroadcast[1][1] ? 1 : secondViewShape,
+                                             willBroadcast[1][2] ? 1 : thirdViewShape};
         const int bloop = CeilDiv(firstDim, firstViewShape);
         const int sloop = CeilDiv(secondDim, secondViewShape);
         const int mloop = CeilDiv(thirdDim, thirdViewShape);
@@ -149,8 +148,8 @@ static void PowOperationExeFunc3Dims(
                         willBroadcast[1][0] ? SymbolicScalar(0) : bIdx * firstViewShape,
                         willBroadcast[1][1] ? SymbolicScalar(0) : sIdx * secondViewShape,
                         willBroadcast[1][2] ? SymbolicScalar(0) : mIdx * thirdViewShape};
-                    std::vector<SymbolicScalar> offset2 = {
-                        bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape};
+                    std::vector<SymbolicScalar> offset2 = {bIdx * firstViewShape, sIdx * secondViewShape,
+                                                           mIdx * thirdViewShape};
                     std::vector<SymbolicScalar> validShape0 = {
                         willBroadcast[0][0] ? SymbolicScalar(1) :
                                               std::min(firstDim - bIdx * firstViewShape, firstViewShape),
@@ -166,17 +165,16 @@ static void PowOperationExeFunc3Dims(
                         willBroadcast[1][2] ? SymbolicScalar(1) :
                                               std::min(thirdDim - mIdx * thirdViewShape, thirdViewShape)};
                     TileShape::Current().SetVecTile(args->tileShape_);
-                    DoPow(
-                        shape0, shape1, validShape0, validShape1, offset0, offset1, offset2, inputs[0], inputs[1],
-                        outputs[0]);
+                    DoPow(shape0, shape1, validShape0, validShape1, offset0, offset1, offset2, inputs[0], inputs[1],
+                          outputs[0]);
                 }
             }
         }
     }
 }
 
-static void PowOperationExeFunc4Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void PowOperationExeFunc4Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                     const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0], inputs[1]}, {outputs[0]})
     {
@@ -222,9 +220,8 @@ static void PowOperationExeFunc4Dims(
                             willBroadcast[1][1] ? SymbolicScalar(0) : sIdx * secondViewShape,
                             willBroadcast[1][2] ? SymbolicScalar(0) : mIdx * thirdViewShape,
                             willBroadcast[1][3] ? SymbolicScalar(0) : nIdx * fourthViewShape};
-                        std::vector<SymbolicScalar> offset2 = {
-                            bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape,
-                            nIdx * fourthViewShape};
+                        std::vector<SymbolicScalar> offset2 = {bIdx * firstViewShape, sIdx * secondViewShape,
+                                                               mIdx * thirdViewShape, nIdx * fourthViewShape};
                         std::vector<SymbolicScalar> validShape0 = {
                             willBroadcast[0][0] ? SymbolicScalar(1) :
                                                   std::min(firstDim - bIdx * firstViewShape, firstViewShape),
@@ -244,9 +241,8 @@ static void PowOperationExeFunc4Dims(
                             willBroadcast[1][3] ? SymbolicScalar(1) :
                                                   std::min(fourthDim - nIdx * fourthViewShape, fourthViewShape)};
                         TileShape::Current().SetVecTile(args->tileShape_);
-                        DoPow(
-                            shape0, shape1, validShape0, validShape1, offset0, offset1, offset2, inputs[0], inputs[1],
-                            outputs[0]);
+                        DoPow(shape0, shape1, validShape0, validShape1, offset0, offset1, offset2, inputs[0], inputs[1],
+                              outputs[0]);
                     }
                 }
             }
@@ -256,10 +252,9 @@ static void PowOperationExeFunc4Dims(
 
 class PowOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac_param<PowOpMetaData> {};
 
-INSTANTIATE_TEST_SUITE_P(
-    TestPow, PowOperationTest,
-    ::testing::ValuesIn(GetOpMetaData<PowOpMetaData>(
-        {PowOperationExeFunc2Dims, PowOperationExeFunc3Dims, PowOperationExeFunc4Dims}, "Pow")));
+INSTANTIATE_TEST_SUITE_P(TestPow, PowOperationTest,
+                         ::testing::ValuesIn(GetOpMetaData<PowOpMetaData>(
+                             {PowOperationExeFunc2Dims, PowOperationExeFunc3Dims, PowOperationExeFunc4Dims}, "Pow")));
 
 TEST_P(PowOperationTest, TestPow)
 {

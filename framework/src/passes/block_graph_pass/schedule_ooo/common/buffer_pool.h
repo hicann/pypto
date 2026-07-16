@@ -86,9 +86,8 @@ public:
     uint64_t GetMemSize();
 
     size_t ObtainStartAddr(size_t i, const std::vector<std::tuple<int, size_t, size_t>>& allocatedBufs);
-    size_t UpdateIdx(
-        size_t& i, size_t sizeNeedSpill, size_t startAddr,
-        const std::vector<std::tuple<int, size_t, size_t>>& allocatedBufs);
+    size_t UpdateIdx(size_t& i, size_t sizeNeedSpill, size_t startAddr,
+                     const std::vector<std::tuple<int, size_t, size_t>>& allocatedBufs);
     // 单池 spill 选组: 返回所有可能的 spill 组合 (空即"没有可 spill 候选")。
     // 与主线签名一致, 调用方按"空即失败"处理。
     std::vector<std::vector<int>> GetSpillGroup(size_t sizeNeedSpill);
@@ -105,11 +104,11 @@ public:
     bool CheckBufferSlicesOverlap();
     void PrintStatus();
     Status MakeBufferSlice(LocalBufferPtr tensor, BufferSlice& newSlice);
-    void SelectHeadAndTail(
-        LocalBufferPtr tensor, bool& head, bool& tail, std::map<uint64_t, std::map<uint64_t, uint64_t>> freeIntervals);
+    void SelectHeadAndTail(LocalBufferPtr tensor, bool& head, bool& tail,
+                           std::map<uint64_t, std::map<uint64_t, uint64_t>> freeIntervals);
     // Fills `changes` with one entry per moved memId for NotifyBufferRearrange.
-    Status CompactBufferSlices(
-        std::unordered_map<int, LocalBufferPtr>& localBufferMap, std::vector<BufferAddrChange>& changes);
+    Status CompactBufferSlices(std::unordered_map<int, LocalBufferPtr>& localBufferMap,
+                               std::vector<BufferAddrChange>& changes);
 
     // === DualDst 扩展 ===
     // 返回本池按起点升序的扁平 [start, end) 空闲段列表;OoOScheduler::FindCommonFreeOffset

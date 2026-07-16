@@ -67,16 +67,13 @@ public:
 
     TileRange memoryrange;
 
-    LogicalTensor(
-        Function& function, DataType t, Shape tshape, TileOpFormat tformat = TileOpFormat::TILEOP_ND,
-        std::string tname = "");
-    LogicalTensor(
-        Function& function, DataType t, Shape tshape, std::vector<SymbolicScalar> tValidShape,
-        TileOpFormat tformat = TileOpFormat::TILEOP_ND, std::string tname = "");
+    LogicalTensor(Function& function, DataType t, Shape tshape, TileOpFormat tformat = TileOpFormat::TILEOP_ND,
+                  std::string tname = "");
+    LogicalTensor(Function& function, DataType t, Shape tshape, std::vector<SymbolicScalar> tValidShape,
+                  TileOpFormat tformat = TileOpFormat::TILEOP_ND, std::string tname = "");
     LogicalTensor(Function& function, std::shared_ptr<RawTensor> rawTensor, Offset toffset, Shape tshape);
-    LogicalTensor(
-        Function& function, std::shared_ptr<RawTensor> rawTensor, Offset toffset, Shape tshape,
-        std::vector<SymbolicScalar> tValidShape);
+    LogicalTensor(Function& function, std::shared_ptr<RawTensor> rawTensor, Offset toffset, Shape tshape,
+                  std::vector<SymbolicScalar> tValidShape);
 
     LogicalTensor(LogicalTensor&&) = delete;
     LogicalTensor(const LogicalTensor&) = delete;
@@ -230,11 +227,10 @@ bool TypeEqual(const LogicalTensorPtr a, const LogicalTensorPtr b);
 Tensor TensorExtract(const Tensor& src, const std::vector<SymbolicScalar>& offset);
 void TensorInsert(const Tensor& src, const std::vector<SymbolicScalar>& offset, Tensor& dst);
 
-SymbolicScalar GetViewValidShapeDim(
-    const SymbolicScalar& validShapeDim, const SymbolicScalar& viewOffsetDim, const SymbolicScalar& viewShapeDim);
-std::vector<SymbolicScalar> GetViewValidShape(
-    const std::vector<SymbolicScalar>& validShape, const Offset& viewOffset,
-    const std::vector<SymbolicScalar>& viewDynOffset, const Shape& viewShape);
+SymbolicScalar GetViewValidShapeDim(const SymbolicScalar& validShapeDim, const SymbolicScalar& viewOffsetDim,
+                                    const SymbolicScalar& viewShapeDim);
+std::vector<SymbolicScalar> GetViewValidShape(const std::vector<SymbolicScalar>& validShape, const Offset& viewOffset,
+                                              const std::vector<SymbolicScalar>& viewDynOffset, const Shape& viewShape);
 
 std::map<int, std::vector<RawSymbolicScalarPtr>> GetTensorDataDict(const SymbolicScalar& dimOffset);
 std::map<int, std::vector<RawSymbolicScalarPtr>> GetTensorDataDict(const std::vector<SymbolicScalar>& offset);

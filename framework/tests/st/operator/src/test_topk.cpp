@@ -47,9 +47,8 @@ void TopKOnBoardFunc(TopKParams& params)
         void* x_ptr = readToDev(GetGoldenDir() + "/x.bin", inputSize);
         TileShape::Current().SetVecTile({shape0, shape1});
         Tensor input_a(DataType::DT_FP32, input_shape, (uint8_t*)x_ptr, "A");
-        auto output = std::make_tuple(
-            Tensor(DataType::DT_FP32, output_shape, out_ptr, "npu_val"),
-            Tensor(DataType::DT_FP32, output_shape, out_ptr1, "resDics"));
+        auto output = std::make_tuple(Tensor(DataType::DT_FP32, output_shape, out_ptr, "npu_val"),
+                                      Tensor(DataType::DT_FP32, output_shape, out_ptr1, "resDics"));
 
         config::SetBuildStatic(true);
         FUNCTION("TOPK_T", {input_a, std::get<0>(output), std::get<1>(output)})

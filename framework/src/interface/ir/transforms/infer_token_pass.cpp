@@ -114,8 +114,8 @@ private:
         return std::make_shared<SeqStmts>(newStmts, body->span_);
     }
 
-    std::vector<size_t> BuildReturnVarToTokenIndex(
-        SeqStmtsPtr body, size_t originalReturnVarCount, const std::vector<VarPtr>& branchTokens)
+    std::vector<size_t> BuildReturnVarToTokenIndex(SeqStmtsPtr body, size_t originalReturnVarCount,
+                                                   const std::vector<VarPtr>& branchTokens)
     {
         std::vector<size_t> mapping(originalReturnVarCount, SIZE_MAX);
         if (!body || body->stmts_.empty() || branchTokens.empty()) {
@@ -218,8 +218,8 @@ private:
             }
         }
 
-        auto newStmt = npu::tile_fwk::RebuildTensorOpStmt(
-            op, op->result_, resultToken, op->args_, newTokens, op->span_);
+        auto newStmt = npu::tile_fwk::RebuildTensorOpStmt(op, op->result_, resultToken, op->args_, newTokens,
+                                                          op->span_);
 
         UpdateProducers(op->result_, resultToken);
         return newStmt;
@@ -313,8 +313,8 @@ private:
         QueueUpdate(returnVarToCarryToken);
         producers_ = savedProducers;
 
-        return std::make_shared<ForStmt>(
-            op->loopVar_, op->start_, op->stop_, op->step_, op->iterArgs_, processedBody, newReturnVars, op->span_, op->attrs_);
+        return std::make_shared<ForStmt>(op->loopVar_, op->start_, op->stop_, op->step_, op->iterArgs_, processedBody,
+                                         newReturnVars, op->span_, op->attrs_);
     }
 };
 

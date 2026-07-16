@@ -216,16 +216,15 @@ SortParam CodeGenOpNPU::PrepareSortParam() const
     std::string tmpDtypeStr = DataType2CCEStr(tmpDtype);
     std::string src0DtypeStr = DataType2CCEStr(src0Dtype);
     AppendLocalBufVarOffsetInOrder(dstVar, tmpVar, src0Var);
-    return {
-        {ds[ID0], ds[ID1], ds[ID2], ds[ID3]},
-        {ts[ID0], ts[ID1], ts[ID2], ts[ID3]},
-        {ss[ID0], ss[ID1], ss[ID2], ss[ID3]},
-        src0Var,
-        dstVar,
-        tmpVar,
-        src0DtypeStr,
-        dstDtypeStr,
-        tmpDtypeStr};
+    return {{ds[ID0], ds[ID1], ds[ID2], ds[ID3]},
+            {ts[ID0], ts[ID1], ts[ID2], ts[ID3]},
+            {ss[ID0], ss[ID1], ss[ID2], ss[ID3]},
+            src0Var,
+            dstVar,
+            tmpVar,
+            src0DtypeStr,
+            dstDtypeStr,
+            tmpDtypeStr};
 }
 
 std::string CodeGenOpNPU::GenMrgSortOp() const
@@ -359,17 +358,16 @@ TiledSortParam CodeGenOpNPU::PrepareTiledSortParam() const
     std::string dstDtypeStr = DataType2CCEStr(dstDtype);
     std::string srcDtypeStr = DataType2CCEStr(srcDtype);
     AppendLocalBufVarOffsetInOrder(dstVar, tmpVar, src0Var, src1Var, src2Var, src3Var);
-    return {
-        {ds[ID0], ds[ID1], ds[ID2], ds[ID3]},
-        {s0[ID0], s0[ID1], s0[ID2], s0[ID3], s3[ID3]},
-        src0Var,
-        src1Var,
-        src2Var,
-        src3Var,
-        tmpVar,
-        dstVar,
-        srcDtypeStr,
-        dstDtypeStr};
+    return {{ds[ID0], ds[ID1], ds[ID2], ds[ID3]},
+            {s0[ID0], s0[ID1], s0[ID2], s0[ID3], s3[ID3]},
+            src0Var,
+            src1Var,
+            src2Var,
+            src3Var,
+            tmpVar,
+            dstVar,
+            srcDtypeStr,
+            dstDtypeStr};
 }
 
 std::string CodeGenOpNPU::PrintTileSortTileTensor() const

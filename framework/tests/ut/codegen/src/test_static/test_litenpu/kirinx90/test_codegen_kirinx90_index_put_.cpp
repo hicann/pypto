@@ -19,13 +19,10 @@ using namespace npu::tile_fwk;
 
 class TestCodeGenKirinX90IndexPut : public CodegenTestLiteNPU {
 public:
-    TestCodeGenKirinX90IndexPut() : CodegenTestLiteNPU("KirinX90"){};
+    TestCodeGenKirinX90IndexPut() : CodegenTestLiteNPU("KirinX90") {};
 };
 
-TEST_F(TestCodeGenKirinX90IndexPut, test_index_put_001)
-{
-    TestCodeGenIndexPut::Instance().test_index_put_001();
-}
+TEST_F(TestCodeGenKirinX90IndexPut, test_index_put_001) { TestCodeGenIndexPut::Instance().test_index_put_001(); }
 
 TEST_F(TestCodeGenKirinX90IndexPut, DISABLED_test_index_put_002)
 {

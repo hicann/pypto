@@ -22,7 +22,7 @@ namespace npu::tile_fwk {
 
 class CodeGenCloudNPU : public CodeGenNPU {
 public:
-    explicit CodeGenCloudNPU(const CodeGenCtx& cgCtx) : CodeGenNPU(cgCtx){};
+    explicit CodeGenCloudNPU(const CodeGenCtx& cgCtx) : CodeGenNPU(cgCtx) {};
     ~CodeGenCloudNPU() override = default;
 
 private:

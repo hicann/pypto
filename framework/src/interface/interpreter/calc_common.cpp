@@ -29,8 +29,8 @@ void ExecuteOpAssemble(ExecuteOperationContext* ctx)
     ASSERT(ExecuteOperationScene::CTX_OUTPUT_COUNT_MISMATCH, ctx->ooperandInplaceDataViewList->size() == 1);
     ASSERT(ExecuteOperationScene::CTX_INPUT_COUNT_MISMATCH, ctx->ioperandDataViewList->size() <= NUM_VALUE_2);
     ASSERT(ExecuteOperationScene::CTX_OP_NULL, ctx->op != nullptr);
-    // InplaceProcess 优化后，Assemble 的输入输出可能已共享同一底层 RawTensor（RawMagic 相同），该op也不会被翻译成任何硬件指令；
-    // 此时无需再执行 View/Copy，直接跳过即可。
+    // InplaceProcess 优化后，Assemble 的输入输出可能已共享同一底层 RawTensor（RawMagic
+    // 相同），该op也不会被翻译成任何硬件指令； 此时无需再执行 View/Copy，直接跳过即可。
     if (ctx->op->GetIOperands()[0]->tensor->GetRawMagic() == ctx->op->GetOOperands()[0]->tensor->GetRawMagic()) {
         return;
     }
@@ -47,8 +47,8 @@ void ExecuteOpAssemble(ExecuteOperationContext* ctx)
     }
     if (iop->IsShmTensor()) {
         oop->GetData()->SetAsShmTensor();
-        oop->GetData()->SetShmOffset(
-            iop->GetData()->GetShmOffset() + ret->GetStorageOffset() * ret->GetData()->GetElementSize());
+        oop->GetData()->SetShmOffset(iop->GetData()->GetShmOffset() +
+                                     ret->GetStorageOffset() * ret->GetData()->GetElementSize());
     }
 }
 REGISTER_CALC_OP(OP_ASSEMBLE, Opcode::OP_ASSEMBLE, ExecuteOpAssemble);
@@ -184,14 +184,15 @@ void ExecuteOpView(ExecuteOperationContext* ctx)
     }
     uint64_t shmOffset = 0;
 
-    bool trans =
-        (ctx->op->HasAttr(Matrix::L1_TO_L0_TRANSPOSE)) ? ctx->op->GetBoolAttribute(Matrix::L1_TO_L0_TRANSPOSE) : false;
+    bool trans = (ctx->op->HasAttr(Matrix::L1_TO_L0_TRANSPOSE)) ?
+                     ctx->op->GetBoolAttribute(Matrix::L1_TO_L0_TRANSPOSE) :
+                     false;
     bool isMx = false;
     if (ctx->op->HasAttr(Matrix::A_MUL_B_COPY_IN_MODE)) {
         trans = (ctx->op->GetIntAttribute(Matrix::A_MUL_B_COPY_IN_MODE) ==
-            static_cast<int64_t>(Matrix::CopyInMode::DN2NZ)) ?
-            true :
-            false;
+                 static_cast<int64_t>(Matrix::CopyInMode::DN2NZ)) ?
+                    true :
+                    false;
         isMx = true;
     }
     if (trans) {
@@ -243,8 +244,9 @@ void ExecuteOpCopyOut(ExecuteOperationContext* ctx)
             uint64_t scale = (ctx->op->HasAttr(Matrix::A_MUL_B_SCALE_ATTR)) ?
                                  ctx->op->GetElementAttribute(Matrix::A_MUL_B_SCALE_ATTR).GetUnsignedData() :
                                  0;
-            int relu =
-                (ctx->op->HasAttr(Matrix::A_MUL_B_RELU_ATTR)) ? ctx->op->GetIntAttribute(Matrix::A_MUL_B_RELU_ATTR) : 0;
+            int relu = (ctx->op->HasAttr(Matrix::A_MUL_B_RELU_ATTR)) ?
+                           ctx->op->GetIntAttribute(Matrix::A_MUL_B_RELU_ATTR) :
+                           0;
             LogicalTensorDataPtr scalePtr = nullptr;
             if (ctx->ioperandDataViewList->size() > 1) {
                 scalePtr = ctx->ioperandDataViewList->at(1);
@@ -280,8 +282,8 @@ void ExecuteOpCopyIn(ExecuteOperationContext* ctx)
     if (outputCombineAxisDone && oopShape.size() == SIZE_TWO) {
         std::vector<int64_t> transShape = {oopShape[1], oopShape[0]};
         std::vector<int64_t> transRawShape = {oop->GetData()->GetShape()[1], oop->GetData()->GetShape()[0]};
-        oopTrans =
-            LogicalTensorData::CreateEmpty(oop->GetDataType(), transShape, std::vector<int64_t>(0), transRawShape);
+        oopTrans = LogicalTensorData::CreateEmpty(oop->GetDataType(), transShape, std::vector<int64_t>(0),
+                                                  transRawShape);
     }
 
     // HACK: copyin's default attribute should be full tensor
@@ -290,8 +292,8 @@ void ExecuteOpCopyIn(ExecuteOperationContext* ctx)
     if (copyin != nullptr) {
         std::vector<int64_t> rawShape = ctx->opInter->EvaluateOpImmediate(ctx->frame, copyin->GetRawShape());
         std::vector<int64_t> fromOffset = ctx->opInter->EvaluateOpImmediate(ctx->frame, copyin->GetFromOffset());
-        std::vector<int64_t> dynvalidshape =
-            ctx->opInter->EvaluateOpImmediate(ctx->frame, copyin->GetToDynValidShape());
+        std::vector<int64_t> dynvalidshape = ctx->opInter->EvaluateOpImmediate(ctx->frame,
+                                                                               copyin->GetToDynValidShape());
         if (dynvalidshape.empty()) {
             dynvalidshape = iopValid->GetValidShape();
         }
@@ -338,9 +340,9 @@ static std::string TensorToDumpString(const LogicalTensorDataPtr& tensor)
     return castOut->ToString();
 }
 
-std::string FormatString(
-    const std::string& s, OperationInterpreter* opInter, const std::vector<LogicalTensorDataPtr>* iopDataView,
-    const std::vector<SymbolicScalar>* scalars)
+std::string FormatString(const std::string& s, OperationInterpreter* opInter,
+                         const std::vector<LogicalTensorDataPtr>* iopDataView,
+                         const std::vector<SymbolicScalar>* scalars)
 {
     std::stringstream ss;
     size_t pos = 0;
@@ -433,12 +435,11 @@ void ExecuteOpReshape(ExecuteOperationContext* ctx)
     ASSERT(ExecuteOperationScene::CTX_INPUT_COUNT_MISMATCH, ctx->ioperandDataViewList->size() == 1);
     auto& oop = ctx->ooperandInplaceDataViewList->at(0);
     auto& iop = ctx->ioperandDataViewList->at(0);
-    int64_t iopSize = std::accumulate(
-        iop->GetValidShape().begin(), iop->GetValidShape().end(), (int64_t)1, std::multiplies<int64_t>());
-    int64_t oopSize = std::accumulate(
-        oop->GetValidShape().begin(), oop->GetValidShape().end(), (int64_t)1, std::multiplies<int64_t>());
-    if (ctx->op->GetOOperands()[0]->GetRawMagic() == ctx->op->GetIOperands()[0]->GetRawMagic() &&
-        iopSize != oopSize) {
+    int64_t iopSize = std::accumulate(iop->GetValidShape().begin(), iop->GetValidShape().end(), (int64_t)1,
+                                      std::multiplies<int64_t>());
+    int64_t oopSize = std::accumulate(oop->GetValidShape().begin(), oop->GetValidShape().end(), (int64_t)1,
+                                      std::multiplies<int64_t>());
+    if (ctx->op->GetOOperands()[0]->GetRawMagic() == ctx->op->GetIOperands()[0]->GetRawMagic() && iopSize != oopSize) {
         return;
     }
     auto iopDataView = iop->View(iop->GetValidShape(), iop->GetOffset());
@@ -446,13 +447,13 @@ void ExecuteOpReshape(ExecuteOperationContext* ctx)
     if (oop->GetData()->GetSize() > iop->GetData()->GetSize()) {
         auto oopRawShapeStr = IntVecToStr(oop->GetData()->GetShape());
         auto iopRawShapeStr = IntVecToStr(iop->GetData()->GetShape());
-        INTERPRETER_LOGW(
-            "Reshape: rawTensor shape/size mismatch in padding path: "
-            "oop(raw) shape=%s size=%ld, iop(raw) shape=%s size=%ld",
-            oopRawShapeStr.c_str(), oop->GetData()->GetSize(), iopRawShapeStr.c_str(), iop->GetData()->GetSize());
+        INTERPRETER_LOGW("Reshape: rawTensor shape/size mismatch in padding path: "
+                         "oop(raw) shape=%s size=%ld, iop(raw) shape=%s size=%ld",
+                         oopRawShapeStr.c_str(), oop->GetData()->GetSize(), iopRawShapeStr.c_str(),
+                         iop->GetData()->GetSize());
         auto paddingRaw = std::make_shared<RawTensorData>(oop->GetData()->GetDataType(), iop->GetShape());
-        auto paddingIopView = std::make_shared<LogicalTensorData>(
-            paddingRaw, iop->GetValidShape(), iop->GetValidShape(), iop->GetOffset());
+        auto paddingIopView = std::make_shared<LogicalTensorData>(paddingRaw, iop->GetValidShape(),
+                                                                  iop->GetValidShape(), iop->GetOffset());
         calc::Copy(paddingIopView, iopDataView);
         iopDataView = paddingIopView;
     }
@@ -460,9 +461,8 @@ void ExecuteOpReshape(ExecuteOperationContext* ctx)
     auto actualOop = std::make_shared<LogicalTensorData>(oopDataView->GetData());
     if (oopDataView->GetSize() > iopDataView->GetSize()) {
         INTERPRETER_LOGW("%s", ctx->op->Dump().c_str());
-        INTERPRETER_LOGW(
-            "iop validShape: %s ---> oop validShape: %s", IntVecToStr(iop->GetShape()).c_str(),
-            IntVecToStr(oop->GetShape()).c_str());
+        INTERPRETER_LOGW("iop validShape: %s ---> oop validShape: %s", IntVecToStr(iop->GetShape()).c_str(),
+                         IntVecToStr(oop->GetShape()).c_str());
         INTERPRETER_LOGW("Reshape: input tensor is not enough to reshape to output tensor");
         calc::Reshape(oopDataView, actualIop);
     } else if (oopDataView->GetSize() < iopDataView->GetSize()) {

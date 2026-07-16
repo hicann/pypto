@@ -84,8 +84,8 @@ static std::vector<std::reference_wrapper<const Tensor>> AsRef(const std::vector
     return results;
 }
 
-static void ConcatOperationExeFuncDoubleCut(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void ConcatOperationExeFuncDoubleCut(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                            const OpFuncArgs* opArgs)
 {
     auto inputRefs = AsRef(inputs);
     auto args = static_cast<const ConcatOpFuncArgs*>(opArgs);
@@ -107,8 +107,8 @@ static void ConcatOperationExeFuncDoubleCut(
             indices.insert(indices.begin() + axis, 0);
             std::vector<Tensor> concatTensors = {};
             for (size_t tensorId = 0; tensorId < inputs.size(); tensorId++) {
-                const std::vector<int64_t> tensorViewShape =
-                    GetConcatViewShape(inputs[tensorId], args->viewShape_, axis);
+                const std::vector<int64_t> tensorViewShape = GetConcatViewShape(inputs[tensorId], args->viewShape_,
+                                                                                axis);
                 // 本质是在找 bIdx 循环的是哪一根轴
                 SymbolicScalar validShape0 = std::min(
                     SymbolicScalar(inputs[tensorId].GetShape()[0]) - indices[0] * tensorViewShape[0],
@@ -116,9 +116,8 @@ static void ConcatOperationExeFuncDoubleCut(
                 SymbolicScalar validShape1 = std::min(
                     SymbolicScalar(inputs[tensorId].GetShape()[1]) - indices[1] * tensorViewShape[1],
                     tensorViewShape[1]);
-                auto tileTensor = View(
-                    inputs[tensorId], tensorViewShape, {validShape0, validShape1},
-                    {indices[0] * tensorViewShape[0], indices[1] * tensorViewShape[1]});
+                auto tileTensor = View(inputs[tensorId], tensorViewShape, {validShape0, validShape1},
+                                       {indices[0] * tensorViewShape[0], indices[1] * tensorViewShape[1]});
                 concatTensors.push_back(tileTensor);
             }
             TileShape::Current().SetVecTile(args->tileShape_);
@@ -128,8 +127,8 @@ static void ConcatOperationExeFuncDoubleCut(
     }
 }
 
-static void ConcatOperationExeFuncTripleCut(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void ConcatOperationExeFuncTripleCut(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                            const OpFuncArgs* opArgs)
 {
     auto inputRefs = AsRef(inputs);
     auto args = static_cast<const ConcatOpFuncArgs*>(opArgs);
@@ -153,8 +152,8 @@ static void ConcatOperationExeFuncTripleCut(
                 indices.insert(indices.begin() + axis, 0);
                 std::vector<Tensor> concatTensors = {};
                 for (size_t tensorId = 0; tensorId < inputs.size(); tensorId++) {
-                    const std::vector<int64_t> tensorViewShape =
-                        GetConcatViewShape(inputs[tensorId], args->viewShape_, axis);
+                    const std::vector<int64_t> tensorViewShape = GetConcatViewShape(inputs[tensorId], args->viewShape_,
+                                                                                    axis);
                     SymbolicScalar validShape0 = std::min(
                         SymbolicScalar(inputs[tensorId].GetShape()[0]) - indices[0] * tensorViewShape[0],
                         tensorViewShape[0]);
@@ -164,32 +163,30 @@ static void ConcatOperationExeFuncTripleCut(
                     SymbolicScalar validShape2 = std::min(
                         SymbolicScalar(inputs[tensorId].GetShape()[2]) - indices[2] * tensorViewShape[2],
                         tensorViewShape[2]);
-                    auto tileTensor = View(
-                        inputs[tensorId], tensorViewShape, {validShape0, validShape1, validShape2},
-                        {
-                            indices[0] * tensorViewShape[0],
-                            indices[1] * tensorViewShape[1],
-                            indices[2] * tensorViewShape[2],
-                        });
+                    auto tileTensor = View(inputs[tensorId], tensorViewShape, {validShape0, validShape1, validShape2},
+                                           {
+                                               indices[0] * tensorViewShape[0],
+                                               indices[1] * tensorViewShape[1],
+                                               indices[2] * tensorViewShape[2],
+                                           });
                     concatTensors.push_back(tileTensor);
                 }
                 TileShape::Current().SetVecTile(args->tileShape_);
                 auto res = Cat(concatTensors, axis);
-                Assemble(
-                    res,
-                    {
-                        indices[0] * args->viewShape_[0],
-                        indices[1] * args->viewShape_[1],
-                        indices[2] * args->viewShape_[2],
-                    },
-                    outputs[0]);
+                Assemble(res,
+                         {
+                             indices[0] * args->viewShape_[0],
+                             indices[1] * args->viewShape_[1],
+                             indices[2] * args->viewShape_[2],
+                         },
+                         outputs[0]);
             }
         }
     }
 }
 
-static void ConcatOperationExeFuncQuadraticCut(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void ConcatOperationExeFuncQuadraticCut(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                               const OpFuncArgs* opArgs)
 {
     auto inputRefs = AsRef(inputs);
     int axis = 0;
@@ -216,8 +213,8 @@ static void ConcatOperationExeFuncQuadraticCut(
                     indices.insert(indices.begin() + axis, 0);
                     std::vector<Tensor> concatTensors = {};
                     for (size_t tensorId = 0; tensorId < inputs.size(); tensorId++) {
-                        const std::vector<int64_t> tensorViewShape =
-                            GetConcatViewShape(inputs[tensorId], args->viewShape_, axis);
+                        const std::vector<int64_t> tensorViewShape = GetConcatViewShape(inputs[tensorId],
+                                                                                        args->viewShape_, axis);
                         SymbolicScalar validShape0 = std::min(
                             SymbolicScalar(inputs[tensorId].GetShape()[0]) - indices[0] * tensorViewShape[0],
                             tensorViewShape[0]);
@@ -230,27 +227,26 @@ static void ConcatOperationExeFuncQuadraticCut(
                         SymbolicScalar validShape3 = std::min(
                             SymbolicScalar(inputs[tensorId].GetShape()[3]) - indices[3] * tensorViewShape[3],
                             tensorViewShape[3]);
-                        auto tileTensor = View(
-                            inputs[tensorId], tensorViewShape, {validShape0, validShape1, validShape2, validShape3},
-                            {
-                                indices[0] * tensorViewShape[0],
-                                indices[1] * tensorViewShape[1],
-                                indices[2] * tensorViewShape[2],
-                                indices[3] * tensorViewShape[3],
-                            });
+                        auto tileTensor = View(inputs[tensorId], tensorViewShape,
+                                               {validShape0, validShape1, validShape2, validShape3},
+                                               {
+                                                   indices[0] * tensorViewShape[0],
+                                                   indices[1] * tensorViewShape[1],
+                                                   indices[2] * tensorViewShape[2],
+                                                   indices[3] * tensorViewShape[3],
+                                               });
                         concatTensors.push_back(tileTensor);
                     }
                     TileShape::Current().SetVecTile(args->tileShape_);
                     auto res = Cat(concatTensors, axis);
-                    Assemble(
-                        res,
-                        {
-                            indices[0] * args->viewShape_[0],
-                            indices[1] * args->viewShape_[1],
-                            indices[2] * args->viewShape_[2],
-                            indices[3] * args->viewShape_[3],
-                        },
-                        outputs[0]);
+                    Assemble(res,
+                             {
+                                 indices[0] * args->viewShape_[0],
+                                 indices[1] * args->viewShape_[1],
+                                 indices[2] * args->viewShape_[2],
+                                 indices[3] * args->viewShape_[3],
+                             },
+                             outputs[0]);
                 }
             }
         }
@@ -259,11 +255,11 @@ static void ConcatOperationExeFuncQuadraticCut(
 
 class ConcatOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac_param<ConcatOpMetaData> {};
 
-INSTANTIATE_TEST_SUITE_P(
-    TestConcat, ConcatOperationTest,
-    ::testing::ValuesIn(GetOpMetaData<ConcatOpMetaData>(
-        {ConcatOperationExeFuncDoubleCut, ConcatOperationExeFuncTripleCut, ConcatOperationExeFuncQuadraticCut},
-        "Concat")));
+INSTANTIATE_TEST_SUITE_P(TestConcat, ConcatOperationTest,
+                         ::testing::ValuesIn(GetOpMetaData<ConcatOpMetaData>({ConcatOperationExeFuncDoubleCut,
+                                                                              ConcatOperationExeFuncTripleCut,
+                                                                              ConcatOperationExeFuncQuadraticCut},
+                                                                             "Concat")));
 
 TEST_P(ConcatOperationTest, TestConcat)
 {

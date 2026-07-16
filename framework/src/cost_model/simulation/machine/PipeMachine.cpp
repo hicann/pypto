@@ -115,10 +115,9 @@ uint64_t PipeMachine::GetQueueNextCycles()
 
 bool PipeMachine::IsTerminate()
 {
-    return (
-        !executingTask && submissionQueue.IsTerminate() && completionQueue.IsTerminate() &&
-        outcastReferenceQueue.IsTerminate() && incastReferenceQueue.IsTerminate() && releaseQueue.IsTerminate() &&
-        cacheRespQueue.IsTerminate());
+    return (!executingTask && submissionQueue.IsTerminate() && completionQueue.IsTerminate() &&
+            outcastReferenceQueue.IsTerminate() && incastReferenceQueue.IsTerminate() && releaseQueue.IsTerminate() &&
+            cacheRespQueue.IsTerminate());
 }
 
 void PipeMachine::RunAtBegin() { nextCycles = INT_MAX; }
@@ -141,8 +140,8 @@ void PipeMachine::RunAtEnd()
         if (tileOp != nullptr) {
             tileOp->exeInfo.cycleInfo.executeEndCycle = GetSim()->GetCycles();
             info += tileOp->Dump(true);
-            info +=
-                " SUBGRAPH[" + std::to_string(tileOp->subgraphId) + "] TASK[" + std::to_string(executingTaskId) + "] ";
+            info += " SUBGRAPH[" + std::to_string(tileOp->subgraphId) + "] TASK[" + std::to_string(executingTaskId) +
+                    "] ";
             info += "(" + DecimalTo26(executingTaskId) + ")";
             sCycle = tileOp->exeInfo.cycleInfo.executeStartCycle;
             eCycle = tileOp->exeInfo.cycleInfo.executeEndCycle;
@@ -176,9 +175,8 @@ void PipeMachine::ReceivePacket()
     tile = packet.tileopTask.tile;
     tileOp = packet.tileopTask.tileOp;
     executingTaskId = packet.taskId;
-    SIMULATION_LOGI(
-        "[Cycle: %lu][PipeMachine: %zu][ReceivePacket] get task %lu magic %d", GetSim()->GetCycles(), machineId,
-        packet.taskId, packet.tileopTask.magic);
+    SIMULATION_LOGI("[Cycle: %lu][PipeMachine: %zu][ReceivePacket] get task %lu magic %d", GetSim()->GetCycles(),
+                    machineId, packet.taskId, packet.tileopTask.magic);
     SetMachineExecuting(true);
     LoggerRecordPipeWL(pipeId, CounterType::QUEUE_PUSH);
 }
@@ -258,9 +256,8 @@ void PipeMachine::ProcessTileOp()
 
 void PipeMachine::PushCompletion(int taskId, int curMagic)
 {
-    SIMULATION_LOGI(
-        "[Cycle: %lu][PipeMachine: %zu][PushCompletion] push task %d magic %d  in completion queue.",
-        GetSim()->GetCycles(), machineId, taskId, magic);
+    SIMULATION_LOGI("[Cycle: %lu][PipeMachine: %zu][PushCompletion] push task %d magic %d  in completion queue.",
+                    GetSim()->GetCycles(), machineId, taskId, magic);
     CompletedPacket packet;
     packet.taskId = taskId;
     packet.currentType = machineType;

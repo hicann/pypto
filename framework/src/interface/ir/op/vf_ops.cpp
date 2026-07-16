@@ -33,16 +33,14 @@ namespace ir {
 
 namespace {
 
-TypePtr DeduceVFUnknownType(
-    [[maybe_unused]] const std::vector<ExprPtr>& args,
-    [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
+TypePtr DeduceVFUnknownType([[maybe_unused]] const std::vector<ExprPtr>& args,
+                            [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
 {
     return GetUnknownType();
 }
 
-TypePtr DeduceVFScalarType(
-    [[maybe_unused]] const std::vector<ExprPtr>& args,
-    [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
+TypePtr DeduceVFScalarType([[maybe_unused]] const std::vector<ExprPtr>& args,
+                           [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
 {
     for (const auto& [key, value] : kwargs) {
         if (key == "dtype") {
@@ -52,16 +50,14 @@ TypePtr DeduceVFScalarType(
     return std::make_shared<ScalarType>(DataType::FP32);
 }
 
-TypePtr DeduceVFMaskType(
-    [[maybe_unused]] const std::vector<ExprPtr>& args,
-    [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
+TypePtr DeduceVFMaskType([[maybe_unused]] const std::vector<ExprPtr>& args,
+                         [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
 {
     return std::make_shared<ScalarType>(DataType::UINT16);
 }
 
-TypePtr DeduceVFFromDstArg(
-    [[maybe_unused]] const std::vector<ExprPtr>& args,
-    [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
+TypePtr DeduceVFFromDstArg([[maybe_unused]] const std::vector<ExprPtr>& args,
+                           [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
 {
     if (!args.empty()) {
         return args[0]->GetType();
@@ -247,7 +243,6 @@ REGISTER_OP("vf.div")
     .add_argument("mask", "Mask register")
     .set_attr<int>("mode")
     .f_deduce_type(DeduceVFFromDstArg);
-
 
 REGISTER_OP("vf.muls")
     .set_op_category("VFOp")
@@ -604,9 +599,8 @@ REGISTER_OP("vf.eq")
     .set_attr<DataType>("cmp_dtype")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) -> TypePtr {
-      return std::make_shared<ScalarType>(DataType::UINT16);
+        return std::make_shared<ScalarType>(DataType::UINT16);
     });
-
 
 REGISTER_OP("vf.ne")
     .set_op_category("VFOp")
@@ -617,9 +611,8 @@ REGISTER_OP("vf.ne")
     .set_attr<DataType>("cmp_dtype")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) -> TypePtr {
-      return std::make_shared<ScalarType>(DataType::UINT16);
+        return std::make_shared<ScalarType>(DataType::UINT16);
     });
-
 
 REGISTER_OP("vf.lt")
     .set_op_category("VFOp")
@@ -630,9 +623,8 @@ REGISTER_OP("vf.lt")
     .set_attr<DataType>("cmp_dtype")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) -> TypePtr {
-      return std::make_shared<ScalarType>(DataType::UINT16);
+        return std::make_shared<ScalarType>(DataType::UINT16);
     });
-
 
 REGISTER_OP("vf.gt")
     .set_op_category("VFOp")
@@ -643,9 +635,8 @@ REGISTER_OP("vf.gt")
     .set_attr<DataType>("cmp_dtype")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) -> TypePtr {
-      return std::make_shared<ScalarType>(DataType::UINT16);
+        return std::make_shared<ScalarType>(DataType::UINT16);
     });
-
 
 REGISTER_OP("vf.le")
     .set_op_category("VFOp")
@@ -656,9 +647,8 @@ REGISTER_OP("vf.le")
     .set_attr<DataType>("cmp_dtype")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) -> TypePtr {
-      return std::make_shared<ScalarType>(DataType::UINT16);
+        return std::make_shared<ScalarType>(DataType::UINT16);
     });
-
 
 REGISTER_OP("vf.ge")
     .set_op_category("VFOp")
@@ -669,7 +659,7 @@ REGISTER_OP("vf.ge")
     .set_attr<DataType>("cmp_dtype")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) -> TypePtr {
-      return std::make_shared<ScalarType>(DataType::UINT16);
+        return std::make_shared<ScalarType>(DataType::UINT16);
     });
 REGISTER_OP("vf.squeeze")
 
@@ -756,7 +746,6 @@ REGISTER_OP("vf.load_unalign")
     .add_argument("stride", "Optional post-update stride in bytes")
     .f_deduce_type(DeduceVFFromDstArg);
 
-
 REGISTER_OP("vf.scatter")
     .set_op_category("VFOp")
     .set_description("Scatter store by indices (vscatter)")
@@ -773,7 +762,6 @@ REGISTER_OP("vf.unsqueeze")
     .add_argument("mask", "Mask register to unsqueeze")
     .f_deduce_type(DeduceVFFromDstArg);
 
-
 REGISTER_OP("vf.truncate")
     .set_op_category("VFOp")
     .set_description("Truncate to integer (vtrc with ROUND_Z, alias of Round with round_mode=TRUNC)")
@@ -789,8 +777,6 @@ REGISTER_OP("vf.mask_gen_with_reg_tensor")
     .add_argument("src", "Source register (uint16/uint32)")
     .set_attr<int>("offset")
     .f_deduce_type(DeduceVFMaskType);
-
-
 
 REGISTER_OP("vf.get_mask_spr")
     .set_op_category("VFOp")
@@ -992,5 +978,5 @@ REGISTER_OP("vf.get_spr")
     .set_attr<int>("spr")
     .f_deduce_type(DeduceVFUnknownType);
 
-}  // namespace ir
-}  // namespace pypto
+} // namespace ir
+} // namespace pypto

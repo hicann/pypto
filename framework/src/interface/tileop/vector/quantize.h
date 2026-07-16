@@ -47,7 +47,8 @@ constexpr size_t TILE_ALIGNMENT_BYTES = 32;
  * @param tmp   临时缓冲区
  */
 template <typename T0, typename T1, typename T2, typename T3>
-TILEOP void TQuantInt8Sym(T0 dst, T1 src, T2 scale, T3 tmp) {
+TILEOP void TQuantInt8Sym(T0 dst, T1 src, T2 scale, T3 tmp)
+{
     constexpr size_t expectSize = 5;
 
     const auto dstLayout = dst.GetLayout();
@@ -89,14 +90,15 @@ TILEOP void TQuantInt8Sym(T0 dst, T1 src, T2 scale, T3 tmp) {
     constexpr auto srcTileH = TileOp::GetTensorTileShapeDim<T1, 3, expectSize>();
     constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T1, 4, expectSize>();
     constexpr int paddedCol_src = PTO_CEIL(srcTileW, static_cast<int>(TILE_ALIGNMENT_BYTES / sizeof(float)));
-    constexpr int paddedRow_src = PTO_CEIL(srcTileH, static_cast<int>(TILE_ALIGNMENT_BYTES / sizeof(float)));  // vbrcb processes in groups of 8 rows
+    constexpr int paddedRow_src = PTO_CEIL(
+        srcTileH, static_cast<int>(TILE_ALIGNMENT_BYTES / sizeof(float))); // vbrcb processes in groups of 8 rows
 
     constexpr auto scaleTileW = TileOp::GetTensorTileShapeDim<T2, 4, expectSize>();
     constexpr int paddedRow_scale = PTO_CEIL(scaleTileW, static_cast<int>(TILE_ALIGNMENT_BYTES / sizeof(float)));
 
     // 计算一个 tile 的大小（元素个数）
-    constexpr auto tileShapeSize =
-        TileOp::GetAnyAxisMergeResult<DIM_1ST, Std::tuple_size<typename T0::TileShape>::value, typename T0::TileShape>();
+    constexpr auto tileShapeSize = TileOp::GetAnyAxisMergeResult<
+        DIM_1ST, Std::tuple_size<typename T0::TileShape>::value, typename T0::TileShape>();
 
     // 数据类型
     using DstDtype = typename T0::Type;
@@ -105,15 +107,15 @@ TILEOP void TQuantInt8Sym(T0 dst, T1 src, T2 scale, T3 tmp) {
     using TmpDtype = int32_t;
 
     // 定义 Tile 类型
-    using DstTileDefine = pto::Tile<pto::TileType::Vec, DstDtype, dstTileH, paddedCol_dst,
-                                    pto::BLayout::RowMajor, -1, -1>;
-    using SrcTileDefine = pto::Tile<pto::TileType::Vec, SrcDtype, srcTileH, paddedCol_src,
-                                    pto::BLayout::RowMajor, -1, -1>;
-    using ParaTileDefine = pto::Tile<pto::TileType::Vec, ScaleDtype, paddedRow_scale, 1,
-                                    pto::BLayout::ColMajor, -1, -1>;
+    using DstTileDefine = pto::Tile<pto::TileType::Vec, DstDtype, dstTileH, paddedCol_dst, pto::BLayout::RowMajor, -1,
+                                    -1>;
+    using SrcTileDefine = pto::Tile<pto::TileType::Vec, SrcDtype, srcTileH, paddedCol_src, pto::BLayout::RowMajor, -1,
+                                    -1>;
+    using ParaTileDefine = pto::Tile<pto::TileType::Vec, ScaleDtype, paddedRow_scale, 1, pto::BLayout::ColMajor, -1,
+                                     -1>;
     // tmpbuf: aligned size with int32_t type
-    using TmpTileDefine = pto::Tile<pto::TileType::Vec, TmpDtype, paddedRow_src, paddedCol_src,
-                                    pto::BLayout::RowMajor, -1, -1>;
+    using TmpTileDefine = pto::Tile<pto::TileType::Vec, TmpDtype, paddedRow_src, paddedCol_src, pto::BLayout::RowMajor,
+                                    -1, -1>;
 
     // 遍历所有 Tile
     for (LoopVar n0Index = 0; n0Index < dstShape0; ++n0Index) {
@@ -155,7 +157,8 @@ TILEOP void TQuantInt8Sym(T0 dst, T1 src, T2 scale, T3 tmp) {
  * @param tmp    临时缓冲区
  */
 template <typename T0, typename T1, typename T2, typename T3, typename T4>
-TILEOP void TQuantInt8Asym(T0 dst, T1 src, T2 scale, T3 offset, T4 tmp) {
+TILEOP void TQuantInt8Asym(T0 dst, T1 src, T2 scale, T3 offset, T4 tmp)
+{
     constexpr size_t expectSize = 5;
 
     const auto dstLayout = dst.GetLayout();
@@ -202,7 +205,8 @@ TILEOP void TQuantInt8Asym(T0 dst, T1 src, T2 scale, T3 offset, T4 tmp) {
     constexpr auto srcTileH = TileOp::GetTensorTileShapeDim<T1, 3, expectSize>();
     constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T1, 4, expectSize>();
     constexpr int paddedCol_src = PTO_CEIL(srcTileW, static_cast<int>(TILE_ALIGNMENT_BYTES / sizeof(float)));
-    constexpr int paddedRow_src = PTO_CEIL(srcTileH, static_cast<int>(TILE_ALIGNMENT_BYTES / sizeof(float)));  // vbrcb processes in groups of 8 rows
+    constexpr int paddedRow_src = PTO_CEIL(
+        srcTileH, static_cast<int>(TILE_ALIGNMENT_BYTES / sizeof(float))); // vbrcb processes in groups of 8 rows
 
     constexpr auto scaleTileW = TileOp::GetTensorTileShapeDim<T2, 4, expectSize>();
     constexpr int paddedRow_scale = PTO_CEIL(scaleTileW, static_cast<int>(TILE_ALIGNMENT_BYTES / sizeof(float)));
@@ -210,8 +214,8 @@ TILEOP void TQuantInt8Asym(T0 dst, T1 src, T2 scale, T3 offset, T4 tmp) {
     constexpr int paddedRow_offset = PTO_CEIL(offsetTileW, static_cast<int>(TILE_ALIGNMENT_BYTES / sizeof(float)));
 
     // 计算一个 tile 的大小（元素个数）
-    constexpr auto tileShapeSize =
-        TileOp::GetAnyAxisMergeResult<DIM_1ST, Std::tuple_size<typename T0::TileShape>::value, typename T0::TileShape>();
+    constexpr auto tileShapeSize = TileOp::GetAnyAxisMergeResult<
+        DIM_1ST, Std::tuple_size<typename T0::TileShape>::value, typename T0::TileShape>();
 
     // 数据类型
     using DstDtype = typename T0::Type;
@@ -221,15 +225,13 @@ TILEOP void TQuantInt8Asym(T0 dst, T1 src, T2 scale, T3 offset, T4 tmp) {
     using TmpDtype = int32_t;
 
     // 定义 Tile 类型
-    using DstTileDefine = pto::Tile<pto::TileType::Vec, DstDtype, dstTileH, dstTileW,
-                                    pto::BLayout::RowMajor, -1, -1>;
-    using SrcTileDefine = pto::Tile<pto::TileType::Vec, SrcDtype, srcTileH, srcTileW,
-                                    pto::BLayout::RowMajor, -1, -1>;
-    using ParaTileDefine = pto::Tile<pto::TileType::Vec, ScaleDtype, paddedRow_scale, 1,
-                                    pto::BLayout::ColMajor, -1, -1>;
+    using DstTileDefine = pto::Tile<pto::TileType::Vec, DstDtype, dstTileH, dstTileW, pto::BLayout::RowMajor, -1, -1>;
+    using SrcTileDefine = pto::Tile<pto::TileType::Vec, SrcDtype, srcTileH, srcTileW, pto::BLayout::RowMajor, -1, -1>;
+    using ParaTileDefine = pto::Tile<pto::TileType::Vec, ScaleDtype, paddedRow_scale, 1, pto::BLayout::ColMajor, -1,
+                                     -1>;
     // tmpbuf: aligned size with int32_t type
-    using TmpTileDefine = pto::Tile<pto::TileType::Vec, TmpDtype, paddedRow_src, paddedCol_src,
-                                    pto::BLayout::RowMajor, -1, -1>;
+    using TmpTileDefine = pto::Tile<pto::TileType::Vec, TmpDtype, paddedRow_src, paddedCol_src, pto::BLayout::RowMajor,
+                                    -1, -1>;
 
     // 遍历所有 Tile
     for (LoopVar n0Index = 0; n0Index < dstShape0; ++n0Index) {
@@ -270,7 +272,8 @@ TILEOP void TQuantInt8Asym(T0 dst, T1 src, T2 scale, T3 offset, T4 tmp) {
  * @tparam quantType INT8_SYM 或 INT8_ASYM
  */
 template <pto::QuantType quantType, typename T0, typename T1, typename T2, typename T3>
-TILEOP void TQuant(T0 dst, T1 src, T2 scale, T3 tmp) {
+TILEOP void TQuant(T0 dst, T1 src, T2 scale, T3 tmp)
+{
     static_assert(quantType == pto::QuantType::INT8_SYM,
                   "TQuant with 4 parameters only supports INT8_SYM. "
                   "TQuant only supports INT8_SYM(4 parameters) and INT8_ASYM(5 parameters).");
@@ -278,7 +281,8 @@ TILEOP void TQuant(T0 dst, T1 src, T2 scale, T3 tmp) {
 }
 
 template <pto::QuantType quantType, typename T0, typename T1, typename T2, typename T3, typename T4>
-TILEOP void TQuant(T0 dst, T1 src, T2 scale, T3 offset, T4 tmp) {
+TILEOP void TQuant(T0 dst, T1 src, T2 scale, T3 offset, T4 tmp)
+{
     static_assert(quantType == pto::QuantType::INT8_ASYM,
                   "TQuant with 5 parameters only supports INT8_ASYM."
                   "TQuant only supports INT8_SYM(4 parameters) and INT8_ASYM(5 parameters).");
@@ -294,62 +298,33 @@ constexpr int kDequantScaleRoundingModeRoundUp = 0;
 constexpr int kDequantScaleRoundingModeRoundDown = 1;
 constexpr int kQuantMXPerformanceModeOn = 1;
 
-template <
-    int DEQUANT_SCALE_ROUNDING_MODE, typename DstTile, typename SrcTile, typename ExpTile, typename MaxTile,
-    typename ScalingTile>
-__aicore__ inline void QuantMXDispatch(
-    DstTile& dstTile, SrcTile& srcTile, ExpTile& expTile, MaxTile& maxTile, ScalingTile& scalingTile)
+template <int DEQUANT_SCALE_ROUNDING_MODE, typename DstTile, typename SrcTile, typename ExpTile, typename MaxTile,
+          typename ScalingTile>
+__aicore__ inline void QuantMXDispatch(DstTile& dstTile, SrcTile& srcTile, ExpTile& expTile, MaxTile& maxTile,
+                                       ScalingTile& scalingTile)
 {
     if constexpr (std::is_same_v<typename DstTile::DType, float4_e2m1x2_t>) {
         if constexpr (DEQUANT_SCALE_ROUNDING_MODE == kDequantScaleRoundingModeRoundUp) {
-            pto::TQUANT<
-                pto::QuantType::MXFP4_E2M1,
-                DstTile,
-                SrcTile,
-                ExpTile,
-                MaxTile,
-                ScalingTile,
-                pto::QuantScaleAlg::NV>(
-                dstTile, srcTile, &expTile, &maxTile, &scalingTile);
+            pto::TQUANT<pto::QuantType::MXFP4_E2M1, DstTile, SrcTile, ExpTile, MaxTile, ScalingTile,
+                        pto::QuantScaleAlg::NV>(dstTile, srcTile, &expTile, &maxTile, &scalingTile);
         } else {
-            pto::TQUANT<
-                pto::QuantType::MXFP4_E2M1,
-                DstTile,
-                SrcTile,
-                ExpTile,
-                MaxTile,
-                ScalingTile,
-                pto::QuantScaleAlg::OCP>(
-                dstTile, srcTile, &expTile, &maxTile, &scalingTile);
+            pto::TQUANT<pto::QuantType::MXFP4_E2M1, DstTile, SrcTile, ExpTile, MaxTile, ScalingTile,
+                        pto::QuantScaleAlg::OCP>(dstTile, srcTile, &expTile, &maxTile, &scalingTile);
         }
     } else {
         if constexpr (DEQUANT_SCALE_ROUNDING_MODE == kDequantScaleRoundingModeRoundUp) {
-            pto::TQUANT<
-                pto::QuantType::MXFP8,
-                DstTile,
-                SrcTile,
-                ExpTile,
-                MaxTile,
-                ScalingTile,
-                pto::QuantScaleAlg::NV>(
+            pto::TQUANT<pto::QuantType::MXFP8, DstTile, SrcTile, ExpTile, MaxTile, ScalingTile, pto::QuantScaleAlg::NV>(
                 dstTile, srcTile, &expTile, &maxTile, &scalingTile);
         } else {
-            pto::TQUANT<
-                pto::QuantType::MXFP8,
-                DstTile,
-                SrcTile,
-                ExpTile,
-                MaxTile,
-                ScalingTile,
-                pto::QuantScaleAlg::OCP>(
-                dstTile, srcTile, &expTile, &maxTile, &scalingTile);
+            pto::TQUANT<pto::QuantType::MXFP8, DstTile, SrcTile, ExpTile, MaxTile, ScalingTile,
+                        pto::QuantScaleAlg::OCP>(dstTile, srcTile, &expTile, &maxTile, &scalingTile);
         }
     }
 }
 
 template <typename T, typename Layout>
-__aicore__ inline size_t GetQuantMXPerformanceGroupedOffset(
-    const Layout& layout, LoopVar n0Index, LoopVar n1Index, LoopVar n2Index)
+__aicore__ inline size_t GetQuantMXPerformanceGroupedOffset(const Layout& layout, LoopVar n0Index, LoopVar n1Index,
+                                                            LoopVar n2Index)
 {
     (void)n0Index;
     constexpr auto srcRank = Std::tuple_size<typename T::Shape>::value;
@@ -364,9 +339,8 @@ __aicore__ inline size_t GetQuantMXPerformanceGroupedOffset(
     }
 }
 
-template <
-    int DEQUANT_SCALE_ROUNDING_MODE = kDequantScaleRoundingModeRoundDown, int AXIS = -1, typename T0, typename T1,
-    typename T2, typename T3, typename T4>
+template <int DEQUANT_SCALE_ROUNDING_MODE = kDequantScaleRoundingModeRoundDown, int AXIS = -1, typename T0, typename T1,
+          typename T2, typename T3, typename T4>
 TILEOP void TQuantMXGeneral(T0 dst, T1 exp, T2 maxScratch, T3 scalingScratch, T4 src)
 {
     (void)AXIS;
@@ -390,8 +364,8 @@ TILEOP void TQuantMXGeneral(T0 dst, T1 exp, T2 maxScratch, T3 scalingScratch, T4
     auto maxTile = PtoTile<T2>(maxScratch);
     auto scalingTile = PtoTile<T3>(scalingScratch);
     auto srcTile = PtoTile<T4>(src);
-    ExpByteTile expByteTile(
-        expLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>(), expLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>());
+    ExpByteTile expByteTile(expLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>(),
+                            expLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>());
 
     (void)srcLayout;
     for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
@@ -400,35 +374,32 @@ TILEOP void TQuantMXGeneral(T0 dst, T1 exp, T2 maxScratch, T3 scalingScratch, T4
                 auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
                 auto expTileOffset = n0Index * expStride0 + n1Index * expStride1 + n2Index * expStride2;
                 auto maxTileOffset = GetQuantMXPerformanceGroupedOffset<T4>(maxLayout, n0Index, n1Index, n2Index);
-                auto scalingTileOffset =
-                    GetQuantMXPerformanceGroupedOffset<T4>(scalingLayout, n0Index, n1Index, n2Index);
-                auto srcTileAddr =
-                    (uint64_t)(src.GetAddr() + GenTileOffset(src, tileOffsets) * sizeof(typename T4::Type));
+                auto scalingTileOffset = GetQuantMXPerformanceGroupedOffset<T4>(scalingLayout, n0Index, n1Index,
+                                                                                n2Index);
+                auto srcTileAddr = (uint64_t)(src.GetAddr() +
+                                              GenTileOffset(src, tileOffsets) * sizeof(typename T4::Type));
                 dstTile.Assign(dst, tileOffsets);
                 maxTile.Assign((uint64_t)(maxScratch.GetAddr() + maxTileOffset * sizeof(typename T2::Type)));
                 scalingTile.Assign(
                     (uint64_t)(scalingScratch.GetAddr() + scalingTileOffset * sizeof(typename T3::Type)));
                 srcTile.Assign(srcTileAddr);
                 pto::TASSIGN(expByteTile, (uint64_t)(exp.GetAddr() + expTileOffset * sizeof(typename T1::Type)));
-                if constexpr (
-                    DEQUANT_SCALE_ROUNDING_MODE == kDequantScaleRoundingModeRoundDown ||
-                    DEQUANT_SCALE_ROUNDING_MODE == kDequantScaleRoundingModeRoundUp) {
-                    QuantMXDispatch<DEQUANT_SCALE_ROUNDING_MODE>(
-                        dstTile.Data(), srcTile.Data(), expByteTile, maxTile.Data(), scalingTile.Data());
+                if constexpr (DEQUANT_SCALE_ROUNDING_MODE == kDequantScaleRoundingModeRoundDown ||
+                              DEQUANT_SCALE_ROUNDING_MODE == kDequantScaleRoundingModeRoundUp) {
+                    QuantMXDispatch<DEQUANT_SCALE_ROUNDING_MODE>(dstTile.Data(), srcTile.Data(), expByteTile,
+                                                                 maxTile.Data(), scalingTile.Data());
                 } else {
-                    static_assert(
-                        DEQUANT_SCALE_ROUNDING_MODE == kDequantScaleRoundingModeRoundDown ||
-                            DEQUANT_SCALE_ROUNDING_MODE == kDequantScaleRoundingModeRoundUp,
-                        "TQuantMX only supports ROUND_DOWN (OCP) and ROUND_UP (NV) modes currently.");
+                    static_assert(DEQUANT_SCALE_ROUNDING_MODE == kDequantScaleRoundingModeRoundDown ||
+                                      DEQUANT_SCALE_ROUNDING_MODE == kDequantScaleRoundingModeRoundUp,
+                                  "TQuantMX only supports ROUND_DOWN (OCP) and ROUND_UP (NV) modes currently.");
                 }
             }
         }
     }
 }
 
-template <
-    int DEQUANT_SCALE_ROUNDING_MODE = kDequantScaleRoundingModeRoundDown, int AXIS = -1, typename T0, typename T1,
-    typename T2, typename T3, typename T4>
+template <int DEQUANT_SCALE_ROUNDING_MODE = kDequantScaleRoundingModeRoundDown, int AXIS = -1, typename T0, typename T1,
+          typename T2, typename T3, typename T4>
 TILEOP void TQuantMXPerformance(T0 dst, T1 exp, T2 maxScratch, T3 scalingScratch, T4 src)
 {
     (void)AXIS;
@@ -449,20 +420,18 @@ TILEOP void TQuantMXPerformance(T0 dst, T1 exp, T2 maxScratch, T3 scalingScratch
     constexpr auto srcTileH = TileOp::GetTensorTileShapeDim<T4, DIM_4TH, MAX_DIMS>();
     constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T4, DIM_5TH, MAX_DIMS>();
     constexpr auto expFlatTileW = srcTileH * ((srcTileW + kMxQuantGroupSize - 1) / kMxQuantGroupSize);
-    constexpr auto expFlatTileWAligned =
-        ((expFlatTileW + kExpTileAlignElems - 1) / kExpTileAlignElems) * kExpTileAlignElems;
+    constexpr auto expFlatTileWAligned = ((expFlatTileW + kExpTileAlignElems - 1) / kExpTileAlignElems) *
+                                         kExpTileAlignElems;
     constexpr auto maxTileH = TileOp::GetTensorTileShapeDim<T2, DIM_4TH, MAX_DIMS>();
     constexpr auto maxTileW = TileOp::GetTensorTileShapeDim<T2, DIM_5TH, MAX_DIMS>();
-    using ExpByteTile =
-        pto::Tile<pto::TileType::Vec, uint8_t, 1, expFlatTileWAligned, pto::BLayout::RowMajor, -1, -1>;
+    using ExpByteTile = pto::Tile<pto::TileType::Vec, uint8_t, 1, expFlatTileWAligned, pto::BLayout::RowMajor, -1, -1>;
     using MaxDtype = std::conditional_t<std::is_same_v<typename T2::Type, bool>, uint8_t, typename T2::Type>;
     using MaxTile = pto::Tile<pto::TileType::Vec, MaxDtype, maxTileH, maxTileW, pto::BLayout::RowMajor, -1, -1>;
     ExpByteTile expByteTile(
-        1,
-        srcLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>() *
-            ((srcLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>() + kMxQuantGroupSize - 1) / kMxQuantGroupSize));
-    MaxTile maxTile(
-        maxLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>(), maxLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>());
+        1, srcLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>() *
+               ((srcLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>() + kMxQuantGroupSize - 1) / kMxQuantGroupSize));
+    MaxTile maxTile(maxLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>(),
+                    maxLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>());
 
     for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
         for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
@@ -470,35 +439,32 @@ TILEOP void TQuantMXPerformance(T0 dst, T1 exp, T2 maxScratch, T3 scalingScratch
                 auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
                 auto expTileOffset = GetQuantMXPerformanceGroupedOffset<T4>(expLayout, n0Index, n1Index, n2Index);
                 auto maxTileOffset = GetQuantMXPerformanceGroupedOffset<T4>(maxLayout, n0Index, n1Index, n2Index);
-                auto scalingTileOffset =
-                    GetQuantMXPerformanceGroupedOffset<T4>(scalingLayout, n0Index, n1Index, n2Index);
-                auto srcTileAddr =
-                    (uint64_t)(src.GetAddr() + GenTileOffset(src, tileOffsets) * sizeof(typename T4::Type));
+                auto scalingTileOffset = GetQuantMXPerformanceGroupedOffset<T4>(scalingLayout, n0Index, n1Index,
+                                                                                n2Index);
+                auto srcTileAddr = (uint64_t)(src.GetAddr() +
+                                              GenTileOffset(src, tileOffsets) * sizeof(typename T4::Type));
                 dstTile.Assign(dst, tileOffsets);
                 scalingTile.Assign(
                     (uint64_t)(scalingScratch.GetAddr() + scalingTileOffset * sizeof(typename T3::Type)));
                 srcTile.Assign(srcTileAddr);
                 pto::TASSIGN(expByteTile, (uint64_t)(exp.GetAddr() + expTileOffset * sizeof(typename T1::Type)));
                 pto::TASSIGN(maxTile, (uint64_t)(maxScratch.GetAddr() + maxTileOffset * sizeof(typename T2::Type)));
-                if constexpr (
-                    DEQUANT_SCALE_ROUNDING_MODE == kDequantScaleRoundingModeRoundDown ||
-                    DEQUANT_SCALE_ROUNDING_MODE == kDequantScaleRoundingModeRoundUp) {
-                    QuantMXDispatch<DEQUANT_SCALE_ROUNDING_MODE>(
-                        dstTile.Data(), srcTile.Data(), expByteTile, maxTile, scalingTile.Data());
+                if constexpr (DEQUANT_SCALE_ROUNDING_MODE == kDequantScaleRoundingModeRoundDown ||
+                              DEQUANT_SCALE_ROUNDING_MODE == kDequantScaleRoundingModeRoundUp) {
+                    QuantMXDispatch<DEQUANT_SCALE_ROUNDING_MODE>(dstTile.Data(), srcTile.Data(), expByteTile, maxTile,
+                                                                 scalingTile.Data());
                 } else {
-                    static_assert(
-                        DEQUANT_SCALE_ROUNDING_MODE == kDequantScaleRoundingModeRoundDown ||
-                            DEQUANT_SCALE_ROUNDING_MODE == kDequantScaleRoundingModeRoundUp,
-                        "TQuantMX only supports ROUND_DOWN (OCP) and ROUND_UP (NV) modes currently.");
+                    static_assert(DEQUANT_SCALE_ROUNDING_MODE == kDequantScaleRoundingModeRoundDown ||
+                                      DEQUANT_SCALE_ROUNDING_MODE == kDequantScaleRoundingModeRoundUp,
+                                  "TQuantMX only supports ROUND_DOWN (OCP) and ROUND_UP (NV) modes currently.");
                 }
             }
         }
     }
 }
 
-template <
-    int DEQUANT_SCALE_ROUNDING_MODE = kDequantScaleRoundingModeRoundDown, int AXIS = -1, int PERFORMANCE_MODE = 0,
-    typename T0, typename T1, typename T2, typename T3, typename T4>
+template <int DEQUANT_SCALE_ROUNDING_MODE = kDequantScaleRoundingModeRoundDown, int AXIS = -1, int PERFORMANCE_MODE = 0,
+          typename T0, typename T1, typename T2, typename T3, typename T4>
 TILEOP void TQuantMX(T0 dst, T1 exp, T2 maxScratch, T3 scalingScratch, T4 src)
 {
     if constexpr (PERFORMANCE_MODE == kQuantMXPerformanceModeOn) {

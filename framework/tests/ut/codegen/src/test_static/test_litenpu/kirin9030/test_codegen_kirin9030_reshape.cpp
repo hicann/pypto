@@ -19,13 +19,10 @@ using namespace npu::tile_fwk;
 
 class TestCodeGenKirin9030Reshape : public CodegenTestLiteNPU {
 public:
-    TestCodeGenKirin9030Reshape() : CodegenTestLiteNPU("Kirin9030"){};
+    TestCodeGenKirin9030Reshape() : CodegenTestLiteNPU("Kirin9030") {};
 };
 
-TEST_F(TestCodeGenKirin9030Reshape, test_reshape_fp16_001)
-{
-    TestCodeGenReshape::Instance().test_reshape_fp16_001();
-}
+TEST_F(TestCodeGenKirin9030Reshape, test_reshape_fp16_001) { TestCodeGenReshape::Instance().test_reshape_fp16_001(); }
 
 TEST_F(TestCodeGenKirin9030Reshape, DISABLED_test_reshape_fp16_002)
 {

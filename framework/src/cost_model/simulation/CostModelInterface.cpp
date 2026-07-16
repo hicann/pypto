@@ -93,15 +93,15 @@ int CostModelInterface::BuildCostModel(std::vector<std::string>& inputConfigs)
         sim->config.aicpuMachineNumber = 1;
         sim->config.cubeMachineNumberPerAICPU = 1;
         sim->config.vecMachineNumberPerAICPU = 1;
-        sim->config.coreMachineNumberPerAICPU =
-            sim->config.cubeMachineNumberPerAICPU + sim->config.vecMachineNumberPerAICPU;
+        sim->config.coreMachineNumberPerAICPU = sim->config.cubeMachineNumberPerAICPU +
+                                                sim->config.vecMachineNumberPerAICPU;
         sim->BuildSystem();
     }
     return 0;
 }
 
-void CostModelInterface::GetInput(
-    std::vector<npu::tile_fwk::Function*>& inputFuncs, bool topoFromRootFunc, std::string& startFuncName)
+void CostModelInterface::GetInput(std::vector<npu::tile_fwk::Function*>& inputFuncs, bool topoFromRootFunc,
+                                  std::string& startFuncName)
 {
     if (IsNeedInput(sim->mode)) {
         if (!startFuncName.empty()) {
@@ -123,8 +123,8 @@ void CostModelInterface::GetInput(
     }
 }
 
-void CostModelInterface::Submit(
-    std::vector<npu::tile_fwk::Function*>& inputFuncs, bool topoFromRootFunc, std::string startFuncName)
+void CostModelInterface::Submit(std::vector<npu::tile_fwk::Function*>& inputFuncs, bool topoFromRootFunc,
+                                std::string startFuncName)
 {
     GetInput(inputFuncs, topoFromRootFunc, startFuncName);
 }
@@ -165,8 +165,8 @@ void CostModelInterface::RunPerformance()
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::seconds>(end - start);
     if (sim->IsDeadlock()) {
-        SIMULATION_LOGE(CostModel::ForwardSimErrorScene::DEAD_LOCK,
-            "Simulation is deadlock at cycle %lu !!!!!!!!!", sim->globalCycles);
+        SIMULATION_LOGE(CostModel::ForwardSimErrorScene::DEAD_LOCK, "Simulation is deadlock at cycle %lu !!!!!!!!!",
+                        sim->globalCycles);
     }
     SIMULATION_LOGW("CostModel Simulation Runtime: %ld(s)", duration.count());
 }

@@ -36,15 +36,15 @@ public:
 
 TEST_F(FunctionMixParallelTest, GroupedMixSplitCallOpsExecuteTwoCalleeFrames)
 {
-    auto rootFunc =
-        std::make_shared<Function>(Program::GetInstance(), "mix_parallel_root", "mix_parallel_root", nullptr);
+    auto rootFunc = std::make_shared<Function>(Program::GetInstance(), "mix_parallel_root", "mix_parallel_root",
+                                               nullptr);
     rootFunc->SetFunctionType(FunctionType::STATIC);
     rootFunc->SetGraphType(GraphType::BLOCK_GRAPH);
 
-    auto calleeFunc1 = std::make_shared<Function>(
-        Program::GetInstance(), "mix_parallel_callee1", "mix_parallel_callee1", rootFunc.get());
-    auto calleeFunc2 = std::make_shared<Function>(
-        Program::GetInstance(), "mix_parallel_callee2", "mix_parallel_callee2", rootFunc.get());
+    auto calleeFunc1 = std::make_shared<Function>(Program::GetInstance(), "mix_parallel_callee1",
+                                                  "mix_parallel_callee1", rootFunc.get());
+    auto calleeFunc2 = std::make_shared<Function>(Program::GetInstance(), "mix_parallel_callee2",
+                                                  "mix_parallel_callee2", rootFunc.get());
     calleeFunc1->SetFunctionType(FunctionType::STATIC);
     calleeFunc2->SetFunctionType(FunctionType::STATIC);
     calleeFunc1->SetGraphType(GraphType::BLOCK_GRAPH);
@@ -81,10 +81,10 @@ TEST_F(FunctionMixParallelTest, GroupedMixSplitCallOpsExecuteTwoCalleeFrames)
 
     std::map<int, SymbolicScalar> emptyOutExpr;
     std::vector<std::vector<SymbolicScalar>> emptyArgList;
-    auto callAttr1 =
-        std::dynamic_pointer_cast<CallOpAttribute>(calleeFunc1->CreateCallOpAttribute(emptyArgList, emptyOutExpr));
-    auto callAttr2 =
-        std::dynamic_pointer_cast<CallOpAttribute>(calleeFunc2->CreateCallOpAttribute(emptyArgList, emptyOutExpr));
+    auto callAttr1 = std::dynamic_pointer_cast<CallOpAttribute>(
+        calleeFunc1->CreateCallOpAttribute(emptyArgList, emptyOutExpr));
+    auto callAttr2 = std::dynamic_pointer_cast<CallOpAttribute>(
+        calleeFunc2->CreateCallOpAttribute(emptyArgList, emptyOutExpr));
     ASSERT_NE(callAttr1, nullptr);
     ASSERT_NE(callAttr2, nullptr);
     callAttr1->SetCalleeHash(calleeHash1);
@@ -108,8 +108,8 @@ TEST_F(FunctionMixParallelTest, GroupedMixSplitCallOpsExecuteTwoCalleeFrames)
         std::vector<std::shared_ptr<LogicalTensorData>>{inView1, inView2},
         std::vector<std::shared_ptr<LogicalTensorData>>{outView1, outView2});
 
-    auto rootCallAttr =
-        std::dynamic_pointer_cast<CallOpAttribute>(calleeFunc1->CreateCallOpAttribute(emptyArgList, emptyOutExpr));
+    auto rootCallAttr = std::dynamic_pointer_cast<CallOpAttribute>(
+        calleeFunc1->CreateCallOpAttribute(emptyArgList, emptyOutExpr));
     ASSERT_NE(rootCallAttr, nullptr);
     FunctionFrame rootFrame(rootFunc.get(), nullptr, rootCallAttr, inoutDataPair, 0);
 
@@ -139,8 +139,8 @@ TEST_F(FunctionMixParallelTest, GroupedMixSplitCallOpsExecuteTwoCalleeFrames)
 
 TEST_F(FunctionMixParallelTest, MixGlobalTensorDictThreadSyncWithCallOps)
 {
-    auto rootFunc = std::make_shared<Function>(
-        Program::GetInstance(), "mix_global_tensor_sync_root", "mix_global_tensor_sync_root", nullptr);
+    auto rootFunc = std::make_shared<Function>(Program::GetInstance(), "mix_global_tensor_sync_root",
+                                               "mix_global_tensor_sync_root", nullptr);
     rootFunc->SetFunctionType(FunctionType::STATIC);
     rootFunc->SetGraphType(GraphType::BLOCK_GRAPH);
 
@@ -159,10 +159,10 @@ TEST_F(FunctionMixParallelTest, MixGlobalTensorDictThreadSyncWithCallOps)
     };
     auto dynShape = makeDynShape(shape);
 
-    auto calleeFunc1 = std::make_shared<Function>(
-        Program::GetInstance(), "mix_global_tensor_sync_callee1", "mix_global_tensor_sync_callee1", rootFunc.get());
-    auto calleeFunc2 = std::make_shared<Function>(
-        Program::GetInstance(), "mix_global_tensor_sync_callee2", "mix_global_tensor_sync_callee2", rootFunc.get());
+    auto calleeFunc1 = std::make_shared<Function>(Program::GetInstance(), "mix_global_tensor_sync_callee1",
+                                                  "mix_global_tensor_sync_callee1", rootFunc.get());
+    auto calleeFunc2 = std::make_shared<Function>(Program::GetInstance(), "mix_global_tensor_sync_callee2",
+                                                  "mix_global_tensor_sync_callee2", rootFunc.get());
     calleeFunc1->SetFunctionType(FunctionType::STATIC);
     calleeFunc2->SetFunctionType(FunctionType::STATIC);
     calleeFunc1->SetGraphType(GraphType::BLOCK_GRAPH);
@@ -237,10 +237,10 @@ TEST_F(FunctionMixParallelTest, MixGlobalTensorDictThreadSyncWithCallOps)
 
     std::map<int, SymbolicScalar> emptyOutExpr;
     std::vector<std::vector<SymbolicScalar>> emptyArgList;
-    auto callAttr1 =
-        std::dynamic_pointer_cast<CallOpAttribute>(calleeFunc1->CreateCallOpAttribute(emptyArgList, emptyOutExpr));
-    auto callAttr2 =
-        std::dynamic_pointer_cast<CallOpAttribute>(calleeFunc2->CreateCallOpAttribute(emptyArgList, emptyOutExpr));
+    auto callAttr1 = std::dynamic_pointer_cast<CallOpAttribute>(
+        calleeFunc1->CreateCallOpAttribute(emptyArgList, emptyOutExpr));
+    auto callAttr2 = std::dynamic_pointer_cast<CallOpAttribute>(
+        calleeFunc2->CreateCallOpAttribute(emptyArgList, emptyOutExpr));
     ASSERT_NE(callAttr1, nullptr);
     ASSERT_NE(callAttr2, nullptr);
     callAttr1->SetCalleeHash(calleeHash1);
@@ -261,8 +261,8 @@ TEST_F(FunctionMixParallelTest, MixGlobalTensorDictThreadSyncWithCallOps)
     auto inoutDataPair = std::make_shared<FunctionIODataPair>(
         std::vector<std::shared_ptr<LogicalTensorData>>{inView1, inView2},
         std::vector<std::shared_ptr<LogicalTensorData>>{outView1, outView2});
-    auto rootCallAttr =
-        std::dynamic_pointer_cast<CallOpAttribute>(calleeFunc1->CreateCallOpAttribute(emptyArgList, emptyOutExpr));
+    auto rootCallAttr = std::dynamic_pointer_cast<CallOpAttribute>(
+        calleeFunc1->CreateCallOpAttribute(emptyArgList, emptyOutExpr));
     ASSERT_NE(rootCallAttr, nullptr);
     FunctionFrame rootFrame(rootFunc.get(), nullptr, rootCallAttr, inoutDataPair, 0);
     std::vector<std::shared_ptr<FunctionFrame>> capturedFrames;
@@ -293,8 +293,8 @@ TEST_F(FunctionMixParallelTest, MixGlobalTensorDictThreadSyncWithCallOps)
 
 TEST_F(FunctionMixParallelTest, BuildCallInOutDataPairWaitsUntilMixGlobalTensorReady)
 {
-    auto rootFunc =
-        std::make_shared<Function>(Program::GetInstance(), "wait_mix_global_root", "wait_mix_global_root", nullptr);
+    auto rootFunc = std::make_shared<Function>(Program::GetInstance(), "wait_mix_global_root", "wait_mix_global_root",
+                                               nullptr);
     rootFunc->SetFunctionType(FunctionType::STATIC);
     rootFunc->SetGraphType(GraphType::BLOCK_GRAPH);
 
@@ -305,8 +305,8 @@ TEST_F(FunctionMixParallelTest, BuildCallInOutDataPairWaitsUntilMixGlobalTensorR
 
     std::map<int, SymbolicScalar> emptyOutExpr;
     std::vector<std::vector<SymbolicScalar>> emptyArgList;
-    auto callAttr =
-        std::dynamic_pointer_cast<CallOpAttribute>(rootFunc->CreateCallOpAttribute(emptyArgList, emptyOutExpr));
+    auto callAttr = std::dynamic_pointer_cast<CallOpAttribute>(
+        rootFunc->CreateCallOpAttribute(emptyArgList, emptyOutExpr));
     ASSERT_NE(callAttr, nullptr);
     callAttr->wrapId = 888;
     callOp.SetOpAttribute(callAttr);

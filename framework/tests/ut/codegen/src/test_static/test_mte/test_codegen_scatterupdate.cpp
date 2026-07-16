@@ -28,11 +28,10 @@ namespace npu::tile_fwk {
 class TestCodegenScatterUpdate : public CodegenTestBase {
 public:
     TestCodegenScatterUpdate()
-        : CodegenTestBase(
-              {.compileStage = CS_EXECUTE_GRAPH,
-               .setTileTensor = true,
-               .tileTensorValue = false,
-               .resetTileTensorOnTearDown = true})
+        : CodegenTestBase({.compileStage = CS_EXECUTE_GRAPH,
+                           .setTileTensor = true,
+                           .tileTensorValue = false,
+                           .resetTileTensorOnTearDown = true})
     {}
 };
 
@@ -42,18 +41,18 @@ void TestScatterUpdate(std::vector<int64_t> tileShape)
     TileShape::Current().SetVecTile(tileShape);
 
     PassManager& passManager = PassManager::Instance();
-    passManager.RegisterStrategy(
-        "GenerateMoveOpPassTestStrategy", {
-                                              {"RemoveRedundantReshape", PassName::REMOVE_REDUNDANT_RESHAPE},
-                                              {"ExpandFunction", PassName::EXPAND_FUNCTION},
-                                              {"DuplicateOp", PassName::DUPLICATE_OP},
-                                              {"MergeViewAssemble", PassName::MERGE_VIEW_ASSEMBLE},
-                                              {"AssignMemoryType", PassName::ASSIGN_MEMORY_TYPE},
-                                              {"SplitLargeFanoutTensor", PassName::SPLIT_LARGE_FANOUT_TENSOR},
-                                              {"SplitReshape", PassName::SPLIT_RESHAPE},
-                                              {"RemoveRedundantOp", PassName::REMOVE_REDUNDANT_OP},
-                                              {"GenerateMoveOp", PassName::GENERATE_MOVE_OP},
-                                          });
+    passManager.RegisterStrategy("GenerateMoveOpPassTestStrategy",
+                                 {
+                                     {"RemoveRedundantReshape", PassName::REMOVE_REDUNDANT_RESHAPE},
+                                     {"ExpandFunction", PassName::EXPAND_FUNCTION},
+                                     {"DuplicateOp", PassName::DUPLICATE_OP},
+                                     {"MergeViewAssemble", PassName::MERGE_VIEW_ASSEMBLE},
+                                     {"AssignMemoryType", PassName::ASSIGN_MEMORY_TYPE},
+                                     {"SplitLargeFanoutTensor", PassName::SPLIT_LARGE_FANOUT_TENSOR},
+                                     {"SplitReshape", PassName::SPLIT_RESHAPE},
+                                     {"RemoveRedundantOp", PassName::REMOVE_REDUNDANT_OP},
+                                     {"GenerateMoveOp", PassName::GENERATE_MOVE_OP},
+                                 });
 
     int h = 128, minusTwo = -2;
     Tensor output(DT_INT32, {h, h}, "output");
@@ -107,7 +106,7 @@ TEST_F(TestCodegenScatterUpdate, TestScatterUpdate)
 
     std::vector<int64_t> shape0 = {S2, kvLoraRank + qkRopeHeadDim}; // [16, 16]
     std::vector<int64_t> shape1 = {1, S};
-    std::vector<int64_t> shape2 = {S, kvLoraRank + qkRopeHeadDim};  // [1, 16]
+    std::vector<int64_t> shape2 = {S, kvLoraRank + qkRopeHeadDim}; // [1, 16]
 
     TileShape::Current().SetVecTile(16, 16);
 

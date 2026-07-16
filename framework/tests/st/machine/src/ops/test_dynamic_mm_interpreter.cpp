@@ -69,8 +69,8 @@ static void NonSplitFunc(const Tensor& tensor_a, const Tensor& tensor_b, Tensor&
 }
 
 template <typename outputDtype, bool transA, bool transB, bool isCNz>
-static void MSplitFunc(
-    const std::vector<int64_t>& viewShape, const Tensor& tensor_a, const Tensor& tensor_b, Tensor& tensor_c)
+static void MSplitFunc(const std::vector<int64_t>& viewShape, const Tensor& tensor_a, const Tensor& tensor_b,
+                       Tensor& tensor_c)
 {
     const auto& aShape = tensor_a.GetShape();
     std::vector<SymbolicScalar> aValidShape = {aShape[0], aShape[1]};
@@ -79,19 +79,18 @@ static void MSplitFunc(
 
     FUNCTION("testMSplit", {tensor_a, tensor_b}, {tensor_c})
     {
-        LOOP(
-            "mLoop", FunctionType::DYNAMIC_LOOP, mIdx,
-            LoopRange(0, CeilDivSymbolicScalar(transA ? aShape[1] : aShape[0], viewShape[0]), 1))
+        LOOP("mLoop", FunctionType::DYNAMIC_LOOP, mIdx,
+             LoopRange(0, CeilDivSymbolicScalar(transA ? aShape[1] : aShape[0], viewShape[0]), 1))
         {
             Tensor dyn_a;
             if (transA) {
-                dyn_a = View(
-                    tensor_a, {aShape[0], viewShape[0]},
-                    {aShape[0], std::min(aShape[1] - viewShape[0] * mIdx, viewShape[0])}, {0, mIdx * viewShape[0]});
+                dyn_a = View(tensor_a, {aShape[0], viewShape[0]},
+                             {aShape[0], std::min(aShape[1] - viewShape[0] * mIdx, viewShape[0])},
+                             {0, mIdx * viewShape[0]});
             } else {
-                dyn_a = View(
-                    tensor_a, {viewShape[0], aShape[1]},
-                    {std::min(aShape[0] - viewShape[0] * mIdx, viewShape[0]), aShape[1]}, {mIdx * viewShape[0], 0});
+                dyn_a = View(tensor_a, {viewShape[0], aShape[1]},
+                             {std::min(aShape[0] - viewShape[0] * mIdx, viewShape[0]), aShape[1]},
+                             {mIdx * viewShape[0], 0});
             }
             Tensor dyn_b = View(tensor_b, bShape, bValidShape, {0, 0});
             Tensor res = Matrix::Matmul(GetAstDtype<outputDtype>(), dyn_a, dyn_b, transA, transB, isCNz);
@@ -101,8 +100,8 @@ static void MSplitFunc(
 }
 
 template <typename outputDtype, bool transA, bool transB, bool isCNz>
-static void NSplitFunc(
-    const std::vector<int64_t>& viewShape, const Tensor& tensor_a, const Tensor& tensor_b, Tensor& tensor_c)
+static void NSplitFunc(const std::vector<int64_t>& viewShape, const Tensor& tensor_a, const Tensor& tensor_b,
+                       Tensor& tensor_c)
 {
     const auto& aShape = tensor_a.GetShape();
     std::vector<SymbolicScalar> aValidShape = {aShape[0], aShape[1]};
@@ -111,20 +110,19 @@ static void NSplitFunc(
 
     FUNCTION("testNSplit", {tensor_a, tensor_b}, {tensor_c})
     {
-        LOOP(
-            "nLoop", FunctionType::DYNAMIC_LOOP, nIdx,
-            LoopRange(0, CeilDivSymbolicScalar(transB ? bShape[0] : bShape[1], viewShape[1]), 1))
+        LOOP("nLoop", FunctionType::DYNAMIC_LOOP, nIdx,
+             LoopRange(0, CeilDivSymbolicScalar(transB ? bShape[0] : bShape[1], viewShape[1]), 1))
         {
             Tensor dyn_a = View(tensor_a, aShape, aValidShape, {0, 0});
             Tensor dyn_b;
             if (!transB) {
-                dyn_b = View(
-                    tensor_b, {bShape[0], viewShape[1]},
-                    {bShape[0], std::min(bShape[1] - viewShape[1] * nIdx, viewShape[1])}, {0, nIdx * viewShape[1]});
+                dyn_b = View(tensor_b, {bShape[0], viewShape[1]},
+                             {bShape[0], std::min(bShape[1] - viewShape[1] * nIdx, viewShape[1])},
+                             {0, nIdx * viewShape[1]});
             } else {
-                dyn_b = View(
-                    tensor_b, {viewShape[1], bShape[1]},
-                    {std::min(bShape[0] - viewShape[1] * nIdx, viewShape[1]), bShape[1]}, {nIdx * viewShape[1], 0});
+                dyn_b = View(tensor_b, {viewShape[1], bShape[1]},
+                             {std::min(bShape[0] - viewShape[1] * nIdx, viewShape[1]), bShape[1]},
+                             {nIdx * viewShape[1], 0});
             }
             Tensor res = Matrix::Matmul(GetAstDtype<outputDtype>(), dyn_a, dyn_b, transA, transB, isCNz);
             Assemble(res, {0, nIdx * viewShape[1]}, tensor_c);
@@ -133,8 +131,8 @@ static void NSplitFunc(
 }
 
 template <typename outputDtype, bool transA, bool transB, bool isCNz>
-static void MNSplitFunc(
-    const std::vector<int64_t>& viewShape, const Tensor& tensor_a, const Tensor& tensor_b, Tensor& tensor_c)
+static void MNSplitFunc(const std::vector<int64_t>& viewShape, const Tensor& tensor_a, const Tensor& tensor_b,
+                        Tensor& tensor_c)
 {
     const auto& aShape = tensor_a.GetShape();
     std::vector<SymbolicScalar> aValidShape = {aShape[0], aShape[1]};
@@ -143,33 +141,31 @@ static void MNSplitFunc(
 
     FUNCTION("testNSplit", {tensor_a, tensor_b}, {tensor_c})
     {
-        LOOP(
-            "mLoop", FunctionType::DYNAMIC_LOOP, mIdx,
-            LoopRange(0, CeilDivSymbolicScalar(transA ? aShape[1] : aShape[0], viewShape[0]), 1))
+        LOOP("mLoop", FunctionType::DYNAMIC_LOOP, mIdx,
+             LoopRange(0, CeilDivSymbolicScalar(transA ? aShape[1] : aShape[0], viewShape[0]), 1))
         {
-            LOOP(
-                "nLoop", FunctionType::DYNAMIC_LOOP, nIdx,
-                LoopRange(0, CeilDivSymbolicScalar(transB ? bShape[0] : bShape[1], viewShape[1]), 1))
+            LOOP("nLoop", FunctionType::DYNAMIC_LOOP, nIdx,
+                 LoopRange(0, CeilDivSymbolicScalar(transB ? bShape[0] : bShape[1], viewShape[1]), 1))
             {
                 Tensor dyn_a;
                 if (transA) {
-                    dyn_a = View(
-                        tensor_a, {aShape[0], viewShape[0]},
-                        {aShape[0], std::min(aShape[1] - viewShape[0] * mIdx, viewShape[0])}, {0, mIdx * viewShape[0]});
+                    dyn_a = View(tensor_a, {aShape[0], viewShape[0]},
+                                 {aShape[0], std::min(aShape[1] - viewShape[0] * mIdx, viewShape[0])},
+                                 {0, mIdx * viewShape[0]});
                 } else {
-                    dyn_a = View(
-                        tensor_a, {viewShape[0], aShape[1]},
-                        {std::min(aShape[0] - viewShape[0] * mIdx, viewShape[0]), aShape[1]}, {mIdx * viewShape[0], 0});
+                    dyn_a = View(tensor_a, {viewShape[0], aShape[1]},
+                                 {std::min(aShape[0] - viewShape[0] * mIdx, viewShape[0]), aShape[1]},
+                                 {mIdx * viewShape[0], 0});
                 }
                 Tensor dyn_b;
                 if (!transB) {
-                    dyn_b = View(
-                        tensor_b, {bShape[0], viewShape[1]},
-                        {bShape[0], std::min(bShape[1] - viewShape[1] * nIdx, viewShape[1])}, {0, nIdx * viewShape[1]});
+                    dyn_b = View(tensor_b, {bShape[0], viewShape[1]},
+                                 {bShape[0], std::min(bShape[1] - viewShape[1] * nIdx, viewShape[1])},
+                                 {0, nIdx * viewShape[1]});
                 } else {
-                    dyn_b = View(
-                        tensor_b, {viewShape[1], bShape[1]},
-                        {std::min(bShape[0] - viewShape[1] * nIdx, viewShape[1]), bShape[1]}, {nIdx * viewShape[1], 0});
+                    dyn_b = View(tensor_b, {viewShape[1], bShape[1]},
+                                 {std::min(bShape[0] - viewShape[1] * nIdx, viewShape[1]), bShape[1]},
+                                 {nIdx * viewShape[1], 0});
                 }
                 Tensor res = Matrix::Matmul(GetAstDtype<outputDtype>(), dyn_a, dyn_b, transA, transB, isCNz);
                 Assemble(res, {mIdx * viewShape[0], nIdx * viewShape[1]}, tensor_c);
@@ -179,8 +175,8 @@ static void MNSplitFunc(
 }
 
 template <typename inputDtype, typename outputDtype, bool transA, bool transB, bool isCNz>
-void TestDynMatmul(
-    const std::vector<int64_t>& mmShape, bool isANz, bool isBNz, const std::vector<int64_t>& viewShape, string dataPath)
+void TestDynMatmul(const std::vector<int64_t>& mmShape, bool isANz, bool isBNz, const std::vector<int64_t>& viewShape,
+                   string dataPath)
 {
     SetInterpreterConfig();
 
@@ -246,8 +242,8 @@ TEST_F(DynamicMatmulInterpreterTest, mm_A_B_ND_bf16)
     bool isANz = false;
     bool isBNz = false;
     std::vector<int64_t> viewShape = {96, -1};
-    TestDynMatmul<npu::tile_fwk::bfloat16, float, false, false, false>(
-        {m, k, n}, isANz, isBNz, viewShape, GetGoldenDir());
+    TestDynMatmul<npu::tile_fwk::bfloat16, float, false, false, false>({m, k, n}, isANz, isBNz, viewShape,
+                                                                       GetGoldenDir());
 }
 
 TEST_F(DynamicMatmulInterpreterTest, mm_A_B_NZ_bf16)
@@ -259,8 +255,8 @@ TEST_F(DynamicMatmulInterpreterTest, mm_A_B_NZ_bf16)
     bool isANz = false;
     bool isBNz = true;
     std::vector<int64_t> viewShape = {-1, -1};
-    TestDynMatmul<npu::tile_fwk::bfloat16, float, false, false, false>(
-        {m, k, n}, isANz, isBNz, viewShape, GetGoldenDir());
+    TestDynMatmul<npu::tile_fwk::bfloat16, float, false, false, false>({m, k, n}, isANz, isBNz, viewShape,
+                                                                       GetGoldenDir());
 }
 
 TEST_F(DynamicMatmulInterpreterTest, mm_A_Bt_ND_fp16)
@@ -272,8 +268,8 @@ TEST_F(DynamicMatmulInterpreterTest, mm_A_Bt_ND_fp16)
     bool isANz = false;
     bool isBNz = false;
     std::vector<int64_t> viewShape = {-1, 256};
-    TestDynMatmul<npu::tile_fwk::float16, float, false, true, false>(
-        {m, k, n}, isANz, isBNz, viewShape, GetGoldenDir());
+    TestDynMatmul<npu::tile_fwk::float16, float, false, true, false>({m, k, n}, isANz, isBNz, viewShape,
+                                                                     GetGoldenDir());
 }
 
 TEST_F(DynamicMatmulInterpreterTest, mm_A_Bt_NZ_fp16)
@@ -285,8 +281,8 @@ TEST_F(DynamicMatmulInterpreterTest, mm_A_Bt_NZ_fp16)
     bool isANz = false;
     bool isBNz = true;
     std::vector<int64_t> viewShape = {-1, -1};
-    TestDynMatmul<npu::tile_fwk::float16, float, false, true, false>(
-        {m, k, n}, isANz, isBNz, viewShape, GetGoldenDir());
+    TestDynMatmul<npu::tile_fwk::float16, float, false, true, false>({m, k, n}, isANz, isBNz, viewShape,
+                                                                     GetGoldenDir());
 }
 
 TEST_F(DynamicMatmulInterpreterTest, mm_A_B_NZ_int8)
@@ -322,8 +318,8 @@ TEST_F(DynamicMatmulInterpreterTest, mm_A_B_ND_bf16_tile1)
     bool isANz = false;
     bool isBNz = false;
     std::vector<int64_t> viewShape = {90, 256};
-    TestDynMatmul<npu::tile_fwk::bfloat16, float, false, false, false>(
-        {m, k, n}, isANz, isBNz, viewShape, GetGoldenDir());
+    TestDynMatmul<npu::tile_fwk::bfloat16, float, false, false, false>({m, k, n}, isANz, isBNz, viewShape,
+                                                                       GetGoldenDir());
 }
 
 TEST_F(DynamicMatmulInterpreterTest, mm_A_Bt_ND_fp16_tile2)
@@ -335,8 +331,8 @@ TEST_F(DynamicMatmulInterpreterTest, mm_A_Bt_ND_fp16_tile2)
     bool isANz = false;
     bool isBNz = false;
     std::vector<int64_t> viewShape = {-1, -1};
-    TestDynMatmul<npu::tile_fwk::float16, float, false, true, false>(
-        {m, k, n}, isANz, isBNz, viewShape, GetGoldenDir());
+    TestDynMatmul<npu::tile_fwk::float16, float, false, true, false>({m, k, n}, isANz, isBNz, viewShape,
+                                                                     GetGoldenDir());
 }
 
 TEST_F(DynamicMatmulInterpreterTest, mm_A_B_NZ_int8_tile3)
@@ -372,7 +368,7 @@ TEST_F(DynamicMatmulInterpreterTest, mm_A_ND_B_ND_C_NZ)
     bool isANz = false;
     bool isBNz = false;
     std::vector<int64_t> viewShape = {-1, -1};
-    TestDynMatmul<npu::tile_fwk::float16, float, false, false, true>(
-        {m, k, n}, isANz, isBNz, viewShape, GetGoldenDir());
+    TestDynMatmul<npu::tile_fwk::float16, float, false, false, true>({m, k, n}, isANz, isBNz, viewShape,
+                                                                     GetGoldenDir());
 }
 } // namespace

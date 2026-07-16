@@ -58,9 +58,8 @@ const SymbolicScalar& GetRuntimeParamSymbol()
     return kRuntimeParam;
 }
 
-void ComputeGmCheckValues(
-    const std::vector<SymbolicScalar>& rawShape, const std::vector<SymbolicScalar>& dynOffset,
-    const std::vector<SymbolicScalar>& dynValidShape, GmOutOfRangeCheckInfo& info)
+void ComputeGmCheckValues(const std::vector<SymbolicScalar>& rawShape, const std::vector<SymbolicScalar>& dynOffset,
+                          const std::vector<SymbolicScalar>& dynValidShape, GmOutOfRangeCheckInfo& info)
 {
     constexpr size_t kMinDimsForStrideCalc = 2;
     std::vector<SymbolicScalar> strides(rawShape.size());
@@ -91,16 +90,14 @@ void ComputeGmCheckValues(
     info.totalSize = OpImmediate::Specified(totalSize);
 }
 
-std::optional<std::vector<SymbolicScalar>> GetDynValidShape(const Operation& op, const std::shared_ptr<CopyOpAttribute>& attr)
+std::optional<std::vector<SymbolicScalar>> GetDynValidShape(const Operation& op,
+                                                            const std::shared_ptr<CopyOpAttribute>& attr)
 {
-    const std::vector<OpImmediate>& dynValidShape = attr->IsCopyOut() 
-        ? attr->GetFromDynValidShape() 
-        : attr->GetToDynValidShape();
-    
-    const std::vector<OpImmediate>& chosenShape = dynValidShape.empty() 
-        ? attr->GetShape() 
-        : dynValidShape;
-    
+    const std::vector<OpImmediate>& dynValidShape = attr->IsCopyOut() ? attr->GetFromDynValidShape() :
+                                                                        attr->GetToDynValidShape();
+
+    const std::vector<OpImmediate>& chosenShape = dynValidShape.empty() ? attr->GetShape() : dynValidShape;
+
     std::vector<SymbolicScalar> result;
     for (const auto& opImm : chosenShape) {
         if (!opImm.IsSpecified()) {
@@ -112,15 +109,14 @@ std::optional<std::vector<SymbolicScalar>> GetDynValidShape(const Operation& op,
         }
         result.push_back(opImm.GetSpecifiedValue());
     }
-    
+
     return result;
 }
 
 std::vector<SymbolicScalar> GetDynOffset(const Operation& op, const std::shared_ptr<CopyOpAttribute>& attr)
 {
-    const std::vector<OpImmediate>& offsetAttr = attr->IsCopyOut()
-        ? attr->GetCopyOutAttr().second
-        : attr->GetCopyInAttr().first;
+    const std::vector<OpImmediate>& offsetAttr = attr->IsCopyOut() ? attr->GetCopyOutAttr().second :
+                                                                     attr->GetCopyInAttr().first;
 
     std::vector<SymbolicScalar> result;
     for (const auto& opImm : offsetAttr) {
@@ -156,13 +152,12 @@ bool CodegenPreproc::IsCopyNeedSave(const Operation& op) const
     return OpcodeManager::Inst().IsCopyInOrOut(op.GetOpcode()) && (!op.IsNeedStackGM());
 }
 
-void CodegenPreproc::SetTensorParamAddr(
-    LogicalTensor& tensor, int64_t tensorParamIdx, const SymbolicScalar& attrOffsetScalar,
-    const TensorAddrKey& key) const
+void CodegenPreproc::SetTensorParamAddr(LogicalTensor& tensor, int64_t tensorParamIdx,
+                                        const SymbolicScalar& attrOffsetScalar, const TensorAddrKey& key) const
 {
     IRBuilder builder;
-    SymbolicScalar paramAddr =
-        GetParamAddrSymbol()(GetRuntimeParamSymbol(), builder.CreateConstInt(tensorParamIdx), attrOffsetScalar);
+    SymbolicScalar paramAddr = GetParamAddrSymbol()(GetRuntimeParamSymbol(), builder.CreateConstInt(tensorParamIdx),
+                                                    attrOffsetScalar);
     std::map<TensorAddrKey, SymbolicScalar> opParamAddrs;
     tensor.GetAttr<std::map<TensorAddrKey, SymbolicScalar>>(TensorAttributeKey::tensorAddr, opParamAddrs);
     opParamAddrs[key] = paramAddr;
@@ -184,8 +179,8 @@ Status CodegenPreproc::SaveGmTensorParamIdxToOp(Function& func) const
         gmParamInCallFunc.clear();
         for (auto& op : subProgram.second->Operations(false)) {
             if (IsCopyNeedSave(op)) {
-                int coaIndex =
-                    OpcodeManager::Inst().IsCopyIn(op.GetOpcode()) ? op.GetIOpAttrOffset(0) : op.GetOOpAttrOffset(0);
+                int coaIndex = OpcodeManager::Inst().IsCopyIn(op.GetOpcode()) ? op.GetIOpAttrOffset(0) :
+                                                                                op.GetOOpAttrOffset(0);
                 gmParamInCallFunc[coaIndex].emplace_back(&op);
             }
             if (op.GetOpcode() == Opcode::OP_GATHER_IN_L1 || op.GetOpcode() == Opcode::OP_GATHER_IN_UB) {
@@ -202,8 +197,8 @@ Status CodegenPreproc::SaveGmTensorParamIdxToOp(Function& func) const
             }
         }
 
-        APASS_LOG_INFO_F(
-            Elements::Operation, "%d:%sgmParamInCallFunc size: %zu", __LINE__, __FUNCTION__, gmParamInCallFunc.size());
+        APASS_LOG_INFO_F(Elements::Operation, "%d:%sgmParamInCallFunc size: %zu", __LINE__, __FUNCTION__,
+                         gmParamInCallFunc.size());
 
         int64_t tensorParamIdx{0};
         for (auto param : gmParamInCallFunc) {
@@ -226,9 +221,8 @@ Status CodegenPreproc::SaveGmTensorParamIdxToOp(Function& func) const
                     attrOffset = i;
                 }
                 if (tensor->GetMemoryTypeToBe() == MEM_DEVICE_DDR) {
-                    SetTensorParamAddr(
-                        *tensor, gmTensorParamIdx, builder.CreateConstInt(op.GetIOpAttrOffset(attrOffset++)),
-                        addrKey);
+                    SetTensorParamAddr(*tensor, gmTensorParamIdx,
+                                       builder.CreateConstInt(op.GetIOpAttrOffset(attrOffset++)), addrKey);
                 }
             }
             attrOffset = 0;
@@ -239,9 +233,8 @@ Status CodegenPreproc::SaveGmTensorParamIdxToOp(Function& func) const
                     attrOffset = i;
                 }
                 if (tensor->GetMemoryTypeToBe() == MEM_DEVICE_DDR) {
-                    SetTensorParamAddr(
-                        *tensor, gmTensorParamIdx, builder.CreateConstInt(op.GetOOpAttrOffset(attrOffset++)),
-                        addrKey);
+                    SetTensorParamAddr(*tensor, gmTensorParamIdx,
+                                       builder.CreateConstInt(op.GetOOpAttrOffset(attrOffset++)), addrKey);
                 }
             }
         }
@@ -345,7 +338,7 @@ inline bool SkipInputCombineOps(Operation& op, int dimSize)
 
 Status CodegenPreproc::ForceCombineAxisForAxisCombine(Function& func) const
 {
-    const bool isDAV3510 = Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510;    
+    const bool isDAV3510 = Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510;
     for (auto& subProgram : func.rootFunc_->programs_) {
         for (auto& op : subProgram.second->Operations(false)) {
             if (OpcodeManager::Inst().GetCoreType(op.GetOpcode()) != OpCoreType::AIV && !IsUBCopy(op)) {
@@ -427,12 +420,11 @@ void CodegenPreproc::SetNeedAllocAttr(Function& function)
     APASS_LOG_DEBUG_F(Elements::Operation, "%s", DumpOpList(function).c_str());
 }
 
-GmOutOfRangeCheckInfo CodegenPreproc::ComputeGmOoRCheckInfo(
-    const Operation& op,
-    const std::vector<SymbolicScalar>& dynOffset,
-    const std::vector<SymbolicScalar>& dynValidShape,
-    const std::vector<SymbolicScalar>& rawShape,
-    GmOutOfRangeCheckInfo::AccessType accessType) const
+GmOutOfRangeCheckInfo CodegenPreproc::ComputeGmOoRCheckInfo(const Operation& op,
+                                                            const std::vector<SymbolicScalar>& dynOffset,
+                                                            const std::vector<SymbolicScalar>& dynValidShape,
+                                                            const std::vector<SymbolicScalar>& rawShape,
+                                                            GmOutOfRangeCheckInfo::AccessType accessType) const
 {
     GmOutOfRangeCheckInfo info;
     info.accessType = accessType;
@@ -459,20 +451,16 @@ void CodegenPreproc::GenGmOoRCheckInfoForOp(Operation& op) const
     auto attr = std::dynamic_pointer_cast<CopyOpAttribute>(op.GetOpAttribute());
     bool isCopyOut = attr->IsCopyOut();
     bool isCopyIn = !isCopyOut;
-    if (isCopyIn && !op.iOperand.empty() &&
-        op.iOperand[0]->GetMemoryTypeOriginal() != MemoryType::MEM_DEVICE_DDR) {
-        APASS_LOG_WARN_F(
-            Elements::Operation, "GMOutOfRangeCheck skip op=%d opcode=%s: input is not DDR, memType=%s",
-            op.GetOpMagic(), op.GetOpcodeStr().c_str(),
-            MemoryTypeToString(op.iOperand[0]->GetMemoryTypeOriginal()).c_str());
+    if (isCopyIn && !op.iOperand.empty() && op.iOperand[0]->GetMemoryTypeOriginal() != MemoryType::MEM_DEVICE_DDR) {
+        APASS_LOG_WARN_F(Elements::Operation, "GMOutOfRangeCheck skip op=%d opcode=%s: input is not DDR, memType=%s",
+                         op.GetOpMagic(), op.GetOpcodeStr().c_str(),
+                         MemoryTypeToString(op.iOperand[0]->GetMemoryTypeOriginal()).c_str());
         return;
     }
-    if (isCopyOut && !op.oOperand.empty() &&
-        op.oOperand[0]->GetMemoryTypeOriginal() != MemoryType::MEM_DEVICE_DDR) {
-        APASS_LOG_WARN_F(
-            Elements::Operation, "GMOutOfRangeCheck skip op=%d opcode=%s: output is not DDR, memType=%s",
-            op.GetOpMagic(), op.GetOpcodeStr().c_str(),
-            MemoryTypeToString(op.oOperand[0]->GetMemoryTypeOriginal()).c_str());
+    if (isCopyOut && !op.oOperand.empty() && op.oOperand[0]->GetMemoryTypeOriginal() != MemoryType::MEM_DEVICE_DDR) {
+        APASS_LOG_WARN_F(Elements::Operation, "GMOutOfRangeCheck skip op=%d opcode=%s: output is not DDR, memType=%s",
+                         op.GetOpMagic(), op.GetOpcodeStr().c_str(),
+                         MemoryTypeToString(op.oOperand[0]->GetMemoryTypeOriginal()).c_str());
         return;
     }
 
@@ -482,14 +470,13 @@ void CodegenPreproc::GenGmOoRCheckInfoForOp(Operation& op) const
     }
     auto dynOffset = GetDynOffset(op, attr);
     auto rawShape = GetRawShape(op, attr);
-    auto accessType = isCopyOut ? GmOutOfRangeCheckInfo::AccessType::WRITE_GM
-                                : GmOutOfRangeCheckInfo::AccessType::READ_GM;
+    auto accessType = isCopyOut ? GmOutOfRangeCheckInfo::AccessType::WRITE_GM :
+                                  GmOutOfRangeCheckInfo::AccessType::READ_GM;
     auto gmInfo = ComputeGmOoRCheckInfo(op, dynOffset, *dynValidShapeOpt, rawShape, accessType);
     attr->SetGmOutOfRangeCheck(gmInfo);
 
     ASSERT(OperErr::ATTRIBUTE_INVALID, attr != nullptr && attr->GetGmOutOfRangeCheck() != nullptr)
-        << "GmOutOfRangeCheckInfo is missing for DDR copy op op=" << op.GetOpMagic()
-        << " opcode=" << op.GetOpcodeStr()
+        << "GmOutOfRangeCheckInfo is missing for DDR copy op op=" << op.GetOpMagic() << " opcode=" << op.GetOpcodeStr()
         << ". All CopyIn from DDR and CopyOut to DDR must have valid GmOutOfRangeCheckInfo.";
 }
 
@@ -505,9 +492,8 @@ void CodegenPreproc::GenGmOoRCheckInfo(Function& function) const
     }
 }
 
-static void GetEventsInfo(
-    int subgraphNum, const std::vector<std::set<int>>& subgraphOutGraph, const std::vector<int>& subgraphLatency,
-    std::vector<std::tuple<int, bool, int>>& events)
+static void GetEventsInfo(int subgraphNum, const std::vector<std::set<int>>& subgraphOutGraph,
+                          const std::vector<int>& subgraphLatency, std::vector<std::tuple<int, bool, int>>& events)
 {
     std::vector<int> inDegree(subgraphNum, 0);
     for (int i = 0; i < subgraphNum; ++i) {
@@ -557,9 +543,9 @@ static void GetEventsInfo(
     }
 }
 
-inline std::pair<int, int> EstimateRequiredCores(
-    int subgraphNum, const std::vector<bool>& isCubeGraph, const std::vector<std::set<int>>& subgraphOutGraph,
-    const std::vector<int>& subgraphLatency)
+inline std::pair<int, int> EstimateRequiredCores(int subgraphNum, const std::vector<bool>& isCubeGraph,
+                                                 const std::vector<std::set<int>>& subgraphOutGraph,
+                                                 const std::vector<int>& subgraphLatency)
 {
     if (subgraphNum == 0) {
         return {0, 0};
@@ -634,8 +620,8 @@ inline void EstimateCVCores(Function& function)
     }
 }
 
-Status CodegenPreproc::CheckSingleTensorAddrRange(
-    const Operation& op, LogicalTensorPtr tensor, size_t tensorIdx, const std::string& tensorType) const
+Status CodegenPreproc::CheckSingleTensorAddrRange(const Operation& op, LogicalTensorPtr tensor, size_t tensorIdx,
+                                                  const std::string& tensorType) const
 {
     const auto& shape = tensor->GetShape();
     const auto& rawShape = tensor->tensor->rawshape;
@@ -643,19 +629,19 @@ Status CodegenPreproc::CheckSingleTensorAddrRange(
 
     if (shape.size() != rawShape.size() || shape.size() != offset.size()) {
         APASS_LOG_ERROR_F(Elements::Operation,
-            "CheckTensorAddrRange: op[%d] %s tensor[%zu] dimension mismatch: "
-            "shape.size=%zu, rawshape.size=%zu, offset.size=%zu",
-            op.GetOpMagic(), tensorType.c_str(), tensorIdx, shape.size(), rawShape.size(), offset.size());
+                          "CheckTensorAddrRange: op[%d] %s tensor[%zu] dimension mismatch: "
+                          "shape.size=%zu, rawshape.size=%zu, offset.size=%zu",
+                          op.GetOpMagic(), tensorType.c_str(), tensorIdx, shape.size(), rawShape.size(), offset.size());
         return FAILED;
     }
 
     for (size_t dimIdx = 0; dimIdx < shape.size(); dimIdx++) {
         if (shape[dimIdx] + offset[dimIdx] > rawShape[dimIdx]) {
             APASS_LOG_ERROR_F(Elements::Operation,
-                "CheckTensorAddrRange: op[%d] %s tensor[%zu] dim[%zu] overflow: "
-                "shape[%zu]=%ld + offset[%zu]=%ld > rawshape[%zu]=%ld",
-                op.GetOpMagic(), tensorType.c_str(), tensorIdx, dimIdx, dimIdx, shape[dimIdx],
-                dimIdx, offset[dimIdx], dimIdx, rawShape[dimIdx]);
+                              "CheckTensorAddrRange: op[%d] %s tensor[%zu] dim[%zu] overflow: "
+                              "shape[%zu]=%ld + offset[%zu]=%ld > rawshape[%zu]=%ld",
+                              op.GetOpMagic(), tensorType.c_str(), tensorIdx, dimIdx, dimIdx, shape[dimIdx], dimIdx,
+                              offset[dimIdx], dimIdx, rawShape[dimIdx]);
             return FAILED;
         }
     }
@@ -685,23 +671,23 @@ Status CodegenPreproc::RunOnFunction(Function& function)
 {
     EstimateCVCores(function);
     combineAxis = function.paramConfigs_.combineAxis;
-    APASS_LOG_INFO_F(
-        Elements::Operation, "===============================================================> Start CodegenPreproc.");
+    APASS_LOG_INFO_F(Elements::Operation,
+                     "===============================================================> Start CodegenPreproc.");
     for (auto& op : function.Operations()) {
         if (op.GetOpcode() == Opcode::OP_VIEW_TYPE) {
             op.SetOpCode(Opcode::OP_VIEW);
         }
     }
     if (SaveGmTensorParamIdxToOp(function) != SUCCESS) {
-        APASS_LOG_ERROR_F(
-            Elements::Operation, "CodegenPreproc RunOnFunction failed at function SaveGmTensorParamIdxToOp.");
+        APASS_LOG_ERROR_F(Elements::Operation,
+                          "CodegenPreproc RunOnFunction failed at function SaveGmTensorParamIdxToOp.");
         return FAILED;
     }
 
     if (combineAxis) {
         if (ForceCombineAxisForAxisCombine(function) != SUCCESS) {
-            APASS_LOG_ERROR_F(
-                Elements::Operation, "CodegenPreproc RunOnFunction failed at function ForceCombineAxisForAxisCombine.");
+            APASS_LOG_ERROR_F(Elements::Operation,
+                              "CodegenPreproc RunOnFunction failed at function ForceCombineAxisForAxisCombine.");
             return FAILED;
         }
     }
@@ -711,14 +697,14 @@ Status CodegenPreproc::RunOnFunction(Function& function)
 
     if (passDfxconfigs_.addrCheck) {
         if (CheckTensorAddrRange(function) != SUCCESS) {
-            APASS_LOG_ERROR_F(
-                Elements::Operation, "CodegenPreproc RunOnFunction failed at function CheckTensorAddrRange.");
+            APASS_LOG_ERROR_F(Elements::Operation,
+                              "CodegenPreproc RunOnFunction failed at function CheckTensorAddrRange.");
             return FAILED;
         }
     }
 
-    APASS_LOG_INFO_F(
-        Elements::Operation, "===============================================================> Finish CodegenPreproc.");
+    APASS_LOG_INFO_F(Elements::Operation,
+                     "===============================================================> Finish CodegenPreproc.");
     return SUCCESS;
 }
 

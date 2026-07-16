@@ -55,16 +55,20 @@ protected:
     // 单个辅助函数：构建Mix子图的所有内容
     std::shared_ptr<Function> BuildMixFunction(Function* rootFunc, std::vector<int64_t>& tensorShape)
     {
-        auto mixFuncPtr =
-            std::make_shared<Function>(Program::GetInstance(), "mix_func_illegal", "mix_func_illegal", rootFunc);
+        auto mixFuncPtr = std::make_shared<Function>(Program::GetInstance(), "mix_func_illegal", "mix_func_illegal",
+                                                     rootFunc);
         mixFuncPtr->SetGraphType(GraphType::BLOCK_GRAPH);
         mixFuncPtr->SetFunctionType(FunctionType::STATIC);
 
         // 创建tensors
-        auto inputTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, tensorShape, CreateTestConstIntVector(tensorShape));
-        auto outputTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, tensorShape, CreateTestConstIntVector(tensorShape));
-        auto tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, tensorShape, CreateTestConstIntVector(tensorShape));
-        auto tensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, tensorShape, CreateTestConstIntVector(tensorShape));
+        auto inputTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, tensorShape,
+                                                                      CreateTestConstIntVector(tensorShape));
+        auto outputTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, tensorShape,
+                                                                       CreateTestConstIntVector(tensorShape));
+        auto tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, tensorShape,
+                                                                  CreateTestConstIntVector(tensorShape));
+        auto tensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, tensorShape,
+                                                                  CreateTestConstIntVector(tensorShape));
 
         // 设置边界tensor
         mixFuncPtr->inCasts_.push_back(inputTensor);
@@ -248,18 +252,22 @@ void VerifyBasicSplitResult(Status status, Function& rootFunc, Function* origina
 }
 
 // 辅助函数2：创建CallOp
-Operation& CreateCallOp(
-    std::shared_ptr<Function>& rootFuncPtr, const uint64_t mixProgramId, const FunctionHash& mixFuncHash)
+Operation& CreateCallOp(std::shared_ptr<Function>& rootFuncPtr, const uint64_t mixProgramId,
+                        const FunctionHash& mixFuncHash)
 {
     std::vector<int64_t> tensorShape = {MS_NUM16, MS_NUM16};
 
-    auto callInTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, tensorShape, CreateTestConstIntVector(tensorShape));
-    auto callInTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, tensorShape, CreateTestConstIntVector(tensorShape));
-    auto callInTensor3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, tensorShape, CreateTestConstIntVector(tensorShape));
-    auto callOutTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, tensorShape, CreateTestConstIntVector(tensorShape));
+    auto callInTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, tensorShape,
+                                                                    CreateTestConstIntVector(tensorShape));
+    auto callInTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, tensorShape,
+                                                                    CreateTestConstIntVector(tensorShape));
+    auto callInTensor3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, tensorShape,
+                                                                    CreateTestConstIntVector(tensorShape));
+    auto callOutTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, tensorShape,
+                                                                    CreateTestConstIntVector(tensorShape));
 
-    auto& callOp =
-        IRBuilder().CreateTensorOpStmt(*rootFuncPtr, Opcode::OP_CALL, {callInTensor1, callInTensor2, callInTensor3}, {callOutTensor});
+    auto& callOp = IRBuilder().CreateTensorOpStmt(*rootFuncPtr, Opcode::OP_CALL,
+                                                  {callInTensor1, callInTensor2, callInTensor3}, {callOutTensor});
 
     auto callAttr = std::make_shared<CallOpAttribute>();
     auto invokeInfo = std::make_shared<SubfuncInvokeInfoTy>();
@@ -281,9 +289,8 @@ Operation& CreateCallOp(
 }
 
 // 辅助函数3：创建Vector scope
-void CreateVectorScope(
-    std::shared_ptr<Function>& mixFuncPtr, std::shared_ptr<LogicalTensor>& incast3,
-    std::shared_ptr<LogicalTensor>& outcast1)
+void CreateVectorScope(std::shared_ptr<Function>& mixFuncPtr, std::shared_ptr<LogicalTensor>& incast3,
+                       std::shared_ptr<LogicalTensor>& outcast1)
 {
     std::vector<int64_t> tensorShape = {MS_NUM16, MS_NUM16};
 
@@ -291,8 +298,10 @@ void CreateVectorScope(
     auto operations = mixFuncPtr->Operations(false);
     auto cubeTensor3 = operations[operations.size() - 1].GetOOperands()[0];
 
-    auto vectorTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, tensorShape, CreateTestConstIntVector(tensorShape));
-    auto vectorTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, tensorShape, CreateTestConstIntVector(tensorShape));
+    auto vectorTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, tensorShape,
+                                                                    CreateTestConstIntVector(tensorShape));
+    auto vectorTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, tensorShape,
+                                                                    CreateTestConstIntVector(tensorShape));
 
     auto shapeImme = OpImmediate::Specified(tensorShape);
     std::vector<int64_t> offsetVec = {0, 0};
@@ -300,7 +309,8 @@ void CreateVectorScope(
     std::vector<OpImmediate> emptyVec;
 
     // Vector scope op（internalSubgraphID=1）
-    auto& vectorAdd = IRBuilder().CreateTensorOpStmt(*mixFuncPtr, Opcode::OP_ADD, {cubeTensor3, incast3}, {vectorTensor1});
+    auto& vectorAdd = IRBuilder().CreateTensorOpStmt(*mixFuncPtr, Opcode::OP_ADD, {cubeTensor3, incast3},
+                                                     {vectorTensor1});
     vectorAdd.SetIOpAtt(1, 5);
     vectorAdd.UpdateInternalSubgraphID(1);
     vectorAdd.SetAIVCore(AIVCore::AIV0);
@@ -318,14 +328,16 @@ void CreateVectorScope(
 }
 
 // 辅助函数4：创建Cube scope
-void CreateCubeScope(
-    std::shared_ptr<Function>& mixFuncPtr, std::shared_ptr<LogicalTensor>& incast1,
-    std::shared_ptr<LogicalTensor>& incast2)
+void CreateCubeScope(std::shared_ptr<Function>& mixFuncPtr, std::shared_ptr<LogicalTensor>& incast1,
+                     std::shared_ptr<LogicalTensor>& incast2)
 {
     std::vector<int64_t> tensorShape = {MS_NUM16, MS_NUM16};
-    auto cubeTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, tensorShape, CreateTestConstIntVector(tensorShape));
-    auto cubeTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, tensorShape, CreateTestConstIntVector(tensorShape));
-    auto cubeTensor3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, tensorShape, CreateTestConstIntVector(tensorShape));
+    auto cubeTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, tensorShape,
+                                                                  CreateTestConstIntVector(tensorShape));
+    auto cubeTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, tensorShape,
+                                                                  CreateTestConstIntVector(tensorShape));
+    auto cubeTensor3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, tensorShape,
+                                                                  CreateTestConstIntVector(tensorShape));
 
     auto shapeImme = OpImmediate::Specified(tensorShape);
     std::vector<int64_t> offsetVec = {0, 0};
@@ -347,7 +359,8 @@ void CreateCubeScope(
     cubeCopyIn2.UpdateInternalSubgraphID(0);
     cubeCopyIn2.SetAttr(OpAttributeKey::isCube, true);
 
-    auto& cubeMul = IRBuilder().CreateTensorOpStmt(*mixFuncPtr, Opcode::OP_A_MUL_B, {cubeTensor1, cubeTensor2}, {cubeTensor3});
+    auto& cubeMul = IRBuilder().CreateTensorOpStmt(*mixFuncPtr, Opcode::OP_A_MUL_B, {cubeTensor1, cubeTensor2},
+                                                   {cubeTensor3});
     cubeMul.UpdateInternalSubgraphID(0);
     cubeMul.SetAttr(OpAttributeKey::isCube, true);
 }
@@ -358,10 +371,14 @@ void SetupMixSubgraphStructure(std::shared_ptr<Function>& mixFuncPtr, FunctionHa
     std::vector<int64_t> tensorShape = {MS_NUM16, MS_NUM16};
 
     // 创建incast和outcast
-    auto incast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, tensorShape, CreateTestConstIntVector(tensorShape));
-    auto incast2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, tensorShape, CreateTestConstIntVector(tensorShape));
-    auto incast3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, tensorShape, CreateTestConstIntVector(tensorShape));
-    auto outcast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, tensorShape, CreateTestConstIntVector(tensorShape));
+    auto incast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, tensorShape,
+                                                              CreateTestConstIntVector(tensorShape));
+    auto incast2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, tensorShape,
+                                                              CreateTestConstIntVector(tensorShape));
+    auto incast3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, tensorShape,
+                                                              CreateTestConstIntVector(tensorShape));
+    auto outcast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, tensorShape,
+                                                               CreateTestConstIntVector(tensorShape));
 
     mixFuncPtr->inCasts_.push_back(incast1);
     mixFuncPtr->inCasts_.push_back(incast2);
@@ -383,8 +400,8 @@ void SetupMixSubgraphStructure(std::shared_ptr<Function>& mixFuncPtr, FunctionHa
 // 辅助函数6：创建Mix子图
 std::shared_ptr<Function> CreateMixSubgraph(std::shared_ptr<Function>& rootFuncPtr, FunctionHash& mixFuncHash)
 {
-    auto mixFuncPtr =
-        std::make_shared<Function>(Program::GetInstance(), "test_mix_func", "test_mix_func", rootFuncPtr.get());
+    auto mixFuncPtr = std::make_shared<Function>(Program::GetInstance(), "test_mix_func", "test_mix_func",
+                                                 rootFuncPtr.get());
     mixFuncPtr->SetGraphType(GraphType::BLOCK_GRAPH);
     mixFuncPtr->SetFunctionType(FunctionType::STATIC);
 
@@ -427,8 +444,8 @@ TEST_F(MixSubgraphSplitTest, TestSingleMixSubgraphBasicSplit)
 }
 
 // 辅助函数1：为非Mix子图创建callOp（这个函数会被CreateNonMixFunctions调用，所以要放在前面）
-void CreateCallOpForNonMix(
-    std::shared_ptr<Function>& rootFuncPtr, uint64_t programIdx, FunctionHash hash, const std::vector<int64_t>& shape)
+void CreateCallOpForNonMix(std::shared_ptr<Function>& rootFuncPtr, uint64_t programIdx, FunctionHash hash,
+                           const std::vector<int64_t>& shape)
 {
     auto callInTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     auto callOutTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
@@ -452,44 +469,48 @@ void CreateCallOpForNonMix(
 }
 
 // 辅助函数2：创建非Mix子图（这个函数调用CreateCallOpForNonMix）
-void CreateNonMixFunctions(
-    std::shared_ptr<Function>& rootFuncPtr, std::vector<std::shared_ptr<Function>>& nonMixFunctions,
-    const std::vector<uint64_t>& nonMixProgramIds)
+void CreateNonMixFunctions(std::shared_ptr<Function>& rootFuncPtr,
+                           std::vector<std::shared_ptr<Function>>& nonMixFunctions,
+                           const std::vector<uint64_t>& nonMixProgramIds)
 {
     for (int i = 0; i < 2; i++) {
-        auto nonMixFunc = std::make_shared<Function>(
-            Program::GetInstance(), "test_non_mix_" + std::to_string(i), "test_non_mix_" + std::to_string(i),
-            rootFuncPtr.get());
+        auto nonMixFunc = std::make_shared<Function>(Program::GetInstance(), "test_non_mix_" + std::to_string(i),
+                                                     "test_non_mix_" + std::to_string(i), rootFuncPtr.get());
         nonMixFunc->SetGraphType(GraphType::BLOCK_GRAPH);
         nonMixFunc->SetFunctionType(FunctionType::STATIC);
 
         std::vector<int64_t> shape = {8, 8};
         auto incastTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
-        auto outcastTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+        auto outcastTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape,
+                                                                        CreateTestConstIntVector(shape));
 
         nonMixFunc->inCasts_.push_back(incastTensor);
         nonMixFunc->outCasts_.push_back(outcastTensor);
 
-        auto internalTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
-        auto& copyInOp = IRBuilder().CreateTensorOpStmt(*nonMixFunc, Opcode::OP_COPY_IN, {incastTensor}, {internalTensor1});
+        auto internalTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape,
+                                                                          CreateTestConstIntVector(shape));
+        auto& copyInOp = IRBuilder().CreateTensorOpStmt(*nonMixFunc, Opcode::OP_COPY_IN, {incastTensor},
+                                                        {internalTensor1});
         copyInOp.SetIOpAtt(0, 0);
 
         auto shapeImme = OpImmediate::Specified(shape);
         std::vector<int64_t> offsetVec = {0, 0};
         auto offsetImme = OpImmediate::Specified(offsetVec);
         std::vector<OpImmediate> emptyVec;
-        auto copyInAttr =
-            std::make_shared<CopyOpAttribute>(offsetImme, MemoryType::MEM_UB, shapeImme, shapeImme, emptyVec);
+        auto copyInAttr = std::make_shared<CopyOpAttribute>(offsetImme, MemoryType::MEM_UB, shapeImme, shapeImme,
+                                                            emptyVec);
         copyInOp.SetOpAttribute(copyInAttr);
 
-        auto internalTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+        auto internalTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape,
+                                                                          CreateTestConstIntVector(shape));
         auto& expOp = IRBuilder().CreateTensorOpStmt(*nonMixFunc, Opcode::OP_EXP, {internalTensor1}, {internalTensor2});
         (void)expOp;
-        auto& copyOutOp = IRBuilder().CreateTensorOpStmt(*nonMixFunc, Opcode::OP_COPY_OUT, {internalTensor2}, {outcastTensor});
+        auto& copyOutOp = IRBuilder().CreateTensorOpStmt(*nonMixFunc, Opcode::OP_COPY_OUT, {internalTensor2},
+                                                         {outcastTensor});
         copyOutOp.SetOOpAtt(0, 0);
 
-        auto copyOutAttr =
-            std::make_shared<CopyOpAttribute>(MemoryType::MEM_UB, offsetImme, shapeImme, shapeImme, emptyVec);
+        auto copyOutAttr = std::make_shared<CopyOpAttribute>(MemoryType::MEM_UB, offsetImme, shapeImme, shapeImme,
+                                                             emptyVec);
         copyOutOp.SetOpAttribute(copyOutAttr);
 
         nonMixFunc->ComputeHash();
@@ -503,18 +524,21 @@ void CreateNonMixFunctions(
     }
 }
 
-void CreateCallOpsForMixFunction(
-    std::shared_ptr<Function>& rootFuncPtr, uint64_t programIdx, FunctionHash hash, const std::vector<int64_t>& shape,
-    int mixIdx)
+void CreateCallOpsForMixFunction(std::shared_ptr<Function>& rootFuncPtr, uint64_t programIdx, FunctionHash hash,
+                                 const std::vector<int64_t>& shape, int mixIdx)
 {
     int callOpCount = (mixIdx % 2 == 0) ? 1 : 2;
 
     for (int callIdx = 0; callIdx < callOpCount; callIdx++) {
-        auto callInTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
-        auto callInTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
-        auto callOutTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+        auto callInTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape,
+                                                                        CreateTestConstIntVector(shape));
+        auto callInTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape,
+                                                                        CreateTestConstIntVector(shape));
+        auto callOutTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape,
+                                                                        CreateTestConstIntVector(shape));
 
-        auto& callOp = IRBuilder().CreateTensorOpStmt(*rootFuncPtr, Opcode::OP_CALL, {callInTensor1, callInTensor2}, {callOutTensor});
+        auto& callOp = IRBuilder().CreateTensorOpStmt(*rootFuncPtr, Opcode::OP_CALL, {callInTensor1, callInTensor2},
+                                                      {callOutTensor});
 
         auto callAttr = std::make_shared<CallOpAttribute>();
         auto invokeInfo = std::make_shared<SubfuncInvokeInfoTy>();
@@ -558,7 +582,8 @@ void CreateAdditionalScopes(std::shared_ptr<Function>& mixFunc, int componentCou
     }
 
     // 创建COPY_OUT op
-    auto& copyOut = IRBuilder().CreateTensorOpStmt(*mixFunc, Opcode::OP_COPY_OUT, {lastTensor}, {mixFunc->outCasts_[0]});
+    auto& copyOut = IRBuilder().CreateTensorOpStmt(*mixFunc, Opcode::OP_COPY_OUT, {lastTensor},
+                                                   {mixFunc->outCasts_[0]});
     copyOut.UpdateInternalSubgraphID(componentCount - 1);
     copyOut.SetOOpAtt(0, 0);
 
@@ -566,8 +591,8 @@ void CreateAdditionalScopes(std::shared_ptr<Function>& mixFunc, int componentCou
     std::vector<int64_t> offsetVec = {0, 0};
     auto offsetImme = OpImmediate::Specified(offsetVec);
     std::vector<OpImmediate> emptyVec;
-    auto copyOutAttr =
-        std::make_shared<CopyOpAttribute>(MemoryType::MEM_UB, offsetImme, shapeImme, shapeImme, emptyVec);
+    auto copyOutAttr = std::make_shared<CopyOpAttribute>(MemoryType::MEM_UB, offsetImme, shapeImme, shapeImme,
+                                                         emptyVec);
     copyOut.SetOpAttribute(copyOutAttr);
 
     if ((componentCount - 1) % 2 == 0) {
@@ -577,14 +602,12 @@ void CreateAdditionalScopes(std::shared_ptr<Function>& mixFunc, int componentCou
     }
 }
 
-void CreateMixFunctions(
-    std::shared_ptr<Function>& rootFuncPtr, std::vector<std::shared_ptr<Function>>& mixFunctions,
-    const std::vector<uint64_t>& mixProgramIds, const std::vector<int>& componentCounts)
+void CreateMixFunctions(std::shared_ptr<Function>& rootFuncPtr, std::vector<std::shared_ptr<Function>>& mixFunctions,
+                        const std::vector<uint64_t>& mixProgramIds, const std::vector<int>& componentCounts)
 {
     for (int mixIdx = 0; mixIdx < 3; mixIdx++) {
-        auto mixFunc = std::make_shared<Function>(
-            Program::GetInstance(), "test_mix_" + std::to_string(mixIdx), "test_mix_" + std::to_string(mixIdx),
-            rootFuncPtr.get());
+        auto mixFunc = std::make_shared<Function>(Program::GetInstance(), "test_mix_" + std::to_string(mixIdx),
+                                                  "test_mix_" + std::to_string(mixIdx), rootFuncPtr.get());
         mixFunc->SetGraphType(GraphType::BLOCK_GRAPH);
         mixFunc->SetFunctionType(FunctionType::STATIC);
 
@@ -612,19 +635,20 @@ void CreateMixFunctions(
         copyIn1.UpdateInternalSubgraphID(0);
         copyIn1.SetIOpAtt(0, 0);
         copyIn1.SetAttr(OpAttributeKey::isCube, true);
-        auto copyIn1Attr =
-            std::make_shared<CopyOpAttribute>(offsetImme, MemoryType::MEM_UB, shapeImme, shapeImme, emptyVec);
+        auto copyIn1Attr = std::make_shared<CopyOpAttribute>(offsetImme, MemoryType::MEM_UB, shapeImme, shapeImme,
+                                                             emptyVec);
         copyIn1.SetOpAttribute(copyIn1Attr);
 
         auto& copyIn2 = IRBuilder().CreateTensorOpStmt(*mixFunc, Opcode::OP_COPY_IN, {incast2}, {cubeTensor2});
         copyIn2.UpdateInternalSubgraphID(0);
         copyIn2.SetIOpAtt(0, 0);
         copyIn2.SetAttr(OpAttributeKey::isCube, true);
-        auto copyIn2Attr =
-            std::make_shared<CopyOpAttribute>(offsetImme, MemoryType::MEM_UB, shapeImme, shapeImme, emptyVec);
+        auto copyIn2Attr = std::make_shared<CopyOpAttribute>(offsetImme, MemoryType::MEM_UB, shapeImme, shapeImme,
+                                                             emptyVec);
         copyIn2.SetOpAttribute(copyIn2Attr);
 
-        auto& cubeMul = IRBuilder().CreateTensorOpStmt(*mixFunc, Opcode::OP_A_MUL_B, {cubeTensor1, cubeTensor2}, {cubeTensor3});
+        auto& cubeMul = IRBuilder().CreateTensorOpStmt(*mixFunc, Opcode::OP_A_MUL_B, {cubeTensor1, cubeTensor2},
+                                                       {cubeTensor3});
         cubeMul.UpdateInternalSubgraphID(0);
         cubeMul.SetAttr(OpAttributeKey::isCube, true);
 
@@ -647,14 +671,15 @@ void CreateMixFunctions(
 }
 
 // 辅助函数6：验证多个Mix子图拆分结果（最后定义，因为它不调用其他辅助函数）
-void VerifyMultipleMixSplitResults(
-    std::shared_ptr<Function>& rootFuncPtr, Status status, const std::vector<std::shared_ptr<Function>>& mixFunctions,
-    const std::vector<std::shared_ptr<Function>>& nonMixFunctions, const std::vector<int>& componentCounts)
+void VerifyMultipleMixSplitResults(std::shared_ptr<Function>& rootFuncPtr, Status status,
+                                   const std::vector<std::shared_ptr<Function>>& mixFunctions,
+                                   const std::vector<std::shared_ptr<Function>>& nonMixFunctions,
+                                   const std::vector<int>& componentCounts)
 {
     EXPECT_EQ(status, SUCCESS) << "Multiple mix subgraphs split should succeed";
 
     // 计算预期的新子图总数
-    size_t expectedNewProgramCount = 2;   // 2个非Mix子图保留
+    size_t expectedNewProgramCount = 2; // 2个非Mix子图保留
     for (int count : componentCounts) {
         expectedNewProgramCount += count; // 每个Mix子图的scope数
     }
@@ -721,8 +746,8 @@ void VerifyMultipleMixSplitResults(
 TEST_F(MixSubgraphSplitTest, TestMultipleMixSubgraphsSplit)
 {
     // 1. 创建rootFunction
-    auto rootFuncPtr =
-        std::make_shared<Function>(Program::GetInstance(), "test_root_multi", "test_root_multi", nullptr);
+    auto rootFuncPtr = std::make_shared<Function>(Program::GetInstance(), "test_root_multi", "test_root_multi",
+                                                  nullptr);
     rootFuncPtr->rootFunc_ = rootFuncPtr.get();
 
     // 2. 创建3个Mix子图和2个非Mix子图
@@ -752,16 +777,15 @@ TEST_F(MixSubgraphSplitTest, TestMultipleMixSubgraphsSplit)
 TEST_F(MixSubgraphSplitTest, TestNoMixSubgraphScenario)
 {
     // 1. 创建仅包含非Mix子图的rootFunction
-    auto rootFuncPtr =
-        std::make_shared<Function>(Program::GetInstance(), "test_root_no_mix", "test_root_no_mix", nullptr);
+    auto rootFuncPtr = std::make_shared<Function>(Program::GetInstance(), "test_root_no_mix", "test_root_no_mix",
+                                                  nullptr);
     rootFuncPtr->rootFunc_ = rootFuncPtr.get();
     // 2. 创建3个普通（非Mix）子图
     std::vector<std::shared_ptr<Function>> nonMixFunctions;
     std::vector<uint64_t> programIds = {10, 20, 30};
     for (int i = 0; i < 3; i++) {
-        auto func = std::make_shared<Function>(
-            Program::GetInstance(), "test_func_" + std::to_string(i), "test_func_" + std::to_string(i),
-            rootFuncPtr.get());
+        auto func = std::make_shared<Function>(Program::GetInstance(), "test_func_" + std::to_string(i),
+                                               "test_func_" + std::to_string(i), rootFuncPtr.get());
         func->SetGraphType(GraphType::BLOCK_GRAPH);
         func->SetFunctionType(FunctionType::STATIC);
         // 创建简单op（无internalSubgraphID标记）
@@ -811,8 +835,8 @@ TEST_F(MixSubgraphSplitTest, TestNoMixSubgraphScenario)
 }
 
 // 辅助函数：创建外部Mix子图
-void CreateExternalMixFunction(
-    std::shared_ptr<Function>& externalRootFuncPtr, std::shared_ptr<Function>& externalMixFuncPtr)
+void CreateExternalMixFunction(std::shared_ptr<Function>& externalRootFuncPtr,
+                               std::shared_ptr<Function>& externalMixFuncPtr)
 {
     // 创建外部root function
     externalRootFuncPtr = std::make_shared<Function>(Program::GetInstance(), "external_root", "external_root", nullptr);
@@ -820,8 +844,8 @@ void CreateExternalMixFunction(
 
     // 创建Mix子图
     const uint64_t externalMixProgramId = 999;
-    externalMixFuncPtr =
-        std::make_shared<Function>(Program::GetInstance(), "external_mix", "external_mix", externalRootFuncPtr.get());
+    externalMixFuncPtr = std::make_shared<Function>(Program::GetInstance(), "external_mix", "external_mix",
+                                                    externalRootFuncPtr.get());
     externalMixFuncPtr->SetGraphType(GraphType::BLOCK_GRAPH);
     externalMixFuncPtr->SetFunctionType(FunctionType::STATIC);
 
@@ -861,9 +885,9 @@ void CreateExternalMixFunction(
 }
 
 // 辅助函数：验证跨function调用结果
-void VerifyCrossFunctionResults(
-    MixSubgraphSplit& splitter, std::shared_ptr<Function>& rootFuncPtr, std::shared_ptr<Function>& externalRootFuncPtr,
-    std::shared_ptr<Function>& externalMixFuncPtr, Operation* crossCallOp, Status status)
+void VerifyCrossFunctionResults(MixSubgraphSplit& splitter, std::shared_ptr<Function>& rootFuncPtr,
+                                std::shared_ptr<Function>& externalRootFuncPtr,
+                                std::shared_ptr<Function>& externalMixFuncPtr, Operation* crossCallOp, Status status)
 {
     EXPECT_EQ(status, FAILED) << "Fresh external mix function without preceding processing should fail";
 
@@ -906,8 +930,8 @@ void VerifyCrossFunctionResults(
 TEST_F(MixSubgraphSplitTest, TestCrossFunctionMixSubgraph)
 {
     // 1. 创建场景：Mix子图不在当前rootFunc的programs中
-    auto rootFuncPtr =
-        std::make_shared<Function>(Program::GetInstance(), "test_root_cross", "test_root_cross", nullptr);
+    auto rootFuncPtr = std::make_shared<Function>(Program::GetInstance(), "test_root_cross", "test_root_cross",
+                                                  nullptr);
     rootFuncPtr->rootFunc_ = rootFuncPtr.get();
 
     // 2. 创建外部Mix子图（保持为shared_ptr，避免析构）

@@ -23,9 +23,8 @@ const unsigned IDX_DIM2 = 2;
 const unsigned IDX_DIM3 = 3;
 
 struct ProdOpFuncArgs : public OpFuncArgs {
-    ProdOpFuncArgs(
-        std::vector<int64_t> viewShape, const std::vector<int64_t> tileShape, std::vector<int64_t> dims,
-        const bool keepDim)
+    ProdOpFuncArgs(std::vector<int64_t> viewShape, const std::vector<int64_t> tileShape, std::vector<int64_t> dims,
+                   const bool keepDim)
         : viewShape_(viewShape), tileShape_(tileShape), dims_(dims), keepDim_(keepDim)
     {}
     std::vector<int64_t> viewShape_;
@@ -98,9 +97,8 @@ void Prod3DOperationExeFunc(const std::vector<Tensor>& inputs, std::vector<Tenso
             dim = static_cast<int>(inputs[0].GetShape().size()) + dim;
         }
         SymbolicScalar viewShape[] = {args->viewShape_[0], args->viewShape_[1], args->viewShape_[2]};
-        int loops[] = {
-            CeilDiv(inputs[0].GetShape()[0], viewShape[0]), CeilDiv(inputs[0].GetShape()[1], viewShape[1]),
-            CeilDiv(inputs[0].GetShape()[2], viewShape[2])};
+        int loops[] = {CeilDiv(inputs[0].GetShape()[0], viewShape[0]), CeilDiv(inputs[0].GetShape()[1], viewShape[1]),
+                       CeilDiv(inputs[0].GetShape()[2], viewShape[2])};
         viewShape[dim] = 0;
         loops[dim] = 1;
         if (dim == IDX_DIM0) {
@@ -125,8 +123,8 @@ void Prod3DOperationExeFunc(const std::vector<Tensor>& inputs, std::vector<Tenso
                          viewShape[2] == 0 ? lastDim : std::min(lastDim - nIdx * viewShape[2], viewShape[2])},
                         {bIdx * viewShape[0], sIdx * viewShape[1], nIdx * viewShape[2]});
                     TileShape::Current().SetVecTile(args->tileShape_);
-                    std::vector<SymbolicScalar> offset = {
-                        bIdx * viewShape[0], sIdx * viewShape[1], nIdx * viewShape[2]};
+                    std::vector<SymbolicScalar> offset = {bIdx * viewShape[0], sIdx * viewShape[1],
+                                                          nIdx * viewShape[2]};
                     auto res = Prod(viewTensor, args->dims_[0], keepDim);
                     if (!keepDim) {
                         offset.erase(offset.begin() + dim);
@@ -153,11 +151,10 @@ void Prod4DOperationExeFunc(const std::vector<Tensor>& inputs, std::vector<Tenso
         if (dim < 0) {
             dim = static_cast<int>(inputs[0].GetShape().size()) + dim;
         }
-        SymbolicScalar viewShape[] = {
-            args->viewShape_[0], args->viewShape_[1], args->viewShape_[2], args->viewShape_[3]};
-        int loops[] = {
-            CeilDiv(inputs[0].GetShape()[0], viewShape[0]), CeilDiv(inputs[0].GetShape()[1], viewShape[1]),
-            CeilDiv(inputs[0].GetShape()[2], viewShape[2]), CeilDiv(inputs[0].GetShape()[3], viewShape[3])};
+        SymbolicScalar viewShape[] = {args->viewShape_[0], args->viewShape_[1], args->viewShape_[2],
+                                      args->viewShape_[3]};
+        int loops[] = {CeilDiv(inputs[0].GetShape()[0], viewShape[0]), CeilDiv(inputs[0].GetShape()[1], viewShape[1]),
+                       CeilDiv(inputs[0].GetShape()[2], viewShape[2]), CeilDiv(inputs[0].GetShape()[3], viewShape[3])};
         viewShape[dim] = 0;
         loops[dim] = 1;
         LOOP("LOOP_L0_bIdx", FunctionType::DYNAMIC_LOOP, bIdx, LoopRange(loops[IDX_DIM0]))
@@ -168,8 +165,8 @@ void Prod4DOperationExeFunc(const std::vector<Tensor>& inputs, std::vector<Tenso
                 {
                     LOOP("LOOP_L3_bIdx", FunctionType::DYNAMIC_LOOP, qIdx, LoopRange(loops[IDX_DIM3]))
                     {
-                        std::vector<SymbolicScalar> offset = {
-                            bIdx * viewShape[0], sIdx * viewShape[1], nIdx * viewShape[2], qIdx * viewShape[3]};
+                        std::vector<SymbolicScalar> offset = {bIdx * viewShape[0], sIdx * viewShape[1],
+                                                              nIdx * viewShape[2], qIdx * viewShape[3]};
                         auto viewTensor = View(
                             inputs[0],
                             {viewShape[0] == 0 ? firstDim : viewShape[0], viewShape[1] == 0 ? secondDim : viewShape[1],
@@ -195,17 +192,16 @@ void Prod4DOperationExeFunc(const std::vector<Tensor>& inputs, std::vector<Tenso
 
 class ProdOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac_param<ProdOpMetadata> {};
 
-INSTANTIATE_TEST_SUITE_P(
-    TestProd, ProdOperationTest,
-    ::testing::ValuesIn(
-        GetOpMetaData<ProdOpMetadata>({ProdOperationExeFunc, Prod3DOperationExeFunc, Prod4DOperationExeFunc}, "Prod")));
+INSTANTIATE_TEST_SUITE_P(TestProd, ProdOperationTest,
+                         ::testing::ValuesIn(GetOpMetaData<ProdOpMetadata>(
+                             {ProdOperationExeFunc, Prod3DOperationExeFunc, Prod4DOperationExeFunc}, "Prod")));
 
 TEST_P(ProdOperationTest, TestProd)
 {
     auto test_data = GetParam().test_data_;
-    auto args = ProdOpFuncArgs(
-        GetViewShape(test_data), GetTileShape(test_data), GetValueByName<std::vector<int64_t>>(test_data, "dims"),
-        GetValueByName<bool>(test_data, "keepDim"));
+    auto args = ProdOpFuncArgs(GetViewShape(test_data), GetTileShape(test_data),
+                               GetValueByName<std::vector<int64_t>>(test_data, "dims"),
+                               GetValueByName<bool>(test_data, "keepDim"));
     auto testCase = CreateTestCaseDesc<ProdOpMetadata>(GetParam(), &args);
     TestExecutor::runTest(testCase);
 }

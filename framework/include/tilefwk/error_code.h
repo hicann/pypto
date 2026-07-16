@@ -546,11 +546,7 @@ enum class ExternalErrorScene : uint32_t {
     PYTHON_CMD_ERROR = 91007U
 };
 
-enum class ForwardSimErrorScene : uint32_t {
-    INVALID_PIPE_TYPE = 92006U,
-    SHAPE_INVALID = 92007U,
-    DEAD_LOCK = 92010U
-};
+enum class ForwardSimErrorScene : uint32_t { INVALID_PIPE_TYPE = 92006U, SHAPE_INVALID = 92007U, DEAD_LOCK = 92010U };
 
 enum class PrecisionSimErrorScene : uint32_t {
     NO_SO_EXISTS = 94001U,

@@ -19,58 +19,28 @@ using namespace npu::tile_fwk;
 
 class TestCodeGenKirin9030Matmul : public CodegenTestLiteNPU {
 public:
-    TestCodeGenKirin9030Matmul() : CodegenTestLiteNPU("Kirin9030"){};
+    TestCodeGenKirin9030Matmul() : CodegenTestLiteNPU("Kirin9030") {};
 };
 
-TEST_F(TestCodeGenKirin9030Matmul, test_matmul_001)
-{
-    TestCodeGenMatmul::Instance().test_matmul_001();
-}
+TEST_F(TestCodeGenKirin9030Matmul, test_matmul_001) { TestCodeGenMatmul::Instance().test_matmul_001(); }
 
-TEST_F(TestCodeGenKirin9030Matmul, DISABLED_test_matmul_002)
-{
-    TestCodeGenMatmul::Instance().test_matmul_002();
-}
+TEST_F(TestCodeGenKirin9030Matmul, DISABLED_test_matmul_002) { TestCodeGenMatmul::Instance().test_matmul_002(); }
 
-TEST_F(TestCodeGenKirin9030Matmul, DISABLED_test_matmul_003)
-{
-    TestCodeGenMatmul::Instance().test_matmul_003();
-}
+TEST_F(TestCodeGenKirin9030Matmul, DISABLED_test_matmul_003) { TestCodeGenMatmul::Instance().test_matmul_003(); }
 
-TEST_F(TestCodeGenKirin9030Matmul, DISABLED_test_matmul_004)
-{
-    TestCodeGenMatmul::Instance().test_matmul_004();
-}
+TEST_F(TestCodeGenKirin9030Matmul, DISABLED_test_matmul_004) { TestCodeGenMatmul::Instance().test_matmul_004(); }
 
-TEST_F(TestCodeGenKirin9030Matmul, DISABLED_test_matmul_005)
-{
-    TestCodeGenMatmul::Instance().test_matmul_005();
-}
+TEST_F(TestCodeGenKirin9030Matmul, DISABLED_test_matmul_005) { TestCodeGenMatmul::Instance().test_matmul_005(); }
 
-TEST_F(TestCodeGenKirin9030Matmul, DISABLED_test_matmul_006)
-{
-    TestCodeGenMatmul::Instance().test_matmul_006();
-}
+TEST_F(TestCodeGenKirin9030Matmul, DISABLED_test_matmul_006) { TestCodeGenMatmul::Instance().test_matmul_006(); }
 
-TEST_F(TestCodeGenKirin9030Matmul, DISABLED_test_matmul_007)
-{
-    TestCodeGenMatmul::Instance().test_matmul_007();
-}
+TEST_F(TestCodeGenKirin9030Matmul, DISABLED_test_matmul_007) { TestCodeGenMatmul::Instance().test_matmul_007(); }
 
-TEST_F(TestCodeGenKirin9030Matmul, test_matmul_008)
-{
-    TestCodeGenMatmul::Instance().test_matmul_008();
-}
+TEST_F(TestCodeGenKirin9030Matmul, test_matmul_008) { TestCodeGenMatmul::Instance().test_matmul_008(); }
 
-TEST_F(TestCodeGenKirin9030Matmul, DISABLED_test_matmul_009)
-{
-    TestCodeGenMatmul::Instance().test_matmul_009();
-}
+TEST_F(TestCodeGenKirin9030Matmul, DISABLED_test_matmul_009) { TestCodeGenMatmul::Instance().test_matmul_009(); }
 
-TEST_F(TestCodeGenKirin9030Matmul, DISABLED_test_matmul_010)
-{
-    TestCodeGenMatmul::Instance().test_matmul_010();
-}
+TEST_F(TestCodeGenKirin9030Matmul, DISABLED_test_matmul_010) { TestCodeGenMatmul::Instance().test_matmul_010(); }
 
 TEST_F(TestCodeGenKirin9030Matmul, DISABLED_test_matmul_s8s8_001)
 {
@@ -82,10 +52,7 @@ TEST_F(TestCodeGenKirin9030Matmul, DISABLED_test_matmul_s8s8_002)
     TestCodeGenMatmul::Instance().test_matmul_s8s8_002();
 }
 
-TEST_F(TestCodeGenKirin9030Matmul, test_matmul_s8s8_003)
-{
-    TestCodeGenMatmul::Instance().test_matmul_s8s8_003();
-}
+TEST_F(TestCodeGenKirin9030Matmul, test_matmul_s8s8_003) { TestCodeGenMatmul::Instance().test_matmul_s8s8_003(); }
 
 TEST_F(TestCodeGenKirin9030Matmul, DISABLED_test_matmul_s8s8_004)
 {

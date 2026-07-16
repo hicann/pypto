@@ -84,8 +84,8 @@ __tf__ PTO_INTERNAL void TCOLMAX_HIGH_PERF(TileDataOut& dstTile, TileDataIn& src
 
 #define OP_TILE_OP_ONLINESOFTMAX TOnlineSoftmax
 template <typename T0, typename T1, typename T2, typename T3, typename T4, typename T5, typename Scalar>
-TILEOP void TOnlineSoftmax(
-    T0 expScoresBf16, T1 columnMax, T2 columnSum, T3 scores, T4 scaledScores, T5 reduceWorkspace, Scalar scale)
+TILEOP void TOnlineSoftmax(T0 expScoresBf16, T1 columnMax, T2 columnSum, T3 scores, T4 scaledScores, T5 reduceWorkspace,
+                           Scalar scale)
 {
     auto expScoresTile = PtoTile<T0>(expScoresBf16);
     auto columnMaxTile = PtoTile<T1>(columnMax);
@@ -100,12 +100,12 @@ TILEOP void TOnlineSoftmax(
     scaledScoresTile.Assign(scaledScores);
     reduceWorkspaceTile.Assign(reduceWorkspace);
 
-    auto &expScoresData = expScoresTile.Data();
-    auto &columnMaxData = columnMaxTile.Data();
-    auto &columnSumData = columnSumTile.Data();
-    auto &scoresData = scoresTile.Data();
-    auto &scaledScoresData = scaledScoresTile.Data();
-    auto &reduceWorkspaceData = reduceWorkspaceTile.Data();
+    auto& expScoresData = expScoresTile.Data();
+    auto& columnMaxData = columnMaxTile.Data();
+    auto& columnSumData = columnSumTile.Data();
+    auto& scoresData = scoresTile.Data();
+    auto& scaledScoresData = scaledScoresTile.Data();
+    auto& reduceWorkspaceData = reduceWorkspaceTile.Data();
 
     TCOLMAX_HIGH_PERF(columnMaxData, scoresData, scale);
 
@@ -119,16 +119,14 @@ TILEOP void TOnlineSoftmax(
     TOnlineSoftmaxSyncV();
     pto::TCVT<false>(expScoresData, scaledScoresData, pto::RoundMode::CAST_ROUND, pto::SaturationMode::OFF);
     TOnlineSoftmaxSyncV();
-    [[pto::last_use(0, 1, 1)]]pto::TCOLSUM(columnSumData, scaledScoresData, reduceWorkspaceData, false);
+    [[pto::last_use(0, 1, 1)]] pto::TCOLSUM(columnSumData, scaledScoresData, reduceWorkspaceData, false);
 }
 
 #define OP_TILE_OP_ONLINESOFTMAXUPDATE TOnlineSoftmaxUpdate
-template <
-    typename T0, typename T1, typename T2, typename T3, typename T4, typename T5, typename T6, typename T7, typename T8,
-    typename T9>
-TILEOP void TOnlineSoftmaxUpdate(
-    T0 updatedMax, T1 updatedSum, T2 updatedOutput, T3 previousMax, T4 previousSum, T5 previousOutput, T6 currentMax,
-    T7 currentSum, T8 currentOutput, T9 updateWorkspace)
+template <typename T0, typename T1, typename T2, typename T3, typename T4, typename T5, typename T6, typename T7,
+          typename T8, typename T9>
+TILEOP void TOnlineSoftmaxUpdate(T0 updatedMax, T1 updatedSum, T2 updatedOutput, T3 previousMax, T4 previousSum,
+                                 T5 previousOutput, T6 currentMax, T7 currentSum, T8 currentOutput, T9 updateWorkspace)
 {
     auto updatedMaxTile = PtoTile<T0>(updatedMax);
     auto updatedSumTile = PtoTile<T1>(updatedSum);
@@ -150,10 +148,10 @@ TILEOP void TOnlineSoftmaxUpdate(
     constexpr auto outputTileH = TileOp::GetTensorTileShapeDim<T2, DIM_4TH, MAX_DIMS>();
     constexpr auto workspaceTileW = TileOp::GetTensorTileShapeDim<T9, DIM_5TH, MAX_DIMS>();
     constexpr size_t statisticStrideBytes = workspaceTileW * sizeof(typename T0::Type);
-    using StatisticScratchTile = pto::Tile<
-        pto::TileType::Vec, typename T0::Type, statisticTileH, workspaceTileW, pto::BLayout::RowMajor, -1, -1>;
-    using OutputScratchTile =
-        pto::Tile<pto::TileType::Vec, typename T2::Type, outputTileH, workspaceTileW, pto::BLayout::RowMajor, -1, -1>;
+    using StatisticScratchTile = pto::Tile<pto::TileType::Vec, typename T0::Type, statisticTileH, workspaceTileW,
+                                           pto::BLayout::RowMajor, -1, -1>;
+    using OutputScratchTile = pto::Tile<pto::TileType::Vec, typename T2::Type, outputTileH, workspaceTileW,
+                                        pto::BLayout::RowMajor, -1, -1>;
     StatisticScratchTile previousScaleTile(statisticHeight, statisticWidth);
     StatisticScratchTile currentScaleTile(statisticHeight, statisticWidth);
     StatisticScratchTile scaledCurrentSumTile(statisticHeight, statisticWidth);
@@ -168,15 +166,15 @@ TILEOP void TOnlineSoftmaxUpdate(
     currentMaxTile.Assign(currentMax);
     currentSumTile.Assign(currentSum);
     currentOutputTile.Assign(currentOutput);
-    auto &updatedMaxData = updatedMaxTile.Data();
-    auto &updatedSumData = updatedSumTile.Data();
-    auto &updatedOutputData = updatedOutputTile.Data();
-    auto &previousMaxData = previousMaxTile.Data();
-    auto &previousSumData = previousSumTile.Data();
-    auto &previousOutputData = previousOutputTile.Data();
-    auto &currentMaxData = currentMaxTile.Data();
-    auto &currentSumData = currentSumTile.Data();
-    auto &currentOutputData = currentOutputTile.Data();
+    auto& updatedMaxData = updatedMaxTile.Data();
+    auto& updatedSumData = updatedSumTile.Data();
+    auto& updatedOutputData = updatedOutputTile.Data();
+    auto& previousMaxData = previousMaxTile.Data();
+    auto& previousSumData = previousSumTile.Data();
+    auto& previousOutputData = previousOutputTile.Data();
+    auto& currentMaxData = currentMaxTile.Data();
+    auto& currentSumData = currentSumTile.Data();
+    auto& currentOutputData = currentOutputTile.Data();
 
     pto::TASSIGN(previousScaleTile, (uint64_t)(updateWorkspace.GetAddr()));
     pto::TASSIGN(currentScaleTile, (uint64_t)(updateWorkspace.GetAddr() + statisticStrideBytes));
@@ -186,33 +184,33 @@ TILEOP void TOnlineSoftmaxUpdate(
     pto::TMAX(updatedMaxData, previousMaxData, currentMaxData);
     TOnlineSoftmaxSyncV();
 
-    [[pto::last_use(0, 1, 0)]]pto::TSUB(previousScaleTile, previousMaxData, updatedMaxData);
+    [[pto::last_use(0, 1, 0)]] pto::TSUB(previousScaleTile, previousMaxData, updatedMaxData);
     TOnlineSoftmaxSyncV();
 
     pto::TEXP(previousScaleTile, previousScaleTile);
     TOnlineSoftmaxSyncV();
 
-    [[pto::last_use(0, 1, 0)]]pto::TSUB(currentScaleTile, currentMaxData, updatedMaxData);
+    [[pto::last_use(0, 1, 0)]] pto::TSUB(currentScaleTile, currentMaxData, updatedMaxData);
     TOnlineSoftmaxSyncV();
 
     pto::TEXP(currentScaleTile, currentScaleTile);
     TOnlineSoftmaxSyncV();
 
-    [[pto::last_use(0, 0, 1)]]pto::TMUL(updatedSumData, previousScaleTile, previousSumData);
+    [[pto::last_use(0, 0, 1)]] pto::TMUL(updatedSumData, previousScaleTile, previousSumData);
     TOnlineSoftmaxSyncV();
 
-    [[pto::last_use(0, 0, 1)]]pto::TMUL(scaledCurrentSumTile, currentScaleTile, currentSumData);
+    [[pto::last_use(0, 0, 1)]] pto::TMUL(scaledCurrentSumTile, currentScaleTile, currentSumData);
     TOnlineSoftmaxSyncV();
-    [[pto::last_use(0, 0, 1)]]pto::TADD(updatedSumData, updatedSumData, scaledCurrentSumTile);
-    TOnlineSoftmaxSyncV();
-
-    [[pto::last_use(0, 1, 1)]]pto::TCOLEXPANDMUL(updatedOutputData, previousOutputData, previousScaleTile);
+    [[pto::last_use(0, 0, 1)]] pto::TADD(updatedSumData, updatedSumData, scaledCurrentSumTile);
     TOnlineSoftmaxSyncV();
 
-    [[pto::last_use(0, 1, 1)]]pto::TCOLEXPANDMUL(scaledCurrentOutputTile, currentOutputData, currentScaleTile);
+    [[pto::last_use(0, 1, 1)]] pto::TCOLEXPANDMUL(updatedOutputData, previousOutputData, previousScaleTile);
     TOnlineSoftmaxSyncV();
 
-    [[pto::last_use(0, 0, 1)]]pto::TADD(updatedOutputData, updatedOutputData, scaledCurrentOutputTile);
+    [[pto::last_use(0, 1, 1)]] pto::TCOLEXPANDMUL(scaledCurrentOutputTile, currentOutputData, currentScaleTile);
+    TOnlineSoftmaxSyncV();
+
+    [[pto::last_use(0, 0, 1)]] pto::TADD(updatedOutputData, updatedOutputData, scaledCurrentOutputTile);
     TOnlineSoftmaxSyncV();
 }
 

@@ -22,17 +22,16 @@
 #define OP_TILE_OP_CAST TCast
 
 #define INIT_TILE(tile, TileType, validH, validW, shape3, shape4) \
-    if constexpr(validH == -1 && validW == -1) { \
-        tile = TileType(shape3, shape4); \
-    } else if constexpr(validH == -1) { \
-        tile = TileType(shape3); \
-    } else if constexpr(validW == -1) { \
-        tile = TileType(shape4); \
+    if constexpr (validH == -1 && validW == -1) {                 \
+        tile = TileType(shape3, shape4);                          \
+    } else if constexpr (validH == -1) {                          \
+        tile = TileType(shape3);                                  \
+    } else if constexpr (validW == -1) {                          \
+        tile = TileType(shape4);                                  \
     }
 
-template <
-    typename LastUse = LastUse3Dim<0, 0, 0>, unsigned Mode, pto::SaturationMode satmode = pto::SaturationMode::OFF,
-    typename T0, typename T1, typename T2>
+template <typename LastUse = LastUse3Dim<0, 0, 0>, unsigned Mode,
+          pto::SaturationMode satmode = pto::SaturationMode::OFF, typename T0, typename T1, typename T2>
 TILEOP void TCast(T0 dst, T1 src, T2 tmp)
 {
     constexpr size_t expectSize = 5;
@@ -74,12 +73,12 @@ TILEOP void TCast(T0 dst, T1 src, T2 tmp)
     for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
         for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
             for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
-                using TileDefineDst = pto::Tile<
-                    pto::TileType::Vec, DstDtype, dstTileH, dstTileW, pto::BLayout::RowMajor, dstValidH, dstValidW>;
-                using TileDefineSrc = pto::Tile<
-                    pto::TileType::Vec, SrcDtype, srcTileH, srcTileW, pto::BLayout::RowMajor, srcValidH, srcValidW>;
-                using TmpTile = pto::Tile<
-                    pto::TileType::Vec, int32_t, tmpTileH, tmpTileW, pto::BLayout::RowMajor, tmpValidH, tmpValidW>;
+                using TileDefineDst = pto::Tile<pto::TileType::Vec, DstDtype, dstTileH, dstTileW,
+                                                pto::BLayout::RowMajor, dstValidH, dstValidW>;
+                using TileDefineSrc = pto::Tile<pto::TileType::Vec, SrcDtype, srcTileH, srcTileW,
+                                                pto::BLayout::RowMajor, srcValidH, srcValidW>;
+                using TmpTile = pto::Tile<pto::TileType::Vec, int32_t, tmpTileH, tmpTileW, pto::BLayout::RowMajor,
+                                          tmpValidH, tmpValidW>;
                 TileDefineDst dstTile;
                 TileDefineSrc srcTile;
                 TmpTile tmpTile;
@@ -91,16 +90,15 @@ TILEOP void TCast(T0 dst, T1 src, T2 tmp)
                 pto::TASSIGN(tmpTile, (uint64_t)(tmp.GetAddr()));
                 pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + dstOffset * dstTypeSize));
                 pto::TASSIGN(srcTile, (uint64_t)(src.GetAddr() + srcOffset * srcTypeSize));
-                PTO_WITH_LAST_USE(
-                    pto::TCVT(dstTile, srcTile, tmpTile, static_cast<pto::RoundMode>(Mode), satmode), n1, n2, n3);
+                PTO_WITH_LAST_USE(pto::TCVT(dstTile, srcTile, tmpTile, static_cast<pto::RoundMode>(Mode), satmode), n1,
+                                  n2, n3);
             }
         }
     }
 }
 
-template <
-    typename LastUse = LastUse2Dim<0, 0>, unsigned Mode, pto::SaturationMode satmode = pto::SaturationMode::OFF,
-    typename T0, typename T1>
+template <typename LastUse = LastUse2Dim<0, 0>, unsigned Mode, pto::SaturationMode satmode = pto::SaturationMode::OFF,
+          typename T0, typename T1>
 TILEOP void TCast(T0 dst, T1 src)
 {
     constexpr size_t expectSize = 5;
@@ -137,10 +135,10 @@ TILEOP void TCast(T0 dst, T1 src)
     for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
         for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
             for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
-                using TileDefineDst = pto::Tile<
-                    pto::TileType::Vec, DstDtype, dstTileH, dstTileW, pto::BLayout::RowMajor, dstValidH, dstValidW>;
-                using TileDefineSrc = pto::Tile<
-                    pto::TileType::Vec, SrcDtype, srcTileH, srcTileW, pto::BLayout::RowMajor, srcValidH, srcValidW>;
+                using TileDefineDst = pto::Tile<pto::TileType::Vec, DstDtype, dstTileH, dstTileW,
+                                                pto::BLayout::RowMajor, dstValidH, dstValidW>;
+                using TileDefineSrc = pto::Tile<pto::TileType::Vec, SrcDtype, srcTileH, srcTileW,
+                                                pto::BLayout::RowMajor, srcValidH, srcValidW>;
                 TileDefineDst dstTile;
                 TileDefineSrc srcTile;
                 INIT_TILE(dstTile, TileDefineDst, dstValidH, dstValidW, shape3, shape4)

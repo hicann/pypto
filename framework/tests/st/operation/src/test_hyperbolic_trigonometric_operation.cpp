@@ -18,10 +18,11 @@
 using namespace tile_fwk::test_operation;
 namespace {
 
-enum class HyperbolicTrigOp {Sinh, Cosh, ASinh, ACosh};
+enum class HyperbolicTrigOp { Sinh, Cosh, ASinh, ACosh };
 
 struct HyperbolicTrigOpFuncArgs : public OpFuncArgs {
-    HyperbolicTrigOpFuncArgs(HyperbolicTrigOp op, const std::vector<int64_t>& viewShape, const std::vector<int64_t>& tileShape)
+    HyperbolicTrigOpFuncArgs(HyperbolicTrigOp op, const std::vector<int64_t>& viewShape,
+                             const std::vector<int64_t>& tileShape)
         : op_(op), viewShape_(viewShape), tileShape_(tileShape)
     {}
 
@@ -55,8 +56,8 @@ static inline Tensor ApplyHyperbolicTrigOp(HyperbolicTrigOp op, const Tensor& t0
     }
 }
 
-static void HyperbolicTrigOpOperationExeFunc2Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void HyperbolicTrigOpOperationExeFunc2Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                                  const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0]})
     {
@@ -69,8 +70,8 @@ static void HyperbolicTrigOpOperationExeFunc2Dims(
             LOOP("LOOP_L0_bIdx", FunctionType::DYNAMIC_LOOP, bIdx, LoopRange(0, bloop, 1))
             {
                 std::vector<SymbolicScalar> offset = {bIdx * args->viewShape_[0]};
-                auto viewTensor = View(
-                    inputs[0], args->viewShape_, {std::min(firstDim - bIdx * firstViewShape, firstViewShape)}, offset);
+                auto viewTensor = View(inputs[0], args->viewShape_,
+                                       {std::min(firstDim - bIdx * firstViewShape, firstViewShape)}, offset);
                 TileShape::Current().SetVecTile(args->tileShape_);
                 auto res = ApplyHyperbolicTrigOp(args->op_, viewTensor);
                 Assemble(res, offset, outputs[0]);
@@ -89,11 +90,10 @@ static void HyperbolicTrigOpOperationExeFunc2Dims(
                 LOOP("LOOP_L1_sIdx", FunctionType::DYNAMIC_LOOP, sIdx, LoopRange(0, sloop, 1))
                 {
                     std::vector<SymbolicScalar> offset = {bIdx * firstViewShape, sIdx * secondViewShape};
-                    auto viewTensor = View(
-                        inputs[0], args->viewShape_,
-                        {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                        std::min(secondDim - sIdx * secondViewShape, secondViewShape)},
-                        offset);
+                    auto viewTensor = View(inputs[0], args->viewShape_,
+                                           {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                            std::min(secondDim - sIdx * secondViewShape, secondViewShape)},
+                                           offset);
                     TileShape::Current().SetVecTile(args->tileShape_);
                     auto res = ApplyHyperbolicTrigOp(args->op_, viewTensor);
                     Assemble(res, offset, outputs[0]);
@@ -103,8 +103,8 @@ static void HyperbolicTrigOpOperationExeFunc2Dims(
     }
 }
 
-static void HyperbolicTrigOpOperationExeFunc3Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void HyperbolicTrigOpOperationExeFunc3Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                                  const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0]})
     {
@@ -125,15 +125,13 @@ static void HyperbolicTrigOpOperationExeFunc3Dims(
             {
                 LOOP("LOOP_L3_nIdx", FunctionType::DYNAMIC_LOOP, nIdx, LoopRange(0, nloop, 1))
                 {
-                    std::vector<SymbolicScalar> offset = {
-                        bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape
-                    };
-                    auto viewTensor = View(
-                        inputs[0], args->viewShape_,
-                        {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                         std::min(secondDim - sIdx * secondViewShape, secondViewShape),
-                         std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape)},
-                        offset);
+                    std::vector<SymbolicScalar> offset = {bIdx * firstViewShape, sIdx * secondViewShape,
+                                                          nIdx * thirdViewShape};
+                    auto viewTensor = View(inputs[0], args->viewShape_,
+                                           {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                            std::min(secondDim - sIdx * secondViewShape, secondViewShape),
+                                            std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape)},
+                                           offset);
                     TileShape::Current().SetVecTile(args->tileShape_);
                     auto res = ApplyHyperbolicTrigOp(args->op_, viewTensor);
                     Assemble(res, offset, outputs[0]);
@@ -143,8 +141,8 @@ static void HyperbolicTrigOpOperationExeFunc3Dims(
     }
 }
 
-static void HyperbolicTrigOpOperationExeFunc4Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+static void HyperbolicTrigOpOperationExeFunc4Dims(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
+                                                  const OpFuncArgs* opArgs)
 {
     FUNCTION("main", {inputs[0]}, {outputs[0]})
     {
@@ -171,17 +169,14 @@ static void HyperbolicTrigOpOperationExeFunc4Dims(
                 {
                     LOOP("LOOP_L3_nIdx", FunctionType::DYNAMIC_LOOP, nIdx, LoopRange(0, nloop, 1))
                     {
-                        std::vector<SymbolicScalar> offset = {
-                            bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape,
-                            nIdx * fourthViewShape
-                        };
-                        auto viewTensor = View(
-                            inputs[0], args->viewShape_,
-                            {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                             std::min(secondDim - sIdx * secondViewShape, secondViewShape),
-                             std::min(thirdDim - mIdx * thirdViewShape, thirdViewShape),
-                             std::min(fourthDim - nIdx * fourthViewShape, fourthViewShape)},
-                            offset);
+                        std::vector<SymbolicScalar> offset = {bIdx * firstViewShape, sIdx * secondViewShape,
+                                                              mIdx * thirdViewShape, nIdx * fourthViewShape};
+                        auto viewTensor = View(inputs[0], args->viewShape_,
+                                               {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                                std::min(secondDim - sIdx * secondViewShape, secondViewShape),
+                                                std::min(thirdDim - mIdx * thirdViewShape, thirdViewShape),
+                                                std::min(fourthDim - nIdx * fourthViewShape, fourthViewShape)},
+                                               offset);
                         TileShape::Current().SetVecTile(args->tileShape_);
                         auto res = ApplyHyperbolicTrigOp(args->op_, viewTensor);
                         Assemble(res, offset, outputs[0]);
@@ -192,14 +187,13 @@ static void HyperbolicTrigOpOperationExeFunc4Dims(
     }
 }
 
-
 class SinhOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac_param<HyperbolicTrigOpMetaData> {};
 
-INSTANTIATE_TEST_SUITE_P(
-    TestSinh, SinhOperationTest,
-    ::testing::ValuesIn(tile_fwk::test_operation::GetOpMetaData<HyperbolicTrigOpMetaData>(
-        {HyperbolicTrigOpOperationExeFunc2Dims, HyperbolicTrigOpOperationExeFunc3Dims, HyperbolicTrigOpOperationExeFunc4Dims},
-        "Sinh")));
+INSTANTIATE_TEST_SUITE_P(TestSinh, SinhOperationTest,
+                         ::testing::ValuesIn(tile_fwk::test_operation::GetOpMetaData<HyperbolicTrigOpMetaData>(
+                             {HyperbolicTrigOpOperationExeFunc2Dims, HyperbolicTrigOpOperationExeFunc3Dims,
+                              HyperbolicTrigOpOperationExeFunc4Dims},
+                             "Sinh")));
 
 TEST_P(SinhOperationTest, TestSinh)
 {
@@ -211,11 +205,11 @@ TEST_P(SinhOperationTest, TestSinh)
 
 class CoshOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac_param<HyperbolicTrigOpMetaData> {};
 
-INSTANTIATE_TEST_SUITE_P(
-    TestCosh, CoshOperationTest,
-    ::testing::ValuesIn(tile_fwk::test_operation::GetOpMetaData<HyperbolicTrigOpMetaData>(
-        {HyperbolicTrigOpOperationExeFunc2Dims, HyperbolicTrigOpOperationExeFunc3Dims, HyperbolicTrigOpOperationExeFunc4Dims},
-        "Cosh")));
+INSTANTIATE_TEST_SUITE_P(TestCosh, CoshOperationTest,
+                         ::testing::ValuesIn(tile_fwk::test_operation::GetOpMetaData<HyperbolicTrigOpMetaData>(
+                             {HyperbolicTrigOpOperationExeFunc2Dims, HyperbolicTrigOpOperationExeFunc3Dims,
+                              HyperbolicTrigOpOperationExeFunc4Dims},
+                             "Cosh")));
 
 TEST_P(CoshOperationTest, TestCosh)
 {
@@ -227,11 +221,11 @@ TEST_P(CoshOperationTest, TestCosh)
 
 class ASinhOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac_param<HyperbolicTrigOpMetaData> {};
 
-INSTANTIATE_TEST_SUITE_P(
-    TestASinh, ASinhOperationTest,
-    ::testing::ValuesIn(tile_fwk::test_operation::GetOpMetaData<HyperbolicTrigOpMetaData>(
-        {HyperbolicTrigOpOperationExeFunc2Dims, HyperbolicTrigOpOperationExeFunc3Dims, HyperbolicTrigOpOperationExeFunc4Dims},
-        "ASinh")));
+INSTANTIATE_TEST_SUITE_P(TestASinh, ASinhOperationTest,
+                         ::testing::ValuesIn(tile_fwk::test_operation::GetOpMetaData<HyperbolicTrigOpMetaData>(
+                             {HyperbolicTrigOpOperationExeFunc2Dims, HyperbolicTrigOpOperationExeFunc3Dims,
+                              HyperbolicTrigOpOperationExeFunc4Dims},
+                             "ASinh")));
 
 TEST_P(ASinhOperationTest, TestASinh)
 {
@@ -243,11 +237,11 @@ TEST_P(ASinhOperationTest, TestASinh)
 
 class ACoshOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac_param<HyperbolicTrigOpMetaData> {};
 
-INSTANTIATE_TEST_SUITE_P(
-    TestACosh, ACoshOperationTest,
-    ::testing::ValuesIn(tile_fwk::test_operation::GetOpMetaData<HyperbolicTrigOpMetaData>(
-        {HyperbolicTrigOpOperationExeFunc2Dims, HyperbolicTrigOpOperationExeFunc3Dims, HyperbolicTrigOpOperationExeFunc4Dims},
-        "ACosh")));
+INSTANTIATE_TEST_SUITE_P(TestACosh, ACoshOperationTest,
+                         ::testing::ValuesIn(tile_fwk::test_operation::GetOpMetaData<HyperbolicTrigOpMetaData>(
+                             {HyperbolicTrigOpOperationExeFunc2Dims, HyperbolicTrigOpOperationExeFunc3Dims,
+                              HyperbolicTrigOpOperationExeFunc4Dims},
+                             "ACosh")));
 
 TEST_P(ACoshOperationTest, TestACosh)
 {
@@ -257,4 +251,4 @@ TEST_P(ACoshOperationTest, TestACosh)
     tile_fwk::test_operation::TestExecutor::runTest(testCase);
 }
 
-} //namespace
+} // namespace

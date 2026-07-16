@@ -43,10 +43,10 @@ namespace ir {
 // Common helpers
 // ---------------------------------------------------------------------------
 
-static TypePtr DeduceBlockOutFillPadType(
-    [[maybe_unused]] const std::vector<ExprPtr>& args,
-    [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs, const std::string& op_name,
-    bool allow_expand, bool require_shared_backing_storage = false)
+static TypePtr DeduceBlockOutFillPadType([[maybe_unused]] const std::vector<ExprPtr>& args,
+                                         [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs,
+                                         const std::string& op_name, bool allow_expand,
+                                         bool require_shared_backing_storage = false)
 {
     auto out_type = As<TileType>(DeduceBlockOutTileType(args, kwargs, op_name, 2));
     CHECK(out_type) << op_name << ": out must be TileType";
@@ -66,9 +66,8 @@ static TypePtr DeduceBlockOutFillPadType(
             << op_name << ": src and out must share backing storage";
         auto src_memref = src_type->memref_.value();
         auto out_memref = out_type->memref_.value();
-        CHECK(
-            src_memref->memorySpace_ == out_memref->memorySpace_ &&
-            structural_equal(src_memref->addr_, out_memref->addr_))
+        CHECK(src_memref->memorySpace_ == out_memref->memorySpace_ &&
+              structural_equal(src_memref->addr_, out_memref->addr_))
             << op_name << ": src and out must share backing storage";
 
         CHECK(src_type->shape_.size() == 0x2 && out_type->shape_.size() == 0x2)
@@ -104,10 +103,9 @@ static TypePtr DeduceBlockOutFillPadType(
 // block.load: (out, tensor, offsets) -> TileType (out's type)
 REGISTER_OP("block.load")
     .set_op_category("BlockOp")
-    .set_description(
-        "Block explicit-output load: copy data from a global tensor into a pre-allocated tile. "
-        "The output tile (first arg) defines the destination buffer; its type is returned. "
-        "Partition view sizes are derived from the tile type's shape/valid_shape.")
+    .set_description("Block explicit-output load: copy data from a global tensor into a pre-allocated tile. "
+                     "The output tile (first arg) defines the destination buffer; its type is returned. "
+                     "Partition view sizes are derived from the tile type's shape/valid_shape.")
     .add_argument("out", "Pre-allocated destination tile (TileType)")
     .add_argument("tensor", "Source tensor (TensorType)")
     .add_argument("offsets", "Offset tuple per dimension (MakeTuple)")
@@ -144,8 +142,7 @@ REGISTER_OP("block.store")
         auto offsets = As<MakeTuple>(args[2]);
         CHECK(offsets) << "block.store: arg 2 must be MakeTuple (offsets)";
         if (args.size() == 4) {
-            CHECK(As<ScalarType>(args[3]->GetType()))
-                << "block.store: arg 3 (pre_quant_scalar) must be ScalarType";
+            CHECK(As<ScalarType>(args[3]->GetType())) << "block.store: arg 3 (pre_quant_scalar) must be ScalarType";
         }
         return out_type;
     });
@@ -175,9 +172,8 @@ REGISTER_OP("block.store_fp")
 // block.move: (out, src_tile, [offset]) -> TileType (out's type)
 REGISTER_OP("block.move")
     .set_op_category("BlockOp")
-    .set_description(
-        "Block explicit-output move: transfer a tile between memory levels into a pre-allocated buffer. "
-        "The TMOV variant is determined by the output tile's memory space.")
+    .set_description("Block explicit-output move: transfer a tile between memory levels into a pre-allocated buffer. "
+                     "The TMOV variant is determined by the output tile's memory space.")
     .add_argument("out", "Pre-allocated destination tile (TileType)")
     .add_argument("src", "Source tile (TileType)")
     .add_argument("offset", "Optional 2D offset [offset_m, offset_k] for sub-tile extraction (TupleType)")
@@ -221,17 +217,15 @@ REGISTER_OP("block.move_fp")
 // block.insert: (out, src, row, col) -> TileType
 REGISTER_OP("block.insert")
     .set_op_category("BlockOp")
-    .set_description(
-        "Block explicit-output insert: insert source sub-tile into destination tile at a 2-D offset. "
-        "Corresponds to pto-isa TINSERT instruction for UB→L1 transfer.")
+    .set_description("Block explicit-output insert: insert source sub-tile into destination tile at a 2-D offset. "
+                     "Corresponds to pto-isa TINSERT instruction for UB→L1 transfer.")
     .add_argument("out", "Destination tile (TileType, Mat memory)")
     .add_argument("src", "Source sub-tile (TileType, Vec memory)")
     .add_argument("row", "Row offset where insertion begins")
     .add_argument("col", "Column offset where insertion begins")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
-        CHECK(args.size() == 4)
-            << "The operator block.insert requires 4 arguments, but got " << args.size();
+        CHECK(args.size() == 4) << "The operator block.insert requires 4 arguments, but got " << args.size();
         auto out_type = As<TileType>(args[0]->GetType());
         CHECK(out_type) << "block.insert: first argument (out) must be TileType";
         return out_type;
@@ -327,9 +321,8 @@ REGISTER_OP("block.fillpad_expand")
 // block.set_validshape: (tile, row, col) -> TileType (tile's type)
 REGISTER_OP("block.set_validshape")
     .set_op_category("BlockOp")
-    .set_description(
-        "Update valid-shape metadata on a dynamic tile in place. "
-        "Emits a pto.set_validshape instruction to set the runtime valid row/col.")
+    .set_description("Update valid-shape metadata on a dynamic tile in place. "
+                     "Emits a pto.set_validshape instruction to set the runtime valid row/col.")
     .add_argument("tile", "Dynamic tile buffer to update (TileType)")
     .add_argument("row", "Runtime valid row count (ScalarType or constant)")
     .add_argument("col", "Runtime valid column count (ScalarType or constant)")
@@ -341,10 +334,9 @@ REGISTER_OP("block.set_validshape")
 // block.set_stride: (tensor, row_stride, col_stride) -> TensorType (tensor's type)
 REGISTER_OP("block.set_stride")
     .set_op_category("BlockOp")
-    .set_description(
-        "Override the per-dimension stride of a global tensor descriptor in place. "
-        "Emits a GlobalTensor::SetStride call so subsequent loads/stores walk the "
-        "tensor with the supplied (row, col) element strides.")
+    .set_description("Override the per-dimension stride of a global tensor descriptor in place. "
+                     "Emits a GlobalTensor::SetStride call so subsequent loads/stores walk the "
+                     "tensor with the supplied (row, col) element strides.")
     .add_argument("tensor", "Global tensor whose stride descriptor is rewritten (TensorType)")
     .add_argument("row", "Runtime row stride in elements (ScalarType or constant)")
     .add_argument("col", "Runtime column stride in elements (ScalarType or constant)")

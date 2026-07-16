@@ -80,8 +80,8 @@ TILEOP void UnaryComputeImpl(T0 dst, T1 src)
 }
 
 template <typename T, typename HalfTileDefineSrc, typename TileDefineDst, typename B16TileDefineSrc>
-TILEOP void IsFiniteCalcImpl(
-    TileDefineDst dst, B16TileDefineSrc src, B16TileDefineSrc bufferB16, HalfTileDefineSrc bufferFP16)
+TILEOP void IsFiniteCalcImpl(TileDefineDst dst, B16TileDefineSrc src, B16TileDefineSrc bufferB16,
+                             HalfTileDefineSrc bufferFP16)
 {
     int16_t mask = 0;
     if constexpr (std::is_same_v<T, bfloat16_t>) {
@@ -198,7 +198,8 @@ TILEOP void BrcbCompute(T0 dst, T1 src)
 }
 
 #define OP_TILE_OP_EXP TExp
-template <auto PrecisionType = pto::ExpAlgorithm::DEFAULT, typename LastUse = LastUse2Dim<0, 0>, typename T0, typename T1>
+template <auto PrecisionType = pto::ExpAlgorithm::DEFAULT, typename LastUse = LastUse2Dim<0, 0>, typename T0,
+          typename T1>
 TILEOP void TExp(T0 dst, T1 src)
 {
     UnaryCompute<UnaryOp::EXP, PrecisionType, LastUse>(dst, src);
@@ -212,7 +213,8 @@ TILEOP void TRsqrt(T0 dst, T1 src)
 }
 
 #define OP_TILE_OP_SQRT TSqrt
-template <auto PrecisionType = pto::SqrtAlgorithm::DEFAULT, typename LastUse = LastUse2Dim<0, 0>, typename T0, typename T1>
+template <auto PrecisionType = pto::SqrtAlgorithm::DEFAULT, typename LastUse = LastUse2Dim<0, 0>, typename T0,
+          typename T1>
 TILEOP void TSqrt(T0 dst, T1 src)
 {
     UnaryCompute<UnaryOp::SQRT, PrecisionType, LastUse>(dst, src);
@@ -221,8 +223,8 @@ TILEOP void TSqrt(T0 dst, T1 src)
 template <typename DstTileTensor, typename SrcTileTensor, typename BufferTileTensor>
 TILEOP void TIsFiniteCombineAxis(DstTileTensor dst, SrcTileTensor src, BufferTileTensor buffer)
 {
-    using DstType =
-        std::conditional_t<std::is_same_v<typename DstTileTensor::Type, bool>, uint8_t, typename DstTileTensor::Type>;
+    using DstType = std::conditional_t<std::is_same_v<typename DstTileTensor::Type, bool>, uint8_t,
+                                       typename DstTileTensor::Type>;
     using SrcType = typename SrcTileTensor::Type;
 
     constexpr size_t tileSrcH = GetMergedAxisIfNeed<SrcTileTensor, true>();
@@ -234,9 +236,8 @@ TILEOP void TIsFiniteCombineAxis(DstTileTensor dst, SrcTileTensor src, BufferTil
     constexpr int validW = GetValidWidth<SrcTileTensor>();
 
     if constexpr (IsIntegralType<SrcType>()) {
-        using TileDefineDst = pto::Tile<
-            pto::TileType::Vec, int16_t, tileDstH, (tileDstW + 1) / 2, pto::BLayout::RowMajor, validH,
-            (validW + 1) / 2>;
+        using TileDefineDst = pto::Tile<pto::TileType::Vec, int16_t, tileDstH, (tileDstW + 1) / 2,
+                                        pto::BLayout::RowMajor, validH, (validW + 1) / 2>;
         TileDefineDst dstTile;
         pto::TASSIGN(dstTile, dst.GetAddr());
         int16_t mask = 0x0101;
@@ -246,14 +247,14 @@ TILEOP void TIsFiniteCombineAxis(DstTileTensor dst, SrcTileTensor src, BufferTil
         SyncV();
         return;
     } else {
-        using TileDefineDst =
-            pto::Tile<pto::TileType::Vec, DstType, tileDstH, tileDstW, pto::BLayout::RowMajor, validH, validW>;
-        using HalfTileDefineSrc = pto::Tile<
-            pto::TileType::Vec, half, tileSrcH, tileSrcW * sizeof(SrcType) / sizeof(half), pto::BLayout::RowMajor,
-            validH, validW>;
-        using B16TileDefineSrc = pto::Tile<
-            pto::TileType::Vec, int16_t, tileSrcH, tileSrcW * sizeof(SrcType) / sizeof(int16_t), pto::BLayout::RowMajor,
-            validH, validW>;
+        using TileDefineDst = pto::Tile<pto::TileType::Vec, DstType, tileDstH, tileDstW, pto::BLayout::RowMajor, validH,
+                                        validW>;
+        using HalfTileDefineSrc = pto::Tile<pto::TileType::Vec, half, tileSrcH,
+                                            tileSrcW * sizeof(SrcType) / sizeof(half), pto::BLayout::RowMajor, validH,
+                                            validW>;
+        using B16TileDefineSrc = pto::Tile<pto::TileType::Vec, int16_t, tileSrcH,
+                                           tileSrcW * sizeof(SrcType) / sizeof(int16_t), pto::BLayout::RowMajor, validH,
+                                           validW>;
 
         HalfTileDefineSrc bufferTile;
         TileDefineDst dstTile;
@@ -263,8 +264,8 @@ TILEOP void TIsFiniteCombineAxis(DstTileTensor dst, SrcTileTensor src, BufferTil
         pto::TASSIGN(srcTile, src.GetAddr());
 
         if constexpr (std::is_same_v<SrcType, float>) {
-            using FP32TileDefineSrc =
-                pto::Tile<pto::TileType::Vec, float, tileSrcH, tileSrcW, pto::BLayout::RowMajor, validH, validW>;
+            using FP32TileDefineSrc = pto::Tile<pto::TileType::Vec, float, tileSrcH, tileSrcW, pto::BLayout::RowMajor,
+                                                validH, validW>;
             FP32TileDefineSrc srcFP32;
             HalfTileDefineSrc srcFP16;
             pto::TASSIGN(srcFP32, src.GetAddr());
@@ -280,8 +281,8 @@ TILEOP void TIsFiniteCombineAxis(DstTileTensor dst, SrcTileTensor src, BufferTil
 template <typename DstTileTensor, typename SrcTileTensor>
 TILEOP void TIsFinite4Integral(DstTileTensor dst, SrcTileTensor src)
 {
-    using DstType =
-        std::conditional_t<std::is_same_v<typename DstTileTensor::Type, bool>, uint8_t, typename DstTileTensor::Type>;
+    using DstType = std::conditional_t<std::is_same_v<typename DstTileTensor::Type, bool>, uint8_t,
+                                       typename DstTileTensor::Type>;
     using SrcType = typename SrcTileTensor::Type;
     constexpr size_t tileSrcH = GetMergedAxisIfNeed<SrcTileTensor, false>();
     constexpr size_t tileSrcW = TileOp::GetTensorTileShapeDim<SrcTileTensor, DIM_5TH, MAX_DIMS>();
@@ -291,8 +292,8 @@ TILEOP void TIsFinite4Integral(DstTileTensor dst, SrcTileTensor src)
     int validH = src.GetLayout().template GetShapeDim<DIM_4TH, MAX_DIMS>();
     int validW = src.GetLayout().template GetShapeDim<DIM_5TH, MAX_DIMS>();
 
-    using TileDefineDst =
-        pto::Tile<pto::TileType::Vec, int16_t, tileDstH, tileDstW / 2, pto::BLayout::RowMajor, -1, -1>;
+    using TileDefineDst = pto::Tile<pto::TileType::Vec, int16_t, tileDstH, tileDstW / 2, pto::BLayout::RowMajor, -1,
+                                    -1>;
     TileDefineDst dstTile(validH, (validW + 1) / 2);
     pto::TASSIGN(dstTile, dst.GetAddr());
     const auto dstLayout = dst.GetLayout();
@@ -319,8 +320,8 @@ template <typename DstTileTensor, typename SrcTileTensor, typename BufferTileTen
 TILEOP void TIsFinite4Floats(DstTileTensor dst, SrcTileTensor src, BufferTileTensor buffer)
 {
     using SrcType = typename SrcTileTensor::Type;
-    using DstType =
-        std::conditional_t<std::is_same_v<typename DstTileTensor::Type, bool>, uint8_t, typename DstTileTensor::Type>;
+    using DstType = std::conditional_t<std::is_same_v<typename DstTileTensor::Type, bool>, uint8_t,
+                                       typename DstTileTensor::Type>;
     constexpr size_t tileSrcH = GetMergedAxisIfNeed<SrcTileTensor, false>();
     constexpr size_t tileSrcW = TileOp::GetTensorTileShapeDim<SrcTileTensor, DIM_5TH, MAX_DIMS>();
     constexpr size_t tileDstH = GetMergedAxisIfNeed<DstTileTensor, false>();
@@ -330,11 +331,10 @@ TILEOP void TIsFinite4Floats(DstTileTensor dst, SrcTileTensor src, BufferTileTen
     int validW = src.GetLayout().template GetShapeDim<DIM_5TH, MAX_DIMS>();
 
     using TileDefineDst = pto::Tile<pto::TileType::Vec, DstType, tileDstH, tileDstW, pto::BLayout::RowMajor, -1, -1>;
-    using HalfTileDefineSrc = pto::Tile<
-        pto::TileType::Vec, half, tileSrcH, tileSrcW * sizeof(SrcType) / sizeof(half), pto::BLayout::RowMajor, -1, -1>;
-    using B16TileDefineSrc = pto::Tile<
-        pto::TileType::Vec, int16_t, tileSrcH, tileSrcW * sizeof(SrcType) / sizeof(int16_t), pto::BLayout::RowMajor, -1,
-        -1>;
+    using HalfTileDefineSrc = pto::Tile<pto::TileType::Vec, half, tileSrcH, tileSrcW * sizeof(SrcType) / sizeof(half),
+                                        pto::BLayout::RowMajor, -1, -1>;
+    using B16TileDefineSrc = pto::Tile<pto::TileType::Vec, int16_t, tileSrcH,
+                                       tileSrcW * sizeof(SrcType) / sizeof(int16_t), pto::BLayout::RowMajor, -1, -1>;
 
     HalfTileDefineSrc bufferTile(validH, validW);
     pto::TASSIGN(bufferTile, buffer.GetAddr());
@@ -353,8 +353,8 @@ TILEOP void TIsFinite4Floats(DstTileTensor dst, SrcTileTensor src, BufferTileTen
                 pto::TASSIGN(dstTile, dst.GetAddr() + GenTileOffset(dst, tileOffsets) * sizeof(DstType));
                 pto::TASSIGN(srcTile, src.GetAddr() + GenTileOffset(src, tileOffsets) * sizeof(int16_t));
                 if constexpr (std::is_same_v<SrcType, float>) {
-                    using FP32TileDefineSrc =
-                        pto::Tile<pto::TileType::Vec, float, tileSrcH, tileSrcW, pto::BLayout::RowMajor, -1, -1>;
+                    using FP32TileDefineSrc = pto::Tile<pto::TileType::Vec, float, tileSrcH, tileSrcW,
+                                                        pto::BLayout::RowMajor, -1, -1>;
                     FP32TileDefineSrc srcFP32(validH, validW);
                     HalfTileDefineSrc srcFP16(validH, validW);
                     pto::TASSIGN(srcFP32, src.GetAddr() + GenTileOffset(dst, tileOffsets) * sizeof(float));
@@ -593,8 +593,8 @@ TILEOP void TExp2(T0 dst, T1 tmp, T2 tmp2, T3 src)
 #ifdef __DAV_V220
                     pipe_barrier(PIPE_V);
 #endif
-                    if constexpr (
-                        std::is_same_v<typename T3::Type, half> || std::is_same_v<typename T3::Type, bfloat16_t>) {
+                    if constexpr (std::is_same_v<typename T3::Type, half> ||
+                                  std::is_same_v<typename T3::Type, bfloat16_t>) {
                         pto::TEXP(tmpTile2.Data(), tmpTile.Data());
 #ifdef __DAV_V220
                         pipe_barrier(PIPE_V);
@@ -698,8 +698,8 @@ TILEOP void TExpm1(T0 dst, T1 tmp, T2 src)
 #ifdef __DAV_V220
                     pipe_barrier(PIPE_V);
 #endif
-                    if constexpr (
-                        std::is_same_v<typename T2::Type, half> || std::is_same_v<typename T2::Type, bfloat16_t>) {
+                    if constexpr (std::is_same_v<typename T2::Type, half> ||
+                                  std::is_same_v<typename T2::Type, bfloat16_t>) {
                         pto::TADDS(tmpTile.Data(), tmpTile.Data(), -1.0f);
 #ifdef __DAV_V220
                         pipe_barrier(PIPE_V);
@@ -715,7 +715,8 @@ TILEOP void TExpm1(T0 dst, T1 tmp, T2 src)
 }
 
 #define OP_TILE_OP_RECIPROCAL TReciprocal
-template <auto PrecisionType = pto::RecipAlgorithm::DEFAULT, typename LastUse = LastUse2Dim<0, 0>, typename T0, typename T1>
+template <auto PrecisionType = pto::RecipAlgorithm::DEFAULT, typename LastUse = LastUse2Dim<0, 0>, typename T0,
+          typename T1>
 TILEOP void TReciprocal(T0 dst, T1 src)
 {
     UnaryCompute<UnaryOp::RECIPROCAL, PrecisionType, LastUse>(dst, src);
@@ -753,13 +754,12 @@ TILEOP void TSinh(T0 dst, T1 src, T2 tmp)
     constexpr auto tileW = TileOp::GetTensorTileShapeDim<T0, DIM_5TH, MAX_DIMS>();
     constexpr auto dstTypeSize = sizeof(typename T0::Type);
 
-    constexpr auto tileShapeSize =
-        TileOp::GetAnyAxisMergeResult<DIM_1ST, Std::tuple_size<typename T0::TileShape>::value, typename T0::TileShape>();
+    constexpr auto tileShapeSize = TileOp::GetAnyAxisMergeResult<
+        DIM_1ST, Std::tuple_size<typename T0::TileShape>::value, typename T0::TileShape>();
 
-    using DataTileDefine =
-        pto::Tile<pto::TileType::Vec, typename T0::Type, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
-    using MaskTileDefine =
-        pto::Tile<pto::TileType::Vec, uint8_t, tileH, tileW * 4, pto::BLayout::RowMajor, -1, -1>;
+    using DataTileDefine = pto::Tile<pto::TileType::Vec, typename T0::Type, tileH, tileW, pto::BLayout::RowMajor, -1,
+                                     -1>;
+    using MaskTileDefine = pto::Tile<pto::TileType::Vec, uint8_t, tileH, tileW * 4, pto::BLayout::RowMajor, -1, -1>;
     DataTileDefine dstTile(dstShape3, dstShape4);
     DataTileDefine srcTile(dstShape3, dstShape4);
     DataTileDefine tmp0Tile(dstShape3, dstShape4);
@@ -768,15 +768,15 @@ TILEOP void TSinh(T0 dst, T1 src, T2 tmp)
     DataTileDefine tmp3Tile(dstShape3, dstShape4);
     MaskTileDefine tmp1MaskTile(dstShape3, dstShape4);
 
-    for (LoopVar n0Index = 0; n0Index < dstShape0; n0Index ++ ) {
-        for (LoopVar n1Index = 0; n1Index < dstShape1; n1Index ++ ) {
-            for (LoopVar n2Index = 0; n2Index < dstShape2; n2Index ++ ) {
+    for (LoopVar n0Index = 0; n0Index < dstShape0; n0Index++) {
+        for (LoopVar n1Index = 0; n1Index < dstShape1; n1Index++) {
+            for (LoopVar n2Index = 0; n2Index < dstShape2; n2Index++) {
                 auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
                 auto srcOffset = GenTileOffset(src, tileOffsets);
                 auto dstOffset = GenTileOffset(dst, tileOffsets);
                 pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + dstOffset * dstTypeSize));
                 pto::TASSIGN(srcTile, (uint64_t)(src.GetAddr() + srcOffset * dstTypeSize));
-                
+
                 pto::TASSIGN(tmp0Tile, (uint64_t)(tmp.GetAddr() + dstOffset * dstTypeSize));
                 pto::TASSIGN(tmp1Tile, (uint64_t)(tmp.GetAddr() + (dstOffset + tileShapeSize) * dstTypeSize));
                 pto::TASSIGN(tmp2Tile, (uint64_t)(tmp.GetAddr() + (dstOffset + 2 * tileShapeSize) * dstTypeSize));
@@ -853,17 +853,17 @@ TILEOP void TCosh(T0 dst, T1 src, T2 tmp)
     constexpr auto tileW = TileOp::GetTensorTileShapeDim<T0, DIM_5TH, MAX_DIMS>();
     constexpr auto dstTypeSize = sizeof(typename T0::Type);
 
-    using DataTileDefine =
-        pto::Tile<pto::TileType::Vec, typename T0::Type, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
+    using DataTileDefine = pto::Tile<pto::TileType::Vec, typename T0::Type, tileH, tileW, pto::BLayout::RowMajor, -1,
+                                     -1>;
     DataTileDefine dstTile(dstShape3, dstShape4);
     DataTileDefine srcTile(dstShape3, dstShape4);
     DataTileDefine tmpTile(dstShape3, dstShape4);
-                    
-    for (LoopVar n0Index = 0; n0Index < dstShape0; n0Index ++ ) {
-        for (LoopVar n1Index = 0; n1Index < dstShape1; n1Index ++ ) {
-            for (LoopVar n2Index = 0; n2Index < dstShape2; n2Index ++ ) {
+
+    for (LoopVar n0Index = 0; n0Index < dstShape0; n0Index++) {
+        for (LoopVar n1Index = 0; n1Index < dstShape1; n1Index++) {
+            for (LoopVar n2Index = 0; n2Index < dstShape2; n2Index++) {
                 auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
-                auto srcOffset = GenTileOffset(src, tileOffsets);       
+                auto srcOffset = GenTileOffset(src, tileOffsets);
                 pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + srcOffset * dstTypeSize));
                 pto::TASSIGN(srcTile, (uint64_t)(src.GetAddr() + srcOffset * dstTypeSize));
                 pto::TASSIGN(tmpTile, (uint64_t)(tmp.GetAddr() + srcOffset * dstTypeSize));
@@ -978,10 +978,10 @@ TILEOP void reduceKCompute(T0 dst, T1 tmp0, T2 tmp1, T3 tmp2, T4 src0)
     // kover2floorm4
     pto::TMULS(dst, dst, M4_SCA);
     SyncV();
-    //k2
+    // k2
     pto::TMULS(tmp0, tmp0, K2_SCA);
     SyncV();
-    //sign
+    // sign
     pto::TADD(dst, dst, tmp0);
     SyncV();
     pto::TADDS(dst, dst, TRIG_ONE);
@@ -1030,7 +1030,7 @@ TILEOP void SinCosCompute(T0 dst, T1 tmp0, T2 tmp1, T3 tmp2, T4 src0)
     return;
 }
 // P(x) = (((((0.053443748819x^2+0.75517016694e1)x^2+0.10162808918e3)x^2
-//          +0.13938061484e4)x^2+0.50637915060e4)x^2+0.29639384698e5)x 
+//          +0.13938061484e4)x^2+0.50637915060e4)x^2+0.29639384698e5)x
 template <typename T0, typename T1, typename T2>
 TILEOP void ErfComputeP(T0 dst, T1 tmp0, T2 tmp1)
 {
@@ -1122,7 +1122,10 @@ TILEOP void ErfPadeCompute(T0 dst, T1 tmp0, T2 tmp1, T3 tmp2, T4 src)
 template <typename T0, typename T1, typename T2>
 TILEOP void ErfSubsectionSmallCompute(T0 dst, T1 tmp2, T2 src)
 {
-    using FloatIntUnion = union { uint32_t i; float f; };
+    using FloatIntUnion = union {
+        uint32_t i;
+        float f;
+    };
     pto::TMUL(dst, src, src);
     pto::TMULS(tmp2, dst, FloatIntUnion{.i = 0x38B1E96A}.f);
     pto::TADDS(tmp2, tmp2, FloatIntUnion{.i = 0xBA574D20}.f);
@@ -1144,7 +1147,10 @@ TILEOP void ErfSubsectionSmallCompute(T0 dst, T1 tmp2, T2 src)
 template <typename T0, typename T1, typename T2, typename T3>
 TILEOP void ErfSubsectionLargeCompute(T0 dst, T1 tmp0, T2 tmp1, T3 src)
 {
-    using FloatIntUnion = union { uint32_t i; float f; };
+    using FloatIntUnion = union {
+        uint32_t i;
+        float f;
+    };
     constexpr float LOG2_VALUE = 2.0f;
     constexpr float ZERO_VALUE = 0.0f;
 
@@ -1178,11 +1184,13 @@ TILEOP void ErfSubsectionLargeCompute(T0 dst, T1 tmp0, T2 tmp1, T3 src)
     return;
 }
 
-
 template <typename T0, typename T1, typename T2, typename T3, typename T4>
 TILEOP void ErfSubsectionCompute(T0 dst, T1 tmp0, T2 tmp1, T3 tmp2, T4 src)
 {
-    using FloatIntUnion = union { uint32_t i; float f; };
+    using FloatIntUnion = union {
+        uint32_t i;
+        float f;
+    };
     // tmp2
     ErfSubsectionSmallCompute(dst, tmp2, src);
     // dst
@@ -1221,8 +1229,10 @@ TILEOP void TrigErfCompute(T0 dst, T1 tmp, T2 src)
         for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
             for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
                 auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
-                pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + GenTileOffset(dst, tileOffsets) * sizeof(typename T2::Type)));
-                pto::TASSIGN(src0Tile, (uint64_t)(src.GetAddr() + GenTileOffset(src, tileOffsets) * sizeof(typename T2::Type)));
+                pto::TASSIGN(dstTile,
+                             (uint64_t)(dst.GetAddr() + GenTileOffset(dst, tileOffsets) * sizeof(typename T2::Type)));
+                pto::TASSIGN(src0Tile,
+                             (uint64_t)(src.GetAddr() + GenTileOffset(src, tileOffsets) * sizeof(typename T2::Type)));
                 pto::TASSIGN(tmp0Tile, (uint64_t)(tmp.GetAddr()));
                 pto::TASSIGN(tmp2Tile, (uint64_t)(tmp.GetAddr() + 2 * tileW * tileH * sizeof(float)));
                 if constexpr (op == UnaryOp::ERF) {
@@ -1372,8 +1382,8 @@ TILEOP inline void ErfcComputeS(TileType& tmpCompBuf2, TileType& tmpCompBuf4, co
 }
 
 template <typename TileType>
-TILEOP inline void ErfcPublicSteps(
-    TileType& tmpCompBuf1, TileType& tmpCompBuf2, TileType& tmpCompBuf3, TileType& tmpCompBuf4)
+TILEOP inline void ErfcPublicSteps(TileType& tmpCompBuf1, TileType& tmpCompBuf2, TileType& tmpCompBuf3,
+                                   TileType& tmpCompBuf4)
 {
     ErfcComputeR(tmpCompBuf2, tmpCompBuf3, tmpCompBuf1);
     ErfcComputeS(tmpCompBuf2, tmpCompBuf4, tmpCompBuf1);
@@ -1431,10 +1441,10 @@ TILEOP void TErfc(T0 dst, T1 tmp, T2 src)
         for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
             for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
                 auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
-                pto::TASSIGN(
-                    dstTile, (uint64_t)(dst.GetAddr() + GenTileOffset(dst, tileOffsets) * sizeof(typename T2::Type)));
-                pto::TASSIGN(
-                    srcTile, (uint64_t)(src.GetAddr() + GenTileOffset(src, tileOffsets) * sizeof(typename T2::Type)));
+                pto::TASSIGN(dstTile,
+                             (uint64_t)(dst.GetAddr() + GenTileOffset(dst, tileOffsets) * sizeof(typename T2::Type)));
+                pto::TASSIGN(srcTile,
+                             (uint64_t)(src.GetAddr() + GenTileOffset(src, tileOffsets) * sizeof(typename T2::Type)));
 
                 pto::TASSIGN(tmpCompBuf1, (uint64_t)(tmp.GetAddr()));
                 pto::TASSIGN(tmpCompBuf2, (uint64_t)(tmp.GetAddr() + 1 * tileW * tileH * sizeof(typename T2::Type)));
@@ -1455,14 +1465,14 @@ TILEOP void TErfc(T0 dst, T1 tmp, T2 src)
 template <typename TOut, typename TIn, typename TScratch>
 TILEOP void ArcsinPolyHorner(TOut outTile, TIn tTile, TScratch sScratch)
 {
-    constexpr float ASIN_C0 = 1.0f;             // 1
-    constexpr float ASIN_C1 = 0.16666667f;      // 1/6
-    constexpr float ASIN_C2 = 0.075f;           // 3/40
-    constexpr float ASIN_C3 = 0.04464286f;      // 5/112
-    constexpr float ASIN_C4 = 0.03038194f;      // 35/1152
-    constexpr float ASIN_C5 = 0.02237216f;      // 63/2816
-    constexpr float ASIN_C6 = 0.01735276f;      // 231/13312
-    constexpr float ASIN_C7 = 0.01396484f;      // 143/10240
+    constexpr float ASIN_C0 = 1.0f;        // 1
+    constexpr float ASIN_C1 = 0.16666667f; // 1/6
+    constexpr float ASIN_C2 = 0.075f;      // 3/40
+    constexpr float ASIN_C3 = 0.04464286f; // 5/112
+    constexpr float ASIN_C4 = 0.03038194f; // 35/1152
+    constexpr float ASIN_C5 = 0.02237216f; // 63/2816
+    constexpr float ASIN_C6 = 0.01735276f; // 231/13312
+    constexpr float ASIN_C7 = 0.01396484f; // 143/10240
 
     // s = t^2
     pto::TMUL(sScratch, tTile, tTile);
@@ -1508,16 +1518,15 @@ TILEOP void ArcsinPolyHorner(TOut outTile, TIn tTile, TScratch sScratch)
 }
 
 template <bool IsAsin, typename TDst, typename TSrc, typename TTmp0, typename TTmp1, typename TTmp2, typename TTmp3,
-    typename TTmp4, typename TMask>
-TILEOP void TAsinAcosTileImpl(
-    TDst dstTile, TSrc srcTile, TTmp0 tmp0Tile, TTmp1 tmp1Tile, TTmp2 tmp2Tile, TTmp3 tmp3Tile, TTmp4 tmp4Tile,
-    TMask maskTile)
+          typename TTmp4, typename TMask>
+TILEOP void TAsinAcosTileImpl(TDst dstTile, TSrc srcTile, TTmp0 tmp0Tile, TTmp1 tmp1Tile, TTmp2 tmp2Tile,
+                              TTmp3 tmp3Tile, TTmp4 tmp4Tile, TMask maskTile)
 {
-    constexpr float ASIN_THRESHOLD = 0.70710678f;   // 1/sqrt(2)
-    constexpr float PI_HALF        = 1.57079633f;
-    constexpr float SCALAR_ONE          = 1.0f;
+    constexpr float ASIN_THRESHOLD = 0.70710678f; // 1/sqrt(2)
+    constexpr float PI_HALF = 1.57079633f;
+    constexpr float SCALAR_ONE = 1.0f;
     constexpr float SCALAR_NEGATIVE_ONE = -1.0f;
-    constexpr float SCALAR_ZERO         = 0.0f;
+    constexpr float SCALAR_ZERO = 0.0f;
 
     // ---- 1) tmp0 = |x| ----
     pto::TABS(tmp0Tile, srcTile);
@@ -1567,9 +1576,9 @@ TILEOP void TAsinAcosTileImpl(
         //   src <  0: pi/2 + dst
         pto::TMULS(tmp1Tile, dstTile, SCALAR_NEGATIVE_ONE);
         SyncV();
-        pto::TADDS(tmp1Tile, tmp1Tile, PI_HALF);     // pi/2 - dst
+        pto::TADDS(tmp1Tile, tmp1Tile, PI_HALF); // pi/2 - dst
         SyncV();
-        pto::TADDS(tmp2Tile, dstTile, PI_HALF);      // pi/2 + dst
+        pto::TADDS(tmp2Tile, dstTile, PI_HALF); // pi/2 + dst
         SyncV();
         pto::TCMPS(maskTile, srcTile, SCALAR_ZERO, pto::CmpMode::GE);
         SyncV();
@@ -1595,19 +1604,18 @@ TILEOP void TAsinAcosImpl(T0 dst, T1 src, T2 tmp)
     constexpr auto tileW = TileOp::GetTensorTileShapeDim<T0, DIM_5TH, MAX_DIMS>();
     constexpr auto dstTypeSize = sizeof(typename T0::Type);
 
-    using DataTileDefine =
-        pto::Tile<pto::TileType::Vec, typename T0::Type, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
-    using MaskTileDefine =
-        pto::Tile<pto::TileType::Vec, uint8_t, tileH, tileW * 4, pto::BLayout::RowMajor, -1, -1>;
+    using DataTileDefine = pto::Tile<pto::TileType::Vec, typename T0::Type, tileH, tileW, pto::BLayout::RowMajor, -1,
+                                     -1>;
+    using MaskTileDefine = pto::Tile<pto::TileType::Vec, uint8_t, tileH, tileW * 4, pto::BLayout::RowMajor, -1, -1>;
 
     DataTileDefine dstTile(shape3, shape4);
     DataTileDefine srcTile(shape3, shape4);
-    DataTileDefine tmp0Tile(shape3, shape4);   // |x|
-    DataTileDefine tmp1Tile(shape3, shape4);   // small-branch result
-    DataTileDefine tmp2Tile(shape3, shape4);   // sqrt(1 - x^2) for large branch
-    DataTileDefine tmp3Tile(shape3, shape4);   // large-branch result
-    DataTileDefine tmp4Tile(shape3, shape4);   // generic scratch (Horner s, 1-x^2, ...)
-    MaskTileDefine maskTile(shape3, shape4);   // aliases tmp4
+    DataTileDefine tmp0Tile(shape3, shape4); // |x|
+    DataTileDefine tmp1Tile(shape3, shape4); // small-branch result
+    DataTileDefine tmp2Tile(shape3, shape4); // sqrt(1 - x^2) for large branch
+    DataTileDefine tmp3Tile(shape3, shape4); // large-branch result
+    DataTileDefine tmp4Tile(shape3, shape4); // generic scratch (Horner s, 1-x^2, ...)
+    MaskTileDefine maskTile(shape3, shape4); // aliases tmp4
 
     constexpr size_t tmpStride = tileH * tileW * dstTypeSize;
     pto::TASSIGN(tmp0Tile, (uint64_t)(tmp.GetAddr() + 0 * tmpStride));
@@ -1621,12 +1629,9 @@ TILEOP void TAsinAcosImpl(T0 dst, T1 src, T2 tmp)
         for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
             for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
                 auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
-                pto::TASSIGN(
-                    dstTile, (uint64_t)(dst.GetAddr() + GenTileOffset(dst, tileOffsets) * dstTypeSize));
-                pto::TASSIGN(
-                    srcTile, (uint64_t)(src.GetAddr() + GenTileOffset(src, tileOffsets) * dstTypeSize));
-                TAsinAcosTileImpl<IsAsin>(
-                    dstTile, srcTile, tmp0Tile, tmp1Tile, tmp2Tile, tmp3Tile, tmp4Tile, maskTile);
+                pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + GenTileOffset(dst, tileOffsets) * dstTypeSize));
+                pto::TASSIGN(srcTile, (uint64_t)(src.GetAddr() + GenTileOffset(src, tileOffsets) * dstTypeSize));
+                TAsinAcosTileImpl<IsAsin>(dstTile, srcTile, tmp0Tile, tmp1Tile, tmp2Tile, tmp3Tile, tmp4Tile, maskTile);
             }
         }
     }
@@ -1668,14 +1673,13 @@ TILEOP void TASinh(T0 dst, T1 src, T2 tmp)
     constexpr float CONST_COMPARE_VALUE_MIN = 1e-45f;
     constexpr float CONST_COMPARE_VALUE_MAX = 3.4028235e34f;
     constexpr float CONST_LOG_TWO_VALUE = 6.93147180559945286227e-01f;
-    
-    constexpr auto tileShapeSize =
-        TileOp::GetAnyAxisMergeResult<DIM_1ST, Std::tuple_size<typename T0::TileShape>::value, typename T0::TileShape>();
 
-    using DataTileDefine = 
-        pto::Tile<pto::TileType::Vec, typename T0::Type, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
-    using MaskTileDefine =
-        pto::Tile<pto::TileType::Vec, uint8_t, tileH, 4 * tileW, pto::BLayout::RowMajor, -1, -1>;
+    constexpr auto tileShapeSize = TileOp::GetAnyAxisMergeResult<
+        DIM_1ST, Std::tuple_size<typename T0::TileShape>::value, typename T0::TileShape>();
+
+    using DataTileDefine = pto::Tile<pto::TileType::Vec, typename T0::Type, tileH, tileW, pto::BLayout::RowMajor, -1,
+                                     -1>;
+    using MaskTileDefine = pto::Tile<pto::TileType::Vec, uint8_t, tileH, 4 * tileW, pto::BLayout::RowMajor, -1, -1>;
     DataTileDefine srcTile(dstShape3, dstShape4);
     DataTileDefine dstTile(dstShape3, dstShape4);
     DataTileDefine tmp0Tile(dstShape3, dstShape4);
@@ -1683,10 +1687,10 @@ TILEOP void TASinh(T0 dst, T1 src, T2 tmp)
     DataTileDefine tmp2Tile(dstShape3, dstShape4);
     DataTileDefine tmp3Tile(dstShape3, dstShape4);
     MaskTileDefine tmp2MaskTile(dstShape3, dstShape4);
-    
-    for (LoopVar n0Index = 0; n0Index < dstShape0; n0Index ++ ) {
-        for (LoopVar n1Index = 0; n1Index < dstShape1; n1Index ++ ) {
-            for (LoopVar n2Index = 0; n2Index < dstShape2; n2Index ++ ) {
+
+    for (LoopVar n0Index = 0; n0Index < dstShape0; n0Index++) {
+        for (LoopVar n1Index = 0; n1Index < dstShape1; n1Index++) {
+            for (LoopVar n2Index = 0; n2Index < dstShape2; n2Index++) {
                 auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
                 auto dstOffset = GenTileOffset(dst, tileOffsets);
                 auto srcOffset = GenTileOffset(src, tileOffsets);
@@ -1712,7 +1716,8 @@ TILEOP void TASinh(T0 dst, T1 src, T2 tmp)
                 SyncV();
                 pto::TADD(tmp1Tile, tmp3Tile, tmp1Tile); // sqrt(1 + 1/(|x|)^2) + 1/|x|
                 SyncV();
-                pto::TDIV<pto::DivAlgorithm::HIGH_PRECISION>(tmp1Tile, tmp0Tile, tmp1Tile); // |x| / (sqrt(1 + 1/(|x|)^2) + 1/|x|)
+                pto::TDIV<pto::DivAlgorithm::HIGH_PRECISION>(tmp1Tile, tmp0Tile,
+                                                             tmp1Tile); // |x| / (sqrt(1 + 1/(|x|)^2) + 1/|x|)
                 SyncV();
                 pto::TADD(tmp1Tile, tmp0Tile, tmp1Tile); // r = |x| + |x| / (sqrt(1 + 1/(|x|)^2) + 1/|x|)
                 SyncV();
@@ -1725,12 +1730,13 @@ TILEOP void TASinh(T0 dst, T1 src, T2 tmp)
                 SyncV();
                 pto::TMINS(dstTile, dstTile, CONST_COMPARE_VALUE_MAX);
                 SyncV();
-                
+
                 pto::TLOG<pto::LogAlgorithm::HIGH_PRECISION>(tmp3Tile, tmp3Tile); // log(r + 1)
                 SyncV();
                 pto::TMUL(tmp1Tile, tmp1Tile, tmp3Tile); // r * log(r + 1)
                 SyncV();
-                pto::TDIV<pto::DivAlgorithm::HIGH_PRECISION>(tmp1Tile, tmp1Tile, dstTile); // r * log(r + 1) / clamp(r, s_min, s_max)
+                pto::TDIV<pto::DivAlgorithm::HIGH_PRECISION>(tmp1Tile, tmp1Tile,
+                                                             dstTile); // r * log(r + 1) / clamp(r, s_min, s_max)
                 SyncV();
 
                 pto::TLOG<pto::LogAlgorithm::HIGH_PRECISION>(tmp3Tile, tmp0Tile); // log(|x|)
@@ -1779,19 +1785,19 @@ TILEOP void TACosh(T0 dst, T1 src, T2 tmp)
     constexpr auto tileW = TileOp::GetTensorTileShapeDim<T0, DIM_5TH, MAX_DIMS>();
     constexpr auto dstTypeSize = sizeof(typename T0::Type);
 
-    constexpr auto tileShapeSize =
-        TileOp::GetAnyAxisMergeResult<DIM_1ST, Std::tuple_size<typename T0::TileShape>::value, typename T0::TileShape>();
-    
-    using DataTileDefine =
-        pto::Tile<pto::TileType::Vec, typename T0::Type, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
+    constexpr auto tileShapeSize = TileOp::GetAnyAxisMergeResult<
+        DIM_1ST, Std::tuple_size<typename T0::TileShape>::value, typename T0::TileShape>();
+
+    using DataTileDefine = pto::Tile<pto::TileType::Vec, typename T0::Type, tileH, tileW, pto::BLayout::RowMajor, -1,
+                                     -1>;
     DataTileDefine srcTile(dstShape3, dstShape4);
     DataTileDefine dstTile(dstShape3, dstShape4);
     DataTileDefine tmp0Tile(dstShape3, dstShape4);
     DataTileDefine tmp1Tile(dstShape3, dstShape4);
     DataTileDefine tmp2Tile(dstShape3, dstShape4);
-    for (LoopVar n0Index = 0; n0Index < dstShape0; n0Index ++ ) {
-        for (LoopVar n1Index = 0; n1Index < dstShape1; n1Index ++ ) {
-            for (LoopVar n2Index = 0; n2Index < dstShape2; n2Index ++ ) {
+    for (LoopVar n0Index = 0; n0Index < dstShape0; n0Index++) {
+        for (LoopVar n1Index = 0; n1Index < dstShape1; n1Index++) {
+            for (LoopVar n2Index = 0; n2Index < dstShape2; n2Index++) {
                 auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
                 auto srcOffset = GenTileOffset(src, tileOffsets);
                 auto dstOffset = GenTileOffset(dst, tileOffsets);
@@ -1828,9 +1834,10 @@ TILEOP void TACosh(T0 dst, T1 src, T2 tmp)
                 SyncV();
                 pto::TMUL(dstTile, dstTile, tmp1Tile); // r * log(r + 1)
                 SyncV();
-                pto::TDIV<pto::DivAlgorithm::HIGH_PRECISION>(dstTile, dstTile, tmp0Tile); // r * log(r + 1) / clamp(r, s_min, s_max)
+                pto::TDIV<pto::DivAlgorithm::HIGH_PRECISION>(dstTile, dstTile,
+                                                             tmp0Tile); // r * log(r + 1) / clamp(r, s_min, s_max)
                 SyncV();
-                
+
                 pto::TLOG<pto::LogAlgorithm::HIGH_PRECISION>(tmp0Tile, srcTile); // log(x)
                 SyncV();
                 pto::TADDS(tmp0Tile, tmp0Tile, CONST_LOG_TWO_VALUE); // log(x) + log(2)

@@ -71,13 +71,17 @@ inline std::shared_ptr<ViewOpAttribute> CreateL1ViewAttribute()
 
 inline void BuildL1DataMoveTail(const std::shared_ptr<Function>& currFunctionPtr, const L1DataMoveGraphNodes& graph)
 {
-    auto& viewOp1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {graph.opViewL1Out1}, {graph.viewOut1});
+    auto& viewOp1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {graph.opViewL1Out1},
+                                                   {graph.viewOut1});
     viewOp1.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
-    auto& viewOp2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {graph.opViewL1Out1}, {graph.viewOut2});
+    auto& viewOp2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {graph.opViewL1Out1},
+                                                   {graph.viewOut2});
     viewOp2.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 32}));
-    auto& viewOp3 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {graph.opViewL1Out2}, {graph.viewOut3});
+    auto& viewOp3 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {graph.opViewL1Out2},
+                                                   {graph.viewOut3});
     viewOp3.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
-    auto& viewOp4 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {graph.opViewL1Out2}, {graph.viewOut4});
+    auto& viewOp4 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {graph.opViewL1Out2},
+                                                   {graph.viewOut4});
     viewOp4.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{32, 0}));
 
     IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_L1_TO_L0A, {graph.viewOut1}, {graph.l0aOut1});
@@ -85,13 +89,15 @@ inline void BuildL1DataMoveTail(const std::shared_ptr<Function>& currFunctionPtr
     IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_L1_TO_L0B, {graph.viewOut3}, {graph.l0bOut1});
     IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_L1_TO_L0B, {graph.viewOut4}, {graph.l0bOut2});
 
-    IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_A_MUL_B, {graph.l0aOut1, graph.l0bOut1}, {graph.aMulBOut1});
-    IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_A_MUL_B, {graph.l0aOut2, graph.l0bOut2}, {graph.aMulBOut2});
+    IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_A_MUL_B, {graph.l0aOut1, graph.l0bOut1},
+                                   {graph.aMulBOut1});
+    IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_A_MUL_B, {graph.l0aOut2, graph.l0bOut2},
+                                   {graph.aMulBOut2});
 
     currFunctionPtr->inCasts_.push_back(graph.inputCast1);
     currFunctionPtr->inCasts_.push_back(graph.inputCast2);
     currFunctionPtr->outCasts_.push_back(graph.aMulBOut1);
     currFunctionPtr->outCasts_.push_back(graph.aMulBOut2);
 }
-}  // namespace tile_fwk
-}  // namespace npu
+} // namespace tile_fwk
+} // namespace npu

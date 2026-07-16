@@ -53,9 +53,8 @@ Status IntraSubgraphAdapterChecker::PostCheckSubgraphTensor(const std::vector<st
             }
         }
         if (aicMemoryCount > 0 && aivMemoryCount > 0) {
-            APASS_LOG_ERROR_F(
-                Elements::Tensor, "Subgraph %d has both ub(%d) and l0/l1(%d) memory type tensor.", subgraphId,
-                aivMemoryCount, aicMemoryCount);
+            APASS_LOG_ERROR_F(Elements::Tensor, "Subgraph %d has both ub(%d) and l0/l1(%d) memory type tensor.",
+                              subgraphId, aivMemoryCount, aicMemoryCount);
             return FAILED;
         }
     }

@@ -133,7 +133,11 @@ struct DynDeviceTaskBase {
 
     uint32_t GetMaxC() const { return maxC_; }
     uint32_t GetMaxV() const { return maxV_; }
-    void SetMaxCV(uint32_t maxC, uint32_t maxV) { maxC_ = maxC; maxV_ = maxV; }
+    void SetMaxCV(uint32_t maxC, uint32_t maxV)
+    {
+        maxC_ = maxC;
+        maxV_ = maxV;
+    }
 };
 
 struct DeviceTaskCache {
@@ -155,9 +159,10 @@ struct DeviceExecuteSlot {
 
     bool IsOutputAddress() const { return isOutputSlot; }
     bool IsAssembleAddress() const { return isAssembleSlot; }
-    void ChangeSlotAllocIterId() {
+    void ChangeSlotAllocIterId()
+    {
         slotAllocIterId++;
-        if (slotAllocIterId == MAX_STITCH_FUNC_NUM -1) {
+        if (slotAllocIterId == MAX_STITCH_FUNC_NUM - 1) {
             slotAllocIterId = 0;
         }
     }
@@ -253,14 +258,13 @@ struct DevControlFlowCache {
 
     void inline CalcUsedCacheSize()
     {
-        usedCacheSize =
-            reinterpret_cast<uintptr_t>(cacheData.Data()) + cacheDataOffset - reinterpret_cast<uintptr_t>(this);
+        usedCacheSize = reinterpret_cast<uintptr_t>(cacheData.Data()) + cacheDataOffset -
+                        reinterpret_cast<uintptr_t>(this);
     }
 
     // slottedOutcastBlockCount: live devTask boundary-outcast block headers backed up for ctrl-flow cache.
-    void Init(
-        void* dyndevAttrPtr, uint64_t cacheSize, uint64_t runtimeOutcastPoolSize, uint64_t& initOffset,
-        uint64_t slottedOutcastBlockCount);
+    void Init(void* dyndevAttrPtr, uint64_t cacheSize, uint64_t runtimeOutcastPoolSize, uint64_t& initOffset,
+              uint64_t slottedOutcastBlockCount);
     uint64_t GetSize() const
     {
         return reinterpret_cast<uintptr_t>(ctrlFlowLastField.End()) - reinterpret_cast<uintptr_t>(this);
@@ -276,10 +280,9 @@ struct DevControlFlowCache {
             cacheDataOffset += (size + CFGCACHE_ALIGN - 1) / CFGCACHE_ALIGN * CFGCACHE_ALIGN;
             DEV_VERBOSE_DEBUG("cacheDataOffset is: %lu", cacheDataOffset);
         } else {
-            DEV_DEBUG(
-                "[ctrl.cache.record] Recording is stopped, requestSize=%lu, "
-                "cacheDataOffset=%lu, cacheDataSize=%lu.",
-                size, cacheDataOffset,cacheData.size());
+            DEV_DEBUG("[ctrl.cache.record] Recording is stopped, requestSize=%lu, "
+                      "cacheDataOffset=%lu, cacheDataSize=%lu.",
+                      size, cacheDataOffset, cacheData.size());
 
             isRecordingStopped = true;
         }
@@ -379,9 +382,8 @@ struct DevControlFlowCache {
         if (dynDataBackup->bitmapByteSize == 0) {
             return;
         }
-        dynDataCache->devFunc->RestoreBitmapFrom(
-            dynDataBackup->deadEndHubBitmapBackup, dynDataBackup->tailTaskBitmapBackup,
-            dynDataBackup->bitmapByteSize);
+        dynDataCache->devFunc->RestoreBitmapFrom(dynDataBackup->deadEndHubBitmapBackup,
+                                                 dynDataBackup->tailTaskBitmapBackup, dynDataBackup->bitmapByteSize);
     }
 
     void PredCountDataBackup(DynDeviceTaskBase* base);
@@ -402,19 +404,18 @@ struct DevControlFlowCache {
 
     void MixTaskDataRestore(DynDeviceTaskBase* base);
 
-    static void RelocBuildInputOutputDesc(
-        std::unordered_map<uint64_t, AddressDescriptor>& cacheInputOutputDict, DevStartArgsBase* devStartArgs);
+    static void RelocBuildInputOutputDesc(std::unordered_map<uint64_t, AddressDescriptor>& cacheInputOutputDict,
+                                          DevStartArgsBase* devStartArgs);
 
-    static void RelocBuildInputOutputDesc(
-        std::unordered_map<uint64_t, AddressDescriptor>& cacheInputOutputDict,
-        DevRelocVector<DevTensorData> inputTensorDataList, DevRelocVector<DevTensorData> outputTensorDataList);
+    static void RelocBuildInputOutputDesc(std::unordered_map<uint64_t, AddressDescriptor>& cacheInputOutputDict,
+                                          DevRelocVector<DevTensorData> inputTensorDataList,
+                                          DevRelocVector<DevTensorData> outputTensorDataList);
 
-    static void RelocDescToCache(
-        AddressDescriptor& desc, const RelocRange& relocWorkspace,
-        std::unordered_map<uint64_t, AddressDescriptor>& cacheInputOutputDict);
+    static void RelocDescToCache(AddressDescriptor& desc, const RelocRange& relocWorkspace,
+                                 std::unordered_map<uint64_t, AddressDescriptor>& cacheInputOutputDict);
 
-    static void RelocDescFromCache(
-        AddressDescriptor& desc, const RelocRange& relocWorkspace, DevStartArgsBase* devStartArgs);
+    static void RelocDescFromCache(AddressDescriptor& desc, const RelocRange& relocWorkspace,
+                                   DevStartArgsBase* devStartArgs);
 
     void IncastOutcastAddrBackup(DynDeviceTaskBase* base);
 
@@ -432,33 +433,32 @@ struct DevControlFlowCache {
 
     void IncastOutcastAddrReloc(uint64_t srcWorkspace, uint64_t dstWorkspace, DevStartArgsBase* devStartArgs);
 
-    void RuntimeAddrBackup(
-        DeviceExecuteSlot* runtimeSlotList, ItemPool<RuntimeOutcastTensor>* runtimeOutcastTensorPool,
-        uint64_t slotSize, uint64_t runtimeOutcastTensorSize, TensorAllocator* allocator, uint32_t parallelism);
+    void RuntimeAddrBackup(DeviceExecuteSlot* runtimeSlotList, ItemPool<RuntimeOutcastTensor>* runtimeOutcastTensorPool,
+                           uint64_t slotSize, uint64_t runtimeOutcastTensorSize, TensorAllocator* allocator,
+                           uint32_t parallelism);
 
-    void RuntimeAddrRestore(
-        DeviceExecuteSlot* runtimeSlotList, ItemPool<RuntimeOutcastTensor>* runtimeOutcastTensorPool,
-        uint64_t slotSize, uint64_t runtimeOutcastTensorSize, TensorAllocator* allocator, uint32_t parallelism);
+    void RuntimeAddrRestore(DeviceExecuteSlot* runtimeSlotList,
+                            ItemPool<RuntimeOutcastTensor>* runtimeOutcastTensorPool, uint64_t slotSize,
+                            uint64_t runtimeOutcastTensorSize, TensorAllocator* allocator, uint32_t parallelism);
 
     void RuntimeAddrRelocProgram(uint64_t srcProgram, uint64_t dstProgram);
 
-    void RuntimeAddrRelocWorkspace(
-        uint64_t srcWorkspace, uint64_t dstWorkspace, DevStartArgsBase* devStartArgs,
-        DeviceExecuteSlot* runtimeSlotList, ItemPool<RuntimeOutcastTensor>::ItemBlock* runtimeOutcastTensorPool,
-        uint32_t parallelism);
+    void RuntimeAddrRelocWorkspace(uint64_t srcWorkspace, uint64_t dstWorkspace, DevStartArgsBase* devStartArgs,
+                                   DeviceExecuteSlot* runtimeSlotList,
+                                   ItemPool<RuntimeOutcastTensor>::ItemBlock* runtimeOutcastTensorPool,
+                                   uint32_t parallelism);
 
-    void MixTaskDataReloc(
-        RelocRange& relocCtrlCache, RelocRange& relocProgram, DynDeviceTaskBase* dynTaskBase,
-        DynFuncHeader* dynFuncDataList);
+    void MixTaskDataReloc(RelocRange& relocCtrlCache, RelocRange& relocProgram, DynDeviceTaskBase* dynTaskBase,
+                          DynFuncHeader* dynFuncDataList);
 
     void DieReadyQueueReloc(RelocRange& relocCtrlCache, DynDeviceTaskBase* dynTaskBase);
-    void RelocDuppedDataAndDynFuncData(
-        RelocRange& relocProgram, RelocRange& relocCtrlCache, DevAscendFunctionDuppedData* duppedData,
-        DynFuncData* dynData, DynFuncDataCache* dynDataCache, DynFuncDataBackup* dynDataBackup);
+    void RelocDuppedDataAndDynFuncData(RelocRange& relocProgram, RelocRange& relocCtrlCache,
+                                       DevAscendFunctionDuppedData* duppedData, DynFuncData* dynData,
+                                       DynFuncDataCache* dynDataCache, DynFuncDataBackup* dynDataBackup);
 
     /* Host-to-cache: devStartArgs should be nullptr. Cache-to-Device: devStartArgs should be filled */
-    void TaskAddrRelocProgramAndCtrlCache(
-        uint64_t srcProgram, uint64_t srcCtrlCache, uint64_t dstProgram, uint64_t dstCtrlCache);
+    void TaskAddrRelocProgramAndCtrlCache(uint64_t srcProgram, uint64_t srcCtrlCache, uint64_t dstProgram,
+                                          uint64_t dstCtrlCache);
 
     template <typename Ty>
     typename Ty::ElementType* RelocOffset(intptr_t shift, void*& offset, Ty& list)

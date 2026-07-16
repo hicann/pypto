@@ -112,7 +112,7 @@ struct CalcOps {
     void (*PReLU)(const TensorData&, const TensorData&, const TensorData&);
     void (*LogicalAnd)(const TensorData&, const TensorData&, const TensorData&);
 
-    void (*Uniform)(const TensorData &, const Element &, const Element &, const Element &, const Element &, DataType);
+    void (*Uniform)(const TensorData&, const Element&, const Element&, const Element&, const Element&, DataType);
 
     void (*AddS)(const TensorData&, const TensorData&, const Element&, bool);
     void (*SubS)(const TensorData&, const TensorData&, const Element&, bool);
@@ -172,8 +172,10 @@ struct CalcOps {
     void (*RowArgMinWithValueSingle)(const TensorData&, const TensorData&, const TensorData&, const TensorData&, int);
     void (*RowArgMaxWithValueLine)(const TensorData&, const TensorData&, const TensorData&, const TensorData&, int);
     void (*RowArgMinWithValueLine)(const TensorData&, const TensorData&, const TensorData&, const TensorData&, int);
-    void (*PairArgMax)(const TensorData&, const TensorData&, const TensorData&, const TensorData&, const TensorData&, const TensorData&);
-    void (*PairArgMin)(const TensorData&, const TensorData&, const TensorData&, const TensorData&, const TensorData&, const TensorData&);
+    void (*PairArgMax)(const TensorData&, const TensorData&, const TensorData&, const TensorData&, const TensorData&,
+                       const TensorData&);
+    void (*PairArgMin)(const TensorData&, const TensorData&, const TensorData&, const TensorData&, const TensorData&,
+                       const TensorData&);
 
     void (*OneHot)(const TensorData&, const TensorData&, int);
     void (*ExpandS)(const TensorData&, const Element&);
@@ -195,8 +197,8 @@ struct CalcOps {
 
     void (*ReduceAcc)(const TensorData&, const std::vector<TensorData>&);
     void (*Copy)(const TensorData&, const TensorData&, bool, bool);
-    void (*ScatterUpdate)(
-        const TensorData&, const TensorData&, const TensorData&, const TensorData&, int, std::string, int);
+    void (*ScatterUpdate)(const TensorData&, const TensorData&, const TensorData&, const TensorData&, int, std::string,
+                          int);
     void (*ScatterElement)(const TensorData&, const TensorData&, const TensorData&, const Element&, int, int);
     void (*Scatter)(const TensorData&, const TensorData&, const TensorData&, const TensorData&, int, int);
     void (*FormatND2NZ)(const TensorData&, const TensorData&);
@@ -208,13 +210,13 @@ struct CalcOps {
     void (*Dequantize)(const TensorData&, const TensorData&, const TensorData&, const TensorData&);
 
     void (*BitSort)(const TensorData&, const TensorData&, int64_t, bool, int64_t);
-    void (*TiledMrgSort)(
-        const TensorData&, const TensorData&, const TensorData&, const TensorData&, const TensorData&, int, int);
+    void (*TiledMrgSort)(const TensorData&, const TensorData&, const TensorData&, const TensorData&, const TensorData&,
+                         int, int);
     void (*Extract)(const TensorData&, const TensorData&, int, bool);
     void (*MrgSort)(const TensorData&, const TensorData&, int64_t, int64_t);
     void (*TopK)(const TensorData&, const TensorData&, const TensorData&, int, int, bool);
-    void (*QuantMX)(
-        const TensorData&, const TensorData&, const TensorData&, const TensorData&, const TensorData&, bool, int64_t);
+    void (*QuantMX)(const TensorData&, const TensorData&, const TensorData&, const TensorData&, const TensorData&, bool,
+                    int64_t);
     void (*Interleave)(const TensorData&, const TensorData&, const TensorData&, const TensorData&);
     void (*DeInterleave)(const TensorData&, const TensorData&, const TensorData&, const TensorData&);
     void (*DeInterleaveSingle)(const TensorData&, const TensorData&, const TensorData&);

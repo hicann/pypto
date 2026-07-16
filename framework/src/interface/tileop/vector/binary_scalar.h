@@ -125,9 +125,8 @@ TILEOP void TMulS(T0 dst, T1 src0, Scalar src1)
 }
 
 #define OP_TILE_OP_DIVS TDivS
-template <
-    auto PrecisionType = pto::DivAlgorithm::DEFAULT, typename LastUse = LastUse2Dim<0, 0>, typename Scalar, typename T0,
-    typename T1>
+template <auto PrecisionType = pto::DivAlgorithm::DEFAULT, typename LastUse = LastUse2Dim<0, 0>, typename Scalar,
+          typename T0, typename T1>
 TILEOP void TDivS(T0 dst, T1 src0, Scalar src1)
 {
     BinaryScalarCompute<BinaryScalarOp::DIV, PrecisionType, LastUse>(dst, src0, src1);
@@ -222,9 +221,8 @@ TILEOP void TGcdS(T0 dst, T1 src0, Scalar src1)
 }
 
 #define OP_TILE_OP_MODS TModS
-template <
-    auto PrecisionType = pto::FmodSAlgorithm::DEFAULT, typename LastUse = LastUse2Dim<0, 0>, typename Scalar,
-    typename T0, typename T1>
+template <auto PrecisionType = pto::FmodSAlgorithm::DEFAULT, typename LastUse = LastUse2Dim<0, 0>, typename Scalar,
+          typename T0, typename T1>
 TILEOP void TModS(T0 dst, T1 src0, Scalar src1)
 {
     BinaryScalarCompute<BinaryScalarOp::MOD, PrecisionType, LastUse>(dst, src0, src1);
@@ -306,10 +304,10 @@ TILEOP void TRemainderRS(T0 dst, T1 src0, Scalar src1, T2 tmp)
     auto src0Tile = PtoTile<T1>(src0);
     constexpr auto tmpTileH = TileOp::GetTensorTileShapeDim<T0, 3, 5>();
     constexpr auto tmpTileW = TileOp::GetTensorTileShapeDim<T2, 4, 5>();
-    using tmp0TileDefine =
-        pto::Tile<pto::TileType::Vec, typename T2::Type, tmpTileH, tmpTileW, pto::BLayout::RowMajor, -1, -1>;
-    using tmp1TileDefine =
-        pto::Tile<pto::TileType::Vec, typename T2::Type, 2, tmpTileW, pto::BLayout::RowMajor, -1, -1>;
+    using tmp0TileDefine = pto::Tile<pto::TileType::Vec, typename T2::Type, tmpTileH, tmpTileW, pto::BLayout::RowMajor,
+                                     -1, -1>;
+    using tmp1TileDefine = pto::Tile<pto::TileType::Vec, typename T2::Type, 2, tmpTileW, pto::BLayout::RowMajor, -1,
+                                     -1>;
     tmp0TileDefine tmp0Tile(shape3, shape4);
     tmp1TileDefine tmp1Tile(2, shape4);
 
@@ -349,11 +347,11 @@ TILEOP void TFloorDivS(T0 dst, T1 src0, Scalar src1, T2 tmp)
     constexpr auto tileH = TileOp::GetTensorTileShapeDim<T0, DIM_4TH, MAX_DIMS>();
     constexpr auto tileW = TileOp::GetTensorTileShapeDim<T0, DIM_5TH, MAX_DIMS>();
     constexpr auto dstTypeSize = sizeof(typename T0::Type);
-    constexpr auto tileShapeSize =
-        TileOp::GetAnyAxisMergeResult<DIM_1ST, Std::tuple_size<typename T0::TileShape>::value, typename T0::TileShape>();
+    constexpr auto tileShapeSize = TileOp::GetAnyAxisMergeResult<
+        DIM_1ST, Std::tuple_size<typename T0::TileShape>::value, typename T0::TileShape>();
 
-    using DataTileDefine =
-        pto::Tile<pto::TileType::Vec, typename T0::Type, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
+    using DataTileDefine = pto::Tile<pto::TileType::Vec, typename T0::Type, tileH, tileW, pto::BLayout::RowMajor, -1,
+                                     -1>;
     DataTileDefine src0Tile(dstShape3, dstShape4);
     DataTileDefine dstTile(dstShape3, dstShape4);
 
@@ -368,8 +366,8 @@ TILEOP void TFloorDivS(T0 dst, T1 src0, Scalar src1, T2 tmp)
 
                 if constexpr (std::is_same_v<typename T0::Type, half> ||
                               std::is_same_v<typename T0::Type, bfloat16_t>) {
-                    using Fp32TileDefine =
-                        pto::Tile<pto::TileType::Vec, float, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
+                    using Fp32TileDefine = pto::Tile<pto::TileType::Vec, float, tileH, tileW, pto::BLayout::RowMajor,
+                                                     -1, -1>;
                     Fp32TileDefine tmp0Tile(dstShape3, dstShape4);
                     pto::TASSIGN(tmp0Tile, FloorDivTmpAddr(tmp, dstOffset, tileShapeSize, 0, sizeof(float)));
                     pto::TCVT(tmp0Tile, src0Tile, pto::RoundMode::CAST_NONE);
@@ -389,12 +387,12 @@ TILEOP void TFloorDivS(T0 dst, T1 src0, Scalar src1, T2 tmp)
 
 #ifdef __DAV_V220
                 if constexpr (std::is_same_v<typename T0::Type, int32_t>) {
-                    using Fp32TileDefine =
-                        pto::Tile<pto::TileType::Vec, float, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
-                    using Int32TileDefine =
-                        pto::Tile<pto::TileType::Vec, int32_t, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
-                    using MaskTileDefine =
-                        pto::Tile<pto::TileType::Vec, uint8_t, tileH, 4 * tileW, pto::BLayout::RowMajor, -1, -1>;
+                    using Fp32TileDefine = pto::Tile<pto::TileType::Vec, float, tileH, tileW, pto::BLayout::RowMajor,
+                                                     -1, -1>;
+                    using Int32TileDefine = pto::Tile<pto::TileType::Vec, int32_t, tileH, tileW, pto::BLayout::RowMajor,
+                                                      -1, -1>;
+                    using MaskTileDefine = pto::Tile<pto::TileType::Vec, uint8_t, tileH, 4 * tileW,
+                                                     pto::BLayout::RowMajor, -1, -1>;
 
                     Fp32TileDefine tmp0Fp32Tile(dstShape3, dstShape4);
                     Fp32TileDefine tmp2Fp32Tile(dstShape3, dstShape4);
@@ -419,7 +417,8 @@ TILEOP void TFloorDivS(T0 dst, T1 src0, Scalar src1, T2 tmp)
                     // q = floor(float32(x1) / float32(x2))
                     pto::TCVT(tmp0Fp32Tile, src0Tile, pto::RoundMode::CAST_NONE, pto::SaturationMode::OFF);
                     SyncV();
-                    pto::TDIVS<pto::DivAlgorithm::HIGH_PRECISION>(tmp0Fp32Tile, tmp0Fp32Tile, static_cast<float>(divisor));
+                    pto::TDIVS<pto::DivAlgorithm::HIGH_PRECISION>(tmp0Fp32Tile, tmp0Fp32Tile,
+                                                                  static_cast<float>(divisor));
                     SyncV();
                     pto::TCVT(dstTile, tmp0Fp32Tile, pto::RoundMode::CAST_FLOOR);
                     SyncV();
@@ -433,7 +432,8 @@ TILEOP void TFloorDivS(T0 dst, T1 src0, Scalar src1, T2 tmp)
                     // Step 3: refine q with floor(float32(r) / float32(x2)).
                     pto::TCVT(tmp2Fp32Tile, tmp0I32Tile, pto::RoundMode::CAST_NONE);
                     SyncV();
-                    pto::TDIVS<pto::DivAlgorithm::HIGH_PRECISION>(tmp2Fp32Tile, tmp2Fp32Tile, static_cast<float>(divisor));
+                    pto::TDIVS<pto::DivAlgorithm::HIGH_PRECISION>(tmp2Fp32Tile, tmp2Fp32Tile,
+                                                                  static_cast<float>(divisor));
                     SyncV();
                     pto::TCVT(tmp0I32Tile, tmp2Fp32Tile, pto::RoundMode::CAST_FLOOR);
                     SyncV();
@@ -491,10 +491,10 @@ TILEOP void TFloorDivS(T0 dst, T1 src0, Scalar src1, T2 tmp)
                     SyncV();
                 } else if constexpr (std::is_same_v<typename T0::Type, int8_t> ||
                                      std::is_same_v<typename T0::Type, uint8_t>) {
-                    using HalfTileDefine =
-                        pto::Tile<pto::TileType::Vec, half, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
-                    using Fp32TileDefine =
-                        pto::Tile<pto::TileType::Vec, float, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
+                    using HalfTileDefine = pto::Tile<pto::TileType::Vec, half, tileH, tileW, pto::BLayout::RowMajor, -1,
+                                                     -1>;
+                    using Fp32TileDefine = pto::Tile<pto::TileType::Vec, float, tileH, tileW, pto::BLayout::RowMajor,
+                                                     -1, -1>;
                     HalfTileDefine tmp0Tile(dstShape3, dstShape4);
                     Fp32TileDefine tmp1Tile(dstShape3, dstShape4);
                     pto::TASSIGN(tmp0Tile, FloorDivTmpAddr(tmp, dstOffset, tileShapeSize, 0, sizeof(float)));
@@ -512,10 +512,10 @@ TILEOP void TFloorDivS(T0 dst, T1 src0, Scalar src1, T2 tmp)
                 }
 #else
                 if constexpr (std::is_same_v<typename T0::Type, uint8_t>) {
-                    using HalfTileDefine =
-                        pto::Tile<pto::TileType::Vec, half, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
-                    using Int16TileDefine =
-                        pto::Tile<pto::TileType::Vec, int16_t, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
+                    using HalfTileDefine = pto::Tile<pto::TileType::Vec, half, tileH, tileW, pto::BLayout::RowMajor, -1,
+                                                     -1>;
+                    using Int16TileDefine = pto::Tile<pto::TileType::Vec, int16_t, tileH, tileW, pto::BLayout::RowMajor,
+                                                      -1, -1>;
                     HalfTileDefine tmp0Tile(dstShape3, dstShape4);
                     Int16TileDefine tmp1Tile(dstShape3, dstShape4);
                     pto::TASSIGN(tmp0Tile, FloorDivTmpAddr(tmp, dstOffset, tileShapeSize, 0, sizeof(float)));
@@ -525,23 +525,23 @@ TILEOP void TFloorDivS(T0 dst, T1 src0, Scalar src1, T2 tmp)
                     pto::TDIVS(tmp1Tile, tmp1Tile, static_cast<int16_t>(src1));
                     pto::TCVT(dstTile, tmp1Tile, pto::RoundMode::CAST_NONE, pto::SaturationMode::ON);
                 } else if constexpr (std::is_same_v<typename T0::Type, int8_t>) {
-                    using HalfTileDefine =
-                        pto::Tile<pto::TileType::Vec, half, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
+                    using HalfTileDefine = pto::Tile<pto::TileType::Vec, half, tileH, tileW, pto::BLayout::RowMajor, -1,
+                                                     -1>;
                     HalfTileDefine tmp0Tile(dstShape3, dstShape4);
                     pto::TASSIGN(tmp0Tile, FloorDivTmpAddr(tmp, dstOffset, tileShapeSize, 0, sizeof(float)));
                     pto::TCVT(tmp0Tile, src0Tile, pto::RoundMode::CAST_NONE);
                     if (src1 == 0) {
                         pto::TEXPANDS(tmp0Tile, static_cast<half>(0.0f));
                     } else {
-                        pto::TDIVS<pto::DivAlgorithm::HIGH_PRECISION>(
-                            tmp0Tile, tmp0Tile, static_cast<half>(static_cast<float>(src1)));
+                        pto::TDIVS<pto::DivAlgorithm::HIGH_PRECISION>(tmp0Tile, tmp0Tile,
+                                                                      static_cast<half>(static_cast<float>(src1)));
                     }
                     pto::TCVT(dstTile, tmp0Tile, pto::RoundMode::CAST_FLOOR);
                 } else if constexpr (std::is_same_v<typename T0::Type, int32_t>) {
-                    using Int32TileDefine =
-                        pto::Tile<pto::TileType::Vec, int32_t, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
-                    using MaskTileDefine =
-                        pto::Tile<pto::TileType::Vec, uint8_t, tileH, 4 * tileW, pto::BLayout::RowMajor, -1, -1>;
+                    using Int32TileDefine = pto::Tile<pto::TileType::Vec, int32_t, tileH, tileW, pto::BLayout::RowMajor,
+                                                      -1, -1>;
+                    using MaskTileDefine = pto::Tile<pto::TileType::Vec, uint8_t, tileH, 4 * tileW,
+                                                     pto::BLayout::RowMajor, -1, -1>;
                     Int32TileDefine tmp0DataTile(dstShape3, dstShape4);
                     Int32TileDefine tmp1DataTile(dstShape3, dstShape4);
                     MaskTileDefine tmp2MaskTile(dstShape3, dstShape4);

@@ -137,8 +137,8 @@ public:
      * \param kind Loop kind (Sequential or Parallel, default: Sequential)
      * \throws RuntimeError if not inside a function or another loop
      */
-    void BeginForLoop(
-        const VarPtr& loop_var, const ExprPtr& start, const ExprPtr& stop, const ExprPtr& step, const Span& span);
+    void BeginForLoop(const VarPtr& loop_var, const ExprPtr& start, const ExprPtr& stop, const ExprPtr& step,
+                      const Span& span);
 
     /**
      * \brief Add an iteration argument to the current for loop
@@ -592,8 +592,7 @@ private:
 class IfStmtContext : public BuildContext {
 public:
     IfStmtContext(ExprPtr condition, Span span)
-        : BuildContext(Type::IF_STMT, std::move(span)),
-          condition_(std::move(condition))
+        : BuildContext(Type::IF_STMT, std::move(span)), condition_(std::move(condition))
     {}
 
     void BeginElseBranch()

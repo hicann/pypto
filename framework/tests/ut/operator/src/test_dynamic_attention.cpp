@@ -36,11 +36,10 @@ protected:
     bool oriEnableAihacBackend = false;
 };
 
-template <
-    typename T = npu::tile_fwk::float16, bool splitReduceLastDim = false, bool splitK = false, bool nz = false,
-    bool usePrefetch = false>
-void TestDynamicAttention(
-    std::vector<int64_t>& params, PaTileShapeConfig& paTileConfig, bool isQuant = false, std::string cacheMode = "BNSD")
+template <typename T = npu::tile_fwk::float16, bool splitReduceLastDim = false, bool splitK = false, bool nz = false,
+          bool usePrefetch = false>
+void TestDynamicAttention(std::vector<int64_t>& params, PaTileShapeConfig& paTileConfig, bool isQuant = false,
+                          std::string cacheMode = "BNSD")
 {
     // b, s, s2, n, h, qLoraRank, qkNopeHeadDim, qkRopeHeadDim, kvLoraRank, vHeadDim
 
@@ -159,9 +158,8 @@ void TestDynamicAttention(
     };
 
     MlaQuantInputs quantInputs;
-    Attention(
-        x, wDq, wUqQr, wUk, wDkvKr, gamma_cq, gamma_ckv, sin, cos, kv_len, kv_cache, kr_cache, output_q, output_q_rope,
-        output_kv_cache, output_kr_cache, quantInputs, ropeConfig,         /*---*/
-        blockTable, actSeqs, paOut, blockSize, softmaxScale, paTileConfig, /*---*/
-        weightUV, weightO, weightOScaleW, postOut, 1e-5f, 1e-5f, cacheMode);
+    Attention(x, wDq, wUqQr, wUk, wDkvKr, gamma_cq, gamma_ckv, sin, cos, kv_len, kv_cache, kr_cache, output_q,
+              output_q_rope, output_kv_cache, output_kr_cache, quantInputs, ropeConfig, /*---*/
+              blockTable, actSeqs, paOut, blockSize, softmaxScale, paTileConfig,        /*---*/
+              weightUV, weightO, weightOScaleW, postOut, 1e-5f, 1e-5f, cacheMode);
 }

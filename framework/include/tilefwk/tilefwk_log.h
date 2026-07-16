@@ -64,72 +64,70 @@ private:
 } // namespace npu::tile_fwk
 
 #define PYPTO_HOST_LOG_INNER(level, module, has_module, fmt, ...)                                                    \
-    do {                                                                                                              \
-        if (npu::tile_fwk::LogFuncInfo::Instance().setAttr != nullptr) {                                              \
-            npu::tile_fwk::LogFuncInfo::Instance().setAttr(false);                                                    \
-        }                                                                                                             \
+    do {                                                                                                             \
+        if (npu::tile_fwk::LogFuncInfo::Instance().setAttr != nullptr) {                                             \
+            npu::tile_fwk::LogFuncInfo::Instance().setAttr(false);                                                   \
+        }                                                                                                            \
         if (npu::tile_fwk::LogFuncInfo::Instance().checkLevel != nullptr &&                                          \
-            npu::tile_fwk::LogFuncInfo::Instance().record != nullptr) {                                               \
-            if (npu::tile_fwk::LogFuncInfo::Instance().checkLevel(PYPTO, level, npu::tile_fwk::LogModule::module)) {  \
+            npu::tile_fwk::LogFuncInfo::Instance().record != nullptr) {                                              \
+            if (npu::tile_fwk::LogFuncInfo::Instance().checkLevel(PYPTO, level, npu::tile_fwk::LogModule::module)) { \
                 if (has_module) {                                                                                    \
-                    npu::tile_fwk::LogFuncInfo::Instance().record(                                                   \
-                        PYPTO, level, "[%s:%d][%s]:" fmt, __FILE_NAME__, __LINE__, #module, ##__VA_ARGS__);           \
+                    npu::tile_fwk::LogFuncInfo::Instance().record(PYPTO, level, "[%s:%d][%s]:" fmt, __FILE_NAME__,   \
+                                                                  __LINE__, #module, ##__VA_ARGS__);                 \
                 } else {                                                                                             \
-                    npu::tile_fwk::LogFuncInfo::Instance().record(                                                   \
-                        PYPTO, level, "[%s:%d]:" fmt, __FILE_NAME__, __LINE__, ##__VA_ARGS__);                        \
-                }                                                                                                     \
-            }                                                                                                         \
-        }                                                                                                             \
+                    npu::tile_fwk::LogFuncInfo::Instance().record(PYPTO, level, "[%s:%d]:" fmt, __FILE_NAME__,       \
+                                                                  __LINE__, ##__VA_ARGS__);                          \
+                }                                                                                                    \
+            }                                                                                                        \
+        }                                                                                                            \
     } while (0)
 
-#define PYPTO_HOST_LOG(level, module, fmt, ...) \
-    PYPTO_HOST_LOG_INNER(level, module, true, fmt, ##__VA_ARGS__)
+#define PYPTO_HOST_LOG(level, module, fmt, ...) PYPTO_HOST_LOG_INNER(level, module, true, fmt, ##__VA_ARGS__)
 
-#define PYPTO_HOST_LOG_WITHOUT_MODULE(level, fmt, ...) \
-    PYPTO_HOST_LOG_INNER(level, BOTTOM, false, fmt, ##__VA_ARGS__)
+#define PYPTO_HOST_LOG_WITHOUT_MODULE(level, fmt, ...) PYPTO_HOST_LOG_INNER(level, BOTTOM, false, fmt, ##__VA_ARGS__)
 
 #define MAX_LOG_LENGTH 880
 
-#define PYPTO_HOST_SPLIT_LOG_INNER(level, module, has_module, fmt, ...)                                             \
-    do {                                                                                                              \
-        if (npu::tile_fwk::LogFuncInfo::Instance().setAttr != nullptr) {                                              \
-            npu::tile_fwk::LogFuncInfo::Instance().setAttr(false);                                                    \
-        }                                                                                                             \
-        if (npu::tile_fwk::LogFuncInfo::Instance().checkLevel == nullptr ||                                          \
-            npu::tile_fwk::LogFuncInfo::Instance().record == nullptr) {                                               \
-            break;                                                                                                    \
-        }                                                                                                             \
-        if (!npu::tile_fwk::LogFuncInfo::Instance().checkLevel(PYPTO, level, npu::tile_fwk::LogModule::module)) {     \
-            break;                                                                                                    \
-        }                                                                                                             \
-        char* formatStr = nullptr;                                                                                   \
-        int len = asprintf(&formatStr, fmt, ##__VA_ARGS__);                                                           \
-        if (len <= 0 || formatStr == nullptr) {                                                                       \
-            break;                                                                                                    \
-        }                                                                                                             \
-        if (len < MAX_LOG_LENGTH) {                                                                                   \
-            if (has_module) {                                                                                        \
-                npu::tile_fwk::LogFuncInfo::Instance().record(                                                        \
-                    PYPTO, level, "[%s:%d][%s]:%s", __FILE_NAME__, __LINE__, #module, formatStr);                    \
-            } else {                                                                                                 \
-                npu::tile_fwk::LogFuncInfo::Instance().record(                                                        \
-                    PYPTO, level, "[%s:%d]:%s", __FILE_NAME__, __LINE__, formatStr);                                 \
-            }                                                                                                         \
-        } else {                                                                                                      \
-            char* msgBegin = formatStr;                                                                               \
-            char* msgEnd = formatStr + len;                                                                           \
-            while (msgBegin < msgEnd) {                                                                               \
-                if (has_module) {                                                                                    \
-                    npu::tile_fwk::LogFuncInfo::Instance().record(                                                    \
-                        PYPTO, level, "[%s:%d][%s]:%.880s", __FILE_NAME__, __LINE__, #module, msgBegin);              \
-                } else {                                                                                             \
-                    npu::tile_fwk::LogFuncInfo::Instance().record(                                                    \
-                        PYPTO, level, "[%s:%d]:%.880s", __FILE_NAME__, __LINE__, msgBegin);                           \
-                }                                                                                                     \
-                msgBegin += MAX_LOG_LENGTH;                                                                           \
-            }                                                                                                         \
-        }                                                                                                             \
-        free(formatStr);                                                                                              \
+#define PYPTO_HOST_SPLIT_LOG_INNER(level, module, has_module, fmt, ...)                                                \
+    do {                                                                                                               \
+        if (npu::tile_fwk::LogFuncInfo::Instance().setAttr != nullptr) {                                               \
+            npu::tile_fwk::LogFuncInfo::Instance().setAttr(false);                                                     \
+        }                                                                                                              \
+        if (npu::tile_fwk::LogFuncInfo::Instance().checkLevel == nullptr ||                                            \
+            npu::tile_fwk::LogFuncInfo::Instance().record == nullptr) {                                                \
+            break;                                                                                                     \
+        }                                                                                                              \
+        if (!npu::tile_fwk::LogFuncInfo::Instance().checkLevel(PYPTO, level, npu::tile_fwk::LogModule::module)) {      \
+            break;                                                                                                     \
+        }                                                                                                              \
+        char* formatStr = nullptr;                                                                                     \
+        int len = asprintf(&formatStr, fmt, ##__VA_ARGS__);                                                            \
+        if (len <= 0 || formatStr == nullptr) {                                                                        \
+            break;                                                                                                     \
+        }                                                                                                              \
+        if (len < MAX_LOG_LENGTH) {                                                                                    \
+            if (has_module) {                                                                                          \
+                npu::tile_fwk::LogFuncInfo::Instance().record(PYPTO, level, "[%s:%d][%s]:%s", __FILE_NAME__, __LINE__, \
+                                                              #module, formatStr);                                     \
+            } else {                                                                                                   \
+                npu::tile_fwk::LogFuncInfo::Instance().record(PYPTO, level, "[%s:%d]:%s", __FILE_NAME__, __LINE__,     \
+                                                              formatStr);                                              \
+            }                                                                                                          \
+        } else {                                                                                                       \
+            char* msgBegin = formatStr;                                                                                \
+            char* msgEnd = formatStr + len;                                                                            \
+            while (msgBegin < msgEnd) {                                                                                \
+                if (has_module) {                                                                                      \
+                    npu::tile_fwk::LogFuncInfo::Instance().record(PYPTO, level, "[%s:%d][%s]:%.880s", __FILE_NAME__,   \
+                                                                  __LINE__, #module, msgBegin);                        \
+                } else {                                                                                               \
+                    npu::tile_fwk::LogFuncInfo::Instance().record(PYPTO, level, "[%s:%d]:%.880s", __FILE_NAME__,       \
+                                                                  __LINE__, msgBegin);                                 \
+                }                                                                                                      \
+                msgBegin += MAX_LOG_LENGTH;                                                                            \
+            }                                                                                                          \
+        }                                                                                                              \
+        free(formatStr);                                                                                               \
     } while (0)
 
 #define PYPTO_HOST_SPLIT_LOG(level, module, fmt, ...) \
@@ -138,15 +136,15 @@ private:
 #define PYPTO_HOST_SPLIT_LOG_WITHOUT_MODULE(level, fmt, ...) \
     PYPTO_HOST_SPLIT_LOG_INNER(level, BOTTOM, false, fmt, ##__VA_ARGS__)
 
-#define PYPTO_HOST_LOG_WITHOUT_LEVEL_CHECK(level, module, fmt, ...)                                 \
-    do {                                                                                            \
-        if (npu::tile_fwk::LogFuncInfo::Instance().setAttr != nullptr) {                            \
-            npu::tile_fwk::LogFuncInfo::Instance().setAttr(false);                                  \
-        }                                                                                           \
-        if (npu::tile_fwk::LogFuncInfo::Instance().record != nullptr) {                             \
-            npu::tile_fwk::LogFuncInfo::Instance().record(                                          \
-                PYPTO, level, "[%s:%d][%s]:" fmt, __FILE_NAME__, __LINE__, #module, ##__VA_ARGS__); \
-        }                                                                                           \
+#define PYPTO_HOST_LOG_WITHOUT_LEVEL_CHECK(level, module, fmt, ...)                                                  \
+    do {                                                                                                             \
+        if (npu::tile_fwk::LogFuncInfo::Instance().setAttr != nullptr) {                                             \
+            npu::tile_fwk::LogFuncInfo::Instance().setAttr(false);                                                   \
+        }                                                                                                            \
+        if (npu::tile_fwk::LogFuncInfo::Instance().record != nullptr) {                                              \
+            npu::tile_fwk::LogFuncInfo::Instance().record(PYPTO, level, "[%s:%d][%s]:" fmt, __FILE_NAME__, __LINE__, \
+                                                          #module, ##__VA_ARGS__);                                   \
+        }                                                                                                            \
     } while (0)
 
 #define PYPTO_SIM_LOG(level, module, fmt, ...)                                                                       \
@@ -157,20 +155,20 @@ private:
         if (npu::tile_fwk::LogFuncInfo::Instance().checkLevel != nullptr &&                                          \
             npu::tile_fwk::LogFuncInfo::Instance().pyptoRecord != nullptr) {                                         \
             if (npu::tile_fwk::LogFuncInfo::Instance().checkLevel(PYPTO, level, npu::tile_fwk::LogModule::module)) { \
-                npu::tile_fwk::LogFuncInfo::Instance().pyptoRecord(                                                  \
-                    PYPTO, level, "[%s:%d][%s]:" fmt, __FILE_NAME__, __LINE__, #module, ##__VA_ARGS__);              \
+                npu::tile_fwk::LogFuncInfo::Instance().pyptoRecord(PYPTO, level, "[%s:%d][%s]:" fmt, __FILE_NAME__,  \
+                                                                   __LINE__, #module, ##__VA_ARGS__);                \
             }                                                                                                        \
         }                                                                                                            \
     } while (0)
 
-#define PYPTO_SIM_LOG_WITHOUT_LEVEL_CHECK(level, module, fmt, ...)                                                   \
-    do {                                                                                                             \
-        if (npu::tile_fwk::LogFuncInfo::Instance().setAttr != nullptr) {                                             \
-            npu::tile_fwk::LogFuncInfo::Instance().setAttr(true);                                                    \
-        }                                                                                                            \
-        if (npu::tile_fwk::LogFuncInfo::Instance().pyptoRecord != nullptr) {                                         \
-            npu::tile_fwk::LogFuncInfo::Instance().pyptoRecord(                                                      \
-                PYPTO, level, "[%s:%d][%s]:" fmt, __FILE_NAME__, __LINE__, #module, ##__VA_ARGS__);                  \
-        }                                                                                                            \
+#define PYPTO_SIM_LOG_WITHOUT_LEVEL_CHECK(level, module, fmt, ...)                                              \
+    do {                                                                                                        \
+        if (npu::tile_fwk::LogFuncInfo::Instance().setAttr != nullptr) {                                        \
+            npu::tile_fwk::LogFuncInfo::Instance().setAttr(true);                                               \
+        }                                                                                                       \
+        if (npu::tile_fwk::LogFuncInfo::Instance().pyptoRecord != nullptr) {                                    \
+            npu::tile_fwk::LogFuncInfo::Instance().pyptoRecord(PYPTO, level, "[%s:%d][%s]:" fmt, __FILE_NAME__, \
+                                                               __LINE__, #module, ##__VA_ARGS__);               \
+        }                                                                                                       \
     } while (0)
 #endif

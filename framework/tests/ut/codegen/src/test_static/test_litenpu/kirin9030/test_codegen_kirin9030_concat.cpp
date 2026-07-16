@@ -19,85 +19,37 @@ using namespace npu::tile_fwk;
 
 class TestCodeGenKirin9030Concat : public CodegenTestLiteNPU {
 public:
-    TestCodeGenKirin9030Concat() : CodegenTestLiteNPU("Kirin9030"){};
+    TestCodeGenKirin9030Concat() : CodegenTestLiteNPU("Kirin9030") {};
 };
 
-TEST_F(TestCodeGenKirin9030Concat, test_concat_001)
-{
-    TestCodeGenConcat::Instance().test_concat_001();
-}
+TEST_F(TestCodeGenKirin9030Concat, test_concat_001) { TestCodeGenConcat::Instance().test_concat_001(); }
 
-TEST_F(TestCodeGenKirin9030Concat, DISABLED_test_concat_002)
-{
-    TestCodeGenConcat::Instance().test_concat_002();
-}
+TEST_F(TestCodeGenKirin9030Concat, DISABLED_test_concat_002) { TestCodeGenConcat::Instance().test_concat_002(); }
 
-TEST_F(TestCodeGenKirin9030Concat, DISABLED_test_concat_003)
-{
-    TestCodeGenConcat::Instance().test_concat_003();
-}
+TEST_F(TestCodeGenKirin9030Concat, DISABLED_test_concat_003) { TestCodeGenConcat::Instance().test_concat_003(); }
 
-TEST_F(TestCodeGenKirin9030Concat, DISABLED_test_concat_004)
-{
-    TestCodeGenConcat::Instance().test_concat_004();
-}
+TEST_F(TestCodeGenKirin9030Concat, DISABLED_test_concat_004) { TestCodeGenConcat::Instance().test_concat_004(); }
 
-TEST_F(TestCodeGenKirin9030Concat, DISABLED_test_concat_005)
-{
-    TestCodeGenConcat::Instance().test_concat_005();
-}
+TEST_F(TestCodeGenKirin9030Concat, DISABLED_test_concat_005) { TestCodeGenConcat::Instance().test_concat_005(); }
 
-TEST_F(TestCodeGenKirin9030Concat, DISABLED_test_concat_006)
-{
-    TestCodeGenConcat::Instance().test_concat_006();
-}
+TEST_F(TestCodeGenKirin9030Concat, DISABLED_test_concat_006) { TestCodeGenConcat::Instance().test_concat_006(); }
 
-TEST_F(TestCodeGenKirin9030Concat, DISABLED_test_concat_007)
-{
-    TestCodeGenConcat::Instance().test_concat_007();
-}
+TEST_F(TestCodeGenKirin9030Concat, DISABLED_test_concat_007) { TestCodeGenConcat::Instance().test_concat_007(); }
 
-TEST_F(TestCodeGenKirin9030Concat, DISABLED_test_concat_008)
-{
-    TestCodeGenConcat::Instance().test_concat_008();
-}
+TEST_F(TestCodeGenKirin9030Concat, DISABLED_test_concat_008) { TestCodeGenConcat::Instance().test_concat_008(); }
 
-TEST_F(TestCodeGenKirin9030Concat, DISABLED_test_concat_009)
-{
-    TestCodeGenConcat::Instance().test_concat_009();
-}
+TEST_F(TestCodeGenKirin9030Concat, DISABLED_test_concat_009) { TestCodeGenConcat::Instance().test_concat_009(); }
 
-TEST_F(TestCodeGenKirin9030Concat, DISABLED_test_concat_010)
-{
-    TestCodeGenConcat::Instance().test_concat_010();
-}
+TEST_F(TestCodeGenKirin9030Concat, DISABLED_test_concat_010) { TestCodeGenConcat::Instance().test_concat_010(); }
 
-TEST_F(TestCodeGenKirin9030Concat, DISABLED_test_concat_011)
-{
-    TestCodeGenConcat::Instance().test_concat_011();
-}
+TEST_F(TestCodeGenKirin9030Concat, DISABLED_test_concat_011) { TestCodeGenConcat::Instance().test_concat_011(); }
 
-TEST_F(TestCodeGenKirin9030Concat, DISABLED_test_concat_012)
-{
-    TestCodeGenConcat::Instance().test_concat_012();
-}
+TEST_F(TestCodeGenKirin9030Concat, DISABLED_test_concat_012) { TestCodeGenConcat::Instance().test_concat_012(); }
 
-TEST_F(TestCodeGenKirin9030Concat, DISABLED_test_concat_013)
-{
-    TestCodeGenConcat::Instance().test_concat_013();
-}
+TEST_F(TestCodeGenKirin9030Concat, DISABLED_test_concat_013) { TestCodeGenConcat::Instance().test_concat_013(); }
 
-TEST_F(TestCodeGenKirin9030Concat, DISABLED_test_concat_014)
-{
-    TestCodeGenConcat::Instance().test_concat_014();
-}
+TEST_F(TestCodeGenKirin9030Concat, DISABLED_test_concat_014) { TestCodeGenConcat::Instance().test_concat_014(); }
 
-TEST_F(TestCodeGenKirin9030Concat, DISABLED_test_concat_015)
-{
-    TestCodeGenConcat::Instance().test_concat_015();
-}
+TEST_F(TestCodeGenKirin9030Concat, DISABLED_test_concat_015) { TestCodeGenConcat::Instance().test_concat_015(); }
 
-TEST_F(TestCodeGenKirin9030Concat, DISABLED_test_concat_016)
-{
-    TestCodeGenConcat::Instance().test_concat_016();
-}
+TEST_F(TestCodeGenKirin9030Concat, DISABLED_test_concat_016) { TestCodeGenConcat::Instance().test_concat_016(); }

@@ -44,9 +44,8 @@ struct CodeGenOpCtx {
     bool isMainBlock{false};
     bool isDynamicAligned{false};
 
-    CodeGenOpCtx(
-        std::shared_ptr<SymbolManager> sm, Function& tf, Function& sf, const Operation& op, bool isMainBlk = false,
-        bool isDynAligned = false)
+    CodeGenOpCtx(std::shared_ptr<SymbolManager> sm, Function& tf, Function& sf, const Operation& op,
+                 bool isMainBlk = false, bool isDynAligned = false)
         : symbolManager(std::move(sm)),
           topFunc(tf),
           subFunc(sf),
@@ -104,8 +103,8 @@ protected:
     std::vector<SymbolicScalar> dynamicOffset[MAX_OPERANDS] = {};
     std::vector<SymbolicScalar> dynamicValidShape[MAX_OPERANDS] = {}; // valid shape
 
-    std::vector<int64_t> shapeFromAttr[MAX_OPERANDS] = {};            // 1.for spilling to GM scene 2.for conv
-    std::vector<SymbolicScalar> offsetFromAttr[MAX_OPERANDS] = {};    // for spilling to GM scene
+    std::vector<int64_t> shapeFromAttr[MAX_OPERANDS] = {};         // 1.for spilling to GM scene 2.for conv
+    std::vector<SymbolicScalar> offsetFromAttr[MAX_OPERANDS] = {}; // for spilling to GM scene
     std::vector<SymbolicScalar> dynValidShapeFromOpAttr[MAX_OPERANDS] = {};
     // if operand is an variable, record its related argument location
     int paramLocation[MAX_OPERANDS] = {};
@@ -132,17 +131,16 @@ protected:
     bool isDynamicAligned{false};
 
 private:
-    void UpdateCodegenOpInfoByTensor(
-        const Operation& ops, bool isInput, const std::shared_ptr<LogicalTensor>& tensor, int& operandIdx,
-        size_t ioIdx);
+    void UpdateCodegenOpInfoByTensor(const Operation& ops, bool isInput, const std::shared_ptr<LogicalTensor>& tensor,
+                                     int& operandIdx, size_t ioIdx);
 
     void UpdateTileOpInfo(const Operation& ops);
 
     void ConvertPoolAttribute(const Operation& operation);
     void ConvertAttribute(const Operation& operation);
     void UpdateShape(const Operation& oper, const LogicalTensor& logicalTensor, int operandIdx);
-    void UpdateShapeAndOffset(
-        const Operation& ops, const LogicalTensor& logicalTensor, bool isInput, int operandIdx, size_t ioIdx);
+    void UpdateShapeAndOffset(const Operation& ops, const LogicalTensor& logicalTensor, bool isInput, int operandIdx,
+                              size_t ioIdx);
     void UpdateOffsetForInput(const Operation& oper, const LogicalTensor& logicalTensor, int operandIdx);
     void UpdateOffsetForOutput(const Operation& oper, const LogicalTensor& logicalTensor, int operandIdx);
     void UpdateOffsetValueFromAttr(const std::vector<OpImmediate>& offsets, int operandIdx);

@@ -141,8 +141,7 @@ Json CostModelAgent::ParseDynTopo(std::string& path)
             } catch (const std::invalid_argument& e) {
                 // ignore
             } catch (const std::out_of_range& e) {
-                SIMULATION_LOGE(CostModel::ExternalErrorScene::FILE_CONTENT_ERROR,
-                    "Out of range: %s", e.what());
+                SIMULATION_LOGE(CostModel::ExternalErrorScene::FILE_CONTENT_ERROR, "Out of range: %s", e.what());
             }
         }
         uint64_t seqNo = fields[seqPos];
@@ -235,14 +234,16 @@ void CostModelAgent::DebugSingleFunc(Function* func)
 void CostModelAgent::GetFunctionFromJson(const std::string& jsonPath)
 {
     std::ifstream file(jsonPath);
-    CHECK(static_cast<unsigned>(CostModel::ExternalErrorScene::FILE_OPEN_FAILED), file.good()) << "[SIMULATION]: "
-                       << "Json file: " << jsonPath << " open failed!!!";
+    CHECK(static_cast<unsigned>(CostModel::ExternalErrorScene::FILE_OPEN_FAILED), file.good())
+        << "[SIMULATION]: "
+        << "Json file: " << jsonPath << " open failed!!!";
     Json jsonData;
     try {
         file >> jsonData;
     } catch (const std::exception& e) {
-        CHECK(static_cast<unsigned>(CostModel::ExternalErrorScene::FILE_FORMAT_ERROR), false) << "[SIMULATION]: "
-                     << "Json file: " << jsonPath << " parsing error: " << e.what();
+        CHECK(static_cast<unsigned>(CostModel::ExternalErrorScene::FILE_FORMAT_ERROR), false)
+            << "[SIMULATION]: "
+            << "Json file: " << jsonPath << " parsing error: " << e.what();
     }
     Program::GetInstance().LoadJson(jsonData);
 }

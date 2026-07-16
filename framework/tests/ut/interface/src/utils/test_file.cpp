@@ -130,7 +130,7 @@ TEST(FileTest, CreateDirHandlesConsecutiveSlashes)
     EXPECT_TRUE(CreateDir(path + "/", true));
     DeleteDir(base, true);
 
-    EXPECT_TRUE(CreateDir("/tmp", true));   // 已存在
+    EXPECT_TRUE(CreateDir("/tmp", true)); // 已存在
 }
 
 TEST(FileTest, CreateMultiLevelDirFailedWhenParentIsFile)

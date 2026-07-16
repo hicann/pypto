@@ -78,9 +78,8 @@ public:
         if (npu::tile_fwk::Platform::Instance().GetSoc().GetNPUArch() == npu::tile_fwk::NPUArch::DAV_3510) {
             Mc2CommConfig_.inner.version = 100U;
             Mc2CommConfig_.inner.commEngine = 3;
-            (void)memset_s(
-                Mc2CommConfig_.inner.reserved, sizeof(Mc2CommConfig_.inner.reserved), 0,
-                sizeof(Mc2CommConfig_.inner.reserved));
+            (void)memset_s(Mc2CommConfig_.inner.reserved, sizeof(Mc2CommConfig_.inner.reserved), 0,
+                           sizeof(Mc2CommConfig_.inner.reserved));
         } else {
             Mc2CommConfig_.inner.version = 1;
         }
@@ -95,8 +94,8 @@ public:
         Mc2CommConfig_.inner.stepSize = 0;
         Mc2CommConfig_.inner.opType = 18U;
         Mc2CommConfig_.inner.version = 1;
-        Mc2CommConfig_.init.offset[0] = static_cast<uint32_t>(
-            reinterpret_cast<uint64_t>(&Mc2CommConfig_.inner) - reinterpret_cast<uint64_t>(&Mc2CommConfig_.init));
+        Mc2CommConfig_.init.offset[0] = static_cast<uint32_t>(reinterpret_cast<uint64_t>(&Mc2CommConfig_.inner) -
+                                                              reinterpret_cast<uint64_t>(&Mc2CommConfig_.init));
         auto ret = strcpy_s(Mc2CommConfig_.inner.groupName, npu::tile_fwk::GROUP_NAME_SIZE, groupName.c_str());
         if (ret != 0) {
             return -1;
@@ -120,8 +119,8 @@ enum class ResType { RING_A2, MESH_A3, MESH_A5, UNKNOWN };
 
 class DistributedContext {
 public:
-    DistributedContext(){};
-    ~DistributedContext(){};
+    DistributedContext() {};
+    ~DistributedContext() {};
     static std::vector<uint64_t> GetCommContext(const std::vector<std::string>& groupNames);
     static std::vector<uint64_t> GetCommContextToHost(const std::vector<std::string>& groupNames);
     template <ResType T>

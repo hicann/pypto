@@ -42,15 +42,15 @@ TEST_F(TestCodegenDynLogical, TestDynOpLogicalAnd)
     auto function = GenMockFuncDyn("TestDynOpLogicalAnd");
     std::vector<int64_t> shape = {64, 64};
     std::vector<SymbolicScalar> dynValidShape = {64, 64};
-    auto localTensorInput1 =
-        CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
-    auto localTensorInput2 =
-        CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
+    auto localTensorInput1 = CreateLogicalTensor(
+        {*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
+    auto localTensorInput2 = CreateLogicalTensor(
+        {*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
     auto localTensorRes = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
     auto localTensorTmp = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
 
-    auto& op = function->AddOperation(
-        Opcode::OP_LOGICALAND, {localTensorInput1, localTensorInput2}, {localTensorRes, localTensorTmp});
+    auto& op = function->AddOperation(Opcode::OP_LOGICALAND, {localTensorInput1, localTensorInput2},
+                                      {localTensorRes, localTensorTmp});
 
     std::string res = GenOpCodeFromOp(*function, op);
     std::string expect =
@@ -64,11 +64,11 @@ TEST_F(TestCodegenDynLogical, TestDynOpLogicalNot)
     auto function = GenMockFuncDyn("TestDynOpLogicalNot");
     std::vector<int64_t> shape = {64, 64};
     std::vector<SymbolicScalar> dynValidShape = {64, 64};
-    auto localTensorInput =
-        CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
+    auto localTensorInput = CreateLogicalTensor(
+        {*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
     auto localTensorRes = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
-    auto localTensorTmpCond =
-        CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
+    auto localTensorTmpCond = CreateLogicalTensor(
+        {*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
 
     auto& op = function->AddOperation(Opcode::OP_LOGICALNOT, {localTensorInput}, {localTensorRes, localTensorTmpCond});
 
@@ -88,8 +88,8 @@ std::string TestLogicalBody(Opcode opcode)
 
     std::vector<int64_t> shape = {64, 64};
     std::vector<SymbolicScalar> dynValidShape = {64, 64};
-    auto logicalInTensor =
-        CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
+    auto logicalInTensor = CreateLogicalTensor(
+        {*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
     auto localOutTensor = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
     std::vector<int64_t> offset = {0, 0};
     std::vector<SymbolicScalar> dynoffset = {0, 0};

@@ -35,8 +35,8 @@ std::vector<int64_t> PermuteTileVector(const std::vector<int64_t>& values, const
     return result;
 }
 
-[[maybe_unused]] std::vector<SymbolicScalar> PermuteTileVector(
-    const std::vector<SymbolicScalar>& values, const std::vector<int>& perm)
+[[maybe_unused]] std::vector<SymbolicScalar> PermuteTileVector(const std::vector<SymbolicScalar>& values,
+                                                               const std::vector<int>& perm)
 {
     std::vector<SymbolicScalar> result;
     result.reserve(perm.size());
@@ -46,8 +46,8 @@ std::vector<int64_t> PermuteTileVector(const std::vector<int64_t>& values, const
     return result;
 }
 
-void PermuteOperationOperandCheck(
-    const std::vector<LogicalTensorPtr>& iOperand, const std::vector<LogicalTensorPtr>& oOperand)
+void PermuteOperationOperandCheck(const std::vector<LogicalTensorPtr>& iOperand,
+                                  const std::vector<LogicalTensorPtr>& oOperand)
 {
     CHECK(VectorErrorCode::ERR_PARAM_INVALID, iOperand.size() == 1) << "Permute input operand count should be 1";
     CHECK(VectorErrorCode::ERR_PARAM_INVALID, oOperand.size() == 1) << "Permute output operand count should be 1";
@@ -99,8 +99,8 @@ void ValidatePermutation(const std::vector<int>& perm, int shapeSize)
     }
 }
 
-static LogicalTensorPtr MakePermutedLogicalTensor(
-    Function& function, const LogicalTensorPtr& self, const std::vector<int>& perm)
+static LogicalTensorPtr MakePermutedLogicalTensor(Function& function, const LogicalTensorPtr& self,
+                                                  const std::vector<int>& perm)
 {
     std::vector<int64_t> resultShape = PermuteResultShape(self->shape, perm);
     std::vector<SymbolicScalar> resultValidShape;
@@ -114,9 +114,8 @@ static LogicalTensorPtr MakePermutedLogicalTensor(
     return std::make_shared<LogicalTensor>(function, self->tensor->datatype, resultShape, resultValidShape);
 }
 
-void TiledPermuteOperation(
-    Function& function, const TileShape& tileShape, size_t cur, Input& input, const LogicalTensorPtr& result,
-    const std::vector<int>& perm);
+void TiledPermuteOperation(Function& function, const TileShape& tileShape, size_t cur, Input& input,
+                           const LogicalTensorPtr& result, const std::vector<int>& perm);
 
 Tensor TensorPermuteOperation(Function& function, LogicalTensorPtr self, const std::vector<int>& perm)
 {
@@ -127,9 +126,8 @@ Tensor TensorPermuteOperation(Function& function, LogicalTensorPtr self, const s
     return result;
 }
 
-void TiledPermuteOperation(
-    Function& function, const TileShape& tileShape, size_t cur, Input& input, const LogicalTensorPtr& result,
-    const std::vector<int>& perm)
+void TiledPermuteOperation(Function& function, const TileShape& tileShape, size_t cur, Input& input,
+                           const LogicalTensorPtr& result, const std::vector<int>& perm)
 {
     int shapeSize = static_cast<int>(input.tensor.GetShape().size());
     if (cur == static_cast<size_t>(shapeSize)) {
@@ -152,9 +150,9 @@ void TiledPermuteOperation(
     }
 }
 
-void PermuteOperationTileFunc(
-    Function& function, const TileShape& tileShape, const std::vector<LogicalTensorPtr>& iOperand,
-    const std::vector<LogicalTensorPtr>& oOperand, const Operation& op)
+void PermuteOperationTileFunc(Function& function, const TileShape& tileShape,
+                              const std::vector<LogicalTensorPtr>& iOperand,
+                              const std::vector<LogicalTensorPtr>& oOperand, const Operation& op)
 {
     PermuteOperationOperandCheck(iOperand, oOperand);
 
@@ -184,9 +182,8 @@ Tensor TensorElementPermuteOperation(Function& function, LogicalTensorPtr self, 
     return result;
 }
 
-void TiledPermuteElementOperation(
-    Function& function, const TileShape& tileShape, size_t cur, Input& input, const LogicalTensorPtr& result,
-    const std::vector<int>& perm)
+void TiledPermuteElementOperation(Function& function, const TileShape& tileShape, size_t cur, Input& input,
+                                  const LogicalTensorPtr& result, const std::vector<int>& perm)
 {
     int shapeSize = static_cast<int>(input.tensor.GetShape().size());
     if (cur == static_cast<size_t>(shapeSize)) {
@@ -209,9 +206,9 @@ void TiledPermuteElementOperation(
     }
 }
 
-void PermuteElementOperationTileFunc(
-    Function& function, const TileShape& tileShape, const std::vector<LogicalTensorPtr>& iOperand,
-    const std::vector<LogicalTensorPtr>& oOperand, const Operation& op)
+void PermuteElementOperationTileFunc(Function& function, const TileShape& tileShape,
+                                     const std::vector<LogicalTensorPtr>& iOperand,
+                                     const std::vector<LogicalTensorPtr>& oOperand, const Operation& op)
 {
     PermuteOperationOperandCheck(iOperand, oOperand);
 
@@ -226,22 +223,18 @@ Tensor Permute(Function& function, const Tensor& self, std::vector<int> perm)
 {
     DECLARE_TRACER();
     CheckTensorShapeSize(self.GetStorage(), "PERMUTE");
-    std::unordered_set<DataType> supportedTypes = {
-        DT_FP8E4M3, DT_FP8E5M2, DT_HF8, DT_FP8E8M0,
-        DT_FP16, DT_BF16, DT_FP32,
-        DT_INT8, DT_UINT8, DT_INT16, DT_UINT16,
-        DT_INT32, DT_UINT32, DT_INT64, DT_UINT64,
-        DT_BOOL
-    };
+    std::unordered_set<DataType> supportedTypes = {DT_FP8E4M3, DT_FP8E5M2, DT_HF8,    DT_FP8E8M0, DT_FP16,   DT_BF16,
+                                                   DT_FP32,    DT_INT8,    DT_UINT8,  DT_INT16,   DT_UINT16, DT_INT32,
+                                                   DT_UINT32,  DT_INT64,   DT_UINT64, DT_BOOL};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "PERMUTE");
-    
+
     DataType dtype = self.GetDataType();
     if (dtype == DT_FP8E4M3 || dtype == DT_FP8E5M2 || dtype == DT_HF8 || dtype == DT_FP8E8M0) {
-        CHECK(VectorErrorCode::ERR_PARAM_INVALID, 
-               Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510)
-            << "PERMUTE: FP8 types (DT_FP8E4M3, DT_FP8E5M2, DT_HF8, DT_FP8E8M0) are only supported on DAV_3510 architecture.";
+        CHECK(VectorErrorCode::ERR_PARAM_INVALID, Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510)
+            << "PERMUTE: FP8 types (DT_FP8E4M3, DT_FP8E5M2, DT_HF8, DT_FP8E8M0) are only supported on DAV_3510 "
+               "architecture.";
     }
-    
+
     if (dtype == DT_INT64 || dtype == DT_UINT64) {
         CHECK(VectorErrorCode::ERR_PARAM_INVALID, self.Format() != TileOpFormat::TILEOP_NZ)
             << "PERMUTE: INT64/UINT64 do not support NZ format.";

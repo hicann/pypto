@@ -41,8 +41,8 @@ std::string CodeGenOpNPU::GetTemplateDType() const
 std::string CodeGenOpNPU::GenTemplateParamsForPutAndGet() const
 {
     std::ostringstream oss;
-    static const std::unordered_map<Opcode, std::array<int32_t, 2>> opcodeIndexMap = {
-        {Opcode::OP_SHMEM_PUT, {3, 4}}, {Opcode::OP_SHMEM_GET, {0, 3}}};
+    static const std::unordered_map<Opcode, std::array<int32_t, 2>> opcodeIndexMap = {{Opcode::OP_SHMEM_PUT, {3, 4}},
+                                                                                      {Opcode::OP_SHMEM_GET, {0, 3}}};
     auto [nonShmemDataIndex, shmemDataIndex] = opcodeIndexMap.at(opCode);
     const std::vector<int64_t>& tileShape = shape[shmemDataIndex];
     int64_t tileRowShape = tileShape[tileShape.size() - 2];
@@ -52,14 +52,14 @@ std::string CodeGenOpNPU::GenTemplateParamsForPutAndGet() const
     int64_t bufferColShape = 0;
     Distributed::AtomicType atomicType = Distributed::AtomicType::SET;
     if (opCode == Opcode::OP_SHMEM_PUT) {
-        Distributed::ShmemPutAttr distOpAttr =
-            AnyCast<Distributed::ShmemPutAttr>(opAttrs.at(OpAttributeKey::distOpAttr));
+        Distributed::ShmemPutAttr distOpAttr = AnyCast<Distributed::ShmemPutAttr>(
+            opAttrs.at(OpAttributeKey::distOpAttr));
         bufferRowShape = distOpAttr.copyBufferShape[0];
         bufferColShape = distOpAttr.copyBufferShape[1];
         atomicType = distOpAttr.atomicType;
     } else {
-        Distributed::ShmemGetAttr distOpAttr =
-            AnyCast<Distributed::ShmemGetAttr>(opAttrs.at(OpAttributeKey::distOpAttr));
+        Distributed::ShmemGetAttr distOpAttr = AnyCast<Distributed::ShmemGetAttr>(
+            opAttrs.at(OpAttributeKey::distOpAttr));
         bufferRowShape = distOpAttr.copyBufferShape[0];
         bufferColShape = distOpAttr.copyBufferShape[1];
         atomicType = distOpAttr.atomicType;
@@ -113,8 +113,8 @@ std::string CodeGenOpNPU::GenTemplateParamsForStore() const
 std::string CodeGenOpNPU::GenTemplateParamsForSignal() const
 {
     std::ostringstream oss;
-    Distributed::ShmemSignalAttr distOpAttr =
-        AnyCast<Distributed::ShmemSignalAttr>(opAttrs.at(OpAttributeKey::distOpAttr));
+    Distributed::ShmemSignalAttr distOpAttr = AnyCast<Distributed::ShmemSignalAttr>(
+        opAttrs.at(OpAttributeKey::distOpAttr));
 
     oss << "<" << distOpAttr.signalValue << ", " << distOpAttr.signalStride << ", "
         << Distributed::ToString(distOpAttr.atomicType) << ", " << (distOpAttr.notifyAll ? "true" : "false") << ", "

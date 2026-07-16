@@ -198,12 +198,12 @@ public:
     using PvInitFunc = void (*)(int pv_mode, int hj_switch, int pv_wrap, const char* out_dir, uint32_t core_id);
     using PvLaunchSubCoreFunc = void (*)(uint64_t pc, const char* bin_file, uint32_t sub_core_id, uint32_t core_id);
     using PvStepFunc = uint32_t (*)(uint32_t pipe_id, uint32_t sub_core_id, uint32_t core_id, uint32_t warp_id);
-    using PvMemWriteFunc =
-        void (*)(uint32_t mem_type, uint64_t addr, uint64_t size, uint8_t* buf, uint32_t sub_core_id, uint32_t core_id);
-    using PvMemReadFunc =
-        void (*)(uint32_t mem_type, uint64_t addr, uint64_t size, uint8_t* buf, uint32_t sub_core_id, uint32_t core_id);
-    using PvRegWriteFunc =
-        void (*)(uint32_t reg_type, uint32_t reg_id, uint8_t* buf, uint32_t sub_core_id, uint32_t core_id);
+    using PvMemWriteFunc = void (*)(uint32_t mem_type, uint64_t addr, uint64_t size, uint8_t* buf, uint32_t sub_core_id,
+                                    uint32_t core_id);
+    using PvMemReadFunc = void (*)(uint32_t mem_type, uint64_t addr, uint64_t size, uint8_t* buf, uint32_t sub_core_id,
+                                   uint32_t core_id);
+    using PvRegWriteFunc = void (*)(uint32_t reg_type, uint32_t reg_id, uint8_t* buf, uint32_t sub_core_id,
+                                    uint32_t core_id);
 
     explicit DynPvModelImpl()
     {
@@ -224,10 +224,11 @@ public:
         std::string archTypeStr = NPUArchToString(archType);
         std::transform(archTypeStr.begin(), archTypeStr.end(), archTypeStr.begin(), ::tolower);
         std::string soPath = std::string(ascendHome) + "/toolkit/tools/simulator/" + archTypeStr +
-            (archType == NPUArch::DAV_3510 ? "/camodel/libpem_davinci.so" : "/lib/libpem_davinci.so");
+                             (archType == NPUArch::DAV_3510 ? "/camodel/libpem_davinci.so" : "/lib/libpem_davinci.so");
         void* handle = dlopen((soPath.c_str()), RTLD_LAZY);
         if (!handle) {
-            SIMULATION_LOGE(CostModel::PrecisionSimErrorScene::NO_SO_EXISTS, "can not load library: %s", soPath.c_str());
+            SIMULATION_LOGE(CostModel::PrecisionSimErrorScene::NO_SO_EXISTS, "can not load library: %s",
+                            soPath.c_str());
             throw std::runtime_error("can not load library: " + soPath);
         }
         // Load function symbols
@@ -294,11 +295,11 @@ public:
                 cceBin.emplace_back(PvModelCceBin(0, 0, npu::tile_fwk::CoreType::INVALID));
             }
             if (leaf->IsDummyFunction()) {
-                cceBin.emplace_back(PvModelCceBin(
-                    leaf->GetProgramId(), leaf->GetFunctionHash().GetHash(), npu::tile_fwk::CoreType::HUB));
+                cceBin.emplace_back(PvModelCceBin(leaf->GetProgramId(), leaf->GetFunctionHash().GetHash(),
+                                                  npu::tile_fwk::CoreType::HUB));
                 if (hasMainBlock) {
-                    cceBin.emplace_back(PvModelCceBin(
-                        leaf->GetProgramId(), leaf->GetFunctionHash().GetHash(), npu::tile_fwk::CoreType::HUB));
+                    cceBin.emplace_back(PvModelCceBin(leaf->GetProgramId(), leaf->GetFunctionHash().GetHash(),
+                                                      npu::tile_fwk::CoreType::HUB));
                 }
             } else {
                 ASSERT(npu::tile_fwk::InternalError::SIM_INNER_ERROR, leafFuncAttr != nullptr)
@@ -337,9 +338,8 @@ public:
         char cmd[cmdLen];
         CHECK(static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH), npu::tile_fwk::IsPathExist(objPath))
             << "obj file does not exist. objPath: " << objPath;
-        int ret = snprintf_s(
-            cmd, sizeof(cmd), sizeof(cmd) - 1, "llvm-objcopy -O binary -j .text %s %s", objPath.c_str(),
-            binPath.c_str());
+        int ret = snprintf_s(cmd, sizeof(cmd), sizeof(cmd) - 1, "llvm-objcopy -O binary -j .text %s %s",
+                             objPath.c_str(), binPath.c_str());
         if (ret < 0 || ret >= static_cast<int>(sizeof(cmd))) {
             SIMULATION_LOGE(CostModel::PrecisionSimErrorScene::CMD_ERROR, "snprintf_s: %s", cmd);
         }

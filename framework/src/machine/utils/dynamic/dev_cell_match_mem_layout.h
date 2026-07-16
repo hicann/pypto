@@ -104,8 +104,8 @@ inline void CellMatchSetCurrentOpType(uint64_t& meta, uint32_t opType)
 
 inline uint32_t CellMatchGetPrevMutexOpType(uint64_t meta)
 {
-    return (uint32_t)CELL_MATCH_GET_BITS(
-        meta, CELL_MATCH_BIT_PREV_MUTEX_OPTYPE_START, CELL_MATCH_BIT_PREV_MUTEX_OPTYPE_END);
+    return (uint32_t)CELL_MATCH_GET_BITS(meta, CELL_MATCH_BIT_PREV_MUTEX_OPTYPE_START,
+                                         CELL_MATCH_BIT_PREV_MUTEX_OPTYPE_END);
 }
 
 inline void CellMatchSetPrevMutexOpType(uint64_t& meta, uint32_t mutexType)
@@ -125,8 +125,8 @@ inline void CellMatchSetCurrentOpCount(uint64_t& meta, uint32_t count)
 
 inline uint32_t CellMatchGetPrevMutexOpCount(uint64_t meta)
 {
-    return (uint32_t)CELL_MATCH_GET_BITS(
-        meta, CELL_MATCH_BIT_PREV_MUTEX_OPCOUNT_START, CELL_MATCH_BIT_PREV_MUTEX_OPCOUNT_END);
+    return (uint32_t)CELL_MATCH_GET_BITS(meta, CELL_MATCH_BIT_PREV_MUTEX_OPCOUNT_START,
+                                         CELL_MATCH_BIT_PREV_MUTEX_OPCOUNT_END);
 }
 
 inline void CellMatchSetPrevMutexOpCount(uint64_t& meta, uint32_t count)
@@ -167,16 +167,14 @@ inline uint64_t CellMatchCellIndexToMemBase(uint64_t cellIndex, const DevCellMat
     return cellIndex * desc.cellUint64Size;
 }
 
-inline uint64_t CellMatchGetOpId(
-    uint64_t* cellMatchTableData, uint64_t cellMemBase, uint32_t opType, uint32_t index,
-    const DevCellMatchTableDesc& desc)
+inline uint64_t CellMatchGetOpId(uint64_t* cellMatchTableData, uint64_t cellMemBase, uint32_t opType, uint32_t index,
+                                 const DevCellMatchTableDesc& desc)
 {
     return cellMatchTableData[cellMemBase + desc.opMemLayOutIndex[opType] + index];
 }
 
-inline void CellMatchAddOpId(
-    uint64_t* cellMatchTableData, uint64_t cellMemBase, uint64_t taskId, uint32_t index, uint32_t opType,
-    const DevCellMatchTableDesc& desc)
+inline void CellMatchAddOpId(uint64_t* cellMatchTableData, uint64_t cellMemBase, uint64_t taskId, uint32_t index,
+                             uint32_t opType, const DevCellMatchTableDesc& desc)
 {
     cellMatchTableData[cellMemBase + desc.opMemLayOutIndex[opType] + index] = taskId;
 }

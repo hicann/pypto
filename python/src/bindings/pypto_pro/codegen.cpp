@@ -31,38 +31,34 @@ void BindCodegen(py::module_& m)
     // TypeConverter class for type conversions
     py::class_<TypeConverter>(codegen_module, "TypeConverter", "Utility for converting IR types to pto-isa C++ types")
         .def(py::init<>(), "Create a type converter")
-        .def(
-            "ConvertPipeType", &TypeConverter::ConvertPipeType, py::arg("pipe"),
-            "Convert PipeType to pto-isa pipe type string\n\n"
-            "Args:\n"
-            "    pipe: Pipeline type\n\n"
-            "Returns:\n"
-            "    C++ pipe type string with 'PIPE_' prefix (e.g., 'PIPE_MTE1', 'PIPE_V')")
-        .def(
-            "ConvertEventId", &TypeConverter::ConvertEventId, py::arg("event_id"),
-            "Convert event ID to pto-isa event ID string\n\n"
-            "Args:\n"
-            "    event_id: Event ID (must be in range [0, 7])\n\n"
-            "Returns:\n"
-            "    C++ event ID string with 'EVENT_ID' prefix (e.g., 'EVENT_ID0')")
-        .def(
-            "GenerateShapeType", &TypeConverter::GenerateShapeType, py::arg("dims"),
-            "Generate Shape type instantiation\n\n"
-            "Args:\n"
-            "    dims: Shape dimensions\n\n"
-            "Returns:\n"
-            "    Shape type string with 5D padding (e.g., 'Shape<1, 1, 1, 128, 64>')")
-        .def(
-            "GenerateStrideType", &TypeConverter::GenerateStrideType, py::arg("shape"),
-            "Generate Stride type instantiation for row-major layout\n\n"
-            "Args:\n"
-            "    shape: Shape dimensions\n\n"
-            "Returns:\n"
-            "    Stride type string with 5D padding");
+        .def("ConvertPipeType", &TypeConverter::ConvertPipeType, py::arg("pipe"),
+             "Convert PipeType to pto-isa pipe type string\n\n"
+             "Args:\n"
+             "    pipe: Pipeline type\n\n"
+             "Returns:\n"
+             "    C++ pipe type string with 'PIPE_' prefix (e.g., 'PIPE_MTE1', 'PIPE_V')")
+        .def("ConvertEventId", &TypeConverter::ConvertEventId, py::arg("event_id"),
+             "Convert event ID to pto-isa event ID string\n\n"
+             "Args:\n"
+             "    event_id: Event ID (must be in range [0, 7])\n\n"
+             "Returns:\n"
+             "    C++ event ID string with 'EVENT_ID' prefix (e.g., 'EVENT_ID0')")
+        .def("GenerateShapeType", &TypeConverter::GenerateShapeType, py::arg("dims"),
+             "Generate Shape type instantiation\n\n"
+             "Args:\n"
+             "    dims: Shape dimensions\n\n"
+             "Returns:\n"
+             "    Shape type string with 5D padding (e.g., 'Shape<1, 1, 1, 128, 64>')")
+        .def("GenerateStrideType", &TypeConverter::GenerateStrideType, py::arg("shape"),
+             "Generate Stride type instantiation for row-major layout\n\n"
+             "Args:\n"
+             "    shape: Shape dimensions\n\n"
+             "Returns:\n"
+             "    Stride type string with 5D padding");
 
     // CCECodegen - CCE/pto-isa C++ code generator (unified in codegen module)
-    py::class_<CCECodegen>(
-        codegen_module, "CCECodegen", "CCE code generator for converting PyPTO IR to pto-isa C++ code")
+    py::class_<CCECodegen>(codegen_module, "CCECodegen",
+                           "CCE code generator for converting PyPTO IR to pto-isa C++ code")
         .def(py::init<>(), "Create a CCE code generator (backend is always CCE)")
         .def(
             "generate_single",
@@ -74,8 +70,7 @@ void BindCodegen(py::module_& m)
             "Runs IR passes, generates __global__ AICORE kernel with section guards, "
             "constexpr scalars, and FFTS support. Returns C++ code as a single string.")
         .def(
-            "get_tiling_headers",
-            [](const CCECodegen& self) { return self.GetTilingHeaders(); },
+            "get_tiling_headers", [](const CCECodegen& self) { return self.GetTilingHeaders(); },
             "Tiling struct headers from the last generate_single call, as a dict mapping "
             "header filename (e.g. 'OpTiling_tiling.h') to its content. The kernel.cpp "
             "includes these by name; write them next to kernel.cpp in the build dir.");

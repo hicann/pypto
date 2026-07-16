@@ -82,8 +82,8 @@ public:
         }
     }
 
-    ComputationalDagVectorImpl(const ComputationalDagVectorImpl &other) = default;
-    ComputationalDagVectorImpl &operator=(const ComputationalDagVectorImpl &other) = default;
+    ComputationalDagVectorImpl(const ComputationalDagVectorImpl& other) = default;
+    ComputationalDagVectorImpl& operator=(const ComputationalDagVectorImpl& other) = default;
 
     /**
      * @brief Constructs a graph from another graph type.
@@ -95,12 +95,12 @@ public:
      * @param other The source graph to copy from.
      */
     template <typename GraphT>
-    explicit ComputationalDagVectorImpl(const GraphT &other)
+    explicit ComputationalDagVectorImpl(const GraphT& other)
     {
         ConstructComputationalDag(other, *this);
     }
 
-    ComputationalDagVectorImpl(ComputationalDagVectorImpl &&other) noexcept
+    ComputationalDagVectorImpl(ComputationalDagVectorImpl&& other) noexcept
         : vertices_(std::move(other.vertices_)),
           outNeigbors_(std::move(other.outNeigbors_)),
           inNeigbors_(std::move(other.inNeigbors_)),
@@ -111,7 +111,7 @@ public:
         other.numVertexTypes_ = 0;
     };
 
-    ComputationalDagVectorImpl &operator=(ComputationalDagVectorImpl &&other) noexcept
+    ComputationalDagVectorImpl& operator=(ComputationalDagVectorImpl&& other) noexcept
     {
         if (this != &other) {
             vertices_ = std::move(other.vertices_);
@@ -128,58 +128,23 @@ public:
 
     ~ComputationalDagVectorImpl() = default;
 
-    [[nodiscard]] auto Vertices() const
-    {
-        return IntegralRange<VertexIdx>(static_cast<VertexIdx>(vertices_.size()));
-    }
-    [[nodiscard]] VertexIdx NumVertices() const
-    {
-        return static_cast<VertexIdx>(vertices_.size());
-    }
-    [[nodiscard]] bool empty() const
-    {
-        return vertices_.empty();
-    }
-    [[nodiscard]] VertexIdx NumEdges() const
-    {
-        return numEdges_;
-    }
-    [[nodiscard]] const std::vector<VertexIdx> &Parents(const VertexIdx v) const
-    {
-        return inNeigbors_[v];
-    }
-    [[nodiscard]] const std::vector<VertexIdx> &Children(const VertexIdx v) const
-    {
-        return outNeigbors_[v];
-    }
-    [[nodiscard]] VertexIdx InDegree(const VertexIdx v) const
-    {
-        return static_cast<VertexIdx>(inNeigbors_[v].size());
-    }
+    [[nodiscard]] auto Vertices() const { return IntegralRange<VertexIdx>(static_cast<VertexIdx>(vertices_.size())); }
+    [[nodiscard]] VertexIdx NumVertices() const { return static_cast<VertexIdx>(vertices_.size()); }
+    [[nodiscard]] bool empty() const { return vertices_.empty(); }
+    [[nodiscard]] VertexIdx NumEdges() const { return numEdges_; }
+    [[nodiscard]] const std::vector<VertexIdx>& Parents(const VertexIdx v) const { return inNeigbors_[v]; }
+    [[nodiscard]] const std::vector<VertexIdx>& Children(const VertexIdx v) const { return outNeigbors_[v]; }
+    [[nodiscard]] VertexIdx InDegree(const VertexIdx v) const { return static_cast<VertexIdx>(inNeigbors_[v].size()); }
     [[nodiscard]] VertexIdx OutDegree(const VertexIdx v) const
     {
         return static_cast<VertexIdx>(outNeigbors_[v].size());
     }
-    [[nodiscard]] VertexCommWeightType VertexCommWeight(const VertexIdx v) const
-    {
-        return vertices_[v].commWeight_;
-    }
-    [[nodiscard]] VertexWorkWeightType VertexWorkWeight(const VertexIdx v) const
-    {
-        return vertices_[v].workWeight_;
-    }
-    [[nodiscard]] VertexMemWeightType VertexMemWeight(const VertexIdx v) const
-    {
-        return vertices_[v].memWeight_;
-    }
-    [[nodiscard]] VertexTypeType VertexType(const VertexIdx v) const
-    {
-        return vertices_[v].vertexType_;
-    }
-    VertexIdx AddVertex(const VertexWorkWeightType workWeight,
-                        const VertexCommWeightType commWeight,
-                        const VertexMemWeightType memWeight,
-                        const VertexTypeType vertexType = 0)
+    [[nodiscard]] VertexCommWeightType VertexCommWeight(const VertexIdx v) const { return vertices_[v].commWeight_; }
+    [[nodiscard]] VertexWorkWeightType VertexWorkWeight(const VertexIdx v) const { return vertices_[v].workWeight_; }
+    [[nodiscard]] VertexMemWeightType VertexMemWeight(const VertexIdx v) const { return vertices_[v].memWeight_; }
+    [[nodiscard]] VertexTypeType VertexType(const VertexIdx v) const { return vertices_[v].vertexType_; }
+    VertexIdx AddVertex(const VertexWorkWeightType workWeight, const VertexCommWeightType commWeight,
+                        const VertexMemWeightType memWeight, const VertexTypeType vertexType = 0)
     {
         vertices_.emplace_back(vertices_.size(), workWeight, commWeight, memWeight, vertexType);
         outNeigbors_.push_back({});
@@ -190,10 +155,7 @@ public:
         return vertices_.back().id_;
     }
 
-    [[nodiscard]] VertexTypeType NumVertexTypes() const
-    {
-        return numVertexTypes_;
-    }
+    [[nodiscard]] VertexTypeType NumVertexTypes() const { return numVertexTypes_; }
 
     void SetVertexWorkWeight(const VertexIdx v, const VertexWorkWeightType workWeight)
     {
@@ -218,12 +180,12 @@ public:
 
     bool AddEdge(const VertexIdx source, const VertexIdx target)
     {
-        if (source >= static_cast<VertexIdx>(vertices_.size()) || target >= static_cast<VertexIdx>(vertices_.size())
-            || source == target) {
+        if (source >= static_cast<VertexIdx>(vertices_.size()) || target >= static_cast<VertexIdx>(vertices_.size()) ||
+            source == target) {
             return false;
         }
 
-        const auto &out = outNeigbors_.at(source);
+        const auto& out = outNeigbors_.at(source);
         if (std::find(out.begin(), out.end(), target) != out.end()) {
             return false;
         }
@@ -254,6 +216,6 @@ using ComputationalDagVectorImplDefUnsignedT = ComputationalDagVectorImpl<CDagVe
  * @brief Default implementation of a computational DAG using signed integer weights.
  */
 using ComputationalDagVectorImplDefIntT = ComputationalDagVectorImpl<CDagVertexImplInt>;
-}    // namespace osp
+} // namespace osp
 } // namespace npu::tile_fwk
 #endif // OSP_COMPUTATIONAL_DAG_VECTOR_IMPL_HPP

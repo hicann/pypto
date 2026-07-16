@@ -29,6 +29,6 @@ public:
     virtual uint8_t* CopyTensorToDev(uint8_t* data, uint64_t size) = 0;
     virtual uint8_t* AllocWorkspace(uint64_t size) = 0;
     virtual void CopyTensorFromDev() = 0;
-    virtual void Run(npu::tile_fwk::DynFuncData *funcdata, int coreId, int funcId, int taskId) = 0;
+    virtual void Run(npu::tile_fwk::DynFuncData* funcdata, int coreId, int funcId, int taskId) = 0;
 };
 } // namespace CostModel

@@ -50,9 +50,8 @@ void BindBackend(py::module_& m)
 
     // ========== Mem class ==========
     py::class_<Mem>(backend_mod, "Mem", "Memory component")
-        .def(
-            py::init<MemorySpace, uint64_t, uint64_t>(), py::arg("mem_type"), py::arg("mem_size"), py::arg("alignment"),
-            "Create a memory component")
+        .def(py::init<MemorySpace, uint64_t, uint64_t>(), py::arg("mem_type"), py::arg("mem_size"),
+             py::arg("alignment"), "Create a memory component")
         .def_property_readonly("mem_type", &Mem::GetMemType, "Memory space type")
         .def_property_readonly("mem_size", &Mem::GetMemSize, "Memory size in bytes")
         .def_property_readonly("alignment", &Mem::GetAlignment, "Memory alignment in bytes")
@@ -85,9 +84,8 @@ void BindBackend(py::module_& m)
     // ========== Die class ==========
     py::class_<Die>(backend_mod, "Die", "Die containing clusters")
         .def(py::init<std::map<Cluster, int>>(), py::arg("cluster_counts"), "Create die from cluster counts map")
-        .def(
-            py::init<const Cluster&, int>(), py::arg("cluster"), py::arg("count"),
-            "Create die with single cluster type")
+        .def(py::init<const Cluster&, int>(), py::arg("cluster"), py::arg("count"),
+             "Create die with single cluster type")
         .def_property_readonly("cluster_counts", &Die::GetClusterCounts, "Map of cluster configurations to counts")
         .def("total_cluster_count", &Die::TotalClusterCount, "Get total number of clusters in die")
         .def("total_core_count", &Die::TotalCoreCount, "Get total number of cores in die")
@@ -113,36 +111,31 @@ void BindBackend(py::module_& m)
     // ========== Backend abstract base class ==========
     py::class_<Backend>(backend_mod, "Backend", "Abstract backend base class")
         .def("get_type_name", &Backend::GetTypeName, "Get backend type name")
-        .def(
-            "find_mem_path", &Backend::FindMemPath, py::arg("from_mem"), py::arg("to_mem"),
-            "Find memory path from source to destination")
+        .def("find_mem_path", &Backend::FindMemPath, py::arg("from_mem"), py::arg("to_mem"),
+             "Find memory path from source to destination")
         .def("get_mem_size", &Backend::GetMemSize, py::arg("mem_type"), "Get total memory size for given memory type")
         .def_property_readonly(
             "soc", [](const Backend& backend) -> const SoC& { return backend.GetSoC(); }, "Get SoC object");
 
     // ========== Backend910B_CCE concrete implementation ==========
     py::class_<Backend910B_CCE, Backend>(backend_mod, "Backend910B_CCE", "910B CCE backend implementation")
-        .def_static(
-            "instance", &Backend910B_CCE::Instance, py::return_value_policy::reference,
-            "Get singleton instance of 910B CCE backend");
+        .def_static("instance", &Backend910B_CCE::Instance, py::return_value_policy::reference,
+                    "Get singleton instance of 910B CCE backend");
 
     // ========== Backend configuration functions ==========
-    backend_mod.def(
-        "set_backend_type", &backend::BackendConfig::SetBackendType, py::arg("backend_type"),
-        "Set the global backend type. Must be called before any backend operations. "
-        "Can be called multiple times with the same type (idempotent).");
+    backend_mod.def("set_backend_type", &backend::BackendConfig::SetBackendType, py::arg("backend_type"),
+                    "Set the global backend type. Must be called before any backend operations. "
+                    "Can be called multiple times with the same type (idempotent).");
 
-    backend_mod.def(
-        "get_backend_type", &backend::BackendConfig::GetBackendType,
-        "Get the configured backend type. Throws error if not configured.");
+    backend_mod.def("get_backend_type", &backend::BackendConfig::GetBackendType,
+                    "Get the configured backend type. Throws error if not configured.");
 
-    backend_mod.def(
-        "is_backend_configured", &backend::BackendConfig::IsConfigured, "Check if backend type has been configured.");
+    backend_mod.def("is_backend_configured", &backend::BackendConfig::IsConfigured,
+                    "Check if backend type has been configured.");
 
-    backend_mod.def(
-        "reset_for_testing", &backend::BackendConfig::ResetForTesting,
-        "Reset backend configuration (for testing only). "
-        "WARNING: Only use in tests to reset between test cases.");
+    backend_mod.def("reset_for_testing", &backend::BackendConfig::ResetForTesting,
+                    "Reset backend configuration (for testing only). "
+                    "WARNING: Only use in tests to reset between test cases.");
 }
 
 } // namespace ir

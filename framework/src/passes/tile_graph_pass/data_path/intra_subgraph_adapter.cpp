@@ -50,7 +50,8 @@ Status IntraSubgraphAdapter::RunOnFunction(Function& function)
     for (size_t i = 0; i < boundaryTensors.size(); i++) {
         LogicalTensorPtr tensor = boundaryTensors[i];
         if (CheckBoundaryTensor(tensor) != SUCCESS) {
-            APASS_LOG_ERROR_F(Elements::Tensor, "Check boundary tensor failed; Please check the CheckBoundaryTensor method.");
+            APASS_LOG_ERROR_F(Elements::Tensor,
+                              "Check boundary tensor failed; Please check the CheckBoundaryTensor method.");
             return FAILED;
         }
 
@@ -73,9 +74,12 @@ Status IntraSubgraphAdapter::RunOnFunction(Function& function)
             int mainSubgraphID = *(commonColors.begin()); // the only subgraph id that has both producers and consumers.
             LogicalTensors newBoundaryTensors;
 
-            APASS_LOG_DEBUG_F(Elements::Tensor, "********** %s requires SplitBoundaryTensor. **********", function.GetMagicName().c_str());
-            APASS_LOG_DEBUG_F(Elements::Tensor, "Boundary tensor: %s, mainSubgraphID: %d, producerColors: %s, consumerColors: %s",
-                tensor->Dump().c_str(), mainSubgraphID, IntSetToStr(producerColors).c_str(), IntSetToStr(consumerColors).c_str());
+            APASS_LOG_DEBUG_F(Elements::Tensor, "********** %s requires SplitBoundaryTensor. **********",
+                              function.GetMagicName().c_str());
+            APASS_LOG_DEBUG_F(Elements::Tensor,
+                              "Boundary tensor: %s, mainSubgraphID: %d, producerColors: %s, consumerColors: %s",
+                              tensor->Dump().c_str(), mainSubgraphID, IntSetToStr(producerColors).c_str(),
+                              IntSetToStr(consumerColors).c_str());
             for (const auto& producer : tensor->GetProducers()) {
                 APASS_LOG_DEBUG_F(Elements::Operation, "producer: %s", producer->Dump().c_str());
             }
@@ -84,11 +88,15 @@ Status IntraSubgraphAdapter::RunOnFunction(Function& function)
             }
 
             if (SplitBoundaryTensor(function, tensor, mainSubgraphID, newBoundaryTensors) == FAILED) {
-                APASS_LOG_ERROR_F(Elements::Tensor, "Split boundary tensor failed, tensor magic : %d; Please check SplitBoundaryTensor method.", tensor->GetMagic());
+                APASS_LOG_ERROR_F(
+                    Elements::Tensor,
+                    "Split boundary tensor failed, tensor magic : %d; Please check SplitBoundaryTensor method.",
+                    tensor->GetMagic());
                 return FAILED;
             }
             if (ProcessBoundaryTensors(function, newBoundaryTensors) == FAILED) {
-                APASS_LOG_ERROR_F(Elements::Tensor, "Process boundary tensors failed; Please check ProcessBoundaryTensors method.");
+                APASS_LOG_ERROR_F(Elements::Tensor,
+                                  "Process boundary tensors failed; Please check ProcessBoundaryTensors method.");
                 return FAILED;
             }
         }
@@ -102,15 +110,22 @@ Status IntraSubgraphAdapter::RunOnFunction(Function& function)
     return SUCCESS;
 }
 
-Status IntraSubgraphAdapter::CheckColorCount(Function& function, LogicalTensorPtr tensor, size_t commonColorCount) {
+Status IntraSubgraphAdapter::CheckColorCount(Function& function, LogicalTensorPtr tensor, size_t commonColorCount)
+{
     if (commonColorCount > 1) {
-        APASS_LOG_ERROR_F(Elements::Tensor, "Process boundary tensor failed, tensor magic : %d; The producers and consumers cannot simultaneously "
-            "appear in more than one subgraph.", tensor->GetMagic());
+        APASS_LOG_ERROR_F(
+            Elements::Tensor,
+            "Process boundary tensor failed, tensor magic : %d; The producers and consumers cannot simultaneously "
+            "appear in more than one subgraph.",
+            tensor->GetMagic());
         return FAILED;
     }
     if (commonColorCount == 0) {
         if (ProcessBoundaryTensor(function, tensor) == FAILED) {
-            APASS_LOG_ERROR_F(Elements::Tensor,"Process boundary tensor failed, tensor magic : %d; Please check the ProcessBoundaryTensor method.", tensor->GetMagic());
+            APASS_LOG_ERROR_F(
+                Elements::Tensor,
+                "Process boundary tensor failed, tensor magic : %d; Please check the ProcessBoundaryTensor method.",
+                tensor->GetMagic());
             return FAILED;
         }
     }
@@ -139,8 +154,8 @@ Status IntraSubgraphAdapter::CheckBoundaryTensor(LogicalTensorPtr tensor)
     return SUCCESS;
 }
 
-Status IntraSubgraphAdapter::SplitBoundaryTensor(
-    Function& function, LogicalTensorPtr tensor, int mainSubgraphID, LogicalTensors& newBoundaryTensors)
+Status IntraSubgraphAdapter::SplitBoundaryTensor(Function& function, LogicalTensorPtr tensor, int mainSubgraphID,
+                                                 LogicalTensors& newBoundaryTensors)
 {
     // if the tensor has multiple producers in different subgraph, then the producers must be OP_ASSEMBLE/OP_COPY_OUT.
     for (const auto& producer : tensor->GetProducers()) {
@@ -170,18 +185,16 @@ Status IntraSubgraphAdapter::SplitBoundaryTensor(
             // to the other subgraph, and change the producer to main subgraph.
             if (tensor->GetConsumers().size() != 1) {
                 LogicalTensorPtr assembleInput = producer->GetIOperands()[0];
-                APASS_LOG_DEBUG_F(
-                    Elements::Tensor, "SplitBoundaryTensor output of %s[%d]", producer->GetOpcodeStr().c_str(),
-                    producer->GetOpMagic());
+                APASS_LOG_DEBUG_F(Elements::Tensor, "SplitBoundaryTensor output of %s[%d]",
+                                  producer->GetOpcodeStr().c_str(), producer->GetOpMagic());
                 LogicalTensorPtr newTensor = InsertOpBetween(function, Opcode::OP_ASSEMBLE, assembleInput, {producer});
                 producer->UpdateSubgraphID(mainSubgraphID);
-                APASS_LOG_INFO_F(
-                    Elements::Tensor, "Adjust OP_ASSEMBLE(magic : %d) to subgraph %d.", producer->GetOpMagic(),
-                    mainSubgraphID);
+                APASS_LOG_INFO_F(Elements::Tensor, "Adjust OP_ASSEMBLE(magic : %d) to subgraph %d.",
+                                 producer->GetOpMagic(), mainSubgraphID);
                 // The intermediate tensor become a new boundary tensor.
                 newBoundaryTensors.push_back(newTensor);
-                APASS_LOG_INFO_F(
-                    Elements::Tensor, "Add new tensor(magic : %d) to boundary tensors.", assembleInput->GetMagic());
+                APASS_LOG_INFO_F(Elements::Tensor, "Add new tensor(magic : %d) to boundary tensors.",
+                                 assembleInput->GetMagic());
             }
         }
     }
@@ -195,20 +208,18 @@ Status IntraSubgraphAdapter::SplitBoundaryTensor(
     for (const auto& consumer : tensor->GetConsumers()) {
         if (consumer->GetSubgraphID() != mainSubgraphID) {
             subsidiaryConsumers.push_back(consumer);
-            APASS_LOG_DEBUG_F(
-                Elements::Operation, "Insert %s[%d] to the subsidiaryConsumers.", consumer->GetOpcodeStr().c_str(),
-                consumer->GetOpMagic());
+            APASS_LOG_DEBUG_F(Elements::Operation, "Insert %s[%d] to the subsidiaryConsumers.",
+                              consumer->GetOpcodeStr().c_str(), consumer->GetOpMagic());
         }
     }
 
     // For consumers from other subgraph, we insert a new ASSEMBLE before them,
     // the intermediate tensor become a new boundary tensor.
     if (subsidiaryConsumers.size() != 0) {
-        APASS_LOG_DEBUG_F(
-            Elements::Operation,
-            "=========== multi subsidiaryConsumers size: %zu ==========", subsidiaryConsumers.size());
-        LogicalTensorPtr newTensor =
-            InsertOpBetween(function, Opcode::OP_ASSEMBLE, tensor, subsidiaryConsumers, mainSubgraphID);
+        APASS_LOG_DEBUG_F(Elements::Operation,
+                          "=========== multi subsidiaryConsumers size: %zu ==========", subsidiaryConsumers.size());
+        LogicalTensorPtr newTensor = InsertOpBetween(function, Opcode::OP_ASSEMBLE, tensor, subsidiaryConsumers,
+                                                     mainSubgraphID);
         newBoundaryTensors.push_back(newTensor);
     }
     return SUCCESS;
@@ -230,9 +241,9 @@ Status IntraSubgraphAdapter::ProcessBoundaryTensors(Function& function, LogicalT
 
 Status IntraSubgraphAdapter::ProcessBoundaryTensor(Function& function, LogicalTensorPtr tensor)
 {
-    APASS_LOG_INFO_F(
-        Elements::Tensor, "Process boundary tensor, tensor magic : %d, info: %s, mem: %s", tensor->GetMagic(),
-        tensor->Dump().c_str(), BriefMemoryTypeToString(tensor->GetMemoryTypeOriginal()).c_str());
+    APASS_LOG_INFO_F(Elements::Tensor, "Process boundary tensor, tensor magic : %d, info: %s, mem: %s",
+                     tensor->GetMagic(), tensor->Dump().c_str(),
+                     BriefMemoryTypeToString(tensor->GetMemoryTypeOriginal()).c_str());
     // Insert OP_ASSEMBLE before the boundary tensor, if the producer is not OP_ASSEMBLE/OP_COPY_OUT
     if (AdapteTensorProducers(function, tensor) == FAILED) {
         APASS_LOG_ERROR_F(
@@ -261,8 +272,8 @@ bool IntraSubgraphAdapter::IsCrossCoreMoveOps(Operation* op)
     if (convertOpAttr == nullptr && copyOpAttr == nullptr) {
         return false;
     }
-    std::unordered_set<MemoryType> AICTypeMemory{
-        MemoryType::MEM_L1, MemoryType::MEM_L0A, MemoryType::MEM_L0B, MemoryType::MEM_L0C};
+    std::unordered_set<MemoryType> AICTypeMemory{MemoryType::MEM_L1, MemoryType::MEM_L0A, MemoryType::MEM_L0B,
+                                                 MemoryType::MEM_L0C};
     std::unordered_set<MemoryType> AIVTypeMemory{MemoryType::MEM_UB};
     bool isFromAIC = false;
     bool isFromAIV = false;
@@ -286,9 +297,8 @@ Status IntraSubgraphAdapter::AdapteTensorProducers(Function& function, LogicalTe
 {
     if (tensor->GetProducers().size() > 1) {
         for (const Operation* producer : tensor->GetProducers()) {
-            APASS_LOG_DEBUG_F(
-                Elements::Operation, "|---- Producer %s[%d].", producer->GetOpcodeStr().c_str(),
-                producer->GetOpMagic());
+            APASS_LOG_DEBUG_F(Elements::Operation, "|---- Producer %s[%d].", producer->GetOpcodeStr().c_str(),
+                              producer->GetOpMagic());
             if (producer->GetOpcode() == Opcode::OP_ASSEMBLE) {
                 APASS_LOG_DEBUG_F(Elements::Operation, "|---- Op Attr: %s", producer->Dump().c_str());
             }
@@ -306,8 +316,8 @@ Status IntraSubgraphAdapter::AdapteTensorProducers(Function& function, LogicalTe
     }
     if (tensor->GetProducers().size() == 1) {
         Operation* producer = *(tensor->GetProducers().begin());
-        APASS_LOG_DEBUG_F(
-            Elements::Operation, "|---- Producer %s[%d].", producer->GetOpcodeStr().c_str(), producer->GetOpMagic());
+        APASS_LOG_DEBUG_F(Elements::Operation, "|---- Producer %s[%d].", producer->GetOpcodeStr().c_str(),
+                          producer->GetOpMagic());
         if (producer->GetOpcode() == Opcode::OP_ASSEMBLE) {
             APASS_LOG_DEBUG_F(Elements::Operation, "|---- Op Attr: %s", producer->Dump().c_str());
         }
@@ -321,9 +331,8 @@ Status IntraSubgraphAdapter::AdapteTensorProducers(Function& function, LogicalTe
                     OpImmediate::Specified(tensor->GetShape()),
                     OpImmediate::Specified(tensor->GetRawTensor()->GetDynRawShape())));
             }
-            APASS_LOG_DEBUG_F(
-                Elements::Operation, "change %s[%d] opcode to OP_COPY_OUT.", producer->GetOpcodeStr().c_str(),
-                producer->GetOpMagic());
+            APASS_LOG_DEBUG_F(Elements::Operation, "change %s[%d] opcode to OP_COPY_OUT.",
+                              producer->GetOpcodeStr().c_str(), producer->GetOpMagic());
         }
         if (producer->GetOpcode() != Opcode::OP_ASSEMBLE && producer->GetOpcode() != Opcode::OP_COPY_OUT) {
             InsertOpBetween(function, Opcode::OP_ASSEMBLE, *producer, tensor);
@@ -334,7 +343,8 @@ Status IntraSubgraphAdapter::AdapteTensorProducers(Function& function, LogicalTe
     return SUCCESS;
 }
 
-static bool IsIndirectView(Operation* op) {
+static bool IsIndirectView(Operation* op)
+{
     if (op->GetOpcode() != Opcode::OP_VIEW) {
         return false;
     }
@@ -356,15 +366,15 @@ Status IntraSubgraphAdapter::AdapteTensorConsumers(Function& function, LogicalTe
 {
     std::unordered_map<int, std::vector<Operation*>> consumerColor2OpsMap;
     for (const auto& consumer : tensor->GetConsumers()) {
-        APASS_LOG_DEBUG_F(
-            Elements::Operation, "|---- Consumer %s[%d].", consumer->GetOpcodeStr().c_str(), consumer->GetOpMagic());
+        APASS_LOG_DEBUG_F(Elements::Operation, "|---- Consumer %s[%d].", consumer->GetOpcodeStr().c_str(),
+                          consumer->GetOpMagic());
         if (consumer->GetOpcode() == Opcode::OP_VIEW) {
             APASS_LOG_DEBUG_F(Elements::Operation, "|---- Op Attr: %s", consumer->Dump().c_str());
         }
         if (IsCrossCoreMoveOps(consumer)) {
-            APASS_LOG_ERROR_F(
-                Elements::Operation, "%s[%d] : Crosscore move op should not exist at the front of a subgraph.",
-                consumer->GetOpcodeStr().c_str(), consumer->GetOpMagic());
+            APASS_LOG_ERROR_F(Elements::Operation,
+                              "%s[%d] : Crosscore move op should not exist at the front of a subgraph.",
+                              consumer->GetOpcodeStr().c_str(), consumer->GetOpMagic());
             return FAILED;
         }
         if ((consumer->GetOpcode() != Opcode::OP_VIEW && consumer->GetOpcode() != Opcode::OP_COPY_IN) ||
@@ -380,18 +390,17 @@ Status IntraSubgraphAdapter::AdapteTensorConsumers(Function& function, LogicalTe
 }
 
 // For Assemble
-LogicalTensorPtr IntraSubgraphAdapter::InsertOpBetween(
-    Function& function, Opcode opcode, Operation& op, LogicalTensorPtr tensor)
+LogicalTensorPtr IntraSubgraphAdapter::InsertOpBetween(Function& function, Opcode opcode, Operation& op,
+                                                       LogicalTensorPtr tensor)
 {
-    APASS_LOG_DEBUG_F(
-        Elements::Operation, "intraSubgraphAdapter::InsertOpBetween %s 1.",
-        OpcodeManager::Inst().GetOpcodeStr(opcode).c_str());
+    APASS_LOG_DEBUG_F(Elements::Operation, "intraSubgraphAdapter::InsertOpBetween %s 1.",
+                      OpcodeManager::Inst().GetOpcodeStr(opcode).c_str());
     ASSERT(opcode == Opcode::OP_ASSEMBLE) << "[IntraSubgraphAdapter][Operation][ERROR]: Opcode for "
                                              "IntraSubgraphAdapter::InsertOpBetween must be OP_ASSEMBLE.";
-    auto newRawTensor =
-        std::make_shared<RawTensor>(tensor->Datatype(), tensor->GetRawTensor()->rawshape, tensor->Format());
-    LogicalTensorPtr newTensor =
-        irBuilder_.CreateTensorVar(newRawTensor, tensor->GetOffset(), tensor->GetShape(), std::vector<SymbolicScalar>{});
+    auto newRawTensor = std::make_shared<RawTensor>(tensor->Datatype(), tensor->GetRawTensor()->rawshape,
+                                                    tensor->Format());
+    LogicalTensorPtr newTensor = irBuilder_.CreateTensorVar(newRawTensor, tensor->GetOffset(), tensor->GetShape(),
+                                                            std::vector<SymbolicScalar>{});
     GraphUtils::CopyDynStatus(newTensor, tensor);
     newTensor->SetMemoryTypeBoth(tensor->GetMemoryTypeOriginal(), true);
     op.ReplaceOutputOperand(tensor, newTensor);
@@ -406,12 +415,11 @@ LogicalTensorPtr IntraSubgraphAdapter::InsertOpBetween(
             newTensor->GetMemoryTypeOriginal(), offset, tensor->GetDynOffset(), tensor->GetDynValidShape()));
     }
     if (opcode == Opcode::OP_VIEW) {
-        newOp->SetOpAttribute(std::make_shared<ViewOpAttribute>(
-            offset, newTensor->GetMemoryTypeToBe(), tensor->GetDynOffset(), tensor->GetDynValidShape()));
+        newOp->SetOpAttribute(std::make_shared<ViewOpAttribute>(offset, newTensor->GetMemoryTypeToBe(),
+                                                                tensor->GetDynOffset(), tensor->GetDynValidShape()));
     }
-    APASS_LOG_DEBUG_F(
-        Elements::Operation, "Insert New Op %s[%d], info: %s", newOp->GetOpcodeStr().c_str(), newOp->GetOpMagic(),
-        newOp->Dump().c_str());
+    APASS_LOG_DEBUG_F(Elements::Operation, "Insert New Op %s[%d], info: %s", newOp->GetOpcodeStr().c_str(),
+                      newOp->GetOpMagic(), newOp->Dump().c_str());
     newOp->UpdateSubgraphID(op.GetSubgraphID());
     newTensor->AddProducer(op);
     newTensor->AddConsumer(newOp);
@@ -421,23 +429,27 @@ LogicalTensorPtr IntraSubgraphAdapter::InsertOpBetween(
 }
 
 // For View
-LogicalTensorPtr IntraSubgraphAdapter::InsertOpBetween(
-    Function& function, Opcode opcode, LogicalTensorPtr tensor, const std::vector<Operation*>& ops, int newOpSubgraphID)
+LogicalTensorPtr IntraSubgraphAdapter::InsertOpBetween(Function& function, Opcode opcode, LogicalTensorPtr tensor,
+                                                       const std::vector<Operation*>& ops, int newOpSubgraphID)
 {
     /*
         before: tensor -> op
         after: tensor -> newOp -> newTensor ->op
     */
-    APASS_LOG_DEBUG_F(Elements::Operation, "IntraSubgraphAdapter::InsertOpBetween %s 2.", OpcodeManager::Inst().GetOpcodeStr(opcode).c_str());
+    APASS_LOG_DEBUG_F(Elements::Operation, "IntraSubgraphAdapter::InsertOpBetween %s 2.",
+                      OpcodeManager::Inst().GetOpcodeStr(opcode).c_str());
     if (ops.size() == 0) {
-        APASS_LOG_ERROR_F(Elements::Operation, "Insert op between tensor and ops failed; The ops to be inserted can't be empty.");
+        APASS_LOG_ERROR_F(Elements::Operation,
+                          "Insert op between tensor and ops failed; The ops to be inserted can't be empty.");
         return nullptr;
     }
     ASSERT(opcode == Opcode::OP_VIEW || opcode == Opcode::OP_ASSEMBLE)
-        << "[IntraSubgraphAdapter][Operation][ERROR]: Opcode for IntraSubgraphAdapter::InsertOpBetween must be OP_VIEW or OP_ASSEMBLE.";
-    auto newRawTensor = std::make_shared<RawTensor>(tensor->Datatype(), tensor->GetRawTensor()->rawshape, tensor->Format());
-    LogicalTensorPtr newTensor =
-        irBuilder_.CreateTensorVar(newRawTensor, tensor->GetOffset(), tensor->GetShape(), tensor->GetDynValidShape());
+        << "[IntraSubgraphAdapter][Operation][ERROR]: Opcode for IntraSubgraphAdapter::InsertOpBetween must be OP_VIEW "
+           "or OP_ASSEMBLE.";
+    auto newRawTensor = std::make_shared<RawTensor>(tensor->Datatype(), tensor->GetRawTensor()->rawshape,
+                                                    tensor->Format());
+    LogicalTensorPtr newTensor = irBuilder_.CreateTensorVar(newRawTensor, tensor->GetOffset(), tensor->GetShape(),
+                                                            tensor->GetDynValidShape());
     newTensor->UpdateOffset(tensor->GetTensorOffset());
     GraphUtils::CopyDynStatus(newTensor, tensor);
     newTensor->SetMemoryTypeBoth(tensor->GetMemoryTypeOriginal(), true);
@@ -456,10 +468,11 @@ LogicalTensorPtr IntraSubgraphAdapter::InsertOpBetween(
             newTensor->GetMemoryTypeOriginal(), offset, tensor->GetDynOffset(), tensor->GetDynValidShape()));
     }
     if (opcode == Opcode::OP_VIEW) {
-        newOp->SetOpAttribute(std::make_shared<ViewOpAttribute>(
-            offset, newTensor->GetMemoryTypeToBe(), tensor->GetDynOffset(), tensor->GetDynValidShape()));
+        newOp->SetOpAttribute(std::make_shared<ViewOpAttribute>(offset, newTensor->GetMemoryTypeToBe(),
+                                                                tensor->GetDynOffset(), tensor->GetDynValidShape()));
     }
-    APASS_LOG_DEBUG_F(Elements::Operation, "Insert New Op %s[%d], info: %s", newOp->GetOpcodeStr().c_str(), newOp->GetOpMagic(), newOp->Dump().c_str());
+    APASS_LOG_DEBUG_F(Elements::Operation, "Insert New Op %s[%d], info: %s", newOp->GetOpcodeStr().c_str(),
+                      newOp->GetOpMagic(), newOp->Dump().c_str());
     if (newOpSubgraphID == -1) {
         newOp->UpdateSubgraphID(ops[0]->GetSubgraphID());
     } else {
@@ -504,7 +517,8 @@ LogicalTensors IntraSubgraphAdapter::CollectBoundaryTensors(Function& function)
     LogicalTensors ret;
     TensorSet allTensors = GraphUtils::GetAllTensors(function);
     for (const auto& tensor : allTensors) {
-        if (!tensor) continue;
+        if (!tensor)
+            continue;
         std::set<int> colors;
         CollectProducerColors(tensor, colors);
         CollectConsumerColors(tensor, colors);

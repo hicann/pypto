@@ -208,7 +208,7 @@ TEST_F(QkvPreOnBoardTest, test_qkvPre_float16_32_32_1_256_256_512)
     int b = 32;
     int s = 1;
     int s2 = 256;
-    h = 256;         //
+    h = 256; //
     n = 32;
     qLoraRank = 512; //
     qkNopeHeadDim = 128;

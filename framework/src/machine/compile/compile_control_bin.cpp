@@ -43,12 +43,11 @@ std::string GetMachineCompilerPath()
             kAscendHomeEnv);
         return "";
     }
-    const std::string compiler =
-        homePath + "/toolkit/toolchain/hcc/bin/aarch64-target-linux-gnu-g++";
+    const std::string compiler = homePath + "/toolkit/toolchain/hcc/bin/aarch64-target-linux-gnu-g++";
     if (!npu::tile_fwk::IsPathExist(compiler)) {
         MACHINE_LOGE(npu::tile_fwk::DevCommonErr::FILE_ERROR,
-            "%s is set but aarch64 toolchain g++ was not found at \"%s\" (canonical path must exist).",
-            kAscendHomeEnv, compiler.c_str());
+                     "%s is set but aarch64 toolchain g++ was not found at \"%s\" (canonical path must exist).",
+                     kAscendHomeEnv, compiler.c_str());
         return "";
     }
     return compiler;
@@ -59,8 +58,8 @@ namespace npu::tile_fwk {
 
 constexpr int DUMP_LEVEL_FOUR = 4;
 
-void GenCustomOpInfo(
-    const std::string& funcName, const std::string& controlAicpuPath, const std::string& constrolSoName)
+void GenCustomOpInfo(const std::string& funcName, const std::string& controlAicpuPath,
+                     const std::string& constrolSoName)
 {
     Json customOp;
     AicpuOpConfig costomInit;

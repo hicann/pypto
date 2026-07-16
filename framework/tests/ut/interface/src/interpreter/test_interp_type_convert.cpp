@@ -248,12 +248,8 @@ TEST_F(InterpTypeConvertTest, Fp8E4M3SpecialValues)
         float expected;
         bool is_nan;
     } cases[] = {
-        {0x00, 0.0f, false},
-        {0x80, -0.0f, false},
-        {0x7E, 448.0f, false},
-        {0xFE, -448.0f, false},
-        {0x7F, 0.0f, true},
-        {0xFF, 0.0f, true},
+        {0x00, 0.0f, false},    {0x80, -0.0f, false}, {0x7E, 448.0f, false},
+        {0xFE, -448.0f, false}, {0x7F, 0.0f, true},   {0xFF, 0.0f, true},
     };
 
     for (const auto& c : cases) {

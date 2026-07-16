@@ -41,8 +41,7 @@ const std::string& DeviceDepVerifyDumpDir()
     return dir;
 }
 
-void OpenIfPathChanged(std::ofstream& ofs, std::string& lastPath,
-                       const std::string& path, const char* header)
+void OpenIfPathChanged(std::ofstream& ofs, std::string& lastPath, const std::string& path, const char* header)
 {
     if (path == lastPath) {
         return;
@@ -59,8 +58,7 @@ void OpenIfPathChanged(std::ofstream& ofs, std::string& lastPath,
 
 inline bool DumpEnabled()
 {
-    static const bool cached =
-        (config::GetDebugOption<int64_t>(CFG_RUNTIME_DBEUG_MODE) == CFG_RUNTIME_DEBUG_VERIFY);
+    static const bool cached = (config::GetDebugOption<int64_t>(CFG_RUNTIME_DBEUG_MODE) == CFG_RUNTIME_DEBUG_VERIFY);
     return cached;
 }
 
@@ -72,25 +70,23 @@ struct CellMatchHandleCollect {
     }
 };
 
-bool CollectCellIdxForUse(
-    DevAscendFunction* devFunc, const DevAscendFunctionCallOperandUse& use,
-    const uint64_t* runtimeExpressionList, const DevCellMatchTableDesc& cellMatchTableDesc,
-    std::vector<int>* cellIdxListOut)
+bool CollectCellIdxForUse(DevAscendFunction* devFunc, const DevAscendFunctionCallOperandUse& use,
+                          const uint64_t* runtimeExpressionList, const DevCellMatchTableDesc& cellMatchTableDesc,
+                          std::vector<int>* cellIdxListOut)
 {
     uint64_t offset[DEV_SHAPE_DIM_MAX];
     uint64_t validShape[DEV_SHAPE_DIM_MAX];
-    bool paramConcrete = GetTensorOffsetAndValidShape<false>(
-        devFunc, offset, validShape, runtimeExpressionList, cellMatchTableDesc, cellMatchTableDesc.GetDimensionSize(),
-        use.operationIdx, use.offsetAttrIdx);
+    bool paramConcrete = GetTensorOffsetAndValidShape<false>(devFunc, offset, validShape, runtimeExpressionList,
+                                                             cellMatchTableDesc, cellMatchTableDesc.GetDimensionSize(),
+                                                             use.operationIdx, use.offsetAttrIdx);
     if (paramConcrete) {
         CellMatchHandle<CellMatchHandleCollect>(offset, validShape, cellMatchTableDesc, cellIdxListOut);
     }
     return paramConcrete;
 }
 
-void AppendSlotAccessRow(
-    uint32_t seqNo, int slotIdx, uint32_t funcIdx, uint32_t opIdx,
-    char accessType, const std::vector<int>& cellIdxList, bool allConcrete)
+void AppendSlotAccessRow(uint32_t seqNo, int slotIdx, uint32_t funcIdx, uint32_t opIdx, char accessType,
+                         const std::vector<int>& cellIdxList, bool allConcrete)
 {
     static std::mutex mu;
     static std::ofstream ofs;
@@ -102,8 +98,7 @@ void AppendSlotAccessRow(
         return;
     }
     const uint32_t taskId = (funcIdx << 16) | (opIdx & 0xffffU);
-    ofs << seqNo << ',' << slotIdx << ',' << funcIdx << ',' << opIdx << ','
-        << taskId << ',' << accessType << ",[";
+    ofs << seqNo << ',' << slotIdx << ',' << funcIdx << ',' << opIdx << ',' << taskId << ',' << accessType << ",[";
     for (size_t i = 0; i < cellIdxList.size(); ++i) {
         if (i != 0) {
             ofs << ';';
@@ -115,17 +110,15 @@ void AppendSlotAccessRow(
 
 } // namespace
 
-void DumpProducerCellAccess(
-    uint32_t devTaskId, int slotIdx, uint32_t devNextIdx,
-    DevAscendFunction& devRootSrc, DevAscendFunctionOutcast& outcast,
-    const DeviceExecuteSlot& slot, const uint64_t* expressionList)
+void DumpProducerCellAccess(uint32_t devTaskId, int slotIdx, uint32_t devNextIdx, DevAscendFunction& devRootSrc,
+                            DevAscendFunctionOutcast& outcast, const DeviceExecuteSlot& slot,
+                            const uint64_t* expressionList)
 {
     if (!DumpEnabled()) {
         return;
     }
-    const DevCellMatchTableDesc& desc = slot.isPartialUpdateStitch
-        ? slot.partialUpdate->cellMatchTableDesc
-        : outcast.cellMatchTableDesc;
+    const DevCellMatchTableDesc& desc = slot.isPartialUpdateStitch ? slot.partialUpdate->cellMatchTableDesc :
+                                                                     outcast.cellMatchTableDesc;
     const DevAscendFunctionCallOperandUse* useList = nullptr;
     size_t useSize = 0;
     if (slot.isPartialUpdateStitch && outcast.producerConsumerList.size() == 0) {
@@ -137,34 +130,28 @@ void DumpProducerCellAccess(
     }
     for (size_t i = 0; i < useSize; ++i) {
         std::vector<int> cellIdxList;
-        bool allConcrete =
-            CollectCellIdxForUse(&devRootSrc, useList[i], expressionList, desc, &cellIdxList);
-        AppendSlotAccessRow(
-            devTaskId, slotIdx, devNextIdx, static_cast<uint32_t>(useList[i].operationIdx),
-            'W', cellIdxList, allConcrete);
+        bool allConcrete = CollectCellIdxForUse(&devRootSrc, useList[i], expressionList, desc, &cellIdxList);
+        AppendSlotAccessRow(devTaskId, slotIdx, devNextIdx, static_cast<uint32_t>(useList[i].operationIdx), 'W',
+                            cellIdxList, allConcrete);
     }
 }
 
-void DumpConsumerCellAccess(
-    uint32_t devTaskId, int slotIdx, uint32_t devNextIdx,
-    DevAscendFunction& nextSrc, const DevAscendFunctionCallOperandUse& consumer,
-    const DevCellMatchTableDesc& cellMatchTableDesc, const uint64_t* expressionList)
+void DumpConsumerCellAccess(uint32_t devTaskId, int slotIdx, uint32_t devNextIdx, DevAscendFunction& nextSrc,
+                            const DevAscendFunctionCallOperandUse& consumer,
+                            const DevCellMatchTableDesc& cellMatchTableDesc, const uint64_t* expressionList)
 {
     if (!DumpEnabled()) {
         return;
     }
     std::vector<int> cellIdxList;
-    bool allConcrete =
-        CollectCellIdxForUse(&nextSrc, consumer, expressionList, cellMatchTableDesc, &cellIdxList);
-    AppendSlotAccessRow(
-        devTaskId, slotIdx, devNextIdx, static_cast<uint32_t>(consumer.operationIdx),
-        'R', cellIdxList, allConcrete);
+    bool allConcrete = CollectCellIdxForUse(&nextSrc, consumer, expressionList, cellMatchTableDesc, &cellIdxList);
+    AppendSlotAccessRow(devTaskId, slotIdx, devNextIdx, static_cast<uint32_t>(consumer.operationIdx), 'R', cellIdxList,
+                        allConcrete);
 }
 
-void DumpStitchEdge(
-    const DevAscendFunctionDupped& producerDup, const DevAscendFunctionDupped& consumerDup,
-    size_t producerOperationIdx, size_t consumerIdx, size_t consumerOperationIdx,
-    DeviceStitchContext::StitchKind stitchKind, int slotIdx)
+void DumpStitchEdge(const DevAscendFunctionDupped& producerDup, const DevAscendFunctionDupped& consumerDup,
+                    size_t producerOperationIdx, size_t consumerIdx, size_t consumerOperationIdx,
+                    DeviceStitchContext::StitchKind stitchKind, int slotIdx)
 {
     if (!DumpEnabled()) {
         return;
@@ -185,30 +172,24 @@ void DumpStitchEdge(
     auto* consSrc = consumerDup.GetSource();
     int producerFuncIdx = prodSrc->GetFuncidx();
 
-    ofs << DeviceStitchContext::GetStitchKindName(stitchKind) << ',' << slotIdx << ','
-        << prodSrc->funcKey << ',' << producerFuncIdx << ',' << producerOperationIdx << ','
-        << MakeTaskID(producerFuncIdx, producerOperationIdx) << ','
-        << consSrc->funcKey << ',' << consumerIdx << ',' << consumerOperationIdx << ','
+    ofs << DeviceStitchContext::GetStitchKindName(stitchKind) << ',' << slotIdx << ',' << prodSrc->funcKey << ','
+        << producerFuncIdx << ',' << producerOperationIdx << ',' << MakeTaskID(producerFuncIdx, producerOperationIdx)
+        << ',' << consSrc->funcKey << ',' << consumerIdx << ',' << consumerOperationIdx << ','
         << MakeTaskID(consumerIdx, consumerOperationIdx) << '\n';
 }
 
 #else // __DEVICE__
 
-void DumpProducerCellAccess(
-    uint32_t, int, uint32_t,
-    DevAscendFunction&, DevAscendFunctionOutcast&,
-    const DeviceExecuteSlot&, const uint64_t*)
+void DumpProducerCellAccess(uint32_t, int, uint32_t, DevAscendFunction&, DevAscendFunctionOutcast&,
+                            const DeviceExecuteSlot&, const uint64_t*)
 {}
 
-void DumpConsumerCellAccess(
-    uint32_t, int, uint32_t,
-    DevAscendFunction&, const DevAscendFunctionCallOperandUse&,
-    const DevCellMatchTableDesc&, const uint64_t*)
+void DumpConsumerCellAccess(uint32_t, int, uint32_t, DevAscendFunction&, const DevAscendFunctionCallOperandUse&,
+                            const DevCellMatchTableDesc&, const uint64_t*)
 {}
 
-void DumpStitchEdge(
-    const DevAscendFunctionDupped&, const DevAscendFunctionDupped&,
-    size_t, size_t, size_t, DeviceStitchContext::StitchKind, int)
+void DumpStitchEdge(const DevAscendFunctionDupped&, const DevAscendFunctionDupped&, size_t, size_t, size_t,
+                    DeviceStitchContext::StitchKind, int)
 {}
 
 #endif // __DEVICE__

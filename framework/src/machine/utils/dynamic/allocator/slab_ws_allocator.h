@@ -18,7 +18,6 @@
 #include <cstdint>
 #include <algorithm>
 
-
 #include "machine/utils/device_log.h"
 #include "machine/device/dynamic/device_utils.h"
 #include "ws_allocator_basics.h"
@@ -46,7 +45,7 @@ constexpr uint64_t SLAB_OBJ_MAGIC = 0xDEADBEEFCAFEBABEULL;
 constexpr uint32_t SLAB_MAGIC_SIZE = sizeof(uint64_t);
 constexpr uint32_t SLAB_OBJ_META_SIZE = sizeof(void*) + SLAB_MAGIC_SIZE;
 
-template<typename T>
+template <typename T>
 constexpr T AlignUpSlab(T n)
 {
     return (n + static_cast<T>(SLAB_ALIGN_GRANULARITY) - 1) & ~(static_cast<T>(SLAB_ALIGN_GRANULARITY) - 1);
@@ -123,9 +122,8 @@ public:
 
         totalSlabCount_ = totalMemSize_ / slabAlignSize_;
         allocatedSlabCount_ = 0;
-        DEV_DEBUG(
-            "[SlabWsAllocator]Init SlabWsAllocator: base=%p, size=%u, align=%u.\n", memBaseaddr_, totalMemSize_,
-            slabAlignSize_);
+        DEV_DEBUG("[SlabWsAllocator]Init SlabWsAllocator: base=%p, size=%u, align=%u.\n", memBaseaddr_, totalMemSize_,
+                  slabAlignSize_);
     }
 
     bool RegistCache(uint32_t type, uint32_t objSize)
@@ -139,16 +137,15 @@ public:
                 DEV_DEBUG("[SlabWsAllocator]Slab cache exists: objsize=%u, cacheType=%u.\n", objSize, type);
                 return true;
             }
-            DEV_ERROR(
-                WsErr::SLAB_ADD_CACHE_FAILED,
-                "workspace.slab.add_cache: [SlabWsAllocator]Add cache failed: type=%u, objsize=%u", type, objSize);
+            DEV_ERROR(WsErr::SLAB_ADD_CACHE_FAILED,
+                      "workspace.slab.add_cache: [SlabWsAllocator]Add cache failed: type=%u, objsize=%u", type,
+                      objSize);
             return false;
         }
         uint32_t slotStride = CalcSlotStride(objSize);
         caches_[type] = SlabCache(objSize, slotStride, this);
         numCaches_++;
-        DEV_DEBUG(
-            "[SlabWsAllocator]Add slab cache: objsize=%u, slotStride=%u, type=%u.\n", objSize, slotStride, type);
+        DEV_DEBUG("[SlabWsAllocator]Add slab cache: objsize=%u, slotStride=%u, type=%u.\n", objSize, slotStride, type);
         return true;
     }
 
@@ -229,9 +226,8 @@ public:
             obj = static_cast<uint8_t*>(static_cast<void*>(slab)) + FirstObjBaseOffset() +
                   slab->allocatedCount * cache.slotStride;
             slab->allocatedCount++;
-            DEV_VERBOSE_DEBUG(
-                "[SlabWsAllocator]Alloc from active slab: slab = %p, objsize = %u, allocCnt=%u .\n", slab, objSize,
-                slab->allocatedCount);
+            DEV_VERBOSE_DEBUG("[SlabWsAllocator]Alloc from active slab: slab = %p, objsize = %u, allocCnt=%u .\n", slab,
+                              objSize, slab->allocatedCount);
         } else {
             void* slabMem = get_free_slab();
             if (!slabMem) {
@@ -254,13 +250,13 @@ public:
             cache.totalObjCount += header->totalCount;
             allocatedSlabCount_++;
 
-            DEV_VERBOSE_DEBUG("[SlabWsAllocator]Alloc from new slab: slab = %p, objsize = %u, totalCnt=%u .\n",
-                header, objSize, header->totalCount);
+            DEV_VERBOSE_DEBUG("[SlabWsAllocator]Alloc from new slab: slab = %p, objsize = %u, totalCnt=%u .\n", header,
+                              objSize, header->totalCount);
         }
 
         AfterAllocSuccess(cache, obj, objSize);
-        DEV_VERBOSE_DEBUG(
-            "[SlabWsAllocator]Alloc sucess obj = %p cacheType = %u size = %u .\n", obj, cacheType, objSize);
+        DEV_VERBOSE_DEBUG("[SlabWsAllocator]Alloc sucess obj = %p cacheType = %u size = %u .\n", obj, cacheType,
+                          objSize);
         return static_cast<uint8_t*>(obj) + SLAB_OBJ_META_SIZE;
     }
 
@@ -275,26 +271,23 @@ public:
 
         void* temp = caches_[cacheIdx].stageAllocHead;
         if (temp == nullptr) {
-            DEV_ERROR(
-                WsErr::SLAB_STAGE_LIST_INCONSISTENT,
-                "workspace.slab.stage: stageAllocHead is null for cacheIndex=%u\n", cacheIdx);
+            DEV_ERROR(WsErr::SLAB_STAGE_LIST_INCONSISTENT,
+                      "workspace.slab.stage: stageAllocHead is null for cacheIndex=%u\n", cacheIdx);
         }
         DEV_ASSERT(WsErr::SLAB_STAGE_LIST_INCONSISTENT, temp != nullptr);
 
         TIMEOUT_CHECK_INIT_WARN_ONLY(archInfo_);
         while (*static_cast<void**>(temp) != caches_[cacheIdx].stageAllocTail) {
-            __PYPTO_TIMEOUT_CHECK_WARN_ONLY(
-                "#workspace.slab.stage: Stage alloc traversal for cacheIndex=%u.",
-                cacheIdx);
+            __PYPTO_TIMEOUT_CHECK_WARN_ONLY("#workspace.slab.stage: Stage alloc traversal for cacheIndex=%u.",
+                                            cacheIdx);
             temp = *static_cast<void**>(temp);
         }
 
         if (temp == nullptr) {
-            DEV_ERROR(
-                WsErr::SLAB_STAGE_LIST_INCONSISTENT,
-                "workspace.slab.stage: stageAllocHead is null after loop for cacheIndex=%u, "
-                "stageAllocTail=%p\n",
-                cacheIdx, caches_[cacheIdx].stageAllocTail);
+            DEV_ERROR(WsErr::SLAB_STAGE_LIST_INCONSISTENT,
+                      "workspace.slab.stage: stageAllocHead is null after loop for cacheIndex=%u, "
+                      "stageAllocTail=%p\n",
+                      cacheIdx, caches_[cacheIdx].stageAllocTail);
         }
         DEV_ASSERT(WsErr::SLAB_STAGE_LIST_INCONSISTENT, temp != nullptr);
 
@@ -338,9 +331,8 @@ public:
             {
                 void* temp = info.heads[i];
                 while (temp) {
-                    DEV_VERBOSE_DEBUG(
-                        "[SlabWsAllocator]recycle sucess obj = %p cacheType = %d size = %u .\n", temp, i,
-                        cache.objSize);
+                    DEV_VERBOSE_DEBUG("[SlabWsAllocator]recycle sucess obj = %p cacheType = %d size = %u .\n", temp, i,
+                                      cache.objSize);
                     temp = *static_cast<void**>(temp);
                 }
             }
@@ -367,24 +359,24 @@ public:
                 auto* base = static_cast<uint8_t*>(curr);
                 uint64_t headMagic = *reinterpret_cast<uint64_t*>(base + sizeof(void*));
                 DEV_ASSERT_MSG(WsErr::SLAB_MAGIC_CORRUPTED, headMagic == SLAB_OBJ_MAGIC,
-                    "tag=%s, cache=%u, obj=%p, headMagic expected=0x%llX, actual=0x%llX",
-                    tag, i, curr, (unsigned long long)SLAB_OBJ_MAGIC, (unsigned long long)headMagic);
+                               "tag=%s, cache=%u, obj=%p, headMagic expected=0x%llX, actual=0x%llX", tag, i, curr,
+                               (unsigned long long)SLAB_OBJ_MAGIC, (unsigned long long)headMagic);
                 uint64_t tailMagic = *reinterpret_cast<uint64_t*>(base + SLAB_OBJ_META_SIZE + info.objSizes[i]);
                 DEV_ASSERT_MSG(WsErr::SLAB_MAGIC_CORRUPTED, tailMagic == SLAB_OBJ_MAGIC,
-                    "tag=%s, cache=%u, obj=%p, tailMagic expected=0x%llX, actual=0x%llX",
-                    tag, i, curr, (unsigned long long)SLAB_OBJ_MAGIC, (unsigned long long)tailMagic);
+                               "tag=%s, cache=%u, obj=%p, tailMagic expected=0x%llX, actual=0x%llX", tag, i, curr,
+                               (unsigned long long)SLAB_OBJ_MAGIC, (unsigned long long)tailMagic);
                 uintptr_t objAddr = reinterpret_cast<uintptr_t>(curr);
                 uintptr_t baseAddr = reinterpret_cast<uintptr_t>(info.slabBase);
                 uintptr_t slabAddr = baseAddr + ((objAddr - baseAddr) / info.slabAlignSize) * info.slabAlignSize;
                 const SlabHeader* slab = reinterpret_cast<const SlabHeader*>(slabAddr);
                 DEV_ASSERT_MSG(WsErr::SLAB_MAGIC_CORRUPTED, slab->magic == SLAB_OBJ_MAGIC,
-                    "tag=%s, cache=%u, slab=%p, slabMagic expected=0x%llX, actual=0x%llX",
-                    tag, i, slab, (unsigned long long)SLAB_OBJ_MAGIC, (unsigned long long)slab->magic);
+                               "tag=%s, cache=%u, slab=%p, slabMagic expected=0x%llX, actual=0x%llX", tag, i, slab,
+                               (unsigned long long)SLAB_OBJ_MAGIC, (unsigned long long)slab->magic);
                 curr = *static_cast<void**>(curr);
                 traversed++;
                 DEV_ASSERT_MSG(WsErr::SLAB_STAGE_LIST_INCONSISTENT, traversed <= info.objCnt[i],
-                    "tag=%s, cache=%u, traversed=%u > objCnt=%u, list may be corrupted",
-                    tag, i, traversed, info.objCnt[i]);
+                               "tag=%s, cache=%u, traversed=%u > objCnt=%u, list may be corrupted", tag, i, traversed,
+                               info.objCnt[i]);
             }
         }
     }
@@ -406,8 +398,8 @@ public:
         stats.allocatedSlabCount = allocatedSlabCount_;
         stats.freeSlabCount = totalSlabCount_ - allocatedSlabCount_;
         stats.slabSize = slabAlignSize_;
-        stats.usage =
-            totalSlabCount_ > 0 ? (static_cast<double>(stats.allocatedSlabCount) / stats.totalSlabCount) : 0.0;
+        stats.usage = totalSlabCount_ > 0 ? (static_cast<double>(stats.allocatedSlabCount) / stats.totalSlabCount) :
+                                            0.0;
         return stats;
     }
 
@@ -434,8 +426,8 @@ public:
         stats.totalObjCount = cache.totalObjCount;
         stats.allocatedObjCount = cache.allocatedObjCount;
         stats.freeObjCount = cache.totalObjCount - cache.allocatedObjCount;
-        stats.usage =
-            cache.totalObjCount > 0 ? (static_cast<double>(cache.allocatedObjCount) / cache.totalObjCount) : 0.0;
+        stats.usage = cache.totalObjCount > 0 ? (static_cast<double>(cache.allocatedObjCount) / cache.totalObjCount) :
+                                                0.0;
         return stats;
     }
 
@@ -452,12 +444,10 @@ public:
         AllocatorStats allocStats = GetAllocatorStats();
         uint64_t usedBytes = static_cast<uint64_t>(allocStats.allocatedSlabCount) * allocStats.slabSize;
         uint64_t freeBytes = static_cast<uint64_t>(allocStats.freeSlabCount) * allocStats.slabSize;
-        DEV_DEBUG(
-            "[workspaceSize.slab.usage] %s totalBytes=%u, usedBytes=%lu, freeBytes=%lu, totalSlabs=%u, "
-            "allocatedSlabs=%u, freeSlabs=%u, slabSize=%u, usage=%.2f%%.",
-            title, totalMemSize_, usedBytes, freeBytes,
-            allocStats.totalSlabCount, allocStats.allocatedSlabCount, allocStats.freeSlabCount, allocStats.slabSize,
-            allocStats.usage * percent);
+        DEV_DEBUG("[workspaceSize.slab.usage] %s totalBytes=%u, usedBytes=%lu, freeBytes=%lu, totalSlabs=%u, "
+                  "allocatedSlabs=%u, freeSlabs=%u, slabSize=%u, usage=%.2f%%.",
+                  title, totalMemSize_, usedBytes, freeBytes, allocStats.totalSlabCount, allocStats.allocatedSlabCount,
+                  allocStats.freeSlabCount, allocStats.slabSize, allocStats.usage * percent);
     }
     void DumpMemoryStatusWhenAbnormal(const char* title) const
     {
@@ -472,11 +462,10 @@ public:
                 continue;
 
             CacheStats cacheStats = GetCacheStats(i);
-            DEV_DEBUG(
-                "Slab cache[%d]: ObjSize=%u, AlloCatedSlabs=%u, TotalObjs=%u,"
-                "AllocatedObjs=%u, FreeObjs=%u, Usage=%.2f%%\n",
-                i, cacheStats.objSize, cacheStats.slabCount, cacheStats.totalObjCount, cacheStats.allocatedObjCount,
-                cacheStats.freeObjCount, cacheStats.usage * percent);
+            DEV_DEBUG("Slab cache[%d]: ObjSize=%u, AlloCatedSlabs=%u, TotalObjs=%u,"
+                      "AllocatedObjs=%u, FreeObjs=%u, Usage=%.2f%%\n",
+                      i, cacheStats.objSize, cacheStats.slabCount, cacheStats.totalObjCount,
+                      cacheStats.allocatedObjCount, cacheStats.freeObjCount, cacheStats.usage * percent);
         }
     }
 

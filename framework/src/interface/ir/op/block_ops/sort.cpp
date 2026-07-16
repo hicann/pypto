@@ -32,9 +32,8 @@ namespace ir {
 
 REGISTER_OP("block.sort32")
     .set_op_category("BlockOp")
-    .set_description(
-        "Block explicit-output sort fixed-size 32-element blocks with index mapping. "
-        "Sorts each 32-element block and produces sorted values and permutation indices.")
+    .set_description("Block explicit-output sort fixed-size 32-element blocks with index mapping. "
+                     "Sorts each 32-element block and produces sorted values and permutation indices.")
     .add_argument("dst", "Output tile for sorted values (TileType)")
     .add_argument("src", "Input tile (TileType)")
     .add_argument("idx", "Input/output tile for permutation indices (TileType, UINT32)")
@@ -54,9 +53,8 @@ REGISTER_OP("block.sort32")
 
 REGISTER_OP("block.mrgsort")
     .set_op_category("BlockOp")
-    .set_description(
-        "Block explicit-output merge sort on sorted lists (format1). "
-        "Performs merge sort with specified block length.")
+    .set_description("Block explicit-output merge sort on sorted lists (format1). "
+                     "Performs merge sort with specified block length.")
     .add_argument("dst", "Output tile (TileType)")
     .add_argument("src", "Input tile (TileType)")
     .set_attr<int>("block_len")
@@ -74,9 +72,8 @@ REGISTER_OP("block.mrgsort")
 
 REGISTER_OP("block.mrgsort2")
     .set_op_category("BlockOp")
-    .set_description(
-        "Block explicit-output merge sort on multiple sorted lists (format2). "
-        "Merges 2, 3, or 4 pre-sorted source tiles into dst using tmp buffer.")
+    .set_description("Block explicit-output merge sort on multiple sorted lists (format2). "
+                     "Merges 2, 3, or 4 pre-sorted source tiles into dst using tmp buffer.")
     .add_argument("dst", "Output tile (TileType)")
     .add_argument("src0", "First input tile (TileType)")
     .add_argument("tmp", "Temporary buffer tile (TileType, same shape as dst)")
@@ -93,9 +90,8 @@ REGISTER_OP("block.mrgsort2")
 
 REGISTER_OP("block.histogram")
     .set_op_category("BlockOp")
-    .set_description(
-        "Radix sort histogram accumulation for 256-bin histograms. "
-        "Only supported on A5. Builds histogram for radix sort preprocessing.")
+    .set_description("Radix sort histogram accumulation for 256-bin histograms. "
+                     "Only supported on A5. Builds histogram for radix sort preprocessing.")
     .add_argument("dst", "Destination histogram tile (TileType, dtype=UINT32, cols=256)")
     .add_argument("src", "Source tile (TileType, dtype=UINT16 or UINT32)")
     .add_argument("idx", "Index tile for LSB filtering (TileType, dtype=UINT8)")

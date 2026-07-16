@@ -37,7 +37,7 @@ TEST_F(AicoreTest, InitGoodbye)
     devArgs.devDfxArgAddr = (uint64_t)(uintptr_t)devDfxArgs.get();
 
     KernelEntry(0, 0, 0, 0, 0, (uint64_t)(uintptr_t)&devArgs);
-    // Use AICORE_SAY_GOODBYE to exit 
+    // Use AICORE_SAY_GOODBYE to exit
     EXPECT_EQ(args->shakeBuffer[3], STAGE_GET_PARALLEL_DEVTASK_TIMEOUT);
 }
 
@@ -94,8 +94,8 @@ struct MultipleCore : ThreadAicoreEmulation {
 
     static void StartKernelEntry(std::shared_ptr<MultipleCore> aicore) { aicore->WaitAndStartKernelEntry(); }
 
-    virtual void AicoreCallSubFuncTask(
-        uint64_t funcIdx, CoreFuncParam* param, int64_t gmStackAddr, __gm__ int64_t* hcclContext, TaskStat* taskStat) override
+    virtual void AicoreCallSubFuncTask(uint64_t funcIdx, CoreFuncParam* param, int64_t gmStackAddr,
+                                       __gm__ int64_t* hcclContext, TaskStat* taskStat) override
     {
         UNUSED(funcIdx);
         UNUSED(param);
@@ -106,7 +106,8 @@ struct MultipleCore : ThreadAicoreEmulation {
         traceList.emplace_back(GetAicoreInfoByThread()->GetCoreIdx(), funcIdx, *param);
     }
 
-    void MainLoop() {
+    void MainLoop()
+    {
         const int rootCount = 0x2;
         const int attrCount = 0x100;
         const int leafCount = 0x40;
@@ -143,7 +144,7 @@ struct MultipleCore : ThreadAicoreEmulation {
             buffer[i].args.parallelDevTask.front = 0;
             buffer[i].args.parallelDevTask.rear = 1;
             buffer[i].args.parallelDevTask.ptrElements[0] = (uintptr_t)dataList;
-            
+
             buffer[i].args.shakeBuffer[SHAK_BUF_PRINT_BUFFER_INDEX] = (uintptr_t)memory->GetPrintBuffer(i);
         }
 
@@ -152,7 +153,7 @@ struct MultipleCore : ThreadAicoreEmulation {
         }
 
         for (int i = 0; i < memory->GetAicCount() + memory->GetAivCount(); i++) {
-            while (AicpuGetCond(i) == AICORE_TASK_INIT ||  (AicpuGetCond(i) & AICORE_FIN_MASK) == 0) {
+            while (AicpuGetCond(i) == AICORE_TASK_INIT || (AicpuGetCond(i) & AICORE_FIN_MASK) == 0) {
                 std::this_thread::sleep_for(std::chrono::seconds(0));
             }
         }

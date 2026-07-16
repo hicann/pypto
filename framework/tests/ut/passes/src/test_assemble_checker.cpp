@@ -40,9 +40,8 @@ public:
     AssembleChecker checker;
 };
 
-void BuildAssembleGraph(
-    ComputationalGraphBuilder& G, const TensorInfos& inTensors, const TensorInfos& outTensors,
-    const AssembleOpInfos& assembleOps)
+void BuildAssembleGraph(ComputationalGraphBuilder& G, const TensorInfos& inTensors, const TensorInfos& outTensors,
+                        const AssembleOpInfos& assembleOps)
 {
     // 添加输入Tensor
     for (const auto& [name, shape] : inTensors) {
@@ -73,11 +72,10 @@ TEST_F(TestAssembleChecker, TestAssembleInputNoOverlap)
     ComputationalGraphBuilder G;
     TensorInfos inTensors = {{"in1", {2, 2}}, {"in2", {3, 2}}, {"in3", {2, 3}}, {"in4", {3, 3}}};
     TensorInfos outTensors = {{"out1", {8, 8}}};
-    AssembleOpInfos assembleOps = {
-        {"in1", "out1", "assemble1", {0, 0}},
-        {"in2", "out1", "assemble2", {0, 4}},
-        {"in3", "out1", "assemble3", {4, 0}},
-        {"in4", "out1", "assemble4", {4, 4}}};
+    AssembleOpInfos assembleOps = {{"in1", "out1", "assemble1", {0, 0}},
+                                   {"in2", "out1", "assemble2", {0, 4}},
+                                   {"in3", "out1", "assemble3", {4, 0}},
+                                   {"in4", "out1", "assemble4", {4, 4}}};
     BuildAssembleGraph(G, inTensors, outTensors, assembleOps);
     Function* function = G.GetFunction();
 
@@ -89,12 +87,11 @@ TEST_F(TestAssembleChecker, TestAssembleInputExactNoOverlap)
     ComputationalGraphBuilder G;
     TensorInfos inTensors = {{"in1", {2, 4}}, {"in2", {2, 4}}, {"in3", {4, 2}}, {"in4", {4, 2}}, {"in5", {2, 2}}};
     TensorInfos outTensors = {{"out1", {6, 6}}};
-    AssembleOpInfos assembleOps = {
-        {"in1", "out1", "assemble1", {0, 0}},
-        {"in2", "out1", "assemble2", {4, 2}},
-        {"in3", "out1", "assemble3", {0, 4}},
-        {"in4", "out1", "assemble4", {2, 0}},
-        {"in5", "out1", "assemble5", {2, 2}}};
+    AssembleOpInfos assembleOps = {{"in1", "out1", "assemble1", {0, 0}},
+                                   {"in2", "out1", "assemble2", {4, 2}},
+                                   {"in3", "out1", "assemble3", {0, 4}},
+                                   {"in4", "out1", "assemble4", {2, 0}},
+                                   {"in5", "out1", "assemble5", {2, 2}}};
     BuildAssembleGraph(G, inTensors, outTensors, assembleOps);
     Function* function = G.GetFunction();
 
@@ -118,10 +115,9 @@ TEST_F(TestAssembleChecker, TestAssembleInputPartialOverlap)
     ComputationalGraphBuilder G;
     TensorInfos inTensors = {{"in1", {2, 4}}, {"in2", {2, 6}}, {"in3", {2, 8}}};
     TensorInfos outTensors = {{"out1", {4, 8}}};
-    AssembleOpInfos assembleOps = {
-        {"in1", "out1", "assemble1", {0, 0}},
-        {"in2", "out1", "assemble2", {0, 3}},
-        {"in3", "out1", "assemble3", {2, 0}}};
+    AssembleOpInfos assembleOps = {{"in1", "out1", "assemble1", {0, 0}},
+                                   {"in2", "out1", "assemble2", {0, 3}},
+                                   {"in3", "out1", "assemble3", {2, 0}}};
     BuildAssembleGraph(G, inTensors, outTensors, assembleOps);
     Function* function = G.GetFunction();
 
@@ -181,10 +177,9 @@ TEST_F(TestAssembleChecker, TestAssembleSkipInputNoOverlap)
     ComputationalGraphBuilder G;
     TensorInfos inTensors = {{"in1", {2, 2}}, {"in2", {2, 2}}, {"in3", {2, -1}}};
     TensorInfos outTensors = {{"out1", {2, 8}}};
-    AssembleOpInfos assembleOps = {
-        {"in1", "out1", "assemble1", {0, 0}},
-        {"in2", "out1", "assemble2", {0, 2}},
-        {"in3", "out1", "assemble3", {0, 4}}};
+    AssembleOpInfos assembleOps = {{"in1", "out1", "assemble1", {0, 0}},
+                                   {"in2", "out1", "assemble2", {0, 2}},
+                                   {"in3", "out1", "assemble3", {0, 4}}};
     BuildAssembleGraph(G, inTensors, outTensors, assembleOps);
     Function* function = G.GetFunction();
 
@@ -196,10 +191,9 @@ TEST_F(TestAssembleChecker, TestAssembleSkipInputHasOverlap)
     ComputationalGraphBuilder G;
     TensorInfos inTensors = {{"in1", {2, 2}}, {"in2", {2, 3}}, {"in3", {2, -1}}};
     TensorInfos outTensors = {{"out1", {2, 8}}};
-    AssembleOpInfos assembleOps = {
-        {"in1", "out1", "assemble1", {0, 0}},
-        {"in2", "out1", "assemble2", {0, 1}},
-        {"in3", "out1", "assemble3", {0, 4}}};
+    AssembleOpInfos assembleOps = {{"in1", "out1", "assemble1", {0, 0}},
+                                   {"in2", "out1", "assemble2", {0, 1}},
+                                   {"in3", "out1", "assemble3", {0, 4}}};
     BuildAssembleGraph(G, inTensors, outTensors, assembleOps);
     Function* function = G.GetFunction();
 
@@ -278,8 +272,8 @@ TEST_F(TestAssembleChecker, TestAssembleOffsetShapeDimNotMatch)
 
 TEST_F(TestAssembleChecker, CheckAssembleOverlap_AssembleAttrNull)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestAssembleAttrNull", "TestAssembleAttrNull", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestAssembleAttrNull",
+                                                      "TestAssembleAttrNull", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
     std::vector<int64_t> shape = {16, 32};
     auto t1Tensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));

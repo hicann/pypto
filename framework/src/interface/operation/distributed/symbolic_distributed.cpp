@@ -23,8 +23,8 @@
 namespace npu::tile_fwk {
 SymbolicScalar GetHcclRankId(const std::string& groupName)
 {
-    int32_t hcclGroupIndex =
-        static_cast<int32_t>(Distributed::CommGroupRecorder::GetInstance().Input(std::string(groupName)));
+    int32_t hcclGroupIndex = static_cast<int32_t>(
+        Distributed::CommGroupRecorder::GetInstance().Input(std::string(groupName)));
     std::string name = SymbolHandler::GetNameByHandlerId(SymbolHandlerId::GetHcclRankId);
     name = AddRuntimePrefix(name);
     SymbolicScalar getHcclRankId(name);

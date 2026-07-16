@@ -178,11 +178,10 @@ void TestCmpKvSel(CmpAttnTile& tileConfig)
                                                     fullK_v3,          cmpK_v3,      firstRope_v3,
                                                     firstRopeInput_v3, topkRes_v3,   topkInputData};
 
-    FusedCompressKvSelect(
-        qNope_v2, qRope_v2, kvCache_v2, krCache_v2, cmpKvCache_v2, cmpKrCache_v2, blockTable_v2, cmpBlockTable_v2,
-        actSeqLen_v2, actCmpSeqLen_v2, mlpWk1_v2, mlpWk2_v2, mlpCos_v2, mlpSin_v2, cmpAttn, cmpAttn16, cmpSoftmax,
-        fullK, cmpK, firstRope, firstRopeInput, topkRes, topkInput, blockSize, cmpBlockSize, cmpStride, softmaxScale,
-        n1, n2, tileConfig);
+    FusedCompressKvSelect(qNope_v2, qRope_v2, kvCache_v2, krCache_v2, cmpKvCache_v2, cmpKrCache_v2, blockTable_v2,
+                          cmpBlockTable_v2, actSeqLen_v2, actCmpSeqLen_v2, mlpWk1_v2, mlpWk2_v2, mlpCos_v2, mlpSin_v2,
+                          cmpAttn, cmpAttn16, cmpSoftmax, fullK, cmpK, firstRope, firstRopeInput, topkRes, topkInput,
+                          blockSize, cmpBlockSize, cmpStride, softmaxScale, n1, n2, tileConfig);
 
     DevFuncRunner::Run(Program::GetInstance().GetLastFunction(), inputDataList, outputDataList);
 

@@ -49,8 +49,8 @@ TEST_F(GetParamIdxTest, TestAdd)
 {
     auto rootFuncPtr = std::make_shared<Function>(Program::GetInstance(), "TestParams", "TestParams", nullptr);
     rootFuncPtr->rootFunc_ = rootFuncPtr.get();
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestAddParams", "TestAddParams", rootFuncPtr.get());
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestAddParams", "TestAddParams",
+                                                      rootFuncPtr.get());
     EXPECT_TRUE(currFunctionPtr != nullptr);
     rootFuncPtr->rootFunc_->programs_.emplace(currFunctionPtr->GetFuncMagic(), currFunctionPtr.get());
 
@@ -83,7 +83,8 @@ TEST_F(GetParamIdxTest, TestAdd)
     copy_op2.SetIOpAtt(0, 5);
     copy_op2.SetOpAttribute(copyin2Attr);
 
-    auto& add_op = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ADD, {ubTensor1, ubTensor2}, {ubTensor3});
+    auto& add_op = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ADD, {ubTensor1, ubTensor2},
+                                                    {ubTensor3});
     (void)add_op;
     auto& copy_out_op = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {ubTensor3}, {outCast});
     copy_out_op.SetOOpAtt(0, 11);
@@ -102,10 +103,10 @@ TEST_F(GetParamIdxTest, TestAddExp)
     auto rootGraphPtr = std::make_shared<Function>(Program::GetInstance(), "TestParams", "TestParams", nullptr);
     EXPECT_TRUE(rootGraphPtr != nullptr);
     rootGraphPtr->rootFunc_ = rootGraphPtr.get();
-    auto subGraphPtr0 =
-        std::make_shared<Function>(Program::GetInstance(), "TestAddParams", "TestAddParams", rootGraphPtr.get());
-    auto subGraphPtr1 =
-        std::make_shared<Function>(Program::GetInstance(), "TestExpParams", "TestExpParams", rootGraphPtr.get());
+    auto subGraphPtr0 = std::make_shared<Function>(Program::GetInstance(), "TestAddParams", "TestAddParams",
+                                                   rootGraphPtr.get());
+    auto subGraphPtr1 = std::make_shared<Function>(Program::GetInstance(), "TestExpParams", "TestExpParams",
+                                                   rootGraphPtr.get());
     rootGraphPtr->rootFunc_->programs_.emplace(subGraphPtr0->GetFuncMagic(), subGraphPtr0.get());
     rootGraphPtr->rootFunc_->programs_.emplace(subGraphPtr1->GetFuncMagic(), subGraphPtr1.get());
     // Prepare the graph

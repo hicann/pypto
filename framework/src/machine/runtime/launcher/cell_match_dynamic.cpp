@@ -26,9 +26,8 @@ namespace npu::tile_fwk::dynamic {
 
 namespace {
 
-bool TryBuildDynamicCellMatchDesc(
-    const DyndevFunctionAttribute::DynamicCellMatchLaunchMeta& launchMeta, Evaluator& eval,
-    DevCellMatchTableDesc& patchedDesc)
+bool TryBuildDynamicCellMatchDesc(const DyndevFunctionAttribute::DynamicCellMatchLaunchMeta& launchMeta,
+                                  Evaluator& eval, DevCellMatchTableDesc& patchedDesc)
 {
     patchedDesc.SetCellShape(launchMeta.cellShape);
     const int dim = patchedDesc.GetDimensionSize();
@@ -79,8 +78,8 @@ bool TryBuildDynamicCellMatchDesc(
 
 } // namespace
 
-std::vector<DevDynamicCellMatchStridePatch> PrepareDynamicCellMatchDescPatches(
-    const DyndevFunctionAttribute& dynAttr, Evaluator& eval)
+std::vector<DevDynamicCellMatchStridePatch> PrepareDynamicCellMatchDescPatches(const DyndevFunctionAttribute& dynAttr,
+                                                                               Evaluator& eval)
 {
     std::vector<DevDynamicCellMatchStridePatch> patches;
     if (dynAttr.dynamicCellMatchLaunchMetaList.empty()) {
@@ -101,8 +100,8 @@ std::vector<DevDynamicCellMatchStridePatch> PrepareDynamicCellMatchDescPatches(
     return patches;
 }
 
-void PatchHostDynamicCellMatchTableDesc(
-    DevAscendProgram* hostDevProg, const std::vector<DevDynamicCellMatchStridePatch>& patches)
+void PatchHostDynamicCellMatchTableDesc(DevAscendProgram* hostDevProg,
+                                        const std::vector<DevDynamicCellMatchStridePatch>& patches)
 {
     if (hostDevProg == nullptr || patches.empty()) {
         return;
@@ -114,8 +113,8 @@ void PatchHostDynamicCellMatchTableDesc(
     }
 }
 
-void WriteDynamicCellMatchStridePatchesToLaunchArgs(
-    int64_t* launchInputs, const std::vector<DevDynamicCellMatchStridePatch>& patches)
+void WriteDynamicCellMatchStridePatchesToLaunchArgs(int64_t* launchInputs,
+                                                    const std::vector<DevDynamicCellMatchStridePatch>& patches)
 {
     if (launchInputs == nullptr) {
         return;
@@ -141,8 +140,7 @@ static bool IsOutputTensorStitchSlot(const DevAscendProgram* hostDevProg, int sl
         return false;
     }
     const auto* partialUpdates = reinterpret_cast<const DevAscendProgramPartialUpdate*>(
-        reinterpret_cast<const uint8_t*>(hostDevProg) +
-        reinterpret_cast<uintptr_t>(partialUpdateList.Data()));
+        reinterpret_cast<const uint8_t*>(hostDevProg) + reinterpret_cast<uintptr_t>(partialUpdateList.Data()));
     return partialUpdates[slotIndex].isOutputTensorStitchSlot;
 }
 
@@ -159,8 +157,7 @@ static bool HasAnyOutputTensorStitchSlot(const DevAscendProgram* hostDevProg)
     return false;
 }
 
-void ValidateDynamicCellMatchTableMemBudget(
-    const DyndevFunctionAttribute& dynAttr, DevAscendProgram* hostDevProg)
+void ValidateDynamicCellMatchTableMemBudget(const DyndevFunctionAttribute& dynAttr, DevAscendProgram* hostDevProg)
 {
     if (hostDevProg == nullptr ||
         (dynAttr.constructAssembleNeedAllocRuntimeSlots.empty() && !HasAnyOutputTensorStitchSlot(hostDevProg))) {
@@ -175,34 +172,32 @@ void ValidateDynamicCellMatchTableMemBudget(
         const auto* desc = reinterpret_cast<const DevCellMatchTableDesc*>(cfgBytes + launchMeta.descOffset);
         const uint64_t cellMatchStride0 = desc->stride.dimStride[0];
         ASSERT(DevCommonErr::PARAM_CHECK_FAILED, cellMatchStride0 < static_cast<uint64_t>(MAX_CELLMATCHSSTRIDE))
-            << " Dynamic cell match slot=" << launchMeta.slotIndex
-            << " stitch results in excessive memory consumption,"
+            << " Dynamic cell match slot=" << launchMeta.slotIndex << " stitch results in excessive memory consumption,"
             << "Please appropriately configure the view shape and tile shape, and ensure aligned with the input shape.";
     }
 }
 
-void RefillDynamicMemBudgets(
-    DevAscendProgram* hostDevProg, DyndevFunctionAttribute& dynAttr, Evaluator& eval)
+void RefillDynamicMemBudgets(DevAscendProgram* hostDevProg, DyndevFunctionAttribute& dynAttr, Evaluator& eval)
 {
     if (hostDevProg == nullptr) {
         return;
     }
     if (dynAttr.maxDynamicAssembleOutcastMem.IsValid()) {
-        hostDevProg->memBudget.tensor.maxDynamicAssembleOutcastMem =
-            eval.Evaluate(dynAttr.maxDynamicAssembleOutcastMem);
+        hostDevProg->memBudget.tensor.maxDynamicAssembleOutcastMem = eval.Evaluate(
+            dynAttr.maxDynamicAssembleOutcastMem);
     }
     if (!dynAttr.maxDynamicCellMatchTableMem.IsValid()) {
         return;
     }
-    hostDevProg->memBudget.metadata.maxDynamicCellMatchTableMem =
-        eval.Evaluate(dynAttr.maxDynamicCellMatchTableMem);
+    hostDevProg->memBudget.metadata.maxDynamicCellMatchTableMem = eval.Evaluate(dynAttr.maxDynamicCellMatchTableMem);
     uint64_t totalDynamicCellMatchSlotNum = hostDevProg->memBudget.metadata.dynamicCellMatchSlotNum;
-    hostDevProg->memBudget.metadata.dynamicCellMatch =
-        totalDynamicCellMatchSlotNum * hostDevProg->memBudget.metadata.maxDynamicCellMatchTableMem;
+    hostDevProg->memBudget.metadata.dynamicCellMatch = totalDynamicCellMatchSlotNum *
+                                                       hostDevProg->memBudget.metadata.maxDynamicCellMatchTableMem;
 }
 
-std::vector<DevDynamicCellMatchStridePatch> PrepareHostDynamicCellMatchForLaunch(
-    DyndevFunctionAttribute& dynAttr, Evaluator& eval, DevAscendProgram* hostDevProg)
+std::vector<DevDynamicCellMatchStridePatch> PrepareHostDynamicCellMatchForLaunch(DyndevFunctionAttribute& dynAttr,
+                                                                                 Evaluator& eval,
+                                                                                 DevAscendProgram* hostDevProg)
 {
     auto patches = PrepareDynamicCellMatchDescPatches(dynAttr, eval);
     PatchHostDynamicCellMatchTableDesc(hostDevProg, patches);

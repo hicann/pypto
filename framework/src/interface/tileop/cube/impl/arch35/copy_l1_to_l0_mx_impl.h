@@ -23,9 +23,8 @@ template <typename Coord, typename DstTileData, typename SrcTileData>
 INLINE void TExtractMXImpl(DstTileData& dst, SrcTileData& src, const Coord& coord)
 {
     constexpr uint64_t shapeSize = Std::tuple_size<typename DstTileData::Shape>::value;
-    static_assert(
-        (DstTileData::FORMAT == Hardware::L0A_MX || DstTileData::FORMAT == Hardware::L0B_MX) &&
-        SrcTileData::FORMAT == Hardware::L1);
+    static_assert((DstTileData::FORMAT == Hardware::L0A_MX || DstTileData::FORMAT == Hardware::L0B_MX) &&
+                  SrcTileData::FORMAT == Hardware::L1);
     int64_t offset0 = TileOp::GetTupleElement<Coord, DIM_1ST, SHAPE_DIM3, 0>(coord);
     int64_t offset1 = TileOp::GetTupleElement<Coord, DIM_2ND, SHAPE_DIM3, 0>(coord);
     constexpr auto staticL1H = Std::tuple_element<shapeSize - SHAPE_DIM3, typename SrcTileData::TileShape>::type::value;
@@ -38,12 +37,10 @@ INLINE void TExtractMXImpl(DstTileData& dst, SrcTileData& src, const Coord& coor
     int64_t srcShape1 = GetShape<1>(src);
     using tileL1Tensor = std::conditional_t<
         DstTileData::FORMAT == Hardware::L0A_MX,
-        pto::Tile<
-            pto::TileType::Mat, typename SrcTileData::Type, staticL1H, staticL1W * SHAPE_DIM2, pto::BLayout::RowMajor,
-            -1, -1, pto::SLayout::RowMajor, pto::TileConfig::alignedSize>,
-        pto::Tile<
-            pto::TileType::Mat, typename SrcTileData::Type, staticL1H * SHAPE_DIM2, staticL1W, pto::BLayout::ColMajor,
-            -1, -1, pto::SLayout::ColMajor, pto::TileConfig::alignedSize>>;
+        pto::Tile<pto::TileType::Mat, typename SrcTileData::Type, staticL1H, staticL1W * SHAPE_DIM2,
+                  pto::BLayout::RowMajor, -1, -1, pto::SLayout::RowMajor, pto::TileConfig::alignedSize>,
+        pto::Tile<pto::TileType::Mat, typename SrcTileData::Type, staticL1H * SHAPE_DIM2, staticL1W,
+                  pto::BLayout::ColMajor, -1, -1, pto::SLayout::ColMajor, pto::TileConfig::alignedSize>>;
     using tileL0MXTensor = std::conditional_t<
         DstTileData::FORMAT == Hardware::L0A_MX,
         pto::TileLeftScaleCompact<typename DstTileData::Type, staticL0H, staticL0W * SHAPE_DIM2, -1, -1>,

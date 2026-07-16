@@ -20,29 +20,28 @@ using namespace npu::tile_fwk;
 
 namespace npu::tile_fwk {
 
-void LightningIndexerTopkQuant(
-    const Tensor& query, const Tensor& key, const Tensor& qScale, const Tensor& kScale, const Tensor& weights,
-    const Tensor& actSeqKey, const Tensor& blockTable, Tensor& topkRes, const int selectedCount, IndexerTile tileConfig,
-    const std::set<int>& unrollList)
+void LightningIndexerTopkQuant(const Tensor& query, const Tensor& key, const Tensor& qScale, const Tensor& kScale,
+                               const Tensor& weights, const Tensor& actSeqKey, const Tensor& blockTable,
+                               Tensor& topkRes, const int selectedCount, IndexerTile tileConfig,
+                               const std::set<int>& unrollList)
 {
-    LightningIndexerTopkImpl(
-        query, key, true, &qScale, &kScale, weights, actSeqKey, blockTable, topkRes, selectedCount, tileConfig,
-        unrollList);
+    LightningIndexerTopkImpl(query, key, true, &qScale, &kScale, weights, actSeqKey, blockTable, topkRes, selectedCount,
+                             tileConfig, unrollList);
 }
 
-void LightningIndexerTopk(
-    const Tensor& query, const Tensor& key, const Tensor& weights, const Tensor& actSeqKey, const Tensor& blockTable,
-    Tensor& topkRes, const int selectedCount, IndexerTile tileConfig, const std::set<int>& unrollList)
+void LightningIndexerTopk(const Tensor& query, const Tensor& key, const Tensor& weights, const Tensor& actSeqKey,
+                          const Tensor& blockTable, Tensor& topkRes, const int selectedCount, IndexerTile tileConfig,
+                          const std::set<int>& unrollList)
 {
-    LightningIndexerTopkImpl(
-        query, key, false, nullptr, nullptr, weights, actSeqKey, blockTable, topkRes, selectedCount, tileConfig,
-        unrollList);
+    LightningIndexerTopkImpl(query, key, false, nullptr, nullptr, weights, actSeqKey, blockTable, topkRes,
+                             selectedCount, tileConfig, unrollList);
 }
 
-void LightningIndexerTopkImpl(
-    const Tensor& query, const Tensor& key, bool isQuant, const Tensor* qScale, const Tensor* kScale,
-    const Tensor& weights, const Tensor& actSeqKey, const Tensor& blockTable, Tensor& topkRes, const int selectedCount,
-    IndexerTile tileConfig, const std::set<int>& unrollList, Tensor* tmpOut, Tensor* topkValue)
+void LightningIndexerTopkImpl(const Tensor& query, const Tensor& key, bool isQuant, const Tensor* qScale,
+                              const Tensor* kScale, const Tensor& weights, const Tensor& actSeqKey,
+                              const Tensor& blockTable, Tensor& topkRes, const int selectedCount,
+                              IndexerTile tileConfig, const std::set<int>& unrollList, Tensor* tmpOut,
+                              Tensor* topkValue)
 {
     // 下面的逻辑涉及核内Assemble，但TILE TENSOR的实现暂不支持核内Assemble，因此先走非TILE TENSOR的逻辑
     config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, false);
@@ -128,12 +127,12 @@ void LightningIndexerTopkImpl(
                     for (int subblockIdx = 0; subblockIdx < unrollLength; subblockIdx++) {
                         auto blockIdx = firstBlockIdx + subblockIdx;
                         SymbolicScalar curBlockIdx = GetTensorData(blockTable, {bIdx, blockIdx});
-                        auto curK = View(
-                            key2D, {blockSize, indexD}, {std::min(blockSize, effSeq - (blockIdx * blockSize)), indexD},
-                            {curBlockIdx * blockSize, n2Idx * indexD});
+                        auto curK = View(key2D, {blockSize, indexD},
+                                         {std::min(blockSize, effSeq - (blockIdx * blockSize)), indexD},
+                                         {curBlockIdx * blockSize, n2Idx * indexD});
 
-                        TileShape::Current().SetCubeTile(
-                            {c1Tile[0], c1Tile[1]}, {c1Tile[2], c1Tile[3]}, {c1Tile[4], c1Tile[5]});
+                        TileShape::Current().SetCubeTile({c1Tile[0], c1Tile[1]}, {c1Tile[2], c1Tile[3]},
+                                                         {c1Tile[4], c1Tile[5]});
                         auto mmRes = Matrix::Matmul(DataType::DT_FP32, curQ, curK, false, true); // (group, blockSize)
                         concatSrcs.emplace_back(mmRes); // Matches tile size, no extra Assign needed (?)
                     }
@@ -143,7 +142,7 @@ void LightningIndexerTopkImpl(
                     auto curW = View(weight2D, {group, 1}, {qOffset, 0}); // (group, 1)
                     auto wB32 = Cast(curW, DT_FP32);                      // (group, 1)
 
-                    auto mmRes = Cat(concatSrcs, -1);                     // (group, superBlockSize)
+                    auto mmRes = Cat(concatSrcs, -1); // (group, superBlockSize)
 
                     TileShape::Current().SetVecTile(tileConfig.v1Tile);
                     auto reluRes = Maximum(mmRes, Element(DT_FP32, 0.0f)); // (group, superBlockSize)
@@ -167,19 +166,19 @@ void LightningIndexerTopkImpl(
                     for (int subblockIdx = 0; subblockIdx < unrollLength; subblockIdx++) {
                         auto blockIdx = firstBlockIdx + subblockIdx;
                         SymbolicScalar curBlockIdx = GetTensorData(blockTable, {bIdx, blockIdx});
-                        auto curK = View(
-                            key2D, {blockSize, indexD}, {std::min(blockSize, effSeq - (blockIdx * blockSize)), indexD},
-                            {curBlockIdx * blockSize, n2Idx * indexD});
+                        auto curK = View(key2D, {blockSize, indexD},
+                                         {std::min(blockSize, effSeq - (blockIdx * blockSize)), indexD},
+                                         {curBlockIdx * blockSize, n2Idx * indexD});
 
-                        TileShape::Current().SetCubeTile(
-                            {c1Tile[0], c1Tile[1]}, {c1Tile[2], c1Tile[3]}, {c1Tile[4], c1Tile[5]});
+                        TileShape::Current().SetCubeTile({c1Tile[0], c1Tile[1]}, {c1Tile[2], c1Tile[3]},
+                                                         {c1Tile[4], c1Tile[5]});
 
                         auto mmRes = Matrix::Matmul(DataType::DT_INT32, curQ, curK, false, true); // (group, blockSize)
                         mmResQuantConcatSrcs.emplace_back(mmRes);
 
-                        auto curKScale = View(
-                            kScale2D, {blockSize, 1}, {std::min(blockSize, effSeq - (blockIdx * blockSize)), 1},
-                            {curBlockIdx * blockSize, n2Idx}); // (blockSize, 1)
+                        auto curKScale = View(kScale2D, {blockSize, 1},
+                                              {std::min(blockSize, effSeq - (blockIdx * blockSize)), 1},
+                                              {curBlockIdx * blockSize, n2Idx}); // (blockSize, 1)
                         kScaleConcatSrcs.emplace_back(curKScale);
                     }
 
@@ -248,23 +247,18 @@ void LightningIndexerTopkImpl(
                         Assemble({{Assign(ax), {0, 0}}, {bx, {0, effSeq}}}, padX2K, true);
                         auto [resValue, resIdx] = TopK(padX2K, selectedCount, 1);
                         TileShape::Current().SetVecTile(tileConfig.addsTile);
-                        auto topk4D = Reshape(
-                            View(resIdx, {1, selectedCount}, {1, effSeq}, {0, 0}), {1, 1, 1, selectedCount},
-                            {1, 1, 1, effSeq});
-                        auto topkIndicesPad = Full(
-                            Element(idxdtype, padIdxValue), idxdtype, {1, 1, 1, selectedCount},
-                            {1, 1, 1, selectedCount - effSeq});
-                        Assemble(
-                            {{topk4D, {bIdx, s1Idx, n2Idx, 0}}, {topkIndicesPad, {bIdx, s1Idx, n2Idx, effSeq}}},
-                            topkRes, true);
+                        auto topk4D = Reshape(View(resIdx, {1, selectedCount}, {1, effSeq}, {0, 0}),
+                                              {1, 1, 1, selectedCount}, {1, 1, 1, effSeq});
+                        auto topkIndicesPad = Full(Element(idxdtype, padIdxValue), idxdtype, {1, 1, 1, selectedCount},
+                                                   {1, 1, 1, selectedCount - effSeq});
+                        Assemble({{topk4D, {bIdx, s1Idx, n2Idx, 0}}, {topkIndicesPad, {bIdx, s1Idx, n2Idx, effSeq}}},
+                                 topkRes, true);
 
                         if (topkValue != nullptr) {
-                            auto topk4DValue = Reshape(
-                                View(resValue, {1, selectedCount}, {1, effSeq}, {0, 0}), {1, 1, 1, selectedCount},
-                                {1, 1, 1, effSeq});
-                            auto topkValuePad = Full(
-                                Element(DT_FP32, padValue), DT_FP32, {1, 1, 1, selectedCount},
-                                {1, 1, 1, selectedCount - effSeq});
+                            auto topk4DValue = Reshape(View(resValue, {1, selectedCount}, {1, effSeq}, {0, 0}),
+                                                       {1, 1, 1, selectedCount}, {1, 1, 1, effSeq});
+                            auto topkValuePad = Full(Element(DT_FP32, padValue), DT_FP32, {1, 1, 1, selectedCount},
+                                                     {1, 1, 1, selectedCount - effSeq});
                             Assemble(
                                 {{topk4DValue, {bIdx, s1Idx, n2Idx, 0}}, {topkValuePad, {bIdx, s1Idx, n2Idx, effSeq}}},
                                 *topkValue, true);
@@ -343,11 +337,11 @@ void LightningIndexerTopkImpl(
     }
 }
 
-void LightningIndexerImpl(
-    const Tensor& idxQuery, const Tensor& idxQueryScale, const Tensor& idxKeyCache, const Tensor& idxKeyScale,
-    const Tensor& idxWeight, const Tensor& actSeqKey, const Tensor& blockTable, const int selectedCount,
-    Tensor& topkRes, LightningIndexerConfigs configs, const std::set<int>& unrollList, Tensor* firstMm, Tensor* mmOut,
-    Tensor* topkValue)
+void LightningIndexerImpl(const Tensor& idxQuery, const Tensor& idxQueryScale, const Tensor& idxKeyCache,
+                          const Tensor& idxKeyScale, const Tensor& idxWeight, const Tensor& actSeqKey,
+                          const Tensor& blockTable, const int selectedCount, Tensor& topkRes,
+                          LightningIndexerConfigs configs, const std::set<int>& unrollList, Tensor* firstMm,
+                          Tensor* mmOut, Tensor* topkValue)
 {
     /*
     idxQuery: [t, idxNHeads, indexD], int8
@@ -428,11 +422,11 @@ void LightningIndexerImpl(
             {
                 (void)unUsed;
                 TileShape::Current().SetVecTile(s1Tile, 1, idxNHeads);
-                auto curQs = View(
-                    qScale3D, {s1Tile, 1, idxNHeads}, {bIdx * s1 + s1Tile * s1Idx, 0, 0}); // (s1Tile, 1, idxNHeads)
-                auto curW = View(
-                    weight3D, {s1Tile, 1, idxNHeads}, {bIdx * s1 + s1Tile * s1Idx, 0, 0}); // (s1Tile, 1, idxNHeads)
-                wScale = Mul(curQs, curW); // (s1Tile, 1, idxNHeads), fp16 * fp16
+                auto curQs = View(qScale3D, {s1Tile, 1, idxNHeads},
+                                  {bIdx * s1 + s1Tile * s1Idx, 0, 0}); // (s1Tile, 1, idxNHeads)
+                auto curW = View(weight3D, {s1Tile, 1, idxNHeads},
+                                 {bIdx * s1 + s1Tile * s1Idx, 0, 0}); // (s1Tile, 1, idxNHeads)
+                wScale = Mul(curQs, curW);                            // (s1Tile, 1, idxNHeads), fp16 * fp16
             }
 
             LOOP("LOOP_BLOCK_NUM", FunctionType::DYNAMIC_LOOP, bnIdx, LoopRange(curBlock), unrollList)
@@ -440,8 +434,8 @@ void LightningIndexerImpl(
                 for (auto unrollLoop : unrollList) {
                     UNROLL(unrollLoop)
                     {
-                        auto curQ =
-                            View(query2D, {s1Tile * idxNHeads, indexD}, {qOffset, 0}); // (s1Tile * idxNHeads, indexD)
+                        auto curQ = View(query2D, {s1Tile * idxNHeads, indexD},
+                                         {qOffset, 0}); // (s1Tile * idxNHeads, indexD)
                         std::vector<Tensor> firstMmCollect;
                         std::vector<Tensor> kScaleCollect;
                         // static unroll into bigger block to reduce tasks
@@ -450,25 +444,22 @@ void LightningIndexerImpl(
                             SymbolicScalar curBlockIdx = GetTensorData(blockTable, {bIdx, idxInBlock});
                             auto tailSeq = std::min(blockSize, curSeq - (idxInBlock * blockSize));
                             config::SetSemanticLabel("LI-QK-DOT");
-                            auto kBlock = View(
-                                key2D, {blockSize, indexD}, {tailSeq, indexD},
-                                {curBlockIdx * blockSize, 0}); // (blockSize, indexD)
-                            TileShape::Current().SetCubeTile(
-                                {c1Tile[0], c1Tile[1]}, {c1Tile[2], c1Tile[3]}, {c1Tile[4], c1Tile[5]});
+                            auto kBlock = View(key2D, {blockSize, indexD}, {tailSeq, indexD},
+                                               {curBlockIdx * blockSize, 0}); // (blockSize, indexD)
+                            TileShape::Current().SetCubeTile({c1Tile[0], c1Tile[1]}, {c1Tile[2], c1Tile[3]},
+                                                             {c1Tile[4], c1Tile[5]});
                             if (false) {
                                 // use fixpipe
-                                auto qkDot = Matrix::Matmul(
-                                    DataType::DT_FP16, curQ, kBlock, configs.extendParam, false,
-                                    true); // (s1Tile * idxNHeads, blockSize)
+                                auto qkDot = Matrix::Matmul(DataType::DT_FP16, curQ, kBlock, configs.extendParam, false,
+                                                            true); // (s1Tile * idxNHeads, blockSize)
                                 firstMmCollect.emplace_back(qkDot);
                                 if (firstMm != nullptr) {
-                                    Assemble(
-                                        qkDot, {qOffset, idxInBlock * blockSize},
-                                        *firstMm); // (s1Tile * idxNHeads, blockSize)
+                                    Assemble(qkDot, {qOffset, idxInBlock * blockSize},
+                                             *firstMm); // (s1Tile * idxNHeads, blockSize)
                                 }
                             } else {
-                                auto qkDot = Matrix::Matmul(
-                                    DataType::DT_INT32, curQ, kBlock, false, true); // (s1Tile * idxNHeads, blockSize)
+                                auto qkDot = Matrix::Matmul(DataType::DT_INT32, curQ, kBlock, false,
+                                                            true); // (s1Tile * idxNHeads, blockSize)
                                 TileShape::Current().SetVecTile(s1Tile * idxNHeads, blockSize);
                                 qkDot = Cast(qkDot, DT_FP32);
                                 qkDot = Maximum(qkDot, Element(DT_FP32, 0.0f));
@@ -476,14 +467,13 @@ void LightningIndexerImpl(
                                 qkDot = Cast(qkDot, DT_FP16); // (s1Tile * idxNHeads, blockSize)
                                 firstMmCollect.emplace_back(qkDot);
                                 if (firstMm != nullptr) {
-                                    Assemble(
-                                        qkDot, {qOffset, idxInBlock * blockSize},
-                                        *firstMm); // (s1Tile * idxNHeads, blockSize)
+                                    Assemble(qkDot, {qOffset, idxInBlock * blockSize},
+                                             *firstMm); // (s1Tile * idxNHeads, blockSize)
                                 }
                             }
 
-                            auto kSBlock =
-                                View(kScale2D, {1, blockSize}, {1, tailSeq}, {curBlockIdx, 0}); // (1, blockSize)
+                            auto kSBlock = View(kScale2D, {1, blockSize}, {1, tailSeq},
+                                                {curBlockIdx, 0}); // (1, blockSize)
                             kScaleCollect.emplace_back(kSBlock);
                         }
 
@@ -491,22 +481,20 @@ void LightningIndexerImpl(
                         TileShape::Current().SetVecTile(unrollLoop, blockSize);
                         auto kScaleCat = Cat(kScaleCollect, -1); // (1, unrollLoop * blockSize), fp16
                         TileShape::Current().SetVecTile(1, blockSize * unrollLoop);
-                        kScaleCat = Cast(kScaleCat, DT_FP32);    // (1, unrollLoop * blockSize), fp32
+                        kScaleCat = Cast(kScaleCat, DT_FP32); // (1, unrollLoop * blockSize), fp32
 
                         config::SetSemanticLabel("LI-W-DOT");
                         TileShape::Current().SetVecTile(std::min(s1Tile * idxNHeads, blockSize), blockSize);
                         auto firstMmCat = Cat(firstMmCollect, -1); // (s1Tile * idxNHeads, unrollLoop * blockSize)
                         auto validCatShape = (unrollLoop - 1) * blockSize + lastSeq;
-                        auto qk3D = Reshape(
-                            firstMmCat, {s1Tile, idxNHeads, unrollLoop * blockSize},
-                            {s1Tile, idxNHeads, std::min(unrollLoop * blockSize, validCatShape)});
-                        TileShape::Current().SetCubeTile(
-                            {c2Tile[0], c2Tile[1]}, {c2Tile[2], c2Tile[3]}, {c2Tile[4], c2Tile[5]});
-                        auto wQk = Matrix::BatchMatmul(
-                            DT_FP32, wScale, qk3D, false, false); // (s1Tile, 1, unrollLoop * blockSize);
-                        auto secondMm = Reshape(
-                            wQk, {s1Tile, unrollLoop * blockSize},
-                            {s1Tile, std::min(unrollLoop * blockSize, validCatShape)});
+                        auto qk3D = Reshape(firstMmCat, {s1Tile, idxNHeads, unrollLoop * blockSize},
+                                            {s1Tile, idxNHeads, std::min(unrollLoop * blockSize, validCatShape)});
+                        TileShape::Current().SetCubeTile({c2Tile[0], c2Tile[1]}, {c2Tile[2], c2Tile[3]},
+                                                         {c2Tile[4], c2Tile[5]});
+                        auto wQk = Matrix::BatchMatmul(DT_FP32, wScale, qk3D, false,
+                                                       false); // (s1Tile, 1, unrollLoop * blockSize);
+                        auto secondMm = Reshape(wQk, {s1Tile, unrollLoop * blockSize},
+                                                {s1Tile, std::min(unrollLoop * blockSize, validCatShape)});
 
                         config::SetSemanticLabel("LI-K-SCALE");
                         TileShape::Current().SetVecTile(s1Tile, unrollLoop * blockSize);
@@ -538,25 +526,24 @@ void LightningIndexerImpl(
                 (void)pad2KIdx;
                 config::SetSemanticLabel("LI-2K-PAD");
                 auto topkIn = View(maxTensor, {1, selectedCount}, {1, effSeq}, {srcIdx, 0});
-                auto padTensor =
-                    Full(Element(DT_FP32, -FLT_MAX), DT_FP32, {1, selectedCount}, {1, selectedCount - effSeq});
+                auto padTensor = Full(Element(DT_FP32, -FLT_MAX), DT_FP32, {1, selectedCount},
+                                      {1, selectedCount - effSeq});
                 Assemble(Assign(topkIn), {srcIdx, 0}, pad2K);
                 Assemble(padTensor, {srcIdx, effSeq}, pad2K);
             }
-            config::SetPassOption(SG_SET_SCOPE, std::vector<int64_t>{-1, 0, 0});// tile unroll
+            config::SetPassOption(SG_SET_SCOPE, std::vector<int64_t>{-1, 0, 0}); // tile unroll
             LOOP("TOPK_2K_CALC", FunctionType::DYNAMIC_LOOP, calc2KIdx, LoopRange(effSeq < selectedCount))
             {
                 (void)calc2KIdx;
                 config::SetSemanticLabel("LI-2K-TOPK");
                 TileShape::Current().SetVecTile(1, selectedCount);
                 auto cur2KIn = View(pad2K, {1, selectedCount}, {srcIdx, 0});
-                auto [curRes, curIdx] = TopK(cur2KIn, selectedCount, -1);            // (1, selectedCount)
+                auto [curRes, curIdx] = TopK(cur2KIn, selectedCount, -1); // (1, selectedCount)
                 config::SetSemanticLabel("LI-2K-INDEX");
                 auto effIdx = View(curIdx, {1, selectedCount}, {1, effSeq}, {0, 0}); // (1, effSeq)
                 effIdx = Reshape(effIdx, {1, 1, selectedCount}, {1, 1, effSeq});
-                auto padIdx = Full(
-                    Element(DT_INT32, -1), DT_INT32, {1, selectedCount},
-                    {1, selectedCount - effSeq}); // (1, selectedCount - effSeq)
+                auto padIdx = Full(Element(DT_INT32, -1), DT_INT32, {1, selectedCount},
+                                   {1, selectedCount - effSeq}); // (1, selectedCount - effSeq)
                 padIdx = Reshape(effIdx, {1, 1, selectedCount}, {1, 1, selectedCount - effSeq});
                 TileShape::Current().SetVecTile(1, 1, selectedCount);
                 Assemble(Assign(effIdx), {dstIdx, 0, 0}, topkRes);
@@ -624,14 +611,13 @@ void LightningIndexerImpl(
     }
 }
 
-void LightningIndexer(
-    const Tensor& idxQuery, const Tensor& idxQueryScale, const Tensor& idxKeyCache, const Tensor& idxKeyScale,
-    const Tensor& idxWeight, const Tensor& actSeqKey, const Tensor& blockTable, const int selectedCount,
-    Tensor& topkRes, LightningIndexerConfigs configs, const std::set<int>& unrollList)
+void LightningIndexer(const Tensor& idxQuery, const Tensor& idxQueryScale, const Tensor& idxKeyCache,
+                      const Tensor& idxKeyScale, const Tensor& idxWeight, const Tensor& actSeqKey,
+                      const Tensor& blockTable, const int selectedCount, Tensor& topkRes,
+                      LightningIndexerConfigs configs, const std::set<int>& unrollList)
 {
-    LightningIndexerImpl(
-        idxQuery, idxQueryScale, idxKeyCache, idxKeyScale, idxWeight, actSeqKey, blockTable, selectedCount, topkRes,
-        configs, unrollList);
+    LightningIndexerImpl(idxQuery, idxQueryScale, idxKeyCache, idxKeyScale, idxWeight, actSeqKey, blockTable,
+                         selectedCount, topkRes, configs, unrollList);
 }
 
 } // namespace npu::tile_fwk

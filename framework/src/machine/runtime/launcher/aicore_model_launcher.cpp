@@ -51,8 +51,8 @@ constexpr uint32_t AICORE_MODEL_NR_AIV = 48;
 constexpr uint32_t AICORE_MODEL_NR_VALID_AIC = 24;
 constexpr uint32_t AICORE_MODEL_NR_AICPU = 4;
 constexpr uint32_t AICORE_MODEL_SCHE_CPU_NUM = 3;
-constexpr int AICORE_MODEL_AICPU_THREAD_NUM =
-    MAX_LAUNCH_SCHEDULE_AICPU_NUM + static_cast<int>(dynamic::MAX_CONTROL_FLOW_AICPU_NUM);
+constexpr int AICORE_MODEL_AICPU_THREAD_NUM = MAX_LAUNCH_SCHEDULE_AICPU_NUM +
+                                              static_cast<int>(dynamic::MAX_CONTROL_FLOW_AICPU_NUM);
 
 static int GetSystemCpuCount()
 {
@@ -114,8 +114,8 @@ static void InitHostSimRegAddrArray(DevAscendProgram* devProg, int aicoreNum)
     }
 }
 
-static void AicoreModelWorker(
-    DeviceKernelArgs kArgs, int blockId, int phyId, int bindCpu, int nrValidAic, int scheCpuNum)
+static void AicoreModelWorker(DeviceKernelArgs kArgs, int blockId, int phyId, int bindCpu, int nrValidAic,
+                              int scheCpuNum)
 {
     char name[32] = {0};
     bool isAic = (blockId < nrValidAic);
@@ -127,7 +127,7 @@ static void AicoreModelWorker(
     }
     threadName = name;
     SetThreadAffinity(bindCpu, threadName);
-    
+
     HostCoreContext ctx;
     ctx.blockId = blockId;
     ctx.phyId = phyId;
@@ -174,7 +174,7 @@ static int AicoreModelLaunchOnce(DeviceKernelArgs& kArgs)
         const char* role = (runMode == RUN_SPLITTED_STREAM_CTRL) ? "ctrl" : "sche";
         int schedIdx = (runMode == RUN_SPLITTED_STREAM_CTRL) ? 0 : threadIndex;
         if (sprintf_s(name, sizeof(name), "aicore_model_%s_%d", role, schedIdx) < 0) {
-            DEV_WARN("sprintf_s failed, role: %s, schedIdx: %d", role, schedIdx);   
+            DEV_WARN("sprintf_s failed, role: %s, schedIdx: %d", role, schedIdx);
         }
         SetThreadAffinity(bindCpu, name);
         DeviceKernelArgs localArgs = kArgs;
@@ -207,9 +207,10 @@ static int AicoreModelLaunchOnce(DeviceKernelArgs& kArgs)
             t.join();
         }
     }
-    
+
     for (int result : aicpuResultList) {
-        if (result != 0) return result;
+        if (result != 0)
+            return result;
     }
     return 0;
 }
@@ -228,26 +229,26 @@ int AicoreModelLauncher::AicoreModelLaunchOnceWithHostTensorData(
     int rc = AicoreModelLaunchOnce(kArgs);
     return rc;
 }
-int AicoreModelLauncher::AicoreModelRunOnce(
-    Function* function, DevControlFlowCache* inputCtrlCache, const DeviceLauncherConfig& config)
+int AicoreModelLauncher::AicoreModelRunOnce(Function* function, DevControlFlowCache* inputCtrlCache,
+                                            const DeviceLauncherConfig& config)
 {
     auto& inputDataList = ProgramData::GetInstance().GetInputDataList();
     auto& outputDataList = ProgramData::GetInstance().GetOutputDataList();
     std::vector<DeviceTensorData> inputDeviceDataList;
     std::vector<DeviceTensorData> outputDeviceDataList;
     AicoreModelMemoryUtils memUtils;
-    std::tie(inputDeviceDataList, outputDeviceDataList) =
-        DeviceLauncher::BuildInputOutputFromHost(memUtils, inputDataList, outputDataList);
+    std::tie(inputDeviceDataList, outputDeviceDataList) = DeviceLauncher::BuildInputOutputFromHost(
+        memUtils, inputDataList, outputDataList);
     DevControlFlowCache* launchCtrlFlowCache = nullptr;
     if (inputCtrlCache != nullptr) {
-        launchCtrlFlowCache =
-            reinterpret_cast<DevControlFlowCache*>(memUtils.AllocZero(inputCtrlCache->usedCacheSize, nullptr));
+        launchCtrlFlowCache = reinterpret_cast<DevControlFlowCache*>(
+            memUtils.AllocZero(inputCtrlCache->usedCacheSize, nullptr));
         if (launchCtrlFlowCache) {
             MemcpyS(launchCtrlFlowCache, inputCtrlCache->usedCacheSize, inputCtrlCache, inputCtrlCache->usedCacheSize);
         }
     }
-    int rc = AicoreModelLaunchOnceWithHostTensorData(
-        function, inputDeviceDataList, outputDeviceDataList, launchCtrlFlowCache, memUtils, config);
+    int rc = AicoreModelLaunchOnceWithHostTensorData(function, inputDeviceDataList, outputDeviceDataList,
+                                                     launchCtrlFlowCache, memUtils, config);
     return rc;
 }
 
@@ -275,9 +276,11 @@ static void freeHostTensorData(const std::vector<DeviceTensorData>& hostDataList
         free(hostData.GetAddr());
     }
 }
-int AicoreModelLauncher::AicoreModelLaunchDeviceTensorData(
-    Function* function, const std::vector<DeviceTensorData>& inDevList, const std::vector<DeviceTensorData>& outDevList,
-    const DeviceLauncherConfig& config, DevControlFlowCache* ctrlCache)
+int AicoreModelLauncher::AicoreModelLaunchDeviceTensorData(Function* function,
+                                                           const std::vector<DeviceTensorData>& inDevList,
+                                                           const std::vector<DeviceTensorData>& outDevList,
+                                                           const DeviceLauncherConfig& config,
+                                                           DevControlFlowCache* ctrlCache)
 {
     AicoreModelMemoryUtils memUtils;
     ExchangeCaptureModeRelax();

@@ -87,8 +87,8 @@ std::string JoinString(const std::vector<T>& params, const std::string& sep)
 }
 
 template <typename T = std::string>
-std::string PrintParams(
-    const std::pair<std::string, std::string>& delimiter, const std::vector<T>& params, const std::string& conj)
+std::string PrintParams(const std::pair<std::string, std::string>& delimiter, const std::vector<T>& params,
+                        const std::string& conj)
 {
     std::ostringstream oss;
     oss << delimiter.first << JoinString<T>(params, conj) << delimiter.second;
@@ -109,11 +109,11 @@ std::string WrapParamByAngleBrackets(const std::vector<T>& params)
 
 std::vector<int64_t> NormalizeShape(const std::vector<int64_t>& shapeVec, unsigned dim);
 
-std::vector<int> NormalizeExpandAxes(
-    const std::vector<int64_t>& expandAxes, unsigned originalDimSize, unsigned targetDimSize);
+std::vector<int> NormalizeExpandAxes(const std::vector<int64_t>& expandAxes, unsigned originalDimSize,
+                                     unsigned targetDimSize);
 
-std::string FormatFloat(
-    const std::variant<int64_t, uint64_t, double>& v, DataType dtype = DataType::DT_FP32, int precision = 9);
+std::string FormatFloat(const std::variant<int64_t, uint64_t, double>& v, DataType dtype = DataType::DT_FP32,
+                        int precision = 9);
 
 std::string FormatScalarLiteral(const Element& scalar);
 

@@ -173,9 +173,9 @@ std::vector<typename Config::IndexType> make_topk_indices(const Config& cfg, uin
 
 // ----------------- 逻辑 index -> 物理 index 的核心函数 -----------------
 template <typename Config>
-typename Config::IndexType compute_physical_index(
-    typename Config::IndexType logical_index, const std::vector<typename Config::IndexType>& page_table,
-    const Config& cfg)
+typename Config::IndexType compute_physical_index(typename Config::IndexType logical_index,
+                                                  const std::vector<typename Config::IndexType>& page_table,
+                                                  const Config& cfg)
 {
     using IndexType = typename Config::IndexType;
 
@@ -192,10 +192,10 @@ typename Config::IndexType compute_physical_index(
 // buffer         : [num_buffer_tokens, hidden_dim] -> size = num_buffer_tokens * hidden_dim
 // 输出 result    : [topk_count, hidden_dim] -> size = topk_count * hidden_dim
 template <typename Config>
-void gather_golden(
-    const std::vector<typename Config::IndexType>& topk_indices,
-    const std::vector<typename Config::IndexType>& page_table, const std::vector<typename Config::DataType>& buffer,
-    const Config& cfg, std::vector<typename Config::DataType>& result, bool isTrans)
+void gather_golden(const std::vector<typename Config::IndexType>& topk_indices,
+                   const std::vector<typename Config::IndexType>& page_table,
+                   const std::vector<typename Config::DataType>& buffer, const Config& cfg,
+                   std::vector<typename Config::DataType>& result, bool isTrans)
 {
     using IndexType = typename Config::IndexType;
     // using DataType = typename Config::DataType;
@@ -267,16 +267,15 @@ class GatherInL1Test : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac {
 };
 
 template <typename Config>
-void ProgramSetting(
-    Tensor& src, std::vector<typename Config::DataType>& srcData, Tensor& offsets,
-    std::vector<typename Config::IndexType>& offsetsData, Tensor& unit, std::vector<float16>& unitData,
-    Tensor& pageTable, std::vector<typename Config::IndexType>& pageTableData, Tensor& dst, Tensor golden,
-    std::vector<typename Config::DataType>& goldenData, bool verify)
+void ProgramSetting(Tensor& src, std::vector<typename Config::DataType>& srcData, Tensor& offsets,
+                    std::vector<typename Config::IndexType>& offsetsData, Tensor& unit, std::vector<float16>& unitData,
+                    Tensor& pageTable, std::vector<typename Config::IndexType>& pageTableData, Tensor& dst,
+                    Tensor golden, std::vector<typename Config::DataType>& goldenData, bool verify)
 {
-    ProgramData::GetInstance().AppendInputs(
-        {RawTensorData::CreateTensor<float16>(src, srcData), RawTensorData::CreateTensor<int32_t>(offsets, offsetsData),
-         RawTensorData::CreateTensor<float16>(unit, unitData),
-         RawTensorData::CreateTensor<int32_t>(pageTable, pageTableData)});
+    ProgramData::GetInstance().AppendInputs({RawTensorData::CreateTensor<float16>(src, srcData),
+                                             RawTensorData::CreateTensor<int32_t>(offsets, offsetsData),
+                                             RawTensorData::CreateTensor<float16>(unit, unitData),
+                                             RawTensorData::CreateTensor<int32_t>(pageTable, pageTableData)});
     ProgramData::GetInstance().AppendOutputs({
         RawTensorData::CreateConstantTensor<float16>(dst, 0),
     });
@@ -288,9 +287,9 @@ void ProgramSetting(
 }
 
 template <typename Config>
-void GatherInL1Function(
-    const Tensor& src, const Tensor& offsets, const Tensor& unit, const Tensor& pageTable, Tensor& dst,
-    std::vector<typename Config::DataType> goldenData, Config& cfg, bool isB, bool isTrans)
+void GatherInL1Function(const Tensor& src, const Tensor& offsets, const Tensor& unit, const Tensor& pageTable,
+                        Tensor& dst, std::vector<typename Config::DataType> goldenData, Config& cfg, bool isB,
+                        bool isTrans)
 {
     FUNCTION("test", {src, offsets, unit, pageTable}, {dst})
     {
@@ -308,22 +307,22 @@ void GatherInL1Function(
 
             if (!isB) {
                 if (!isTrans) {
-                    auto a = experimental::GatherInL1<false, false>(
-                        dynSrc, dynOffsets, pageTable, cfg.block_size, cfg.hidden_dim);
+                    auto a = experimental::GatherInL1<false, false>(dynSrc, dynOffsets, pageTable, cfg.block_size,
+                                                                    cfg.hidden_dim);
                     dst = Matrix::Matmul(DT_FP16, a, dynUnit);
                 } else {
-                    auto a = experimental::GatherInL1<false, true>(
-                        dynSrc, dynOffsets, pageTable, cfg.block_size, cfg.hidden_dim);
+                    auto a = experimental::GatherInL1<false, true>(dynSrc, dynOffsets, pageTable, cfg.block_size,
+                                                                   cfg.hidden_dim);
                     dst = Matrix::Matmul(DT_FP16, a, dynUnit, true, false);
                 }
             } else {
                 if (!isTrans) {
-                    auto b = experimental::GatherInL1<true, false>(
-                        dynSrc, dynOffsets, pageTable, cfg.block_size, cfg.hidden_dim);
+                    auto b = experimental::GatherInL1<true, false>(dynSrc, dynOffsets, pageTable, cfg.block_size,
+                                                                   cfg.hidden_dim);
                     dst = Matrix::Matmul(DT_FP16, dynUnit, b, false, false);
                 } else {
-                    auto b = experimental::GatherInL1<true, true>(
-                        dynSrc, dynOffsets, pageTable, cfg.block_size, cfg.hidden_dim);
+                    auto b = experimental::GatherInL1<true, true>(dynSrc, dynOffsets, pageTable, cfg.block_size,
+                                                                  cfg.hidden_dim);
                     dst = Matrix::Matmul(DT_FP16, dynUnit, b, false, true);
                 }
             }
@@ -348,9 +347,8 @@ void GatherInL1Function(
 }
 
 template <typename Config>
-void GatherInL1Execute(
-    const Shape& srcShapes, const Shape& offsetsShapes, const Shape& pageTableShapes, const Shape& dstShapes,
-    const Shape& unitShape, bool verify, Config& cfg, bool isB, bool isTrans)
+void GatherInL1Execute(const Shape& srcShapes, const Shape& offsetsShapes, const Shape& pageTableShapes,
+                       const Shape& dstShapes, const Shape& unitShape, bool verify, Config& cfg, bool isB, bool isTrans)
 {
     auto TotalSize = [](const Shape& shapes) {
         size_t res = 1;
@@ -383,8 +381,8 @@ void GatherInL1Execute(
     std::vector<typename Config::DataType> goldenData;
     gather_golden<Config>(offsetsData, pageTableData, srcData, cfg, goldenData, isTrans);
     std::cout << "simu finished" << std::endl;
-    ProgramSetting<Config>(
-        src, srcData, offsets, offsetsData, unit, unitData, pageTable, pageTableData, dst, golden, goldenData, verify);
+    ProgramSetting<Config>(src, srcData, offsets, offsetsData, unit, unitData, pageTable, pageTableData, dst, golden,
+                           goldenData, verify);
     GatherInL1Function<Config>(src, offsets, unit, pageTable, dst, goldenData, cfg, isB, isTrans);
 }
 

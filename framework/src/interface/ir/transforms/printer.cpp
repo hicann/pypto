@@ -146,8 +146,8 @@ void PrintIRNodeWithVisitor(IRVisitor& visitor, std::ostream& stream, const IRNo
     }
 }
 
-void PrintChildExprWithParens(
-    IRVisitor& visitor, std::ostream& stream, const ExprPtr& parent, const ExprPtr& child, bool is_left)
+void PrintChildExprWithParens(IRVisitor& visitor, std::ostream& stream, const ExprPtr& parent, const ExprPtr& child,
+                              bool is_left)
 {
     bool needs_parens = NeedsParensForPrint(parent, child, is_left);
     if (needs_parens) {
@@ -174,9 +174,8 @@ void PrintReturnStmtValues(IRVisitor& visitor, std::ostream& stream, const std::
     }
 }
 
-void PrintFunctionReturnAnnotation(
-    std::ostream& stream, const std::vector<TypePtr>& return_types,
-    const std::function<std::string(const TypePtr&)>& print_type)
+void PrintFunctionReturnAnnotation(std::ostream& stream, const std::vector<TypePtr>& return_types,
+                                   const std::function<std::string(const TypePtr&)>& print_type)
 {
     if (!return_types.empty()) {
         stream << " -> ";
@@ -281,8 +280,8 @@ void PrintIterArgNames(std::ostringstream& stream, const std::vector<IterArgPtr>
 }
 
 template <typename VisitExprFn>
-void PrintIterArgInitValues(
-    std::ostringstream& stream, const std::vector<IterArgPtr>& iter_args, const VisitExprFn& visit_expr)
+void PrintIterArgInitValues(std::ostringstream& stream, const std::vector<IterArgPtr>& iter_args,
+                            const VisitExprFn& visit_expr)
 {
     stream << "init_values=(";
     for (size_t i = 0; i < iter_args.size(); ++i) {
@@ -297,8 +296,8 @@ void PrintIterArgInitValues(
 }
 
 template <typename VisitExprFn>
-void PrintForRangeHeader(
-    std::ostringstream& stream, const std::string& prefix, const ForStmtPtr& op, const VisitExprFn& visit_expr)
+void PrintForRangeHeader(std::ostringstream& stream, const std::string& prefix, const ForStmtPtr& op,
+                         const VisitExprFn& visit_expr)
 {
     stream << "for " << op->loopVar_->name_;
     if (!op->iterArgs_.empty()) {
@@ -365,8 +364,8 @@ void PrintForRangeHeader(
 }
 
 template <typename VisitExprFn>
-void PrintWhileIterArgsHeader(
-    std::ostringstream& stream, const std::string& prefix, const WhileStmtPtr& op, const VisitExprFn& visit_expr)
+void PrintWhileIterArgsHeader(std::ostringstream& stream, const std::string& prefix, const WhileStmtPtr& op,
+                              const VisitExprFn& visit_expr)
 {
     stream << "for ";
     PrintIterArgNames(stream, op->iterArgs_);
@@ -551,7 +550,8 @@ std::string IRPrinter::Print(const TypePtr& type)
 std::string IRPrinter::GetIndent() const { return std::string(static_cast<size_t>(indent_ * 4), ' '); }
 
 // Expression visitors - reuse precedence logic from base printer
-void IRPrinter::VisitExpr_(const VarPtr& op) {
+void IRPrinter::VisitExpr_(const VarPtr& op)
+{
     if (auto type = As<LogicalTensorType>(op->GetType())) {
         stream_ << DumpTensorVar(op);
     } else {
@@ -679,8 +679,8 @@ void IRPrinter::PrintKwargValue(const std::string& key, const std::any& value)
         }
         stream_ << "]";
     } else {
-        INTERNAL_CHECK(false) << "Unsupported kwarg value type for key '" << key << "': "
-                              << DemangleTypeName(value.type().name());
+        INTERNAL_CHECK(false) << "Unsupported kwarg value type for key '" << key
+                              << "': " << DemangleTypeName(value.type().name());
     }
 }
 

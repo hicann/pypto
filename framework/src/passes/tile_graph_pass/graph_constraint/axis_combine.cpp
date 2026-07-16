@@ -62,26 +62,25 @@ inline int GetExpandDim(const std::vector<int64_t>& lhsShape, const std::vector<
     return -1;
 }
 
-LogicalTensorPtr AxisCombine::CreateAlignedTensor(
-    const LogicalTensorPtr& srcTensor, const std::vector<int64_t>& alignedShape)
+LogicalTensorPtr AxisCombine::CreateAlignedTensor(const LogicalTensorPtr& srcTensor,
+                                                  const std::vector<int64_t>& alignedShape)
 {
-    auto alignedTensor = irBuilder_.CreateTensorVar(
-        srcTensor->Datatype(), alignedShape, std::vector<SymbolicScalar>{}, srcTensor->Format());
+    auto alignedTensor = irBuilder_.CreateTensorVar(srcTensor->Datatype(), alignedShape, std::vector<SymbolicScalar>{},
+                                                    srcTensor->Format());
     alignedTensor->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
     return alignedTensor;
 }
 
-static void UpdateOperand(
-    Operation& op, size_t idx, const LogicalTensorPtr& oldTensor, const LogicalTensorPtr& newTensor,
-    std::vector<LogicalTensorPtr>& inputTensor)
+static void UpdateOperand(Operation& op, size_t idx, const LogicalTensorPtr& oldTensor,
+                          const LogicalTensorPtr& newTensor, std::vector<LogicalTensorPtr>& inputTensor)
 {
     oldTensor->RemoveConsumer(op);
     op.ReplaceIOperand(idx, newTensor);
     inputTensor[idx] = newTensor;
 }
 
-static std::vector<SymbolicScalar> BuildAlignedValidShape(
-    IRBuilder& irBuilder, LogicalTensors& inputTensor, int idx, Shape& shape)
+static std::vector<SymbolicScalar> BuildAlignedValidShape(IRBuilder& irBuilder, LogicalTensors& inputTensor, int idx,
+                                                          Shape& shape)
 {
     int expandDim = inputTensor[idx]->GetShape().size() - 1;
     auto dynValidShape = CommonUtils::CreateConstIntVector(shape);
@@ -105,8 +104,7 @@ static void UpdateBrcOperandAfterExpand(Operation& op)
     if (!brcOperand.empty()) {
         brcOperand.back() = 0;
     }
-    bool anyBrc = std::any_of(brcOperand.begin(), brcOperand.end(),
-                              [](int64_t v) { return v != 0; });
+    bool anyBrc = std::any_of(brcOperand.begin(), brcOperand.end(), [](int64_t v) { return v != 0; });
     if (anyBrc) {
         op.SetAttribute(OpAttributeKey::brcOperand, brcOperand);
     } else {
@@ -146,7 +144,7 @@ Status AxisCombine::AlignBroadCastOpInputs([[maybe_unused]] Function& function, 
             auto& expand = irBuilder_.CreateTensorOpStmt(function, Opcode::OP_EXPAND, {srcTensor}, {alignedTensor});
             auto validShape = BuildAlignedValidShape(irBuilder_, inputTensor, idx, alignedShape);
             expand.SetAttribute(OpAttributeKey::expandDims,
-                std::vector<int>{static_cast<int>(inputTensor[idx]->GetShape().size() - 1)});
+                                std::vector<int>{static_cast<int>(inputTensor[idx]->GetShape().size() - 1)});
             expand.SetAttribute(OP_ATTR_PREFIX + "validShape", validShape);
             alignedTensor->UpdateDynValidShape(validShape);
             expand.UpdateSubgraphID(op.GetSubgraphID());
@@ -174,9 +172,8 @@ Status AxisCombine::Process(Function& function)
     for (auto& op : function.Operations()) {
         if (InsertCondition(op.GetOpcode()) && op.GetIOperands().size() == INPUT_SIZE) {
             if (AlignBroadCastOpInputs(function, op) != SUCCESS) {
-                APASS_LOG_ERROR_F(
-                    Elements::Operation, "operation %d's aligned faild. %s", op.GetOpMagic(),
-                    op.GetOpcodeStr().c_str());
+                APASS_LOG_ERROR_F(Elements::Operation, "operation %d's aligned faild. %s", op.GetOpMagic(),
+                                  op.GetOpcodeStr().c_str());
                 return FAILED;
             }
         }

@@ -32,8 +32,8 @@ bool RescheduleUtils::isAllocOp(Operation* op)
 
 // vector size == 2
 // 这里in_graph和out_graph只考虑了数据依赖，需要确认控制依赖是不是也要加入到in_graph和out_graph中
-std::vector<std::vector<std::vector<int>>> RescheduleUtils::GetInOutGraphs(
-    const std::vector<Operation*>& opList, int functionmagic)
+std::vector<std::vector<std::vector<int>>> RescheduleUtils::GetInOutGraphs(const std::vector<Operation*>& opList,
+                                                                           int functionmagic)
 {
     std::vector<std::vector<int>> inGraph;
     std::vector<std::vector<int>> outGraph;
@@ -204,8 +204,8 @@ void RescheduleUtils::EraseOpsBelongToFunc(std::set<Operation*, LogicalTensor::C
     }
 }
 
-void RescheduleUtils::ClearInputConsProd(
-    Operation& op, Function* funcPtr, const std::unordered_set<LogicalTensorPtr>& incastSet)
+void RescheduleUtils::ClearInputConsProd(Operation& op, Function* funcPtr,
+                                         const std::unordered_set<LogicalTensorPtr>& incastSet)
 {
     for (auto& inOperand : op.GetIOperands()) {
         if (incastSet.count(inOperand) == 0) {
@@ -217,8 +217,8 @@ void RescheduleUtils::ClearInputConsProd(
     }
 }
 
-void RescheduleUtils::ClearOutputConsProd(
-    Operation& op, Function* funcPtr, const std::unordered_set<LogicalTensorPtr>& outcastSet)
+void RescheduleUtils::ClearOutputConsProd(Operation& op, Function* funcPtr,
+                                          const std::unordered_set<LogicalTensorPtr>& outcastSet)
 {
     for (auto& outOperand : op.GetOOperands()) {
         auto& prods = outOperand->GetProducers();

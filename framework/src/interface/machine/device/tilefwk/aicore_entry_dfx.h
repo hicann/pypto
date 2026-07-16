@@ -42,14 +42,14 @@ struct AicoreDevTaskMetric {
 struct ExecuteContext {
     __gm__ KernelArgs* args;
     int32_t blockIdx;
-    volatile __gm__ ParallelDevTask *parallelDevTask{nullptr};
+    volatile __gm__ ParallelDevTask* parallelDevTask{nullptr};
     uint32_t curLeafTaskParallelIdx{0};
     uint32_t seqNo{0};
     uint32_t profLevel{0};
     struct CachedDevTask {
         uint32_t seqNo{0};
-        __gm__ DynFuncHeader *header{nullptr};
-        __gm__ DynFuncData *funcDataList{nullptr};
+        __gm__ DynFuncHeader* header{nullptr};
+        __gm__ DynFuncData* funcDataList{nullptr};
         __gm__ DynFuncBin* cceBinary{nullptr};
     } cachedDevTasks[npu::tile_fwk::SCH_DEVTASK_MAX_PARALLELISM];
     uint64_t lastTaskFinishCycle{0};
@@ -85,8 +85,7 @@ INLINE void SetLastWordStatus(__gm__ KernelArgs* args, int64_t val)
     dcci(args->shakeBuffer, SINGLE_CACHE_LINE, CACHELINE_OUT);
 }
 
-INLINE void PerfTraceRecord(
-    uint32_t devTaskId, __gm__ AicoreMetric* metric, AicorePerfTrace type, uint64_t cycle = 0)
+INLINE void PerfTraceRecord(uint32_t devTaskId, __gm__ AicoreMetric* metric, AicorePerfTrace type, uint64_t cycle = 0)
 {
     if (metric != nullptr) {
         uint64_t cnt = metric->cnt;
@@ -95,7 +94,7 @@ INLINE void PerfTraceRecord(
             perf->type = static_cast<uint64_t>(type);
             perf->aicoreDevTimeStamp = (cycle == 0) ? get_sys_cnt() : cycle;
             perf->devTaskIdx = static_cast<uint64_t>(devTaskId);
-            
+
             metric->cnt = cnt + 1;
         }
     }
@@ -134,21 +133,19 @@ INLINE void AddMetricStatistic(ExecuteContext* ctx, uint32_t seqNo, uint32_t tas
 INLINE void DfxProcWhenCoreExit(ExecuteContext* ctx, __gm__ KernelArgs* args, __gm__ Metrics* metric)
 {
     PerfTraceRecord(INVALID_DEV_TASK_ID, ctx->aicoreDevTaskMetric.devTaskMetric, PERF_TRACE_CORE_WAIT_EXIT_NOTIFY);
-    if (unlikely(
-            args->taskEntry.reserved[0] == PRO_LEVEL2 || args->taskEntry.reserved[0] == PRO_LEVEL1 ||
-            ctx->aicoreDevTaskMetric.devTaskMetricEnable)) {
+    if (unlikely(args->taskEntry.reserved[0] == PRO_LEVEL2 || args->taskEntry.reserved[0] == PRO_LEVEL1 ||
+                 ctx->aicoreDevTaskMetric.devTaskMetricEnable)) {
         metric->turnNum++;
         FlushMetricStatistic(args);
     }
 }
 
-INLINE void DfxProcWhenDevTaskStop(ExecuteContext *ctx, __gm__ KernelArgs *args, __gm__ Metrics* metric)
+INLINE void DfxProcWhenDevTaskStop(ExecuteContext* ctx, __gm__ KernelArgs* args, __gm__ Metrics* metric)
 {
     if (ctx->lastTaskFinishCycle > 0) {
-        PerfTraceRecord(
-            ctx->SeqNo(), ctx->aicoreDevTaskMetric.devTaskMetric, PERF_TRACE_CORE_DEV_TASK_LEAF_TASK_EXEC, ctx->lastTaskFinishCycle);
+        PerfTraceRecord(ctx->SeqNo(), ctx->aicoreDevTaskMetric.devTaskMetric, PERF_TRACE_CORE_DEV_TASK_LEAF_TASK_EXEC,
+                        ctx->lastTaskFinishCycle);
     }
     (void)metric;
     (void)args;
 }
-

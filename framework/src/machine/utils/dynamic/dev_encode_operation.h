@@ -60,13 +60,13 @@ struct DevAscendFunctionCallOperandUse {
 
     DevAscendFunctionCallOperandUse() = default;
     DevAscendFunctionCallOperandUse(int operationIdx_, int offsetAttrIdx_, int shapeAttrIdx_,
-                                      CellMatchOpType opType_ = CellMatchOpType::READ,
-                                      Opcode opCode_ = Opcode::OP_UNKNOWN)
-         : operationIdx(operationIdx_),	 
-           offsetAttrIdx(offsetAttrIdx_),	 
-           shapeAttrIdx(shapeAttrIdx_),	 
-           opType(opType_),
-           opCode(opCode_)
+                                    CellMatchOpType opType_ = CellMatchOpType::READ,
+                                    Opcode opCode_ = Opcode::OP_UNKNOWN)
+        : operationIdx(operationIdx_),
+          offsetAttrIdx(offsetAttrIdx_),
+          shapeAttrIdx(shapeAttrIdx_),
+          opType(opType_),
+          opCode(opCode_)
     {}
 };
 

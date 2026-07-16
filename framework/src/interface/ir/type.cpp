@@ -34,7 +34,6 @@ ShapedType::ShapedType(DataType dtype, const std::vector<int64_t>& shape, std::o
     }
 }
 
-
 TupleType::TupleType(std::vector<TypePtr> types) : types_(std::move(types)) {}
 } // namespace ir
 } // namespace pypto

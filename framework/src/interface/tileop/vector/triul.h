@@ -35,8 +35,8 @@ TILEOP void TTriUL(DstTensor dst, SrcTensor src, int diagonal)
 
     auto srcAddr = (__ubuf__ typename SrcTensor::Type*)((uint64_t)(src.GetAddr()));
     auto dstAddr = (__ubuf__ typename DstTensor::Type*)((uint64_t)(dst.GetAddr()));
-    using dstTileDefine =
-        pto::Tile<pto::TileType::Vec, typename DstTensor::Type, dstTileH, dstTileW, pto::BLayout::RowMajor, -1, -1>;
+    using dstTileDefine = pto::Tile<pto::TileType::Vec, typename DstTensor::Type, dstTileH, dstTileW,
+                                    pto::BLayout::RowMajor, -1, -1>;
     dstTileDefine dstTile(shape3, shape4);
     dstTileDefine srcTile(shape3, shape4);
     for (size_t n0Index = 0; n0Index < shape0; ++n0Index) {

@@ -190,8 +190,8 @@ std::vector<std::shared_ptr<SchemaNode>> SchemaNode::ParseSchema(const std::vect
     return nodeList;
 }
 
-static void BuildSchemaDict(
-    std::map<std::string, std::vector<std::shared_ptr<SchemaNode>>>& dict, const std::shared_ptr<SchemaNode>& node)
+static void BuildSchemaDict(std::map<std::string, std::vector<std::shared_ptr<SchemaNode>>>& dict,
+                            const std::shared_ptr<SchemaNode>& node)
 {
     dict[node->GetName()].push_back(node);
     for (auto& child : *node) {

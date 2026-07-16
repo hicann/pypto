@@ -56,8 +56,8 @@ TEST_F(TestCodegenDynPairProd, PairProdLayout)
             output = Prod(input_a, -1, true);
         }
     }
-    auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX +
+                                                                HIDDEN_FUNC_SUFFIX);
 
     std::string res = GenCodeByFunction(*function);
     const std::string expect = R"(TPairProd(ubTensor_4, ubTensor_0, ubTensor_2);)";

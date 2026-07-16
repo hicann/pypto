@@ -19,7 +19,7 @@ using namespace npu::tile_fwk;
 
 class TestCodeGenKirin9030Transpose : public CodegenTestLiteNPU {
 public:
-    TestCodeGenKirin9030Transpose() : CodegenTestLiteNPU("Kirin9030"){};
+    TestCodeGenKirin9030Transpose() : CodegenTestLiteNPU("Kirin9030") {};
 };
 
 TEST_F(TestCodeGenKirin9030Transpose, test_transpose_fp16_001)

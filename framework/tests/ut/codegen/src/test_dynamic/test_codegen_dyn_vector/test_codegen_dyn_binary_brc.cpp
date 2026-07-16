@@ -56,8 +56,8 @@ TEST_F(TestCodegenDynBinaryBrc, TestMulDynamic)
             output = Mul(input_a, input_c);
         }
     }
-    auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX +
+                                                                HIDDEN_FUNC_SUFFIX);
 
     (void)GenCodeByFunction(*function);
 }

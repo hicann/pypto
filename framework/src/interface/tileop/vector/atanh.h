@@ -9,9 +9,9 @@
  */
 
 /*!
-* \file atanh.h
-* \brief atanh(x) = 0.5 * ln((1 + x) / (1 - x))
-*/
+ * \file atanh.h
+ * \brief atanh(x) = 0.5 * ln((1 + x) / (1 - x))
+ */
 
 #ifndef TILEOP_TILE_OPERATOR_ATANH__H
 #define TILEOP_TILE_OPERATOR_ATANH__H
@@ -38,13 +38,12 @@ TILEOP void TAtanh(T0 dst, T1 src, T2 tmp)
     constexpr auto tileW = TileOp::GetTensorTileShapeDim<T0, DIM_5TH, MAX_DIMS>();
     constexpr auto dstTypeSize = sizeof(typename T0::Type);
 
-    constexpr auto tileShapeSize =
-        TileOp::GetAnyAxisMergeResult<DIM_1ST, Std::tuple_size<typename T0::TileShape>::value, typename T0::TileShape>();
+    constexpr auto tileShapeSize = TileOp::GetAnyAxisMergeResult<
+        DIM_1ST, Std::tuple_size<typename T0::TileShape>::value, typename T0::TileShape>();
 
-    using DataTileDefine =
-        pto::Tile<pto::TileType::Vec, typename T0::Type, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
-    using MaskTileDefine =
-        pto::Tile<pto::TileType::Vec, uint8_t, tileH, tileW * 4, pto::BLayout::RowMajor, -1, -1>;
+    using DataTileDefine = pto::Tile<pto::TileType::Vec, typename T0::Type, tileH, tileW, pto::BLayout::RowMajor, -1,
+                                     -1>;
+    using MaskTileDefine = pto::Tile<pto::TileType::Vec, uint8_t, tileH, tileW * 4, pto::BLayout::RowMajor, -1, -1>;
 
     DataTileDefine dstTile(dstShape3, dstShape4);
     DataTileDefine srcTile(dstShape3, dstShape4);
@@ -100,7 +99,7 @@ TILEOP void TAtanh(T0 dst, T1 src, T2 tmp)
 
                 pto::TDIV(tmp2Tile, dstTile, tmp1Tile);
                 SyncV();
-                
+
                 pto::TABS(dstTile, srcTile);
                 SyncV();
 

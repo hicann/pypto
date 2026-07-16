@@ -31,9 +31,7 @@ Vector op默认对尾轴做32B对齐
 */
 class PadLocalBuffer : public Pass {
 public:
-    explicit PadLocalBuffer(std::string name = "PadLocalBuffer")
-        : Pass(name)
-    {}
+    explicit PadLocalBuffer(std::string name = "PadLocalBuffer") : Pass(name) {}
     ~PadLocalBuffer() override = default;
 
 private:
@@ -49,25 +47,24 @@ private:
     void PadVector256(Operation& op, LogicalTensorPtr& in, bool needRowPad);
     void ProcessBroadcast(Operation& op, int64_t blockPadding);
     void PrepareBroadcast(Function& function);
-    void PadVectorForAxisCombine(
-        Operation& op, LogicalTensorPtr& in, std::unordered_set<std::shared_ptr<RawTensor>>& visitedRaw);
+    void PadVectorForAxisCombine(Operation& op, LogicalTensorPtr& in,
+                                 std::unordered_set<std::shared_ptr<RawTensor>>& visitedRaw);
     bool IsUb2L1CopyOp(const Operation& op);
     bool HandleUb2L1CopyOp(Operation& op, LogicalTensorPtr& in);
     bool ShouldSkipVectorPad(Operation& op, LogicalTensorPtr& in);
     bool IsElementwiseLikeOp(OpCalcType calcType, Operation* producerOp) const;
-    void DoBrcbOpPadding(
-        Operation& op, LogicalTensorPtr& in, size_t lastIdx, int64_t paddingValue,
-        std::unordered_set<std::shared_ptr<RawTensor>>& visitedRaw);
+    void DoBrcbOpPadding(Operation& op, LogicalTensorPtr& in, size_t lastIdx, int64_t paddingValue,
+                         std::unordered_set<std::shared_ptr<RawTensor>>& visitedRaw);
     void DoElementwiseLikePadding(const Operation& op, LogicalTensorPtr& in, size_t lastIdx, int64_t paddingValue);
     bool IsMatmul(const LogicalTensorPtr& tensor) const;
     bool IsVector(const LogicalTensorPtr& tensor) const;
     void PadSingleTensor(Operation& op, LogicalTensorPtr& tensor,
-        std::unordered_set<std::shared_ptr<RawTensor>>& visitedRaw, bool needRowPad = false);
+                         std::unordered_set<std::shared_ptr<RawTensor>>& visitedRaw, bool needRowPad = false);
     void DoPadding(Function& function);
     void ProcessReduceForAxisCombine(Operation& op, LogicalTensorPtr& in, int64_t paddingValue);
     int64_t AlignedRawTensorIfNeed(LogicalTensorPtr& in, int64_t pos, const int64_t base);
-    bool IsInputDataType(
-        const Operation& op, const LogicalTensorPtr& in, const std::unordered_set<DataType>& targetTypes) const;
+    bool IsInputDataType(const Operation& op, const LogicalTensorPtr& in,
+                         const std::unordered_set<DataType>& targetTypes) const;
     // 设置原始 rawshape（替代 RawTensor::oriRawshape = rawshape）
     Shape& SetOriRawshape(LogicalTensorPtr& in);
     // 获取已保存的原始 rawshape

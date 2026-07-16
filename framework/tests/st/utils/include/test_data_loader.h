@@ -122,9 +122,8 @@ public:
     int GetInputNameToIdx(const std::string& name) { return inputNameToIdx.at(name); }
     int GetOutputNameToIdx(const std::string& name) { return outputNameToIdx.at(name); }
 
-    Tensor& InputTensorCheck(
-        const std::string& name, const DataType dtype, const Shape& shape,
-        const TileOpFormat format = TileOpFormat::TILEOP_ND)
+    Tensor& InputTensorCheck(const std::string& name, const DataType dtype, const Shape& shape,
+                             const TileOpFormat format = TileOpFormat::TILEOP_ND)
     {
         // 用户传入需要的input tensor的DataType,Shape,weightFormat进行校验，正确返回tensor&
 
@@ -161,9 +160,8 @@ public:
         return inputTensors.at(name);
     }
 
-    Tensor& OutputTensorCheck(
-        const std::string& name, const DataType dtype, const Shape& shape,
-        const TileOpFormat format = TileOpFormat::TILEOP_ND)
+    Tensor& OutputTensorCheck(const std::string& name, const DataType dtype, const Shape& shape,
+                              const TileOpFormat format = TileOpFormat::TILEOP_ND)
     {
         // 用户传入需要的output tensor的DataType,Shape,weightFormat进行校验，正确返回tensor&
 
@@ -269,9 +267,9 @@ public:
     }
 
     // 创建 Tensor 函数
-    static std::pair<Tensor, RawTensorDataPtr> CreateTensor(
-        const std::string& name, const std::string& dtype, const Shape& shape, const std::string& fileName,
-        const TileOpFormat format = TileOpFormat::TILEOP_ND)
+    static std::pair<Tensor, RawTensorDataPtr> CreateTensor(const std::string& name, const std::string& dtype,
+                                                            const Shape& shape, const std::string& fileName,
+                                                            const TileOpFormat format = TileOpFormat::TILEOP_ND)
     {
         Tensor t(CostModel::ToDataType(const_cast<string&>(dtype)), shape, name, format);
         auto dataPtr = CreateHelper(dtype, t, fileName);
@@ -382,9 +380,8 @@ private:
                 if (IsValidWeightFormat(value)) {
                     opFormat = static_cast<TileOpFormat>(value);
                 } else {
-                    throw std::runtime_error(
-                        "Undefined 'opFormat' value in tensor configuration: '" + tensorName +
-                        "': " + std::to_string(value));
+                    throw std::runtime_error("Undefined 'opFormat' value in tensor configuration: '" + tensorName +
+                                             "': " + std::to_string(value));
                 }
             } else {
                 throw std::runtime_error("Missing or invalid 'opFormat' in tensor configuration: " + tensorName);
@@ -446,7 +443,7 @@ private:
     std::unordered_map<std::string, int> inputNameToIdx;               // 用于查找 tensor 对应的数据
     std::vector<std::reference_wrapper<const Tensor>> inputTensorList; // 保证 TensorList 和 DataList 顺序一致
     std::vector<RawTensorDataPtr> inputDataList;
-    std::unordered_map<std::string, int> outputNameToIdx;              // 用于查找 tensor 对应的数据
+    std::unordered_map<std::string, int> outputNameToIdx; // 用于查找 tensor 对应的数据
     std::vector<std::reference_wrapper<const Tensor>> outputTensorList;
     std::vector<RawTensorDataPtr> outputDataList;
 };

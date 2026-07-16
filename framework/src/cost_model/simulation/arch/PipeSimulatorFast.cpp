@@ -310,7 +310,7 @@ uint64_t PipeSimulatorFast<PostSimulator>::Simulate(const TileOpPtr& tileOp)
     }
 
     ASSERT(CostModel::ForwardSimErrorScene::SHAPE_INVALID, !shape.empty() && !shape[0].empty()) << "[SIMULATION]: "
-                                                << "shape is invalid";
+                                                                                                << "shape is invalid";
 
     int shapeSize = GetMinShapeSize(shape);
     int shapeCnt = GetShapeCntSize(shape);
@@ -388,11 +388,11 @@ uint64_t PipeSimulatorFast<PostSimulator>::PostSimulate(const TileOpPtr& tileOp)
 }
 
 template <typename PostSimulator>
-uint64_t PipeSimulatorFast<PostSimulator>::SimulateForPass(
-    const std::string& op, const std::vector<std::vector<int>>& shape, DataType dtype)
+uint64_t PipeSimulatorFast<PostSimulator>::SimulateForPass(const std::string& op,
+                                                           const std::vector<std::vector<int>>& shape, DataType dtype)
 {
     ASSERT(CostModel::ForwardSimErrorScene::SHAPE_INVALID, !shape.empty() && !shape[0].empty()) << "[SIMULATION]: "
-                                                << "shape is invalid";
+                                                                                                << "shape is invalid";
     int shapeSize = GetMinShapeSize(shape);
     int shapeCnt = GetShapeCntSize(shape);
     int cycle = CalcCyclesCommon(op, shapeSize * shapeCnt, dtype);
@@ -400,8 +400,9 @@ uint64_t PipeSimulatorFast<PostSimulator>::SimulateForPass(
 }
 
 template <typename PostSimulator>
-uint64_t PipeSimulatorFast<PostSimulator>::PostSimulateForPass(
-    const std::string& op, const std::vector<std::vector<int>>& shape, DataType dtype)
+uint64_t PipeSimulatorFast<PostSimulator>::PostSimulateForPass(const std::string& op,
+                                                               const std::vector<std::vector<int>>& shape,
+                                                               DataType dtype)
 {
     PostSimulator psm;
     auto opLatency = psm.GetOpLatency();
@@ -425,11 +426,13 @@ uint64_t PipeSimulatorFast<PostSimulator>::PostSimulateForPass(
     return latency;
 }
 
-extern "C" __attribute__((visibility("default"))) int64_t GetCyclesForPass(
-    const std::string& op, const std::vector<std::vector<int>>& shape, DataType dtype)
+extern "C" __attribute__((visibility("default"))) int64_t GetCyclesForPass(const std::string& op,
+                                                                           const std::vector<std::vector<int>>& shape,
+                                                                           DataType dtype)
 {
-    std::string archType = 
-        config::GetPlatformConfig("device_platform", "ASCEND_950PR_9579") == "ASCEND_950PR_9579" ? "A5" : "A2A3";
+    std::string archType = config::GetPlatformConfig("device_platform", "ASCEND_950PR_9579") == "ASCEND_950PR_9579" ?
+                               "A5" :
+                               "A2A3";
     auto simPtr = CreateSimulator(archType);
     return simPtr->PostSimulateForPass(op, shape, dtype);
 }

@@ -18,18 +18,12 @@
 #include "conv_utils.h"
 
 template <bool isConv3D, typename srcTensorType>
-INLINE void SetConvTileParams(
-    srcTensorType& l1,
-    const uint8_t* padValues,
-    const int64_t& filterH, const int64_t& filterW,
-    const int64_t& dilationH, const int64_t& dilationW,
-    const int64_t& strideH, const int64_t& strideW,
-    const int64_t& padValue,
-    const int64_t& mL0, const int64_t& kL0,
-    const int64_t& shape1, const int64_t& shape2,
-    const int64_t& shape3, const int64_t& shape4,
-    const int64_t& c0Size,
-    const int64_t& repeatStride, const int64_t& repeatTime, const int64_t& dstStride)
+INLINE void SetConvTileParams(srcTensorType& l1, const uint8_t* padValues, const int64_t& filterH,
+                              const int64_t& filterW, const int64_t& dilationH, const int64_t& dilationW,
+                              const int64_t& strideH, const int64_t& strideW, const int64_t& padValue,
+                              const int64_t& mL0, const int64_t& kL0, const int64_t& shape1, const int64_t& shape2,
+                              const int64_t& shape3, const int64_t& shape4, const int64_t& c0Size,
+                              const int64_t& repeatStride, const int64_t& repeatTime, const int64_t& dstStride)
 {
     l1.SetPadListArray(padValues);
     l1.SetFilterH(filterH);
@@ -59,11 +53,11 @@ INLINE void SetConvTileParams(
 }
 
 template <bool isConv3D, typename T, typename U>
-TILEOP void TLoad3D(
-    T& dst, U& src, const int64_t& mPos, const int64_t& kPos, const int64_t& padLeft, const int64_t& padRight,
-    const int64_t& padTop, const int64_t& padBottom, const int64_t& padValue, const int64_t& filterH,
-    const int64_t& filterW, const int64_t& dilationH, const int64_t& dilationW, const int64_t& strideH,
-    const int64_t& strideW, const int64_t& repeatStride, const int64_t& repeatTime, const int64_t& dstStride)
+TILEOP void TLoad3D(T& dst, U& src, const int64_t& mPos, const int64_t& kPos, const int64_t& padLeft,
+                    const int64_t& padRight, const int64_t& padTop, const int64_t& padBottom, const int64_t& padValue,
+                    const int64_t& filterH, const int64_t& filterW, const int64_t& dilationH, const int64_t& dilationW,
+                    const int64_t& strideH, const int64_t& strideW, const int64_t& repeatStride,
+                    const int64_t& repeatTime, const int64_t& dstStride)
 {
     // 2D： n c1 h w c0
     // 3D： n d c1 h w
@@ -89,12 +83,10 @@ TILEOP void TLoad3D(
     using dstTensor = pto::TileLeft<typename T::Type, staticML0, staticKL0, -1, -1>;
     dstTensor l0(dstStride, kL0);
 
-    uint8_t values[4] = {
-        static_cast<uint8_t>(padLeft), static_cast<uint8_t>(padRight), static_cast<uint8_t>(padTop),
-        static_cast<uint8_t>(padBottom)};
-    SetConvTileParams<isConv3D>(
-        l1, values, filterH, filterW, dilationH, dilationW, strideH, strideW, padValue, mL0, kL0,
-        shape1, shape2, shape3, shape4, c0Size, repeatStride, repeatTime, dstStride);
+    uint8_t values[4] = {static_cast<uint8_t>(padLeft), static_cast<uint8_t>(padRight), static_cast<uint8_t>(padTop),
+                         static_cast<uint8_t>(padBottom)};
+    SetConvTileParams<isConv3D>(l1, values, filterH, filterW, dilationH, dilationW, strideH, strideW, padValue, mL0,
+                                kL0, shape1, shape2, shape3, shape4, c0Size, repeatStride, repeatTime, dstStride);
 
     pto::TASSIGN(l1, static_cast<uint64_t>(src.GetAddr()));
     pto::TASSIGN(l0, static_cast<uint64_t>(dst.GetAddr()));
@@ -113,9 +105,8 @@ TILEOP void TLoad2D(T& dst, U& src, const int64_t& indexRow, const int64_t& inde
     int64_t n1 = GetConvShape<CONV_IDX_1>(src);
     int64_t n0 = GetConvShape<CONV_IDX_2>(src);
     int64_t c0 = GetConvShape<CONV_IDX_3>(src);
-    using srcTensor = pto::ConvTile<
-        pto::TileType::Mat, typename U::Type, bufferSize, pto::Layout::FRACTAL_Z,
-        pto::ConvTileShape<-1, -1, staticN0, staticC0>>;
+    using srcTensor = pto::ConvTile<pto::TileType::Mat, typename U::Type, bufferSize, pto::Layout::FRACTAL_Z,
+                                    pto::ConvTileShape<-1, -1, staticN0, staticC0>>;
     srcTensor l1(c1hw, n1);
 
     constexpr auto staticKL0 = Std::tuple_element<CONV_IDX_0, typename T::TileShape>::type::value;

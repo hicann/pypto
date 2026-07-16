@@ -75,8 +75,8 @@ void CheckShapeValid(DataType& dataType, const Shape& shape, TileOpFormat& forma
     if (shape.empty() || shape.back() == -1) {
         return;
     }
-    static const std::vector<DataType> FP4_TYPES = {
-        DataType::DT_FP4_E2M1X2, DataType::DT_FP4_E1M2X2, DataType::DT_FP4_E2M1, DataType::DT_FP4_E1M2};
+    static const std::vector<DataType> FP4_TYPES = {DataType::DT_FP4_E2M1X2, DataType::DT_FP4_E1M2X2,
+                                                    DataType::DT_FP4_E2M1, DataType::DT_FP4_E1M2};
     bool isB4 = std::find(FP4_TYPES.begin(), FP4_TYPES.end(), dataType) != FP4_TYPES.end();
     if (format == TileOpFormat::TILEOP_NZ) {
         size_t alignSize = isB4 ? ALIGN_SIZE_64 : ALIGN_SIZE_32;
@@ -98,8 +98,8 @@ Tensor::Tensor(DataType dataType, const Shape& shape, std::string name, TileOpFo
 {
     CheckShapeValid(dataType, shape, format);
     auto dynShape = ToDynShape(name, shape);
-    storage_ = std::make_shared<LogicalTensor>(
-        *Program::GetInstance().GetCurrentFunction(), dataType, shape, dynShape, format, name);
+    storage_ = std::make_shared<LogicalTensor>(*Program::GetInstance().GetCurrentFunction(), dataType, shape, dynShape,
+                                               format, name);
     storage_->tensor->AddRefCount(1);
     storage_->tensor->UpdateDynRawShape(dynShape);
     Program::GetInstance().GetTensorSlotManager()->TensorConstruct(*this);
@@ -309,8 +309,7 @@ SymbolicScalar GetInputData(const Tensor& t, const std::vector<SymbolicScalar>& 
 {
     FE_ASSERT(FeError::INVALID_VAL, t.Dim() == offset.size())
         << "t.Dim(): " << t.Dim() << "!= offset.size(): " << offset.size();
-    FE_ASSERT(FeError::INVALID_VAL, t.Dim() > 0 && t.Dim() <= 0x4)
-        << "t.Dim(): " << t.Dim() << ", limit: [1, 4]";
+    FE_ASSERT(FeError::INVALID_VAL, t.Dim() > 0 && t.Dim() <= 0x4) << "t.Dim(): " << t.Dim() << ", limit: [1, 4]";
     FE_ASSERT(FeError::INVALID_VAL, IsInteger(t.GetDataType()))
         << "Not Int type, got: " << DataType2String(t.GetDataType());
 
@@ -334,8 +333,8 @@ SymbolicScalar GetInputData(const Tensor& t, const std::vector<SymbolicScalar>& 
     return getInputData(argList);
 }
 
-static SymbolicScalar DoGetTensorDataInt32(
-    SymbolHandlerId handlerId, const Tensor& t, const std::vector<SymbolicScalar>& offset)
+static SymbolicScalar DoGetTensorDataInt32(SymbolHandlerId handlerId, const Tensor& t,
+                                           const std::vector<SymbolicScalar>& offset)
 {
     FE_ASSERT(FeError::INVALID_VAL, t.GetShape().size() == offset.size())
         << "Mismatch dimension: " << t.GetShape().size() << " vs " << offset.size() << "\n";
@@ -397,12 +396,13 @@ SymbolicScalar GetTensorData(const Tensor& t, const std::vector<SymbolicScalar>&
     CHECK(ExternalError::INVALID_TYPE, t.GetDataType() == DT_INT32) << "Tensor dtype must be DT_INT32.";
     CHECK(ExternalError::OUT_OF_RANGE, offset.size() <= MAX_GET_TENSOR_DATA_DIM)
         << "Offset.size() must be less than " << MAX_GET_TENSOR_DATA_DIM;
-    SymbolHandlerId handlerId =
-        static_cast<SymbolHandlerId>(static_cast<int>(SymbolHandlerId::GetTensorDataInt32Dim1) + offset.size() - 1);
+    SymbolHandlerId handlerId = static_cast<SymbolHandlerId>(static_cast<int>(SymbolHandlerId::GetTensorDataInt32Dim1) +
+                                                             offset.size() - 1);
     return DoGetTensorDataInt32(handlerId, t, offset);
 }
 
-void TensorMove(Tensor& src, Tensor& dst) {
+void TensorMove(Tensor& src, Tensor& dst)
+{
     auto func = Program::GetInstance().GetCurrentDynamicFunction();
     if (func) {
         auto inputs = func->GetDyndevAttribute()->startArgsInputTensorList;

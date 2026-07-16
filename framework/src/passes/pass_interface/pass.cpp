@@ -28,10 +28,7 @@ namespace npu::tile_fwk {
 
 Pass::Pass(std::string name) : name_(std::move(name)) {}
 
-const std::string& Pass::LogFolder(const std::string& topFolder, size_t i) const
-{
-    return LogFolder(topFolder, "", i);
-}
+const std::string& Pass::LogFolder(const std::string& topFolder, size_t i) const { return LogFolder(topFolder, "", i); }
 
 const std::string& Pass::LogFolder(const std::string& topFolder, const std::string& strategy, size_t i) const
 {
@@ -79,21 +76,18 @@ void Pass::DoHealthCheckAfter(Function& function, const std::string& folderPath)
     return;
 }
 
-Status Pass::Run(
-    Function& function, const std::string& strategy, const std::string& identifier)
+Status Pass::Run(Function& function, const std::string& strategy, const std::string& identifier)
 {
     return Run(function, strategy, identifier, 0);
 }
 
-Status Pass::Run(
-    Function& function, const std::string& strategy, const std::string& identifier, size_t runtimeIdx)
+Status Pass::Run(Function& function, const std::string& strategy, const std::string& identifier, size_t runtimeIdx)
 {
     return Run(function, strategy, identifier, runtimeIdx, BuildStrategyLogFolderName(strategy, 0));
 }
 
-Status Pass::Run(
-    Function& function, const std::string& strategy, const std::string& identifier, size_t runtimeIdx,
-    const std::string& logStrategy)
+Status Pass::Run(Function& function, const std::string& strategy, const std::string& identifier, size_t runtimeIdx,
+                 const std::string& logStrategy)
 {
     identifier_ = identifier;
     strategy_ = strategy;
@@ -338,8 +332,8 @@ Status Pass::PostRun(Function& function)
         }
     }
     if (DefaultEnabledPostCheck(function) != SUCCESS) {
-        APASS_LOG_ERROR_F(
-            Elements::Function, "Postcheck the necessary items of pass [%s] failed.", identifier_.c_str());
+        APASS_LOG_ERROR_F(Elements::Function, "Postcheck the necessary items of pass [%s] failed.",
+                          identifier_.c_str());
         return FAILED;
     }
     if (passDfxconfigs_.postCheck) {

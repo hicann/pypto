@@ -301,8 +301,8 @@ TEST_F(TestDistributedShmemImpl, TestShmemStore)
     std::string functionRawName = GetFunctionRawName(functionName);
     auto function = Program::GetInstance().GetFunctionByRawName(functionRawName);
     std::string res = GenCodeByFunction(*function);
-    std::string expect =
-        R"!!!(TileOp::Distributed::ShmemStore<float, 16, 32, 32, TileOp::Distributed::AtomicType::ADD>)!!!";
+    std::string
+        expect = R"!!!(TileOp::Distributed::ShmemStore<float, 16, 32, 32, TileOp::Distributed::AtomicType::ADD>)!!!";
     CheckStringExist(expect, res);
 }
 } // namespace npu::tile_fwk::Distributed

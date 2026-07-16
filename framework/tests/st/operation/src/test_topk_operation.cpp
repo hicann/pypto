@@ -23,9 +23,8 @@ const unsigned IDX_DIM2 = 2;
 const unsigned IDX_DIM3 = 3;
 
 struct TopKOpFuncArgs : public OpFuncArgs {
-    TopKOpFuncArgs(
-        std::vector<int64_t> viewShape, const std::vector<int64_t> tileShape, std::vector<int> count,
-        std::vector<int> dims, std::vector<bool> largest)
+    TopKOpFuncArgs(std::vector<int64_t> viewShape, const std::vector<int64_t> tileShape, std::vector<int> count,
+                   std::vector<int> dims, std::vector<bool> largest)
         : viewShape_(viewShape), tileShape_(tileShape), count_(count), dims_(dims), largest_(largest)
     {}
     std::vector<int64_t> viewShape_;
@@ -56,11 +55,10 @@ void TopKOpExeFunc(const std::vector<Tensor>& inputs, std::vector<Tensor>& outpu
             LOOP("LOOP_L1_bIdx", FunctionType::DYNAMIC_LOOP, sIdx, LoopRange(loop[IDX_DIM1]))
             {
                 std::vector<SymbolicScalar> offset = {bIdx * args->viewShape_[0], sIdx * args->viewShape_[1]};
-                auto viewTensor = View(
-                    inputs[0], args->viewShape_,
-                    {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                     std::min(secondDim - sIdx * secondViewShape, secondViewShape)},
-                    offset);
+                auto viewTensor = View(inputs[0], args->viewShape_,
+                                       {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                        std::min(secondDim - sIdx * secondViewShape, secondViewShape)},
+                                       offset);
                 TileShape::Current().SetVecTile(args->tileShape_);
                 auto res = TopK(viewTensor, args->count_[0], args->dims_[0], args->largest_[0]);
                 Assemble(std::get<0>(res), offset, outputs[0]);
@@ -79,8 +77,8 @@ void TopKOpExeFunc3D(const std::vector<Tensor>& inputs, std::vector<Tensor>& out
     const int firstViewShape = args->viewShape_[0];
     const int secondViewShape = args->viewShape_[1];
     const int thirdViewShape = args->viewShape_[2];
-    int loop[] = {
-        CeilDiv(firstDim, firstViewShape), CeilDiv(secondDim, secondViewShape), CeilDiv(thirdDim, thirdViewShape)};
+    int loop[] = {CeilDiv(firstDim, firstViewShape), CeilDiv(secondDim, secondViewShape),
+                  CeilDiv(thirdDim, thirdViewShape)};
     FUNCTION("main", {inputs[0]}, {outputs[0], outputs[1]})
     {
         LOOP("LOOP_L0_bIdx", FunctionType::DYNAMIC_LOOP, bIdx, LoopRange(loop[IDX_DIM0]))
@@ -94,12 +92,11 @@ void TopKOpExeFunc3D(const std::vector<Tensor>& inputs, std::vector<Tensor>& out
                         sIdx * args->viewShape_[1],
                         nIdx * args->viewShape_[2],
                     };
-                    auto viewTensor = View(
-                        inputs[0], args->viewShape_,
-                        {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                         std::min(secondDim - sIdx * secondViewShape, secondViewShape),
-                         std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape)},
-                        offset);
+                    auto viewTensor = View(inputs[0], args->viewShape_,
+                                           {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                            std::min(secondDim - sIdx * secondViewShape, secondViewShape),
+                                            std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape)},
+                                           offset);
                     TileShape::Current().SetVecTile(args->tileShape_);
                     auto res = TopK(viewTensor, args->count_[0], args->dims_[0], args->largest_[0]);
                     Assemble(std::get<0>(res), offset, outputs[0]);
@@ -121,9 +118,8 @@ void TopKOpExeFunc4D(const std::vector<Tensor>& inputs, std::vector<Tensor>& out
     const int secondViewShape = args->viewShape_[1];
     const int thirdViewShape = args->viewShape_[2];
     const int forthViewShape = args->viewShape_[3];
-    int loop[] = {
-        CeilDiv(firstDim, firstViewShape), CeilDiv(secondDim, secondViewShape), CeilDiv(thirdDim, thirdViewShape),
-        CeilDiv(forthDim, forthViewShape)};
+    int loop[] = {CeilDiv(firstDim, firstViewShape), CeilDiv(secondDim, secondViewShape),
+                  CeilDiv(thirdDim, thirdViewShape), CeilDiv(forthDim, forthViewShape)};
     FUNCTION("main", {inputs[0]}, {outputs[0], outputs[1]})
     {
         LOOP("LOOP_L0_bIdx", FunctionType::DYNAMIC_LOOP, bIdx, LoopRange(loop[IDX_DIM0]))
@@ -140,13 +136,12 @@ void TopKOpExeFunc4D(const std::vector<Tensor>& inputs, std::vector<Tensor>& out
                             nIdx * args->viewShape_[2],
                             qIdx * args->viewShape_[3],
                         };
-                        auto viewTensor = View(
-                            inputs[0], args->viewShape_,
-                            {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
-                             std::min(secondDim - sIdx * secondViewShape, secondViewShape),
-                             std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape),
-                             std::min(forthDim - qIdx * forthViewShape, forthViewShape)},
-                            offset);
+                        auto viewTensor = View(inputs[0], args->viewShape_,
+                                               {std::min(firstDim - bIdx * firstViewShape, firstViewShape),
+                                                std::min(secondDim - sIdx * secondViewShape, secondViewShape),
+                                                std::min(thirdDim - nIdx * thirdViewShape, thirdViewShape),
+                                                std::min(forthDim - qIdx * forthViewShape, forthViewShape)},
+                                               offset);
                         TileShape::Current().SetVecTile(args->tileShape_);
                         auto res = TopK(viewTensor, args->count_[0], args->dims_[0], args->largest_[0]);
                         Assemble(std::get<0>(res), offset, outputs[0]);

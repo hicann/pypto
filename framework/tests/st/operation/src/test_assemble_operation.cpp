@@ -1104,9 +1104,8 @@ TEST_F(AssembleTest, test_assemble_to_inner_tensor_1)
                 auto tmp2 = Mul(View(a, shape2, offsets2), Element(DT_FP32, 5.14f));
                 auto tmp3 = Sub(View(a, shape3, offsets3), Element(DT_FP32, 2.33f));
                 Assemble({{Mul(tmp2, tmp3), {idx % 2, 32}}, {Sub(tmp2, tmp3), {idx % 2, 40}}}, tmpOut, true);
-                Assemble(
-                    {{Add(tmp1, tmp2), {idx % 2, 32}}, {Add(tmp1, tmp3), {idx % 2, 40}}}, tmpOut,
-                    true); // 覆盖上一次Assemble的部分结果
+                Assemble({{Add(tmp1, tmp2), {idx % 2, 32}}, {Add(tmp1, tmp3), {idx % 2, 40}}}, tmpOut,
+                         true); // 覆盖上一次Assemble的部分结果
             }
             LOOP("inner_loop_3", FunctionType::DYNAMIC_LOOP, unusedIdx, LoopRange(1))
             {
@@ -1921,9 +1920,8 @@ void TestInnerAssembleMultiView()
 
     ASSERT(N % 5 == 0);
     int row = N / 5;
-    auto SimuResult = [&row](
-                          const std::vector<T>& a, const std::vector<T>& b, const std::vector<T>& c,
-                          const std::vector<int>& lens1, const std::vector<int>& lens2) {
+    auto SimuResult = [&row](const std::vector<T>& a, const std::vector<T>& b, const std::vector<T>& c,
+                             const std::vector<int>& lens1, const std::vector<int>& lens2) {
         ASSERT(a.size() == N * M);
         ASSERT(lens1.size() * 5 == N);
         ASSERT(lens2.size() * 5 == N);

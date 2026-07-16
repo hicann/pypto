@@ -28,33 +28,30 @@
 namespace npu::tile_fwk {
 struct LogicalTensorInfo {
     LogicalTensorInfo(Function& func, DataType dataType, MemoryType memoryType, const std::vector<int64_t>& tShape)
-        : function(func), dType(dataType), memType(memoryType), shape(tShape){};
-    LogicalTensorInfo(
-        Function& func, DataType dataType, MemoryType memoryType, const std::vector<int64_t>& tShape, std::string tName)
-        : function(func), dType(dataType), memType(memoryType), shape(tShape), tensorName(std::move(tName)){};
-    LogicalTensorInfo(
-        Function& func, DataType dataType, MemoryType memoryType, const std::vector<int64_t>& tShape,
-        const std::vector<SymbolicScalar>& dynShape)
-        : function(func), dType(dataType), memType(memoryType), shape(tShape), dynValidShape(dynShape){};
-    LogicalTensorInfo(
-        Function& func, DataType dataType, MemoryType memoryType, const std::vector<int64_t>& tShape, int magicVal,
-        const std::vector<SymbolicScalar>& dynShape)
+        : function(func), dType(dataType), memType(memoryType), shape(tShape) {};
+    LogicalTensorInfo(Function& func, DataType dataType, MemoryType memoryType, const std::vector<int64_t>& tShape,
+                      std::string tName)
+        : function(func), dType(dataType), memType(memoryType), shape(tShape), tensorName(std::move(tName)) {};
+    LogicalTensorInfo(Function& func, DataType dataType, MemoryType memoryType, const std::vector<int64_t>& tShape,
+                      const std::vector<SymbolicScalar>& dynShape)
+        : function(func), dType(dataType), memType(memoryType), shape(tShape), dynValidShape(dynShape) {};
+    LogicalTensorInfo(Function& func, DataType dataType, MemoryType memoryType, const std::vector<int64_t>& tShape,
+                      int magicVal, const std::vector<SymbolicScalar>& dynShape)
         : function(func),
           dType(dataType),
           memType(memoryType),
           shape(tShape),
           magic(magicVal),
-          dynValidShape(dynShape){};
-    LogicalTensorInfo(
-        Function& func, DataType dataType, MemoryType memoryType, const std::vector<int64_t>& tShape, std::string tName,
-        int magicVal, const std::vector<SymbolicScalar>& dynShape)
+          dynValidShape(dynShape) {};
+    LogicalTensorInfo(Function& func, DataType dataType, MemoryType memoryType, const std::vector<int64_t>& tShape,
+                      std::string tName, int magicVal, const std::vector<SymbolicScalar>& dynShape)
         : function(func),
           dType(dataType),
           memType(memoryType),
           shape(tShape),
           tensorName(std::move(tName)),
           magic(magicVal),
-          dynValidShape(dynShape){};
+          dynValidShape(dynShape) {};
 
     Function& function;
     DataType dType;
@@ -98,8 +95,8 @@ Function* GenMockFuncDynUnary(const std::string& funcName, const MockFuncDynUnar
             opFunc(input, output);
         }
     }
-    auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX +
+                                                                HIDDEN_FUNC_SUFFIX);
     function->SetFunctionType(FunctionType::DYNAMIC_LOOP_PATH);
     function->SetUnderDynamicFunction(true);
     return function;
@@ -130,16 +127,16 @@ Function* GenMockFuncDynBinary(const std::string& funcName, const MockFuncDynBin
             opFunc(inputA, inputB, output);
         }
     }
-    auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX +
+                                                                HIDDEN_FUNC_SUFFIX);
     function->SetFunctionType(FunctionType::DYNAMIC_LOOP_PATH);
     function->SetUnderDynamicFunction(true);
     return function;
 }
 
-std::shared_ptr<LogicalTensor> CreateConvTensor(
-    Function& function, const DataType& dtype, const std::vector<int64_t>& shape, const MemoryType& memType,
-    const bool& isCopyIn = true);
+std::shared_ptr<LogicalTensor> CreateConvTensor(Function& function, const DataType& dtype,
+                                                const std::vector<int64_t>& shape, const MemoryType& memType,
+                                                const bool& isCopyIn = true);
 
 struct GenOpCodeOptions {
     bool isMainBlk = false;
@@ -147,9 +144,9 @@ struct GenOpCodeOptions {
 
 std::string GenOpCodeFromOp(Function& function, const Operation& op, const GenOpCodeOptions& options = {});
 
-CodeGenOpCloudNPU GenOpCloudNPUFromOp(
-    Function& function, const Operation& op, std::shared_ptr<SymbolManager>& outSymbolManager,
-    const GenOpCodeOptions& options = {});
+CodeGenOpCloudNPU GenOpCloudNPUFromOp(Function& function, const Operation& op,
+                                      std::shared_ptr<SymbolManager>& outSymbolManager,
+                                      const GenOpCodeOptions& options = {});
 
 } // namespace npu::tile_fwk
 

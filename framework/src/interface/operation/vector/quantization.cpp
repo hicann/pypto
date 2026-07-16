@@ -9,9 +9,9 @@
  */
 
 /*!
-* \file quantization.cpp
-* \brief Quantization operation implementation for INT8 symmetric and asymmetric quantization
-*/
+ * \file quantization.cpp
+ * \brief Quantization operation implementation for INT8 symmetric and asymmetric quantization
+ */
 
 #include "interface/utils/operator_tracer.h"
 #include "interface/operation/opcode.h"
@@ -33,8 +33,7 @@ constexpr int64_t QUANT_MX_SCALE_PAIR_SIZE = 2;
 constexpr int64_t QUANT_MX_TILE_ALIGN_BYTES = 256;
 const std::unordered_set<DataType> QUANT_MX_SUPPORTED_INPUT_TYPES = {DataType::DT_FP16, DataType::DT_BF16,
                                                                      DataType::DT_FP32};
-const std::unordered_set<DataType> QUANT_MX_SUPPORTED_OUTPUT_TYPES = {DataType::DT_FP8E4M3,
-                                                                      DataType::DT_FP4_E2M1X2};
+const std::unordered_set<DataType> QUANT_MX_SUPPORTED_OUTPUT_TYPES = {DataType::DT_FP8E4M3, DataType::DT_FP4_E2M1X2};
 const std::vector<NPUArch> QUANT_MX_SUPPORTED_ARCHITECTURES = {NPUArch::DAV_3510};
 
 int64_t CeilDiv(int64_t dividend, int64_t divisor)
@@ -45,9 +44,8 @@ int64_t CeilDiv(int64_t dividend, int64_t divisor)
 
 void CheckQuantMXDtype(DataType quantDtype)
 {
-    CHECK(
-        VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED,
-        QUANT_MX_SUPPORTED_OUTPUT_TYPES.find(quantDtype) != QUANT_MX_SUPPORTED_OUTPUT_TYPES.end())
+    CHECK(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED,
+          QUANT_MX_SUPPORTED_OUTPUT_TYPES.find(quantDtype) != QUANT_MX_SUPPORTED_OUTPUT_TYPES.end())
         << "QuantMX currently only supports DT_FP8E4M3 and DT_FP4_E2M1X2 output. Current quant dtype: "
         << DataType2String(quantDtype);
 }
@@ -55,16 +53,14 @@ void CheckQuantMXDtype(DataType quantDtype)
 void CheckQuantMXDtypeCombination(DataType inputDtype, DataType quantDtype)
 {
     if (quantDtype == DataType::DT_FP8E4M3) {
-        CHECK(
-            VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED,
-            inputDtype == DataType::DT_FP32 || inputDtype == DataType::DT_FP16 || inputDtype == DataType::DT_BF16)
+        CHECK(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED,
+              inputDtype == DataType::DT_FP32 || inputDtype == DataType::DT_FP16 || inputDtype == DataType::DT_BF16)
             << "QuantMX DT_FP8E4M3 output only supports DT_FP32, DT_FP16, and DT_BF16 input.";
         return;
     }
     if (quantDtype == DataType::DT_FP4_E2M1X2) {
-        CHECK(
-            VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED,
-            inputDtype == DataType::DT_FP16 || inputDtype == DataType::DT_BF16)
+        CHECK(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED,
+              inputDtype == DataType::DT_FP16 || inputDtype == DataType::DT_BF16)
             << "QuantMX DT_FP4_E2M1X2 output only supports DT_FP16 and DT_BF16 input.";
     }
 }
@@ -72,7 +68,7 @@ void CheckQuantMXDtypeCombination(DataType inputDtype, DataType quantDtype)
 void CheckQuantMXMode(DequantScaleRoundingMode mode)
 {
     CHECK(VectorErrorCode::ERR_PARAM_INVALID,
-        mode == DequantScaleRoundingMode::ROUND_DOWN || mode == DequantScaleRoundingMode::ROUND_UP)
+          mode == DequantScaleRoundingMode::ROUND_DOWN || mode == DequantScaleRoundingMode::ROUND_UP)
         << "QuantMX currently only supports ROUND_DOWN (OCP) and ROUND_UP (NV) modes.";
 }
 
@@ -123,22 +119,20 @@ void CheckQuantMXAxis(int64_t axis, size_t rank)
         << "QuantMX currently only supports the last axis. Current axis: " << axis << ", input rank: " << rank;
 }
 
-void CheckQuantMXInput(
-    const Tensor& input, DataType quantDtype, DequantScaleRoundingMode mode, int64_t axis, bool performanceMode)
+void CheckQuantMXInput(const Tensor& input, DataType quantDtype, DequantScaleRoundingMode mode, int64_t axis,
+                       bool performanceMode)
 {
     const auto inputDtype = input.GetDataType();
-    CHECK(
-        VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED,
-        QUANT_MX_SUPPORTED_INPUT_TYPES.find(inputDtype) != QUANT_MX_SUPPORTED_INPUT_TYPES.end())
+    CHECK(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED,
+          QUANT_MX_SUPPORTED_INPUT_TYPES.find(inputDtype) != QUANT_MX_SUPPORTED_INPUT_TYPES.end())
         << "QuantMX currently only supports DT_FP16, DT_BF16, and DT_FP32 input.";
     CheckQuantMXDtype(quantDtype);
     CheckQuantMXDtypeCombination(inputDtype, quantDtype);
     CheckQuantMXMode(mode);
     CHECK(VectorErrorCode::ERR_PARAM_INVALID, input.Format() == TileOpFormat::TILEOP_ND)
         << "QuantMX only supports TILEOP_ND input.";
-    CHECK(
-        VectorErrorCode::ERR_PARAM_SHAPE_DIM_UNSUPPORTED,
-        QUANT_MX_MIN_RANK <= input.GetShape().size() && input.GetShape().size() <= QUANT_MX_MAX_RANK)
+    CHECK(VectorErrorCode::ERR_PARAM_SHAPE_DIM_UNSUPPORTED,
+          QUANT_MX_MIN_RANK <= input.GetShape().size() && input.GetShape().size() <= QUANT_MX_MAX_RANK)
         << "QuantMX only supports 1D to 4D input.";
     CheckQuantMXAxis(axis, input.GetShape().size());
     if (!performanceMode) {
@@ -149,7 +143,8 @@ void CheckQuantMXInput(
     if (performanceMode) {
         const int64_t lastDimBytes = input.GetShape().back() * BytesOf(inputDtype);
         CHECK(VectorErrorCode::ERR_PARAM_INVALID, lastDimBytes % QUANT_MX_TILE_ALIGN_BYTES == 0)
-            << "QuantMX performance mode requires view shape's last dim to be 256-byte aligned. Current last dim bytes: "
+            << "QuantMX performance mode requires view shape's last dim to be 256-byte aligned. Current last dim "
+               "bytes: "
             << lastDimBytes;
     }
 }
@@ -210,14 +205,13 @@ std::vector<int64_t> BuildQuantMXPerformanceVecTile(const std::vector<int64_t>& 
     for (size_t i = 0; i + 2 < inputVecTile.size(); ++i) {
         groupedVecTile.push_back(inputVecTile[i]);
     }
-    groupedVecTile.push_back(
-        inputVecTile[inputVecTile.size() - 2] * CeilDiv(inputVecTile.back(), QUANT_MX_GROUP_COLS));
+    groupedVecTile.push_back(inputVecTile[inputVecTile.size() - 2] * CeilDiv(inputVecTile.back(), QUANT_MX_GROUP_COLS));
     return groupedVecTile;
 }
 
-std::vector<int64_t> BuildQuantMXPerformanceGroupedOffset(
-    const std::vector<int64_t>& inputOffset, const std::vector<int64_t>& inputShape,
-    const std::vector<int64_t>& inputTileShape)
+std::vector<int64_t> BuildQuantMXPerformanceGroupedOffset(const std::vector<int64_t>& inputOffset,
+                                                          const std::vector<int64_t>& inputShape,
+                                                          const std::vector<int64_t>& inputTileShape)
 {
     if (inputOffset.size() == 1) {
         return {inputOffset[0] / QUANT_MX_GROUP_COLS};
@@ -230,8 +224,8 @@ std::vector<int64_t> BuildQuantMXPerformanceGroupedOffset(
     }
     const int64_t groupCols = CeilDiv(inputShape.back(), QUANT_MX_GROUP_COLS);
     const int64_t tileRows = inputTileShape[inputTileShape.size() - 2];
-    groupedOffset.push_back(
-        inputOffset[inputOffset.size() - 2] * groupCols + tileRows * (inputOffset.back() / QUANT_MX_GROUP_COLS));
+    groupedOffset.push_back(inputOffset[inputOffset.size() - 2] * groupCols +
+                            tileRows * (inputOffset.back() / QUANT_MX_GROUP_COLS));
     return groupedOffset;
 }
 
@@ -255,14 +249,13 @@ std::vector<SymbolicScalar> BuildQuantMXPerformanceGroupedValidShape(const std::
     for (size_t i = 0; i + 2 < inputValidShape.size(); ++i) {
         groupedValidShape.push_back(inputValidShape[i]);
     }
-    groupedValidShape.push_back(
-        inputValidShape[inputValidShape.size() - 2] *
-        ((inputValidShape.back() + QUANT_MX_GROUP_COLS - 1) / QUANT_MX_GROUP_COLS));
+    groupedValidShape.push_back(inputValidShape[inputValidShape.size() - 2] *
+                                ((inputValidShape.back() + QUANT_MX_GROUP_COLS - 1) / QUANT_MX_GROUP_COLS));
     return groupedValidShape;
 }
 
-std::vector<SymbolicScalar> BuildQuantMXScalingValidShape(
-    const std::vector<SymbolicScalar>& groupedValidShape, DataType inputDtype)
+std::vector<SymbolicScalar> BuildQuantMXScalingValidShape(const std::vector<SymbolicScalar>& groupedValidShape,
+                                                          DataType inputDtype)
 {
     auto scalingValidShape = groupedValidShape;
     if (inputDtype == DataType::DT_FP32) {
@@ -346,8 +339,8 @@ QuantMXTileParams BuildQuantMXTileParams(const Input& input, int64_t performance
 {
     QuantMXTileParams params;
     params.groupedShape = BuildQuantMXPerformanceGroupedShape(input.tileInfo.shape);
-    params.groupedOffset =
-        BuildQuantMXPerformanceGroupedOffset(input.tileInfo.offset, input.tensor.GetShape(), input.tileInfo.shape);
+    params.groupedOffset = BuildQuantMXPerformanceGroupedOffset(input.tileInfo.offset, input.tensor.GetShape(),
+                                                                input.tileInfo.shape);
     params.scalingShape = BuildQuantMXScalingShape(params.groupedShape, input.tensor.GetDataType());
     params.scalingOffset = BuildQuantMXScalingOffset(params.groupedOffset, input.tensor.GetDataType());
     if (performanceMode == 0) {
@@ -394,17 +387,16 @@ void TiledQuantMXOperationImpl(const QuantMXTileContext& ctx, const TileShape& t
 }
 
 void TiledQuantMXOperation(Function& function, const TileShape& tileShape, size_t cur, Input& input,
-    const LogicalTensorPtr& dst, const LogicalTensorPtr& exp, const LogicalTensorPtr& maxScratch,
-    const LogicalTensorPtr& scalingScratch,
-    DequantScaleRoundingMode mode, int64_t axis, int64_t performanceMode)
+                           const LogicalTensorPtr& dst, const LogicalTensorPtr& exp, const LogicalTensorPtr& maxScratch,
+                           const LogicalTensorPtr& scalingScratch, DequantScaleRoundingMode mode, int64_t axis,
+                           int64_t performanceMode)
 {
     QuantMXTileContext ctx{function, input, dst, exp, maxScratch, scalingScratch, mode, axis, performanceMode};
     TiledQuantMXOperationImpl(ctx, tileShape, cur);
 }
 
-void QuantMXTileFunc(
-    Function& function, const TileShape& tileShape, const std::vector<LogicalTensorPtr>& iOperand,
-    const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
+void QuantMXTileFunc(Function& function, const TileShape& tileShape, const std::vector<LogicalTensorPtr>& iOperand,
+                     const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
 {
     CHECK(VectorErrorCode::ERR_PARAM_INVALID, iOperand.size() == 1) << "QuantMX expects 1 input tensor.";
     CHECK(VectorErrorCode::ERR_PARAM_INVALID, oOperand.size() == 4) << "QuantMX expects 4 output tensors.";
@@ -425,8 +417,8 @@ void QuantMXTileFunc(
     CheckQuantMXPerformanceTileShape(src, tileShape.GetVecTile(), performanceMode);
     TileInfo inputTileInfo(src->shape.size(), src->offset.size());
     auto input = Input{Tensor(src), inputTileInfo};
-    TiledQuantMXOperation(
-        function, tileShape, 0, input, dst, exp, maxScratch, scalingScratch, mode, axis, performanceMode);
+    TiledQuantMXOperation(function, tileShape, 0, input, dst, exp, maxScratch, scalingScratch, mode, axis,
+                          performanceMode);
 }
 } // namespace
 
@@ -434,26 +426,28 @@ void QuantMXTileFunc(
 // Symmetric Quantization (FP32 -> INT8)
 // =============================================================================
 
-void TiledQuantizeSymmetric(Function &function, const TileShape &tileShape, size_t cur,
-    Input &srcInput, Input &scaleInput, Input &dstInput, int64_t axis, uint32_t workspaceSize) {
+void TiledQuantizeSymmetric(Function& function, const TileShape& tileShape, size_t cur, Input& srcInput,
+                            Input& scaleInput, Input& dstInput, int64_t axis, uint32_t workspaceSize)
+{
     if (cur == dstInput.tensor.GetShape().size()) {
         auto srcTile = srcInput.tensor.GetStorage()->View(function, srcInput.tileInfo.shape, srcInput.tileInfo.offset);
-        auto scaleTile = scaleInput.tensor.GetStorage()->View(function, scaleInput.tileInfo.shape, scaleInput.tileInfo.offset);
+        auto scaleTile = scaleInput.tensor.GetStorage()->View(function, scaleInput.tileInfo.shape,
+                                                              scaleInput.tileInfo.offset);
         auto dstTile = dstInput.tensor.GetStorage()->View(function, dstInput.tileInfo.shape, dstInput.tileInfo.offset);
 
-        Operation *op = nullptr;
+        Operation* op = nullptr;
         if (workspaceSize == 0) {
             op = &function.AddOperation(Opcode::OP_QUANTIZE_SYM, {srcTile, scaleTile}, {dstTile});
         } else {
-            LogicalTensorPtr workspace =
-                std::make_shared<LogicalTensor>(function, DT_INT32, std::vector<int64_t>{workspaceSize});
+            LogicalTensorPtr workspace = std::make_shared<LogicalTensor>(function, DT_INT32,
+                                                                         std::vector<int64_t>{workspaceSize});
             op = &function.AddOperation(Opcode::OP_QUANTIZE_SYM, {srcTile, scaleTile}, {dstTile, workspace});
         }
         op->SetAttribute(OP_ATTR_PREFIX + "axis", axis);
         return;
     }
 
-    auto &vecTile = tileShape.GetVecTile();
+    auto& vecTile = tileShape.GetVecTile();
     for (int64_t i = 0; i < dstInput.tensor.GetShape()[cur]; i += vecTile[cur]) {
         // Update dst tile info
         dstInput.tileInfo.shape[cur] = std::min(dstInput.tensor.GetShape()[cur] - i, vecTile[cur]);
@@ -478,9 +472,10 @@ void TiledQuantizeSymmetric(Function &function, const TileShape &tileShape, size
     }
 }
 
-void TiledQuantizeSymmetric(Function &function, const TileShape &tileShape,
-    const LogicalTensorPtr &src, const LogicalTensorPtr &scale,
-    const LogicalTensorPtr &dst, int64_t axis, uint32_t workspaceSize) {
+void TiledQuantizeSymmetric(Function& function, const TileShape& tileShape, const LogicalTensorPtr& src,
+                            const LogicalTensorPtr& scale, const LogicalTensorPtr& dst, int64_t axis,
+                            uint32_t workspaceSize)
+{
     CHECK(VectorErrorCode::ERR_PARAM_INVALID, src->shape.size() == src->offset.size())
         << "Source shape size and offset size should be equal";
     CHECK(VectorErrorCode::ERR_PARAM_INVALID, dst->shape.size() == dst->offset.size())
@@ -501,27 +496,32 @@ void TiledQuantizeSymmetric(Function &function, const TileShape &tileShape,
 // Asymmetric Quantization (FP32 -> UINT8)
 // =============================================================================
 
-void TiledQuantizeAsymmetric(Function &function, const TileShape &tileShape, size_t cur,
-    Input &srcInput, Input &scaleInput, Input &offsetInput, Input &dstInput, int64_t axis, uint32_t workspaceSize) {
+void TiledQuantizeAsymmetric(Function& function, const TileShape& tileShape, size_t cur, Input& srcInput,
+                             Input& scaleInput, Input& offsetInput, Input& dstInput, int64_t axis,
+                             uint32_t workspaceSize)
+{
     if (cur == dstInput.tensor.GetShape().size()) {
         auto srcTile = srcInput.tensor.GetStorage()->View(function, srcInput.tileInfo.shape, srcInput.tileInfo.offset);
-        auto scaleTile = scaleInput.tensor.GetStorage()->View(function, scaleInput.tileInfo.shape, scaleInput.tileInfo.offset);
-        auto offsetTile = offsetInput.tensor.GetStorage()->View(function, offsetInput.tileInfo.shape, offsetInput.tileInfo.offset);
+        auto scaleTile = scaleInput.tensor.GetStorage()->View(function, scaleInput.tileInfo.shape,
+                                                              scaleInput.tileInfo.offset);
+        auto offsetTile = offsetInput.tensor.GetStorage()->View(function, offsetInput.tileInfo.shape,
+                                                                offsetInput.tileInfo.offset);
         auto dstTile = dstInput.tensor.GetStorage()->View(function, dstInput.tileInfo.shape, dstInput.tileInfo.offset);
 
-        Operation *op = nullptr;
+        Operation* op = nullptr;
         if (workspaceSize == 0) {
             op = &function.AddOperation(Opcode::OP_QUANTIZE_ASYM, {srcTile, scaleTile, offsetTile}, {dstTile});
         } else {
-            LogicalTensorPtr workspace =
-                std::make_shared<LogicalTensor>(function, DT_INT32, std::vector<int64_t>{workspaceSize});
-            op = &function.AddOperation(Opcode::OP_QUANTIZE_ASYM, {srcTile, scaleTile, offsetTile}, {dstTile, workspace});
+            LogicalTensorPtr workspace = std::make_shared<LogicalTensor>(function, DT_INT32,
+                                                                         std::vector<int64_t>{workspaceSize});
+            op = &function.AddOperation(Opcode::OP_QUANTIZE_ASYM, {srcTile, scaleTile, offsetTile},
+                                        {dstTile, workspace});
         }
         op->SetAttribute(OP_ATTR_PREFIX + "axis", axis);
         return;
     }
 
-    auto &vecTile = tileShape.GetVecTile();
+    auto& vecTile = tileShape.GetVecTile();
     for (int64_t i = 0; i < dstInput.tensor.GetShape()[cur]; i += vecTile[cur]) {
         // Update dst tile info
         dstInput.tileInfo.shape[cur] = std::min(dstInput.tensor.GetShape()[cur] - i, vecTile[cur]);
@@ -547,13 +547,15 @@ void TiledQuantizeAsymmetric(Function &function, const TileShape &tileShape, siz
             offsetInput.tileInfo.offset[cur] = offsetIdx;
         }
 
-        TiledQuantizeAsymmetric(function, tileShape, cur + 1, srcInput, scaleInput, offsetInput, dstInput, axis, workspaceSize);
+        TiledQuantizeAsymmetric(function, tileShape, cur + 1, srcInput, scaleInput, offsetInput, dstInput, axis,
+                                workspaceSize);
     }
 }
 
-void TiledQuantizeAsymmetric(Function &function, const TileShape &tileShape,
-    const LogicalTensorPtr &src, const LogicalTensorPtr &scale, const LogicalTensorPtr &offset,
-    const LogicalTensorPtr &dst, int64_t axis, uint32_t workspaceSize) {
+void TiledQuantizeAsymmetric(Function& function, const TileShape& tileShape, const LogicalTensorPtr& src,
+                             const LogicalTensorPtr& scale, const LogicalTensorPtr& offset, const LogicalTensorPtr& dst,
+                             int64_t axis, uint32_t workspaceSize)
+{
     CHECK(VectorErrorCode::ERR_PARAM_INVALID, src->shape.size() == src->offset.size())
         << "Source shape size and offset size should be equal";
     CHECK(VectorErrorCode::ERR_PARAM_INVALID, dst->shape.size() == dst->offset.size())
@@ -576,21 +578,24 @@ void TiledQuantizeAsymmetric(Function &function, const TileShape &tileShape,
 // Tensor-level Quantization Operations
 // =============================================================================
 
-LogicalTensorPtr TensorQuantizeSymmetricOperation(Function &function,
-    const LogicalTensorPtr &src, const LogicalTensorPtr &scale, int64_t axis) {
+LogicalTensorPtr TensorQuantizeSymmetricOperation(Function& function, const LogicalTensorPtr& src,
+                                                  const LogicalTensorPtr& scale, int64_t axis)
+{
     // Output is INT8 for symmetric quantization
     auto result = std::make_shared<LogicalTensor>(function, DataType::DT_INT8, src->shape, src->GetDynValidShape());
-    auto &op = function.AddOperation(Opcode::OP_QUANTIZE_SYM, {src, scale}, {result});
+    auto& op = function.AddOperation(Opcode::OP_QUANTIZE_SYM, {src, scale}, {result});
     op.SetAttribute(OP_ATTR_PREFIX + "axis", axis);
     function.UpdateTensorDataUsage(op);
     return result;
 }
 
-LogicalTensorPtr TensorQuantizeAsymmetricOperation(Function &function,
-    const LogicalTensorPtr &src, const LogicalTensorPtr &scale, const LogicalTensorPtr &offset, int64_t axis) {
+LogicalTensorPtr TensorQuantizeAsymmetricOperation(Function& function, const LogicalTensorPtr& src,
+                                                   const LogicalTensorPtr& scale, const LogicalTensorPtr& offset,
+                                                   int64_t axis)
+{
     // Output is UINT8 for asymmetric quantization
     auto result = std::make_shared<LogicalTensor>(function, DataType::DT_UINT8, src->shape, src->GetDynValidShape());
-    auto &op = function.AddOperation(Opcode::OP_QUANTIZE_ASYM, {src, scale, offset}, {result});
+    auto& op = function.AddOperation(Opcode::OP_QUANTIZE_ASYM, {src, scale, offset}, {result});
     op.SetAttribute(OP_ATTR_PREFIX + "axis", axis);
     function.UpdateTensorDataUsage(op);
     return result;
@@ -600,7 +605,8 @@ LogicalTensorPtr TensorQuantizeAsymmetricOperation(Function &function,
 // Public Quantize API
 // =============================================================================
 
-Tensor Quantize(const Tensor &input, const Tensor &scale, DataType dtype, int axis, const Tensor &zeroPoints) {
+Tensor Quantize(const Tensor& input, const Tensor& scale, DataType dtype, int axis, const Tensor& zeroPoints)
+{
     DECLARE_TRACER();
     CheckTensorFormat(input.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Quantize");
     CheckTensorFormat(scale.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Quantize");
@@ -608,9 +614,9 @@ Tensor Quantize(const Tensor &input, const Tensor &scale, DataType dtype, int ax
         CheckTensorFormat(zeroPoints.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Quantize");
     }
 
-
     // Validate input dimensions
-    CHECK(VectorErrorCode::ERR_PARAM_SHAPE_DIM_UNSUPPORTED, input.GetShape().size() >= SHAPE_DIM1 && input.GetShape().size() <= SHAPE_DIM5)
+    CHECK(VectorErrorCode::ERR_PARAM_SHAPE_DIM_UNSUPPORTED,
+          input.GetShape().size() >= SHAPE_DIM1 && input.GetShape().size() <= SHAPE_DIM5)
         << "The shape.size() only support 1~5";
 
     // Handle 1D input: reshape to [1, n] and process as 2D
@@ -653,8 +659,9 @@ Tensor Quantize(const Tensor &input, const Tensor &scale, DataType dtype, int ax
 
     // Validate data types
     std::vector<DataType> SUPPORT_INPUT_DATATYPES = {DataType::DT_FP32};
-    CHECK(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED, std::find(
-        SUPPORT_INPUT_DATATYPES.begin(), SUPPORT_INPUT_DATATYPES.end(), input.GetDataType()) != SUPPORT_INPUT_DATATYPES.end())
+    CHECK(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED,
+          std::find(SUPPORT_INPUT_DATATYPES.begin(), SUPPORT_INPUT_DATATYPES.end(), input.GetDataType()) !=
+              SUPPORT_INPUT_DATATYPES.end())
         << "The input datatype is not supported";
 
     // Normalize axis to negative indexing
@@ -673,8 +680,8 @@ Tensor Quantize(const Tensor &input, const Tensor &scale, DataType dtype, int ax
     // Strategy: transpose input and scale -> quantize with axis=-1 -> transpose output back
     if (normalizedAxis == -2) {
         // Swap last two dimensions: [..., H, W] -> [..., W, H]
-        int lastDim = ndim - 1;        // -1 in positive index
-        int secondLastDim = ndim - 2;  // -2 in positive index
+        int lastDim = ndim - 1;       // -1 in positive index
+        int secondLastDim = ndim - 2; // -2 in positive index
 
         // Transpose input: [..., H, W] -> [..., W, H]
         Tensor transposedInput = Transpose(processedInput, {secondLastDim, lastDim});
@@ -695,17 +702,14 @@ Tensor Quantize(const Tensor &input, const Tensor &scale, DataType dtype, int ax
             // Asymmetric quantization with axis=-1
             CHECK(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED, dtype == DataType::DT_UINT8)
                 << "Asymmetric quantization output type should be UINT8";
-            quantizedResult = CALL(QuantizeAsymmetricOperation,
-                *Program::GetInstance().GetCurrentFunction(),
-                transposedInput.GetStorage(), scale.GetStorage(),
-                zeroPoints.GetStorage(), -1);
+            quantizedResult = CALL(QuantizeAsymmetricOperation, *Program::GetInstance().GetCurrentFunction(),
+                                   transposedInput.GetStorage(), scale.GetStorage(), zeroPoints.GetStorage(), -1);
         } else {
             // Symmetric quantization with axis=-1
             CHECK(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED, dtype == DataType::DT_INT8)
                 << "Symmetric quantization output type should be INT8";
-            quantizedResult = CALL(QuantizeSymmetricOperation,
-                *Program::GetInstance().GetCurrentFunction(),
-                transposedInput.GetStorage(), scale.GetStorage(), -1);
+            quantizedResult = CALL(QuantizeSymmetricOperation, *Program::GetInstance().GetCurrentFunction(),
+                                   transposedInput.GetStorage(), scale.GetStorage(), -1);
         }
 
         // [Transpose] set tmp validShape
@@ -740,13 +744,13 @@ Tensor Quantize(const Tensor &input, const Tensor &scale, DataType dtype, int ax
         CHECK(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED, dtype == DataType::DT_UINT8)
             << "Asymmetric quantization output type should be UINT8";
         result = CALL(QuantizeAsymmetricOperation, *Program::GetInstance().GetCurrentFunction(),
-            processedInput.GetStorage(), scale.GetStorage(), zeroPoints.GetStorage(), normalizedAxis);
+                      processedInput.GetStorage(), scale.GetStorage(), zeroPoints.GetStorage(), normalizedAxis);
     } else {
         // Symmetric quantization: FP32 -> INT8
         CHECK(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED, dtype == DataType::DT_INT8)
             << "Symmetric quantization output type should be INT8";
         result = CALL(QuantizeSymmetricOperation, *Program::GetInstance().GetCurrentFunction(),
-            processedInput.GetStorage(), scale.GetStorage(), normalizedAxis);
+                      processedInput.GetStorage(), scale.GetStorage(), normalizedAxis);
     }
 
     // If input was 1D, reshape output back to 1D and restore original VecTile
@@ -767,9 +771,10 @@ Tensor Quantize(const Tensor &input, const Tensor &scale, DataType dtype, int ax
 // Tile Function Registration
 // =============================================================================
 
-void QuantizeSymmetricOperationTileFunc(Function &function, const TileShape &tileShape,
-    const std::vector<LogicalTensorPtr> &iOperand, const std::vector<LogicalTensorPtr> &oOperand,
-    const Operation &op) {
+void QuantizeSymmetricOperationTileFunc(Function& function, const TileShape& tileShape,
+                                        const std::vector<LogicalTensorPtr>& iOperand,
+                                        const std::vector<LogicalTensorPtr>& oOperand, const Operation& op)
+{
     int64_t axis = op.GetIntAttribute(OP_ATTR_PREFIX + "axis");
 
     // Calculate workspace size: same size as src (with int32_t type)
@@ -780,7 +785,7 @@ void QuantizeSymmetricOperationTileFunc(Function &function, const TileShape &til
     int64_t tmpCols = (dim >= 1) ? shape.tile[dim - 1] : 1;
 
     // tmpbuf need 32-byte alignment
-    constexpr int64_t alignElements = 8;  // 8 * 4 = 32 bytes
+    constexpr int64_t alignElements = 8; // 8 * 4 = 32 bytes
     tmpCols = (tmpCols + alignElements - 1) / alignElements * alignElements;
     tmpRows = (tmpRows + alignElements - 1) / alignElements * alignElements;
 
@@ -790,9 +795,10 @@ void QuantizeSymmetricOperationTileFunc(Function &function, const TileShape &til
     TiledQuantizeSymmetric(function, tileShape, iOperand[0], iOperand[1], oOperand[0], axis, workspaceSize);
 }
 
-void QuantizeAsymmetricOperationTileFunc(Function &function, const TileShape &tileShape,
-    const std::vector<LogicalTensorPtr> &iOperand, const std::vector<LogicalTensorPtr> &oOperand,
-    const Operation &op) {
+void QuantizeAsymmetricOperationTileFunc(Function& function, const TileShape& tileShape,
+                                         const std::vector<LogicalTensorPtr>& iOperand,
+                                         const std::vector<LogicalTensorPtr>& oOperand, const Operation& op)
+{
     int64_t axis = op.GetIntAttribute(OP_ATTR_PREFIX + "axis");
 
     // Calculate workspace size: same size as src (with int32_t type)
@@ -803,14 +809,15 @@ void QuantizeAsymmetricOperationTileFunc(Function &function, const TileShape &ti
     int64_t tmpCols = (dim >= 1) ? shape.tile[dim - 1] : 1;
 
     // tmpbuf need 32-byte alignment
-    constexpr int64_t alignElements = 8;  // 8 * 4 = 32 bytes
+    constexpr int64_t alignElements = 8; // 8 * 4 = 32 bytes
     tmpCols = (tmpCols + alignElements - 1) / alignElements * alignElements;
     tmpRows = (tmpRows + alignElements - 1) / alignElements * alignElements;
 
     // workspaceSize is element count, not bytes (LogicalTensor constructor takes shape)
     uint32_t workspaceSize = tmpRows * tmpCols;
 
-    TiledQuantizeAsymmetric(function, tileShape, iOperand[0], iOperand[1], iOperand[2], oOperand[0], axis, workspaceSize);
+    TiledQuantizeAsymmetric(function, tileShape, iOperand[0], iOperand[1], iOperand[2], oOperand[0], axis,
+                            workspaceSize);
 }
 
 REGISTER_OPERATION_TILED_FUNC(OP_QUANTIZE_SYM, Opcode::OP_QUANTIZE_SYM, QuantizeSymmetricOperationTileFunc);
@@ -821,20 +828,23 @@ REGISTER_OPERATION_TILED_FUNC(OP_QUANTIZE_ASYM, Opcode::OP_QUANTIZE_ASYM, Quanti
 // TDequant always requires 4 params: dst, src, scale, offset (symmetric: offset=0)
 // =============================================================================
 
-void TiledDequantize(Function &function, const TileShape &tileShape, size_t cur,
-    Input &srcInput, Input &scaleInput, Input &offsetInput, Input &dstInput, int64_t axis) {
+void TiledDequantize(Function& function, const TileShape& tileShape, size_t cur, Input& srcInput, Input& scaleInput,
+                     Input& offsetInput, Input& dstInput, int64_t axis)
+{
     if (cur == dstInput.tensor.GetShape().size()) {
         auto srcTile = srcInput.tensor.GetStorage()->View(function, srcInput.tileInfo.shape, srcInput.tileInfo.offset);
-        auto scaleTile = scaleInput.tensor.GetStorage()->View(function, scaleInput.tileInfo.shape, scaleInput.tileInfo.offset);
-        auto offsetTile = offsetInput.tensor.GetStorage()->View(function, offsetInput.tileInfo.shape, offsetInput.tileInfo.offset);
+        auto scaleTile = scaleInput.tensor.GetStorage()->View(function, scaleInput.tileInfo.shape,
+                                                              scaleInput.tileInfo.offset);
+        auto offsetTile = offsetInput.tensor.GetStorage()->View(function, offsetInput.tileInfo.shape,
+                                                                offsetInput.tileInfo.offset);
         auto dstTile = dstInput.tensor.GetStorage()->View(function, dstInput.tileInfo.shape, dstInput.tileInfo.offset);
 
-        auto &op = function.AddOperation(Opcode::OP_DEQUANTIZE, {srcTile, scaleTile, offsetTile}, {dstTile});
+        auto& op = function.AddOperation(Opcode::OP_DEQUANTIZE, {srcTile, scaleTile, offsetTile}, {dstTile});
         op.SetAttribute(OP_ATTR_PREFIX + "axis", axis);
         return;
     }
 
-    auto &vecTile = tileShape.GetVecTile();
+    auto& vecTile = tileShape.GetVecTile();
     for (int64_t i = 0; i < dstInput.tensor.GetShape()[cur]; i += vecTile[cur]) {
         dstInput.tileInfo.shape[cur] = std::min(dstInput.tensor.GetShape()[cur] - i, vecTile[cur]);
         dstInput.tileInfo.offset[cur] = i;
@@ -860,9 +870,10 @@ void TiledDequantize(Function &function, const TileShape &tileShape, size_t cur,
     }
 }
 
-void TiledDequantize(Function &function, const TileShape &tileShape,
-    const LogicalTensorPtr &src, const LogicalTensorPtr &scale, const LogicalTensorPtr &offset,
-    const LogicalTensorPtr &dst, int64_t axis) {
+void TiledDequantize(Function& function, const TileShape& tileShape, const LogicalTensorPtr& src,
+                     const LogicalTensorPtr& scale, const LogicalTensorPtr& offset, const LogicalTensorPtr& dst,
+                     int64_t axis)
+{
     TileInfo srcTileInfo(src->shape.size(), src->offset.size());
     TileInfo scaleTileInfo(scale->shape.size(), scale->offset.size());
     TileInfo offsetTileInfo(offset->shape.size(), offset->offset.size());
@@ -876,27 +887,30 @@ void TiledDequantize(Function &function, const TileShape &tileShape,
     TiledDequantize(function, tileShape, 0, srcInput, scaleInput, offsetInput, dstInput, axis);
 }
 
-LogicalTensorPtr TensorDequantizeOperation(Function &function,
-    const LogicalTensorPtr &src, const LogicalTensorPtr &scale, const LogicalTensorPtr &offset, int64_t axis) {
+LogicalTensorPtr TensorDequantizeOperation(Function& function, const LogicalTensorPtr& src,
+                                           const LogicalTensorPtr& scale, const LogicalTensorPtr& offset, int64_t axis)
+{
     auto result = std::make_shared<LogicalTensor>(function, DataType::DT_FP32, src->shape, src->GetDynValidShape());
-    auto &op = function.AddOperation(Opcode::OP_DEQUANTIZE, {src, scale, offset}, {result});
+    auto& op = function.AddOperation(Opcode::OP_DEQUANTIZE, {src, scale, offset}, {result});
     op.SetAttribute(OP_ATTR_PREFIX + "axis", axis);
     function.UpdateTensorDataUsage(op);
     return result;
 }
 
 // Helper: create zero tensor for symmetric dequantization
-static LogicalTensorPtr CreateZeroOffsetTensor(Function &function, const LogicalTensorPtr &scale) {
+static LogicalTensorPtr CreateZeroOffsetTensor(Function& function, const LogicalTensorPtr& scale)
+{
     Element zeroVal(DataType::DT_FP32, (int64_t)0);
 
-    Tensor zeroTensor = TensorFullOperation(function, zeroVal, SymbolicScalar(),
-        DataType::DT_FP32 ,scale->shape, scale->GetDynValidShape());
+    Tensor zeroTensor = TensorFullOperation(function, zeroVal, SymbolicScalar(), DataType::DT_FP32, scale->shape,
+                                            scale->GetDynValidShape());
 
     return zeroTensor.GetStorage();
 }
 
 // Public Dequantize API
-Tensor Dequantize(const Tensor &input, const Tensor &scale, DataType otype, int axis, const Tensor &zeroPoints) {
+Tensor Dequantize(const Tensor& input, const Tensor& scale, DataType otype, int axis, const Tensor& zeroPoints)
+{
     DECLARE_TRACER();
     CheckTensorFormat(input.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Dequantize");
     CheckTensorFormat(scale.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Dequantize");
@@ -904,9 +918,9 @@ Tensor Dequantize(const Tensor &input, const Tensor &scale, DataType otype, int 
         CheckTensorFormat(zeroPoints.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Dequantize");
     }
 
-
     // Validate input dimensions
-    CHECK(VectorErrorCode::ERR_PARAM_SHAPE_DIM_UNSUPPORTED, input.GetShape().size() >= SHAPE_DIM1 && input.GetShape().size() <= SHAPE_DIM5)
+    CHECK(VectorErrorCode::ERR_PARAM_SHAPE_DIM_UNSUPPORTED,
+          input.GetShape().size() >= SHAPE_DIM1 && input.GetShape().size() <= SHAPE_DIM5)
         << "The shape.size() only support 1~5";
 
     // Handle 1D input: reshape to [1, n] and process as 2D
@@ -949,9 +963,8 @@ Tensor Dequantize(const Tensor &input, const Tensor &scale, DataType otype, int 
 
     // Validate input data type: INT8 or INT16
     CHECK(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED,
-        input.GetDataType() == DataType::DT_INT8 || input.GetDataType() == DataType::DT_INT16)
-        << "Dequantize input dtype must be INT8 or INT16, but got dtype="
-        << static_cast<int>(input.GetDataType());
+          input.GetDataType() == DataType::DT_INT8 || input.GetDataType() == DataType::DT_INT16)
+        << "Dequantize input dtype must be INT8 or INT16, but got dtype=" << static_cast<int>(input.GetDataType());
 
     // Validate output type
     CHECK(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED, otype == DataType::DT_FP32)
@@ -964,8 +977,8 @@ Tensor Dequantize(const Tensor &input, const Tensor &scale, DataType otype, int 
         normalizedAxis = axis - ndim;
     }
     CHECK(VectorErrorCode::ERR_PARAM_INVALID, normalizedAxis == -1 || normalizedAxis == -2)
-        << "Dequantize axis must be -1 (per-row) or -2 (per-column), but got axis="
-        << axis << " (normalized=" << normalizedAxis << ")";
+        << "Dequantize axis must be -1 (per-row) or -2 (per-column), but got axis=" << axis
+        << " (normalized=" << normalizedAxis << ")";
 
     // Determine if symmetric or asymmetric
     bool isAsymmetric = (zeroPoints.GetStorage() != nullptr);
@@ -992,18 +1005,15 @@ Tensor Dequantize(const Tensor &input, const Tensor &scale, DataType otype, int 
 
         if (isAsymmetric) {
             // scale and zeroPoints are NOT transposed (consistent with Quantize)
-            dequantizedResult = TensorDequantizeOperation(
-                *Program::GetInstance().GetCurrentFunction(),
-                transposedInput.GetStorage(), scale.GetStorage(),
-                zeroPoints.GetStorage(), -1);
+            dequantizedResult = TensorDequantizeOperation(*Program::GetInstance().GetCurrentFunction(),
+                                                          transposedInput.GetStorage(), scale.GetStorage(),
+                                                          zeroPoints.GetStorage(), -1);
         } else {
             // Symmetric: create zero offset tensor
-            auto zeroOffset = CreateZeroOffsetTensor(*Program::GetInstance().GetCurrentFunction(),
-                scale.GetStorage());
-            dequantizedResult = TensorDequantizeOperation(
-                *Program::GetInstance().GetCurrentFunction(),
-                transposedInput.GetStorage(), scale.GetStorage(),
-                zeroOffset, -1);
+            auto zeroOffset = CreateZeroOffsetTensor(*Program::GetInstance().GetCurrentFunction(), scale.GetStorage());
+            dequantizedResult = TensorDequantizeOperation(*Program::GetInstance().GetCurrentFunction(),
+                                                          transposedInput.GetStorage(), scale.GetStorage(), zeroOffset,
+                                                          -1);
         }
 
         // [Transpose] set tmp validShape
@@ -1034,14 +1044,13 @@ Tensor Dequantize(const Tensor &input, const Tensor &scale, DataType otype, int 
     // axis=-1 case
     Tensor result;
     if (isAsymmetric) {
-        result = CALL(DequantizeOperation, *Program::GetInstance().GetCurrentFunction(),
-            processedInput.GetStorage(), scale.GetStorage(), zeroPoints.GetStorage(), normalizedAxis);
+        result = CALL(DequantizeOperation, *Program::GetInstance().GetCurrentFunction(), processedInput.GetStorage(),
+                      scale.GetStorage(), zeroPoints.GetStorage(), normalizedAxis);
     } else {
         // Symmetric: create zero offset tensor
-        auto zeroOffset = CreateZeroOffsetTensor(*Program::GetInstance().GetCurrentFunction(),
-            scale.GetStorage());
-        result = CALL(DequantizeOperation, *Program::GetInstance().GetCurrentFunction(),
-            processedInput.GetStorage(), scale.GetStorage(), zeroOffset, normalizedAxis);
+        auto zeroOffset = CreateZeroOffsetTensor(*Program::GetInstance().GetCurrentFunction(), scale.GetStorage());
+        result = CALL(DequantizeOperation, *Program::GetInstance().GetCurrentFunction(), processedInput.GetStorage(),
+                      scale.GetStorage(), zeroOffset, normalizedAxis);
     }
 
     // If input was 1D, reshape output back to 1D and restore original VecTile
@@ -1058,14 +1067,16 @@ Tensor Dequantize(const Tensor &input, const Tensor &scale, DataType otype, int 
     return result;
 }
 
-Tensor DequantizeSymmetric(const Tensor &src, const Tensor &scale, int64_t axis) {
+Tensor DequantizeSymmetric(const Tensor& src, const Tensor& scale, int64_t axis)
+{
     CheckTensorFormat(src.GetStorage(), {TileOpFormat::TILEOP_NZ}, "DequantizeSymmetric");
     CheckTensorFormat(scale.GetStorage(), {TileOpFormat::TILEOP_NZ}, "DequantizeSymmetric");
 
     return Dequantize(src, scale, DataType::DT_FP32, axis, Tensor());
 }
 
-Tensor DequantizeAsymmetric(const Tensor &src, const Tensor &scale, const Tensor &zeroPoints, int64_t axis) {
+Tensor DequantizeAsymmetric(const Tensor& src, const Tensor& scale, const Tensor& zeroPoints, int64_t axis)
+{
     CheckTensorFormat(src.GetStorage(), {TileOpFormat::TILEOP_NZ}, "DequantizeAsymmetric");
     CheckTensorFormat(scale.GetStorage(), {TileOpFormat::TILEOP_NZ}, "DequantizeAsymmetric");
     CheckTensorFormat(zeroPoints.GetStorage(), {TileOpFormat::TILEOP_NZ}, "DequantizeAsymmetric");
@@ -1073,8 +1084,8 @@ Tensor DequantizeAsymmetric(const Tensor &src, const Tensor &scale, const Tensor
     return Dequantize(src, scale, DataType::DT_FP32, axis, zeroPoints);
 }
 
-std::tuple<Tensor, Tensor> QuantMX(
-    const Tensor& input, DataType quantDtype, DequantScaleRoundingMode mode, int64_t axis, bool performanceMode)
+std::tuple<Tensor, Tensor> QuantMX(const Tensor& input, DataType quantDtype, DequantScaleRoundingMode mode,
+                                   int64_t axis, bool performanceMode)
 {
     DECLARE_TRACER();
     CheckTensorFormat(input.GetStorage(), {TileOpFormat::TILEOP_NZ}, "QuantMX");
@@ -1132,9 +1143,10 @@ std::tuple<Tensor, Tensor> QuantMX(
 }
 
 // Tile Function Registration
-void DequantizeOperationTileFunc(Function &function, const TileShape &tileShape,
-    const std::vector<LogicalTensorPtr> &iOperand, const std::vector<LogicalTensorPtr> &oOperand,
-    const Operation &op) {
+void DequantizeOperationTileFunc(Function& function, const TileShape& tileShape,
+                                 const std::vector<LogicalTensorPtr>& iOperand,
+                                 const std::vector<LogicalTensorPtr>& oOperand, const Operation& op)
+{
     int64_t axis = op.GetIntAttribute(OP_ATTR_PREFIX + "axis");
     TiledDequantize(function, tileShape, iOperand[0], iOperand[1], iOperand[2], oOperand[0], axis);
 }

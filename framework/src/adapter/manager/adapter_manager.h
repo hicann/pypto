@@ -1,5 +1,5 @@
 /**
-* Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
  * Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -27,30 +27,12 @@ namespace npu::tile_fwk {
 class AdapterManager {
 public:
     static AdapterManager& Instance();
-    const CannAdapter<AclFunc>& GetAclAdapter() const
-    {
-        return aclAdapter_;
-    }
-    const CannAdapter<AdumpFunc>& GetAdumpAdapter() const
-    {
-        return adumpAdapter_;
-    }
-    const CannAdapter<HalFunc>& GetHalAdapter() const
-    {
-        return halAdapter_;
-    }
-    const CannAdapter<HcclFunc>& GetHcclAdapter() const
-    {
-        return hcclAdapter_;
-    }
-    const CannAdapter<MsprofFunc>& GetMsprofAdapter() const
-    {
-        return msprofAdapter_;
-    }
-    const CannAdapter<RuntimeFunc>& GetRuntimeAdapter() const
-    {
-        return runtimeAdapter_;
-    }
+    const CannAdapter<AclFunc>& GetAclAdapter() const { return aclAdapter_; }
+    const CannAdapter<AdumpFunc>& GetAdumpAdapter() const { return adumpAdapter_; }
+    const CannAdapter<HalFunc>& GetHalAdapter() const { return halAdapter_; }
+    const CannAdapter<HcclFunc>& GetHcclAdapter() const { return hcclAdapter_; }
+    const CannAdapter<MsprofFunc>& GetMsprofAdapter() const { return msprofAdapter_; }
+    const CannAdapter<RuntimeFunc>& GetRuntimeAdapter() const { return runtimeAdapter_; }
 
 private:
     AdapterManager();
@@ -62,4 +44,4 @@ private:
     CannAdapter<MsprofFunc> msprofAdapter_;
     CannAdapter<RuntimeFunc> runtimeAdapter_;
 };
-}
+} // namespace npu::tile_fwk

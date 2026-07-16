@@ -70,8 +70,8 @@ inCast{8,16}->reshape->ubTensor2{32,4}->sqrt->outCast{32,4}
 */
 TEST_F(TestRemoveRedundantReshapePass, RemoveRedundantReshapeUTest1)
 {
-    auto currFunctionPtr = std::make_shared<Function>(
-        Program::GetInstance(), "TestRemoveRedundantReshape", "TestRemoveRedundantReshape", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantReshape",
+                                                      "TestRemoveRedundantReshape", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     // Prepare the graph
@@ -117,8 +117,8 @@ inCast{8,16}->sqrt->outCast{8,16}
 */
 TEST_F(TestRemoveRedundantReshapePass, RemoveRedundantReshapeUTest2)
 {
-    auto currFunctionPtr = std::make_shared<Function>(
-        Program::GetInstance(), "TestRemoveRedundantReshape", "TestRemoveRedundantReshape", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantReshape",
+                                                      "TestRemoveRedundantReshape", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     // Prepare the graph
@@ -159,8 +159,8 @@ inCast{8,16}->sqrt->outCast1{8,16}
 */
 TEST_F(TestRemoveRedundantReshapePass, RemoveRedundantReshapeUTest3)
 {
-    auto currFunctionPtr = std::make_shared<Function>(
-        Program::GetInstance(), "TestRemoveRedundantReshape", "TestRemoveRedundantReshape", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantReshape",
+                                                      "TestRemoveRedundantReshape", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     // Prepare the graph
@@ -212,8 +212,8 @@ inCast{8,16}->reshape->ubTensor1{16,8}->exp->outCast1{16,8}
 */
 TEST_F(TestRemoveRedundantReshapePass, RemoveRedundantReshapeUTest4)
 {
-    auto currFunctionPtr = std::make_shared<Function>(
-        Program::GetInstance(), "TestRemoveRedundantReshape", "TestRemoveRedundantReshape", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantReshape",
+                                                      "TestRemoveRedundantReshape", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     // Prepare the graph
@@ -297,10 +297,10 @@ TEST_F(TestRemoveRedundantReshapePass, RemoveRedundantReshapeSTest1)
     Function* func = Program::GetInstance().GetFunctionByRawName("TENSOR_STCase1");
     EXPECT_EQ(func->Operations().size(), kSizeFifteen);
 
-    passManager.RegisterStrategy(
-        "RemoveRedundantReshapeTestStrategy", {
-                                                  {"RemoveRedundantReshape", PassName::REMOVE_REDUNDANT_RESHAPE},
-                                              });
+    passManager.RegisterStrategy("RemoveRedundantReshapeTestStrategy",
+                                 {
+                                     {"RemoveRedundantReshape", PassName::REMOVE_REDUNDANT_RESHAPE},
+                                 });
     EXPECT_EQ(passManager.RunPass(Program::GetInstance(), *func, "RemoveRedundantReshapeTestStrategy"), SUCCESS);
 
     // ================== Verify the effect of the Pass ==================
@@ -318,8 +318,8 @@ TEST_F(TestRemoveRedundantReshapePass, RemoveRedundantReshapeSTest1)
 
 TEST_F(TestRemoveRedundantReshapePass, RemoveRedundantReshapeUTest5)
 {
-    auto currFunctionPtr = std::make_shared<Function>(
-        Program::GetInstance(), "TestRemoveRedundantReshape", "TestRemoveRedundantReshape", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantReshape",
+                                                      "TestRemoveRedundantReshape", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     // Prepare the graph
@@ -351,8 +351,8 @@ inCast->reShape->ubTensor1->reShape->outCast
 */
 TEST_F(TestRemoveRedundantReshapePass, RemoveRedundantReshapeContainNegativeOne)
 {
-    auto currFunctionPtr = std::make_shared<Function>(
-        Program::GetInstance(), "TestRemoveRedundantReshape", "TestRemoveRedundantReshape", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantReshape",
+                                                      "TestRemoveRedundantReshape", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
     int64_t kSizeNegativeOne = -1;
     // Prepare the graph
@@ -380,11 +380,10 @@ TEST_F(TestRemoveRedundantReshapePass, RemoveRedundantReshapeContainNegativeOne)
     EXPECT_EQ(reshapeNum, kNumTwo);
 }
 
-TEST_F(TestRemoveRedundantReshapePass, ReshapeNoConsumer) {
-    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(),
-        "TestReshapeNoConsumer",
-        "TestReshapeNoConsumer",
-        nullptr);
+TEST_F(TestRemoveRedundantReshapePass, ReshapeNoConsumer)
+{
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestReshapeNoConsumer",
+                                                      "TestReshapeNoConsumer", nullptr);
     ASSERT_NE(currFunctionPtr, nullptr);
     std::vector<int64_t> shape = {kNumEight, kNumExpFour};
     auto inCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
@@ -393,9 +392,9 @@ TEST_F(TestRemoveRedundantReshapePass, ReshapeNoConsumer) {
     currFunctionPtr->inCasts_.push_back(inCast);
     currFunctionPtr->outCasts_.push_back(outCast);
     RemoveRedundantReshape pass;
-    
+
     Status ret = pass.PreCheck(*currFunctionPtr);
     EXPECT_EQ(ret, FAILED);
 }
-}
-}
+} // namespace tile_fwk
+} // namespace npu

@@ -23,8 +23,8 @@ const std::string CODEGEN_LITENPU_WORKSPACE = "workspace";
 
 class CompileInfoLiteNPU : public CompileInfo {
 public:
-    CompileInfoLiteNPU(
-        Function& topFunc, const CodeGenCtx& ctx, const std::pair<uint64_t, Function*>& subFuncPair, bool isCube)
+    CompileInfoLiteNPU(Function& topFunc, const CodeGenCtx& ctx, const std::pair<uint64_t, Function*>& subFuncPair,
+                       bool isCube)
         : CompileInfo(topFunc, ctx, subFuncPair, isCube)
     {
         std::ostringstream ss;
@@ -41,7 +41,7 @@ private:
 
 class CodeGenLiteNPU : public CodeGenNPU {
 public:
-    explicit CodeGenLiteNPU(const CodeGenCtx& cgCtx) : CodeGenNPU(cgCtx){};
+    explicit CodeGenLiteNPU(const CodeGenCtx& cgCtx) : CodeGenNPU(cgCtx) {};
     ~CodeGenLiteNPU() override = default;
 
     void GenCode(Function& topFunc) override;
@@ -54,24 +54,23 @@ private:
     std::string GetCoreArch(const CompileInfo& compileInfo) const override;
 
     void AppendLiteNPUVFOptions(std::ostringstream& oss) const;
-    void BuildExtraOptions(
-        std::ostringstream& oss, const CompileInfo& compileInfo, const std::string& compileOptions) const override;
+    void BuildExtraOptions(std::ostringstream& oss, const CompileInfo& compileInfo,
+                           const std::string& compileOptions) const override;
 
     void BuildIncludes(std::ostringstream& oss) const override;
 
-    std::string GenFuncGlobalCodeAfterReplace(
-        const Function& func, std::pair<uint64_t, Function*> subFuncPair, const std::string& subProgramCode);
+    std::string GenFuncGlobalCodeAfterReplace(const Function& func, std::pair<uint64_t, Function*> subFuncPair,
+                                              const std::string& subProgramCode);
 
-    std::unordered_map<int, std::string> GenParamsSymbolMap(
-        const SubfuncParam& subFuncParam, std::vector<std::string>& params,
-        std::map<std::string, std::string>& dTypeMap);
+    std::unordered_map<int, std::string> GenParamsSymbolMap(const SubfuncParam& subFuncParam,
+                                                            std::vector<std::string>& params,
+                                                            std::map<std::string, std::string>& dTypeMap);
 
     std::vector<std::string> GetInOutParams(std::pair<uint64_t, Function*> subFuncPair);
 
-    void GenConfigJson(
-        const std::string& jsonName, const std::string& cppName, const std::string& binName,
-        const std::string& kernelName, const int& workspaceSize, const std::vector<std::string>& argNames,
-        const int& blockDim) const;
+    void GenConfigJson(const std::string& jsonName, const std::string& cppName, const std::string& binName,
+                       const std::string& kernelName, const int& workspaceSize,
+                       const std::vector<std::string>& argNames, const int& blockDim) const;
 };
 
 } // namespace npu::tile_fwk

@@ -47,8 +47,8 @@ std::map<int, int> FordBellman(const std::vector<std::pair<int, int>>& edges, Fu
     return subgrDepthMap;
 }
 
-void FindCubeTilesCombinations(
-    std::map<std::vector<int64_t>, double>& setOfCubeTiles, int64_t m, int64_t k, int64_t n, int64_t inputTypeSize)
+void FindCubeTilesCombinations(std::map<std::vector<int64_t>, double>& setOfCubeTiles, int64_t m, int64_t k, int64_t n,
+                               int64_t inputTypeSize)
 {
     const int64_t L0A_MAX_SIZE = Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_L0A);
     const int64_t L0B_MAX_SIZE = Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_L0B);
@@ -68,27 +68,26 @@ void FindCubeTilesCombinations(
     }
 }
 
-static void CalculateUtilizationScore(
-    const std::vector<int64_t>& tile, double& score, int64_t M, int64_t K, int64_t N, int64_t inputTypeSize,
-    int64_t L0A_MAX_SIZE, int64_t L0B_MAX_SIZE, int64_t L0C_MAX_SIZE)
+static void CalculateUtilizationScore(const std::vector<int64_t>& tile, double& score, int64_t M, int64_t K, int64_t N,
+                                      int64_t inputTypeSize, int64_t L0A_MAX_SIZE, int64_t L0B_MAX_SIZE,
+                                      int64_t L0C_MAX_SIZE)
 {
     score = (tile[M_DIM] == std::max(M, MIN_TILE)) ? (score + WHOLE_M_SCORE) : score;
     score = (tile[K_DIM] == std::max(K, MIN_TILE)) ? (score + WHOLE_K_SCORE) : score;
     score = (tile[N_DIM] == std::max(N, MIN_TILE)) ? (score + WHOLE_N_SCORE) : score;
-    double utilizationL0A =
-        static_cast<double>((tile[M_DIM] * tile[K_DIM] * inputTypeSize)) / (L0A_MAX_SIZE / DOUBLE_BUFFER);
-    double utilizationL0B =
-        static_cast<double>((tile[K_DIM] * tile[N_DIM] * inputTypeSize)) / (L0B_MAX_SIZE / DOUBLE_BUFFER);
-    double utilizationL0C =
-        static_cast<double>((tile[M_DIM] * tile[N_DIM] * OUTPUT_TYPE_SIZE)) / (L0C_MAX_SIZE / DOUBLE_BUFFER_L0C);
+    double utilizationL0A = static_cast<double>((tile[M_DIM] * tile[K_DIM] * inputTypeSize)) /
+                            (L0A_MAX_SIZE / DOUBLE_BUFFER);
+    double utilizationL0B = static_cast<double>((tile[K_DIM] * tile[N_DIM] * inputTypeSize)) /
+                            (L0B_MAX_SIZE / DOUBLE_BUFFER);
+    double utilizationL0C = static_cast<double>((tile[M_DIM] * tile[N_DIM] * OUTPUT_TYPE_SIZE)) /
+                            (L0C_MAX_SIZE / DOUBLE_BUFFER_L0C);
     std::vector<double> vectorRatio = {utilizationL0A, utilizationL0B, utilizationL0C};
     double geomeanUtilizationL0 = CalculateGeometricMean(vectorRatio);
     score += WEIGHT_L0 * geomeanUtilizationL0;
 }
 
-static void CalculateTaskScore(
-    double& score, int64_t M, int64_t N, const std::vector<int64_t>& tile, int64_t cubeL1Reuse, int64_t cubeNBuffer,
-    int64_t numOfMatmuls, int64_t CUBE_CORES)
+static void CalculateTaskScore(double& score, int64_t M, int64_t N, const std::vector<int64_t>& tile,
+                               int64_t cubeL1Reuse, int64_t cubeNBuffer, int64_t numOfMatmuls, int64_t CUBE_CORES)
 {
     double tasks = numOfMatmuls * (std::max(M, MIN_TILE) / static_cast<double>(tile[M_DIM])) *
                    (std::max(N, MIN_TILE) / static_cast<double>(tile[N_DIM])) / (cubeL1Reuse * cubeNBuffer);
@@ -101,9 +100,9 @@ static void CalculateTaskScore(
     score += RESIDUAL_CUBE_TASKS_WEIGHT * residualTasks;
 }
 
-static void CalculateBalanceAndCycleScore(
-    double& score, const std::vector<int64_t>& tile, const uint64_t inputMKN, const uint64_t mkn,
-    const int64_t cubeL1Reuse, const int64_t cubeNBuffer, const int64_t inputTypeSize, const int64_t inputType)
+static void CalculateBalanceAndCycleScore(double& score, const std::vector<int64_t>& tile, const uint64_t inputMKN,
+                                          const uint64_t mkn, const int64_t cubeL1Reuse, const int64_t cubeNBuffer,
+                                          const int64_t inputTypeSize, const int64_t inputType)
 {
     if (mkn == 0) {
         return;
@@ -120,8 +119,9 @@ static void CalculateBalanceAndCycleScore(
     uint64_t numL1CopyInL1A = inputMKN / (mkn * cubeL1Reuse * cubeNBuffer);
     uint64_t numL1CopyInL1B = inputMKN / mkn;
     uint64_t elePerRepeat = BYTES_PER_REPEAT / BytesOf(static_cast<DataType>(inputType));
-    uint64_t parallelism =
-        GetParallelism(static_cast<DataType>(inputType)) == 0 ? 1 : GetParallelism(static_cast<DataType>(inputType));
+    uint64_t parallelism = GetParallelism(static_cast<DataType>(inputType)) == 0 ?
+                               1 :
+                               GetParallelism(static_cast<DataType>(inputType));
     uint64_t cyclePerRepeat = elePerRepeat / parallelism;
     uint64_t latency = GetLatency(static_cast<DataType>(inputType));
     uint64_t repeatCountL1A = (tile[M_DIM] * tile[K_DIM] * inputTypeSize - BYTES_PER_REPEAT) / BYTES_PER_REPEAT + 1;
@@ -132,9 +132,8 @@ static void CalculateBalanceAndCycleScore(
     score -= CYCLES_WEIGHT * cyclesLog;
 }
 
-void FindScoreForCubeTiles(
-    const pairShapeType shapeAndTypeInfo, std::map<std::vector<int64_t>, double>& setOfCubeTiles, int64_t cubeL1Reuse,
-    int64_t cubeNBuffer, int64_t numOfMatmuls)
+void FindScoreForCubeTiles(const pairShapeType shapeAndTypeInfo, std::map<std::vector<int64_t>, double>& setOfCubeTiles,
+                           int64_t cubeL1Reuse, int64_t cubeNBuffer, int64_t numOfMatmuls)
 {
     const int64_t L0A_MAX_SIZE = Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_L0A);
     const int64_t L0B_MAX_SIZE = Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_L0B);
@@ -148,11 +147,10 @@ void FindScoreForCubeTiles(
     uint64_t inputMKN = std::max(M, MIN_TILE) * std::max(K, MIN_TILE) * std::max(N, MIN_TILE);
     for (auto& [tile, score] : setOfCubeTiles) {
         uint64_t mkn = tile[M_DIM] * tile[K_DIM] * tile[N_DIM];
-        CalculateUtilizationScore(
-            tile, score, M, K, N, inputTypeSize, L0A_MAX_SIZE, L0B_MAX_SIZE, L0C_MAX_SIZE);
+        CalculateUtilizationScore(tile, score, M, K, N, inputTypeSize, L0A_MAX_SIZE, L0B_MAX_SIZE, L0C_MAX_SIZE);
         CalculateTaskScore(score, M, N, tile, cubeL1Reuse, cubeNBuffer, numOfMatmuls, CUBE_CORES);
-        CalculateBalanceAndCycleScore(
-            score, tile, inputMKN, mkn, cubeL1Reuse, cubeNBuffer, inputTypeSize, static_cast<int64_t>(inputType));
+        CalculateBalanceAndCycleScore(score, tile, inputMKN, mkn, cubeL1Reuse, cubeNBuffer, inputTypeSize,
+                                      static_cast<int64_t>(inputType));
     }
 }
 
@@ -163,12 +161,12 @@ void SetPossibleCubeTiles(const pairShapeType shapeAndTypeInfo, std::map<std::ve
     int64_t N = shapeAndTypeInfo.first[N_DIM];
     DataType inputType = shapeAndTypeInfo.second;
     int64_t inputTypeSize = BytesOf(inputType);
-    int64_t newM =
-        static_cast<int64_t>(std::pow(NUM2, static_cast<int64_t>(std::ceil(std::log2(std::max(M, MIN_TILE))))));
-    int64_t newK =
-        static_cast<int64_t>(std::pow(NUM2, static_cast<int64_t>(std::ceil(std::log2(std::max(K, MIN_TILE))))));
-    int64_t newN =
-        static_cast<int64_t>(std::pow(NUM2, static_cast<int64_t>(std::ceil(std::log2(std::max(N, MIN_TILE))))));
+    int64_t newM = static_cast<int64_t>(
+        std::pow(NUM2, static_cast<int64_t>(std::ceil(std::log2(std::max(M, MIN_TILE))))));
+    int64_t newK = static_cast<int64_t>(
+        std::pow(NUM2, static_cast<int64_t>(std::ceil(std::log2(std::max(K, MIN_TILE))))));
+    int64_t newN = static_cast<int64_t>(
+        std::pow(NUM2, static_cast<int64_t>(std::ceil(std::log2(std::max(N, MIN_TILE))))));
     for (int64_t m = MIN_TILE; m <= newM; m *= FACTOR) {
         int64_t effM = m > std::max(M, MIN_TILE) ? std::max(M, MIN_TILE) : m;
         for (int64_t k = MIN_TILE; k <= newK; k *= FACTOR) {
@@ -201,10 +199,9 @@ std::tuple<std::array<int64_t, MAX_MDIM>, std::array<int64_t, MAX_KDIM>, std::ar
         int64_t occupiedL1Memory = (resultL0Tiles[M_DIM] * kLA1 + K * resultL0Tiles[N_DIM]) * inputTypeSize;
         kLB1 = (occupiedL1Memory <= L1_MAX_SIZE) ? K : kL1;
     }
-    return {
-        {resultL0Tiles[M_DIM], resultL0Tiles[M_DIM]},
-        {resultL0Tiles[K_DIM], kLA1, kLB1},
-        {resultL0Tiles[N_DIM], resultL0Tiles[N_DIM]}};
+    return {{resultL0Tiles[M_DIM], resultL0Tiles[M_DIM]},
+            {resultL0Tiles[K_DIM], kLA1, kLB1},
+            {resultL0Tiles[N_DIM], resultL0Tiles[N_DIM]}};
 }
 
 std::vector<int64_t> FindMinimalShape(const std::vector<std::vector<int64_t>>& shapes)
@@ -215,9 +212,9 @@ std::vector<int64_t> FindMinimalShape(const std::vector<std::vector<int64_t>>& s
     size_t numDims = shapes[0].size();
     for (const auto& shape : shapes) {
         if (shape.size() != numDims) {
-            APASS_LOG_ERROR_F(
-                Elements::Operation, "ERROR: Dimension inconsistency detected! Expected %zu dims, got %zu dims",
-                numDims, shape.size());
+            APASS_LOG_ERROR_F(Elements::Operation,
+                              "ERROR: Dimension inconsistency detected! Expected %zu dims, got %zu dims", numDims,
+                              shape.size());
             return {-1, -1, -1};
         }
     }
@@ -317,9 +314,8 @@ std::array<int64_t, NUM3> CalculateTileFilterForMatmul(Operation* matmulOp)
     return tileFilter;
 }
 
-std::vector<int64_t> DetermineBestCubeTile(
-    const std::map<std::vector<int64_t>, double>& setOfCubeTiles, const pairShapeType& shapeInfo,
-    const std::array<int64_t, NUM3>& tileFilter)
+std::vector<int64_t> DetermineBestCubeTile(const std::map<std::vector<int64_t>, double>& setOfCubeTiles,
+                                           const pairShapeType& shapeInfo, const std::array<int64_t, NUM3>& tileFilter)
 {
     if (setOfCubeTiles.empty()) {
         int64_t M = shapeInfo.first[M_DIM];
@@ -350,9 +346,8 @@ CubeTilesResultType FindAndSetCubeTileShapes(
     std::map<std::vector<int64_t>, double> setOfCubeTiles;
     SetPossibleCubeTiles(shapeAndTypeInfo, setOfCubeTiles);
     FindScoreForCubeTiles(shapeAndTypeInfo, setOfCubeTiles, cubeL1Reuse, cubeNBuffer, numOfMatmuls);
-    bool hasFilter =
-        (tileFilter[M_DIM] != NO_FILTER_LIMIT || tileFilter[K_DIM] != NO_FILTER_LIMIT ||
-         tileFilter[N_DIM] != NO_FILTER_LIMIT);
+    bool hasFilter = (tileFilter[M_DIM] != NO_FILTER_LIMIT || tileFilter[K_DIM] != NO_FILTER_LIMIT ||
+                      tileFilter[N_DIM] != NO_FILTER_LIMIT);
 
     if (hasFilter) {
         FilterCubeTilesByDimensions(setOfCubeTiles, tileFilter);
@@ -367,10 +362,9 @@ CubeTilesResultType FindAndSetCubeTileShapes(
     }
     return resultCubeTiles;
 #endif
-    return std::make_tuple(
-        std::array<int64_t, MAX_MDIM>{resultL0Tiles[M_DIM], resultL0Tiles[M_DIM]},
-        std::array<int64_t, MAX_KDIM>{resultL0Tiles[K_DIM], resultL0Tiles[K_DIM]},
-        std::array<int64_t, MAX_NDIM>{resultL0Tiles[N_DIM], resultL0Tiles[N_DIM]});
+    return std::make_tuple(std::array<int64_t, MAX_MDIM>{resultL0Tiles[M_DIM], resultL0Tiles[M_DIM]},
+                           std::array<int64_t, MAX_KDIM>{resultL0Tiles[K_DIM], resultL0Tiles[K_DIM]},
+                           std::array<int64_t, MAX_NDIM>{resultL0Tiles[N_DIM], resultL0Tiles[N_DIM]});
 }
 
 ShapeDimsType ExtractNormalOpShapes(Operation* op, bool isTransA, bool isTransB)
@@ -405,9 +399,8 @@ pairShapeType ShapeAndTypeSetting(Operation* op)
     return {{dims.M, dims.K, dims.N}, inputType};
 }
 
-void UniqueTilesFilling(
-    const std::set<Operation*>& cubeOperations, std::map<pairShapeType, int64_t>& uniqueTiles,
-    std::map<uint64_t, std::pair<pairShapeType, std::array<int64_t, NUM3>>>& opShapeFilter)
+void UniqueTilesFilling(const std::set<Operation*>& cubeOperations, std::map<pairShapeType, int64_t>& uniqueTiles,
+                        std::map<uint64_t, std::pair<pairShapeType, std::array<int64_t, NUM3>>>& opShapeFilter)
 {
     for (auto& op : cubeOperations) {
         auto curShapeAndType = ShapeAndTypeSetting(op);
@@ -455,8 +448,8 @@ void SetMMTiles(Function& function, const std::set<Operation*>& cubeOperations)
     }
 }
 
-std::vector<Operation*> SortCubeOpsByDepth(
-    Function& function, const std::set<Operation*>& cubeOperations, std::map<int, int>& subgrDepthMap)
+std::vector<Operation*> SortCubeOpsByDepth(Function& function, const std::set<Operation*>& cubeOperations,
+                                           std::map<int, int>& subgrDepthMap)
 {
     std::vector<std::pair<int, int>> edges;
     for (auto& op : function.Operations()) {

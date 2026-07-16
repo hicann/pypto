@@ -53,9 +53,9 @@ TILEOP void InterleaveCompute(T0 dst0, T1 dst1, T2 src0, T3 src1)
     auto src0Tile = PtoTile<T2>(src0);
     auto src1Tile = PtoTile<T3>(src1);
 
-    for (LoopVar n0Index = 0; n0Index < dstShape0; n0Index ++ ) {
-        for (LoopVar n1Index = 0; n1Index < dstShape1; n1Index ++ ) {
-            for (LoopVar n2Index = 0; n2Index < dstShape2; n2Index ++ ) {
+    for (LoopVar n0Index = 0; n0Index < dstShape0; n0Index++) {
+        for (LoopVar n1Index = 0; n1Index < dstShape1; n1Index++) {
+            for (LoopVar n2Index = 0; n2Index < dstShape2; n2Index++) {
                 auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
                 dst0Tile.Assign(dst0, tileOffsets);
                 dst1Tile.Assign(dst1, tileOffsets);
@@ -94,9 +94,9 @@ TILEOP void TDeInterleave(T0 dst0, T1 dst1, T2 src)
     auto dst1Tile = PtoTile<T1>(dst1);
     auto srcTile = PtoTile<T2>(src);
 
-    for (LoopVar n0Index = 0; n0Index < dstShape0; n0Index ++ ) {
-        for (LoopVar n1Index = 0; n1Index < dstShape1; n1Index ++ ) {
-            for (LoopVar n2Index = 0; n2Index < dstShape2; n2Index ++ ) {
+    for (LoopVar n0Index = 0; n0Index < dstShape0; n0Index++) {
+        for (LoopVar n1Index = 0; n1Index < dstShape1; n1Index++) {
+            for (LoopVar n2Index = 0; n2Index < dstShape2; n2Index++) {
                 auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
                 dst0Tile.Assign(dst0, tileOffsets);
                 dst1Tile.Assign(dst1, tileOffsets);
