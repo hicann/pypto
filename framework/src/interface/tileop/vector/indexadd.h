@@ -29,8 +29,8 @@ TILEOP void IndexAddUBNotLastAxisCompute(dstTileDefine dstTile, tempTileDefine t
 
     if constexpr (Std::is_same_v<Scalar, bfloat16_t>) {
         pto::TASSIGN(tempTile, (uint64_t)(tempAddr));
-        set_flag(PIPE_S, PIPE_V, EVENT_ID7);
-        wait_flag(PIPE_S, PIPE_V, EVENT_ID7);
+        set_flag(PIPE_S, PIPE_V, EVENT_ID0);
+        wait_flag(PIPE_S, PIPE_V, EVENT_ID0);
         if (abs(static_cast<float>(alpha) - 1) > TileOp::EPSILON) {
             pto::TMULS(src1Tile, src1Tile, alpha);
 #ifdef __DAV_V220
@@ -58,8 +58,8 @@ TILEOP void IndexAddUBNotLastAxisCompute(dstTileDefine dstTile, tempTileDefine t
             pto::TCVT(dstTile, tempTile, pto::RoundMode::CAST_NONE); // bf16->fp32
         }
     } else {
-        set_flag(PIPE_S, PIPE_V, EVENT_ID7);
-        wait_flag(PIPE_S, PIPE_V, EVENT_ID7);
+        set_flag(PIPE_S, PIPE_V, EVENT_ID0);
+        wait_flag(PIPE_S, PIPE_V, EVENT_ID0);
         if (abs(static_cast<float>(alpha) - 1) > TileOp::EPSILON) {
             pto::TMULS(src1Tile, src1Tile, alpha);
 #ifdef __DAV_V220
@@ -79,8 +79,8 @@ TILEOP void IndexAddUBLastAxisCompute(T0 dst, T2 src1, T3 src2, Scalar alpha, si
     auto dstAddr = (__ubuf__ typename T0::Type*)((uint64_t)(dst.GetAddr()));
     auto src1Addr = (__ubuf__ typename T2::Type*)((uint64_t)(src1.GetAddr()));
     auto idxAddr = (__ubuf__ typename T3::Type*)((uint64_t)(src2.GetAddr()));
-    set_flag(PIPE_V, PIPE_S, EVENT_ID7);
-    wait_flag(PIPE_V, PIPE_S, EVENT_ID7);
+    set_flag(PIPE_V, PIPE_S, EVENT_ID0);
+    wait_flag(PIPE_V, PIPE_S, EVENT_ID0);
     uint64_t dstOffset = 0;
     uint64_t src1Offset = 0;
     if (abs(static_cast<float>(alpha) - 1) > TileOp::EPSILON) {
@@ -145,8 +145,8 @@ TILEOP void IndexAddUBLastAxisCompute(T0 dst, T2 src1, T3 src2, Scalar alpha, si
             }
         }
     }
-    set_flag(PIPE_S, PIPE_V, EVENT_ID7);
-    wait_flag(PIPE_S, PIPE_V, EVENT_ID7);
+    set_flag(PIPE_S, PIPE_V, EVENT_ID0);
+    wait_flag(PIPE_S, PIPE_V, EVENT_ID0);
 }
 
 /*
@@ -208,8 +208,8 @@ TILEOP void TIndexAddUB(T0 dst, T1 src0, T2 src1, T3 src2, T4 tempTensor, Scalar
         src1TileDefine src1Tile;
         if constexpr (axis == 0) { // 从第2轴开始合轴
             for (LoopVar i = 0; i < src1Shape0; ++i) {
-                set_flag(PIPE_V, PIPE_S, EVENT_ID7);
-                wait_flag(PIPE_V, PIPE_S, EVENT_ID7);
+                set_flag(PIPE_V, PIPE_S, EVENT_ID0);
+                wait_flag(PIPE_V, PIPE_S, EVENT_ID0);
                 auto index = *(idxAddr + i);
                 auto dstOffset = index * dstStride0;
                 auto src1Offset = i * src1Stride0;
@@ -219,8 +219,8 @@ TILEOP void TIndexAddUB(T0 dst, T1 src0, T2 src1, T3 src2, T4 tempTensor, Scalar
         } else if constexpr (axis == 1) { // 从第3轴开始合轴
             for (LoopVar i = 0; i < src1Shape0; ++i) {
                 for (LoopVar j = 0; j < src1Shape1; ++j) {
-                    set_flag(PIPE_V, PIPE_S, EVENT_ID7);
-                    wait_flag(PIPE_V, PIPE_S, EVENT_ID7);
+                    set_flag(PIPE_V, PIPE_S, EVENT_ID0);
+                    wait_flag(PIPE_V, PIPE_S, EVENT_ID0);
                     auto index = *(idxAddr + j);
                     auto dstOffset = i * dstStride0 + index * dstStride1;
                     auto src1Offset = i * src1Stride0 + j * src1Stride1;
@@ -232,8 +232,8 @@ TILEOP void TIndexAddUB(T0 dst, T1 src0, T2 src1, T3 src2, T4 tempTensor, Scalar
             for (LoopVar i = 0; i < src1Shape0; ++i) {
                 for (LoopVar j = 0; j < src1Shape1; ++j) {
                     for (LoopVar k = 0; k < src1Shape2; ++k) {
-                        set_flag(PIPE_V, PIPE_S, EVENT_ID7);
-                        wait_flag(PIPE_V, PIPE_S, EVENT_ID7);
+                        set_flag(PIPE_V, PIPE_S, EVENT_ID0);
+                        wait_flag(PIPE_V, PIPE_S, EVENT_ID0);
                         auto index = *(idxAddr + k);
                         auto dstOffset = i * dstStride0 + j * dstStride1 + index * dstStride2;
                         auto src1Offset = i * src1Stride0 + j * src1Stride1 + k * src1Stride2;
@@ -247,8 +247,8 @@ TILEOP void TIndexAddUB(T0 dst, T1 src0, T2 src1, T3 src2, T4 tempTensor, Scalar
                 for (LoopVar j = 0; j < src1Shape1; ++j) {
                     for (LoopVar k = 0; k < src1Shape2; ++k) {
                         for (LoopVar l = 0; l < src1Shape3; ++l) {
-                            set_flag(PIPE_V, PIPE_S, EVENT_ID7);
-                            wait_flag(PIPE_V, PIPE_S, EVENT_ID7);
+                            set_flag(PIPE_V, PIPE_S, EVENT_ID0);
+                            wait_flag(PIPE_V, PIPE_S, EVENT_ID0);
                             auto index = *(idxAddr + l);
                             auto dstOffset = i * dstStride0 + j * dstStride1 + k * dstStride2 + index * dstStride3;
                             auto src1Offset = i * src1Stride0 + j * src1Stride1 + k * src1Stride2 + l * src1Stride3;
@@ -280,20 +280,20 @@ TILEOP void IndexAddNotLastAxisCompute(dstGlobalData dstGlobal, tmpTileDefine tm
                 Scalar mulsResult = static_cast<Scalar>(src1Addr[newSrc1Offset]) * alpha;
                 tmpAddr[idx] = mulsResult;
             }
-            set_flag(PIPE_S, PIPE_MTE3, EVENT_ID7);
-            wait_flag(PIPE_S, PIPE_MTE3, EVENT_ID7);
+            set_flag(PIPE_S, PIPE_MTE3, EVENT_ID0);
+            wait_flag(PIPE_S, PIPE_MTE3, EVENT_ID0);
         } else {
             // int16,int32,fp16,fp32
-            set_flag(PIPE_S, PIPE_V, EVENT_ID7);
-            wait_flag(PIPE_S, PIPE_V, EVENT_ID7);
+            set_flag(PIPE_S, PIPE_V, EVENT_ID0);
+            wait_flag(PIPE_S, PIPE_V, EVENT_ID0);
             pto::TMULS(tmpTile, src1Tile, alpha);
-            set_flag(PIPE_V, PIPE_MTE3, EVENT_ID7);
-            wait_flag(PIPE_V, PIPE_MTE3, EVENT_ID7);
+            set_flag(PIPE_V, PIPE_MTE3, EVENT_ID0);
+            wait_flag(PIPE_V, PIPE_MTE3, EVENT_ID0);
         }
         pto::TSTORE<tmpTileDefine, dstGlobalData, pto::AtomicType::AtomicAdd>(dstGlobal, tmpTile);
     } else {
-        set_flag(PIPE_S, PIPE_MTE3, EVENT_ID7);
-        wait_flag(PIPE_S, PIPE_MTE3, EVENT_ID7);
+        set_flag(PIPE_S, PIPE_MTE3, EVENT_ID0);
+        wait_flag(PIPE_S, PIPE_MTE3, EVENT_ID0);
         pto::TSTORE<src1TileDefine, dstGlobalData, pto::AtomicType::AtomicAdd>(dstGlobal, src1Tile);
     }
 }
@@ -321,8 +321,8 @@ TILEOP void IndexAddLastAxisCompute(dstGlobalData dstGlobal, tmpTileDefine tmpTi
     }
     pto::TASSIGN(dstGlobal, dstAddr + dstOffset);
     pto::TASSIGN(tmpTile, (uint64_t)tmpAddr);
-    set_flag(PIPE_S, PIPE_MTE3, EVENT_ID7);
-    wait_flag(PIPE_S, PIPE_MTE3, EVENT_ID7);
+    set_flag(PIPE_S, PIPE_MTE3, EVENT_ID0);
+    wait_flag(PIPE_S, PIPE_MTE3, EVENT_ID0);
     pto::TSTORE<tmpTileDefine, dstGlobalData, pto::AtomicType::AtomicAdd>(dstGlobal, tmpTile);
 }
 
@@ -402,8 +402,8 @@ TILEOP void TIndexAdd(T0 dst, T1 src0, T2 src1, T3 src2, T4 tmpTensor, C coord, 
                 for (LoopVar k = 0; k < src1Shapes[2]; ++k) {
                     for (LoopVar l = 0; l < src1Shapes[3]; ++l) {
                         for (LoopVar m = 0; m < src1Shapes[4]; ++m) {
-                            set_flag(PIPE_MTE3, PIPE_S, EVENT_ID7);
-                            wait_flag(PIPE_MTE3, PIPE_S, EVENT_ID7);
+                            set_flag(PIPE_MTE3, PIPE_S, EVENT_ID0);
+                            wait_flag(PIPE_MTE3, PIPE_S, EVENT_ID0);
                             size_t idx[] = {i, j, k, l};
                             auto dstOffset = GetTileOffset<axis, T3>(dstStrides, idx, idxAddr) + idxAddr[m];
                             auto src1Offset = GetTileOffset<axis, T3>(src1Strides, idx, idxAddr) + m;
@@ -422,8 +422,8 @@ TILEOP void TIndexAdd(T0 dst, T1 src0, T2 src1, T3 src2, T4 tmpTensor, C coord, 
             for (LoopVar j = 0; j < src1Shapes[1]; ++j) {
                 for (LoopVar k = 0; k < src1Shapes[2]; ++k) {
                     for (LoopVar l = 0; l < src1Shapes[3]; ++l) {
-                        set_flag(PIPE_MTE3, PIPE_S, EVENT_ID7);
-                        wait_flag(PIPE_MTE3, PIPE_S, EVENT_ID7);
+                        set_flag(PIPE_MTE3, PIPE_S, EVENT_ID0);
+                        wait_flag(PIPE_MTE3, PIPE_S, EVENT_ID0);
                         size_t idx[] = {i, j, k, l};
                         auto dstOffset = GetTileOffset<axis, T3>(dstStrides, idx, idxAddr);
                         auto src1Offset = GetTileOffset<4, T3>(src1Strides, idx, idxAddr);

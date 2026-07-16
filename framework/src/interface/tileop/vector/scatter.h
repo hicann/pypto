@@ -41,8 +41,8 @@ TILEOP void TscatterElementS(T0 dst, T1 src1, Scalar src2)
     auto n3IdxShape = idxLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
     auto n4IdxShape = idxLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
 
-    set_flag(PIPE_V, PIPE_S, EVENT_ID7);
-    wait_flag(PIPE_V, PIPE_S, EVENT_ID7);
+    set_flag(PIPE_V, PIPE_S, EVENT_ID0);
+    wait_flag(PIPE_V, PIPE_S, EVENT_ID0);
     auto idxAddr = (__ubuf__ typename T1::Type*)((uint64_t)(src1.GetAddr()));
     auto dstAddr = (__ubuf__ typename T0::Type*)((uint64_t)(dst.GetAddr()));
     for (LoopVar i = 0; i < n0IdxShape; ++i) {
@@ -88,8 +88,8 @@ TILEOP void TscatterElementS(T0 dst, T1 src1, Scalar src2)
             }
         }
     }
-    set_flag(PIPE_S, PIPE_V, EVENT_ID7);
-    wait_flag(PIPE_S, PIPE_V, EVENT_ID7);
+    set_flag(PIPE_S, PIPE_V, EVENT_ID0);
+    wait_flag(PIPE_S, PIPE_V, EVENT_ID0);
 }
 
 template <int axis, int scatterMode, typename T0, typename T1, typename T2, typename T3>
@@ -147,8 +147,8 @@ TILEOP void Tscatter(T0 dst, T1 src1, T2 src2, T3 tmp)
     srcTileDefine srcTile;
 
     if constexpr (scalarFlag) {
-        set_flag(PIPE_V, PIPE_S, EVENT_ID7);
-        wait_flag(PIPE_V, PIPE_S, EVENT_ID7);
+        set_flag(PIPE_V, PIPE_S, EVENT_ID0);
+        wait_flag(PIPE_V, PIPE_S, EVENT_ID0);
     }
     auto dstAddr = (__ubuf__ typename T0::Type*)((uint64_t)(dst.GetAddr()));
     auto idxAddr = (__ubuf__ typename T1::Type*)((uint64_t)(src1.GetAddr()));
@@ -160,8 +160,8 @@ TILEOP void Tscatter(T0 dst, T1 src1, T2 src2, T3 tmp)
             for (LoopVar k = 0; k < idxShape2; ++k) {
                 for (LoopVar l = 0; l < idxShape3; ++l) {
                     if constexpr (scalarFlag == false) {
-                        set_flag(PIPE_V, PIPE_S, EVENT_ID7);
-                        wait_flag(PIPE_V, PIPE_S, EVENT_ID7);
+                        set_flag(PIPE_V, PIPE_S, EVENT_ID0);
+                        wait_flag(PIPE_V, PIPE_S, EVENT_ID0);
                     }
                     for (LoopVar m = 0; m < idxShape4; ++m) {
                         typename T1::Type index = *(idxAddr + i * idxStride0 + j * idxStride1 + k * idxStride2 +
@@ -193,8 +193,8 @@ TILEOP void Tscatter(T0 dst, T1 src1, T2 src2, T3 tmp)
                         }
                     }
                     if constexpr (scalarFlag == false) {
-                        set_flag(PIPE_S, PIPE_V, EVENT_ID7);
-                        wait_flag(PIPE_S, PIPE_V, EVENT_ID7);
+                        set_flag(PIPE_S, PIPE_V, EVENT_ID0);
+                        wait_flag(PIPE_S, PIPE_V, EVENT_ID0);
                         auto srcOffset = i * srcStride0 + j * srcStride1 + k * srcStride2 + l * srcStride3;
                         pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr()));
                         pto::TASSIGN(idxTile, (uint64_t)(tmp.GetAddr()));
@@ -206,11 +206,11 @@ TILEOP void Tscatter(T0 dst, T1 src1, T2 src2, T3 tmp)
         }
     }
     if constexpr (scalarFlag) {
-        set_flag(PIPE_S, PIPE_V, EVENT_ID7);
-        wait_flag(PIPE_S, PIPE_V, EVENT_ID7);
+        set_flag(PIPE_S, PIPE_V, EVENT_ID0);
+        wait_flag(PIPE_S, PIPE_V, EVENT_ID0);
     } else {
-        set_flag(PIPE_V, PIPE_MTE3, EVENT_ID7);
-        wait_flag(PIPE_V, PIPE_MTE3, EVENT_ID7);
+        set_flag(PIPE_V, PIPE_MTE3, EVENT_ID0);
+        wait_flag(PIPE_V, PIPE_MTE3, EVENT_ID0);
     }
 }
 

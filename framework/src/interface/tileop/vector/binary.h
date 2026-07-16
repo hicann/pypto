@@ -291,8 +291,8 @@ TILEOP void TGcd(T0 dst, T1 src0, T2 src1)
     auto src1Addr = (__ubuf__ typename T2::Type*)((uint64_t)(src1.GetAddr()));
     auto dstAddr = (__ubuf__ typename T0::Type*)((uint64_t)(dst.GetAddr()));
 
-    set_flag(PIPE_V, PIPE_S, EVENT_ID7);
-    wait_flag(PIPE_V, PIPE_S, EVENT_ID7);
+    set_flag(PIPE_V, PIPE_S, EVENT_ID0);
+    wait_flag(PIPE_V, PIPE_S, EVENT_ID0);
     for (LoopVar n = 0; n < shape0; n++) {
         for (LoopVar j = 0; j < shape1; j++) {
             for (LoopVar k = 0; k < shape2; k++) {
@@ -305,8 +305,8 @@ TILEOP void TGcd(T0 dst, T1 src0, T2 src1)
             }
         }
     }
-    set_flag(PIPE_S, PIPE_V, EVENT_ID7);
-    wait_flag(PIPE_S, PIPE_V, EVENT_ID7);
+    set_flag(PIPE_S, PIPE_V, EVENT_ID0);
+    wait_flag(PIPE_S, PIPE_V, EVENT_ID0);
 }
 
 #define OP_TILE_OP_Mod TMod

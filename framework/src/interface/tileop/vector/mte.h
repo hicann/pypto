@@ -394,12 +394,12 @@ __aicore__ inline void DoIndexPut(size_t indicesLength, size_t dstShapes[], size
         }
         ValuesTileDefine valuesData(copyShapes[1], copyShapes[2]);
         DstData dstData(dstAddr + dstOffset, dstDataShape, dstDataStride);
-        set_flag(PIPE_S, PIPE_MTE3, EVENT_ID7);
-        wait_flag(PIPE_S, PIPE_MTE3, EVENT_ID7);
+        set_flag(PIPE_S, PIPE_MTE3, EVENT_ID0);
+        wait_flag(PIPE_S, PIPE_MTE3, EVENT_ID0);
         pto::TASSIGN(valuesData, (uint64_t)valuesPtr);
         pto::TSTORE<ValuesTileDefine, DstData, atomicType>(dstData, valuesData);
-        set_flag(PIPE_MTE3, PIPE_S, EVENT_ID7);
-        wait_flag(PIPE_MTE3, PIPE_S, EVENT_ID7);
+        set_flag(PIPE_MTE3, PIPE_S, EVENT_ID0);
+        wait_flag(PIPE_MTE3, PIPE_S, EVENT_ID0);
         valuesPtr += valuesStride;
     }
     if constexpr (valuesSize == 1) {
@@ -435,12 +435,12 @@ __aicore__ inline void TIndexPut(DST dst, C coordinate, VAL values, IDX indices0
         valuesStride = 0;
     }
     size_t gmOffset = static_cast<size_t>(dstLayout.template GetGmOffset<C, MAX_DIMS>(coordinate));
-    set_flag(PIPE_MTE3, PIPE_S, EVENT_ID7);
-    wait_flag(PIPE_MTE3, PIPE_S, EVENT_ID7);
+    set_flag(PIPE_MTE3, PIPE_S, EVENT_ID0);
+    wait_flag(PIPE_MTE3, PIPE_S, EVENT_ID0);
     DoIndexPut<atomicType, dstShapeSize, valuesSize, VAL>(indicesLength, dstShapes, valuesStride, valuesShapes,
                                                           values.GetAddr(), dst.GetAddr() + gmOffset, indicesPtrs);
-    set_flag(PIPE_S, PIPE_MTE3, EVENT_ID7);
-    wait_flag(PIPE_S, PIPE_MTE3, EVENT_ID7);
+    set_flag(PIPE_S, PIPE_MTE3, EVENT_ID0);
+    wait_flag(PIPE_S, PIPE_MTE3, EVENT_ID0);
 }
 
 #endif

@@ -70,8 +70,8 @@ TILEOP void TPRelu(T0 dst, T1 src, T2 weight, T3 tmp)
         DstTileDefine dstTile(1, dstShape4);
         SrcTileDefine srcTile(1, srcShape4);
         auto weightAddr = (__ubuf__ typename T2::Type*)((uint64_t)(weight.GetAddr()));
-        set_flag(PIPE_V, PIPE_S, EVENT_ID7);
-        wait_flag(PIPE_V, PIPE_S, EVENT_ID7);
+        set_flag(PIPE_V, PIPE_S, EVENT_ID0);
+        wait_flag(PIPE_V, PIPE_S, EVENT_ID0);
 
         auto negative_slope = *weightAddr;
 
@@ -117,8 +117,8 @@ TILEOP void TPRelu(T0 dst, T1 src, T2 weight, T3 tmp)
         DstTileDefine dstTile(1, dstShape4);
         SrcTileDefine srcTile(1, srcShape4);
         auto weightAddr = (__ubuf__ typename T2::Type*)((uint64_t)(weight.GetAddr()));
-        set_flag(PIPE_V, PIPE_S, EVENT_ID7);
-        wait_flag(PIPE_V, PIPE_S, EVENT_ID7);
+        set_flag(PIPE_V, PIPE_S, EVENT_ID0);
+        wait_flag(PIPE_V, PIPE_S, EVENT_ID0);
 
         for (LoopVar n3Index = 0; n3Index < dstShape3; ++n3Index) {
             auto negative_slope = *(weightAddr + n3Index);
@@ -142,8 +142,8 @@ TILEOP void TPRelu(T0 dst, T1 src, T2 weight, T3 tmp)
         DstTileDefine dstTile(dstShape3, dstShape4);
         SrcTileDefine srcTile(srcShape3, srcShape4);
         auto weightAddr = (__ubuf__ typename T2::Type*)((uint64_t)(weight.GetAddr()));
-        set_flag(PIPE_V, PIPE_S, EVENT_ID7);
-        wait_flag(PIPE_V, PIPE_S, EVENT_ID7);
+        set_flag(PIPE_V, PIPE_S, EVENT_ID0);
+        wait_flag(PIPE_V, PIPE_S, EVENT_ID0);
 
         for (LoopVar n2Index = 0; n2Index < dstShape2; ++n2Index) {
             auto negative_slope = *(weightAddr + n2Index);

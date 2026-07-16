@@ -22,8 +22,8 @@ template <typename T0, typename T1, typename T2, int srcrawShape1, int srcTileH,
           typename DstDtype, typename SrcDtype, typename IdxDtype>
 TILEOP void TIndexOutcastMode2(T0 dst, T1 src, T2 src1, unsigned b, unsigned s, unsigned srcShape3, unsigned srcShape4)
 {
-    set_flag(PIPE_MTE2, PIPE_S, EVENT_ID7);
-    wait_flag(PIPE_MTE2, PIPE_S, EVENT_ID7);
+    set_flag(PIPE_MTE2, PIPE_S, EVENT_ID0);
+    wait_flag(PIPE_MTE2, PIPE_S, EVENT_ID0);
 
     __ubuf__ SrcDtype* srcBase = reinterpret_cast<__ubuf__ SrcDtype*>(src.GetAddr());
     __ubuf__ IdxDtype* idxBase = reinterpret_cast<__ubuf__ IdxDtype*>(src1.GetAddr());
@@ -109,12 +109,12 @@ TILEOP void TIndexOutcast(T0 dst, T1 src, T2 src1, C coordinate)
     for (LoopVar i = 0; i < srcShape1; ++i) {
         for (LoopVar j = 0; j < srcShape2; ++j) {
             for (LoopVar k = 0; k < src1Shape4; ++k) {
-                set_flag(PIPE_MTE3, PIPE_S, EVENT_ID7);
-                wait_flag(PIPE_MTE3, PIPE_S, EVENT_ID7);
-                set_flag(PIPE_MTE2, PIPE_S, EVENT_ID7);
-                wait_flag(PIPE_MTE2, PIPE_S, EVENT_ID7);
-                set_flag(PIPE_V, PIPE_S, EVENT_ID7);
-                wait_flag(PIPE_V, PIPE_S, EVENT_ID7);
+                set_flag(PIPE_MTE3, PIPE_S, EVENT_ID0);
+                wait_flag(PIPE_MTE3, PIPE_S, EVENT_ID0);
+                set_flag(PIPE_MTE2, PIPE_S, EVENT_ID0);
+                wait_flag(PIPE_MTE2, PIPE_S, EVENT_ID0);
+                set_flag(PIPE_V, PIPE_S, EVENT_ID0);
+                wait_flag(PIPE_V, PIPE_S, EVENT_ID0);
 
                 auto curValue = *(reinterpret_cast<__ubuf__ IdxDtype*>(src1Base + k));
                 int64_t idxVal = static_cast<int64_t>(curValue);
@@ -128,8 +128,8 @@ TILEOP void TIndexOutcast(T0 dst, T1 src, T2 src1, C coordinate)
                     auto index = curValue % blockSize;
                     __gm__ DstDtype* newDst = dstBase + blockCount * blockSize * dstShape4 +
                                               index * 32 / sizeof(DstDtype);
-                    set_flag(PIPE_S, PIPE_MTE3, EVENT_ID7);
-                    wait_flag(PIPE_S, PIPE_MTE3, EVENT_ID7);
+                    set_flag(PIPE_S, PIPE_MTE3, EVENT_ID0);
+                    wait_flag(PIPE_S, PIPE_MTE3, EVENT_ID0);
 
                     using SrcTileDefine = pto::Tile<pto::TileType::Vec, SrcDtype, srcTileH, srcTileW,
                                                     pto::BLayout::RowMajor, -1, -1>;
@@ -143,8 +143,8 @@ TILEOP void TIndexOutcast(T0 dst, T1 src, T2 src1, C coordinate)
 
                 } else {
                     __gm__ DstDtype* newDst = dstBase + static_cast<unsigned>(curValue) * dstShape4;
-                    set_flag(PIPE_S, PIPE_MTE3, EVENT_ID7);
-                    wait_flag(PIPE_S, PIPE_MTE3, EVENT_ID7);
+                    set_flag(PIPE_S, PIPE_MTE3, EVENT_ID0);
+                    wait_flag(PIPE_S, PIPE_MTE3, EVENT_ID0);
 
                     using SrcTileDefine = pto::Tile<pto::TileType::Vec, SrcDtype, srcTileH, srcTileW,
                                                     pto::BLayout::RowMajor, -1, -1>;

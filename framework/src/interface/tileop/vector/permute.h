@@ -54,8 +54,8 @@ TILEOP void PermuteDim2(__ubuf__ dstType* dstAddr, __gm__ srcType* srcAddr, cons
         auto gmOff = sc[0] * srcStride0 + sc[1] * srcStride1 + sc[2] * 0 + sc[3] * 0 + sc[4] * srcStride4;
         LoadVecTile<tileH, tileW>(dstAddr + i0 * ds0, srcAddr, gmOff, d1, srcStride4);
     }
-    set_flag(PIPE_S, PIPE_MTE2, EVENT_ID7);
-    wait_flag(PIPE_S, PIPE_MTE2, EVENT_ID7);
+    set_flag(PIPE_S, PIPE_MTE2, EVENT_ID0);
+    wait_flag(PIPE_S, PIPE_MTE2, EVENT_ID0);
 }
 
 template <int pad, int axis0, int axis1, int axis2, int tileH, int tileW, typename dstType, typename srcType,
@@ -81,8 +81,8 @@ TILEOP void PermuteDim3(__ubuf__ dstType* dstAddr, __gm__ srcType* srcAddr, cons
             LoadVecTile<tileH, tileW>(dst1 + i1 * ds1, srcAddr, gmOff, d2, srcStride4);
         }
     }
-    set_flag(PIPE_S, PIPE_MTE2, EVENT_ID7);
-    wait_flag(PIPE_S, PIPE_MTE2, EVENT_ID7);
+    set_flag(PIPE_S, PIPE_MTE2, EVENT_ID0);
+    wait_flag(PIPE_S, PIPE_MTE2, EVENT_ID0);
 }
 
 template <int pad, int axis0, int axis1, int axis2, int axis3, int tileH, int tileW, typename dstType, typename srcType,
@@ -114,8 +114,8 @@ TILEOP void PermuteDim4(__ubuf__ dstType* dstAddr, __gm__ srcType* srcAddr, cons
             }
         }
     }
-    set_flag(PIPE_S, PIPE_MTE2, EVENT_ID7);
-    wait_flag(PIPE_S, PIPE_MTE2, EVENT_ID7);
+    set_flag(PIPE_S, PIPE_MTE2, EVENT_ID0);
+    wait_flag(PIPE_S, PIPE_MTE2, EVENT_ID0);
 }
 
 template <int pad, int axis0, int axis1, int axis2, int axis3, int axis4, int tileH, int tileW, typename dstType,
@@ -153,8 +153,8 @@ TILEOP void PermuteDim5(__ubuf__ dstType* dstAddr, __gm__ srcType* srcAddr, cons
             }
         }
     }
-    set_flag(PIPE_S, PIPE_MTE2, EVENT_ID7);
-    wait_flag(PIPE_S, PIPE_MTE2, EVENT_ID7);
+    set_flag(PIPE_S, PIPE_MTE2, EVENT_ID0);
+    wait_flag(PIPE_S, PIPE_MTE2, EVENT_ID0);
 }
 
 template <typename dstType, typename srcType>
@@ -184,8 +184,8 @@ TILEOP void PermuteEleDim2(__ubuf__ dstType* dstAddr, __gm__ srcType* srcAddr, c
             dstAddr[i0 * ds0 + i1 * ds1] = srcAddr[gmOff];
         }
     }
-    set_flag(PIPE_S, PIPE_MTE2, EVENT_ID7);
-    wait_flag(PIPE_S, PIPE_MTE2, EVENT_ID7);
+    set_flag(PIPE_S, PIPE_MTE2, EVENT_ID0);
+    wait_flag(PIPE_S, PIPE_MTE2, EVENT_ID0);
 }
 
 template <int axis0, int axis1, int axis2, typename dstType, typename srcType, typename SrcLayoutT, typename DstLayoutT>
@@ -213,8 +213,8 @@ TILEOP void PermuteEleDim3(__ubuf__ dstType* dstAddr, __gm__ srcType* srcAddr, c
             }
         }
     }
-    set_flag(PIPE_S, PIPE_MTE2, EVENT_ID7);
-    wait_flag(PIPE_S, PIPE_MTE2, EVENT_ID7);
+    set_flag(PIPE_S, PIPE_MTE2, EVENT_ID0);
+    wait_flag(PIPE_S, PIPE_MTE2, EVENT_ID0);
 }
 
 template <int axis0, int axis1, int axis2, int axis3, typename dstType, typename srcType, typename SrcLayoutT,
@@ -249,8 +249,8 @@ TILEOP void PermuteEleDim4(__ubuf__ dstType* dstAddr, __gm__ srcType* srcAddr, c
             }
         }
     }
-    set_flag(PIPE_S, PIPE_MTE2, EVENT_ID7);
-    wait_flag(PIPE_S, PIPE_MTE2, EVENT_ID7);
+    set_flag(PIPE_S, PIPE_MTE2, EVENT_ID0);
+    wait_flag(PIPE_S, PIPE_MTE2, EVENT_ID0);
 }
 
 template <int axis0, int axis1, int axis2, int axis3, int axis4, typename dstType, typename srcType,
@@ -290,8 +290,8 @@ TILEOP void PermuteEleDim5(__ubuf__ dstType* dstAddr, __gm__ srcType* srcAddr, c
             }
         }
     }
-    set_flag(PIPE_S, PIPE_MTE2, EVENT_ID7);
-    wait_flag(PIPE_S, PIPE_MTE2, EVENT_ID7);
+    set_flag(PIPE_S, PIPE_MTE2, EVENT_ID0);
+    wait_flag(PIPE_S, PIPE_MTE2, EVENT_ID0);
 }
 
 } // namespace permute_detail

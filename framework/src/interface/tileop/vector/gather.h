@@ -62,8 +62,8 @@ TILEOP void TgatherElement(T0 dst, T1 src0, T2 src1, T3 tmp)
     idxTileDefine tmpTile(1, n4IdxShape);
     dstTileDefine dstTile(1, n4IdxShape);
     if constexpr (scalarFlag) {
-        set_flag(PIPE_V, PIPE_S, EVENT_ID7);
-        wait_flag(PIPE_V, PIPE_S, EVENT_ID7);
+        set_flag(PIPE_V, PIPE_S, EVENT_ID0);
+        wait_flag(PIPE_V, PIPE_S, EVENT_ID0);
     }
     auto srcAddr = (__ubuf__ typename T1::Type*)((uint64_t)(src0.GetAddr()));
     auto idxAddr = (__ubuf__ typename T2::Type*)((uint64_t)(src1.GetAddr()));
@@ -75,8 +75,8 @@ TILEOP void TgatherElement(T0 dst, T1 src0, T2 src1, T3 tmp)
             for (LoopVar k = 0; k < n2IdxShape; ++k) {
                 for (LoopVar l = 0; l < n3IdxShape; ++l) {
                     if constexpr (scalarFlag == false) {
-                        set_flag(PIPE_V, PIPE_S, EVENT_ID7);
-                        wait_flag(PIPE_V, PIPE_S, EVENT_ID7);
+                        set_flag(PIPE_V, PIPE_S, EVENT_ID0);
+                        wait_flag(PIPE_V, PIPE_S, EVENT_ID0);
                     }
                     for (LoopVar m = 0; m < n4IdxShape; ++m) {
                         auto dstOffset = i * n0DstStride + j * n1DstStride + k * n2DstStride + l * n3DstStride + m;
@@ -105,8 +105,8 @@ TILEOP void TgatherElement(T0 dst, T1 src0, T2 src1, T3 tmp)
                         }
                     }
                     if constexpr (scalarFlag == false) {
-                        set_flag(PIPE_S, PIPE_V, EVENT_ID7);
-                        wait_flag(PIPE_S, PIPE_V, EVENT_ID7);
+                        set_flag(PIPE_S, PIPE_V, EVENT_ID0);
+                        wait_flag(PIPE_S, PIPE_V, EVENT_ID0);
                         auto dstAddrOffset = i * n0DstStride + j * n1DstStride + k * n2DstStride + l * n3DstStride;
                         pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + dstAddrOffset * dstTypeSize));
                         pto::TASSIGN(srcTile, (uint64_t)(src0.GetAddr()));
@@ -119,8 +119,8 @@ TILEOP void TgatherElement(T0 dst, T1 src0, T2 src1, T3 tmp)
         }
     }
     if constexpr (scalarFlag) {
-        set_flag(PIPE_S, PIPE_V, EVENT_ID7);
-        wait_flag(PIPE_S, PIPE_V, EVENT_ID7);
+        set_flag(PIPE_S, PIPE_V, EVENT_ID0);
+        wait_flag(PIPE_S, PIPE_V, EVENT_ID0);
     }
 }
 
@@ -283,8 +283,8 @@ TILEOP void Tgather(T0 dst, T1 src, T2 idx, C1 srcCoordinate, C2 idxCoordinate)
         }
         dcci(src.GetAddr(), 0);
         dcci(idx.GetAddr(), 0);
-        set_flag(PIPE_S, PIPE_MTE2, EVENT_ID7);
-        wait_flag(PIPE_S, PIPE_MTE2, EVENT_ID7);
+        set_flag(PIPE_S, PIPE_MTE2, EVENT_ID0);
+        wait_flag(PIPE_S, PIPE_MTE2, EVENT_ID0);
     }
 }
 

@@ -1793,7 +1793,7 @@ Status PipeSync::RecycleCrossCoreEventIds(const PipeCoreRealEx& currPipeRealEx)
 std::deque<int>& PipeSync::GetFreeEventIdQueue(const PipePairEx& pp)
 {
     if (freeEventId_.count(pp) == 0) {
-        for (int i = 0; i < GetMaxEventId(pp); i++) {
+        for (int i = INTRA_CORE_START_EVENT_ID; i <= GetMaxEventId(pp); i++) {
             freeEventId_[pp].push_back(i);
         }
     }

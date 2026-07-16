@@ -138,8 +138,8 @@ TILEOP void TCumOperation(T0 dst, T1 src)
         }
         return;
     } else {
-        set_flag(PIPE_V, PIPE_S, EVENT_ID7);
-        wait_flag(PIPE_V, PIPE_S, EVENT_ID7);
+        set_flag(PIPE_V, PIPE_S, EVENT_ID0);
+        wait_flag(PIPE_V, PIPE_S, EVENT_ID0);
         auto srcAddr = (__ubuf__ typename T1::Type*)((uint64_t)(src.GetAddr()));
         auto dstAddr = (__ubuf__ typename T0::Type*)((uint64_t)(dst.GetAddr()));
 
@@ -157,8 +157,8 @@ TILEOP void TCumOperation(T0 dst, T1 src)
                 }
             }
         }
-        set_flag(PIPE_S, PIPE_V, EVENT_ID7);
-        wait_flag(PIPE_S, PIPE_V, EVENT_ID7);
+        set_flag(PIPE_S, PIPE_V, EVENT_ID0);
+        wait_flag(PIPE_S, PIPE_V, EVENT_ID0);
     }
 }
 #endif

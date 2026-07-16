@@ -57,11 +57,11 @@ TILEOP void TBitSort(T0 dst, T1 src, T2 tmp)
                                                 -1>;
                 IdxTileDefine idxTile(1, srcShape4);
                 pto::TASSIGN(idxTile, (uint64_t)(tmp.GetAddr()));
-                set_flag(PIPE_V, PIPE_S, EVENT_ID7);
-                wait_flag(PIPE_V, PIPE_S, EVENT_ID7);
+                set_flag(PIPE_V, PIPE_S, EVENT_ID0);
+                wait_flag(PIPE_V, PIPE_S, EVENT_ID0);
                 pto::TCI<IdxTileDefine, uint32_t, 0>(idxTile, offset);
-                set_flag(PIPE_S, PIPE_V, EVENT_ID7);
-                wait_flag(PIPE_S, PIPE_V, EVENT_ID7);
+                set_flag(PIPE_S, PIPE_V, EVENT_ID0);
+                wait_flag(PIPE_S, PIPE_V, EVENT_ID0);
                 for (LoopVar n3Index = 0; n3Index < dstShape3; ++n3Index) {
                     using DstTileDefine = pto::Tile<pto::TileType::Vec, typename T0::Type, 1, dstTileW,
                                                     pto::BLayout::RowMajor, -1, -1>;
