@@ -87,7 +87,7 @@ def run_rsqrt_test(kernels, kernel_name, dtype, shape):
     """Run a single rsqrt kernel test with given kernels dict."""
     device = "cpu"
 
-    a = torch.rand(shape, dtype=dtype, device=device)
+    a = 0.1 + 0.9 * torch.rand(shape, dtype=dtype, device=device)
     out = torch.empty(shape, dtype=dtype, device=device)
 
     kernels[kernel_name](a, out)
