@@ -26,13 +26,12 @@ import pypto
 import torch
 from pypto import pil
 from pypto import pypto_impl
-from pypto.converter import _torch_dtype_from, _gen_pto_tensor, from_torch
+from pypto.converter import _torch_dtype_from, from_torch
 from pypto.cost_model import _cost_model_run_once_data_from_host
 from pypto.frontend.parser.diagnostics import Source
 from pypto.frontend.parser.parser import NestedFunctionMarker, Parser
 from pypto.ir.compile_pipeline import compile_new_ir
-from pypto.runtime import _pto_verify_datas
-from pypto._build_online import BuildOnlineCalculatorManager
+from pypto.runtime import setup_verify_data, _pto_verify_datas
 from pypto._utils import get_torch_npu, get_npu_tensor_format, get_dtensor_type
 from pypto.error import FeError, _catch_and_wrap_error
 
@@ -302,8 +301,6 @@ class JitCallableWrapper:
 
         # kmodule is created lazily in __call__ with cache key including non_tensor_values
         self.kmodule = None
-        # Keep CPU snapshots alive while native code reads DeviceTensorData pointers.
-        self._verify_snapshot_keepalive: Optional[list] = None
 
 
     @_catch_and_wrap_error("call JIT function")
@@ -472,13 +469,10 @@ class JitCallableWrapper:
         if tensor_defs is not None:
             self._check_input_defs_match_tensors(tensors, tensor_defs)
             pto_tensor = self._convert_tensors_with_metadata(tensors, tensor_defs)
-            snapshot_src = list(tensors)
         else:
             pto_tensor = tensors
-            snapshot_src = None
 
         self._set_config_option()
-        self._setup_verify_data(pto_tensor, source_torch_tensors=snapshot_src)
 
         self._pto_function = compile_new_ir(
             self._original_func,
@@ -515,10 +509,8 @@ class JitCallableWrapper:
         if tensor_defs is not None:
             self._check_input_defs_match_tensors(tensors, tensor_defs)
             args = self._convert_tensors_with_metadata(tensors, tensor_defs)
-            snapshot_src = list(tensors)
         else:
             args = tensors
-            snapshot_src = None
 
         # Re-create parser for compilation
         self._parser = self._create_parser()
@@ -531,7 +523,7 @@ class JitCallableWrapper:
         self._set_config_option()
 
         # Initialize backend for compilation
-        self._setup_verify_data(args, source_torch_tensors=snapshot_src)
+        setup_verify_data(args)
 
         # Bind dynamic dimensions from concrete inputs
         self._parser.bind_dynamic_dims_to_input_tensors()
@@ -541,37 +533,6 @@ class JitCallableWrapper:
 
         # Reset golden data after compilation
         _pto_verify_datas.reset()
-
-    def _setup_verify_data(
-        self,
-        pto_tensors: list,
-        source_torch_tensors: Optional[list] = None,
-    ) -> None:
-        """Set verify input/output/golden data for pass-level verification.
-
-        This mirrors the behavior of pypto.runtime._JIT.compile:
-        - Copy current input/output from NPU to Host
-        - Use golden data pre-injected via set_verify_golden_data
-        - Call SetVerifyData to register all three to the underlying ProgramData
-        """
-        if not pypto.get_verify_options().get("enable_pass_verify"):
-            return
-
-        # Compile and load calculator
-        BuildOnlineCalculatorManager().build_and_load_calculator()
-
-        # Fallback (e.g. SIM compile with PTO tensors only, source torch tensors unavailable/mismatched,
-        # non-ND PTO formats, or NPU NZ source tensors): explicit staging + CopyToHost.
-        host_pto_tensors, staging = _gen_pto_tensor(pto_tensors)
-        host_pto_t_datas = _pto_to_tensor_data(host_pto_tensors)
-        for i, dev_tensor in enumerate(_pto_to_tensor_data(pto_tensors)):
-            pypto_impl.CopyToHost(dev_tensor, host_pto_t_datas[i])
-        self._verify_snapshot_keepalive = staging
-        pypto_impl.SetVerifyData(
-            _pto_to_tensor_data(host_pto_tensors),
-            [],
-            _pto_verify_datas.get_data(),
-        )
 
     def _parse_call_args(
         self, args: tuple, kwargs: dict

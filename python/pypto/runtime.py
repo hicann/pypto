@@ -11,13 +11,14 @@
 """
 """
 from enum import IntEnum
-from typing import List
+from typing import List, Sequence
 
 import pypto
 import torch
 
 from . import pypto_impl
-from .converter import from_torch
+from ._build_online import BuildOnlineCalculatorManager
+from .converter import from_torch, _gen_pto_tensor
 from .error import PyptoRtError
 
 __all__ = [
@@ -42,15 +43,19 @@ class _CachedVerifyData:
 
     def __init__(self):
         self._data = []
-        self._ori_data = []
+        self._keepalive_data = []
 
     def reset(self):
         self._data = []
-        self._ori_data = []
+        self._keepalive_data = []
 
-    def set_data(self, goldens, ori_goldens):
-        self._data = goldens
-        self._ori_data = ori_goldens
+    def set_data(self, dates, ori_datas):
+        self._data = dates
+        if ori_datas:
+            self._keepalive_data.extend(ori_datas)
+
+    def set_keepalive_data(self, keepalive_datas):
+        self._keepalive_data.extend(keepalive_datas)
 
     def get_data(self):
         return self._data
@@ -190,3 +195,31 @@ def set_verify_golden_data(in_out_tensors=None, goldens=None):
                               else pypto.from_torch(t))
 
         pypto_impl.SetVerifyData(_pto_to_tensor_data(pto_in_out), [], pto_goldens)
+
+
+def setup_verify_data(pto_tensors: Sequence) -> None:
+    """Set verify input/output/golden data for pass-level verification.
+
+    This mirrors the behavior of pypto.runtime._JIT.compile:
+    - Copy current input/output from NPU to Host
+    - Use golden data pre-injected via set_verify_golden_data
+    - Call SetVerifyData to register all three to the underlying ProgramData
+    """
+    if not pypto.get_verify_options().get("enable_pass_verify"):
+        return
+
+    # Compile and load calculator
+    BuildOnlineCalculatorManager().build_and_load_calculator()
+
+    # Fallback (e.g. SIM compile with PTO tensors only, source torch tensors unavailable/mismatched,
+    # non-ND PTO formats, or NPU NZ source tensors): explicit staging + CopyToHost.
+    host_pto_tensors, staging = _gen_pto_tensor(pto_tensors)
+    host_pto_t_datas = _pto_to_tensor_data(host_pto_tensors)
+    for i, dev_tensor in enumerate(_pto_to_tensor_data(pto_tensors)):
+        pypto_impl.CopyToHost(dev_tensor, host_pto_t_datas[i])
+    _pto_verify_datas.set_keepalive_data(staging)
+    pypto_impl.SetVerifyData(
+        _pto_to_tensor_data(host_pto_tensors),
+        [],
+        _pto_verify_datas.get_data(),
+    )

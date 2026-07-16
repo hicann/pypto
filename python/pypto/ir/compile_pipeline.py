@@ -9,6 +9,7 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 """Helpers for lowering PIL-compiled functions through the new IR pipeline."""
 
+from pypto.runtime import setup_verify_data
 from .. import ir, pil
 from ..logging import log_debug
 
@@ -46,6 +47,7 @@ def compile_new_ir(pyfunc, *args, pipeline=None, **kwargs):
     builder = ir.IRBuilder()
     func = pil.compile(pyfunc, *args, **kwargs)
     program = builder.create_program([func], "main", ir.Span.unknown())
+    setup_verify_data(args)
 
     if pipeline is None:
         pipeline = _build_default_pipeline()

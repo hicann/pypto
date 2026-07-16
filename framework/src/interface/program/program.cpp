@@ -65,6 +65,7 @@ Program& Program::GetInstance()
 void Program::Reset()
 {
     name_.clear();
+    tensorSlotManager_ = nullptr;
     functionmap_.clear();
     functionMagicNameStack_.clear();
     currentFunctionMagicName_ = PROGRAM_ENTRY_FUNCTION_NAME;
@@ -74,7 +75,6 @@ void Program::Reset()
     functionCache_.Reset();
     functionSequence_.clear();
     CreateInitFunction();
-    tensorSlotManager_ = nullptr;
     currentFunctionPtr_ = functionmap_[currentFunctionMagicName_].get();
     HostMachine::GetInstance().ResetAllPasses();
 }

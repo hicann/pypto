@@ -40,5 +40,47 @@ def test_assemble_jit_compile():
     assemble_kernel(a_torch, out_torch)
 
 
+@pypto.frontend.jit(new_ir=True, 
+                    verify_options={"enable_pass_verify": True, "pass_verify_save_tensor": True},
+                    host_options={"compile_stage": pypto.CompStage.TENSOR_GRAPH})
+def foo_kernel(
+    x: pypto.Tensor([pypto.DYN, 32]),
+    y: pypto.Tensor([pypto.DYN, 32]),
+    z: pypto.Tensor([pypto.DYN, 32]),
+):
+    pypto.set_vec_tile_shapes(16, 16)
+    x_view = pypto.view(x, [16, 32], [0, 0])
+    y_view = pypto.view(y, [16, 32], [0, 0])
+    for i in pypto.loop(2):
+        if i == 0:
+            tmp = x_view + y_view
+        else:
+            tmp = x_view - y_view
+        pypto.assemble(tmp, [i * 16, 0], z)
+
+
+def generate_f3_golden(a, b):
+    z = torch.zeros([32, 32], dtype=torch.float32)
+    z[0:16, :] = a[0:16, :] + b[0:16, :]
+    z[16:32, :] = a[0:16, :] - b[0:16, :]
+    return z
+
+
+def test_verify_jit_compile():
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    torch.npu.set_device(device_id)
+    device = f"npu:{device_id}"
+
+    shape = [32, 32]
+    a = torch.rand(shape, dtype=torch.float32, device=device)
+    b = torch.rand(shape, dtype=torch.float32, device=device)
+    c = torch.rand(shape, dtype=torch.float32, device=device)
+    golden = generate_f3_golden(a.cpu(), b.cpu())
+
+    pypto.set_verify_golden_data(goldens=[None, None, golden])
+    foo_kernel(a, b, c)
+
+
 if __name__ == "__main__":
     test_assemble_jit_compile()
+    test_verify_jit_compile()

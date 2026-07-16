@@ -10,7 +10,7 @@ import torch
 
 import pypto
 from pypto._build_online import BuildOnlineCalculatorManager
-from pypto.ir.compile_pipeline import compile_new_ir
+from pypto import pil, ir
 
 
 verify_options = {"enable_pass_verify": True,
@@ -18,9 +18,26 @@ verify_options = {"enable_pass_verify": True,
                  }
 
 
-def _run_dce(func, *args):
+def _run_dce(func, golden, *args):
     """Compile a function through the shared new-IR pipeline."""
-    return compile_new_ir(func, *args)
+    in_out_tensors = [*args]
+    
+    b = ir.IRBuilder()
+    func = pil.compile(func, *args)
+    prog = b.create_program([func], "main", ir.Span.unknown())
+    dce = ir.Pass.aggressive_dce()
+    canonical = ir.Pass.canonicalize()
+    merge = ir.Pass.merge_stmts_into_if()
+    create_pf = ir.Pass.create_root_functions()
+    finalize = ir.Pass.finalize_dynamic_function()
+    prog = dce(canonical(prog))
+    prog = dce(canonical(prog))
+    prog = canonical(merge(prog))
+    prog = create_pf(prog)
+    
+    pypto.set_verify_golden_data(in_out_tensors=in_out_tensors, goldens=[None, None, golden])
+    prog = finalize(prog)
+    return prog.functions[func.name]
 
 
 def generate_f3_golden(a, b):
@@ -52,7 +69,6 @@ def test_ir_verify():
     z = pypto.from_torch(c)
 
     pypto.set_verify_options(**verify_options)
-    pypto.set_verify_golden_data(in_out_tensors=[x, y, z], goldens=[None, None, golden])
     BuildOnlineCalculatorManager().build_and_load_calculator()
 
-    _run_dce(foo, x, y, z)
+    _run_dce(foo, golden, x, y, z)

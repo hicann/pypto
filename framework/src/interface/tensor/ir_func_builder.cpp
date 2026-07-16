@@ -277,13 +277,31 @@ void RootFunctionBuilder::BuildPathFuncSlotScope(
         }
     }
 
+    std::unordered_set<std::shared_ptr<LogicalTensor>> funcParamSet;
+    for (auto& [incast, inArg] : scope->incastToInArgumentDict) {
+        if (paramRawMagics_.count(inArg->GetRawMagic()) != 0) {
+            funcParamSet.insert(incast);
+        }
+    }
+    for (auto& [outcast, outArg] : scope->outcastToOutArgumentDict) {
+        if (paramRawMagics_.count(outArg->GetRawMagic()) != 0) {
+            funcParamSet.insert(outcast);
+        }
+    }
+
+    std::unordered_set<int> addedSlots;
     for (auto& op : pathFunc->Operations()) {
         if ((op.GetOpcode() == Opcode::OP_ASSEMBLE && op.HasAttr("dassemble")) ||
             op.GetOpcode() == Opcode::OP_ASSEMBLE_SSA ||
             op.GetOpcode() == Opcode::OP_ATOMIC_RMW) {
             for (auto& oOperand : op.GetOOperands()) {
                 int slotIndex = FindOrCreateSlot(oOperand, slotManager, pathFunc, true);
-                scope->constructAssembleSlotList.push_back(slotIndex);
+                if (funcParamSet.count(oOperand) != 0) {
+                    continue;
+                }
+                if (addedSlots.insert(slotIndex).second) {
+                    scope->constructAssembleSlotList.push_back(slotIndex);
+                }
             }
         }
     }

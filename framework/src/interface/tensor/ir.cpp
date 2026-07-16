@@ -108,6 +108,7 @@ Pass pass::CreateRootFunctions()
     return pass::CreateProgramPass(
         [](const ProgramPtr& irProgram) -> ProgramPtr {
             auto& programInst = npu::tile_fwk::Program::GetInstance();
+            programInst.ResetTensorSlotManager();
             auto parentFunc = programInst.GetLastFunction();
 
             std::map<std::string, FunctionPtr> newFunctions;
