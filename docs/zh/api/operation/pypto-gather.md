@@ -3,7 +3,7 @@
 ## 产品支持情况
 
 <!-- npu="950" id1 -->
-- Ascend 950PR：支持
+- Ascend 950PR/Ascend 950DT：支持
 <!-- end id1 -->
 <!-- npu="A3" id2 -->
 - Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
@@ -54,7 +54,7 @@ gather(input: Tensor, dim: int, index: Tensor) -> Tensor
 
 5. Tensor数据类型说明：
    <!-- npu="950" id4 -->
-   - Ascend 950PR：DT_INT16, DT_INT32, DT_UINT16, DT_UINT32, DT_FP16, DT_FP32, DT_BF16
+   - Ascend 950PR/Ascend 950DT：DT_INT16, DT_INT32, DT_UINT16, DT_UINT32, DT_FP16, DT_FP32, DT_BF16
    <!-- end id4 -->
    <!-- npu="A3" id5 -->
    - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_INT16, DT_INT32, DT_UINT16, DT_UINT32, DT_FP16, DT_FP32, DT_BF16

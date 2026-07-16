@@ -3,7 +3,7 @@
 ## 产品支持情况
 
 <!-- npu="950" id1 -->
-- Ascend 950PR：支持
+- Ascend 950PR/Ascend 950DT：支持
 <!-- end id1 -->
 <!-- npu="A3" id2 -->
 - Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
@@ -43,7 +43,7 @@ permute(input: Tensor, perm: list[int]) -> Tensor
 
 4. Tensor数据类型说明：
    <!-- npu="950" id4 -->
-   - Ascend 950PR：DT_FP16，DT_BF16，DT_FP32，DT_INT8，DT_UINT8，DT_INT16，DT_UINT16，DT_INT32，DT_UINT32，DT_INT64，DT_UINT64，DT_BOOL，DT_FP8E4M3，DT_FP8E5M2，DT_HF8，DT_FP8E8M0
+   - Ascend 950PR/Ascend 950DT：DT_FP16，DT_BF16，DT_FP32，DT_INT8，DT_UINT8，DT_INT16，DT_UINT16，DT_INT32，DT_UINT32，DT_INT64，DT_UINT64，DT_BOOL，DT_FP8E4M3，DT_FP8E5M2，DT_HF8，DT_FP8E8M0
    <!-- end id4 -->
    <!-- npu="A3" id5 -->
    - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_FP16，DT_BF16，DT_FP32，DT_INT8，DT_UINT8，DT_INT16，DT_UINT16，DT_INT32，DT_UINT32，DT_INT64，DT_UINT64，DT_BOOL

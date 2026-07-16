@@ -3,7 +3,7 @@
 ## 产品支持情况
 
 <!-- npu="950" id1 -->
-- Ascend 950PR：支持
+- Ascend 950PR/Ascend 950DT：支持
 <!-- end id1 -->
 <!-- npu="A3" id2 -->
 - Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
@@ -42,7 +42,7 @@ bitwise_and(input: Tensor, other: Union[Tensor, int]) -> Tensor
 1. input和other都为Tensor时，数据类型应该相同。
 2. Tensor数据类型说明：
    <!-- npu="950" id4 -->
-   - Ascend 950PR：DT_INT16，DT_UINT16，DT_INT8，DT_UINT8，DT_INT32
+   - Ascend 950PR/Ascend 950DT：DT_INT16，DT_UINT16，DT_INT8，DT_UINT8，DT_INT32
    <!-- end id4 -->
    <!-- npu="A3" id5 -->
    - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_INT16，DT_UINT16，DT_INT8，DT_UINT8

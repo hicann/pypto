@@ -3,7 +3,7 @@
 ## 产品支持情况
 
 <!-- npu="950" id1 -->
-- Ascend 950PR：支持
+- Ascend 950PR/Ascend 950DT：支持
 <!-- end id1 -->
 <!-- npu="A3" id2 -->
 - Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
@@ -43,7 +43,7 @@ bitwise_xor(input: Tensor, other: Union[Tensor, int]) -> Tensor
 2. 由于存在临时内存使用，TileShape大小有额外约束，假设TileShape为\[a,b,c,d\]，那么a\*b\*c\*d\*sizeof\(self\) + a\*b\*c\*d\*sizeof\(other\) + a\*b\*c\*d\*sizeof\(self\) < UB。
 3. Tensor数据类型说明：
    <!-- npu="950" id4 -->
-   - Ascend 950PR：DT_INT16，DT_UINT16，DT_INT8，DT_UINT8，DT_INT32
+   - Ascend 950PR/Ascend 950DT：DT_INT16，DT_UINT16，DT_INT8，DT_UINT8，DT_INT32
    <!-- end id4 -->
    <!-- npu="A3" id5 -->
    - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_INT16，DT_UINT16，DT_INT8，DT_UINT8

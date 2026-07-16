@@ -3,7 +3,7 @@
 ## 产品支持情况
 
 <!-- npu="950" id1 -->
-- Ascend 950PR：支持
+- Ascend 950PR/Ascend 950DT：支持
 <!-- end id1 -->
 <!-- npu="A3" id2 -->
 - Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
@@ -81,9 +81,9 @@ cast(input: Tensor, dtype: DataType, mode: CastMode = CastMode.CAST_NONE,
 <!-- end id4 -->
 
 <!-- npu="950" id5 -->
-### Ascend 950PR支持的转换
+### Ascend 950PR/Ascend 950DT支持的转换
 
-Ascend 950PR使用不同的CastMode体系，内部实现基于 `RoundRType`/`RoundAType`/`RoundFType`/`RoundCType`/`RoundZType`/`RoundOType` 等模板参数，用户接口层面仍使用统一的CastMode enum。
+Ascend 950PR/Ascend 950DT使用不同的CastMode体系，内部实现基于 `RoundRType`/`RoundAType`/`RoundFType`/`RoundCType`/`RoundZType`/`RoundOType` 等模板参数，用户接口层面仍使用统一的CastMode enum。
 
 | 源类型 | 目标类型 | 支持的CastMode | 默认CastMode | 特殊说明 |
 |--------|----------|----------------|--------------|----------|
@@ -154,7 +154,7 @@ Ascend 950PR使用不同的CastMode体系，内部实现基于 `RoundRType`/`Rou
 
 3. **DT_FP4_E2M1X2/DT_FP4_E1M2X2特殊说明**：
     <!-- npu="950" id6 -->
-    - Ascend 950PR：支持
+    - Ascend 950PR/Ascend 950DT：支持
     <!-- end id6 -->
     <!-- npu="A3" id7 -->
     - Atlas A3 训练系列产品/Atlas A3 推理系列产品：不支持
@@ -167,7 +167,7 @@ Ascend 950PR使用不同的CastMode体系，内部实现基于 `RoundRType`/`Rou
 
 3. **DT_HF8 (hifloat8)特殊说明**：
     <!-- npu="950" id9 -->
-    - Ascend 950PR：支持
+    - Ascend 950PR/Ascend 950DT：支持
     <!-- end id9 -->
     <!-- npu="A3" id10 -->
     - Atlas A3 训练系列产品/Atlas A3 推理系列产品：不支持

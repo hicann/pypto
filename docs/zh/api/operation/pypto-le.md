@@ -3,7 +3,7 @@
 ## 产品支持情况
 
 <!-- npu="950" id1 -->
-- Ascend 950PR：支持
+- Ascend 950PR/Ascend 950DT：支持
 <!-- end id1 -->
 <!-- npu="A3" id2 -->
 - Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
@@ -39,7 +39,7 @@ le(input: Tensor, other: Union[Tensor, float, Element]) -> Tensor
 2. 支持一维广播。
 3. Tensor和Element数据类型说明：
    <!-- npu="950" id4 -->
-   - Ascend 950PR：DT_FP16, DT_FP32, DT_INT16
+   - Ascend 950PR/Ascend 950DT：DT_FP16, DT_FP32, DT_INT16
    <!-- end id4 -->
    <!-- npu="A3" id5 -->
    - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_FP16, DT_FP32

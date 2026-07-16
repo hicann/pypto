@@ -3,7 +3,7 @@
 ## 产品支持情况
 
 <!-- npu="950" id1 -->
-- Ascend 950PR：支持
+- Ascend 950PR/Ascend 950DT：支持
 <!-- end id1 -->
 <!-- npu="A3" id2 -->
 - Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
@@ -38,7 +38,7 @@ class PrecisionType(enum.Enum):
 3. **对精度要求不高但追求性能的场景**：可以使用`INTRINSIC`模式，直接使用芯片指令进行计算。
 4. HIGH_PRECISION使用说明：
    <!-- npu="950" id4 -->
-   - Ascend 950PR：支持
+   - Ascend 950PR/Ascend 950DT：支持
    <!-- end id4 -->
    <!-- npu="A3" id5 -->
    - Atlas A3 训练系列产品/Atlas A3 推理系列产品：不支持

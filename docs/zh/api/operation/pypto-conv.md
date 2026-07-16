@@ -3,7 +3,7 @@
 ## 产品支持情况
 
 <!-- npu="950" id1 -->
-- Ascend 950PR：支持
+- Ascend 950PR/Ascend 950DT：支持
 <!-- end id1 -->
 <!-- npu="A3" id2 -->
 - Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
@@ -81,7 +81,7 @@ conv(input_conv, weight, out_dtype, strides, paddings, dilations, *, groups=1, t
   - CinFmap = CinWeight × groups。
 - 不同型号的使用约束：
   <!-- npu="950" id4 -->
-  - Ascend 950PR：暂无。
+  - Ascend 950PR/Ascend 950DT：暂无。
   <!-- end id4 -->
   <!-- npu="A3" id5 -->
   - Atlas A3 训练系列产品/Atlas A3 推理系列产品：weight的N轴（cout）除以groups后必须为C0的整数倍（C0 = ALIGN_SIZE_32 / sizeof(dtype)，ALIGN_SIZE_32 = 32）；如果配置cout动态轴切分，切分后的cout除以groups后也必须为C0的整数倍。若input_conv的数据类型为DT_BF16，则bias的数据类型应为DT_FP32。
@@ -129,7 +129,7 @@ conv(input_conv, weight, out_dtype, strides, paddings, dilations, *, groups=1, t
 ### 6. 数据类型约束
 
 <!-- npu="950" id9 -->
-- Ascend 950PR：支持的数据类型为DT_FP16、DT_BF16、DT_FP32。input、weight、bias和output的数据类型需要相同。
+- Ascend 950PR/Ascend 950DT：支持的数据类型为DT_FP16、DT_BF16、DT_FP32。input、weight、bias和output的数据类型需要相同。
 <!-- end id9 -->
 <!-- npu="A3" id10 -->
 - Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持的数据类型为DT_FP16、DT_BF16、DT_FP32。对于DT_FP16和DT_FP32类型，input、weight、bias和output的数据类型需要相同；对于DT_BF16类型，input、weight和output为BF16类型，bias需为DT_FP32类型。

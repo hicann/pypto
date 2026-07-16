@@ -3,7 +3,7 @@
 ## 产品支持情况
 
 <!-- npu="950" id1 -->
-- Ascend 950PR：支持
+- Ascend 950PR/Ascend 950DT：支持
 <!-- end id1 -->
 <!-- npu="A3" id2 -->
 - Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
@@ -45,7 +45,7 @@ div(input: Tensor, other: Union[Tensor, float, int], precision_type: PrecisionTy
 3. **精度模式说明**：
     - **HIGH_PRECISION（高精度模式）**：默认模式，在底层实现中会使用更高精度的计算方式，在不同型号上的支持情况：
       <!-- npu="950" id4 -->
-      - Ascend 950PR：支持
+      - Ascend 950PR/Ascend 950DT：支持
       <!-- end id4 -->
       <!-- npu="A3" id5 -->
       - Atlas A3 训练系列产品/Atlas A3 推理系列产品：不支持

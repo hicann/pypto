@@ -3,7 +3,7 @@
 ## 产品支持情况
 
 <!-- npu="950" id1 -->
-- Ascend 950PR：支持
+- Ascend 950PR/Ascend 950DT：支持
 <!-- end id1 -->
 <!-- npu="A3" id2 -->
 - Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
@@ -166,7 +166,7 @@ pypto.matmul(a, b, pypto.DT_INT8, extend_params=extend_params)
 
 <!-- npu="950" id6 -->
 ```python
-# TF32计算模式（Ascend 950PR）
+# TF32计算模式（Ascend 950PR/Ascend 950DT）
 a = pypto.tensor((16, 32), pypto.DT_FP32, "tensor_a")
 b = pypto.tensor((32, 64), pypto.DT_FP32, "tensor_b")
 extend_params = {'trans_mode': pypto.TransMode.CAST_ROUND}
