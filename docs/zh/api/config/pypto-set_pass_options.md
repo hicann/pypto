@@ -2,7 +2,7 @@
 
 ## 产品支持情况
 
-- Ascend 950PR：支持
+- Ascend 950PR/Ascend 950DT：支持
 - Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
 - Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持
 
@@ -53,23 +53,23 @@ set_pass_options(*,
 - scope_id为 -1时，`allow_parallel_merge`和`allow_cross_scope_merge`必须为False。
 - 不同scope_id的子图之间不可合并，`allow_cross_scope_merge`仅控制带scope的子图与无scope（scope_id=-1）的子图合并。
 - auto_mix_partition使用说明：
-   - Ascend 950PR：支持。
+   - Ascend 950PR/Ascend 950DT：支持。
    - Atlas A3 训练系列产品/Atlas A3 推理系列产品：不支持，不进行自动cv mix合图。
    - Atlas A2 训练系列产品/Atlas A2 推理系列产品：不支持，不进行自动cv mix合图。
 - sg_set_scope使用说明：
-   - Ascend 950PR：支持纯Vector、纯Cube以及CV混合场景的scope配置。
+   - Ascend 950PR/Ascend 950DT：支持纯Vector、纯Cube以及CV混合场景的scope配置。
    - Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持纯Vector或纯Cube的scope配置，不支持CV混合场景的scope配置。
    - Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持纯Vector或纯Cube的scope配置，不支持CV混合场景的scope配置。
 - sg_set_ooo_scope使用说明：
-   - Ascend 950PR：支持。
+   - Ascend 950PR/Ascend 950DT：支持。
    - Atlas A3 训练系列产品/Atlas A3 推理系列产品：不支持，因为不支持cv mix合图。
    - Atlas A2 训练系列产品/Atlas A2 推理系列产品：不支持，因为不支持cv mix合图。
 - ooo_sched_mode使用说明：
-   - Ascend 950PR：支持。
+   - Ascend 950PR/Ascend 950DT：支持。
    - Atlas A3 训练系列产品/Atlas A3 推理系列产品：不支持，因为不支持cv mix合图。
    - Atlas A2 训练系列产品/Atlas A2 推理系列产品：不支持，因为不支持cv mix合图。
 - sg_set_tunevf_mode使用说明：
-   - Ascend 950PR：支持。
+   - Ascend 950PR/Ascend 950DT：支持。
    - Atlas A3 训练系列产品/Atlas A3 推理系列产品：不支持，因为不支持cv mix合图。
    - Atlas A2 训练系列产品/Atlas A2 推理系列产品：不支持，因为不支持cv mix合图。
    - mode=2仅影响TuneSyncForVF中的NeedAdjustOpSeq判断，不影响TuneTileOpSeqForVF。
@@ -209,7 +209,7 @@ pypto.set_pass_options(sg_set_scope=-1)
 
 当需要将整个计算图保持不切分时，因数据切块会产生多条并行分支，这些分支之间无直接数据依赖，默认会被切分算法拆为独立子图。推荐设置`sg_set_scope=(scope_id, True, False)`，通过`allow_parallel_merge=True`使相同scope_id的并行分支Operation合并到同一子图。
 
-##### 场景二：CV混合场景，构造Mix子图以减少GM搬运（Ascend 950PR）
+##### 场景二：CV混合场景，构造Mix子图以减少GM搬运（Ascend 950PR/Ascend 950DT）
 
 当Cube操作的前后均有Vec操作时，目标是构造一个包含Cube和Vec的Mix子图，避免中间结果在GM上反复搬运。根据是否明确scope边界，分为以下两种情况：
 

@@ -2,7 +2,7 @@
 
 ## 产品支持情况
 
-- Ascend 950PR：支持
+- Ascend 950PR/Ascend 950DT：支持
 - Atlas A3 训练系列产品/Atlas A3 推理系列产品：不支持
 - Atlas A2 训练系列产品/Atlas A2 推理系列产品：不支持
 
@@ -38,9 +38,8 @@ online_softmax(scores: Tensor, scale: float) -> Tuple[Tensor, Tensor, Tensor]
 ## 约束说明
 
 1. 该接口为定制接口，不保证稳定性。
-2. 该接口仅支持A5架构（Ascend 950PR/Ascend 950DT）。
-3. scores 数据类型仅支持 DT_FP32。
-4. 当前版本不切分第0维，要求 scores.shape[0] <= vec_tile[0]。
+2. scores 数据类型仅支持 DT_FP32。
+3. 当前版本不切分第0维，要求 scores.shape[0] <= vec_tile[0]。
 
 ## 调用示例
 

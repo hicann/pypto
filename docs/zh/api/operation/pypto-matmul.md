@@ -2,7 +2,7 @@
 
 ## 产品支持情况
 
-- Ascend 950PR：支持
+- Ascend 950PR/Ascend 950DT：支持
 - Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
 - Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持
 
@@ -55,32 +55,32 @@ matmul(input, mat2, out_dtype, *, a_trans = False, b_trans = False, c_matrix_nz 
 
 | input | mat2 | out_dtype | bias_tensor | 产品支持 |
 |:------|:-----|:----------|:------------|:---------|
-| DT_FP16 | DT_FP16 | DT_FP16/DT_FP32 | DT_FP16/DT_FP32 | Ascend 950PR <br> Atlas A2 训练系列产品/Atlas A2 推理系列产品 <br> Atlas A3 训练系列产品/Atlas A3 推理系列产品 |
+| DT_FP16 | DT_FP16 | DT_FP16/DT_FP32 | DT_FP16/DT_FP32 | Ascend 950PR/Ascend 950DT <br> Atlas A2 训练系列产品/Atlas A2 推理系列产品 <br> Atlas A3 训练系列产品/Atlas A3 推理系列产品 |
 | DT_BF16 | DT_BF16 | DT_BF16/DT_FP32 | DT_FP32 | Atlas A2 训练系列产品/Atlas A2 推理系列产品 <br> Atlas A3 训练系列产品/Atlas A3 推理系列产品 |
-| DT_BF16 | DT_BF16 | DT_BF16/DT_FP32 | DT_BF16 | Ascend 950PR |
-| DT_FP32 | DT_FP32 | DT_FP32 | DT_FP32 | Ascend 950PR <br> Atlas A2 训练系列产品/Atlas A2 推理系列产品 <br> Atlas A3 训练系列产品/Atlas A3 推理系列产品 |
-| DT_INT8 | DT_INT8 | DT_INT32 | DT_INT32 | Ascend 950PR <br> Atlas A2 训练系列产品/Atlas A2 推理系列产品 <br> Atlas A3 训练系列产品/Atlas A3 推理系列产品 |
-| DT_FP8E5M2 | DT_FP8E5M2/DT_FP8E4M3 | DT_FP16/DT_BF16/DT_FP32 | DT_FP16/DT_BF16/DT_FP32 | Ascend 950PR |
-| DT_FP8E4M3 | DT_FP8E5M2/DT_FP8E4M3 | DT_FP16/DT_BF16/DT_FP32 | DT_FP16/DT_BF16/DT_FP32 | Ascend 950PR |
-| DT_HF8 | DT_HF8 | DT_FP16/DT_BF16/DT_FP32 | DT_FP16/DT_BF16/DT_FP32 | Ascend 950PR |
+| DT_BF16 | DT_BF16 | DT_BF16/DT_FP32 | DT_BF16 | Ascend 950PR/Ascend 950DT |
+| DT_FP32 | DT_FP32 | DT_FP32 | DT_FP32 | Ascend 950PR/Ascend 950DT <br> Atlas A2 训练系列产品/Atlas A2 推理系列产品 <br> Atlas A3 训练系列产品/Atlas A3 推理系列产品 |
+| DT_INT8 | DT_INT8 | DT_INT32 | DT_INT32 | Ascend 950PR/Ascend 950DT <br> Atlas A2 训练系列产品/Atlas A2 推理系列产品 <br> Atlas A3 训练系列产品/Atlas A3 推理系列产品 |
+| DT_FP8E5M2 | DT_FP8E5M2/DT_FP8E4M3 | DT_FP16/DT_BF16/DT_FP32 | DT_FP16/DT_BF16/DT_FP32 | Ascend 950PR/Ascend 950DT |
+| DT_FP8E4M3 | DT_FP8E5M2/DT_FP8E4M3 | DT_FP16/DT_BF16/DT_FP32 | DT_FP16/DT_BF16/DT_FP32 | Ascend 950PR/Ascend 950DT |
+| DT_HF8 | DT_HF8 | DT_FP16/DT_BF16/DT_FP32 | DT_FP16/DT_BF16/DT_FP32 | Ascend 950PR/Ascend 950DT |
 
 表4：反量化支持的数据类型
 
 | input | mat2 | out_dtype | 产品支持 |
 |:------|:-----|:----------|:----------|
-| DT_INT8 | DT_INT8 | DT_FP16 | Ascend 950PR <br> Atlas A2 训练系列产品/Atlas A2 推理系列产品 <br> Atlas A3 训练系列产品/Atlas A3 推理系列产品 |
+| DT_INT8 | DT_INT8 | DT_FP16 | Ascend 950PR/Ascend 950DT <br> Atlas A2 训练系列产品/Atlas A2 推理系列产品 <br> Atlas A3 训练系列产品/Atlas A3 推理系列产品 |
 
 表5：量化支持的数据类型
 
 | input | mat2 | out_dtype | 产品支持 |
 |:------|:-----|:----------|:----------|
-| DT_BF16 | DT_BF16 | DT_INT8 | Ascend 950PR <br> Atlas A2 训练系列产品/Atlas A2 推理系列产品 <br> Atlas A3 训练系列产品/Atlas A3 推理系列产品 |
-| DT_FP16 | DT_FP16 | DT_INT8 | Ascend 950PR <br> Atlas A2 训练系列产品/Atlas A2 推理系列产品 <br> Atlas A3 训练系列产品/Atlas A3 推理系列产品 |
-| DT_FP32 | DT_FP32 | DT_INT8 | Ascend 950PR <br> Atlas A2 训练系列产品/Atlas A2 推理系列产品 <br> Atlas A3 训练系列产品/Atlas A3 推理系列产品 |
-| DT_INT8 | DT_INT8 | DT_INT8 | Ascend 950PR <br> Atlas A2 训练系列产品/Atlas A2 推理系列产品 <br> Atlas A3 训练系列产品/Atlas A3 推理系列产品 |
-| DT_FP8E5M2 | DT_FP8E5M2/DT_FP8E4M3 | DT_INT8 | Ascend 950PR |
-| DT_FP8E4M3 | DT_FP8E5M2/DT_FP8E4M3 | DT_INT8 | Ascend 950PR |
-| DT_HF8 | DT_HF8 | DT_INT8 | Ascend 950PR |
+| DT_BF16 | DT_BF16 | DT_INT8 | Ascend 950PR/Ascend 950DT <br> Atlas A2 训练系列产品/Atlas A2 推理系列产品 <br> Atlas A3 训练系列产品/Atlas A3 推理系列产品 |
+| DT_FP16 | DT_FP16 | DT_INT8 | Ascend 950PR/Ascend 950DT <br> Atlas A2 训练系列产品/Atlas A2 推理系列产品 <br> Atlas A3 训练系列产品/Atlas A3 推理系列产品 |
+| DT_FP32 | DT_FP32 | DT_INT8 | Ascend 950PR/Ascend 950DT <br> Atlas A2 训练系列产品/Atlas A2 推理系列产品 <br> Atlas A3 训练系列产品/Atlas A3 推理系列产品 |
+| DT_INT8 | DT_INT8 | DT_INT8 | Ascend 950PR/Ascend 950DT <br> Atlas A2 训练系列产品/Atlas A2 推理系列产品 <br> Atlas A3 训练系列产品/Atlas A3 推理系列产品 |
+| DT_FP8E5M2 | DT_FP8E5M2/DT_FP8E4M3 | DT_INT8 | Ascend 950PR/Ascend 950DT |
+| DT_FP8E4M3 | DT_FP8E5M2/DT_FP8E4M3 | DT_INT8 | Ascend 950PR/Ascend 950DT |
+| DT_HF8 | DT_HF8 | DT_INT8 | Ascend 950PR/Ascend 950DT |
 
 ## 返回值说明
 

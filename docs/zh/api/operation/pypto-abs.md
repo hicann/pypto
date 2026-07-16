@@ -2,7 +2,7 @@
 
 ## 产品支持情况
 
-- Ascend 950PR：支持
+- Ascend 950PR/Ascend 950DT：支持
 - Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
 - Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持
 
@@ -29,7 +29,7 @@ abs(input: Tensor) -> Tensor
 ## 约束说明
 
 1. Tensor 支持的数据类型如下：
-   - Ascend 950PR：DT_FP16，DT_BF16，DT_FP32，DT_INT8，DT_INT16，DT_INT32。
+   - Ascend 950PR/Ascend 950DT：DT_FP16，DT_BF16，DT_FP32，DT_INT8，DT_INT16，DT_INT32。
    - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_FP16，DT_BF16，DT_FP32。
    - Atlas A2 训练系列产品/Atlas A2 推理系列产品：DT_FP16，DT_BF16，DT_FP32。
 2. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。

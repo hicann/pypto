@@ -18,7 +18,7 @@ All domain-specific terms must strictly follow the standard expressions in the [
 
 To maintain consistent product model expressions in the documentation system, use the following standard naming conventions:
 
-- Ascend 950PR
+- Ascend 950PR/Ascend 950DT
 - Atlas A3 training series products, Atlas A3 inference series products
 - Atlas A2 training series products, Atlas A2 inference series products
 

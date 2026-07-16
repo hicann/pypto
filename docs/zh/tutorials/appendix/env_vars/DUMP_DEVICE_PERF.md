@@ -20,6 +20,6 @@ python tools/scripts/machine_perf_trace.py analyze output/output_<时间戳>/mac
 - 当前只支持采集200次devTask构建的数据，超出时日志中会出现告警。
 
 ## 支持的型号
-- Ascend 950PR
+- Ascend 950PR/Ascend 950DT
 - Atlas A2训练系列产品 / Atlas A2推理系列产品
 - Atlas A3训练系列产品 / Atlas A3推理系列产品

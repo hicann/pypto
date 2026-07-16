@@ -16,6 +16,6 @@ export TILE_FWK_DEVICE_ID=0
 - 多进程场景下应避免多个进程使用同一设备卡号。
 
 ## 支持的型号
-- Ascend 950PR
+- Ascend 950PR/Ascend 950DT
 - Atlas A2训练系列产品 / Atlas A2推理系列产品
 - Atlas A3训练系列产品 / Atlas A3推理系列产品

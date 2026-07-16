@@ -17,6 +17,6 @@ export PYPTO_LAUNCH_SCHED_SAME_CLUSTER=false
 - 开启同Cluster分配时，`launch_sched_aicpu_num`配置不生效。
 
 ## 支持的型号
-- Ascend 950PR
+- Ascend 950PR/Ascend 950DT
 - Atlas A2训练系列产品 / Atlas A2推理系列产品
 - Atlas A3训练系列产品 / Atlas A3推理系列产品

@@ -2,7 +2,7 @@
 
 ## 产品支持情况
 
-- Ascend 950PR：支持
+- Ascend 950PR/Ascend 950DT：支持
 - Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
 - Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持
 
@@ -40,7 +40,7 @@ topk(input: Tensor, k: int, dim: Optional[int] = None, largest: bool = True, alg
 2. 选用MERGE_SORT算法时，TileShape尾轴需要小于22KB\(TileShape\[-1\]\*4 < 22KB\)；
 3. 选用RADIX_SELECT算法时，记TileShape尾轴为tile，则需要临时空间2\*tile\*sizeof\(srcType\)+6\*tile+1024+max\(1024, 8\*tile\)，临时空间加上输入输出的tile块不能超过UB大小；
 4. k <= TileShape\[-1\] && k <= input.shape\[-1\]；
-5. RADIX_SELECT算法仅支持Ascend 950PR；
+5. RADIX_SELECT算法仅支持Ascend 950PR/Ascend 950DT；
 6. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
 
 

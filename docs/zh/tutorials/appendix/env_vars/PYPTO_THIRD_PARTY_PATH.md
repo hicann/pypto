@@ -19,6 +19,6 @@ python3 -m pip install . --verbose
 - 仅在源码编译安装时生效，PyPI安装无需设置。
 
 ## 支持的型号
-- Ascend 950PR
+- Ascend 950PR/Ascend 950DT
 - Atlas A2训练系列产品 / Atlas A2推理系列产品
 - Atlas A3训练系列产品 / Atlas A3推理系列产品

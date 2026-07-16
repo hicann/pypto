@@ -77,7 +77,7 @@ AiCore Print用于在AICore kernel中打印tensor数据和调试信息，支持G
 
 ### 对外接口
 
-| 接口名称 | 功能 | 适用场景 | Ascend 950PR |
+| 接口名称 | 功能 | 适用场景 | Ascend 950PR/Ascend 950DT |
 |---------|------|---------|:---:|
 | **AiCoreLogF** | 格式化日志打印 | 打印地址、标量、提示信息 | 支持 |
 | **AiCorePrintShape** | 打印Shape信息 | 查看tensor shape维度 | 支持 |
@@ -92,14 +92,14 @@ AiCore Print支持以下数据类型：
 
 **浮点类型**：
 
-- Ascend 950PR：支持
+- Ascend 950PR/Ascend 950DT：支持
 - **fp32**：`float`
 - **fp16**：`half`
 - **bf16**：`bfloat16_t`
 
 **整数类型**：
 
-- Ascend 950PR：支持
+- Ascend 950PR/Ascend 950DT：支持
 - **int8**：`int8_t`
 - **uint8**：`uint8_t`
 - **int16**：`int16_t`
@@ -111,13 +111,13 @@ AiCore Print支持以下数据类型：
 
 **FP8类型**（平台限制）：
 
-- Ascend 950PR：支持
+- Ascend 950PR/Ascend 950DT：支持
 - **fp8_e4m3**：`float8_e4m3_t`
 - **fp8_e5m2**：`float8_e5m2_t`
 - **fp8_e8m0**：`float8_e8m0_t`
 - **hifloat8**：`hifloat8_t`
 
-**平台限制说明**：FP8和HiFloat8类型仅在Ascend 950PR上支持（`SUPPORT_FP8_HF8_PRINT=1`，对应`__NPU_ARCH__ == 3510`）。
+**平台限制说明**：FP8和HiFloat8类型仅在Ascend 950PR/Ascend 950DT上支持（`SUPPORT_FP8_HF8_PRINT=1`，对应`__NPU_ARCH__ == 3510`）。
 
 其他平台不支持FP8/HiFloat8打印功能。
 
@@ -309,9 +309,9 @@ AiCoreLogF(param->ctx, "INT8 input loaded");
 
 2. **打印数量控制**：PRINT_BUFFER_SIZE当前为128KB（定义于`framework/src/interface/machine/device/tilefwk/aicpu_common.h`），若触发overflow warning，需增大该值后重新编译。
 
-3. **FP8/HiFloat8支持平台**：仅Ascend 950PR（`__NPU_ARCH__ == 3510`）支持（见`SUPPORT_FP8_HF8_PRINT`宏定义）。
+3. **FP8/HiFloat8支持平台**：仅Ascend 950PR/Ascend 950DT（`__NPU_ARCH__ == 3510`）支持（见`SUPPORT_FP8_HF8_PRINT`宏定义）。
 
-4. **AiCorePrintL1Tensor支持平台**：Ascend 950PR不支持；Atlas A2训练系列产品/Atlas A2推理系列产品、Atlas A3训练系列产品/Atlas A3推理系列产品支持（见`SUPPORT_L1_COPY`宏定义）。
+4. **AiCorePrintL1Tensor支持平台**：Ascend 950PR/Ascend 950DT不支持；Atlas A2训练系列产品/Atlas A2推理系列产品、Atlas A3训练系列产品/Atlas A3推理系列产品支持（见`SUPPORT_L1_COPY`宏定义）。
 
 5. **AIC (Cube核)中不能使用AiCorePrintUbTensor**：AIC (Cube核)的标量处理器(SP)没有到UB地址空间的物理通路，无法从UB标量读取数据。编译期已通过`static_assert`拦截，在AIC kernel中调用`AiCorePrintUbTensor`会触发编译报错：
 
@@ -352,7 +352,7 @@ AiCoreLogF(param->ctx, "INT8 input loaded");
 
 ### 4. FP8/HiFloat8无法打印
 
-当前平台不支持（检查`SUPPORT_FP8_HF8_PRINT`宏；仅Ascend 950PR / `__NPU_ARCH__ == 3510`时为1）。
+当前平台不支持（检查`SUPPORT_FP8_HF8_PRINT`宏；仅Ascend 950PR/Ascend 950DT / `__NPU_ARCH__ == 3510`时为1）。
 
 ### 5. AiCorePrintL1Tensor找不到接口定义
 

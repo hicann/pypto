@@ -20,6 +20,6 @@ export PTO_TILE_LIB_CODE_PATH="$PWD/pto-isa"
 - 使用CANN包内置的PyPTO时，pto-isa已随CANN包安装，无需单独设置。
 
 ## 支持的型号
-- Ascend 950PR
+- Ascend 950PR/Ascend 950DT
 - Atlas A2训练系列产品 / Atlas A2推理系列产品
 - Atlas A3训练系列产品 / Atlas A3推理系列产品

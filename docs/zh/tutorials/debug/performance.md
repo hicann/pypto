@@ -157,7 +157,7 @@ python tools/profiling/tilefwk_pmu_to_csv.py -p PROF_xxx/device_x/data -pe=$PYPT
 PMU Trace 用于核内流水分析，是算子深度性能调优的重要工具。开启该能力后，开发者可以直观地观察 kernel 在 AI Core 上执行时，各硬件流水线（如 MTE2、MTE3、Vector、Cube 等）的时序排布与重叠情况。通过分析流水排布，可以识别搬运与计算之间的空闲等待、判断各流水线的利用率是否充分，从而有针对性地调整 Tiling 配置或计算编排策略，提升算子性能。
 
 **限制说明**：
-- 当前仅支持 Ascend 950PR / Ascend 950DT。
+- 当前仅支持Ascend 950PR/Ascend 950DT。
 - 当前仅支持单算子采集，不支持整网场景。
 - 当前最多只能采集 6 个核的数据。
 
