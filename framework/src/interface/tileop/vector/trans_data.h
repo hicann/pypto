@@ -21,34 +21,34 @@
 TILEOP void Sync23_VS()
 {
 #ifdef __DAV_V220
-    set_flag(PIPE_MTE2, PIPE_V, EVENT_ID7);
-    wait_flag(PIPE_MTE2, PIPE_V, EVENT_ID7);
-    set_flag(PIPE_MTE2, PIPE_S, EVENT_ID7);
-    wait_flag(PIPE_MTE2, PIPE_S, EVENT_ID7);
-    set_flag(PIPE_MTE3, PIPE_V, EVENT_ID7);
-    wait_flag(PIPE_MTE3, PIPE_V, EVENT_ID7);
-    set_flag(PIPE_MTE3, PIPE_S, EVENT_ID7);
-    wait_flag(PIPE_MTE3, PIPE_S, EVENT_ID7);
+    set_flag(PIPE_MTE2, PIPE_V, EVENT_ID0);
+    wait_flag(PIPE_MTE2, PIPE_V, EVENT_ID0);
+    set_flag(PIPE_MTE2, PIPE_S, EVENT_ID0);
+    wait_flag(PIPE_MTE2, PIPE_S, EVENT_ID0);
+    set_flag(PIPE_MTE3, PIPE_V, EVENT_ID0);
+    wait_flag(PIPE_MTE3, PIPE_V, EVENT_ID0);
+    set_flag(PIPE_MTE3, PIPE_S, EVENT_ID0);
+    wait_flag(PIPE_MTE3, PIPE_S, EVENT_ID0);
 #endif
 }
 
 TILEOP void Sync2_VS()
 {
 #ifdef __DAV_V220
-    set_flag(PIPE_MTE2, PIPE_V, EVENT_ID7);
-    wait_flag(PIPE_MTE2, PIPE_V, EVENT_ID7);
-    set_flag(PIPE_MTE2, PIPE_S, EVENT_ID7);
-    wait_flag(PIPE_MTE2, PIPE_S, EVENT_ID7);
+    set_flag(PIPE_MTE2, PIPE_V, EVENT_ID0);
+    wait_flag(PIPE_MTE2, PIPE_V, EVENT_ID0);
+    set_flag(PIPE_MTE2, PIPE_S, EVENT_ID0);
+    wait_flag(PIPE_MTE2, PIPE_S, EVENT_ID0);
 #endif
 }
 
 TILEOP void SyncVS_3()
 {
 #ifdef __DAV_V220
-    set_flag(PIPE_S, PIPE_MTE3, EVENT_ID7);
-    wait_flag(PIPE_S, PIPE_MTE3, EVENT_ID7);
-    set_flag(PIPE_V, PIPE_MTE3, EVENT_ID7);
-    wait_flag(PIPE_V, PIPE_MTE3, EVENT_ID7);
+    set_flag(PIPE_S, PIPE_MTE3, EVENT_ID0);
+    wait_flag(PIPE_S, PIPE_MTE3, EVENT_ID0);
+    set_flag(PIPE_V, PIPE_MTE3, EVENT_ID0);
+    wait_flag(PIPE_V, PIPE_MTE3, EVENT_ID0);
 #endif
 }
 
@@ -240,8 +240,8 @@ __aicore__ inline void TTransDataNC1HWC02NCHW(
     DST dst, TYPEC coordinate, TMP tmpTensor, INPUT input, int n, int c1, int h, int w, int c0, int groupIndex,
     int group, int padSize)
 {
-    set_flag(PIPE_S, PIPE_V, EVENT_ID7);
-    wait_flag(PIPE_S, PIPE_V, EVENT_ID7);
+    set_flag(PIPE_S, PIPE_V, EVENT_ID0);
+    wait_flag(PIPE_S, PIPE_V, EVENT_ID0);
     constexpr auto inputTypeSize = sizeof(typename INPUT::Type);
     constexpr auto tileN = Std::tuple_element<DIM_1ST, typename INPUT::TileShape>::type::value;
     constexpr auto tileC1 = Std::tuple_element<DIM_2ND, typename INPUT::TileShape>::type::value;
@@ -312,13 +312,13 @@ __aicore__ inline void TTransDataNC1HWC02NCHW(
             for (LoopVar j = 0; j < cValidLen; j++) {
                 for (LoopVar k = 0; k < inputH; k++) {
                     uint64_t tmpDstStride = i * tmpDstStride0 + j * tmpDstStride1 + k * tmpDstStride2;
-                    set_flag(PIPE_MTE3, PIPE_S, EVENT_ID7);
-                    wait_flag(PIPE_MTE3, PIPE_S, EVENT_ID7);
+                    set_flag(PIPE_MTE3, PIPE_S, EVENT_ID0);
+                    wait_flag(PIPE_MTE3, PIPE_S, EVENT_ID0);
                     for (LoopVar m = 0; m < inputW; m++) {
                         tmpAreaAddr[m] = tmpDstAddr[tmpDstStride + m];
                     }
-                    set_flag(PIPE_S, PIPE_MTE3, EVENT_ID7);
-                    wait_flag(PIPE_S, PIPE_MTE3, EVENT_ID7);
+                    set_flag(PIPE_S, PIPE_MTE3, EVENT_ID0);
+                    wait_flag(PIPE_S, PIPE_MTE3, EVENT_ID0);
                     pto::TASSIGN(tmpDstTile, (uint64_t)(tmpAreaAddr));
                     uint64_t DstStride = (n + i) * dstStride0 + (dstCStart + j) * dstStride1 + (h + k) * dstStride2 + w;
                     GlobalData globalData(
@@ -438,8 +438,8 @@ __aicore__ inline void TTransDataNDC1HWC02NCDHW(
     DST dst, TYPEC coordinate, TMP tmpTensor, INPUT input, int n, int d, int c1, int h, int w, int c0, int groupIndex,
     int group, int padSize)
 {
-    set_flag(PIPE_S, PIPE_V, EVENT_ID7);
-    wait_flag(PIPE_S, PIPE_V, EVENT_ID7);
+    set_flag(PIPE_S, PIPE_V, EVENT_ID0);
+    wait_flag(PIPE_S, PIPE_V, EVENT_ID0);
     constexpr auto inputTypeSize = sizeof(typename INPUT::Type);
     constexpr auto tileD = Std::tuple_element<DIM_1ST, typename INPUT::TileShape>::type::value;
     constexpr auto tileC1 = Std::tuple_element<DIM_2ND, typename INPUT::TileShape>::type::value;
@@ -514,13 +514,13 @@ __aicore__ inline void TTransDataNDC1HWC02NCDHW(
             for (LoopVar j = 0; j < cValidLen; j++) {
                 for (LoopVar k = 0; k < inputH; k++) {
                     uint64_t tmpDstStride = l * tmpDstStride1 + j * tmpDstStride2 + k * tmpDstStride3;
-                    set_flag(PIPE_MTE3, PIPE_S, EVENT_ID7);
-                    wait_flag(PIPE_MTE3, PIPE_S, EVENT_ID7);
+                    set_flag(PIPE_MTE3, PIPE_S, EVENT_ID0);
+                    wait_flag(PIPE_MTE3, PIPE_S, EVENT_ID0);
                     for (LoopVar m = 0; m < inputW; m++) {
                         tmpAreaAddr[m] = tmpDstAddr[tmpDstStride + m];
                     }
-                    set_flag(PIPE_S, PIPE_MTE3, EVENT_ID7);
-                    wait_flag(PIPE_S, PIPE_MTE3, EVENT_ID7);
+                    set_flag(PIPE_S, PIPE_MTE3, EVENT_ID0);
+                    wait_flag(PIPE_S, PIPE_MTE3, EVENT_ID0);
                     pto::TASSIGN(tmpDstTile, (uint64_t)(tmpAreaAddr));
                     uint64_t DstStride = (d + l) * dstStride1 + (dstCStart + j) * dstStride2 + (h + k) * dstStride3 + w;
                     GlobalData globalData(

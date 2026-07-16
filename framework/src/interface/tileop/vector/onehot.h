@@ -63,8 +63,8 @@ TILEOP void TOneHot(DST dst, SRC src)
                 auto dstOffset = TileOffset(n0Index, n1Index, n2Index);
                 dstTile.Assign(dst, dstOffset);
                 TZEROS(dstTile.Data(), dstShape3, dstShape4);
-                set_flag(PIPE_V, PIPE_S, EVENT_ID7);
-                wait_flag(PIPE_V, PIPE_S, EVENT_ID7);
+                set_flag(PIPE_V, PIPE_S, EVENT_ID0);
+                wait_flag(PIPE_V, PIPE_S, EVENT_ID0);
                 auto srcOffset = n0Index * srcStride0 + n1Index * srcStride1 + n2Index * srcStride2;
                 auto srcPtr = (__ubuf__ SrcDtype*)(src.GetAddr() + srcOffset * sizeof(SrcDtype));
                 for (LoopVar n3Index = 0; n3Index < dstShape3; ++n3Index) {
@@ -72,8 +72,8 @@ TILEOP void TOneHot(DST dst, SRC src)
                     SrcDtype onePos = srcPtr[n3Index];
                     dstPtr[onePos] = 1;
                 }
-                set_flag(PIPE_S, PIPE_V, EVENT_ID7);
-                wait_flag(PIPE_S, PIPE_V, EVENT_ID7);
+                set_flag(PIPE_S, PIPE_V, EVENT_ID0);
+                wait_flag(PIPE_S, PIPE_V, EVENT_ID0);
             }
         }
     }

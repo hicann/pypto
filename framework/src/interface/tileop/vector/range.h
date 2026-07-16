@@ -35,8 +35,8 @@ TILEOP inline void TRangePropagate(__ubuf__ T* base, int32_t loopN, int32_t tail
 #ifdef __DAV_V220
             pipe_barrier(PIPE_V);
 #else
-            set_flag(PIPE_V, PIPE_S, EVENT_ID7);
-            wait_flag(PIPE_V, PIPE_S, EVENT_ID7);
+            set_flag(PIPE_V, PIPE_S, EVENT_ID0);
+            wait_flag(PIPE_V, PIPE_S, EVENT_ID0);
 #endif
         }
     }
@@ -69,8 +69,8 @@ TILEOP void TRange(
         for (int32_t j = 0; j < static_cast<int32_t>(N); ++j) {
             dst_ptr[j] = baseStart + step * static_cast<T>(j);
         }
-        set_flag(PIPE_S, PIPE_V, EVENT_ID7);
-        wait_flag(PIPE_S, PIPE_V, EVENT_ID7);
+        set_flag(PIPE_S, PIPE_V, EVENT_ID0);
+        wait_flag(PIPE_S, PIPE_V, EVENT_ID0);
         return;
     }
 
@@ -86,8 +86,8 @@ TILEOP void TRange(
         loopN = static_cast<int32_t>(N) / kBlkElems - 1;
         tailSize = static_cast<int32_t>(N) % kBlkElems;
     }
-    set_flag(PIPE_S, PIPE_V, EVENT_ID7);
-    wait_flag(PIPE_S, PIPE_V, EVENT_ID7);
+    set_flag(PIPE_S, PIPE_V, EVENT_ID0);
+    wait_flag(PIPE_S, PIPE_V, EVENT_ID0);
     TRangePropagate<T, ONE_BLK_SIZE / sizeof(T)>(dst_ptr, loopN, tailSize, step * static_cast<T>(kBlkElems));
 
     if (N <= static_cast<unsigned>(kRepElems)) {

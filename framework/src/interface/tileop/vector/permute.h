@@ -59,8 +59,8 @@ TILEOP void PermuteDim2(
         LoadVecTile<tileH, tileW>(dstAddr + i0 * ds0, srcAddr, gmOff, d1, srcStride4);
         pipe_barrier(PIPE_ALL);
     }
-    set_flag(PIPE_S, PIPE_MTE2, EVENT_ID7);
-    wait_flag(PIPE_S, PIPE_MTE2, EVENT_ID7);
+    set_flag(PIPE_S, PIPE_MTE2, EVENT_ID0);
+    wait_flag(PIPE_S, PIPE_MTE2, EVENT_ID0);
     pipe_barrier(PIPE_ALL);
 }
 
@@ -89,8 +89,8 @@ TILEOP void PermuteDim3(
             pipe_barrier(PIPE_ALL);
         }
     }
-    set_flag(PIPE_S, PIPE_MTE2, EVENT_ID7);
-    wait_flag(PIPE_S, PIPE_MTE2, EVENT_ID7);
+    set_flag(PIPE_S, PIPE_MTE2, EVENT_ID0);
+    wait_flag(PIPE_S, PIPE_MTE2, EVENT_ID0);
     pipe_barrier(PIPE_ALL);
 }
 
@@ -125,8 +125,8 @@ TILEOP void PermuteDim4(
             }
         }
     }
-    set_flag(PIPE_S, PIPE_MTE2, EVENT_ID7);
-    wait_flag(PIPE_S, PIPE_MTE2, EVENT_ID7);
+    set_flag(PIPE_S, PIPE_MTE2, EVENT_ID0);
+    wait_flag(PIPE_S, PIPE_MTE2, EVENT_ID0);
     pipe_barrier(PIPE_ALL);
 }
 
@@ -167,8 +167,8 @@ TILEOP void PermuteDim5(
             }
         }
     }
-    set_flag(PIPE_S, PIPE_MTE2, EVENT_ID7);
-    wait_flag(PIPE_S, PIPE_MTE2, EVENT_ID7);
+    set_flag(PIPE_S, PIPE_MTE2, EVENT_ID0);
+    wait_flag(PIPE_S, PIPE_MTE2, EVENT_ID0);
     pipe_barrier(PIPE_ALL);
 }
 
@@ -200,8 +200,8 @@ TILEOP void PermuteEleDim2(
             dstAddr[i0 * ds0 + i1 * ds1] = srcAddr[gmOff];
         }
     }
-    set_flag(PIPE_S, PIPE_MTE2, EVENT_ID7);
-    wait_flag(PIPE_S, PIPE_MTE2, EVENT_ID7);
+    set_flag(PIPE_S, PIPE_MTE2, EVENT_ID0);
+    wait_flag(PIPE_S, PIPE_MTE2, EVENT_ID0);
 }
 
 template <int axis0, int axis1, int axis2, typename dstType, typename srcType, typename SrcLayoutT, typename DstLayoutT>
@@ -229,8 +229,8 @@ TILEOP void PermuteEleDim3(
             }
         }
     }
-    set_flag(PIPE_S, PIPE_MTE2, EVENT_ID7);
-    wait_flag(PIPE_S, PIPE_MTE2, EVENT_ID7);
+    set_flag(PIPE_S, PIPE_MTE2, EVENT_ID0);
+    wait_flag(PIPE_S, PIPE_MTE2, EVENT_ID0);
 }
 
 template <
@@ -266,8 +266,8 @@ TILEOP void PermuteEleDim4(
             }
         }
     }
-    set_flag(PIPE_S, PIPE_MTE2, EVENT_ID7);
-    wait_flag(PIPE_S, PIPE_MTE2, EVENT_ID7);
+    set_flag(PIPE_S, PIPE_MTE2, EVENT_ID0);
+    wait_flag(PIPE_S, PIPE_MTE2, EVENT_ID0);
 }
 
 template <
@@ -308,8 +308,8 @@ TILEOP void PermuteEleDim5(
             }
         }
     }
-    set_flag(PIPE_S, PIPE_MTE2, EVENT_ID7);
-    wait_flag(PIPE_S, PIPE_MTE2, EVENT_ID7);
+    set_flag(PIPE_S, PIPE_MTE2, EVENT_ID0);
+    wait_flag(PIPE_S, PIPE_MTE2, EVENT_ID0);
 }
 
 } // namespace permute_detail

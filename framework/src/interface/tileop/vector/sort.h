@@ -57,11 +57,11 @@ TILEOP void TBitSort(T0 dst, T1 src, T2 tmp)
                     pto::Tile<pto::TileType::Vec, uint32_t, 1, tmpTileW, pto::BLayout::RowMajor, -1, -1>;
                 IdxTileDefine idxTile(1, srcShape4);
                 pto::TASSIGN(idxTile, (uint64_t)(tmp.GetAddr()));
-                set_flag(PIPE_V, PIPE_S, EVENT_ID7);
-                wait_flag(PIPE_V, PIPE_S, EVENT_ID7);
+                set_flag(PIPE_V, PIPE_S, EVENT_ID0);
+                wait_flag(PIPE_V, PIPE_S, EVENT_ID0);
                 pto::TCI<IdxTileDefine, uint32_t, 0>(idxTile, offset);
-                set_flag(PIPE_S, PIPE_V, EVENT_ID7);
-                wait_flag(PIPE_S, PIPE_V, EVENT_ID7);
+                set_flag(PIPE_S, PIPE_V, EVENT_ID0);
+                wait_flag(PIPE_S, PIPE_V, EVENT_ID0);
                 for (LoopVar n3Index = 0; n3Index < dstShape3; ++n3Index) {
                     using DstTileDefine =
                         pto::Tile<pto::TileType::Vec, typename T0::Type, 1, dstTileW, pto::BLayout::RowMajor, -1, -1>;
@@ -555,8 +555,8 @@ TILEOP void RadixSelectGetResult(int32_t gtk, int32_t eqk,
 template <typename ValDType>
 TILEOP void RadixSelectExtractSortResult(uint64_t val, uint64_t idx, uint64_t k)
 {
-    set_flag(PIPE_V, PIPE_S, EVENT_ID7);
-    wait_flag(PIPE_V, PIPE_S, EVENT_ID7);
+    set_flag(PIPE_V, PIPE_S, EVENT_ID0);
+    wait_flag(PIPE_V, PIPE_S, EVENT_ID0);
     __ubuf__ int32_t *pIdx = (__ubuf__ int32_t *)idx;   
     __ubuf__ ValDType *pVal = (__ubuf__ ValDType *)val;
     for (size_t i = 0; i < k - 1; ++i) {
@@ -571,8 +571,8 @@ TILEOP void RadixSelectExtractSortResult(uint64_t val, uint64_t idx, uint64_t k)
             }
         }
     }
-    set_flag(PIPE_S, PIPE_V, EVENT_ID7);
-    wait_flag(PIPE_S, PIPE_V, EVENT_ID7);
+    set_flag(PIPE_S, PIPE_V, EVENT_ID0);
+    wait_flag(PIPE_S, PIPE_V, EVENT_ID0);
 }
 
 template <
@@ -772,8 +772,8 @@ TILEOP void TRadixSelect(VAL value, IDX index, TMP tmp, SRC src)
                     for (uint16_t i = srcTypeSize; i > 0 && remindK > 0; --i) {
                         RadixSelectPrepareHistogramSource<srcTypeSize>(i, last, srcMaskUInt16Tile, twiddleUIntTile, srcTempUIntTile, srcMaskTmpUInt16Tile, maskTile, uselessTile);
                         pto::THISTOGRAM<pto::HistByte::BYTE_0>(histogramUInt32Tile, srcMaskUInt16Tile, highTile);
-                        set_flag(PIPE_V, PIPE_S, EVENT_ID7);
-                        wait_flag(PIPE_V, PIPE_S, EVENT_ID7);
+                        set_flag(PIPE_V, PIPE_S, EVENT_ID0);
+                        wait_flag(PIPE_V, PIPE_S, EVENT_ID0);
                         __ubuf__ int32_t *pHistogram = (__ubuf__ int32_t *)histogramAddr;
                         __ubuf__ uint8_t *pHigh = (__ubuf__ uint8_t *)highAddr;
                         int32_t bit = RadixSelectBinarySearch(remindK - 1, pHistogram);
@@ -789,8 +789,8 @@ TILEOP void TRadixSelect(VAL value, IDX index, TMP tmp, SRC src)
                             pHigh[0] = static_cast<uint8_t>(0);
                             eqk = pHistogram[0];
                         }
-                        set_flag(PIPE_S, PIPE_V, EVENT_ID7);
-                        wait_flag(PIPE_S, PIPE_V, EVENT_ID7);
+                        set_flag(PIPE_S, PIPE_V, EVENT_ID0);
+                        wait_flag(PIPE_S, PIPE_V, EVENT_ID0);
                         pto::TCMPS(cmpTile, srcMaskTmpUInt16Tile, last, pto::CmpMode::EQ);
                         pto::TAND(maskTile, maskTile, cmpTile);
                     }
