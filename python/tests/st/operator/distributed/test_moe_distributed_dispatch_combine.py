@@ -313,26 +313,26 @@ def generate_moe_golden(
 ]:
     check_cond(mode in ('dispatch', 'combine', 'dispatch_combine'),
         f'mode must be dispatch/combine/dispatch_combine, but got {mode}')
-    
+
     operands_list = generate_inputs(moe_case, torch_data_type)
     dispatch_input_operands_list = [
         DispatchInOperands(x, expert_ids, x_active_mask)
         for x, _, expert_ids, x_active_mask in operands_list
     ]
     dispatch_golden_output_operands_list = dispatch_tokens(moe_case, torch_data_type, dispatch_input_operands_list)
-    
+
     if mode == 'dispatch':
         return list(zip(dispatch_input_operands_list, dispatch_golden_output_operands_list))
-    
+
     combine_input_operands_list = [
         CombineInOperands(op.expand_x, op.assist_info_for_combine, op.recv_counts, expert_scales, x_active_mask)
         for op, (_, expert_scales, _, x_active_mask) in zip(dispatch_golden_output_operands_list, operands_list)
     ]
     combine_golden_output_operands_list = combine_tokens(moe_case, torch_data_type, combine_input_operands_list)
-    
+
     if mode == 'combine':
         return list(zip(combine_input_operands_list, combine_golden_output_operands_list))
-    
+
     return list(zip(
         dispatch_input_operands_list,
         dispatch_golden_output_operands_list,

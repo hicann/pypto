@@ -213,7 +213,7 @@ def gen_mla_prolog_data(params, dtype, is_nz=False):
         for key, value in inputs.items():
             if isinstance(value, torch.Tensor):
                 inputs[key] = value.npu()
-    
+
     q_out, kv_out, qr_out = mla_prolog_compute(inputs)
     outputs = {"q_golden": q_out, "kv_golden": kv_out, "qr_golden": qr_out}
 
@@ -259,7 +259,7 @@ def mla_prolog(params, input_tensors, golden_tensors, dtype, is_nz):
     q_out_shape = [t, n1, head_dim]
     kv_out_shape = [t, head_dim]
     qr_out_shape = [t, q_lora_rank]
-    
+
     if is_nz:
         wq_a_nz = torch_npu.npu_format_cast(input_tensors["wq_a"].reshape(wq_a_shape).npu().contiguous(), \
                                             torch_npu.Format.FRACTAL_NZ)
@@ -270,7 +270,7 @@ def mla_prolog(params, input_tensors, golden_tensors, dtype, is_nz):
         input_tensors["wq_a"] = wq_a_nz
         input_tensors["wq_b"] = wq_b_nz
         input_tensors["w_kv"] = wkv_nz
-    
+
     token_x = input_tensors["x"].reshape(token_x_shape).npu()
     wq_a = input_tensors["wq_a"].reshape(wq_a_shape).npu()
     wq_b = input_tensors["wq_b"].reshape(wq_b_shape).npu()
@@ -286,16 +286,16 @@ def mla_prolog(params, input_tensors, golden_tensors, dtype, is_nz):
     compiler_config.mode = "reduce-overhead"
     npu_backend = tng.get_npu_backend(compiler_config=compiler_config)
     model = torch.compile(MLA_MODEL(), dynamic=False, fullgraph=True, backend=npu_backend)
-    
+
     output_q_data, output_kv_data, output_qr_data = model(token_x, wq_a, wq_b, wkv, rope_cos, \
                                                     rope_sin, gamma_cq, gamma_ckv)
     pypto.runtime._device_synchronize()
 
-    # golden data 
+    # golden data
     golden1 = golden_tensors["q_golden"].reshape(q_out_shape)
     golden2 = golden_tensors["kv_golden"].reshape(kv_out_shape)
     golden3 = golden_tensors["qr_golden"].reshape(qr_out_shape)
-    
+
     # compare
     print("q ================")
     compare(output_q_data.cpu(), golden1.cpu(), "qOut", 0.0001, 0.0078125, 0.005)
@@ -326,7 +326,7 @@ def mla_prolog_eager(params, input_tensors, golden_tensors, dtype, is_nz, attrs,
     q_out_shape = [t, n1, head_dim]
     kv_out_shape = [t, head_dim]
     qr_out_shape = [t, q_lora_rank]
-    
+
     if is_nz:
         wq_a_nz = torch_npu.npu_format_cast(input_tensors["wq_a"].reshape(wq_a_shape).npu().contiguous(), \
                                             torch_npu.Format.FRACTAL_NZ)
@@ -337,7 +337,7 @@ def mla_prolog_eager(params, input_tensors, golden_tensors, dtype, is_nz, attrs,
         input_tensors["wq_a"] = wq_a_nz
         input_tensors["wq_b"] = wq_b_nz
         input_tensors["w_kv"] = wkv_nz
-    
+
     token_x = input_tensors["x"].reshape(token_x_shape).npu()
     wq_a = input_tensors["wq_a"].reshape(wq_a_shape).npu()
     wq_b = input_tensors["wq_b"].reshape(wq_b_shape).npu()
@@ -359,11 +359,11 @@ def mla_prolog_eager(params, input_tensors, golden_tensors, dtype, is_nz, attrs,
     mla_prolog_v4(*params_info, attrs, configs)
     pypto.runtime._device_synchronize()
 
-    # golden data 
+    # golden data
     golden1 = golden_tensors["q_golden"].reshape(q_out_shape)
     golden2 = golden_tensors["kv_golden"].reshape(kv_out_shape)
     golden3 = golden_tensors["qr_golden"].reshape(qr_out_shape)
-    
+
     # compare
     print("q ================")
     compare(output_q_data.cpu(), golden1.cpu(), "qOut", 0.0001, 0.0078125, 0.005)

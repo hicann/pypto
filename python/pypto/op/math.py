@@ -242,8 +242,8 @@ def mul(input_tensor: Tensor, other: Union[Tensor, float, int]) -> Tensor:
     Output z:[[1.0 4.0 9.0],
               [1.0 4.0 9.0]]
     """
-    if isinstance(other, pypto_impl.Tensor):	 
-        return pypto_impl.Mul(input_tensor, other)	 
+    if isinstance(other, pypto_impl.Tensor):
+        return pypto_impl.Mul(input_tensor, other)
     else:
         _check_scalar_type("mul", input_tensor.dtype, other)
         other = _clip_scalar_to_dtype(input_tensor.dtype, other)

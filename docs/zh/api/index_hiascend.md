@@ -9,7 +9,7 @@
   - [pypto.Tensor.assemble](tensor/pypto-Tensor-assemble.md)
   - [pypto.Tensor.clone](tensor/pypto-Tensor-clone.md)
   - [pypto.Tensor.concat](tensor/pypto-Tensor-concat.md)
-  - [pypto.Tensor.cos](tensor/pypto-Tensor-cos.md) 
+  - [pypto.Tensor.cos](tensor/pypto-Tensor-cos.md)
   - [pypto.Tensor.cumprod](tensor/pypto-Tensor-cumprod.md)
   - [pypto.Tensor.cumsum](tensor/pypto-Tensor-cumsum.md)
   - [pypto.Tensor.dim](tensor/pypto-Tensor-dim.md)

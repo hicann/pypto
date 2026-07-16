@@ -49,7 +49,7 @@ class ProcessLoopBatchArgs:
 class PassComparator:
     """Pass comparator class, which encapsulates all comparison logic."""
 
-    def __init__(self, 
+    def __init__(self,
                  output_pass: str = "",
                  golden_pass: str = "",
                  verify_path_pass1: str = "",
@@ -128,7 +128,7 @@ class PassComparator:
             "GlobalMemoryReuse": 36,
             "CodegenPreproc": 37
         }
-        
+
         self._update_pass_dict_from_path(verify_path_pass1)
 
     @staticmethod
@@ -213,7 +213,7 @@ class PassComparator:
         record["B>:shape"] = a[":shape"]
         record["B>EVAL:dynvalidshape"] = a["EVAL:dynvalidshape"]
         record["B>ROOT_FUNC:hash"] = a["ROOT_FUNC:hash"]
-        
+
         if b:
             record["A>PHASE_NAME"] = b["PHASE_NAME"]
             record["A>TIMESTAMP"] = b["TIMESTAMP"]
@@ -231,14 +231,14 @@ class PassComparator:
             record["A>:shape"] = b[":shape"]
             record["A>EVAL:dynvalidshape"] = b["EVAL:dynvalidshape"]
             record["A>ROOT_FUNC:hash"] = b["ROOT_FUNC:hash"]
-        
+
         if compare_result is None:
             record["AB>RESULT"] = "SKIP"
             record["AB>RESULT_REASON"] = a.get("skip_reason", "")
             record["AB>rtol/atol"] = ""
         else:
             record.update(compare_result)
-        
+
         return record
 
     @staticmethod

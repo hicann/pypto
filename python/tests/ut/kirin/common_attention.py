@@ -105,7 +105,7 @@ TEST_CASES_ATTENTION = [
 def _make_4input_kernel(soc_version, name, a_shape, b_shape, c_shape, out_shape, vec_tile_shape, cube_tile_shape):
     vec_tile = vec_tile_shape if vec_tile_shape is not None else (16, 16)
     cube_tile = cube_tile_shape if cube_tile_shape is not None else ([16, 16], [16, 16], [16, 16])
-    
+
     @pypto.frontend.jit(
         codegen_options={"soc_version": soc_version},
         runtime_options={"run_mode": pypto.RunMode.SIM}
@@ -135,7 +135,7 @@ def _make_attention_kernel(soc_version, name, q_shape, k_shape, v_shape,
                           cube_tile_shape):
     vec_tile = vec_tile_shape if vec_tile_shape is not None else (1, 1, 16, 16)
     cube_tile = cube_tile_shape if cube_tile_shape is not None else ([16, 16], [16, 16], [16, 16])
-    
+
     @pypto.frontend.jit(
         codegen_options={"soc_version": soc_version},
         runtime_options={"run_mode": pypto.RunMode.SIM}

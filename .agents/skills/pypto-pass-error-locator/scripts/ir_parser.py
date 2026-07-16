@@ -107,7 +107,7 @@ class IRFile:
 
 class IRParser:
     """IR 文本格式解析器"""
-    
+
     def __init__(self):
         self.header_pattern = re.compile(r'^Function\s+(\S+)\[(\d+)\]\s+(-?\d+)\s+(\w+)\s+(\w+)\s+\{$')
         self.rawtensor_pattern = re.compile(r'RAWTENSOR\[\s*(\d+)\]\s+<([^>]+)>\s+@(\d+)"?([^"]*)"?')
@@ -118,35 +118,35 @@ class IRParser:
             r'<([^>]+)>\s+%(\d+)@(\d+)#(\([^)]+\))(\S+)::(\S+)\s+=\s+!(\d+)\s+(\S+)\s*'
             r'\(g:(-?\d+),\s*s:(-?\d+)\)(.*)'
         )
-    
+
     @staticmethod
     def _parse_shape_and_dtype(shape_str: str) -> Tuple[List[int], str]:
         """解析 shape 和数据类型"""
         parts = shape_str.strip().split()
         shape = []
         data_type = ""
-        
+
         for part in parts:
             if part.isdigit() or (part.startswith('-') and part[1:].isdigit()):
                 shape.append(int(part))
             elif part.startswith('DT_'):
                 data_type = part
-        
+
         return shape, data_type
-    
+
     @staticmethod
     def _parse_array(array_str: str) -> List[int]:
         """解析数组字符串 [x, y, z, ...] 或 offset:[x, y, z, ...]"""
         start_idx = array_str.find('[')
         end_idx = array_str.rfind(']')
-        
+
         if start_idx == -1 or end_idx == -1:
             return []
-        
+
         array_content = array_str[start_idx + 1:end_idx].strip()
         if not array_content:
             return []
-        
+
         values = []
         for item in array_content.split(','):
             item = item.strip()
@@ -155,41 +155,41 @@ class IRParser:
                     values.append(int(item))
                 except ValueError:
                     pass
-        
+
         return values
-    
+
     @staticmethod
     def _skip_array_tokens(tokens: List[str], start_idx: int) -> int:
         """跳过数组tokens，返回新的索引"""
         if start_idx >= len(tokens):
             return start_idx
-        
+
         i = start_idx
         while i < len(tokens):
             if tokens[i].endswith(']'):
                 return i + 1
             i += 1
-        
+
         return i
-    
+
     def parse_file(self, file_path: str) -> Tuple[Optional[IRFile], Optional[str]]:
         """解析 IR 文件
-        
+
         Args:
             file_path: IR 文件路径
-            
+
         Returns:
             (IRFile, error_message): 成功时返回 (IRFile, None)，失败时返回 (None, error_message)
         """
         if not os.path.exists(file_path):
             return None, f"File not found: {file_path}"
-        
+
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 lines = f.readlines()
         except Exception as e:
             return None, f"Failed to read file: {str(e)}"
-        
+
         ir_file = IRFile(
             header=None,
             rawtensors={},
@@ -198,18 +198,18 @@ class IRParser:
             operations={},
             file_path=file_path
         )
-        
+
         in_function = False
-        
+
         for line_num, line in enumerate(lines, 1):
             line = line.strip()
-            
+
             if not line or line.startswith('/*') or line.startswith('*/'):
                 continue
-            
+
             if line == '-------------':
                 continue
-            
+
             if line.startswith('Function'):
                 header, error = self._parse_header(line)
                 if error:
@@ -217,50 +217,50 @@ class IRParser:
                 ir_file.header = header
                 in_function = True
                 continue
-            
+
             if line == '}':
                 in_function = False
                 continue
-            
+
             if not in_function:
                 continue
-            
+
             if line.startswith('RAWTENSOR'):
                 rawtensor, error = self._parse_rawtensor(line, line_num)
                 if error:
                     return None, error
                 if rawtensor:
                     ir_file.rawtensors[rawtensor.index] = rawtensor
-            
+
             elif line.startswith('INCAST'):
                 cast, error = self._parse_cast(line, line_num, 'IN')
                 if error:
                     return None, error
                 if cast:
                     ir_file.incasts[cast.index] = cast
-            
+
             elif line.startswith('OUTCAST'):
                 cast, error = self._parse_cast(line, line_num, 'OUT')
                 if error:
                     return None, error
                 if cast:
                     ir_file.outcasts[cast.index] = cast
-            
+
             elif '=' in line and '!' in line:
                 operation, error = self._parse_operation(line, line_num)
                 if error:
                     return None, error
                 if operation:
                     ir_file.operations[operation.op_id] = operation
-        
+
         return ir_file, None
-    
+
     def _parse_header(self, line: str) -> Tuple[Optional[IRHeader], Optional[str]]:
         """解析文件头"""
         match = self.header_pattern.match(line)
         if not match:
             return None, f"Invalid header format: {line}"
-        
+
         return IRHeader(
             function_name=match.group(1),
             function_magic=int(match.group(2)),
@@ -268,16 +268,16 @@ class IRParser:
             function_type=match.group(4),
             graph_type=match.group(5)
         ), None
-    
+
     def _parse_rawtensor(self, line: str, line_num: int) -> Tuple[Optional[RawTensor], Optional[str]]:
         """解析 RAWTENSOR"""
         match = self.rawtensor_pattern.match(line)
         if not match:
             return None, f"Invalid RAWTENSOR format: {line}"
-        
+
         shape_str = match.group(2)
         shape, data_type = self._parse_shape_and_dtype(shape_str)
-        
+
         return RawTensor(
             index=int(match.group(1)),
             shape=shape,
@@ -286,19 +286,19 @@ class IRParser:
             name=match.group(4).strip(),
             line=line_num
         ), None
-    
+
     def _parse_cast(self, line: str, line_num: int, cast_type: str) -> Tuple[Optional[Cast], Optional[str]]:
         """解析 INCAST/OUTCAST"""
         match = self.cast_pattern.match(line)
         if not match:
             return None, f"Invalid CAST format: {line}"
-        
+
         shape_str = match.group(3)
         shape, _ = self._parse_shape_and_dtype(shape_str)
-        
+
         valid_shape_str = match.group(3).split('/')[1].strip() if '/' in match.group(3) else shape_str
         valid_shape, _ = self._parse_shape_and_dtype(valid_shape_str)
-        
+
         return Cast(
             cast_type=cast_type,
             index=int(match.group(2)),
@@ -310,20 +310,20 @@ class IRParser:
             slot=int(match.group(8)),
             line=line_num
         ), None
-    
+
     def _parse_operation(self, line: str, line_num: int) -> Tuple[Optional[Operation], Optional[str]]:
         """解析操作节点"""
         match = self.operation_pattern.match(line)
         if not match:
             return None, f"Invalid operation format: {line}"
-        
+
         output_shape_str = match.group(1)
         output_shape, _ = self._parse_shape_and_dtype(output_shape_str.split('/')[0].strip())
         valid_shape_part = output_shape_str.split('/')[1].strip() if '/' in output_shape_str else output_shape_str
         output_valid_shape, _ = self._parse_shape_and_dtype(valid_shape_part)
-        
+
         input_tensors, attributes, offset_info = self._parse_operation_params(match.group(11))
-        
+
         return Operation(
             op_id=int(match.group(7)),
             opcode=match.group(8),
@@ -347,29 +347,29 @@ class IRParser:
             dynvalidshape_direction=offset_info.get('dynvalidshape_direction', ''),
 line=line_num
         ), None
-    
+
     def _parse_array_from_tokens(self, tokens: List[str], start_idx: int) -> List[int]:
         """从tokens列表中解析数组，处理 offset:[...] 格式"""
         if start_idx >= len(tokens):
             return []
-        
+
         array_content = []
         i = start_idx
-        
+
         if '[' not in tokens[i]:
             return []
-        
+
         while i < len(tokens):
             token = tokens[i]
             array_content.append(token)
             i += 1
-        
+
         array_str = ' '.join(array_content)
         return self._parse_array(array_str)
-    
+
     def _parse_operation_params(self, params_str: str) -> Tuple[List[Dict[str, Any]], Dict[str, Any], Dict[str, Any]]:
         """解析操作参数和属性"""
-        
+
         input_tensors = []
         attributes = {}
         offset_info = {
@@ -381,12 +381,12 @@ line=line_num
             'dynoffset_direction': '',
             'dynvalidshape_direction': ''
         }
-        
+
         tokens = params_str.strip().split()
         i = 0
         while i < len(tokens):
             token = tokens[i]
-            
+
             if token.startswith('%'):
                 tensor_info = {
                     'logic_id': int(token[1:].split('@')[0]),
@@ -396,39 +396,39 @@ line=line_num
                 }
                 input_tensors.append(tensor_info)
                 i += 1
-            
+
             elif token.startswith('#'):
                 attr_name = token[1:].split('{')[0]
                 attr_value = token.split('{')[1].rstrip('}')
                 attributes[attr_name] = attr_value
                 i += 1
-            
+
             elif token == 'from':
                 offset_info['offset_from'] = True
                 i += 1
-            
+
             elif token == 'to':
                 offset_info['offset_from'] = False
                 i += 1
-            
+
             elif token.startswith('offset:['):
                 offset_info['offset'] = self._parse_array_from_tokens(tokens, i)
                 offset_info['offset_direction'] = 'from' if offset_info['offset_from'] else 'to'
                 i = self._skip_array_tokens(tokens, i)
-            
+
             elif token.startswith('dynoffset:['):
                 offset_info['dynoffset'] = self._parse_array_from_tokens(tokens, i)
                 offset_info['dynoffset_direction'] = 'from' if offset_info['offset_from'] else 'to'
                 i = self._skip_array_tokens(tokens, i)
-            
+
             elif token.startswith('dynvalidshape:['):
                 offset_info['dynvalidshape'] = self._parse_array_from_tokens(tokens, i)
                 offset_info['dynvalidshape_direction'] = 'from' if offset_info['offset_from'] else 'to'
                 i = self._skip_array_tokens(tokens, i)
-            
+
             else:
                 i += 1
-        
+
         return input_tensors, attributes, offset_info
 
 

@@ -243,14 +243,14 @@ def compare_tensors_result_dict(
 ) -> Dict[str, Any]:
     """
     独立的 tensor 对比函数，返回详细统计 dict。
-    
+
     Args:
         tensor_a: 输入 tensor A (对应结果中的 B 字段，遵循 pass_compare 历史约定)
         tensor_b: 输入 tensor B (对应结果中的 A 字段)
         path: 数据对比失败时, 将详细数据写入该路径文件
         config: 对比配置对象，默认创建 rtol=1e-3, atol=1e-3 的配置
         max_precision: 输出数值精度，默认使用 MAX_PRECISION
-    
+
     Returns:
         dict 包含对比结果和统计信息:
         - AB>RESULT: 对比结果 ("PASS"/"FAIL")
@@ -265,13 +265,13 @@ def compare_tensors_result_dict(
         config = IsCloseConfig(rtol=1e-3, atol=1e-3)
     if max_precision is None:
         max_precision = MAX_PRECISION
-    
+
     top_k = config.top_k
     comparator = TensorComparator()
     result_is_close, result_reason, result_info = comparator.check_isclose(
         tensor_a, tensor_b, config
     )
-    
+
     record = {}
     if result_is_close:
         record["AB>RESULT"] = "PASS"
@@ -280,14 +280,14 @@ def compare_tensors_result_dict(
         comparator.print_isclose_info(result_is_close, result_reason, result_info, path, top_k)
     record["AB>RESULT_REASON"] = result_reason
     record["AB>rtol/atol"] = f"{config.rtol:.{max_precision}g}/{config.atol:.{max_precision}g}"
-    
+
     diff_conf = result_info[6] if len(result_info) > 6 else None
     if diff_conf is not None:
         brief_conf = diff_conf[0]
         ab_conf = diff_conf[1]
         a_conf = diff_conf[2]
         b_conf = diff_conf[3]
-        
+
         record["AB>fail_cnt/warn_cnt/tol_cnt"] = f"{brief_conf[4]}/{brief_conf[3]}/{brief_conf[2]}"
         record["AB>total_cnt/zero_cnt/infnan_cnt"] = f"{brief_conf[0]}/{brief_conf[1]}/{brief_conf[5]}"
         record["AB>mae"] = f"{ab_conf[0]:.{max_precision}g}"
@@ -308,5 +308,5 @@ def compare_tensors_result_dict(
         record["B>aavg"] = f"{a_conf[3]:.{max_precision}g}"
         record["B>zero"] = f"{a_conf[4]:.{max_precision}g}"
         record["B>infnan"] = f"{a_conf[5]:.{max_precision}g}"
-    
+
     return record

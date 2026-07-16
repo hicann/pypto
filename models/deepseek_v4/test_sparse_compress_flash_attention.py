@@ -25,10 +25,10 @@ from utils.compare import compare
 
 
 class CompressSFA(torch.nn.Module):
-    def forward(self, query_npu, q_act_seqs_npu, ori_kv_npu, cmp_kv_npu, ori_block_table_npu, 
-                cmp_block_table_npu, atten_sink_npu, seqused_kv_npu, cmp_sparse_indices_npu, 
+    def forward(self, query_npu, q_act_seqs_npu, ori_kv_npu, cmp_kv_npu, ori_block_table_npu,
+                cmp_block_table_npu, atten_sink_npu, seqused_kv_npu, cmp_sparse_indices_npu,
                 softmax_scale, win_size, cmp_ratio):
-        return sparse_compress_flash_attention_graph(query_npu, q_act_seqs_npu, ori_kv_npu, cmp_kv_npu, 
+        return sparse_compress_flash_attention_graph(query_npu, q_act_seqs_npu, ori_kv_npu, cmp_kv_npu,
                                     ori_block_table_npu, cmp_block_table_npu, atten_sink_npu,
                                     seqused_kv_npu, cmp_sparse_indices_npu, softmax_scale, win_size, cmp_ratio)
 
@@ -125,7 +125,7 @@ def compute_attention_no_flash(input_data, params, s2_tile):
                 for cur_s2_idx in range(s2_tile_cur):
                     slc_idx = offset[cur_s2_idx]
                     slc_compress_kv[cur_s2_idx, :] = compress_kv[slc_idx, :]
-                
+
                 # win kv_cache
                 kv_list = []
                 for block_idx in range(start_block, end_block + 1):
@@ -208,7 +208,7 @@ def gen_sparse_compress_attention_golden(dtype, bn1n2s1, actual_seq_q, actual_se
             raise RuntimeError("unsupported actual_seq list length")
     else:
         raise RuntimeError("unsupported actual_seq data type")
-    
+
     # 生成压缩后的seq
     actual_seq = [i // cmp_ratio for i in origin_actual_seq]
 
@@ -335,7 +335,7 @@ def do_test_sparse_compress_attention_func(bn1n2s1, actual_seq, input_params, in
 
     tensors = [q_npu, q_act_seqs_npu, origin_kv_npu, compress_kv_npu, origin_block_table_npu,
         block_table_npu, atten_sink_npu, kv_act_seqs_npu, topk_indices_npu, calc_attention_out_npu]
-            
+
     sparse_compress_flash_attention_kernel(*tensors, n_q, n_kv, scalar, topk, block_size, win_size, cmp_ratio, tile_config)
 
     pypto.runtime._device_synchronize()

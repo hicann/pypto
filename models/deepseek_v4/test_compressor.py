@@ -260,7 +260,7 @@ class Compressor(nn.Module):
         self, x, kv_state, score_state, kv_block_table, score_block_table, sin, cos, wkv, wgate,
         ape, weight, hadamard, st, ra, rope_head_dim, ro
     ):
-        return compressor_pypto(x, kv_state, score_state, kv_block_table, score_block_table, 
+        return compressor_pypto(x, kv_state, score_state, kv_block_table, score_block_table,
             sin, cos, wkv, wgate, ape, weight, hadamard, st, ra, rope_head_dim, ro)
 
 

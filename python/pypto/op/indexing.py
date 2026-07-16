@@ -86,7 +86,7 @@ def index_add_(
     Output y:  [[2 2 2],
                 [1 1 1]]               # shape (2, 3)
     """
-    
+
     pypto_impl.IndexAdd_(input, source, index, dim, pypto_impl.Element(input.dtype, alpha))
     return input
 

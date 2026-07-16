@@ -89,24 +89,24 @@ def _get_dtype_from_str(dtype_str: str):
 def _get_compare_config(dtype):
     """
     根据数据类型返回合适的对比配置
-    
+
     Args:
         dtype: numpy dtype 对象，可能为 None
-    
+
     Returns:
         IsCloseConfig: 对比配置对象，或 None（表示不支持的类型）
     """
     if dtype is None:
         return None
-    
+
     # 整型数据：精确匹配
     if np.issubdtype(dtype, np.integer):
         return IsCloseConfig(rtol=0, atol=0, calc_dtype=torch.float64, is_detail=True)
-    
+
     # FP32/FP64：标准容差
     if dtype in [np.float32, np.float64]:
         return IsCloseConfig(rtol=1e-3, atol=1e-3, calc_dtype=torch.float64, is_detail=True)
-    
+
     # FP16/BF16/FP8 等低精度浮点：放宽容差
     return IsCloseConfig(rtol=1e-2, atol=1e-2, calc_dtype=torch.float64, is_detail=True)
 
@@ -121,16 +121,16 @@ class VerifyRes:
     def parse_loop_info(loop_info_str):
         """
         解析 LOOP_INFO 字符串为 dict
-        
+
         Args:
             loop_info_str: 's_idx=0@b_idx=0@loop_idx_0=0'
-        
+
         Returns:
             {'s_idx': 0, 'b_idx': 0, 'loop_idx_0': 0}
         """
         if not loop_info_str:
             return {}
-        
+
         result = {}
         pairs = loop_info_str.split('@')
         for pair in pairs:
@@ -140,7 +140,7 @@ class VerifyRes:
                     result[name] = int(value)
                 except ValueError:
                     result[name] = value
-        
+
         return result
 
     @staticmethod
@@ -150,24 +150,24 @@ class VerifyRes:
         """
         if not tensor_loop_dict or not verify_loop_dict:
             return False
-        
+
         if set(tensor_loop_dict.keys()) != set(verify_loop_dict.keys()):
             return False
-        
+
         for name, value in tensor_loop_dict.items():
             if verify_loop_dict.get(name) != value:
                 return False
-        
+
         return True
-    
+
     @staticmethod
     def loop_dict_to_str(loop_dict):
         """
         将 loop info dict 转换为字符串格式
-        
+
         Args:
             loop_dict: {'s_idx': 0, 'b_idx': 0, 'loop_idx_0': 0}
-        
+
         Returns:
             's_idx=0@b_idx=0@loop_idx_0=0'
         """
@@ -181,20 +181,20 @@ class VerifyRes:
         for i, tensor_info in enumerate(tensor_infos_new):
             dump_tshape = tensor_info.get("B>:validshape")
             verify_tensor_info = tensor_info["verify_dup_tensor"]
-            
+
             # 复制 B>loopVarInfos 和 LOOP_INFO（已转换为字符串格式）
             if "B>loopVarInfos" in tensor_info:
                 tensor_infos[i]["B>loopVarInfos"] = tensor_info["B>loopVarInfos"]
             if "LOOP_INFO" in tensor_info:
                 tensor_infos[i]["LOOP_INFO"] = tensor_info["LOOP_INFO"]
-            
+
             if not verify_tensor_info:
                 tensor_infos[i]["AB>RESULT"] = "SKIP"
                 tensor_infos[i]["AB>RESULT_REASON"] = "verify file not exist"
                 continue
 
             verify_tshape = tensor_info["valid_shape"]
-            tensor_infos[i]["A>PHASE_NAME"] = tensor_info["PHASE_NAME"] 
+            tensor_infos[i]["A>PHASE_NAME"] = tensor_info["PHASE_NAME"]
             tensor_infos[i]["A>:validshape"] = verify_tshape
             tensor_infos[i]["A>:datatype"] = tensor_info["A>:datatype"]
             tensor_infos[i]["A>FILENAME"] = tensor_info["verify_dup_tensor"]
@@ -215,24 +215,24 @@ class VerifyRes:
                 dtype_result = _get_data_type(tensor_info["datatype"])
                 dtype = dtype_result[1]
                 verify_data_type = _get_dtype_from_str(tensor_info["A>:datatype"])
-                
+
                 # 不支持的类型，跳过对比
                 if dtype is None:
                     tensor_infos[i]["AB>RESULT"] = "SKIP"
                     tensor_infos[i]["AB>RESULT_REASON"] = f"unsupported dtype: {dtype_result[0]}"
                     continue
-                
+
                 verify_tensor_data = np.fromfile(verify_tensor_info, verify_data_type)
                 verify_tensor_data = verify_tensor_data.reshape(verify_tshape)
-                
+
                 data = np.fromfile(tensor_info["B>FILENAME"], dtype)
                 data = data.reshape(dump_tshape)
-                
+
                 slices = []
                 for dim in range(data.ndim):
                     stop = min(verify_tshape[dim], dump_tshape[dim])
                     slices.append(slice(0, stop))
-                
+
                 sliced_data = data[tuple(slices)]
                 sliced_verify = verify_tensor_data[tuple(slices)]
 
@@ -245,7 +245,7 @@ class VerifyRes:
                 cmp_result = compare_tensors_result_dict(tensor_a, tensor_b, csv_path, config=config)
                 for key, value in cmp_result.items():
                     tensor_infos[i][key] = value
-                
+
             else:
                 tensor_infos[i]["AB>RESULT"] = "SKIP"
                 tensor_infos[i]["AB>RESULT_REASON"] = "verify file not exist or shape mismatch"
@@ -338,7 +338,7 @@ class VerifyRes:
         tensor_info["valid_shape"] = valid_shape
         tensor_info["loop_info"] = loop_info
         tensor_info["A>:datatype"] = dtype
-        
+
         # 更新 LOOP_INFO 和 B>loopVarInfos：匹配成功用 verify 的 LOOP_INFO，失败 LOOP_INFO 置空且 B>loopVarInfos 转字符串
         tensor_loop_dict = tensor_info.get("B>loopVarInfos")
         if isinstance(tensor_loop_dict, dict):
@@ -408,10 +408,10 @@ class VerifyRes:
                 verify_loop_dict = self.parse_loop_info(row.get("LOOP_INFO"))
                 if verify_loop_dict and self.match_loop_info(tensor_loop_dict, verify_loop_dict):
                     matched_indices.append(idx)
-            
+
             if not matched_indices:
                 return verify_dup_tensor, valid_shape, phase_name, dtype, loop_info_str
-            
+
             filtered_df = filtered_df.loc[matched_indices]
             loop_matched = True
 
@@ -537,12 +537,12 @@ class CompactDumpTensorInfoParser:
     def _parse_loop_var_info(bin_data: bytes, offset: int) -> tuple:
         """
         解析单个 LoopVarInfo 结构
-        
+
         结构定义：
         - char name[64]: 循环变量名称
         - int32_t exprIdx: exprList 索引
         - int32_t value: 当前值
-        
+
         Returns:
             (dict, 字节数)
         """
@@ -550,10 +550,10 @@ class CompactDumpTensorInfoParser:
         name = name_bytes.rstrip(b'\x00').decode('utf-8', errors='replace')
         offset += 64
         offset += 4     # 跳过exprIdx的值
-        
+
         value = struct.unpack_from(BYTE_ORDER + "i", bin_data, offset)[0]
         offset += 4
-        
+
         result = {
             name: value,
         }
@@ -569,7 +569,7 @@ class CompactDumpTensorInfoParser:
         merge_tensor_info["A>FILENAME"] = verify_tensor_info
         merge_tensor_info["A>PHASE_NAME"] = phase_name
         merge_tensor_info["A>:datatype"] = dtype
-        
+
         # 更新 LOOP_INFO 和 B>loopVarInfos
         if loop_info_str:
             merge_tensor_info["LOOP_INFO"] = loop_info_str
@@ -582,16 +582,16 @@ class CompactDumpTensorInfoParser:
 
         if os.path.exists(verify_tensor_info) and len(verify_tshape) == len(dump_tshape) and \
                 all(vdim == ddim for vdim, ddim in zip(verify_tshape, dump_tshape)):
-            
+
             dtype_result = _get_data_type(merge_tensor_info["datatype"])
             dtype = dtype_result[1]
-            
+
             # 不支持的类型，跳过对比
             if dtype is None:
                 merge_tensor_info["AB>RESULT"] = "SKIP"
                 merge_tensor_info["AB>RESULT_REASON"] = f"unsupported dtype: {dtype_result[0]}"
                 return merge_tensor_info
-            
+
             verify_tensor_data = np.fromfile(verify_tensor_info, dtype)
             verify_tensor_data = verify_tensor_data.reshape(verify_tshape)
 
@@ -604,7 +604,7 @@ class CompactDumpTensorInfoParser:
             cmp_result = compare_tensors_result_dict(tensor_a, tensor_b, csv_path, config=config)
             for key, value in cmp_result.items():
                 merge_tensor_info[key] = value
-            
+
         else:
             merge_tensor_info["AB>RESULT"] = "SKIP"
             merge_tensor_info["AB>RESULT_REASON"] = "verify file not exist or shape mismatch"
@@ -639,7 +639,7 @@ class CompactDumpTensorInfoParser:
         # 解析循环变量信息
         loop_var_count = result.get("B>loopVarCount", 0)
         result["B>loopVarInfos"] = {}
-        
+
         if loop_var_count > 0:
             actual_count = min(loop_var_count, 16)
             for _ in range(actual_count):
@@ -715,7 +715,7 @@ class CompactDumpTensorInfoParser:
         for _, tensor_infos in self.task_tensor_info.items():
             if not tensor_infos:
                 continue
-                
+
             block_idx = tensor_infos[0].get("B>blockIdx")
             task_id = tensor_infos[0].get("B>taskId")
             seq_no = tensor_infos[0].get("B>seqNo")
@@ -930,7 +930,7 @@ def main():
                 continue
             bin_file = os.path.join(dir_path, file_name)
             parser.parse_file(bin_file)
-    
+
     parent_dir = os.path.dirname(os.path.dirname(os.path.dirname(args.dump_tensor_path)))
     prof_data_file = os.path.join(parent_dir, "tilefwk_L1_prof_data.json")
     if os.path.exists(prof_data_file):
@@ -954,7 +954,7 @@ def main():
     for col in ["B>:validshape", "B>OP_ATTR_SYM_OFFSET", "B>:rawshape", "A>:validshape"]:
         if col in df.columns:
             df[col] = df[col].apply(to_json_str)
-    
+
     # 转成字符串，防止用excel打开后显示为科学计算法，导致数据截断
     df["ROOT_FUNC:hash"] = df["ROOT_FUNC:hash"].apply(lambda x: f"{x}'")
     df["FUNC:hash"] = df["FUNC:hash"].apply(lambda x: f"{x}'")
@@ -963,7 +963,7 @@ def main():
     df["B>EXEC_TIMESTAMP"] = df["B>EXEC_TIMESTAMP"].apply(lambda x: f"{x}'")
     df["B>TIMESTAMP"] = df["B>TIMESTAMP"].apply(lambda x: f"{x}'")
     df["B>tensorAddr"] = df["B>tensorAddr"].apply(lambda x: f"{x}'")
-    
+
     # 只保留文件名，去掉绝对路径
     if "A>FILENAME" in df.columns:
         df["A>FILENAME"] = df["A>FILENAME"].apply(lambda x: os.path.basename(x) if isinstance(x, str) and x else "")

@@ -79,9 +79,9 @@ AiCore Print用于在AICore kernel中打印tensor数据和调试信息，支持G
 
 | 接口名称 | 功能 | 适用场景 |
 |---------|------|---------|
-| **AiCoreLogF** | 格式化日志打印 | 打印地址、标量、提示信息 | 
-| **AiCorePrintShape** | 打印Shape信息 | 查看tensor shape维度 | 
-| **AiCorePrintGmTensor** | 打印GM Tensor | 查看Global Memory数据 | 
+| **AiCoreLogF** | 格式化日志打印 | 打印地址、标量、提示信息 |
+| **AiCorePrintShape** | 打印Shape信息 | 查看tensor shape维度 |
+| **AiCorePrintGmTensor** | 打印GM Tensor | 查看Global Memory数据 |
 | **AiCorePrintUbTensor** | 打印UB Tensor | 查看Unified Buffer数据（仅AIV kernel） |
 | **AiCorePrintL1Tensor** | 打印L1 Tensor | 查看Circular Buffer数据（仅AIC kernel） |
 | **AiCorePrintL0CTensor** | 打印L0C Tensor | 查看Accumulator Buffer数据（仅AIC kernel） |

@@ -286,7 +286,7 @@ def set_pass_options(*,
     if ooo_sched_mode is not None:
         if ooo_sched_mode not in ("", "GAPMIN", "HLF"):
             raise ValueError(f"Invalid ooo_sched_mode: '{ooo_sched_mode}'. "
-                            f"Expected '', 'GAPMIN' or 'HLF'.") 
+                            f"Expected '', 'GAPMIN' or 'HLF'.")
         pass_options['ooo_sched_mode'] = ooo_sched_mode
 
     if pass_options:

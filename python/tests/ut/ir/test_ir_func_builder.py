@@ -319,4 +319,3 @@ def test_if_else_both_branches():
     assert len(for_stmts) >= 1
     if_stmts = _collect_stmts(for_stmts[0].body, ir.IfStmt)
     assert len(if_stmts) >= 1, "Expected IfStmt in loop body"
-

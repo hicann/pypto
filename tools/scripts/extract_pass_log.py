@@ -63,7 +63,7 @@ def is_runtime_end_line(line, context):
 def process_log_line(line, context, output_dir):
     """
     处理单行日志
-    
+
     Args:
         line: 日志行
         context: PassContext对象
@@ -88,15 +88,15 @@ def extract_pass_logs(log_file_paths, output_dir, target_function_name=None):
     """
     提取日志文件中的每个pass部分并保存到单独的文件中
     支持多个输入文件，处理跨文件的pass日志
-    
+
     Args:
         log_file_paths: 输入日志文件路径列表
         output_dir: 输出目录文件路径
         target_function_name: 只提取指定function_name，None表示提取全部
     """
-    
+
     os.makedirs(output_dir, exist_ok=True)
-    
+
     pass_pattern = re.compile(r'Apply pass <([^>]+)> on function: ([^.]+)\.')
     runtime_pattern = re.compile(
         r'The Runtime of pass ([^\s]+) for program\s+([^\s]+)\s+function\s+([^\s]+) is \d+ us\.')
@@ -105,21 +105,21 @@ def extract_pass_logs(log_file_paths, output_dir, target_function_name=None):
         runtime_pattern=runtime_pattern,
         target_function_name=target_function_name
     )
-    
+
     for log_file_path in log_file_paths:
         with open(log_file_path, 'r', encoding='utf-8') as f:
             lines = f.readlines()
-        
+
         for line in lines:
             process_log_line(line, context, output_dir)
-    
+
     finalize_current_pass(context, output_dir)
 
 
 def save_pass_log(pass_lines, pass_name, function_name, output_dir, function_index_map):
     """
     保存单个pass的日志到文件
-    
+
     Args:
         pass_lines: pass日志行列表
         pass_name: pass名称
@@ -129,20 +129,20 @@ def save_pass_log(pass_lines, pass_name, function_name, output_dir, function_ind
     """
     if function_name not in function_index_map:
         function_index_map[function_name] = 0
-    
+
     index = function_index_map[function_name]
     function_name_for_file = function_name.replace("___main___", "_")
     filename = f"Pass_{index:02d}_{pass_name}_{function_name_for_file}.log"
-    
+
     subdir_name = f"Pass_{index:02d}_{pass_name}"
     subdir_path = os.path.join(output_dir, subdir_name)
     os.makedirs(subdir_path, exist_ok=True)
-    
+
     filepath = os.path.join(subdir_path, filename)
-    
+
     with open(filepath, 'w', encoding='utf-8') as f:
         f.writelines(pass_lines)
-    
+
     function_index_map[function_name] += 1
 
 
@@ -168,25 +168,25 @@ def main():
                        help='仅提取指定function_name的日志（默认：提取全部）')
     parser.add_argument('--silentmode', '--silent-mode', action='store_true',
                        help='静默模式：不输出任何提示信息')
-    
+
     args = parser.parse_args()
-    
+
     log_patterns = args.log_files
     output_directory = args.output
     target_function_name = args.function_name
     silent_mode = args.silentmode
-    
+
     log_files = []
     for pattern in log_patterns:
         matched_files = glob.glob(pattern)
         if matched_files:
             log_files.extend(matched_files)
-    
+
     if not log_files:
         if not silent_mode:
             sys.exit("Error, no log has been found.")
         return
-    
+
     log_files.sort()
     extract_pass_logs(log_files, output_directory, target_function_name)
 

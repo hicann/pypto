@@ -453,7 +453,7 @@ private:
     static constexpr int EVENT_NUM = 8;
     static constexpr int CROSS_CORE_EVENT_NUM = 16;
     static constexpr int EVENT_ID7 = 7;
-    static constexpr int INTRA_CORE_START_EVENT_ID = 1; // 核内 eventid 使用 1 ~ 7
+    static constexpr int INTRA_CORE_START_EVENT_ID = 1;                            // 核内 eventid 使用 1 ~ 7
     std::unordered_map<PipePairEx, std::vector<int>, PipePairExHash> doublePipeOp; // pipepair, opmagic
     std::queue<size_t> orderedOpList_;
     std::vector<Operation*> oriOpList_;

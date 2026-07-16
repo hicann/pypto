@@ -490,7 +490,7 @@ class ScopeLivenessAnalyzer(ast.NodeVisitor):
 
     def _has_uses_outside_def_scopes(self, var_info: VarInfo) -> bool:
         """Check if there are uses outside def scopes (not nested in any def scope).
-        
+
         Returns True if has outside uses, False otherwise.
         """
         for scope_id, _ in var_info.use_points:
@@ -510,7 +510,7 @@ class ScopeLivenessAnalyzer(ast.NodeVisitor):
 
     def _is_use_nested_in_any_def_scope(self, use_scope: Scope, def_scope_ids: Set[int]) -> bool:
         """Check if use_scope is nested in any def scope.
-        
+
         Returns True if nested, False otherwise.
         """
         for def_id in def_scope_ids:
@@ -521,7 +521,7 @@ class ScopeLivenessAnalyzer(ast.NodeVisitor):
 
     def _has_def_scopes_nesting(self, var_info: VarInfo) -> bool:
         """Check if def scopes have nesting relationship.
-        
+
         Returns True if has nesting, False otherwise.
         """
         def_scopes = [
@@ -565,7 +565,7 @@ class ScopeLivenessAnalyzer(ast.NodeVisitor):
 
         For independent definitions in mutually exclusive scopes (e.g., if/else branches),
         set a single unified deletion point at the common ancestor scope exit.
-        
+
         For for loop scopes, use conservative deletion strategy with no explicit deletion.
         """
         if self._all_def_scopes_are_for_loops(var_info):
@@ -600,7 +600,7 @@ class ScopeLivenessAnalyzer(ast.NodeVisitor):
 
     def _handle_brother_scope_deletion(self, var_info: VarInfo, def_scopes: List[Scope]) -> bool:
         """Handle deletion for brother scopes (mutually exclusive execution paths).
-        
+
         Returns True if handled, False otherwise.
         """
         if not self._are_scopes_brothers(def_scopes):
@@ -676,26 +676,26 @@ class ScopeLivenessAnalyzer(ast.NodeVisitor):
 
     def _are_scopes_brothers(self, scopes: List[Scope]) -> bool:
         """Check if all scopes are brothers (mutually exclusive, same parent).
-        
+
         Returns True if all scopes share the same parent and are not nested
         within each other, False otherwise.
         """
         if len(scopes) <= 1:
             return False
-        
+
         parents = [s.parent for s in scopes if s.parent]
         if not parents or len(parents) != len(scopes):
             return False
-        
+
         first_parent = parents[0]
         if not all(p.scope_id == first_parent.scope_id for p in parents):
             return False
-        
+
         for i, scope_i in enumerate(scopes):
             for scope_j in scopes[i + 1:]:
                 if scope_i.is_nested_in(scope_j) or scope_j.is_nested_in(scope_i):
                     return False
-        
+
         return True
 
     def _compute_delete_point_unified(self, var_info: VarInfo) -> None:

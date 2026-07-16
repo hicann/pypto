@@ -35,11 +35,11 @@ class ToolCall:
     output: Optional[str]
     error: Optional[str]
     time_created: int
-    
+
     @property
     def is_completed(self) -> bool:
         return self.status == "completed"
-    
+
     @property
     def has_error(self) -> bool:
         return self.error is not None or self.status == "error"
@@ -95,7 +95,7 @@ def get_connection() -> sqlite3.Connection:
 def get_current_session_id() -> Optional[str]:
     """
     Get the current session ID by querying the most recently updated root session.
-    
+
     Returns:
         Session ID string, or None if not found
     """
@@ -108,10 +108,10 @@ def get_current_session_id() -> Optional[str]:
             ORDER BY time_updated DESC
             LIMIT 1
         """)
-        
+
         row = cursor.fetchone()
         conn.close()
-        
+
         return row[0] if row else None
     except (sqlite3.Error, RuntimeError):
         return None
@@ -124,10 +124,10 @@ def get_session_title(session_id: str) -> Optional[str]:
         cursor = conn.execute("""
             SELECT title FROM session WHERE id = ?
         """, (session_id,))
-        
+
         row = cursor.fetchone()
         conn.close()
-        
+
         return row[0] if row else None
     except (sqlite3.Error, RuntimeError):
         return None
@@ -143,7 +143,7 @@ def get_child_sessions(parent_id: str) -> List[SessionInfo]:
             WHERE parent_id = ?
             ORDER BY time_created ASC
         """, (parent_id,))
-        
+
         sessions = []
         for row in cursor.fetchall():
             sessions.append(SessionInfo(
@@ -153,7 +153,7 @@ def get_child_sessions(parent_id: str) -> List[SessionInfo]:
                 time_created=row[3],
                 time_updated=row[4]
             ))
-        
+
         conn.close()
         return sessions
     except (sqlite3.Error, RuntimeError):
@@ -163,10 +163,10 @@ def get_child_sessions(parent_id: str) -> List[SessionInfo]:
 def list_recent_root_sessions(limit: int = 10) -> List[SessionInfo]:
     """
     List recent root sessions (no parent_id) for agent to identify correct session.
-    
+
     Args:
         limit: Maximum number of sessions to return
-        
+
     Returns:
         List of SessionInfo ordered by time_updated DESC
     """
@@ -179,7 +179,7 @@ def list_recent_root_sessions(limit: int = 10) -> List[SessionInfo]:
             ORDER BY time_updated DESC
             LIMIT ?
         """, (limit,))
-        
+
         sessions = []
         for row in cursor.fetchall():
             sessions.append(SessionInfo(
@@ -189,7 +189,7 @@ def list_recent_root_sessions(limit: int = 10) -> List[SessionInfo]:
                 time_created=row[3],
                 time_updated=row[4]
             ))
-        
+
         conn.close()
         return sessions
     except (sqlite3.Error, RuntimeError):
@@ -199,21 +199,21 @@ def list_recent_root_sessions(limit: int = 10) -> List[SessionInfo]:
 def get_session_parts(session_id: str) -> SessionParts:
     """
     Get all parts from a session.
-    
+
     Uses message.role to distinguish user messages from assistant replies.
     """
     try:
         conn = get_connection()
-        
+
         # First, get message roles
         cursor = conn.execute("""
             SELECT id, json_extract(data, '$.role') as role
             FROM message
             WHERE session_id = ?
         """, (session_id,))
-        
+
         message_roles = {row[0]: row[1] for row in cursor.fetchall()}
-        
+
         # Then, get all parts with message_id
         cursor = conn.execute("""
             SELECT id, time_created, message_id, data
@@ -221,16 +221,16 @@ def get_session_parts(session_id: str) -> SessionParts:
             WHERE session_id = ?
             ORDER BY time_created ASC
         """, (session_id,))
-        
+
         parts = SessionParts(session_id=session_id)
-        
+
         for row in cursor.fetchall():
             part_id = row[0]
             time_created = row[1]
             message_id = row[2]
             data = json.loads(row[3])
             part_type = data.get("type", "unknown")
-            
+
             if part_type == "tool":
                 tool_call = ToolCall(
                     id=part_id,
@@ -276,7 +276,7 @@ def get_session_parts(session_id: str) -> SessionParts:
                     "type": part_type,
                     "data": data
                 })
-        
+
         conn.close()
         return parts
     except (sqlite3.Error, RuntimeError, json.JSONDecodeError):
@@ -286,13 +286,13 @@ def get_session_parts(session_id: str) -> SessionParts:
 if __name__ == "__main__":
     # Quick test
     logger.info("Testing session_db module...")
-    
+
     # Get recent root sessions
     recent = list_recent_root_sessions(limit=5)
     logger.info(f"Recent root sessions: {len(recent)}")
     for i, s in enumerate(recent, 1):
         logger.info(f"  {i}. [{s.id[:12]}...] {s.title}")
-    
+
     # Test get_session_parts
     if recent:
         parts = get_session_parts(recent[0].id)
@@ -301,5 +301,5 @@ if __name__ == "__main__":
         logger.info(f"  Assistant replies: {len(parts.assistant_replies)}")
         logger.info(f"  Tool calls: {len(parts.tool_calls)}")
         logger.info(f"  Reasoning: {len(parts.reasoning)}")
-    
+
     logger.info("Module works correctly!")

@@ -67,7 +67,7 @@ class PyptoError(Exception):
                 msg = err_str
             else:
                 msg = f"ErrCode: {err_code:X}, {type(msg).__name__}: {err_str}"
-        elif "ErrCode" not in msg: 
+        elif "ErrCode" not in msg:
             msg = f"ErrCode: {err_code:X}, {msg}"
         super().__init__(msg)
         self.node: Optional[ast.AST] = None

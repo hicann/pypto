@@ -25,10 +25,10 @@ def test_return_statement_error():
         out: pypto.Tensor([4, 4], pypto.DT_FP32)):
         out[:] = x
         return out
-    
+
     x = torch.randn(4, 4, dtype=torch.float32)
     out = torch.zeros(4, 4, dtype=torch.float32)
-    
+
     with pytest.raises(ParserError, match="Return statements are not allowed"):
         kernel_with_return(x, out)
 
@@ -44,11 +44,11 @@ def test_return_nested_in_if_error():
         if flag > 0:
             return out
         return out
-    
+
     x = torch.randn(4, 4, dtype=torch.float32)
     flag = torch.tensor(1, dtype=torch.int32)
     out = torch.zeros(4, 4, dtype=torch.float32)
-    
+
     with pytest.raises(ParserError, match="Return statements are not allowed"):
         kernel_with_return_in_if(x, flag, out)
 
@@ -64,10 +64,10 @@ def test_return_nested_in_for_error():
             if i == 3:
                 return out
         return out
-    
+
     x = torch.randn(4, 4, dtype=torch.float32)
     out = torch.zeros(4, 4, dtype=torch.float32)
-    
+
     with pytest.raises(ParserError, match="Return statements are not allowed"):
         kernel_with_return_in_for(x, out)
 
@@ -81,10 +81,10 @@ def test_break_statement_error():
         for i in range(4):
             if i == 2:
                 break
-    
+
     x = torch.randn(4, 4, dtype=torch.float32)
     out = torch.zeros(4, 4, dtype=torch.float32)
-    
+
     with pytest.raises(ParserError, match="Break is not supported by the PTO parser"):
         kernel_with_break(x, out)
 
@@ -99,10 +99,10 @@ def test_continue_statement_error():
             if i % 2 == 0:
                 continue
             out[i, :] = x[i, :]
-    
+
     x = torch.randn(4, 4, dtype=torch.float32)
     out = torch.zeros(4, 4, dtype=torch.float32)
-    
+
     with pytest.raises(ParserError, match="Continue is not supported by the PTO parser"):
         kernel_with_continue(x, out)
 

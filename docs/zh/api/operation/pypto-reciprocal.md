@@ -83,4 +83,3 @@ y = pypto.reciprocal(x, pypto.PrecisionType.INTRINSIC)
 
 - [pypto.rsqrt](pypto-rsqrt.md)：计算输入张量的元素级平方根的倒数。
 - [pypto.div](pypto-div.md)：计算两个张量的元素级除法。
-

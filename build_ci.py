@@ -377,7 +377,7 @@ class BuildParam(CMakeParam):
         self.clang_install_path = self._get_clang_install_path(opt=args.clang)
         self.compile_dependency_check = args.compile_dependency_check
         self.enable_build_with_cann_mobile = args.enable_build_with_cann_mobile
-        
+
     def __str__(self) -> str:
         """返回构建参数的字符串表示
 

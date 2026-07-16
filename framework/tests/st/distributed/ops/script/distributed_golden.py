@@ -125,7 +125,7 @@ def parse_base_case(config: dict) -> BaseCase:
     min_val, max_val = input_tensor['data_range']['min'], input_tensor['data_range']['max']
     tile_shape = tuple(config['tile_shape'])
     value_range = ValueRange(min_val=min_val, max_val=max_val)
-    case = BaseCase(dtype=dtype, shape=shape, valid_shape=valid_shape, world_size=world_size, tile_shape=tile_shape, 
+    case = BaseCase(dtype=dtype, shape=shape, valid_shape=valid_shape, world_size=world_size, tile_shape=tile_shape,
         value_range=value_range)
     return case
 

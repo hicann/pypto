@@ -198,7 +198,7 @@ def attention_forward_golden(q, k, v, scale):
                     pij_div = pij / lij
                     pij_bf16 = pij_div.to(torch.bfloat16)
                     out_bf16 = torch.matmul(pij_bf16, v_tile_view)
-                    
+
                     o_out[q_tile_start:q_tile_end, :] = out_bf16[:q_tile_len, :]
                     l_out[q_tile_start:q_tile_end, :] = lij[:q_tile_len, :]
                     m_out[q_tile_start:q_tile_end, :] = mij[:q_tile_len, :]
@@ -221,7 +221,7 @@ def attention_forward_golden(q, k, v, scale):
                 if k_tile_idx == k_tile_count - 1:
                     out_fp32 = oi_tmp / li_new
                     out_bf16 = out_fp32.to(torch.bfloat16)
-                    
+
                     o_out[q_tile_start:q_tile_end, :] = out_bf16[:q_tile_len, :]
                     l_out[q_tile_start:q_tile_end, :] = li_new[:q_tile_len, :]
                     m_out[q_tile_start:q_tile_end, :] = mi_new[:q_tile_len, :]

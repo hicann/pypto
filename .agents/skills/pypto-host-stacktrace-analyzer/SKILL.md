@@ -100,7 +100,7 @@ python3 .agents/skills/pypto-stack-trace-analyzer/scripts/comprehensive_analyzer
 - 总帧数
 - 每帧的详细信息（二进制、符号、偏移、地址）
 - 符号反混淆结果
-- **源码行号** 
+- **源码行号**
 - 错误发生点标记
 
 ### 二进制文件

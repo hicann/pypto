@@ -15,7 +15,7 @@
 ## 功能说明
 
 将source的每一块数据乘以缩放因子alpha（默认为1）加到input的相应数据块上，其中索引和数据块方向由index和dim指定。例如，
-$$ input[index[i], :, :] += alpha * source[i, :, :],\ if \ dim == 0, \\ 
+$$ input[index[i], :, :] += alpha * source[i, :, :],\ if \ dim == 0, \\
     input[:, index[i], :] += alpha * source[:, i, :],\ if \ dim == 1,\\
     input[:, :, index[i]] += alpha * source[:, :, i],\ if \ dim == 2.$$
 

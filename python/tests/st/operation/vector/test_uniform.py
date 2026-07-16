@@ -23,14 +23,14 @@ def uniform_numpy_golden(shape, key, counter, alg, dtype):
     """
     Numpy implementation of uniform based on TensorFlow's Philox algorithm.
     Replicates TensorFlow's behavior using the Philox 4x32_10 algorithm.
-    
+
     Args:
         shape: Output shape (list of integers)
         key: Random seed key (list with one uint64 value)
         counter: Counter value (list with two uint64 values)
         alg: Algorithm identifier (list with one int, 1=Philox)
         dtype: Data type (pypto.DT_FP32, pypto.DT_FP16, pypto.DT_BF16)
-    
+
     Returns:
         Random uniform array with values in [0, 1)
     """

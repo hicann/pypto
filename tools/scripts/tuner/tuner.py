@@ -1,24 +1,24 @@
- #!/usr/bin/env python3 
- # coding: utf-8 
- # Copyright (c) 2026 Huawei Technologies Co., Ltd. 
- # This program is free software, you can redistribute it and/or modify it under the terms and conditions of 
- # CANN Open Software License Agreement Version 2.0 (the "License"). 
- # Please refer to the License for details. You may not use this file except in compliance with the License. 
- # THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, 
- # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE. 
- # See LICENSE in the root of the software repository for the full text of the License. 
- # ----------------------------------------------------------------------------------------------------------- 
+ #!/usr/bin/env python3
+ # coding: utf-8
+ # Copyright (c) 2026 Huawei Technologies Co., Ltd.
+ # This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ # CANN Open Software License Agreement Version 2.0 (the "License").
+ # Please refer to the License for details. You may not use this file except in compliance with the License.
+ # THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ # See LICENSE in the root of the software repository for the full text of the License.
+ # -----------------------------------------------------------------------------------------------------------
 """
 """
 import re
-import os 
-import sys 
+import os
+import sys
 import argparse
 import json
 import subprocess
 import shutil
 import datetime
-import csv 
+import csv
 
 from pathlib import Path
 from itertools import product
@@ -33,44 +33,44 @@ class Patcher:
     def __init__(self, run_params):
         self.run_params = run_params
         self.backups = []
-    
+
     def __enter__(self):
         for item in self.run_params:
             Patcher._make_backup(item["file"])
             self.backups.append(item["file"])
         return self
-    
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         for filepath in self.backups:
             Patcher._restore_backup(filepath)
         return False
-    
+
     @staticmethod
     def _replace_line(file_path, line_num, new_content):
         with open(file_path, 'r') as file:
             lines = file.readlines()
             prev_line = lines[line_num - 1].rstrip()
-            
-            leading_spaces = re.match(r'^\s*', prev_line).group(0) 
+
+            leading_spaces = re.match(r'^\s*', prev_line).group(0)
             if prev_line.endswith(":"):
                 leading_spaces += "\t"
 
             new_content = leading_spaces + new_content
             lines.insert(line_num, new_content + "\n")
-        
+
         with open(file_path, "w") as file:
             file.writelines(lines)
 
     @staticmethod
     def _make_backup(path):
         shutil.copy(path, path + ".backup")
-    
+
     @staticmethod
     def _restore_backup(path):
         backup = path + ".backup"
         if os.path.exists(backup):
             os.replace(backup, path)
-    
+
     def apply_changes(self):
         for item in self.run_params:
             sorted_by_lines = dict(sorted(item["lines"].items(), reverse=True))
@@ -89,7 +89,7 @@ class Execution:
             run_params.append({"name": name})
             json_txt = json.dumps(run_params, indent=4)
             run_file.write(json_txt)
-    
+
     @staticmethod
     def _get_execution_time():
         dirs = list(filter(os.path.isdir, [os.path.join("output", f) for f in os.listdir("output")]))
@@ -126,12 +126,12 @@ class Execution:
                 Execution._save_run_params(self.result_folder,
                     run_params, self.result_folder + "/combination_params.json")
                 test_result = self._run_test(json_config)
-            
+
             if test_result == 0:
                 time = Execution._get_execution_time()
                 execution_times.append(time)
             else:
-                return None 
+                return None
 
         execution_times.sort()
 
@@ -140,7 +140,7 @@ class Execution:
             return execution_times[mid]
         else:
             return (execution_times[mid] + execution_times[mid - 1]) / 2
-    
+
     def _run_test(self, json_config):
         test = json_config["test_name"]
         run_command = f"python3 {test}"
@@ -155,11 +155,11 @@ class Execution:
 
 
 class HeuristicTile:
-    def __init__(self, 
-                l1_size=131072, 
-                l0a_size=65536, 
-                l0b_size=65536, 
-                l0c_size=524288, 
+    def __init__(self,
+                l1_size=131072,
+                l0a_size=65536,
+                l0b_size=65536,
+                l0c_size=524288,
                 output_dt_bytes=4):
 
         self.l1_size = l1_size
@@ -171,12 +171,12 @@ class HeuristicTile:
     @staticmethod
     def greatest_bit(x):
         n = 0
-        power = 1 
+        power = 1
         while power <= x:
-            power *= 2 
+            power *= 2
             n += 1
         return n - 1
-    
+
     def is_good_tiling(self, tile, input_dt_bytes):
         m, m_big, k, k_big, n, n_big = tile
         r1 = k_big % k == 0 and n_big >= n
@@ -209,7 +209,7 @@ class HeuristicTile:
             if self.is_good_tiling([m, m_big, k, 2 * k_big, n, n_big], input_dt_bytes):
                 num_of_variants += 1
                 yield [m, m_big, k, 2 * k_big, n, n_big]
-            
+
             if self.is_good_tiling([m, m_big, k, k_big, n, 2 * n_big], input_dt_bytes):
                 num_of_variants += 1
                 yield [m, m_big, k, k_big, n, 2 * n_big]
@@ -222,7 +222,7 @@ class HeuristicTile:
         m_dim = 0
         k_dim = 2
         n_dim = 4
-        
+
         m = tile[m_dim]
         k = tile[k_dim]
         n = tile[n_dim]
@@ -236,7 +236,7 @@ class HeuristicTile:
         whole_n_score = 2
 
         score = 0
-        
+
         #If the tiling size = shape size -> the preferred option
         score = (score + whole_m_score) if tile[m_dim] == max(m, min_tile) else score
         score = (score + whole_k_score) if tile[k_dim] == max(k, min_tile) else score
@@ -244,7 +244,7 @@ class HeuristicTile:
 
         #The more filled L0A, L0B, L0C is better
         utilization_l0a = (tile[m_dim] * tile[k_dim] * input_type_size) / self.l0a_size
-        utilization_l0b = (tile[k_dim] * tile[n_dim] * input_type_size) / self.l0b_size 
+        utilization_l0b = (tile[k_dim] * tile[n_dim] * input_type_size) / self.l0b_size
         utilization_l0c = (tile[m_dim] * tile[n_dim] * self.output_dt_bytes) / self.l0c_size
         score += min_tile * gmean([utilization_l0a, utilization_l0b, utilization_l0c])
 
@@ -283,7 +283,7 @@ class HeuristicTile:
                 m = int(m)
                 k = int(k)
                 n = int(n)
-    
+
                 dt_bytes = int(re.search(r"\d+", datatype).group(0)) // 8
                 tiles = list(self.generate_tiles([m, k, n], input_dt_bytes=dt_bytes))
                 best_tiles = self.get_best_k_tiles(tiles, [m, k, n], dt_bytes, best_k_tiles=5)
@@ -298,27 +298,27 @@ class HeuristicTile:
 
 def check_json(json_config):
     all_params = []
-    
+
     for file_conf in json_config["files"]:
         _, lines_conf = next(iter(file_conf.items()))
         for line_conf in lines_conf:
             params = [k for k in line_conf if k not in ("string", "line")]
             all_params.extend(params)
-    
+
     checked = set()
     duplicates = set()
     for item in all_params:
         if item in checked:
             duplicates.add(item)
         checked.add(item)
-    
+
     if duplicates:
         raise NameError(f"Parameters {duplicates} are not unique in your json config")
 
 
 def preproc_json(json_config):
     """
-    Replaces parameters that are set using strings  
+    Replaces parameters that are set using strings
     """
     ht = HeuristicTile()
     check_json(json_config)
@@ -338,7 +338,7 @@ def run_values_to_run_params(run_values, json_config):
         generated_lines_conf = dict()
 
         for line in lines_conf:
-            if len(line) == 3: 
+            if len(line) == 3:
                 #if line with tune parameter
                 run_value = run_values[vec_idx]
                 vec_idx += 1
@@ -352,13 +352,13 @@ def run_values_to_run_params(run_values, json_config):
         run_param["lines"] = generated_lines_conf
         run_params.append(run_param)
 
-    return run_params 
+    return run_params
 
 
 class ExhaustiveGenerator:
     def __init__(self, json_config):
         self.json_config = json_config
-    
+
     @staticmethod
     def _parse_file_conf(lines_conf):
         """
@@ -373,24 +373,24 @@ class ExhaustiveGenerator:
 
             string_param_comb = []
             #if we have tunable params
-            if params: 
+            if params:
                 for e in product(*params.values()):
                     param_comb = dict(zip(params.keys(), e))
                     result = line_conf["string"].format(**param_comb)
                     string_param_comb.append([(line_conf["line"], result), param_comb])
                 lines_comb.append(string_param_comb)
-        
+
         return list(product(*lines_comb))
-    
+
     def generate_combinations(self):
         """
         Generates all possible permutations of tune values inside config.json
-        """       
+        """
         comb_inside_file = dict()
         for file_conf in self.json_config["files"]:
             path_to_file, lines_conf = list(file_conf.items())[0]
             comb_inside_file[path_to_file] = ExhaustiveGenerator._parse_file_conf(lines_conf)
-        
+
         for e in product(*comb_inside_file.values()):
             single_param_values = []
 
@@ -405,8 +405,8 @@ class ExhaustiveGenerator:
                     single_param_values.append(names)
                     num_lines[line] = string
 
-                d["lines"] = num_lines   
-            
+                d["lines"] = num_lines
+
             single_run_params = run_values_to_run_params(single_param_values, self.json_config)
             yield single_run_params, single_param_values
 
@@ -416,14 +416,14 @@ def parse_json():
         'in the specified test and measure performance \n' \
         'To specify which tiles and tile values to iterate through, use config.json \n' \
         'To start the iteration: \n\n' \
-        'python tools/scripts/tiling_tool.py --json_path /path/to/config.json', 
+        'python tools/scripts/tiling_tool.py --json_path /path/to/config.json',
         formatter_class=argparse.RawTextHelpFormatter)
 
-    parser.add_argument("--json_path", 
-                        help="path to config.json where described tiling configs", 
+    parser.add_argument("--json_path",
+                        help="path to config.json where described tiling configs",
                         type=str,
                         required=True)
-    
+
     args = parser.parse_args()
 
     with open(args.json_path) as f:
@@ -442,9 +442,9 @@ def save_to_csv(path_to_file, res_params):
 
 
 def sort_results(results):
-    def compare_function(x): 
+    def compare_function(x):
         return 1e6 if x[1] == "Error" else x[1] # set configs of error will be at the end
-        
+
     results_sorted_by_time = dict(sorted(results.items(), key=compare_function))
     return results_sorted_by_time
 
@@ -458,12 +458,12 @@ def remove_worst_combination(result_folder_path, results):
 
 
 def main():
-    json_config = parse_json()    
+    json_config = parse_json()
     results = dict()
     now = datetime.datetime.now(datetime.timezone.utc)
     today_folder_name = now.strftime("%d_%b_%H_%M_%S")
 
-    os.makedirs(json_config["results_folder"], exist_ok=True)  
+    os.makedirs(json_config["results_folder"], exist_ok=True)
     result_folder_path = json_config["results_folder"] + "/" + today_folder_name
     os.makedirs(result_folder_path, exist_ok=True)
 
@@ -480,12 +480,12 @@ def main():
         run_result = "Error" if time is None else time
         results[f"combination_{idx}"] = run_result
         run_values.append({"time(us)": run_result})
-        
+
         param_val_flat = {"combination": f"combination_{idx}"}
         for d in run_values:
             param_val_flat.update(d)
         res_params.append(param_val_flat)
-        
+
         if idx >= json_config["save_best_k"]:
             remove_worst_combination(result_folder_path, results)
 

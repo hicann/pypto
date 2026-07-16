@@ -40,7 +40,7 @@ class SCFATileShapeConfig:
     c2_tile_shape: list
 
 
-def sparse_compress_flash_attention_compute(query, actual_seq_q, ori_kv, cmp_kv, ori_block_table, 
+def sparse_compress_flash_attention_compute(query, actual_seq_q, ori_kv, cmp_kv, ori_block_table,
                                    cmp_block_table, atten_sink,
                                    seqused_kv, cmp_sparse_indices,
                                    attention_out, nq, n_kv, softmax_scale, topk,
@@ -149,13 +149,13 @@ def sparse_compress_flash_attention_compute(query, actual_seq_q, ori_kv, cmp_kv,
 )
 def sparse_compress_flash_attention_kernel(
     query: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16),
-    actual_seq_q: pypto.Tensor([pypto.DYNAMIC], pypto.DT_INT32), 
-    ori_kv: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16), 
-    cmp_kv: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16), 
-    ori_block_table: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_INT32), 
-    cmp_block_table: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_INT32), 
+    actual_seq_q: pypto.Tensor([pypto.DYNAMIC], pypto.DT_INT32),
+    ori_kv: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16),
+    cmp_kv: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16),
+    ori_block_table: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_INT32),
+    cmp_block_table: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_INT32),
     atten_sink: pypto.Tensor([pypto.STATIC], pypto.DT_FP32),
-    seqused_kv: pypto.Tensor([pypto.DYNAMIC], pypto.DT_INT32), 
+    seqused_kv: pypto.Tensor([pypto.DYNAMIC], pypto.DT_INT32),
     cmp_sparse_indices: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_INT32),
     attention_out: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16),
     nq, n_kv, softmax_scale, topk, block_size, win_size, cmp_ratio, tile_config):
@@ -164,14 +164,14 @@ def sparse_compress_flash_attention_kernel(
     """
     pypto.experimental.set_operation_options(combine_axis=True)
 
-    sparse_compress_flash_attention_compute(query, actual_seq_q, ori_kv, cmp_kv, ori_block_table, 
+    sparse_compress_flash_attention_compute(query, actual_seq_q, ori_kv, cmp_kv, ori_block_table,
                                 cmp_block_table, atten_sink,
                                 seqused_kv, cmp_sparse_indices,
                                 attention_out, nq, n_kv, softmax_scale, topk,
                                 block_size, win_size, cmp_ratio, tile_config)
 
 
-def check_input_output_shape_dtype(query_npu, q_act_seqs_npu, ori_kv_npu, cmp_kv_npu, atten_sink_npu, 
+def check_input_output_shape_dtype(query_npu, q_act_seqs_npu, ori_kv_npu, cmp_kv_npu, atten_sink_npu,
                                    cmp_sparse_indices_npu):
     assert q_act_seqs_npu is not None and q_act_seqs_npu.dim() == 1, \
         f"q_act_seqs_npu dim num is {q_act_seqs_npu.dim()}, expected 1"
@@ -192,12 +192,12 @@ def check_input_output_shape_dtype(query_npu, q_act_seqs_npu, ori_kv_npu, cmp_kv
 
 
 @allow_in_graph
-def npu_sparse_compress_flash_attention(query_npu, q_act_seqs_npu, ori_kv_npu, cmp_kv_npu, ori_block_table_npu, 
+def npu_sparse_compress_flash_attention(query_npu, q_act_seqs_npu, ori_kv_npu, cmp_kv_npu, ori_block_table_npu,
                                         cmp_block_table_npu, atten_sink_npu,
                                         seqused_kv_npu, cmp_sparse_indices_npu, softmax_scale, win_size, cmp_ratio):
 
     assert not isinstance(query_npu, FakeTensor), f"query_npu is FakeTensor"
-    check_input_output_shape_dtype(query_npu, q_act_seqs_npu, ori_kv_npu, cmp_kv_npu, 
+    check_input_output_shape_dtype(query_npu, q_act_seqs_npu, ori_kv_npu, cmp_kv_npu,
                                    atten_sink_npu, cmp_sparse_indices_npu)
 
     tile_config = SCFATileShapeConfig(
@@ -215,10 +215,10 @@ def npu_sparse_compress_flash_attention(query_npu, q_act_seqs_npu, ori_kv_npu, c
     topk = cmp_sparse_indices_npu.size(1)
     block_size = 128
 
-    tensors = [query_npu, q_act_seqs_npu, ori_kv_npu, cmp_kv_npu, ori_block_table_npu, cmp_block_table_npu, 
+    tensors = [query_npu, q_act_seqs_npu, ori_kv_npu, cmp_kv_npu, ori_block_table_npu, cmp_block_table_npu,
         atten_sink_npu, seqused_kv_npu, cmp_sparse_indices_npu, attention_out_npu]
 
-    sparse_compress_flash_attention_kernel(*tensors, nq, n_kv, softmax_scale, topk, block_size, 
+    sparse_compress_flash_attention_kernel(*tensors, nq, n_kv, softmax_scale, topk, block_size,
                                            win_size, cmp_ratio, tile_config)
 
     return attention_out_npu
@@ -243,10 +243,10 @@ def sparse_compress_flash_attention(query_npu, q_act_seqs_npu, ori_kv_npu, cmp_k
 
 try:
     @torch.library.impl(pyptolib, "sparse_compress_flash_attention", "NPU")
-    def sparse_compress_flash_attention(query_npu, q_act_seqs_npu, ori_kv_npu, cmp_kv_npu, ori_block_table_npu, 
+    def sparse_compress_flash_attention(query_npu, q_act_seqs_npu, ori_kv_npu, cmp_kv_npu, ori_block_table_npu,
                                         cmp_block_table_npu, atten_sink_npu,
                                         seqused_kv_npu, cmp_sparse_indices_npu, softmax_scale, win_size, cmp_ratio):
-        return npu_sparse_compress_flash_attention(query_npu, q_act_seqs_npu, ori_kv_npu, cmp_kv_npu, 
+        return npu_sparse_compress_flash_attention(query_npu, q_act_seqs_npu, ori_kv_npu, cmp_kv_npu,
                                         ori_block_table_npu, cmp_block_table_npu, atten_sink_npu,
                                         seqused_kv_npu, cmp_sparse_indices_npu, softmax_scale, win_size, cmp_ratio)
 except Exception as e:
@@ -256,9 +256,9 @@ except Exception as e:
         print(f"Skip: Unexpected error : {e}")
 
 
-def sparse_compress_flash_attention_graph(query_npu, q_act_seqs_npu, ori_kv_npu, cmp_kv_npu, 
+def sparse_compress_flash_attention_graph(query_npu, q_act_seqs_npu, ori_kv_npu, cmp_kv_npu,
                                     ori_block_table_npu, cmp_block_table_npu, atten_sink_npu,
                                     seqused_kv_npu, cmp_sparse_indices_npu, softmax_scale, win_size, cmp_ratio):
-    return torch.ops.pypto.sparse_compress_flash_attention(query_npu, q_act_seqs_npu, ori_kv_npu, 
+    return torch.ops.pypto.sparse_compress_flash_attention(query_npu, q_act_seqs_npu, ori_kv_npu,
                                     cmp_kv_npu, ori_block_table_npu, cmp_block_table_npu, atten_sink_npu,
                                     seqused_kv_npu, cmp_sparse_indices_npu, softmax_scale, win_size, cmp_ratio)

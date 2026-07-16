@@ -79,7 +79,7 @@ PyPTO提供了丰富的示例代码，涵盖从基础操作到复杂模型实现
 
 ```
 ├── docs/                       # 文档资源
-│   └── zh/                      
+│   └── zh/
 │      ├── api/                 # API参考文档
 │      ├── contribute/          # 贡献指南文档
 │      └── tutorials/           # PyPTO编程指南

@@ -424,7 +424,7 @@ def compressor_ratio_4_kernel(
     kv_state_out: pypto.Tensor([...], pypto.DT_FP32),
     score_state_out: pypto.Tensor([...], pypto.DT_FP32),
     start_pos_dy: pypto.Tensor([...], pypto.DT_INT32),
-    ratio, 
+    ratio,
     rope_head_dim
     ):
     dtype = x.dtype
@@ -625,7 +625,7 @@ def compressor_ratio_4_rotate_kernel(
     kv_state_out: pypto.Tensor([...], pypto.DT_FP32),
     score_state_out: pypto.Tensor([...], pypto.DT_FP32),
     start_pos_dy: pypto.Tensor([...], pypto.DT_INT32),
-    ratio, 
+    ratio,
     rope_head_dim):
     bsz, s1, h = x_in.shape
     dtype = x_in.dtype
@@ -846,7 +846,7 @@ def compressor_ratio_128_kernel(
     kv_state_out: pypto.Tensor([...], pypto.DT_FP32),
     score_state_out: pypto.Tensor([...], pypto.DT_FP32),
     start_pos_dy: pypto.Tensor([...], pypto.DT_INT32),
-    ratio, 
+    ratio,
     rope_head_dim):
     dtype = x.dtype
     bsz, s1, h = x.shape

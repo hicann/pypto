@@ -260,12 +260,12 @@ def _calculate_batch_offsets_3d(ctx: MatmulKernelContext, lp: LoopParams, b_idx:
     batch_a = lp.batch_sizes[0]
     batch_b = lp.batch_sizes[1]
     tile_b = lp.tile_batch[0]
-    
+
     a_params = BatchOffsetParams(batch_a, b_idx, tile_b, batch_a == 1, batch_b)
     a_start, a_end = _get_batch_offsets(a_params)
     b_params = BatchOffsetParams(batch_b, b_idx, tile_b, batch_b == 1, batch_a)
     b_start, b_end = _get_batch_offsets(b_params)
-    
+
     return BatchOffsets([a_start], [a_end], [b_start], [b_end])
 
 
@@ -274,7 +274,7 @@ def _calculate_batch_offsets_4d(ctx: MatmulKernelContext, lp: LoopParams, indice
     b0_b, b1_b = lp.batch_sizes[2], lp.batch_sizes[3]
     tile_b0, tile_b1 = lp.tile_batch[0], lp.tile_batch[1]
     b0_idx, b1_idx = indices[0], indices[1]
-    
+
     a0_params = BatchOffsetParams(b0_a, b0_idx, tile_b0, b0_a == 1, b0_b)
     a0_start, a0_end = _get_batch_offsets(a0_params)
     a1_params = BatchOffsetParams(b1_a, b1_idx, tile_b1, b1_a == 1, b1_b)
@@ -283,7 +283,7 @@ def _calculate_batch_offsets_4d(ctx: MatmulKernelContext, lp: LoopParams, indice
     b0_start, b0_end = _get_batch_offsets(b0_params)
     b1_params = BatchOffsetParams(b1_b, b1_idx, tile_b1, b1_b == 1, b1_a)
     b1_start, b1_end = _get_batch_offsets(b1_params)
-    
+
     return BatchOffsets([a0_start, a1_start], [a0_end, a1_end], [b0_start, b1_start], [b0_end, b1_end])
 
 
@@ -302,7 +302,7 @@ class ExtendParamsBuilder:
 
 def _build_extend_params(builder: ExtendParamsBuilder) -> dict:
     extend_params = {"relu_type": builder.config.relu_mode}
-    
+
     if builder.config.mode == "bias":
         bias_params = BiasViewParams(
             builder.bias_tensor, builder.config.bias_shape,
@@ -323,7 +323,7 @@ def _build_extend_params(builder: ExtendParamsBuilder) -> dict:
             extend_params["scale_tensor"] = _get_scale_view_3d(scale_params)
         else:
             extend_params["scale_tensor"] = _get_scale_view_4d(scale_params)
-    
+
     return extend_params
 
 
@@ -331,25 +331,25 @@ def _process_tile_3d(ctx: MatmulKernelContext, lp: LoopParams, indices: LoopIndi
     m_offset = indices.m_idx * lp.tile_m
     n_offset = indices.n_idx * lp.tile_n
     b_offset = indices.batch_indices[0] * lp.tile_batch[0]
-    
+
     a_view_params = TensorViewParams(
         ctx.a_tensor, ctx.config, offsets.a_starts, offsets.a_ends, m_offset, lp.tile_m, lp.k
     )
     b_view_params = TensorViewParams(
         ctx.b_tensor, ctx.config, offsets.b_starts, offsets.b_ends, n_offset, lp.tile_n, lp.k
     )
-    
+
     a_view = _get_a_view(a_view_params)
     b_view = _get_b_view(b_view_params)
-    
+
     builder = ExtendParamsBuilder(
         ctx.config, ctx.bias_tensor, ctx.scale_tensor,
         offsets, indices.batch_indices, n_offset, lp.tile_batch, lp.tile_n, lp.batch_sizes[:2]
     )
     extend_params = _build_extend_params(builder)
-    
+
     out_view = _compute_matmul_out(a_view, b_view, ctx.config, extend_params)
-    write_params = WriteTensorParams(ctx.out_tensor, out_view, 
+    write_params = WriteTensorParams(ctx.out_tensor, out_view,
         [b_offset, m_offset, n_offset], [lp.tile_batch[0], lp.tile_m, lp.tile_n])
     _write_out_tensor_3d(write_params)
 
@@ -387,21 +387,21 @@ def batch_matmul_kernel_3d(
     batch_a = config.input_shape_a[0]
     batch_b = config.input_shape_b[0]
     batch = config.output_shape[0]
-    
+
     pypto.set_cube_tile_shapes(*config.tile_shape)
     pypto.set_vec_tile_shapes(config.tile_shape[0][0], config.tile_shape[2][0])
     tile_b = config.get_tile_batch()[0]
     tile_m = config.get_tile_m()
     tile_n = config.get_tile_n()
-    
+
     m_loop = (m + tile_m - 1) // tile_m
     n_loop = (n + tile_n - 1) // tile_n
     b_loop = (batch + tile_b - 1) // tile_b
     pypto.set_matrix_size([m, k, n])
-    
+
     ctx = MatmulKernelContext(a_tensor, b_tensor, bias_tensor, scale_tensor, out_tensor, config)
     lp = LoopParams(m, n, k, tile_m, tile_n, [batch_a, batch_b], [tile_b])
-    
+
     for b_idx in pypto.loop(0, b_loop, 1, name="LOOP_L0_bIdx", idx_name="b_idx"):
         batch_params = ProcessBatchParams(ctx, lp, [b_idx], [m_loop, n_loop])
         _process_batch_3d_inner(batch_params)
@@ -412,24 +412,24 @@ def _process_tile_4d(ctx: MatmulKernelContext, lp: LoopParams, indices: LoopIndi
     n_offset = indices.n_idx * lp.tile_n
     b0_offset = indices.batch_indices[0] * lp.tile_batch[0]
     b1_offset = indices.batch_indices[1] * lp.tile_batch[1]
-    
+
     a_view_params = TensorViewParams(
         ctx.a_tensor, ctx.config, offsets.a_starts, offsets.a_ends, m_offset, lp.tile_m, lp.k
     )
     b_view_params = TensorViewParams(
         ctx.b_tensor, ctx.config, offsets.b_starts, offsets.b_ends, n_offset, lp.tile_n, lp.k
     )
-    
+
     a_view = _get_a_view_4d(a_view_params)
     b_view = _get_b_view_4d(b_view_params)
-    
+
     builder = ExtendParamsBuilder(
         ctx.config, ctx.bias_tensor, ctx.scale_tensor,
         offsets, indices.batch_indices, n_offset, lp.tile_batch, lp.tile_n,
         [lp.batch_sizes[0], lp.batch_sizes[1]]
     )
     extend_params = _build_extend_params(builder)
-    
+
     out_view = _compute_matmul_out(a_view, b_view, ctx.config, extend_params)
     write_params = WriteTensor4DParams(
         ctx.out_tensor, out_view, b0_offset, b1_offset,
@@ -462,22 +462,22 @@ def batch_matmul_kernel_4d(
     k = config.get_k()
     b0_a, b1_a = config.input_shape_a[0], config.input_shape_a[1]
     b0_b, b1_b = config.input_shape_b[0], config.input_shape_b[1]
-    
+
     pypto.set_cube_tile_shapes(*config.tile_shape)
     pypto.set_vec_tile_shapes(config.tile_shape[0][0], config.tile_shape[2][0])
     tile_b0, tile_b1 = config.get_tile_batch()[0], config.get_tile_batch()[1]
     tile_m = config.get_tile_m()
     tile_n = config.get_tile_n()
-    
+
     m_loop = (m + tile_m - 1) // tile_m
     n_loop = (n + tile_n - 1) // tile_n
     b0_loop = (b0_a + tile_b0 - 1) // tile_b0
     b1_loop = (b1_a + tile_b1 - 1) // tile_b1
     pypto.set_matrix_size([m, k, n])
-    
+
     ctx = MatmulKernelContext(a_tensor, b_tensor, bias_tensor, scale_tensor, out_tensor, config)
     lp = LoopParams(m, n, k, tile_m, tile_n, [b0_a, b1_a, b0_b, b1_b], [tile_b0, tile_b1])
-    
+
     for b0_idx in pypto.loop(0, b0_loop, 1, name="LOOP_L0_b0Idx", idx_name="b0_idx"):
         for b1_idx in pypto.loop(0, b1_loop, 1, name="LOOP_L0_b1Idx", idx_name="b1_idx"):
             batch_params = ProcessBatchParams(ctx, lp, [b0_idx, b1_idx], [m_loop, n_loop])
@@ -500,39 +500,39 @@ def _compute_golden_tensors(a_shape: list, b_shape: list, n: int, config: BiasFi
     a_dtype = config.get_a_torch_dtype()
     b_dtype = config.get_b_torch_dtype()
     c_dtype = config.get_c_torch_dtype()
-    
+
     if a_dtype == torch.int8:
         a_tensor_cpu = torch.randint(-5, 6, a_shape, dtype=a_dtype)
         b_tensor_cpu = torch.randint(-5, 6, b_shape, dtype=b_dtype)
     else:
         a_tensor_cpu = torch.rand(a_shape, dtype=a_dtype)
         b_tensor_cpu = torch.rand(b_shape, dtype=b_dtype)
-    
+
     a_cpu = a_tensor_cpu.transpose(-2, -1) if config.a_trans else a_tensor_cpu
     b_cpu = b_tensor_cpu.transpose(-2, -1) if config.b_trans else b_tensor_cpu
-    
+
     accum_dtype = torch.int32 if a_dtype == torch.int8 else torch.float32
     matmul_result = torch.matmul(a_cpu.to(accum_dtype), b_cpu.to(accum_dtype))
-    
+
     bias_tensor_cpu = None
     scale_tensor_cpu = None
     flattened = None
     golden = matmul_result.to(c_dtype)
-    
+
     if config.mode == "bias":
         bias_shape = config.bias_shape
         bias_dtype = config.get_torch_dtype(config.bias_dtype)
-        
+
         if bias_dtype == torch.int32:
             bias_tensor_cpu = torch.randint(-5, 6, bias_shape, dtype=bias_dtype)
         else:
             bias_tensor_cpu = torch.rand(bias_shape, dtype=bias_dtype)
-        
+
         golden = (matmul_result + bias_tensor_cpu.to(accum_dtype)).to(c_dtype)
-    
+
     if config.relu_mode == pypto.ReLuType.RELU:
         golden = torch.relu(golden)
-    
+
     if config.mode == "pertensor":
         golden = golden * config.scale
     elif config.mode == "perchannel":
@@ -545,21 +545,21 @@ def _compute_golden_tensors(a_shape: list, b_shape: list, n: int, config: BiasFi
             flattened_int64[i] = torch_npu.npu_trans_quant_param(flattened[i])
         flattened = flattened_int64.view(scale_shape)
         golden = (golden * scale_tensor_cpu).to(torch.float16)
-    
-    return GoldenComputeResult(a_tensor_cpu, b_tensor_cpu, bias_tensor_cpu, 
+
+    return GoldenComputeResult(a_tensor_cpu, b_tensor_cpu, bias_tensor_cpu,
             flattened, golden, a_dtype, b_dtype, c_dtype)
 
 
 def run_fixpipe_bias_test(case: dict):
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
     torch.npu.set_device(device_id)
-    
+
     config = BiasFixpipeMatmulConfig.from_test_case(case)
-    
+
     m = config.get_m()
     k = config.get_k()
     n = config.get_n()
-    
+
     if config.get_batch_dims() == 1:
         batch_a = config.input_shape_a[0]
         batch_b = config.input_shape_b[0]
@@ -572,13 +572,13 @@ def run_fixpipe_bias_test(case: dict):
         a_shape = [b0_a, b1_a, k, m] if config.a_trans else [b0_a, b1_a, m, k]
         b_shape = [b0_b, b1_b, n, k] if config.b_trans else [b0_b, b1_b, k, n]
         c_shape = config.output_shape
-    
+
     golden_result = _compute_golden_tensors(a_shape, b_shape, n, config)
-    
+
     a_tensor = golden_result.a_tensor_cpu.to(f"npu:{device_id}")
     b_tensor = golden_result.b_tensor_cpu.to(f"npu:{device_id}")
     c_tensor = torch.zeros(c_shape, dtype=golden_result.c_dtype, device=f"npu:{device_id}")
-    
+
     if config.mode == "bias":
         bias_tensor = golden_result.bias_tensor_cpu.to(f"npu:{device_id}")
         dummy_scale = torch.zeros([1], dtype=torch.float16, device=f"npu:{device_id}")
@@ -588,12 +588,12 @@ def run_fixpipe_bias_test(case: dict):
             dummy_scale = golden_result.scale_tensor_cpu.to(torch.uint64).to(f"npu:{device_id}")
         else:
             dummy_scale = torch.zeros([1], dtype=torch.float16, device=f"npu:{device_id}")
-    
+
     if config.get_batch_dims() == 1:
         batch_matmul_kernel_3d(a_tensor, b_tensor, c_tensor, bias_tensor, dummy_scale, config)
     else:
         batch_matmul_kernel_4d(a_tensor, b_tensor, bias_tensor, dummy_scale, c_tensor, config)
-    
+
     atol, rtol = config.get_tolerance(config.c_dtype)
     assert torch.allclose(
         c_tensor.cpu(), golden_result.golden.cpu(), atol=atol, rtol=rtol

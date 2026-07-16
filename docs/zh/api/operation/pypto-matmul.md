@@ -59,16 +59,16 @@ matmul(input, mat2, out_dtype, *, a_trans = False, b_trans = False, c_matrix_nz 
 
 表3： Matmul支持的数据类型
 
-| input | mat2 | out_dtype | bias_tensor | 
+| input | mat2 | out_dtype | bias_tensor |
 |:------|:-----|:----------|:------------|
 | DT_FP16 | DT_FP16 | DT_FP16/DT_FP32 | DT_FP16/DT_FP32 |
 | DT_BF16 | DT_BF16 | DT_BF16/DT_FP32 | DT_FP32 |
-| DT_BF16 | DT_BF16 | DT_BF16/DT_FP32 | DT_BF16 | 
+| DT_BF16 | DT_BF16 | DT_BF16/DT_FP32 | DT_BF16 |
 | DT_FP32 | DT_FP32 | DT_FP32 | DT_FP32 |
-| DT_INT8 | DT_INT8 | DT_INT32 | DT_INT32 | 
-| DT_FP8E5M2 | DT_FP8E5M2/DT_FP8E4M3 | DT_FP16/DT_BF16/DT_FP32 | DT_FP16/DT_BF16/DT_FP32 | 
-| DT_FP8E4M3 | DT_FP8E5M2/DT_FP8E4M3 | DT_FP16/DT_BF16/DT_FP32 | DT_FP16/DT_BF16/DT_FP32 | 
-| DT_HF8 | DT_HF8 | DT_FP16/DT_BF16/DT_FP32 | DT_FP16/DT_BF16/DT_FP32 | 
+| DT_INT8 | DT_INT8 | DT_INT32 | DT_INT32 |
+| DT_FP8E5M2 | DT_FP8E5M2/DT_FP8E4M3 | DT_FP16/DT_BF16/DT_FP32 | DT_FP16/DT_BF16/DT_FP32 |
+| DT_FP8E4M3 | DT_FP8E5M2/DT_FP8E4M3 | DT_FP16/DT_BF16/DT_FP32 | DT_FP16/DT_BF16/DT_FP32 |
+| DT_HF8 | DT_HF8 | DT_FP16/DT_BF16/DT_FP32 | DT_FP16/DT_BF16/DT_FP32 |
 
 表4：反量化支持的数据类型
 
@@ -78,15 +78,15 @@ matmul(input, mat2, out_dtype, *, a_trans = False, b_trans = False, c_matrix_nz 
 
 表5：量化支持的数据类型
 
-| input | mat2 | out_dtype | 
+| input | mat2 | out_dtype |
 |:------|:-----|:----------|
 | DT_BF16 | DT_BF16 | DT_INT8 |
-| DT_FP16 | DT_FP16 | DT_INT8 | 
-| DT_FP32 | DT_FP32 | DT_INT8 | 
+| DT_FP16 | DT_FP16 | DT_INT8 |
+| DT_FP32 | DT_FP32 | DT_INT8 |
 | DT_INT8 | DT_INT8 | DT_INT8 |
-| DT_FP8E5M2 | DT_FP8E5M2/DT_FP8E4M3 | DT_INT8 | 
-| DT_FP8E4M3 | DT_FP8E5M2/DT_FP8E4M3 | DT_INT8 | 
-| DT_HF8 | DT_HF8 | DT_INT8 | 
+| DT_FP8E5M2 | DT_FP8E5M2/DT_FP8E4M3 | DT_INT8 |
+| DT_FP8E4M3 | DT_FP8E5M2/DT_FP8E4M3 | DT_INT8 |
+| DT_HF8 | DT_HF8 | DT_INT8 |
 
 ## 返回值说明
 
@@ -173,4 +173,3 @@ extend_params = {'trans_mode': pypto.TransMode.CAST_ROUND}
 pypto.matmul(a, b, pypto.DT_FP32, extend_params=extend_params)
 ```
 <!-- end id6 -->
-

@@ -98,23 +98,23 @@ def inverse_pto(attn: pypto.Tensor, eye: pypto.Tensor, size: int, zeros_16, zero
     attn_tmp_dim1 = pypto.concat(attn_8_8_list, dim=1)
 
     attn_tmp_dim1_inv = inverse_pto_min_length(attn_tmp_dim0, attn_tmp_dim1, eye, min_length, min_length * 8)
-    
+
     attn_8_8_inv_list = []
     for i in range(8):
         attn_8_8_inv_list.append(attn_tmp_dim1_inv[:, min_length * i:min_length * (i + 1)] + 0.0)
 
     attn_4_inv_list = []
     for i in range(4):
-        attn_4_inv_list.append(inverse_matmul(attn=attn, attn_1_1_inv=attn_8_8_inv_list[i * 2], 
-            attn_2_2_inv=attn_8_8_inv_list[i * 2 + 1], x_ofs=min_length * i * 2, y_ofs=min_length * i * 2, 
+        attn_4_inv_list.append(inverse_matmul(attn=attn, attn_1_1_inv=attn_8_8_inv_list[i * 2],
+            attn_2_2_inv=attn_8_8_inv_list[i * 2 + 1], x_ofs=min_length * i * 2, y_ofs=min_length * i * 2,
             m_len=min_length, zero_tensor=zeros_16))
-        
+
     attn_2_inv_list = []
     for i in range(2):
-        attn_2_inv_list.append(inverse_matmul(attn=attn, attn_1_1_inv=attn_4_inv_list[i * 2], 
-            attn_2_2_inv=attn_4_inv_list[i * 2 + 1], x_ofs=min_length * i * 4, y_ofs=min_length * i * 4, 
+        attn_2_inv_list.append(inverse_matmul(attn=attn, attn_1_1_inv=attn_4_inv_list[i * 2],
+            attn_2_2_inv=attn_4_inv_list[i * 2 + 1], x_ofs=min_length * i * 4, y_ofs=min_length * i * 4,
             m_len=min_length * 2, zero_tensor=zeros_32))
-    attn_inv = inverse_matmul(attn=attn, attn_1_1_inv=attn_2_inv_list[0], 
+    attn_inv = inverse_matmul(attn=attn, attn_1_1_inv=attn_2_inv_list[0],
         attn_2_2_inv=attn_2_inv_list[1], x_ofs=0, y_ofs=0, m_len=min_length * 4, zero_tensor=zeros_64)
     return attn_inv
 
@@ -291,17 +291,17 @@ def chunk_gated_delta_rule(b, nqk, nv, d, l):
         }
     )
     def kernel(
-            query: pypto.Tensor(query_shape, pypto.DT_FP32),                        
-            key: pypto.Tensor(key_shape, pypto.DT_FP32), 
-            value: pypto.Tensor(value_shape, pypto.DT_FP32), 
-            beta: pypto.Tensor(beta_shape, pypto.DT_FP32), 
-            gate: pypto.Tensor(gate_shape, pypto.DT_FP32), 
-            states: pypto.Tensor(states_shape, pypto.DT_FP32), 
-            mask: pypto.Tensor(mask_shape, pypto.DT_FP32), 
-            tril_mask: pypto.Tensor(tril_mask_shape, pypto.DT_FP32), 
-            eye: pypto.Tensor(eye_shape, pypto.DT_FP32), 
-            act_seq_len: pypto.Tensor(act_seq_len_shape, pypto.DT_INT32), 
-            core_attn_out: pypto.Tensor(core_attn_out_shape, pypto.DT_FP32), 
+            query: pypto.Tensor(query_shape, pypto.DT_FP32),
+            key: pypto.Tensor(key_shape, pypto.DT_FP32),
+            value: pypto.Tensor(value_shape, pypto.DT_FP32),
+            beta: pypto.Tensor(beta_shape, pypto.DT_FP32),
+            gate: pypto.Tensor(gate_shape, pypto.DT_FP32),
+            states: pypto.Tensor(states_shape, pypto.DT_FP32),
+            mask: pypto.Tensor(mask_shape, pypto.DT_FP32),
+            tril_mask: pypto.Tensor(tril_mask_shape, pypto.DT_FP32),
+            eye: pypto.Tensor(eye_shape, pypto.DT_FP32),
+            act_seq_len: pypto.Tensor(act_seq_len_shape, pypto.DT_INT32),
+            core_attn_out: pypto.Tensor(core_attn_out_shape, pypto.DT_FP32),
             last_state_data: pypto.Tensor(last_state_data_shape, pypto.DT_FP32),
         ):
 
@@ -315,7 +315,7 @@ def chunk_gated_delta_rule(b, nqk, nv, d, l):
         for b_idx in pypto.loop(b, name="LOOP_B_TND", idx_name="b_idx"):
             s = act_seq_len[b_idx + 1] - act_seq_len[b_idx]
             b_ofs = act_seq_len[b_idx]
-            for nv_idx in pypto.loop(nv, name="LOOP_Nv_TND", idx_name="nv_idx", parallel=True): # 
+            for nv_idx in pypto.loop(nv, name="LOOP_Nv_TND", idx_name="nv_idx", parallel=True): #
                 nqk_idx = nv_idx // group
                 pypto.set_vec_tile_shapes(16, 16, 128, 128)
                 last_state = states[b_idx, nv_idx]
@@ -328,12 +328,12 @@ def chunk_gated_delta_rule(b, nqk, nv, d, l):
                     value_view = pypto.view(value, [l, 1, d], [bs_ofs, nv_idx, 0], valid_shape =[actual_l, 1, d])
                     beta_view = pypto.view(beta, [l, 1], [bs_ofs, nv_idx], valid_shape =[actual_l, 1])
                     gate_view = pypto.view(gate, [l, 1], [bs_ofs, nv_idx], valid_shape =[actual_l, 1])
- 
+
                     pypto.set_vec_tile_shapes(128, 128, 128)
                     query_view_2d = pypto.reshape(query_view, [l, d], valid_shape=[actual_l, d])
                     key_view_2d = pypto.reshape(key_view, [l, d], valid_shape=[actual_l, d])
                     value_view_2d = pypto.reshape(value_view, [l, d], valid_shape=[actual_l, d])
- 
+
                     zeros_16 = pypto.full(size=[16, 16], fill_value=0.0, dtype=pypto.DT_FP32)
                     zeros_32 = pypto.full(size=[32, 32], fill_value=0.0, dtype=pypto.DT_FP32)
                     zeros_64 = pypto.full(size=[64, 64], fill_value=0.0, dtype=pypto.DT_FP32)
@@ -342,11 +342,11 @@ def chunk_gated_delta_rule(b, nqk, nv, d, l):
                     query_norm, key_norm = l2norm(query_view_2d, key_view_2d)
                     scale = 1 / d ** 0.5
                     query_scale = query_norm * scale
- 
+
                     gate_cum, decay_mask, A_block, key_beta = pre_attn(gate_view, key_norm, beta_view, tril_mask, mask)
                     # inverse
                     A_block_inverse = inverse_pto(A_block, eye, 128, zeros_16, zeros_32, zeros_64)
- 
+
                     # cal_value_and_keycumdecay
                     value_out, key_cum_out = cal_value_and_key_cumdecay(A_block_inverse, value_view_2d, beta_view, key_beta, gate_cum)
                     chunk_attn_out, cur_state = recurrent_state_attn_all(query_scale, key_norm, value_out, key_cum_out, gate_cum, last_state, decay_mask, tril_mask)
@@ -387,7 +387,7 @@ def pypto_chunk_gated_delta_rule(
     Nqk = query_data.shape[1]
     L = 128
     B = state_data.shape[0]
-    
+
     if not query_data.is_contiguous():
         query_data = query_data.contiguous()
     if not key_data.is_contiguous():
@@ -411,7 +411,7 @@ def pypto_chunk_gated_delta_rule(
 
     inputs = [query_data, key_data, value_data, beta_data, gate_data, state_data, mask_data,
                     tril_mask_data, eye_data, act_seq_len]
-    
+
     outputs = [core_attn_out, last_state_data]
     chunk_gated_delta_rule(B, Nqk, Nv, D, L)(*inputs, *outputs)
     # torch.npu.synchronize()

@@ -45,10 +45,10 @@ def test_varargs_error():
         out: pypto.Tensor([], pypto.DT_FP32),
         *args):
         out[:] = x
-    
+
     x = torch.randn(4, 4, dtype=torch.float32)
     out = torch.zeros(4, 4, dtype=torch.float32)
-    
+
     with pytest.raises(ParserError, match="Variable-length arguments"):
         varargs_kernel(x, out)
 
@@ -61,10 +61,10 @@ def test_kwargs_error():
         out: pypto.Tensor([], pypto.DT_FP32),
         **kwargs):
         out[:] = x
-    
+
     x = torch.randn(4, 4, dtype=torch.float32)
     out = torch.zeros(4, 4, dtype=torch.float32)
-    
+
     with pytest.raises(ParserError, match="Keyword argument packing"):
         kwargs_kernel(x, out)
 
@@ -77,10 +77,10 @@ def test_error_message_contains_error_code():
         out: pypto.Tensor([], pypto.DT_FP32),
         *args):
         out[:] = x
-    
+
     x = torch.randn(4, 4, dtype=torch.float32)
     out = torch.zeros(4, 4, dtype=torch.float32)
-    
+
     try:
         varargs_kernel(x, out)
         assert False, "Should have raised an error"
@@ -106,7 +106,7 @@ def test_catch_and_wrap_error_normal():
     @_catch_and_wrap_error("test operation")
     def normal_func(x):
         return x * 2
-    
+
     assert normal_func(5) == 10
 
 
@@ -114,10 +114,10 @@ def test_catch_and_wrap_error_wraps_exception():
     @_catch_and_wrap_error("test operation")
     def failing_func():
         raise ValueError("test error")
-    
+
     with pytest.raises(PyptoGeneralError) as exc_info:
         failing_func()
-    
+
     assert "Failed to test operation" in str(exc_info.value)
     assert "test error" in str(exc_info.value)
 
@@ -126,10 +126,10 @@ def test_catch_and_wrap_error_preserves_errcode():
     @_catch_and_wrap_error("test operation")
     def failing_func():
         raise RuntimeError("ErrCode: F00003, some error")
-    
+
     with pytest.raises(PyptoGeneralError) as exc_info:
         failing_func()
-    
+
     assert "ErrCode: F00003" in str(exc_info.value)
 
 
@@ -146,11 +146,11 @@ def test_error_on_input_tensor_reassign():
     ):
         pypto.set_vec_tile_shapes(32, 32)
         c = a + b
-    
+
     a = torch.rand((32, 32), dtype=torch.float16)
     b = torch.rand((32, 32), dtype=torch.float16)
     c = torch.zeros((32, 32), dtype=torch.float16)
-    
+
     with pytest.raises(ParserError, match="Input tensor 'c' cannot be reassigned"):
         error_assign_input(a, b, c)
 
@@ -168,11 +168,11 @@ def test_error_on_first_input_tensor_reassign():
     ):
         pypto.set_vec_tile_shapes(32, 32)
         a = b + c
-    
+
     a = torch.rand((32, 32), dtype=torch.float16)
     b = torch.rand((32, 32), dtype=torch.float16)
     c = torch.zeros((32, 32), dtype=torch.float16)
-    
+
     with pytest.raises(ParserError, match="Input tensor 'a' cannot be reassigned"):
         error_assign_first_input(a, b, c)
 
@@ -190,11 +190,11 @@ def test_error_location_on_reshape_dynamic_shape(capsys):
     ):
         pypto.set_vec_tile_shapes(32, 32)
         pypto.reshape(a, [a.shape[0] * a.shape[1]])
-    
+
     a = torch.rand((32, 32), dtype=torch.float16)
     b = torch.rand((32, 32), dtype=torch.float16)
     c = torch.zeros((32, 32), dtype=torch.float16)
-    
+
     with pytest.raises(ParserError) as exc_info:
         reshape_dynamic_shape_error(a, b, c)
 

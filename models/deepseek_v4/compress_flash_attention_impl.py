@@ -212,7 +212,7 @@ def c128_decode_impl(
         pypto.set_cube_tile_shapes(c2_tile[0], c2_tile[1], c2_tile[2])
         out_view = pypto.matmul(softmax_16, kv_assemble, dtype)
         atten_out[bs_ofs * g:, :] = out_view
-    
+
 
 pyptolib = torch.library.Library("pypto", "FRAGMENT")
 pyptolib.define("npu_cfa_attention(Tensor q, Tensor cmp_kv, Tensor sinks, Tensor cmp_block_table,\

@@ -128,11 +128,11 @@ def score(rules_data, findings, skill_path):
 
     scripts_dir = os.path.join(skill_path, "scripts")
     d9_no_scripts = not os.path.isdir(scripts_dir)
-    
+
     references_dir = os.path.join(skill_path, "references")
     skill_md_path = os.path.join(skill_path, "SKILL.md")
     has_knowledge_content = False
-    
+
     if os.path.isdir(references_dir) and os.listdir(references_dir):
         has_knowledge_content = True
     elif os.path.isfile(skill_md_path):
@@ -143,7 +143,7 @@ def score(rules_data, findings, skill_path):
                     has_knowledge_content = True
         except OSError:
             pass
-    
+
     d10_no_knowledge = not has_knowledge_content
 
     dimensions = {}

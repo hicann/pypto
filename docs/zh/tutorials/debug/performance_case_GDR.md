@@ -114,4 +114,3 @@ for s_idx in pypto.loop(0, s, l, name="LOOP_S_TND", idx_name="s_idx", unroll_lis
 
 图10 求逆尾轴合并优化最终穿刺方案的泳道图
 ![图片说明](../figures/gdr_3.10.png)
-

@@ -773,7 +773,7 @@ def test_b64_s64k2_pa_nd_bf16_quantb_d():
     tile_config = MlaTileConfig()
     tile_config.tile_bs = 32
 
-    tile_config.m_tile = 128 
+    tile_config.m_tile = 128
 
     tile_config.cube_qb_tile = [128, 128, 128, 256, 256, 256]
     tile_config.cube_wuk_tile = [tile_config.m_tile, tile_config.m_tile, 128, 256, 256, 256]

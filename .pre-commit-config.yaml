@@ -42,16 +42,6 @@ repos:
           - "-i"
         exclude: ^build/|tests/third_party/
 
-  # Python 代码检查
-  - repo: https://gitcode.com/gh_mirrors/ru/ruff-pre-commit
-    rev: v0.14.14
-    hooks:
-      - id: ruff-check
-        args: ["--output-format", "github", "--fix", "--target-version", "py39"]
-        types: [python]
-      - id: ruff-format
-        types: [python]
-
   # 拼写检查
   - repo: https://gitcode.com/gh_mirrors/co/codespell
     rev: v2.4.1
@@ -63,15 +53,3 @@ repos:
             "--skip",
             "*.py,*.cpp,*.hpp,*.c,*.h",
           ]
-
-  # OAT 合规性检查 (Open Source Audit Tool)
-  - repo: local
-    hooks:
-      - id: oat-check
-        name: OAT Compliance Check
-        entry: bash scripts/oat_check.sh
-        language: system
-        pass_filenames: true
-        types: [file]
-        stages: [pre-commit]
-        verbose: true

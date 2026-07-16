@@ -407,7 +407,7 @@ void RootFunctionBuilder::CreateAndFinalizePathFunc(Function* pathFunc, Function
 
     LogicalTensors pathInArgs = pathFunc->MakeIncasts(pathScope);
     LogicalTensors pathOutArgs = pathFunc->MakeOutcasts(pathScope);
-    
+
     // 4. Add valueDepend of hiddenFunc to DynamicFunction
     auto currDynFunc = program_.GetCurrentDynamicFunction();
     FE_ASSERT(FeError::INVALID_PTR, currDynFunc != nullptr) << "CurrentDynamicFunction is nullptr";

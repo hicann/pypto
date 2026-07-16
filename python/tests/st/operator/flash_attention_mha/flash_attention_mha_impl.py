@@ -64,12 +64,12 @@ def flash_attention_varlen_forward_kernel(
 
     输入张量为三维 [total_seq, N, D] (total_seq=DYNAMIC, N=num_heads, D=head_dim),
     输出张量为二维 [total_seq, hidden_dim] (hidden_dim = N*D)。
-    
+
     Kernel入口处从输入tensor shape 获取 num_heads 和 head_dim:
       num_heads = q.shape[1]
       head_dim = q.shape[2]
       hidden_dim = num_heads * head_dim
-    
+
     然后 reshape inplace 输入为二维 [total_seq, hidden_dim] 以便按 head 做 view 切片，
     输出保持二维布局。
 
@@ -263,7 +263,7 @@ def flash_attention_varlen_forward_kernel(
                                 pypto.assemble(li_new, [q_start + q_tile_start, h_act_idx], l_output)
                                 pypto.assemble(mi_new, [q_start + q_tile_start, h_act_idx], m_output)
                                 pypto.assemble(out_bf16, [q_start + q_tile_start, h_offset], output)
-                            else: 
+                            else:
                                 oi_update[:] = oi_tmp
                                 li_update[:] = li_new
                                 mi_update[:] = mi_new

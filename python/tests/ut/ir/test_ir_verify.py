@@ -21,7 +21,7 @@ verify_options = {"enable_pass_verify": True,
 def _run_dce(func, golden, *args):
     """Compile a function through the shared new-IR pipeline."""
     in_out_tensors = [*args]
-    
+
     b = ir.IRBuilder()
     func = pil.compile(func, *args)
     prog = b.create_program([func], "main", ir.Span.unknown())
@@ -34,7 +34,7 @@ def _run_dce(func, golden, *args):
     prog = dce(canonical(prog))
     prog = canonical(merge(prog))
     prog = create_pf(prog)
-    
+
     pypto.set_verify_golden_data(in_out_tensors=in_out_tensors, goldens=[None, None, golden])
     prog = finalize(prog)
     return prog.functions[func.name]

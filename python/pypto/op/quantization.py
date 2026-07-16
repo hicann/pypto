@@ -56,10 +56,10 @@ def quantize(
     x = pypto.tensor([3, 4], pypto.DT_FP32)
     scale = pypto.tensor([3], pypto.DT_FP32)
     zero_points = pypto.tensor([3], pypto.DT_FP32)
-    
+
     # Symmetric quantization: fp32 -> int8
     y1 = pypto.quantize(x, scale, pypto.DT_INT8, -1)
-    
+
     # Asymmetric quantization: fp32 -> uint8
     y2 = pypto.quantize(x, scale, pypto.DT_UINT8, -1, zero_points)
     """
@@ -107,10 +107,10 @@ def dequantize(
     x = pypto.tensor([3, 4], pypto.DT_INT8)
     scale = pypto.tensor([3], pypto.DT_FP32)
     zero_points = pypto.tensor([3], pypto.DT_FP32)
-    
+
     # Symmetric dequantization: int8/int16 -> fp32
     y1 = pypto.dequantize(x, scale, pypto.DT_FP32, -1)
-    
+
     # Asymmetric dequantization: int8/int16 -> fp32
     y2 = pypto.dequantize(x, scale, pypto.DT_FP32, -1, zero_points)
     """

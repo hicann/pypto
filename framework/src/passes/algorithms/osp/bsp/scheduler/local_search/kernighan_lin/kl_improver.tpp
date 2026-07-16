@@ -580,7 +580,7 @@ bool KlImprover<GraphT, CommCostFunctionT, windowSize, CostT>::BlockedEdgeStrate
         threadData.unlockEdgeBacktrackCounter_--;
         return true;
     } else {
-        return false;    // or reset local search and initalize with violating nodes
+        return false;    // or reset local search and initialize with violating nodes
     }
 }
 

@@ -455,4 +455,3 @@ def _parse_pto_assert(self, call: ast.Call):
     kwargs = self.parse_op_kwargs(call)
     condition_text = self.span_tracker.get_source_text(call.args[0])
     return pto_assert(*args, condition_text=condition_text, **kwargs, span=span)
-

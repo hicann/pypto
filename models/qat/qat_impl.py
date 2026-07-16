@@ -227,7 +227,7 @@ def ai_infra_qat_asymmetric_per_group_backward_kernel(
         pypto.assemble(grad_o_bf16, [g_offset, 0], grad_offset_out)
 
 
-def ai_infra_qat_asymmetric_per_group_backward(grad_output, weight_pto, scale_pto, offset_pto, 
+def ai_infra_qat_asymmetric_per_group_backward(grad_output, weight_pto, scale_pto, offset_pto,
                                             group_size=128, bit=4, eps=1e-4, clip_val=0.99):
     n_levels = 2 ** (bit - 1)
     shift = 0.5

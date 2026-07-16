@@ -219,7 +219,7 @@ workspace_tensor = torch.empty(workspace_size, dtype=torch.uint8, device=device)
 ## ⭐ 关键注意事项
 
 1. **默认路径**: 步骤 1 使用默认值初始化，无需收集用户输入
-2. **路径规范**: 
+2. **路径规范**:
    - 所有路径必须使用绝对路径
    - 步骤 3.1 传递 output **根目录**，不要传递具体的 output_xxx 子目录
 3. **修复流程**: 只有检测到内存重叠时，才执行步骤 4 尝试修复

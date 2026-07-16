@@ -31,11 +31,11 @@ def _create_shmem_tensors(group_names, world_sizes, shmem_shape):
     shmem_tensor = pypto.distributed.create_shmem_tensor(
         group_names[0], world_sizes[0], pypto.DT_FP32, shmem_shape)
     my_pe = pypto.distributed.my_symbolic_pe(group_names[0])
-    
+
     shmem_tensor1 = pypto.distributed.create_shmem_tensor(
         group_names[1], world_sizes[1], pypto.DT_FP32, shmem_shape)
     my_pe1 = pypto.distributed.my_symbolic_pe(group_names[1])
-    
+
     return shmem_tensor, my_pe, shmem_tensor1, my_pe1
 
 
@@ -43,10 +43,10 @@ def _get_input_tile(in_tensor, batch_size, bs_idx, view_row_shape, hidden_size):
     in_tensor_tile = pypto.view(
         in_tensor, (view_row_shape, in_tensor.shape[1]), [bs_idx * view_row_shape, 0],
         valid_shape=[(batch_size - bs_idx * view_row_shape).min(view_row_shape), in_tensor.shape[1]])
-    
+
     pypto.set_vec_tile_shapes(view_row_shape, hidden_size)
     in_tensor_tile_fp32 = pypto.cast(in_tensor_tile, pypto.DT_FP32)
-    
+
     return in_tensor_tile_fp32
 
 
@@ -62,7 +62,7 @@ def _perform_allreduce(input_tensor, stage_params):
     (shmem_tensor, world_size, shmem_shape, my_pe,
      view_row_shape, hidden_size, batch_size, bs_idx) = stage_params
     pypto.set_vec_tile_shapes(view_row_shape, hidden_size)
-    
+
     for dyn_idx in range(world_size):
         put_out = pypto.distributed.shmem_put(
             input_tensor, [0, 0], shmem_tensor, dyn_idx,
@@ -72,7 +72,7 @@ def _perform_allreduce(input_tensor, stage_params):
             shmem_tensor, dyn_idx, 1, shmem_shape,
             [0, 0], target_pe=dyn_idx, sig_op=pypto.AtomicType.ADD, pred=[put_out]
         )
-    
+
     wait_until_out = pypto.distributed.shmem_wait_until(
         shmem_tensor, my_pe, world_size,
         shmem_shape, [0, 0], cmp=pypto.OpType.EQ, clear_signal=True, pred=[input_tensor]
@@ -81,10 +81,10 @@ def _perform_allreduce(input_tensor, stage_params):
         shmem_tensor, my_pe, shmem_shape, [0, 0], pred=[wait_until_out],
         valid_shape=[(batch_size - bs_idx * view_row_shape).min(view_row_shape), hidden_size]
     )
-    
+
     pypto.set_vec_tile_shapes(1, hidden_size)
     all_reduce_out_bf16 = pypto.cast(all_reduce_out_fp32, pypto.DT_BF16)
-    
+
     return all_reduce_out_bf16
 
 
@@ -105,20 +105,20 @@ def allreduce_cascading_kernel(
     for bs_idx in pypto.loop(bs_loop, name="LOOP_ALLREDUCE_CASCADING", idx_name="bs_idx"):
         shmem_tensor, my_pe, shmem_tensor1, my_pe1 = _create_shmem_tensors(
             group_names, world_sizes, shmem_shape)
-        
+
         in_tensor_tile_fp32 = _get_input_tile(
             in_tensor, batch_size, bs_idx, view_row_shape, hidden_size)
-        
+
         # 第一阶段参数列表
         stage1_params = [shmem_tensor, world_sizes[0], shmem_shape, my_pe,
                          view_row_shape, hidden_size, batch_size, bs_idx]
         all_reduce_out_bf16 = _perform_allreduce(in_tensor_tile_fp32, stage1_params)
-        
+
         # 第二阶段参数列表
         stage2_params = [shmem_tensor1, world_sizes[1], shmem_shape, my_pe1,
                          view_row_shape, hidden_size, batch_size, bs_idx]
         all_reduce_out_bf161 = _perform_allreduce(all_reduce_out_bf16, stage2_params)
-        
+
         out_tensor[bs_idx * pypto.symbolic_scalar(view_row_shape):] = all_reduce_out_bf161
 
 
@@ -169,7 +169,7 @@ def generate_allreduce_cascading_golden_data(config: DistributedConfig, group_in
         for rank in group_ranks:
             group_sum_fp32 += intermediate_datas[rank].to(torch.float32).cpu()
         group_sum_bf16 = group_sum_fp32.to(torch.bfloat16)
-        
+
         for rank in group_ranks:
             output_datas[rank] = group_sum_bf16
 
@@ -184,7 +184,7 @@ def allreduce_cascading_worker(worker_params, error_queue: mp.Queue):
     """
     try:
         config, input_data, output_data, logical_rank_id, group_info = worker_params
-        
+
         group_info = generate_group_splits(config.world_size, group_info)
         groups = config.init_hccl_comm(logical_rank_id, group_info)
         physical_device_id = config.get_physical_device_id(logical_rank_id)
@@ -199,7 +199,7 @@ def allreduce_cascading_worker(worker_params, error_queue: mp.Queue):
         group_key0 = "even_odd_0" if logical_rank_id % 2 == 0 else "even_odd_1"
         group_name0 = groups[0]
         world_size0 = len(group_info.get(group_key0, []))
-        
+
         mid = config.world_size // 2
         group_key1 = "half_0" if logical_rank_id < mid else "half_1"
         group_name1 = groups[1]
@@ -237,7 +237,7 @@ def test_allreduce_cascading():
 
     error_queue = mp.Queue()
     processes = []
-    
+
     for i in range(config.world_size):
         worker_params = [config, input_datas[i], output_datas[i], i, None]
         p = mp.Process(

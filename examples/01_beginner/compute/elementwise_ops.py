@@ -1047,7 +1047,7 @@ Examples:
             'description': 'Adding a scalar to a tensor example',
             'function': test_add_scalar
         },
-        
+
         'clip::test_clip_basic': {
             'name': 'Test basic usage of clip function',
             'description': 'Basic usage of clip function example',
@@ -1153,7 +1153,7 @@ Examples:
             'description': 'Subing a scalar to a tensor example',
             'function': test_sub_scalar
         },
-        
+
     }
 
     # List examples if requested

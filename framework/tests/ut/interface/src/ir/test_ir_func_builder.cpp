@@ -44,10 +44,7 @@ using namespace npu::tile_fwk;
 namespace {
 static constexpr int64_t TILE = 16;
 
-ir::Span Sp()
-{
-    return ir::Span("test_ir_func_builder", 1, 1);
-}
+ir::Span Sp() { return ir::Span("test_ir_func_builder", 1, 1); }
 
 struct IrFuncSetup {
     npu::tile_fwk::IRBuilder builder;
@@ -164,8 +161,7 @@ TEST_F(IrFuncBuilderTest, TestConstructAssembleSlotList_DedupSameSlot)
     ASSERT_EQ(hiddenFuncs.size(), 1u);
 
     auto slots = CollectConstructAssembleSlots();
-    EXPECT_EQ(slots.size(), 1u)
-        << "Expected 1 slot (deduplicated), got " << slots.size();
+    EXPECT_EQ(slots.size(), 1u) << "Expected 1 slot (deduplicated), got " << slots.size();
 }
 
 // ============================================================================
@@ -193,6 +189,5 @@ TEST_F(IrFuncBuilderTest, TestConstructAssembleSlotList_MixedParamAndIntermediat
     ASSERT_EQ(hiddenFuncs.size(), 1u);
 
     auto slots = CollectConstructAssembleSlots();
-    EXPECT_EQ(slots.size(), 1u)
-        << "Expected 1 slot (aux only, out excluded), got " << slots.size();
+    EXPECT_EQ(slots.size(), 1u) << "Expected 1 slot (aux only, out excluded), got " << slots.size();
 }

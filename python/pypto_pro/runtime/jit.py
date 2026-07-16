@@ -1493,5 +1493,3 @@ class _TileJitKernel:
         if self._datatype_schema is None and dtype_key is not None:
             raise ValueError(self._launch_key_error())
         return stream, block_dim, tk_key, dtype_key
-
-

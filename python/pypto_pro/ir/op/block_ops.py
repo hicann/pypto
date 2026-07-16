@@ -771,4 +771,3 @@ def _parse_set_validshape(self, call: ast.Call) -> Expr:
         return ConstInt(0, DataType.INDEX, span)
 
     return _ir_set_validshape(*args, **kwargs, span=span)
-

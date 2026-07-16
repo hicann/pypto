@@ -63,7 +63,7 @@ cannsim record 'export ACCURACY_LEVEL=2 && python3 examples/00_hello_world/hello
 - 主目录下生成 `cannsim_*/` 目录
 
 **执行完成后，告知用户可选步骤 3：**
-> 
+>
 > **可选步骤 3：** 如需全部核（32核）的完整流水报告，请确认后执行：
 > ```bash
 > cannsim report -e cannsim_* -o report --core-id all

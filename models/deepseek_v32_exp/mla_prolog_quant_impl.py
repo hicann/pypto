@@ -718,7 +718,7 @@ def options_list():
     else:
         return {
             "runtime_options": {
-                "device_sched_mode": 2, 
+                "device_sched_mode": 2,
                 "stitch_function_max_num": 128,
                 "max_workspace_kb": 131072,
             },

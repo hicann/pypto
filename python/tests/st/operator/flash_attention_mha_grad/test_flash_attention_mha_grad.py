@@ -254,7 +254,7 @@ def _verify_precision(dq_out, dk_out, dv_out, dq_golden, dk_golden, dv_golden):
         npu_np = npu_tensor.float().cpu().numpy()
         golden_np = golden_tensor.float().cpu().numpy()
         max_diff = np.abs(npu_np - golden_np).max()
-        
+
         assert_allclose(npu_np, golden_np, rtol=rtol, atol=atol)
         logging.info(f"  {name}: PASSED (max_diff={max_diff:.6f}, rtol={rtol}, atol={atol})")
 

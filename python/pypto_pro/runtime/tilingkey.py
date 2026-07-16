@@ -191,5 +191,3 @@ class TilingKeySchema:
                 f"tiling_key class '{self._cls.__name__}' uses {offset} bits, "
                 f"exceeding the {_MAX_TOTAL_BITS}-bit limit"
             )
-
-

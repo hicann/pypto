@@ -80,7 +80,7 @@ Key directories are as follows:
 
 ```
 ├── docs/                       # Documentation resources
-│   └── zh/                      
+│   └── zh/
 │      ├── api/                 # API reference documentation
 │      ├── contribute/          # Contribution guide documentation
 │      └── tutorials/           # PyPTO programming guide

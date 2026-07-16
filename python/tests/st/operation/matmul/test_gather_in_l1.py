@@ -51,9 +51,9 @@ def run_gather_in_l1_test(case: dict):
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
     torch.npu.set_device(device_id)
     torch.manual_seed(42)
-    
+
     config = GatherInL1Config.from_test_case(case)
-    
+
     in_dtype = GatherInL1Config.get_torch_dtype(case["in_dtype"])
     out_dtype = GatherInL1Config.get_torch_dtype(case["out_dtype"])
     if case["in_dtype"] == "DT_INT8":
@@ -98,20 +98,20 @@ def test_gather_in_l1_basic(case: dict):
 
 def create_gather_demo_inputs(device: str, config: GatherInL1Config):
     all_buffer = torch.randn(config.num_buffer_tokens, config.token_dim, dtype=torch.float16, device=device)
-    
+
     if config.is_gather_b_matrix == config.is_gather_trans:
         unit_tensor = torch.ones((config.token_dim, config.token_dim), dtype=torch.float16, device=device)
     else:
         unit_tensor = torch.ones((config.topk, config.topk), dtype=torch.float16, device=device)
-    
+
     page_table = torch.randperm(
         config.num_buffer_tokens // config.block_size)[:config.num_logical_blocks].to(torch.int32).view(1, -1)
     page_table = page_table.to(device)
-    
+
     indices = torch.randint(
         0, config.block_size * page_table.shape[1], (config.topk,)).to(torch.int32).view(1, -1)
     indices = indices.to(device)
-    
+
     return all_buffer, indices, page_table, unit_tensor
 
 

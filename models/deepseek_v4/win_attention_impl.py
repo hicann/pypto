@@ -60,11 +60,11 @@ def check_args_tnd(
 def win_atten_main_tnd_mask(
     q_tnd: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC], pypto.DT_BF16),
     block_table: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_INT32),
-    kv_cache: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_BF16), 
-    seqused_kv_list: pypto.Tensor([pypto.DYNAMIC], pypto.DT_INT32), 
+    kv_cache: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_BF16),
+    seqused_kv_list: pypto.Tensor([pypto.DYNAMIC], pypto.DT_INT32),
     sinks: pypto.Tensor([pypto.STATIC], pypto.DT_FP32),
-    cu_seqlens_q: pypto.Tensor([pypto.DYNAMIC], pypto.DT_INT32), 
-    mask2: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_BOOL), 
+    cu_seqlens_q: pypto.Tensor([pypto.DYNAMIC], pypto.DT_INT32),
+    mask2: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_BOOL),
     atten_out: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16),
     win):
     pypto.experimental.set_operation_options(combine_axis=True)
@@ -246,7 +246,7 @@ def deepseekv4_win_atten(q: torch.Tensor,
     atten_out = torch.empty([q.shape[0] * q.shape[1], q.shape[2]], dtype=q.dtype, device=q.device)
 
     tensors = [q, ori_block_table, ori_kv, seqused_kv, sinks, cu_seqlens_q, mask, atten_out]
-    
+
     win_atten_main_tnd_mask(*tensors, win_size)
 
     atten_out = atten_out.reshape(q.shape)
