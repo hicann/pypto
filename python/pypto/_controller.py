@@ -49,6 +49,7 @@ __all__ = [
 class Controller:
     _loop_idx_generator = itertools.count(0)
     in_function = False
+    _ooo_scope_iter_id = 0
 
     @classmethod
     def init_ooo_scope_iter(cls):
