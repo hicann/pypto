@@ -55,6 +55,8 @@ using namespace npu::tile_fwk::dynamic;
 
 namespace pypto {
 
+using npu::tile_fwk::dynamic::KernelBinary;
+
 std::string ValidateDynamicFunctionAndIO(
     Function* func, const std::vector<DeviceTensorData>& inputs, const std::vector<DeviceTensorData>& outputs)
 {
@@ -423,13 +425,11 @@ int64_t BuildCache(
 }
 
 #ifdef BUILD_WITH_CANN
-#define ENABLE_VERBOSE_LOG 0
 
 class KernelModule {
 public:
     KernelModule(py::object& module)
     {
-        InitCachedArgs();
         InitConfigOptions(module);
     }
 
@@ -439,6 +439,10 @@ public:
             delete k;
         }
     }
+
+    LaunchMode GetLaunchMode() {
+        return launchMode_;
+    } 
 
     bool IsCompileStageAllComplete() { return compileStageAllComplete; }
 
@@ -450,35 +454,6 @@ public:
             }
         }
         return nullptr;
-    }
-
-    uint8_t* FindCtrlFlowCache(KernelBinary* kernel, std::vector<DeviceTensorData>& tensors)
-    {
-        if (kernel->DisableHostCtrlFlowCacheBuild()) {
-            COMPILER_LOGI("Skip host control flow cache build due to RUNTIME_FUNCKEY_CACHESTOP.");
-            return nullptr;
-        }
-        auto devCache = kernel->FindCtrlFlowCache(tensors, true);
-        if (devCache == nullptr) {
-            std::vector<std::vector<int64_t>> shape;
-            if (DeviceLauncher::IsCaptureMode()) { // KernelModule
-                AclModeGuard guard(AclMdlRICaptureMode::RELAXED);
-                devCache = kernel->BuildControlFlowCache(tensors, true);
-            } else {
-                AclModeGuard guard(AclMdlRICaptureMode::RELAXED);
-                devCache = kernel->BuildControlFlowCache(tensors, true);
-            }
-        }
-#if ENABLE_VERBOSE_LOG
-        std::stringstream ss;
-        for (auto& t : tensors) {
-            for (auto& s : t.GetShape()) {
-                ss << s << " ";
-            }
-        }
-        COMPILER_LOGI("find ctrlflow cache: %p shape %s", devCache, ss.str().c_str());
-#endif
-        return devCache;
     }
 
     KernelBinary* Compile(py::object& module, py::sequence& torch_tensors, py::sequence& tensor_defs)
@@ -542,83 +517,9 @@ public:
         int64_t* workspace)
     {
         SetTensorData(tensors);
-        auto [args, argsSize] = kernel->BuildKernelArgs(tensors);
-        rtAicpuArgs.args = args;
-        rtAicpuArgs.argsSize = argsSize;
 
-        args->kArgs.ctrlFlowCache = (int64_t*)ctrlFlowCache;
-        args->kArgs.workspace = workspace;
-        args->kArgs.parameter.globalRound = ++sequence;
-        args->kArgs.maxDynamicAssembleOutcastMem = kernel->GetMaxDynamicAssembleOutcastMem();
-        args->kArgs.maxDynamicCellMatchTableMem = kernel->GetMaxDynamicCellMatchTableMem();
-        args->kArgs.runtimeDynamicCellMatchAddr = kernel->GetRuntimeDynamicCellMatchAddr();
-        args->kArgs.runtimeDynamicCellMatchCapacity = kernel->GetRuntimeDynamicCellMatchCapacity();
-        args->kArgs.schedSyncMode = kernel->GetSyncMode();
-        auto isCaptureMode = DeviceLauncher::IsCaptureMode();  // KernelModule
-        bool debugEnable = !isCaptureMode && isDebugMode;
-
-#if ENABLE_VERBOSE_LOG
-        COMPILER_LOGI("Sequence %ld workspace %p cfgcache %p", sequence.load(), workspace, ctrlFlowCache);
-#endif
-        int ret = DeviceLauncher::LaunchSyncTask(aicoreStream, isCaptureMode, launchEarlyMode);
-        MACHINE_ASSERT(ret == RT_SUCCESS) << "launch pre sync failed: " << ret;
-
-        DeviceLauncher::SetDevPerfAddr(debugEnable, isCaptureMode);
-        if (!isCaptureMode) {
-           args->kArgs.toSubMachineConfig = kernel->GetMachineConfig();
-        }
-        ret = DeviceLauncher::LaunchAicpuKernel(rtAicpuArgs, debugEnable, kernel->GetFunction(), tensors);
-        MACHINE_ASSERT(ret == RT_SUCCESS) << "launch aicpu failed: " << ret;
-
-        kernelArgs[5] = args->kArgs.cfgdata; // 5 is cfgdata
-        // copy tensor to aicore args
-        kernelArgs[0] = const_cast<char*>(kernel->GetKernelname().c_str());
-        kernelArgs[4] = (int64_t*)(args + 1);
-        kernelArgs[6] = (DevTensorData*)((int64_t*)(args + 1) + 2);
-        ret = DeviceLauncher::LaunchAicoreKernel(
-            aicoreStream, kernel->GetKernelBin(), rtAicoreArgs, rtTaskCfg, debugEnable, kernel->GetFunction());
-        MACHINE_ASSERT(ret == RT_SUCCESS) << "launch aicore failed: " << ret;
-    }
-
-    DevControlFlowCache* GetHostCtrlFlowCache(
-        KernelBinary* kernel, std::vector<DeviceTensorData>& tensors, uint8_t* devCache,
-        std::vector<uint8_t>& hostCache)
-    {
-        DevControlFlowCache* ctrlCache = FindHostCtrlFlowCache(tensors, hostCache);
-        if (ctrlCache == nullptr && devCache != nullptr) {
-            auto devProg =
-                reinterpret_cast<DevAscendProgram*>(kernel->GetFunction()->GetDyndevAttribute()->devProgBinary.data());
-            size_t ctrlCacheSize = devProg->ctrlFlowCacheSize;
-            std::vector<uint8_t> hostCacheVec;
-            hostCacheVec.resize(ctrlCacheSize);
-            AclModeGuard guard(AclMdlRICaptureMode::RELAXED);
-            RuntimeMemcpy(
-                hostCacheVec.data(), ctrlCacheSize, devCache, ctrlCacheSize, RtMemcpyKind::DEVICE_TO_HOST);
-            AddHostCtrlFlowCache(tensors, std::move(hostCacheVec));
-            ctrlCache = FindHostCtrlFlowCache(tensors, hostCache);
-        }
-        return ctrlCache;
-    }
-
-    void EmulationLaunch(KernelBinary* kernel, std::vector<DeviceTensorData>& tensors, uint8_t* devCache)
-    {
-        if (launchMode_ == LaunchMode::DEVICE_RT) {
-            return;
-        }
-        DeviceLauncherConfig config;
-        DeviceLauncher::DeviceLauncherConfigFillDeviceInfo(config);
-        std::vector<uint8_t> hostCache;
-        DevControlFlowCache* ctrlCache = GetHostCtrlFlowCache(kernel, tensors, devCache, hostCache);
-        int ret = 0;
-        if (launchMode_ == LaunchMode::EMULATION) {
-            ret = EmulationLauncher::EmulationLaunchDeviceTensorData(
-                kernel->GetFunction(), tensors, {}, config, ctrlCache);
-            MACHINE_ASSERT(ret == RT_SUCCESS) << "emulation run failed: " << ret;
-        } else if (launchMode_ == LaunchMode::AICORE_MODEL) {
-            ret = AicoreModelLauncher::AicoreModelLaunchDeviceTensorData(
-                kernel->GetFunction(), tensors, {}, config, ctrlCache);
-            MACHINE_ASSERT(ret == RT_SUCCESS) << "aicore model run failed: " << ret;
-        }
+        COMPILER_LOGD("Workspace %p cfgcache %p", workspace, ctrlFlowCache);
+        DeviceLauncher::LaunchKernel(aicoreStream, ctrlFlowCache, kernel, workspace, tensors, isDebugMode_, launchEarlyMode_);
     }
 
     bool IsAicoreModelMode() const { return launchMode_ == LaunchMode::AICORE_MODEL; }
@@ -643,31 +544,12 @@ public:
     }
 
 private:
-    void InitCachedArgs()
-    {
-        memset_s(&rtAicpuArgs, sizeof(RtAicpuArgsEx), 0, sizeof(RtAicpuArgsEx));
-        rtAicpuArgs.kernelNameAddrOffset = offsetof(AiCpuArgs, kernelName);
-        rtAicpuArgs.soNameAddrOffset = offsetof(AiCpuArgs, soName);
-        rtAicpuArgs.hostInputInfoNum = 1;
-        hostInfo.addrOffset = offsetof(AiCpuArgs, kArgs.inputs);
-        hostInfo.dataOffset = sizeof(AiCpuArgs);
-        rtAicpuArgs.hostInputInfoPtr = &hostInfo;
-        rtAicpuArgs.timeout = AICPU_EXECUTE_TIMEOUT;
-        memset_s(&rtAicoreArgs, sizeof(RtArgsEx), 0, sizeof(RtArgsEx));
-        kernelArgs.resize(0x7, nullptr); // see aicore.ascpp
-        rtAicoreArgs.args = kernelArgs.data();
-        rtAicoreArgs.argsSize = kernelArgs.size() * sizeof(void*);
-
-        memset_s(&rtTaskCfg, sizeof(RtTaskCfgInfo), 0, sizeof(RtTaskCfgInfo));
-        rtTaskCfg.schemMode = static_cast<uint8_t>(RtSchemModeType::BATCH);
-    }
-
     void InitConfigOptions(py::object& module)
     {
         if (!module.attr("_runtime_options").is_none()) {
             auto rutimeOptions = module.attr("_runtime_options").cast<py::dict>();
             if (rutimeOptions.contains("launch_early_mode")) {
-                launchEarlyMode = rutimeOptions["launch_early_mode"].cast<int>();
+                launchEarlyMode_ = rutimeOptions["launch_early_mode"].cast<int>();
             }
         }
 
@@ -676,7 +558,7 @@ private:
             if (debugOptions.contains("runtime_debug_mode")) {
                 auto debugMode = debugOptions["runtime_debug_mode"].cast<int64_t>();
                 launchMode_ = LauncherRouter::ResolveByDebugMode(debugMode);
-                isDebugMode = (debugMode == CFG_DEBUG_ALL);
+                isDebugMode_ = (debugMode == CFG_DEBUG_ALL);
             }
         }
 
@@ -704,41 +586,13 @@ private:
             }
         }
 
-        if (launchEarlyMode < 0) {
-            launchEarlyMode = (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510) ? 2 : 0;
+        if (launchEarlyMode_ < 0) {
+            launchEarlyMode_ = (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510) ? 2 : 0;
         }
-    }
-
-    DevControlFlowCache* FindHostCtrlFlowCache(std::vector<DeviceTensorData>& tensors, std::vector<uint8_t>& hostCache)
-    {
-        int64_t hash = ControlFlowCache::Hash(tensors);
-        for (auto& cache : hostCtrlFlowCaches) {
-            if (cache.hash == hash) {
-                hostCache = cache.hostCache; // Copy new backup
-                return reinterpret_cast<DevControlFlowCache*>(hostCache.data());
-            }
-        }
-        return nullptr;
-    }
-
-    void AddHostCtrlFlowCache(std::vector<DeviceTensorData>& tensors, std::vector<uint8_t>&& hostCache)
-    {
-        hostCtrlFlowCaches.emplace_back(tensors, std::move(hostCache));
     }
 
 private:
-    struct HostControlFlowCache {
-        int64_t hash;
-        std::vector<uint8_t> hostCache;
-
-        HostControlFlowCache(std::vector<DeviceTensorData>& datas, std::vector<uint8_t>&& hcache)
-            : hostCache(std::move(hcache))
-        {
-            hash = ControlFlowCache::Hash(datas);
-        }
-    };
-
-    bool isDebugMode{false};
+    bool isDebugMode_{false};
     bool compileStageAllComplete{true};
     LaunchMode launchMode_{LaunchMode::DEVICE_RT};
     bool compileMonitorEnable{false};
@@ -746,22 +600,11 @@ private:
     int intervalSec{60};
     double timeoutSec{static_cast<double>(config::GetHostOption<int>(TIMEOUT_SEC))};
     int totalTimeoutSec{600};
-    int launchEarlyMode{-1};
+    int launchEarlyMode_{-1};
 
-    RtHostInputInfo hostInfo;
-    RtAicpuArgsEx rtAicpuArgs;
-
-    RtArgsEx rtAicoreArgs;
-    RtTaskCfgInfo rtTaskCfg;
-    std::vector<void*> kernelArgs;
     std::vector<KernelBinary*> kernels;
-    std::vector<HostControlFlowCache> hostCtrlFlowCaches;
-
-    static std::atomic<int64_t> sequence;
 };
 using KernelModulePtr = std::shared_ptr<KernelModule>;
-
-std::atomic<int64_t> KernelModule::sequence(0);
 
 class KernelLauncher {
 private:
@@ -818,10 +661,7 @@ private:
         jitScopeGuard.emplace("jit_scope", std::map<std::string, std::any>{});
         Program::GetInstance().Reset();
         AclModeGuard guard(AclMdlRICaptureMode::RELAXED);
-#if ENABLE_VERBOSE_LOG
-        COMPILER_LOGI("compile kernel");
-#endif
-
+        COMPILER_LOGD("compile kernel");
         return kmodule->Compile(module, torchTensors, tensorDefs);
     }
 
@@ -844,18 +684,10 @@ private:
             auto pyalloc = py::getattr(module, "alloc");
             wsAddr = (int64_t*)pyalloc(wsSize).cast<int64_t>();
         }
-#if ENABLE_VERBOSE_LOG
-        COMPILER_LOGI("alloc workspace %ld", wsSize);
-#endif
+        COMPILER_LOGD("alloc workspace %ld", wsSize);
         HOST_PERF_TRACE(TracePhase::LaunchAllocWorkSpace);
 
-        DeviceLauncher::AddAicpuStream(DeviceLauncher::IsCaptureMode(), rtModel);
-        HOST_PERF_TRACE(TracePhase::LaunchAttachStream);
-
-        uint8_t* ctrlFlowCache = kmodule->FindCtrlFlowCache(kbinary, tensors);
-        HOST_PERF_TRACE(TracePhase::FindCtrlFlowCache);
-
-        kmodule->EmulationLaunch(kbinary, tensors, ctrlFlowCache);
+        uint8_t* ctrlFlowCache = DeviceLauncher::PrepareLaunch(kbinary, tensors, rtModel, kmodule->GetLaunchMode());
         if (kmodule->IsAicoreModelMode()) {
             return;
         }

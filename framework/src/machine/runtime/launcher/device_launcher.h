@@ -17,6 +17,7 @@
 #define SRC_MACHINE_DEVICE_LAUNCHER_H
 
 #include <cinttypes>
+#include <atomic>
 #include <unordered_map>
 #include "tilefwk/data_type.h"
 #include "tilefwk/tilefwk.h"
@@ -34,8 +35,12 @@
 #include "machine/runtime/distributed/distributed_context.h"
 #include "machine/runtime/runner/device_runner.h"
 #include "machine/runtime/launcher/device_launcher_types.h"
+#include "machine/runtime/launcher/launcher_router.h"
 
 namespace npu::tile_fwk::dynamic {
+
+class KernelBinary;
+
 // 基于 DAV3510 架构硬件约束：aiCpuNum 与 die0MaxCpuid 的固定映射关系
 constexpr uint32_t DAV3510_AICPU_NUM_6 = 6;       // DAV3510 6 个 AICPU 配置
 constexpr uint32_t DAV3510_AICPU_NUM_7 = 7;       // DAV3510 7 个 AICPU 配置
@@ -486,9 +491,17 @@ public:
     static int LaunchAicoreKernel(
         AclRtStream aicoreStream, void* kernel, RtArgsEx& rtArgs, RtTaskCfgInfo& rtTaskCfg,
         bool debugEnable, [[maybe_unused]] Function* function);
+    static int LaunchKernel(AclRtStream aicoreStream, uint8_t* ctrlFlowCache, KernelBinary* kernel,
+        int64_t* workspace, const std::vector<DeviceTensorData>& tensors, bool isDebugMode, int launchEarlyMode);
     static int DeviceRunOnce(
         Function* function, DevControlFlowCache* hostCtrlCache = nullptr,
         const DeviceLauncherConfig& config = DeviceLauncherConfig());
+    static void EmulationLaunch(
+        Function* function, const std::vector<DeviceTensorData>& tensors,
+        DevControlFlowCache* ctrlCache, LaunchMode launchMode);
+    static uint8_t* PrepareLaunch(
+        KernelBinary* kernel, std::vector<DeviceTensorData>& tensors,
+        AclMdlRI rtModel, LaunchMode launchMode);
 
     static void SetDevRunCacheKernelEnable(Function* func, bool enabled);
     static bool IsDevRunCacheKernelEnable(Function* func);
@@ -511,6 +524,7 @@ private:
     static bool inited_;
     static std::vector<uint8_t> tensorInfo_;
     static std::unordered_map<Function*, DeviceRunCacheInfo> cacheInfoDict_;
+    static std::atomic<int64_t> sequence_;
 };
 } // namespace npu::tile_fwk::dynamic
 #endif // SRC_MACHINE_DEVICE_LAUNCHER_H

@@ -128,6 +128,7 @@ void DeviceRunner::InitDevDfxArgs(const bool isPerfTrace, DevDfxArgs &devDfxArg)
 
 void DeviceRunner::ResetPerData() const { devicePerf_.ResetPerData(); }
 
+
 void DeviceRunner::InitMetaData(DeviceArgs& devArgs) const
 {
     devArgs.runtimeDataRingBufferAddr = args_.runtimeDataRingBufferAddr;

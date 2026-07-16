@@ -18,8 +18,6 @@
 #include <cstdlib>
 #include <sstream>
 
-#define ENABLE_VERBOSE_LOG 0
-
 #include "tilefwk/pypto_fwk_log.h"
 #include "tilefwk/error_code.h"
 #include "interface/function/rebuildable_attribute.h"
@@ -44,6 +42,7 @@ KernelBinary::KernelBinary(std::shared_ptr<Function> func) : dynFunc(func)
     kernelBin = RegisterKernelBinary(dynAttr->kernelBinary);
     workspaceSize = devProg->memBudget.Total();
     InitCachedArgs();
+    InitLaunchArgs();
     auto aicpuArgs = (AiCpuArgs*)aicpuArgBuf.data();
     DeviceLauncher::FillSwimLaneEnableInfo(toSubMachineConfig_);
     if (config::GetRuntimeOption<int64_t>(CFG_RUN_MODE) == CFG_RUN_MODE_SIM) {
@@ -120,15 +119,7 @@ uint8_t* KernelBinary::BuildControlFlowCache(std::vector<DeviceTensorData>& inpu
     }
 
     uint8_t* devCache = DeviceLauncher::CopyControlFlowCache(ctrlCache);
-#if ENABLE_VERBOSE_LOG
-    std::stringstream ss;
-    for (auto& t : inputs) {
-        for (auto x : t.GetShape()) {
-            ss << x << " ";
-        }
-    }
-    COMPILER_LOGI("control flow cache: %p shape %s", devCache, ss.str().c_str());
-#endif
+    COMPILER_LOGD("control flow cache: %p", devCache);
     if (isOriginShape) {
         originShapeCaches.emplace_back(inputs, devCache);
     } else {
@@ -306,6 +297,25 @@ void KernelBinary::InitCachedArgs()
     }
 }
 
+void KernelBinary::InitLaunchArgs()
+{
+    memset_s(&rtAicpuArgs_, sizeof(RtAicpuArgsEx), 0, sizeof(RtAicpuArgsEx));
+    rtAicpuArgs_.kernelNameAddrOffset = offsetof(AiCpuArgs, kernelName);
+    rtAicpuArgs_.soNameAddrOffset = offsetof(AiCpuArgs, soName);
+    rtAicpuArgs_.hostInputInfoNum = 1;
+    hostInfo_.addrOffset = offsetof(AiCpuArgs, kArgs.inputs);
+    hostInfo_.dataOffset = sizeof(AiCpuArgs);
+    rtAicpuArgs_.hostInputInfoPtr = &hostInfo_;
+    rtAicpuArgs_.timeout = AICPU_EXECUTE_TIMEOUT;
+    memset_s(&rtAicoreArgs_, sizeof(RtArgsEx), 0, sizeof(RtArgsEx));
+    kernelArgs_.resize(0x7, nullptr);
+    rtAicoreArgs_.args = kernelArgs_.data();
+    rtAicoreArgs_.argsSize = kernelArgs_.size() * sizeof(void*);
+
+    memset_s(&rtTaskCfg_, sizeof(RtTaskCfgInfo), 0, sizeof(RtTaskCfgInfo));
+    rtTaskCfg_.schemMode = static_cast<uint8_t>(RtSchemModeType::BATCH);
+}
+
 void KernelBinary::RefreshRuntimeDynamicCellMatchMeta(uint64_t needBytes)
 {
     if (needBytes == 0) {
@@ -338,6 +348,7 @@ void KernelBinary::RefreshRuntimeDynamicCellMatchMeta(uint64_t needBytes)
     }
     auto* newHostPtr = static_cast<uint8_t*>(std::malloc(static_cast<size_t>(needBytes)));
     if (newHostPtr == nullptr) {
+        DevMemoryPool::Instance().FreeDevAddr(newPtr);
         ASSERT(false) << "alloc host dynamic cell match meta failed, needBytes=" << needBytes;
         return;
     }

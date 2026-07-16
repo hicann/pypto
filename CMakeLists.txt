@@ -410,6 +410,7 @@ if (ENABLE_FEATURE_PYTHON_FRONT_END)
                     framework/src/machine/utils/device_switch.h
                     framework/src/machine/utils/machine_ws_intf.h
                     framework/src/machine/utils/queues.h
+                    framework/src/machine/utils/dynamic/dev_encode_program_ctrlflow_cache.h
                 DESTINATION ${PyPTO_WhlName}/lib/framework/src/machine/utils
         )
         install(DIRECTORY framework/src/machine/utils/dynamic/

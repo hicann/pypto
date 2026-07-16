@@ -27,9 +27,8 @@
 #include "machine/runtime/launcher/device_launcher_types.h"
 #include "machine/utils/dynamic/dev_encode_tensor.h"
 #include "machine/utils/machine_ws_intf.h"
+#include "adapter/api/runtime_define.h"
 
-
-using namespace npu::tile_fwk;
 namespace npu::tile_fwk::dynamic {
 
 class KernelBinary {
@@ -58,14 +57,21 @@ public:
     uint64_t GetMaxDynamicCellMatchTableMem() const;
     uint64_t GetRuntimeDynamicCellMatchAddr() const;
     uint64_t GetRuntimeDynamicCellMatchCapacity() const;
+    auto& GetHostCtrlFlowCaches() { return hostCtrlFlowCaches_; }
 
     void SetSyncMode(uint8_t syncModel);
     uint8_t GetSyncMode();
 
     void PatchHostDynamicCellMatchAddr(DevAscendProgram* hostProg);
 
+    RtAicpuArgsEx& GetRtAicpuArgs() { return rtAicpuArgs_; }
+    RtArgsEx& GetRtAicoreArgs() { return rtAicoreArgs_; }
+    RtTaskCfgInfo& GetRtTaskCfg() { return rtTaskCfg_; }
+    std::vector<void*>& GetKernelArgs() { return kernelArgs_; }
+
 private:
     void InitCachedArgs();
+    void InitLaunchArgs();
     void RefreshRuntimeDynamicCellMatchMeta(uint64_t needBytes);
 
     std::shared_ptr<Function> dynFunc;
@@ -75,6 +81,7 @@ private:
     int64_t workspaceSize{0}; // static workspace size
     std::vector<ControlFlowCache> inferShapeCaches;
     std::vector<ControlFlowCache> originShapeCaches;
+    std::vector<HostControlFlowCache> hostCtrlFlowCaches_;
 
     std::vector<int64_t> aicpuArgBuf;
     uint64_t l2Offset{0};
@@ -89,6 +96,12 @@ private:
     std::string kernelName_;
     ToSubMachineConfig toSubMachineConfig_;
     uint8_t scheSyncModel_{0};
+
+    RtAicpuArgsEx rtAicpuArgs_;
+    RtArgsEx rtAicoreArgs_;
+    RtTaskCfgInfo rtTaskCfg_;
+    std::vector<void*> kernelArgs_;
+    RtHostInputInfo hostInfo_;
 };
 
 } // namespace npu::tile_fwk::dynamic

@@ -27,7 +27,12 @@
 #include "machine/runtime/context/device_launcher_context.h"
 #include "machine/runtime/runner/runtime_utils.h"
 #include "machine/runtime/launcher/device_launcher_driver_gate.h"
+#include "machine/runtime/launcher/emulation_launcher.h"
+#include "machine/runtime/launcher/aicore_model_launcher.h"
+#include "machine/runtime/launcher/ctrl_flow_cache_manager.h"
+#include "machine/runtime/runner/kernel_binary.h"
 #include "machine/host/perf_analysis.h"
+#include "interface/program/program.h"
 
 extern "C" __attribute__((weak)) int AdxDataDumpServerUnInit();
 extern "C" __attribute__((weak)) int AdxDataDumpServerInit();
@@ -36,6 +41,7 @@ namespace npu::tile_fwk::dynamic {
 bool DeviceLauncher::inited_ = false;
 std::vector<uint8_t> DeviceLauncher::tensorInfo_(kDefaultTensorinfoSize);
 std::unordered_map<Function*, DeviceLauncher::DeviceRunCacheInfo> DeviceLauncher::cacheInfoDict_;
+std::atomic<int64_t> DeviceLauncher::sequence_(0);
 
 void DeviceLauncher::CheckAscendDriverVersionOnboard()
 {
@@ -485,4 +491,84 @@ int DeviceLauncher::LaunchAicoreKernel(
     }
     return ret;
 }
+
+int DeviceLauncher::LaunchKernel(AclRtStream aicoreStream, uint8_t* ctrlFlowCache, KernelBinary* kernel,
+    int64_t* workspace, const std::vector<DeviceTensorData>& tensors, bool isDebugMode, int launchEarlyMode)
+{
+    auto& rtAicpuArgs = kernel->GetRtAicpuArgs();
+    auto& rtAicoreArgs = kernel->GetRtAicoreArgs();
+    auto& rtTaskCfg = kernel->GetRtTaskCfg();
+    auto& kernelArgs = kernel->GetKernelArgs();
+
+    auto [args, argsSize] = kernel->BuildKernelArgs(tensors);
+    rtAicpuArgs.args = args;
+    rtAicpuArgs.argsSize = argsSize;
+
+    args->kArgs.ctrlFlowCache = (int64_t*)ctrlFlowCache;
+    args->kArgs.workspace = workspace;
+    args->kArgs.parameter.globalRound = ++sequence_;
+    args->kArgs.maxDynamicAssembleOutcastMem = kernel->GetMaxDynamicAssembleOutcastMem();
+    args->kArgs.maxDynamicCellMatchTableMem = kernel->GetMaxDynamicCellMatchTableMem();
+    args->kArgs.runtimeDynamicCellMatchAddr = kernel->GetRuntimeDynamicCellMatchAddr();
+    args->kArgs.runtimeDynamicCellMatchCapacity = kernel->GetRuntimeDynamicCellMatchCapacity();
+    args->kArgs.schedSyncMode = kernel->GetSyncMode();
+    auto isCaptureMode = DeviceLauncher::IsCaptureMode();
+    bool debugEnable = !isCaptureMode && isDebugMode;
+
+    int ret = LaunchSyncTask(aicoreStream, isCaptureMode, launchEarlyMode);
+    MACHINE_ASSERT(ret == RT_SUCCESS) << "launch pre sync failed: " << ret;
+
+    DeviceLauncher::SetDevPerfAddr(debugEnable, isCaptureMode);
+    if (!isCaptureMode) {
+        args->kArgs.toSubMachineConfig = kernel->GetMachineConfig();
+    }
+    ret = LaunchAicpuKernel(rtAicpuArgs, debugEnable, kernel->GetFunction(), tensors);
+    MACHINE_ASSERT(ret == RT_SUCCESS) << "launch aicpu failed: " << ret;
+
+    kernelArgs[5] = args->kArgs.cfgdata;
+    kernelArgs[0] = const_cast<char*>(kernel->GetKernelname().c_str());
+    kernelArgs[4] = (int64_t*)(args + 1);
+    kernelArgs[6] = (DevTensorData*)((int64_t*)(args + 1) + 2);
+    ret = LaunchAicoreKernel(
+        aicoreStream, kernel->GetKernelBin(), rtAicoreArgs, rtTaskCfg, debugEnable, kernel->GetFunction());
+    MACHINE_ASSERT(ret == RT_SUCCESS) << "launch aicore failed: " << ret;
+    return ret;
+}
+
+void DeviceLauncher::EmulationLaunch(
+    Function* function, const std::vector<DeviceTensorData>& tensors,
+    DevControlFlowCache* ctrlCache, LaunchMode launchMode)
+{
+    DeviceLauncherConfig config;
+    DeviceLauncherConfigFillDeviceInfo(config);
+    int ret = 0;
+    if (launchMode == LaunchMode::EMULATION) {
+        ret = EmulationLauncher::EmulationLaunchDeviceTensorData(function, tensors, {}, config, ctrlCache);
+        MACHINE_ASSERT(ret == RT_SUCCESS) << "emulation run failed: " << ret;
+    } else if (launchMode == LaunchMode::AICORE_MODEL) {
+        ret = AicoreModelLauncher::AicoreModelLaunchDeviceTensorData(function, tensors, {}, config, ctrlCache);
+        MACHINE_ASSERT(ret == RT_SUCCESS) << "aicore model run failed: " << ret;
+    }
+}
+
+uint8_t* DeviceLauncher::PrepareLaunch(
+    KernelBinary* kernel, std::vector<DeviceTensorData>& tensors,
+    AclMdlRI rtModel, LaunchMode launchMode)
+{
+    AddAicpuStream(IsCaptureMode(), rtModel);
+    HOST_PERF_TRACE(TracePhase::LaunchAttachStream);
+    auto& cacheMgr = CtrlFlowCacheManager::Instance();
+    // findOrBuildDevCache===>kermode FindCtrlFlowcache
+    uint8_t* ctrlFlowCache = cacheMgr.FindOrBuildDevCache(kernel, tensors);
+    HOST_PERF_TRACE(TracePhase::FindCtrlFlowCache);
+    // emulation launch
+    if (launchMode == LaunchMode::DEVICE_RT) {
+        return ctrlFlowCache;
+    }
+    std::vector<uint8_t> hostCache;
+    DevControlFlowCache* ctrlCache = cacheMgr.GetHostCtrlFlowCache(kernel, tensors, ctrlFlowCache, hostCache);
+    EmulationLaunch(kernel->GetFunction(), tensors, ctrlCache, launchMode);
+    return ctrlFlowCache;
+}
+
 } // namespace npu::tile_fwk::dynamic
