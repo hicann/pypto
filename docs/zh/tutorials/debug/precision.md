@@ -383,13 +383,15 @@ python3 tools/verifier/parse_dump_tensors.py \
 
 ```
 output/output_*/dump_tensor_*/device_0/
-├── *.data                                # 提取的tensor数据文件
-├── raw_{rawMagic}_{dataType}_{ioflag}.data  # 合并后的raw tensor（如有分片）
-└── ../                                   # 上级目录生成对比结果报告
-    └── verify_task_result_cmp~{timestamp}.csv  # 对比验证结果报告
+├── *.data                                       # 提取的tensor数据文件
+├── raw_{rawMagic}_{dataType}_{ioflag}.data      # 合并后的raw tensor（如有分片）
+└── ../                                          # 上级目录生成对比结果报告
+    └── verify_task_result_cmp~{pass_full_name}~{timestamp}.csv  # 对比验证结果报告
 ```
 
-**verify_task_result_cmp~{timestamp}.csv字段说明：**
+> 注：`ioflag` 使用 `i`（输入）或 `o`（输出）；`pass_full_name` 为自动检测到的 Pass 全名（如 `Pass_36_CodegenPreproc`）。
+
+**verify_task_result_cmp~{pass_full_name}~{timestamp}.csv字段说明：**
 
 字段前缀说明：
 
@@ -401,55 +403,263 @@ output/output_*/dump_tensor_*/device_0/
 
 | 字段 | 说明 |
 |------|------|
+| NO. | 序号（按执行时间戳排序） |
+| B>version | dump数据格式版本号（当前为1） |
+| B>opId | Operation ID |
+| B>funcId | Function ID |
 | B>taskId | 任务ID |
+| B>blockIdx | Block索引 |
 | ROOT_CALL:opmagic | 算子调用magic标识 |
 | ROOT_CALL:rawmagic | 原始tensor magic标识 |
-| B>validshape | tensor实际shape |
-| B>offset | tensor在raw tensor中的偏移 |
-| B>rawShape | 原始完整tensor的shape |
+| B>:validshape | tensor实际shape |
+| B>OP_ATTR_SYM_OFFSET | tensor在raw tensor中的偏移 |
+| B>:rawshape | 原始完整tensor的shape |
 | B>tensorAddr | tensor内存地址 |
-| B>datatype | 数据类型（字符串，如FP32、INT8） |
-| IO_FLAG | 输入/输出标记（input/output） |
+| B>:datatype | 数据类型（字符串，如FP32、INT8） |
+| IO_FLAG | 输入/输出标记（i/o） |
 | B>seqNo | 序列号 |
 | B>TIMESTAMP | 时间戳 |
-| B>funcId | Function ID |
+| B>EXEC_TIMESTAMP | 执行时间戳（输入取execStart，输出取execEnd） |
 | ROOT_FUNC:hash | Root Function hash值 |
 | FUNC:hash | Function hash值 |
+| B>loopVarInfos | 循环变量信息（匹配成功时为"="，否则为字符串形式） |
+| LOOP_INFO | 验证数据的循环信息（匹配成功时填充，否则为空） |
 
 **验证对比字段（启用--verify_path时）：**
 
 | 字段 | 说明 |
 |------|------|
 | A>PHASE_NAME | 验证数据的阶段名称（如Pass_36_CodegenPreproc） |
-| A>FILENAME | 验证数据文件路径 |
-| A>datatype | 验证数据的数据类型 |
-| A>validshape | 验证数据的shape |
-| AB>RESULT | 对比结果：PASS、FAIL、NO_CMP |
-| error_count | 误差元素数量（对比失败时） |
-| error_rate | 误差元素占比（对比失败时） |
-| max_abs_error | 最大绝对误差（对比失败时） |
-| max_rel_error | 最大相对误差（对比失败时） |
-| mean_abs_error | 平均绝对误差（对比失败时） |
-| mean_rel_error | 平均相对误差（对比失败时） |
-| result_reason | 未对比原因（NO_CMP时，如"unsupported dtype: BOTTOM"） |
+| A>FILENAME | 验证数据文件名（仅保留文件名，不含路径） |
+| A>:datatype | 验证数据的数据类型 |
+| A>:validshape | 验证数据的shape |
+| A>:rawmagic | 验证数据的raw magic标识 |
+| A>:opcode | 验证数据的opcode |
+| A>:opmagic | 验证数据的op magic标识 |
+| A>OP_ATTR_SYM_OFFSET | 验证数据的偏移 |
+| A>OP_IO_FLAG | 验证数据的输入/输出标记 |
+| PATH_FUNC:hash | Path Function hash值 |
+| AB>RESULT | 对比结果：PASS、FAIL、SKIP |
+| AB>RESULT_REASON | 未对比原因（SKIP时，如"unsupported dtype: BOTTOM"） |
+| AB>rtol/atol | 容差参数 |
 
 **对比验证流程：**
 
-1. **数据匹配**：通过`ROOT_CALL:opmagic`、`ROOT_CALL:rawmagic`、`IO_FLAG`、`B>offset`匹配上板数据与验证数据
+1. **数据匹配**：通过`ROOT_CALL:opmagic`、`ROOT_CALL:rawmagic`、`IO_FLAG`、`B>OP_ATTR_SYM_OFFSET`匹配上板数据与验证数据
 2. **容差配置**：根据数据类型自动选择容差
    - FP32/FP64：标准容差（rtol=1e-3, atol=1e-3）
    - FP16/BF16/FP8：放宽容差（rtol=1e-2, atol=1e-2）
 3. **Shape处理**：自动处理shape不一致的对比（取公共部分）
-4. **不支持类型**：HF4、HF8、BOTTOM等类型标记为NO_CMP
+4. **不支持类型**：HF4、HF8、BOTTOM等类型标记为SKIP
 
 **Raw Tensor合并说明：**
 
 当多个task处理同一个raw tensor的不同分片时，脚本会自动：
 
 1. 按`ROOT_CALL:rawmagic`分组
-2. 根据`B>offset`和`B>validshape`计算切片位置
+2. 根据`B>OP_ATTR_SYM_OFFSET`和`B>:validshape`计算切片位置
 3. 合并所有分片数据到完整raw tensor
-4. 生成的文件命名为：`raw_{rawMagic}_{dataType}_{ioflag}.data`
+4. 生成的文件命名为：`raw_{rawMagic}_{dataType}_{ioflag}.data`（`ioflag`为`i`或`o`）
+
+## CPU模拟计算数据dump
+
+### 功能概述
+
+支持dump CPU模拟计算的结果，可用于精度定位。通过dump模拟计算数据，将精度出错的pass和前面正确的pass用对比脚本进行对比，找到能够匹配上首次出现精度问题的op。
+
+### 启用方式
+
+```python
+# 配置验证选项
+@pypto.frontend.jit(
+    debug_options={"compile_debug_mode": 1},
+    verify_options={
+        "enable_pass_verify": True,
+        "pass_verify_save_tensor": True,
+        "pass_verify_pass_filter": ["InferParamIndex", "CodegenPreproc"]  # 可配置dump的具体pass
+    }
+)
+def kernel(...):
+    ...
+```
+
+> 注：`pass_verify_pass_filter`不指定时默认校验特定pass；指定`"all"`校验所有pass；指定具体pass名称列表可仅dump所需pass的模拟计算数据。
+
+### Dump数据输出路径
+
+执行结束后，在`{work_path}/output/output_*/`目录（*代表时间戳）下生成`verify_*`目录，存放模拟计算数据与检测结果文件：
+
+```text
+├── tensor_graph                                   # 保存前端初始计算图模拟计算后的中间数据，作为基础数据
+│   ├── *.data
+│   └── ...
+├── Pass_{PASS_SEQ}_{PASS_NAME}                    # 保存中间pass计算图模拟计算后的中间数据，作为待测数据
+│   ├── *.data
+│   └── ...
+├── verify_graph_data_metainfo.csv                 # 结果报告，保存中间数据元信息及对应数据文件名
+├── verify_graph_result_brief.csv                  # 精度比对摘要（PASS/FAIL/NO_COMPARE、误差统计等）
+├── verify_graph_result_brief.log                  # 精度比对异常详情（失败项、异常路径、错误明细）
+└── interpreter.log                                # 校验结果与 interpreter 执行日志
+```
+
+### 数据处理工具
+
+**工具位置：** `tools/verifier/pass_compare.py`
+
+**主要功能：**
+
+根据dump的`verify_graph_data_metainfo.csv`里面的tensor信息，将两个pass间能够匹配上的op的输出tensor进行对比，找到出错的op。
+
+**使用方法：**
+
+```bash
+# 基本用法（两个pass在同一verify目录下）
+python3 tools/verifier/pass_compare.py \
+    --p ExpandFunction RemoveUndrivenView \
+    --verify_path output/output_20260101120000/verify
+
+# 指定函数名过滤对比范围
+python3 tools/verifier/pass_compare.py \
+    --p ExpandFunction RemoveUndrivenView \
+    --verify_path output/output_20260101120000/verify \
+    --func TENSOR_LOOP_s2_Unroll8_PATH0_hiddenfunc0_20
+
+# 两个pass在不同verify目录下
+python3 tools/verifier/pass_compare.py \
+    --p ExpandFunction RemoveUndrivenView \
+    --verify_path output/output_20260101120000/verify output/output_20260101130000/verify
+```
+
+**参数说明：**
+
+| 参数 | 必需/可选 | 说明 | 默认值 |
+|------|-----------|------|--------|
+| `--p` | 必需 | 指定需要比较的两个pass的名称，以空格分隔。第一个为待测pass（可能有精度问题），第二个为golden pass（精度正确的基准） | 无 |
+| `--verify_path` | 必需 | verify结果目录路径。提供一个值时两个pass共用同一目录；提供两个值时分别对应两个pass的目录 | 无 |
+| `--func` | 可选 | 指定待比较的函数名称列表，以空格分隔。不指定则对比所有函数 | 空（对比所有） |
+| `--atol` | 可选 | 绝对误差容差 | `1e-3` |
+| `--rtol` | 可选 | 相对误差容差 | `1e-3` |
+| `--topk` | 可选 | 打印差异最大的前k行 | `1000` |
+
+**输出文件：**
+
+```text
+output/output_*/verify_*/
+├── verify_graph_result_cmp~Pass_{NN}_{GoldenPass}~Pass_{NN}_{OutputPass}~{timestamp}.csv  # 对比验证结果报告
+└── verify_graph_result_cmp~Pass_{NN}_{GoldenPass}~Pass_{NN}_{OutputPass}~{timestamp}.DETAIL/  # 逐tensor差异明细（仅对比失败时生成）
+    └── {tensor_filename}.csv
+```
+
+> 注：`{NN}`为pass序号（两位补零），`{GoldenPass}`为golden pass名称，`{OutputPass}`为待测pass名称，`{timestamp}`为微秒级时间戳。工具会自动确保序号大的pass作为待测pass、序号小的pass作为golden pass，无需用户手动排序。
+
+**verify_graph_result_cmp~{Pass_a}~{Pass_b}~{timestamp}.csv字段说明：**
+
+字段前缀说明：
+
+- `B>`前缀：表示待测pass（后一个、精度可能有问题的pass）的数据信息
+- `A>`前缀：表示golden pass（精度正确的pass）的数据信息
+- `AB>`前缀：表示对比验证结果
+- 无前缀：表示两个pass共有的公共属性
+
+**公共信息字段：**
+
+| 字段 | 说明 |
+|------|------|
+| NO. | 序号（按待测pass时间戳排序） |
+| PATH_FUNC:func_magicname | Path Function的magic名称 |
+| PATH_FUNC:funcmagic | Path Function的magic标识 |
+| PATH_FUNC:hash | Path Function的hash值 |
+| LOOP_INFO | 循环变量信息 |
+| :symbol | tensor符号名 |
+| :validshape | tensor实际shape |
+| :datatype | 数据类型（字符串，如FP32、BF16、INT8） |
+| OP_ATTR_SYM_OFFSET | tensor在raw tensor中的偏移 |
+| OP_IO_FLAG | 输入/输出标记 |
+
+**待测pass数据字段（B>前缀）：**
+
+| 字段 | 说明 |
+|------|------|
+| B>PHASE_NAME | 待测pass的阶段名称 |
+| B>TIMESTAMP | 时间戳 |
+| B>FILENAME | 数据文件名 |
+| B>FUNC:hash | Function hash值 |
+| B>FUNC:funcmagic | Function magic标识 |
+| B>ROOT_CALL:opmagic | 算子调用magic标识 |
+| B>ROOT_CALL:rawmagic | 原始tensor magic标识 |
+| B>:opmagic | op magic标识 |
+| B>:opcode | 操作类型（如COPY_IN、COPY_OUT、VIEW、ASSEMBLE等） |
+| B>:rawmagic | raw tensor magic标识 |
+| B>:magic | tensor magic标识 |
+| B>:rawshape | 原始完整tensor的shape |
+| B>:format | 数据格式 |
+| B>:shape | tensor的shape |
+| B>EVAL:dynvalidshape | 动态shape求值结果 |
+| B>ROOT_FUNC:hash | Root Function hash值 |
+
+**golden pass数据字段（A>前缀）：**
+
+| 字段 | 说明 |
+|------|------|
+| A>PHASE_NAME | golden pass的阶段名称 |
+| A>TIMESTAMP | 时间戳 |
+| A>FILENAME | 数据文件名 |
+| A>FUNC:hash | Function hash值 |
+| A>FUNC:funcmagic | Function magic标识 |
+| A>ROOT_CALL:opmagic | 算子调用magic标识 |
+| A>ROOT_CALL:rawmagic | 原始tensor magic标识 |
+| A>:opmagic | op magic标识 |
+| A>:opcode | 操作类型 |
+| A>:rawmagic | raw tensor magic标识 |
+| A>:magic | tensor magic标识 |
+| A>:rawshape | 原始完整tensor的shape |
+| A>:format | 数据格式 |
+| A>:shape | tensor的shape |
+| A>EVAL:dynvalidshape | 动态shape求值结果 |
+| A>ROOT_FUNC:hash | Root Function hash值 |
+
+**对比结果字段（AB>前缀）：**
+
+| 字段 | 说明 |
+|------|------|
+| AB>RESULT | 对比结果：PASS（通过）、FAIL（失败）、SKIP（跳过） |
+| AB>RESULT_REASON | 跳过或失败原因（SKIP时，如"`:rawmagic : 123, not exit in golden pass`"、"not match"） |
+| AB>rtol/atol | 实际使用的容差参数 |
+| AB>fail_cnt/warn_cnt/tol_cnt | 失败/警告/容忍的元素计数 |
+| AB>total_cnt/zero_cnt/infnan_cnt | 总数/零值/inf或nan元素计数 |
+| AB>mae | 平均绝对误差（Mean Absolute Error） |
+| AB>mae_top8 | 误差最大的前8个元素的平均绝对误差 |
+| AB>mae_top1permil | 误差最大的前千分之一元素的平均绝对误差 |
+| AB>mre | 平均相对误差（Mean Relative Error） |
+| AB>mre_top8 | 误差最大的前8个元素的平均相对误差 |
+| AB>mre_top1permil | 误差最大的前千分之一元素的平均相对误差 |
+
+**数据统计字段：**
+
+| 字段 | 说明 |
+|------|------|
+| A>max / B>max | golden/待测数据的最大值 |
+| A>min / B>min | golden/待测数据的最小值 |
+| A>avg / B>avg | golden/待测数据的平均值 |
+| A>aavg / B>aavg | golden/待测数据的绝对值平均值 |
+| A>zero / B>zero | golden/待测数据的零值个数 |
+| A>infnan / B>infnan | golden/待测数据的inf/nan个数 |
+
+**对比验证流程：**
+
+1. **读取元信息**：从`verify_graph_data_metainfo.csv`读取两个pass的tensor元信息
+2. **Pass排序**：自动确保序号大的pass作为待测pass（B>）、序号小的pass作为golden pass（A>），如需交换则同步交换verify路径
+3. **匹配键选择**：根据pass序号自动选择匹配键
+   - 两个pass都 >= ExpandFunction：使用`:magic`匹配
+   - 待测pass >= InferParamIndex 且 golden pass在[ExpandFunction, InferParamIndex)区间：使用`ROOT_CALL:rawmagic`匹配（仅匹配COPY_IN/COPY_OUT操作）
+   - 两个pass都 >= InferParamIndex：启用leaf function匹配逻辑（额外校验`ROOT_CALL:opmagic`）
+4. **分组匹配**：按`PATH_FUNC:func_magicname`和`LOOP_INFO`分组，在相同分组内按匹配键寻找tensor对
+   - codegen模式下COPY_IN操作通过`INPUT:rawmagic`匹配
+5. **跳过检查**：validshape含0、或ASSEMBLE/COPY_OUT的输入validshape含0的记录直接跳过
+6. **包含性检查**：验证待测tensor是否被golden tensor包含（基于offset和shape范围）
+7. **opcode匹配**：支持等价opcode匹配（如VIEW≈L1_TO_L0A/L1_TO_L0B、COPY_OUT≈ASSEMBLE、COPY_IN≈VIEW、A_MUL_B≈A_MULACC_B）
+8. **数据对比**：读取`.data`文件，按offset切片后转为float64进行逐元素对比；ASSEMBLE/COPY_OUT操作使用输入tensor的shape进行切片
+9. **不支持类型**：非BF16/FP32/FP16/INT32/INT8/INT64/INT16的类型标记为SKIP
 
 ## 算子级别的输入输出tensor dump
 

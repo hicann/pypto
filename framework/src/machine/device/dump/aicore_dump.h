@@ -47,7 +47,11 @@ struct LoopVarInfo {
 };
 
 struct DumpTensorInfo {
-    uint32_t headSize;
+    uint8_t version;
+    uint8_t rsrv_01;
+    uint16_t headSize;
+    uint32_t rsrv_02;
+    uint32_t opId;
     uint32_t funcId;
     uint32_t taskId;
     uint32_t callopMagic;
@@ -269,7 +273,11 @@ public:
                 cceIndex = (func->GetOperationAttrCalleeIndex(opIdx) + 1) / MAIN_BLOCK_SIZE;
             }
             dumpTensorInfo.headSize = sizeof(DumpTensorInfo);
+            dumpTensorInfo.version = 0x1;
+            dumpTensorInfo.rsrv_01 = 0;
+            dumpTensorInfo.rsrv_02 = 0;
             dumpTensorInfo.funcId = FuncID(taskId_);
+            dumpTensorInfo.opId = opIdx;
             dumpTensorInfo.callopMagic = func->GetOperationDebugOpmagic(opIdx);
             dumpTensorInfo.taskId = taskId_;
             dumpTensorInfo.rawMagic = rawTensor->rawMagic;

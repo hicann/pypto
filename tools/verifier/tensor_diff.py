@@ -254,7 +254,7 @@ def compare_tensors_result_dict(
     Returns:
         dict 包含对比结果和统计信息:
         - AB>RESULT: 对比结果 ("PASS"/"FAIL")
-        - result_reason: 失败原因描述
+        - AB>RESULT_REASON: 失败原因描述
         - AB>rtol/atol: 容差参数
         - AB>fail_cnt/warn_cnt/tol_cnt: 失败/警告/容忍计数
         - AB>total_cnt/zero_cnt/infnan_cnt: 总数/零值/inf/nan计数
@@ -278,7 +278,7 @@ def compare_tensors_result_dict(
     else:
         record["AB>RESULT"] = "FAIL"
         comparator.print_isclose_info(result_is_close, result_reason, result_info, path, top_k)
-    record["result_reason"] = result_reason
+    record["AB>RESULT_REASON"] = result_reason
     record["AB>rtol/atol"] = f"{config.rtol:.{max_precision}g}/{config.atol:.{max_precision}g}"
     
     diff_conf = result_info[6] if len(result_info) > 6 else None

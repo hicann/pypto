@@ -26,6 +26,7 @@ import pandas as pd
 import numpy as np
 from tensor_diff import TensorComparator, IsCloseConfig, compare_tensors_result_dict, MAX_PRECISION
 from run_float_diff import DataDiffAnalyzer
+from parse_dump_tensors import scan_pass_info_from_path
 
 
 @dataclass
@@ -127,14 +128,11 @@ class PassComparator:
             "GlobalMemoryReuse": 36,
             "CodegenPreproc": 37
         }
-
-        self.opcode_dict = {
-            "VIEW": ["L1_TO_L0A", "L1_TO_L0B"],
-            "A_MUL_B": ["A_MULACC_B"]
-        }
+        
+        self._update_pass_dict_from_path(verify_path_pass1)
 
     @staticmethod
-    def is_contain(a: Dict[str, Any], b: Dict[str, Any], key: str, is_leaf: bool) -> bool:
+    def is_contain(a: Dict[str, Any], b: Dict[str, Any], key: str, is_leaf: bool, opcode_dict: Dict) -> bool:
         """
         Checks whether tensor a is completely included in tensor b.
         Returns:
@@ -144,14 +142,21 @@ class PassComparator:
         b_offset = json.loads(b[":offset"])
         a_shape = json.loads(a[":validshape"])
         b_shape = json.loads(b[":validshape"])
-        if a[":opcode"] in {"ASSEMBLE", "COPY_OUT", "COPY_IN"}:
+        copy_opcodes = {"ASSEMBLE", "COPY_OUT", "COPY_IN",
+                        "RESHAPE_COPY_OUT", "RESHAPE_COPY_IN", "L0C_RESHAPE_COPY_OUT"}
+        if a[":opcode"] in copy_opcodes:
             if is_leaf and a["ROOT_CALL:opmagic"] is not None:
                 return (a["OP_ATTR_SYM_OFFSET"] == b["OP_ATTR_SYM_OFFSET"]
                         and a[":opcode"] == b[":opcode"]
                         and a["ROOT_CALL:opmagic"] == b["ROOT_CALL:opmagic"])
+            elif a["OP_ATTR_ATOMIC"] == True:
+                return (a["OP_ATTR_SYM_OFFSET"] == b["OP_ATTR_SYM_OFFSET"]
+                        and PassComparator.opcode_match(a[":opcode"], b[":opcode"], opcode_dict)
+                        and a["OP_ATTR_ATOMIC"] == b["OP_ATTR_ATOMIC"]
+                        and a[":opmagic"] == b[":opmagic"])
             else:
                 return (a["OP_ATTR_SYM_OFFSET"] == b["OP_ATTR_SYM_OFFSET"]
-                        and a[":opcode"] == b[":opcode"])
+                        and PassComparator.opcode_match(a[":opcode"], b[":opcode"], opcode_dict))
         if key == ":magic" and a_shape == b_shape and not is_leaf:
             return True
         else:
@@ -167,6 +172,8 @@ class PassComparator:
     @staticmethod
     def opcode_match(opcode_a: str, opcode_b: str, opcode_dict: Dict) -> bool:
         """opcode match"""
+        if opcode_a == opcode_b:
+            return True
         if opcode_a in opcode_dict:
             return opcode_b in opcode_dict[opcode_a]
         if opcode_b in opcode_dict:
@@ -227,7 +234,7 @@ class PassComparator:
         
         if compare_result is None:
             record["AB>RESULT"] = "SKIP"
-            record["result_reason"] = a.get("skip_reason", "")
+            record["AB>RESULT_REASON"] = a.get("skip_reason", "")
             record["AB>rtol/atol"] = ""
         else:
             record.update(compare_result)
@@ -236,16 +243,16 @@ class PassComparator:
 
     @staticmethod
     def should_skip_record(ai: Dict[str, Any], bi: Dict[str, Any]) -> bool:
-        """Check if a record pair should be skipped based on validshape and inputValidShape."""
+        """Check if a record pair should be skipped based on validshape and INPUT:validshape."""
         ai_validshape = json.loads(ai[':validshape'])
         bi_validshape = json.loads(bi[':validshape'])
         if 0 in ai_validshape or 0 in bi_validshape:
             return True
         ai_opcode = ai[":opcode"]
         bi_opcode = bi[":opcode"]
-        if ai_opcode in {"ASSEMBLE", "COPY_OUT"} and 0 in json.loads(ai[':inputValidShape']):
+        if ai_opcode in {"ASSEMBLE", "COPY_OUT"} and 0 in json.loads(ai['INPUT:validshape']):
             return True
-        if bi_opcode in {"ASSEMBLE", "COPY_OUT"} and 0 in json.loads(bi[':inputValidShape']):
+        if bi_opcode in {"ASSEMBLE", "COPY_OUT"} and 0 in json.loads(bi['INPUT:validshape']):
             return True
         return False
 
@@ -284,7 +291,9 @@ class PassComparator:
 
             opcode_dict = {
                 "VIEW": ["L1_TO_L0A", "L1_TO_L0B"],
-                "A_MUL_B": ["A_MULACC_B"]
+                "A_MUL_B": ["A_MULACC_B"],
+                "COPY_OUT": ["ASSEMBLE"],
+                "COPY_IN": ["VIEW"]
             }
 
             for task in loop_tasks:
@@ -304,7 +313,7 @@ class PassComparator:
                         b_records = df_b[df_b[":rawmagic"] == raw_magic].to_dict(orient='records')
                         if ai[":opcode"] == "COPY_IN":
                             b_records = df_b[
-                                (df_b[":inputRawMagic"] == str(int(ai[key]))) &
+                                (df_b["INPUT:rawmagic"] == str(int(ai[key]))) &
                                 (df_b[":opcode"] == "COPY_IN")
                             ].to_dict(orient='records')
                     else:
@@ -349,7 +358,7 @@ class PassComparator:
                                     verify_path_pass1: str, verify_path_pass2: str,
                                     dtype_dict: Dict, opcode_dict: Dict, is_leaf: bool) -> bool:
         """Static version of compare_not_support for multiprocessing"""
-        if not PassComparator.is_contain(a, b, key, is_leaf):
+        if not PassComparator.is_contain(a, b, key, is_leaf, opcode_dict, ):
             return False
 
         f_a = os.path.join(verify_path_pass1, a["PHASE_NAME"], a["FILENAME"])
@@ -385,7 +394,7 @@ class PassComparator:
 
         a_shape = json.loads(a[":validshape"])
         if a[":opcode"] in {"ASSEMBLE", "COPY_OUT"}:
-            input_dict = [item for item in csv_data_dict if item["FILENAME"] == a["INPUT_FILENAMES"]]
+            input_dict = [item for item in csv_data_dict if item["FILENAME"] == a["INPUT:FILENAMES"]]
             if input_dict:
                 a_shape = json.loads(input_dict[0][":validshape"])
 
@@ -446,13 +455,13 @@ class PassComparator:
         f_a = os.path.join(verify_path_pass1, a["PHASE_NAME"], a["FILENAME"])
         f_b = os.path.join(verify_path_pass2, b["PHASE_NAME"], b["FILENAME"])
 
-        input_dict = [item for item in csv_data_dict if item["FILENAME"] == a["INPUT_FILENAMES"]]
+        input_dict = [item for item in csv_data_dict if item["FILENAME"] == a["INPUT:FILENAMES"]]
         a_offset = json.loads(a["OP_ATTR_SYM_OFFSET"])
         b_offset = json.loads(b["OP_ATTR_SYM_OFFSET"])
         shape = json.loads(a[":rawshape"])
         if not input_dict:
-            logging.error(f"No matching record found for FILENAME: {a['INPUT_FILENAMES']}")
-            raise ValueError(f"No matching record found for FILENAME: {a['INPUT_FILENAMES']}")
+            logging.error(f"No matching record found for FILENAME: {a['INPUT:FILENAMES']}")
+            raise ValueError(f"No matching record found for FILENAME: {a['INPUT:FILENAMES']}")
         a_shape = json.loads(input_dict[0][":validshape"])
         b_shape = json.loads(input_dict[0][":validshape"])
         np_dtype = dtype_dict.get(a[":datatype"])
@@ -493,16 +502,19 @@ class PassComparator:
             self.verify_path_pass1, self.verify_path_pass2 = self.verify_path_pass2, self.verify_path_pass1
         self.result_file = f'verify_graph_result_cmp~Pass_{self.pass_dict[self.golden_pass]:02d}_{self.golden_pass}~' \
                 f'Pass_{self.pass_dict[self.output_pass]:02d}_{self.output_pass}~{int(time.time() * 1_000_000)}.csv'
-        
-        if self.pass_dict[pass_a] >= 5 and self.pass_dict[pass_b] >= 5:
+        infer_param_index = self.pass_dict["InferParamIndex"]
+        expand_function = self.pass_dict["ExpandFunction"]
+        if self.pass_dict[pass_a] >= expand_function and self.pass_dict[pass_b] >= expand_function:
             self.key = ":magic"
         # 判断是否需要使用 codegen 的特殊逻辑
         is_codegen = False
-        if self.pass_dict[pass_a] >= 29 and self.pass_dict[pass_b] >= 5 and self.pass_dict[pass_b] < 29:
+        if (self.pass_dict[pass_a] >= infer_param_index and
+            self.pass_dict[pass_b] >= expand_function and
+            self.pass_dict[pass_b] < infer_param_index):
             self.key = "ROOT_CALL:rawmagic"
             is_codegen = True
         is_leaf = False
-        if self.pass_dict[pass_a] >= 29 and self.pass_dict[pass_b] >= 29:
+        if self.pass_dict[pass_a] >= infer_param_index and self.pass_dict[pass_b] >= infer_param_index:
             is_leaf = True
         logging.info(f"key  : {self.key}")
 
@@ -582,6 +594,9 @@ class PassComparator:
         df.to_csv(csv_path, index=False, encoding='utf-8')
         logging.info(f"Comparison results saved to {csv_path}")
 
+    def _update_pass_dict_from_path(self, verify_path: str) -> None:
+        self.pass_dict.update(scan_pass_info_from_path(verify_path))
+
 
 def main():
     """Main function: Parse parameters and run the comparison"""
@@ -633,6 +648,8 @@ def main():
 
     logging.info(f"pass : {args.p[0]}, {args.p[1]}")
     logging.info(f"path: {args.func}")
+    logging.info(f"ExpandFunction: {comparator.pass_dict['ExpandFunction']}")
+    logging.info(f"InferParamIndex: {comparator.pass_dict['InferParamIndex']}")
     logging.info(f"verify_path_pass1: {verify_path_pass1}")
     logging.info(f"verify_path_pass2: {verify_path_pass2}")
 

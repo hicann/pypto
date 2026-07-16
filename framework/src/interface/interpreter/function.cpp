@@ -61,9 +61,9 @@ std::vector<std::string> MakeOpInfoCsvHeader()
         "OP_IO_FLAG",
         "TIMESTAMP",
         "FILENAME",
-        "INPUT_FILENAMES",
-        ":inputValidShape",
-        ":inputRawMagic",
+        "INPUT:FILENAMES",
+        "INPUT:validshape",
+        "INPUT:rawmagic",
     };
 }
 
@@ -382,9 +382,9 @@ void FunctionInterpreter::FillOperationInputInfo(
         }
         auto dataView = ioperandDataViewList->at(k);
         if (k > 0) {
-            opInfo[toIndex(OpInfoCsvHeader::inputTensors)] += ", ";
-            opInfo[toIndex(OpInfoCsvHeader::inputValidShape)] += ", ";
-            opInfo[toIndex(OpInfoCsvHeader::inputRawMagic)] += ", ";
+            opInfo[toIndex(OpInfoCsvHeader::inputTensors)] += ";";
+            opInfo[toIndex(OpInfoCsvHeader::inputValidShape)] += ";";
+            opInfo[toIndex(OpInfoCsvHeader::inputRawMagic)] += ";";
         }
         opInfo[toIndex(OpInfoCsvHeader::inputValidShape)] += ShapeToString(dataView->GetValidShape());
         opInfo[toIndex(OpInfoCsvHeader::inputRawMagic)] += std::to_string(
