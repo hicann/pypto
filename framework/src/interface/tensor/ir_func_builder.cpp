@@ -60,6 +60,8 @@ void RootFunctionBuilder::InitDynFunc(const ir::FunctionPtr& irFunc)
     dynFunc_->SetGraphType(GraphType::TENSOR_GRAPH);
     ir::Span span = irFunc->span_;
     dynFunc_->SetSpan(span);
+    dynFunc_->SetDyndevAttribute(std::make_shared<DyndevFunctionAttribute>());
+    program_.SetCurrentDynamicFunction(dynFunc_.get());
 }
 
 void RootFunctionBuilder::FinalizeDynFunc(const ir::FunctionPtr& irFunc)
@@ -305,8 +307,8 @@ void RootFunctionBuilder::BuildPathFuncSlotScope(Function* pathFunc, const std::
 
 void RootFunctionBuilder::BuildDynSlotScope()
 {
-    auto attr = std::make_shared<DyndevFunctionAttribute>();
-    dynFunc_->SetDyndevAttribute(attr);
+    auto attr = dynFunc_->GetDyndevAttribute();
+    FE_ASSERT(FeError::INVALID_PTR, attr != nullptr) << "DyndevAttribute is nullptr";
 
     auto slotManager = program_.GetTensorSlotManager();
     auto& dynScope = dynFunc_->GetSlotScope();
@@ -405,6 +407,15 @@ void RootFunctionBuilder::CreateAndFinalizePathFunc(Function* pathFunc, Function
 
     LogicalTensors pathInArgs = pathFunc->MakeIncasts(pathScope);
     LogicalTensors pathOutArgs = pathFunc->MakeOutcasts(pathScope);
+    
+    // 4. Add valueDepend of hiddenFunc to DynamicFunction
+    auto currDynFunc = program_.GetCurrentDynamicFunction();
+    FE_ASSERT(FeError::INVALID_PTR, currDynFunc != nullptr) << "CurrentDynamicFunction is nullptr";
+    auto dynAttr = currDynFunc->GetDyndevAttribute();
+    FE_ASSERT(FeError::INVALID_PTR, dynAttr != nullptr) << "DyndevAttribute is nullptr";
+    auto iodescDict = hiddenFunc->GetTensorDataForTensorGraph();
+    hiddenFunc->GetTensorDataRefreshIO(iodescDict);
+    dynAttr->valueDependDescDict[hiddenFunc] = hiddenFunc->LookupValueDepend();
 
     for (auto& incast : pathFunc->GetIncast())
         pathFunc->params_.push_back(std::static_pointer_cast<const ir::Var>(incast));
