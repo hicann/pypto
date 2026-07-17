@@ -11,6 +11,7 @@
 
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -43,6 +44,7 @@ private:
     LogicalTensors logicalParams_;
     std::unordered_set<int> consumedRawMagics_;
     std::unordered_set<int> paramRawMagics_;
+    std::unordered_map<std::string, int> loopNameCounters_;
 
     void InitDynFunc(const pypto::ir::FunctionPtr& irFunc);
     void FinalizeDynFunc(const pypto::ir::FunctionPtr& irFunc);

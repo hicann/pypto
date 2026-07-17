@@ -205,7 +205,7 @@ void RootFunctionBuilder::ComputeOutcast(Function& pathFunc,
 std::shared_ptr<Function> RootFunctionBuilder::CreateHiddenFunc(const ir::SeqStmtsPtr& seq,
                                                                 const std::string& loopVarName)
 {
-    auto pathFuncId = IdGen<IdType::FUNCTION>::Inst().NewId();
+    auto pathFuncId = loopNameCounters_[loopVarName]++;
     std::string pathSuffix = loopVarName.empty() ? std::to_string(pathFuncId) :
                                                    loopVarName + "_PATH" + std::to_string(pathFuncId);
     auto hiddenRawName = dynFunc_->GetRawName() + "_" + pathSuffix + "_hiddenfunc";
@@ -261,31 +261,16 @@ void RootFunctionBuilder::BuildPathFuncSlotScope(Function* pathFunc, const std::
 {
     auto slotManager = program_.GetTensorSlotManager();
 
-    scope->ioslot.incastSlot.resize(pathFunc->GetIncast().size());
-    for (size_t idx = 0; idx < pathFunc->GetIncast().size(); idx++) {
+    scope->ioslot.incastSlot.resize(originalIncasts.size());
+    for (size_t idx = 0; idx < originalIncasts.size(); idx++) {
         int slotIndex = FindOrCreateSlot(originalIncasts[idx], slotManager, pathFunc);
         scope->ioslot.incastSlot[idx] = {slotIndex};
     }
 
-    scope->ioslot.outcastSlot.resize(pathFunc->GetOutcast().size());
-    for (size_t idx = 0; idx < pathFunc->GetOutcast().size(); idx++) {
+    scope->ioslot.outcastSlot.resize(originalOutcasts.size());
+    for (size_t idx = 0; idx < originalOutcasts.size(); idx++) {
         int slotIndex = FindOrCreateSlot(originalOutcasts[idx], slotManager, pathFunc);
         scope->ioslot.outcastSlot[idx] = {slotIndex};
-        if (scope->partialUpdateOutcastDict.count(pathFunc->GetOutcast()[idx])) {
-            scope->ioslot.partialUpdateOutcastList.push_back(idx);
-        }
-    }
-
-    std::unordered_set<std::shared_ptr<LogicalTensor>> funcParamSet;
-    for (auto& [incast, inArg] : scope->incastToInArgumentDict) {
-        if (paramRawMagics_.count(inArg->GetRawMagic()) != 0) {
-            funcParamSet.insert(incast);
-        }
-    }
-    for (auto& [outcast, outArg] : scope->outcastToOutArgumentDict) {
-        if (paramRawMagics_.count(outArg->GetRawMagic()) != 0) {
-            funcParamSet.insert(outcast);
-        }
     }
 
     std::unordered_set<int> addedSlots;
@@ -294,7 +279,7 @@ void RootFunctionBuilder::BuildPathFuncSlotScope(Function* pathFunc, const std::
             op.GetOpcode() == Opcode::OP_ASSEMBLE_SSA || op.GetOpcode() == Opcode::OP_ATOMIC_RMW) {
             for (auto& oOperand : op.GetOOperands()) {
                 int slotIndex = FindOrCreateSlot(oOperand, slotManager, pathFunc, true);
-                if (funcParamSet.count(oOperand) != 0) {
+                if (paramRawMagics_.count(oOperand->GetRawMagic()) != 0) {
                     continue;
                 }
                 if (addedSlots.insert(slotIndex).second) {
@@ -405,8 +390,15 @@ void RootFunctionBuilder::CreateAndFinalizePathFunc(Function* pathFunc, Function
     pathFunc->SetSlotScope(pathScope);
     program_.GetTensorSlotManager()->scopeList.push_back(pathScope);
 
+    BuildPathFuncSlotScope(pathFunc, pathScope, pathFunc->GetOriginIncast(), pathFunc->GetOriginOutcast());
+
     LogicalTensors pathInArgs = pathFunc->MakeIncasts(pathScope);
     LogicalTensors pathOutArgs = pathFunc->MakeOutcasts(pathScope);
+    for (size_t idx = 0; idx < pathFunc->GetOutcast().size(); idx++) {
+        if (pathScope->partialUpdateOutcastDict.count(pathFunc->GetOutcast()[idx])) {
+            pathScope->ioslot.partialUpdateOutcastList.push_back(idx);
+        }
+    }
 
     // 4. Add valueDepend of hiddenFunc to DynamicFunction
     auto currDynFunc = program_.GetCurrentDynamicFunction();
@@ -421,9 +413,6 @@ void RootFunctionBuilder::CreateAndFinalizePathFunc(Function* pathFunc, Function
         pathFunc->params_.push_back(std::static_pointer_cast<const ir::Var>(incast));
     for (auto& outcast : pathFunc->GetOutcast())
         pathFunc->params_.push_back(std::static_pointer_cast<const ir::Var>(outcast));
-
-    // 4. 复制 constructAssembleSlotList
-    BuildPathFuncSlotScope(pathFunc, pathScope, pathInArgs, pathOutArgs);
 
     // 5. pathFunc body_ 重建
     std::vector<ir::StmtPtr> pathBodyStmts;
@@ -466,15 +455,20 @@ ir::StmtPtr RootFunctionBuilder::FinalizePathFunc(const ir::StmtPtr& placeholder
     auto originalIncasts = hiddenFunc->GetOriginIncast();
     auto originalOutcasts = hiddenFunc->GetOriginOutcast();
 
+    BuildPathFuncSlotScope(hiddenFunc, hiddenScope, originalIncasts, originalOutcasts);
+
     auto hiddenInArgs = hiddenFunc->MakeIncasts(hiddenScope);
     auto hiddenOutArgs = hiddenFunc->MakeOutcasts(hiddenScope);
+    for (size_t idx = 0; idx < hiddenFunc->GetOutcast().size(); idx++) {
+        if (hiddenScope->partialUpdateOutcastDict.count(hiddenFunc->GetOutcast()[idx])) {
+            hiddenScope->ioslot.partialUpdateOutcastList.push_back(idx);
+        }
+    }
 
     for (auto& incast : hiddenFunc->GetIncast())
         hiddenFunc->params_.push_back(std::static_pointer_cast<const ir::Var>(incast));
     for (auto& outcast : hiddenFunc->GetOutcast())
         hiddenFunc->params_.push_back(std::static_pointer_cast<const ir::Var>(outcast));
-
-    BuildPathFuncSlotScope(hiddenFunc, hiddenScope, originalIncasts, originalOutcasts);
 
     std::vector<ir::StmtPtr> hiddenBodyStmts;
     for (auto& op : hiddenFunc->Operations(false))
