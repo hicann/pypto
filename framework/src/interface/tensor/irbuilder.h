@@ -79,10 +79,27 @@ public:
         var_counter_.clear();
         all_vars_.clear();
         token_map_.clear();
+        ClearTensorDataDescList();
     }
+
+    void ClearTensorDataDescList() { getTensorDataDescList.clear(); }
 
     void AddDependToken(const ir::ExprPtr& val, const ir::VarPtr& token) { token_map_[val].push_back(token); }
     std::vector<ir::VarPtr>& GetDependToken(const ir::ExprPtr& val);
+    int AddTensorDataDesc(const std::shared_ptr<Tensor>& assembleTensor)
+    {
+        int index = static_cast<int>(getTensorDataDescList.size());
+        getTensorDataDescList.push_back(assembleTensor);
+        return index;
+    }
+    std::shared_ptr<Tensor> GetTensorDataDesc(int index) const
+    {
+        FE_ASSERT(FeError::INVALID_VAL, index >= 0 && static_cast<size_t>(index) < getTensorDataDescList.size())
+            << "Invalid GetTensorDataDesc index: " << index;
+        auto assembleTensor = getTensorDataDescList[index];
+        FE_ASSERT(FeError::INVALID_PTR, assembleTensor != nullptr) << "GetTensorDataDesc is nullptr, index: " << index;
+        return assembleTensor;
+    }
 
     static IRContext& Get();
 
@@ -93,6 +110,7 @@ private:
     std::map<std::string, int64_t> var_counter_;  // counter for named variable
     std::map<std::string, std::string> all_vars_; // unique var name -> var name
     std::unordered_map<ir::ExprPtr, std::vector<ir::VarPtr>> token_map_;
+    std::vector<std::shared_ptr<Tensor>> getTensorDataDescList;
 };
 
 class IRBuilder : public ir::IRBuilder {
@@ -196,6 +214,12 @@ public:
 
     void AddDependToken(ir::ExprPtr expr, ir::VarPtr token) { irContext_.AddDependToken(expr, token); }
     std::vector<ir::VarPtr>& GetDependToken(ir::ExprPtr expr) { return irContext_.GetDependToken(expr); }
+    int AddTensorDataDesc(const std::shared_ptr<Tensor>& assembleTensor)
+    {
+        return irContext_.AddTensorDataDesc(assembleTensor);
+    }
+    void ClearTensorDataDescList() { irContext_.ClearTensorDataDescList(); }
+    std::shared_ptr<Tensor> GetTensorDataDesc(int index) const { return irContext_.GetTensorDataDesc(index); }
 
     void EmitTensorStmts();
 

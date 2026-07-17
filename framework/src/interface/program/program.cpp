@@ -29,6 +29,7 @@
 #include "interface/machine/host/host_machine.h"
 #include "interface/program/program.h"
 #include "interface/configs/config_manager_ng.h"
+#include "interface/tensor/irbuilder.h"
 #include "interface/compiler_monitor/monitor_manager.h"
 #include "interface/utils/error.h"
 #include "passes/pass_mgr/pass_manager.h"
@@ -65,6 +66,7 @@ Program& Program::GetInstance()
 void Program::Reset()
 {
     name_.clear();
+    IRContext::Get().Reset();
     tensorSlotManager_ = nullptr;
     functionmap_.clear();
     functionMagicNameStack_.clear();

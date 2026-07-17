@@ -343,10 +343,9 @@ static SymbolicScalar DoGetTensorDataInt32(SymbolHandlerId handlerId, const Tens
     auto currDynFunc = Program::GetInstance().GetCurrentDynamicFunction();
     FE_ASSERT(FeError::INVALID_OPERATION, currDynFunc != nullptr) << "Not under dynamic function!\n";
 
-    auto currDynAttr = currDynFunc->GetDyndevAttribute();
-    int getTensorDataIndex = currDynAttr->getTensorDataCount++;
-
     auto assemble = std::make_shared<Tensor>(TensorExtract(t, offset));
+    auto builder = IRBuilder();
+    int getTensorDataIndex = builder.AddTensorDataDesc(assemble);
 
     auto emuopAssemble = *assemble->GetStorage()->GetProducers().begin();
     auto emuopMark = *emuopAssemble->GetIOperands()[0]->GetProducers().begin();
@@ -355,9 +354,6 @@ static SymbolicScalar DoGetTensorDataInt32(SymbolHandlerId handlerId, const Tens
     GetTensorDataSetIndex(emuopMark, getTensorDataIndex);
     GetTensorDataSetIndex(emuopAssemble, getTensorDataIndex);
 
-    auto& desc = currDynAttr->getTensorDataDescDict[getTensorDataIndex];
-    desc.assembleTensor = assemble;
-
     std::string getName = SymbolHandler::GetNameByHandlerId(handlerId);
     std::string getRuntimeName = AddRuntimePrefix(getName);
     SymbolicScalar getRuntimeHandler(getRuntimeName);
@@ -365,7 +361,6 @@ static SymbolicScalar DoGetTensorDataInt32(SymbolHandlerId handlerId, const Tens
     argList.insert(argList.end(), offset.begin(), offset.end());
     auto scalar = getRuntimeHandler(argList);
 
-    auto builder = IRBuilder();
     emuopAssemble->result_token_ = builder.CreateTokenVar(emuopAssemble->GetSpan());
     builder.AddDependToken(scalar, emuopAssemble->result_token_);
     return scalar;

@@ -1823,18 +1823,17 @@ void Function::UpdateTensorDataUsage(Operation& op)
     if (dynDevAttr == nullptr) {
         return;
     }
-    auto& descDict = dynDevAttr->getTensorDataDescDict;
     auto& importDict = dynDevAttr->getTensorDataUsageDict[this].importDict;
+    IRBuilder builder;
 
     auto dynAttrList = op.GetDynamicAttributeList();
     auto dict = GetTensorDataDict(dynAttrList);
     for (auto& [index, callList] : dict) {
         (void)callList;
-        FE_ASSERT(FeError::INVALID_VAL, descDict.count(index)) << "Invalid index" << op.Dump();
         if (importDict.count(index)) {
             continue;
         }
-        auto assemble = descDict[index].assembleTensor;
+        auto assemble = builder.GetTensorDataDesc(index);
         std::vector<int64_t> importShape(assemble->GetShape().size(), 1);
         std::vector<int64_t> importOffset(assemble->GetShape().size(), 0);
         auto import = View(*assemble, importShape, importOffset);

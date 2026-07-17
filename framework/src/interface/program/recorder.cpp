@@ -14,6 +14,7 @@
  */
 
 #include "interface/configs/config_manager.h"
+#include "interface/tensor/irbuilder.h"
 #include "passes/pass_mgr/pass_manager.h"
 
 namespace npu::tile_fwk {
@@ -160,8 +161,7 @@ void RecordFunc::EndFunction()
             dynFunc_->CleanRedundantOutCast();
             dynFunc_->InferParamDirection();
             // Destructor GetTensorData small Tensor
-            auto attr = dynFunc_->GetDyndevAttribute();
-            attr->getTensorDataDescDict.clear();
+            IRContext::Get().ClearTensorDataDescList();
 
             dynFunc_->ApplyLoopCallOrderGroup();
             if (config::GetVerifyOption<bool>(KEY_ENABLE_PASS_VERIFY)) {

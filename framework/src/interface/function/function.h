@@ -387,12 +387,6 @@ struct DyndevFunctionAttribute {
     };
     std::unordered_map<Function*, ValueDependDesc> valueDependDescDict;
 
-    struct GetTensorDataDesc {
-        std::shared_ptr<Tensor> assembleTensor;
-    };
-    std::unordered_map<int, GetTensorDataDesc> getTensorDataDescDict;
-    uint64_t getTensorDataCount;
-
     struct GetTensorDataUsage {
         // In each function, one usage at most correpond to one import
         // Mapping from the GetTensorData index to the View operation
