@@ -86,6 +86,11 @@ target_link_libraries(tile_fwk_server
             -ldl
             $<$<TARGET_EXISTS:intf_pub>:$<BUILD_INTERFACE:intf_pub>>
 )
+target_link_options(tile_fwk_server
+        PRIVATE
+            -Wl,-z,relro
+            -s
+)
 set_target_properties(tile_fwk_server PROPERTIES OUTPUT_NAME tilefwk_backend_server)
 
 if (NOT ENABLE_FEATURE_PYTHON_FRONT_END)
