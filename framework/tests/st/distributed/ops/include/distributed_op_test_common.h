@@ -176,11 +176,6 @@ private:
 };
 
 std::vector<uint64_t> GetHcclContext(const std::vector<std::string>& groupNames);
-
-int64_t GetEleNumFromShape(std::vector<int64_t>& shape);
-
-Tensor CreateTensorFromFile(std::vector<int64_t>& shape, DataType dtype, std::string& file, std::string tname = "");
-
 } // namespace Distributed
 } // namespace npu::tile_fwk
 

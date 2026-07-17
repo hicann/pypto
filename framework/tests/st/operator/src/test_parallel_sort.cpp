@@ -46,53 +46,6 @@ int64_t Capacity(std::vector<int64_t>& shape)
 }
 
 template <typename T = float, typename idxT = int>
-void SortStaticTest(int tileSize)
-{
-    AclInit(nullptr);
-    RuntimeSetDevice(GetDeviceIdByEnvVar());
-
-    std::vector<int> params(2);
-    readInput<int>(GetGoldenDir() + "/params.bin", params);
-    int32_t length = params[0];
-    bool descending = (bool)params[1];
-
-    std::vector<int64_t> shape = {1, length};
-
-    void* xPtr = readToDev<uint32_t>(GetGoldenDir() + "/x.bin", Capacity(shape));
-    uint8_t* yPtr = allocDevAddr(Capacity(shape) * sizeof(float));
-    uint8_t* yIdxPtr = allocDevAddr(Capacity(shape) * sizeof(float));
-
-    Tensor x(DataType::DT_FP32, shape, (uint8_t*)xPtr, "x");
-    Tensor y(DataType::DT_FP32, shape, (uint8_t*)yPtr, "y");
-    Tensor yIdx(DataType::DT_FP32, shape, (uint8_t*)yIdxPtr, "yIdx");
-
-    std::vector<float> yGolden(Capacity(shape));
-    std::vector<float> yIdxGolden(Capacity(shape));
-    readInput(GetGoldenDir() + "/y.bin", yGolden);
-    readInput(GetGoldenDir() + "/yidx.bin", yIdxGolden);
-
-    ConfigManager::Instance();
-    config::SetBuildStatic(true);
-    FUNCTION("Sort", {x, y, yIdx})
-    {
-        TileShape::Current().SetVecTile({1, tileSize});
-        std::tie(y, yIdx) = Sort(x, descending);
-    }
-
-    DevFuncRunner::Run(Program::GetInstance().GetLastFunction());
-
-    std::vector<float> yResult(Capacity(shape));
-    std::vector<float> yIdxResult(Capacity(shape));
-    CopyFromTensor((uint8_t*)yResult.data(), (uint8_t*)yPtr, Capacity(shape) * sizeof(float));
-    CopyFromTensor((uint8_t*)yIdxResult.data(), (uint8_t*)yIdxPtr, Capacity(shape) * sizeof(float));
-    std::cout << "y" << std::endl;
-    bool cmp = resultCmp(yGolden, yResult, 0);
-    std::cout << "yIdx" << std::endl;
-    bool cmpIdx = resultCmp(yIdxGolden, yIdxResult, 0);
-    EXPECT_EQ(cmp && cmpIdx, true);
-}
-
-template <typename T = float, typename idxT = int>
 void SortTest(int tileSize)
 {
     std::vector<int> params(2);
@@ -230,8 +183,6 @@ void TopKTest(int tileSize)
     std::cout << "yIdx ======" << std::endl;
     EXPECT_TRUE(resultCmp<idxT>(yIdxGolden, (idxT*)yIdxData->data(), 0));
 }
-
-TEST_F(ParallelSortSTest, sort_static) { SortStaticTest(256); }
 
 TEST_F(ParallelSortSTest, sort) { SortTest(256); }
 

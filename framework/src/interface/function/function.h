@@ -592,8 +592,6 @@ private:
 
 class Function : public ir::Function {
 public:
-    std::vector<OriArgInfo> GetOpOriginArgsInfo();
-
     friend class ExpandFunction;
     friend class VFFusionPass;
 
@@ -783,8 +781,6 @@ public:
     FunctionCallArgs EndFunction(const std::shared_ptr<TensorSlotScope>& scope);
     /* -------------------------常用改图接口------------------------------ */
     Operation* GetOpByOpMagic(const int opMagic) const;
-    int GetParamIndex(const std::shared_ptr<RawTensor>& rawTensor);
-    void* GetParamAddress(int index);
 
     static bool TensorReuse(const LogicalTensorPtr& dstTensor, const LogicalTensorPtr& srcTensor);
     std::set<Operation*, LogicalTensor::CompareOp> FindConsumers(const Operation& op) const;
@@ -1039,7 +1035,6 @@ private:
     FunctionType functionType_{FunctionType::INVALID};
     GraphType graphType_{GraphType::INVALID};
     std::vector<TensorSlot> explicitArgSlots_;
-    std::vector<void*> explicitArgAddrs_;
 
     std::map<std::string, DynParamInfo> dynParamTable_;
 

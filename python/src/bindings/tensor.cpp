@@ -47,16 +47,12 @@ void BindTensor(py::module_& m)
                  }
              }),
              py::arg("dtype"), py::arg("shape"), py::arg("name") = "", py::arg("format") = TileOpFormat::TILEOP_ND)
-        .def(py::init<DataType, std::vector<int64_t>, uint8_t*, std::string, TileOpFormat>(), py::arg("dtype"),
-             py::arg("shape"), py::arg("data_ptr"), py::arg("name"), py::arg("format") = TileOpFormat::TILEOP_ND)
         .def(py::init<DataType, std::vector<int64_t>, std::string>(), py::arg("dtype"), py::arg("shape"),
              py::arg("name") = "int_init")
         .def(py::init<DataType, std::vector<SymbolicScalar>, std::string>(), py::arg("dtype"), py::arg("shape"),
              py::arg("name") = "SymbolicScalar_init")
         .def(py::init<DataType, std::vector<int64_t>, std::string, TileOpFormat>(), py::arg("dtype"), py::arg("shape"),
              py::arg("name") = "", py::arg("format") = TileOpFormat::TILEOP_ND)
-        .def(py::init<DataType, std::vector<int64_t>, uint8_t*, std::string, TileOpFormat>(), py::arg("dtype"),
-             py::arg("shape"), py::arg("data_ptr"), py::arg("name"), py::arg("format") = TileOpFormat::TILEOP_ND)
         .def(py::init<DataType, std::vector<SymbolicScalar>, std::string, TileOpFormat>(), py::arg("dtype"),
              py::arg("shape"), py::arg("name") = "", py::arg("format") = TileOpFormat::TILEOP_ND)
         .def(py::init<LogicalTensorPtr>(), py::arg("logical_tensor"))

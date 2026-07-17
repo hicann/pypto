@@ -374,9 +374,9 @@ TEST_F(SubgraphToFunctionTest, test_json_dump_and_load_1)
         std::vector<int64_t> input_shape = {shape0, shape1};
         std::vector<int64_t> output_shape = {shape0, k};
         TileShape::Current().SetVecTile({shape0, shape1});
-        Tensor input_a(DT_FP32, input_shape, (uint8_t*)nullptr, "A");
-        auto output = std::make_tuple(Tensor(DT_FP32, output_shape, nullptr, "npu_val"),
-                                      Tensor(DT_FP32, output_shape, nullptr, "resDics"));
+        Tensor input_a(DT_FP32, input_shape, "A");
+        auto output = std::make_tuple(Tensor(DT_FP32, output_shape, "npu_val"),
+                                      Tensor(DT_FP32, output_shape, "resDics"));
         config::SetBuildStatic(true);
         FUNCTION("TOPK_T", {input_a, std::get<0>(output), std::get<1>(output)})
         {
@@ -409,9 +409,9 @@ TEST_F(SubgraphToFunctionTest, test_json_dump_and_load_1_cov)
         std::vector<int64_t> input_shape = {shape0, shape1};
         std::vector<int64_t> output_shape = {shape0, k};
         TileShape::Current().SetVecTile({shape0, shape1});
-        Tensor input_a(DT_FP32, input_shape, (uint8_t*)nullptr, "A");
-        auto output = std::make_tuple(Tensor(DT_FP32, output_shape, nullptr, "npu_val"),
-                                      Tensor(DT_FP32, output_shape, nullptr, "resDics"));
+        Tensor input_a(DT_FP32, input_shape, "A");
+        auto output = std::make_tuple(Tensor(DT_FP32, output_shape, "npu_val"),
+                                      Tensor(DT_FP32, output_shape, "resDics"));
         config::SetBuildStatic(true);
         FUNCTION("TOPK_T", {input_a, std::get<0>(output), std::get<1>(output)})
         {
@@ -465,18 +465,18 @@ TEST_F(SubgraphToFunctionTest, test_json_dump_and_load_2)
 
     PROGRAM("PageAttentionStatic")
     {
-        Tensor qNope(DT_BF16, {b * sq * nq, dn}, (uint8_t*)nullptr, "qNope");
-        Tensor qRope(DT_BF16, {b * sq * nq, dr}, (uint8_t*)nullptr, "qRope");
-        Tensor kNopeCache(DT_BF16, {blockNum * blockSize * nkv, dn}, (uint8_t*)nullptr, "kNopeCache");
-        Tensor kRopeCache(DT_BF16, {blockNum * blockSize * nkv, dr}, (uint8_t*)nullptr, "kRope");
-        Tensor vNopeCache(DT_BF16, {blockNum * blockSize * nkv, dn}, (uint8_t*)nullptr, "vNopeCache");
+        Tensor qNope(DT_BF16, {b * sq * nq, dn}, "qNope");
+        Tensor qRope(DT_BF16, {b * sq * nq, dr}, "qRope");
+        Tensor kNopeCache(DT_BF16, {blockNum * blockSize * nkv, dn}, "kNopeCache");
+        Tensor kRopeCache(DT_BF16, {blockNum * blockSize * nkv, dr}, "kRope");
+        Tensor vNopeCache(DT_BF16, {blockNum * blockSize * nkv, dn}, "vNopeCache");
 
         // blockTable: (b, maxBlockNumPerBatch)
         int maxSeqAllBatch = *(std::max_element(actSeqs.begin(), actSeqs.end()));
         int maxBlockNumPerBatch = CeilDiv(maxSeqAllBatch, blockSize);
         std::vector<std::vector<int>> blockTable(b, std::vector<int>(maxBlockNumPerBatch, 0));
 
-        Tensor attentionOut(DT_FP32, {b * sq * nq, dn}, nullptr, "attentionOut");
+        Tensor attentionOut(DT_FP32, {b * sq * nq, dn}, "attentionOut");
 
         // 计算流程开始
         config::SetBuildStatic(true);

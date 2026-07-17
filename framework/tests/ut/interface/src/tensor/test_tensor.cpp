@@ -31,94 +31,6 @@ public:
     void TearDown() override {}
 };
 
-TEST_F(TestTensor, AssignWithData)
-{
-    std::vector<int64_t> tshape = {100, 100};
-    Tensor a(DT_FP32, tshape, "A");
-    Tensor b(DT_FP32, tshape, "B");
-    auto ptr1 = std::make_unique<uint8_t>(0);
-    auto ptr2 = std::make_unique<uint8_t>(0);
-
-    auto reset = [&a, &b]() {
-        a.SetData(nullptr);
-        b.SetData(nullptr);
-    };
-
-    {
-        reset();
-        b = a;
-        EXPECT_EQ(b.GetData(), nullptr);
-        EXPECT_EQ(a.GetData(), nullptr);
-    }
-
-    {
-        reset();
-        b.SetData(ptr1.get());
-        b = a;
-        EXPECT_EQ(b.GetData(), ptr1.get());
-        EXPECT_EQ(a.GetData(), nullptr);
-    }
-
-    {
-        reset();
-        a.SetData(ptr1.get());
-        b = a;
-        EXPECT_EQ(b.GetData(), ptr1.get());
-        EXPECT_EQ(a.GetData(), ptr1.get());
-    }
-
-    {
-        reset();
-        a.SetData(ptr2.get());
-        b.SetData(ptr2.get());
-        b = a;
-        EXPECT_EQ(b.GetData(), ptr2.get());
-        EXPECT_EQ(a.GetData(), ptr2.get());
-    }
-}
-
-TEST_F(TestTensor, AssignWithData2)
-{
-    std::vector<int64_t> tshape = {100, 100};
-    Tensor b(DT_FP32, tshape, "B");
-    auto ptr1 = std::make_unique<uint8_t>(0);
-    auto ptr2 = std::make_unique<uint8_t>(0);
-
-    auto reset = [&b]() { b.SetData(nullptr); };
-
-    {
-        Tensor a(DT_FP32, tshape, "A");
-        reset();
-        b = std::move(a);
-        EXPECT_EQ(b.GetData(), nullptr);
-    }
-
-    {
-        Tensor a(DT_FP32, tshape, "A");
-        reset();
-        b.SetData(ptr1.get());
-        b = std::move(a);
-        EXPECT_EQ(b.GetData(), ptr1.get());
-    }
-
-    {
-        Tensor a(DT_FP32, tshape, "A");
-        reset();
-        a.SetData(ptr1.get());
-        b = std::move(a);
-        EXPECT_EQ(b.GetData(), ptr1.get());
-    }
-
-    {
-        Tensor a(DT_FP32, tshape, "A");
-        reset();
-        a.SetData(ptr1.get());
-        b.SetData(ptr1.get());
-        b = std::move(a);
-        EXPECT_EQ(b.GetData(), ptr1.get());
-    }
-}
-
 TEST_F(TestTensor, GetShapeTest)
 {
     std::vector<int64_t> tshape = {16, 32, 16, 64};
@@ -183,14 +95,4 @@ TEST_F(TestTensor, InvalidShapeValue)
 {
     std::vector<int64_t> shape = {-2, 16};
     EXPECT_THROW(Tensor(DT_FP32, shape, "A"), std::exception);
-}
-
-TEST_F(TestTensor, SelfAssignment)
-{
-    std::vector<int64_t> shape = {16, 16};
-    Tensor a(DT_FP32, shape, "A");
-    auto ptr = std::make_unique<uint8_t>(0);
-
-    a.SetData(ptr.get());
-    EXPECT_NO_THROW(a = a);
 }

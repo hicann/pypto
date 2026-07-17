@@ -38,27 +38,8 @@ stest:
       # - AttentionPostSTest.b32_s1_nz_bf16_quant
       # - AttentionPostSTest.b32_s2_nz_bf16_quant
 
-  # operator_op_qkvPre:
-  #   cases:
-  #     # - QkvPreOnBoardTest.test_qkvPre_bfloat16_32_2_1_256_256_512
-  #     # - QkvPreOnBoardTest.test_qkvPre_float16_32_32_1_256_256_1536
-  #     # - QkvPreOnBoardTest.test_qkvPre_bfloat16_32_32_1_256_7168_1536
-
-  # operator_op_attention:
-  #   cases:
-  #     # - MlaPrologOnBoardTest.attention_bf16_4_1024_1024_32_256
-
-  operator_op_rope_sub_graph:
-    cases:
-      # - LogicalNotOnBoardTest.test_logicalnot_16_32_fp32
-      # - LogicalNotOnBoardTest.test_logicalnot_16_32_32_fp16
-
   operator_DeepSeekV3_MOE:
     cases:
-      # - MoEGatePart1OnBoardTest.test_moe_gate_part1
-      # - MoEGatePart2OnBoardTest.test_operation_b_2
-      # - MoEGatePart2OnBoardTest.test_operation_b_1024
-      # - MoEPart4OnBoardTest.test_operation_b_2
       # - MoeInferOnbroadTest.test_deepseekMoEInfer
       # - MoeInferOnbroadTest.test_deepseekMoEInfer_singleout
       # - DynamicFFNTest.TestOnbroadDynamicFFN

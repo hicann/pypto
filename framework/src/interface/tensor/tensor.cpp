@@ -122,8 +122,6 @@ Tensor::Tensor(DataType dataType, std::vector<SymbolicScalar> shape, std::string
     rawTensor->UpdateDynRawShape(shape);
 }
 
-void Tensor::SetData(BinDataPtr data) { data_ = data; }
-
 const LogicalTensor& Tensor::operator*() const
 {
     Program::GetInstance().GetTensorSlotManager()->TensorRead(*this);
@@ -152,42 +150,28 @@ std::shared_ptr<LogicalTensor>& Tensor::GetStorage(bool readSlot)
     return storage_;
 }
 
-namespace npu {
-namespace tile_fwk {
-void AssignTensorData(Tensor& lhs, const Tensor& rhs)
+void Tensor::AssignStorage(const Tensor& rhs, std::shared_ptr<LogicalTensor> newStorage, bool addRef)
 {
-    if (lhs.GetData() != nullptr) {
-        if (rhs.GetData() != nullptr) {
-            CHECK(ExternalError::INVALID_OPERATION, lhs.GetData() == rhs.GetData())
-                << "Assign data to a tensor that already contains data is prohibited.";
+    if (storage_ != nullptr && storage_->tensor != nullptr) {
+        storage_->tensor->AddRefCount(-1);
+        newStorage->tensor->symbol = storage_->tensor->symbol;
+    }
+    storage_ = std::move(newStorage);
+    if (storage_ != nullptr) {
+        if (addRef) {
+            storage_->tensor->AddRefCount(1);
         }
-    } else {
-        lhs.SetData(rhs.GetData());
+        Program::GetInstance().GetTensorSlotManager()->TensorRead(rhs);
+        Program::GetInstance().GetTensorSlotManager()->TensorWrite(*this);
     }
 }
-} // namespace tile_fwk
-} // namespace npu
 
 Tensor& Tensor::operator=(const Tensor& rhs)
 {
     if (this == &rhs) {
         return *this;
     }
-    AssignTensorData(*this, rhs);
-    if (storage_ != nullptr && storage_->tensor != nullptr) {
-        rhs.GetStorage()->tensor->symbol = storage_->tensor->symbol;
-    }
-    if (storage_ != nullptr) {
-        storage_->tensor->AddRefCount(-1);
-    }
-    storage_ = rhs.GetStorage();
-    if (storage_ != nullptr) {
-        storage_->tensor->AddRefCount(1);
-    }
-    if (storage_ != nullptr) {
-        Program::GetInstance().GetTensorSlotManager()->TensorRead(rhs);
-        Program::GetInstance().GetTensorSlotManager()->TensorWrite(*this);
-    }
+    AssignStorage(rhs, rhs.GetStorage(), true);
     return *this;
 }
 
@@ -196,19 +180,7 @@ Tensor& Tensor::operator=(Tensor&& rhs) noexcept
     if (this == &rhs) {
         return *this;
     }
-    AssignTensorData(*this, rhs);
-    rhs.SetData(nullptr);
-    if (storage_ != nullptr && storage_->tensor != nullptr) {
-        rhs.GetStorage()->tensor->symbol = storage_->tensor->symbol;
-    }
-    if (storage_ != nullptr) {
-        storage_->tensor->AddRefCount(-1);
-    }
-    storage_ = std::move(rhs.GetStorage());
-    if (storage_ != nullptr) {
-        Program::GetInstance().GetTensorSlotManager()->TensorRead(rhs);
-        Program::GetInstance().GetTensorSlotManager()->TensorWrite(*this);
-    }
+    AssignStorage(rhs, std::move(rhs.GetStorage()), false);
     return *this;
 }
 
@@ -217,7 +189,7 @@ Tensor::Tensor(const Tensor& rhs) : storage_(rhs.GetStorage()), index_(IdGen<IdT
     if (storage_ != nullptr) {
         storage_->tensor->AddRefCount(1);
     }
-    SetData(rhs.GetData());
+
     Program::GetInstance().InsertAliveTensor(this);
     if (storage_ != nullptr) {
         Program::GetInstance().GetTensorSlotManager()->TensorRead(rhs);
@@ -229,8 +201,6 @@ Tensor::Tensor(Tensor&& rhs)
     : storage_(std::move(rhs.GetStorage())), index_(IdGen<IdType::TENSOR_INDEX>::Inst().NewId())
 {
     Program::GetInstance().InsertAliveTensor(this);
-    SetData(rhs.GetData());
-    rhs.SetData(nullptr);
     if (storage_ != nullptr) {
         Program::GetInstance().GetTensorSlotManager()->TensorRead(rhs);
         Program::GetInstance().GetTensorSlotManager()->TensorWrite(*this);

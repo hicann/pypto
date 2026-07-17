@@ -68,16 +68,6 @@ stest:
       - TestMatmul/MatmulOperationTest.TestMatmul/46
       # - GatherInL1Test.gather_in_a_unalign
       # - GatherInL1Test.gather_in_bt_with_valid_shape
-      # - MatmulOnBoardTest.test_mm_float32_32_512_576
-      # - MatmulOnBoardTest.test_mm_bfloat16_64_128_128
-      # - MatmulOnBoardTest.test_mm_bfloat16_f32_64_128_128
-      # - MatmulOnBoardTest.test_mm_float32_128_128_128
-      # - MatmulOnBoardTest.test_mm_float32_32_128_128
-      # - MatmulOnBoardTest.test_mm_unalign_float32_2_128_128
-      # - MatmulOnBoardTest.test_mm_unalign_float32_16_35_32
-      # - MatmulOnBoardTest.test_mm_float32_32_128_64
-      # - MatmulOnBoardTest.test_mm_float32_32_192_64
-      # - MatmulOnBoardTest.test_mm_int8_32_128_64
 
   operation_vector:
     cases:
@@ -308,69 +298,7 @@ stest:
       # - GatherInL1Test.gather_in_a_unalign
       # - GatherInL1Test.gather_in_bt_with_valid_shape
       - GatherInUBTest.gather_in_a_
-      # - GatherOnBoardTest.test_gather_float_64_256_1_64
-      # - GatherOnBoardTest.test_gather_float_1_64_32_1
-      # - GatherOnBoardTest.test_gather_float_32_64_1_32
-      # - GatherOnBoardTest.test_gather_float_32_65_1_33
-      # - GatherOnBoardTest.test_gather_float_64_512_16_64
-      # - GatherOnBoardTest.test_gather_float_8_7168_64
-      # - GatherOnBoardTest.test_gather_float_8_7169_64
-      # - GatherElementOnBoardTest.test_gather_element_float_16_64_8_32_1
-      # - GatherElementOnBoardTest.test_gather_element_float_16_70_8_40_1
       # - TensorIndexOnBoardTest.test_tensorindex_float_64_256_1_64
       # - TensorIndexOnBoardTest.test_tensorindex_float_64_512_16_64
       # - TensorIndexOnBoardTest.test_tensorindex_float_8_7168_64_moe
-      # - ConcatOnBoardTest.test_concat_dim4_float32
-      # - ConcatOnBoardTest.test_concat_dim2_float32_moe
-      # - ConcatOnBoardTest.test_concat_exp_dim4_float32
-      # - ConcatOnBoardTest.test_concat_100_inputs_float32
-      # - ExpandOnBoardTest.test_expand_32_1_to_32_32
-      # - ExpandOnBoardTest.test_expand_32_8_1_to_32_8_32
-      # - ExpandOnBoardTest.test_expand_32_1_to_32_23
-      # - ExpandOnBoardTest.test_expand_32_8_1_to_32_8_23
-      # - ExpandOnBoardTest.test_expand_for_4_dim
-      # - ExpandOnBoardTest.test_expand_1_1_to_1_16384
-      # - AbsOnBoardTest.test_abs_8_4608
-      # - AbsOnBoardTest.test_abs_8_4609
-      # - AbsOnBoardTest.test_abs_1_16384
-      # - OnBoardIFATest.test_32_1_sub_32_1
-      # - OnBoardIFATest.test_32_1_mul_32_1
-      # - OnBoardIFATest.test_32_1_maximum
-      # - OnBoardIFATest.test_32_1_tileop_exp
-      # - OnBoardIFATest.test_32_1_reciprocal
-      # - OnBoardIFATest.test_page_attention_static_low_latency
       #
-      # - CastOnBoard.test_cast_fp32toint32rint_1_4608
-      # - CastOnBoard.test_cast_int32tofp16none_1_4608
-      # - CastOnBoard.test_cast_fp16toint8trunc_1_4608
-      # - CastOnBoard.test_cast_fp16tofp32_unalign
-      # - CastOnBoard.test_cast_fp32toint32rint_1_16384
-      # - RowMaxSumSingleOnBoardTest.test_operation_row_max_single
-      # - RowMaxSumSingleOnBoardTest.test_operation_row_sum_single
-      # - RowMaxSumSingleOnBoardTest.test_operation_row_max_single_3dim
-      # - RowMaxSumSingleOnBoardTest.test_operation_row_sum_single_3dim_mla_rmsNorm
-      # - RowMaxSumSingleOnBoardTest.test_operation_row_max_single_4dim_softmax
-      # - RowMaxSumSingleOnBoardTest.test_operation_row_max_single_4dim_softmax_unalign
-      # - RowMaxSumSingleOnBoardTest.test_operation_row_sum_single_4dim_softmax
-      # - RowMaxSumSingleOnBoardTest.test_operation_row_sum_single_3dim_moe
-      # - RowMaxSumSingleOnBoardTest.test_operation_row_sum_single_2dim_moe
-      # - RowMaxSumSingleOnBoardTest.test_operation_row_sum_single_3dim_big_moe
-      # - RowMaxSumSingleOnBoardTest.test_row_sum_single_4dim_axis0_unalign
-      # - RowMaxSumSingleOnBoardTest.test_row_sum_single_4dim_axis1_unalign
-      # - RowMaxSumSingleOnBoardTest.test_row_sum_single_4dim_axis2_unalign
-      # - RowMaxSumSingleOnBoardTest.test_row_sum_single_unalign
-      # - RowMaxSumSingleOnBoardTest.test_row_sum_single_unalign_4_93
-      # - RowMaxSumSingleOnBoardTest.test_row_sum_single_unalign_4d
-      # - RowMaxSumSingleOnBoardTest.test_row_max_single_unalign
-      # - RowMaxSumSingleOnBoardTest.test_row_max_single_unalign_4_93
-      # - RowMaxSumSingleOnBoardTest.test_row_max_single_unalign_4d
-      # - LLamaLayerTest.llama_1_1_128_128
-      # - LLamaLayerTest.llama_1_1_256_128
-      # - LLamaLayerTest.llama_1_1_512_128
-      # - LLamaLayerTest.llama_1_1_1024_128
-      # - LLamaLayerTest.llama_1_1_4096_128
-      # - TopkOnBoardTest.test_operation_tensor_128_32_32_topk
-      # - TopkOnBoardTest.test_operation_tensor_4_32_8_topk
-      # - TopkOnBoardTest.test_operation_tensor_2_288_15_topk
-      # - TopkOnBoardTest.test_operation_tensor_2_288_15_topk_reverse
-      # - VecdupTest.TestVecDup

@@ -62,23 +62,6 @@ public:
     Tensor(DataType dataType, const Shape& shape, std::string name = "", TileOpFormat format = TileOpFormat::TILEOP_ND);
 
     /**
-     * \brief Construct a new Tensor object with 6 input parameters
-     *
-     * \param dataType : Data type of the tensor.
-     * \param shape : A vector that stores the shape of the tensor.
-     * \param dataPtr : Pointer to the dataPtr of the tensor.
-     * \param name : Name of the tensor.
-     * \param format : Format of the tensor. The default value is TileOpFormat::TILEOP_ND.
-     * \attention : The parameters dataType,shape,dataPtr and name are required parameters.
-     */
-    Tensor(DataType dataType, const Shape& shape, uint8_t* dataPtr, std::string name,
-           TileOpFormat format = TileOpFormat::TILEOP_ND)
-        : Tensor(dataType, shape, name, format)
-    {
-        SetData(dataPtr);
-    }
-
-    /**
      * \brief Construct a new Tensor object
      *
      * \param dataType : Datatype
@@ -235,20 +218,6 @@ public:
     int Id() const { return index_; }
 
     /**
-     * \brief Set the data of Tensor.
-     *
-     * \param data : Pointer to the data of the tensor. The data type is uint8_t.
-     */
-    void SetData(BinDataPtr data);
-
-    /**
-     * \brief Get the data of Tensor.
-     *
-     * \return auto : A pointer to the data of the tensor.
-     */
-    auto GetData() const { return data_; }
-
-    /**
      * \brief Set the name of Tensor.
      *
      * \param name : The name of the tensor.
@@ -276,9 +245,10 @@ public:
     bool IsEmpty() const;
 
 private:
+    void AssignStorage(const Tensor& rhs, std::shared_ptr<LogicalTensor> newStorage, bool addRef);
+
     std::shared_ptr<LogicalTensor> storage_;
     int index_{-1};
-    BinDataPtr data_{};
 };
 
 /**

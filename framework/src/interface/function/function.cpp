@@ -528,29 +528,6 @@ const SubfuncInvokeInfoTy& Function::GetSubFuncInvokeInfo(const size_t i) const
     return *(callAttr->invokeInfo_);
 }
 
-int Function::GetParamIndex(const std::shared_ptr<RawTensor>& rawTensor)
-{
-    if (slotScope_ == nullptr) {
-        return -1;
-    }
-    auto slots = slotScope_->LoopupArgSlot(rawTensor);
-    for (auto slot : slots) {
-        for (int idx = 0; idx < (int)explicitArgSlots_.size(); idx++) {
-            if (slot == explicitArgSlots_[idx]) {
-                return idx;
-            }
-        }
-    }
-    return -1;
-}
-
-void* Function::GetParamAddress(int index)
-{
-    FE_ASSERT(FeError::INVALID_VAL, explicitArgAddrs_.size() > static_cast<uint64_t>(index))
-        << "The param address is not stored.";
-    return explicitArgAddrs_[index];
-}
-
 bool Function::HasCallOperation()
 {
     for (const auto& op : Operations()) {
@@ -663,7 +640,6 @@ void Function::BeginFunction(const std::vector<std::reference_wrapper<const Tens
     auto slotManager = Program::GetInstance().GetTensorSlotManager();
     for (auto& arg : explicitOpArgs) {
         explicitArgSlots_.push_back(TensorSlot::CreateTensor(arg));
-        explicitArgAddrs_.push_back(arg.get().GetData());
     }
 }
 
@@ -3798,52 +3774,6 @@ std::set<Operation*, LogicalTensor::CompareOp> Function::FindProducers(const Ope
         }
     }
     return producers;
-}
-
-std::vector<OriArgInfo> Function::GetOpOriginArgsInfo()
-{
-    std::map<int, OriArgInfo> args;
-    int maxSubscript = 0;
-    for (const auto& incast : inCasts_) {
-        auto subscript = GetParamIndex(incast->GetRawTensor());
-        if (subscript == -1) {
-            continue;
-        }
-        maxSubscript = std::max(maxSubscript, subscript);
-        OriArgInfo info{reinterpret_cast<uint64_t>(GetParamAddress(subscript)), incast->MemorySize(),
-                        incast->GetCachePolicy(CachePolicy::PREFETCH)};
-        if (args.count(subscript) > 0) {
-            FE_ASSERT(args.at(subscript) == info)
-                << "args.at(subscript): " << args.at(subscript).Dump() << ", info: " << info.Dump();
-        } else {
-            args.emplace(subscript, info);
-        }
-    }
-    for (const auto& outcast : outCasts_) {
-        auto subscript = GetParamIndex(outcast->GetRawTensor());
-        if (subscript == -1) {
-            continue;
-        }
-        maxSubscript = std::max(maxSubscript, subscript);
-        OriArgInfo info{reinterpret_cast<uint64_t>(GetParamAddress(subscript)), outcast->MemorySize(),
-                        outcast->GetCachePolicy(CachePolicy::PREFETCH)};
-        if (args.count(subscript) > 0) {
-            FE_ASSERT(args.at(subscript) == info)
-                << "args.at(subscript): " << args.at(subscript).Dump() << ", info: " << info.Dump();
-        } else {
-            args.emplace(subscript, info);
-        }
-    }
-
-    std::vector<OriArgInfo> argsInfo(maxSubscript + 1);
-    for (int idx = 0; idx <= maxSubscript; idx++) {
-        if (args.count(idx) > 0) {
-            argsInfo[idx] = args.at(idx);
-        } else {
-            argsInfo[idx] = OriArgInfo{0, 0, false};
-        }
-    }
-    return argsInfo;
 }
 
 void Function::OpValidCheck(Operation& op) const
