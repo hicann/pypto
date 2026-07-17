@@ -276,46 +276,6 @@ int DeviceRunner::DynamicLaunchSynchronize(RtStream schedStream, RtStream ctrlSt
     return rcAicore + rcAicpu + rcCtrl;
 }
 
-int DeviceRunner::LaunchDynamicAiCore(void* binHandle, RtStream aicoreStream, uint32_t blockDim,
-                                      DeviceKernelArgs* kernelArgs)
-{
-    RtArgsEx rtArgs;
-    memset_s(&rtArgs, sizeof(rtArgs), 0, sizeof(rtArgs));
-    std::vector<void*> kArgs = {nullptr, nullptr, nullptr, nullptr, nullptr, kernelArgs->cfgdata};
-    rtArgs.args = kArgs.data();
-    rtArgs.argsSize = kArgs.size() * sizeof(int64_t);
-    uint64_t tilingKey = OpInfoManager::GetInstance().GetOpTilingKey();
-    RtTaskCfgInfo cfg = {};
-    cfg.schemMode = static_cast<uint8_t>(RtSchemModeType::BATCH);
-    return RuntimeKernelLaunchWithHandleV2(binHandle, tilingKey, blockDim, &rtArgs, nullptr, aicoreStream, &cfg);
-}
-
-int DeviceRunner::LaunchDynamicAiCpu(RtStream aicpuStream, uint32_t aicpuNum, DeviceKernelArgs* kernelArgs)
-{
-#ifdef BUILD_WITH_NEW_CANN
-    return LoadAicpuOp::GetInstance().LaunchBuiltInOp(aicpuStream, kernelArgs, aicpuNum, "PyptoRun");
-#endif
-    // use inputs/outputs store argsaddr/argsSize(aicpu task info + tensorInfo size)
-    auto args = reinterpret_cast<AiCpuArgs*>(kernelArgs->inputs);
-    kernelArgs->inputs = nullptr;
-    args->kArgs = *kernelArgs;
-    RtAicpuArgsEx rtArgs;
-    memset_s(&rtArgs, sizeof(rtArgs), 0, sizeof(rtArgs));
-    rtArgs.args = args;
-    rtArgs.argsSize = reinterpret_cast<uint64_t>(kernelArgs->outputs);
-    rtArgs.kernelNameAddrOffset = offsetof(AiCpuArgs, kernelName);
-    rtArgs.soNameAddrOffset = offsetof(AiCpuArgs, soName);
-    rtArgs.hostInputInfoNum = 1;
-    RtHostInputInfo hostInputInfo;
-    hostInputInfo.addrOffset = reinterpret_cast<int8_t*>(&args->kArgs.inputs) - reinterpret_cast<int8_t*>(args);
-    hostInputInfo.dataOffset = sizeof(AiCpuArgs);
-    rtArgs.hostInputInfoPtr = &hostInputInfo;
-    rtArgs.timeout = dynamic::AICPU_EXECUTE_TIMEOUT;
-    MACHINE_LOGI("Copy flow addrOffset %u argsSize %u", hostInputInfo.addrOffset, hostInputInfo.dataOffset);
-    return RuntimeAicpuKernelLaunchExWithArgs(static_cast<uint32_t>(RtKernelType::AICPU_KFC), "AST_DYN_AICPU", aicpuNum,
-                                              &rtArgs, nullptr, aicpuStream, RT_KERNEL_USE_SPECIAL_TIMEOUT);
-}
-
 void DeviceRunner::InitAiCpuSoBin(DeviceArgs& devArgs)
 {
     std::string fileName = GetPyptoLibPath() + "/libtilefwk_backend_server.so";
@@ -370,126 +330,8 @@ bool DeviceRunner::GetEnableDumpDevPref() const { return args_.aicpuPerfAddr != 
 
 void DeviceRunner::SetDebugEnable() { devicePerf_.SetDebugEnable(); }
 
-void DeviceRunner::RunPost(RtStream aicpuStream, RtStream aicoreStream)
-{
-    AclRtEvent event;
-    int rc = AclRtCreateEventExWithFlag(&event, ACL_EVENT_SYNC);
-    if (rc < 0) {
-        MACHINE_LOGI("CreateEvent failed rc=%d.", rc);
-    }
-
-    rc = AclRtRecordEvent(event, aicpuStream);
-    if (rc < 0) {
-        MACHINE_LOGI("RecordEvent failed rc=%d", rc);
-    }
-
-    rc = AclRtStreamWaitEvent(aicoreStream, event);
-    if (rc < 0) {
-        MACHINE_LOGI("StreamWaitEvent failed rc=%d", rc);
-    }
-}
-
-int DeviceRunner::DynamicKernelLaunch(const KernelLaunchInfo& launchInfo, DeviceKernelArgs* kernelArgs) const
-{
-    HOST_PERF_TRACE(TracePhase::RunDevKernelLaunchAicpuInit);
-    uint64_t startTime = MspfSysCycleTime();
-    auto rc = LaunchDynamicAiCpu(launchInfo.schedStream, launchInfo.aicpuNum, kernelArgs);
-    if (rc < 0) {
-        MACHINE_LOGE(HostLauncherErr::LAUNCH_AICPU_FAILED, "launch aicpu failed %d\n", rc);
-        return rc;
-    }
-    ReportHostProfInfo(launchInfo.aicoreStream, startTime, launchInfo.aicpuNum, MSPF_GE_TASK_TYPE_AI_CPU);
-    HOST_PERF_TRACE(TracePhase::RunDevKernelLaunchAicpuRun);
-
-    startTime = MspfSysCycleTime();
-    rc = LaunchDynamicAiCore(launchInfo.binHandle, launchInfo.aicoreStream, launchInfo.blockDim, kernelArgs);
-    if (rc < 0) {
-        MACHINE_LOGE(HostLauncherErr::LAUNCH_AICPU_FAILED, "launch aicpu failed %d\n", rc);
-        return rc;
-    }
-    ReportHostProfInfo(launchInfo.aicoreStream, startTime, launchInfo.blockDim, MSPF_GE_TASK_TYPE_MIX_AIC, true);
-
-    HOST_PERF_TRACE(TracePhase::RunDevKernelLaunchAIcore);
-    return rc;
-}
-
-int DeviceRunner::DynamicTripleStreamLaunch(const KernelLaunchInfo& launchInfo, DeviceKernelArgs* kernelArgs) const
-{
-    LoadAicpuOp::GetInstance().CustomAiCpuSoLoad();
-    auto args = reinterpret_cast<AiCpuArgs*>(kernelArgs->inputs);
-    kernelArgs->inputs = nullptr;
-    args->kArgs = *kernelArgs;
-    RtAicpuArgsEx rtArgs;
-    memset_s(&rtArgs, sizeof(rtArgs), 0, sizeof(rtArgs));
-    rtArgs.args = args;
-    rtArgs.argsSize = reinterpret_cast<uint64_t>(kernelArgs->outputs);
-    rtArgs.hostInputInfoNum = 1;
-    rtArgs.kernelNameAddrOffset = offsetof(AiCpuArgs, kernelName);
-    rtArgs.soNameAddrOffset = offsetof(AiCpuArgs, soName);
-    RtHostInputInfo hostInputInfo;
-    hostInputInfo.addrOffset = reinterpret_cast<int8_t*>(&args->kArgs.inputs) - reinterpret_cast<int8_t*>(args);
-    hostInputInfo.dataOffset = sizeof(AiCpuArgs);
-    rtArgs.hostInputInfoPtr = &hostInputInfo;
-    MACHINE_LOGI("Copy flow addrOffset %u argsSize %u", hostInputInfo.addrOffset, hostInputInfo.dataOffset);
-    args->kArgs.parameter.runMode = RUN_SPLITTED_STREAM_CTRL;
-
-    uint64_t startTime = MspfSysCycleTime();
-    int rc = RuntimeAicpuKernelLaunchExWithArgs(static_cast<uint32_t>(RtKernelType::AICPU_KFC), "AST_DYN_AICPU", 1,
-                                                &rtArgs, nullptr, launchInfo.ctrlStream, 0);
-    if (rc < 0) {
-        MACHINE_LOGE(HostLauncherErr::LAUNCH_AICPU_FAILED, "triple stream launch ctrl aicpu failed %d\n", rc);
-        return rc;
-    }
-    ReportHostProfInfo(launchInfo.ctrlStream, startTime, 1, MSPF_GE_TASK_TYPE_AI_CPU, false);
-
-    startTime = MspfSysCycleTime();
-    args->kArgs.parameter.runMode = RUN_SPLITTED_STREAM_SCHE;
-    rc = RuntimeAicpuKernelLaunchExWithArgs(static_cast<uint32_t>(RtKernelType::AICPU_KFC), "AST_DYN_AICPU",
-                                            launchInfo.aicpuNum, &rtArgs, nullptr, launchInfo.schedStream, 0);
-    if (rc < 0) {
-        MACHINE_LOGE(HostLauncherErr::LAUNCH_AICPU_FAILED, "triple stream launch sche aicpu failed %d\n", rc);
-        return rc;
-    }
-    ReportHostProfInfo(launchInfo.schedStream, startTime, launchInfo.aicpuNum, MSPF_GE_TASK_TYPE_AI_CPU, false);
-
-    startTime = MspfSysCycleTime();
-    rc = LaunchDynamicAiCore(launchInfo.binHandle, launchInfo.aicoreStream, launchInfo.blockDim, kernelArgs);
-    if (rc < 0) {
-        MACHINE_LOGE(HostLauncherErr::LAUNCH_AICORE_FAILED, "triple stream launch aicore failed %d\n", rc);
-        return rc;
-    }
-    ReportHostProfInfo(launchInfo.aicoreStream, startTime, launchInfo.blockDim, MSPF_GE_TASK_TYPE_MIX_AIC, true);
-
-    RunPost(launchInfo.ctrlStream, launchInfo.aicoreStream);
-    return rc;
-}
-
-int DeviceRunner::DynamicLaunch(const KernelLaunchInfo& launchInfo, DeviceKernelArgs* kernelArgs)
-{
-#ifdef BUILD_WITH_NEW_CANN
-    auto ret = LoadAicpuOp::GetInstance().LaunchPyptoNullOp(launchInfo.schedStream, kernelArgs, 1);
-    if (ret != 0) {
-        MACHINE_LOGE(HostLauncherErr::LAUNCH_BUILTIN_OP_NULL_FAILED, "launch built null failed");
-        return ret;
-    }
-#endif
-    if (!devicePerf_.RunPrepare()) {
-        MACHINE_LOGE(HostLauncherErr::LAUNCH_PREPARE_FAILED, "Prepare failed.");
-        return -1;
-    }
-    HOST_PERF_TRACE(TracePhase::RunDevKernelInitRunPrepare);
-
-    if (launchInfo.isCaptureActivate) {
-        ExchangeCaptureModeGlobal();
-    }
-    if (launchInfo.ctrlStream == nullptr) {
-        return DynamicKernelLaunch(launchInfo, kernelArgs);
-    }
-    return DynamicTripleStreamLaunch(launchInfo, kernelArgs);
-}
-
-void DeviceRunner::ReportHostProfInfo(RtStream stream, uint64_t startTime, uint32_t blockDim, uint16_t taskType,
-                                      bool isCore) const
+void DeviceRunner::ReportHostProfInfo(
+    RtStream stream, uint64_t startTime, uint32_t blockDim, uint16_t taskType, bool isCore) const
 {
     if (hostProf_.GetProfType() == MSPF_COMMANDHANDLE_TYPE_START) {
         uint64_t endTime = MspfSysCycleTime();
@@ -507,18 +349,6 @@ void DeviceRunner::ReportHostProfInfo(RtStream stream, uint64_t startTime, uint3
     if (taskType == MSPF_GE_TASK_TYPE_MIX_AIC) {
         hostProf_.HostProfReportCacheTaskInfo(stream, blockDim, taskType);
     }
-}
-
-int DeviceRunner::DynamicRun(const KernelLaunchInfo& launchInfo, DeviceKernelArgs* kernelArgs)
-{
-    int rc = DynamicLaunch(launchInfo, kernelArgs);
-    if (rc < 0) {
-        return rc;
-    }
-    if (launchInfo.isCaptureActivate) {
-        return 0;
-    }
-    return DynamicLaunchSynchronize(launchInfo.schedStream, launchInfo.ctrlStream, launchInfo.aicoreStream);
 }
 
 int DeviceRunner::Init()

@@ -27,7 +27,9 @@
 #include "machine/runtime/launcher/device_launcher.h"
 #include "machine/runtime/launcher/cell_match_dynamic.h"
 #include "machine/runtime/launcher/device_launcher_binding.h"
+#include "machine/runtime/runner/kernel_binary.h"
 #include "machine/runtime/runner/runtime_utils.h"
+#include "interface/program/program.h"
 #include "cost_model/simulation/backend.h"
 
 using namespace npu::tile_fwk::dynamic;
@@ -251,11 +253,12 @@ private:
         }
     }
 
-    void DumpTensorContents(const DeviceKernelArgs& kArgs, const std::vector<RawTensorDataPtr>& inputs,
-                            const std::vector<RawTensorDataPtr>& outputs)
+    void DumpTensorContents(
+        int64_t* workspace, const std::vector<RawTensorDataPtr>& inputs,
+        const std::vector<RawTensorDataPtr>& outputs)
     {
         auto* devProg = GetDevProg(function_);
-        uint8_t* dumpTensorWsPtr = reinterpret_cast<uint8_t*>(kArgs.workspace) + devProg->memBudget.Total() -
+        uint8_t* dumpTensorWsPtr = reinterpret_cast<uint8_t*>(workspace) + devProg->memBudget.Total() -
                                    devProg->memBudget.debug.dumpTensor;
         uint64_t dumpTensorWsUsed = 0;
         RuntimeMemcpy(&dumpTensorWsUsed, sizeof(uint64_t), dumpTensorWsPtr, sizeof(uint64_t),
@@ -306,24 +309,46 @@ private:
             return;
         }
         CheckDeviceId();
-        MemoryHelper memoryHelper(false);
-        DeviceKernelArgs kArgs;
-        auto dynAttr = InitKernelRuntime(memoryHelper, kArgs);
-        RefillDynamicBudgetsAndSyncCfg(memoryHelper, kArgs, inputs, outputs, false);
-        KernelLaunchInfo launchInfo(GetContextScheStream(), GetContextCtrlStream(), GetContextAiCoreStream(),
-                                    config_.blockdim, config_.aicpuNum);
-        launchInfo.binHandle = RegisterKernelBin(function_->GetDyndevAttribute()->kernelBinary);
+
+        auto kernel = std::make_unique<KernelBinary>(Program::GetInstance().GetFunctionSharedPtr(function_));
         DeviceRunner::Get().SetHostProfFunction(function_);
+
+        MemoryHelper memoryHelper(false);
+        std::vector<DeviceTensorData> inputList;
+        std::vector<DeviceTensorData> outputList;
+        std::tie(inputList, outputList) = BuildInputOutputFromHost(memoryHelper, inputs, outputs);
+
+        std::vector<DeviceTensorData> tensors;
+        tensors.reserve(inputList.size() + outputList.size());
+        tensors.insert(tensors.end(), inputList.begin(), inputList.end());
+        tensors.insert(tensors.end(), outputList.begin(), outputList.end());
+        int64_t wsSize = kernel->GetWorkspaceSize(tensors);
+        int64_t* wsAddr = nullptr;
+        if (wsSize > 0) {
+            wsAddr = reinterpret_cast<int64_t*>(memoryHelper.AllocDev(static_cast<size_t>(wsSize), nullptr));
+            if (wsAddr == nullptr) {
+                MACHINE_LOGE(RtErr::RT_MALLOC_FAILED, "Malloc dev failed!!!");
+                return;
+            }
+        }
+        
+
+        auto aicoreStream = GetContextAiCoreStream();
+        uint8_t* ctrlFlowCache = DeviceLauncher::PrepareLaunch(kernel.get(), tensors, nullptr, LaunchMode::DEVICE_RT);
+
         for (int i = 0; i < config_.repeatNum; i++) {
-            InitKernelInOuts(memoryHelper, kArgs, inputs, outputs, false, dynAttr->disableL2List);
-            rc = DeviceRunner::Get().DynamicRun(launchInfo, &kArgs);
+            rc = DeviceLauncher::LaunchKernel(aicoreStream, ctrlFlowCache, kernel.get(), wsAddr, tensors, false, 0);
+            EXPECT_EQ(rc, 0);
+
+            rc = DeviceRunner::Get().DynamicLaunchSynchronize(
+                GetContextScheStream(), GetContextCtrlStream(), aicoreStream);
             EXPECT_EQ(rc, 0);
             bool debugEnable = config::GetDebugOption<int64_t>(CFG_RUNTIME_DBEUG_MODE) == CFG_DEBUG_ALL;
             DeviceRunner::Get().SyncProfData(debugEnable);
         }
         CopyBackInOut(memoryHelper, inputs, outputs);
         if (IsDumpTensorEnable()) {
-            DumpTensorContents(kArgs, inputs, outputs);
+            DumpTensorContents(wsAddr, inputs, outputs);
         }
     }
 

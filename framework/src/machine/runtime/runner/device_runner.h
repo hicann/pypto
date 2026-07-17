@@ -43,8 +43,6 @@ struct KernelLaunchInfo {
 class DeviceRunner {
 public:
     static DeviceRunner& Get();
-    int DynamicRun(const KernelLaunchInfo& launchInfo, DeviceKernelArgs* kernelArgs);
-    int DynamicLaunch(const KernelLaunchInfo& launchInfo, DeviceKernelArgs* kernelArgs);
     static int DynamicLaunchSynchronize(RtStream schedStream, RtStream ctrlStream, RtStream aicoreStream);
 
     void SetHostProfFunction(Function* function,
@@ -69,14 +67,7 @@ private:
     static void GetAicoreRegs(const ArchInfo archInfo, std::vector<int64_t>& regs, std::vector<int64_t>& regsPmu);
     static int InitDeviceArgsCore(DeviceArgs& args);
     static void InitAicpuPerfAddr(DeviceArgs& args);
-    static int LaunchAicpuServerInit(int64_t* devArgsAddr);
-    /**************DynamicFunction**************/
-    int DynamicKernelLaunch(const KernelLaunchInfo& launchInfo, DeviceKernelArgs* kernelArgs) const;
-    int DynamicTripleStreamLaunch(const KernelLaunchInfo& launchInfo, DeviceKernelArgs* kernelArgs) const;
-    static int LaunchDynamicAiCore(void* binHandle, RtStream aicoreStream, uint32_t blockDim,
-                                   DeviceKernelArgs* kernelArgs);
-    static int LaunchDynamicAiCpu(RtStream aicpuStream, uint32_t aicpuNum, DeviceKernelArgs* kernelArgs);
-    static void RunPost(RtStream aicpuStream, RtStream aicoreStream);
+    static int LaunchAicpuServerInit(int64_t *devArgsAddr);
 
 private:
     std::once_flag once_;

@@ -79,23 +79,6 @@ TEST_F(TestDynamicDeviceRunner, TestInitArgs)
     runner.SyncProfData(false);
 }
 
-TEST_F(TestDynamicDeviceRunner, TestDynamicRun)
-{
-    npu::tile_fwk::DeviceRunner runner;
-    [[maybe_unused]] DeviceArgs args;
-    args.nrAic = 2;
-    args.nrAiv = 2;
-    [[maybe_unused]] npu::tile_fwk::DeviceKernelArgs taskArgs;
-    std::vector<uint8_t> tensorInfo(sizeof(AiCpuArgs));
-    taskArgs.inputs = reinterpret_cast<int64_t*>(tensorInfo.data());
-    taskArgs.outputs = 0;
-    runner.args_.nrAic = 2;
-    runner.args_.nrAiv = 2;
-    KernelLaunchInfo launchInfo(GetContextScheStream(), GetContextCtrlStream(), GetContextAiCoreStream(), 2, 5);
-    int ret = runner.DynamicRun(launchInfo, &taskArgs);
-    EXPECT_EQ(ret, 0);
-}
-
 TEST_F(TestDynamicDeviceRunner, test_pypto_kernel_server_null)
 {
     DeviceKernelArgs pyptoKernelArgs;

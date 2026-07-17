@@ -54,9 +54,6 @@ KernelBinary::KernelBinary(std::shared_ptr<Function> func) : dynFunc(func)
         DeviceLauncher::FillDeviceKernelArgs(deviceMemoryUtils, dynAttr->devProgBinary, aicpuArgs->kArgs,
                                              dynAttr->commGroupNames);
     }
-    runtimeDynamicCellMatchAddr_ = devProg->devArgs.dynamicCellMatchAddr;
-    runtimeDynamicCellMatchCapacity_ = devProg->devArgs.dynamicCellMatchCapacity;
-    lastPreparedDynamicCellMatchBytes_ = runtimeDynamicCellMatchCapacity_;
     kernelName_ = "PyPTO_" + dynFunc->GetOriginalRawName();
 }
 
@@ -111,7 +108,10 @@ uint8_t* KernelBinary::BuildControlFlowCache(std::vector<DeviceTensorData>& inpu
     devProg->ctrlFlowCacheSize = DEFAULT_STITCH_CFGCACHE_SIZE;
     config.isCacheOriginShape = isOriginShape;
     EmulationMemoryUtils memUtils;
-    int ret = EmulationLauncher::BuildControlFlowCache(dynFunc.get(), memUtils, inputs, {}, &ctrlCache, config);
+    size_t inputCount = dynAttr->startArgsInputTensorList.size();
+    std::vector<DeviceTensorData> inputList(inputs.begin(), inputs.begin() + inputCount);
+    std::vector<DeviceTensorData> outputList(inputs.begin() + inputCount, inputs.end());
+    int ret = EmulationLauncher::BuildControlFlowCache(dynFunc.get(), memUtils, inputList, outputList, &ctrlCache, config);
     if (ret != 0) {
         COMPILER_LOGE(CtrlErr::DEVICE_TASK_BUILD_FAILED, "control flow cache failed %d", ret);
         return nullptr;
@@ -149,6 +149,8 @@ int64_t KernelBinary::GetWorkspaceSize(const std::vector<DeviceTensorData>& tens
         if (devProg->memBudget.metadata.dynamicCellMatch != lastPreparedDynamicCellMatchBytes_) {
             RefreshRuntimeDynamicCellMatchMeta(devProg->memBudget.metadata.dynamicCellMatch);
             lastPreparedDynamicCellMatchBytes_ = devProg->memBudget.metadata.dynamicCellMatch;
+            devProg->devArgs.dynamicCellMatchAddr = runtimeDynamicCellMatchAddr_;
+            devProg->devArgs.dynamicCellMatchCapacity = runtimeDynamicCellMatchCapacity_;
         }
         PatchHostDynamicCellMatchAddr(devProg);
         workspaceSize = devProg->memBudget.Total();
@@ -173,8 +175,9 @@ std::pair<AiCpuArgs*, int64_t> KernelBinary::BuildKernelArgs(const std::vector<D
     auto aicpuArgs = (AiCpuArgs*)aicpuArgBuf.data();
     int64_t* inputp = (int64_t*)(aicpuArgs + 1);
     auto tensorData = (DevTensorData*)(inputp + 2);
-    MACHINE_ASSERT((int64_t)tensors.size() == inputp[0]) << "mismatch tensor size";
-    for (size_t i = 0; i < (size_t)inputp[0]; ++i) {
+    const int64_t totalTensorCount = inputp[0] + inputp[1];
+    MACHINE_ASSERT((int64_t)tensors.size() == totalTensorCount) << "mismatch tensor size";
+    for (size_t i = 0; i < (size_t)totalTensorCount; ++i) {
         auto& t = tensors[i];
         auto addr = (uint64_t)t.GetAddr();
         if (unlikely(addr && disableL2List.size() && disableL2List[i])) {
@@ -284,9 +287,15 @@ void KernelBinary::InitCachedArgs()
     l2Offset = GetRuntimeL2Offset();
 
     for (auto& t : dynAttr->startArgsInputLogicalTensorList) {
+        if (t == nullptr) {
+            continue;
+        }
         argTypes.emplace_back(t->Datatype(), nullptr, t->GetShape(), t->Format());
     }
     for (auto& t : dynAttr->startArgsOutputLogicalTensorList) {
+        if (t == nullptr) {
+            continue;
+        }
         argTypes.emplace_back(t->Datatype(), nullptr, t->GetShape(), t->Format());
     }
 }

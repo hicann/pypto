@@ -88,8 +88,8 @@ int DeviceLauncher::RunWithProfile(RtStream aicoreStream, RtStream aicpuStream, 
 
 int DeviceLauncher::DeviceLaunchOnceWithDeviceTensorData(
     Function* function, const std::vector<DeviceTensorData>& inputList, const std::vector<DeviceTensorData>& outputList,
-    RtStream aicoreStream, bool streamSynchronize, CachedOperator* cachedOperator,
-    DevControlFlowCache* inputDevCtrlCache, const DeviceLauncherConfig& config)
+    RtStream aicoreStream, bool streamSynchronize, [[maybe_unused]] CachedOperator* cachedOperator,
+    [[maybe_unused]] DevControlFlowCache* inputDevCtrlCache, const DeviceLauncherConfig& config)
 {
     MACHINE_LOGI("Kernel Launch");
     aicoreStream = aicoreStream == nullptr ? GetContextAiCoreStream() : aicoreStream;
@@ -115,49 +115,36 @@ int DeviceLauncher::DeviceLaunchOnceWithDeviceTensorData(
     HOST_PERF_TRACE(TracePhase::RunDeviceInit);
 
     CheckAscendDriverVersionOnboard();
+    CheckDeviceId();
 
-    if (cachedOperator == nullptr) {
-        // Not python cached operator mode, consider kernel reuse mode
-        if (IsDevRunCacheKernelEnable(function)) {
-            cachedOperator = GetDevRunCacheOperator(function);
-        }
-    }
+    auto kernel = std::make_unique<KernelBinary>(Program::GetInstance().GetFunctionSharedPtr(function));
 
-    if (function != nullptr && function->GetDyndevAttribute() != nullptr) {
-        launchInfo.binHandle = *reinterpret_cast<RtBinHandle*>(CachedOperator::GetBinHandleHolder(cachedOperator));
-        if (launchInfo.binHandle == nullptr) {
-            launchInfo.binHandle = RegisterKernelBin(function->GetDyndevAttribute()->kernelBinary);
-        }
-        if (launchInfo.binHandle == nullptr) {
-            MACHINE_LOGE(HostLauncherErr::REGISTER_KERNEL_FAILED, "Register kernel bin failed.");
+    std::vector<DeviceTensorData> tensors;
+    tensors.reserve(inputList.size() + outputList.size());
+    tensors.insert(tensors.end(), inputList.begin(), inputList.end());
+    tensors.insert(tensors.end(), outputList.begin(), outputList.end());
+
+    int64_t wsSize = kernel->GetWorkspaceSize(tensors);
+    HOST_PERF_TRACE(TracePhase::RunDevInitInOutTensor);
+
+    int64_t* wsAddr = nullptr;
+    if (wsSize > 0) {
+        DeviceMemoryUtils devMem;
+        wsAddr = reinterpret_cast<int64_t*>(devMem.AllocDev(static_cast<size_t>(wsSize), nullptr));
+        if (wsAddr == nullptr) {
+            MACHINE_LOGE(RtErr::RT_MALLOC_FAILED, "Failed to alloc workspace of size %ld", wsSize);
             return -1;
         }
     }
-    HOST_PERF_TRACE(TracePhase::RunDevRegistKernelBin);
 
-    auto dynAttr = function->GetDyndevAttribute();
-    CheckDeviceId();
-    DeviceKernelArgs kArgs;
-    DeviceLauncherConfigFillDeviceInfo(config);
-    DeviceMemoryUtils devMemoryUtilis;
-    DeviceInitDistributedContext(devMemoryUtilis, dynAttr->commGroupNames, kArgs);
-
-    HOST_PERF_TRACE(TracePhase::RunDevEnvReady);
-    DeviceInitTilingData(devMemoryUtilis, kArgs, dynAttr->devProgBinary, inputDevCtrlCache, config, cachedOperator);
-    HOST_PERF_TRACE(TracePhase::RunDevInitTiling);
-
-    SetDevRunCacheKernel(function, (uint8_t*)kArgs.cfgdata);
-    DeviceInitKernelInOuts(devMemoryUtilis, kArgs, inputList, outputList, dynAttr->disableL2List);
-
-    HOST_PERF_TRACE(TracePhase::RunDevInitInOutTensor);
+    uint8_t* ctrlFlowCache = PrepareLaunch(kernel.get(), tensors, nullptr, LaunchMode::DEVICE_RT);
 
     DataDumpInit();
-    launchInfo.blockDim = config.blockdim;
-    launchInfo.aicpuNum = config.aicpuNum;
-    rc = DeviceRunner::Get().DynamicLaunch(launchInfo, &kArgs);
+    rc = LaunchKernel(aicoreStream, ctrlFlowCache, kernel.get(), wsAddr, tensors, false, 0);
     if (rc < 0) {
         return rc;
     }
+
     rc = RunWithProfile(aicoreStream, launchInfo.schedStream, launchInfo.isCaptureActivate);
     if (rc < 0) {
         return rc;
