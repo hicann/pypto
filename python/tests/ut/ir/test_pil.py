@@ -782,3 +782,26 @@ def test_pil_multi_and():
 def test_has_scalar_symbolic_scalar():
     assert has_scalar([pypto.symbolic_scalar("n"), 1]) is True
     assert has_scalar([1, 2, 3]) is False
+
+
+def test_custom_class():
+    from dataclasses import dataclass
+
+    @dataclass
+    class SliceContext:
+        tile: tuple[int, int]
+
+    def make_view_2d(a, ctx):
+        return pypto.view(a, ctx.tile, [0, 0])
+
+    def foo(a, b):
+        for _ in pypto.loop(a.shape[0] // 16):
+            pypto.set_vec_tile_shapes(16, 16)
+            ctx = SliceContext(tile=(16, 16))
+            ta = make_view_2d(a, ctx)
+            b[0:, 0:] = ta
+
+    x = pypto.Tensor((-1, 32), pypto.DT_FP32, 'x')
+    y = pypto.Tensor((-1, 32), pypto.DT_FP32, 'y')
+    func = pil.compile(foo, x, y)
+    info(func)

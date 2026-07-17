@@ -29,6 +29,9 @@
 #include "ir/transforms/printer.h"
 #include "ir/type.h"
 #include "test_ir.h"
+#include "tilefwk/symbolic_scalar.h"
+
+using npu::tile_fwk::SymbolicScalar;
 
 namespace pypto {
 namespace ir {
@@ -605,17 +608,38 @@ TEST_F(IRPrinterTest, TestPrintTensorOpStmtMultiResult)
     EXPECT_EQ(str, "[r1, r2], tok = split(1)");
 }
 
-TEST_F(IRPrinterTest, TestPrintTensorOpStmtWithTokensAndAttrs)
+TEST_F(IRPrinterTest, TestPrintAttributes)
 {
     auto res = Var_("res");
     auto tok = Var_("tok");
     auto arg = std::make_shared<ConstInt>(1, DataType::INT32, Sp());
     auto t1 = Var_("t1");
+    auto x = SymbolicScalar("x");
+
+    std::vector<std::pair<std::string, std::any>> attrs = {
+        {"axis", 0},
+        {"set_pipe", 1},
+        {"wait_pipe", 1},
+        {"uint64_val", 1UL},
+        {"double_val", 1.0},
+        {"float_val", 1.0f},
+        {"bool_val", true},
+        {"str_val", "hello"},
+        {"datatype", DataType::INT32},
+        {"memoryspace", MemorySpace::DDR},
+        {"SymbolicScalar", x},
+        {"vector_int", std::vector<int>{1, 2, 3}},
+        {"vector_symbolic_scalar", std::vector<SymbolicScalar>{x, x, x}},
+        {"unknown", t1}};
     auto stmt = std::make_shared<TensorOpStmt>(std::vector<VarPtr>{res}, tok, "op", std::vector<ExprPtr>{arg},
-                                               std::vector<VarPtr>{t1},
-                                               std::vector<std::pair<std::string, std::any>>{{"axis", 0}}, Sp());
+                                               std::vector<VarPtr>{t1}, attrs, Sp());
     auto str = Print(stmt);
-    EXPECT_EQ(str, "res, tok = op(1, tokens=[t1], attrs=[axis=0])");
+    EXPECT_EQ(
+        str,
+        "res, tok = op(1, tokens=[t1], attrs=[\"axis\": 0, \"set_pipe\": ir.PipeType.MTE2, \"wait_pipe\": "
+        "ir.PipeType.MTE2, \"uint64_val\": 1, \"double_val\": 1.0, \"float_val\": 1.0, \"bool_val\": True, "
+        "\"str_val\": Unsupported, \"datatype\": ir.INT32, \"memoryspace\": ir.MemorySpace.DDR, \"SymbolicScalar\": "
+        "x, \"vector_int\": [1, 2, 3], \"vector_symbolic_scalar\": [x, x, x], \"unknown\": Unsupported])");
 }
 
 } // namespace ir

@@ -2312,64 +2312,36 @@ class Pass:
 
     @staticmethod
     def convert_to_ssa() -> Pass:
-        """Convert the program to SSA form.
-
-        Returns:
-            None
-        """
+        """Convert the program to SSA form."""
 
     @staticmethod
     def init_mem_ref() -> Pass:
-        """Initialize memory references.
-
-        Returns:
-            None
-        """
+        """Initialize memory references."""
 
     @staticmethod
     def aggressive_dce() -> Pass:
-        """Eliminate dead code.
-
-        Returns:
-            None
-        """
+        """Eliminate dead code."""
 
     @staticmethod
     def canonicalize() -> Pass:
-        """Canonicalize the IR.
-
-        Returns:
-            None
-        """
+        """Canonicalize the IR."""
 
     @staticmethod
     def token_pass() -> Pass:
-        """Add WAR/WAW token dependencies.
-
-        Returns:
-            None
-        """
+        """Add WAR/WAW token dependencies."""
 
     @staticmethod
     def merge_stmts_into_if() -> Pass:
-        """Merge statements into if statements.
-
-        Returns:
-            None
-        """
+        """Merge statements into if statements."""
 
     @staticmethod
     def create_root_functions() -> Pass:
-        """Create root functions.
+        """Create root functions."""
 
-        Returns:
-            None
-        """
+    @staticmethod
+    def finalize_dynamic_function() -> Pass:
+        """Finalize dynamic functions."""
 
     @staticmethod
     def run_verifier() -> Pass:
-        """Run the verifier on the program.
-
-        Returns:
-            None
-        """
+        """Run the verifier on the program."""

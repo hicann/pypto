@@ -774,9 +774,9 @@ std::vector<StmtPtr> RebuildMergedStmtsRecursively(const std::vector<StmtPtr>& m
             MergeIfStmts(ifStmt, result, subst, exVarNames, condPath);
         } else if (auto forStmt = As<ForStmt>(cur)) {
             auto conds = condPath;
-            if (forStmt->HasAttr("constraints")) {
-                auto constraints = forStmt->GetAttr<std::vector<SymbolicScalar>>("constraints");
-                conds.insert(conds.end(), constraints.begin(), constraints.end());
+            if (forStmt->HasAttr("_loop_conds")) {
+                auto loopConds = forStmt->GetAttr<std::vector<SymbolicScalar>>("_loop_conds");
+                conds.insert(conds.end(), loopConds.begin(), loopConds.end());
             }
             auto body = MergeStmtsIntoIfStmtImpl(forStmt->body_, exVarNames, conds);
             result.push_back(std::make_shared<ForStmt>(forStmt->loopVar_, forStmt->start_, forStmt->stop_,

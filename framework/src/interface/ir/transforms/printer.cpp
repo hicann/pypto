@@ -265,6 +265,57 @@ const char* TensorLayoutToPythonName(TensorLayout layout)
     return sep ? sep + 2 : full;
 }
 
+static void PrintKwargValue(std::ostream& stream, const std::string& prefix, const std::string& key,
+                            const std::any& value)
+{
+    stream << std::quoted(key) << ": ";
+
+    if (value.type() == typeid(int)) {
+        auto intVal = AnyCast<int>(value, key);
+        if (key == "set_pipe" || key == "wait_pipe") {
+            stream << prefix << ".PipeType." << PipeTypeToString(static_cast<PipeType>(intVal));
+        } else {
+            stream << intVal;
+        }
+    } else if (value.type() == typeid(uint64_t)) {
+        stream << (AnyCast<uint64_t>(value));
+    } else if (value.type() == typeid(double)) {
+        stream << FormatFloatLiteral(AnyCast<double>(value, key));
+    } else if (value.type() == typeid(float)) {
+        stream << FormatFloatLiteral(static_cast<double>(AnyCast<float>(value, key)));
+    } else if (value.type() == typeid(bool)) {
+        stream << (AnyCast<bool>(value, key) ? "True" : "False");
+    } else if (value.type() == typeid(std::string)) {
+        stream << std::quoted(AnyCast<std::string>(value, key));
+    } else if (value.type() == typeid(DataType)) {
+        stream << prefix << "." << DTypeToString(AnyCast<DataType>(value, key));
+    } else if (value.type() == typeid(MemorySpace)) {
+        stream << prefix << ".MemorySpace." << MemorySpaceToString(AnyCast<MemorySpace>(value, key));
+    } else if (value.type() == typeid(SymbolicScalar)) {
+        stream << AnyCast<SymbolicScalar>(value, key).Dump();
+    } else if (value.type() == typeid(std::vector<int>)) {
+        const auto& values = AnyCast<std::vector<int>>(value, key);
+        stream << "[";
+        for (size_t j = 0; j < values.size(); ++j) {
+            if (j != 0)
+                stream << ", ";
+            stream << values[j];
+        }
+        stream << "]";
+    } else if (value.type() == typeid(std::vector<SymbolicScalar>)) {
+        const auto& values = AnyCast<std::vector<SymbolicScalar>>(value, key);
+        stream << "[";
+        for (size_t j = 0; j < values.size(); ++j) {
+            if (j != 0)
+                stream << ", ";
+            stream << values[j].Dump();
+        }
+        stream << "]";
+    } else {
+        stream << "Unsupported";
+    }
+}
+
 void PrintIterArgNames(std::ostringstream& stream, const std::vector<IterArgPtr>& iter_args)
 {
     stream << "(";
@@ -319,44 +370,12 @@ void PrintForRangeHeader(std::ostringstream& stream, const std::string& prefix, 
     if (!op->attrs_.empty()) {
         stream << ", attrs={";
         for (size_t i = 0; i < op->attrs_.size(); ++i) {
+            const auto& [key, value] = op->attrs_[i];
+            if (key.size() > 1 && key[0] == '_') // internal attrs, skip it
+                continue;
             if (i != 0)
                 stream << ", ";
-            const auto& [key, value] = op->attrs_[i];
-            stream << std::quoted(key) << ": ";
-            if (value.type() == typeid(int)) {
-                stream << AnyCast<int>(value, key);
-            } else if (value.type() == typeid(double)) {
-                stream << FormatFloatLiteral(AnyCast<double>(value, key));
-            } else if (value.type() == typeid(float)) {
-                stream << FormatFloatLiteral(static_cast<double>(AnyCast<float>(value, key)));
-            } else if (value.type() == typeid(bool)) {
-                stream << (AnyCast<bool>(value, key) ? "True" : "False");
-            } else if (value.type() == typeid(std::string)) {
-                stream << std::quoted(AnyCast<std::string>(value, key));
-            } else if (value.type() == typeid(SymbolicScalar)) {
-                stream << AnyCast<SymbolicScalar>(value, key).Dump();
-            } else if (value.type() == typeid(std::vector<int>)) {
-                const auto& values = AnyCast<std::vector<int>>(value, key);
-                stream << "[";
-                for (size_t j = 0; j < values.size(); ++j) {
-                    if (j != 0)
-                        stream << ", ";
-                    stream << values[j];
-                }
-                stream << "]";
-            } else if (value.type() == typeid(std::vector<SymbolicScalar>)) {
-                const auto& values = AnyCast<std::vector<SymbolicScalar>>(value, key);
-                stream << "[";
-                for (size_t j = 0; j < values.size(); ++j) {
-                    if (j != 0)
-                        stream << ", ";
-                    stream << values[j].Dump();
-                }
-                stream << "]";
-            } else {
-                INTERNAL_CHECK(false) << "Unsupported for-loop attrs value type for key '" << key
-                                      << "': " << DemangleTypeName(value.type().name());
-            }
+            PrintKwargValue(stream, prefix, key, value);
         }
         stream << "}";
     }
@@ -433,7 +452,6 @@ private:
     void PrintFunctionBinaryOp(const BinaryExprPtr& op, const char* func_name);
     void PrintChild(const ExprPtr& parent, const ExprPtr& child, bool is_left);
     void PrintCallKwargs(const CallPtr& op, bool need_comma);
-    void PrintKwargValue(const std::string& key, const std::any& value);
 
     // Shape printing helper
     void PrintShapeDims(std::ostringstream& oss, const std::vector<ExprPtr>& shape);
@@ -627,63 +645,6 @@ void IRPrinter::PrintFunctionBinaryOp(const BinaryExprPtr& op, const char* func_
     stream_ << ")";
 }
 
-void IRPrinter::PrintKwargValue(const std::string& key, const std::any& value)
-{
-    if (value.type() == typeid(int)) {
-        int int_val = AnyCast<int>(value, "printing kwarg: " + key);
-        if (key == "set_pipe" || key == "wait_pipe") {
-            stream_ << prefix_ << ".PipeType." << PipeTypeToString(static_cast<PipeType>(int_val));
-        } else {
-            stream_ << int_val;
-        }
-    } else if (value.type() == typeid(bool)) {
-        stream_ << (AnyCast<bool>(value, "printing kwarg: " + key) ? "True" : "False");
-    } else if (value.type() == typeid(std::string)) {
-        stream_ << std::quoted(AnyCast<std::string>(value, "printing kwarg: " + key));
-    } else if (value.type() == typeid(double)) {
-        stream_ << FormatFloatLiteral(AnyCast<double>(value, "printing kwarg: " + key));
-    } else if (value.type() == typeid(float)) {
-        stream_ << FormatFloatLiteral(static_cast<double>(AnyCast<float>(value, "printing kwarg: " + key)));
-    } else if (value.type() == typeid(DataType)) {
-        stream_ << prefix_ << "." << DTypeToString(AnyCast<DataType>(value, "printing kwarg: " + key));
-    } else if (value.type() == typeid(MemorySpace)) {
-        stream_ << prefix_ << ".MemorySpace."
-                << MemorySpaceToString(AnyCast<MemorySpace>(value, "printing kwarg: " + key));
-    } else if (value.type() == typeid(std::vector<int>)) {
-        const auto& values = AnyCast<std::vector<int>>(value, "printing kwarg: " + key);
-        stream_ << "[";
-        for (size_t i = 0; i < values.size(); ++i) {
-            if (i > 0)
-                stream_ << ", ";
-            stream_ << values[i];
-        }
-        stream_ << "]";
-    } else if (value.type() == typeid(std::vector<std::string>)) {
-        const auto& values = AnyCast<std::vector<std::string>>(value, "printing kwarg: " + key);
-        stream_ << "[";
-        for (size_t i = 0; i < values.size(); ++i) {
-            if (i > 0)
-                stream_ << ", ";
-            stream_ << std::quoted(values[i]);
-        }
-        stream_ << "]";
-    } else if (value.type() == typeid(SymbolicScalar)) {
-        stream_ << (AnyCast<SymbolicScalar>(value, "printing kwarg: " + key)).Dump();
-    } else if (value.type() == typeid(std::vector<SymbolicScalar>)) {
-        const auto& values = AnyCast<std::vector<SymbolicScalar>>(value, "printing kwarg: " + key);
-        stream_ << "[";
-        for (size_t i = 0; i < values.size(); ++i) {
-            if (i > 0)
-                stream_ << ", ";
-            stream_ << values[i].Dump();
-        }
-        stream_ << "]";
-    } else {
-        INTERNAL_CHECK(false) << "Unsupported kwarg value type for key '" << key
-                              << "': " << DemangleTypeName(value.type().name());
-    }
-}
-
 void IRPrinter::PrintCallKwargs(const CallPtr& op, bool need_comma)
 {
     for (const auto& [key, value] : op->kwargs_) {
@@ -692,7 +653,7 @@ void IRPrinter::PrintCallKwargs(const CallPtr& op, bool need_comma)
         }
         need_comma = true;
         stream_ << key << "=";
-        PrintKwargValue(key, value);
+        PrintKwargValue(stream_, prefix_, key, value);
     }
 }
 
@@ -952,50 +913,12 @@ void IRPrinter::VisitStmt_(const TensorOpStmtPtr& op)
         stream_ << "]";
     }
 
-    auto printValue = [&](const std::string& key, const std::any& value) {
-        stream_ << key << "=";
-        if (value.type() == typeid(int)) {
-            stream_ << AnyCast<int>(value);
-        } else if (value.type() == typeid(double)) {
-            stream_ << FormatFloatLiteral(AnyCast<double>(value));
-        } else if (value.type() == typeid(float)) {
-            stream_ << FormatFloatLiteral(static_cast<double>(AnyCast<float>(value)));
-        } else if (value.type() == typeid(bool)) {
-            stream_ << (AnyCast<bool>(value) ? "True" : "False");
-        } else if (value.type() == typeid(std::string)) {
-            stream_ << std::quoted(AnyCast<std::string>(value));
-        } else if (value.type() == typeid(SymbolicScalar)) {
-            stream_ << (AnyCast<SymbolicScalar>(value).Dump());
-        } else if (value.type() == typeid(std::vector<int>)) {
-            auto values = AnyCast<std::vector<int>>(value);
-            stream_ << "[";
-            for (size_t i = 0; i < values.size(); ++i) {
-                if (i > 0)
-                    stream_ << ", ";
-                stream_ << values[i];
-            }
-            stream_ << "]";
-        } else if (value.type() == typeid(std::vector<SymbolicScalar>)) {
-            auto values = AnyCast<std::vector<SymbolicScalar>>(value);
-            stream_ << "[";
-            for (size_t i = 0; i < values.size(); ++i) {
-                if (i > 0)
-                    stream_ << ", ";
-                stream_ << values[i].Dump();
-            }
-            stream_ << "]";
-        } else if (value.type() == typeid(uint64_t)) {
-            stream_ << (AnyCast<uint64_t>(value));
-        } else {
-            INTERNAL_CHECK(false) << "Unsupported function attrs value type: " << DemangleTypeName(value.type().name());
-        }
-    };
     if (!op->attrs_.empty()) {
         stream_ << ", attrs=[";
         for (size_t i = 0; i < op->attrs_.size(); ++i) {
             if (i > 0)
                 stream_ << ", ";
-            printValue(op->attrs_[i].first, op->attrs_[i].second);
+            PrintKwargValue(stream_, prefix_, op->attrs_[i].first, op->attrs_[i].second);
         }
         stream_ << "]";
     }

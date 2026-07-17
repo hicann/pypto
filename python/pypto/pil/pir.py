@@ -246,12 +246,6 @@ class BuildContext(ir.IRBuilder):
         finally:
             self.return_var_names = old_names
 
-    def create_var(self, name: str, type_: Optional[ir.Type], span: ir.Span):
-        return ir.Var(name, type_, span=span)
-
-    def create_none(self, span: ir.Span):
-        return ir.Var("None", ir.UnknownType.get(), span=span)
-
     def unwrap(self, val: Any) -> ir.Expr:
         if val is None:
             return self.none()
@@ -270,7 +264,8 @@ class BuildContext(ir.IRBuilder):
         elif isinstance(val, (list, tuple)):
             return ir.MakeTuple([self.unwrap(v) for v in val], ir.Span.unknown())
         else:
-            raise TypeError(f"Invalid type {type(val)} for unwrap")
+            # not ir types, treated as none, it should be removed in canonicalize pass
+            return self.none()
 
     def wrap(self, val: ir.Expr) -> Any:
         if isinstance(val, (ir.ConstInt, ir.ConstFloat, ir.ConstBool)):

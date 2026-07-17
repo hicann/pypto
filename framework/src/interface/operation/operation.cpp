@@ -250,21 +250,8 @@ void Operation::InitCoreTypeAndTileShape(Opcode opcode)
             break;
     }
 
-    if (!function_->IsGraphType(GraphType::TENSOR_GRAPH)) {
-        return;
-    }
-    tileShape_ = TileShape::Current();
-    if (coreType_ == CoreType::AIC) {
-        auto& cubeTile = tileShape_.GetCubeTile();
-        auto& convTile = tileShape_.GetConvTile();
-        FE_ASSERT(FeError::INVALID_VAL, cubeTile.valid() || convTile.valid())
-            << "op [" << OpcodeManager::Inst().GetOpcodeStr(opcode) << "]tile shape not set";
-    }
-    OpCalcType calcType = OpcodeManager::Inst().GetOpCalcType(opcode);
-    if (coreType_ == CoreType::AIV && calcType != OpCalcType::DISTRIBUTED) {
-        auto& vecTile = tileShape_.GetVecTile();
-        FE_ASSERT(FeError::INVALID_VAL, vecTile.valid())
-            << "op [" << OpcodeManager::Inst().GetOpcodeStr(opcode) << "]tile shape not set";
+    if (function_->IsGraphType(GraphType::TENSOR_GRAPH)) {
+        tileShape_ = TileShape::Current();
     }
 }
 

@@ -521,6 +521,8 @@ ir::StmtPtr RootFunctionBuilder::TransformStmts(ir::StmtPtr stmt, const std::str
         }
         case ir::ObjectKind::ForStmt: {
             auto forStmt = std::static_pointer_cast<const ir::ForStmt>(stmt);
+            auto config = forStmt->GetAttr<std::shared_ptr<ConfigScope>>("_config_scope");
+            ConfigManagerNg::ScopedRestore scoped(config);
             auto currentLoopVarName = IRContext::Get().GetOriginName(forStmt->loopVar_);
             auto stepConst = ir::As<ir::ConstInt>(forStmt->step_);
             int64_t stepValue = stepConst ? stepConst->value_ : 1;

@@ -42,9 +42,12 @@
 #include "ir/transforms/structural_comparison.h"
 #include "ir/type.h"
 #include "tilefwk/symbolic_scalar.h"
+#include "interface/configs//config_manager_ng.h"
 
 namespace py = pybind11;
 
+using npu::tile_fwk::ConfigScope;
+using npu::tile_fwk::ConfigScopePtr;
 using npu::tile_fwk::SymbolicScalar;
 
 namespace pypto {
@@ -193,6 +196,8 @@ std::any ConvertAttr(const py::object& attr)
         return py::cast<SymbolicScalar>(attr);
     } else if (py::isinstance<ExprPtr>(attr)) {
         return py::cast<ExprPtr>(attr);
+    } else if (py::isinstance<ConfigScope>(attr)) {
+        return py::cast<ConfigScopePtr>(attr);
     } else {
         throw TypeError("Unsupported attr type");
     }
