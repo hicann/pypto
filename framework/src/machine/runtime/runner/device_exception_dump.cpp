@@ -23,6 +23,7 @@
 #include "interface/program/program.h"
 #include "runtime_utils.h"
 #include "tilefwk/error_code.h"
+#include "machine/utils/machine_ws_intf.h"
 
 using namespace npu::tile_fwk;
 namespace npu::tile_fwk::dynamic {
@@ -117,14 +118,14 @@ int32_t GetDeviceExceptionDumpInfo(RtAicoreExDetailInfo& aicoreExceptionInfo, Ad
     return GetAicoreExceptionDumpInfo(kernelArg, exceptionDumpInfo);
 }
 
-void FillExceptionKernelName(RtExceptionKernelInfo& exceptionKernelInfo, AdxExceptionDumpInfo* exceptionDumpInfo)
+void FillExceptionKernelName(const char* kernelName, AdxExceptionDumpInfo* exceptionDumpInfo)
 {
-    if (exceptionKernelInfo.kernelName != nullptr) {
-        auto ret = strcpy_s(exceptionDumpInfo->kernelName, MAX_KERNEL_BUF_LEN, exceptionKernelInfo.kernelName);
+    if (kernelName != nullptr) {
+        auto ret = strcpy_s(exceptionDumpInfo->kernelName, MAX_KERNEL_BUF_LEN, kernelName);
         if (ret != 0) {
             MACHINE_LOGW("Mem cpy KernelName from exceptionKernelInfo failed");
         }
-        ret = strcpy_s(exceptionDumpInfo->kernelDisplayName, MAX_KERNEL_BUF_LEN, exceptionKernelInfo.kernelName);
+        ret = strcpy_s(exceptionDumpInfo->kernelDisplayName, MAX_KERNEL_BUF_LEN, kernelName);
         if (ret != 0) {
             MACHINE_LOGW("Mem cpy kernelDisplayName from exceptionKernelInfo failed");
         }
@@ -144,7 +145,7 @@ int32_t FillCoreExceptionInfo(RtExceptionInfo* exceptionInfo, AdxExceptionDumpIn
             exceptionDumpInfo[i].coreId = exceptionRegInfo.errRegInfo[i].coreId;
             exceptionDumpInfo[i].coreType = exceptionRegInfo.errRegInfo[i].coreType;
             exceptionDumpInfo[i].bin = aicoreBin;
-            FillExceptionKernelName(exceptionKernelInfo, &exceptionDumpInfo[i]);
+            FillExceptionKernelName(exceptionKernelInfo.kernelName, &exceptionDumpInfo[i]);
             MACHINE_LOGD("Current No[%u] exception from %s coreId: %u", i,
                          exceptionDumpInfo->coreType == RtCoreType::RT_CORE_TYPE_AIC ? "AIC" : "AIV",
                          exceptionDumpInfo->coreId);
@@ -153,6 +154,48 @@ int32_t FillCoreExceptionInfo(RtExceptionInfo* exceptionInfo, AdxExceptionDumpIn
     }
     MACHINE_LOGW("Cannot Get ExceptionRegInfo, which CoreType coreId would not support");
     return static_cast<int32_t>(npu::tile_fwk::MachineError::DUMP_DFX);
+}
+
+int32_t GetAicpuExceptionDumpInfo(RtAicpuExDetailInfo& aicpuExcepitionInfo, AdxExceptionDumpInfo* exceptionDumpInfo)
+{
+    auto kernelArgAddr = aicpuExcepitionInfo.argAddr;
+    auto argSize = aicpuExcepitionInfo.argsize;
+
+    if (kernelArgAddr == nullptr) {
+        MACHINE_LOGW("GetAicpuExceptionDumpInfo failed: kernelArgAddr is nullptr");
+        return static_cast<int32_t>(npu::tile_fwk::MachineError::DUMP_DFX);
+    }
+
+    if (argSize == 0) {
+        MACHINE_LOGD("Aicpu kernelArgs is not suitable pypto");
+        return 0;
+    }
+    // aicpu Op whose functionName == kerneName
+    if (aicpuExcepitionInfo.functionName != nullptr &&
+        strncmp(aicpuExcepitionInfo.functionName, "DynTileFwkKernelServer", strlen("DynTileFwkKernelServer")) != 0) {
+        MACHINE_LOGI("Current exception info is not PyPTO");
+        return 0;
+    }
+
+    std::string aicpuPyptoName = "PyPTO_Aicpu_" + Program::GetInstance().GetLastFunction()->GetOriginalRawName();
+    FillExceptionKernelName(aicpuPyptoName.c_str(), exceptionDumpInfo);
+    MACHINE_LOGI("Current argAddr is %p, argSize: %u", kernelArgAddr, argSize);
+    std::vector<uint8_t> kernelArg(argSize);
+    int rc = RuntimeMemcpyDirect(kernelArg.data(), argSize, kernelArgAddr, argSize, RtMemcpyKind::DEVICE_TO_HOST);
+    if (rc != 0) {
+        MACHINE_LOGE(npu::tile_fwk::MachineError::DUMP_DFX, "Aicpu exception info D2H memcpy failed: ret=%d", rc);
+        return rc;
+    }
+
+    npu::tile_fwk::AiCpuArgs* aicpuArgs = (AiCpuArgs*)kernelArg.data();
+    // device kernelArgs
+    [[maybe_unused]] DeviceKernelArgs deviceKernelArgs = aicpuArgs->kArgs;
+    // tensor info
+    int64_t* tensorInfo = (int64_t*)(aicpuArgs + 1);
+    int64_t inputSize = tensorInfo[0];
+    auto tensorData = (DevTensorData*)(tensorInfo + 2);
+    GetTensorInfo(inputSize, tensorData, exceptionDumpInfo);
+    return 0;
 }
 
 int32_t DeviceExceptionDumpCallBack(RtExceptionInfo* exceptionInfo, AdxExceptionDumpInfo* exceptionDumpInfo,
@@ -166,6 +209,9 @@ int32_t DeviceExceptionDumpCallBack(RtExceptionInfo* exceptionInfo, AdxException
             return ret;
         }
         return GetDeviceExceptionDumpInfo(expandInfo.u.aicoreInfo, &exceptionDumpInfo[0]);
+    }
+    if (expandInfo.type == RtExceptionExpandType::AICPU) {
+        return GetAicpuExceptionDumpInfo(expandInfo.u.aicpuInfo, &exceptionDumpInfo[0]);
     }
     return 0;
 }

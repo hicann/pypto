@@ -24,6 +24,7 @@
 #include "adapter/api/runtime_api.h"
 #include "adapter/api/adump_api.h"
 #include "machine/runtime/runner/device_exception_dump.h"
+#include "machine/utils/machine_ws_intf.h"
 #include "tilefwk/data_type.h"
 #include "tilefwk/error_code.h"
 #define private public
@@ -385,4 +386,148 @@ TEST_F(DeviceExceptionDumpTest, TestNonAicoreExceptionTypeFFTSPlus)
     EXPECT_EQ(ret, 0);
     EXPECT_EQ(mode, AdxExceptionDumpMode::ADX_DUMP_MODE_OVERWRITE);
     EXPECT_EQ(realSize, 1);
+}
+
+// ============================ AICPU exception dump tests ============================
+
+static void BuildAicpuArgBuffer(std::vector<uint8_t>& buffer, int64_t inputSize,
+                                const std::vector<DevTensorData>& tensors)
+{
+    size_t totalSize = sizeof(AiCpuArgs) + TENSOR_INFO_OFFSET * sizeof(int64_t) +
+                       tensors.size() * sizeof(DevTensorData);
+    buffer.assign(totalSize, 0);
+    auto* args = reinterpret_cast<AiCpuArgs*>(buffer.data());
+    args->kArgs = DeviceKernelArgs{};
+    int64_t* tensorInfo = reinterpret_cast<int64_t*>(buffer.data() + sizeof(AiCpuArgs));
+    tensorInfo[0] = inputSize;
+    tensorInfo[1] = 0;
+    auto* tensorData = reinterpret_cast<DevTensorData*>(tensorInfo + TENSOR_INFO_OFFSET);
+    for (size_t i = 0; i < tensors.size(); i++) {
+        tensorData[i] = tensors[i];
+    }
+}
+
+TEST_F(DeviceExceptionDumpTest, TestAicpuExceptionWithNullArgAddr)
+{
+    RtExceptionInfo exceptionInfo = {};
+    AdxExceptionDumpInfo dumpInfo = {};
+    uint32_t dumpSize = 1;
+    uint32_t realSize = 0;
+    AdxExceptionDumpMode mode = AdxExceptionDumpMode::ADX_DUMP_MODE_NONE;
+    exceptionInfo.expandInfo.type = RtExceptionExpandType::AICPU;
+    exceptionInfo.expandInfo.u.aicpuInfo.argAddr = nullptr;
+    exceptionInfo.expandInfo.u.aicpuInfo.argsize = sizeof(AiCpuArgs);
+    auto ret = ExceptionDumpCallBack(&exceptionInfo, &dumpInfo, dumpSize, &realSize, &mode);
+    EXPECT_EQ(ret, static_cast<int32_t>(npu::tile_fwk::MachineError::DUMP_DFX));
+}
+
+TEST_F(DeviceExceptionDumpTest, TestAicpuExceptionWithZeroArgSize)
+{
+    int64_t dummy = 0;
+    RtExceptionInfo exceptionInfo = {};
+    AdxExceptionDumpInfo dumpInfo = {};
+    uint32_t dumpSize = 1;
+    uint32_t realSize = 0;
+    AdxExceptionDumpMode mode = AdxExceptionDumpMode::ADX_DUMP_MODE_NONE;
+    exceptionInfo.expandInfo.type = RtExceptionExpandType::AICPU;
+    exceptionInfo.expandInfo.u.aicpuInfo.argAddr = &dummy;
+    exceptionInfo.expandInfo.u.aicpuInfo.argsize = 0;
+    auto ret = ExceptionDumpCallBack(&exceptionInfo, &dumpInfo, dumpSize, &realSize, &mode);
+    EXPECT_EQ(ret, 0);
+}
+
+TEST_F(DeviceExceptionDumpTest, TestAicpuExceptionWithNonPyptoFunctionName)
+{
+    std::vector<uint8_t> buffer;
+    BuildAicpuArgBuffer(buffer, 0, {});
+    RtExceptionInfo exceptionInfo = {};
+    AdxExceptionDumpInfo dumpInfo = {};
+    uint32_t dumpSize = 1;
+    uint32_t realSize = 0;
+    AdxExceptionDumpMode mode = AdxExceptionDumpMode::ADX_DUMP_MODE_NONE;
+    exceptionInfo.expandInfo.type = RtExceptionExpandType::AICPU;
+    exceptionInfo.expandInfo.u.aicpuInfo.argAddr = buffer.data();
+    exceptionInfo.expandInfo.u.aicpuInfo.argsize = static_cast<uint32_t>(buffer.size());
+    exceptionInfo.expandInfo.u.aicpuInfo.functionName = "OtherAicpuKernel";
+    auto ret = ExceptionDumpCallBack(&exceptionInfo, &dumpInfo, dumpSize, &realSize, &mode);
+    EXPECT_EQ(ret, 0);
+}
+
+TEST_F(DeviceExceptionDumpTest, TestAicpuExceptionWithNullFunctionName)
+{
+    std::vector<uint8_t> buffer;
+    BuildAicpuArgBuffer(buffer, 0, {});
+    RtExceptionInfo exceptionInfo = {};
+    AdxExceptionDumpInfo dumpInfo = {};
+    uint32_t dumpSize = 1;
+    uint32_t realSize = 0;
+    AdxExceptionDumpMode mode = AdxExceptionDumpMode::ADX_DUMP_MODE_NONE;
+    exceptionInfo.expandInfo.type = RtExceptionExpandType::AICPU;
+    exceptionInfo.expandInfo.u.aicpuInfo.argAddr = buffer.data();
+    exceptionInfo.expandInfo.u.aicpuInfo.argsize = static_cast<uint32_t>(buffer.size());
+    exceptionInfo.expandInfo.u.aicpuInfo.functionName = nullptr;
+    auto ret = ExceptionDumpCallBack(&exceptionInfo, &dumpInfo, dumpSize, &realSize, &mode);
+    EXPECT_EQ(ret, 0);
+    EXPECT_STREQ(dumpInfo.kernelName, "PyPTO_Aicpu_TestFunc");
+    EXPECT_STREQ(dumpInfo.kernelDisplayName, "PyPTO_Aicpu_TestFunc");
+}
+
+TEST_F(DeviceExceptionDumpTest, TestAicpuExceptionWithValidTensors)
+{
+    std::vector<uint8_t> tensorBuf0(32, 0xAB);
+    std::vector<uint8_t> tensorBuf1(16, 0xCD);
+    std::vector<DevTensorData> tensors(2);
+    tensors[0].address = reinterpret_cast<uint64_t>(tensorBuf0.data());
+    tensors[0].dataType = static_cast<int32_t>(DataType::DT_FP32);
+    tensors[0].shape.dim[0] = 4;
+    tensors[0].shape.dim[1] = 8;
+    tensors[0].shape.dimSize = 2;
+    tensors[1].address = reinterpret_cast<uint64_t>(tensorBuf1.data());
+    tensors[1].dataType = static_cast<int32_t>(DataType::DT_FP32);
+    tensors[1].shape.dim[0] = 4;
+    tensors[1].shape.dim[1] = 4;
+    tensors[1].shape.dimSize = 2;
+
+    std::vector<uint8_t> buffer;
+    BuildAicpuArgBuffer(buffer, 2, tensors);
+    RtExceptionInfo exceptionInfo = {};
+    AdxExceptionDumpInfo dumpInfo = {};
+    uint32_t dumpSize = 1;
+    uint32_t realSize = 0;
+    AdxExceptionDumpMode mode = AdxExceptionDumpMode::ADX_DUMP_MODE_NONE;
+    exceptionInfo.expandInfo.type = RtExceptionExpandType::AICPU;
+    exceptionInfo.expandInfo.u.aicpuInfo.argAddr = buffer.data();
+    exceptionInfo.expandInfo.u.aicpuInfo.argsize = static_cast<uint32_t>(buffer.size());
+    exceptionInfo.expandInfo.u.aicpuInfo.functionName = "DynTileFwkKernelServer";
+    auto ret = ExceptionDumpCallBack(&exceptionInfo, &dumpInfo, dumpSize, &realSize, &mode);
+    EXPECT_EQ(ret, 0);
+    EXPECT_EQ(mode, AdxExceptionDumpMode::ADX_DUMP_MODE_OVERWRITE);
+    EXPECT_EQ(realSize, 1);
+    EXPECT_STREQ(dumpInfo.kernelName, "PyPTO_Aicpu_TestFunc");
+    EXPECT_STREQ(dumpInfo.kernelDisplayName, "PyPTO_Aicpu_TestFunc");
+    EXPECT_EQ(dumpInfo.extraTensorNum, 2);
+}
+
+TEST_F(DeviceExceptionDumpTest, TestAicpuExceptionWithZeroAddressTensor)
+{
+    std::vector<DevTensorData> tensors(1);
+    tensors[0].address = 0;
+    tensors[0].dataType = static_cast<int32_t>(DataType::DT_FP32);
+    tensors[0].shape.dim[0] = 16;
+    tensors[0].shape.dimSize = 1;
+
+    std::vector<uint8_t> buffer;
+    BuildAicpuArgBuffer(buffer, 1, tensors);
+    RtExceptionInfo exceptionInfo = {};
+    AdxExceptionDumpInfo dumpInfo = {};
+    uint32_t dumpSize = 1;
+    uint32_t realSize = 0;
+    AdxExceptionDumpMode mode = AdxExceptionDumpMode::ADX_DUMP_MODE_NONE;
+    exceptionInfo.expandInfo.type = RtExceptionExpandType::AICPU;
+    exceptionInfo.expandInfo.u.aicpuInfo.argAddr = buffer.data();
+    exceptionInfo.expandInfo.u.aicpuInfo.argsize = static_cast<uint32_t>(buffer.size());
+    exceptionInfo.expandInfo.u.aicpuInfo.functionName = "DynTileFwkKernelServer";
+    auto ret = ExceptionDumpCallBack(&exceptionInfo, &dumpInfo, dumpSize, &realSize, &mode);
+    EXPECT_EQ(ret, 0);
+    EXPECT_EQ(dumpInfo.extraTensorNum, 1);
 }

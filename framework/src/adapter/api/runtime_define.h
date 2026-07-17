@@ -209,7 +209,7 @@ enum class RtProfCtrlType { INVALID = 0, SWITCH, REPORTER, BUTT };
 
 enum class RtSchemModeType { NORMAL = 0, BATCH, END };
 
-enum class RtExceptionExpandType { INVALID = 0, FFTS_PLUS, AICORE, UB, CCU, FUSION };
+enum class RtExceptionExpandType { INVALID = 0, FFTS_PLUS, AICORE, UB, CCU, FUSION, AICPU };
 
 struct RtArgsSizeInfo {
     void* infoAddr; /* info : atomicIndex|input num input offset|size|size */
@@ -245,6 +245,14 @@ struct RtAicoreExDetailInfo {
 };
 
 enum class RtUbExType { DOORBELL, DIRECT_WQE };
+struct RtAicpuExDetailInfo {
+    RtFuncHandle funcHandle;
+    const char* soName;
+    const char* functionName;
+    const char* kernelName;
+    void* argAddr;
+    uint32_t argsize;
+};
 
 struct RtUbInfo {
     uint8_t functionId;
@@ -304,6 +312,7 @@ struct RtExceptionExpandInfo {
     union {
         RtFftsPlusExDetailInfo fftsPlusInfo;
         RtAicoreExDetailInfo aicoreInfo; // 关注下影响
+        RtAicpuExDetailInfo aicpuInfo;
         RtUbExDetailInfo ubInfo;
         RtMultiCCUExDetailInfo ccuInfo;  /* use for ccu task */
         RtFusionExDetailInfo fusionInfo; /* use for fusion task */
