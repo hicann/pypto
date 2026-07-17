@@ -26,7 +26,7 @@ concat(tensors: List[Tensor], dim: int = 0) -> Tensor
 
 | 参数名  | 输入/输出 | 说明                                                                                                                                                                                                     |
 | ------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| tensors | 输入      | 源操作数。支持的类型为：Tensor。 Tensor支持的数据类型为：DT_INT8, DT_UINT8, DT_INT16, DT_UINT16, DT_INT32, DT_UINT32, DT_FP16, DT_FP32, DT_BF16。不支持空Tensor；Shape Size不大于2147483647（即INT32_MAX）。 |
+| tensors | 输入      | 源操作数。支持的类型为：Tensor。 Tensor支持的数据类型为：DT_INT8, DT_UINT8, DT_INT16, DT_UINT16, DT_INT32, DT_UINT32, DT_FP16, DT_FP32, DT_BF16, DT_INT64, DT_UINT64。不支持空Tensor；Shape Size不大于2147483647（即INT32_MAX）。 |
 | dim     | 输入      | 指定进行拼接的维度。支持的数据类型为：int，默认为0。                                                                                                                                                      |
 
 ## 返回值说明

@@ -1644,8 +1644,8 @@ void InnerConcatNew(Function& function, const LogicalTensorPtr& operand, const L
 
 void CheckCat(const std::vector<Tensor>& tensors, int axis)
 {
-    std::unordered_set<DataType> supportedTypes = {DT_INT8,   DT_UINT8, DT_INT16, DT_UINT16, DT_INT32,
-                                                   DT_UINT32, DT_FP16,  DT_FP32,  DT_BF16};
+    std::unordered_set<DataType> supportedTypes = {DT_INT8, DT_UINT8, DT_INT16, DT_UINT16, DT_INT32, DT_UINT32,
+                                                   DT_FP16, DT_FP32,  DT_BF16,  DT_INT64,  DT_UINT64};
     CheckTensorDataType(tensors[0].GetStorage(), supportedTypes, "CAT");
     CheckAxisRange(tensors[0], axis);
     std::vector<LogicalTensorPtr> tensorPtrs;
