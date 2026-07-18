@@ -58,7 +58,7 @@ struct TensorDef {
     std::vector<ir::ExprPtr> access_shape;      ///< access window shape (tile-derived) from load/store
     std::optional<ir::SectionKind> def_section; ///< nullopt = used outside any section (shared)
     std::optional<std::vector<int>> tile_dims;  ///< tile_dims kwarg for strided views (if any)
-    bool is_dn = false;                         ///< loaded with layout="dn" (needs Layout::DN)
+    bool is_transpose = false;                  ///< loaded with is_transpose=true (needs Layout::DN)
 };
 
 /**
@@ -82,7 +82,7 @@ public:
     /**
      * \brief Generate a single C++ file from a PyPTO IR Program (MIX mode)
      *
-     * Runs IR passes (LowerBreakContinue ->ConvertToSSA ->ConstFoldAndSimplify),
+     * Runs the ConvertToSSA IR pass,
      * then generates a single __global__ AICORE kernel with:
      * - PTO-style function signature
      * - Section-aware tile declarations (#if __DAV_CUBE__ / __DAV_VEC__)
@@ -117,7 +117,9 @@ public:
     /// Resolve a VF tile expr (plain tile or `tile[offset]`) to its `__ubuf__` pointer, typed as the
     /// tile element and hoisted before `__VEC_SCOPE__`. A `tile[offset]` load reuses the rvalue
     /// `(vf_tile_ptr_N + off)`; otherwise a `vf_tile_ptr_N` is declared once and cached. With
-    /// `is_post_update`, even a `tile[offset]` materialises a cursor the intrinsic advances in place.
+    /// `is_post_update`, the access gets its own hoisted variable, kept separate from a plain base
+    /// pointer to the same tile (e.g. a POST_UPDATE store cursor that must not alias a base load),
+    /// and even a `tile[offset]` materialises a real lvalue var rather than the shared rvalue.
     std::string GetOrCreateVFTilePtr(const ir::ExprPtr& expr, bool is_post_update = false);
     int64_t GetConstIntValue(const ir::ExprPtr& expr) override;
     std::string GetVarName(const ir::VarPtr& var) override;
@@ -158,6 +160,27 @@ public:
         tile_emit_shape_[tile_cpp_name] = {row_code, col_code};
     }
 
+    /** \brief Register a VF RegTensor variable (called from EmitVFRegTensor). */
+    void RegisterRegTensorVar(const std::string& cpp_name) { reg_tensor_vars_.insert(cpp_name); }
+
+    /** \brief Push a RegTensor declaration to the hoisting buffer (emitted at __VEC_SCOPE__ top). */
+    void HoistRegTensorDecl(const std::string& decl) { vf_reg_hoisted_decls_.push_back(decl); }
+
+    /** \brief Check if a C++ variable name was declared as a VF RegTensor. */
+    bool IsRegTensorVar(const std::string& cpp_name) const { return reg_tensor_vars_.count(cpp_name) > 0; }
+
+    /** \brief Register a VF MaskReg variable (called from EmitVFCreateMask/Compare/etc). */
+    void RegisterMaskRegVar(const std::string& cpp_name) { mask_reg_vars_.insert(cpp_name); }
+
+    /** \brief Check if a C++ variable name was declared as a VF MaskReg. */
+    bool IsMaskRegVar(const std::string& cpp_name) const { return mask_reg_vars_.count(cpp_name) > 0; }
+
+    /** \brief Register a VF AddrReg variable (called from EmitVFCreateAddrReg). */
+    void RegisterAddrRegVar(const std::string& cpp_name) { addr_reg_vars_.insert(cpp_name); }
+
+    /** \brief Check if a C++ variable name was declared as a VF AddrReg. */
+    bool IsAddrRegVar(const std::string& cpp_name) const { return addr_reg_vars_.count(cpp_name) > 0; }
+
     /** \brief Look up the emit-time valid-shape for a tile (used by load and store). */
     std::optional<std::pair<std::string, std::string>> LookupTileEmitShape(const std::string& tile_cpp_name) const
     {
@@ -174,6 +197,9 @@ public:
      * where stride[i] = product(shape[i+1..n-1])
      */
     std::string ComputeIRBasedOffset(const ir::TensorTypePtr& tensor_type, const ir::MakeTuplePtr& offsets);
+
+    const ir::Span& GetCurrentStmtSpan() const { return current_stmt_span_; }
+    const ir::Span& GetCurrentExprSpan() const { return current_expr_span_; }
 
     /**
      * \brief Register a tensor variable's underlying raw pointer (CCE-specific).
@@ -244,6 +270,12 @@ protected:
     void VisitStmt_(const ir::IfStmtPtr& op) override;
     void VisitStmt_(const ir::YieldStmtPtr& op) override;
     void VisitStmt_(const ir::SectionStmtPtr& op) override;
+    void VisitStmt_(const ir::SeqStmtsPtr& op) override;
+    void VisitStmt_(const ir::BreakStmtPtr& op) override;
+    void VisitStmt_(const ir::ContinueStmtPtr& op) override;
+
+    void VisitStmt(const ir::StmtPtr& stmt) override;
+    void VisitExpr(const ir::ExprPtr& expr) override;
 
     // Override visitor methods for code generation - Expressions
     // Leaf nodes
@@ -423,25 +455,46 @@ private:
     // --- Phase 5: ForStmt helpers ---
 
     /**
-     * \brief Register iteration arguments for a for-loop and emit their initialization.
+     * \brief Register loop iteration arguments and emit their initialization.
      *
      * Handles alias propagation, cross-section safety, and pointer/struct inheritance.
      * Returns the sanitized names of each iter-arg for later yield assignment.
+     * Shared by ForStmt and WhileStmt.
      */
-    std::vector<std::string> RegisterForIterArgs(const ir::ForStmtPtr& op);
-    void PropagateTupleIterArgs(const ir::ForStmtPtr& op);
+    std::vector<std::string> RegisterLoopIterArgs(const std::vector<ir::IterArgPtr>& iterArgs);
+    void PropagateTupleIterArgs(const std::vector<ir::IterArgPtr>& iterArgs, const std::vector<ir::VarPtr>& returnVars);
 
     /**
-     * \brief Emit yield-to-iter-arg assignments at the end of a for-loop body.
+     * \brief Emit yield-to-iter-arg assignments at the end of a loop body.
      *
      * Resolves aliases, detects self-assignments, and uses TASSIGN for tile transfers.
      */
-    void EmitForYieldAssignments(const std::vector<std::string>& iter_arg_names);
-    void RegisterForReturnVars(const ir::ForStmtPtr& op, const std::vector<std::string>& iter_arg_names);
+    void EmitForYieldAssignments(const std::vector<std::string>& iterArgNames);
 
-    void EmitForLoopWithHoisting(const ir::ForStmtPtr& op, const std::string& loop_var_name,
-                                 const std::vector<std::string>& iter_arg_names, const std::string& start,
-                                 const std::string& stop, const std::string& step);
+    /// Emit `targets[i] = sources[i];` (or TASSIGN for tiles/tuples), skipping self-assignments.
+    /// Shared by the trailing-yield write-back and native break/continue write-back.
+    void EmitCarriedAssignments(const std::vector<std::string>& targets, const std::vector<std::string>& sources);
+    void RegisterLoopReturnVars(const std::vector<ir::VarPtr>& returnVars,
+                                const std::vector<std::string>& iterArgNames);
+
+    /**
+     * \brief Emit a C++ loop (for/while) with array-decl hoisting, shared by both loop kinds.
+     *
+     * The caller supplies the fully-formed loop header line ("for (...) {" or "while (...) {");
+     * everything else — hoisting scaffold, body emission, loop-carried write-back on the trailing
+     * yield, and return-var registration — is identical. A native break/continue in the body
+     * carries its own loop-carried values (BreakStmt::value_, populated by ConvertToSSA) and writes
+     * them back via loop_target_stack_ before jumping.
+     */
+    void EmitLoopWithHoisting(const std::string& header, const ir::StmtPtr& body,
+                              const std::vector<ir::IterArgPtr>& iterArgs, const std::vector<ir::VarPtr>& returnVars,
+                              const std::vector<std::string>& iterArgNames);
+
+    // --- Native break/continue support ---
+
+    /// Write a native jump's self-described carried values to the innermost loop's iter_args
+    /// (loop_target_stack_.back()) before the jump skips the trailing yield.
+    void EmitJumpCarriedWriteback(const std::vector<ir::ExprPtr>& values);
 
     // --- Phase 6: GenerateSinglePrologue helpers ---
 
@@ -489,8 +542,7 @@ private:
 
     void AppendDynamicStrideGlobalTensorArgs(std::ostringstream& global_instance, const std::string& shape_type_name,
                                              const std::string& stride_type_name, const ir::TensorTypePtr& tensor_type,
-                                             const std::vector<int64_t>& shape_dims,
-                                             const std::optional<std::vector<int>>& tile_dims, bool is_dn);
+                                             const std::optional<std::vector<int>>& tile_dims, bool is_transpose);
 
     void EmitDynamicNZGlobalTensorDeclaration(const std::string& var_name, const ir::TensorTypePtr& tensor_type,
                                               const std::optional<std::string>& base_pointer,
@@ -505,15 +557,15 @@ private:
                                        const ir::TensorTypePtr& tensor_type);
 
     std::string BuildGlobalTensorLayoutArg(const std::string& stride_type_name, const std::vector<int64_t>& shape_dims,
-                                           bool is_dn) const;
+                                           bool is_transpose) const;
 
     /**
      * \brief Emit the GlobalTensor instance declaration and register pointer/struct mappings.
      */
     void EmitGlobalTensorInstance(const std::string& var_name, const std::string& global_type_name,
                                   const std::string& shape_type_name, const std::string& stride_type_name,
-                                  const ir::TensorTypePtr& tensor_type, const std::vector<int64_t>& shape_dims,
-                                  const std::optional<std::vector<int>>& tile_dims, bool is_dn,
+                                  const ir::TensorTypePtr& tensor_type,
+                                  const std::optional<std::vector<int>>& tile_dims, bool is_transpose,
                                   const std::string& base_pointer);
 
     /**
@@ -548,14 +600,21 @@ private:
     // Loop tile hoisting: declarations collected during loop body visit, emitted before outermost loop
     int loop_depth_ = 0; ///< Current for-loop nesting depth (0 = not in loop)
     int if_depth_ = 0;   ///< Current if-stmt nesting depth (0 = not in if)
-    std::map<std::string, std::string>
-        vf_tile_ptrs_; ///< VF tile expr code ->hoisted vf_tile_ptr_N var (base + POST_UPDATE cursor)
+    std::map<std::pair<bool, std::string>, std::string>
+        vf_tile_ptrs_; ///< (is_post_update, VF tile expr code) -> hoisted vf_tile_ptr_N var. A dedicated var (e.g. a
+                       ///< POST_UPDATE store cursor) and a plain base pointer to the same tile are kept separate, so a
+                       ///< cursor store does not corrupt a base load of the same tile.
     std::vector<std::string> loop_hoisted_decls_;    ///< Lines to hoist before outermost loop/if
     std::vector<std::string> section_hoisted_decls_; ///< VF section decls hoisted before __VEC_SCOPE__ (pre mem_bar)
     std::set<std::string> var_read_names_;           ///< Var names read anywhere in the function body
     std::unordered_map<std::string, int> var_read_counts_;   ///< Var name ->read count
     std::map<int, std::set<ir::PipeType>> cube_mutex_pipes_; ///< buf_id ->pipes in Cube section
     std::map<int, std::set<ir::PipeType>> vec_mutex_pipes_;  ///< buf_id ->pipes in Vec section
+
+    /// Per active loop: the write-back target C++ names (its iter_arg names), pushed while the loop
+    /// body is emitted. A native break/continue assigns its self-described carried values
+    /// (BreakStmt::value_) to loop_target_stack_.back() before jumping. Innermost loop = back().
+    std::vector<std::vector<std::string>> loop_target_stack_;
 
     /**
      * \brief Pre-scan the IR for mutex_id ->pipe mappings.
@@ -593,12 +652,29 @@ private:
     /// Track emitted tile reference aliases to avoid C++ redefinition errors
     std::set<std::string> emitted_tile_aliases_;
 
+    /// Track VF RegTensor variable names (C++ names set by EmitVFRegTensor)
+    std::set<std::string> reg_tensor_vars_;
+
+    /// RegTensor declarations to hoist to the top of __VEC_SCOPE__ (avoid loop-interior placement)
+    std::vector<std::string> vf_reg_hoisted_decls_;
+
+    /// Track VF MaskReg variable names (C++ names set by EmitVFCreateMask/Compare/etc)
+    std::set<std::string> mask_reg_vars_;
+
+    /// Track VF AddrReg variable names (C++ names set by EmitVFCreateAddrReg)
+    std::set<std::string> addr_reg_vars_;
+
     // Tuple Var C++ name -> the MakeTuple that was assigned to it.
     // Populated during body codegen by VisitStmt_(AssignStmtPtr) on tuple-typed lhs:
     // VisitExpr(rhs) drives current_tuple_ through MakeTuple literals, tuple-var aliases,
     // and chained static GetItem, all via the visitExpr chain. ForStmt iterArg/returnVar
     // are propagated in VisitStmt_(ForStmtPtr).
     std::map<std::string, ir::MakeTuplePtr> tuple_var_to_make_tuple_;
+
+    // Tuple variable names whose homogeneous MakeTuple assignment emitted a C++
+    // backing array. Tuple array identity is scoped to the assignment variable,
+    // not the MakeTuple expression, which may be shared by multiple inline sites.
+    std::set<std::string> tuple_vars_with_dyn_array_;
 
     int dyn_arr_counter_ = 0;
 
@@ -627,21 +703,10 @@ private:
     /// Emit-time valid-shape map: tile C++ name -> (row code, col code).
     /// Populated when set_validshape is emitted; consumed by the following load or store.
     std::map<std::string, std::pair<std::string, std::string>> tile_emit_shape_;
-};
 
-/**
- * \brief Inline all HELPER function calls into the kernel function.
- *
- * Walks the kernel body and replaces every Call whose op name matches
- * a HELPER function with the helper's body (variables renamed with
- * a unique per-call-site prefix, parameters substituted with call-site args,
- * ReturnStmt converted to assignment).  Returns a new Program containing
- * only the inlined kernel (if present) -- helpers are
- * removed.
- *
- * If the program has no helpers, returns it unchanged.
- */
-ir::ProgramPtr InlineHelperCalls(const ir::ProgramPtr& program);
+    ir::Span current_stmt_span_;
+    ir::Span current_expr_span_;
+};
 
 } // namespace codegen
 } // namespace pypto

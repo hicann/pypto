@@ -9,12 +9,12 @@
  */
 
 /**
- * @file backend_910b_cce_block_out_ops.cpp
+ * @file backend_cce_block_out_ops.cpp
  * @brief CCE backend op registration for block explicit-output operations.
  *
- * Block explicit-output ops carry an explicit pre-allocated output tile as their last argument.
- * Convention: args = [input0, input1, ..., output_tile]
- * The helpers here extract output from args.back() instead of GetCurrentResultTarget().
+ * Block explicit-output ops carry an explicit pre-allocated output tile as their first argument.
+ * Convention: args = [output_tile, input0, input1, ...]
+ * The helpers here extract output from args.front() instead of GetCurrentResultTarget().
  */
 
 #include <cstddef>
@@ -24,7 +24,7 @@
 #include <string>
 #include <utility>
 
-#include "backend/910B_CCE/backend_910b_cce.h"
+#include "backend/backend_cce.h"
 #include "backend/common/backend.h"
 #include "backend/common/backend_utils.h"
 #include "codegen/cce/cce_codegen.h"
@@ -34,6 +34,7 @@
 #include "ir/expr.h"
 #include "ir/kind_traits.h"
 #include "ir/memref.h"
+#include "ir/op_attr_types.h"
 #include "ir/pipe.h"
 #include "ir/type.h"
 #include "tilefwk/error.h"
@@ -76,144 +77,118 @@ static std::string TileTypeStringForTemplate(codegen::CCECodegen& codegen, const
     return "decltype(" + expr + ")";
 }
 
-static std::string MapAtomicModeCCE(const std::string& atomic)
+static std::string GetAtomicTypeCCE(int atomic)
 {
-    if (atomic == "none") {
-        return "AtomicType::AtomicNone";
-    }
-    if (atomic == "add") {
-        return "AtomicType::AtomicAdd";
-    }
-    throw pypto::ir::ValueError("Invalid atomic mode: " + atomic + " (expected 'none' or 'add')");
+    auto mode = static_cast<ir::AtomicType>(atomic);
+    return ir::EnumToString(mode);
 }
 
-static std::string MapReluPreModeCCE(const std::string& relu)
+static std::string GetReluPreModeCCE(int relu)
 {
-    if (relu == "no_relu") {
-        return "ReluPreMode::NoRelu";
-    }
-    if (relu == "normal_relu") {
-        return "ReluPreMode::NormalRelu";
-    }
-    throw pypto::ir::ValueError("Invalid relu_pre_mode: " + relu);
+    auto mode = static_cast<ir::ReluPreMode>(relu);
+    return ir::EnumToString(mode);
 }
 
-// Helper: Parse "phase" kwarg and return template string like "AccPhase::Partial".
-// Returns empty string if no phase kwarg is present.
-// prefix should be "AccPhase" (for TMATMUL) or "STPhase" (for TSTORE).
-static std::string MapPhaseTemplateCCE(const ir::CallPtr& op, const std::string& prefix)
+static std::string GetSTPhaseCCE(const ir::CallPtr& op)
 {
     if (!op->HasKwarg("phase")) {
         return "";
     }
-    const std::string& phase_str = op->GetKwarg<std::string>("phase");
-    if (phase_str == "unspecified") {
-        return prefix + "::Unspecified";
-    }
-    if (phase_str == "partial") {
-        return prefix + "::Partial";
-    }
-    if (phase_str == "final") {
-        return prefix + "::Final";
-    }
-    throw pypto::ir::ValueError("Invalid phase: " + phase_str + " (expected 'unspecified' / 'partial' / 'final')");
+    return ir::EnumToString(static_cast<ir::STPhase>(op->GetKwarg<int>("phase")));
 }
 
-static std::string MapAccToVecModeCCE(const std::string& mode, bool allow_dual)
+static std::string GetAccPhaseCCE(const ir::CallPtr& op)
 {
-    if (mode == "single_vec0") {
-        return "AccToVecMode::SingleModeVec0";
+    if (!op->HasKwarg("phase")) {
+        return "";
     }
-    if (mode == "single_vec1") {
-        return "AccToVecMode::SingleModeVec1";
-    }
-    if (!allow_dual && (mode == "dual_split_m" || mode == "dual_split_n")) {
+    return ir::EnumToString(static_cast<ir::AccPhase>(op->GetKwarg<int>("phase")));
+}
+
+static std::string GetAccToVecModeCCE(int mode, bool allow_dual)
+{
+    auto m = static_cast<ir::AccToVecMode>(mode);
+    if (!allow_dual && (m == ir::AccToVecMode::DualModeSplitM || m == ir::AccToVecMode::DualModeSplitN)) {
         throw pypto::ir::ValueError("block.move_fp: fp_tile only supports single-mode acc_to_vec_mode");
     }
-    if (mode == "dual_split_m") {
-        return "AccToVecMode::DualModeSplitM";
-    }
-    if (mode == "dual_split_n") {
-        return "AccToVecMode::DualModeSplitN";
-    }
-    throw pypto::ir::ValueError("Invalid acc_to_vec_mode: " + mode);
+    return ir::EnumToString(m);
 }
 
 // ============================================================================
-// Helper: Block explicit-output binary op  -  args = [lhs, rhs, dst]
+// Helper: Block explicit-output binary op  -  args = [dst, lhs, rhs]
 // Emits: OP(dst, lhs, rhs);
 // ============================================================================
 static std::string MakeBlockOutBinaryCodegenCCE(const std::string& cce_op_name, const ir::CallPtr& op,
                                                 codegen::CodegenBase& codegen_base)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-    CHECK(op->args_.size() == 3) << cce_op_name << ": expected 3 args (lhs, rhs, dst), got " << op->args_.size();
-    std::string lhs = codegen.GetExprAsCode(op->args_[0]);
-    std::string rhs = codegen.GetExprAsCode(op->args_[1]);
-    std::string dst = codegen.GetExprAsCode(op->args_[2]);
+    CHECK(op->args_.size() == 3) << cce_op_name << ": expected 3 args (dst, lhs, rhs), got " << op->args_.size();
+    std::string dst = codegen.GetExprAsCode(op->args_[0]);
+    std::string lhs = codegen.GetExprAsCode(op->args_[1]);
+    std::string rhs = codegen.GetExprAsCode(op->args_[2]);
     codegen.Emit(cce_op_name + "(" + dst + ", " + lhs + ", " + rhs + ");");
     return "";
 }
 
 // ============================================================================
-// Helper: Block explicit-output unary op  - args = [src, dst]
+// Helper: Block explicit-output unary op  - args = [dst, src]
 // Emits: OP(dst, src);
 // ============================================================================
 static std::string MakeBlockOutUnaryCodegenCCE(const std::string& cce_op_name, const ir::CallPtr& op,
                                                codegen::CodegenBase& codegen_base)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-    CHECK(op->args_.size() == 2) << cce_op_name << ": expected 2 args (src, dst), got " << op->args_.size();
-    std::string src = codegen.GetExprAsCode(op->args_[0]);
-    std::string dst = codegen.GetExprAsCode(op->args_[1]);
+    CHECK(op->args_.size() == 2) << cce_op_name << ": expected 2 args (dst, src), got " << op->args_.size();
+    std::string dst = codegen.GetExprAsCode(op->args_[0]);
+    std::string src = codegen.GetExprAsCode(op->args_[1]);
     codegen.Emit(cce_op_name + "(" + dst + ", " + src + ");");
     return "";
 }
 
 // ============================================================================
-// Helper: Block explicit-output scalar op  - args = [tile, scalar, dst]
+// Helper: Block explicit-output scalar op  - args = [dst, tile, scalar]
 // Emits: OP(dst, tile, scalar);
 // ============================================================================
 static std::string MakeBlockOutScalarCodegenCCE(const std::string& cce_op_name, const ir::CallPtr& op,
                                                 codegen::CodegenBase& codegen_base)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-    CHECK(op->args_.size() == 3) << cce_op_name << ": expected 3 args (tile, scalar, dst), got " << op->args_.size();
-    std::string tile = codegen.GetExprAsCode(op->args_[0]);
-    std::string scalar = codegen.GetExprAsCode(op->args_[1]);
-    std::string dst = codegen.GetExprAsCode(op->args_[2]);
+    CHECK(op->args_.size() == 3) << cce_op_name << ": expected 3 args (dst, tile, scalar), got " << op->args_.size();
+    std::string dst = codegen.GetExprAsCode(op->args_[0]);
+    std::string tile = codegen.GetExprAsCode(op->args_[1]);
+    std::string scalar = codegen.GetExprAsCode(op->args_[2]);
     codegen.Emit(cce_op_name + "(" + dst + ", " + tile + ", " + scalar + ");");
     return "";
 }
 
 // ============================================================================
-// Helper: Block explicit-output reduction op  - args = [tile, tmp, dst]
+// Helper: Block explicit-output reduction op  - args = [dst, tile, tmp]
 // Emits: OP(dst, tile, tmp);
 // ============================================================================
 static std::string MakeBlockOutRowReductionCodegenCCE(const std::string& cce_op_name, const ir::CallPtr& op,
                                                       codegen::CodegenBase& codegen_base)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-    CHECK(op->args_.size() == 3) << cce_op_name << ": expected 3 args (tile, tmp, dst), got " << op->args_.size();
-    std::string tile = codegen.GetExprAsCode(op->args_[0]);
-    std::string tmp = codegen.GetExprAsCode(op->args_[1]);
-    std::string dst = codegen.GetExprAsCode(op->args_[2]);
+    CHECK(op->args_.size() == 3) << cce_op_name << ": expected 3 args (dst, tile, tmp), got " << op->args_.size();
+    std::string dst = codegen.GetExprAsCode(op->args_[0]);
+    std::string tile = codegen.GetExprAsCode(op->args_[1]);
+    std::string tmp = codegen.GetExprAsCode(op->args_[2]);
     codegen.Emit(cce_op_name + "(" + dst + ", " + tile + ", " + tmp + ");");
     return "";
 }
 
 // ============================================================================
-// Helper: Block explicit-output col-reduction op  - args = [tile, tmp, dst]
+// Helper: Block explicit-output col-reduction op  - args = [dst, tile, tmp]
 // TCOLMAX emits: TCOLMAX(dst, tile);          ->2-arg form (no tmp)
 // TCOLSUM emits: TCOLSUM(dst, tile, tmp, false); ->4-arg form
 // ============================================================================
 static std::string MakeBlockOutColMaxCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-    CHECK(op->args_.size() == 3) << "TCOLMAX: expected 3 args (tile, tmp, dst), got " << op->args_.size();
-    std::string tile = codegen.GetExprAsCode(op->args_[0]);
-    // args_[1] is tmp  - not used by TCOLMAX
-    std::string dst = codegen.GetExprAsCode(op->args_[2]);
+    CHECK(op->args_.size() == 3) << "TCOLMAX: expected 3 args (dst, tile, tmp), got " << op->args_.size();
+    std::string dst = codegen.GetExprAsCode(op->args_[0]);
+    std::string tile = codegen.GetExprAsCode(op->args_[1]);
+    // args_[2] is tmp  - not used by TCOLMAX
     codegen.Emit("TCOLMAX(" + dst + ", " + tile + ");");
     return "";
 }
@@ -246,9 +221,9 @@ static std::string MakeBlockOutExpandBinOpCodegenCCE(const std::string& prefix, 
     CHECK(op->args_.size() == 3) << prefix << "BINOP: expected 3 args, got " << op->args_.size();
     int op_type = op->GetKwarg<int>("op_type");
     std::string cce_op_name = prefix + GetExpandBinOpSuffix(op_type);
-    std::string tile = codegen.GetExprAsCode(op->args_[0]);
-    std::string red = codegen.GetExprAsCode(op->args_[1]);
-    std::string dst = codegen.GetExprAsCode(op->args_[2]);
+    std::string dst = codegen.GetExprAsCode(op->args_[0]);
+    std::string tile = codegen.GetExprAsCode(op->args_[1]);
+    std::string red = codegen.GetExprAsCode(op->args_[2]);
     codegen.Emit(cce_op_name + "(" + dst + ", " + tile + ", " + red + ");");
     return "";
 }
@@ -256,44 +231,38 @@ static std::string MakeBlockOutExpandBinOpCodegenCCE(const std::string& prefix, 
 static std::string MakeBlockOutColSumCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-    CHECK(op->args_.size() == 3) << "TCOLSUM: expected 3 args (tile, tmp, dst), got " << op->args_.size();
-    std::string tile = codegen.GetExprAsCode(op->args_[0]);
-    std::string tmp = codegen.GetExprAsCode(op->args_[1]);
-    std::string dst = codegen.GetExprAsCode(op->args_[2]);
+    CHECK(op->args_.size() == 3) << "TCOLSUM: expected 3 args (dst, tile, tmp), got " << op->args_.size();
+    std::string dst = codegen.GetExprAsCode(op->args_[0]);
+    std::string tile = codegen.GetExprAsCode(op->args_[1]);
+    std::string tmp = codegen.GetExprAsCode(op->args_[2]);
     codegen.Emit("TCOLSUM(" + dst + ", " + tile + ", " + tmp + ", false);");
     return "";
 }
 
 // ============================================================================
-// Helper: Block explicit-output row-expand op  - args = [tile, reduction_tile, dst]
+// Helper: Block explicit-output row-expand op  - args = [dst, tile, reduction_tile]
 // Emits: OP(dst, tile, reduction_tile);
 // ============================================================================
 static std::string MakeBlockOutRowExpandCodegenCCE(const std::string& cce_op_name, const ir::CallPtr& op,
                                                    codegen::CodegenBase& codegen_base)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-    CHECK(op->args_.size() == 3) << cce_op_name << ": expected 3 args (tile, red, dst), got " << op->args_.size();
-    std::string tile = codegen.GetExprAsCode(op->args_[0]);
-    std::string red = codegen.GetExprAsCode(op->args_[1]);
-    std::string dst = codegen.GetExprAsCode(op->args_[2]);
+    CHECK(op->args_.size() == 3) << cce_op_name << ": expected 3 args (dst, tile, red), got " << op->args_.size();
+    std::string dst = codegen.GetExprAsCode(op->args_[0]);
+    std::string tile = codegen.GetExprAsCode(op->args_[1]);
+    std::string red = codegen.GetExprAsCode(op->args_[2]);
     codegen.Emit(cce_op_name + "(" + dst + ", " + tile + ", " + red + ");");
     return "";
 }
 
 // ============================================================================
-// Helper: Resolve effective (row, col) expressions for SetShape.
-//
-// Priority:
-//   1. cached set_validshape value (if present and not "-1")
-//   2. fallback: tile's declared TileType shape dimension (ConstInt only)
-//      Covers two cases:
-//        a) set_validshape was never called  -to- no cache entry
-//        b) set_validshape was called with -1 -to- cache entry is "-1"
-//      In both cases the tile's own shape is the correct full-shape value.
-// Returns ("", "") when the dimension cannot be statically resolved.
+// Helper: Resolve the (row, col) SetShape expressions from the tile's declared
+// TileType shape (ConstInt dims only). This is the no-set_validshape fallback:
+// EmitSetShapeIfDynamic only reaches here when the tile has no cached valid
+// window, so the tile's own full shape is the correct value.
+// Returns ("", "") when a dimension cannot be statically resolved.
 // ============================================================================
-static std::pair<std::string, std::string> ResolveEffectiveTileShape(
-    const std::optional<std::pair<std::string, std::string>>& cached, const ir::ExprPtr& tile_arg)
+static std::pair<std::string, std::string> ResolveEffectiveTileShape(const ir::ExprPtr& tile_arg)
 {
     auto dim_from_type = [](const ir::ExprPtr& dim_expr) -> std::string {
         if (!dim_expr)
@@ -303,23 +272,6 @@ static std::pair<std::string, std::string> ResolveEffectiveTileShape(
         return ""; // dynamic var  -  cannot embed as literal
     };
 
-    auto resolve_one = [&](const std::string& cached_val, size_t dim_idx) -> std::string {
-        if (cached_val != "-1")
-            return cached_val;
-        // -1 or missing -to- fall back to tile's TileType shape
-        if (!tile_arg)
-            return "";
-        auto tile_type = ir::As<ir::TileType>(tile_arg->GetType());
-        if (!tile_type || tile_type->shape_.size() <= dim_idx)
-            return "";
-        return dim_from_type(tile_type->shape_[dim_idx]);
-    };
-
-    if (cached.has_value()) {
-        return {resolve_one(cached->first, 0), resolve_one(cached->second, 1)};
-    }
-
-    // No cache entry at all: use tile's full shape as fallback
     if (!tile_arg)
         return {"", ""};
     auto tile_type = ir::As<ir::TileType>(tile_arg->GetType());
@@ -331,27 +283,40 @@ static std::pair<std::string, std::string> ResolveEffectiveTileShape(
 // ============================================================================
 // Helper: Emit SetShape<DIM_3, DIM_4> before TASSIGN.
 // GlobalTensor shapes use Shape<1,1,1,-1,-1>; only DIM_3 and DIM_4 are dynamic.
-// Shape values come from the set_validshape cache or from the tile's own type.
 // Must NOT be called for NZ-layout tensors (their shape is fully static).
+//
+// When the tile has a set_validshape, the GM tensor's (row, col) is taken from
+// the tile's RUNTIME valid shape via GetValidRow()/GetValidCol() rather than a
+// host-side expression. This is correct no matter where set_validshape was
+// emitted: a single straight-line call, a value selected in if/else and set
+// once, or set_validshape duplicated inside separate if/else branches. The old
+// scheme cached the textually-last set_validshape (row, col) strings, which did
+// not match the runtime-taken branch and over-sized the DMA (nBurst = gShape3),
+// faulting on every non-corner tile. Reading the tile back removes that coupling.
+//
+// When no set_validshape was issued the tile carries no dynamic valid window, so
+// fall back to its declared full TileType shape (unchanged behavior).
 // ============================================================================
 static void EmitSetShapeIfDynamic(codegen::CCECodegen& codegen, const std::string& tensor_var,
                                   const std::string& tile_cpp_name, const ir::ExprPtr& tile_arg)
 {
     auto cached = codegen.LookupTileEmitShape(tile_cpp_name);
-    auto [row_expr, col_expr] = ResolveEffectiveTileShape(cached, tile_arg);
+    if (cached.has_value()) {
+        codegen.Emit(tensor_var + ".SetShape<pto::GlobalTensorDim::DIM_3, pto::GlobalTensorDim::DIM_4>(" +
+                     "static_cast<int64_t>(" + tile_cpp_name + ".GetValidRow()), " + "static_cast<int64_t>(" +
+                     tile_cpp_name + ".GetValidCol()));");
+        return;
+    }
+
+    auto [row_expr, col_expr] = ResolveEffectiveTileShape(tile_arg);
     if (row_expr.empty() || col_expr.empty())
         return;
-    // DN (column-major) tensors store the tile's valid shape with rows and columns
-    // swapped: SetShape<DIM_3, DIM_4> receives (col, row) instead of (row, col).
-    const codegen::TensorDef* def = codegen.GetTensorDef(tensor_var);
-    if (def != nullptr && def->is_dn)
-        std::swap(row_expr, col_expr);
     codegen.Emit(tensor_var + ".SetShape<pto::GlobalTensorDim::DIM_3, pto::GlobalTensorDim::DIM_4>(" +
                  "static_cast<int64_t>(" + row_expr + "), " + "static_cast<int64_t>(" + col_expr + "));");
 }
 
 // ============================================================================
-// block.load  -  args = [tensor, offsets, out_tile]
+// block.load  -  args = [out_tile, tensor, offsets]
 // Emits: [SetShape<DIM_3,DIM_4>(...);] TASSIGN(tensor_global, ptr + offset); TLOAD(out_tile, tensor_global);
 // SetShape is emitted automatically when the tensor has dynamic dims and a
 // set_validshape was previously issued for out_tile (cache lookup).
@@ -359,20 +324,20 @@ static void EmitSetShapeIfDynamic(codegen::CCECodegen& codegen, const std::strin
 static std::string MakeBlockOutLoadCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-    CHECK(op->args_.size() == 3) << "block.load requires 3 arguments: tensor, offsets, out_tile";
+    CHECK(op->args_.size() == 3) << "block.load requires 3 arguments: out_tile, tensor, offsets";
 
-    auto src_tensor_var_ptr = std::dynamic_pointer_cast<const ir::Var>(op->args_[0]);
-    CHECK(src_tensor_var_ptr != nullptr) << "block.load source tensor must be a Var";
-
-    auto offsets_tuple = std::dynamic_pointer_cast<const ir::MakeTuple>(op->args_[1]);
-    CHECK(offsets_tuple != nullptr) << "block.load second argument must be a tuple (offsets)";
-
-    auto out_tile = std::dynamic_pointer_cast<const ir::Var>(op->args_[2]);
+    auto out_tile = std::dynamic_pointer_cast<const ir::Var>(op->args_[0]);
     if (!out_tile) {
         // Support GetItemExpr (e.g., qk_vec_buf[0]) - resolved by GetExprAsCode below
-        CHECK(ir::As<ir::TileType>(op->args_[2]->GetType()) != nullptr)
-            << "block.load third argument (out) must be a tile (Var or GetItemExpr)";
+        CHECK(ir::As<ir::TileType>(op->args_[0]->GetType()) != nullptr)
+            << "block.load first argument (out) must be a tile (Var or GetItemExpr)";
     }
+
+    auto src_tensor_var_ptr = std::dynamic_pointer_cast<const ir::Var>(op->args_[1]);
+    CHECK(src_tensor_var_ptr != nullptr) << "block.load source tensor must be a Var";
+
+    auto offsets_tuple = std::dynamic_pointer_cast<const ir::MakeTuple>(op->args_[2]);
+    CHECK(offsets_tuple != nullptr) << "block.load third argument must be a tuple (offsets)";
 
     std::string src_tensor_var = codegen.GetVarName(src_tensor_var_ptr);
     auto src_tensor_type = std::dynamic_pointer_cast<const ir::TensorType>(src_tensor_var_ptr->GetType());
@@ -380,10 +345,10 @@ static std::string MakeBlockOutLoadCodegenCCE(const ir::CallPtr& op, codegen::Co
 
     std::string offset = cce::ComputeStrideBasedOffset(codegen, offsets_tuple, src_tensor_type);
     std::string src_ptr = codegen.GetPointer(src_tensor_var);
-    std::string out_name = codegen.GetExprAsCode(op->args_[2]);
+    std::string out_name = codegen.GetExprAsCode(op->args_[0]);
 
     if (!cce::IsNZTensorType(src_tensor_type)) {
-        EmitSetShapeIfDynamic(codegen, src_tensor_var, out_name, op->args_[2]);
+        EmitSetShapeIfDynamic(codegen, src_tensor_var, out_name, op->args_[0]);
     }
     codegen.Emit("TASSIGN(" + src_tensor_var + ", " + src_ptr + " + " + offset + ");");
     codegen.Emit("TLOAD(" + out_name + ", " + src_tensor_var + ");");
@@ -391,7 +356,7 @@ static std::string MakeBlockOutLoadCodegenCCE(const ir::CallPtr& op, codegen::Co
 }
 
 // ============================================================================
-// block.store  -  args = [tile, offsets, output_tensor]
+// block.store  -  args = [output_tensor, tile, offsets]
 // Emits: [SetShape<DIM_3,DIM_4>(...);] TASSIGN(tensor_global, ptr + offset); TSTORE(tensor_global, tile);
 // SetShape is emitted automatically when the tensor has dynamic dims and a
 // set_validshape was previously issued for the src tile (cache lookup).
@@ -399,26 +364,27 @@ static std::string MakeBlockOutLoadCodegenCCE(const ir::CallPtr& op, codegen::Co
 static std::string MakeBlockOutStoreCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-    CHECK(op->args_.size() == 3) << "block.store requires 3 arguments: tile, offsets, output_tensor";
+    CHECK(op->args_.size() == 3 || op->args_.size() == 4)
+        << "block.store requires 3 or 4 arguments: output_tensor, tile, offsets, [pre_quant_scalar]";
 
-    std::string src_tile = codegen.GetExprAsCode(op->args_[0]);
-
-    auto offsets_tuple = std::dynamic_pointer_cast<const ir::MakeTuple>(op->args_[1]);
-    CHECK(offsets_tuple != nullptr) << "block.store second argument must be a tuple (offsets)";
-
-    auto dst_tensor_var_ptr = std::dynamic_pointer_cast<const ir::Var>(op->args_[2]);
+    auto dst_tensor_var_ptr = std::dynamic_pointer_cast<const ir::Var>(op->args_[0]);
     CHECK(dst_tensor_var_ptr != nullptr) << "block.store destination tensor must be a Var";
+
+    std::string src_tile = codegen.GetExprAsCode(op->args_[1]);
+
+    auto offsets_tuple = std::dynamic_pointer_cast<const ir::MakeTuple>(op->args_[2]);
+    CHECK(offsets_tuple != nullptr) << "block.store third argument must be a tuple (offsets)";
 
     std::string dst_tensor_var = codegen.GetVarName(dst_tensor_var_ptr);
     auto dst_tensor_type = std::dynamic_pointer_cast<const ir::TensorType>(dst_tensor_var_ptr->GetType());
     CHECK(dst_tensor_type != nullptr) << "block.store destination must be TensorType";
-    cce::ValidateStoreNZPreconditions("block.store", op->args_[0], offsets_tuple, dst_tensor_type);
+    cce::ValidateStoreNZPreconditions("block.store", op->args_[1], offsets_tuple, dst_tensor_type);
 
     std::string offset = cce::ComputeStrideBasedOffset(codegen, offsets_tuple, dst_tensor_type);
     std::string dst_ptr = codegen.GetPointer(dst_tensor_var);
 
     if (!cce::IsNZTensorType(dst_tensor_type)) {
-        EmitSetShapeIfDynamic(codegen, dst_tensor_var, src_tile, op->args_[0]);
+        EmitSetShapeIfDynamic(codegen, dst_tensor_var, src_tile, op->args_[1]);
     }
     codegen.Emit("TASSIGN(" + dst_tensor_var + ", " + dst_ptr + " + " + offset + ");");
 
@@ -430,28 +396,40 @@ static std::string MakeBlockOutStoreCodegenCCE(const ir::CallPtr& op, codegen::C
 
     // Get atomic mode
     if (op->HasKwarg("atomic")) {
-        atomic_enum = MapAtomicModeCCE(op->GetKwarg<std::string>("atomic"));
+        atomic_enum = GetAtomicTypeCCE(op->GetKwarg<int>("atomic"));
     }
 
     if (op->HasKwarg("relu_pre_mode")) {
-        relu_template = MapReluPreModeCCE(op->GetKwarg<std::string>("relu_pre_mode"));
+        relu_template = GetReluPreModeCCE(op->GetKwarg<int>("relu_pre_mode"));
     }
 
     // Get phase (unit-flag) — STPhase template parameter.
-    std::string phase_template = MapPhaseTemplateCCE(op, "STPhase");
+    std::string phase_template = GetSTPhaseCCE(op);
 
     // Build function arguments
     std::string args = dst_tensor_var + ", " + src_tile;
 
-    if (op->HasKwarg("pre_quant_scalar")) {
-        int pre_quant = op->GetKwarg<int>("pre_quant_scalar");
-        args += ", " + std::to_string(pre_quant);
+    // pre_quant_scalar is an optional trailing operand (args_[3]), a UINT64 deqScalar matching
+    // pto-isa: low 32 bits = float32 bit-pattern of the scale, bit46 = signed-int8 flag.
+    // It may be a compile-time constant or a runtime scalar.
+    if (op->args_.size() > 3) {
+        std::string pre_quant = codegen.GetExprAsCode(op->args_[3]);
+        if (dst_tensor_type->dtype_ == DataType::INT8) {
+            // For a signed-int8 output, bit46 of the deqScalar register selects signed (vs unsigned)
+            // requantization on the fixpipe; the hardware reads negative L0C values as signed only when
+            // this flag is set, otherwise they saturate to 0 as if unsigned. Emit the bit set as a
+            // runtime expression so it works for both constant and dynamic scales. The value is already
+            // uint64, so cast straight to uint64_t (no uint32 narrowing that would drop high bits).
+            args += ", ((static_cast<uint64_t>(" + pre_quant + ") & ~(1ULL << 46)) | (1ULL << 46))";
+        } else {
+            args += ", static_cast<uint64_t>(" + pre_quant + ")";
+        }
     }
 
     // Emit atomic mode before TSTORE if atomic mode is add (pto-isa API)
     if (atomic_enum == "AtomicType::AtomicAdd") {
         // Get dtype from tile type for set_atomic_dtype
-        auto src_tile_type = std::dynamic_pointer_cast<const ir::TileType>(op->args_[0]->GetType());
+        auto src_tile_type = std::dynamic_pointer_cast<const ir::TileType>(op->args_[1]->GetType());
         if (src_tile_type) {
             auto dtype = src_tile_type->dtype_;
             if (dtype == DataType::FP32) {
@@ -476,16 +454,17 @@ static std::string MakeBlockOutStoreCodegenCCE(const ir::CallPtr& op, codegen::C
     // (per pto-isa pto_instr.hpp UF-aware overloads at lines 224/240/257/275).
     if (!relu_template.empty()) {
         // TSTORE<[STPhase,] TileData, GlobalData, AtomicType::AtomicNone, ReluPreMode>(dst, src[, preQuant])
-        std::string src_type = TileTypeStringForTemplate(codegen, src_tile, op->args_[0]);
+        std::string src_type = TileTypeStringForTemplate(codegen, src_tile, op->args_[1]);
         std::string tparams;
         if (!phase_template.empty()) {
             tparams = phase_template + ", ";
         }
         tparams += src_type + ", decltype(" + dst_tensor_var + "), AtomicType::AtomicNone, " + relu_template;
         codegen.Emit("TSTORE<" + tparams + ">(" + args + ");");
-    } else if (op->HasKwarg("pre_quant_scalar")) {
+    } else if (op->args_.size() > 3) {
         // TSTORE<[STPhase,] TileData, GlobalData>(dst, src, preQuant)  -  default AtomicType & ReluPreMode
-        std::string src_type = TileTypeStringForTemplate(codegen, src_tile, op->args_[0]);
+        // pre_quant_scalar is the optional trailing operand (args_[3]).
+        std::string src_type = TileTypeStringForTemplate(codegen, src_tile, op->args_[1]);
         std::string tparams;
         if (!phase_template.empty()) {
             tparams = phase_template + ", ";
@@ -494,7 +473,7 @@ static std::string MakeBlockOutStoreCodegenCCE(const ir::CallPtr& op, codegen::C
         codegen.Emit("TSTORE<" + tparams + ">(" + args + ");");
     } else if (!phase_template.empty()) {
         // TSTORE<STPhase, TileData, GlobalData>(dst, src) — phase-only path
-        std::string src_type = TileTypeStringForTemplate(codegen, src_tile, op->args_[0]);
+        std::string src_type = TileTypeStringForTemplate(codegen, src_tile, op->args_[1]);
         codegen.Emit("TSTORE<" + phase_template + ", " + src_type + ", decltype(" + dst_tensor_var + ")>(" + args +
                      ");");
     } else {
@@ -509,46 +488,46 @@ static std::string MakeBlockOutStoreCodegenCCE(const ir::CallPtr& op, codegen::C
 }
 
 // ============================================================================
-// block.store_fp  -  args = [tile, fp_tile, offsets, output_tensor]
+// block.store_fp  -  args = [output_tensor, tile, fp_tile, offsets]
 // Emits: [SetShape<DIM_3,DIM_4>(...);] TASSIGN(tensor_global, ptr + offset); TSTORE_FP(tensor_global, tile, fp_tile);
 // ============================================================================
 static std::string MakeBlockOutStoreFpCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-    CHECK(op->args_.size() == 4) << "block.store_fp requires 4 arguments: tile, fp_tile, offsets, output_tensor";
+    CHECK(op->args_.size() == 4) << "block.store_fp requires 4 arguments: output_tensor, tile, fp_tile, offsets";
 
-    auto src_tile_type = ir::As<ir::TileType>(op->args_[0]->GetType());
+    auto dst_tensor_var_ptr = std::dynamic_pointer_cast<const ir::Var>(op->args_[0]);
+    CHECK(dst_tensor_var_ptr != nullptr) << "block.store_fp destination tensor must be a Var";
+
+    auto src_tile_type = ir::As<ir::TileType>(op->args_[1]->GetType());
     CHECK(src_tile_type != nullptr) << "block.store_fp source must be TileType";
     CHECK(src_tile_type->memref_.has_value()) << "block.store_fp source tile must have an allocated memory space";
     if (src_tile_type->memref_.value()->memorySpace_ != ir::MemorySpace::Acc) {
         throw pypto::ir::ValueError("block.store_fp: source tile must be allocated in Acc memory");
     }
 
-    auto fp_tile_type = ir::As<ir::TileType>(op->args_[1]->GetType());
+    auto fp_tile_type = ir::As<ir::TileType>(op->args_[2]->GetType());
     CHECK(fp_tile_type != nullptr) << "block.store_fp fp tile must be TileType";
     CHECK(fp_tile_type->memref_.has_value()) << "block.store_fp fp tile must have an allocated memory space";
     if (fp_tile_type->memref_.value()->memorySpace_ != ir::MemorySpace::Scaling) {
         throw pypto::ir::ValueError("block.store_fp: fp tile must be allocated in Scaling memory");
     }
 
-    auto offsets_tuple = std::dynamic_pointer_cast<const ir::MakeTuple>(op->args_[2]);
-    CHECK(offsets_tuple != nullptr) << "block.store_fp third argument must be a tuple (offsets)";
-
-    auto dst_tensor_var_ptr = std::dynamic_pointer_cast<const ir::Var>(op->args_[3]);
-    CHECK(dst_tensor_var_ptr != nullptr) << "block.store_fp destination tensor must be a Var";
+    auto offsets_tuple = std::dynamic_pointer_cast<const ir::MakeTuple>(op->args_[3]);
+    CHECK(offsets_tuple != nullptr) << "block.store_fp fourth argument must be a tuple (offsets)";
 
     std::string dst_tensor_var = codegen.GetVarName(dst_tensor_var_ptr);
     auto dst_tensor_type = std::dynamic_pointer_cast<const ir::TensorType>(dst_tensor_var_ptr->GetType());
     CHECK(dst_tensor_type != nullptr) << "block.store_fp destination must be TensorType";
-    cce::ValidateStoreNZPreconditions("block.store_fp", op->args_[0], offsets_tuple, dst_tensor_type);
+    cce::ValidateStoreNZPreconditions("block.store_fp", op->args_[1], offsets_tuple, dst_tensor_type);
 
     std::string offset = cce::ComputeStrideBasedOffset(codegen, offsets_tuple, dst_tensor_type);
     std::string dst_ptr = codegen.GetPointer(dst_tensor_var);
-    std::string src_tile = codegen.GetExprAsCode(op->args_[0]);
-    std::string fp_tile = codegen.GetExprAsCode(op->args_[1]);
+    std::string src_tile = codegen.GetExprAsCode(op->args_[1]);
+    std::string fp_tile = codegen.GetExprAsCode(op->args_[2]);
 
     if (!cce::IsNZTensorType(dst_tensor_type)) {
-        EmitSetShapeIfDynamic(codegen, dst_tensor_var, src_tile, op->args_[0]);
+        EmitSetShapeIfDynamic(codegen, dst_tensor_var, src_tile, op->args_[1]);
     }
     codegen.Emit("TASSIGN(" + dst_tensor_var + ", " + dst_ptr + " + " + offset + ");");
     codegen.Emit("TSTORE_FP(" + dst_tensor_var + ", " + src_tile + ", " + fp_tile + ");");
@@ -556,75 +535,65 @@ static std::string MakeBlockOutStoreFpCodegenCCE(const ir::CallPtr& op, codegen:
 }
 
 // ============================================================================
-// block.insert  - args = [src, index_row, index_col, dst] or [src, index_row, index_col, offset, dst]
+// block.insert  - args = [dst, src, row, col]
 // ============================================================================
 static std::string MakeBlockOutInsertCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-    CHECK(op->args_.size() == 4 || op->args_.size() == 5)
-        << "block.insert: expected 4 or 5 args, got " << op->args_.size();
+    CHECK(op->args_.size() == 4) << "block.insert: expected 4 args, got " << op->args_.size();
 
-    bool has_offset = (op->args_.size() == 5);
-    std::string src = codegen.GetExprAsCode(op->args_[0]);
-    std::string index_row = codegen.GetExprAsCode(op->args_[1]);
-    std::string index_col = codegen.GetExprAsCode(op->args_[2]);
-    std::string dst, offset, base_addr;
-
-    if (has_offset) {
-        offset = codegen.GetExprAsCode(op->args_[3]);
-        dst = codegen.GetExprAsCode(op->args_[4]);
-        // For array-subscript dst (e.g. NBuffer auto-rotate ``arr[ctx.cursor%2]``),
-        // tile_addresses_ does not have an entry  -  use the runtime ``data()``
-        // method to get the actual base address. Save it to a temp because
-        // TASSIGN mutates ``dst.data()``; the second TASSIGN (restore) needs
-        // the original address.
-        if (dst.find('[') != std::string::npos) {
-            static int insert_addr_counter = 0;
-            std::string addr_tmp = "_tinsert_addr_" + std::to_string(insert_addr_counter++);
-            codegen.Emit("uint64_t " + addr_tmp + " = (uint64_t)(" + dst + ".data());");
-            base_addr = addr_tmp;
-        } else {
-            base_addr = codegen.GetTileAddress(dst);
-        }
-        codegen.Emit("TASSIGN(" + dst + ", " + base_addr + " + " + offset + ");");
-    } else {
-        dst = codegen.GetExprAsCode(op->args_[3]);
-    }
-
-    codegen.Emit("TINSERT(" + dst + ", " + src + ", " + index_row + ", " + index_col + ");");
-
-    if (has_offset) {
-        codegen.Emit("TASSIGN(" + dst + ", " + base_addr + ");");
-    }
+    std::string dst = codegen.GetExprAsCode(op->args_[0]);
+    std::string src = codegen.GetExprAsCode(op->args_[1]);
+    std::string row = codegen.GetExprAsCode(op->args_[2]);
+    std::string col = codegen.GetExprAsCode(op->args_[3]);
+    codegen.Emit("TINSERT(" + dst + ", " + src + ", " + row + ", " + col + ");");
 
     return "";
 }
 
 // ============================================================================
-// block.move  - args = [src, dst] or [src, dst, offset]
+// block.move  - args = [dst, src] or [dst, src, offset]
 // ============================================================================
 static std::string MakeBlockOutMoveCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-    CHECK(op->args_.size() == 2 || op->args_.size() == 3)
-        << "block.move: expected 2 or 3 args, got " << op->args_.size();
+    CHECK(op->args_.size() >= 2 && op->args_.size() <= 4)
+        << "block.move: expected 2 to 4 args, got " << op->args_.size();
 
-    std::string src = codegen.GetExprAsCode(op->args_[0]);
-    std::string dst = codegen.GetExprAsCode(op->args_[1]);
+    std::string dst = codegen.GetExprAsCode(op->args_[0]);
+    std::string src = codegen.GetExprAsCode(op->args_[1]);
 
     // Build template params (shared by both TEXTRACT and TMOV paths)
     std::string template_params = "";
     if (op->HasKwarg("acc_to_vec_mode")) {
-        template_params = ", " + MapAccToVecModeCCE(op->GetKwarg<std::string>("acc_to_vec_mode"), true);
+        template_params = ", " + GetAccToVecModeCCE(op->GetKwarg<int>("acc_to_vec_mode"), true);
     }
     if (op->HasKwarg("relu_pre_mode")) {
-        template_params += ", " + MapReluPreModeCCE(op->GetKwarg<std::string>("relu_pre_mode"));
+        template_params += ", " + GetReluPreModeCCE(op->GetKwarg<int>("relu_pre_mode"));
     }
 
-    // When offset is provided (args.size() == 3), use TEXTRACT.
-    if (op->args_.size() == 3) {
-        auto offset_tuple = op->args_[2];
-        auto make_tuple = ir::As<ir::MakeTuple>(offset_tuple);
+    // Optional trailing operands are distinguished by TYPE, not position: a MakeTuple is the 2D
+    // sub-tile offset; a ScalarType is the pre_quant_scalar scale. Layout is [dst, src, offset?, pre_quant?]
+    // so args_[2] may be either, and args_[3] (when present) is always pre_quant_scalar.
+    ir::ExprPtr offset_operand = nullptr;
+    ir::ExprPtr pre_quant_operand = nullptr;
+    if (op->args_.size() > 2) {
+        if (ir::As<ir::MakeTuple>(op->args_[2]) != nullptr) {
+            offset_operand = op->args_[2];
+        } else {
+            pre_quant_operand = op->args_[2];
+        }
+    }
+    if (op->args_.size() > 3) {
+        pre_quant_operand = op->args_[3];
+    }
+
+    // L1->L0 sub-tile read: use pto::TEXTRACT when a 2D offset [offset_m, offset_k]
+    // is provided (TupleType). TMOV requires src.shape == dst.shape; TEXTRACT supports a
+    // WIDE src + NARROW dst at an explicit offset.
+    // Signature: pto::TEXTRACT(l0Tile, l1Tile, offsetM, offsetK) (element units).
+    if (offset_operand != nullptr) {
+        auto make_tuple = ir::As<ir::MakeTuple>(offset_operand);
         CHECK(make_tuple) << "block.move: offset must be a tuple [offset_m, offset_k]";
         CHECK(make_tuple->elements_.size() == 2) << "block.move: offset must have 2 elements";
         auto m_offset_expr = codegen.GetExprAsCode(make_tuple->elements_[0]);
@@ -638,9 +607,20 @@ static std::string MakeBlockOutMoveCodegenCCE(const ir::CallPtr& op, codegen::Co
 
     // No offset: TMOV
     std::string args = dst + ", " + src;
-    if (op->HasKwarg("pre_quant_scalar")) {
-        int pre_quant = op->GetKwarg<int>("pre_quant_scalar");
-        args += ", " + std::to_string(pre_quant);
+
+    if (pre_quant_operand != nullptr) {
+        std::string pre_quant = codegen.GetExprAsCode(pre_quant_operand);
+        auto dst_tile_type = ir::As<ir::TileType>(op->args_[0]->GetType());
+        if (dst_tile_type != nullptr && dst_tile_type->dtype_ == DataType::INT8) {
+            // For a signed-int8 output, bit46 of the deqScalar register selects signed (vs unsigned)
+            // requantization on the fixpipe; negative L0C values are read as signed only when this flag
+            // is set, otherwise they saturate to 0 as if unsigned. Emit as a runtime expression so it
+            // works for both constant and dynamic scales. The value is already uint64, so cast straight
+            // to uint64_t (no uint32 narrowing that would drop high bits).
+            args += ", ((static_cast<uint64_t>(" + pre_quant + ") & ~(1ULL << 46)) | (1ULL << 46))";
+        } else {
+            args += ", static_cast<uint64_t>(" + pre_quant + ")";
+        }
     }
 
     codegen.Emit("TMOV<std::remove_reference_t<decltype(" + dst + ")>, std::remove_reference_t<decltype(" + src + ")>" +
@@ -671,39 +651,39 @@ static std::string MakeBlockOutMoveFpCodegenCCE(const ir::CallPtr& op, codegen::
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
     CHECK(op->args_.size() == 3) << "block.move_fp: expected 3 args, got " << op->args_.size();
 
-    CheckMoveFpTileSpace(op->args_[0], ir::MemorySpace::Acc, "source");
-    CheckMoveFpTileSpace(op->args_[1], ir::MemorySpace::Scaling, "fp");
-    CheckMoveFpTileSpace(op->args_[2], ir::MemorySpace::Vec, "destination");
+    CheckMoveFpTileSpace(op->args_[0], ir::MemorySpace::Vec, "destination");
+    CheckMoveFpTileSpace(op->args_[1], ir::MemorySpace::Acc, "source");
+    CheckMoveFpTileSpace(op->args_[2], ir::MemorySpace::Scaling, "fp");
 
-    std::string src = codegen.GetExprAsCode(op->args_[0]);
-    std::string fp_tile = codegen.GetExprAsCode(op->args_[1]);
-    std::string dst = codegen.GetExprAsCode(op->args_[2]);
+    std::string dst = codegen.GetExprAsCode(op->args_[0]);
+    std::string src = codegen.GetExprAsCode(op->args_[1]);
+    std::string fp_tile = codegen.GetExprAsCode(op->args_[2]);
     std::string args = dst + ", " + src + ", " + fp_tile;
 
     std::string relu_template;
     if (op->HasKwarg("relu_pre_mode")) {
-        relu_template = MapReluPreModeCCE(op->GetKwarg<std::string>("relu_pre_mode"));
+        relu_template = GetReluPreModeCCE(op->GetKwarg<int>("relu_pre_mode"));
     }
 
     if (op->HasKwarg("acc_to_vec_mode")) {
-        std::string mode_enum = MapAccToVecModeCCE(op->GetKwarg<std::string>("acc_to_vec_mode"), false);
+        std::string mode_enum = GetAccToVecModeCCE(op->GetKwarg<int>("acc_to_vec_mode"), false);
 
-        std::string fp_type = TileTypeStringForTemplate(codegen, fp_tile, op->args_[1]);
+        std::string fp_type = TileTypeStringForTemplate(codegen, fp_tile, op->args_[2]);
         std::string template_params = ", " + fp_type + ", " + mode_enum;
         if (!relu_template.empty()) {
             template_params += ", " + relu_template;
         }
-        std::string dst_type = TileTypeStringForTemplate(codegen, dst, op->args_[2]);
-        std::string src_type = TileTypeStringForTemplate(codegen, src, op->args_[0]);
+        std::string dst_type = TileTypeStringForTemplate(codegen, dst, op->args_[0]);
+        std::string src_type = TileTypeStringForTemplate(codegen, src, op->args_[1]);
         codegen.Emit("TMOV<std::remove_reference_t<decltype(" + dst + ")>, std::remove_reference_t<decltype(" + src +
                      ")>" + template_params + ">(" + args + ");");
         return "";
     }
 
     if (!relu_template.empty()) {
-        std::string dst_type = TileTypeStringForTemplate(codegen, dst, op->args_[2]);
-        std::string src_type = TileTypeStringForTemplate(codegen, src, op->args_[0]);
-        std::string fp_type = TileTypeStringForTemplate(codegen, fp_tile, op->args_[1]);
+        std::string dst_type = TileTypeStringForTemplate(codegen, dst, op->args_[0]);
+        std::string src_type = TileTypeStringForTemplate(codegen, src, op->args_[1]);
+        std::string fp_type = TileTypeStringForTemplate(codegen, fp_tile, op->args_[2]);
         codegen.Emit("TMOV_FP<std::remove_reference_t<decltype(" + dst + ")>, std::remove_reference_t<decltype(" + src +
                      ")>, std::remove_reference_t<decltype(" + fp_tile + ")>, " + relu_template + ">(" + args + ");");
     } else {
@@ -714,16 +694,16 @@ static std::string MakeBlockOutMoveFpCodegenCCE(const ir::CallPtr& op, codegen::
 }
 
 // ============================================================================
-// block.set_validshape  - args = [row, col, tile]
+// block.set_validshape  - args = [tile, row, col]
 // Emits: tile.SetValidShape(row, col);
 // ============================================================================
 static std::string MakeBlockOutSetValidShapeCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-    CHECK(op->args_.size() == 3) << "block.set_validshape: expected 3 args (row, col, tile), got " << op->args_.size();
-    std::string row = codegen.GetExprAsCode(op->args_[0]);
-    std::string col = codegen.GetExprAsCode(op->args_[1]);
-    std::string tile = codegen.GetExprAsCode(op->args_[2]);
+    CHECK(op->args_.size() == 3) << "block.set_validshape: expected 3 args (tile, row, col), got " << op->args_.size();
+    std::string tile = codegen.GetExprAsCode(op->args_[0]);
+    std::string row = codegen.GetExprAsCode(op->args_[1]);
+    std::string col = codegen.GetExprAsCode(op->args_[2]);
     // Register for any subsequent store that uses this tile.
     codegen.RegisterTileEmitShape(tile, row, col);
     codegen.Emit(tile + ".SetValidShape(" + row + ", " + col + ");");
@@ -731,19 +711,41 @@ static std::string MakeBlockOutSetValidShapeCodegenCCE(const ir::CallPtr& op, co
 }
 
 // ============================================================================
-// block.matmul  - args = [left, right, dst]
+// block.set_stride  -  args = [tensor, row_stride, col_stride]
+// Emits: tensor.SetStride<DIM_3, DIM_4>(row, col);
+// The global tensor descriptor is declared once with a fully-dynamic 5D stride
+// (pto::Stride<-1,...>), where rows map to DIM_3 and cols to DIM_4. This op
+// overrides those two runtime strides so subsequent block.load/store accesses
+// through the same descriptor walk the tensor with the supplied element strides.
+// ============================================================================
+static std::string MakeBlockOutSetStrideCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
+{
+    auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
+    CHECK(op->args_.size() == 3) << "block.set_stride: expected 3 args (tensor, row, col), got " << op->args_.size();
+    auto tensor_var = std::dynamic_pointer_cast<const ir::Var>(op->args_[0]);
+    CHECK(tensor_var != nullptr) << "block.set_stride: tensor must be a Var";
+    std::string tensor = codegen.GetVarName(tensor_var);
+    std::string row = codegen.GetExprAsCode(op->args_[1]);
+    std::string col = codegen.GetExprAsCode(op->args_[2]);
+    codegen.Emit(tensor + ".SetStride<pto::GlobalTensorDim::DIM_3, pto::GlobalTensorDim::DIM_4>(" +
+                 "static_cast<int64_t>(" + row + "), static_cast<int64_t>(" + col + "));");
+    return "";
+}
+
+// ============================================================================
+// block.matmul  - args = [dst, left, right]
 // Emits: TMATMUL[<AccPhase::Phase>](dst, left, right);
 // ============================================================================
 static std::string MakeBlockOutMatmulCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-    CHECK(op->args_.size() == 3) << "block.matmul: expected 3 args (left, right, dst), got " << op->args_.size();
-    std::string left = codegen.GetExprAsCode(op->args_[0]);
-    std::string right = codegen.GetExprAsCode(op->args_[1]);
-    std::string dst = codegen.GetExprAsCode(op->args_[2]);
+    CHECK(op->args_.size() == 3) << "block.matmul: expected 3 args (dst, left, right), got " << op->args_.size();
+    std::string dst = codegen.GetExprAsCode(op->args_[0]);
+    std::string left = codegen.GetExprAsCode(op->args_[1]);
+    std::string right = codegen.GetExprAsCode(op->args_[2]);
 
     // Get phase (unit-flag) — AccPhase template parameter for TMATMUL.
-    std::string phase_template = MapPhaseTemplateCCE(op, "AccPhase");
+    std::string phase_template = GetAccPhaseCCE(op);
 
     if (!phase_template.empty()) {
         codegen.Emit("TMATMUL<" + phase_template + ">(" + dst + ", " + left + ", " + right + ");");
@@ -753,19 +755,19 @@ static std::string MakeBlockOutMatmulCodegenCCE(const ir::CallPtr& op, codegen::
     return "";
 }
 
-// block.matmul_acc  - args = [acc, left, right, dst]
+// block.matmul_acc  - args = [dst, acc, left, right]
 // Emits: TMATMUL_ACC[<AccPhase::Phase>](dst, acc, left, right);
 static std::string MakeBlockOutMatmulAccCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
     CHECK(op->args_.size() == 4) << "block.matmul_acc: expected 4 args, got " << op->args_.size();
-    std::string acc = codegen.GetExprAsCode(op->args_[0]);
-    std::string left = codegen.GetExprAsCode(op->args_[1]);
-    std::string right = codegen.GetExprAsCode(op->args_[2]);
-    std::string dst = codegen.GetExprAsCode(op->args_[3]);
+    std::string dst = codegen.GetExprAsCode(op->args_[0]);
+    std::string acc = codegen.GetExprAsCode(op->args_[1]);
+    std::string left = codegen.GetExprAsCode(op->args_[2]);
+    std::string right = codegen.GetExprAsCode(op->args_[3]);
 
     // Get phase (unit-flag) — AccPhase template parameter for TMATMUL_ACC.
-    std::string phase_template = MapPhaseTemplateCCE(op, "AccPhase");
+    std::string phase_template = GetAccPhaseCCE(op);
 
     if (!phase_template.empty()) {
         codegen.Emit("TMATMUL_ACC<" + phase_template + ">(" + dst + ", " + acc + ", " + left + ", " + right + ");");
@@ -775,34 +777,33 @@ static std::string MakeBlockOutMatmulAccCodegenCCE(const ir::CallPtr& op, codege
     return "";
 }
 
-// block.cast  - args = [src, dst] + mode kwarg
+// block.cast  - args = [dst, src] + mode kwarg
 static std::string MakeBlockOutCastCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-    CHECK(op->args_.size() == 2) << "block.cast: expected 2 args (src, dst), got " << op->args_.size();
-    std::string src = codegen.GetExprAsCode(op->args_[0]);
-    std::string dst = codegen.GetExprAsCode(op->args_[1]);
+    CHECK(op->args_.size() == 2) << "block.cast: expected 2 args (dst, src), got " << op->args_.size();
+    std::string dst = codegen.GetExprAsCode(op->args_[0]);
+    std::string src = codegen.GetExprAsCode(op->args_[1]);
 
-    // Get round mode from kwargs  - block.cast uses a string mode
-    const std::string& mode_str = op->GetKwarg<std::string>("mode");
-    int mode_idx = round_mode::FindIndex(mode_str, "block.cast");
+    // Get round mode from kwargs - block.cast uses an int mode (RoundMode enum)
+    int mode_idx = op->GetKwarg<int>("mode");
 
     codegen.Emit("TCVT(" + dst + ", " + src + ", " + codegen.GetTypeConverter().ConvertCastRoundMode(mode_idx) + ");");
     return "";
 }
 
-// block.full/expands  - args = [scalar, dst]
+// block.full/expands  - args = [dst, scalar]
 static std::string MakeBlockOutExpandsCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-    CHECK(op->args_.size() == 2) << "block.full/expands: expected 2 args (scalar, dst), got " << op->args_.size();
-    std::string scalar = codegen.GetExprAsCode(op->args_[0]);
-    std::string dst = codegen.GetExprAsCode(op->args_[1]);
+    CHECK(op->args_.size() == 2) << "block.full/expands: expected 2 args (dst, scalar), got " << op->args_.size();
+    std::string dst = codegen.GetExprAsCode(op->args_[0]);
+    std::string scalar = codegen.GetExprAsCode(op->args_[1]);
 
     // aicore does not allow implicit cast from integer (including index) to float.
     // Insert explicit (float) cast when scalar is integer/index and dst element type is float.
-    auto scalar_type = ir::As<ir::ScalarType>(op->args_[0]->GetType());
-    auto tile_type = ir::As<ir::TileType>(op->args_[1]->GetType());
+    auto scalar_type = ir::As<ir::ScalarType>(op->args_[1]->GetType());
+    auto tile_type = ir::As<ir::TileType>(op->args_[0]->GetType());
     if (scalar_type && tile_type) {
         bool src_is_int = (scalar_type->dtype_ == DataType::INDEX || scalar_type->dtype_ == DataType::INT8 ||
                            scalar_type->dtype_ == DataType::INT16 || scalar_type->dtype_ == DataType::INT32 ||
@@ -821,18 +822,18 @@ static std::string MakeBlockOutExpandsCodegenCCE(const ir::CallPtr& op, codegen:
     return "";
 }
 
-// block.create_vec_idx  - args = [start, dst]
-static std::string MakeBlockOutCreateVecIdxCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
+// block.fill_index  - args = [dst, start]
+static std::string MakeBlockOutFillIndexCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-    CHECK(op->args_.size() == 2) << "block.create_vec_idx: expected 2 args (start, dst), got " << op->args_.size();
-    std::string start = codegen.GetExprAsCode(op->args_[0]);
-    std::string dst = codegen.GetExprAsCode(op->args_[1]);
-    std::string dst_type = TileTypeStringForTemplate(codegen, dst, op->args_[1]);
+    CHECK(op->args_.size() == 2) << "block.fill_index: expected 2 args (dst, start), got " << op->args_.size();
+    std::string dst = codegen.GetExprAsCode(op->args_[0]);
+    std::string start = codegen.GetExprAsCode(op->args_[1]);
+    std::string dst_type = TileTypeStringForTemplate(codegen, dst, op->args_[0]);
 
     // TCI requires the scalar type T to match the tile element type.
     std::string scalar_type = "int32_t";
-    auto tile_type = ir::As<ir::TileType>(op->args_[1]->GetType());
+    auto tile_type = ir::As<ir::TileType>(op->args_[0]->GetType());
     if (tile_type) {
         if (tile_type->dtype_ == DataType::INT16) {
             scalar_type = "int16_t";
@@ -890,17 +891,17 @@ static std::string BuildNullPadSourceAliasCCE(codegen::CCECodegen& codegen, cons
     return alias_name;
 }
 
-// block.fillpad  - args = [src, dst]
+// block.fillpad  - args = [dst, src]
 static std::string MakeBlockOutFillpadCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-    CHECK(op->args_.size() == 2) << "block.fillpad: expected 2 args (src, dst), got " << op->args_.size();
+    CHECK(op->args_.size() == 2) << "block.fillpad: expected 2 args (dst, src), got " << op->args_.size();
 
-    auto src_tile_type = ir::As<ir::TileType>(op->args_[0]->GetType());
+    auto src_tile_type = ir::As<ir::TileType>(op->args_[1]->GetType());
     CHECK(src_tile_type != nullptr) << "block.fillpad: expected TileType src";
 
-    std::string src = codegen.GetExprAsCode(op->args_[0]);
-    std::string dst = codegen.GetExprAsCode(op->args_[1]);
+    std::string dst = codegen.GetExprAsCode(op->args_[0]);
+    std::string src = codegen.GetExprAsCode(op->args_[1]);
     if (NeedsNullPadSourceAliasCCE(src_tile_type)) {
         src = BuildNullPadSourceAliasCCE(codegen, src_tile_type, src);
     }
@@ -909,17 +910,17 @@ static std::string MakeBlockOutFillpadCodegenCCE(const ir::CallPtr& op, codegen:
     return "";
 }
 
-// block.fillpad_inplace  - args = [src, dst]
+// block.fillpad_inplace  - args = [dst, src]
 static std::string MakeBlockOutFillpadInplaceCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-    CHECK(op->args_.size() == 2) << "block.fillpad_inplace: expected 2 args (src, dst), got " << op->args_.size();
+    CHECK(op->args_.size() == 2) << "block.fillpad_inplace: expected 2 args (dst, src), got " << op->args_.size();
 
-    auto src_tile_type = ir::As<ir::TileType>(op->args_[0]->GetType());
+    auto src_tile_type = ir::As<ir::TileType>(op->args_[1]->GetType());
     CHECK(src_tile_type != nullptr) << "block.fillpad_inplace: expected TileType src";
 
-    std::string src = codegen.GetExprAsCode(op->args_[0]);
-    std::string dst = codegen.GetExprAsCode(op->args_[1]);
+    std::string dst = codegen.GetExprAsCode(op->args_[0]);
+    std::string src = codegen.GetExprAsCode(op->args_[1]);
 
     if (NeedsNullPadSourceAliasCCE(src_tile_type)) {
         src = BuildNullPadSourceAliasCCE(codegen, src_tile_type, src);
@@ -929,17 +930,17 @@ static std::string MakeBlockOutFillpadInplaceCodegenCCE(const ir::CallPtr& op, c
     return "";
 }
 
-// block.fillpad_expand  - args = [src, dst]
+// block.fillpad_expand  - args = [dst, src]
 static std::string MakeBlockOutFillpadExpandCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-    CHECK(op->args_.size() == 2) << "block.fillpad_expand: expected 2 args (src, dst), got " << op->args_.size();
+    CHECK(op->args_.size() == 2) << "block.fillpad_expand: expected 2 args (dst, src), got " << op->args_.size();
 
-    auto src_tile_type = ir::As<ir::TileType>(op->args_[0]->GetType());
+    auto src_tile_type = ir::As<ir::TileType>(op->args_[1]->GetType());
     CHECK(src_tile_type != nullptr) << "block.fillpad_expand: expected TileType src";
 
-    std::string src = codegen.GetExprAsCode(op->args_[0]);
-    std::string dst = codegen.GetExprAsCode(op->args_[1]);
+    std::string dst = codegen.GetExprAsCode(op->args_[0]);
+    std::string src = codegen.GetExprAsCode(op->args_[1]);
     if (src == dst) {
         throw pypto::ir::ValueError("block.fillpad_expand: inplace is not supported");
     }
@@ -952,51 +953,51 @@ static std::string MakeBlockOutFillpadExpandCodegenCCE(const ir::CallPtr& op, co
     return "";
 }
 
-// block.reshape  - args = [src, shape, dst]
+// block.reshape  - args = [dst, src, shape]
 static std::string MakeBlockOutReshapeCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-    CHECK(op->args_.size() == 3) << "block.reshape: expected 3 args (src, shape, dst), got " << op->args_.size();
-    std::string src = codegen.GetExprAsCode(op->args_[0]);
-    std::string dst = codegen.GetExprAsCode(op->args_[2]);
+    CHECK(op->args_.size() == 3) << "block.reshape: expected 3 args (dst, src, shape), got " << op->args_.size();
+    std::string dst = codegen.GetExprAsCode(op->args_[0]);
+    std::string src = codegen.GetExprAsCode(op->args_[1]);
     codegen.Emit("TRESHAPE(" + dst + ", " + src + ");");
     return "";
 }
 
-// block.transpose  - args = [src, dst]
+// block.transpose  - args = [dst, src]
 static std::string MakeBlockOutTransposeCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-    CHECK(op->args_.size() == 2) << "block.transpose: expected 2 args (src, dst), got " << op->args_.size();
-    std::string src = codegen.GetExprAsCode(op->args_[0]);
-    std::string dst = codegen.GetExprAsCode(op->args_[1]);
+    CHECK(op->args_.size() == 2) << "block.transpose: expected 2 args (dst, src), got " << op->args_.size();
+    std::string dst = codegen.GetExprAsCode(op->args_[0]);
+    std::string src = codegen.GetExprAsCode(op->args_[1]);
     // A5 CCE builtin requires the explicit tmp operand for TTRANS.
     // Reuse the source tile as the temporary buffer, matching PTO ISA demos.
     codegen.Emit("TTRANS(" + dst + ", " + src + ", " + src + ");");
     return "";
 }
 
-// block.cmp  -  args = [lhs, rhs, dst] + cmp_type kwarg
+// block.cmp  -  args = [dst, lhs, rhs] + cmp_type kwarg
 static std::string MakeBlockOutCmpCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-    CHECK(op->args_.size() == 3) << "block.cmp: expected 3 args (lhs, rhs, dst), got " << op->args_.size();
-    std::string lhs = codegen.GetExprAsCode(op->args_[0]);
-    std::string rhs = codegen.GetExprAsCode(op->args_[1]);
-    std::string dst = codegen.GetExprAsCode(op->args_[2]);
+    CHECK(op->args_.size() == 3) << "block.cmp: expected 3 args (dst, lhs, rhs), got " << op->args_.size();
+    std::string dst = codegen.GetExprAsCode(op->args_[0]);
+    std::string lhs = codegen.GetExprAsCode(op->args_[1]);
+    std::string rhs = codegen.GetExprAsCode(op->args_[2]);
     int cmp_type = op->GetKwarg<int>("cmp_type");
     codegen.Emit("TCMP(" + dst + ", " + lhs + ", " + rhs + ", " + cce::GetCmpModeEnum(cmp_type) + ");");
     return "";
 }
 
-// block.cmps  - args = [tile, scalar, dst] + cmp_type kwarg
+// block.cmps  - args = [dst, tile, scalar] + cmp_type kwarg
 static std::string MakeBlockOutCmpsCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-    CHECK(op->args_.size() == 3) << "block.cmps: expected 3 args (tile, scalar, dst), got " << op->args_.size();
-    std::string tile = codegen.GetExprAsCode(op->args_[0]);
-    std::string scalar = codegen.GetExprAsCode(op->args_[1]);
-    std::string dst = codegen.GetExprAsCode(op->args_[2]);
+    CHECK(op->args_.size() == 3) << "block.cmps: expected 3 args (dst, tile, scalar), got " << op->args_.size();
+    std::string dst = codegen.GetExprAsCode(op->args_[0]);
+    std::string tile = codegen.GetExprAsCode(op->args_[1]);
+    std::string scalar = codegen.GetExprAsCode(op->args_[2]);
     int cmp_type = op->GetKwarg<int>("cmp_type");
     codegen.Emit("TCMPS(" + dst + ", " + tile + ", " + scalar + ", " + cce::GetCmpModeEnum(cmp_type) + ");");
     return "";
@@ -1042,66 +1043,66 @@ static std::string MakeBlockOutSsbufLoadCodegenCCE(const ir::CallPtr& op, codege
     return "";
 }
 
-// block.col_expand  - args = [src, dst]
+// block.col_expand  - args = [dst, src]
 static std::string MakeBlockOutColExpandCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-    CHECK(op->args_.size() == 2) << "block.col_expand: expected 2 args (src, dst), got " << op->args_.size();
+    CHECK(op->args_.size() == 2) << "block.col_expand: expected 2 args (dst, src), got " << op->args_.size();
     // TCOLEXPAND is inplace: dst and src share same buffer
-    std::string src = codegen.GetExprAsCode(op->args_[0]);
-    std::string dst = codegen.GetExprAsCode(op->args_[1]);
+    std::string dst = codegen.GetExprAsCode(op->args_[0]);
+    std::string src = codegen.GetExprAsCode(op->args_[1]);
     codegen.Emit("TCOLEXPAND(" + dst + ", " + src + ");");
     return "";
 }
 
-// block.row_expand  - args = [src, dst]
+// block.row_expand  - args = [dst, src]
 static std::string MakeBlockOutRowExpandUnaryCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-    CHECK(op->args_.size() == 2) << "block.row_expand: expected 2 args (src, dst), got " << op->args_.size();
-    std::string src = codegen.GetExprAsCode(op->args_[0]);
-    std::string dst = codegen.GetExprAsCode(op->args_[1]);
+    CHECK(op->args_.size() == 2) << "block.row_expand: expected 2 args (dst, src), got " << op->args_.size();
+    std::string dst = codegen.GetExprAsCode(op->args_[0]);
+    std::string src = codegen.GetExprAsCode(op->args_[1]);
     codegen.Emit("TROWEXPAND(" + dst + ", " + src + ");");
     return "";
 }
 
 // ============================================================================
-// Helper: Block explicit-output ternary op  - args = [a, b, c, dst]
+// Helper: Block explicit-output ternary op  - args = [dst, a, b, c]
 // Emits: OP(dst, a, b, c);
 // ============================================================================
 static std::string MakeBlockOutTernaryCodegenCCE(const std::string& cce_op_name, const ir::CallPtr& op,
                                                  codegen::CodegenBase& codegen_base)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-    CHECK(op->args_.size() == 4) << cce_op_name << ": expected 4 args (a, b, c, dst), got " << op->args_.size();
-    std::string a = codegen.GetExprAsCode(op->args_[0]);
-    std::string b = codegen.GetExprAsCode(op->args_[1]);
-    std::string c = codegen.GetExprAsCode(op->args_[2]);
-    std::string dst = codegen.GetExprAsCode(op->args_[3]);
+    CHECK(op->args_.size() == 4) << cce_op_name << ": expected 4 args (dst, a, b, c), got " << op->args_.size();
+    std::string dst = codegen.GetExprAsCode(op->args_[0]);
+    std::string a = codegen.GetExprAsCode(op->args_[1]);
+    std::string b = codegen.GetExprAsCode(op->args_[2]);
+    std::string c = codegen.GetExprAsCode(op->args_[3]);
     codegen.Emit(cce_op_name + "(" + dst + ", " + a + ", " + b + ", " + c + ");");
     return "";
 }
 
 // ============================================================================
-// Helper: Block explicit-output quaternary op  - args = [a, b, c, d, dst]
+// Helper: Block explicit-output quaternary op  - args = [dst, a, b, c, d]
 // Emits: OP(dst, a, b, c, d);
 // ============================================================================
 static std::string MakeBlockOutQuaternaryCodegenCCE(const std::string& cce_op_name, const ir::CallPtr& op,
                                                     codegen::CodegenBase& codegen_base)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-    CHECK(op->args_.size() == 5) << cce_op_name << ": expected 5 args (a, b, c, d, dst), got " << op->args_.size();
-    std::string a = codegen.GetExprAsCode(op->args_[0]);
-    std::string b = codegen.GetExprAsCode(op->args_[1]);
-    std::string c = codegen.GetExprAsCode(op->args_[2]);
-    std::string d = codegen.GetExprAsCode(op->args_[3]);
-    std::string dst = codegen.GetExprAsCode(op->args_[4]);
+    CHECK(op->args_.size() == 5) << cce_op_name << ": expected 5 args (dst, a, b, c, d), got " << op->args_.size();
+    std::string dst = codegen.GetExprAsCode(op->args_[0]);
+    std::string a = codegen.GetExprAsCode(op->args_[1]);
+    std::string b = codegen.GetExprAsCode(op->args_[2]);
+    std::string c = codegen.GetExprAsCode(op->args_[3]);
+    std::string d = codegen.GetExprAsCode(op->args_[4]);
     codegen.Emit(cce_op_name + "(" + dst + ", " + a + ", " + b + ", " + c + ", " + d + ");");
     return "";
 }
 
 // ============================================================================
-// Helper: Binary + ReLU  - args = [lhs, rhs, dst]
+// Helper: Binary + ReLU  - args = [dst, lhs, rhs]
 // Semantics: dst = max(0, OP(lhs, rhs))
 // Emits: OP(lhs, lhs, rhs); TRELU(dst, lhs);
 // ============================================================================
@@ -1109,17 +1110,17 @@ static std::string MakeBlockOutBinaryReluCodegenCCE(const std::string& cce_op_na
                                                     codegen::CodegenBase& codegen_base)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-    CHECK(op->args_.size() == 3) << cce_op_name << "+relu: expected 3 args (lhs, rhs, dst), got " << op->args_.size();
-    std::string lhs = codegen.GetExprAsCode(op->args_[0]);
-    std::string rhs = codegen.GetExprAsCode(op->args_[1]);
-    std::string dst = codegen.GetExprAsCode(op->args_[2]);
+    CHECK(op->args_.size() == 3) << cce_op_name << "+relu: expected 3 args (dst, lhs, rhs), got " << op->args_.size();
+    std::string dst = codegen.GetExprAsCode(op->args_[0]);
+    std::string lhs = codegen.GetExprAsCode(op->args_[1]);
+    std::string rhs = codegen.GetExprAsCode(op->args_[2]);
     codegen.Emit(cce_op_name + "(" + lhs + ", " + lhs + ", " + rhs + ");");
     codegen.Emit("TRELU(" + dst + ", " + lhs + ");");
     return "";
 }
 
 // ============================================================================
-// Helper: Binary + ReLU + Cast  - args = [lhs, rhs, dst] + mode kwarg
+// Helper: Binary + ReLU + Cast  - args = [dst, lhs, rhs] + mode kwarg
 // Semantics: dst = cast(max(0, OP(lhs, rhs)), mode)
 // Emits: OP(lhs, lhs, rhs); TRELU(lhs, lhs); TCVT(dst, lhs, mode);
 // ============================================================================
@@ -1127,13 +1128,12 @@ static std::string MakeBlockOutBinaryReluCastCodegenCCE(const std::string& cce_o
                                                         codegen::CodegenBase& codegen_base)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-    CHECK(op->args_.size() == 3) << cce_op_name << "+relu+cast: expected 3 args (lhs, rhs, dst), got "
+    CHECK(op->args_.size() == 3) << cce_op_name << "+relu+cast: expected 3 args (dst, lhs, rhs), got "
                                  << op->args_.size();
-    std::string lhs = codegen.GetExprAsCode(op->args_[0]);
-    std::string rhs = codegen.GetExprAsCode(op->args_[1]);
-    std::string dst = codegen.GetExprAsCode(op->args_[2]);
-    const std::string& mode_str = op->GetKwarg<std::string>("mode");
-    int mode_idx = round_mode::FindIndex(mode_str, cce_op_name + "+relu+cast");
+    std::string dst = codegen.GetExprAsCode(op->args_[0]);
+    std::string lhs = codegen.GetExprAsCode(op->args_[1]);
+    std::string rhs = codegen.GetExprAsCode(op->args_[2]);
+    int mode_idx = op->GetKwarg<int>("mode");
     codegen.Emit(cce_op_name + "(" + lhs + ", " + lhs + ", " + rhs + ");");
     codegen.Emit("TRELU(" + lhs + ", " + lhs + ");");
     codegen.Emit("TCVT(" + dst + ", " + lhs + ", " + codegen.GetTypeConverter().ConvertCastRoundMode(mode_idx) + ");");
@@ -1141,7 +1141,7 @@ static std::string MakeBlockOutBinaryReluCastCodegenCCE(const std::string& cce_o
 }
 
 // ============================================================================
-// Helper: Binary + Cast  - args = [lhs, rhs, dst] + mode kwarg
+// Helper: Binary + Cast  - args = [dst, lhs, rhs] + mode kwarg
 // Semantics: dst = cast(OP(lhs, rhs), mode)
 // Emits: OP(lhs, lhs, rhs); TCVT(dst, lhs, mode);
 // ============================================================================
@@ -1149,64 +1149,63 @@ static std::string MakeBlockOutBinaryCastCodegenCCE(const std::string& cce_op_na
                                                     codegen::CodegenBase& codegen_base)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-    CHECK(op->args_.size() == 3) << cce_op_name << "+cast: expected 3 args (lhs, rhs, dst), got " << op->args_.size();
-    std::string lhs = codegen.GetExprAsCode(op->args_[0]);
-    std::string rhs = codegen.GetExprAsCode(op->args_[1]);
-    std::string dst = codegen.GetExprAsCode(op->args_[2]);
-    const std::string& mode_str = op->GetKwarg<std::string>("mode");
-    int mode_idx = round_mode::FindIndex(mode_str, cce_op_name + "+cast");
+    CHECK(op->args_.size() == 3) << cce_op_name << "+cast: expected 3 args (dst, lhs, rhs), got " << op->args_.size();
+    std::string dst = codegen.GetExprAsCode(op->args_[0]);
+    std::string lhs = codegen.GetExprAsCode(op->args_[1]);
+    std::string rhs = codegen.GetExprAsCode(op->args_[2]);
+    int mode_idx = op->GetKwarg<int>("mode");
     codegen.Emit(cce_op_name + "(" + lhs + ", " + lhs + ", " + rhs + ");");
     codegen.Emit("TCVT(" + dst + ", " + lhs + ", " + codegen.GetTypeConverter().ConvertCastRoundMode(mode_idx) + ");");
     return "";
 }
 
 // ============================================================================
-// block.mul_add_dst  - args = [lhs, rhs, out]
+// block.mul_add_dst  - args = [out, lhs, rhs]
 // Semantics: out = (lhs * rhs) + out
 // Emits: TMUL(lhs, lhs, rhs); TADD(out, lhs, out);
 // ============================================================================
 static std::string MakeBlockOutMulAddDstCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-    CHECK(op->args_.size() == 3) << "block.mul_add_dst: expected 3 args (lhs, rhs, out), got " << op->args_.size();
-    std::string lhs = codegen.GetExprAsCode(op->args_[0]);
-    std::string rhs = codegen.GetExprAsCode(op->args_[1]);
-    std::string out = codegen.GetExprAsCode(op->args_[2]);
+    CHECK(op->args_.size() == 3) << "block.mul_add_dst: expected 3 args (out, lhs, rhs), got " << op->args_.size();
+    std::string out = codegen.GetExprAsCode(op->args_[0]);
+    std::string lhs = codegen.GetExprAsCode(op->args_[1]);
+    std::string rhs = codegen.GetExprAsCode(op->args_[2]);
     codegen.Emit("TMUL(" + lhs + ", " + lhs + ", " + rhs + ");");
     codegen.Emit("TADD(" + out + ", " + lhs + ", " + out + ");");
     return "";
 }
 
 // ============================================================================
-// block.fused_mul_add  - args = [lhs, rhs, out]
+// block.fused_mul_add  - args = [out, lhs, rhs]
 // Semantics: out = (lhs * out) + rhs
 // Emits: TMUL(lhs, lhs, out); TADD(out, lhs, rhs);
 // ============================================================================
 static std::string MakeBlockOutFusedMulAddCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-    CHECK(op->args_.size() == 3) << "block.fused_mul_add: expected 3 args (lhs, rhs, out), got " << op->args_.size();
-    std::string lhs = codegen.GetExprAsCode(op->args_[0]);
-    std::string rhs = codegen.GetExprAsCode(op->args_[1]);
-    std::string out = codegen.GetExprAsCode(op->args_[2]);
+    CHECK(op->args_.size() == 3) << "block.fused_mul_add: expected 3 args (out, lhs, rhs), got " << op->args_.size();
+    std::string out = codegen.GetExprAsCode(op->args_[0]);
+    std::string lhs = codegen.GetExprAsCode(op->args_[1]);
+    std::string rhs = codegen.GetExprAsCode(op->args_[2]);
     codegen.Emit("TMUL(" + lhs + ", " + lhs + ", " + out + ");");
     codegen.Emit("TADD(" + out + ", " + lhs + ", " + rhs + ");");
     return "";
 }
 
 // ============================================================================
-// block.fused_mul_add_relu  - args = [lhs, rhs, out]
+// block.fused_mul_add_relu  - args = [out, lhs, rhs]
 // Semantics: out = max(0, (lhs * out) + rhs)
 // Emits: TMUL(lhs, lhs, out); TADD(lhs, lhs, rhs); TRELU(out, lhs);
 // ============================================================================
 static std::string MakeBlockOutFusedMulAddReluCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-    CHECK(op->args_.size() == 3) << "block.fused_mul_add_relu: expected 3 args (lhs, rhs, out), got "
+    CHECK(op->args_.size() == 3) << "block.fused_mul_add_relu: expected 3 args (out, lhs, rhs), got "
                                  << op->args_.size();
-    std::string lhs = codegen.GetExprAsCode(op->args_[0]);
-    std::string rhs = codegen.GetExprAsCode(op->args_[1]);
-    std::string out = codegen.GetExprAsCode(op->args_[2]);
+    std::string out = codegen.GetExprAsCode(op->args_[0]);
+    std::string lhs = codegen.GetExprAsCode(op->args_[1]);
+    std::string rhs = codegen.GetExprAsCode(op->args_[2]);
     codegen.Emit("TMUL(" + lhs + ", " + lhs + ", " + out + ");");
     codegen.Emit("TADD(" + lhs + ", " + lhs + ", " + rhs + ");");
     codegen.Emit("TRELU(" + out + ", " + lhs + ");");
@@ -1214,12 +1213,12 @@ static std::string MakeBlockOutFusedMulAddReluCodegenCCE(const ir::CallPtr& op, 
 }
 
 // ============================================================================
-// block.gather  - args = [src, indices, out] or [src, indices, tmp, out]
+// block.gather  - args = [out, src, indices] or [out, src, indices, tmp]
 // Emits: TGATHER(out, src, indices) or TGATHER(out, src, indices, tmp);
 // ============================================================================
 // block.gather: Two forms:
-//   Index form: args = [src, indices, out] or [src, indices, tmp, out]
-//   Compare form: args = [src, k_value, cdst, tmp, out] + kwargs(cmp_mode, offset)
+//   Index form: args = [out, src, indices] or [out, src, indices, tmp]
+//   Compare form: args = [out, src, k_value, cdst, tmp] + kwargs(cmp_mode, offset)
 // ============================================================================
 static std::string MakeBlockOutGatherCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
 {
@@ -1229,24 +1228,24 @@ static std::string MakeBlockOutGatherCodegenCCE(const ir::CallPtr& op, codegen::
 
     if (!attrs.has_cmp_mode && (op->args_.size() == 3 || op->args_.size() == 4)) {
         if (op->args_.size() == 3) {
-            std::string src = codegen.GetExprAsCode(op->args_[0]);
-            std::string indices = codegen.GetExprAsCode(op->args_[1]);
-            std::string out = codegen.GetExprAsCode(op->args_[2]);
+            std::string out = codegen.GetExprAsCode(op->args_[0]);
+            std::string src = codegen.GetExprAsCode(op->args_[1]);
+            std::string indices = codegen.GetExprAsCode(op->args_[2]);
             codegen.Emit("TGATHER(" + out + ", " + src + ", " + indices + ");");
         } else {
             CHECK(op->args_.size() == 4) << "block.gather: expected 3 or 4 args, got " << op->args_.size();
-            std::string src = codegen.GetExprAsCode(op->args_[0]);
-            std::string indices = codegen.GetExprAsCode(op->args_[1]);
-            std::string tmp = codegen.GetExprAsCode(op->args_[2]);
-            std::string out = codegen.GetExprAsCode(op->args_[3]);
+            std::string out = codegen.GetExprAsCode(op->args_[0]);
+            std::string src = codegen.GetExprAsCode(op->args_[1]);
+            std::string indices = codegen.GetExprAsCode(op->args_[2]);
+            std::string tmp = codegen.GetExprAsCode(op->args_[3]);
             codegen.Emit("TGATHER(" + out + ", " + src + ", " + indices + ", " + tmp + ");");
         }
     } else if (attrs.has_cmp_mode && op->args_.size() == 5) {
-        std::string src = codegen.GetExprAsCode(op->args_[0]);
-        std::string k_value = codegen.GetExprAsCode(op->args_[1]);
-        std::string cdst = codegen.GetExprAsCode(op->args_[2]);
-        std::string tmp = codegen.GetExprAsCode(op->args_[3]);
-        std::string out = codegen.GetExprAsCode(op->args_[4]);
+        std::string out = codegen.GetExprAsCode(op->args_[0]);
+        std::string src = codegen.GetExprAsCode(op->args_[1]);
+        std::string k_value = codegen.GetExprAsCode(op->args_[2]);
+        std::string cdst = codegen.GetExprAsCode(op->args_[3]);
+        std::string tmp = codegen.GetExprAsCode(op->args_[4]);
         std::string cmp_mode_str = (attrs.cmp_mode == 4) ? "CmpMode::GT" : "CmpMode::EQ";
         codegen.Emit("TGATHER<std::remove_reference_t<decltype(" + out + ")>, std::remove_reference_t<decltype(" + src +
                      ")>, std::remove_reference_t<decltype(" + k_value + ")>, std::remove_reference_t<decltype(" +
@@ -1260,8 +1259,6 @@ static std::string MakeBlockOutGatherCodegenCCE(const ir::CallPtr& op, codegen::
 
 // ============================================================================
 // block.gathermask  - args = [out, src] + kwargs(pattern_mode)
-// Note: parser reorders Python args (src, out) -> IR args (out, src) via
-// the "first arg is out, push to last" convention. So args_[0] = out, args_[1] = src.
 // Emits: TGATHER<decltype(out), decltype(src), MaskPattern::Pxxxx>(out, src)
 // ============================================================================
 static std::string MakeBlockOutGatherMaskCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
@@ -1298,85 +1295,91 @@ static std::string MakeBlockOutGatherMaskCodegenCCE(const ir::CallPtr& op, codeg
 // Op registrations  - Memory
 // ============================================================================
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.load")
+REGISTER_BACKEND_OP(BackendCCE, "block.load")
     .set_pipe(ir::PipeType::MTE2)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutLoadCodegenCCE(op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.store")
+REGISTER_BACKEND_OP(BackendCCE, "block.store")
     .set_pipe(ir::PipeType::MTE3)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutStoreCodegenCCE(op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.store_fp")
+REGISTER_BACKEND_OP(BackendCCE, "block.store_fp")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutStoreFpCodegenCCE(op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.set_validshape")
+REGISTER_BACKEND_OP(BackendCCE, "block.set_validshape")
     .set_pipe(ir::PipeType::S)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutSetValidShapeCodegenCCE(op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.move")
+REGISTER_BACKEND_OP(BackendCCE, "block.set_stride")
+    .set_pipe(ir::PipeType::S)
+    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
+        return MakeBlockOutSetStrideCodegenCCE(op, codegen);
+    });
+
+REGISTER_BACKEND_OP(BackendCCE, "block.move")
     .set_pipe(ir::PipeType::MTE1)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutMoveCodegenCCE(op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.move_fp")
+REGISTER_BACKEND_OP(BackendCCE, "block.move_fp")
     .set_pipe(ir::PipeType::FIX)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutMoveFpCodegenCCE(op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.insert")
-    .set_pipe(ir::PipeType::MTE1)
+REGISTER_BACKEND_OP(BackendCCE, "block.insert")
+    .set_pipe(ir::PipeType::MTE3)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutInsertCodegenCCE(op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.ub_copy")
+REGISTER_BACKEND_OP(BackendCCE, "block.ub_copy")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutUbCopyCodegenCCE(op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.ssbuf_store")
+REGISTER_BACKEND_OP(BackendCCE, "block.ssbuf_store")
     .set_pipe(ir::PipeType::S)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutSsbufStoreCodegenCCE(op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.ssbuf_load")
+REGISTER_BACKEND_OP(BackendCCE, "block.ssbuf_load")
     .set_pipe(ir::PipeType::S)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutSsbufLoadCodegenCCE(op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.full")
+REGISTER_BACKEND_OP(BackendCCE, "block.full")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutExpandsCodegenCCE(op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.fillpad")
+REGISTER_BACKEND_OP(BackendCCE, "block.fillpad")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutFillpadCodegenCCE(op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.fillpad_inplace")
+REGISTER_BACKEND_OP(BackendCCE, "block.fillpad_inplace")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutFillpadInplaceCodegenCCE(op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.fillpad_expand")
+REGISTER_BACKEND_OP(BackendCCE, "block.fillpad_expand")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutFillpadExpandCodegenCCE(op, codegen);
@@ -1386,139 +1389,139 @@ REGISTER_BACKEND_OP(Backend910B_CCE, "block.fillpad_expand")
 // Op registrations  - Tile x Tile binary
 // ============================================================================
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.add")
+REGISTER_BACKEND_OP(BackendCCE, "block.add")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutBinaryCodegenCCE("TADD", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.partadd")
+REGISTER_BACKEND_OP(BackendCCE, "block.partadd")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutBinaryCodegenCCE("TPARTADD", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.partmax")
+REGISTER_BACKEND_OP(BackendCCE, "block.partmax")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutBinaryCodegenCCE("TPARTMAX", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.partmin")
+REGISTER_BACKEND_OP(BackendCCE, "block.partmin")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutBinaryCodegenCCE("TPARTMIN", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.partmul")
+REGISTER_BACKEND_OP(BackendCCE, "block.partmul")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutBinaryCodegenCCE("TPARTMUL", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.sub")
+REGISTER_BACKEND_OP(BackendCCE, "block.sub")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutBinaryCodegenCCE("TSUB", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.mul")
+REGISTER_BACKEND_OP(BackendCCE, "block.mul")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutBinaryCodegenCCE("TMUL", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.div")
+REGISTER_BACKEND_OP(BackendCCE, "block.div")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutBinaryCodegenCCE("TDIV", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.rem")
+REGISTER_BACKEND_OP(BackendCCE, "block.rem")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutBinaryCodegenCCE("TREM", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.maximum")
+REGISTER_BACKEND_OP(BackendCCE, "block.maximum")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutBinaryCodegenCCE("TMAX", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.minimum")
+REGISTER_BACKEND_OP(BackendCCE, "block.minimum")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutBinaryCodegenCCE("TMIN", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.and")
+REGISTER_BACKEND_OP(BackendCCE, "block.and")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutBinaryCodegenCCE("TAND", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.or")
+REGISTER_BACKEND_OP(BackendCCE, "block.or")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutBinaryCodegenCCE("TOR", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.shl")
+REGISTER_BACKEND_OP(BackendCCE, "block.shl")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutBinaryCodegenCCE("TSHL", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.shr")
+REGISTER_BACKEND_OP(BackendCCE, "block.shr")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutBinaryCodegenCCE("TSHR", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.add_relu")
+REGISTER_BACKEND_OP(BackendCCE, "block.add_relu")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutBinaryReluCodegenCCE("TADD", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.sub_relu")
+REGISTER_BACKEND_OP(BackendCCE, "block.sub_relu")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutBinaryReluCodegenCCE("TSUB", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.add_relu_cast")
+REGISTER_BACKEND_OP(BackendCCE, "block.add_relu_cast")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutBinaryReluCastCodegenCCE("TADD", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.sub_relu_cast")
+REGISTER_BACKEND_OP(BackendCCE, "block.sub_relu_cast")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutBinaryReluCastCodegenCCE("TSUB", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.mul_cast")
+REGISTER_BACKEND_OP(BackendCCE, "block.mul_cast")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutBinaryCastCodegenCCE("TMUL", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.mul_add_dst")
+REGISTER_BACKEND_OP(BackendCCE, "block.mul_add_dst")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutMulAddDstCodegenCCE(op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.fused_mul_add")
+REGISTER_BACKEND_OP(BackendCCE, "block.fused_mul_add")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutFusedMulAddCodegenCCE(op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.fused_mul_add_relu")
+REGISTER_BACKEND_OP(BackendCCE, "block.fused_mul_add_relu")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutFusedMulAddReluCodegenCCE(op, codegen);
@@ -1528,79 +1531,79 @@ REGISTER_BACKEND_OP(Backend910B_CCE, "block.fused_mul_add_relu")
 // Op registrations  - Tile x Scalar binary
 // ============================================================================
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.adds")
+REGISTER_BACKEND_OP(BackendCCE, "block.adds")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutScalarCodegenCCE("TADDS", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.subs")
+REGISTER_BACKEND_OP(BackendCCE, "block.subs")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutScalarCodegenCCE("TSUBS", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.muls")
+REGISTER_BACKEND_OP(BackendCCE, "block.muls")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutScalarCodegenCCE("TMULS", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.divs")
+REGISTER_BACKEND_OP(BackendCCE, "block.divs")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutScalarCodegenCCE("TDIVS", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.rems")
+REGISTER_BACKEND_OP(BackendCCE, "block.rems")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutScalarCodegenCCE("TREMS", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.ands")
+REGISTER_BACKEND_OP(BackendCCE, "block.ands")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutScalarCodegenCCE("TANDS", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.ors")
+REGISTER_BACKEND_OP(BackendCCE, "block.ors")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutScalarCodegenCCE("TORS", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.shls")
+REGISTER_BACKEND_OP(BackendCCE, "block.shls")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutScalarCodegenCCE("TSHLS", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.shrs")
+REGISTER_BACKEND_OP(BackendCCE, "block.shrs")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutScalarCodegenCCE("TSHRS", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.maxs")
+REGISTER_BACKEND_OP(BackendCCE, "block.maxs")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutScalarCodegenCCE("TMAXS", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.mins")
+REGISTER_BACKEND_OP(BackendCCE, "block.mins")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutScalarCodegenCCE("TMINS", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.lrelu")
+REGISTER_BACKEND_OP(BackendCCE, "block.lrelu")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutScalarCodegenCCE("TLRELU", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.axpy")
+REGISTER_BACKEND_OP(BackendCCE, "block.axpy")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutScalarCodegenCCE("TAXPY", op, codegen);
@@ -1610,61 +1613,61 @@ REGISTER_BACKEND_OP(Backend910B_CCE, "block.axpy")
 // Op registrations  - Unary
 // ============================================================================
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.neg")
+REGISTER_BACKEND_OP(BackendCCE, "block.neg")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutUnaryCodegenCCE("TNEG", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.exp")
+REGISTER_BACKEND_OP(BackendCCE, "block.exp")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutUnaryCodegenCCE("TEXP", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.sqrt")
+REGISTER_BACKEND_OP(BackendCCE, "block.sqrt")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutUnaryCodegenCCE("TSQRT", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.rsqrt")
+REGISTER_BACKEND_OP(BackendCCE, "block.rsqrt")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutUnaryCodegenCCE("TRSQRT", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.recip")
+REGISTER_BACKEND_OP(BackendCCE, "block.recip")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutUnaryCodegenCCE("TRECIP", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.log")
+REGISTER_BACKEND_OP(BackendCCE, "block.log")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutUnaryCodegenCCE("TLOG", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.abs")
+REGISTER_BACKEND_OP(BackendCCE, "block.abs")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutUnaryCodegenCCE("TABS", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.relu")
+REGISTER_BACKEND_OP(BackendCCE, "block.relu")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutUnaryCodegenCCE("TRELU", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.not")
+REGISTER_BACKEND_OP(BackendCCE, "block.not")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutUnaryCodegenCCE("TNOT", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.cast")
+REGISTER_BACKEND_OP(BackendCCE, "block.cast")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutCastCodegenCCE(op, codegen);
@@ -1674,13 +1677,13 @@ REGISTER_BACKEND_OP(Backend910B_CCE, "block.cast")
 // Op registrations  - Comparison
 // ============================================================================
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.cmp")
+REGISTER_BACKEND_OP(BackendCCE, "block.cmp")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutCmpCodegenCCE(op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.cmps")
+REGISTER_BACKEND_OP(BackendCCE, "block.cmps")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutCmpsCodegenCCE(op, codegen);
@@ -1690,81 +1693,81 @@ REGISTER_BACKEND_OP(Backend910B_CCE, "block.cmps")
 // Op registrations  - Scalar broadcast
 // ============================================================================
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.expands")
+REGISTER_BACKEND_OP(BackendCCE, "block.expands")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutExpandsCodegenCCE(op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.create_vec_idx")
+REGISTER_BACKEND_OP(BackendCCE, "block.fill_index")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
-        return MakeBlockOutCreateVecIdxCodegenCCE(op, codegen);
+        return MakeBlockOutFillIndexCodegenCCE(op, codegen);
     });
 
 // ============================================================================
 // Op registrations  - Reductions (tile, tmp, out)
 // ============================================================================
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.row_sum")
+REGISTER_BACKEND_OP(BackendCCE, "block.row_sum")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutRowReductionCodegenCCE("TROWSUM", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.row_max")
+REGISTER_BACKEND_OP(BackendCCE, "block.row_max")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutRowReductionCodegenCCE("TROWMAX", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.row_min")
+REGISTER_BACKEND_OP(BackendCCE, "block.row_min")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutRowReductionCodegenCCE("TROWMIN", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.col_max")
+REGISTER_BACKEND_OP(BackendCCE, "block.col_max")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutColMaxCodegenCCE(op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.col_sum")
+REGISTER_BACKEND_OP(BackendCCE, "block.col_sum")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutColSumCodegenCCE(op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.col_min")
+REGISTER_BACKEND_OP(BackendCCE, "block.col_min")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         auto& cce = dynamic_cast<codegen::CCECodegen&>(codegen);
-        CHECK(op->args_.size() == 3) << "TCOLMIN: expected 3 args (tile, tmp, dst), got " << op->args_.size();
-        std::string tile = cce.GetExprAsCode(op->args_[0]);
-        std::string dst = cce.GetExprAsCode(op->args_[2]);
+        CHECK(op->args_.size() == 3) << "TCOLMIN: expected 3 args (dst, tile, tmp), got " << op->args_.size();
+        std::string dst = cce.GetExprAsCode(op->args_[0]);
+        std::string tile = cce.GetExprAsCode(op->args_[1]);
         cce.Emit("TCOLMIN(" + dst + ", " + tile + ");");
         return std::string("");
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.row_prod")
+REGISTER_BACKEND_OP(BackendCCE, "block.row_prod")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutRowReductionCodegenCCE("TROWPROD", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.col_prod")
+REGISTER_BACKEND_OP(BackendCCE, "block.col_prod")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         auto& cce = dynamic_cast<codegen::CCECodegen&>(codegen);
-        CHECK(op->args_.size() == 3) << "TCOLPROD: expected 3 args (tile, tmp, dst), got " << op->args_.size();
-        std::string tile = cce.GetExprAsCode(op->args_[0]);
-        std::string dst = cce.GetExprAsCode(op->args_[2]);
+        CHECK(op->args_.size() == 3) << "TCOLPROD: expected 3 args (dst, tile, tmp), got " << op->args_.size();
+        std::string dst = cce.GetExprAsCode(op->args_[0]);
+        std::string tile = cce.GetExprAsCode(op->args_[1]);
         cce.Emit("TCOLPROD(" + dst + ", " + tile + ");");
         return std::string("");
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.row_reduce")
+REGISTER_BACKEND_OP(BackendCCE, "block.row_reduce")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         int op_type = op->GetKwarg<int>("op_type");
@@ -1789,15 +1792,15 @@ REGISTER_BACKEND_OP(Backend910B_CCE, "block.row_reduce")
         return MakeBlockOutRowReductionCodegenCCE(op_name, op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.col_reduce")
+REGISTER_BACKEND_OP(BackendCCE, "block.col_reduce")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         auto& cce = dynamic_cast<codegen::CCECodegen&>(codegen);
         CHECK(op->args_.size() == 3) << "block.col_reduce: expected 3 args, got " << op->args_.size();
         int op_type = op->GetKwarg<int>("op_type");
-        std::string tile = cce.GetExprAsCode(op->args_[0]);
-        std::string tmp = cce.GetExprAsCode(op->args_[1]);
-        std::string dst = cce.GetExprAsCode(op->args_[2]);
+        std::string dst = cce.GetExprAsCode(op->args_[0]);
+        std::string tile = cce.GetExprAsCode(op->args_[1]);
+        std::string tmp = cce.GetExprAsCode(op->args_[2]);
         switch (op_type) {
             case 0:
                 cce.Emit("TCOLSUM(" + dst + ", " + tile + ", " + tmp + ", false);");
@@ -1817,25 +1820,25 @@ REGISTER_BACKEND_OP(Backend910B_CCE, "block.col_reduce")
         return std::string("");
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.row_argmax")
+REGISTER_BACKEND_OP(BackendCCE, "block.row_argmax")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutRowReductionCodegenCCE("TROWARGMAX", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.row_argmin")
+REGISTER_BACKEND_OP(BackendCCE, "block.row_argmin")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutRowReductionCodegenCCE("TROWARGMIN", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.col_argmax")
+REGISTER_BACKEND_OP(BackendCCE, "block.col_argmax")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutRowReductionCodegenCCE("TCOLARGMAX", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.col_argmin")
+REGISTER_BACKEND_OP(BackendCCE, "block.col_argmin")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutRowReductionCodegenCCE("TCOLARGMIN", op, codegen);
@@ -1845,109 +1848,109 @@ REGISTER_BACKEND_OP(Backend910B_CCE, "block.col_argmin")
 // Op registrations  - Broadcast expansion
 // ============================================================================
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.row_expand")
+REGISTER_BACKEND_OP(BackendCCE, "block.row_expand")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutRowExpandUnaryCodegenCCE(op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.row_expand_add")
+REGISTER_BACKEND_OP(BackendCCE, "block.row_expand_add")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutRowExpandCodegenCCE("TROWEXPANDADD", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.row_expand_sub")
+REGISTER_BACKEND_OP(BackendCCE, "block.row_expand_sub")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutRowExpandCodegenCCE("TROWEXPANDSUB", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.row_expand_mul")
+REGISTER_BACKEND_OP(BackendCCE, "block.row_expand_mul")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutRowExpandCodegenCCE("TROWEXPANDMUL", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.row_expand_div")
+REGISTER_BACKEND_OP(BackendCCE, "block.row_expand_div")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutRowExpandCodegenCCE("TROWEXPANDDIV", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.row_expand_max")
+REGISTER_BACKEND_OP(BackendCCE, "block.row_expand_max")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutRowExpandCodegenCCE("TROWEXPANDMAX", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.row_expand_min")
+REGISTER_BACKEND_OP(BackendCCE, "block.row_expand_min")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutRowExpandCodegenCCE("TROWEXPANDMIN", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.row_expand_expdif")
+REGISTER_BACKEND_OP(BackendCCE, "block.row_expand_expdif")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutRowExpandCodegenCCE("TROWEXPANDEXPDIF", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.row_expand_binop")
+REGISTER_BACKEND_OP(BackendCCE, "block.row_expand_binop")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutExpandBinOpCodegenCCE("TROWEXPAND", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.col_expand")
+REGISTER_BACKEND_OP(BackendCCE, "block.col_expand")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutColExpandCodegenCCE(op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.col_expand_add")
+REGISTER_BACKEND_OP(BackendCCE, "block.col_expand_add")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutRowExpandCodegenCCE("TCOLEXPANDADD", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.col_expand_mul")
+REGISTER_BACKEND_OP(BackendCCE, "block.col_expand_mul")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutRowExpandCodegenCCE("TCOLEXPANDMUL", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.col_expand_div")
+REGISTER_BACKEND_OP(BackendCCE, "block.col_expand_div")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutRowExpandCodegenCCE("TCOLEXPANDDIV", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.col_expand_sub")
+REGISTER_BACKEND_OP(BackendCCE, "block.col_expand_sub")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutRowExpandCodegenCCE("TCOLEXPANDSUB", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.col_expand_max")
+REGISTER_BACKEND_OP(BackendCCE, "block.col_expand_max")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutRowExpandCodegenCCE("TCOLEXPANDMAX", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.col_expand_min")
+REGISTER_BACKEND_OP(BackendCCE, "block.col_expand_min")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutRowExpandCodegenCCE("TCOLEXPANDMIN", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.col_expand_expdif")
+REGISTER_BACKEND_OP(BackendCCE, "block.col_expand_expdif")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutRowExpandCodegenCCE("TCOLEXPANDEXPDIF", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.col_expand_binop")
+REGISTER_BACKEND_OP(BackendCCE, "block.col_expand_binop")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutExpandBinOpCodegenCCE("TCOLEXPAND", op, codegen);
@@ -1957,37 +1960,37 @@ REGISTER_BACKEND_OP(Backend910B_CCE, "block.col_expand_binop")
 // Op registrations  - Matrix multiplication
 // ============================================================================
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.matmul")
+REGISTER_BACKEND_OP(BackendCCE, "block.matmul")
     .set_pipe(ir::PipeType::M)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutMatmulCodegenCCE(op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.matmul_acc")
+REGISTER_BACKEND_OP(BackendCCE, "block.matmul_acc")
     .set_pipe(ir::PipeType::M)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutMatmulAccCodegenCCE(op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.matmul_bias")
+REGISTER_BACKEND_OP(BackendCCE, "block.matmul_bias")
     .set_pipe(ir::PipeType::M)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutQuaternaryCodegenCCE("TMATMUL_BIAS", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.gemv")
+REGISTER_BACKEND_OP(BackendCCE, "block.gemv")
     .set_pipe(ir::PipeType::M)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutBinaryCodegenCCE("TGEMV", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.gemv_acc")
+REGISTER_BACKEND_OP(BackendCCE, "block.gemv_acc")
     .set_pipe(ir::PipeType::M)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutTernaryCodegenCCE("TGEMV_ACC", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.gemv_bias")
+REGISTER_BACKEND_OP(BackendCCE, "block.gemv_bias")
     .set_pipe(ir::PipeType::M)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutTernaryCodegenCCE("TGEMV_BIAS", op, codegen);
@@ -1997,13 +2000,13 @@ REGISTER_BACKEND_OP(Backend910B_CCE, "block.gemv_bias")
 // Op registrations  - Layout operations
 // ============================================================================
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.reshape")
+REGISTER_BACKEND_OP(BackendCCE, "block.reshape")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutReshapeCodegenCCE(op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.transpose")
+REGISTER_BACKEND_OP(BackendCCE, "block.transpose")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutTransposeCodegenCCE(op, codegen);
@@ -2013,83 +2016,84 @@ REGISTER_BACKEND_OP(Backend910B_CCE, "block.transpose")
 // Op registrations  - Ternary / multi-input
 // ============================================================================
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.xor")
+REGISTER_BACKEND_OP(BackendCCE, "block.xor")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutTernaryCodegenCCE("TXOR", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.xors")
+REGISTER_BACKEND_OP(BackendCCE, "block.xors")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutTernaryCodegenCCE("TXORS", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.prelu")
+REGISTER_BACKEND_OP(BackendCCE, "block.prelu")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutTernaryCodegenCCE("TPRELU", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.addc")
+REGISTER_BACKEND_OP(BackendCCE, "block.addc")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutTernaryCodegenCCE("TADDC", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.subc")
+REGISTER_BACKEND_OP(BackendCCE, "block.subc")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutTernaryCodegenCCE("TSUBC", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.addsc")
+REGISTER_BACKEND_OP(BackendCCE, "block.addsc")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutTernaryCodegenCCE("TADDSC", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.subsc")
+REGISTER_BACKEND_OP(BackendCCE, "block.subsc")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutTernaryCodegenCCE("TSUBSC", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.sel")
+REGISTER_BACKEND_OP(BackendCCE, "block.sel")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutQuaternaryCodegenCCE("TSEL", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.sels")
+REGISTER_BACKEND_OP(BackendCCE, "block.sels")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
-        return MakeBlockOutTernaryCodegenCCE("TSELS", op, codegen);
+        // args = [mask, src, tmp, scalar, out] -> TSELS(out, mask, src, tmp, scalar)
+        return MakeBlockOutQuaternaryCodegenCCE("TSELS", op, codegen);
     });
 
 // ============================================================================
 // Op registrations  - Gather / scatter
 // ============================================================================
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.gather")
+REGISTER_BACKEND_OP(BackendCCE, "block.gather")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutGatherCodegenCCE(op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.gatherb")
+REGISTER_BACKEND_OP(BackendCCE, "block.gatherb")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutBinaryCodegenCCE("TGATHERB", op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.gathermask")
+REGISTER_BACKEND_OP(BackendCCE, "block.gathermask")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutGatherMaskCodegenCCE(op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.scatter")
+REGISTER_BACKEND_OP(BackendCCE, "block.scatter")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutBinaryCodegenCCE("TSCATTER", op, codegen);
@@ -2104,7 +2108,7 @@ REGISTER_BACKEND_OP(Backend910B_CCE, "block.scatter")
 // AssignStmt(var, struct.create(v0, v1, ..., name=Name, fields=[f0, f1, ...]))
 // the CCE codegen emits `Name var = {.f0=v0, .f1=v1, ...};`. The struct type
 // definition itself is emitted earlier by CCECodegen::PreEmitStructTypes.
-REGISTER_BACKEND_OP(Backend910B_CCE, "struct.create")
+REGISTER_BACKEND_OP(BackendCCE, "struct.create")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen_base) {
         auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
@@ -2131,7 +2135,7 @@ REGISTER_BACKEND_OP(Backend910B_CCE, "struct.create")
 
 // Struct field write (statement side-effect): `base.field = value;`. Field name comes from
 // the `field` kwarg set by the parser (same naming convention as struct.create's `fields`).
-REGISTER_BACKEND_OP(Backend910B_CCE, "struct.set")
+REGISTER_BACKEND_OP(BackendCCE, "struct.set")
     .set_pipe(ir::PipeType::S)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen_base) -> std::string {
         auto& cg = dynamic_cast<codegen::CCECodegen&>(codegen_base);
@@ -2148,16 +2152,16 @@ REGISTER_BACKEND_OP(Backend910B_CCE, "struct.set")
 // Op registrations  - Sorting
 // ============================================================================
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.sort32")
+REGISTER_BACKEND_OP(BackendCCE, "block.sort32")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen_base) {
         auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
         CHECK(op->args_.size() == 3 || op->args_.size() == 4)
-            << "block.sort32: expected 3 or 4 args (src, idx, dst[, tmp]), got " << op->args_.size();
+            << "block.sort32: expected 3 or 4 args (dst, src, idx[, tmp]), got " << op->args_.size();
 
-        std::string src = codegen.GetExprAsCode(op->args_[0]);
-        std::string idx = codegen.GetExprAsCode(op->args_[1]);
-        std::string dst = codegen.GetExprAsCode(op->args_[2]);
+        std::string dst = codegen.GetExprAsCode(op->args_[0]);
+        std::string src = codegen.GetExprAsCode(op->args_[1]);
+        std::string idx = codegen.GetExprAsCode(op->args_[2]);
 
         if (op->args_.size() == 4) {
             std::string tmp = codegen.GetExprAsCode(op->args_[3]);
@@ -2168,14 +2172,14 @@ REGISTER_BACKEND_OP(Backend910B_CCE, "block.sort32")
         return "";
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.mrgsort")
+REGISTER_BACKEND_OP(BackendCCE, "block.mrgsort")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen_base) {
         auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-        CHECK(op->args_.size() == 2) << "block.mrgsort: expected 2 args (src, dst), got " << op->args_.size();
+        CHECK(op->args_.size() == 2) << "block.mrgsort: expected 2 args (dst, src), got " << op->args_.size();
 
-        std::string src = codegen.GetExprAsCode(op->args_[0]);
-        std::string dst = codegen.GetExprAsCode(op->args_[1]);
+        std::string dst = codegen.GetExprAsCode(op->args_[0]);
+        std::string src = codegen.GetExprAsCode(op->args_[1]);
         int block_len = op->GetKwarg<int>("block_len");
 
         codegen.Emit("TMRGSORT(" + dst + ", " + src + ", " + std::to_string(block_len) + ");");
@@ -2192,8 +2196,8 @@ static std::string MakeBlockOutMrgsort2CCE(const ir::CallPtr& op, codegen::Codeg
     bool exhausted = op->GetKwarg<bool>("exhausted");
     std::string exhausted_str = exhausted ? "true" : "false";
 
-    std::string src0 = codegen.GetExprAsCode(op->args_[0]);
-    std::string dst = codegen.GetExprAsCode(op->args_[1]);
+    std::string dst = codegen.GetExprAsCode(op->args_[0]);
+    std::string src0 = codegen.GetExprAsCode(op->args_[1]);
     std::string tmp = codegen.GetExprAsCode(op->args_[2]);
     std::string src1 = codegen.GetExprAsCode(op->args_[3]);
 
@@ -2224,21 +2228,21 @@ static std::string MakeBlockOutMrgsort2CCE(const ir::CallPtr& op, codegen::Codeg
     return "";
 }
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.mrgsort2")
+REGISTER_BACKEND_OP(BackendCCE, "block.mrgsort2")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutMrgsort2CCE(op, codegen);
     });
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.histogram")
+REGISTER_BACKEND_OP(BackendCCE, "block.histogram")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen_base) {
         auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-        CHECK(op->args_.size() == 3) << "block.histogram: expected 3 args (src, idx, dst), got " << op->args_.size();
+        CHECK(op->args_.size() == 3) << "block.histogram: expected 3 args (dst, src, idx), got " << op->args_.size();
 
-        std::string src = codegen.GetExprAsCode(op->args_[0]);
-        std::string idx = codegen.GetExprAsCode(op->args_[1]);
-        std::string dst = codegen.GetExprAsCode(op->args_[2]);
+        std::string dst = codegen.GetExprAsCode(op->args_[0]);
+        std::string src = codegen.GetExprAsCode(op->args_[1]);
+        std::string idx = codegen.GetExprAsCode(op->args_[2]);
 
         bool is_msb = op->GetKwarg<bool>("is_msb");
 
@@ -2267,28 +2271,28 @@ REGISTER_BACKEND_OP(Backend910B_CCE, "block.histogram")
 static std::string MakeBlockOutQuantCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-    const std::string& mode_str = op->GetKwarg<std::string>("mode");
-    if (mode_str == "sym") {
-        CHECK(op->args_.size() == 3) << "block.quant(sym): expected 3 args (src, scale, dst), got " << op->args_.size();
-        std::string src = codegen.GetExprAsCode(op->args_[0]);
-        std::string scale = codegen.GetExprAsCode(op->args_[1]);
-        std::string dst = codegen.GetExprAsCode(op->args_[2]);
+    auto mode = static_cast<ir::QuantMode>(op->GetKwarg<int>("mode"));
+    if (mode == ir::QuantMode::SYM) {
+        CHECK(op->args_.size() == 3) << "block.quant(sym): expected 3 args (dst, src, scale), got " << op->args_.size();
+        std::string dst = codegen.GetExprAsCode(op->args_[0]);
+        std::string src = codegen.GetExprAsCode(op->args_[1]);
+        std::string scale = codegen.GetExprAsCode(op->args_[2]);
         codegen.Emit("TQUANT<QuantType::INT8_SYM>(" + dst + ", " + src + ", " + scale + ");");
-    } else if (mode_str == "asym") {
-        CHECK(op->args_.size() == 4) << "block.quant(asym): expected 4 args (src, scale, offset, dst), got "
+    } else if (mode == ir::QuantMode::ASYM) {
+        CHECK(op->args_.size() == 4) << "block.quant(asym): expected 4 args (dst, src, scale, offset), got "
                                      << op->args_.size();
-        std::string src = codegen.GetExprAsCode(op->args_[0]);
-        std::string scale = codegen.GetExprAsCode(op->args_[1]);
-        std::string offset = codegen.GetExprAsCode(op->args_[2]);
-        std::string dst = codegen.GetExprAsCode(op->args_[3]);
+        std::string dst = codegen.GetExprAsCode(op->args_[0]);
+        std::string src = codegen.GetExprAsCode(op->args_[1]);
+        std::string scale = codegen.GetExprAsCode(op->args_[2]);
+        std::string offset = codegen.GetExprAsCode(op->args_[3]);
         codegen.Emit("TQUANT<QuantType::INT8_ASYM>(" + dst + ", " + src + ", " + scale + ", " + offset + ");");
     } else {
-        CHECK(false) << "block.quant: unknown mode '" << mode_str << "', expected 'sym' or 'asym'";
+        CHECK(false) << "block.quant: unknown mode " << ir::EnumToString(mode);
     }
     return "";
 }
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.quant")
+REGISTER_BACKEND_OP(BackendCCE, "block.quant")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutQuantCodegenCCE(op, codegen);
@@ -2297,17 +2301,17 @@ REGISTER_BACKEND_OP(Backend910B_CCE, "block.quant")
 static std::string MakeBlockOutDequantCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-    CHECK(op->args_.size() == 4) << "block.dequant: expected 4 args (src, scale, offset, dst), got "
+    CHECK(op->args_.size() == 4) << "block.dequant: expected 4 args (dst, src, scale, offset), got "
                                  << op->args_.size();
-    std::string src = codegen.GetExprAsCode(op->args_[0]);
-    std::string scale = codegen.GetExprAsCode(op->args_[1]);
-    std::string offset = codegen.GetExprAsCode(op->args_[2]);
-    std::string dst = codegen.GetExprAsCode(op->args_[3]);
+    std::string dst = codegen.GetExprAsCode(op->args_[0]);
+    std::string src = codegen.GetExprAsCode(op->args_[1]);
+    std::string scale = codegen.GetExprAsCode(op->args_[2]);
+    std::string offset = codegen.GetExprAsCode(op->args_[3]);
     codegen.Emit("TDEQUANT(" + dst + ", " + src + ", " + scale + ", " + offset + ");");
     return "";
 }
 
-REGISTER_BACKEND_OP(Backend910B_CCE, "block.dequant")
+REGISTER_BACKEND_OP(BackendCCE, "block.dequant")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutDequantCodegenCCE(op, codegen);

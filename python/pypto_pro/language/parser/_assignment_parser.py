@@ -1,4 +1,4 @@
-# Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
 # This program is free software, you can redistribute it and/or modify it under the terms and conditions of
 # CANN Open Software License Agreement Version 2.0 (the "License").
 # Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -18,18 +18,6 @@ from pypto.pypto_impl import ir
 from pypto.pypto_impl.ir import DataType
 
 from .diagnostics import ParserSyntaxError, ParserTypeError, UnsupportedFeatureError
-
-
-def _as_const_int_list(value_expr: Any) -> "list[int] | None":
-    """Return the ints of a ``MakeTuple`` of ``ConstInt`` (e.g. ``[1, 3]``), else None."""
-    if not isinstance(value_expr, ir.MakeTuple):
-        return None
-    ints: list[int] = []
-    for elt in value_expr.elements:
-        if not isinstance(elt, ir.ConstInt):
-            return None
-        ints.append(elt.value)
-    return ints
 
 
 class AssignmentParserMixin:
@@ -63,10 +51,11 @@ class AssignmentParserMixin:
         # Use annotation type as override when it carries memref info
         annotation_type = self.type_resolver.resolve_type_if_memref(stmt.annotation)
         var = self.builder.let(var_name, value_expr, var_type=annotation_type, span=span)
-        self._consume_nbuf_pending(var, value_expr)
+        self._transfer_tile_sync_metadata(var, value_expr)
 
         # Register in scope
         self.scope_manager.define_var(var_name, var, span=span)
+        self._update_const_env(var_name, value_expr)
 
     def parse_assignment(self, stmt: ast.Assign) -> None:
         """Parse regular assignment: var = value or tuple unpacking.
@@ -216,20 +205,36 @@ class AssignmentParserMixin:
                 span=span,
             )
 
-        parsed_kwargs = {k: v for k, v in self.parse_op_kwargs(call).items() if k != "dtype"}
+        # Determine whether the backend op carries `dtype` as an IR attribute.
+        # If so, keep the user-supplied dtype (or inject the inferred one when
+        # not explicitly passed); otherwise strip it.
+        backend_op_name = self._VF_OP_NAME_MAP.get(vf_op_name, vf_op_name)
+        ir_op_name = f"vf.{backend_op_name}"
+        keep_dtype = ir.is_op_registered(ir_op_name) and \
+            ir.get_op(ir_op_name).has_attr("dtype")
+        parsed_kwargs = {
+            k: v for k, v in self.parse_op_kwargs(call).items()
+            if k != "dtype" or keep_dtype
+        }
+        if keep_dtype:
+            parsed_kwargs.setdefault("dtype", dtype_val)
 
-        # Step 2: Declare dst variables via vf.reg_tensor (first definition only).
-        # For existing variables, reuse them directly — do NOT create a new
-        # reg_tensor, as that would lose the accumulated value in self-referential ops.
+        # Step 2: Declare dst variables (first definition only). For existing
+        # variables, reuse them directly — do NOT create a new register, as that
+        # would lose the accumulated value in self-referential ops.
+        # Ops in _VF_MASK_DST_OPS produce MaskReg dst(s); declare them via
+        # vf.create_mask. All other ops produce RegTensor dst(s); declare via
+        # vf.reg_tensor. (addc/subc carry outputs must be pre-declared by the
+        # user via vf.create_mask.)
+        is_mask_dst = self._is_vf_mask_dst_op(vf_op_name)
+        decl_op = "vf.mask_reg" if is_mask_dst else "vf.reg_tensor"
         dst_vars = []
-        for _, (name, tgt) in enumerate(zip(dst_names, dst_targets)):
-            existing = self.scope_manager.lookup_var(name)
+        for name, _ in zip(dst_names, dst_targets):
+            existing = self.scope_manager.lookup_var_bounded(name)
             if existing is None:
                 self.current_target_name = name
-                regtensor_call = ir.create_op_call(
-                    "vf.reg_tensor", [], {"dtype": dtype_val}, span,
-                )
-                var = self.builder.let(name, regtensor_call, span=span)
+                decl_call = ir.create_op_call(decl_op, [], {"dtype": dtype_val}, span)
+                var = self.builder.let(name, decl_call, span=span)
                 self.scope_manager.define_var(name, var, span=span)
                 dst_vars.append(var)
             else:
@@ -240,9 +245,8 @@ class AssignmentParserMixin:
         # picks the per-lane (vshl/vshr) vs uniform-scalar (vshls/vshrs) form
         # from the shift-amount argument type (see EmitVFShiftLeft/Right), so no
         # special routing is needed here.
-        backend_op_name = self._VF_OP_NAME_MAP.get(vf_op_name, vf_op_name)
         all_args = dst_vars + parsed_src_args
-        call_expr = ir.create_op_call(f"vf.{backend_op_name}", all_args, parsed_kwargs, span)
+        call_expr = ir.create_op_call(ir_op_name, all_args, parsed_kwargs, span)
         self.builder.emit(ir.EvalStmt(call_expr, span))
 
     def _parse_tuple_unpacking(self, target: ast.Tuple, stmt: ast.Assign) -> None:
@@ -260,7 +264,8 @@ class AssignmentParserMixin:
                 f"Cannot unpack tuple with {expected} items into {actual} targets",
                 span=span,
             )
-        tuple_var = self.builder.let("_tuple_tmp", value_expr, span=span)
+        tuple_var = self.builder.let(f"_tuple_tmp_{self._tuple_idx_counter}", value_expr, span=span)
+        self._tuple_idx_counter += 1
         for i, elt in enumerate(target.elts):
             if not isinstance(elt, ast.Name):
                 raise ParserSyntaxError(
@@ -277,6 +282,9 @@ class AssignmentParserMixin:
             )
             var = self.builder.let(elt.id, item_expr, span=span)
             self.scope_manager.define_var(elt.id, var, span=span)
+            const_item = value_expr.elements[i] if isinstance(value_expr, ir.MakeTuple) else item_expr
+            self._transfer_tile_sync_metadata(var, const_item)
+            self._update_const_env(elt.id, const_item)
 
     def _parse_name_assignment(self, var_name: str, stmt: ast.Assign) -> None:
         span = self.span_tracker.get_span(stmt)
@@ -290,25 +298,14 @@ class AssignmentParserMixin:
             )
         if isinstance(value_expr, ir.Expr):
             var = self.builder.let(var_name, value_expr, span=span)
-            self._consume_nbuf_pending(var, value_expr)
+            self._transfer_tile_sync_metadata(var, value_expr)
             self.scope_manager.define_var(var_name, var, span=span)
             if self._auto_mutex:
                 self._emit_auto_mutex_unlocks()
-            # Track compile-time integer constants so TileType shape/valid_shape can fold them.
-            if isinstance(value_expr, ir.ConstInt):
-                self._const_scalars[var_name] = value_expr.value
-            else:
-                self._const_scalars.pop(var_name, None)
-            # Track compile-time constant int lists (e.g. ``qkv_tile_dims = [1, 3]``) so a
-            # compile-time-only list kwarg such as ``tile_dims`` can fold them, including when the
-            # list is threaded through an implicit-helper parameter.
-            const_list = _as_const_int_list(value_expr)
-            if const_list is not None:
-                self._const_lists[var_name] = const_list
-            else:
-                self._const_lists.pop(var_name, None)
+            self._update_const_env(var_name, value_expr)
         else:
             self.scope_manager.define_var(var_name, value_expr, span=span)
+            self._update_const_env(var_name, value_expr)
 
     def _parse_struct_field_assignment(self, target: ast.Attribute, stmt: ast.Assign, span: ir.Span) -> None:
         """Lower ``base.field = rhs`` to ``EvalStmt(struct.set(base, rhs, field=...))``.
@@ -319,6 +316,16 @@ class AssignmentParserMixin:
         """
         base = self.parse_expression(target.value)
         field_name = target.attr
+        if (
+            isinstance(base, ir.MakeTuple)
+            and not self._is_struct_array_tuple(base)
+            and self.named_fields(base)
+        ):
+            raise ParserSyntaxError(
+                f"Cannot assign to immutable named tuple field '{ast.unparse(target)}'",
+                span=span,
+                hint="Use pl.struct() or pl.struct_array() for mutable fields.",
+            )
         fields = self.named_fields(base)
         if not fields or field_name not in fields:
             raise ParserTypeError(

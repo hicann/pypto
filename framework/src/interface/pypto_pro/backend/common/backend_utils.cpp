@@ -243,7 +243,8 @@ std::string FormatDebugLocationHeader(const ir::Span& span, const std::string& o
 
 bool IsSupportedPrintfConversion(char conversion)
 {
-    return conversion == 'd' || conversion == 'i' || conversion == 'u' || conversion == 'x' || conversion == 'f';
+    return conversion == 'd' || conversion == 'i' || conversion == 'u' || conversion == 'x' || conversion == 'f' ||
+           conversion == 'p';
 }
 
 size_t FindPrintfConversionIndex(const std::string& format_segment)

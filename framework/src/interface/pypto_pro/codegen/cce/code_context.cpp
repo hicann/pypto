@@ -36,6 +36,35 @@ std::string CodeContext::GetVarName(const ir::VarPtr& var)
     if (v0 != name_to_cpp_.end()) {
         return v0->second;
     }
+    // Fallback: for variables first defined inside a loop body, the post-loop
+    // reference may use the raw base name while SSA registered a versioned form
+    // (e.g. 'reg_dst' vs 'reg_dst_1'). Search for the highest-versioned match.
+    std::string best_match;
+    int best_version = -1;
+    std::string prefix = var->name_ + "_";
+    for (const auto& [key, value] : name_to_cpp_) {
+        if (key.size() > prefix.size() && key.compare(0, prefix.size(), prefix) == 0) {
+            const char* suffix = key.c_str() + prefix.size();
+            bool all_digits = true;
+            for (const char* p = suffix; *p; ++p) {
+                if (*p < '0' || *p > '9') {
+                    all_digits = false;
+                    break;
+                }
+            }
+            if (all_digits && *suffix != '\0') {
+                int ver = std::atoi(suffix);
+                if (ver > best_version) {
+                    best_version = ver;
+                    best_match = value;
+                }
+            }
+        }
+    }
+    if (!best_match.empty()) {
+        name_to_cpp_[var->name_] = best_match;
+        return best_match;
+    }
     // Auto-register: variable may originate from a different section (Cube/Vector)
     // that was cleared on section boundary. Use the sanitized IR name.
     std::string cpp_name = SanitizeName(var);

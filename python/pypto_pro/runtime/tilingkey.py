@@ -68,7 +68,9 @@ class TilingKeySchema:
     """Validated tilingkey schema collected from a user class.
 
     Fields are collected in class-definition order. Each field is assigned a bit
-    offset; the packed 64-bit value places each field's concrete value at its offset.
+    offset; the packed 64-bit value places each field value's index in ``values`` at
+    its offset. This matches AscendC template-tiling keys, where the field bits select
+    an entry from the field's value list.
     """
 
     def __init__(self, cls: type) -> None:
@@ -135,7 +137,8 @@ class TilingKeySchema:
         """Pack a concrete key into its unique 64-bit identifier."""
         packed = 0
         for field in self._fields:
-            packed |= (int(key[field.name]) & ((1 << field.bits) - 1)) << field.offset
+            value_index = field.values.index(key[field.name])
+            packed |= value_index << field.offset
         return packed
 
     def validate_concrete(self, key: dict) -> None:
@@ -173,17 +176,21 @@ class TilingKeySchema:
                 raise PyptoValueError(
                     f"tilingkey field '{field.name}' must have a non-empty 'values' list"
                 )
-            max_repr = (1 << field.bits) - 1
             for v in field.values:
                 if not isinstance(v, int) or isinstance(v, bool):
                     raise PyptoValueError(
                         f"tilingkey field '{field.name}' values must be ints, got {v!r}"
                     )
-                if v < 0 or v > max_repr:
-                    raise PyptoValueError(
-                        f"tilingkey field '{field.name}' value {v} does not fit in "
-                        f"{field.bits} bits (max {max_repr})"
-                    )
+            if len(set(field.values)) != len(field.values):
+                raise PyptoValueError(
+                    f"tilingkey field '{field.name}' values must be unique"
+                )
+            max_candidates = 1 << field.bits
+            if len(field.values) > max_candidates:
+                raise PyptoValueError(
+                    f"tilingkey field '{field.name}' has {len(field.values)} candidates, "
+                    f"exceeding the {max_candidates} representable by {field.bits} bits"
+                )
             field.offset = offset
             offset += field.bits
         if offset > _MAX_TOTAL_BITS:

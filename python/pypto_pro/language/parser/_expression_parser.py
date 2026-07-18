@@ -1,4 +1,4 @@
-# Copyright (c) PyPTO Contributors.
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
 # This program is free software, you can redistribute it and/or modify it under the terms and conditions of
 # CANN Open Software License Agreement Version 2.0 (the "License").
 # Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@ from typing import Any
 
 from pypto_pro.ir import op as ir_op
 from pypto_pro.ir._operators import make_binary as _make_binary
+from pypto_pro.ir._utils import _normalize_expr
 from pypto.pypto_impl import ir
 from pypto.pypto_impl.ir import DataType
 
@@ -27,8 +28,38 @@ from .diagnostics import (
 )
 
 
+def _scalar_branches_reconcilable(then_type: Any, else_type: Any) -> bool:
+    """Whether two ternary branch types differ only by same-category scalar dtype.
+
+    Such pairs (e.g. ``INT32`` from a tensor read vs ``INDEX`` from a shape access, or
+    two float widths) are promoted to a common dtype when the if statement is finalized
+    in the builder, mirroring the promotion binary operators already perform. Non-scalar
+    or cross-category (int vs float) mismatches are not reconcilable here.
+    """
+    if not isinstance(then_type, ir.ScalarType) or not isinstance(else_type, ir.ScalarType):
+        return False
+    then_dtype = then_type.dtype
+    else_dtype = else_type.dtype
+    both_int = then_dtype.is_int() and else_dtype.is_int()
+    both_float = then_dtype.is_float() and else_dtype.is_float()
+    return both_int or both_float
+
+
 class ExpressionParserMixin:
+
     """Mixin containing expression, attribute, and subscript parsing."""
+
+    @staticmethod
+    def _const_int_value(expr: ir.Expr) -> int | None:
+        if isinstance(expr, ir.ConstInt):
+            return expr.value
+        if isinstance(expr, ir.ConstBool):
+            return 1 if expr.value else 0
+        return None
+
+    @staticmethod
+    def _const_dtype(expr: ir.Expr) -> DataType:
+        return expr.type.dtype if isinstance(expr.type, ir.ScalarType) else DataType.INDEX
 
     @staticmethod
     def _check_uniform_tuple_types(value_type: ir.TupleType, span: ir.Span) -> None:
@@ -73,6 +104,32 @@ class ExpressionParserMixin:
             condition = ir.ConstInt(1 if condition.value else 0, DataType.BOOL, span)
 
         return condition
+
+    @staticmethod
+    def _is_pl_range_call(call: ast.Call) -> bool:
+        """Check if call node is pl.range()."""
+        func = call.func
+        return isinstance(func, ast.Attribute) and func.attr == "range"
+
+    @staticmethod
+    def _try_const_fold_in(left, elements, is_not_in, span):
+        """If left and all elements are compile-time constants, eval directly."""
+        if not isinstance(left, (ir.ConstInt, ir.ConstFloat, ir.ConstBool)):
+            return None
+        const_values = []
+        for elt in elements:
+            if isinstance(elt, ir.ConstInt):
+                const_values.append(elt.value)
+            elif isinstance(elt, ir.ConstFloat):
+                const_values.append(elt.value)
+            elif isinstance(elt, ir.ConstBool):
+                const_values.append(elt.value)
+            else:
+                return None
+        result = left.value in const_values
+        if is_not_in:
+            result = not result
+        return ir.ConstBool(result, span)
 
     def parse_evaluation_statement(self, stmt: ast.Expr) -> None:
         """Parse evaluation statement (EvalStmt).
@@ -162,7 +219,15 @@ class ExpressionParserMixin:
             IR expression (Var from scope, or constant/tuple from closure)
         """
         var_name = name.id
-        var = self.scope_manager.lookup_var(var_name)
+        # An inline helper may only resolve its own parameters and locals from
+        # the DSL scope.  ``lookup_var_bounded`` behaves like the normal lookup
+        # outside an inline scope, but stops at the inline boundary so a helper
+        # cannot silently capture a caller IR variable.
+        const = self.const_env.get(var_name)
+        if const is not None:
+            return const
+
+        var = self.scope_manager.lookup_var_bounded(var_name)
         if var is not None:
             return var
 
@@ -270,7 +335,9 @@ class ExpressionParserMixin:
                 hint="Use supported operators: +, -, *, /, //, %, &, |, ^, <<, >>",
             )
 
-        return _make_binary(op_map[op_type], left, right, span)
+        op_name = op_map[op_type]
+        folded = self._fold_const_binop(op_name, left, right, span)
+        return folded if folded is not None else _make_binary(op_name, left, right, span)
 
     def parse_compare(self, compare: ast.Compare) -> ir.Expr:
         """Parse comparison operation.
@@ -289,6 +356,56 @@ class ExpressionParserMixin:
             )
 
         span = self.span_tracker.get_span(compare)
+        op_type = type(compare.ops[0])
+
+        # Dispatch `in` / `not in` to the desugar path: they are not scalar
+        # binary comparisons, so they cannot enter the op_map below.
+        if op_type in (ast.In, ast.NotIn):
+            return self._parse_in_operator(compare, span)
+
+        # ── Handle 'is None' / 'is not None' for pointer null checks ──
+        # Converts to runtime comparison: cast(ptr, UINT64) == 0 / cast(ptr, UINT64) != 0
+        # This allows optional pl.Ptr parameters to be checked at runtime without
+        # compile-time constant folding or multiple kernel variants.
+        if op_type in (ast.Is, ast.IsNot):
+            comparator = compare.comparators[0]
+            if isinstance(comparator, ast.Constant) and comparator.value is None:
+                # Left side must be a simple variable name (typically a pl.Ptr or pl.Tensor parameter)
+                if not isinstance(compare.left, ast.Name):
+                    raise ParserSyntaxError(
+                        "'is None' only supported on simple variable names",
+                        span=span,
+                        hint="Use 'param_name is None' for null checks on pl.Ptr parameters",
+                    )
+                # Parse the left operand (must be a pl.Ptr parameter)
+                left = self.parse_expression(compare.left)
+                # 'is None' only makes sense for pointer parameters. pl.Tensor is a
+                # descriptor (ptr + shape); null-checking it has no meaning and the
+                # generated code would reference an undeclared identifier. Guide users
+                # to pl.Ptr for optional inputs (reviewer guidance: optional inputs
+                # should be declared as pl.Ptr since pl.Tensor requires a shape even
+                # when the argument is None, making the shape meaningless).
+                if not isinstance(left.type, ir.PtrType):
+                    raise ParserTypeError(
+                        "'is None' / 'is not None' is only supported on pl.Ptr parameters",
+                        span=span,
+                        hint="Use pl.Ptr[dtype] for optional pointer inputs; "
+                             "pl.Tensor requires a shape even when the argument is None",
+                    )
+                # Cast pointer to UINT64 for comparison (IR requires ScalarType for eq/ne)
+                left_as_int = ir.cast(left, ir.DataType.UINT64, span)
+                zero = ir.ConstInt(0, ir.DataType.UINT64, span)
+                # Generate runtime comparison: cast(ptr, UINT64) == 0 or != 0
+                op = "eq" if op_type is ast.Is else "ne"
+                return _make_binary(op, left_as_int, zero, span)
+            else:
+                raise ParserTypeError(
+                    "'is' / 'is not' only supported with None",
+                    span=span,
+                    hint="Use '==' for value comparison, or 'param is None' for pointer null checks",
+                )
+
+        # ── Standard comparison operators (==, !=, <, <=, >, >=) ──
         left = self.parse_expression(compare.left)
         right = self.parse_expression(compare.comparators[0])
 
@@ -302,15 +419,16 @@ class ExpressionParserMixin:
             ast.GtE: "ge",
         }
 
-        op_type = type(compare.ops[0])
         if op_type not in op_map:
             raise UnsupportedFeatureError(
                 f"Unsupported comparison: {op_type.__name__}",
-                span=self.span_tracker.get_span(compare),
+                span=span,
                 hint="Use supported comparisons: ==, !=, <, <=, >, >=",
             )
 
-        return _make_binary(op_map[op_type], left, right, span)
+        op_name = op_map[op_type]
+        folded = self._fold_const_binop(op_name, left, right, span)
+        return folded if folded is not None else _make_binary(op_name, left, right, span)
 
     def parse_unaryop(self, unary: ast.UnaryOp) -> ir.Expr:
         """Parse unary operation.
@@ -339,12 +457,20 @@ class ExpressionParserMixin:
                 hint="Use supported unary operators: -, not",
             )
 
+        value = self._const_int_value(operand)
+        if value is not None:
+            if op_type is ast.USub:
+                return ir.ConstInt(-value, self._const_dtype(operand), span)
+            if op_type is ast.Not:
+                return ir.ConstInt(int(not value), DataType.BOOL, span)
+            if op_type is ast.Invert:
+                return ir.ConstInt(~value, self._const_dtype(operand), span)
+            if op_type is ast.UAdd:
+                return operand
         return op_map[op_type](operand, span)
 
     def parse_boolop(self, expr: ast.BoolOp) -> ir.Expr:
         span = self.span_tracker.get_span(expr)
-        operands = [self.parse_expression(v) for v in expr.values]
-
         bool_dtype = DataType.BOOL
         if isinstance(expr.op, ast.And):
             fold_fn = ir.And
@@ -356,9 +482,24 @@ class ExpressionParserMixin:
                 span=span,
             )
 
-        result = operands[0]
-        for operand in operands[1:]:
-            result = fold_fn(result, operand, bool_dtype, span)
+        result = self.parse_expression(expr.values[0])
+        for value_node in expr.values[1:]:
+            result_value = self._const_int_value(result)
+            if isinstance(expr.op, ast.And) and result_value == 0:
+                return ir.ConstInt(0, bool_dtype, span)
+            if isinstance(expr.op, ast.Or) and result_value is not None and result_value != 0:
+                return ir.ConstInt(1, bool_dtype, span)
+            operand = self.parse_expression(value_node)
+            operand_value = self._const_int_value(operand)
+            if result_value is not None and operand_value is not None:
+                result = ir.ConstInt(
+                    int(bool(result_value) and bool(operand_value)) if isinstance(expr.op, ast.And)
+                    else int(bool(result_value) or bool(operand_value)),
+                    bool_dtype,
+                    span,
+                )
+            else:
+                result = fold_fn(result, operand, bool_dtype, span)
         return result
 
     def parse_ifexp(self, expr: ast.IfExp) -> ir.Expr:
@@ -368,7 +509,7 @@ class ExpressionParserMixin:
 
         condition = self._resolve_constexpr_condition(test_node, condition, is_constexpr, span)
 
-        if is_constexpr and isinstance(condition, (ir.ConstBool, ir.ConstInt)):
+        if isinstance(condition, (ir.ConstBool, ir.ConstInt)):
             is_true = (condition.value if isinstance(condition, ir.ConstBool) else condition.value != 0)
             chosen = expr.body if is_true else expr.orelse
             result = self.parse_expression(chosen, nested=False)
@@ -402,7 +543,9 @@ class ExpressionParserMixin:
                     span=span,
                     hint="Ensure the 'else' branch of the ternary expression is a valid expression",
                 )
-            if not ir.structural_equal(then_value.type, else_value.type, enable_auto_mapping=False):
+            if not ir.structural_equal(
+                then_value.type, else_value.type, enable_auto_mapping=False
+            ) and not _scalar_branches_reconcilable(then_value.type, else_value.type):
                 raise ParserTypeError(
                     f"Ternary expression branches have mismatched types: "
                     f"then-branch has type {then_value.type}, "
@@ -410,6 +553,8 @@ class ExpressionParserMixin:
                     span=span,
                     hint="Ensure both branches of the ternary expression have the same type",
                 )
+            # Same-category scalar branches with differing dtypes (e.g. INT32 vs INDEX)
+            # are promoted to a common dtype when the if statement is finalized.
             self.builder.emit(ir.YieldStmt([else_value], span))
 
         return_var = if_builder.output(0)
@@ -500,8 +645,13 @@ class ExpressionParserMixin:
 
             # If the scope variable's static IR type is a named tuple
             # (TupleType with dbg_name), lower to GetItemExpr(base, index).
-            obj_expr = self.scope_manager.lookup_var(obj_name)
+            obj_expr = self.scope_manager.lookup_var_bounded(obj_name)
             if isinstance(obj_expr, ir.Expr):
+                const_obj = self.const_env.get(obj_name)
+                if isinstance(const_obj, ir.MakeTuple) and not self._is_struct_array_tuple(const_obj):
+                    fields = self.named_fields(const_obj)
+                    if field_name in fields:
+                        return const_obj.elements[fields.index(field_name)]
                 lowered = self.lower_attr_access(obj_expr, field_name, span)
                 if lowered is not None:
                     return lowered
@@ -586,17 +736,175 @@ class ExpressionParserMixin:
                 self._check_uniform_tuple_types(value_type, span)
 
         index_expr = self.parse_expression(subscript.slice)
+        if (
+            isinstance(value_expr, ir.MakeTuple)
+            and not self._is_struct_array_tuple(value_expr)
+            and isinstance(index_expr, ir.ConstInt)
+        ):
+            index = index_expr.value
+            if 0 <= index < len(value_expr.elements):
+                return value_expr.elements[index]
+
+        # This GetItem could not be statically evaluated. Restore a named tuple
+        # Var when folding reduced its base to that Var's MakeTuple value, so
+        # codegen retains the backing-array identity. This covers runtime indices
+        # and static accesses that must remain dynamic, including struct arrays.
+        value_expr = self._restore_tuple_var_for_unfolded_getitem(value_expr)
+        value_type = value_expr.type
         item_expr = ir.GetItemExpr(value_expr, index_expr, span)
         # A slice of a tile aliases the tile's buffer, so carry the base's mutex
         # metadata onto the slice.  auto_mutex then locks accesses to the slice on
         # the base's buf_id; it is consumed when the slice is bound to a var (see
-        # _consume_nbuf_pending).  Nested slices compose: the inner slice is tagged
+        # _transfer_tile_sync_metadata).  Nested slices compose: the inner slice is tagged
         # from its root here, and the outer one inherits from the (tagged) inner.
         if isinstance(value_type, ir.TileType):
-            meta = self._tile_mutex_meta.get(id(value_expr))
+            meta = self._tile_mutex_meta.get(value_expr)
             if meta is not None:
-                self._tile_mutex_meta[id(item_expr)] = meta
+                self._tile_mutex_meta[item_expr] = meta
         return item_expr
+
+    def _is_const_expr(self, expr: Any) -> bool:
+        """Return whether *expr* is a parser-propagatable IR constant."""
+        if isinstance(expr, (ir.ConstInt, ir.ConstBool, ir.ConstFloat)):
+            return True
+        # MakeTuple is immutable.  struct_array is the sole exception because
+        # its elements are mutable structs whose static and dynamic accesses
+        # must share CCE's backing array.
+        return isinstance(expr, ir.MakeTuple) and not self._is_struct_array_tuple(expr)
+
+    def _is_struct_array_tuple(self, tuple_value: ir.MakeTuple) -> bool:
+        return id(tuple_value) in self._struct_array_tuple_ids
+
+    def _update_const_env(self, name: str, value: Any) -> None:
+        if isinstance(value, ir.Expr) and self._is_const_expr(value):
+            self.const_env[name] = value
+        else:
+            self.const_env.pop(name, None)
+
+    def _fold_const_binop(self, op_name: str, left: ir.Expr, right: ir.Expr, span: ir.Span) -> ir.Expr | None:
+        """Fold integer scalar operations without bypassing parser type checks."""
+        left_value = self._const_int_value(left)
+        right_value = self._const_int_value(right)
+        if left_value is None or right_value is None:
+            return None
+        dtype = self._const_dtype(left)
+        binary_ops = {
+            "add": lambda: left_value + right_value,
+            "sub": lambda: left_value - right_value,
+            "mul": lambda: left_value * right_value,
+            "floordiv": lambda: left_value // right_value,
+            "mod": lambda: left_value % right_value,
+            "bit_and": lambda: left_value & right_value,
+            "bit_or": lambda: left_value | right_value,
+            "bit_xor": lambda: left_value ^ right_value,
+            "bit_shift_left": lambda: left_value << right_value,
+            "bit_shift_right": lambda: left_value >> right_value,
+        }
+        if op_name in binary_ops:
+            try:
+                return ir.ConstInt(binary_ops[op_name](), dtype, span)
+            except ZeroDivisionError:
+                return None
+        comparisons = {
+            "eq": left_value == right_value,
+            "ne": left_value != right_value,
+            "lt": left_value < right_value,
+            "le": left_value <= right_value,
+            "gt": left_value > right_value,
+            "ge": left_value >= right_value,
+        }
+        if op_name in comparisons:
+            return ir.ConstInt(int(comparisons[op_name]), DataType.BOOL, span)
+        return None
+
+    def _desugar_in_literal(self, left, elements, is_not_in, span, elements_are_ir=False):
+        """Desugar x in (a,b,c) -> Or-chain of eq; x not in -> And-chain of ne."""
+        folded = self._try_const_fold_in(left, elements, is_not_in, span)
+        if folded is not None:
+            return folded
+        if len(elements) == 0:
+            return ir.ConstBool(is_not_in, span)
+        cmp_name = "ne" if is_not_in else "eq"
+        fold_fn = ir.And if is_not_in else ir.Or
+        bool_dtype = DataType.BOOL
+
+        def get_element(elt):
+            return elt if elements_are_ir else self.parse_expression(elt)
+
+        result = _make_binary(cmp_name, left, get_element(elements[0]), span)
+        for elt in elements[1:]:
+            cmp_expr = _make_binary(cmp_name, left, get_element(elt), span)
+            result = fold_fn(result, cmp_expr, bool_dtype, span)
+        return result
+
+    def _desugar_in_range(self, left, range_call, is_not_in, span):
+        """Desugar x in pl.range(start, stop, step).
+
+        step == 1:  x >= start and x < stop
+        step != 1:  x >= start and x < stop and (x - start) % step == 0
+        """
+        args = self._parse_range_call(range_call)
+        start = _normalize_expr(args["start"], span)
+        stop = _normalize_expr(args["stop"], span)
+        step = _normalize_expr(args["step"], span)
+        ge_start = _make_binary("ge", left, start, span)
+        lt_stop = _make_binary("lt", left, stop, span)
+        result = ir.And(ge_start, lt_stop, DataType.BOOL, span)
+        step_is_one = (
+            isinstance(step, ir.ConstInt) and step.value == 1
+            or isinstance(step, ir.ConstFloat) and step.value == 1.0
+        )
+        if not step_is_one:
+            diff = _make_binary("sub", left, start, span)
+            mod_val = _make_binary("mod", diff, step, span)
+            zero = ir.ConstInt(0, DataType.INDEX, span)
+            result = ir.And(result, _make_binary("eq", mod_val, zero, span),
+                            DataType.BOOL, span)
+        return ir.not_(result, span) if is_not_in else result
+
+    def _parse_in_operator(self, compare: ast.Compare, span: ir.Span) -> ir.Expr:
+        """Parse ``x in (...)`` / ``x not in (...)``.
+
+        Supports three container forms, all desugared to existing IR ops:
+          1. Literal tuple/list:  x in (a, b, c)      -> or-chain of eq
+          2. pl.range() call:     x in pl.range(s,e,k) -> range bounds + modulo check
+          3. Closure variable:    x in my_list          -> eval at compile time, expand to eq-chain
+        """
+        is_not_in = isinstance(compare.ops[0], ast.NotIn)
+        left = self.parse_expression(compare.left)
+        container = compare.comparators[0]
+
+        if isinstance(container, (ast.Tuple, ast.List)):
+            return self._desugar_in_literal(left, container.elts, is_not_in, span)
+
+        if isinstance(container, ast.Call) and self._is_pl_range_call(container):
+            return self._desugar_in_range(left, container, is_not_in, span)
+
+        success, value = self.expr_evaluator.try_eval_expr(container)
+        if success and isinstance(value, (list, tuple)):
+            ir_elements = [self.expr_evaluator.python_value_to_ir(v, span) for v in value]
+            return self._desugar_in_literal(
+                left, ir_elements, is_not_in, span, elements_are_ir=True)
+
+        raise ParserSyntaxError(
+            f"'{'not in' if is_not_in else 'in'}' only supports tuple/list literals, "
+            f"pl.range(), or compile-time list/tuple variables, "
+            f"got {ast.unparse(container)}",
+            span=span,
+            hint="Use: x in (a, b, c), x in pl.range(10), or x in <compile-time-list>",
+        )
+
+    def _restore_tuple_var_for_unfolded_getitem(self, value_expr: ir.Expr) -> ir.Expr:
+        """Recover a tuple Var when an un-folded GetItem has its MakeTuple value."""
+        if not isinstance(value_expr, ir.MakeTuple):
+            return value_expr
+        for name, const_value in self.const_env.items():
+            if const_value is not value_expr:
+                continue
+            scoped_value = self.scope_manager.lookup_var_bounded(name)
+            if isinstance(scoped_value, ir.Expr) and isinstance(scoped_value.type, ir.TupleType):
+                return scoped_value
+        return value_expr
 
     def _unwrap_constexpr(self, expr: ast.expr) -> tuple[ast.expr, bool]:
         """Detect pl.constexpr(...) or bare constexpr(...) wrapper.
@@ -682,7 +990,9 @@ class ExpressionParserMixin:
             return result
         name = f"_expr_tmp_{self._expr_tmp_counter}"
         self._expr_tmp_counter += 1
-        return self.builder.let(name, result, span=span)
+        value = self.builder.let(name, result, span=span)
+        self._transfer_tile_sync_metadata(value, result)
+        return value
 
     def _route_ir_node_method(self, node: ast.Call):
         """Route ``xxx.f(...)`` to an op func when ``xxx`` is an IR node.
@@ -696,7 +1006,7 @@ class ExpressionParserMixin:
         span = self.span_tracker.get_span(node)
         if not isinstance(node.func.value, ast.Name):
             return None
-        obj = self.scope_manager.lookup_var(node.func.value.id)
+        obj = self.scope_manager.lookup_var_bounded(node.func.value.id)
         if self.is_tile_group(obj) and method in ("next", "current", "previous"):
             return self._lower_group_accessor(obj, method, span)
         return None

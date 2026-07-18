@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-# coding: utf-8
 # Copyright (c) 2026 Huawei Technologies Co., Ltd.
 # This program is free software, you can redistribute it and/or modify it under the terms and conditions of
 # CANN Open Software License Agreement Version 2.0 (the "License").
@@ -20,9 +18,18 @@ from __future__ import annotations
 
 import ast
 
-from pypto.ir import CacheLine, CrossCoreSyncMode, DcciDst, SyncAllMode, SyncCoreType
 from pypto.pypto_impl import ir as _ir_core
-from pypto.pypto_impl.ir import Call, Expr, PipeType, Span
+from pypto.pypto_impl.ir import (
+    CacheLine,
+    Call,
+    CrossCoreSyncMode,
+    DcciDst,
+    Expr,
+    PipeType,
+    Span,
+    SyncAllMode,
+    SyncCoreType,
+)
 
 from .._utils import _get_span_or_capture, _normalize_expr, _to_make_tuple
 from ._op_registry import OpSpec, op_impl, register_table
@@ -279,7 +286,7 @@ def dcci(
 # ----------------------------------------------------------------------------
 # Alternative to event-id based sync_src/sync_dst: uses a buffer-id token
 # (MutexID, range 0-31) to enforce ordering between pipes. Lowered to
-# pto.get_buf / pto.rls_buf in the PTO backend.
+# pto.get_buf / pto.rls_buf.
 # ============================================================================
 
 
@@ -301,6 +308,37 @@ def _create_mutex_op(
         return _ir_core.create_op_call(f"{op_name}_dyn", [mutex_id], kwargs, actual_span)
     kwargs = {"pipe": pipe, "mutex_id": mutex_id, "mode": mode}
     return _ir_core.create_op_call(op_name, [], kwargs, actual_span)
+
+
+def _create_mutex_dedup_op(
+    op_name: str,
+    *,
+    pipe: PipeType,
+    mutex_id_exprs: list[Expr],
+    mode: int = 0,
+    mutex_ids_union: list | None = None,
+    span: Span | None = None,
+) -> Call:
+    """Create a dedup mutex lock/unlock for N aliasing tiles (in-place scenario).
+
+    Emits a single ``system.mutex_lock_dyn`` / ``system.mutex_unlock_dyn`` IR Call
+    with multiple mutex_id expressions in args. The CCE codegen generates runtime
+    if-guards so each unique mutex_id is only locked/unlocked once (avoids hardware
+    hang from double get_buf on the same pipe + same id).
+
+    Args:
+        op_name: Base operation name ("system.mutex_lock" or "system.mutex_unlock").
+        pipe: Pipe to lock on.
+        mutex_id_exprs: List of N mutex_id IR expressions (already normalized to Expr).
+        mode: Mutex mode (default 0).
+        mutex_ids_union: Union of all candidate mutex_id values (for ShouldSkipVPipeMutex).
+        span: Source span.
+    """
+    actual_span = span if span is not None else _get_span_or_capture(span, frame_offset=3)
+    kwargs: dict = {"pipe": pipe, "mode": mode, "max_mutex_id": len(mutex_id_exprs)}
+    if mutex_ids_union is not None:
+        kwargs["mutex_ids"] = list(mutex_ids_union)
+    return _ir_core.create_op_call(f"{op_name}_dyn", mutex_id_exprs, kwargs, actual_span)
 
 
 def _mutex_op(
@@ -344,12 +382,12 @@ def mutex_lock(
         pipe: PipeType for which to acquire the lock (e.g. PipeType.MTE2).
         mutex_id: MutexID (0-31, per Ascend C Mutex ISASI spec).
             May be a static int or a dynamic IR Expr; when dynamic, the
-            PTO codegen emits an if-chain of static `pto.get_buf` using
+            codegen emits an if-chain of static `pto.get_buf` using
             ``mutex_ids`` as the comparison targets.
         mode: Optional mode attribute (default 0).
         max_mutex_id: Upper bound of the unrolled range when ``mutex_id``
             is dynamic. Defaults to 2 (ping-pong double buffering).
-        mutex_ids: Actual mutex id integer values for PTO if-chain
+        mutex_ids: Actual mutex id integer values for if-chain
             (e.g. (2, 3)). When None, defaults to (0, 1, ..., max_mutex_id-1).
         span: Optional source span (auto-captured when omitted).
 
@@ -386,7 +424,7 @@ def mutex_unlock(
         mutex_id: MutexID passed to the paired :func:`mutex_lock`.
         mode: Optional mode attribute (default 0).
         max_mutex_id: Upper bound of the unrolled range when dynamic.
-        mutex_ids: Actual mutex id integer values for PTO if-chain.
+        mutex_ids: Actual mutex id integer values for if-chain.
         span: Optional source span (auto-captured when omitted).
 
     Returns:
@@ -442,6 +480,7 @@ register_table({
     "get_block_idx": OpSpec(ir_name="get_block_idx", parse_args=False, parse_kwargs=False),
     "get_subblock_idx": OpSpec(ir_name="get_subblock_idx", parse_args=False, parse_kwargs=False),
     "get_block_num": OpSpec(ir_name="get_block_num", parse_args=False, parse_kwargs=False),
+    "get_spr": OpSpec(ir_name="get_spr", parse_args=False, parse_kwargs=False),
     # args + kwargs
     "system.dcci": OpSpec(builder=dcci),
 })

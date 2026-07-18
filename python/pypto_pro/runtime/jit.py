@@ -26,6 +26,7 @@ import ast
 import shutil
 import subprocess
 import textwrap
+from collections import ChainMap
 from collections.abc import Mapping
 from pathlib import Path
 
@@ -104,6 +105,9 @@ class CompiledKernel:
 
     lib_path: str
     param_specs: list[ParamSpec]
+    # True when the generated kernel uses only vector (AIV) cores (no cube code),
+    # so block_dim should be clamped against the vector core count.
+    is_aiv_only: bool = False
 
 
 @dataclasses.dataclass
@@ -178,7 +182,7 @@ def _artifact_prefix_from_filename(filename: str | None) -> str | None:
     stem = Path(filename).stem
     if not stem.startswith("test_"):
         return None
-    suffix = stem.removeprefix("test_")
+    suffix = stem[len("test_"):]
     return _sanitize_artifact_component(suffix or stem)
 
 
@@ -1046,17 +1050,21 @@ def _launch(stream=None, block_dim=1, compiled_result: "CompiledKernel | str" = 
     compiled_func(*args, block_dim=block_dim, stream=stream)
 
 
-def _clamp_block_dim(block_dim: int) -> int:
+def _clamp_block_dim(block_dim: int, is_aiv_only: bool = False) -> int:
     """Clamp block_dim to platform's available core count.
 
     If the requested block_dim exceeds the hardware core count,
     emit a warning and return the maximum available cores.
+
+    On architectures where cube (AIC) and vector (AIV) cores are counted
+    separately, an aiv-only kernel is bounded by the vector core count rather
+    than the total AI core count.
     """
     if not isinstance(block_dim, int) or block_dim <= 0:
         return block_dim
     from pypto_pro.runtime.platform import get_platform_info
     info = get_platform_info()
-    max_cores = info.core_num
+    max_cores = info.vector_core_num if is_aiv_only else info.core_num
     if max_cores > 0 and block_dim > max_cores:
         import warnings
         warnings.warn(
@@ -1141,10 +1149,14 @@ def jit(
         tilingkey_schema = TilingKeySchema(tiling_key)
     datatype_schema = _validate_datatype_schema(datatype)
 
-    # Capture caller's scope NOW (at decoration time) so that the parser
-    # can resolve names like `pl`, `fe`, etc. when compilation happens later.
+    # Capture caller's scope for name resolution during lazy compilation.
+    # Locals are snapshotted NOW (at decoration time) because a frame's locals
+    # do not outlive the frame, but globals are kept as a LIVE reference so that
+    # module-level helpers defined *below* the jit function are still resolvable
+    # at compile time (compilation is lazy, on first call). Locals take priority
+    # over globals, matching Python's own scoping.
     caller_frame = inspect.currentframe().f_back
-    caller_closure_vars = {**caller_frame.f_globals, **caller_frame.f_locals}
+    caller_closure_vars = ChainMap(dict(caller_frame.f_locals), caller_frame.f_globals)
 
     def decorator(f):
         if tilingkey_schema is not None:
@@ -1265,12 +1277,13 @@ class _TileJitKernel:
         """
         stream, block_dim, tk_key, dtype_key = self._parse_launch_key(key)
 
-        block_dim = _clamp_block_dim(block_dim)
-
         def launcher(*args, **kwargs):
             args = self._normalize_launch_args(args, kwargs)
             compiled = self._ensure_compiled(args, concrete_key=tk_key, dtype_key=dtype_key)
-            _launch(stream, block_dim, compiled, *args)
+            # Clamp after compile so the kernel's core type (aiv-only vs mix) is
+            # known and block_dim is bounded against the right core count.
+            clamped = _clamp_block_dim(block_dim, is_aiv_only=compiled.is_aiv_only)
+            _launch(stream, clamped, compiled, *args)
 
         return launcher
 
@@ -1324,7 +1337,7 @@ class _TileJitKernel:
         # Create KernelDef directly with the captured closure_vars
         # (cannot call @kernel decorator here because inspect.currentframe().f_back
         # would point to this method instead of the user's module scope)
-        from pypto_pro.runtime.kernel import KernelDef, KernelFunction, extract_func_source_info
+        from pypto_pro.runtime.kernel import KernelDef, extract_func_source_info
         from pypto.pypto_impl import ir
 
         f = self._func
@@ -1332,8 +1345,6 @@ class _TileJitKernel:
          line_offset, col_offset, func_def) = extract_func_source_info(f)
 
         closure_vars = self._closure_vars or {}
-        helper_funcs = [val.ir_function for val in closure_vars.values() if isinstance(val, KernelFunction)]
-
         kernel_def = KernelDef(
             func=f,
             source_file=source_file,
@@ -1347,7 +1358,6 @@ class _TileJitKernel:
             func_type=ir.FunctionType.Opaque,
             strict_ssa=False,
             meta_data=None,
-            helper_funcs=helper_funcs,
             auto_mutex=self._auto_mutex,
             pipeline=self._pipeline,
             tilingkey_consts=concrete_key,
@@ -1440,7 +1450,12 @@ class _TileJitKernel:
         if lib_path is None:
             raise RuntimeError(f"Failed to compile kernel '{self.__name__}'")
 
-        compiled = CompiledKernel(lib_path=lib_path, param_specs=cg.param_specs)
+        # An aiv-only kernel emits vector code but no cube code; its block_dim
+        # is bounded by the vector core count rather than the total core count.
+        is_aiv_only = ("__DAV_VEC__" in cg.content) and ("__DAV_CUBE__" not in cg.content)
+        compiled = CompiledKernel(
+            lib_path=lib_path, param_specs=cg.param_specs, is_aiv_only=is_aiv_only
+        )
         self._compiled_by_signature[cache_key] = compiled
         return compiled
 

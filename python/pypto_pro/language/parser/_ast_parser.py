@@ -1,4 +1,4 @@
-# Copyright (c) PyPTO Contributors.
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
 # This program is free software, you can redistribute it and/or modify it under the terms and conditions of
 # CANN Open Software License Agreement Version 2.0 (the "License").
 # Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -114,7 +114,7 @@ class ASTParser(
         )
         self.type_resolver = TypeResolver(
             expr_evaluator=self.expr_evaluator,
-            scope_lookup=self.scope_manager.lookup_var,
+            scope_lookup=self.scope_manager.lookup_var_bounded,
             span_tracker=self.span_tracker,
             bound_signature=bound_signature,
         )
@@ -134,16 +134,12 @@ class ASTParser(
         self.current_if_builder = None
         self.current_loop_builder = None
 
-        # Cache for implicitly compiled functions (keyed by id(fn))
-        self.implicit_func_cache: dict[int, Any] = {}
-
-        # VF auto_mutex metadata for compiled KernelFunctions (keyed by id(kfunc)).
-        # Value:
-        #   None       — non-VF function; skip VF auto_mutex entirely.
-        #   {names...} — @pl.vector_function: all param names (entire body is VF
-        #                scope); mutex_lock/unlock(V) wraps the func.call for
-        #                tile-valued params among them.
-        self.kfunc_vf_used_params: dict[int, set[str] | None] = {}
+        # Immutable source templates for Python functions expanded at their call sites.
+        self.inline_func_cache: dict[int, Any] = {}
+        self.inline_call_stack: list[int] = []
+        self.inline_counter: int = 0
+        # Nested vector helpers share the outermost VF section.
+        self.inline_vf_depth: int = 0
 
         # Counter for anonymous buffer tile variables (auto-named _buf_tile_N).
         self._buf_tile_counter: int = 0
@@ -151,22 +147,21 @@ class ASTParser(
         self._tuple_idx_counter: int = 0
         self._expr_tmp_counter: int = 0
         self._ifexpr_tmp_counter: int = 0
-        # Maps id(group_var) -> (num_tiles, mutex_ids) for make_tile_group handles.
-        self.tile_group_meta: dict[int, tuple] = {}
-        # Maps id(tile_var) -> (buf_id_ir, mutex_ids) for tiles returned by
+        # Maps group Expr objects -> (num_tiles, mutex_ids) for make_tile_group handles.
+        self.tile_group_meta: dict[ir.Expr, tuple] = {}
+        # Maps tile Expr objects -> (buf_id_ir, mutex_ids) for tiles returned by
         # group.next()/current()/previous(); consumed by auto_mutex.
-        self._tile_mutex_meta: dict[int, tuple] = {}
+        # Keep the Expr itself as the key.  A bare id(expr) does not retain the
+        # Python IR wrapper and can be reused by an unrelated expression.
+        self._tile_mutex_meta: dict[ir.Expr, tuple] = {}
 
-        # Maps var_name -> int for scalar assignments bound to a compile-time constant
-        # (e.g. ``valid_m = 128``). Lets TileType shape/valid_shape fold such vars to constants,
-        # since those are compile-time template/constructor params (see resolve_static_int_list).
-        self._const_scalars: dict[str, int] = {}
-
-        # Maps var_name -> list[int] for assignments bound to a compile-time constant int list
-        # (e.g. ``qkv_tile_dims = [1, 3]``). Lets a compile-time-only list kwarg such as
-        # load/store/load_tile/store_tile ``tile_dims`` fold such vars to constants, including when
-        # the list is threaded through an implicit-helper parameter (see _inferred_const_lists).
-        self._const_lists: dict[str, list[int]] = {}
+        # Parser-only constant environment. Runtime bindings remain exclusively in
+        # ScopeManager as Vars; this map only says which names can safely be
+        # substituted while parsing the current control-flow path.
+        self.const_env: dict[str, ir.Expr] = {}
+        # struct_array is the sole mutable tuple container and must retain
+        # GetItemExpr alias semantics; every other MakeTuple is immutable.
+        self._struct_array_tuple_ids: set[int] = set()
 
         # Cache closure-level tuple constants by name/object so repeated uses of
         # the same module constant do not create duplicate MakeTuple IR nodes.
@@ -185,36 +180,13 @@ class ASTParser(
         # Per-section-kind saved variables: allows same-kind sections to share
         # variables across multiple section blocks (interleaved cube/vector pattern).
         self._section_saved_vars: dict[str, dict] = {"cube": {}, "vec": {}}
+        self._section_saved_const_env: dict[str, dict[str, ir.Expr]] = {"cube": {}, "vec": {}}
 
         # Current assignment LHS name; set before parse_expression so helpers
         # (_build_tile_group_ir, _parse_struct_array_expr) can name intermediate vars.
         self.current_target_name: str = ""
-        # Pending tile-group metadata consumed by _consume_nbuf_pending after builder.let.
-        self._tile_group_meta_pending: tuple | None = None
-        # Pending tile->mutex metadata for a tile returned by group.next()/current()/previous().
-        self._tile_mutex_pending: tuple | None = None
-
-        # Pre-resolved types for helper-call parameters (populated by _implicit_func_call).
-        # Maps param_name -> ir.Type inferred from the call-site argument.
-        self.inferred_param_types: dict[str, ir.Type] = {}
 
         self._current_node: ast.AST | None = None
-
-        # Tile-group metadata for helper-call parameters (populated by _implicit_func_call).
-        # Maps param_name -> (num_tiles, mutex_ids) so .next()/.current()/.previous() work in helpers.
-        self._inferred_tile_group_meta: dict[str, tuple] = {}
-
-        # Tile-mutex metadata for helper-call parameters (populated by _implicit_func_call).
-        # Maps param_name -> (buf_id_ir, mutex_ids) so auto_mutex can lock a tile passed into
-        # a helper. The buf_id_ir references the caller's scope, which is valid after the helper
-        # call is inlined (InlineHelperCalls).
-        self._inferred_tile_mutex_meta: dict[str, tuple] = {}
-
-        # Compile-time constant int lists passed as helper-call arguments (populated by
-        # _implicit_func_call). Maps param_name -> list[int]. A compile-time-only list kwarg
-        # (e.g. ``tile_dims``) must fold to constants at parse time; threading it through a helper
-        # param would otherwise leave it an ir.Var. Applied to _const_lists in _register_param.
-        self._inferred_const_lists: dict[str, list[int]] = {}
 
     @property
     def auto_mutex_enabled(self) -> bool:
@@ -249,10 +221,6 @@ class ASTParser(
     def set_inferred_tile_group_meta(self, param_name: str, meta: tuple) -> None:
         """Attach inferred tile-group metadata to a helper parameter."""
         self._inferred_tile_group_meta[param_name] = meta
-
-    def set_inferred_const_list(self, param_name: str, values: list[int]) -> None:
-        """Attach a compile-time constant int list to a helper parameter."""
-        self._inferred_const_lists[param_name] = values
 
     def set_inferred_tile_mutex_meta(self, param_name: str, meta: tuple) -> None:
         """Attach inferred tile-mutex metadata to a helper parameter."""
@@ -466,26 +434,21 @@ class ASTParser(
     def _parse_pass_statement(self, stmt: ast.Pass) -> None:
         pass  # No-op: pass statements are valid in DSL functions
 
-    def _consume_nbuf_pending(self, var: ir.Var, value_expr: ir.Expr | None = None) -> None:
-        """Migrate pending tile-group / tile-mutex metadata to id-keyed dicts after builder.let.
+    def _transfer_tile_sync_metadata(self, var: ir.Var, value_expr: ir.Expr | None = None) -> None:
+        """Transfer tile sync metadata from value expression to the assigned variable.
 
-        Also propagate tile-mutex metadata through a plain binding ``x = <expr>``
-        whose RHS already carries it, so auto_mutex synchronises accesses to
-        ``x`` on the SAME buf_id as the tile it aliases (otherwise the access is
-        emitted unsynchronised).  Two RHS forms carry it: a tile *slice*
-        ``base[off]`` (tagged onto the GetItemExpr in ``parse_subscript``) and a
-        direct tile *alias* ``x = tile_a`` (the RHS Var already has meta).
+        When ``var = value_expr``, re-key any tile-group or tile-mutex metadata
+        stored under ``value_expr`` to ``var``, so that subsequent
+        auto_mutex lookups on the variable name find the correct sync info.
         """
-        if self._tile_group_meta_pending is not None:
-            self.tile_group_meta[id(var)] = self._tile_group_meta_pending
-            self._tile_group_meta_pending = None
-        if self._tile_mutex_pending is not None:
-            self._tile_mutex_meta[id(var)] = self._tile_mutex_pending
-            self._tile_mutex_pending = None
-        elif value_expr is not None:
-            meta = self._tile_mutex_meta.get(id(value_expr))
-            if meta is not None:
-                self._tile_mutex_meta[id(var)] = meta
+        if value_expr is None:
+            return
+        gm = self.tile_group_meta.get(value_expr)
+        if gm is not None:
+            self.tile_group_meta[var] = gm
+        mm = self._tile_mutex_meta.get(value_expr)
+        if mm is not None:
+            self._tile_mutex_meta[var] = mm
 
     def _validate_tiling_params(
         self, args_to_process: list[ast.arg], func_def: ast.FunctionDef,
@@ -546,23 +509,7 @@ class ASTParser(
             self.scope_manager.define_var(param_name, tiling_var, allow_redef=True)
             return
 
-        # 2) Call-site-inferred type (implicit-func path). The inferred type is authoritative;
-        # any annotation was already validated for compatibility by _implicit_func_call.
-        if param_name in self.inferred_param_types:
-            param_var = f.param(param_name, self.inferred_param_types[param_name], param_span)
-            self.scope_manager.define_var(param_name, param_var, allow_redef=True)
-            if param_name in self._inferred_tile_group_meta:
-                self.tile_group_meta[id(param_var)] = self._inferred_tile_group_meta[param_name]
-            if param_name in self._inferred_tile_mutex_meta:
-                self._tile_mutex_meta[id(param_var)] = self._inferred_tile_mutex_meta[param_name]
-            # A compile-time constant int list passed as this argument stays foldable inside the
-            # helper body (e.g. ``tile_dims=tile_dims``), so a compile-time-only kwarg resolves to
-            # the constant instead of this ir.Var param.
-            if param_name in self._inferred_const_lists:
-                self._const_lists[param_name] = self._inferred_const_lists[param_name]
-            return
-
-        # 3) Annotation only (decorator path: no call site to infer from).
+        # 2) Annotation only (decorator path: no call site to infer from).
         if arg.annotation is None:
             raise ParserTypeError(
                 f"Parameter '{param_name}' missing type annotation",

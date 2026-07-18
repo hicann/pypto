@@ -123,7 +123,7 @@ class TypeResolver:
             if shape_spec.has_ellipsis
             else len(actual.shape) == explicit_rank
         )
-        return shape_spec, rank_matches
+        return shape_spec, rank_matches, explicit_rank
 
     @classmethod
     def to_ir_shape(cls, shape: list[int | ir.Expr]) -> list[int] | list[ir.Expr]:
@@ -144,6 +144,14 @@ class TypeResolver:
 
         # Convert all to Expr
         return [ir.ConstInt(d, DataType.INDEX, ir.Span.unknown()) if isinstance(d, int) else d for d in shape]
+
+    @classmethod
+    def dtype_from_value(cls, value: int) -> DataType | None:
+        """Resolve a DataType enum from its integer value."""
+        for dtype in cls._DTYPE_MAP.values():
+            if int(dtype) == value:
+                return dtype
+        return None
 
     @classmethod
     def _get_type_name(cls, node: ast.expr) -> str | None:
@@ -311,7 +319,7 @@ class TypeResolver:
                     f"Return value {return_index} dtype mismatch: expected {expected.dtype}, got {actual.dtype}",
                     span=self._get_span(type_node),
                 )
-            shape_spec, rank_matches = self._resolve_shape_spec_and_rank(
+            shape_spec, rank_matches, explicit_rank = self._resolve_shape_spec_and_rank(
                 f"return[{return_index}]", return_index, expected.shape, actual,
                 self._get_span(type_node),
             )
@@ -356,7 +364,7 @@ class TypeResolver:
                 f"Helper parameter '{parameter_name}' dtype mismatch: expected {annotation.dtype}, got {actual.dtype}",
                 span=self._get_span(type_node),
             )
-        shape_spec, rank_matches = self._resolve_shape_spec_and_rank(
+        shape_spec, rank_matches, explicit_rank = self._resolve_shape_spec_and_rank(
             parameter_name, 0, annotation.shape, actual, self._get_span(type_node),
         )
         if not rank_matches:

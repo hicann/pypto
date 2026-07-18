@@ -51,9 +51,22 @@ class BufferParserMixin:
     @staticmethod
     def _tile_type_slot_size(tile_type: _TileType) -> int:
         """Per-tile byte size derived from the TileType static shape and dtype."""
-        shape = tuple(tile_type.shape)
+        shape = tile_type.shape
+        if isinstance(shape, ir.MakeTuple):
+            shape = tuple(
+                element.value
+                for element in shape.elements
+                if isinstance(element, ir.ConstInt)
+            )
+            if len(shape) != len(tile_type.shape.elements):
+                raise ParserTypeError("make_tile_group() TileType shape must contain constant integers")
+        else:
+            shape = tuple(shape)
         elems = reduce(lambda a, b: a * b, shape, 1)
         return int(elems) * max(1, (int(tile_type.dtype.get_bit()) + 7) // 8)
+
+    def is_tile_group(self, expr) -> bool:
+        return "tiles" in self.named_fields(expr)
 
     # --- factory --------------------------------------------------------------
 
@@ -92,9 +105,6 @@ class BufferParserMixin:
 
         return self._build_tile_group_ir(tile_type, tile_addrs, mutex_ids, slot_size, span)
 
-    def is_tile_group(self, expr) -> bool:
-        return "tiles" in self.named_fields(expr)
-
     def _build_tile_group_ir(self, tile_type, tile_addrs, mutex_ids, slot_size, span: ir.Span) -> ir.Expr:
         """Build the IR named-tuple handle for a tile group.
 
@@ -102,8 +112,9 @@ class BufferParserMixin:
         cursor}); single-tile groups skip it ({tiles, mutex_ids}) since the only
         tile and its mutex id are statically determined.
 
-        Sets pending metadata ``_tile_group_meta_pending`` consumed by
-        ``_consume_nbuf_pending`` after the caller's builder.let.
+        Writes group metadata directly to ``tile_group_meta`` keyed by the
+        returned expression; ``_transfer_tile_sync_metadata`` re-keys it to
+        the assigned variable after builder.let.
         """
         var_name = self.current_target_name or "g"
         num = len(mutex_ids)
@@ -121,16 +132,18 @@ class BufferParserMixin:
         mut_tuple = self.builder.let(
             f"_tg_{var_name}_mutex_ids",
             ir.MakeTuple([ir.ConstInt(m, DataType.INDEX, span) for m in mutex_ids], span), span=span)
-        self._tile_group_meta_pending = (num, mutex_ids)
         if num == 1:
-            # Single tile: no cursor needed; accessors short-circuit to tiles[0].
-            return self.make_named_tuple([tiles_tuple, mut_tuple], ["tiles", "mutex_ids"], span)
+            result = self.make_named_tuple([tiles_tuple, mut_tuple], ["tiles", "mutex_ids"], span)
+            self.tile_group_meta[result] = (num, mutex_ids, tile_type.target_memory)
+            return result
         cursor_call = ir.create_op_call(
             "struct.create", [ir.ConstInt(num - 1, DataType.INDEX, span)],
             {"name": "_TileGroupCursor", "fields": ["cursor"]}, span)
         self.register_struct_fields(cursor_call, ["cursor"])
         cursor = self.builder.let(f"_tg_{var_name}_cursor", cursor_call, span=span)
-        return self.make_named_tuple([tiles_tuple, mut_tuple, cursor], ["tiles", "mutex_ids", "cursor"], span)
+        result = self.make_named_tuple([tiles_tuple, mut_tuple, cursor], ["tiles", "mutex_ids", "cursor"], span)
+        self.tile_group_meta[result] = (num, mutex_ids, tile_type.target_memory)
+        return result
 
     # --- accessors ------------------------------------------------------------
 
@@ -143,16 +156,17 @@ class BufferParserMixin:
 
         next() advances the cursor (+1) then returns the tile at the new index;
         current()/previous() leave the cursor unchanged. Records the selected
-        tile's mutex id via _tile_mutex_pending for auto_mutex.
+        tile's mutex id via _tile_mutex_meta for auto_mutex.
         """
-        n_slots = self.tile_group_meta.get(id(group_var), (1, None))[0]
-        mutex_values = self.tile_group_meta.get(id(group_var), (1, None))[1]
+        _meta = self.tile_group_meta.get(group_var, (1, None))
+        n_slots = _meta[0]
+        mutex_values = _meta[1]
         tiles = self.lower_attr_access(group_var, "tiles", span)
         if n_slots == 1:
             # Single tile: no cursor, no modulo. Select tiles[0] with a const index
-            # (folded by ConstFoldAndSimplify) and lock the lone mutex id statically.
+            # (resolved by parser-side constant propagation) and lock the lone mutex id statically.
             tile_ir = ir.GetItemExpr(tiles, ir.ConstInt(0, DataType.INDEX, span), span)
-            self._tile_mutex_pending = (mutex_values[0], mutex_values)
+            self._tile_mutex_meta[tile_ir] = (mutex_values[0], mutex_values)
             return tile_ir
         n_const = ir.ConstInt(n_slots, DataType.INDEX, span)
         mut = self.lower_attr_access(group_var, "mutex_ids", span)
@@ -174,5 +188,5 @@ class BufferParserMixin:
         self._tuple_idx_counter += 1
         tile_ir = ir.GetItemExpr(tiles, idx, span)
         buf_id_ir = ir.GetItemExpr(mut, idx, span)
-        self._tile_mutex_pending = (buf_id_ir, mutex_values)
+        self._tile_mutex_meta[tile_ir] = (buf_id_ir, mutex_values)
         return tile_ir

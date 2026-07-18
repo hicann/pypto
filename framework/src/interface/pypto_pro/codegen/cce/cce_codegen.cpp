@@ -24,7 +24,6 @@
 #include <vector>
 
 #include "backend/common/backend.h"
-#include "backend/common/backend_config.h"
 #include "backend/common/backend_utils.h"
 #include "core/error.h"
 #include "core/logging.h"
@@ -174,11 +173,7 @@ std::vector<int64_t> BuildNZPhysicalShapeDims(const ir::TensorTypePtr& tensor_ty
 
 } // namespace
 
-CCECodegen::CCECodegen() : backend_(backend::GetBackend())
-{
-    auto type = backend::GetBackendType();
-    CHECK(type == backend::BackendType::CCE) << "CCECodegen requires CCE backend, but unknown is configured";
-}
+CCECodegen::CCECodegen() : backend_(backend::GetBackend()) {}
 
 // ============================================================================
 // Helper function inlining
@@ -192,16 +187,34 @@ class BodyRenamer : public ir::IRMutator {
 public:
     using ir::IRMutator::VisitExpr_;
     using ir::IRMutator::VisitStmt_;
-    BodyRenamer(const std::string& prefix, const std::vector<ir::VarPtr>& params, const std::vector<ir::ExprPtr>& args)
+    BodyRenamer(const std::string& prefix, const std::vector<ir::VarPtr>& params, const std::vector<ir::ExprPtr>& args,
+                const std::unordered_map<const ir::Expr*, ir::ExprPtr>& parent_remap = {})
         : prefix_(prefix)
     {
+        // Seed with the enclosing inline's remap so free-variable references to an outer
+        // helper's vars (e.g. an auto_mutex buf_id captured from the caller and carried into a
+        // nested helper) are rewritten consistently. Params override any inherited entry.
+        var_remap_ = parent_remap;
+        // The Python->IR conversion gives each function its own Var objects, so a nested helper's
+        // free reference to an outer helper's var is a *distinct* pointer with the same name. Build
+        // a name-keyed fallback from the enclosing remap to bridge those (see VisitExpr_(Var)).
+        for (const auto& [key, val] : parent_remap) {
+            if (key != nullptr && key->GetKind() == ir::ObjectKind::Var) {
+                name_remap_[static_cast<const ir::Var*>(key)->name_] = val;
+            }
+        }
         for (size_t i = 0; i < params.size() && i < args.size(); ++i) {
             var_remap_[params[i].get()] = args[i];
         }
     }
 
+    /// Final var mapping after visiting; used to seed nested helper inlines.
+    const std::unordered_map<const ir::Expr*, ir::ExprPtr>& GetRemap() const { return var_remap_; }
+
 private:
     std::string prefix_;
+    // Name-keyed fallback for free variables inherited from an enclosing inline (see ctor).
+    std::unordered_map<std::string, ir::ExprPtr> name_remap_;
 
     ir::VarPtr RenameVar(const ir::VarPtr& var)
     {
@@ -221,6 +234,13 @@ private:
         auto it = var_remap_.find(op.get());
         if (it != var_remap_.end())
             return it->second;
+        // Pointer miss on a var whose definition is not in this body means it is a free variable
+        // inherited from an enclosing inline; bridge it by name (its defining object lives in the
+        // enclosing helper and was already renamed there). Helper-local uses always hit above,
+        // since their defining statement is visited (and pointer-mapped) before any use.
+        auto name_it = name_remap_.find(op->name_);
+        if (name_it != name_remap_.end())
+            return name_it->second;
         return op;
     }
 
@@ -304,6 +324,40 @@ private:
         }
         return std::make_shared<const ir::IfStmt>(new_cond, new_then, new_else, std::move(new_rvs), op->span_);
     }
+
+    bool RenameJumpValues(const std::vector<ir::ExprPtr>& values, std::vector<ir::ExprPtr>& new_values)
+    {
+        new_values.reserve(values.size());
+        bool changed = false;
+        for (const auto& value : values) {
+            auto new_value = VisitExpr(value);
+            changed = changed || (new_value.get() != value.get());
+            new_values.push_back(std::move(new_value));
+        }
+        return changed;
+    }
+
+    // ConvertToSSA (which runs before inlining) snapshots each loop-carried
+    // value's live SSA version at a break/continue and stores it in value_, so
+    // the backend can write those values back before the jump. The base mutator
+    // returns Break/Continue unchanged, so without these overrides the snapshot
+    // references keep their pre-inline names and become undefined (or collide
+    // with outer-scope vars) once the rest of the body is prefix-renamed.
+    ir::StmtPtr VisitStmt_(const ir::BreakStmtPtr& op) override
+    {
+        std::vector<ir::ExprPtr> new_values;
+        if (!RenameJumpValues(op->value_, new_values))
+            return op;
+        return std::make_shared<const ir::BreakStmt>(std::move(new_values), op->span_);
+    }
+
+    ir::StmtPtr VisitStmt_(const ir::ContinueStmtPtr& op) override
+    {
+        std::vector<ir::ExprPtr> new_values;
+        if (!RenameJumpValues(op->value_, new_values))
+            return op;
+        return std::make_shared<const ir::ContinueStmt>(std::move(new_values), op->span_);
+    }
 };
 
 /// Replaces all ReturnStmt nodes in a body with an assignment to `target`.
@@ -319,6 +373,16 @@ public:
 
     ir::StmtPtr VisitStmt_(const ir::ReturnStmtPtr& op) override
     {
+        if (target_ && op->value_.empty()) {
+            // The call result is used as a value, but this path is a void `return` (a
+            // `return None` in the helper). Assign an empty-tuple sentinel: if this path is
+            // dead it is dropped by const-folding; if it is the taken path the sentinel
+            // survives and codegen reports a clear error at the use site (see
+            // VisitExpr_(GetItemExprPtr)) instead of emitting an undeclared identifier that
+            // only fails later inside the CCE compiler.
+            return std::make_shared<const ir::AssignStmt>(
+                target_, std::make_shared<const ir::MakeTuple>(std::vector<ir::ExprPtr>{}, op->span_), op->span_);
+        }
         if (!target_ || op->value_.empty()) {
             // Void call — replace return with empty SeqStmts
             return std::make_shared<const ir::SeqStmts>(std::vector<ir::StmtPtr>{}, op->span_);
@@ -335,10 +399,15 @@ private:
 /// Build the inlined body for a helper call. Replaces ReturnStmt with an
 /// assignment to `target` (null for void/EvalStmt calls).
 ir::StmtPtr BuildInlinedBody(const ir::FunctionPtr& helper, const std::vector<ir::ExprPtr>& call_args,
-                             const std::string& prefix, const ir::VarPtr& target)
+                             const std::string& prefix, const ir::VarPtr& target,
+                             const std::unordered_map<const ir::Expr*, ir::ExprPtr>& parent_remap = {},
+                             std::unordered_map<const ir::Expr*, ir::ExprPtr>* out_remap = nullptr)
 {
-    BodyRenamer renamer(prefix, helper->params_, call_args);
+    BodyRenamer renamer(prefix, helper->params_, call_args, parent_remap);
     auto renamed_body = renamer.VisitStmt(helper->body_);
+    if (out_remap != nullptr) {
+        *out_remap = renamer.GetRemap();
+    }
 
     ReturnReplacer replacer(target);
     return replacer.VisitStmt(renamed_body);
@@ -379,8 +448,10 @@ public:
         }
 
         // Single target: tuple returns lower to `target = MakeTuple(...)`.
-        auto inlined = BuildInlinedBody(helper, args, prefix, target_var);
-        return VisitStmt(inlined); // recurse for nested helper calls
+        std::unordered_map<const ir::Expr*, ir::ExprPtr> child_remap;
+        auto inlined = BuildInlinedBody(helper, args, prefix, target_var, ambient_remap_, &child_remap);
+        auto result = VisitInlinedWithAmbient(inlined, std::move(child_remap)); // recurse for nested helper calls
+        return UnwrapIfNestedVF(result);
     }
 
     ir::StmtPtr VisitStmt_(const ir::EvalStmtPtr& op) override
@@ -398,60 +469,70 @@ public:
             args.push_back(VisitExpr(a));
         }
 
-        auto inlined = BuildInlinedBody(helper, args, prefix, /*target=*/nullptr);
-        return VisitStmt(inlined);
+        std::unordered_map<const ir::Expr*, ir::ExprPtr> child_remap;
+        auto inlined = BuildInlinedBody(helper, args, prefix, /*target=*/nullptr, ambient_remap_, &child_remap);
+        auto result = VisitInlinedWithAmbient(inlined, std::move(child_remap));
+        return UnwrapIfNestedVF(result);
+    }
+
+    /// Track whether we are inlining inside an enclosing VF section. A VF helper
+    /// (@pl.vector_function) is compiled with its body wrapped in a SectionStmt(VF);
+    /// when such a helper is called from another VF helper, naive inlining would
+    /// nest two VF sections, which the codegen VF-section invariant forbids
+    /// (see EmitSection: "VF section must be nested inside a Vector section").
+    /// Flatten by tracking the current section kind here and unwrapping a nested
+    /// VF section at the inline site (see UnwrapIfNestedVF).
+    ir::StmtPtr VisitStmt_(const ir::SectionStmtPtr& op) override
+    {
+        bool prev_in_vf = in_vf_section_;
+        if (op->sectionKind_ == ir::SectionKind::VF) {
+            in_vf_section_ = true;
+        }
+        auto result = IRMutator::VisitStmt_(op);
+        in_vf_section_ = prev_in_vf;
+        return result;
     }
 
 private:
+    /// If we are already inside a VF section and the freshly-inlined statement is
+    /// itself a SectionStmt(VF), splice in its body instead of the nested section,
+    /// collapsing multiple VF-helper calls into a single VF section.
+    ir::StmtPtr UnwrapIfNestedVF(const ir::StmtPtr& inlined)
+    {
+        if (!in_vf_section_) {
+            return inlined;
+        }
+        auto section = ir::As<ir::SectionStmt>(inlined);
+        if (section && section->sectionKind_ == ir::SectionKind::VF) {
+            return section->body_;
+        }
+        return inlined;
+    }
+
+    /// Recurse into a freshly-inlined body with `child_remap` (this inline's var mapping) as the
+    /// ambient remap, so a nested helper's free references to this helper's vars are rewritten
+    /// consistently. Restores the previous ambient afterward.
+    ir::StmtPtr VisitInlinedWithAmbient(const ir::StmtPtr& inlined,
+                                        std::unordered_map<const ir::Expr*, ir::ExprPtr>&& child_remap)
+    {
+        auto saved = std::move(ambient_remap_);
+        ambient_remap_ = std::move(child_remap);
+        auto result = VisitStmt(inlined);
+        ambient_remap_ = std::move(saved);
+        return result;
+    }
+
     const std::map<std::string, ir::FunctionPtr>& helpers_;
     int counter_ = 0;
+    // Var mapping from the enclosing inline(s); seeds nested helper inlines so their free-variable
+    // references (e.g. auto_mutex buf_ids captured from an outer scope) remap correctly.
+    std::unordered_map<const ir::Expr*, ir::ExprPtr> ambient_remap_;
+    // True while visiting inside a VF section, so a VF helper inlined into another
+    // VF helper has its redundant nested VF section unwrapped (see UnwrapIfNestedVF).
+    bool in_vf_section_ = false;
 };
 
 } // namespace
-
-ir::ProgramPtr InlineHelperCalls(const ir::ProgramPtr& program)
-{
-    // Step 1: collect helper functions by name
-    std::map<std::string, ir::FunctionPtr> helpers;
-    ir::FunctionPtr kernel_func;
-    std::string kernel_name;
-
-    for (const auto& [name, func] : program->functions_) {
-        if (func->funcType_ == ir::FunctionType::HELPER) {
-            helpers[func->name_] = func;
-        } else if (func->funcType_ != ir::FunctionType::ORCHESTRATION && !kernel_func) {
-            kernel_func = func;
-            kernel_name = name;
-        }
-    }
-
-    if (helpers.empty() || !kernel_func) {
-        return program; // nothing to inline
-    }
-
-    // Step 2: inline all helper calls in the kernel body
-    CallInliner inliner(helpers);
-    auto new_body = inliner.VisitStmt(kernel_func->body_);
-
-    auto new_func = std::make_shared<const ir::Function>(kernel_func->name_, kernel_func->params_,
-                                                         kernel_func->returnTypes_, new_body, kernel_func->span_,
-                                                         kernel_func->funcType_);
-
-    // Step 3: build a new program with only the kernel (no helpers)
-    std::map<std::string, ir::FunctionPtr> new_funcs;
-    for (const auto& [name, func] : program->functions_) {
-        if (func->funcType_ == ir::FunctionType::HELPER) {
-            continue; // drop helpers
-        }
-        if (name == kernel_name) {
-            new_funcs[name] = new_func;
-        } else {
-            new_funcs[name] = func;
-        }
-    }
-
-    return std::make_shared<const ir::Program>(std::move(new_funcs), program->name_, program->span_);
-}
 
 // ============================================================================
 // Single-file MIX mode generation (skip ptoas)
@@ -471,6 +552,8 @@ void CCECodegen::PrepareBodyGeneration()
 {
     PreScanValidShapes();
     tuple_var_to_make_tuple_.clear();
+    tuple_vars_with_dyn_array_.clear();
+    dyn_arr_counter_ = 0;
 }
 
 std::string CCECodegen::GenerateSingle(const ir::ProgramPtr& program, const std::string& arch)
@@ -484,14 +567,13 @@ std::string CCECodegen::GenerateSingle(const ir::ProgramPtr& program, const std:
     // they key on stay valid, so codegen reads names through this captured table.
     debug_info_ = program->GetDebugInfo();
 
-    ir::ProgramPtr lowered = ir::pass::LowerBreakContinue()(program);
-    ir::ProgramPtr ssa_program = ir::pass::ConvertToSSA()(lowered);
-    // ir::ProgramPtr opt_program = ir::pass::ConstFoldAndSimplify()(ssa_program);
-    ir::ProgramPtr inlined_program = InlineHelperCalls(ssa_program);
-    ir::ProgramPtr opt_program = ir::pass::ConstFoldAndSimplify()(inlined_program);
+    // break/continue are handled natively in VisitStmt_(Break/Continue) below.
+    // ConvertToSSA still models loop-carried scalars as iter_args +
+    // a trailing yield, so the native-jump visitors write those values back before jumping.
+    ir::ProgramPtr ssa_program = ir::pass::ConvertToSSA()(program);
 
     ir::FunctionPtr kernel_func;
-    for (const auto& func_entry : opt_program->functions_) {
+    for (const auto& func_entry : ssa_program->functions_) {
         const auto& func = func_entry.second;
         if (func->funcType_ == ir::FunctionType::ORCHESTRATION) {
             continue;
@@ -520,7 +602,16 @@ std::string CCECodegen::GenerateSingle(const ir::ProgramPtr& program, const std:
 
     GenerateSinglePrologue(kernel_func, needs_ffts);
     PrepareBodyGeneration();
-    GenerateBody(kernel_func);
+    try {
+        GenerateBody(kernel_func);
+    } catch (const npu::tile_fwk::Error& e) {
+        const ir::Span& best_span = current_expr_span_.IsUnknown() ? current_stmt_span_ : current_expr_span_;
+        if (!best_span.IsUnknown()) {
+            std::string enriched = std::string(e.what()) + "\n  --> " + best_span.ToString();
+            throw npu::tile_fwk::Error("GenerateBody", __FILE__, __LINE__, enriched, nullptr);
+        }
+        throw;
+    }
 
     return emitter_.GetCode();
 }
@@ -680,6 +771,81 @@ bool IsOnlyYieldStmts(const ir::StmtPtr& stmt)
     return true;
 }
 
+/// True if `s` contains a BreakStmt/ContinueStmt bound to the current loop level. Descends through
+/// the container statements that can appear in a loop body (Seq/If/Section) but stops at a nested
+/// For/While, whose jumps belong to that inner loop. Used to keep a 0..1 for-loop wrapped so a
+/// native break inside it stays legal C++.
+bool BodyContainsNativeJump(const ir::StmtPtr& s)
+{
+    if (!s) {
+        return false;
+    }
+    if (ir::As<ir::BreakStmt>(s) || ir::As<ir::ContinueStmt>(s) || ir::As<ir::ReturnStmt>(s)) {
+        return true;
+    }
+    if (ir::As<ir::ForStmt>(s) || ir::As<ir::WhileStmt>(s)) {
+        return false; // nested loop barrier
+    }
+    if (auto seq = ir::As<ir::SeqStmts>(s)) {
+        for (const auto& stmt : seq->stmts_) {
+            if (BodyContainsNativeJump(stmt)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    if (auto ifStmt = ir::As<ir::IfStmt>(s)) {
+        return BodyContainsNativeJump(ifStmt->thenBody_) ||
+               (ifStmt->elseBody_.has_value() && BodyContainsNativeJump(*ifStmt->elseBody_));
+    }
+    if (auto section = ir::As<ir::SectionStmt>(s)) {
+        return BodyContainsNativeJump(section->body_);
+    }
+    return false; // leaf statement
+}
+
+// Whether a statement (transitively) issues a vf.create_addr_reg. Its vag_* /
+// AddrReg codegen must sit inside the physical loop it is bound to; bisheng
+// rejects a vag that is "not bound into the correct loop layer". So a loop body
+// containing one must keep its real for-loop wrapper and cannot be collapsed by
+// the single-iteration optimization (mirrors the BodyContainsNativeJump guard).
+// A nested loop is a barrier: an inner vag binds to the inner loop, not this one.
+bool BodyContainsAddrReg(const ir::StmtPtr& s)
+{
+    if (!s) {
+        return false;
+    }
+    auto is_addr_reg_call = [](const ir::ExprPtr& e) {
+        auto call = ir::As<ir::Call>(e);
+        return call && call->name_ == "vf.create_addr_reg";
+    };
+    if (auto assign = ir::As<ir::AssignStmt>(s)) {
+        return is_addr_reg_call(assign->value_);
+    }
+    if (auto eval = ir::As<ir::EvalStmt>(s)) {
+        return is_addr_reg_call(eval->expr_);
+    }
+    if (ir::As<ir::ForStmt>(s) || ir::As<ir::WhileStmt>(s)) {
+        return false; // nested loop barrier
+    }
+    if (auto seq = ir::As<ir::SeqStmts>(s)) {
+        for (const auto& stmt : seq->stmts_) {
+            if (BodyContainsAddrReg(stmt)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    if (auto ifStmt = ir::As<ir::IfStmt>(s)) {
+        return BodyContainsAddrReg(ifStmt->thenBody_) ||
+               (ifStmt->elseBody_.has_value() && BodyContainsAddrReg(*ifStmt->elseBody_));
+    }
+    if (auto section = ir::As<ir::SectionStmt>(s)) {
+        return BodyContainsAddrReg(section->body_);
+    }
+    return false; // leaf statement
+}
+
 } // namespace
 
 // ========================================================================
@@ -691,9 +857,11 @@ void CCECodegen::EmitSingleFunctionSignature(const ir::FunctionPtr& func, bool h
     // Collect dynamic dim variables from tensor shapes (first-occurrence order)
     std::vector<ir::VarPtr> dyn_dim_vars = CollectDynamicDimVars(func);
 
-    // Build PTO-style function signature: __global__ AICORE void func_name(__gm__ type* p1, ...)
+    // Emit the kernel body as a device function `<name>_impl`; the `__global__` entry that
+    // forwards to it is generated by the launcher (JIT call_kernel.cpp) or the binary-delivery
+    // op cpp. Keeps the body identical while letting the entry layer add adaptation logic later.
     std::ostringstream sig;
-    sig << "__global__ AICORE void " << func->name_ << "(";
+    sig << "__aicore__ inline void " << func->name_ << "_impl(";
     bool first = true;
     for (const auto& param : func->params_) {
         if (!first)
@@ -704,11 +872,12 @@ void CCECodegen::EmitSingleFunctionSignature(const ir::FunctionPtr& func, bool h
         if (auto tensor_type = std::dynamic_pointer_cast<const ir::TensorType>(param->GetType())) {
             std::string element_type = tensor_type->dtype_.ToCTypeString();
             std::string param_name = context_.SanitizeName(param);
-            // Tensor parameter is a raw pointer named "<name>_ptr"; the GlobalTensor wrapper
-            // emitted in EmitSingleTensorDeclarations takes the tensor var name itself.
-            sig << "__gm__ " << element_type << "* " << param_name << "_ptr";
+            auto ptr_var = std::const_pointer_cast<ir::Var>(ir::As<ir::Var>(*tensor_type->tensor_view_->ptr));
+            std::string ptr_name = param_name + "_ptr";
+            context_.RegisterVar(ptr_var, ptr_name);
+            sig << "__gm__ " << element_type << "* " << ptr_name;
             context_.RegisterVar(param, param_name);
-            RegisterPointer(param_name, param_name + "_ptr");
+            RegisterPointer(param_name, ptr_name);
         } else if (auto scalar_type = std::dynamic_pointer_cast<const ir::ScalarType>(param->GetType())) {
             std::string cpp_type = scalar_type->dtype_.ToCTypeString();
             std::string param_name = context_.SanitizeName(param);
@@ -769,13 +938,10 @@ void CCECodegen::EmitSingleTensorDeclarations(const ir::FunctionPtr& func)
     CollectTensorDefs(func);
 
     std::vector<TensorDef> param_defs;
-    param_defs.reserve(tensor_defs_.size());
-    for (const auto& [name, def] : tensor_defs_) {
-        (void)name;
-        auto tt = ir::As<ir::TensorType>(def.var->GetType());
-        const bool is_view = tt && tt->tensor_view_.has_value() && tt->tensor_view_->ptr.has_value();
-        if (!is_view) {
-            param_defs.push_back(def);
+    for (const auto& param : func->params_) {
+        auto it = tensor_defs_.find(context_.SanitizeName(param));
+        if (it != tensor_defs_.end()) {
+            param_defs.push_back(it->second);
         }
     }
 
@@ -958,7 +1124,7 @@ void CCECodegen::VisitStmt_(const ir::SectionStmtPtr& op)
     // VF section: emit a __VEC_SCOPE__ { ... } block with all tile->ptr base declarations
     // hoisted to just before the scope (section_hoist), so they never sit after a mem_bar.
     if (op->sectionKind_ == ir::SectionKind::VF) {
-        // After InlineHelperCalls, a VF section is always nested inside a Vector section.
+        // VF sections are nested inside a Vector section by the parser.
         INTERNAL_CHECK(current_section_kind_.has_value() && *current_section_kind_ == ir::SectionKind::Vector)
             << "VF section must be nested inside a Vector section";
         // VF sections do not nest, so the hoist buffer must be empty on entry.
@@ -971,11 +1137,34 @@ void CCECodegen::VisitStmt_(const ir::SectionStmtPtr& op)
 
         auto prev_kind = current_section_kind_;
         current_section_kind_ = ir::SectionKind::VF;
+        vf_reg_hoisted_decls_.clear();
+
         emitter_.EmitLine("__VEC_SCOPE__ {");
         emitter_.IncreaseIndent();
+
+        // Capture header position so RegTensor declarations can be hoisted to the
+        // top of __VEC_SCOPE__ body (must be inside the scope but before any loops).
+        std::string scope_header = emitter_.GetCode();
+        int body_indent = emitter_.GetIndentLevel();
+        emitter_.Clear();
+        emitter_.SetIndentLevel(body_indent);
+
         if (op->body_) {
-            VisitStmt(op->body_); // GetItemExpr / GetUBufPtr lazily push base-ptr decls
+            VisitStmt(op->body_); // auto-declare pushes RegTensor decls to vf_reg_hoisted_decls_
         }
+
+        std::string scope_body = emitter_.GetCode();
+        emitter_.Clear();
+        emitter_.SetIndentLevel(body_indent);
+
+        // Reassemble: header + hoisted RegTensor decls + body
+        emitter_.EmitRaw(scope_header);
+        for (const auto& decl : vf_reg_hoisted_decls_) {
+            emitter_.EmitLine(decl);
+        }
+        vf_reg_hoisted_decls_.clear();
+        emitter_.EmitRaw(scope_body);
+
         emitter_.DecreaseIndent();
         emitter_.EmitLine("}");
         current_section_kind_ = prev_kind;
@@ -1046,6 +1235,22 @@ bool CCECodegen::DetectCrossCoreSyncOps(const ir::StmtPtr& stmt)
     CrossCoreSyncDetector detector;
     detector.VisitStmt(stmt);
     return detector.found;
+}
+
+void CCECodegen::VisitStmt(const ir::StmtPtr& stmt)
+{
+    if (stmt) {
+        current_stmt_span_ = stmt->span_;
+    }
+    ir::IRVisitor::VisitStmt(stmt);
+}
+
+void CCECodegen::VisitExpr(const ir::ExprPtr& expr)
+{
+    if (expr) {
+        current_expr_span_ = expr->span_;
+    }
+    ir::IRVisitor::VisitExpr(expr);
 }
 
 void CCECodegen::GenerateBody(const ir::FunctionPtr& func)
@@ -1136,6 +1341,7 @@ void CCECodegen::VisitStmt_(const ir::AssignStmtPtr& op)
                                                                   /*allow_struct_tuple=*/true);
                 if (!arr_decl.empty()) {
                     emitter_.EmitLine(arr_decl);
+                    tuple_vars_with_dyn_array_.insert(var_name);
                 }
             }
         }
@@ -1164,8 +1370,11 @@ void CCECodegen::VisitStmt_(const ir::EvalStmtPtr& op)
 void CCECodegen::VisitStmt_(const ir::ReturnStmtPtr& op)
 {
     INTERNAL_CHECK(op != nullptr) << "Internal error: null ReturnStmt";
-    // Helper returns are rewritten to assignments during inlining; a ReturnStmt
-    // reaching codegen is a kernel-level (void) return, which emits nothing.
+    // A ReturnStmt reaching codegen is a kernel-level return. Emit a native C++ return so the
+    // function exits immediately, matching Python's return semantics.
+    // Kernel functions are void, so return values are discarded.
+    emitter_.EmitLine("return;");
+    current_expr_value_ = "";
 }
 
 void CCECodegen::VisitStmt_(const ir::YieldStmtPtr& op)
@@ -1306,21 +1515,20 @@ std::string CCECodegen::BuildDynamicTupleArrayDecl(const ir::TypePtr& elem_type,
         return "";
     }
 
-    std::ostringstream init;
-    for (size_t i = 0; i < elem_names.size(); ++i) {
-        if (i > 0)
-            init << ", ";
-        init << elem_names[i];
-    }
-
     std::string elem_cpp_type;
+    // For scalar elements, wrap each initializer in an explicit cast to the array's
+    // element type. The element expressions may have a different (e.g. unsigned) C++
+    // type than the declared array type, which would otherwise trigger a narrowing
+    // error in the initializer list (e.g. unsigned long -> int64_t).
+    std::string scalar_cast_type;
     if (auto tile_type = ir::As<ir::TileType>(elem_type)) {
         auto shape_dims = ExtractShapeDimensions(tile_type->shape_);
         int64_t rows = shape_dims.size() >= 1 ? shape_dims[0] : 1;
         int64_t cols = shape_dims.size() >= 2 ? shape_dims[1] : 1;
         elem_cpp_type = type_converter_.ConvertTileType(tile_type, rows, cols);
     } else if (auto scalar_type = ir::As<ir::ScalarType>(elem_type)) {
-        elem_cpp_type = "const " + scalar_type->dtype_.ToCTypeString();
+        scalar_cast_type = scalar_type->dtype_.ToCTypeString();
+        elem_cpp_type = "const " + scalar_cast_type;
     } else if (allow_struct_tuple) {
         auto inner_tt = ir::As<ir::TupleType>(elem_type);
         if (inner_tt && debug_info_ != nullptr && debug_info_->GetTupleFields(inner_tt.get()) != nullptr) {
@@ -1334,6 +1542,18 @@ std::string CCECodegen::BuildDynamicTupleArrayDecl(const ir::TypePtr& elem_type,
     if (elem_cpp_type.empty()) {
         return "";
     }
+
+    std::ostringstream init;
+    for (size_t i = 0; i < elem_names.size(); ++i) {
+        if (i > 0)
+            init << ", ";
+        if (!scalar_cast_type.empty()) {
+            init << "static_cast<" << scalar_cast_type << ">(" << elem_names[i] << ")";
+        } else {
+            init << elem_names[i];
+        }
+    }
+
     return elem_cpp_type + " " + arr_name + "[] = {" + init.str() + "};";
 }
 
@@ -1480,123 +1700,131 @@ void CCECodegen::VisitStmt_(const ir::IfStmtPtr& op)
 // Phase 5 helpers: ForStmt iter-arg registration and yield assignments
 // ========================================================================
 
-std::vector<std::string> CCECodegen::RegisterForIterArgs(const ir::ForStmtPtr& op)
+std::vector<std::string> CCECodegen::RegisterLoopIterArgs(const std::vector<ir::IterArgPtr>& iterArgs)
 {
-    std::vector<std::string> iter_arg_names;
-    if (op->iterArgs_.empty())
-        return iter_arg_names;
+    std::vector<std::string> iterArgNames;
+    if (iterArgs.empty()) {
+        return iterArgNames;
+    }
 
-    bool any_emitted = false;
-    for (auto& iter_arg : op->iterArgs_) {
-        const auto& var = iter_arg->iterVar_;
-        std::string iter_arg_name = context_.SanitizeName(var);
+    bool anyEmitted = false;
+    for (auto& iterArg : iterArgs) {
+        const auto& var = iterArg->iterVar_;
+        std::string iterArgName = context_.SanitizeName(var);
 
-        VisitExpr(iter_arg->initValue_);
-        std::string init_value = current_expr_value_;
+        VisitExpr(iterArg->initValue_);
+        std::string initValue = current_expr_value_;
         current_expr_value_ = "";
 
-        auto init_var = std::dynamic_pointer_cast<const ir::Var>(iter_arg->initValue_);
-        if (init_var && std::dynamic_pointer_cast<const ir::TensorType>(init_var->GetType())) {
-            std::string init_var_name = context_.GetVarName(init_var);
-            std::string init_ptr = GetPointer(init_var_name);
-            RegisterPointer(iter_arg_name, init_ptr);
+        auto initVar = std::dynamic_pointer_cast<const ir::Var>(iterArg->initValue_);
+        if (initVar && std::dynamic_pointer_cast<const ir::TensorType>(initVar->GetType())) {
+            std::string initVarName = context_.GetVarName(initVar);
+            std::string initPtr = GetPointer(initVarName);
+            RegisterPointer(iterArgName, initPtr);
         }
 
-        std::string resolved_init = init_value;
-        bool is_simple_var_copy = (init_var != nullptr) &&
-                                  !std::dynamic_pointer_cast<const ir::TensorType>(init_var->GetType()) &&
-                                  !std::dynamic_pointer_cast<const ir::TileType>(init_var->GetType()) &&
-                                  !std::dynamic_pointer_cast<const ir::TupleType>(init_var->GetType());
-        bool can_reuse_writable_slot = is_simple_var_copy && IsWritableLValueExpr(resolved_init);
-        if (can_reuse_writable_slot && context_.IsAutoRegistered(resolved_init)) {
-            can_reuse_writable_slot = false;
+        std::string resolvedInit = initValue;
+        bool isSimpleVarCopy = (initVar != nullptr) &&
+                               !std::dynamic_pointer_cast<const ir::TensorType>(initVar->GetType()) &&
+                               !std::dynamic_pointer_cast<const ir::TileType>(initVar->GetType()) &&
+                               !std::dynamic_pointer_cast<const ir::TupleType>(initVar->GetType());
+        bool canReuseWritableSlot = isSimpleVarCopy && IsWritableLValueExpr(resolvedInit);
+        if (canReuseWritableSlot && context_.IsAutoRegistered(resolvedInit)) {
+            canReuseWritableSlot = false;
         }
 
-        if (can_reuse_writable_slot) {
-            context_.RegisterVar(var, resolved_init);
-            iter_arg_names.push_back(resolved_init);
+        if (canReuseWritableSlot) {
+            context_.RegisterVar(var, resolvedInit);
+            iterArgNames.push_back(resolvedInit);
         } else {
-            context_.RegisterVar(var, iter_arg_name);
-            iter_arg_names.push_back(iter_arg_name);
-            if (!any_emitted) {
-                any_emitted = true;
+            context_.RegisterVar(var, iterArgName);
+            iterArgNames.push_back(iterArgName);
+            if (!anyEmitted) {
+                anyEmitted = true;
             }
-            std::string safe_init = init_value;
-            if (context_.IsAutoRegistered(init_value)) {
-                safe_init = "0";
+            std::string safeInit = initValue;
+            if (context_.IsAutoRegistered(initValue)) {
+                safeInit = "0";
             }
-            emitter_.EmitLine("auto " + iter_arg_name + " = " + safe_init + ";");
+            emitter_.EmitLine("auto " + iterArgName + " = " + safeInit + ";");
         }
     }
-    if (any_emitted) {
+    if (anyEmitted) {
         emitter_.EmitLine("");
     }
-    return iter_arg_names;
+    return iterArgNames;
 }
 
-void CCECodegen::EmitForYieldAssignments(const std::vector<std::string>& iter_arg_names)
+void CCECodegen::EmitCarriedAssignments(const std::vector<std::string>& targets,
+                                        const std::vector<std::string>& sources)
 {
-    if (yield_buffer_.empty())
-        return;
+    CHECK(targets.size() == sources.size())
+        << "Loop-carried write-back expects " << targets.size() << " values but got " << sources.size();
 
-    CHECK(yield_buffer_.size() == iter_arg_names.size())
-        << "Yielded " << yield_buffer_.size() << " values but expected " << iter_arg_names.size();
-
-    for (size_t i = 0; i < iter_arg_names.size(); ++i) {
-        std::string lhs = iter_arg_names[i];
-        std::string rhs = yield_buffer_[i];
+    for (size_t i = 0; i < targets.size(); ++i) {
+        const std::string& lhs = targets[i];
+        const std::string& rhs = sources[i];
         if (lhs == rhs) {
             continue; // Self-assignment after alias resolution - skip
         }
-        // For tiles: use TASSIGN instead of operator= to transfer hardware address
-        std::string tile_source = tile_addresses_.count(yield_buffer_[i]) ? yield_buffer_[i] : rhs;
-        if (tile_addresses_.count(tile_source)) {
-            emitter_.EmitLine("TASSIGN(" + lhs + ", " + tile_addresses_[tile_source] + ");");
-            tile_addresses_[lhs] = tile_addresses_[tile_source];
+        // For tiles/tuples: use TASSIGN instead of operator= to transfer the hardware address.
+        if (tile_addresses_.count(rhs)) {
+            emitter_.EmitLine("TASSIGN(" + lhs + ", " + tile_addresses_[rhs] + ");");
+            tile_addresses_[lhs] = tile_addresses_[rhs];
         } else {
             emitter_.EmitLine(lhs + " = " + rhs + ";");
         }
     }
+}
+
+void CCECodegen::EmitForYieldAssignments(const std::vector<std::string>& iterArgNames)
+{
+    if (yield_buffer_.empty()) {
+        return;
+    }
+    EmitCarriedAssignments(iterArgNames, yield_buffer_);
     yield_buffer_.clear();
 }
 
-void CCECodegen::RegisterForReturnVars(const ir::ForStmtPtr& op, const std::vector<std::string>& iter_arg_names)
+void CCECodegen::RegisterLoopReturnVars(const std::vector<ir::VarPtr>& returnVars,
+                                        const std::vector<std::string>& iterArgNames)
 {
-    if (op->returnVars_.empty()) {
+    if (returnVars.empty()) {
         return;
     }
-    for (size_t i = 0; i < op->returnVars_.size(); ++i) {
-        const auto& return_var = op->returnVars_[i];
-        if (i < iter_arg_names.size()) {
-            context_.RegisterVar(return_var, iter_arg_names[i]);
+    for (size_t i = 0; i < returnVars.size(); ++i) {
+        const auto& returnVar = returnVars[i];
+        if (i < iterArgNames.size()) {
+            context_.RegisterVar(returnVar, iterArgNames[i]);
         } else {
-            throw ir::RuntimeError("ForStmt return_var has no corresponding iter_arg");
+            throw ir::RuntimeError("Loop return_var has no corresponding iter_arg");
         }
     }
 }
 
-void CCECodegen::PropagateTupleIterArgs(const ir::ForStmtPtr& op)
+void CCECodegen::PropagateTupleIterArgs(const std::vector<ir::IterArgPtr>& iterArgs,
+                                        const std::vector<ir::VarPtr>& returnVars)
 {
-    for (size_t i = 0; i < op->iterArgs_.size(); ++i) {
-        const auto& ia = op->iterArgs_[i];
-        if (!ia || !ir::As<ir::TupleType>(ia->iterVar_->GetType()) || !ia->initValue_)
+    for (size_t i = 0; i < iterArgs.size(); ++i) {
+        const auto& ia = iterArgs[i];
+        if (!ia || !ir::As<ir::TupleType>(ia->iterVar_->GetType()) || !ia->initValue_) {
             continue;
-        std::string saved_expr = current_expr_value_;
-        ir::MakeTuplePtr saved_tuple = current_tuple_;
+        }
+        std::string savedExpr = current_expr_value_;
+        ir::MakeTuplePtr savedTuple = current_tuple_;
         current_tuple_ = nullptr;
         current_expr_value_ = "";
         VisitExpr(ia->initValue_);
         if (current_tuple_) {
-            std::string ia_name = context_.SanitizeName(ia->iterVar_);
-            tuple_var_to_make_tuple_.emplace(ia_name, current_tuple_);
-            if (i < op->returnVars_.size() && op->returnVars_[i] &&
-                ir::As<ir::TupleType>(op->returnVars_[i]->GetType())) {
-                std::string rv_name = context_.SanitizeName(op->returnVars_[i]);
-                tuple_var_to_make_tuple_.emplace(rv_name, current_tuple_);
+            std::string iaName = context_.SanitizeName(ia->iterVar_);
+            tuple_var_to_make_tuple_.emplace(iaName, current_tuple_);
+            if (i < returnVars.size() && returnVars[i] && ir::As<ir::TupleType>(returnVars[i]->GetType())) {
+                std::string rvName = context_.SanitizeName(returnVars[i]);
+                tuple_var_to_make_tuple_.emplace(rvName, current_tuple_);
             }
         }
-        current_expr_value_ = saved_expr;
-        current_tuple_ = saved_tuple;
+        current_expr_value_ = savedExpr;
+        current_tuple_ = savedTuple;
     }
 }
 
@@ -1618,8 +1846,13 @@ void CCECodegen::VisitStmt_(const ir::ForStmtPtr& op)
     auto start_ci = ir::As<ir::ConstInt>(op->start_);
     auto stop_ci = ir::As<ir::ConstInt>(op->stop_);
     auto step_ci = ir::As<ir::ConstInt>(op->step_);
+    // A native break/continue would be illegal C++ if the body is emitted without a loop wrapper,
+    // so keep the real for-loop when the body contains one bound to this loop.
+    // A vf.create_addr_reg in the body emits a vag_* bound to this loop layer;
+    // collapsing the loop would leave the vag unbound, so keep the real for-loop.
     bool is_single_iter = (start_ci && stop_ci && step_ci && start_ci->value_ == 0 && stop_ci->value_ == 1 &&
-                           step_ci->value_ == 1);
+                           step_ci->value_ == 1) &&
+                          !BodyContainsNativeJump(op->body_) && !BodyContainsAddrReg(op->body_);
 
     // Register loop variable
     std::string loop_var_name;
@@ -1632,8 +1865,8 @@ void CCECodegen::VisitStmt_(const ir::ForStmtPtr& op)
         context_.RegisterVar(op->loopVar_, loop_var_name);
     }
 
-    std::vector<std::string> iter_arg_names = RegisterForIterArgs(op);
-    PropagateTupleIterArgs(op);
+    std::vector<std::string> iter_arg_names = RegisterLoopIterArgs(op->iterArgs_);
+    PropagateTupleIterArgs(op->iterArgs_, op->returnVars_);
 
     // Evaluate loop range
     VisitExpr(op->start_);
@@ -1656,47 +1889,61 @@ void CCECodegen::VisitStmt_(const ir::ForStmtPtr& op)
         yield_buffer_.clear();
 
         // Register return variables with same names as iter_args
-        RegisterForReturnVars(op, iter_arg_names);
+        RegisterLoopReturnVars(op->returnVars_, iter_arg_names);
         return;
     }
 
     // --- Emit for-loop with hoisting ---
-    EmitForLoopWithHoisting(op, loop_var_name, iter_arg_names, start, stop, step);
-}
-
-void CCECodegen::EmitForLoopWithHoisting(const ir::ForStmtPtr& op, const std::string& loop_var_name,
-                                         const std::vector<std::string>& iter_arg_names, const std::string& start,
-                                         const std::string& stop, const std::string& step)
-{
-    bool is_outermost_loop = (loop_depth_ == 0);
-    // VF base-ptr / POST_UPDATE decls now go to section_hoisted_decls_ (hoisted to __VEC_SCOPE__),
-    // so loop-level hoisting is only needed for the outermost kernel loop.
-    bool should_hoist = is_outermost_loop;
-    loop_depth_++;
-    size_t hoist_start_idx = loop_hoisted_decls_.size();
-
-    std::string pre_for_code;
-    int saved_indent = emitter_.GetIndentLevel();
-    if (should_hoist) {
-        pre_for_code = emitter_.GetCode();
-        emitter_.Clear();
-        emitter_.SetIndentLevel(saved_indent);
-    }
-
-    // In __VEC_SCOPE__, bisheng requires uint16_t loop variables AND the bound
-    // expression must also resolve to uint16_t (otherwise -Wcce-compat -Werror
-    // fails the build). Force a static_cast when we're inside a VF section.
+    // In __VEC_SCOPE__, bisheng requires uint16_t loop variables AND the bound expression to also
+    // resolve to uint16_t (otherwise -Wcce-compat -Werror fails the build), so cast inside a VF section.
     std::string loop_type = IsInVFSection() ? "uint16_t" : "uint64_t";
     std::string stop_expr = IsInVFSection() ? ("(uint16_t)(" + stop + ")") : stop;
-    emitter_.EmitLine("for (" + loop_type + " " + loop_var_name + " = " + start + "; " + loop_var_name + " < " +
-                      stop_expr + "; " + loop_var_name + " += " + step + ") {");
+    // Perf: in a VF section, hoist a NON-constant loop bound into a `const` local
+    // and use that as the trip count.  A literal-constant bound is already ideal,
+    // so it is left inline.  Binding a variable bound to a const evaluates it once
+    // and lets the bisheng VF compiler treat the trip count as loop-invariant
+    // (enabling unrolling / vectorization it would otherwise skip).
+    if (IsInVFSection() && !stop_ci) {
+        std::string bound_name = loop_var_name + "_ub";
+        emitter_.EmitLine("const uint16_t " + bound_name + " = " + stop_expr + ";");
+        stop_expr = bound_name;
+    }
+    std::string header = "for (" + loop_type + " " + loop_var_name + " = " + start + "; " + loop_var_name + " < " +
+                         stop_expr + "; " + loop_var_name + " += " + step + ") {";
+    EmitLoopWithHoisting(header, op->body_, op->iterArgs_, op->returnVars_, iter_arg_names);
+}
+
+void CCECodegen::EmitLoopWithHoisting(const std::string& header, const ir::StmtPtr& body,
+                                      const std::vector<ir::IterArgPtr>& iterArgs,
+                                      const std::vector<ir::VarPtr>& returnVars,
+                                      const std::vector<std::string>& iterArgNames)
+{
+    // VF base-ptr / POST_UPDATE decls go to section_hoisted_decls_ (hoisted to __VEC_SCOPE__), so
+    // loop-level array-decl hoisting is only needed for the outermost kernel loop.
+    bool shouldHoist = (loop_depth_ == 0);
+    loop_depth_++;
+    size_t hoistStartIdx = loop_hoisted_decls_.size();
+
+    std::string preLoopCode;
+    int savedIndent = emitter_.GetIndentLevel();
+    if (shouldHoist) {
+        preLoopCode = emitter_.GetCode();
+        emitter_.Clear();
+        emitter_.SetIndentLevel(savedIndent);
+    }
+
+    emitter_.EmitLine(header);
     emitter_.IncreaseIndent();
 
+    // Expose this loop's write-back targets so a native break/continue in the body can assign its
+    // self-described carried values (BreakStmt::value_) to the iter_args before jumping.
+    loop_target_stack_.push_back(iterArgNames);
     yield_buffer_.clear();
-    VisitStmt(op->body_);
+    VisitStmt(body);
+    loop_target_stack_.pop_back();
 
-    if (!op->iterArgs_.empty()) {
-        EmitForYieldAssignments(iter_arg_names);
+    if (!iterArgs.empty()) {
+        EmitForYieldAssignments(iterArgNames);
     }
 
     emitter_.DecreaseIndent();
@@ -1704,32 +1951,102 @@ void CCECodegen::EmitForLoopWithHoisting(const ir::ForStmtPtr& op, const std::st
 
     loop_depth_--;
 
-    // Insert hoisted declarations before the for-loop
-    if (should_hoist) {
-        std::string for_code = emitter_.GetCode();
+    // Insert hoisted declarations before the loop.
+    if (shouldHoist) {
+        std::string loopCode = emitter_.GetCode();
         emitter_.Clear();
-        emitter_.SetIndentLevel(saved_indent);
-        emitter_.EmitRaw(pre_for_code);
+        emitter_.SetIndentLevel(savedIndent);
+        emitter_.EmitRaw(preLoopCode);
 
-        if (loop_hoisted_decls_.size() > hoist_start_idx) {
-            for (size_t i = hoist_start_idx; i < loop_hoisted_decls_.size(); ++i) {
+        if (loop_hoisted_decls_.size() > hoistStartIdx) {
+            for (size_t i = hoistStartIdx; i < loop_hoisted_decls_.size(); ++i) {
                 emitter_.EmitLine(loop_hoisted_decls_[i]);
             }
             emitter_.EmitLine("");
-            loop_hoisted_decls_.resize(hoist_start_idx);
+            loop_hoisted_decls_.resize(hoistStartIdx);
         }
 
-        emitter_.EmitRaw(for_code);
+        emitter_.EmitRaw(loopCode);
     }
 
-    // Register return variables with same names as iter_args
-    RegisterForReturnVars(op, iter_arg_names);
+    // Return variables capture the final iteration values; alias them to iter_args.
+    RegisterLoopReturnVars(returnVars, iterArgNames);
 }
 
 void CCECodegen::VisitStmt_(const ir::WhileStmtPtr& op)
 {
-    (void)op;
-    throw ir::RuntimeError("WhileStmt codegen not yet implemented");
+    INTERNAL_CHECK(op != nullptr) << "Internal error: null WhileStmt";
+    INTERNAL_CHECK(op->condition_ != nullptr) << "Internal error: WhileStmt has null condition";
+    INTERNAL_CHECK(op->body_ != nullptr) << "Internal error: WhileStmt has null body";
+
+    // iter_args and return_vars must agree in size (each loop-carried value has a phi).
+    CHECK(op->iterArgs_.size() == op->returnVars_.size())
+        << "WhileStmt iter_args size (" << op->iterArgs_.size() << ") must equal return_vars size ("
+        << op->returnVars_.size() << ")";
+
+    // Native break/continue inside the body are emitted directly; each
+    // jump carries its own loop-carried values (BreakStmt::value_, populated by ConvertToSSA) and
+    // writes them to the iter_args before jumping. The body otherwise ends in a YieldStmt that feeds
+    // the loop-carried iter_args on the normal loop-back path.
+    std::vector<std::string> iter_arg_names = RegisterLoopIterArgs(op->iterArgs_);
+    PropagateTupleIterArgs(op->iterArgs_, op->returnVars_);
+
+    // The condition is re-evaluated each iteration, so emit it inline in the while header.
+    // Comparison/logical exprs lower to pure C++ expression strings (see IMPLEMENT_BINARY_OP),
+    // so they are safe to place directly in `while (...)`.
+    VisitExpr(op->condition_);
+    std::string condition = current_expr_value_;
+    current_expr_value_ = "";
+
+    EmitLoopWithHoisting("while (" + condition + ") {", op->body_, op->iterArgs_, op->returnVars_, iter_arg_names);
+}
+
+// ========================================================================
+// Native break/continue support
+// ========================================================================
+
+// Write a native jump's self-described carried values (BreakStmt/ContinueStmt::value_, populated by
+// ConvertToSSA) back to the innermost loop's iter_args before the jump skips the trailing yield.
+void CCECodegen::EmitJumpCarriedWriteback(const std::vector<ir::ExprPtr>& values)
+{
+    if (values.empty() || loop_target_stack_.empty()) {
+        return; // bare jump: loop carries nothing, or jump is outside a tracked loop
+    }
+    std::vector<std::string> sources;
+    sources.reserve(values.size());
+    for (const auto& v : values) {
+        VisitExpr(v);
+        sources.push_back(current_expr_value_);
+        current_expr_value_ = "";
+    }
+    EmitCarriedAssignments(loop_target_stack_.back(), sources);
+}
+
+void CCECodegen::VisitStmt_(const ir::BreakStmtPtr& op)
+{
+    INTERNAL_CHECK(op != nullptr) << "Internal error: null BreakStmt";
+    EmitJumpCarriedWriteback(op->value_);
+    emitter_.EmitLine("break;");
+}
+
+void CCECodegen::VisitStmt_(const ir::ContinueStmtPtr& op)
+{
+    INTERNAL_CHECK(op != nullptr) << "Internal error: null ContinueStmt";
+    EmitJumpCarriedWriteback(op->value_);
+    emitter_.EmitLine("continue;");
+}
+
+void CCECodegen::VisitStmt_(const ir::SeqStmtsPtr& op)
+{
+    INTERNAL_CHECK(op != nullptr) << "Internal error: null SeqStmts";
+    for (const auto& stmt : op->stmts_) {
+        VisitStmt(stmt);
+        // A native break/continue/return ends this straight-line sequence; statements after it are
+        // unreachable (e.g. the dead trailing yield ConvertToSSA leaves after a body-tail jump).
+        if (ir::As<ir::BreakStmt>(stmt) || ir::As<ir::ContinueStmt>(stmt) || ir::As<ir::ReturnStmt>(stmt)) {
+            break;
+        }
+    }
 }
 
 // ========================================================================
@@ -1768,7 +2085,9 @@ void CCECodegen::VisitExpr_(const ir::ConstIntPtr& op)
 void CCECodegen::VisitExpr_(const ir::ConstFloatPtr& op)
 {
     INTERNAL_CHECK(op != nullptr) << "Internal error: null ConstFloat";
-    current_expr_value_ = std::to_string(op->value_);
+    std::string literal = std::to_string(op->value_);
+    literal += "f";
+    current_expr_value_ = literal;
 }
 
 void CCECodegen::VisitExpr_(const ir::ConstBoolPtr& op)
@@ -1780,7 +2099,11 @@ void CCECodegen::VisitExpr_(const ir::ConstBoolPtr& op)
 std::string CCECodegen::GetOrCreateVFTilePtr(const ir::ExprPtr& expr, bool is_post_update)
 {
     std::string code = GetExprAsCode(expr);
-    auto it = vf_tile_ptrs_.find(code);
+    // Key on is_post_update so a dedicated cursor (e.g. a POST_UPDATE store target) and a plain
+    // base pointer to the same tile are kept as independent hoisted vars — a cursor that is
+    // mutated in place must not be shared with a base-pointer load/store of the same tile.
+    auto cache_key = std::make_pair(is_post_update, code);
+    auto it = vf_tile_ptrs_.find(cache_key);
     if (it != vf_tile_ptrs_.end())
         return it->second;
 
@@ -1798,7 +2121,7 @@ std::string CCECodegen::GetOrCreateVFTilePtr(const ir::ExprPtr& expr, bool is_po
     std::string var = "vf_tile_ptr_" + std::to_string(vf_tile_ptr_counter_++);
     std::string init = is_offset ? code : ("(__ubuf__ " + elem_ctype + " *)" + code + ".data()");
     section_hoisted_decls_.push_back("__ubuf__ " + elem_ctype + " *" + var + " = " + init + ";");
-    vf_tile_ptrs_[code] = var;
+    vf_tile_ptrs_[cache_key] = var;
     return var;
 }
 
@@ -1840,7 +2163,12 @@ void CCECodegen::VisitExpr_(const ir::GetItemExprPtr& op)
                     current_expr_value_ = base_code + "[" + std::to_string(idx) + "]";
                 }
                 return;
+            } else if (tuple_vars_with_dyn_array_.count(current_expr_value_) != 0) {
+                current_tuple_ = nullptr;
+                current_expr_value_ += "[" + std::to_string(idx) + "]";
+                return;
             }
+            CHECK(!current_tuple_->elements_.empty()) << "Cannot index an empty tuple at " << op->span_.ToString();
             INTERNAL_CHECK(idx < static_cast<int>(current_tuple_->elements_.size()))
                 << "GetItemExpr index " << idx << " out of bounds";
             ir::ExprPtr elem = current_tuple_->elements_[idx];
@@ -1851,9 +2179,8 @@ void CCECodegen::VisitExpr_(const ir::GetItemExprPtr& op)
             return;
         }
 
-        // Dynamic index: resolve value_ back to its underlying MakeTuple (Var aliases,
-        // iterArgs, nested static GetItem and struct attrs all land in current_tuple_), then
-        // look up the array emitted at the MakeTuple assignment, which is tuple var.
+        // Dynamic index: a named tuple with a materialized backing array keeps its
+        // variable identity; anonymous MakeTuple expressions use a local fallback array.
         std::string index_code = GetExprAsCode(op->slice_);
         current_tuple_ = nullptr;
         current_expr_value_ = "";
@@ -1861,26 +2188,28 @@ void CCECodegen::VisitExpr_(const ir::GetItemExprPtr& op)
         CHECK(current_tuple_ != nullptr) << "Dynamic tuple GetItem: cannot resolve underlying MakeTuple for "
                                          << op->value_->TypeName();
 
+        ir::MakeTuplePtr resolved_mt = current_tuple_;
         std::string arr_name;
-        if (current_expr_value_ != "") {
+        if (tuple_vars_with_dyn_array_.count(current_expr_value_) != 0) {
             arr_name = current_expr_value_;
-        } else {
-            ir::MakeTuplePtr resolved_mt = current_tuple_;
-            if (resolved_mt && !resolved_mt->elements_.empty()) {
-                auto elem_type = resolved_mt->elements_[0]->GetType();
-                std::vector<std::string> elem_names;
-                elem_names.reserve(resolved_mt->elements_.size());
-                for (size_t i = 0; i < resolved_mt->elements_.size(); ++i) {
-                    elem_names.push_back(GetExprAsCode(resolved_mt->elements_[i]));
-                }
-                std::string candidate_arr_name = "_dyn_arr_" + std::to_string(dyn_arr_counter_);
-                std::string arr_decl = BuildDynamicTupleArrayDecl(elem_type, elem_names, candidate_arr_name,
-                                                                  /*allow_struct_tuple=*/false);
-                if (!arr_decl.empty()) {
-                    arr_name = candidate_arr_name;
-                    ++dyn_arr_counter_;
-                    emitter_.EmitLine(arr_decl);
-                }
+        }
+        if (arr_name.empty() && !resolved_mt->elements_.empty()) {
+            // No dominating assignment materialized an array for this MakeTuple (for
+            // example, an anonymous tuple expression). Preserve the existing fallback
+            // by creating a local temporary array at this dynamic-index use.
+            auto elem_type = resolved_mt->elements_[0]->GetType();
+            std::vector<std::string> elem_names;
+            elem_names.reserve(resolved_mt->elements_.size());
+            for (size_t i = 0; i < resolved_mt->elements_.size(); ++i) {
+                elem_names.push_back(GetExprAsCode(resolved_mt->elements_[i]));
+            }
+            std::string candidate_arr_name = "_dyn_arr_" + std::to_string(dyn_arr_counter_);
+            std::string arr_decl = BuildDynamicTupleArrayDecl(elem_type, elem_names, candidate_arr_name,
+                                                              /*allow_struct_tuple=*/false);
+            if (!arr_decl.empty()) {
+                arr_name = candidate_arr_name;
+                ++dyn_arr_counter_;
+                emitter_.EmitLine(arr_decl);
             }
         }
         current_expr_value_ = arr_name + "[" + index_code + "]";
@@ -1912,6 +2241,12 @@ void CCECodegen::VisitExpr_(const ir::GetItemExprPtr& op)
     auto addr_it = tile_addresses_.find(base_tile);
     if (addr_it != tile_addresses_.end()) {
         base_addr = addr_it->second;
+    } else if (base_tile.find('[') != std::string::npos) {
+        // Dynamically-indexed tile-group member (e.g. `_tg_foo_tiles_0[bufidx]`): the runtime
+        // buffer selected by the cursor is unknown at codegen time, so the static memref address
+        // (which only records buffer 0) would be wrong. Use the tile's runtime base via .data()
+        // so element-offset slices follow the actual double-buffer slot.
+        base_addr = "(uint64_t)" + base_tile + ".data()";
     } else {
         INTERNAL_CHECK(tile_type->memref_.has_value())
             << "GetItemExpr: base tile '" << base_tile << "' has no address info";
@@ -1948,8 +2283,11 @@ void CCECodegen::VisitExpr_(const ir::GetItemExprPtr& op)
 
 std::string CCECodegen::GetExprAsCode(const ir::ExprPtr& expr)
 {
+    auto saved_span = current_expr_span_;
     VisitExpr(expr);
-    return current_expr_value_;
+    auto result = current_expr_value_;
+    current_expr_span_ = saved_span;
+    return result;
 }
 
 void CCECodegen::Emit(const std::string& line) { emitter_.EmitLine(line); }
@@ -2034,6 +2372,81 @@ void CCECodegen::VisitExpr_(const ir::CallPtr& op)
     CHECK(backend_ != nullptr) << "CCE backend must not be null";
     const auto* op_info = backend_->GetOpInfo(op->name_);
     CHECK(op_info != nullptr) << "Unknown call '" << op->name_ << "' reached CCE codegen; helper calls must be inlined";
+
+    // Auto-declare RegTensor for VF compute ops whose dst variable hasn't been
+    // declared yet. This handles the VF assignment form (dst = vf.xxx(...))
+    // where the RegTensor let-binding may end up inside a loop body.
+    // Only applies to compute ops where args[0] is a register (not a tile/store dst).
+    if (op->name_.rfind("vf.", 0) == 0 && !op->args_.empty()) {
+        // Skip store/side-effect ops — args[0] is a tile pointer, not a register
+        static const std::set<std::string> skip_ops = {
+            "vf.store_align",
+            "vf.store_unalign",
+            "vf.store_unalign_post",
+            "vf.store",
+            "vf.scatter",
+            "vf.mask_store",
+            "vf.mask_store_unalign",
+            "vf.store_align_pack",
+            "vf.store_align_intlv",
+            "vf.store_align_pack_postupdate",
+            "vf.mem_bar",
+            "vf.clear_spr",
+            "vf.create_mask",
+            "vf.update_mask",
+            "vf.reg_tensor",
+            "vf.mask_reg",
+            "vf.create_addr_reg",
+            "vf.move",
+            "vf.unalign_reg_for_store",
+            "vf.load_unalign_init",
+            "vf.load_unalign_pre",
+            "vf.get_mask_spr",
+            "vf.mask_gen_with_reg_tensor",
+            "vf.compare",
+            "vf.compares",
+        };
+        if (skip_ops.count(op->name_) == 0) {
+            static const std::set<std::string> dual_dst_ops = {
+                "vf.interleave", "vf.de_interleave", "vf.mask_interleave", "vf.mask_deinterleave", "vf.mull",
+            };
+            bool is_dual_dst = dual_dst_ops.count(op->name_) > 0;
+
+            for (size_t dst_idx = 0; dst_idx < (is_dual_dst ? 2 : 1); ++dst_idx) {
+                auto dst_var = ir::As<ir::Var>(op->args_[dst_idx]);
+                if (!dst_var)
+                    continue;
+                std::string dst_name = GetVarName(dst_var);
+                if (dst_name.empty() || IsRegTensorVar(dst_name) || IsMaskRegVar(dst_name))
+                    continue;
+                // Skip if the variable name contains '[' or '(' — it's a tile
+                // group index expression, not a simple register variable.
+                if (dst_name.find('[') != std::string::npos || dst_name.find('(') != std::string::npos)
+                    continue;
+
+                // Determine dtype: prefer the dst var's own type, then source args.
+                DataType dt = DataType::FP32;
+                auto dst_type = op->args_[dst_idx]->GetType();
+                if (auto dst_st = ir::As<ir::ScalarType>(dst_type)) {
+                    dt = dst_st->dtype_;
+                } else if (auto dst_sh = ir::As<ir::ShapedType>(dst_type)) {
+                    dt = dst_sh->dtype_;
+                } else {
+                    size_t first_src_idx = is_dual_dst ? 2 : 1;
+                    if (op->args_.size() > first_src_idx) {
+                        auto src_type = op->args_[first_src_idx]->GetType();
+                        if (auto src_st = ir::As<ir::ScalarType>(src_type))
+                            dt = src_st->dtype_;
+                        else if (auto src_sh = ir::As<ir::ShapedType>(src_type))
+                            dt = src_sh->dtype_;
+                    }
+                }
+                vf_reg_hoisted_decls_.push_back("RegTensor<" + dt.ToCTypeString() + "> " + dst_name + ";");
+                RegisterRegTensorVar(dst_name);
+            }
+        }
+    }
+
     std::string result = op_info->codegen_func(op, *this);
     current_expr_value_ = result;
 }
@@ -2262,18 +2675,41 @@ public:
         current_section_ = prev;
     }
 
+    void VisitStmt_(const ir::AssignStmtPtr& op) override
+    {
+        // Keep aliases distinct for SSA/body codegen, but attribute their accesses to the
+        // underlying parameter or view whose GlobalTensor declaration owns the base pointer.
+        auto source = ir::As<ir::Var>(op->value_);
+        if (ir::As<ir::TensorType>(op->var_->GetType()) && source && ir::As<ir::TensorType>(source->GetType())) {
+            tensor_aliases_[op->var_.get()] = ResolveTensorAlias(source);
+        }
+        ir::IRVisitor::VisitStmt_(op);
+    }
+
     void VisitExpr_(const ir::CallPtr& op) override
     {
         AccessArgIndices indices = ResolveAccessArgIndices(op->name_);
         if (indices.tensor_arg_idx >= 0 && static_cast<int>(op->args_.size()) > indices.tensor_arg_idx) {
             auto tensor_var = std::dynamic_pointer_cast<const ir::Var>(op->args_[indices.tensor_arg_idx]);
-            RecordTensorDef(op, tensor_var, indices);
+            RecordTensorDef(op, ResolveTensorAlias(tensor_var), indices);
         }
 
         ir::IRVisitor::VisitExpr_(op);
     }
 
 private:
+    std::shared_ptr<const ir::Var> ResolveTensorAlias(std::shared_ptr<const ir::Var> var) const
+    {
+        while (var) {
+            auto it = tensor_aliases_.find(var.get());
+            if (it == tensor_aliases_.end()) {
+                break;
+            }
+            var = it->second;
+        }
+        return var;
+    }
+
     struct AccessArgIndices {
         int tensor_arg_idx = -1;
         int tile_arg_idx = -1;
@@ -2283,12 +2719,15 @@ private:
     {
         AccessArgIndices indices;
         if (op_name == "block.load") {
-            indices.tensor_arg_idx = 0;
-            indices.tile_arg_idx = 2;
-        } else if (op_name == "block.store") {
-            indices.tensor_arg_idx = 2;
+            indices.tensor_arg_idx = 1;
             indices.tile_arg_idx = 0;
+        } else if (op_name == "block.store") {
+            indices.tensor_arg_idx = 0;
+            indices.tile_arg_idx = 1;
         } else if (op_name == "block.store_fp") {
+            indices.tensor_arg_idx = 0;
+            indices.tile_arg_idx = 1;
+        } else if (op_name == "debug.dump_tile") {
             indices.tensor_arg_idx = 3;
             indices.tile_arg_idx = 0;
         }
@@ -2314,8 +2753,6 @@ private:
         if (!tensor_var) {
             return;
         }
-        // A ptr.make_tensor view is self-identifying (its TensorType carries a source
-        // pointer); it lands here just like a tensor parameter and becomes a TensorDef.
         auto var = std::const_pointer_cast<ir::Var>(tensor_var);
         TensorDef& def = defs_[ctx_.SanitizeName(var)];
         if (def.var == nullptr) {
@@ -2332,12 +2769,13 @@ private:
         if (!def.tile_dims.has_value() && op->HasKwarg("tile_dims")) {
             def.tile_dims = op->GetKwarg<std::vector<int>>("tile_dims");
         }
-        if (op->name_ == "block.load" && op->HasKwarg("layout") && op->GetKwarg<std::string>("layout") == "dn") {
-            def.is_dn = true;
+        if (op->name_ == "block.load" && op->HasKwarg("is_transpose") && op->GetKwarg<bool>("is_transpose")) {
+            def.is_transpose = true;
         }
     }
 
     const CodeContext& ctx_; ///< for SanitizeName (pure: derives the cce var-name key)
+    std::map<const ir::Var*, std::shared_ptr<const ir::Var>> tensor_aliases_;
     std::optional<ir::SectionKind> current_section_;
 };
 
@@ -2601,7 +3039,7 @@ std::string CppTypeForField(const ir::TypePtr& t)
 std::string BuildStructTypeDef(const std::string& name, const std::vector<std::string>& fields,
                                const std::vector<ir::TypePtr>& types)
 {
-    std::string def = "struct " + name + " { ";
+    std::string def = "class " + name + " {\npublic:\n    ";
     for (size_t i = 0; i < fields.size(); ++i) {
         const auto& ft = types[i];
         if (auto arr = ir::As<ir::TupleType>(ft)) {
@@ -2610,7 +3048,7 @@ std::string BuildStructTypeDef(const std::string& name, const std::vector<std::s
             def += CppTypeForField(ft) + " " + fields[i] + "; ";
         }
     }
-    def += "};";
+    def += "\n};";
     return def;
 }
 
@@ -2811,26 +3249,14 @@ std::string CCECodegen::GenerateSingleFileStrideType(const std::vector<int64_t>&
     return oss.str();
 }
 
-void CCECodegen::AppendDynamicStrideGlobalTensorArgs(std::ostringstream& global_instance,
-                                                     const std::string& shape_type_name,
-                                                     const std::string& stride_type_name,
-                                                     const ir::TensorTypePtr& tensor_type,
-                                                     const std::vector<int64_t>& shape_dims,
-                                                     const std::optional<std::vector<int>>& tile_dims, bool is_dn)
+void CCECodegen::AppendDynamicStrideGlobalTensorArgs(
+    std::ostringstream& global_instance, const std::string& shape_type_name, const std::string& stride_type_name,
+    const ir::TensorTypePtr& tensor_type, const std::optional<std::vector<int>>& tile_dims, bool is_transpose)
 {
-    auto dim_expr = [this](const ir::ExprPtr& dim, int64_t fallback) -> std::string {
-        if (auto ci = std::dynamic_pointer_cast<const ir::ConstInt>(dim)) {
-            return std::to_string(ci->value_);
-        }
-        if (auto var = std::dynamic_pointer_cast<const ir::Var>(dim)) {
-            return context_.GetVarName(std::const_pointer_cast<ir::Var>(var));
-        }
-        return std::to_string(fallback);
-    };
     auto full_stride_expr = [&](int dim_idx) -> std::string {
         std::string expr = "1";
         for (size_t i = static_cast<size_t>(dim_idx) + 1; i < tensor_type->shape_.size(); ++i) {
-            std::string dim = dim_expr(tensor_type->shape_[i], 1);
+            std::string dim = GetExprAsCode(tensor_type->shape_[i]);
             expr = (expr == "1") ? dim : expr + "*" + dim;
         }
         return expr;
@@ -2839,18 +3265,14 @@ void CCECodegen::AppendDynamicStrideGlobalTensorArgs(std::ostringstream& global_
     std::string row_stride_expr;
     std::string col_stride_expr;
     if (tile_dims.has_value() && tile_dims->size() == 2) {
-        // tile_dims=[a, b] BSND view: row stride is the product below dim a (e.g. N*D),
-        // not the access-window column.
         row_stride_expr = full_stride_expr((*tile_dims)[0]);
         col_stride_expr = full_stride_expr((*tile_dims)[1]);
     } else {
-        row_stride_expr = dim_expr(tensor_type->shape_.back(), shape_dims.back());
+        row_stride_expr = GetExprAsCode(tensor_type->shape_.back());
         col_stride_expr = "1";
     }
-    // Our tensors are 2D; the three leading stride slots are unused -> fixed to 1.
-    // DN (column-major) swaps the low two stride values relative to ND.
     global_instance << ", " << shape_type_name << "(), " << stride_type_name << "(1, 1, 1, ";
-    if (is_dn) {
+    if (is_transpose) {
         global_instance << col_stride_expr << ", " << row_stride_expr;
     } else {
         global_instance << row_stride_expr << ", " << col_stride_expr;
@@ -2860,14 +3282,14 @@ void CCECodegen::AppendDynamicStrideGlobalTensorArgs(std::ostringstream& global_
 
 void CCECodegen::EmitGlobalTensorInstance(const std::string& var_name, const std::string& global_type_name,
                                           const std::string& shape_type_name, const std::string& stride_type_name,
-                                          const ir::TensorTypePtr& tensor_type, const std::vector<int64_t>& shape_dims,
-                                          const std::optional<std::vector<int>>& tile_dims, bool is_dn,
+                                          const ir::TensorTypePtr& tensor_type,
+                                          const std::optional<std::vector<int>>& tile_dims, bool is_transpose,
                                           const std::string& base_pointer)
 {
     std::ostringstream global_instance;
     global_instance << global_type_name << " " << var_name << "(" << base_pointer;
-    AppendDynamicStrideGlobalTensorArgs(global_instance, shape_type_name, stride_type_name, tensor_type, shape_dims,
-                                        tile_dims, is_dn);
+    AppendDynamicStrideGlobalTensorArgs(global_instance, shape_type_name, stride_type_name, tensor_type, tile_dims,
+                                        is_transpose);
     global_instance << ");";
     emitter_.EmitLine(global_instance.str());
 }
@@ -2933,9 +3355,9 @@ void CCECodegen::EmitDynamicNZGlobalTensorDeclaration(
 }
 
 std::string CCECodegen::BuildGlobalTensorLayoutArg(const std::string& stride_type_name,
-                                                   const std::vector<int64_t>& shape_dims, bool is_dn) const
+                                                   const std::vector<int64_t>& shape_dims, bool is_transpose) const
 {
-    if (*shape_dims.rbegin() == 1 || is_dn) {
+    if (*shape_dims.rbegin() == 1 || is_transpose) {
         return stride_type_name + ", Layout::DN";
     }
     return stride_type_name;
@@ -3010,7 +3432,7 @@ void CCECodegen::GenerateGlobalTensorTypeDeclaration(const TensorDef& def)
     INTERNAL_CHECK(HasPointer(var_name)) << "Internal error: tensor '" << var_name << "' has no base pointer";
     INTERNAL_CHECK(!def.access_shape.empty()) << "Internal error: tensor '" << var_name << "' has no access_shape";
 
-    const bool is_dn = def.is_dn;
+    const bool is_transpose = def.is_transpose;
     const std::optional<std::vector<int>>& tile_dims = def.tile_dims;
     const std::string base_pointer = GetPointer(var_name);
 
@@ -3029,13 +3451,13 @@ void CCECodegen::GenerateGlobalTensorTypeDeclaration(const TensorDef& def)
     emitter_.EmitLine("using " + shape_type_name + " = " + type_converter_.GenerateShapeType({-1, -1}) + ";");
     emitter_.EmitLine("using " + stride_type_name + " = pto::Stride<-1, -1, -1, -1, -1>;");
 
-    // Layout: DN if last dim is 1 or if the def is flagged is_dn.
-    std::string global_layout_arg = BuildGlobalTensorLayoutArg(stride_type_name, shape_dims, is_dn);
+    // Layout: DN if last dim is 1 or if the def is flagged is_transpose.
+    std::string global_layout_arg = BuildGlobalTensorLayoutArg(stride_type_name, shape_dims, is_transpose);
     emitter_.EmitLine("using " + global_type_name + " = GlobalTensor<" + element_type + ", " + shape_type_name + ", " +
                       global_layout_arg + ">;");
 
-    EmitGlobalTensorInstance(var_name, global_type_name, shape_type_name, stride_type_name, tensor_type, shape_dims,
-                             tile_dims, is_dn, base_pointer);
+    EmitGlobalTensorInstance(var_name, global_type_name, shape_type_name, stride_type_name, tensor_type, tile_dims,
+                             is_transpose, base_pointer);
 }
 
 } // namespace codegen

@@ -41,7 +41,7 @@ public:
     /**
      * \brief Register a backend type
      *
-     * \param type_name Backend type name (e.g., "910B_CCE")
+     * \param type_name Backend type name (e.g., "CCE")
      * \param func Factory function that creates backend from SoC
      */
     void Register(const std::string& type_name, CreateFunc func);
@@ -49,7 +49,7 @@ public:
     /**
      * \brief Create a backend instance (deprecated for singleton backends)
      *
-     * Backends are singletons; this always throws. Use Backend910B_CCE::Instance() instead.
+     * Backends are singletons; this always throws. Use BackendCCE::Instance() instead.
      *
      * \param type_name Backend type name
      * \param soc SoC structure (includes memory hierarchy)
@@ -73,7 +73,7 @@ private:
 /**
  * \brief Create backend from registry (deprecated for singleton backends)
  *
- * Backends are singletons; this always throws. Use Backend910B_CCE::Instance() instead.
+ * Backends are singletons; this always throws. Use BackendCCE::Instance() instead.
  *
  * \param type_name Backend type name
  * \param soc SoC structure (includes memory hierarchy)

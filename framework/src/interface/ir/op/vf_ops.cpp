@@ -51,8 +51,13 @@ TypePtr DeduceVFScalarType([[maybe_unused]] const std::vector<ExprPtr>& args,
 }
 
 TypePtr DeduceVFMaskType([[maybe_unused]] const std::vector<ExprPtr>& args,
-                         [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
+                         const std::vector<std::pair<std::string, std::any>>& kwargs)
 {
+    for (const auto& [key, value] : kwargs) {
+        if (key == "dtype") {
+            return std::make_shared<ScalarType>(AnyCast<DataType>(value, "kwarg: dtype"));
+        }
+    }
     return std::make_shared<ScalarType>(DataType::UINT16);
 }
 
@@ -73,6 +78,13 @@ REGISTER_OP("vf.reg_tensor")
     .no_argument()
     .set_attr<DataType>("dtype")
     .f_deduce_type(DeduceVFScalarType);
+
+REGISTER_OP("vf.mask_reg")
+    .set_op_category("VFOp")
+    .set_description("Declare a mask register (without initialization)")
+    .no_argument()
+    .set_attr<DataType>("dtype")
+    .f_deduce_type(DeduceVFMaskType);
 
 // Mask
 REGISTER_OP("vf.create_mask")
@@ -531,7 +543,6 @@ REGISTER_OP("vf.exp_sub")
     .add_argument("src", "Source register")
     .add_argument("max", "Max register")
     .add_argument("mask", "Mask register")
-    .set_attr<int>("mode")
     .set_attr<int>("layout")
     .f_deduce_type(DeduceVFFromDstArg);
 
@@ -544,7 +555,6 @@ REGISTER_OP("vf.astype")
     .set_attr<int>("layout")
     .set_attr<int>("round_mode")
     .set_attr<int>("saturate")
-    .set_attr<int>("part")
     .f_deduce_type(DeduceVFFromDstArg);
 
 REGISTER_OP("vf.de_interleave")
@@ -588,79 +598,66 @@ REGISTER_OP("vf.histograms")
     .add_argument("mask", "Mask register")
     .set_attr<int>("bin_type")
     .set_attr<int>("hist_type")
-    .set_attr<int>("mode")
     .f_deduce_type(DeduceVFFromDstArg);
 REGISTER_OP("vf.eq")
     .set_op_category("VFOp")
     .set_description("Equality compare and generate mask")
+    .add_argument("dst", "Destination mask register")
     .add_argument("src0", "First source register")
     .add_argument("src1", "Second source register")
     .add_argument("mask_src", "Source mask register")
     .set_attr<DataType>("cmp_dtype")
-    .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
-                      [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) -> TypePtr {
-        return std::make_shared<ScalarType>(DataType::UINT16);
-    });
+    .f_deduce_type(DeduceVFMaskType);
 
 REGISTER_OP("vf.ne")
     .set_op_category("VFOp")
     .set_description("Not-equal compare and generate mask")
+    .add_argument("dst", "Destination mask register")
     .add_argument("src0", "First source register")
     .add_argument("src1", "Second source register")
     .add_argument("mask_src", "Source mask register")
     .set_attr<DataType>("cmp_dtype")
-    .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
-                      [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) -> TypePtr {
-        return std::make_shared<ScalarType>(DataType::UINT16);
-    });
+    .f_deduce_type(DeduceVFMaskType);
 
 REGISTER_OP("vf.lt")
     .set_op_category("VFOp")
     .set_description("Less-than compare and generate mask")
+    .add_argument("dst", "Destination mask register")
     .add_argument("src0", "First source register")
     .add_argument("src1", "Second source register")
     .add_argument("mask_src", "Source mask register")
     .set_attr<DataType>("cmp_dtype")
-    .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
-                      [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) -> TypePtr {
-        return std::make_shared<ScalarType>(DataType::UINT16);
-    });
+    .f_deduce_type(DeduceVFMaskType);
 
 REGISTER_OP("vf.gt")
     .set_op_category("VFOp")
     .set_description("Greater-than compare and generate mask")
+    .add_argument("dst", "Destination mask register")
     .add_argument("src0", "First source register")
     .add_argument("src1", "Second source register")
     .add_argument("mask_src", "Source mask register")
     .set_attr<DataType>("cmp_dtype")
-    .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
-                      [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) -> TypePtr {
-        return std::make_shared<ScalarType>(DataType::UINT16);
-    });
+    .f_deduce_type(DeduceVFMaskType);
 
 REGISTER_OP("vf.le")
     .set_op_category("VFOp")
     .set_description("Less-or-equal compare and generate mask")
+    .add_argument("dst", "Destination mask register")
     .add_argument("src0", "First source register")
     .add_argument("src1", "Second source register")
     .add_argument("mask_src", "Source mask register")
     .set_attr<DataType>("cmp_dtype")
-    .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
-                      [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) -> TypePtr {
-        return std::make_shared<ScalarType>(DataType::UINT16);
-    });
+    .f_deduce_type(DeduceVFMaskType);
 
 REGISTER_OP("vf.ge")
     .set_op_category("VFOp")
     .set_description("Greater-or-equal compare and generate mask")
+    .add_argument("dst", "Destination mask register")
     .add_argument("src0", "First source register")
     .add_argument("src1", "Second source register")
     .add_argument("mask_src", "Source mask register")
     .set_attr<DataType>("cmp_dtype")
-    .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
-                      [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) -> TypePtr {
-        return std::make_shared<ScalarType>(DataType::UINT16);
-    });
+    .f_deduce_type(DeduceVFMaskType);
 REGISTER_OP("vf.squeeze")
 
     .set_op_category("VFOp")
@@ -668,7 +665,6 @@ REGISTER_OP("vf.squeeze")
     .add_argument("dst", "Destination register")
     .add_argument("src", "Source register")
     .add_argument("mask", "Mask register")
-    .set_attr<int>("mode")
     .set_attr<int>("gather_mode")
     .f_deduce_type(DeduceVFFromDstArg);
 
@@ -686,7 +682,6 @@ REGISTER_OP("vf.gather")
     .add_argument("src_ub", "Source UB pointer")
     .add_argument("indices", "Index register")
     .add_argument("mask", "Mask register")
-    .set_attr<int>("gather_mode")
     .set_attr<int>("data_copy_mode")
     .f_deduce_type(DeduceVFFromDstArg);
 
@@ -970,13 +965,6 @@ REGISTER_OP("vf.move")
     .add_argument("mask", "Mask register (optional)")
     .set_attr<int>("mode")
     .f_deduce_type(DeduceVFFromDstArg);
-
-REGISTER_OP("vf.get_spr")
-    .set_op_category("VFOp")
-    .set_description("Read special purpose register value (get_ar instruction). "
-                     "Currently only AR register is supported.")
-    .set_attr<int>("spr")
-    .f_deduce_type(DeduceVFUnknownType);
 
 } // namespace ir
 } // namespace pypto

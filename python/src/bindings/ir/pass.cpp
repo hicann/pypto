@@ -79,8 +79,6 @@ void BindPasses(py::module_& m)
         .def_static("init_mem_ref", &pass::InitMemRef, "Create a memory reuse pass")
         .def_static("basic_memory_reuse", &pass::BasicMemoryReuse, "Create a basic memory reuse pass")
         .def_static("allocate_memory_addr", &pass::AllocateMemoryAddr, "Create an allocate memory address pass")
-        .def_static("lower_break_continue", &pass::LowerBreakContinue,
-                    "Create a pass that lowers break/continue statements to structured control flow")
         .def_static("outline_incore_scopes", &pass::OutlineIncoreScopes,
                     "Create a pass that outlines InCore scopes into separate functions")
         .def_static("convert_tensor_to_block_ops", &pass::ConvertTensorToBlockOps,

@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-# coding: utf-8
 # Copyright (c) 2026 Huawei Technologies Co., Ltd.
 # This program is free software, you can redistribute it and/or modify it under the terms and conditions of
 # CANN Open Software License Agreement Version 2.0 (the "License").
@@ -16,8 +14,9 @@ from __future__ import annotations
 import ast
 
 from pypto.pypto_impl import ir as _ir_core
+from pypto.pypto_impl.ir import Expr, Span
 
-from ._op_registry import op_impl
+from ._op_registry import op_impl, OpSpec, register_table
 
 
 @op_impl("min")
@@ -57,39 +56,63 @@ def _parse_max(self, call: ast.Call):
 
 
 # ---------------------------------------------------------------------------
-# Unified dispatch: add / sub / mul / div / minimum / maximum
-#   3rd arg is Tile   -> block.add / block.sub / ... / block.minimum / block.maximum
-#   3rd arg is Scalar -> block.adds / block.subs / ... / block.mins / block.maxs
+# Builders for binary ops (tile-tile / tile-scalar dispatch)
+#   rhs is Tile   -> block.add / block.sub / ... / block.and
+#   rhs is Scalar -> block.adds / block.subs / ... / block.ands
 # ---------------------------------------------------------------------------
-def _make_binary_dispatch(op_name: str, scalar_op_name: str | None = None):
-    scalar_op_name = scalar_op_name or (op_name + "s")
-
-    def _dispatch(self, call: ast.Call):
-        from pypto_pro.ir.op.block_ops import block_ir_op
-        from pypto_pro.language.parser.diagnostics import InvalidOperationError
-        call_span = self.span_tracker.get_span(call)
-        if len(call.args) != 3:
-            raise InvalidOperationError(
-                f"Operation '{op_name}' requires exactly 3 arguments (out, lhs, rhs), got {len(call.args)}",
-                span=call_span,
-            )
-        args = [self.parse_expression(arg) for arg in call.args]
-        kwargs = self.parse_op_kwargs(call)
-        if isinstance(args[2].type, _ir_core.TileType):
-            target_op = block_ir_op(op_name)
-        else:
-            target_op = block_ir_op(scalar_op_name)
-        return _ir_core.create_op_call(target_op, args, kwargs, call_span)
-
-    return _dispatch
+def _ir_add(out: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None, **kwargs) -> Expr:
+    from pypto_pro.ir.op.block_ops import _create_tile_scalar_op
+    return _create_tile_scalar_op(out, lhs, rhs, tile_op="add", scalar_op="adds", span=span, **kwargs)
 
 
-op_impl("add")(_make_binary_dispatch("add"))
-op_impl("sub")(_make_binary_dispatch("sub"))
-op_impl("mul")(_make_binary_dispatch("mul"))
-op_impl("div")(_make_binary_dispatch("div"))
-op_impl("minimum")(_make_binary_dispatch("minimum", "mins"))
-op_impl("maximum")(_make_binary_dispatch("maximum", "maxs"))
+def _ir_sub(out: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None, **kwargs) -> Expr:
+    from pypto_pro.ir.op.block_ops import _create_tile_scalar_op
+    return _create_tile_scalar_op(out, lhs, rhs, tile_op="sub", scalar_op="subs", span=span, **kwargs)
+
+
+def _ir_mul(out: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None, **kwargs) -> Expr:
+    from pypto_pro.ir.op.block_ops import _create_tile_scalar_op
+    return _create_tile_scalar_op(out, lhs, rhs, tile_op="mul", scalar_op="muls", span=span, **kwargs)
+
+
+def _ir_div(out: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None, **kwargs) -> Expr:
+    from pypto_pro.ir.op.block_ops import _create_tile_scalar_op
+    return _create_tile_scalar_op(out, lhs, rhs, tile_op="div", scalar_op="divs", span=span, **kwargs)
+
+
+def _ir_and(out: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None, **kwargs) -> Expr:
+    from pypto_pro.ir.op.block_ops import _create_tile_scalar_op
+    return _create_tile_scalar_op(out, lhs, rhs, tile_op="and", scalar_op="ands", span=span, **kwargs)
+
+
+# ---------------------------------------------------------------------------
+# Builders for min/max (element-wise + reduce overload via dim kwarg)
+# ---------------------------------------------------------------------------
+def _ir_minimum(out: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None,
+                dim: int | None = None, **kwargs) -> Expr:
+    from pypto_pro.ir.op.block_ops import _create_tile_scalar_op, _create_dim_op
+    if dim is not None:
+        return _create_dim_op([out, lhs, rhs], row_op="row_min", col_op="col_min", dim=dim, span=span)
+    return _create_tile_scalar_op(out, lhs, rhs, tile_op="minimum", scalar_op="mins", span=span, **kwargs)
+
+
+def _ir_maximum(out: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None,
+                dim: int | None = None, **kwargs) -> Expr:
+    from pypto_pro.ir.op.block_ops import _create_tile_scalar_op, _create_dim_op
+    if dim is not None:
+        return _create_dim_op([out, lhs, rhs], row_op="row_max", col_op="col_max", dim=dim, span=span)
+    return _create_tile_scalar_op(out, lhs, rhs, tile_op="maximum", scalar_op="maxs", span=span, **kwargs)
+
+
+register_table({
+    "add": OpSpec(builder=_ir_add),
+    "sub": OpSpec(builder=_ir_sub),
+    "mul": OpSpec(builder=_ir_mul),
+    "div": OpSpec(builder=_ir_div),
+    "and_": OpSpec(builder=_ir_and),
+    "minimum": OpSpec(builder=_ir_minimum),
+    "maximum": OpSpec(builder=_ir_maximum),
+})
 
 
 @op_impl("const")
@@ -121,7 +144,7 @@ def _parse_typed_constant(self, call: ast.Call):
     if negate:
         value = -value
 
-    dtype = self.type_resolver.resolve_dtype(call.args[1])
+    dtype = self.resolve_dtype_expr(call.args[1])
 
     if isinstance(value, float):
         return _ir_core.ConstFloat(value, dtype, span)

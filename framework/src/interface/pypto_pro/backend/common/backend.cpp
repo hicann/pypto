@@ -20,10 +20,9 @@
 #include <utility>
 #include <vector>
 
-#include "backend/910B_CCE/backend_910b_cce.h"
-
 #include "backend/common/soc.h"
 #include "core/logging.h"
+#include "tilefwk/error.h"
 #include "ir/memref.h"
 #include "ir/pipe.h"
 #include "tilefwk/error.h"
@@ -67,17 +66,6 @@ std::optional<uint64_t> FindMemSizeInDie(const DieT& die, ir::MemorySpace mem_ty
 }
 
 } // namespace
-
-const Backend* GetBackendInstance(BackendType type)
-{
-    switch (type) {
-        case BackendType::CCE:
-            return &Backend910B_CCE::Instance();
-        default:
-            CHECK(false) << "GetBackendInstance: unexpected BackendType (must be CCE)";
-            return nullptr; // unreachable
-    }
-}
 
 // ========== Backend Implementation ==========
 

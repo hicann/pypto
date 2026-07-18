@@ -212,6 +212,17 @@ REGISTER_OP("get_subblock_idx")
         return DeduceBlockGetBlockIdxType(args, kwargs, "get_subblock_idx");
     });
 
+REGISTER_OP("get_spr")
+    .set_op_category("LanguageOp")
+    .set_description("Read special purpose register value (get_ar instruction). "
+                     "Currently only AR register is supported.")
+    .no_argument()
+    .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
+                      [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
+        CHECK(args.size() == 0) << "get_spr requires no arguments";
+        return std::make_shared<ScalarType>(DataType::INT64);
+    });
+
 REGISTER_OP("block.make_tile")
     .set_op_category("BlockOp")
     .set_description("Create a tile")

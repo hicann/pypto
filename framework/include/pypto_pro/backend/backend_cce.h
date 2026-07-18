@@ -4,29 +4,31 @@
  * CANN Open Software License Agreement Version 2.0 (the "License").
  * Please refer to the License for details. You may not use this file except in compliance with the License.
  * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
- * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 
-#include "backend/910B_CCE/backend_910b_cce.h"
+#ifndef PYPTO_BACKEND_BACKEND_CCE_H_
+#define PYPTO_BACKEND_BACKEND_CCE_H_
+
+#include <string>
 
 #include "backend/common/backend.h"
-#include "backend/common/soc.h"
 
 namespace pypto {
 namespace backend {
 
-Backend910B_CCE::Backend910B_CCE() : Backend(Create910BSoC())
-{
-    // Operators are registered via REGISTER_BACKEND_OP macro
-    // in backend_910b_cce_ops.cpp during static initialization
-}
+class BackendCCE : public Backend {
+public:
+    static BackendCCE& Instance();
 
-Backend910B_CCE& Backend910B_CCE::Instance()
-{
-    static Backend910B_CCE instance;
-    return instance;
-}
+    [[nodiscard]] std::string GetTypeName() const override { return "CCE"; }
+
+private:
+    BackendCCE();
+};
 
 } // namespace backend
 } // namespace pypto
+
+#endif // PYPTO_BACKEND_BACKEND_CCE_H_

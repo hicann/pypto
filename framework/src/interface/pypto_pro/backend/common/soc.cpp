@@ -123,9 +123,9 @@ int SoC::TotalCoreCount() const
                            [](int sum, const auto& pair) { return sum + pair.first.TotalCoreCount() * pair.second; });
 }
 
-// ========== 910B SoC Factory ==========
+// ========== SoC Factory ==========
 
-const SoC& Create910BSoC()
+const SoC& CreateSoC()
 {
     // Singleton instance shared by all backends
     static SoC soc = []() {

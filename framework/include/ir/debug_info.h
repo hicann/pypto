@@ -33,8 +33,8 @@ using TupleTypePtr = std::shared_ptr<const TupleType>;
  * each `struct.create` / `MakeTuple` allocates a fresh instance (`make_shared`),
  * so same-shape-different-name structs get distinct keys. IR passes copy `TypePtr`
  * by shared_ptr (types are immutable and never rebuilt via reflection), so the
- * pointer stays valid and identical across ConvertToSSA /
- * ConstFoldAndSimplify / InlineHelperCalls.
+ * pointer stays valid and identical while IR transformation passes rebuild the
+ * surrounding nodes.
  *
  * The parser populates this (via `makeNamedTuple` / struct.create lowering); the
  * instance rides on `Program` so codegen can capture it at its entry point.

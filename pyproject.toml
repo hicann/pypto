@@ -74,6 +74,8 @@ package-dir = {"" = "python"}
 packages.find.where = ["python", ]
 packages.find.include = [
     "pypto",
+    "pypto_pro",
+    "pypto_pro.*",
     "pypto.op",
     "pypto.include.tilefwk",
     "pypto.lib",

@@ -139,8 +139,8 @@ _DEFAULT_CCE_JIT_COMPILE_CONFIG = JitCompileConfig(
         "-shared",
         "-xcce",
         "{mem_arch}",
-        "-O2",
-        "-std=c++20",
+        "-O3",
+        "-std=c++17",
         "-I{toolkit_home}/include",
     ),
     print_debug_flags=(

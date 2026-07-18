@@ -235,15 +235,15 @@ private:
     std::map<ir::MemorySpace, std::vector<ir::MemorySpace>> mem_graph_;
 };
 
-/**
- * \brief Create 910B SoC configuration (singleton)
+/*!
+ * \brief Create SoC configuration (singleton)
  *
- * Returns a reference to the singleton 910B SoC instance.
+ * Returns a reference to the singleton SoC instance.
  * The instance is created on first call and persists for program lifetime.
  *
- * \return Const reference to 910B SoC
+ * \return Const reference to SoC
  */
-const SoC& Create910BSoC();
+const SoC& CreateSoC();
 
 } // namespace backend
 } // namespace pypto

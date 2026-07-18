@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-# coding: utf-8
 # Copyright (c) 2026 Huawei Technologies Co., Ltd.
 # This program is free software, you can redistribute it and/or modify it under the terms and conditions of
 # CANN Open Software License Agreement Version 2.0 (the "License").
@@ -28,7 +26,7 @@ class Scalar:
         count: pl.DT_INT32
 
     Runtime mode (wraps IR expressions):
-        scalar_value = pl.scalar.create(3.14, dtype=pl.DT_FP32)
+        scalar_value = pl.const(3.14, pl.DT_FP32)
         # Returns Scalar wrapping the Call expression
 
     Examples:

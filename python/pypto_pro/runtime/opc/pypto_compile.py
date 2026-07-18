@@ -473,7 +473,13 @@ def _decode_tiling_key(schema, packed: int):
         return None
     concrete = {}
     for field in schema._fields:
-        concrete[field.name] = (packed >> field.offset) & ((1 << field.bits) - 1)
+        value_index = (packed >> field.offset) & ((1 << field.bits) - 1)
+        if value_index >= len(field.values):
+            raise RuntimeError(
+                f"tilingkey field '{field.name}' index {value_index} is out of range "
+                f"for values {list(field.values)}"
+            )
+        concrete[field.name] = field.values[value_index]
     return concrete
 
 

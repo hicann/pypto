@@ -1,0 +1,464 @@
+/**
+ * Copyright (c) 2026 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
+
+#include "gtest/gtest.h"
+
+#include <any>
+#include <exception>
+#include <memory>
+#include <optional>
+#include <string>
+#include <vector>
+
+#include "codegen/cce/cce_codegen.h"
+#include "ir/function.h"
+#include "ir/program.h"
+#include "ir/stmt.h"
+
+namespace pypto {
+namespace codegen {
+namespace {
+
+ir::ExprPtr MakeConstInt(int64_t value)
+{
+    return std::make_shared<const ir::ConstInt>(value, ir::DataType::INT64, ir::Span::Unknown());
+}
+
+ir::VarPtr MakeVar(const std::string& name, const ir::TypePtr& type)
+{
+    return std::make_shared<const ir::Var>(name, type, ir::Span::Unknown());
+}
+
+ir::VarPtr MakeTensorVar(const std::string& name, const std::vector<int64_t>& shape, ir::DataType dtype)
+{
+    auto ptr = MakeVar(name + "_base", std::make_shared<const ir::PtrType>(dtype));
+    ir::TensorView view({}, ir::TensorLayout::ND, ptr);
+    auto tensor_type = std::make_shared<const ir::TensorType>(shape, dtype, std::optional<ir::MemRefPtr>(std::nullopt),
+                                                              std::optional<ir::TensorView>(view));
+    return MakeVar(name, tensor_type);
+}
+
+ir::ProgramPtr MakeProgram(const ir::StmtPtr& body, const std::vector<ir::VarPtr>& params = {})
+{
+    auto function = std::make_shared<const ir::Function>("kernel", params, std::vector<ir::TypePtr>{}, body,
+                                                         ir::Span::Unknown(), ir::FunctionType::IN_CORE, true);
+    return std::make_shared<const ir::Program>(std::vector<ir::FunctionPtr>{function}, "test_program",
+                                               ir::Span::Unknown());
+}
+
+size_t CountOccurrences(const std::string& text, const std::string& needle)
+{
+    size_t count = 0;
+    size_t pos = 0;
+    while ((pos = text.find(needle, pos)) != std::string::npos) {
+        ++count;
+        pos += needle.size();
+    }
+    return count;
+}
+
+} // namespace
+
+TEST(CCECodegenHeaderTest, CoversHeaderOnlyStateAccessors)
+{
+    CCECodegen codegen;
+
+    EXPECT_TRUE(codegen.GetCurrentResultTarget().empty());
+    EXPECT_EQ(codegen.GetArch(), "a3");
+    EXPECT_FALSE(codegen.GetCurrentSectionKind().has_value());
+    EXPECT_FALSE(codegen.IsInCubeSection());
+    EXPECT_FALSE(codegen.IsInVFSection());
+    EXPECT_EQ(codegen.GetTileAddress("unknown_tile"), "0x0");
+    EXPECT_TRUE(codegen.GetTilingHeaders().empty());
+    EXPECT_EQ(codegen.GetTypeConverter().ConvertEventId(3), "EVENT_ID3");
+
+    codegen.RegisterTileEmitShape("tile_0", "rows", "cols");
+    auto shape = codegen.LookupTileEmitShape("tile_0");
+    ASSERT_TRUE(shape.has_value());
+    EXPECT_EQ(shape->first, "rows");
+    EXPECT_EQ(shape->second, "cols");
+    EXPECT_FALSE(codegen.LookupTileEmitShape("missing_tile").has_value());
+
+    codegen.RegisterRegTensorVar("reg_tensor");
+    EXPECT_TRUE(codegen.IsRegTensorVar("reg_tensor"));
+    EXPECT_FALSE(codegen.IsRegTensorVar("other_reg_tensor"));
+    codegen.HoistRegTensorDecl("RegTensor<float> reg_tensor;");
+
+    codegen.RegisterMaskRegVar("mask_reg");
+    EXPECT_TRUE(codegen.IsMaskRegVar("mask_reg"));
+    EXPECT_FALSE(codegen.IsMaskRegVar("other_mask_reg"));
+
+    codegen.RegisterAddrRegVar("addr_reg");
+    EXPECT_TRUE(codegen.IsAddrRegVar("addr_reg"));
+    EXPECT_FALSE(codegen.IsAddrRegVar("other_addr_reg"));
+
+    EXPECT_EQ(codegen.GetTileOffsetCounter(), 0);
+    EXPECT_EQ(codegen.GetTileOffsetCounter(), 1);
+
+    codegen.RecordStructVarType("ctx", "ContextType");
+    EXPECT_EQ(codegen.GetTensorDef("not_prescanned"), nullptr);
+}
+
+TEST(CCECodegenHeaderTest, CoversPointerAndBasicCodegenHelpers)
+{
+    CCECodegen codegen;
+
+    EXPECT_EQ(codegen.GetTypeString(ir::DataType::FP32), "float");
+    EXPECT_EQ(codegen.GetConstIntValue(MakeConstInt(7)), 7);
+
+    auto scalar_type = std::make_shared<const ir::ScalarType>(ir::DataType::INT32);
+    auto var = MakeVar("scalar_value", scalar_type);
+    EXPECT_EQ(codegen.GetVarName(var), "scalar_value");
+
+    EXPECT_FALSE(codegen.HasPointer("tensor"));
+    codegen.RegisterPointer("tensor", "tensor_ptr");
+    EXPECT_TRUE(codegen.HasPointer("tensor"));
+    EXPECT_EQ(codegen.GetPointer("tensor"), "tensor_ptr");
+}
+
+TEST(CCECodegenHeaderTest, CoversTileAndTensorDefDefaults)
+{
+    auto tile_type = std::make_shared<const ir::TileType>(std::vector<int64_t>{16, 16}, ir::DataType::FP16,
+                                                          std::optional<ir::MemRefPtr>(std::nullopt),
+                                                          std::optional<ir::TileView>(std::nullopt));
+    auto tile_var = MakeVar("tile", tile_type);
+
+    TileDef tile_def;
+    tile_def.var = tile_var;
+    tile_def.tile_type = tile_type;
+
+    EXPECT_EQ(tile_def.var, tile_var);
+    EXPECT_EQ(tile_def.tile_type, tile_type);
+    EXPECT_FALSE(tile_def.def_section.has_value());
+
+    auto tensor_type = std::make_shared<const ir::TensorType>(std::vector<int64_t>{32, 32}, ir::DataType::FP16,
+                                                              std::optional<ir::MemRefPtr>(std::nullopt));
+    auto tensor_var = MakeVar("tensor", tensor_type);
+
+    TensorDef tensor_def;
+    tensor_def.var = tensor_var;
+    tensor_def.access_shape = {MakeConstInt(16), MakeConstInt(16)};
+
+    EXPECT_EQ(tensor_def.var, tensor_var);
+    EXPECT_EQ(tensor_def.access_shape.size(), 2);
+    EXPECT_FALSE(tensor_def.def_section.has_value());
+    EXPECT_FALSE(tensor_def.tile_dims.has_value());
+    EXPECT_FALSE(tensor_def.is_transpose);
+}
+
+TEST(CCECodegenTest, KeepsSeparateVFTilePointersForPostUpdate)
+{
+    CCECodegen codegen;
+    auto tile_type = std::make_shared<const ir::TileType>(std::vector<int64_t>{16, 16}, ir::DataType::FP16,
+                                                          std::optional<ir::MemRefPtr>(std::nullopt),
+                                                          std::optional<ir::TileView>(std::nullopt));
+    auto tile = MakeVar("tile", tile_type);
+
+    std::string base_ptr = codegen.GetOrCreateVFTilePtr(tile);
+    EXPECT_EQ(codegen.GetOrCreateVFTilePtr(tile), base_ptr);
+    EXPECT_NE(codegen.GetOrCreateVFTilePtr(tile, true), base_ptr);
+}
+
+TEST(CCECodegenTest, GeneratesNativeLoopJumpsAndReturn)
+{
+    auto scalar_type = std::make_shared<const ir::ScalarType>(ir::DataType::INT64);
+    auto bool_type = std::make_shared<const ir::ScalarType>(ir::DataType::BOOL);
+    auto loop_var = MakeVar("i", scalar_type);
+    auto condition = MakeVar("condition", bool_type);
+
+    auto for_loop = std::make_shared<const ir::ForStmt>(
+        loop_var, MakeConstInt(0), MakeConstInt(1), MakeConstInt(1), std::vector<ir::IterArgPtr>{},
+        std::make_shared<const ir::ContinueStmt>(ir::Span::Unknown()), std::vector<ir::VarPtr>{}, ir::Span::Unknown());
+    auto while_loop = std::make_shared<const ir::WhileStmt>(condition, std::vector<ir::IterArgPtr>{},
+                                                            std::make_shared<const ir::BreakStmt>(ir::Span::Unknown()),
+                                                            std::vector<ir::VarPtr>{}, ir::Span::Unknown());
+    auto body = std::make_shared<const ir::SeqStmts>(
+        std::vector<ir::StmtPtr>{for_loop, while_loop, std::make_shared<const ir::ReturnStmt>(ir::Span::Unknown())},
+        ir::Span::Unknown());
+
+    CCECodegen codegen;
+    std::string generated = codegen.GenerateSingle(MakeProgram(body, {condition}), "a5");
+
+    EXPECT_NE(generated.find("for (uint64_t i"), std::string::npos);
+    EXPECT_NE(generated.find("continue;"), std::string::npos);
+    EXPECT_NE(generated.find("while (condition_"), std::string::npos);
+    EXPECT_NE(generated.find("break;"), std::string::npos);
+    EXPECT_NE(generated.find("return;"), std::string::npos);
+}
+
+TEST(CCECodegenTest, WritesBackLoopCarriedValueBeforeContinue)
+{
+    auto scalar_type = std::make_shared<const ir::ScalarType>(ir::DataType::INT64);
+    auto loop_var = MakeVar("i", scalar_type);
+    auto iter_arg = std::make_shared<const ir::IterArg>("acc", scalar_type, MakeConstInt(0), ir::Span::Unknown());
+    auto return_var = MakeVar("acc_out", scalar_type);
+    auto update = std::make_shared<const ir::AssignStmt>(iter_arg->iterVar_, MakeConstInt(7), ir::Span::Unknown());
+    auto loop_body = std::make_shared<const ir::SeqStmts>(
+        std::vector<ir::StmtPtr>{update, std::make_shared<const ir::ContinueStmt>(ir::Span::Unknown())},
+        ir::Span::Unknown());
+    auto for_loop = std::make_shared<const ir::ForStmt>(loop_var, MakeConstInt(0), MakeConstInt(2), MakeConstInt(1),
+                                                        std::vector<ir::IterArgPtr>{iter_arg}, loop_body,
+                                                        std::vector<ir::VarPtr>{return_var}, ir::Span::Unknown());
+
+    CCECodegen codegen;
+    std::string generated = codegen.GenerateSingle(MakeProgram(for_loop), "a5");
+
+    EXPECT_NE(generated.find("acc = acc_"), std::string::npos);
+    EXPECT_NE(generated.find("continue;"), std::string::npos);
+}
+
+TEST(CCECodegenTest, PreservesSingleIterationLoopForAddrReg)
+{
+    auto scalar_type = std::make_shared<const ir::ScalarType>(ir::DataType::INT64);
+    auto loop_var = MakeVar("i", scalar_type);
+    auto addr_reg = MakeVar("addr", scalar_type);
+    auto create_addr = std::make_shared<const ir::Call>(
+        "vf.create_addr_reg", std::vector<ir::ExprPtr>{loop_var, MakeConstInt(1)}, scalar_type, ir::Span::Unknown());
+    auto assign = std::make_shared<const ir::AssignStmt>(addr_reg, create_addr, ir::Span::Unknown());
+    auto for_loop = std::make_shared<const ir::ForStmt>(loop_var, MakeConstInt(0), MakeConstInt(1), MakeConstInt(1),
+                                                        std::vector<ir::IterArgPtr>{}, assign,
+                                                        std::vector<ir::VarPtr>{}, ir::Span::Unknown());
+
+    CCECodegen codegen;
+    std::string generated = codegen.GenerateSingle(MakeProgram(for_loop), "a5");
+
+    EXPECT_NE(generated.find("for (uint64_t i"), std::string::npos);
+    EXPECT_NE(generated.find("AddrReg addr"), std::string::npos);
+    EXPECT_NE(generated.find("vag_b32(1)"), std::string::npos);
+}
+
+TEST(CCECodegenTest, UsesOneBackingArrayForDynamicAndStaticTupleReads)
+{
+    auto scalar_type = std::make_shared<const ir::ScalarType>(ir::DataType::INT64);
+    auto index = MakeVar("index", scalar_type);
+    auto values = std::make_shared<const ir::MakeTuple>(std::vector<ir::ExprPtr>{MakeConstInt(11), MakeConstInt(22)},
+                                                        ir::Span::Unknown());
+    auto tuple_var = MakeVar("values", values->GetType());
+    auto dynamic_value = MakeVar("dynamic_value", scalar_type);
+    auto static_value = MakeVar("static_value", scalar_type);
+
+    auto tuple_assign = std::make_shared<const ir::AssignStmt>(tuple_var, values, ir::Span::Unknown());
+    auto dynamic_read = std::make_shared<const ir::AssignStmt>(
+        dynamic_value, std::make_shared<const ir::GetItemExpr>(tuple_var, index, ir::Span::Unknown()),
+        ir::Span::Unknown());
+    auto static_read = std::make_shared<const ir::AssignStmt>(
+        static_value, std::make_shared<const ir::GetItemExpr>(tuple_var, MakeConstInt(0), ir::Span::Unknown()),
+        ir::Span::Unknown());
+    auto body = std::make_shared<const ir::SeqStmts>(std::vector<ir::StmtPtr>{tuple_assign, dynamic_read, static_read},
+                                                     ir::Span::Unknown());
+
+    CCECodegen codegen;
+    std::string generated = codegen.GenerateSingle(MakeProgram(body, {index}), "a5");
+
+    EXPECT_NE(generated.find("const int64_t values"), std::string::npos);
+    EXPECT_NE(generated.find("static_cast<int64_t>(11)"), std::string::npos);
+    EXPECT_NE(generated.find("[index"), std::string::npos);
+    EXPECT_NE(generated.find("[0]"), std::string::npos);
+}
+
+TEST(CCECodegenTest, DropsUnusedIfPhiAndYieldOnlyElse)
+{
+    auto bool_type = std::make_shared<const ir::ScalarType>(ir::DataType::BOOL);
+    auto scalar_type = std::make_shared<const ir::ScalarType>(ir::DataType::INT64);
+    auto condition = MakeVar("condition", bool_type);
+    auto unused_phi = MakeVar("unused_phi", scalar_type);
+    auto then_yield = std::make_shared<const ir::YieldStmt>(std::vector<ir::ExprPtr>{MakeConstInt(1)},
+                                                            ir::Span::Unknown());
+    auto else_yield = std::make_shared<const ir::YieldStmt>(std::vector<ir::ExprPtr>{MakeConstInt(2)},
+                                                            ir::Span::Unknown());
+    auto if_stmt = std::make_shared<const ir::IfStmt>(condition, then_yield, std::optional<ir::StmtPtr>(else_yield),
+                                                      std::vector<ir::VarPtr>{unused_phi}, ir::Span::Unknown());
+
+    CCECodegen codegen;
+    std::string generated = codegen.GenerateSingle(MakeProgram(if_stmt, {condition}), "a5");
+
+    EXPECT_NE(generated.find("if (condition"), std::string::npos);
+    EXPECT_EQ(generated.find("unused_phi"), std::string::npos);
+    EXPECT_EQ(generated.find("} else {"), std::string::npos);
+}
+
+TEST(CCECodegenTest, WritesBackWhileCarriedValueBeforeBreak)
+{
+    auto bool_type = std::make_shared<const ir::ScalarType>(ir::DataType::BOOL);
+    auto scalar_type = std::make_shared<const ir::ScalarType>(ir::DataType::INT64);
+    auto condition = MakeVar("condition", bool_type);
+    auto iter_arg = std::make_shared<const ir::IterArg>("acc", scalar_type, MakeConstInt(0), ir::Span::Unknown());
+    auto return_var = MakeVar("acc_out", scalar_type);
+    auto update = std::make_shared<const ir::AssignStmt>(iter_arg->iterVar_, MakeConstInt(9), ir::Span::Unknown());
+    auto break_stmt = std::make_shared<const ir::BreakStmt>(ir::Span::Unknown());
+    auto loop_body = std::make_shared<const ir::SeqStmts>(std::vector<ir::StmtPtr>{update, break_stmt},
+                                                          ir::Span::Unknown());
+    auto while_loop = std::make_shared<const ir::WhileStmt>(condition, std::vector<ir::IterArgPtr>{iter_arg}, loop_body,
+                                                            std::vector<ir::VarPtr>{return_var}, ir::Span::Unknown());
+
+    CCECodegen codegen;
+    std::string generated = codegen.GenerateSingle(MakeProgram(while_loop, {condition}), "a5");
+
+    EXPECT_NE(generated.find("auto acc = 0;"), std::string::npos);
+    EXPECT_NE(generated.find("while (condition"), std::string::npos);
+    size_t writeback = generated.find("acc = acc_");
+    size_t jump = generated.find("break;");
+    ASSERT_NE(writeback, std::string::npos);
+    ASSERT_NE(jump, std::string::npos);
+    EXPECT_LT(writeback, jump);
+}
+
+TEST(CCECodegenTest, GeneratesTensorDescriptorAndLoadFromAccessShape)
+{
+    auto input = MakeTensorVar("input", {64, 128}, ir::DataType::FP16);
+    auto tile_type = std::make_shared<const ir::TileType>(std::vector<int64_t>{16, 32}, ir::DataType::FP16,
+                                                          std::optional<ir::MemRefPtr>(std::nullopt),
+                                                          std::optional<ir::TileView>(std::nullopt));
+    auto tile = MakeVar("tile", tile_type);
+    auto make_tile = std::make_shared<const ir::Call>("block.make_tile", std::vector<ir::ExprPtr>{}, tile_type,
+                                                      ir::Span::Unknown());
+    auto tile_assign = std::make_shared<const ir::AssignStmt>(tile, make_tile, ir::Span::Unknown());
+    auto offsets = std::make_shared<const ir::MakeTuple>(std::vector<ir::ExprPtr>{MakeConstInt(0), MakeConstInt(0)},
+                                                         ir::Span::Unknown());
+    auto load = std::make_shared<const ir::Call>("block.load", std::vector<ir::ExprPtr>{tile, input, offsets},
+                                                 tile_type, ir::Span::Unknown());
+    auto load_stmt = std::make_shared<const ir::EvalStmt>(load, ir::Span::Unknown());
+    auto body = std::make_shared<const ir::SeqStmts>(std::vector<ir::StmtPtr>{tile_assign, load_stmt},
+                                                     ir::Span::Unknown());
+
+    CCECodegen codegen;
+    std::string generated = codegen.GenerateSingle(MakeProgram(body, {input}), "a5");
+
+    EXPECT_NE(generated.find("using input_0ShapeDim5 = pto::Shape<1, 1, 1, -1, -1>;"), std::string::npos);
+    EXPECT_NE(generated.find("using input_0StrideDim5 = pto::Stride<-1, -1, -1, -1, -1>;"), std::string::npos);
+    EXPECT_NE(generated.find("input_0Type input_0(input_0_ptr"), std::string::npos);
+    EXPECT_NE(generated.find("input_0StrideDim5(1, 1, 1, 128, 1)"), std::string::npos);
+    EXPECT_NE(generated.find("TLOAD(tile"), std::string::npos);
+    EXPECT_NE(generated.find(", input_0);"), std::string::npos);
+}
+
+TEST(CCECodegenTest, ResolvesTensorAliasAndTransposeLayout)
+{
+    auto input = MakeTensorVar("input", {64, 128}, ir::DataType::FP16);
+    auto alias = MakeVar("alias", input->GetType());
+    auto tile_type = std::make_shared<const ir::TileType>(std::vector<int64_t>{16, 32}, ir::DataType::FP16,
+                                                          std::optional<ir::MemRefPtr>(std::nullopt),
+                                                          std::optional<ir::TileView>(std::nullopt));
+    auto tile = MakeVar("tile", tile_type);
+    auto make_tile = std::make_shared<const ir::Call>("block.make_tile", std::vector<ir::ExprPtr>{}, tile_type,
+                                                      ir::Span::Unknown());
+    auto alias_assign = std::make_shared<const ir::AssignStmt>(alias, input, ir::Span::Unknown());
+    auto tile_assign = std::make_shared<const ir::AssignStmt>(tile, make_tile, ir::Span::Unknown());
+    auto offsets = std::make_shared<const ir::MakeTuple>(std::vector<ir::ExprPtr>{MakeConstInt(0), MakeConstInt(0)},
+                                                         ir::Span::Unknown());
+    std::vector<std::pair<std::string, std::any>> kwargs{{"is_transpose", true}};
+    auto load = std::make_shared<const ir::Call>("block.load", std::vector<ir::ExprPtr>{tile, alias, offsets}, kwargs,
+                                                 tile_type, ir::Span::Unknown());
+    auto load_stmt = std::make_shared<const ir::EvalStmt>(load, ir::Span::Unknown());
+    auto body = std::make_shared<const ir::SeqStmts>(std::vector<ir::StmtPtr>{alias_assign, tile_assign, load_stmt},
+                                                     ir::Span::Unknown());
+
+    CCECodegen codegen;
+    std::string generated = codegen.GenerateSingle(MakeProgram(body, {input}), "a5");
+
+    EXPECT_NE(generated.find("input_0StrideDim5, Layout::DN"), std::string::npos);
+    EXPECT_NE(generated.find("input_0StrideDim5(1, 1, 1, 1, 128)"), std::string::npos);
+    EXPECT_EQ(generated.find("aliasShapeDim5"), std::string::npos);
+    EXPECT_NE(generated.find("TLOAD(tile"), std::string::npos);
+    EXPECT_NE(generated.find(", input_0);"), std::string::npos);
+}
+
+TEST(CCECodegenTest, HoistsAutoDeclaredVFDestinations)
+{
+    auto fp32_type = std::make_shared<const ir::ScalarType>(ir::DataType::FP32);
+    auto int32_type = std::make_shared<const ir::ScalarType>(ir::DataType::INT32);
+    auto dst0 = MakeVar("dst0", fp32_type);
+    auto dst1 = MakeVar("dst1", fp32_type);
+    auto src0 = MakeVar("src0", fp32_type);
+    auto src1 = MakeVar("src1", fp32_type);
+    auto mask = MakeVar("mask", int32_type);
+    auto add = std::make_shared<const ir::Call>("vf.add", std::vector<ir::ExprPtr>{dst0, src0, src1, mask}, fp32_type,
+                                                ir::Span::Unknown());
+    auto interleave = std::make_shared<const ir::Call>(
+        "vf.interleave", std::vector<ir::ExprPtr>{dst0, dst1, src0, src1}, fp32_type, ir::Span::Unknown());
+    auto vf_body = std::make_shared<const ir::SeqStmts>(
+        std::vector<ir::StmtPtr>{std::make_shared<const ir::EvalStmt>(add, ir::Span::Unknown()),
+                                 std::make_shared<const ir::EvalStmt>(interleave, ir::Span::Unknown())},
+        ir::Span::Unknown());
+    auto vf_section = std::make_shared<const ir::SectionStmt>(ir::SectionKind::VF, vf_body, ir::Span::Unknown());
+    auto vector_section = std::make_shared<const ir::SectionStmt>(ir::SectionKind::Vector, vf_section,
+                                                                  ir::Span::Unknown());
+
+    CCECodegen codegen;
+    std::string generated = codegen.GenerateSingle(MakeProgram(vector_section, {src0, src1, mask}), "a5");
+
+    EXPECT_EQ(CountOccurrences(generated, "RegTensor<float> "), 2);
+    size_t first_decl = generated.find("RegTensor<float>");
+    size_t add_pos = generated.find("vadd(");
+    size_t interleave_pos = generated.find("vintlv(");
+    ASSERT_NE(first_decl, std::string::npos);
+    ASSERT_NE(add_pos, std::string::npos);
+    ASSERT_NE(interleave_pos, std::string::npos);
+    EXPECT_LT(first_decl, add_pos);
+    EXPECT_LT(first_decl, interleave_pos);
+}
+
+TEST(CCECodegenTest, HoistsDynamicVFLoopBoundAsUint16)
+{
+    auto scalar_type = std::make_shared<const ir::ScalarType>(ir::DataType::INT64);
+    auto loop_var = MakeVar("i", scalar_type);
+    auto limit = MakeVar("limit", scalar_type);
+    auto loop_body = std::make_shared<const ir::ContinueStmt>(ir::Span::Unknown());
+    auto for_loop = std::make_shared<const ir::ForStmt>(loop_var, MakeConstInt(0), limit, MakeConstInt(1),
+                                                        std::vector<ir::IterArgPtr>{}, loop_body,
+                                                        std::vector<ir::VarPtr>{}, ir::Span::Unknown());
+    auto vf_section = std::make_shared<const ir::SectionStmt>(ir::SectionKind::VF, for_loop, ir::Span::Unknown());
+    auto vector_section = std::make_shared<const ir::SectionStmt>(ir::SectionKind::Vector, vf_section,
+                                                                  ir::Span::Unknown());
+
+    CCECodegen codegen;
+    std::string generated = codegen.GenerateSingle(MakeProgram(vector_section, {limit}), "a5");
+
+    EXPECT_NE(generated.find("const uint16_t i_0_ub = (uint16_t)(limit_0)"), std::string::npos);
+    EXPECT_NE(generated.find("for (uint16_t i_0 = 0; i_0 < i_0_ub; i_0 += 1)"), std::string::npos);
+}
+
+TEST(CCECodegenTest, ComputesIRBasedOffsetAndRejectsRankMismatch)
+{
+    auto tensor_type = std::make_shared<const ir::TensorType>(std::vector<int64_t>{2, 3, 4}, ir::DataType::FP16,
+                                                              std::optional<ir::MemRefPtr>(std::nullopt));
+    auto offsets = std::make_shared<const ir::MakeTuple>(
+        std::vector<ir::ExprPtr>{MakeConstInt(1), MakeConstInt(2), MakeConstInt(3)}, ir::Span::Unknown());
+    auto short_offsets = std::make_shared<const ir::MakeTuple>(
+        std::vector<ir::ExprPtr>{MakeConstInt(1), MakeConstInt(2)}, ir::Span::Unknown());
+
+    CCECodegen codegen;
+
+    EXPECT_EQ(codegen.ComputeIRBasedOffset(tensor_type, offsets), "(1 * 3 * 4 + 2 * 4 + 3)");
+    EXPECT_THROW((void)codegen.ComputeIRBasedOffset(tensor_type, short_offsets), std::exception);
+}
+
+TEST(CCECodegenTest, AddsExpressionSpanToCodegenErrors)
+{
+    ir::Span call_span("kernel.py", 42, 7);
+    auto scalar_type = std::make_shared<const ir::ScalarType>(ir::DataType::INT64);
+    auto unknown_call = std::make_shared<const ir::Call>("unknown.codegen.op", std::vector<ir::ExprPtr>{}, scalar_type,
+                                                         call_span);
+    auto body = std::make_shared<const ir::EvalStmt>(unknown_call, call_span);
+
+    CCECodegen codegen;
+    try {
+        (void)codegen.GenerateSingle(MakeProgram(body), "a5");
+        FAIL() << "Expected an unknown backend operation to fail code generation";
+    } catch (const std::exception& error) {
+        std::string message = error.what();
+        EXPECT_NE(message.find("Unknown call 'unknown.codegen.op'"), std::string::npos);
+        EXPECT_NE(message.find("kernel.py"), std::string::npos);
+        EXPECT_NE(message.find("42"), std::string::npos);
+    }
+}
+
+} // namespace codegen
+} // namespace pypto

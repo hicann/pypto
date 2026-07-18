@@ -17,8 +17,6 @@ namespace pypto {
 namespace ir {
 namespace pass {
 
-inline const PassProperties kLowerBreakContinueProperties{{IRProperty::TypeChecked}, {IRProperty::TypeChecked}, {}};
-
 inline const PassProperties kUnrollLoopsProperties{{IRProperty::TypeChecked}, {IRProperty::TypeChecked}, {}};
 
 inline const PassProperties kSplitChunkedLoopsProperties{

@@ -24,6 +24,7 @@
 #include "ir/expr.h"
 #include "ir/function.h"
 #include "ir/program.h"
+#include "ir/scalar_expr_ops.h"
 #include "ir/span.h"
 #include "ir/stmt.h"
 #include "ir/type.h"
@@ -47,6 +48,77 @@ Span MakeCombinedSpan(const Span& begin_span, const Span& end_span)
 {
     return Span(begin_span.Filename(), begin_span.BeginLine(), begin_span.BeginColumn(), end_span.EndLine(),
                 end_span.EndColumn());
+}
+
+/**
+ * \brief Reconcile the branch value types of an if statement's SSA return vars.
+ *
+ * A ternary expression ``a if cond else b`` lowers to an if statement whose then/else
+ * branches each yield their value into a phi return var. When the two branches produce
+ * differing but same-category scalar dtypes (e.g. ``INT32`` from a tensor read vs
+ * ``INDEX`` from a shape access), promote both yielded values to the wider dtype and
+ * retype the phi return var to match, mirroring the promotion binary operators already
+ * perform. Non-scalar or cross-category (int vs float) mismatches are left untouched so
+ * the type verifier still reports them.
+ *
+ * \param then_stmts Statements of the then branch (last one is the YieldStmt); mutated in place.
+ * \param else_stmts Statements of the else branch (last one is the YieldStmt); mutated in place.
+ * \param return_vars Phi return vars; retyped in place when a branch pair is promoted.
+ */
+void ReconcileIfReturnVarTypes(std::vector<StmtPtr>& then_stmts, std::vector<StmtPtr>& else_stmts,
+                               std::vector<VarPtr>& return_vars)
+{
+    if (return_vars.empty() || then_stmts.empty() || else_stmts.empty()) {
+        return;
+    }
+    auto then_yield = std::dynamic_pointer_cast<const YieldStmt>(then_stmts.back());
+    auto else_yield = std::dynamic_pointer_cast<const YieldStmt>(else_stmts.back());
+    if (!then_yield || !else_yield) {
+        return;
+    }
+    const size_t count = return_vars.size();
+    if (then_yield->value_.size() != count || else_yield->value_.size() != count) {
+        return;
+    }
+
+    std::vector<ExprPtr> then_values = then_yield->value_;
+    std::vector<ExprPtr> else_values = else_yield->value_;
+    bool changed = false;
+    for (size_t i = 0; i < count; ++i) {
+        const ExprPtr& then_value = then_values[i];
+        const ExprPtr& else_value = else_values[i];
+        if (!then_value || !else_value) {
+            continue;
+        }
+        auto then_scalar = std::dynamic_pointer_cast<const ScalarType>(then_value->GetType());
+        auto else_scalar = std::dynamic_pointer_cast<const ScalarType>(else_value->GetType());
+        if (!then_scalar || !else_scalar) {
+            continue;
+        }
+        DataType then_dtype = then_scalar->dtype_;
+        DataType else_dtype = else_scalar->dtype_;
+        if (then_dtype == else_dtype) {
+            continue;
+        }
+        // Only reconcile a matching numeric category (both int or both float); bool and
+        // int/float mismatches stay errors for the verifier to surface.
+        bool both_int = then_dtype.IsInt() && else_dtype.IsInt();
+        bool both_float = then_dtype.IsFloat() && else_dtype.IsFloat();
+        if (!both_int && !both_float) {
+            continue;
+        }
+        DataType promoted = PromoteSameCategoryDtype(then_dtype, else_dtype, "ternary", return_vars[i]->span_);
+        then_values[i] = MaybeCast(then_value, promoted, then_yield->span_);
+        else_values[i] = MaybeCast(else_value, promoted, else_yield->span_);
+        return_vars[i] = std::make_shared<Var>(return_vars[i]->name_, std::make_shared<ScalarType>(promoted),
+                                               return_vars[i]->span_);
+        changed = true;
+    }
+    if (!changed) {
+        return;
+    }
+    then_stmts.back() = std::make_shared<YieldStmt>(std::move(then_values), then_yield->span_);
+    else_stmts.back() = std::make_shared<YieldStmt>(std::move(else_values), else_yield->span_);
 }
 
 std::string MakeLoopReturnVarsMismatchMessage(const char* loop_kind, size_t iter_arg_count, size_t return_var_count)
@@ -274,36 +346,30 @@ StmtPtr IRBuilder::EndIf(const Span& end_span)
 
     auto* if_ctx = static_cast<IfStmtContext*>(CurrentContext());
 
-    // Build then body
-    StmtPtr then_body;
-    const auto& then_stmts = if_ctx->GetStmts();
-    if (then_stmts.empty()) {
-        then_body = std::make_shared<SeqStmts>(std::vector<StmtPtr>(), end_span);
-    } else if (then_stmts.size() == 1) {
-        then_body = then_stmts[0];
-    } else {
-        then_body = std::make_shared<SeqStmts>(then_stmts, end_span);
+    std::vector<StmtPtr> then_stmts = if_ctx->GetStmts();
+    std::vector<StmtPtr> else_stmts = if_ctx->GetElseStmts();
+    std::vector<VarPtr> return_vars = if_ctx->GetReturnVars();
+
+    // Promote differing but same-category scalar branch types (e.g. ``a if c else b``
+    // yielding INT32 vs INDEX) to a common dtype before building the phi.
+    if (if_ctx->InElseBranch()) {
+        ReconcileIfReturnVarTypes(then_stmts, else_stmts, return_vars);
     }
+
+    // Build then body
+    StmtPtr then_body = MakeStmtBody(then_stmts, end_span);
 
     // Build else body (optional)
     std::optional<StmtPtr> else_body;
-    if (if_ctx->InElseBranch()) {
-        const auto& else_stmts = if_ctx->GetElseStmts();
-        if (!else_stmts.empty()) {
-            if (else_stmts.size() == 1) {
-                else_body = else_stmts[0];
-            } else {
-                else_body = std::make_shared<SeqStmts>(else_stmts, end_span);
-            }
-        }
+    if (if_ctx->InElseBranch() && !else_stmts.empty()) {
+        else_body = MakeStmtBody(else_stmts, end_span);
     }
 
     // Combine begin and end spans
     auto combinedSpan = MakeCombinedSpan(if_ctx->GetBeginSpan(), end_span);
 
     // Create if statement
-    auto if_stmt = std::make_shared<IfStmt>(if_ctx->GetCondition(), then_body, else_body, if_ctx->GetReturnVars(),
-                                            combinedSpan);
+    auto if_stmt = std::make_shared<IfStmt>(if_ctx->GetCondition(), then_body, else_body, return_vars, combinedSpan);
     // Pop context
     context_stack_.pop_back();
 

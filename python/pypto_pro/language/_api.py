@@ -1,4 +1,4 @@
- # Copyright (c) PyPTO Contributors.
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
 # This program is free software, you can redistribute it and/or modify it under the terms and conditions of
 # CANN Open Software License Agreement Version 2.0 (the "License").
 # Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -20,56 +20,10 @@ kernel the AST parser intercepts every ``pl.xxx`` call before Python executes
 it.  Outside a kernel, calling a declaration raises ``RuntimeError``.
 
 When adding a new op to the parser registry / block-default handler, add a
-matching declaration here **and** update ``__all__`` at the bottom of this file.
+matching declaration here and re-export it from the package ``__init__.py``.
 """
 
 from __future__ import annotations
-
-# ===================================================================
-# __all__
-# ===================================================================
-
-__all__ = [
-    # A. Data-movement block ops
-    "load", "load_tile", "store", "store_tile",
-    "move", "insert", "ssbuf_store", "ssbuf_load",
-    # B1. Binary (unified: tile-tile + tile-scalar)
-    "add", "sub", "mul", "div", "maximum", "minimum",
-    # B2. Bitwise (unified: tile-tile + tile-scalar)
-    "and_", "xor", "expands",
-    # B3. Unary
-    "neg", "abs", "exp", "log", "sqrt", "rsqrt", "recip", "relu",
-    "fillpad", "fillpad_expand", "fillpad_inplace",
-    # B4. Type conversion
-    "cast", "add_relu_cast", "sub_relu_cast", "mul_cast",
-    # B5. Compare / select
-    "eq", "ne", "lt", "le", "gt", "ge", "select",
-    # B6. Fused
-    "add_relu", "sub_relu", "addc", "mul_add_dst",
-    "fused_mul_add", "fused_mul_add_relu", "axpy",
-    # B7. Matrix
-    "matmul", "matmul_acc", "transpose",
-    # B8. Reductions
-    "sum", "argmax", "argmin",
-    "expand_max", "expand_min", "expand_mul", "expand_sub", "expand_div",
-    # B9. Gather / scatter / sort
-    "gather", "gatherb", "gathermask", "scatter",
-    "mrgsort", "mrgsort2", "sort32", "histogram",
-    # B10. Quantization / index / misc
-    "quant", "dequant", "getval", "setval",
-    "set_validshape", "set_stride",
-    "fill_index",
-    # C. VF namespace
-    "vf",
-    # E. Debug
-    "pto_assert", "printf", "dump_data", "trap",
-    # F. Scalar
-    "min", "max", "const",
-    # G. Control flow
-    "range", "section_vector", "section_cube",
-    # H. Utility
-    "get_block_idx", "get_subblock_idx", "get_block_num", "make_tile_group",
-]
 
 import functools
 import inspect
@@ -80,19 +34,12 @@ from typing import Any, List, Optional, Union
 from pypto.ir import (
     AccToVecMode,
     AtomicType,
-    CacheLine,
-    DcciDst,
     STPhase,
     AccPhase,
     QuantMode,
     ReluPreMode,
     RoundMode,
-    SyncAllMode,
-    CrossCoreSyncMode,
-    SyncCoreType,
 )
-
-__all__: list[str] = []
 
 # ---------------------------------------------------------------------------
 # User-facing type aliases (NOT IR types)
@@ -589,6 +536,11 @@ def axpy(out: Tile, src: Tile, alpha: Scalar) -> None:
     """
 
 
+@_api_decl
+def partadd(out: Tile, src0: Tile, src1: Tile) -> None:
+    """Partial addition: ``out = src0 + src1`` (only src1's valid region)."""
+
+
 # --- B7. Matrix ops ---
 
 @_api_decl
@@ -900,6 +852,26 @@ def set_stride(tensor: "Tensor", stride: List[int]) -> None:
     (e.g. read from an input via ``pl.getval``). This lets a single load gather
     rows that are non-contiguous in GM (positive stride).
     """
+
+
+@_api_decl
+def set_mask_count() -> None:
+    """Switch mask to counting mode."""
+
+
+@_api_decl
+def set_mask_norm() -> None:
+    """Switch mask to per-bit normalization mode."""
+
+
+@_api_decl
+def set_vec_mask(mask_high: int, mask_low: int) -> None:
+    """Explicitly set the 128-bit vector mask from two 64-bit integers."""
+
+
+@_api_decl
+def reset_mask() -> None:
+    """Reset the mask to all-ones (no masking)."""
 
 
 @_api_decl
@@ -1324,7 +1296,6 @@ class Vf:
             mask: Predicate mask register
 
         Kwargs:
-            mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
             layout: ``pl.CastLayout.ZERO`` (even half, default) or
                 ``pl.CastLayout.ONE`` (odd half) — for half-width results
         """
@@ -1346,7 +1317,6 @@ class Vf:
             layout: ``pl.CastLayout.ZERO`` (default) / ``ONE`` / ``TWO`` / ``THREE``
             round_mode: ``pl.VFRoundMode.ROUND`` (default) / ``RINT`` / ``FLOOR`` / ``CEIL`` / ``TRUNC`` / ``RNA``
             saturate: ``pl.SaturateMode.OFF`` (default) or ``pl.SaturateMode.ON``
-            part: ``"LOWER"`` or ``"UPPER"`` for cross-width select
         """
 
     @staticmethod
@@ -1362,6 +1332,10 @@ class Vf:
             dst1: Destination register for odd elements
             src0: First source register
             src1: Second source register
+
+        Kwargs:
+            dtype: When src operands are MaskReg, specifies the interleave bit-width
+                (selects ``pdintlv_b8``/``b16``/``b32``). Inferred from src0 if omitted.
         """
 
     @staticmethod
@@ -1436,16 +1410,23 @@ class Vf:
         """Histogram accumulation (chistv2/dhistv2 instruction).
 
         Computes histogram on UINT8 data. Supports both cumulative (chistv2)
-        and frequency (dhistv2) modes.
+        and frequency (dhistv2) modes.  The destination register is both read
+        and written — ``chistv2`` accumulates into the existing value, so the
+        dst must be pre-initialized (e.g. via ``vf.full(0, ...)``) before the
+        first call.  Subsequent ``dst = vf.histograms(...)`` calls reuse the
+        same register and continue accumulating.
 
         Args:
-            dst: Destination histogram register
             src: Source register (data to bin)
             mask: Predicate mask register
 
         Kwargs:
             bin_type: ``"BIN0"`` (default) or ``"BIN1"`` — selects bin mapping
             hist_type: ``"ACCUMULATE"`` (default, chistv2) or ``"FREQUENCY"`` (dhistv2)
+
+        Returns:
+            Destination histogram register (same register passed as dst,
+            with accumulated histogram values)
         """
 
     @staticmethod
@@ -1597,7 +1578,6 @@ class Vf:
         Kwargs:
             data_copy_mode: ``pl.DataCopyMode.NORM`` (default, per-element via vgather2)
                 or ``pl.DataCopyMode.DATA_BLOCK_LOAD`` (per 32B datablock via vgatherb)
-            gather_mode: Gather mode selection
         """
 
     @staticmethod
@@ -1827,6 +1807,10 @@ class Vf:
             dst1: Second destination register
             src0: First source register
             src1: Second source register
+
+        Kwargs:
+            dtype: When src operands are MaskReg, specifies the interleave bit-width
+                (selects ``pintlv_b8``/``b16``/``b32``). Inferred from src0 if omitted.
         """
 
     @staticmethod
@@ -1991,17 +1975,22 @@ class Vf:
     @staticmethod
     @_api_decl
     def addc(*args, **kwargs):
-        """Add with carry: ``carry_out, dst = src0 + src1 + carry_in``
+        """Add with carry (vaddcs): ``carry_out, dst = src0 + src1 + carry_in``
 
-        Used for multi-word (64-bit) arithmetic on 32-bit registers.
+        Used for multi-word (e.g. 64-bit) arithmetic on 32-bit registers.
+        Produces two outputs via tuple unpacking — the carry-out flag register
+        (declared as a MaskReg) and the sum register (RegTensor)::
+
+            carry_out, dst = vf.addc(src0, src1, carry_in, mask)
 
         Args:
-            carry_out: Output carry flag register
-            dst: Destination register (sum)
             src0: First source register
             src1: Second source register
-            carry_in: Input carry flag register
+            carry_in: Input carry flag register (MaskReg)
             mask: Predicate mask register
+
+        Returns:
+            (carry_out, dst): carry-out flag register and the sum register
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
@@ -2010,17 +1999,22 @@ class Vf:
     @staticmethod
     @_api_decl
     def subc(*args, **kwargs):
-        """Subtract with borrow: ``borrow_out, dst = src0 - src1 - borrow_in``
+        """Subtract with borrow (vsubcs): ``borrow_out, dst = src0 - src1 - borrow_in``
 
-        Used for multi-word (64-bit) arithmetic on 32-bit registers.
+        Used for multi-word (e.g. 64-bit) arithmetic on 32-bit registers.
+        Produces two outputs via tuple unpacking — the borrow-out flag register
+        (declared as a MaskReg) and the difference register (RegTensor)::
+
+            borrow_out, dst = vf.subc(src0, src1, borrow_in, mask)
 
         Args:
-            borrow_out: Output borrow flag register
-            dst: Destination register (difference)
             src0: First source register
             src1: Second source register
-            borrow_in: Input borrow flag register
+            borrow_in: Input borrow flag register (MaskReg)
             mask: Predicate mask register
+
+        Returns:
+            (borrow_out, dst): borrow-out flag register and the difference register
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
@@ -2546,22 +2540,10 @@ class Vf:
             mode: ``pl.MergeMode.MERGING`` (default, only supported mode)
         """
 
-    @staticmethod
-    @_api_decl
-    def get_spr(*args, **kwargs):
-        """Read a special purpose register value (get_ar instruction).
-
-        Currently only the AR register is supported. The AR register stores
-        the total byte count of valid elements produced by Squeeze.
-
-        Returns:
-            int64_t scalar value from the SPR
-        """
-
-
 # ===================================================================
 # Section E: Debug ops
 # ===================================================================
+
 
 @_api_decl
 def pto_assert(condition: bool, format_str: Optional[str] = None,
@@ -2764,6 +2746,21 @@ def get_subblock_idx() -> int:
 @_api_decl
 def get_block_num() -> int:
     """Get the total number of blocks."""
+
+
+@_api_decl
+def get_spr() -> int:
+    """Read a special purpose register value (get_ar instruction).
+
+    Currently only the AR register is supported. The AR register stores
+    the total byte count of valid elements produced by Squeeze.
+
+    ``get_ar()`` is an ``__aicore__`` instruction and cannot be used inside
+    ``@pl.vector_function``. Call this in the ``@pl.jit`` kernel body.
+
+    Returns:
+        int64_t scalar value from the SPR
+    """
 
 
 @_api_decl

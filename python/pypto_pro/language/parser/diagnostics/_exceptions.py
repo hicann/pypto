@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-# coding: utf-8
 # Copyright (c) 2026 Huawei Technologies Co., Ltd.
 # This program is free software, you can redistribute it and/or modify it under the terms and conditions of
 # CANN Open Software License Agreement Version 2.0 (the "License").
@@ -34,6 +32,8 @@ def _normalize_span(span: ir.Span | None) -> dict[str, str | int | None] | None:
     """Convert an IR span to a plain dictionary with standard location fields."""
     if span is None:
         return None
+    if isinstance(span, dict):
+        return span
 
     filename = getattr(span, "filename", None)
     begin_line = getattr(span, "begin_line", 0)

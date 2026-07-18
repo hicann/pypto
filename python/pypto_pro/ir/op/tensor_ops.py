@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-# coding: utf-8
 # Copyright (c) 2026 Huawei Technologies Co., Ltd.
 # This program is free software, you can redistribute it and/or modify it under the terms and conditions of
 # CANN Open Software License Agreement Version 2.0 (the "License").
@@ -16,9 +14,8 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any
 
-from pypto.ir import RoundMode
 from pypto.pypto_impl import ir as _ir_core
-from pypto.pypto_impl.ir import Call, ConstInt, DataType, Expr, ScalarType, Span
+from pypto.pypto_impl.ir import Call, ConstInt, DataType, Expr, RoundMode, ScalarType, Span
 
 from .._utils import _get_span_or_capture, _normalize_expr, _to_make_tuple
 from ._op_registry import OpSpec, register_table

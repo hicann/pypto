@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-# coding: utf-8
 # Copyright (c) 2026 Huawei Technologies Co., Ltd.
 # This program is free software, you can redistribute it and/or modify it under the terms and conditions of
 # CANN Open Software License Agreement Version 2.0 (the "License").
@@ -16,11 +14,13 @@ __all__ = ["Tensor"]
 
 
 from collections.abc import Sequence
-from types import EllipsisType
 
 from pypto.pypto_impl.ir import DataType
 from pypto.pypto_impl.ir import Expr, MemRef, TensorLayout
 from pypto_pro.language.typing.shape import _ShapePolicy
+
+
+EllipsisType = type(Ellipsis)
 
 
 class Tensor:

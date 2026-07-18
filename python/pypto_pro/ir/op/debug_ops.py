@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-# coding: utf-8
 # Copyright (c) 2026 Huawei Technologies Co., Ltd.
 # This program is free software, you can redistribute it and/or modify it under the terms and conditions of
 # CANN Open Software License Agreement Version 2.0 (the "License").
@@ -29,7 +27,8 @@ from ._op_registry import OpSpec, op_impl, register_table
 _PRINTF_FLAGS = set("-+ #0")
 _INTEGER_CONVERSIONS = {"d", "i", "u", "x"}
 _FLOAT_CONVERSIONS = {"f"}
-_SUPPORTED_CONVERSIONS = _INTEGER_CONVERSIONS | _FLOAT_CONVERSIONS
+_POINTER_CONVERSIONS = {"p"}
+_SUPPORTED_CONVERSIONS = _INTEGER_CONVERSIONS | _FLOAT_CONVERSIONS | _POINTER_CONVERSIONS
 _INTEGER_DTYPE_NAMES = ("INT8", "INT16", "INT32", "INT64", "UINT8", "UINT16", "UINT32", "UINT64")
 _INTEGER_DTYPES = tuple(
     getattr(DataType, name) for name in _INTEGER_DTYPE_NAMES if hasattr(DataType, name)
@@ -143,13 +142,23 @@ def _validate_printf_arguments(
         raise ValueError(f"{op_name} format expects {len(specs)} scalar arguments, but got {len(normalized_args)}")
 
     for idx, (spec, arg, is_raw_bool) in enumerate(zip(specs, normalized_args, raw_bool_args)):
-        scalar_type = arg.type
-        if not isinstance(scalar_type, ScalarType):
-            raise TypeError(
-                f"debug.{op_name} argument {idx} requires ScalarType input, but got {type(scalar_type).__name__}"
-            )
-
+        arg_type = arg.type
         conversion = spec[-1]
+
+        # %p accepts pointer types (PtrType)
+        if conversion == "p":
+            if not isinstance(arg_type, _ir_core.PtrType):
+                raise TypeError(
+                    f"debug.{op_name} conversion '{spec}' requires pointer, but got {type(arg_type).__name__}"
+                )
+            continue
+
+        if not isinstance(arg_type, ScalarType):
+            raise TypeError(
+                f"debug.{op_name} argument {idx} requires ScalarType input, but got {type(arg_type).__name__}"
+            )
+        scalar_type = arg_type
+
         if conversion in {"d", "i"} and not (
             _is_signed_integer_dtype(scalar_type.dtype)
             or _is_bool_dtype(scalar_type.dtype)
@@ -198,8 +207,7 @@ def dump_tensor(
     - Window dump with dynamic ``shapes``
 
     Backend support:
-    - PTO: full dump and window dump support dynamic ``offsets``/``shapes``
-    - CCE: full dump and window dump support dynamic ``offsets``/``shapes``
+    - full dump and window dump support dynamic ``offsets``/``shapes``
 
     Current limitation:
     - Windowed dumps still require the innermost tensor stride to be statically 1
@@ -278,13 +286,12 @@ def dump_tile(
     Supported forms:
     - Full tile dump: ``dump_tile(tile)``
     - Full dump of tiles with dynamic valid-shape
-    - Window dump with dynamic ``offsets`` on PTO and CCE
-    - Window dump with dynamic ``shapes`` on CCE
+    - Window dump with dynamic ``offsets``
+    - Window dump with dynamic ``shapes``
     - Acc tile dump with ``workspace`` (GM temporary space)
 
     Backend support:
-    - PTO: window ``shapes`` must still be static
-    - CCE: window ``shapes`` may be dynamic
+    - window ``shapes`` may be dynamic
 
     Current limitations:
     - Tile windows are currently 2D-only

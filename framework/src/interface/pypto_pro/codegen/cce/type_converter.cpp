@@ -18,6 +18,7 @@
 
 #include "core/error.h"
 #include "core/logging.h"
+#include "ir/op_attr_types.h"
 #include "ir/expr.h"
 #include "ir/kind_traits.h"
 #include "ir/memref.h"
@@ -243,24 +244,8 @@ std::string TypeConverter::ConvertEventId(int event_id) const
 
 std::string TypeConverter::ConvertCastRoundMode(int mode) const
 {
-    switch (mode) {
-        case 0:
-            return "RoundMode::CAST_NONE";
-        case 1:
-            return "RoundMode::CAST_RINT";
-        case 2:
-            return "RoundMode::CAST_ROUND";
-        case 3:
-            return "RoundMode::CAST_FLOOR";
-        case 4:
-            return "RoundMode::CAST_CEIL";
-        case 5:
-            return "RoundMode::CAST_TRUNC";
-        case 6:
-            return "RoundMode::CAST_ODD";
-        default:
-            throw pypto::ir::ValueError("Cast round mode must be in range [0, 6], got " + std::to_string(mode));
-    }
+    auto m = static_cast<ir::RoundMode>(mode);
+    return ir::EnumToString(m);
 }
 
 std::string TypeConverter::ConvertTileLayout(ir::TileLayout layout) const

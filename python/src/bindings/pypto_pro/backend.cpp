@@ -14,12 +14,12 @@
 #include <pybind11/stl.h>
 
 #include <map>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "bindings/pypto_pro/bindings.h"
-#include "backend/910B_CCE/backend_910b_cce.h"
-#include "backend/common/backend_config.h"
+#include "backend/backend_cce.h"
 #include "backend/common/soc.h"
 #include "ir/memref.h"
 #include "ir/pipe.h"
@@ -30,8 +30,7 @@ namespace pypto {
 namespace ir {
 
 using pypto::backend::Backend;
-using pypto::backend::Backend910B_CCE;
-using pypto::backend::BackendType;
+using pypto::backend::BackendCCE;
 using pypto::backend::Cluster;
 using pypto::backend::Core;
 using pypto::backend::Die;
@@ -43,10 +42,6 @@ using pypto::ir::MemorySpace;
 void BindBackend(py::module_& m)
 {
     py::module_ backend_mod = m.def_submodule("backend", "PyPTO Backend module");
-
-    // ========== BackendType enum ==========
-    py::enum_<BackendType>(backend_mod, "BackendType", "Backend type for passes and codegen (use Instance internally)")
-        .value("CCE", BackendType::CCE, "910B CCE backend (C++ codegen)");
 
     // ========== Mem class ==========
     py::class_<Mem>(backend_mod, "Mem", "Memory component")
@@ -111,31 +106,26 @@ void BindBackend(py::module_& m)
     // ========== Backend abstract base class ==========
     py::class_<Backend>(backend_mod, "Backend", "Abstract backend base class")
         .def("get_type_name", &Backend::GetTypeName, "Get backend type name")
+        .def(
+            "get_op_pipe",
+            [](const Backend& backend, const std::string& op_name) -> std::optional<ir::PipeType> {
+                const auto* op_info = backend.GetOpInfo(op_name);
+                if (op_info == nullptr) {
+                    return std::nullopt;
+                }
+                return op_info->pipe;
+            },
+            py::arg("op_name"), "Get the registered pipeline type for an operator, or None if unregistered")
         .def("find_mem_path", &Backend::FindMemPath, py::arg("from_mem"), py::arg("to_mem"),
              "Find memory path from source to destination")
         .def("get_mem_size", &Backend::GetMemSize, py::arg("mem_type"), "Get total memory size for given memory type")
         .def_property_readonly(
             "soc", [](const Backend& backend) -> const SoC& { return backend.GetSoC(); }, "Get SoC object");
 
-    // ========== Backend910B_CCE concrete implementation ==========
-    py::class_<Backend910B_CCE, Backend>(backend_mod, "Backend910B_CCE", "910B CCE backend implementation")
-        .def_static("instance", &Backend910B_CCE::Instance, py::return_value_policy::reference,
-                    "Get singleton instance of 910B CCE backend");
-
-    // ========== Backend configuration functions ==========
-    backend_mod.def("set_backend_type", &backend::BackendConfig::SetBackendType, py::arg("backend_type"),
-                    "Set the global backend type. Must be called before any backend operations. "
-                    "Can be called multiple times with the same type (idempotent).");
-
-    backend_mod.def("get_backend_type", &backend::BackendConfig::GetBackendType,
-                    "Get the configured backend type. Throws error if not configured.");
-
-    backend_mod.def("is_backend_configured", &backend::BackendConfig::IsConfigured,
-                    "Check if backend type has been configured.");
-
-    backend_mod.def("reset_for_testing", &backend::BackendConfig::ResetForTesting,
-                    "Reset backend configuration (for testing only). "
-                    "WARNING: Only use in tests to reset between test cases.");
+    // ========== BackendCCE concrete implementation ==========
+    py::class_<BackendCCE, Backend>(backend_mod, "BackendCCE", "CCE backend implementation")
+        .def_static("instance", &BackendCCE::Instance, py::return_value_policy::reference,
+                    "Get singleton instance of CCE backend");
 }
 
 } // namespace ir

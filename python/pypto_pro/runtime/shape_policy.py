@@ -29,9 +29,21 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 import inspect
 import re
-from typing import Any
+from typing import Any, Union
 
 from pypto_pro.language.typing.shape import DYNAMIC, STATIC, _ShapePolicy
+
+
+def _get_annotations(func, namespace):
+    get_annotations = getattr(inspect, "get_annotations", None)
+    if get_annotations is not None:
+        return get_annotations(func, globals=namespace, locals=namespace, eval_str=True)
+
+    annotations = dict(getattr(func, "__annotations__", {}))
+    for name, annotation in annotations.items():
+        if isinstance(annotation, str):
+            annotations[name] = eval(annotation, namespace, namespace)
+    return annotations
 
 
 def _dynamic_name(parameter_name: str, axis: int) -> str:
@@ -87,7 +99,7 @@ class StaticTail:
     start_axis: int
 
 
-DimensionSpec = FixedDim | DynamicDim | StaticDim | StaticTail
+DimensionSpec = Union[FixedDim, DynamicDim, StaticDim, StaticTail]
 
 
 @dataclass(frozen=True)
@@ -297,12 +309,7 @@ class KernelSignatureSpec:
         namespace = dict(getattr(func, "__globals__", {}))
         namespace.update(closure_vars or {})
         try:
-            annotations = inspect.get_annotations(
-                func,
-                globals=namespace,
-                locals=namespace,
-                eval_str=True,
-            )
+            annotations = _get_annotations(func, namespace)
         except (NameError, TypeError, ValueError) as exc:
             raise TypeError(f"Failed to evaluate annotations for kernel '{func.__name__}': {exc}") from exc
 

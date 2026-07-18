@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-# coding: utf-8
 # Copyright (c) 2026 Huawei Technologies Co., Ltd.
 # This program is free software, you can redistribute it and/or modify it under the terms and conditions of
 # CANN Open Software License Agreement Version 2.0 (the "License").
@@ -18,6 +16,11 @@ import copy
 from ._analyzer import PipelineInfo, analyze_pipeline
 from .config import PipelineConfig
 from ._cross_core_scanner import AccessRole
+
+
+def _names_in_expr(node: ast.expr) -> set[str]:
+    """All Name ids referenced inside an expression."""
+    return {sub.id for sub in ast.walk(node) if isinstance(sub, ast.Name)}
 
 
 def _snake_visit_name(node: ast.AST) -> str:
@@ -212,8 +215,13 @@ def _build_cross_core_sync(stage, index_expr: ast.expr) -> tuple[list, list]:
     event_id index = index_expr % slot_count. index_expr is the iteration index
     base: in pipeline mode `_pl_ctx_negD._pl_task_id`, in sync_only mode `_pl_sync_id`.
     """
+    return _build_syncs_from_accesses(stage.cross_access, index_expr)
+
+
+def _build_syncs_from_accesses(accesses, index_expr: ast.expr) -> tuple[list, list]:
+    """Build (pre_sync, post_sync) from a list of CrossCoreAccess (W/R rules)."""
     pre, post = [], []
-    for acc in stage.cross_core:
+    for acc in accesses:
         p, q = _build_cross_core_sync_one(acc, index_expr)
         pre.extend(p)
         post.extend(q)
@@ -275,8 +283,9 @@ def _build_mix_synced_func(stage, info: PipelineInfo, closure_vars: dict):
     to insert. Called lazily by _flatten_mix_body (and cached there); the result is
     then flattened (inlined) into the main loop.
     """
-    from ._analyzer import _try_get_funcdef, _is_vf_function
-    from ._cross_core_scanner import scan_stage_accesses
+    from ._analyzer import _try_get_funcdef, _is_vf_function, _find_sub_stage_call_args
+    from ._cross_core_scanner import (
+        scan_stage_accesses, scan_kernel_slot_to_buffer, build_binding_map)
 
     mix_fn = closure_vars.get(stage.func_name)
     mix_fd = _try_get_funcdef(mix_fn)
@@ -293,14 +302,32 @@ def _build_mix_synced_func(stage, info: PipelineInfo, closure_vars: dict):
             if fd is not None and _is_vf_function(fd):
                 vf_func_defs[name] = fd
 
+    # Resolve cross-core buffer bindings via the binding mechanism (formal-name /
+    # slot / alias / nesting independent), mirroring the analyzer.
+    cross_buffers = info.sync.buffers
+    kernel_slot_map = scan_kernel_slot_to_buffer(info.func_def, cross_buffers) \
+        if info.func_def is not None else {}
+    stage_func_defs = {}
+    for name in stage_names | set(stage.sub_stages):
+        sfd = _try_get_funcdef(closure_vars.get(name))
+        if sfd is not None:
+            stage_func_defs[name] = sfd
+    # Mix stage's own bindings from its main-loop call site.
+    mix_bindings = build_binding_map(mix_fd, stage.args, {}, kernel_slot_map, cross_buffers)
+
     all_mem = info.sync.all_memory
     sub_sync_info = {}
     for sub_name in stage.sub_stages:
-        sub_fn = closure_vars.get(sub_name)
-        sub_fd = _try_get_funcdef(sub_fn)
+        sub_fd = stage_func_defs.get(sub_name)
         if sub_fd is None:
             continue
-        accesses = scan_stage_accesses(sub_fd, info.sync.buffers, vf_func_defs, all_mem)
+        sub_call_args = _find_sub_stage_call_args(mix_fd, sub_name)
+        accesses = []
+        scan_stage_accesses(
+            sub_fd, cross_buffers, vf_func_defs, all_mem,
+            cross_access_out=accesses,
+            call_args=sub_call_args, caller_bindings=mix_bindings,
+            kernel_slot_map=kernel_slot_map, stage_func_defs=stage_func_defs)
         inner_accs = [a for a in accesses if a.buffer_name in stage.inner_buffers]
         if inner_accs:
             sub_sync_info[sub_name] = inner_accs
@@ -338,9 +365,8 @@ def _insert_inner_sync_recursive(stmts: list[ast.stmt], sub_sync_info: dict,
                 if isinstance(inner, ast.Expr) and isinstance(inner.value, ast.Call):
                     fname = _get_call_name(inner.value)
                     if fname in sub_sync_info:
-                        class _H:
-                            cross_core = sub_sync_info[fname]
-                        pre, post = _build_cross_core_sync(_H(), index_expr)
+                        pre, post = _build_syncs_from_accesses(
+                            sub_sync_info[fname], index_expr)
                         stmt.body[j:j + 1] = pre + [inner] + post
                         found_any = True
                         # If this is the last sub-stage, insert counter incr
@@ -390,7 +416,7 @@ def _transform_sync_only(stmts: list[ast.stmt], info: PipelineInfo,
     counter advances continuously across outer-loop iterations (matching the
     cross-core buffer cursor, which does not reset) and pre-fire fires once.
     """
-    # Map stage func_name -> StageCall (has cross_core summary)
+    # Map stage func_name -> StageCall (has cross_access summary)
     stage_by_name = {s.func_name: s for s in info.stages}
 
     for i, stmt in enumerate(stmts):
@@ -535,7 +561,7 @@ def _check_pipeline_consistency(info: PipelineInfo) -> None:
     producer = {}
     consumer = {}
     for stage in info.stages:
-        for acc in stage.cross_core:
+        for acc in stage.cross_access:
             if acc.role == AccessRole.WRITE:
                 producer[acc.buffer_name] = stage
             elif acc.role == AccessRole.READ:
@@ -660,7 +686,7 @@ def _consumer_sync_for_buffer(info: PipelineInfo, buffer_name: str):
     consumer in steady state, so pre-fire must match the consumer's
     section/pipe to land in the same synchronization domain."""
     for stage in info.stages:
-        for acc in stage.cross_core:
+        for acc in stage.cross_access:
             if acc.buffer_name == buffer_name and acc.role == AccessRole.READ:
                 return stage.section_kind, acc.last_pipe
     return None
@@ -713,17 +739,28 @@ def _build_prefire(info: PipelineInfo) -> list[ast.stmt]:
                 ctx=ast.Load(),
             )
             body.append(_build_system_sync_stmt("set_cross_core", pipe_name, event_id))
-        section_attr = f"section_{section_kind}"
-        section_call = ast.Call(
-            func=ast.Attribute(value=ast.Name(id="pl", ctx=ast.Load()),
-                               attr=section_attr, ctx=ast.Load()),
-            args=[], keywords=[],
-        )
-        result.append(ast.With(
-            items=[ast.withitem(context_expr=section_call, optional_vars=None)],
-            body=body,
-            lineno=0,
-        ))
+        result.append(_wrap_in_section(section_kind, body))
+
+    # Pre-fire for address-overlap reverse syncs (scenario 2/3).
+    # Same logic: set each slot of the overlap event ids so the first-round
+    # wait at the earliest-user stage doesn't deadlock.
+    overlap_by_section: dict[str, list] = {}
+    for sync in info.sync.overlap_reverse_syncs:
+        for slot in range(sync.slot_count):
+            overlap_by_section.setdefault(sync.set_section_kind, []).append(
+                (sync.set_pipe, sync.event_ids_var, slot))
+
+    for section_kind, entries in overlap_by_section.items():
+        body = []
+        for pipe_name, ids_var, slot in entries:
+            event_id = ast.Subscript(
+                value=ast.Name(id=ids_var, ctx=ast.Load()),
+                slice=ast.Constant(value=slot),
+                ctx=ast.Load(),
+            )
+            body.append(_build_system_sync_stmt("set_cross_core", pipe_name, event_id))
+        result.append(_wrap_in_section(section_kind, body))
+
     return result
 
 
@@ -731,6 +768,138 @@ def _inner_consumer_sync_for_buffer(info: PipelineInfo, buffer_name: str):
     """Find (section_kind, pipe) of the inner consumer of a mix stage's buffer.
     Uses pre-computed inner_consumer_map from analyzer."""
     return info.sync.inner_consumer_map.get(buffer_name)
+
+
+def _expand_mid_loop_refs(node: ast.expr, mid_loop_assigns: dict,
+                          ctx_field_names: set) -> ast.expr:
+    """Recursively expand references to mid-loop assigned variables in an expression.
+
+    If the expression references a variable that is a mid-loop assign (non-self-ref),
+    replace that Name with the variable's rhs expression (recursively). This ensures
+    the expanded expression only references variables that exist at the ctx-fill
+    position (loop vars, outer-scope vars, constants — not mid-loop intermediates
+    whose assignment comes later in the loop body).
+    """
+    class _Expander(ast.NodeTransformer):
+        def generic_visit(self, node):
+            if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load) and node.id in mid_loop_assigns:
+                rhs = mid_loop_assigns[node.id]
+                rhs_names = _names_in_expr(rhs)
+                is_self_ref = node.id in rhs_names
+                if not is_self_ref:
+                    # This variable is a mid-loop assign → expand to its rhs
+                    expanded = copy.deepcopy(rhs)
+                    return self.visit(expanded)  # recurse in case rhs also needs expansion
+            return super().generic_visit(node)
+    return _Expander().visit(node)
+
+
+def _ctx_field_assign(attr: str, value_node: ast.expr) -> ast.Assign:
+    """Build `_pl_ctx_0.<attr> = <value_node>`."""
+    return ast.Assign(
+        targets=[ast.Attribute(
+            value=ast.Name(id="_pl_ctx_0", ctx=ast.Load()),
+            attr=attr, ctx=ast.Store())],
+        value=value_node,
+        lineno=0,
+    )
+
+
+def _is_ctx_taken_assign(stmt, info: PipelineInfo) -> bool:
+    """True if stmt is a mid-loop changing ctx-field assignment (e.g. `p_offset = ki`)
+    whose value is delivered via the ctx field, so the original assignment should be
+    DROPPED (both at loop top level and inside a section's pre/post statements).
+
+    Excludes self-referencing accumulators (`tick = tick + 1`) — those are preserved.
+    """
+    if not (isinstance(stmt, ast.Assign) and len(stmt.targets) == 1):
+        return False
+    target = stmt.targets[0]
+    if not isinstance(target, ast.Name):
+        return False
+    name = target.id
+    if name not in info.mid_loop_assigns or name not in set(info.ctx_fields):
+        return False
+    is_self_ref = name in _names_in_expr(stmt.value)
+    return not is_self_ref
+
+
+def _classify_loop_body_stmts(original_for: ast.For, info: PipelineInfo):
+    """Walk the pipeline loop body IN ORDER and return an ordered_body list.
+
+    Each entry of ordered_body is either:
+      - a ("STAGE", stage_idx) marker (a section block or a bare mix stage call),
+        which the caller expands into a full stage call; or
+      - a preserved user statement in its ORIGINAL source position (slot defs like
+        `x = buf.next()`, loop-carried accumulators like `tick = tick + 1`, etc.).
+
+    Mid-loop changing ctx fields (e.g. `p_offset = ki`, whether at loop top level
+    or inside a section) are NOT emitted here: their value is delivered solely
+    through the ctx field (filled in _build_ctx_field_fills, read as _pl_ctx_X.<name>
+    in stage args). The original bare assignment is dropped as dead code.
+
+    The loop body may contain:
+      - section blocks / bare stage calls (mix) → ("STAGE", idx) markers
+      - bare function calls (not @stage) → ERROR
+      - simple assignments → ctx-field assign (dropped) or preserved
+      - other statements referencing changing vars → ERROR
+    """
+    stage_func_names = {s.func_name for s in info.stages}
+    changing = info.loop_changing_vars
+
+    ordered_body = []
+    stage_idx = 0
+
+    for stmt in original_for.body:
+        # Section block → a stage call (regenerated with delay/guard/sync)
+        if isinstance(stmt, ast.With):
+            ordered_body.append(("STAGE", stage_idx))
+            stage_idx += 1
+            continue
+
+        # Bare function call
+        if isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Call):
+            fname = _get_call_name(stmt.value)
+            if fname in stage_func_names:
+                # Bare stage call (mix) → a stage call (flattened when generated)
+                ordered_body.append(("STAGE", stage_idx))
+                stage_idx += 1
+                continue
+            raise ValueError(
+                f"pipeline: function call '{fname or ast.unparse(stmt.value)}()' appears "
+                f"directly in the pipeline loop body. All computation must be inside a "
+                f"@pl.pipeline.stage function or a `with pl.section_*()` block."
+            )
+
+        # Mid-loop changing ctx-field assign (e.g. p_offset = ki) → DROP: its value
+        # is delivered via the ctx field, so the bare assignment is dead code.
+        if _is_ctx_taken_assign(stmt, info):
+            continue
+
+        # Simple assignment to a mid-loop var that is NOT ctx-taken:
+        # Preserve in original position (it's loop-carried state or a constant).
+        is_named_assignment = (
+            isinstance(stmt, ast.Assign)
+            and len(stmt.targets) == 1
+            and isinstance(stmt.targets[0], ast.Name)
+        )
+        if is_named_assignment and stmt.targets[0].id in info.mid_loop_assigns:
+            ordered_body.append(copy.deepcopy(stmt))
+            continue
+
+        # Other statement: reject if it references a changing var
+        all_refs = {n.id for n in ast.walk(stmt)
+                    if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)}
+        if all_refs & changing:
+            raise ValueError(
+                f"pipeline: unsupported statement in pipeline loop body that references "
+                f"loop-dependent variable(s) {sorted(all_refs & changing)}. "
+                f"Move this logic into a @pl.pipeline.stage function."
+            )
+        # Preserved in original position (e.g. slot def `x = buf.next()`).
+        ordered_body.append(copy.deepcopy(stmt))
+
+    return ordered_body
 
 
 def _build_pipeline_loop(original_for: ast.For, info: PipelineInfo,
@@ -741,68 +910,26 @@ def _build_pipeline_loop(original_for: ast.For, info: PipelineInfo,
     new_for = copy.deepcopy(original_for)
     _extend_loop_range(new_for, extra)
 
-    # Collect user statements from original loop body that are NOT stage-related.
-    # Two categories:
-    #   - "ctx-taken": changing mid-loop assignments whose value is already captured
-    #     by ctx fill (via their rhs expression). These are dead after transform → skip.
-    #   - "preserved": other user statements (e.g. tick = tick + 1) → keep at loop end.
-    #
-    # A statement is "ctx-taken" if: it's a simple assignment `name = expr` where
-    # `name` is in ctx_fields AND the rhs does NOT reference itself (i.e. not a
-    # loop-carried accumulator like `tick = tick + 1`).
-    stage_func_names = {s.func_name for s in info.stages}
-    ctx_field_names = set(info.ctx_fields)
-    pre_stmts = []       # user stmts that must run BEFORE ctx fill (non-changing mid-loop assigns)
-    preserved_stmts = [] # user stmts that run AFTER all stages (loop-carried accumulators etc.)
-    for stmt in original_for.body:
-        if isinstance(stmt, ast.With):
-            continue  # section blocks are regenerated
-        if isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Call):
-            fname = _get_call_name(stmt.value)
-            if fname in stage_func_names:
-                continue  # bare stage calls (mix) are regenerated
-        # Check if this is a ctx-taken mid-loop assignment (dead after transform):
-        # its value is already captured by ctx fill via the rhs expression.
-        # Only delete if it's in ctx_fields (meaning it was changing and ctx-backed).
-        if isinstance(stmt, ast.Assign) and len(stmt.targets) == 1:
-            target = stmt.targets[0]
-            if isinstance(target, ast.Name) and target.id in info.mid_loop_assigns:
-                if target.id in ctx_field_names:
-                    continue  # ctx-taken changing assign → skip (dead code)
-                else:
-                    # Non-changing mid-loop assign (e.g. p_x = 3): stage references
-                    # it directly by name, so it must exist before stage calls.
-                    pre_stmts.append(copy.deepcopy(stmt))
-                    continue
-        preserved_stmts.append(copy.deepcopy(stmt))
+    # Classify: ordered body (STAGE markers + preserved statements in ORIGINAL
+    # source order). Mid-loop ctx fields are dropped here — filled via ctx fill.
+    ordered_body = _classify_loop_body_stmts(original_for, info)
 
-    # Build new loop body
+    # Assemble new loop body
     new_body = []
-
-    # 0. Non-changing mid-loop assigns that stages reference by name (e.g. p_x = 3)
-    #    must exist before ctx fill / stage calls.
-    new_body.extend(pre_stmts)
-
-    # 1. Fill current ctx
+    # 1. Fill current ctx: slot lookup, is_valid, and ALL ctx fields (loop var,
+    #    mid-loop changing assigns like p_offset, framework fields). Single source.
     new_body.extend(_build_ctx_fill(info, depth))
-
-    # 2. Stage calls with delay and is_valid guard
-    for stage_idx, stage in enumerate(info.stages):
-        new_body.extend(_build_stage_call(stage, stage_idx, info, depth))
-
-    # 3. task_id increment
-    new_body.append(ast.Assign(
-        targets=[ast.Name(id="_pl_task_id", ctx=ast.Store())],
-        value=ast.BinOp(
-            left=ast.Name(id="_pl_task_id", ctx=ast.Load()),
-            op=ast.Add(),
-            right=ast.Constant(value=1),
-        ),
-        lineno=0,
-    ))
-
-    # 4. Preserve user's non-stage statements (e.g. tick = tick + 1)
-    new_body.extend(preserved_stmts)
+    # 2. Walk the ordered body: expand STAGE markers into stage calls; keep
+    #    preserved statements (e.g. `qk_dst = qk_vec_db.next()`) in their original
+    #    position relative to the stage calls.
+    for item in ordered_body:
+        if isinstance(item, tuple) and item[0] == "STAGE":
+            stage_idx = item[1]
+            new_body.extend(_build_stage_call(info.stages[stage_idx], stage_idx, info, depth))
+        else:
+            new_body.append(item)
+    # 3. task_id increment (frame-level iteration counter, after all stage calls)
+    new_body.append(_build_counter_incr("_pl_task_id"))
 
     new_for.body = new_body
     return [new_for]
@@ -837,10 +964,9 @@ def _extend_loop_range(for_stmt: ast.For, extra: int):
 
 
 def _build_ctx_fill(info: PipelineInfo, depth: int) -> list[ast.stmt]:
-    """Build statements to fill the current ctx slot."""
+    """Build statements to fill the current ctx slot: slot lookup, is_valid, fields."""
     stmts = []
-
-    _pl_ctx_0_assign = ast.Assign(
+    stmts.append(ast.Assign(
         targets=[ast.Name(id="_pl_ctx_0", ctx=ast.Store())],
         value=ast.Subscript(
             value=ast.Name(id="_pl_ctx_arr", ctx=ast.Load()),
@@ -852,69 +978,63 @@ def _build_ctx_fill(info: PipelineInfo, depth: int) -> list[ast.stmt]:
             ctx=ast.Load(),
         ),
         lineno=0,
-    )
-    stmts.append(_pl_ctx_0_assign)
+    ))
+    stmts.append(_build_is_valid_guard(info))
+    stmts.extend(_build_ctx_field_fills(info))
+    return stmts
 
-    loop_var = info.inner_loop_var
-    # Use the original range end (before we extended it)
-    range_end = (
-        copy.deepcopy(info.inner_loop_range_end)
-        if info.inner_loop_range_end
-        else ast.Name(id="skv_tiles", ctx=ast.Load())
-    )
 
-    is_valid_if = ast.If(
+def _build_is_valid_guard(info: PipelineInfo) -> ast.If:
+    """Build `if <loop_var> < <range_end>: _pl_ctx_0.is_valid = 1 else: = 0`."""
+    range_end = (copy.deepcopy(info.inner_loop_range_end)
+                 if info.inner_loop_range_end
+                 else ast.Name(id="skv_tiles", ctx=ast.Load()))
+    return ast.If(
         test=ast.Compare(
-            left=ast.Name(id=loop_var, ctx=ast.Load()),
+            left=ast.Name(id=info.inner_loop_var, ctx=ast.Load()),
             ops=[ast.Lt()],
             comparators=[range_end],
         ),
-        body=[ast.Assign(
-            targets=[ast.Attribute(
-                value=ast.Name(id="_pl_ctx_0", ctx=ast.Load()),
-                attr="is_valid", ctx=ast.Store())],
-            value=ast.Constant(value=1),
-            lineno=0,
-        )],
-        orelse=[ast.Assign(
-            targets=[ast.Attribute(
-                value=ast.Name(id="_pl_ctx_0", ctx=ast.Load()),
-                attr="is_valid", ctx=ast.Store())],
-            value=ast.Constant(value=0),
-            lineno=0,
-        )],
+        body=[_ctx_field_assign("is_valid", ast.Constant(value=1))],
+        orelse=[_ctx_field_assign("is_valid", ast.Constant(value=0))],
         lineno=0,
     )
-    stmts.append(is_valid_if)
 
-    # _pl_ctx_0.field = value for each ctx field (except is_valid).
-    # Build field_name -> fill_expr mapping from stage_arg_mapping.
+
+def _build_ctx_field_fills(info: PipelineInfo) -> list[ast.stmt]:
+    """Build `_pl_ctx_0.<field> = <value>` for EVERY ctx field (except is_valid).
+
+    Single source of truth: the fill expression for each field comes from
+    stage_arg_mapping (computed in _derive_ctx_fields). For a mid-loop changing
+    assign (e.g. `p_offset = ki`) the fill expr is its rhs; for a plain changing
+    var it is the var name; for framework fields (e.g. _pl_task_id) it is the
+    same-named variable. This is the ONLY place ctx fields get filled — there is
+    no separate in-place rewrite of the original assignment.
+    """
+    ctx_field_names = set(info.ctx_fields)
+
+    # field_name -> fill_expr, from stage_arg_mapping
     fill_values: dict[str, ast.expr] = {}
     for arg_map in info.stage_arg_mapping:
         for item in arg_map:
             if item is not None:
                 fname, fexpr = item
-                if fname not in fill_values:
-                    fill_values[fname] = fexpr
+                fill_values.setdefault(fname, fexpr)
 
+    stmts = []
     for field_name in info.ctx_fields:
         if field_name == "is_valid":
             continue
         if field_name in fill_values:
-            value_node = copy.deepcopy(fill_values[field_name])
+            # Expand any mid-loop-assign references so the expr only depends on
+            # variables available at ctx-fill position (loop vars / outer / const).
+            value_node = _expand_mid_loop_refs(
+                copy.deepcopy(fill_values[field_name]),
+                info.mid_loop_assigns, ctx_field_names)
         else:
-            # Framework fields like _pl_task_id: fill with same-named var
+            # Framework field (e.g. _pl_task_id): fill with same-named variable.
             value_node = ast.Name(id=field_name, ctx=ast.Load())
-
-        assign = ast.Assign(
-            targets=[ast.Attribute(
-                value=ast.Name(id="_pl_ctx_0", ctx=ast.Load()),
-                attr=field_name, ctx=ast.Store())],
-            value=value_node,
-            lineno=0,
-        )
-        stmts.append(assign)
-
+        stmts.append(_ctx_field_assign(field_name, value_node))
     return stmts
 
 
@@ -986,12 +1106,12 @@ def _build_mix_outer_sync(stage, mix_body: list[ast.stmt], index_expr: ast.expr)
     Shared by the full-pipeline path (under an is_valid guard) and sync_only.
     """
     body = []
-    for acc in stage.cross_core:
+    for acc in stage.cross_access:
         pre, _ = _build_cross_core_sync_one(acc, index_expr)
         if pre:
             body.append(_wrap_in_section(acc.section_kind or stage.section_kind, pre))
     body.extend(mix_body)
-    for acc in stage.cross_core:
+    for acc in stage.cross_access:
         _, post = _build_cross_core_sync_one(acc, index_expr)
         if post:
             body.append(_wrap_in_section(acc.section_kind or stage.section_kind, post))
@@ -1015,16 +1135,81 @@ def _build_guarded_stage_body(stage, call_expr: ast.Call, ctx_var: str, info: Pi
         return _build_mix_outer_sync(stage, mix_body, index_expr)
 
     auto_pre, auto_post = _build_cross_core_sync(stage, index_expr)
+    # Address-overlap reverse sync (scenario 2/3): wait at first_stage, set at last_stage.
+    overlap_pre, overlap_post = _build_overlap_reverse_sync(stage, info, index_expr)
 
     guarded_body = []
     guarded_body.extend(auto_pre)
+    guarded_body.extend(overlap_pre)
     for s in stage.pre_stmts:
+        # Drop mid-loop ctx-field assigns (e.g. p_offset = ki) inside the section:
+        # their value is delivered via the ctx field, same as at loop top level.
+        if _is_ctx_taken_assign(s, info):
+            continue
         guarded_body.append(_replace_ctx_fields(copy.deepcopy(s), ctx_var, ctx_field_set))
     guarded_body.append(ast.Expr(value=call_expr, lineno=0))
     for s in stage.post_stmts:
+        if _is_ctx_taken_assign(s, info):
+            continue
         guarded_body.append(_replace_ctx_fields(copy.deepcopy(s), ctx_var, ctx_field_set))
+    guarded_body.extend(overlap_post)
     guarded_body.extend(auto_post)
     return guarded_body
+
+
+def _build_overlap_reverse_sync(stage, info: PipelineInfo,
+                                index_expr: ast.expr) -> tuple[list, list]:
+    """Build (pre, post) sync stmts for address-overlap reverse syncs (scenario 2/3).
+
+    - If this stage is a sync's first_stage (earliest user): emit a wait in pre,
+      guarded by `if _pl_task_id >= stage_gap` so the wait is skipped until the
+      last_stage has executed at least once (avoids deadlock in initial iterations).
+    - If this stage is a sync's last_stage (latest user): emit a set in post,
+      releasing the shared region.
+
+    event_id index = index_expr % slot_count, indexing the lifted ids variable.
+    """
+    pre, post = [], []
+    for sync in info.sync.overlap_reverse_syncs:
+        if sync.first_stage == stage.func_name:
+            wait_stmt = _build_overlap_sync_stmt(
+                "wait_cross_core", sync.wait_pipe, sync.event_ids_var,
+                sync.slot_count, index_expr)
+            # Guard: only wait after the last_stage has executed at least once.
+            # _pl_task_id >= stage_gap means the last_stage has had a chance to set.
+            guarded_wait = ast.If(
+                test=ast.Compare(
+                    left=ast.Attribute(
+                        value=ast.Name(id="_pl_ctx_0", ctx=ast.Load()),
+                        attr="_pl_task_id", ctx=ast.Load()),
+                    ops=[ast.GtE()],
+                    comparators=[ast.Constant(value=sync.stage_gap)],
+                ),
+                body=[wait_stmt],
+                orelse=[],
+                lineno=0,
+            )
+            pre.append(guarded_wait)
+        if sync.last_stage == stage.func_name:
+            post.append(_build_overlap_sync_stmt(
+                "set_cross_core", sync.set_pipe, sync.event_ids_var,
+                sync.slot_count, index_expr))
+    return pre, post
+
+
+def _build_overlap_sync_stmt(op_name: str, pipe_name: str, ids_var: str,
+                             slot_count: int, index_expr: ast.expr) -> ast.stmt:
+    """Build `pl.<op>(pipe=pl.PipeType.<pipe>, event_id=<ids_var>[<index> % <slot_count>])`."""
+    event_id = ast.Subscript(
+        value=ast.Name(id=ids_var, ctx=ast.Load()),
+        slice=ast.BinOp(
+            left=copy.deepcopy(index_expr),
+            op=ast.Mod(),
+            right=ast.Constant(value=slot_count),
+        ),
+        ctx=ast.Load(),
+    )
+    return _build_system_sync_stmt(op_name, pipe_name, event_id)
 
 
 def _wrap_stage_section(stage, guarded_body: list[ast.stmt], ctx_var: str) -> ast.With:

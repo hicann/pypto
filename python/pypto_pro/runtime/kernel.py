@@ -55,7 +55,6 @@ from pypto_pro.language.parser.decorator import (
     _find_ast_node,
     _attach_source_lines_to_error,
     _extract_function_type_from_decorator,
-    KernelFunction,
 )
 from pypto_pro.language.parser.diagnostics import ParserError, ParserSyntaxError
 
@@ -106,7 +105,6 @@ class KernelDef:
         func_type: IR function type (Opaque, Orchestration, InCore).
         strict_ssa: Whether to enforce SSA.
         meta_data: Optional metadata.
-        helper_funcs: List of ``ir.Function`` from ``@pl.func`` helpers.
         auto_mutex: Whether to enable automatic mutex lock/unlock insertion.
     """
 
@@ -124,7 +122,6 @@ class KernelDef:
         func_type: ir.FunctionType,
         strict_ssa: bool,
         meta_data: Any,
-        helper_funcs: list,
         auto_mutex: bool = False,
         pipeline=None,
         tilingkey_consts: dict[str, int] | None = None,
@@ -145,7 +142,6 @@ class KernelDef:
         self._pipeline = pipeline
         self._pipeline_generated_source = None
         self._meta_data = meta_data
-        self._helper_funcs = helper_funcs
         self._tilingkey_consts = tilingkey_consts
         self._datatype_consts = datatype_consts
 
@@ -198,6 +194,10 @@ class KernelDef:
                 tilingkey_consts=self._tilingkey_consts,
                 datatype_consts=self._datatype_consts,
                 bound_signature=bound_signature,
+                # Kernels use a void ABI: they may early-return, but cannot return values.
+                void_return_only=True,
+                void_return_context="@pl.jit/@pl.kernel",
+                allow_early_return=True,
             )
 
             try:
@@ -209,18 +209,24 @@ class KernelDef:
                 node = getattr(parser, '_current_node', None)
                 if node is not None:
                     span = parser.span_tracker.get_span(node)
+                if isinstance(e, (AttributeError, TypeError)):
+                    hint = ("an internal type check failed while parsing; an argument may "
+                            "have an unsupported type — check that kernel arguments match "
+                            "the expected Tile/Tensor/scalar types")
+                else:
+                    hint = "Check your function definition for errors"
                 raise ParserSyntaxError(
-                    f"Failed to parse kernel function '{self._func.__name__}': {e}",
+                    f"Failed to parse kernel function '{self._func.__name__}': "
+                    f"{type(e).__name__}: {e}",
                     span=span,
-                    hint="Check your function definition for errors",
+                    hint=hint,
                 ) from e
 
-            implicit_funcs = list(parser.external_funcs.values())
-
+            external_funcs = list(parser.external_funcs.values())
             starting_line = self._line_offset + 1
             program_span = ir.Span(self._source_file, starting_line, self._col_offset)
             return ir.Program(
-                self._helper_funcs + implicit_funcs + [ir_func],
+                external_funcs + [ir_func],
                 program_name,
                 program_span,
                 parser.debug_info,
@@ -297,9 +303,6 @@ def kernel(
         (source_file, source_lines, source_lines_raw,
          line_offset, col_offset, func_def) = extract_func_source_info(f)
 
-        # Collect @pl.func helper functions from closure
-        helper_funcs = [val.ir_function for val in closure_vars.values() if isinstance(val, KernelFunction)]
-
         return KernelDef(
             func=f,
             source_file=source_file,
@@ -313,7 +316,6 @@ def kernel(
             func_type=func_type,
             strict_ssa=strict_ssa,
             meta_data=meta_data,
-            helper_funcs=helper_funcs,
             auto_mutex=auto_mutex,
             pipeline=pipeline,
         )

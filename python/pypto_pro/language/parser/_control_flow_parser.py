@@ -29,6 +29,48 @@ def _body_without_docstring(func_def: ast.FunctionDef) -> list[ast.stmt]:
     return body
 
 
+def _target_names(target: ast.expr) -> set[str]:
+    if isinstance(target, ast.Name):
+        return {target.id}
+    if isinstance(target, (ast.Tuple, ast.List)):
+        return set().union(*(_target_names(elt) for elt in target.elts)) if target.elts else set()
+    return set()
+
+
+def _assignment_writes(statements: list[ast.stmt]) -> set[str]:
+    """Collect names that a control-flow region can rebind.
+
+    This intentionally mirrors ConvertToSSA's AssignmentCollector: loop
+    iterators are local, while assignments in nested regions remain writes of
+    the surrounding region.
+    """
+    writes: set[str] = set()
+
+    def visit(stmt: ast.stmt) -> None:
+        if isinstance(stmt, ast.Assign):
+            for target in stmt.targets:
+                writes.update(_target_names(target))
+        elif isinstance(stmt, ast.AugAssign):
+            writes.update(_target_names(stmt.target))
+        elif isinstance(stmt, ast.AnnAssign):
+            writes.update(_target_names(stmt.target))
+        elif isinstance(stmt, ast.If):
+            for child in [*stmt.body, *stmt.orelse]:
+                visit(child)
+        elif isinstance(stmt, (ast.For, ast.While)):
+            for child in stmt.body:
+                visit(child)
+            for child in stmt.orelse:
+                visit(child)
+        elif isinstance(stmt, ast.With):
+            for child in stmt.body:
+                visit(child)
+
+    for statement in statements:
+        visit(statement)
+    return writes
+
+
 def validate_single_tail_return(func_def: ast.FunctionDef, context: str) -> tuple[ast.Return, str, str] | None:
     """Require at most one return, and only as the top-level final statement."""
     returns = [node for node in ast.walk(func_def) if isinstance(node, ast.Return)]
@@ -90,17 +132,24 @@ class ControlFlowParserMixin:
         loop_var_name = self._parse_for_loop_target(stmt)
         range_args = self._parse_range_call(iter_call)
 
+        entry_env = dict(self.const_env)
+        writes = _assignment_writes(stmt.body)
+        self.const_env = {name: value for name, value in entry_env.items() if name not in writes}
+
         loop_var = self.builder.var(loop_var_name, ir.ScalarType(DataType.INDEX))
         span = self.span_tracker.get_span(stmt)
 
-        with self.builder.for_loop(
-            loop_var,
-            range_args["start"],
-            range_args["stop"],
-            range_args["step"],
-            span,
-        ) as loop:
-            self._parse_for_loop_body(stmt, loop, loop_var, loop_var_name)
+        try:
+            with self.builder.for_loop(
+                loop_var,
+                range_args["start"],
+                range_args["stop"],
+                range_args["step"],
+                span,
+            ) as loop:
+                self._parse_for_loop_body(stmt, loop, loop_var, loop_var_name)
+        finally:
+            self.const_env = {name: value for name, value in entry_env.items() if name not in writes}
 
     def parse_while_loop(self, stmt: ast.While) -> None:
         """Parse natural while loop syntax.
@@ -113,23 +162,29 @@ class ControlFlowParserMixin:
         Args:
             stmt: While AST node
         """
+        entry_env = dict(self.const_env)
+        writes = _assignment_writes(stmt.body)
+        self.const_env = {name: value for name, value in entry_env.items() if name not in writes}
         condition = self.parse_expression(stmt.test)
         span = self.span_tracker.get_span(stmt)
 
         prev_loop_builder = self.current_loop_builder
         prev_in_while_loop = self.in_while_loop
-        with self.builder.while_loop(condition, span) as loop:
-            self.current_loop_builder = loop
-            self.in_while_loop = True
-            self.scope_manager.enter_scope("while")
+        try:
+            with self.builder.while_loop(condition, span) as loop:
+                self.current_loop_builder = loop
+                self.in_while_loop = True
+                self.scope_manager.enter_scope("while")
 
-            for body_stmt in stmt.body:
-                self.parse_statement(body_stmt)
+                for body_stmt in stmt.body:
+                    self.parse_statement(body_stmt)
 
-            # Variables leak to outer scope (ConvertToSSA will handle)
-            self.scope_manager.exit_scope(leak_vars=True)
-            self.in_while_loop = prev_in_while_loop
-            self.current_loop_builder = prev_loop_builder
+                # Variables leak to outer scope (ConvertToSSA will handle)
+                self.scope_manager.exit_scope(leak_vars=True)
+                self.in_while_loop = prev_in_while_loop
+                self.current_loop_builder = prev_loop_builder
+        finally:
+            self.const_env = {name: value for name, value in entry_env.items() if name not in writes}
 
     def parse_if_statement(self, stmt: ast.If) -> None:
         """Parse if statement.
@@ -146,11 +201,21 @@ class ControlFlowParserMixin:
 
         condition = self._resolve_constexpr_condition(test_node, condition, is_constexpr, span)
 
+        if isinstance(condition, (ir.ConstBool, ir.ConstInt)):
+            is_true = condition.value if isinstance(condition, ir.ConstBool) else condition.value != 0
+            for branch_stmt in (stmt.body if is_true else stmt.orelse):
+                self.parse_statement(branch_stmt)
+            return
+
+        entry_env = dict(self.const_env)
+        writes = _assignment_writes([*stmt.body, *stmt.orelse])
+
         with self.builder.if_stmt(condition, span) as if_builder:
             self.current_if_builder = if_builder
             self.in_if_stmt = True
 
             self.scope_manager.enter_scope("if")
+            self.const_env = dict(entry_env)
             for then_stmt in stmt.body:
                 self.parse_statement(then_stmt)
             self.scope_manager.exit_scope(leak_vars=True)
@@ -158,10 +223,12 @@ class ControlFlowParserMixin:
             if stmt.orelse:
                 if_builder.else_()
                 self.scope_manager.enter_scope("else")
+                self.const_env = dict(entry_env)
                 for else_stmt in stmt.orelse:
                     self.parse_statement(else_stmt)
                 self.scope_manager.exit_scope(leak_vars=True)
 
+        self.const_env = {name: value for name, value in entry_env.items() if name not in writes}
         self.in_if_stmt = False
         self.current_if_builder = None
 
@@ -280,16 +347,27 @@ class ControlFlowParserMixin:
         saved_key: str | None = None,
     ) -> None:
         """Parse a section body and optionally persist its local variables."""
+        outer_const_env = self.const_env
         with self.builder.section(kind, span):
             self.scope_manager.enter_scope("section")
             if saved_key is not None and self._section_saved_vars.get(saved_key):
                 for name, value in self._section_saved_vars[saved_key].items():
                     self.scope_manager.define_var(name, value, allow_redef=True)
-            for body_stmt in body:
-                self.parse_statement(body_stmt)
-            saved_vars = self.scope_manager.exit_scope(leak_vars=False)
-            if saved_key is not None:
-                self._section_saved_vars[saved_key] = saved_vars
+            self.const_env = {
+                **outer_const_env,
+                **(self._section_saved_const_env.get(saved_key, {}) if saved_key is not None else {}),
+            }
+            try:
+                for body_stmt in body:
+                    self.parse_statement(body_stmt)
+                saved_vars = self.scope_manager.exit_scope(leak_vars=False)
+                if saved_key is not None:
+                    self._section_saved_vars[saved_key] = saved_vars
+                    self._section_saved_const_env[saved_key] = {
+                        name: self.const_env[name] for name in saved_vars if name in self.const_env
+                    }
+            finally:
+                self.const_env = outer_const_env
 
     def _validate_for_loop_iterator(self, stmt: ast.For) -> ast.Call:
         """Validate that for loop uses pl.range().

@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-# coding: utf-8
 # Copyright (c) 2026 Huawei Technologies Co., Ltd.
 # This program is free software, you can redistribute it and/or modify it under the terms and conditions of
 # CANN Open Software License Agreement Version 2.0 (the "License").
@@ -16,6 +14,8 @@ import ast
 import copy
 from dataclasses import dataclass, field
 
+from pypto_pro.language.parser._control_flow_parser import validate_single_tail_return
+
 from ._cross_core_scanner import AccessRole, CrossCoreSyncContext
 from ._stage import is_pipeline_stage
 
@@ -29,7 +29,10 @@ class StageCall:
     delay: int              # derived from call order: 0, 1, 2, ...
     pre_stmts: list = field(default_factory=list)   # statements before stage call in same section
     post_stmts: list = field(default_factory=list)  # statements after stage call in same section
-    cross_core: list = field(default_factory=list)  # list[CrossCoreAccess] for this stage
+    cross_access: list = field(default_factory=list)  # list[CrossCoreAccess] for this stage
+    # Local (non-cross-core) buffers that address-overlap a cross-core buffer:
+    # {buffer_name: (first_pipe, last_pipe)}. Used for scenario 2/3 reverse sync.
+    local_access: dict = field(default_factory=dict)
     is_mix: bool = False    # True if this stage's body calls other @stage functions
     sub_stages: list = field(default_factory=list)  # for mix: list of sub-stage func_names in order
     inner_buffers: set = field(default_factory=set)  # for mix: buffer names internal (both W+R inside)
@@ -61,6 +64,9 @@ class PipelineInfo:
     # Reference to closure_vars for mix-body flatten (avoids threading it through
     # every call in the transform chain).
     closure_vars: dict = field(default_factory=dict)
+    # Reference to the kernel function AST (for kernel-body slot scanning at
+    # transform time, e.g. slots taken outside a mix stage).
+    func_def: ast.FunctionDef | None = None
 
 
 def analyze_pipeline(func_def: ast.FunctionDef, closure_vars: dict) -> PipelineInfo:
@@ -78,12 +84,16 @@ def analyze_pipeline(func_def: ast.FunctionDef, closure_vars: dict) -> PipelineI
     """
     info = PipelineInfo()
     info.closure_vars = closure_vars
+    info.func_def = func_def
 
     # Find all stage functions.
     stage_func_names = set()
     for name, val in closure_vars.items():
         if is_pipeline_stage(val):
             stage_func_names.add(name)
+            stage_func_def = _try_get_funcdef(val)
+            if stage_func_def is not None:
+                _check_stage_void_return_only(name, stage_func_def)
 
     # Walk the AST to find the main loop structure.
     # Seed with ALL loop variables (incl. outer loops) for changing-var analysis.
@@ -130,12 +140,53 @@ def analyze_pipeline(func_def: ast.FunctionDef, closure_vars: dict) -> PipelineI
     return info
 
 
+def _check_stage_void_return_only(func_name: str, func_def: ast.FunctionDef) -> None:
+    """Reject value-returning or early-returning @pl.pipeline.stage functions.
+
+    Pipeline stage calls are transformed as statement calls with delayed ctx
+    arguments, so there is no caller-side value target. Bare `return` is allowed
+    only as one top-level final statement.
+    """
+    return_error = validate_single_tail_return(
+        func_def, f"@pl.pipeline.stage function '{func_name}'"
+    )
+    if return_error is not None:
+        _, message, hint = return_error
+        raise ValueError(f"pipeline: {message} {hint}")
+
+    if func_def.returns is not None and not (
+        isinstance(func_def.returns, ast.Constant) and func_def.returns.value is None
+    ):
+        raise ValueError(
+            f"pipeline: @pl.pipeline.stage function '{func_name}' only supports "
+            "a None return annotation; returning values is not supported. Hint: "
+            "Do not write `return <value>`; only use `return` or `return None`. "
+            "Pass output Tensor/Tile/buffer parameters for data results."
+        )
+    for node in ast.walk(func_def):
+        if not isinstance(node, ast.Return):
+            continue
+        if node.value is None:
+            continue
+        if isinstance(node.value, ast.Constant) and node.value.value is None:
+            continue
+        raise ValueError(
+            f"pipeline: @pl.pipeline.stage function '{func_name}' only supports "
+            "bare return or return None; returning values is not supported. "
+            "Hint: Do not write `return <value>`; only use `return` or `return None`. "
+            "Pass output Tensor/Tile/buffer parameters for data results."
+        )
+
+
 def _scan_cross_core(info: PipelineInfo, func_def: ast.FunctionDef,
                      closure_vars: dict):
     """Scan cross-core buffers + each stage's accesses, store into info."""
     from ._cross_core_scanner import (
         scan_cross_core_buffers, scan_all_buffer_memory, scan_stage_accesses,
+        scan_buffer_addr_ranges, detect_addr_overlaps,
     )
+
+    from ._cross_core_scanner import scan_kernel_slot_to_buffer
 
     cross_buffers, lifted_ids = scan_cross_core_buffers(func_def, closure_vars)
     info.sync.buffers = cross_buffers
@@ -145,16 +196,225 @@ def _scan_cross_core(info: PipelineInfo, func_def: ast.FunctionDef,
 
     all_mem = scan_all_buffer_memory(func_def)
     info.sync.all_memory = all_mem
+
+    # Detect address overlaps involving cross-core buffers (for auto-sync of
+    # address-reused buffers). Local-local overlaps are ignored.
+    info.sync.addr_ranges = scan_buffer_addr_ranges(func_def, closure_vars)
+    info.sync.addr_overlaps = detect_addr_overlaps(
+        info.sync.addr_ranges, set(cross_buffers.keys()))
+
     vf_func_defs = _collect_vf_func_defs(info, closure_vars)
 
+    # Slots taken from cross-core buffers in the kernel body (pipeline loop), for
+    # stages that receive a pre-taken slot instead of the buffer group itself.
+    kernel_slot_to_buffer = scan_kernel_slot_to_buffer(func_def, cross_buffers)
+
+    # All @stage function defs (name -> FunctionDef), for recursive sub-stage descent.
+    stage_func_defs = {}
+    for s in info.stages:
+        sfd = _try_get_funcdef(closure_vars.get(s.func_name))
+        if sfd is not None:
+            stage_func_defs[s.func_name] = sfd
+    # Also include sub-stages (not top-level in info.stages) referenced by mix stages.
+    for s in info.stages:
+        for sub_name in s.sub_stages:
+            if sub_name not in stage_func_defs:
+                sfd = _try_get_funcdef(closure_vars.get(sub_name))
+                if sfd is not None:
+                    stage_func_defs[sub_name] = sfd
+
+    overlaps = info.sync.addr_overlaps
     for stage in info.stages:
         if stage.is_mix:
-            _scan_mix_stage(stage, info, closure_vars, cross_buffers, vf_func_defs, all_mem)
+            _scan_mix_stage(stage, info, closure_vars, cross_buffers, vf_func_defs,
+                            all_mem, kernel_slot_to_buffer, stage_func_defs)
         else:
-            fn = closure_vars.get(stage.func_name)
-            fd = _try_get_funcdef(fn)
+            fd = stage_func_defs.get(stage.func_name)
             if fd is not None:
-                stage.cross_core = scan_stage_accesses(fd, cross_buffers, vf_func_defs, all_mem)
+                stage.cross_access = []
+                stage.local_access = {}
+                scan_stage_accesses(
+                    fd, cross_buffers, vf_func_defs, all_mem, overlaps,
+                    stage.cross_access, stage.local_access,
+                    call_args=stage.args, caller_bindings={},
+                    kernel_slot_map=kernel_slot_to_buffer,
+                    stage_func_defs=stage_func_defs)
+
+    # Scenario 2/3: build reverse syncs for address-overlapping buffers in different stages
+    if overlaps:
+        _build_overlap_reverse_syncs(info, closure_vars)
+
+
+def _build_overlap_reverse_syncs(info: PipelineInfo, closure_vars: dict):
+    """Identify scenario 2/3 overlap pairs and build reverse sync descriptors.
+
+    Scenario 2/3: two address-overlapping buffers used in DIFFERENT stages need a
+    backward sync so the earlier-user cannot overwrite the shared region before the
+    later-user finishes. Given a pair (A, B) where A is used before B:
+      - wait: at A's earliest-use stage, using A's first-op pipe there
+      - set:  at B's latest-use stage,  using B's last-op pipe there
+
+    For a cross-core buffer, earliest use = producer stage (W), latest = consumer
+    stage (R). For a local buffer, they are simply the first/last stage it appears
+    in (its ops there are read/written without a producer/consumer split).
+    """
+    # buffer_name -> usage span: (earliest_idx, first_pipe, latest_idx, last_pipe)
+    usage = _build_buffer_usage(info)
+
+    reverse_sync_pairs = []
+    for buf_a, buf_b in info.sync.addr_overlaps:
+        ua = usage.get(buf_a)
+        ub = usage.get(buf_b)
+        if ua is None or ub is None:
+            continue
+
+        # Order the pair by earliest use: `first` is used before `last`.
+        if ua[0] <= ub[0]:
+            (first_idx, wait_pipe, _, _), first_stage = ua, info.stages[ua[0]]
+            (_, _, last_idx, set_pipe), last_stage = ub, info.stages[ub[2]]
+        else:
+            (first_idx, wait_pipe, _, _), first_stage = ub, info.stages[ub[0]]
+            (_, _, last_idx, set_pipe), last_stage = ua, info.stages[ua[2]]
+
+        # Same stage on both ends → scenario 1 (handled by _extend_last_pipe)
+        if first_idx == last_idx:
+            continue
+        if wait_pipe is None or set_pipe is None:
+            continue
+
+        # slot_count: both sides have the same count (validated earlier)
+        slot_count = len(info.sync.addr_ranges[buf_a][1])
+
+        reverse_sync_pairs.append({
+            "first_stage": first_stage.func_name,
+            "last_stage": last_stage.func_name,
+            "wait_pipe": wait_pipe,
+            "set_pipe": set_pipe,
+            "set_section_kind": last_stage.section_kind,
+            "slot_count": slot_count,
+            "stage_gap": last_idx - first_idx,
+        })
+
+    # Step 2: allocate event ids for each reverse sync
+    _allocate_overlap_event_ids(info, reverse_sync_pairs)
+
+    # Step 3: lift event ids to variables and build OverlapReverseSync dataclass objects
+    from ._cross_core_scanner import OverlapReverseSync
+    syncs = []
+    for i, p in enumerate(reverse_sync_pairs):
+        var_name = f"_pl_overlap_ids_{i}"
+        literal_node = ast.List(
+            elts=[ast.Constant(value=v) for v in p["event_ids"]], ctx=ast.Load())
+        info.sync.lifted_ids.append((var_name, literal_node))
+        syncs.append(OverlapReverseSync(
+            first_stage=p["first_stage"],
+            last_stage=p["last_stage"],
+            wait_pipe=p["wait_pipe"],
+            set_pipe=p["set_pipe"],
+            set_section_kind=p["set_section_kind"],
+            slot_count=p["slot_count"],
+            stage_gap=p["stage_gap"],
+            event_ids=p["event_ids"],
+            event_ids_var=var_name,
+        ))
+    info.sync.overlap_reverse_syncs = syncs
+
+
+def _build_buffer_usage(info: PipelineInfo) -> dict:
+    """Map each buffer touched by a stage to its usage span across stages:
+        buffer_name -> (earliest_idx, first_pipe, latest_idx, last_pipe)
+    where first_pipe is the pipe of its first op at the earliest stage, and
+    last_pipe is the pipe of its last op at the latest stage.
+
+    Cross-core buffers report pipes from cross_access; local overlapping buffers
+    from local_access. A buffer appearing in multiple stages spans earliest→latest.
+    """
+    usage: dict[str, tuple[int, str, int, str]] = {}
+    for idx, stage in enumerate(info.stages):
+        # cross-core accesses: (buffer_name, first_pipe, last_pipe)
+        touched = [(acc.buffer_name, acc.first_pipe, acc.last_pipe)
+                   for acc in stage.cross_access]
+        # local overlapping accesses: buffer_name -> (first_pipe, last_pipe)
+        touched += [(name, fp, lp) for name, (fp, lp) in stage.local_access.items()]
+
+        for name, first_pipe, last_pipe in touched:
+            existing = usage.get(name)
+            if existing is None:
+                usage[name] = (idx, first_pipe, idx, last_pipe)
+            else:
+                e_idx, e_fp, l_idx, l_lp = existing
+                if idx < e_idx:
+                    e_idx, e_fp = idx, first_pipe
+                if idx > l_idx:
+                    l_idx, l_lp = idx, last_pipe
+                usage[name] = (e_idx, e_fp, l_idx, l_lp)
+    return usage
+
+
+def _collect_used_event_ids(info: PipelineInfo) -> set:
+    """Collect all event ids already used by cross-core buffers' fwd/bwd ids.
+
+    The real literal id lists live in info.sync.lifted_ids (fwd/bwd nodes on the
+    buffers were replaced with variable names)."""
+    used = set()
+    for _var, node in info.sync.lifted_ids:
+        if isinstance(node, (ast.List, ast.Tuple)):
+            for e in node.elts:
+                if isinstance(e, ast.Constant) and isinstance(e.value, int):
+                    used.add(e.value)
+    return used
+
+
+def _allocate_overlap_event_ids(info: PipelineInfo, reverse_sync_pairs: list):
+    """Allocate event ids (0-15) for each reverse sync, filling each pair's
+    'event_ids' key with a list of ints.
+
+    Strategy:
+      1. Each pair needs slot_count ids by default.
+      2. Allocate from unused ids (0-15) in order.
+      3. If not enough: degrade pairs (share 1 id across all slots) from smallest
+         slot_count up, logging a warning each time.
+      4. If all degraded to 1 id each and still not enough: raise.
+    """
+    if not reverse_sync_pairs:
+        return
+
+    max_event_id = 16
+    used = _collect_used_event_ids(info)
+    free = [i for i in range(max_event_id) if i not in used]
+
+    # How many ids each pair wants (default: slot_count). May be degraded to 1.
+    wants = [p["slot_count"] for p in reverse_sync_pairs]
+
+    # Degrade (smallest slot_count first) until total demand fits in free ids.
+    # Sort indices by slot_count ascending for degradation order.
+    order = sorted(range(len(reverse_sync_pairs)), key=lambda i: wants[i])
+    deg_ptr = 0
+    while sum(wants) > len(free) and deg_ptr < len(order):
+        idx = order[deg_ptr]
+        if wants[idx] > 1:
+            import logging
+            logging.warning(
+                f"pipeline: not enough event ids for address-overlap reverse sync; "
+                f"degrading pair ({reverse_sync_pairs[idx]['first_stage']} -> "
+                f"{reverse_sync_pairs[idx]['last_stage']}) from {wants[idx]} ids to 1 "
+                f"(slots will serialize, correctness preserved)."
+            )
+            wants[idx] = 1
+        deg_ptr += 1
+
+    if sum(wants) > len(free):
+        raise ValueError(
+            f"pipeline: not enough free event ids (0-{max_event_id - 1}) for "
+            f"address-overlap reverse syncs. Need {sum(wants)}, have {len(free)} free "
+            f"(used: {sorted(used)}). Reduce cross-core buffer id usage or overlaps."
+        )
+
+    # Allocate from free ids in order
+    cursor = 0
+    for p, n in zip(reverse_sync_pairs, wants):
+        p["event_ids"] = free[cursor:cursor + n]
+        cursor += n
 
 
 def _collect_vf_func_defs(info: PipelineInfo, closure_vars: dict) -> dict[str, ast.FunctionDef]:
@@ -190,21 +450,42 @@ def _collect_vf_func_defs(info: PipelineInfo, closure_vars: dict) -> dict[str, a
 
 
 def _scan_mix_stage(stage, info: PipelineInfo, closure_vars: dict,
-                    cross_buffers: dict, vf_func_defs: dict, all_mem: dict):
-    """Scan a mix stage's sub-stages, classify buffers as inner/outer."""
-    from ._cross_core_scanner import scan_stage_accesses
+                    cross_buffers: dict, vf_func_defs: dict, all_mem: dict,
+                    kernel_slot_to_buffer: dict, stage_func_defs: dict):
+    """Scan a mix stage's sub-stages, classify buffers as inner/outer.
+
+    Uses the binding mechanism so cross-core buffers are tracked regardless of
+    formal parameter names, and through any nesting / slot / alias forms:
+      - mix_bindings: resolved from the mix stage's own call site (main loop)
+      - each sub-stage's bindings: resolved from the sub-stage call inside the
+        mix body, using mix_bindings for pass-through params.
+    """
+    from ._cross_core_scanner import scan_stage_accesses, build_binding_map
 
     mix_fn = closure_vars.get(stage.func_name)
     mix_fd = _try_get_funcdef(mix_fn)
 
+    # Bindings for the mix stage itself, from its main-loop call site.
+    mix_bindings = {}
+    if mix_fd is not None:
+        mix_bindings = build_binding_map(
+            mix_fd, stage.args, {}, kernel_slot_to_buffer, cross_buffers)
+
     sub_accesses = {}
     for sub_name in stage.sub_stages:
-        sub_fn = closure_vars.get(sub_name)
-        sub_fd = _try_get_funcdef(sub_fn)
+        sub_fd = stage_func_defs.get(sub_name)
         if sub_fd is None:
             continue
-        sub_accesses[sub_name] = scan_stage_accesses(
-            sub_fd, cross_buffers, vf_func_defs, all_mem)
+        # Find this sub-stage's call node inside the mix body to get its actual args.
+        sub_call_args = _find_sub_stage_call_args(mix_fd, sub_name) if mix_fd else None
+        acc_list = []
+        scan_stage_accesses(
+            sub_fd, cross_buffers, vf_func_defs, all_mem,
+            cross_access_out=acc_list,
+            call_args=sub_call_args, caller_bindings=mix_bindings,
+            kernel_slot_map=kernel_slot_to_buffer,
+            stage_func_defs=stage_func_defs)
+        sub_accesses[sub_name] = acc_list
 
     # Tag each access with the section_kind of the sub-stage it happens in, so
     # outer-buffer sync (set/wait around the mix call) can be wrapped in the
@@ -231,7 +512,7 @@ def _scan_mix_stage(stage, info: PipelineInfo, closure_vars: dict,
                                    sub_accesses, stage, closure_vars, info)
         else:
             stage.outer_accesses.extend(buf_access_map.get(buf_name, []))
-    stage.cross_core = stage.outer_accesses
+    stage.cross_access = stage.outer_accesses
 
 
 def _record_inner_consumer(buf_name: str, accesses: list, sub_accesses: dict,
@@ -310,13 +591,16 @@ def _record_pipeline_loop_info(stmt: ast.For, stmts: list[ast.stmt],
 
 
 def _collect_mid_loop_assigns(stmts: list[ast.stmt]) -> dict[str, ast.expr]:
-    """Collect mid-loop scalar assignments: name -> rhs AST node.
+    """Collect mid-loop scalar assignments in the pipeline loop body: name -> rhs AST.
 
-    Walks the pipeline loop body (including nested sections/if/for) and records
-    simple `name = expr` assignments. Excludes:
-      - slot accessor results (e.g. `slot = buf.next()`)
-      - self-referencing accumulators (e.g. `tick = tick + 1`)
+    Records every simple `name = expr` assignment (single Name target, excluding
+    method-call results like `slot = buf.next()`). Self-referencing accumulators
+    (e.g. `tick = tick + 1`) are included — the caller uses the `changing` set and
+    self-reference check to decide how to handle each entry.
+
     Only the LAST assignment to a given name is kept (matching runtime semantics).
+    Recurses into section blocks and if/else branches (not into nested for-loops,
+    which are not part of the pipeline loop body proper).
     """
     result: dict[str, ast.expr] = {}
     for stmt in stmts:
@@ -324,11 +608,8 @@ def _collect_mid_loop_assigns(stmts: list[ast.stmt]) -> dict[str, ast.expr]:
             target = stmt.targets[0]
             if not isinstance(target, ast.Name):
                 continue
+            # Exclude method-call results (e.g. cur_k = k_l1_db.next())
             if isinstance(stmt.value, ast.Call) and isinstance(stmt.value.func, ast.Attribute):
-                continue
-            # Exclude self-referencing (loop-carried accumulator)
-            rhs_names = _names_in_expr(stmt.value)
-            if target.id in rhs_names:
                 continue
             result[target.id] = stmt.value
         elif isinstance(stmt, ast.With):
@@ -759,6 +1040,16 @@ def _find_sub_stage_section_in_body(mix_fd: ast.FunctionDef, sub_name: str) -> s
     return None
 
 
+def _find_sub_stage_call_args(mix_fd: ast.FunctionDef, sub_name: str) -> list | None:
+    """Find the call-site args (list of AST nodes) of a sub-stage call inside a mix
+    func body. Returns None if not found."""
+    for node in ast.walk(mix_fd):
+        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                and node.func.id == sub_name):
+            return node.args
+    return None
+
+
 def _check_alternating(info: PipelineInfo):
     """C5: verify the stage chain strictly alternates cube/vector."""
     stages = info.stages
@@ -778,7 +1069,7 @@ def _check_single_producer_consumer(info: PipelineInfo):
     producers: dict[str, list[str]] = {}
     consumers: dict[str, list[str]] = {}
     for stage in info.stages:
-        for acc in stage.cross_core:
+        for acc in stage.cross_access:
             tbl = producers if acc.role == AccessRole.WRITE else consumers
             tbl.setdefault(acc.buffer_name, []).append(stage.func_name)
     for buf, prods in producers.items():

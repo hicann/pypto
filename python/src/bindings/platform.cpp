@@ -28,5 +28,9 @@ void BindPlatform(py::module_& m)
      }).def("SetNPUArch", [](const std::string& value) { Platform::Instance().GetSoc().SetNPUArch(value); });
 
     m.def("GetAICoreNum", []() -> size_t { return Platform::Instance().GetSoc().GetAICoreNum(); });
+
+    m.def("GetAICCoreNum", []() -> size_t { return Platform::Instance().GetSoc().GetAICCoreNum(); });
+
+    m.def("GetAIVCoreNum", []() -> size_t { return Platform::Instance().GetSoc().GetAIVCoreNum(); });
 }
 } // namespace pypto

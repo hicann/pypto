@@ -4,7 +4,7 @@
  * CANN Open Software License Agreement Version 2.0 (the "License").
  * Please refer to the License for details. You may not use this file except in compliance with the License.
  * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
- * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 
@@ -37,11 +37,10 @@ void BackendRegistry::Register(const std::string& type_name, CreateFunc func)
 
 std::unique_ptr<Backend> BackendRegistry::Create(const std::string& type_name, const std::shared_ptr<const SoC>& soc)
 {
-    // For singleton backends, we cannot create new instances
     (void)type_name;
     (void)soc;
     throw ir::ValueError("Cannot create backend instances via registry - backends are singletons. "
-                         "Use Backend910B_CCE::Instance() instead.");
+                         "Use BackendCCE::Instance() instead.");
 }
 
 bool BackendRegistry::IsRegistered(const std::string& type_name) const
@@ -51,27 +50,23 @@ bool BackendRegistry::IsRegistered(const std::string& type_name) const
 
 std::unique_ptr<Backend> CreateBackendFromRegistry(const std::string& type_name, const std::shared_ptr<const SoC>& soc)
 {
-    // For singleton backends, we cannot create new instances
     (void)type_name;
     (void)soc;
     throw ir::ValueError("Cannot create backend instances via registry - backends are singletons. "
-                         "Use Backend910B_CCE::Instance() instead.");
+                         "Use BackendCCE::Instance() instead.");
 }
 
-// Auto-register Backend910B_CCE
 namespace {
-bool RegisterBackend910B_CCE()
+bool RegisterBackendCCE()
 {
-    // Backend910B_CCE is a singleton, no need to register factory function
-    // Registration is kept for backward compatibility but Create() will fail
-    BackendRegistry::Instance().Register("910B_CCE", [](const std::shared_ptr<const SoC>& /*unused*/) {
-        throw ir::ValueError("Cannot create Backend910B_CCE via registry - use Backend910B_CCE::Instance()");
-        return std::unique_ptr<Backend>(nullptr); // Never reached
+    BackendRegistry::Instance().Register("CCE", [](const std::shared_ptr<const SoC>& /*unused*/) {
+        throw ir::ValueError("Cannot create BackendCCE via registry - use BackendCCE::Instance()");
+        return std::unique_ptr<Backend>(nullptr);
     });
     return true;
 }
 
-static bool backend_910b_cce_registered = RegisterBackend910B_CCE();
+static bool backend_cce_registered = RegisterBackendCCE();
 } // namespace
 
 } // namespace backend
