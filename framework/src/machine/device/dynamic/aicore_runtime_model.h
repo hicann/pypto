@@ -21,7 +21,9 @@
 #include "machine/device/dynamic/eslmodel_manager.h"
 #include "machine/simulation/aicore_hardware.h"
 #include "interface/machine/device/tilefwk/aicpu_common.h"
+#ifndef __DEVICE__
 #include "adapter/api/runtime_api.h"
+#endif
 
 namespace npu::tile_fwk::dynamic {
 
@@ -202,6 +204,7 @@ public:
 
     bool TryHandShakeByGm(volatile KernelArgs* arg, int64_t dotStatus, int32_t& phyId) override
     {
+#ifndef __DEVICE__
         KernelArgs hostArgs;
         RuntimeMemcpyDirect(&hostArgs, sizeof(KernelArgs), reinterpret_cast<uint8_t*>(PtrToValue((const volatile void*)arg)), sizeof(KernelArgs),
                       RtMemcpyKind::DEVICE_TO_HOST);
@@ -214,6 +217,12 @@ public:
         RuntimeMemcpyDirect(reinterpret_cast<uint8_t*>(PtrToValue(arg)), sizeof(KernelArgs), &hostArgs, sizeof(KernelArgs),
                       RtMemcpyKind::HOST_TO_DEVICE);
         return true;
+#else
+        (void)arg;
+ 	    (void)dotStatus;
+ 	    (void)phyId;
+ 	    return false;
+#endif
     }
 
     void InitKernelArgs(volatile KernelArgs*& arg, int coreIdx, int64_t sharedBuffer, int64_t buffer) override
@@ -222,9 +231,11 @@ public:
         if (arg == nullptr) {
             arg = GetKernelArgsByCore(coreIdx, sharedBuffer);
         }
+#ifndef __DEVICE__
         int64_t valToSend = 0;
         RuntimeMemcpyDirect(reinterpret_cast<uint8_t*>(PtrToValue(&arg->shakeBufferCpuToCore[CPU_TO_CORE_SHAK_BUF_COREFUNC_DATA_INDEX])),
                       sizeof(valToSend), &valToSend, sizeof(valToSend), RtMemcpyKind::HOST_TO_DEVICE);
+#endif
     }
 
     void SetParallelDevTask(
