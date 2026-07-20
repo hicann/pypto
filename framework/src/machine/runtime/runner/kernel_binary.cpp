@@ -46,7 +46,7 @@ KernelBinary::KernelBinary(std::shared_ptr<Function> func) : dynFunc(func)
     auto aicpuArgs = (AiCpuArgs*)aicpuArgBuf.data();
     DeviceLauncher::FillSwimLaneEnableInfo(toSubMachineConfig_);
     if (config::GetRuntimeOption<int64_t>(CFG_RUN_MODE) == CFG_RUN_MODE_SIM) {
-        EslModelMemoryUtils eslMemoryUtils{true, false};
+        EslModelMemoryUtils eslMemoryUtils{true, IsLiteNPU(Platform::Instance().GetSoc().GetNPUArch()) ? false : true};
         DeviceLauncher::FillDeviceKernelArgs(eslMemoryUtils, dynAttr->devProgBinary, aicpuArgs->kArgs,
                                              dynAttr->commGroupNames);
     } else {
@@ -111,7 +111,8 @@ uint8_t* KernelBinary::BuildControlFlowCache(std::vector<DeviceTensorData>& inpu
     size_t inputCount = dynAttr->startArgsInputTensorList.size();
     std::vector<DeviceTensorData> inputList(inputs.begin(), inputs.begin() + inputCount);
     std::vector<DeviceTensorData> outputList(inputs.begin() + inputCount, inputs.end());
-    int ret = EmulationLauncher::BuildControlFlowCache(dynFunc.get(), memUtils, inputList, outputList, &ctrlCache, config);
+    int ret = EmulationLauncher::BuildControlFlowCache(dynFunc.get(), memUtils, inputList, outputList, &ctrlCache,
+                                                       config);
     if (ret != 0) {
         COMPILER_LOGE(CtrlErr::DEVICE_TASK_BUILD_FAILED, "control flow cache failed %d", ret);
         return nullptr;
