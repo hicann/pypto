@@ -747,8 +747,8 @@ void AsinAcosOperationTileFunc(Function& function, const TileShape& tileShape,
     auto repeatElems = REPEAT_BYTE / BytesOf(DT_FP32);
     int64_t tmpW = (shape[dim - 1] + repeatElems - 1) / repeatElems * repeatElems;
     int64_t tmpH = (dim >= 2) ? shape[dim - 2] : 1;
-    // 5 个 H x W 中间块
-    uint64_t intermediateBytes = static_cast<uint64_t>(BytesOf(DT_FP32)) * 5 * tmpH * tmpW;
+    // 3 H x W tile and 1 mask tile
+    uint64_t intermediateBytes = static_cast<uint64_t>(BytesOf(DT_FP32)) * 4 * tmpH * tmpW;
     return TiledUnaryOperation<T>(function, tileShape, iOperand[0], oOperand[0], intermediateBytes);
 }
 
