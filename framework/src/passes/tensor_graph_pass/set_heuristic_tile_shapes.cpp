@@ -264,7 +264,7 @@ void AdjustTileToUB(Operation* op, Shape& vectorTilesNew)
         if (d >= vectorTilesNew.size()) {
             return; // impossible case if UB_MAX_SIZE!=0
         }
-        vectorTilesNew[d] /= 2;
+        vectorTilesNew[d] /= NUM2;
         vectorTilesOut = vectorTilesNew;
         RecalcTileThroughOps(op, vectorTilesOut, true);
         memUsed = MemUsedCalculation(op, vectorTilesNew, vectorTilesOut);
@@ -472,7 +472,6 @@ static std::vector<uint32_t> PrepareAssembleTileBase(Operation* op, const std::v
     auto outShape = op->GetOOperands()[0]->shape;
     ASSERT(inShape.size() == outShape.size()) << "VIEW have different number of dimension in input and output "
                                               << inShape.size() << " vs " << outShape.size() << "\n";
-
     vectorTilesNew.resize(vectorTilesOld.size());
     vectorTilesNew = vectorTilesOld;
     return FindChangedDims(inShape, outShape);
@@ -701,7 +700,7 @@ static int32_t FindReducedDimension(Operation* op, const std::vector<int64_t>& m
             reducedDim = i;
         } else if ((maxInputShape[i] != op->GetOOperands()[0]->shape[i]) && (op->GetOOperands()[0]->shape[i] == 1) &&
                    (reducedDim != -1)) {
-            return -2;
+            return -NUM2;
         }
     }
     return reducedDim;
@@ -757,7 +756,7 @@ void ReduceTileSetting(Operation* op, std::vector<int64_t>& vectorTilesNew)
     ASSERT(outputsNum == 1) << "Reduce have several outputs";
     ASSERT(inputDims == outputDims) << "Reduce have different shape size for input and output";
     int32_t reducedDim = FindReducedDimension(op, maxInputShape, inputDims);
-    if (reducedDim == -2) {
+    if (reducedDim == -NUM2) {
         return;
     }
     ASSERT(reducedDim >= 0) << "Not found reduced dims";
@@ -1016,7 +1015,7 @@ void Propagate(Operation* consumerOp, Operation* op)
 }
 
 void BackwardPropagation(std::vector<Operation*> orderedOperations, std::queue<Operation*>& queueBFS,
-                         std::map<int, bool>& visitedBFS)
+                         std::map<int, bool>& visitedNodesBFS)
 {
     for (auto cubeOp : orderedOperations) {
         queueBFS.push(cubeOp);
@@ -1028,7 +1027,7 @@ void BackwardPropagation(std::vector<Operation*> orderedOperations, std::queue<O
                     singletonTileHandlers.find(producerOp->GetOpcode()) != singletonTileHandlers.end()) {
                     continue;
                 }
-                bool isContinue = DuplicateTileSetting(op, producerOp, queueBFS, visitedBFS);
+                bool isContinue = DuplicateTileSetting(op, producerOp, queueBFS, visitedNodesBFS);
                 if (isContinue) {
                     continue;
                 }
@@ -1037,16 +1036,16 @@ void BackwardPropagation(std::vector<Operation*> orderedOperations, std::queue<O
                 }
                 BackPropagate(producerOp, op);
 
-                // Update queueBFS and visitedBFS
-                UpdateBFS(producerOp, queueBFS, visitedBFS);
+                // Update queueBFS and visitedNodesBFS
+                UpdateBFS(producerOp, queueBFS, visitedNodesBFS);
             }
         }
-        visitedBFS.clear();
+        visitedNodesBFS.clear();
     }
 }
 
 void ForwardPropagation(std::vector<Operation*> orderedOperations, std::queue<Operation*>& queueBFS,
-                        std::map<int, bool>& visitedBFS)
+                        std::map<int, bool>& visitedNodesBFS)
 {
     for (auto cubeOp : orderedOperations) {
         queueBFS.push(cubeOp);
@@ -1061,7 +1060,7 @@ void ForwardPropagation(std::vector<Operation*> orderedOperations, std::queue<Op
                 // Only skip propagation if op is NOT a cube op and vecTile is unset
                 if ((op->GetTileShape().GetVecTile().size() == 1) && (op->GetTileShape().GetVecTile()[0] == -1) &&
                     (cubeMMOps.find(op->GetOpcode()) == cubeMMOps.end())) {
-                    UpdateBFS(consumerOp, queueBFS, visitedBFS);
+                    UpdateBFS(consumerOp, queueBFS, visitedNodesBFS);
                     continue;
                 }
                 // For cube ops, set vecTile from cubeTile (m, n dimensions)
@@ -1069,17 +1068,16 @@ void ForwardPropagation(std::vector<Operation*> orderedOperations, std::queue<Op
                     CubeOutDepsProcessing(op);
                 }
                 auto prevTile = consumerOp->GetTileShape().GetVecTile();
-                // Find the maximum values of the shape dimensions among the outputs, to find the maximum boundary of
-                // the tile values
+                // Find max values of the shape dimensions among the outputs, to find max boundary of the tile values
                 Propagate(consumerOp, op);
                 if ((consumerOp->GetTileShape().GetVecTile().size() == 1) &&
                     (consumerOp->GetTileShape().GetVecTile()[0] == -1)) {
                     continue;
                 }
                 if (prevTile.size() != consumerOp->GetTileShape().GetVecTile().size()) {
-                    visitedBFS[consumerOp->GetOpMagic()] = false;
-                    // Update queueBFS and visitedBFS
-                    UpdateBFS(consumerOp, queueBFS, visitedBFS);
+                    visitedNodesBFS[consumerOp->GetOpMagic()] = false;
+                    // Update queueBFS and visitedNodesBFS
+                    UpdateBFS(consumerOp, queueBFS, visitedNodesBFS);
                     continue;
                 }
                 size_t di = 0;
@@ -1087,14 +1085,14 @@ void ForwardPropagation(std::vector<Operation*> orderedOperations, std::queue<Op
                     di++;
                 }
                 if (di < prevTile.size()) {
-                    visitedBFS[consumerOp->GetOpMagic()] = false;
+                    visitedNodesBFS[consumerOp->GetOpMagic()] = false;
                 }
 
-                // Update queueBFS and visitedBFS
-                UpdateBFS(consumerOp, queueBFS, visitedBFS);
+                // Update queueBFS and visitedNodesBFS
+                UpdateBFS(consumerOp, queueBFS, visitedNodesBFS);
             }
         }
-        visitedBFS.clear();
+        visitedNodesBFS.clear();
     }
 }
 
@@ -1104,8 +1102,7 @@ void SetReduceTiles(std::vector<Operation*> reduceOrderedOperations)
         size_t inputsNum = op->GetIOperands().size();
         size_t inputDims = DimsCalculation(op, inputsNum, true);
         std::vector<int64_t> vectorTilesReduce(inputDims, 1);
-        // Find the maximum values of the shape dimensions among the inputs, to find the maximum boundary of the tile
-        // values
+        // Find max values of the shape dimensions among the inputs, to find max boundary of the tile values
         std::vector<int64_t> maxInputShape = MaxInputShapeCalculation(op, inputsNum, inputDims);
         auto handlerIt = singletonTileHandlers.find(op->GetOpcode());
         if (handlerIt != singletonTileHandlers.end()) {
@@ -1169,7 +1166,7 @@ std::vector<Operation*> FillNoConsumersOperations(Function& function)
 }
 
 void BackwardNoConsumersPropagation(std::vector<Operation*> noConsumersOperations, std::queue<Operation*>& queueBFS,
-                                    std::map<int, bool>& visitedBFS)
+                                    std::map<int, bool>& visitedNodesBFS)
 {
     for (auto noConsumerOp : noConsumersOperations) {
         queueBFS.push(noConsumerOp);
@@ -1179,21 +1176,21 @@ void BackwardNoConsumersPropagation(std::vector<Operation*> noConsumersOperation
             for (auto producerOp : op->ProducerOps()) {
                 bool isVisitedNode = (producerOp->GetTileShape().GetVecTile()[0] != -1);
                 if (isVisitedNode) {
-                    // Update queueBFS and visitedBFS
-                    UpdateBFS(producerOp, queueBFS, visitedBFS);
+                    // Update queueBFS and visitedNodesBFS
+                    UpdateBFS(producerOp, queueBFS, visitedNodesBFS);
                     continue;
                 }
-                bool isContinue = DuplicateTileSetting(op, producerOp, queueBFS, visitedBFS);
+                bool isContinue = DuplicateTileSetting(op, producerOp, queueBFS, visitedNodesBFS);
                 if (isContinue) {
                     continue;
                 }
                 // Call propagation
                 BackPropagate(producerOp, op);
-                // Update queueBFS and visitedBFS
-                UpdateBFS(producerOp, queueBFS, visitedBFS);
+                // Update queueBFS and visitedNodesBFS
+                UpdateBFS(producerOp, queueBFS, visitedNodesBFS);
             }
         }
-        visitedBFS.clear();
+        visitedNodesBFS.clear();
     }
 }
 
@@ -1211,7 +1208,7 @@ void SetHeuristicVectorTiles(Function& function, const std::set<Operation*>& cub
     }
     // Define auxiliary data structures
     std::queue<Operation*> queueBFS;
-    std::map<int, bool> visitedBFS;
+    std::map<int, bool> visitedNodesBFS;
     // Sort reduce operations by depth
     std::vector<std::pair<Operation*, int>> reduceTmpOperations;
     for (auto& op : function.Operations()) {
@@ -1233,13 +1230,13 @@ void SetHeuristicVectorTiles(Function& function, const std::set<Operation*>& cub
                                                               op);
     }
     for (auto pOps : priorOps) {
-        BackwardPropagation(pOps.second, queueBFS, visitedBFS);
-        ForwardPropagation(pOps.second, queueBFS, visitedBFS);
+        BackwardPropagation(pOps.second, queueBFS, visitedNodesBFS);
+        ForwardPropagation(pOps.second, queueBFS, visitedNodesBFS);
     }
     std::vector<int64_t> vectorTilesNew;
     // 3. Backward propagation Matmul (need to set tiles for rest -1 tiles), Start from nodes without consumers
     std::vector<Operation*> noConsumersOperations = FillNoConsumersOperations(function);
-    BackwardNoConsumersPropagation(noConsumersOperations, queueBFS, visitedBFS);
+    BackwardNoConsumersPropagation(noConsumersOperations, queueBFS, visitedNodesBFS);
 }
 
 void GenerateJsonForPython(Function& function)
