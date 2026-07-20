@@ -13,6 +13,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include "ir/expr.h"
@@ -21,6 +22,7 @@
 
 namespace npu::tile_fwk {
 
+class ConfigScope;
 class Function;
 class LogicalTensor;
 class Program;
@@ -57,6 +59,9 @@ private:
     pypto::ir::StmtPtr FinalizePathFunc(const pypto::ir::StmtPtr& placeholder);
 
     std::shared_ptr<Function> CreateHiddenFunc(const pypto::ir::SeqStmtsPtr& seq, const std::string& loopVarName);
+    std::pair<LogicalTensors, LogicalTensors> FinalizeHiddenFunc(Function* hiddenFunc,
+                                                                 const pypto::ir::StmtPtr& placeholder);
+    void AddHiddenFuncValueDepend(Function* hiddenFunc);
     void CreateAndFinalizePathFunc(Function* pathFunc, Function* hiddenFunc, const LogicalTensors& hiddenInArgs,
                                    const LogicalTensors& hiddenOutArgs, const pypto::ir::StmtPtr& placeholder);
     pypto::ir::StmtPtr ProcessTensorOp(std::shared_ptr<Function> pathFunc, const pypto::ir::StmtPtr& stmt,
@@ -75,6 +80,7 @@ private:
     std::vector<std::vector<pypto::ir::StmtPtr>> SplitIntoTensorOpSegments(const pypto::ir::SeqStmtsPtr& seq);
     bool IsPlaceholderCallStmt(const pypto::ir::StmtPtr& stmt);
     std::string GetPlaceholderFuncname(const pypto::ir::StmtPtr& stmt);
+    std::shared_ptr<ConfigScope> GetPlaceholderConfigScope(const pypto::ir::StmtPtr& stmt);
     std::unordered_set<std::shared_ptr<LogicalTensor>> CollectAllOutputs(Function& pathFunc);
     void DumpFunctionGraph(Function* func);
 };

@@ -31,6 +31,20 @@ using namespace pypto;
 
 namespace npu::tile_fwk {
 
+namespace {
+template <typename T>
+T GetPlaceholderAttr(const ir::StmtPtr& stmt, const std::string& attrName, const T& defaultValue = T{})
+{
+    auto tensorOp = std::static_pointer_cast<const ir::TensorOpStmt>(stmt);
+    for (const auto& [key, value] : tensorOp->attrs_) {
+        if (key == attrName) {
+            return std::any_cast<T>(value);
+        }
+    }
+    return defaultValue;
+}
+} // namespace
+
 RootFunctionBuilder::RootFunctionBuilder(Function* parentFunc)
     : program_(Program::GetInstance()), parentFunc_(parentFunc)
 {}
@@ -305,13 +319,12 @@ bool RootFunctionBuilder::IsPlaceholderCallStmt(const ir::StmtPtr& stmt)
 
 std::string RootFunctionBuilder::GetPlaceholderFuncname(const ir::StmtPtr& stmt)
 {
-    auto tensorOp = std::static_pointer_cast<const ir::TensorOpStmt>(stmt);
-    for (auto& [key, value] : tensorOp->attrs_) {
-        if (key == "placeholder_funcname") {
-            return std::any_cast<std::string>(value);
-        }
-    }
-    return "";
+    return GetPlaceholderAttr<std::string>(stmt, "placeholder_funcname");
+}
+
+std::shared_ptr<ConfigScope> RootFunctionBuilder::GetPlaceholderConfigScope(const ir::StmtPtr& stmt)
+{
+    return GetPlaceholderAttr<std::shared_ptr<ConfigScope>>(stmt, "config_scope");
 }
 
 std::unordered_set<std::shared_ptr<LogicalTensor>> RootFunctionBuilder::CollectAllOutputs(Function& pathFunc)
@@ -334,11 +347,26 @@ ir::StmtPtr RootFunctionBuilder::CreatePathFuncAndPlaceholder(const ir::SeqStmts
         consumedRawMagics_.insert(incast->GetRawMagic());
     }
 
-    auto placeholderStmt = std::make_shared<ir::TensorOpStmt>(
-        std::vector<ir::VarPtr>{}, nullptr, "CALL", std::vector<ir::ExprPtr>{}, std::vector<ir::VarPtr>{},
-        std::vector<std::pair<std::string, std::any>>{{"placeholder_funcname", pathFunc->GetMagicName()}}, seq->span_);
+    auto placeholderStmt = std::make_shared<ir::TensorOpStmt>(std::vector<ir::VarPtr>{}, nullptr, "CALL",
+                                                              std::vector<ir::ExprPtr>{}, std::vector<ir::VarPtr>{},
+                                                              std::vector<std::pair<std::string, std::any>>{
+                                                                  {"placeholder_funcname", pathFunc->GetMagicName()},
+                                                                  {"config_scope", ConfigManagerNg::CurrentScope()},
+                                                              },
+                                                              seq->span_);
 
     return placeholderStmt;
+}
+
+void RootFunctionBuilder::AddHiddenFuncValueDepend(Function* hiddenFunc)
+{
+    auto currDynFunc = program_.GetCurrentDynamicFunction();
+    FE_ASSERT(FeError::INVALID_PTR, currDynFunc != nullptr) << "CurrentDynamicFunction is nullptr";
+    auto dynAttr = currDynFunc->GetDyndevAttribute();
+    FE_ASSERT(FeError::INVALID_PTR, dynAttr != nullptr) << "DyndevAttribute is nullptr";
+    auto iodescDict = hiddenFunc->GetTensorDataForTensorGraph();
+    hiddenFunc->GetTensorDataRefreshIO(iodescDict);
+    dynAttr->valueDependDescDict[hiddenFunc] = hiddenFunc->LookupValueDepend();
 }
 
 void RootFunctionBuilder::CreateAndFinalizePathFunc(Function* pathFunc, Function* hiddenFunc,
@@ -372,14 +400,7 @@ void RootFunctionBuilder::CreateAndFinalizePathFunc(Function* pathFunc, Function
         }
     }
 
-    // 4. Add valueDepend of hiddenFunc to DynamicFunction
-    auto currDynFunc = program_.GetCurrentDynamicFunction();
-    FE_ASSERT(FeError::INVALID_PTR, currDynFunc != nullptr) << "CurrentDynamicFunction is nullptr";
-    auto dynAttr = currDynFunc->GetDyndevAttribute();
-    FE_ASSERT(FeError::INVALID_PTR, dynAttr != nullptr) << "DyndevAttribute is nullptr";
-    auto iodescDict = hiddenFunc->GetTensorDataForTensorGraph();
-    hiddenFunc->GetTensorDataRefreshIO(iodescDict);
-    dynAttr->valueDependDescDict[hiddenFunc] = hiddenFunc->LookupValueDepend();
+    AddHiddenFuncValueDepend(hiddenFunc);
 
     for (auto& incast : pathFunc->GetIncast())
         pathFunc->params_.push_back(std::static_pointer_cast<const ir::Var>(incast));
@@ -394,6 +415,43 @@ void RootFunctionBuilder::CreateAndFinalizePathFunc(Function* pathFunc, Function
     pathFunc->ComputeHash();
     DumpFunctionGraph(pathFunc);
     program_.GetFunctionCache().Insert(pathFunc->GetFunctionHash(), *pathFunc);
+}
+
+std::pair<LogicalTensors, LogicalTensors> RootFunctionBuilder::FinalizeHiddenFunc(Function* hiddenFunc,
+                                                                                  const ir::StmtPtr& placeholder)
+{
+    auto allOutputs = CollectAllOutputs(*hiddenFunc);
+    ComputeOutcast(*hiddenFunc, allOutputs);
+    auto hiddenScope = std::make_shared<TensorSlotScope>(hiddenFunc);
+    hiddenFunc->SetSlotScope(hiddenScope);
+    program_.GetTensorSlotManager()->scopeList.push_back(hiddenScope);
+
+    BuildPathFuncSlotScope(hiddenFunc, hiddenScope, hiddenFunc->GetOriginIncast(), hiddenFunc->GetOriginOutcast());
+
+    auto hiddenInArgs = hiddenFunc->MakeIncasts(hiddenScope);
+    auto hiddenOutArgs = hiddenFunc->MakeOutcasts(hiddenScope);
+    for (size_t idx = 0; idx < hiddenFunc->GetOutcast().size(); idx++) {
+        if (hiddenScope->partialUpdateOutcastDict.count(hiddenFunc->GetOutcast()[idx])) {
+            hiddenScope->ioslot.partialUpdateOutcastList.push_back(idx);
+        }
+    }
+
+    for (auto& incast : hiddenFunc->GetIncast())
+        hiddenFunc->params_.push_back(std::static_pointer_cast<const ir::Var>(incast));
+    for (auto& outcast : hiddenFunc->GetOutcast())
+        hiddenFunc->params_.push_back(std::static_pointer_cast<const ir::Var>(outcast));
+
+    std::vector<ir::StmtPtr> hiddenBodyStmts;
+    for (auto& op : hiddenFunc->Operations(false))
+        hiddenBodyStmts.push_back(std::static_pointer_cast<const ir::Stmt>(op.shared_from_this()));
+    hiddenFunc->body_ = std::make_shared<ir::SeqStmts>(std::move(hiddenBodyStmts), placeholder->span_);
+    auto hiddenConfigScope = GetPlaceholderConfigScope(placeholder);
+    program_.SetParamConfig(hiddenFunc, hiddenConfigScope);
+    hiddenFunc->ComputeHash();
+    program_.GetFunctionCache().Insert(hiddenFunc->GetFunctionHash(), *hiddenFunc);
+    DumpFunctionGraph(hiddenFunc);
+
+    return {hiddenInArgs, hiddenOutArgs};
 }
 
 ir::StmtPtr RootFunctionBuilder::FinalizePathFunc(const ir::StmtPtr& placeholder)
@@ -418,41 +476,13 @@ ir::StmtPtr RootFunctionBuilder::FinalizePathFunc(const ir::StmtPtr& placeholder
     hiddenFunc->SetParent(pathFunc.get());
 
     // 3. hiddenFunc 处理（MakeIncasts 的 Parent() = pathFunc）
-    auto allOutputs = CollectAllOutputs(*hiddenFunc);
-    ComputeOutcast(*hiddenFunc, allOutputs);
-    auto hiddenScope = std::make_shared<TensorSlotScope>(hiddenFunc);
-    hiddenFunc->SetSlotScope(hiddenScope);
-    program_.GetTensorSlotManager()->scopeList.push_back(hiddenScope);
-
     auto originalIncasts = hiddenFunc->GetOriginIncast();
     auto originalOutcasts = hiddenFunc->GetOriginOutcast();
-
-    BuildPathFuncSlotScope(hiddenFunc, hiddenScope, originalIncasts, originalOutcasts);
-
-    auto hiddenInArgs = hiddenFunc->MakeIncasts(hiddenScope);
-    auto hiddenOutArgs = hiddenFunc->MakeOutcasts(hiddenScope);
-    for (size_t idx = 0; idx < hiddenFunc->GetOutcast().size(); idx++) {
-        if (hiddenScope->partialUpdateOutcastDict.count(hiddenFunc->GetOutcast()[idx])) {
-            hiddenScope->ioslot.partialUpdateOutcastList.push_back(idx);
-        }
-    }
-
-    for (auto& incast : hiddenFunc->GetIncast())
-        hiddenFunc->params_.push_back(std::static_pointer_cast<const ir::Var>(incast));
-    for (auto& outcast : hiddenFunc->GetOutcast())
-        hiddenFunc->params_.push_back(std::static_pointer_cast<const ir::Var>(outcast));
-
-    std::vector<ir::StmtPtr> hiddenBodyStmts;
-    for (auto& op : hiddenFunc->Operations(false))
-        hiddenBodyStmts.push_back(std::static_pointer_cast<const ir::Stmt>(op.shared_from_this()));
-    hiddenFunc->body_ = std::make_shared<ir::SeqStmts>(std::move(hiddenBodyStmts), placeholder->span_);
-    hiddenFunc->ComputeHash();
-    program_.GetFunctionCache().Insert(hiddenFunc->GetFunctionHash(), *hiddenFunc);
-    DumpFunctionGraph(hiddenFunc);
+    auto hiddenFuncArgs = FinalizeHiddenFunc(hiddenFunc, placeholder);
 
     // 4. pathFunc 处理（独立函数）
-    CreateAndFinalizePathFunc(pathFunc.get(), hiddenFunc, hiddenInArgs, hiddenOutArgs, placeholder);
-    pathFunc->GetSlotScope()->constructAssembleSlotList = hiddenScope->constructAssembleSlotList;
+    CreateAndFinalizePathFunc(pathFunc.get(), hiddenFunc, hiddenFuncArgs.first, hiddenFuncArgs.second, placeholder);
+    pathFunc->GetSlotScope()->constructAssembleSlotList = hiddenFunc->GetSlotScope()->constructAssembleSlotList;
 
     // 5. dynFunc 的 CALL op
     auto& callOperation = dynFunc_->AddRawOperation(Opcode::OP_CALL, originalIncasts, originalOutcasts,

@@ -173,59 +173,59 @@ void Program::ClearEmptyHiddenFunction()
     }
 }
 
-void SetParamConfig(Function* currentFuncPtr)
+namespace {
+void SetBasicParamConfig(ParamConfigs& paramConfigs, const std::shared_ptr<ConfigScope>& configScope)
 {
-    std::shared_ptr<ConfigScope> currentScope = ConfigManagerNg::GetInstance().CurrentScope();
-    currentFuncPtr->paramConfigs_.sgPgLowerBound = currentScope->GetPassConfig<int>(SG_PG_LOWER_BOUND);
-    currentFuncPtr->paramConfigs_.sgParallelNum = currentScope->GetPassConfig<int>(SG_PARALLEL_NUM);
-    currentFuncPtr->paramConfigs_.sgPartitionAlgorithm = currentScope->GetPassConfig<std::string>(
-        SG_PARTITION_ALGORITHM);
-    currentFuncPtr->paramConfigs_.sgMgCopyInUpperBound = currentScope->GetPassConfig<int>(MG_COPYIN_UPPER_BOUND);
-    currentFuncPtr->paramConfigs_.machineConfig_ = currentScope->GetRuntimeConfig<uint8_t>(DEVICE_SCHED_MODE);
-    currentFuncPtr->paramConfigs_.cubeL1ReuseSetting = currentScope->GetPassConfig<std::map<int64_t, int64_t>>(
-        CUBE_L1_REUSE_SETTING);
-    currentFuncPtr->paramConfigs_.cubeNBufferSetting = currentScope->GetPassConfig<std::map<int64_t, int64_t>>(
-        CUBE_NBUFFER_SETTING);
-    currentFuncPtr->paramConfigs_.vecNBufferSetting = currentScope->GetPassConfig<std::map<int64_t, int64_t>>(
-        VEC_NBUFFER_SETTING);
-    currentFuncPtr->paramConfigs_.autoMixPartition = currentScope->GetPassConfig<int>(AUTO_MIX_PARTITION);
-    currentFuncPtr->paramConfigs_.oooSchedMode = currentScope->GetPassConfig<std::string>(OOO_SCHED_MODE);
-    // Function-granularity setting
-    if (currentScope->HasConfig("pass.cube_l1_reuse_setting_by_func")) {
-        currentFuncPtr->paramConfigs_.cubeL1ReuseSettingByFunc = currentScope
-                                                                     ->GetPassConfig<std::map<std::string, int64_t>>(
-                                                                         "cube_l1_reuse_setting_by_func");
+    paramConfigs.dynamicAlignedOps = configScope->GetCodegenConfig<bool>(SUPPORT_DYNAMIC_ALIGNED);
+    paramConfigs.sgPgLowerBound = configScope->GetPassConfig<int>(SG_PG_LOWER_BOUND);
+    paramConfigs.sgParallelNum = configScope->GetPassConfig<int>(SG_PARALLEL_NUM);
+    paramConfigs.sgPartitionAlgorithm = configScope->GetPassConfig<std::string>(SG_PARTITION_ALGORITHM);
+    paramConfigs.sgMgCopyInUpperBound = configScope->GetPassConfig<int>(MG_COPYIN_UPPER_BOUND);
+    paramConfigs.machineConfig_ = configScope->GetRuntimeConfig<uint8_t>(DEVICE_SCHED_MODE);
+    paramConfigs.cubeL1ReuseSetting = configScope->GetPassConfig<std::map<int64_t, int64_t>>(CUBE_L1_REUSE_SETTING);
+    paramConfigs.cubeNBufferSetting = configScope->GetPassConfig<std::map<int64_t, int64_t>>(CUBE_NBUFFER_SETTING);
+    paramConfigs.vecNBufferSetting = configScope->GetPassConfig<std::map<int64_t, int64_t>>(VEC_NBUFFER_SETTING);
+    paramConfigs.autoMixPartition = configScope->GetPassConfig<int>(AUTO_MIX_PARTITION);
+    paramConfigs.oooSchedMode = configScope->GetPassConfig<std::string>(OOO_SCHED_MODE);
+    paramConfigs.mgVecParallelLb = configScope->GetPassConfig<int>(MG_VEC_PARALLEL_LB);
+    paramConfigs.copyOutResolveCoalescing = configScope->GetPassConfig<int>(COPYOUT_RESOLVE_COALESCING);
+    paramConfigs.combineAxis = configScope->GetOperationConfig<bool>(KEY_COMBINE_AXIS);
+}
+
+void SetOptionalParamConfig(ParamConfigs& paramConfigs, const std::shared_ptr<ConfigScope>& configScope)
+{
+    if (configScope->HasConfig("pass.cube_l1_reuse_setting_by_func")) {
+        paramConfigs.cubeL1ReuseSettingByFunc = configScope->GetPassConfig<std::map<std::string, int64_t>>(
+            "cube_l1_reuse_setting_by_func");
     }
-    if (currentScope->HasConfig("pass.cube_nbuffer_setting_by_func")) {
-        currentFuncPtr->paramConfigs_.cubeNBufferSettingByFunc = currentScope
-                                                                     ->GetPassConfig<std::map<std::string, int64_t>>(
-                                                                         "cube_nbuffer_setting_by_func");
+    if (configScope->HasConfig("pass.cube_nbuffer_setting_by_func")) {
+        paramConfigs.cubeNBufferSettingByFunc = configScope->GetPassConfig<std::map<std::string, int64_t>>(
+            "cube_nbuffer_setting_by_func");
     }
-    if (currentScope->HasConfig("pass.vec_nbuffer_setting_by_func")) {
-        currentFuncPtr->paramConfigs_.vecNBufferSettingByFunc = currentScope
-                                                                    ->GetPassConfig<std::map<std::string, int64_t>>(
-                                                                        "vec_nbuffer_setting_by_func");
+    if (configScope->HasConfig("pass.vec_nbuffer_setting_by_func")) {
+        paramConfigs.vecNBufferSettingByFunc = configScope->GetPassConfig<std::map<std::string, int64_t>>(
+            "vec_nbuffer_setting_by_func");
     }
-    // Semantic label settings
-    if (currentScope->HasConfig("pass.cube_l1_reuse_setting_by_label")) {
-        currentFuncPtr->paramConfigs_.cubeL1ReuseSettingByLabel = currentScope
-                                                                      ->GetPassConfig<std::map<std::string, int64_t>>(
-                                                                          "cube_l1_reuse_setting_by_label");
+    if (configScope->HasConfig("pass.cube_l1_reuse_setting_by_label")) {
+        paramConfigs.cubeL1ReuseSettingByLabel = configScope->GetPassConfig<std::map<std::string, int64_t>>(
+            "cube_l1_reuse_setting_by_label");
     }
-    if (currentScope->HasConfig("pass.cube_nbuffer_setting_by_label")) {
-        currentFuncPtr->paramConfigs_.cubeNBufferSettingByLabel = currentScope
-                                                                      ->GetPassConfig<std::map<std::string, int64_t>>(
-                                                                          "cube_nbuffer_setting_by_label");
+    if (configScope->HasConfig("pass.cube_nbuffer_setting_by_label")) {
+        paramConfigs.cubeNBufferSettingByLabel = configScope->GetPassConfig<std::map<std::string, int64_t>>(
+            "cube_nbuffer_setting_by_label");
     }
-    if (currentScope->HasConfig("pass.vec_nbuffer_setting_by_label")) {
-        currentFuncPtr->paramConfigs_.vecNBufferSettingByLabel = currentScope
-                                                                     ->GetPassConfig<std::map<std::string, int64_t>>(
-                                                                         "vec_nbuffer_setting_by_label");
+    if (configScope->HasConfig("pass.vec_nbuffer_setting_by_label")) {
+        paramConfigs.vecNBufferSettingByLabel = configScope->GetPassConfig<std::map<std::string, int64_t>>(
+            "vec_nbuffer_setting_by_label");
     }
-    currentFuncPtr->paramConfigs_.mgVecParallelLb = currentScope->GetPassConfig<int>(MG_VEC_PARALLEL_LB);
-    currentFuncPtr->paramConfigs_.copyOutResolveCoalescing = currentScope->GetPassConfig<int>(
-        COPYOUT_RESOLVE_COALESCING);
-    currentFuncPtr->paramConfigs_.combineAxis = currentScope->GetOperationConfig<bool>(KEY_COMBINE_AXIS);
+}
+} // namespace
+
+void Program::SetParamConfig(Function* currentFuncPtr, const std::shared_ptr<ConfigScope>& configScope) const
+{
+    FE_ASSERT(FeError::INVALID_PTR, configScope != nullptr) << "Function config scope is nullptr.";
+    SetBasicParamConfig(currentFuncPtr->paramConfigs_, configScope);
+    SetOptionalParamConfig(currentFuncPtr->paramConfigs_, configScope);
 }
 
 #if ENABLE_HIDDENLOOP
@@ -385,7 +385,6 @@ std::tuple<Function*, Operation*, bool> Program::EndFunction(const std::string& 
     EndHiddenLoop(currentFunctionPtr_, generateCall);
 #endif
 
-    currentFunctionPtr_->paramConfigs_.dynamicAlignedOps = config::GetCodeGenOption<bool>(SUPPORT_DYNAMIC_ALIGNED);
     std::shared_ptr<TensorSlotScope> scope = nullptr;
     // root & leaf do not need scope, use tensor/tile graph's
     if (currentFunctionPtr_->GetGraphType() != GraphType::BLOCK_GRAPH &&
@@ -406,7 +405,7 @@ std::tuple<Function*, Operation*, bool> Program::EndFunction(const std::string& 
     bool hit = QueryAndUpdateCurrentFunction();
     auto result = currentFunctionPtr_;
 
-    SetParamConfig(currentFunctionPtr_);
+    SetParamConfig(currentFunctionPtr_, ConfigManagerNg::CurrentScope());
 
     DumpTensorGraphIfNeeded(result);
     PopStackAndUpdateCurrent();

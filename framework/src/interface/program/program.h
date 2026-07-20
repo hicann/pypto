@@ -23,6 +23,8 @@
 #endif
 
 namespace npu::tile_fwk {
+class ConfigScope;
+
 class Program {
 public: // public api for torch
     std::vector<Function*> functionSequence_;
@@ -114,6 +116,7 @@ public: // public api for torch
     void RefillCompileQueue(Function* func);
     void UpdateCompileTask();
     void ClearEmptyHiddenFunction();
+    void SetParamConfig(Function* func, const std::shared_ptr<ConfigScope>& configScope) const;
 
 private:
     std::string name_;
