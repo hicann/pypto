@@ -22,6 +22,8 @@
 #include <set>
 
 namespace npu::tile_fwk {
+enum class PromotePriority;
+
 class OptimizeSort {
 public:
     ScheduleState state_;
@@ -54,7 +56,7 @@ public:
     Status PriorDFS(std::unordered_map<Opcode, int> preNodePriority);
     Status DFSFromOutNode(std::vector<Operation*> outNodeQueue, std::unordered_map<Opcode, int> preNodePriority,
                           std::map<Operation*, bool>& visited);
-    int ClassifyPromoteOp(Operation* op) const;
+    PromotePriority ClassifyPromoteOp(Operation* op) const;
     void PromoteOps();
     void DFSFromSingleNode(Operation* op, std::map<Operation*, bool>& visited, std::vector<Operation*>& newOpList,
                            std::unordered_map<Opcode, int> preNodePriority);

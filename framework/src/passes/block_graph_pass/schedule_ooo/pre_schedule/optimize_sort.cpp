@@ -20,9 +20,13 @@
 
 namespace npu::tile_fwk {
 static constexpr size_t invalidIndex = std::numeric_limits<size_t>::max();
-static constexpr int kPromoteAssemble = 0;
-static constexpr int kPromoteDdrCopyOut = 1;
-static constexpr int kPromoteNormal = 2;
+
+enum class PromotePriority {
+    Assemble = 0,
+    View = 1,
+    DdrCopyOut = 2,
+    Normal = 3,
+};
 
 void OptimizeSort::UpdatePreNodeQueue(std::unordered_set<Operation*>& curr,
                                       std::unordered_set<Operation*>& preNodeTotal, std::map<Operation*, bool>& visited)
@@ -197,31 +201,32 @@ Status OptimizeSort::DFSFromOutNode(std::vector<Operation*> outNodeQueue,
     return SUCCESS;
 }
 
-int OptimizeSort::ClassifyPromoteOp(Operation* op) const
+PromotePriority OptimizeSort::ClassifyPromoteOp(Operation* op) const
 {
     if (!op) {
-        return kPromoteNormal;
+        return PromotePriority::Normal;
     }
     if (op->GetOpcode() == Opcode::OP_ASSEMBLE) {
-        return kPromoteAssemble;
+        return PromotePriority::Assemble;
+    }
+    if (IsViewOp(*op)) {
+        return PromotePriority::View;
     }
     if (OpcodeManager::Inst().IsCopyOut(op->GetOpcode()) &&
         op->GetOOperands()[0]->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR) {
-        return kPromoteDdrCopyOut;
+        return PromotePriority::DdrCopyOut;
     }
-    return kPromoteNormal;
+    return PromotePriority::Normal;
 }
 
 struct PromoteCmp {
     const std::unordered_map<Operation*, size_t>& pos;
-    const std::unordered_map<Operation*, int>& cls;
+    const std::unordered_map<Operation*, PromotePriority>& cls;
 
     bool operator()(Operation* a, Operation* b) const
     {
-        int ca = cls.at(a);
-        int cb = cls.at(b);
-        if (ca != cb)
-            return ca > cb;
+        if (cls.at(a) != cls.at(b))
+            return cls.at(a) > cls.at(b);
 
         return pos.at(a) > pos.at(b);
     }
@@ -234,7 +239,7 @@ void OptimizeSort::PromoteOps()
 
     std::unordered_map<Operation*, int> indegree;
     std::unordered_map<Operation*, size_t> pos;
-    std::unordered_map<Operation*, int> cls;
+    std::unordered_map<Operation*, PromotePriority> cls;
 
     indegree.reserve(operations.size());
     pos.reserve(operations.size());
