@@ -93,9 +93,7 @@ void LogicalTensor::UpdateBelongFunction(Function& newFunc)
         return;
     }
     auto self = shared_from_this();
-    function_->GetTensorMap().Erase(self);
     function_ = &newFunc;
-    newFunc.GetTensorMap().Insert(self, false);
 }
 
 std::shared_ptr<LogicalTensor> LogicalTensor::Clone(Function& dstFunc, bool create) const

@@ -24,6 +24,7 @@
 #include <vector>
 
 #include "ir/program.h"
+#include "ir/scalar_expr.h"
 #include "ir/stmt.h"
 #include "ir/transforms/passes.h"
 
@@ -90,6 +91,25 @@ struct IrFuncSetup {
             irParams.push_back(std::static_pointer_cast<const ir::Var>(p));
         }
         return std::make_shared<ir::Function>(name, irParams, std::vector<ir::TypePtr>{}, body, Sp());
+    }
+
+    // Wrap current stmts as the body of a ForStmt and push the ForStmt onto stmts.
+    // ForStmt requires a non-null _config_scope attr (ConfigManagerNg::PushScope asserts non-null).
+    ir::ForStmtPtr WrapStmtsInForLoop(const std::string& loopVarName,
+                                      std::vector<std::pair<std::string, std::any>> attrs = {})
+    {
+        auto body = std::make_shared<ir::SeqStmts>(stmts, Sp());
+        stmts.clear();
+        auto intType = std::make_shared<ir::ScalarType>(ir::DataType::INT64);
+        auto loopVar = IRContext::Get().MakeVar(loopVarName, intType, Sp());
+        auto zero = std::make_shared<ir::ConstInt>(0, ir::DataType::INT64, Sp());
+        auto ten = std::make_shared<ir::ConstInt>(10, ir::DataType::INT64, Sp());
+        auto one = std::make_shared<ir::ConstInt>(1, ir::DataType::INT64, Sp());
+        attrs.emplace_back("_config_scope", ConfigManagerNg::CurrentScope());
+        auto forStmt = std::make_shared<ir::ForStmt>(loopVar, zero, ten, one, std::vector<ir::IterArgPtr>{}, body,
+                                                     std::vector<ir::VarPtr>{}, Sp(), std::move(attrs));
+        stmts.push_back(forStmt);
+        return forStmt;
     }
 };
 
@@ -190,4 +210,58 @@ TEST_F(IrFuncBuilderTest, TestConstructAssembleSlotList_MixedParamAndIntermediat
 
     auto slots = CollectConstructAssembleSlots();
     EXPECT_EQ(slots.size(), 1u) << "Expected 1 slot (aux only, out excluded), got " << slots.size();
+}
+
+// ============================================================================
+// ForStmt with "unroll_times" attr => TransformStmts reads it via std::any_cast<int>
+//   and appends "_Unroll<N>" to the loop-var-derived path suffix baked into the
+//   hidden func raw name (CreateHiddenFunc: dynFuncRaw + "_" + loopVarName + "_PATH0_hiddenfunc").
+//   Verifies the unroll_times branch (ir_func_builder.cpp:521-527).
+// ============================================================================
+TEST_F(IrFuncBuilderTest, TestTransformStmts_UnrollTimesAttr)
+{
+    IrFuncSetup setup("UnrollTimesAttr");
+
+    auto a = setup.MakeParam("a");
+    auto aux = setup.MakeLocal("aux");
+    setup.AddDassemble(a, aux);
+
+    setup.WrapStmtsInForLoop("i", {{"unroll_times", 4}});
+
+    auto irFunc = setup.BuildIrFunction("UnrollTimesAttr");
+    auto irProg = std::make_shared<ir::Program>(std::vector<ir::FunctionPtr>{irFunc}, "test", Sp());
+
+    auto createRoot = pypto::ir::pass::CreateRootFunctions();
+    (void)createRoot(irProg);
+
+    auto hiddenFuncs = FindHiddenFuncs();
+    ASSERT_EQ(hiddenFuncs.size(), 1u);
+    EXPECT_NE(hiddenFuncs[0]->GetRawName().find("_Unroll4_"), std::string::npos)
+        << "Expected '_Unroll4_' in hidden func raw name, got: " << hiddenFuncs[0]->GetRawName();
+}
+
+// ============================================================================
+// ForStmt WITHOUT "unroll_times" attr => default unrollTimes=1, suffix "_Unroll1".
+//   Baseline confirming the attr-absent path defaults to 1.
+// ============================================================================
+TEST_F(IrFuncBuilderTest, TestTransformStmts_UnrollTimesDefault)
+{
+    IrFuncSetup setup("UnrollTimesDefault");
+
+    auto a = setup.MakeParam("a");
+    auto aux = setup.MakeLocal("aux");
+    setup.AddDassemble(a, aux);
+
+    setup.WrapStmtsInForLoop("i");
+
+    auto irFunc = setup.BuildIrFunction("UnrollTimesDefault");
+    auto irProg = std::make_shared<ir::Program>(std::vector<ir::FunctionPtr>{irFunc}, "test", Sp());
+
+    auto createRoot = pypto::ir::pass::CreateRootFunctions();
+    (void)createRoot(irProg);
+
+    auto hiddenFuncs = FindHiddenFuncs();
+    ASSERT_EQ(hiddenFuncs.size(), 1u);
+    EXPECT_NE(hiddenFuncs[0]->GetRawName().find("_Unroll1_"), std::string::npos)
+        << "Expected '_Unroll1_' in hidden func raw name, got: " << hiddenFuncs[0]->GetRawName();
 }

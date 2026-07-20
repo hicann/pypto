@@ -149,7 +149,6 @@ ir::StmtPtr RootFunctionBuilder::ProcessTensorOp(std::shared_ptr<Function> pathF
             continue;
         }
         auto lt = std::const_pointer_cast<LogicalTensor>(std::static_pointer_cast<const LogicalTensor>(result));
-        pathFunc->GetTensorMap().Insert(lt);
         oOperands.push_back(lt);
     }
 
@@ -206,7 +205,7 @@ std::shared_ptr<Function> RootFunctionBuilder::CreateHiddenFunc(const ir::SeqStm
                                                                 const std::string& loopVarName)
 {
     auto pathFuncId = loopNameCounters_[loopVarName]++;
-    std::string pathSuffix = loopVarName.empty() ? std::to_string(pathFuncId) :
+    std::string pathSuffix = loopVarName.empty() ? "PATH" + std::to_string(pathFuncId) :
                                                    loopVarName + "_PATH" + std::to_string(pathFuncId);
     auto hiddenRawName = dynFunc_->GetRawName() + "_" + pathSuffix + "_hiddenfunc";
     auto hiddenMagicName = hiddenRawName + "_" + std::to_string(IdGen<IdType::FUNCTION>::Inst().NewId());
@@ -518,9 +517,8 @@ ir::StmtPtr RootFunctionBuilder::TransformStmts(ir::StmtPtr stmt, const std::str
             auto config = forStmt->GetAttr<std::shared_ptr<ConfigScope>>("_config_scope");
             ConfigManagerNg::ScopedRestore scoped(config);
             auto currentLoopVarName = IRContext::Get().GetOriginName(forStmt->loopVar_);
-            auto stepConst = ir::As<ir::ConstInt>(forStmt->step_);
-            int64_t stepValue = stepConst ? stepConst->value_ : 1;
-            currentLoopVarName += "_Unroll" + std::to_string(stepValue);
+            int unrollTimes = forStmt->GetAttr<int>("unroll_times", 1);
+            currentLoopVarName += "_Unroll" + std::to_string(unrollTimes);
             auto transformedBody = TransformStmts(forStmt->body_, currentLoopVarName);
             return std::make_shared<ir::ForStmt>(forStmt->loopVar_, forStmt->start_, forStmt->stop_, forStmt->step_,
                                                  forStmt->iterArgs_, transformedBody, forStmt->returnVars_,

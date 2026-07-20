@@ -287,6 +287,7 @@ def _loop_unroll(body: Block, loop: LoopRange, factor, stop, config_scope, ctx: 
         "submit_before_loop": loop.submit_before_loop,
         "_loop_conds": loop_conds, # extra loop condition
         "_config_scope": config_scope,
+        "unroll_times": factor
     }
 
     for_stmt = ctx.create_for_stmt(loop_var.as_var(), ctx.unwrap(loop.start), ctx.unwrap(loop.stop),

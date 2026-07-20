@@ -560,7 +560,7 @@ def test_forstmt_attrs_and_step_name_preserved():
     """ForStmt attrs and step-based path func naming must survive DCE/canonicalize/TransformStmts."""
     def foo(x, z):
         pypto.set_vec_tile_shapes(16, 16)
-        for i in pypto.loop(0, 4, 2, name="LOOP_TEST", parallel=True):
+        for i in pypto.loop(0, 4, name="LOOP_TEST", parallel=True, unroll_list=[2]):
             x_view = pypto.view(x, [16, 32], [i * 16, 0])
             pypto.assemble(x_view, [i * 16, 0], z)
 
