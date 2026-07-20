@@ -805,3 +805,18 @@ def test_custom_class():
     y = pypto.Tensor((-1, 32), pypto.DT_FP32, 'y')
     func = pil.compile(foo, x, y)
     info(func)
+
+
+def test_tensor_move():
+
+    def foo(a, b):
+        b[:] = a + 1
+
+    x = pypto.Tensor((32, 32), pypto.DT_FP32, 'x')
+    y = pypto.Tensor((32, 32), pypto.DT_FP32, 'y')
+    func = pil.compile(foo, x, y)
+
+    stmt = func.body[0]
+    assert isinstance(stmt, ir.TensorOpStmt)
+    assert stmt.opcode == "ADDS"
+    assert stmt.result[0].name == 'b'

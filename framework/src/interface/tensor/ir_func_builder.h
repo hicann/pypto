@@ -70,9 +70,6 @@ private:
     void BuildDynSlotScope();
     void BuildPathFuncSlotScope(Function* pathFunc, const std::shared_ptr<TensorSlotScope>& scope,
                                 const LogicalTensors& originalIncasts, const LogicalTensors& originalOutcasts);
-    int FindOrCreateSlot(const std::shared_ptr<LogicalTensor>& lt,
-                         const std::shared_ptr<TensorSlotManager>& slotManager, Function* func,
-                         bool isAssembleOut = false);
 
     bool IsPureTensorOpSeq(const pypto::ir::SeqStmtsPtr& seq);
     std::vector<std::vector<pypto::ir::StmtPtr>> SplitIntoTensorOpSegments(const pypto::ir::SeqStmtsPtr& seq);

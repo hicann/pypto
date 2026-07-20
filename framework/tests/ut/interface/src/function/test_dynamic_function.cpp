@@ -503,7 +503,6 @@ TEST_F(DynamicFunctionTest, TestHybridLoopIf)
     slotManager->BuildIncastOutcastLink("test");
     slotManager->GetOutputIndex(out);
     slotManager->GetOutputIndex(t4);
-    slotManager->LookupSlotIndexBySymbol({"t0", "t1", "tt"});
     slotManager->LookupSlotIndex({t0, t1, t2});
     TensorSlot slot;
     slotManager->TensorSlotRead(slot, t1.GetStorage());

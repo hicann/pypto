@@ -227,33 +227,6 @@ std::shared_ptr<Function> RootFunctionBuilder::CreateHiddenFunc(const ir::SeqStm
     return hiddenFunc;
 }
 
-int RootFunctionBuilder::FindOrCreateSlot(const std::shared_ptr<LogicalTensor>& lt,
-                                          const std::shared_ptr<TensorSlotManager>& slotManager, Function* func,
-                                          bool isAssembleOut)
-{
-    int rawMagic = lt->tensor->GetRawMagic();
-    int existingSlot = slotManager->LookupSlotIndexByRawMagic(rawMagic);
-    if (existingSlot != -1) {
-        if (isAssembleOut) {
-            auto& slotTensors = func->GetSlotTensors();
-            auto it = slotTensors.find(existingSlot);
-            if (it != slotTensors.end()) {
-                slotManager->TensorWrite(*it->second, SlotProperty::ASSEMBLE_DST);
-            }
-        }
-        return existingSlot;
-    }
-
-    auto newTensor = std::make_unique<Tensor>(lt);
-    if (isAssembleOut) {
-        slotManager->TensorWrite(*newTensor, SlotProperty::ASSEMBLE_DST);
-    }
-
-    int tensorSlot = slotManager->LookupSlotIndexByRawMagic(rawMagic);
-    func->GetSlotTensors()[tensorSlot] = std::move(newTensor);
-    return tensorSlot;
-}
-
 void RootFunctionBuilder::BuildPathFuncSlotScope(Function* pathFunc, const std::shared_ptr<TensorSlotScope>& scope,
                                                  const LogicalTensors& originalIncasts,
                                                  const LogicalTensors& originalOutcasts)
@@ -262,14 +235,14 @@ void RootFunctionBuilder::BuildPathFuncSlotScope(Function* pathFunc, const std::
 
     scope->ioslot.incastSlot.resize(originalIncasts.size());
     for (size_t idx = 0; idx < originalIncasts.size(); idx++) {
-        int slotIndex = FindOrCreateSlot(originalIncasts[idx], slotManager, pathFunc);
-        scope->ioslot.incastSlot[idx] = {slotIndex};
+        auto& tensor = slotManager->GetSlotTensor(originalIncasts[idx]);
+        scope->ioslot.incastSlot[idx] = {tensor.Id()};
     }
 
     scope->ioslot.outcastSlot.resize(originalOutcasts.size());
     for (size_t idx = 0; idx < originalOutcasts.size(); idx++) {
-        int slotIndex = FindOrCreateSlot(originalOutcasts[idx], slotManager, pathFunc);
-        scope->ioslot.outcastSlot[idx] = {slotIndex};
+        auto& tensor = slotManager->GetSlotTensor(originalOutcasts[idx]);
+        scope->ioslot.outcastSlot[idx] = {tensor.Id()};
     }
 
     std::unordered_set<int> addedSlots;
@@ -277,12 +250,13 @@ void RootFunctionBuilder::BuildPathFuncSlotScope(Function* pathFunc, const std::
         if ((op.GetOpcode() == Opcode::OP_ASSEMBLE && op.HasAttr("dassemble")) ||
             op.GetOpcode() == Opcode::OP_ASSEMBLE_SSA || op.GetOpcode() == Opcode::OP_ATOMIC_RMW) {
             for (auto& oOperand : op.GetOOperands()) {
-                int slotIndex = FindOrCreateSlot(oOperand, slotManager, pathFunc, true);
+                auto& tensor = slotManager->GetSlotTensor(oOperand);
+                slotManager->TensorWrite(tensor, SlotProperty::ASSEMBLE_DST);
                 if (paramRawMagics_.count(oOperand->GetRawMagic()) != 0) {
                     continue;
                 }
-                if (addedSlots.insert(slotIndex).second) {
-                    scope->constructAssembleSlotList.push_back(slotIndex);
+                if (addedSlots.insert(tensor.Id()).second) {
+                    scope->constructAssembleSlotList.push_back(tensor.Id());
                 }
             }
         }
@@ -302,11 +276,10 @@ void RootFunctionBuilder::BuildDynSlotScope()
 
     attr->startArgsInputLogicalTensorList.resize(logicalParams_.size());
     for (size_t idx = 0; idx < logicalParams_.size(); idx++) {
-        FindOrCreateSlot(logicalParams_[idx], slotManager, dynFunc_.get());
-        const Tensor* tensor = slotManager->LookupTensorByRawMagic(logicalParams_[idx]->tensor->GetRawMagic());
-        attr->startArgsInputTensorList.emplace_back(*tensor);
+        auto& tensor = slotManager->GetSlotTensor(logicalParams_[idx]);
+        attr->startArgsInputTensorList.emplace_back(tensor);
         attr->startArgsInputLogicalTensorList[idx] = attr->startArgsInputTensorList.back().get().GetStorage(false);
-        slotManager->MarkInput(*tensor);
+        slotManager->MarkInput(tensor);
     }
 
     dynFunc_->CleanRedundantOutCast();

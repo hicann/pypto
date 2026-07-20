@@ -22,6 +22,7 @@
 #include "interface/utils/error.h"
 #include "interface/program/program.h"
 #include "interface/utils/string_utils.h"
+#include "irbuilder.h"
 namespace npu::tile_fwk {
 
 // 根据nameDict里记录的name出现次数，为多次同命名的名称添加递增后缀
@@ -442,53 +443,16 @@ std::vector<int> TensorSlotManager::LookupSlotIndexConst(
     return indexList;
 }
 
-int TensorSlotManager::LookupSlotIndexByRawMagic(int rawMagic)
+Tensor& TensorSlotManager::GetSlotTensor(std::shared_ptr<LogicalTensor> lt)
 {
-    for (auto& [slot, index] : slotIndexDict) {
-        const Tensor* tensor_ptr = reinterpret_cast<const Tensor*>(slot.GetSlot());
-        if (Program::GetInstance().GetAliveTensors().count(const_cast<Tensor*>(tensor_ptr)) == 0) {
-            continue;
-        }
-        auto value = slot.GetSlotValue();
-        if (value && value->tensor && value->tensor->GetRawMagic() == rawMagic) {
-            return index;
-        }
-    }
-    return -1;
-}
+    auto name = IRContext::Get().GetOriginName(lt);
 
-const Tensor* TensorSlotManager::LookupTensorByRawMagic(int rawMagic)
-{
-    for (auto& [slot, index] : slotIndexDict) {
-        (void)index;
-        const Tensor* tensor_ptr = reinterpret_cast<const Tensor*>(slot.GetSlot());
-        if (Program::GetInstance().GetAliveTensors().count(const_cast<Tensor*>(tensor_ptr)) == 0) {
-            continue;
-        }
-        auto value = slot.GetSlotValue();
-        if (value && value->tensor && value->tensor->GetRawMagic() == rawMagic) {
-            return reinterpret_cast<const Tensor*>(slot.GetSlot());
-        }
+    auto it = slotTensorDict.find(name);
+    if (it == slotTensorDict.end()) {
+        it = slotTensorDict.emplace(name, std::make_unique<Tensor>(lt)).first;
     }
-    return nullptr;
-}
 
-std::vector<int> TensorSlotManager::LookupSlotIndexBySymbol(const std::vector<std::string>& symbolNameList)
-{
-    std::vector<int> indexList;
-    for (auto& symbolName : symbolNameList) {
-        if (!symbolNameDict.count(symbolName)) {
-            indexList.push_back(-1);
-        } else {
-            TensorSlot slot = symbolNameDict[symbolName];
-            if (slotIndexDict.count(slot)) {
-                indexList.push_back(slotIndexDict[slot]);
-            } else {
-                indexList.push_back(-1);
-            }
-        }
-    }
-    return indexList;
+    return *it->second;
 }
 
 void TensorSlotManager::MarkInput(const Tensor& tensor)

@@ -806,7 +806,6 @@ public:
     void SetSlotScope(const std::shared_ptr<TensorSlotScope>& slotScope) { slotScope_ = slotScope; }
     const std::shared_ptr<TensorSlotScope>& GetSlotScope() const { return slotScope_; }
     std::shared_ptr<TensorSlotScope>& GetSlotScope() { return slotScope_; }
-    std::unordered_map<int, std::unique_ptr<Tensor>>& GetSlotTensors() { return slotTensors_; }
     std::vector<int> GetInCastSlot(const std::shared_ptr<LogicalTensor>& incast);
     std::vector<int> GetOutCastSlot(const std::shared_ptr<LogicalTensor>& outcast);
 
@@ -1048,7 +1047,6 @@ private:
     static bool enableMagicLookupRecord_;
     static std::map<std::pair<int, int>, std::set<Operation*, LogicalTensor::CompareOp>> tensorAndSubgraphToProducer_;
     std::shared_ptr<Tensor> getTensorDataOutcast_;
-    std::unordered_map<int, std::unique_ptr<Tensor>> slotTensors_;
     ir::Span span_;
     bool hiddenFunction_{false};
     VarDependency varDependency_;

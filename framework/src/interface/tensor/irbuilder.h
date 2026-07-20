@@ -54,7 +54,11 @@ public:
 
     void SetType(ir::VarPtr var, ir::TypePtr type) { type_map_[var->name_] = type; }
 
-    std::string GetOriginName(ir::VarPtr var) { return all_vars_[var->name_]; }
+    std::string GetOriginName(ir::VarPtr var)
+    {
+        ASSERT(all_vars_.count(var->name_) != 0);
+        return all_vars_[var->name_];
+    }
 
     std::string GetVarName(const std::string& name = "")
     {

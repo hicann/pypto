@@ -224,6 +224,7 @@ struct TensorSlotManager {
     /* Mapping from slot to its index */
     std::unordered_map<TensorSlot, int> slotIndexDict;
     std::unordered_map<TensorSlot, TensorSlotUsage> slotUsageDict;
+    std::unordered_map<std::string, std::unique_ptr<Tensor>> slotTensorDict;
 
     std::unordered_set<TensorSlot> liveSlotSet;
     std::unordered_set<TensorSlot> assembleSlotSet;
@@ -269,7 +270,6 @@ struct TensorSlotManager {
 
     std::vector<int> LookupSlotIndex(const std::vector<std::reference_wrapper<Tensor>>& tensorList);
     std::vector<int> LookupSlotIndexConst(const std::vector<std::reference_wrapper<const Tensor>>& tensorList);
-    std::vector<int> LookupSlotIndexBySymbol(const std::vector<std::string>& symbolNameList);
 
     void MarkInput(const Tensor& tensor);
     void MarkOutput(const Tensor& tensor);
@@ -281,8 +281,7 @@ struct TensorSlotManager {
     int GetInputIndex(const Tensor& tensor);
     int GetOutputIndex(const Tensor& tensor);
     int GetSlotIndex(const Tensor& tensor);
-    int LookupSlotIndexByRawMagic(int rawMagic);
-    const Tensor* LookupTensorByRawMagic(int rawMagic);
+    Tensor& GetSlotTensor(std::shared_ptr<LogicalTensor> lt);
 
     void Checkpoint();
     void Restore();

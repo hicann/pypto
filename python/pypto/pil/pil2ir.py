@@ -39,6 +39,8 @@ def pil2ir(func: Function, args: dict, tensor_args: list[pypto.Tensor]):
 
 
 def compile(pyfunc, *args, **kwargs):
+    pypto.pypto_impl.Reset()
+
     sig = inspect.signature(pyfunc)
     bound = sig.bind(*args, **kwargs)
     bound.apply_defaults()
@@ -54,7 +56,6 @@ def compile(pyfunc, *args, **kwargs):
             tensor_args.append(val)
         all_args[key] = val
 
-    pypto.pypto_impl.Reset()
     with pypto.function("__entry__", *tensor_args):
         func_def = pil2ir(func, all_args, tensor_args)
         # funtion input args still need to be valid, it'll be used later by tensor slot
