@@ -318,6 +318,7 @@ TILEOP void TPermute(T0 dst, T1 src, C0 srcCoordinate)
     auto srcStride2 = srcLayout.template GetStrideDim<2, srcExpectSize>();
     auto srcStride3 = srcLayout.template GetStrideDim<3, srcExpectSize>();
     auto srcStride4 = srcLayout.template GetStrideDim<4, srcExpectSize>();
+    pipe_barrier(PIPE_ALL);
 
     constexpr int pad = 5 - dimCount;
     if constexpr (dimCount == 2 && axis0 == 1 && axis1 == 0) {

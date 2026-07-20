@@ -85,10 +85,8 @@ __aicore__ inline void TTransDataNCHW2NC1HWC0(DST dst, TYPEC coordinate, TMP tmp
     pto::TASSIGN(tmpAreaTile, (uint64_t)tmpAreaAddr);
 
     Sync2_VS();
-    pipe_barrier(PIPE_ALL);
     pto::TTRANS(convTmpDst, convInput, tmpAreaTile);
     SyncVS_3();
-    pipe_barrier(PIPE_ALL);
 
     const auto inputLayout = input.GetLayout();
     const auto gmLayout = dst.GetLayout();
@@ -166,10 +164,8 @@ __aicore__ inline void TTransDataNCHW2Fractal_Z(DST dst, TYPEC coordinate, TMP t
     pto::TASSIGN(tmpTile, (uint64_t)tmpAreaTileAddr);
 
     Sync2_VS();
-    pipe_barrier(PIPE_ALL);
     pto::TTRANS(convTmpDstNC1HWC0, convInput, tmpTile);
     SyncV();
-    pipe_barrier(PIPE_ALL);
 
     constexpr int64_t N0 = 16;
     constexpr int64_t tileN1 = tileN / N0;
@@ -178,10 +174,8 @@ __aicore__ inline void TTransDataNCHW2Fractal_Z(DST dst, TYPEC coordinate, TMP t
     tmpDst2TileData convTmpDstFractalZ;
     pto::TASSIGN(convTmpDstFractalZ, (uint64_t)tmpDstFractalZAddr);
 
-    pipe_barrier(PIPE_ALL);
     pto::TTRANS(convTmpDstFractalZ, convTmpDstNC1HWC0, tmpTile);
     SyncVS_3();
-    pipe_barrier(PIPE_ALL);
 
     const auto inputLayout = input.GetLayout();
     const auto gmLayout = dst.GetLayout();
@@ -267,10 +261,8 @@ __aicore__ inline void TTransDataNC1HWC02NCHW(DST dst, TYPEC coordinate, TMP tmp
     pto::TASSIGN(tmpAreaTile, (uint64_t)tmpAreaAddr);
 
     Sync2_VS();
-    pipe_barrier(PIPE_ALL);
     pto::TTRANS(convTmpDst, convInput, tmpAreaTile);
     SyncVS_3();
-    pipe_barrier(PIPE_ALL);
 
     const auto inputLayout = input.GetLayout();
     const auto gmLayout = dst.GetLayout();
@@ -400,10 +392,8 @@ __aicore__ inline void TTransDataNCDHW2NDC1HWC0(DST dst, TYPEC coordinate, TMP t
         pto::TASSIGN(convInput, (uint64_t)(inputAddr + loopN * elementSize));
 
         Sync23_VS();
-        pipe_barrier(PIPE_ALL);
         pto::TTRANS(convTmpDst, convInput, tmpAreaTile);
         SyncVS_3();
-        pipe_barrier(PIPE_ALL);
 
         for (LoopVar i = 0; i < inputD; i++) {
             for (LoopVar j = 0; j < inputC1; j++) {
@@ -459,10 +449,8 @@ __aicore__ inline void TTransDataNDC1HWC02NCDHW(DST dst, TYPEC coordinate, TMP t
     pto::TASSIGN(tmpAreaTile, (uint64_t)tmpAreaAddr);
 
     Sync2_VS();
-    pipe_barrier(PIPE_ALL);
     pto::TTRANS(convTmpDst, convInput, tmpAreaTile);
     SyncVS_3();
-    pipe_barrier(PIPE_ALL);
 
     const auto inputLayout = input.GetLayout();
     const auto gmLayout = dst.GetLayout();
@@ -573,10 +561,8 @@ __aicore__ inline void TTransDataNCDHW2FRACTAL_Z_3D(DST dst, TYPEC coordinate, T
     pto::TASSIGN(tmpTile, (uint64_t)tmpAreaTileAddr);
 
     Sync2_VS();
-    pipe_barrier(PIPE_ALL);
     pto::TTRANS(convTmpDstNC1HWC0, convInput, tmpTile);
     SyncVS_3();
-    pipe_barrier(PIPE_ALL);
 
     const auto inputLayout = input.GetLayout();
     const auto gmLayout = dst.GetLayout();
