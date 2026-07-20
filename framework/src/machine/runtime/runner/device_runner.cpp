@@ -330,8 +330,8 @@ bool DeviceRunner::GetEnableDumpDevPref() const { return args_.aicpuPerfAddr != 
 
 void DeviceRunner::SetDebugEnable() { devicePerf_.SetDebugEnable(); }
 
-void DeviceRunner::ReportHostProfInfo(
-    RtStream stream, uint64_t startTime, uint32_t blockDim, uint16_t taskType, bool isCore) const
+void DeviceRunner::ReportHostProfInfo(RtStream stream, uint64_t startTime, uint32_t blockDim, uint16_t taskType,
+                                      bool isCore) const
 {
     if (hostProf_.GetProfType() == MSPF_COMMANDHANDLE_TYPE_START) {
         uint64_t endTime = MspfSysCycleTime();

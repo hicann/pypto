@@ -253,9 +253,8 @@ private:
         }
     }
 
-    void DumpTensorContents(
-        int64_t* workspace, const std::vector<RawTensorDataPtr>& inputs,
-        const std::vector<RawTensorDataPtr>& outputs)
+    void DumpTensorContents(int64_t* workspace, const std::vector<RawTensorDataPtr>& inputs,
+                            const std::vector<RawTensorDataPtr>& outputs)
     {
         auto* devProg = GetDevProg(function_);
         uint8_t* dumpTensorWsPtr = reinterpret_cast<uint8_t*>(workspace) + devProg->memBudget.Total() -
@@ -331,7 +330,6 @@ private:
                 return;
             }
         }
-        
 
         auto aicoreStream = GetContextAiCoreStream();
         uint8_t* ctrlFlowCache = DeviceLauncher::PrepareLaunch(kernel.get(), tensors, nullptr, LaunchMode::DEVICE_RT);
@@ -340,8 +338,8 @@ private:
             rc = DeviceLauncher::LaunchKernel(aicoreStream, ctrlFlowCache, kernel.get(), wsAddr, tensors, false, 0);
             EXPECT_EQ(rc, 0);
 
-            rc = DeviceRunner::Get().DynamicLaunchSynchronize(
-                GetContextScheStream(), GetContextCtrlStream(), aicoreStream);
+            rc = DeviceRunner::Get().DynamicLaunchSynchronize(GetContextScheStream(), GetContextCtrlStream(),
+                                                              aicoreStream);
             EXPECT_EQ(rc, 0);
             bool debugEnable = config::GetDebugOption<int64_t>(CFG_RUNTIME_DBEUG_MODE) == CFG_DEBUG_ALL;
             DeviceRunner::Get().SyncProfData(debugEnable);

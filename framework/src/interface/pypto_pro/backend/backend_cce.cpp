@@ -16,10 +16,7 @@
 namespace pypto {
 namespace backend {
 
-const Backend* GetBackend()
-{
-    return &BackendCCE::Instance();
-}
+const Backend* GetBackend() { return &BackendCCE::Instance(); }
 
 BackendCCE::BackendCCE() : Backend(CreateSoC())
 {
