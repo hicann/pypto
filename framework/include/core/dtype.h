@@ -256,7 +256,11 @@ public:
             case kFp64Code:
                 return "double";
             case kBf16Code:
-                return "bfloat16";
+                return "bfloat16_t";
+            case kFp8e4m3fnCode:
+                return "float8_e4m3_t";
+            case kFp8e5m2Code:
+                return "float8_e5m2_t";
             default:
                 return "unknown";
         }
