@@ -17,6 +17,7 @@
 #include <iterator>
 #include <limits>
 #include <numeric>
+#include <unordered_set>
 #include <vector>
 #include <string>
 #include "gtest/gtest.h"
@@ -24,6 +25,7 @@
 #define MODULE_NAME "OspTests"
 
 #include "passes/algorithms/osp/auxiliary/datastructures/union_find_universe.h"
+#include "passes/algorithms/osp/auxiliary/datastructures/heaps/pairing_heap.h"
 #include "passes/algorithms/osp/auxiliary/balanced_coin_flips.h"
 #include "passes/algorithms/osp/bsp/model/bsp_architecture.h"
 #include "passes/algorithms/osp/bsp/model/bsp_instance.h"
@@ -35,8 +37,11 @@
 #include "passes/algorithms/osp/bsp/scheduler/improvement_scheduler.h"
 #include "passes/algorithms/osp/bsp/scheduler/local_search/kernighan_lin/kl_improver.h"
 #include "passes/algorithms/osp/bsp/scheduler/local_search/kernighan_lin/comm_cost_modules/kl_hyper_total_comm_cost.h"
+#include "passes/algorithms/osp/coarser/multilevel_coarser.h"
 #include "passes/algorithms/osp/dag_divider/isomorphism_divider/isomorphic_subgraph_scheduler.h"
+#include "passes/algorithms/osp/dag_divider/isomorphism_divider/merkle_hash_computer.h"
 #include "passes/algorithms/osp/dag_divider/isomorphism_divider/precomputed_hash_computer.h"
+#include "passes/algorithms/osp/dag_divider/isomorphism_divider/trimmed_group_scheduler.h"
 #include "passes/algorithms/osp/coarser/coarser_util.h"
 #include "passes/algorithms/osp/coarser/sarkar/sarkar.h"
 #include "passes/algorithms/osp/coarser/sarkar/sarkar_mul.h"
@@ -67,6 +72,56 @@ public:
     static void TearDownTestCase() {}
     void SetUp() override {}
     void TearDown() override {}
+};
+
+class TestMultilevelCoarser : public MultilevelCoarser<GraphType, GraphType> {
+public:
+    enum class Scenario { NO_CONTRACTIONS, COMPACT_IDENTITY, KEEP_LARGE_REDUCTION, PREBUILT_GRAPH };
+
+    explicit TestMultilevelCoarser(Scenario scenario) : scenario_(scenario) {}
+
+    [[nodiscard]] std::size_t HistorySize() const { return dagHistory_.size(); }
+
+protected:
+    ReturnStatus RunContractions() override
+    {
+        if (scenario_ == Scenario::NO_CONTRACTIONS) {
+            return ReturnStatus::OSP_SUCCESS;
+        }
+
+        auto identityMap = [this]() {
+            const std::size_t size = dagHistory_.empty() ? GetOriginalGraph()->NumVertices() :
+                                                           dagHistory_.back()->NumVertices();
+            std::vector<VertexIdxT<GraphType>> contractionMap(size);
+            std::iota(contractionMap.begin(), contractionMap.end(), 0);
+            return contractionMap;
+        };
+
+        if (scenario_ == Scenario::PREBUILT_GRAPH) {
+            auto contractionMap = identityMap();
+            GraphType contractedGraph;
+            if (!coarser_util::ConstructCoarseDag(*GetOriginalGraph(), contractedGraph, contractionMap)) {
+                return ReturnStatus::OSP_ERROR;
+            }
+            return AddContraction(std::move(contractionMap), std::move(contractedGraph));
+        }
+
+        ReturnStatus status = AddContraction(identityMap());
+        if (scenario_ == Scenario::KEEP_LARGE_REDUCTION) {
+            auto contractionMap = identityMap();
+            for (std::size_t i = 0; i < contractionMap.size(); ++i) {
+                contractionMap[i] = static_cast<VertexIdxT<GraphType>>(i / 3U);
+            }
+            status = std::max(status, AddContraction(std::move(contractionMap)));
+        } else {
+            status = std::max(status, AddContraction(identityMap()));
+        }
+        status = std::max(status, AddContraction(identityMap()));
+        return status;
+    }
+
+private:
+    Scenario scenario_;
 };
 
 TEST_F(TestOspAlgorithms, UnionFind1)
@@ -241,8 +296,50 @@ TEST_F(TestOspAlgorithms, UnionFind3)
     }
 }
 
+// Verify public heap operations, including updates, equal maxima, and invalid keys.
+TEST_F(TestOspAlgorithms, PairingHeapOperations)
+{
+    MaxPairingHeap<int, int> heap;
+    EXPECT_TRUE(heap.IsEmpty());
+    EXPECT_TRUE(heap.GetTopKeys().empty());
+    EXPECT_THROW(heap.Pop(), std::runtime_error);
+
+    heap.Push(1, 10);
+    heap.Push(2, 20);
+    heap.Push(3, 15);
+    heap.Push(4, 5);
+    EXPECT_EQ(heap.size(), 4U);
+    EXPECT_EQ(heap.Top(), 2);
+    EXPECT_EQ(heap.GetValue(4), 5);
+    EXPECT_THROW(heap.Push(2, 30), std::invalid_argument);
+
+    heap.Update(1, 25);
+    EXPECT_EQ(heap.Top(), 1);
+    heap.Update(2, 0);
+    EXPECT_EQ(heap.GetValue(2), 0);
+
+    heap.Push(5, 25);
+    auto topKeys = heap.GetTopKeys();
+    std::sort(topKeys.begin(), topKeys.end());
+    EXPECT_EQ(topKeys, std::vector<int>({1, 5}));
+    EXPECT_EQ(heap.GetTopKeys(1).size(), 1U);
+
+    heap.Erase(3);
+    EXPECT_FALSE(heap.Contains(3));
+    EXPECT_THROW(heap.Update(3, 30), std::invalid_argument);
+    EXPECT_THROW(heap.Erase(3), std::invalid_argument);
+    EXPECT_THROW(static_cast<void>(heap.GetValue(3)), std::invalid_argument);
+
+    heap.Clear();
+    EXPECT_TRUE(heap.IsEmpty());
+    EXPECT_EQ(heap.size(), 0U);
+}
+
 TEST_F(TestOspAlgorithms, IntSqrt)
 {
+    EXPECT_EQ(IntSqrtFloor(0), 0);
+    EXPECT_EQ(IntSqrtFloor(-1), 0);
+
     for (std::size_t root = 1U; root < 200U; ++root) {
         for (std::size_t num = root * root; num < (root + 1U) * (root + 1U); ++num) {
             EXPECT_EQ(IntSqrtFloor(num), root);
@@ -258,6 +355,9 @@ TEST_F(TestOspAlgorithms, IntSqrt)
 
 TEST_F(TestOspAlgorithms, Divisors)
 {
+    EXPECT_EQ(DivisorsList(0), std::vector<int>({0}));
+    EXPECT_TRUE(DivisorsList(-1).empty());
+
     for (std::size_t num = 1U; num < 1000U; ++num) {
         const std::vector<std::size_t> divs = DivisorsList(num);
         for (const std::size_t& div : divs) {
@@ -402,6 +502,55 @@ TEST_F(TestOspAlgorithms, Architecture)
     EXPECT_TRUE(architecture.SendCost() == uniformSentCosts);
     EXPECT_EQ(architecture.CommunicationCosts(0, 1), 2);
     EXPECT_EQ(architecture.CommunicationCosts(0, 0), 0);
+}
+
+// Reject invalid processor, memory, and send-cost configurations at the public API boundary.
+TEST_F(TestOspAlgorithms, ArchitectureRejectsInvalidConfigurations)
+{
+    using SendCosts = std::vector<std::vector<WorkType>>;
+
+    EXPECT_THROW(BspArchitecture<GraphType>(0U), std::runtime_error);
+    EXPECT_THROW(BspArchitecture<GraphType>(2U, 1, 2, 100, SendCosts({{0, 1}})), std::invalid_argument);
+    EXPECT_THROW(BspArchitecture<GraphType>(2U, 1, 2, 100, SendCosts({{0, 1}, {1}})), std::invalid_argument);
+
+    BspArchitecture<GraphType> architecture(2U, 1, 2, 100, SendCosts({{9, 3}, {4, 8}}));
+    EXPECT_EQ(architecture.SendCosts(0U, 0U), 0);
+    EXPECT_EQ(architecture.SendCosts(0U, 1U), 3);
+    EXPECT_THROW(architecture.SetMemoryBound(std::vector<WorkType>({100})), std::invalid_argument);
+    EXPECT_THROW(architecture.SetNumberOfProcessors(0U), std::invalid_argument);
+    EXPECT_THROW(architecture.SetProcessorsWithTypes({}), std::invalid_argument);
+    EXPECT_THROW(architecture.SetProcessorsConsequTypes({1U, 1U}, {100}), std::invalid_argument);
+}
+
+// Exercise malformed assignments and each schedule validity constraint independently.
+TEST_F(TestOspAlgorithms, ScheduleRejectsInvalidAssignments)
+{
+    const std::set<std::pair<VertType, VertType>> edges({{0, 1}});
+    BspInstance<GraphType> instance;
+    instance.GetArchitecture() = BspArchitecture<GraphType>(2U);
+    instance.GetComputationalDag() = GraphType(2, edges);
+
+    BspSchedule<GraphType> malformed(instance, {0U}, {0U, 0U});
+    EXPECT_FALSE(malformed.SatisfiesPrecedenceConstraints());
+    EXPECT_FALSE(malformed.SatisfiesNodeTypeConstraints());
+
+    BspSchedule<GraphType> schedule(instance, {0U, 0U}, {0U, 0U});
+    EXPECT_THROW(schedule.SetAssignedSuperstep(2, 0U), std::invalid_argument);
+    schedule.SetAssignedSuperstep(1, 2U);
+    schedule.SetNumberOfSupersteps(1U);
+    EXPECT_FALSE(schedule.SatisfiesPrecedenceConstraints());
+
+    schedule = BspSchedule<GraphType>(instance, {0U, 2U}, {0U, 1U});
+    EXPECT_FALSE(schedule.SatisfiesPrecedenceConstraints());
+
+    schedule = BspSchedule<GraphType>(instance, {0U, 1U}, {0U, 0U});
+    EXPECT_FALSE(schedule.SatisfiesPrecedenceConstraints());
+
+    instance.GetArchitecture().SetProcessorsWithTypes({0U, 1U});
+    instance.GetComputationalDag().SetVertexType(1, 1U);
+    instance.SetDiagonalCompatibilityMatrix(2U);
+    schedule = BspSchedule<GraphType>(instance, {0U, 0U}, {0U, 1U});
+    EXPECT_FALSE(schedule.SatisfiesNodeTypeConstraints());
 }
 
 TEST_F(TestOspAlgorithms, EmptyGraph)
@@ -633,6 +782,12 @@ TEST_F(TestOspAlgorithms, ExpansionMapValidity)
 
     const std::vector<std::vector<VertexIdxT<GraphType>>> expansionmap5 = {{0}, {}, {2}, {3}, {1}};
     EXPECT_FALSE(coarser_util::CheckValidExpansionMap<GraphType>(expansionmap5));
+
+    const std::vector<std::vector<VertexIdxT<GraphType>>> expansionmap6 = {{-1}};
+    EXPECT_FALSE(coarser_util::CheckValidExpansionMap<GraphType>(expansionmap6));
+
+    const std::vector<std::vector<VertexIdxT<GraphType>>> expansionmap7 = {{0}, {0}};
+    EXPECT_FALSE(coarser_util::CheckValidExpansionMap<GraphType>(expansionmap7));
 }
 
 TEST_F(TestOspAlgorithms, ContractionMapValidity)
@@ -680,6 +835,11 @@ TEST_F(TestOspAlgorithms, ContractionMapCoarsening)
     for (const auto& vert : coarseGraph1.Parents(1)) {
         EXPECT_EQ(vert, 0);
     }
+
+    ConstrGraphType emptyCoarseGraph;
+    emptyCoarseGraph.AddVertex(1, 1, 1);
+    EXPECT_TRUE(coarser_util::ConstructCoarseDag(GraphType(), emptyCoarseGraph, {}));
+    EXPECT_TRUE(emptyCoarseGraph.empty());
 }
 
 TEST_F(TestOspAlgorithms, TestTopSort)
@@ -697,6 +857,56 @@ TEST_F(TestOspAlgorithms, TestTopSort)
                       0);
         }
     }
+}
+
+TEST_F(TestOspAlgorithms, EdgeViewsSupportIndexedIteration)
+{
+    const GraphType graph(5, std::set<std::pair<VertType, VertType>>({{1, 2}, {1, 4}, {3, 4}}));
+    const auto edgeView = Edges(graph);
+
+    ASSERT_EQ(edgeView.size(), 3U);
+    auto indexedEdge = EdgeView<GraphType>::Iterator(1, graph);
+    EXPECT_EQ(Source(*indexedEdge, graph), 1);
+    EXPECT_EQ(Target(*indexedEdge, graph), 4);
+
+    const auto previousEdge = indexedEdge++;
+    EXPECT_EQ(previousEdge->source_, 1);
+    EXPECT_EQ(indexedEdge->source_, 3);
+    EXPECT_EQ(indexedEdge->target_, 4);
+    EXPECT_EQ(++indexedEdge, edgeView.end());
+
+    const GraphType emptyGraph(2, std::set<std::pair<VertType, VertType>>({}));
+    EXPECT_TRUE(Edges(emptyGraph).empty());
+    EXPECT_EQ(Edges(emptyGraph).begin(), Edges(emptyGraph).end());
+}
+
+TEST_F(TestOspAlgorithms, TopSortRejectsCyclesAndSupportsReverseOrder)
+{
+    ConstrGraphType cycle;
+    for (unsigned i = 0; i < 3U; ++i) {
+        cycle.AddVertex(1, 1, 1);
+    }
+    ASSERT_TRUE(cycle.AddEdge(0, 1));
+    ASSERT_TRUE(cycle.AddEdge(1, 2));
+    ASSERT_TRUE(cycle.AddEdge(2, 0));
+    EXPECT_THROW(static_cast<void>(GetTopOrder(cycle)), std::runtime_error);
+
+    const auto reverseOrder = GetTopOrderReverse(SimpleGraph());
+    ASSERT_FALSE(reverseOrder.empty());
+    EXPECT_EQ(reverseOrder.front(), 10);
+    EXPECT_EQ(reverseOrder.back(), 0);
+}
+
+TEST_F(TestOspAlgorithms, GraphUtilitiesHandleEmptyAndAbsentEdges)
+{
+    const GraphType emptyGraph;
+    EXPECT_EQ(CriticalPathWeight(emptyGraph), 0);
+
+    const GraphType graph(2, std::set<std::pair<VertType, VertType>>({{0, 1}}));
+    EXPECT_TRUE(Edge(0, 1, graph));
+    EXPECT_FALSE(Edge(1, 0, graph));
+    EXPECT_TRUE(EdgeDesc(0, 1, graph).second);
+    EXPECT_FALSE(EdgeDesc(1, 0, graph).second);
 }
 
 TEST_F(TestOspAlgorithms, NodeDistances)
@@ -868,6 +1078,63 @@ TEST_F(TestOspAlgorithms, CoarsenSarkar)
     testCoarseningAlgorithm(coarser);
 }
 
+// Group seven structurally identical buffer nodes in every homogeneous-buffer mode.
+TEST_F(TestOspAlgorithms, SarkarGroupsHomogeneousBuffers)
+{
+    constexpr VertType kBufferCount = 7;
+    constexpr VertType kSink = kBufferCount + 1;
+    std::set<std::pair<VertType, VertType>> edges;
+    for (VertType buffer = 1; buffer <= kBufferCount; ++buffer) {
+        edges.emplace(0, buffer);
+        edges.emplace(buffer, kSink);
+    }
+
+    GraphType graph(kSink + 1, edges);
+    for (const auto vertex : graph.Vertices()) {
+        graph.SetVertexWorkWeight(vertex, 1);
+    }
+
+    sarkar_params::Parameters<VWorkwT<GraphType>> params;
+    params.commCost_ = 1;
+    params.maxWeight_ = 3;
+    params.smallWeightThreshold_ = 3;
+    const std::vector<sarkar_params::Mode> modes = {
+        sarkar_params::Mode::FAN_IN_BUFFER,
+        sarkar_params::Mode::FAN_OUT_BUFFER,
+        sarkar_params::Mode::HOMOGENEOUS_BUFFER,
+    };
+
+    for (const auto mode : modes) {
+        params.mode_ = mode;
+        Sarkar<GraphType, GraphType> coarser(params);
+        VertexIdxT<GraphType> contractions = 0;
+        const auto expansionMap = coarser.GenerateVertexExpansionMap(graph, contractions);
+
+        EXPECT_TRUE(coarser_util::CheckValidExpansionMap<GraphType>(expansionMap));
+        EXPECT_GT(contractions, 0);
+        EXPECT_TRUE(
+            std::any_of(expansionMap.begin(), expansionMap.end(), [](const auto& group) { return group.size() > 1U; }));
+    }
+}
+
+TEST_F(TestOspAlgorithms, SarkarContractsCompleteFanOut)
+{
+    const GraphType graph(4, std::set<std::pair<VertType, VertType>>({{0, 1}, {0, 2}, {0, 3}}));
+    sarkar_params::Parameters<VWorkwT<GraphType>> params;
+    params.mode_ = sarkar_params::Mode::FAN_OUT_FULL;
+    params.commCost_ = 10;
+    params.maxWeight_ = 4;
+
+    Sarkar<GraphType, GraphType> coarser(params);
+    VertexIdxT<GraphType> contractions = 0;
+    const auto expansionMap = coarser.GenerateVertexExpansionMap(graph, contractions);
+
+    ASSERT_EQ(expansionMap.size(), 1U);
+    EXPECT_EQ(expansionMap.front().size(), graph.NumVertices());
+    EXPECT_EQ(contractions, 3);
+    EXPECT_TRUE(coarser_util::CheckValidExpansionMap<GraphType>(expansionMap));
+}
+
 TEST_F(TestOspAlgorithms, CoarsenSarkarML)
 {
     sarkar_params::MulParameters<VWorkwT<GraphType>> params;
@@ -882,6 +1149,38 @@ TEST_F(TestOspAlgorithms, CoarsenSarkarML)
     coarser.SetParameters(params);
 
     testCoarseningAlgorithm(coarser);
+}
+
+// Cover identity fallback, contraction-map composition, history compaction, and the prebuilt-graph overload.
+TEST_F(TestOspAlgorithms, MultilevelCoarserMaintainsContractionHistory)
+{
+    const GraphType graph = SimpleGraph();
+    const std::vector<TestMultilevelCoarser::Scenario> scenarios = {
+        TestMultilevelCoarser::Scenario::NO_CONTRACTIONS,
+        TestMultilevelCoarser::Scenario::COMPACT_IDENTITY,
+        TestMultilevelCoarser::Scenario::KEEP_LARGE_REDUCTION,
+        TestMultilevelCoarser::Scenario::PREBUILT_GRAPH,
+    };
+
+    for (const auto scenario : scenarios) {
+        TestMultilevelCoarser coarser(scenario);
+        GraphType coarseGraph;
+        std::vector<VertexIdxT<GraphType>> contractionMap;
+
+        EXPECT_TRUE(coarser.CoarsenDag(graph, coarseGraph, contractionMap));
+        EXPECT_EQ(contractionMap.size(), graph.NumVertices());
+        EXPECT_TRUE(coarser_util::CheckValidContractionMap<GraphType>(contractionMap));
+        EXPECT_EQ(coarseGraph.NumVertices(), static_cast<VertexIdxT<GraphType>>(
+                                                 *std::max_element(contractionMap.begin(), contractionMap.end()) + 1));
+
+        if (scenario == TestMultilevelCoarser::Scenario::COMPACT_IDENTITY) {
+            EXPECT_EQ(coarser.HistorySize(), 2U);
+        } else if (scenario == TestMultilevelCoarser::Scenario::KEEP_LARGE_REDUCTION) {
+            EXPECT_EQ(coarser.HistorySize(), 3U);
+        } else {
+            EXPECT_EQ(coarser.HistorySize(), 1U);
+        }
+    }
 }
 
 TEST_F(TestOspAlgorithms, DagAdaptorSimpleGraph)
@@ -939,6 +1238,19 @@ TEST_F(TestOspAlgorithms, DagAdaptorSimpleGraph)
     }
 }
 
+TEST_F(TestOspAlgorithms, MutableGraphRejectsInvalidAndDuplicateEdges)
+{
+    ConstrGraphType graph;
+    graph.AddVertex(1, 1, 1);
+    graph.AddVertex(1, 1, 1);
+
+    EXPECT_FALSE(graph.AddEdge(0, 0));
+    EXPECT_FALSE(graph.AddEdge(0, 2));
+    EXPECT_TRUE(graph.AddEdge(0, 1));
+    EXPECT_FALSE(graph.AddEdge(0, 1));
+    EXPECT_EQ(graph.OutDegree(0), 1);
+}
+
 TEST_F(TestOspAlgorithms, BspSchedulers)
 {
     BspInstance<GraphType> bspInst;
@@ -974,6 +1286,272 @@ TEST_F(TestOspAlgorithms, BspSchedulers)
 
     greedymeta.ComputeSchedule(schedule);
     EXPECT_TRUE(schedule.IsValid());
+}
+
+TEST_F(TestOspAlgorithms, SerialSchedulerDefersIncompatibleChildren)
+{
+    BspInstance<ConstrGraphType> instance;
+    instance.GetArchitecture().SetProcessorsWithTypes({0U, 1U});
+    auto& graph = instance.GetComputationalDag();
+    graph.AddVertex(1, 1, 1, 0U);
+    graph.AddVertex(1, 1, 1, 1U);
+    ASSERT_TRUE(graph.AddEdge(0, 1));
+    instance.SetDiagonalCompatibilityMatrix(2U);
+
+    Serial<ConstrGraphType> scheduler;
+    BspSchedule<ConstrGraphType> schedule(instance);
+    EXPECT_EQ(scheduler.ComputeSchedule(schedule), ReturnStatus::OSP_SUCCESS);
+    EXPECT_TRUE(schedule.IsValid());
+    EXPECT_EQ(schedule.AssignedProcessor(0), 0U);
+    EXPECT_EQ(schedule.AssignedProcessor(1), 1U);
+    EXPECT_EQ(schedule.AssignedSuperstep(0), 0U);
+    EXPECT_EQ(schedule.AssignedSuperstep(1), 1U);
+
+    BspInstance<ConstrGraphType> emptyInstance;
+    BspSchedule<ConstrGraphType> emptySchedule(emptyInstance);
+    EXPECT_EQ(scheduler.ComputeSchedule(emptySchedule), ReturnStatus::OSP_SUCCESS);
+}
+
+TEST_F(TestOspAlgorithms, EftSchedulerReportsInsufficientWorkers)
+{
+    BspInstance<ConstrGraphType> instance;
+    instance.GetArchitecture() = BspArchitecture<ConstrGraphType>(1U);
+    instance.GetComputationalDag().AddVertex(4000, 1, 1);
+
+    EftSubgraphScheduler<ConstrGraphType> scheduler;
+    const auto schedule = scheduler.Run(instance, {2U}, {{4000}}, {2U});
+    EXPECT_DOUBLE_EQ(schedule.makespan_, -1.0);
+    EXPECT_TRUE(schedule.nodeAssignedWorkerPerType_.empty());
+}
+
+// Compare forward and backward Merkle hashing and reject graphs with different orbit structures.
+TEST_F(TestOspAlgorithms, MerkleHashComputesForwardAndBackwardOrbits)
+{
+    const GraphType chain(4, std::set<std::pair<VertType, VertType>>({{0, 1}, {1, 2}, {2, 3}}));
+    const GraphType fanOut(4, std::set<std::pair<VertType, VertType>>({{0, 1}, {0, 2}, {0, 3}}));
+    const GraphType shortChain(3, std::set<std::pair<VertType, VertType>>({{0, 1}, {1, 2}}));
+
+    EXPECT_TRUE(AreIsomorphicByMerkleHash(chain, chain));
+    EXPECT_FALSE(AreIsomorphicByMerkleHash(chain, fanOut));
+    EXPECT_FALSE(AreIsomorphicByMerkleHash(chain, shortChain));
+
+    MerkleHashComputer<GraphType> forwardHashes(chain);
+    EXPECT_EQ(forwardHashes.GetVertexHashes().size(), chain.NumVertices());
+    EXPECT_EQ(forwardHashes.GetOrbit(0), forwardHashes.GetOrbitFromHash(forwardHashes.GetVertexHash(0)));
+    EXPECT_EQ(forwardHashes.NumOrbits(), chain.NumVertices());
+    EXPECT_THROW(forwardHashes.GetOrbitFromHash(std::numeric_limits<std::size_t>::max()), std::out_of_range);
+
+    using UniformHash = UniformNodeHashFunc<VertexIdxT<GraphType>>;
+    MerkleHashComputer<GraphType, UniformHash, false> backwardHashes(chain);
+    BwdMerkleNodeHashFunc<GraphType> backwardNodeHash(chain);
+    EXPECT_EQ(backwardHashes.GetVertexHash(0), backwardNodeHash(0));
+
+    const std::vector<std::size_t> nodeHashes({2U, 3U, 5U, 7U});
+    PrecomBwdMerkleNodeHashFunc<GraphType> precomputedHash(chain, nodeHashes);
+    EXPECT_NE(precomputedHash(0), precomputedHash(3));
+}
+
+// Move an empty superstep in both directions and swap populated steps.
+TEST_F(TestOspAlgorithms, ActiveScheduleMovesEmptyAndPopulatedSteps)
+{
+    BspInstance<GraphType> instance;
+    instance.GetArchitecture() = BspArchitecture<GraphType>(2U);
+    instance.GetComputationalDag() = GraphType(3, std::set<std::pair<VertType, VertType>>({}));
+    const BspSchedule<GraphType> schedule(instance, {0U, 0U, 0U}, {1U, 2U, 3U});
+
+    KlActiveSchedule<GraphType, double> activeSchedule;
+    activeSchedule.Initialize(schedule);
+    activeSchedule.SwapEmptyStepFwd(0U, 2U);
+    EXPECT_EQ(activeSchedule.AssignedSuperstep(0), 0U);
+    EXPECT_EQ(activeSchedule.AssignedSuperstep(1), 1U);
+
+    activeSchedule.SwapEmptyStepBwd(2U, 0U);
+    EXPECT_EQ(activeSchedule.AssignedSuperstep(0), 1U);
+    EXPECT_EQ(activeSchedule.AssignedSuperstep(1), 2U);
+
+    activeSchedule.SwapSteps(1U, 1U);
+    activeSchedule.SwapSteps(1U, 3U);
+    EXPECT_EQ(activeSchedule.AssignedSuperstep(0), 3U);
+    EXPECT_EQ(activeSchedule.AssignedSuperstep(2), 1U);
+}
+
+TEST_F(TestOspAlgorithms, KlUtilitiesResizeAndSelectViolatingNodes)
+{
+    GraphType graph(3, std::set<std::pair<VertType, VertType>>({{0, 1}, {1, 2}}));
+    BspInstance<GraphType> instance;
+    instance.GetArchitecture() = BspArchitecture<GraphType>(2U);
+    instance.GetComputationalDag() = graph;
+    const BspSchedule<GraphType> schedule(instance, {0U, 1U, 0U}, {0U, 1U, 2U});
+
+    KlActiveSchedule<GraphType, double> activeSchedule;
+    activeSchedule.Initialize(schedule);
+    using ActiveSchedule = KlActiveSchedule<GraphType, double>;
+    using AffinityTable = AdaptiveAffinityTable<GraphType, double, ActiveSchedule, 1U>;
+    AffinityTable affinityTable;
+    affinityTable.Initialize(activeSchedule, 1U);
+
+    EXPECT_TRUE(affinityTable.Insert(0));
+    EXPECT_FALSE(affinityTable.Insert(0));
+    EXPECT_TRUE(affinityTable.Insert(1));
+    EXPECT_EQ(affinityTable.size(), 2U);
+    affinityTable.Remove(0);
+    EXPECT_TRUE(affinityTable.Insert(2));
+    EXPECT_EQ(affinityTable.GetSelectedNodesIdx(2), 0U);
+    affinityTable.Remove(2);
+    affinityTable.Trim();
+    EXPECT_EQ(affinityTable.GetSelectedNodesIdx(1), 0U);
+
+    affinityTable.ResetNodeSelection();
+    std::mt19937 generator(7U);
+    VertexSelectionStrategy<GraphType, AffinityTable, ActiveSchedule> selectionStrategy;
+    selectionStrategy.Initialize(activeSchedule, generator, 1U, 1U);
+    std::unordered_set<EdgeDescT<GraphType>> violations({EdgeDescT<GraphType>(0, 1), EdgeDescT<GraphType>(1, 2)});
+    selectionStrategy.SelectNodesViolations(affinityTable, violations, 1U, 1U);
+    EXPECT_EQ(affinityTable.size(), 1U);
+    EXPECT_TRUE(affinityTable.IsSelected(1));
+
+    VectorVertexLockManager<VertexIdxT<GraphType>> lockManager;
+    lockManager.Initialize(graph.NumVertices());
+    lockManager.Lock(1);
+    EXPECT_TRUE(lockManager.IsLocked(1));
+    lockManager.Unlock(1);
+    EXPECT_FALSE(lockManager.IsLocked(1));
+    lockManager.Clear();
+}
+
+// Validate communication-cost bookkeeping against its independent recomputation path.
+TEST_F(TestOspAlgorithms, KlCommunicationCostMatchesRecomputation)
+{
+    GraphType graph(3, std::set<std::pair<VertType, VertType>>({{0, 1}, {0, 2}}));
+    graph.SetVertexCommWeight(0, 4);
+
+    BspInstance<GraphType> instance;
+    instance.GetArchitecture() = BspArchitecture<GraphType>(2U, 3, 5);
+    instance.GetComputationalDag() = graph;
+    const BspSchedule<GraphType> schedule(instance, {0U, 1U, 1U}, {0U, 1U, 1U});
+
+    KlActiveSchedule<GraphType, double> activeSchedule;
+    activeSchedule.Initialize(schedule);
+    CompatibleProcessorRange<GraphType> processorRange(instance);
+    KlHyperTotalCommCostFunction<GraphType, double, 1U> costFunction;
+    costFunction.Initialize(activeSchedule, processorRange);
+
+    const double cost = costFunction.ComputeScheduleCost();
+    EXPECT_DOUBLE_EQ(cost, costFunction.ComputeScheduleCostTest());
+    EXPECT_DOUBLE_EQ(costFunction.GetCommMultiplier(), 0.5);
+    EXPECT_DOUBLE_EQ(costFunction.GetMaxCommWeight(), 4.0);
+    EXPECT_DOUBLE_EQ(costFunction.GetMaxCommWeightMultiplied(), 2.0);
+    EXPECT_EQ(costFunction.Name(), "hyper_total_comm_cost");
+
+    using VertexType = VertexIdxT<GraphType>;
+    std::map<VertexType, KlUpdateInfo<VertexType>> recompute;
+    costFunction.MarkForFullRecompute(1, recompute);
+    costFunction.MarkForFullRecompute(1, recompute);
+    EXPECT_TRUE(recompute.at(1).fullUpdate_);
+
+    const KlMoveStruct<double, VertexType> move(1, 0.0, 1U, 1U, 0U, 1U);
+    static_cast<void>(costFunction.GetPreMoveCommData(move));
+    costFunction.UpdateDatastructureAfterMove(move, 0U, 1U);
+    costFunction.UpdateDatastructureAfterMove(move.ReverseMove(), 0U, 1U);
+    EXPECT_DOUBLE_EQ(cost, costFunction.ComputeScheduleCostTest());
+}
+
+// Start from a valid but imbalanced schedule so KL can exercise real move and rollback decisions.
+TEST_F(TestOspAlgorithms, KlImproverBalancesAValidSchedule)
+{
+    const std::set<std::pair<VertType, VertType>> edges({{0, 2}, {1, 2}, {2, 3}, {2, 4}, {3, 5}, {4, 5}});
+    GraphType graph(6, edges);
+    for (const auto vertex : graph.Vertices()) {
+        graph.SetVertexWorkWeight(vertex, 10);
+        graph.SetVertexCommWeight(vertex, 2);
+    }
+
+    BspInstance<GraphType> instance;
+    instance.GetArchitecture() = BspArchitecture<GraphType>(3U, 1, 2);
+    instance.GetComputationalDag() = graph;
+    BspSchedule<GraphType> schedule(instance, {0U, 0U, 0U, 0U, 0U, 0U}, {0U, 0U, 1U, 2U, 2U, 3U});
+    ASSERT_TRUE(schedule.IsValid());
+    const auto initialCost = schedule.ComputeCosts();
+
+    KlImprover<GraphType, KlHyperTotalCommCostFunction<GraphType, double, 1U>, 1U, double> improver(7U);
+    improver.SetSuperstepRemoveStrengthParameter(1.0);
+    improver.SetTimeQualityParameter(1.0);
+    const ReturnStatus status = improver.ImproveSchedule(schedule);
+
+    EXPECT_TRUE(status == ReturnStatus::OSP_SUCCESS || status == ReturnStatus::OSP_BEST_FOUND);
+    EXPECT_TRUE(schedule.IsValid());
+    EXPECT_LE(schedule.ComputeCosts(), initialCost);
+
+    BspInstance<GraphType> singleProcessorInstance;
+    singleProcessorInstance.GetArchitecture() = BspArchitecture<GraphType>(1U);
+    singleProcessorInstance.GetComputationalDag() = graph;
+    BspSchedule<GraphType> singleProcessorSchedule(singleProcessorInstance);
+    EXPECT_EQ(improver.ImproveScheduleWithTimeLimit(singleProcessorSchedule), ReturnStatus::OSP_BEST_FOUND);
+}
+
+// Split two disconnected components over three processor groups and cover an unused group.
+TEST_F(TestOspAlgorithms, TrimmedGroupSchedulerDistributesComponents)
+{
+    BspInstance<ConstrGraphType> instance;
+    instance.GetArchitecture() = BspArchitecture<ConstrGraphType>(6U);
+    auto& graph = instance.GetComputationalDag();
+    for (unsigned i = 0; i < 4U; ++i) {
+        graph.AddVertex(1, 1, 1);
+    }
+    EXPECT_TRUE(graph.AddEdge(0, 1));
+    EXPECT_TRUE(graph.AddEdge(2, 3));
+
+    BspSchedule<ConstrGraphType> schedule(instance);
+    Serial<ConstrGraphType> serialScheduler;
+    TrimmedGroupScheduler<ConstrGraphType> scheduler(serialScheduler, 3U);
+
+    EXPECT_EQ(scheduler.ComputeSchedule(schedule), ReturnStatus::OSP_SUCCESS);
+    EXPECT_TRUE(schedule.IsValid());
+    EXPECT_EQ(schedule.NumberOfSupersteps(), 1U);
+    EXPECT_EQ(schedule.AssignedProcessor(0), 0U);
+    EXPECT_EQ(schedule.AssignedProcessor(1), 0U);
+    EXPECT_EQ(schedule.AssignedProcessor(2), 2U);
+    EXPECT_EQ(schedule.AssignedProcessor(3), 2U);
+}
+
+// An empty trimmed group is a successful zero-superstep schedule.
+TEST_F(TestOspAlgorithms, TrimmedGroupSchedulerHandlesEmptyGraph)
+{
+    BspInstance<ConstrGraphType> instance;
+    BspSchedule<ConstrGraphType> schedule(instance);
+    Serial<ConstrGraphType> serialScheduler;
+    TrimmedGroupScheduler<ConstrGraphType> scheduler(serialScheduler, 1U);
+
+    EXPECT_EQ(scheduler.ComputeSchedule(schedule), ReturnStatus::OSP_SUCCESS);
+    EXPECT_EQ(schedule.NumberOfSupersteps(), 0U);
+}
+
+TEST_F(TestOspAlgorithms, IsomorphicSchedulerTrimsRepeatedComponents)
+{
+    const std::set<std::pair<VertType, VertType>> edges({{0, 1}, {2, 3}, {4, 5}, {6, 7}});
+    GraphType graph(8, edges);
+    for (const auto vertex : graph.Vertices()) {
+        graph.SetVertexWorkWeight(vertex, 2000);
+    }
+    BspInstance<GraphType> instance;
+    instance.GetArchitecture() = BspArchitecture<GraphType>(4U);
+    instance.GetComputationalDag() = graph;
+
+    Serial<ConstrGraphType> serialScheduler;
+    IsomorphicSubgraphScheduler<GraphType, ConstrGraphType> inferredHashScheduler(serialScheduler);
+    inferredHashScheduler.SetWorkThreshold(100000);
+    inferredHashScheduler.SetCriticalPathThreshold(100000);
+    const auto inferredHashPartition = inferredHashScheduler.ComputePartition(instance);
+    EXPECT_TRUE(coarser_util::CheckValidContractionMap<ConstrGraphType>(inferredHashPartition));
+
+    MerkleHashComputer<GraphType> hashComputer(graph);
+    IsomorphicSubgraphScheduler<GraphType, ConstrGraphType> trimmedScheduler(serialScheduler, hashComputer);
+    trimmedScheduler.SetWorkThreshold(100000);
+    trimmedScheduler.SetCriticalPathThreshold(100000);
+    trimmedScheduler.EnableUseMaxGroupSize(2U);
+    trimmedScheduler.SetAllowTrimmedScheduler(true);
+    const auto trimmedPartition = trimmedScheduler.ComputePartition(instance);
+    EXPECT_TRUE(coarser_util::CheckValidContractionMap<ConstrGraphType>(trimmedPartition));
 }
 
 TEST_F(TestOspAlgorithms, CoarsenMerkleBsp)
