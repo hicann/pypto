@@ -43,7 +43,7 @@ from .logging import *  # noqa
 # Import frontend after all other imports to avoid circular imports
 from . import frontend
 
-
+jit = frontend.jit
 tensor = Tensor
 element = Element
 symbolic_scalar = SymbolicScalar

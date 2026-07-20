@@ -5,7 +5,8 @@ This sample demonstrates the simplest tensor addition operation in PyPTO. It is 
 ## Overview
 
 This sample demonstrates the complete PyPTO development process through a simple tensor addition:
-- Define a kernel function using `@pypto.frontend.jit`.
+
+- Define a kernel function using `@pypto.jit`.
 - Create input data through PyTorch tensors.
 - Call the JIT kernel to execute the computation and verify the result.
 
@@ -25,8 +26,6 @@ This sample demonstrates the complete PyPTO development process through a simple
 # Default path installation, using root user as a sample (for non-root users, replace /usr/local with ${HOME})
 source /usr/local/Ascend/ascend-toolkit/set_env.sh
 
-# Set device ID
-export TILE_FWK_DEVICE_ID=0
 ```
 
 ### Execute the Script

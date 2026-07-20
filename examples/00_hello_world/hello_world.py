@@ -10,192 +10,69 @@
 # -----------------------------------------------------------------------------------------------------------
 """
 Hello World Example for PyPTO
-
-This example demonstrates the simplest tensor addition.
 """
+
 import os
 import sys
 import argparse
 import pypto
 import torch
-import numpy as np
-from numpy.testing import assert_allclose
+
+runtime_options = {}
 
 
-def get_device_id():
-    """
-    Get and validate TILE_FWK_DEVICE_ID from environment variable.
+@pypto.jit(runtime_options=runtime_options)
+def add_kernel(x: pypto.Tensor[...], y: pypto.Tensor[...], out: pypto.Tensor[...]):
+    """Simple add kernel, use pypto.Tensor[...] to auto infer shape and dtype."""
 
-    Returns:
-        int: The device ID if valid, None otherwise.
-    """
-    if 'TILE_FWK_DEVICE_ID' not in os.environ:
-        print("If no NPU environment is available, set --run_mode sim to run in simulation mode;")
-        print("otherwise, set the environment variable TILE_FWK_DEVICE_ID.")
-        print("Please set it before running this example:")
-        print("  export TILE_FWK_DEVICE_ID=0")
-        return None
+    # set vector tile shapes, it'll use by the following `vector` operations,
+    # so the rank must match tensor `x` and `y`
+    pypto.set_vec_tile_shapes(32, 32)
 
-    try:
-        device_id = int(os.environ['TILE_FWK_DEVICE_ID'])
-        return device_id
-    except ValueError:
-        print(f"ERROR: TILE_FWK_DEVICE_ID must be an integer, got: {os.environ['TILE_FWK_DEVICE_ID']}")
-        return None
+    # pypto kernel does not support return value, `[:]` is just a syntax sugar to present
+    # write to output tensor, can also use `pypto.assemble(x + y, [0, 0], out)`
+    out[:] = x + y
 
 
-def create_add_kernel(shape: tuple, run_mode: str = "npu"):
-
-    if run_mode == "npu":
-        mode = pypto.RunMode.NPU
-    elif run_mode == "sim":
-        mode = pypto.RunMode.SIM
+def device_init(run_mode):
+    if run_mode == "sim":
+        runtime_options["run_mode"] = pypto.RunMode.SIM
+        return "cpu"
     else:
-        raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
+        try:
+            import torch_npu
+        except ImportError:
+            print("torch_npu is not installed, please install it first")
+            sys.exit(1)
 
-    @pypto.frontend.jit(runtime_options={"run_mode": mode})
-    def add_kernel(
-        x: pypto.Tensor([...], pypto.DT_FP32),
-        y: pypto.Tensor([...], pypto.DT_FP32),
-        out: pypto.Tensor([...], pypto.DT_FP32),
-    ):
-        pypto.set_vec_tile_shapes(1, 4, 1, 64)
-        out[:] = x + y
+        device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+        torch.npu.set_device(device_id)
 
-    return add_kernel
-
-
-def test_add_direct(device_id=None, run_mode: str = "npu") -> None:
-    device = f'npu:{device_id}' if (run_mode == "npu" and device_id is not None) else 'cpu'
-    shape = (1, 4, 1, 64)
-    #prepare data
-    input_data0 = torch.rand(shape, dtype=torch.float, device=device)
-    input_data1 = torch.rand(shape, dtype=torch.float, device=device)
-
-    output_data = torch.empty(shape, dtype=torch.float32, device=device)
-    create_add_kernel(shape, run_mode)(input_data0, input_data1, output_data)
-
-    golden = torch.add(input_data0, input_data1)
-
-    max_diff = np.abs(output_data.cpu().numpy() - golden.cpu().numpy()).max()
-    print(f"Input0 shape: {input_data0.shape}")
-    print(f"Input1 shape: {input_data1.shape}")
-    print(f"Output shape: {output_data.shape}")
-
-    if run_mode == "npu":
-        print(f"Max difference: {max_diff:.6f}")
-        assert_allclose(np.array(output_data.cpu()), np.array(golden.cpu()), rtol=3e-3, atol=3e-3)
-    print("✓ Hello world example passed")
-    print()
+        runtime_options["run_mode"] = pypto.RunMode.NPU
+        return f"npu:{device_id}"
 
 
 def main():
-    """Run hello_world example.
-
-    Usage:
-        python hello_world.py          # Run example
-        python hello_world.py --list   # List available examples
-    """
-    parser = argparse.ArgumentParser(
-        description="PyPTO hello_world Example",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  %(prog)s hello_world::test_add_direct
-            Run the hello_world::test_add_direct example
-  %(prog)s --list       List all available examples
-        """
-    )
+    parser = argparse.ArgumentParser(description="PyPTO add kernel")
     parser.add_argument(
-        'example_id',
-        type=str,
-        nargs='?',
-        help='Example ID to run (1). If not specified, the example will run.'
-    )
-    parser.add_argument(
-        '--list',
-        action='store_true',
-        help='List all available examples and exit'
-    )
-    parser.add_argument(
-        '--run_mode',
-        type=str,
-        nargs='?',
-        default="npu",
+        "-m",
+        "--run_mode",
         choices=["npu", "sim"],
-        help='Run mode, such as npu/sim etc.'
+        default="npu",
+        help="Execution mode (default: npu)",
     )
-
     args = parser.parse_args()
 
-    # Define available examples
-    examples = {
-        "hello_world::test_add_direct": {
-            'name': 'hello_world',
-            'description': 'add_direct implementation',
-            'function': test_add_direct
-        }
-    }
+    shape = (64, 64)
+    device = device_init(args.run_mode)
 
-    # List examples if requested
-    if args.list:
-        print("\n" + "=" * 60)
-        print("Available Examples")
-        print("=" * 60 + "\n")
-        for ex_id, ex_info in sorted(examples.items()):
-            print(f"  ID: {ex_id}")
-            print(f"     name: {ex_info['name']}")
-            print(f"     description: {ex_info['description']}\n")
-        return
+    x = torch.randn(shape, dtype=torch.float, device=device)
+    y = torch.randn(shape, dtype=torch.float, device=device)
+    out = torch.empty(shape, dtype=torch.float, device=device)
 
-    # Validate example ID if provided
-    if args.example_id is not None:
-        if args.example_id not in examples:
-            print(f"ERROR: Invalid example ID: {args.example_id}")
-            print(f"Valid example IDs are: {', '.join(map(str, sorted(examples.keys())))}")
-            print("\nUse --list to see all available examples.")
-            sys.exit(1)
+    add_kernel(x, y, out)
 
-    print("\n" + "=" * 60)
-    print("PyPTO hello_world Example")
-    print("=" * 60 + "\n")
-
-    # Get and validate device ID (needed for NPU examples)
-    device_id = None
-    examples_to_run = []
-
-    if args.example_id is not None:
-        # Run single example
-        example = examples.get(args.example_id)
-        if example is None:
-            raise ValueError(f"Invalid example ID: {args.example_id}")
-        examples_to_run = [(args.example_id, example)]
-    else:
-        # Run all examples
-        examples_to_run = list(examples.items())
-
-    if args.run_mode == "npu":
-        device_id = get_device_id()
-        if device_id is None:
-            return
-        import torch_npu
-        torch.npu.set_device(device_id)
-        print("Running examples that require NPU hardware...")
-        print("(Make sure CANN environment is configured and NPU is available)\n")
-
-    try:
-        for ex_id, ex_info in examples_to_run:
-            print(f"Running Example {ex_id}: {ex_info['name']}")
-            ex_info['function'](device_id, args.run_mode)
-
-        if len(examples_to_run) > 1:
-            print("=" * 60)
-            print("All hello_world tests passed!")
-            print("=" * 60)
-
-    except Exception as e:
-        print(f"\nError: {e}")
-        raise
+    torch.testing.assert_close(x + y, out, atol=1e-3, rtol=1e-3)
 
 
 if __name__ == "__main__":

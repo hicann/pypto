@@ -5,7 +5,8 @@
 ## 总览介绍
 
 本样例通过一个简单的张量加法演示了 PyPTO 的完整开发流程：
-- 使用 `@pypto.frontend.jit` 定义内核函数。
+
+- 使用 `@pypto.jit` 定义内核函数。
 - 通过 PyTorch 张量创建输入数据。
 - 调用 JIT 内核执行计算并验证结果。
 
@@ -24,9 +25,6 @@
 
 # 默认路径安装，以root用户为例（非root用户，将/usr/local替换为${HOME}）
 source /usr/local/Ascend/ascend-toolkit/set_env.sh
-
-# 设置设备 ID
-export TILE_FWK_DEVICE_ID=0
 ```
 
 ### 执行脚本
