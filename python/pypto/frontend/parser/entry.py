@@ -665,7 +665,7 @@ class JitCallableWrapper:
             )
         else:
             cann_is_configed: bool = bool(os.environ.get("ASCEND_HOME_PATH"))
-            if (os.environ.get("ACCURACY_LEVEL") == "2" and cann_is_configed):
+            if (pypto.get_global_config("simulation.accuracy_level") == 2 and cann_is_configed):
                 with pypto.options("jit_scope"):
                     self._set_config_option()
                     get_torch_npu()

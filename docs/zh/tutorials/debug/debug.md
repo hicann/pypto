@@ -59,7 +59,7 @@
     )
     ```
 
-2. 执行用例
+2. 执行用例。
 
     ```bash
     python3 examples/02_intermediate/operators/softmax/softmax.py
@@ -142,7 +142,10 @@
     - 未检测到CANN软件包：自动启用仿真模式（无需显式配置）。
     - 检测到CANN软件包：优先使用真实硬件执行，仿真模式不生效。
 
-具体操作步骤为：
+<!-- npu="A3,910b" id1 -->
+### Atlas A2 训练系列产品/Atlas A2 推理系列产品、Atlas A3 训练系列产品/Atlas A3 推理系列产品
+
+操作步骤如下：
 
 1. 指定运行参数run\_mode。
 
@@ -150,7 +153,7 @@
     @pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.SIM})
     ```
 
-2. 执行算子，自动触发仿真运行
+2. 执行算子，自动触发仿真运行。
 
     ```bash
     python examples/00_hello_world/hello_world.py --run_mode=sim
@@ -167,3 +170,87 @@
     泳道图展示每个核内任务调试情况，包含执行耗时、空闲间隔等，可根据具体情况对算子进行调优，如调整张量的分块形状。
 
 5. 精度仿真与NPU执行一致，执行完成后，会返回运行结果，用户可获取结果并进行处理。
+<!-- end id1 -->
+
+<!-- npu="950" id2 -->
+### Ascend 950PR/Ascend 950DT
+
+Ascend 950PR/Ascend 950DT 支持以下两种仿真模式，均通过`cannsim record`命令启动，开发者可根据调试目的选择：
+
+- **CostModel**：任务级仿真，粒度较粗、速度快但精度较低；输出泳道图（merged\_swimlane.json），通过PyPTO Toolkit查看核间任务的调度与并行情况，适用于快速评估算子的任务调度与核间并行度。
+- **CAModel**：指令级仿真，粒度较细、精度高但速度慢；输出流水报告（trace\_core\*.json），通过chrome://tracing查看核内指令的执行细节，适用于分析核内流水、进行精细性能调优。
+
+#### CostModel
+
+1. 指定运行参数run\_mode。
+
+    ```python
+    @pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.SIM})
+    ```
+
+    指定tensor分配cpu。
+
+    ```python
+    input_data = torch.rand(shape, dtype=torch.float, device='cpu')
+    ```
+
+2. 执行算子，自动触发仿真运行。
+
+    ```bash
+    cannsim record 'python3 examples/00_hello_world/hello_world.py --run_mode sim' -s Ascend950 -o output/
+    ```
+
+3. 性能仿真执行成功后，在output目录下，生成以下文件信息。
+
+    ![](../figures/zh-cn_image_0000002527468273.png)
+
+4. 右键单击merged\_swimlane.json文件，在弹出的菜单中选择“使用PyPTO Toolkit打开”。
+
+    ![](../figures/zh-cn_image_0000002495188648.png)
+
+    泳道图展示每个核内任务调试情况，包含执行耗时、空闲间隔等，可根据具体情况对算子进行调优，如调整张量的分块形状。
+
+5. 精度仿真与NPU执行一致，执行完成后，会返回运行结果，用户可获取结果并进行处理。
+
+#### CAModel
+
+1. 指定运行参数run\_mode。
+
+    ```python
+    @pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.SIM})
+    ```
+
+    指定tensor分配cpu。
+
+    ```python
+    input_data = torch.rand(shape, dtype=torch.float, device='cpu')
+    ```
+
+2. 执行算子，自动触发仿真运行。
+
+    ```bash
+    cannsim record 'export ACCURACY_LEVEL=2 && python3 examples/00_hello_world/hello_world.py --run_mode sim' -s Ascend950 -n 0 -g -o output/
+    ```
+
+3. 性能仿真执行成功后，在output/cannsim_*/目录下，生成以下文件信息。
+
+    ![](../figures/zh-cn_image_0000002527468274.png)
+
+4. 执行生成报告命令。
+
+    ```bash
+    cannsim report -e output/cannsim_*/ -o output/cannsim_*/report --core-id all
+    ```
+
+5. 执行生成报告命令后，在output/cannsim_*/report目录下，生成以下文件信息。
+
+    ![](../figures/zh-cn_image_0000002527468275.png)
+
+    把图中如trace_core0.json放入chrome://tracing/中，即可得到流水报告。
+
+    ![](../figures/zh-cn_image_0000002527468276.png)
+
+    流水报告展示每个核内指令的执行情况，包含执行耗时、空闲间隔等，可根据具体情况对算子进行调优，如调整张量的分块形状。
+
+6. 精度仿真与NPU执行一致，执行完成后，会返回运行结果，用户可获取结果并进行处理。
+<!-- end id2 -->
