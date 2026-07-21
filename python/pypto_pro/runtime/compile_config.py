@@ -190,6 +190,7 @@ _DEFAULT_CCE_JIT_COMPILE_CONFIG = JitCompileConfig(
             "-Wno-parentheses-equality",
             "-Wno-unused-command-line-argument",
             "-Werror",
+            "-Wno-c++20-extensions",
             "-Wno-cce-compat",
         ),
     },
