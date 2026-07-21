@@ -24,7 +24,7 @@ def assemble_kernel(
     pypto.set_vec_tile_shapes(64, 128)
     aux_mat = pypto.tensor([129, 128], pypto.DT_FP32, name="aux_mat")
     pypto.assemble(pypto.full([129, 128], 0.0, pypto.DT_FP32), [0, 0], aux_mat)
-    a = pypto.view(a, [129, 128], [0, 0])
+    a[:] = pypto.view(a, [129, 128], [0, 0])
     pypto.assemble(a, [0, 0], aux_mat)
     pypto.assemble(aux_mat + a, [0, 0], out)
 

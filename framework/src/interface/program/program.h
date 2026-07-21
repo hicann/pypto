@@ -80,7 +80,13 @@ public: // public api for torch
         }
         return tensorSlotManager_;
     };
-    void ResetTensorSlotManager() { tensorSlotManager_ = std::make_shared<TensorSlotManager>(); }
+    void ResetTensorSlotManager()
+    {
+        if (tensorSlotManager_) {
+            tensorSlotManager_->ClearSlotTensors();
+        }
+        tensorSlotManager_ = std::make_shared<TensorSlotManager>();
+    }
     Json DumpJson(Function* mainFunc = nullptr) const;
     void LoadJson(Json& programJson);
     void DumpJsonFile(const std::string& fileName, Function* mainFunc = nullptr);

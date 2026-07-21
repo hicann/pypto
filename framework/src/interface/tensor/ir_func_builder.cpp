@@ -205,8 +205,10 @@ void RootFunctionBuilder::ComputeOutcast(Function& pathFunc,
     std::unordered_set<std::shared_ptr<LogicalTensor>> outcastPtrs;
     for (auto& output : allOutputs) {
         if (outcastPtrs.find(output) == outcastPtrs.end()) {
-            bool neededByConsumer = consumedRawMagics_.count(output->GetRawMagic()) > 0;
-            bool isFuncOutput = paramRawMagics_.count(output->GetRawMagic()) > 0;
+            bool neededByConsumer = consumedRawMagics_.count(output->GetRawMagic()) ||
+                                    consumedOriginName_.count(IRContext::Get().GetOriginName(output));
+            bool isFuncOutput = paramRawMagics_.count(output->GetRawMagic()) ||
+                                paramOriginName_.count(IRContext::Get().GetOriginName(output));
             if (neededByConsumer || isFuncOutput) {
                 outcastPtrs.insert(output);
                 pathFunc.AddOriginOutcast(output);
@@ -345,6 +347,10 @@ ir::StmtPtr RootFunctionBuilder::CreatePathFuncAndPlaceholder(const ir::SeqStmts
 
     for (auto& incast : pathFunc->GetOriginIncast()) {
         consumedRawMagics_.insert(incast->GetRawMagic());
+        auto name = IRContext::Get().GetOriginName(incast);
+        if (!name.empty()) {
+            consumedOriginName_.insert(name);
+        }
     }
 
     auto placeholderStmt = std::make_shared<ir::TensorOpStmt>(std::vector<ir::VarPtr>{}, nullptr, "CALL",
@@ -587,9 +593,11 @@ ir::StmtPtr RootFunctionBuilder::TransformBody(ir::StmtPtr stmt)
     paramRawMagics_.clear();
     for (auto& param : logicalParams_) {
         paramRawMagics_.insert(param->GetRawMagic());
+        paramOriginName_.insert(IRContext::Get().GetOriginName(param));
     }
 
     consumedRawMagics_.clear();
+    consumedOriginName_.clear();
 
     auto irTree = TransformStmts(stmt, "");
     ReplacePlaceholders(irTree);

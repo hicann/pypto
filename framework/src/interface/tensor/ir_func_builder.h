@@ -42,10 +42,11 @@ private:
     Program& program_;
     Function* parentFunc_;
     std::shared_ptr<Function> dynFunc_;
-    // std::shared_ptr<TensorSlotScope> dynScope_;
     LogicalTensors logicalParams_;
     std::unordered_set<int> consumedRawMagics_;
+    std::unordered_set<std::string> consumedOriginName_;
     std::unordered_set<int> paramRawMagics_;
+    std::unordered_set<std::string> paramOriginName_;
     std::unordered_map<std::string, int> loopNameCounters_;
 
     void InitDynFunc(const pypto::ir::FunctionPtr& irFunc);

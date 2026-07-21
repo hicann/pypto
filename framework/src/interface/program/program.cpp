@@ -55,7 +55,13 @@ Program::Program() : currentFunctionPtr_(nullptr)
     HostMachine::GetInstance().Init(HostMachineMode::SERVER);
 }
 
-Program::~Program() { HostMachine::GetInstance().Destroy(); }
+Program::~Program()
+{
+    if (tensorSlotManager_) {
+        tensorSlotManager_->ClearSlotTensors();
+    }
+    HostMachine::GetInstance().Destroy();
+}
 
 Program& Program::GetInstance()
 {
@@ -67,6 +73,9 @@ void Program::Reset()
 {
     name_.clear();
     IRContext::Get().Reset();
+    if (tensorSlotManager_) {
+        tensorSlotManager_->ClearSlotTensors();
+    }
     tensorSlotManager_ = nullptr;
     functionmap_.clear();
     functionMagicNameStack_.clear();
