@@ -26,6 +26,7 @@
 #include "interface/inner/tilefwk.h"
 #include "interface/program/program.h"
 #include "interface/function/function.h"
+#include "interface/tensor/irbuilder.h"
 #include "passes/pass_utils/pass_utils.h"
 
 namespace npu::tile_fwk {
@@ -43,25 +44,68 @@ public:
     Status EliminateVecDupBranch(Function& function, bool& hasReduceAccCascade);
 
 private:
+    struct ReshapeRemapResult {
+        std::vector<Operation*> assembles;
+        std::vector<Operation*> reshapeOps;
+        std::vector<std::vector<int64_t>> reshapeOutputShapes;
+        std::vector<std::vector<SymbolicScalar>> reshapeOutputDynShapes;
+        std::vector<int64_t> assembleOutputShape;
+        std::vector<SymbolicScalar> assembleOutputDynShape;
+        std::vector<int64_t> mappedOffset;
+        std::vector<SymbolicScalar> mappedDynOffset;
+    };
+
     Status CheckAtomicRMWUnsupportedMode(Function& function);
     std::string GetRmwAttrKey(AtomicRMWMode mode);
     Status CheckAndSetRmwAttr(Operation& producerOp, AtomicRMWMode rmwMode, const std::string& rmwAttrKey);
-    void AccumulateAssembleOffset(std::shared_ptr<AssembleOpAttribute> producerAttr,
-                                  const std::vector<int64_t>& rmwOffset,
-                                  const std::vector<SymbolicScalar>& rmwDynOffset);
+    Status AccumulateAssembleOffset(std::shared_ptr<AssembleOpAttribute> producerAttr,
+                                    const std::vector<int64_t>& rmwOffset,
+                                    const std::vector<SymbolicScalar>& rmwDynOffset);
     Status ProcessAssembleProducer(Operation& producerOp, std::shared_ptr<LogicalTensor> rmwOut, AtomicRMWMode rmwMode,
                                    const std::vector<int64_t>& rmwOffset,
                                    const std::vector<SymbolicScalar>& rmwDynOffset);
+    Status MarkAssembleProducerAtomic(Operation& producerOp, AtomicRMWMode rmwMode,
+                                      const std::vector<int64_t>& rmwOffset,
+                                      const std::vector<SymbolicScalar>& rmwDynOffset);
     bool HasAssembleProducer(const std::shared_ptr<LogicalTensor>& input) const;
     bool HasConsumerExcept(const std::shared_ptr<LogicalTensor>& input, const Operation& op) const;
     Status PrepareAtomicRMWSharedInputs(Function& function, const std::vector<Operation*>& atomicRmwOps) const;
     std::shared_ptr<LogicalTensor> PrepareExclusiveAtomicInput(Function& function, Operation& atomicOp,
                                                                const std::shared_ptr<LogicalTensor>& input) const;
     Status ProcessSingleAtomicRMW(Operation& op);
+    Status ProcessAtomicInput(Operation& atomicOp, const std::shared_ptr<LogicalTensor>& input,
+                              const std::shared_ptr<LogicalTensor>& output, AtomicRMWMode rmwMode,
+                              const std::vector<int64_t>& rmwOffset, const std::vector<SymbolicScalar>& rmwDynOffset);
+    Status ProcessAtomicAssembleProducer(Operation& atomicOp, Operation& producerOp,
+                                         const std::shared_ptr<LogicalTensor>& output, AtomicRMWMode rmwMode,
+                                         const std::vector<int64_t>& rmwOffset,
+                                         const std::vector<SymbolicScalar>& rmwDynOffset);
+    Status ProcessAtomicThroughReshape(Operation& atomicOp, const std::shared_ptr<LogicalTensor>& input,
+                                       const std::shared_ptr<LogicalTensor>& output, AtomicRMWMode rmwMode,
+                                       const std::vector<int64_t>& rmwOffset,
+                                       const std::vector<SymbolicScalar>& rmwDynOffset);
+    bool HasReshapeProducer(const std::shared_ptr<LogicalTensor>& input) const;
+    Status FindUpstreamAssembleAndRemapOffset(const std::shared_ptr<LogicalTensor>& input,
+                                              const std::shared_ptr<LogicalTensor>& outputBase,
+                                              const std::vector<int64_t>& offset,
+                                              const std::vector<SymbolicScalar>& dynOffset,
+                                              ReshapeRemapResult& result) const;
+    Status CollectTerminalAssembles(const std::shared_ptr<LogicalTensor>& current, std::set<int>& visited,
+                                    ReshapeRemapResult& result, bool& found) const;
+    Status RemapThroughReshape(Operation& producer, std::shared_ptr<LogicalTensor>& current,
+                               std::vector<int64_t>& currentBaseShape, std::vector<SymbolicScalar>& currentBaseDynShape,
+                               ReshapeRemapResult& result) const;
+    Status RetargetReshapeChain(Operation& atomicOp, const std::shared_ptr<LogicalTensor>& output,
+                                const ReshapeRemapResult& remapResult);
+    Status CombineAssembleOffset(const Operation& assemble, const std::vector<int64_t>& offset,
+                                 const std::vector<SymbolicScalar>& dynOffset, std::vector<int64_t>& combinedOffset,
+                                 std::vector<SymbolicScalar>& combinedDynOffset) const;
     void CollectReduceAccUpstream(Operation& op, std::set<int>& visited, std::vector<Operation*>& result) const;
     Status TraceBackAndRemoveVecDup(Function& function, Operation& op, std::set<int>& visited, bool& anyRemoved);
     Status RemoveVecDupBranchFromCubeOp(Operation& cubeOp, bool& anyRemoved);
     bool IsVecDupAssembleInput(const Operation& assembleOp) const;
+
+    IRBuilder irBuilder_;
 };
 } // namespace npu::tile_fwk
 #endif // PROCESS_ATOMIC_H

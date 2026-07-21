@@ -262,6 +262,31 @@ Status ViewReshapeAssembleReorderUtils::ReorderViewReshapeAssemble(Function& fun
     return utils.Process(function);
 }
 
+bool ViewReshapeAssembleReorderUtils::RemapOffsetBackwardThroughReshape(
+    const LogicalTensorPtr& reshapeInput, const LogicalTensorPtr& reshapeOutput,
+    const std::vector<int64_t>& outputBaseShape, const std::vector<SymbolicScalar>& outputBaseDynShape,
+    const std::vector<int64_t>& outputOffset, const std::vector<SymbolicScalar>& outputDynOffset,
+    std::vector<int64_t>& inputBaseShape, std::vector<SymbolicScalar>& inputBaseDynShape,
+    std::vector<int64_t>& inputOffset, std::vector<SymbolicScalar>& inputDynOffset)
+{
+    if (reshapeInput == nullptr || reshapeOutput == nullptr || outputBaseShape.size() != outputBaseDynShape.size()) {
+        return false;
+    }
+    std::vector<AxisGroup> axisPlan;
+    if (!BuildAxisPlan(reshapeInput->GetShape(), reshapeOutput->GetShape(), axisPlan) ||
+        !ApplyBackwardShape(outputBaseShape, outputBaseDynShape, axisPlan, inputBaseShape, inputBaseDynShape)) {
+        return false;
+    }
+    RemapResult remap;
+    if (!RemapOffset(outputOffset, outputDynOffset, outputBaseShape, outputBaseDynShape, inputBaseShape,
+                     inputBaseDynShape, remap)) {
+        return false;
+    }
+    inputOffset = std::move(remap.staticOffset);
+    inputDynOffset = std::move(remap.dynOffset);
+    return true;
+}
+
 Status ViewReshapeAssembleReorderUtils::Process(Function& function)
 {
     if (!HasTargetMatmulOp(function)) {

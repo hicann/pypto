@@ -1519,5 +1519,193 @@ TEST_F(ProcessAtomicTest, TestAtomicRMWNoReduceAccVecDupBranchKeep)
     EXPECT_EQ(mulbOp->GetInputOperandSize(), 3);
     EXPECT_EQ(CountOpsByType(function, Opcode::OP_VEC_DUP), 1);
 }
+
+TEST_F(ProcessAtomicTest, TestAtomicRMWThroughReshape)
+{
+    ComputationalGraphBuilder G;
+    DataType dtype = DataType::DT_FP32;
+    G.AddTensor(dtype, {16, 32}, "assembleInput");
+    G.AddTensor(dtype, {16, 32}, "reshapeInput");
+    G.AddTensor(dtype, {1, 16, 32}, "reshapeMid");
+    G.AddTensor(dtype, {2, 16, 32}, "atomicOutput");
+    auto assembleInput = G.GetTensor("assembleInput");
+    auto reshapeInput = G.GetTensor("reshapeInput");
+    assembleInput->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    auto reshapeMid = G.GetTensor("reshapeMid");
+    auto atomicOutput = G.GetTensor("atomicOutput");
+    reshapeInput->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    reshapeMid->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    atomicOutput->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+
+    G.AddOp(Opcode::OP_ASSEMBLE, {"assembleInput"}, {"reshapeInput"}, "assembleOp");
+    G.GetOp("assembleOp")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
+    G.AddOp(Opcode::OP_RESHAPE, {"reshapeInput"}, {"reshapeMid"}, "reshapeOp");
+    G.AddOp(Opcode::OP_ATOMIC_RMW, {"reshapeMid"}, {"atomicOutput"}, "atomicRmwOp");
+    auto atomicRmwOp = G.GetOp("atomicRmwOp");
+    atomicRmwOp->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{1, 0, 0}));
+    atomicRmwOp->SetAttribute(OpAttributeKey::rmwMode, static_cast<int>(AtomicRMWMode::ADD));
+    G.SetInCast({"assembleInput"});
+    G.SetOutCast({"atomicOutput"});
+
+    auto* function = G.GetFunction();
+    ProcessAtomic passLocal;
+    EXPECT_EQ(passLocal.EliminateAtomicRMW(*function), SUCCESS);
+    EXPECT_EQ(CountOpsByType(function, Opcode::OP_ATOMIC_RMW), 0);
+    EXPECT_EQ(CountOpsByType(function, Opcode::OP_RESHAPE), 1);
+
+    auto* assembleOp = G.GetOp("assembleOp");
+    EXPECT_NE(assembleOp, nullptr);
+    EXPECT_TRUE(assembleOp->HasAttr(RMW_MODE_ATTR_ADD));
+    auto updatedAttr = std::dynamic_pointer_cast<AssembleOpAttribute>(assembleOp->GetOpAttribute());
+    ASSERT_NE(updatedAttr, nullptr);
+    EXPECT_EQ(updatedAttr->GetToOffset(), (std::vector<int64_t>{16, 0}));
+    EXPECT_NE(assembleOp->GetOutputOperand(0)->GetRawTensor(), atomicOutput->GetRawTensor());
+    EXPECT_EQ(assembleOp->GetOutputOperand(0)->GetShape(), (std::vector<int64_t>{32, 32}));
+    EXPECT_EQ(assembleOp->GetOutputOperand(0)->GetMemoryTypeOriginal(), MemoryType::MEM_DEVICE_DDR);
+    EXPECT_EQ(assembleOp->GetOutputOperand(0)->GetMemoryTypeToBe(), MemoryType::MEM_DEVICE_DDR);
+    EXPECT_EQ(G.GetOp("reshapeOp")->GetOutputOperand(0), atomicOutput);
+    EXPECT_EQ(CountOpsByType(function, Opcode::OP_ASSEMBLE), 1);
+}
+
+TEST_F(ProcessAtomicTest, TestAtomicRMWThroughReshapeWithAssembleFanin)
+{
+    ComputationalGraphBuilder G;
+    DataType dtype = DataType::DT_FP32;
+    G.AddTensor(dtype, {16, 16}, "assembleInput0");
+    G.AddTensor(dtype, {16, 16}, "assembleInput1");
+    G.AddTensor(dtype, {16, 32}, "reshapeInput");
+    G.AddTensor(dtype, {1, 16, 32}, "reshapeOutput");
+    G.AddTensor(dtype, {2, 16, 32}, "atomicOutput");
+    for (const char* name : {"assembleInput0", "assembleInput1", "reshapeInput", "reshapeOutput", "atomicOutput"}) {
+        G.GetTensor(name)->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    }
+
+    G.AddOp(Opcode::OP_ASSEMBLE, {"assembleInput0"}, {"reshapeInput"}, "assembleOp0");
+    G.GetOp("assembleOp0")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
+    G.AddOp(Opcode::OP_ASSEMBLE, {"assembleInput1"}, {"reshapeInput"}, "assembleOp1");
+    G.GetOp("assembleOp1")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 16}));
+    G.AddOp(Opcode::OP_RESHAPE, {"reshapeInput"}, {"reshapeOutput"}, "reshapeOp");
+    G.AddOp(Opcode::OP_ATOMIC_RMW, {"reshapeOutput"}, {"atomicOutput"}, "atomicRmwOp");
+    auto atomicRmwOp = G.GetOp("atomicRmwOp");
+    atomicRmwOp->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{1, 0, 0}));
+    atomicRmwOp->SetAttribute(OpAttributeKey::rmwMode, static_cast<int>(AtomicRMWMode::ADD));
+    G.SetInCast({"assembleInput0", "assembleInput1"});
+    G.SetOutCast({"atomicOutput"});
+
+    auto* function = G.GetFunction();
+    auto atomicOutput = G.GetTensor("atomicOutput");
+    ProcessAtomic passLocal;
+    EXPECT_EQ(passLocal.EliminateAtomicRMW(*function), SUCCESS);
+    EXPECT_EQ(CountOpsByType(function, Opcode::OP_ATOMIC_RMW), 0);
+    EXPECT_EQ(CountOpsByType(function, Opcode::OP_ASSEMBLE), 2);
+
+    auto* assembleOp0 = G.GetOp("assembleOp0");
+    auto* assembleOp1 = G.GetOp("assembleOp1");
+    ASSERT_NE(assembleOp0, nullptr);
+    ASSERT_NE(assembleOp1, nullptr);
+    EXPECT_TRUE(assembleOp0->HasAttr(RMW_MODE_ATTR_ADD));
+    EXPECT_TRUE(assembleOp1->HasAttr(RMW_MODE_ATTR_ADD));
+    auto attr0 = std::dynamic_pointer_cast<AssembleOpAttribute>(assembleOp0->GetOpAttribute());
+    auto attr1 = std::dynamic_pointer_cast<AssembleOpAttribute>(assembleOp1->GetOpAttribute());
+    ASSERT_NE(attr0, nullptr);
+    ASSERT_NE(attr1, nullptr);
+    EXPECT_EQ(attr0->GetToOffset(), (std::vector<int64_t>{16, 0}));
+    EXPECT_EQ(attr1->GetToOffset(), (std::vector<int64_t>{16, 16}));
+    EXPECT_EQ(assembleOp0->GetOutputOperand(0), assembleOp1->GetOutputOperand(0));
+    EXPECT_EQ(assembleOp0->GetOutputOperand(0)->GetShape(), (std::vector<int64_t>{32, 32}));
+    EXPECT_EQ(assembleOp0->GetOutputOperand(0)->GetMemoryTypeOriginal(), MemoryType::MEM_DEVICE_DDR);
+    EXPECT_EQ(G.GetOp("reshapeOp")->GetOutputOperand(0), atomicOutput);
+}
+
+TEST_F(ProcessAtomicTest, TestAtomicRMWThroughMultiDimReshape)
+{
+    ComputationalGraphBuilder G;
+    DataType dtype = DataType::DT_FP32;
+    G.AddTensor(dtype, {8, 32}, "assembleInput");
+    G.AddTensor(dtype, {8, 32}, "reshapeInput");
+    G.AddTensor(dtype, {2, 4, 32}, "reshapeMid");
+    G.AddTensor(dtype, {1, 2, 4, 32}, "atomicInput");
+    G.AddTensor(dtype, {3, 2, 4, 32}, "atomicOutput");
+    for (const char* name : {"assembleInput", "reshapeInput", "reshapeMid", "atomicInput", "atomicOutput"}) {
+        G.GetTensor(name)->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    }
+    auto atomicOutput = G.GetTensor("atomicOutput");
+
+    G.AddOp(Opcode::OP_ASSEMBLE, {"assembleInput"}, {"reshapeInput"}, "assembleOp");
+    G.GetOp("assembleOp")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
+    G.AddOp(Opcode::OP_RESHAPE, {"reshapeInput"}, {"reshapeMid"}, "reshapeOp0");
+    G.AddOp(Opcode::OP_RESHAPE, {"reshapeMid"}, {"atomicInput"}, "reshapeOp1");
+    G.AddOp(Opcode::OP_ATOMIC_RMW, {"atomicInput"}, {"atomicOutput"}, "atomicRmwOp");
+    auto atomicRmwOp = G.GetOp("atomicRmwOp");
+    atomicRmwOp->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{2, 1, 0, 0}));
+    atomicRmwOp->SetAttribute(OpAttributeKey::rmwMode, static_cast<int>(AtomicRMWMode::ADD));
+    G.SetInCast({"assembleInput"});
+    G.SetOutCast({"atomicOutput"});
+
+    auto* function = G.GetFunction();
+    ProcessAtomic passLocal;
+    EXPECT_EQ(passLocal.EliminateAtomicRMW(*function), SUCCESS);
+    EXPECT_EQ(CountOpsByType(function, Opcode::OP_ATOMIC_RMW), 0);
+    EXPECT_EQ(CountOpsByType(function, Opcode::OP_RESHAPE), 2);
+
+    auto* assembleOp = G.GetOp("assembleOp");
+    ASSERT_NE(assembleOp, nullptr);
+    EXPECT_TRUE(assembleOp->HasAttr(RMW_MODE_ATTR_ADD));
+    auto updatedAttr = std::dynamic_pointer_cast<AssembleOpAttribute>(assembleOp->GetOpAttribute());
+    ASSERT_NE(updatedAttr, nullptr);
+    EXPECT_EQ(updatedAttr->GetToOffset(), (std::vector<int64_t>{20, 0}));
+    EXPECT_NE(assembleOp->GetOutputOperand(0)->GetRawTensor(), atomicOutput->GetRawTensor());
+    EXPECT_EQ(assembleOp->GetOutputOperand(0)->GetShape(), (std::vector<int64_t>{24, 32}));
+    EXPECT_EQ(assembleOp->GetOutputOperand(0)->GetMemoryTypeOriginal(), MemoryType::MEM_DEVICE_DDR);
+    EXPECT_EQ(assembleOp->GetOutputOperand(0)->GetMemoryTypeToBe(), MemoryType::MEM_DEVICE_DDR);
+    EXPECT_EQ(G.GetOp("reshapeOp0")->GetOutputOperand(0)->GetMemoryTypeOriginal(), MemoryType::MEM_DEVICE_DDR);
+    EXPECT_EQ(G.GetOp("reshapeOp0")->GetOutputOperand(0)->GetMemoryTypeToBe(), MemoryType::MEM_DEVICE_DDR);
+    EXPECT_EQ(G.GetOp("reshapeOp1")->GetOutputOperand(0), atomicOutput);
+    EXPECT_EQ(CountOpsByType(function, Opcode::OP_ASSEMBLE), 1);
+}
+
+TEST_F(ProcessAtomicTest, TestAtomicRMWWithReshapeBeforeAssemble)
+{
+    ComputationalGraphBuilder G;
+    DataType dtype = DataType::DT_FP32;
+    G.AddTensor(dtype, {16, 32}, "matA");
+    G.AddTensor(dtype, {16, 32}, "matB");
+    G.AddTensor(dtype, {16, 32}, "matmulOutput");
+    G.AddTensor(dtype, {16, 32}, "transported");
+    G.AddTensor(dtype, {1, 16, 32}, "reshaped");
+    G.AddTensor(dtype, {1, 16, 32}, "assembled");
+    G.AddTensor(dtype, {1, 16, 32}, "atomicOutput");
+    for (const char* name : {"matA", "matB", "matmulOutput", "transported", "reshaped", "assembled", "atomicOutput"}) {
+        G.GetTensor(name)->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    }
+
+    G.AddOp(Opcode::OP_A_MUL_B, {"matA", "matB"}, {"matmulOutput"}, "matmulOp");
+    G.AddOp(Opcode::OP_ASSEMBLE, {"matmulOutput"}, {"transported"}, "transportAssemble");
+    G.GetOp("transportAssemble")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
+    G.AddOp(Opcode::OP_RESHAPE, {"transported"}, {"reshaped"}, "reshapeOp");
+    G.AddOp(Opcode::OP_ASSEMBLE, {"reshaped"}, {"assembled"}, "wrapperAssemble");
+    G.GetOp("wrapperAssemble")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0, 0}));
+    G.AddOp(Opcode::OP_ATOMIC_RMW, {"assembled"}, {"atomicOutput"}, "atomicRmwOp");
+    auto atomicRmwOp = G.GetOp("atomicRmwOp");
+    atomicRmwOp->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0, 0}));
+    atomicRmwOp->SetAttribute(OpAttributeKey::rmwMode, static_cast<int>(AtomicRMWMode::ADD));
+    G.SetInCast({"matA", "matB"});
+    G.SetOutCast({"atomicOutput"});
+
+    auto* function = G.GetFunction();
+    auto atomicOutput = G.GetTensor("atomicOutput");
+    ProcessAtomic passLocal;
+    EXPECT_EQ(passLocal.EliminateAtomicRMW(*function), SUCCESS);
+    EXPECT_EQ(CountOpsByType(function, Opcode::OP_ATOMIC_RMW), 0);
+    EXPECT_EQ(CountOpsByType(function, Opcode::OP_RESHAPE), 1);
+    EXPECT_EQ(CountOpsByType(function, Opcode::OP_A_MUL_B), 1);
+
+    auto* transportAssemble = G.GetOp("transportAssemble");
+    EXPECT_NE(transportAssemble, nullptr);
+    EXPECT_TRUE(transportAssemble->HasAttr(RMW_MODE_ATTR_ADD));
+    EXPECT_NE(transportAssemble->GetOutputOperand(0)->GetRawTensor(), atomicOutput->GetRawTensor());
+    EXPECT_EQ(G.GetOp("reshapeOp")->GetOutputOperand(0), atomicOutput);
+    EXPECT_EQ(CountOpsByType(function, Opcode::OP_ASSEMBLE), 1);
+}
 } // namespace tile_fwk
 } // namespace npu

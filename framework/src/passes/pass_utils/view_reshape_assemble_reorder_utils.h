@@ -32,6 +32,13 @@ public:
 
     static Status ReorderViewReshapeAssemble(Function& function);
 
+    static bool RemapOffsetBackwardThroughReshape(
+        const LogicalTensorPtr& reshapeInput, const LogicalTensorPtr& reshapeOutput,
+        const std::vector<int64_t>& outputBaseShape, const std::vector<SymbolicScalar>& outputBaseDynShape,
+        const std::vector<int64_t>& outputOffset, const std::vector<SymbolicScalar>& outputDynOffset,
+        std::vector<int64_t>& inputBaseShape, std::vector<SymbolicScalar>& inputBaseDynShape,
+        std::vector<int64_t>& inputOffset, std::vector<SymbolicScalar>& inputDynOffset);
+
     Status Process(Function& function);
 
 private:

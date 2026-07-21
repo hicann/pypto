@@ -19,13 +19,27 @@
 #include "tilefwk/tilefwk_op.h"
 #include "passes/pass_utils/dead_operation_eliminate.h"
 #include "passes/pass_utils/merge_view_assemble_utils.h"
+#include "passes/pass_utils/view_reshape_assemble_reorder_utils.h"
 #include "passes/pass_log/pass_log.h"
+#include <algorithm>
 #include <set>
 
 #define MODULE_NAME "ProcessAtomic"
 
 namespace npu {
 namespace tile_fwk {
+
+namespace {
+std::vector<SymbolicScalar> GetSymbolicShapeOrStatic(const std::shared_ptr<LogicalTensor>& tensor)
+{
+    if (tensor == nullptr) {
+        return {};
+    }
+    const auto& dynShape = tensor->GetDynValidShape();
+    return dynShape.size() == tensor->GetShape().size() ? dynShape : SymbolicScalar::FromConcrete(tensor->GetShape());
+}
+
+} // namespace
 
 Status ProcessAtomic::PreCheck(Function& function)
 {
@@ -163,25 +177,253 @@ Status ProcessAtomic::ProcessSingleAtomicRMW(Operation& op)
 
     int rmwModeValue = op.GetIntAttribute(OpAttributeKey::rmwMode);
     AtomicRMWMode rmwMode = static_cast<AtomicRMWMode>(rmwModeValue);
-    std::string rmwAttrKey = GetRmwAttrKey(rmwMode);
-    if (rmwAttrKey.empty()) {
+    if (GetRmwAttrKey(rmwMode).empty()) {
         APASS_LOG_ERROR_F(Elements::Operation, "Op[%d] has invalid rmwMode value %d.", op.GetOpMagic(), rmwModeValue);
         return FAILED;
     }
-
     for (const auto& input : op.GetIOperands()) {
-        auto producersBackup = input->GetProducers();
-        for (auto& producerOp : producersBackup) {
-            if (producerOp->GetOpcode() == Opcode::OP_ASSEMBLE || producerOp->GetOpcode() == Opcode::OP_ASSEMBLE_SSA) {
-                if (ProcessAssembleProducer(*producerOp, rmwOut, rmwMode, rmwOffset, rmwDynOffset) != SUCCESS) {
-                    return FAILED;
-                }
-            }
+        if (ProcessAtomicInput(op, input, rmwOut, rmwMode, rmwOffset, rmwDynOffset) != SUCCESS) {
+            return FAILED;
         }
     }
-
     op.SetAsDeleted();
     APASS_LOG_DEBUG_F(Elements::Operation, "%s[%d] will be deleted.", op.GetOpcodeStr().c_str(), op.GetOpMagic());
+    return SUCCESS;
+}
+
+Status ProcessAtomic::ProcessAtomicInput(Operation& atomicOp, const std::shared_ptr<LogicalTensor>& input,
+                                         const std::shared_ptr<LogicalTensor>& output, AtomicRMWMode rmwMode,
+                                         const std::vector<int64_t>& rmwOffset,
+                                         const std::vector<SymbolicScalar>& rmwDynOffset)
+{
+    bool hasAssembleProducer = false;
+    auto producersBackup = input->GetProducers();
+    for (auto* producerOp : producersBackup) {
+        if (producerOp->GetOpcode() != Opcode::OP_ASSEMBLE && producerOp->GetOpcode() != Opcode::OP_ASSEMBLE_SSA) {
+            continue;
+        }
+        if (ProcessAtomicAssembleProducer(atomicOp, *producerOp, output, rmwMode, rmwOffset, rmwDynOffset) != SUCCESS) {
+            return FAILED;
+        }
+        hasAssembleProducer = true;
+    }
+    if (hasAssembleProducer || !HasReshapeProducer(input)) {
+        return SUCCESS;
+    }
+    return ProcessAtomicThroughReshape(atomicOp, input, output, rmwMode, rmwOffset, rmwDynOffset);
+}
+
+Status ProcessAtomic::ProcessAtomicAssembleProducer(Operation& atomicOp, Operation& producerOp,
+                                                    const std::shared_ptr<LogicalTensor>& output, AtomicRMWMode rmwMode,
+                                                    const std::vector<int64_t>& rmwOffset,
+                                                    const std::vector<SymbolicScalar>& rmwDynOffset)
+{
+    if (producerOp.GetIOperands().size() != 1 || !HasReshapeProducer(producerOp.GetInputOperand(0))) {
+        return ProcessAssembleProducer(producerOp, output, rmwMode, rmwOffset, rmwDynOffset);
+    }
+    std::vector<int64_t> combinedOffset;
+    std::vector<SymbolicScalar> combinedDynOffset;
+    if (CombineAssembleOffset(producerOp, rmwOffset, rmwDynOffset, combinedOffset, combinedDynOffset) != SUCCESS) {
+        return FAILED;
+    }
+    return ProcessAtomicThroughReshape(atomicOp, producerOp.GetInputOperand(0), output, rmwMode, combinedOffset,
+                                       combinedDynOffset);
+}
+
+Status ProcessAtomic::ProcessAtomicThroughReshape(Operation& atomicOp, const std::shared_ptr<LogicalTensor>& input,
+                                                  const std::shared_ptr<LogicalTensor>& output, AtomicRMWMode rmwMode,
+                                                  const std::vector<int64_t>& rmwOffset,
+                                                  const std::vector<SymbolicScalar>& rmwDynOffset)
+{
+    ReshapeRemapResult remapResult;
+    if (FindUpstreamAssembleAndRemapOffset(input, output, rmwOffset, rmwDynOffset, remapResult) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Operation,
+                          "Op[%d] cannot remap AtomicRMW offset through Reshape; Cannot eliminate.",
+                          atomicOp.GetOpMagic());
+        return FAILED;
+    }
+    for (auto* assemble : remapResult.assembles) {
+        if (MarkAssembleProducerAtomic(*assemble, rmwMode, remapResult.mappedOffset, remapResult.mappedDynOffset) !=
+            SUCCESS) {
+            return FAILED;
+        }
+    }
+    return RetargetReshapeChain(atomicOp, output, remapResult);
+}
+
+bool ProcessAtomic::HasReshapeProducer(const std::shared_ptr<LogicalTensor>& input) const
+{
+    if (input == nullptr) {
+        return false;
+    }
+    for (auto* producer : input->GetProducers()) {
+        if (producer != nullptr && producer->GetOpcode() == Opcode::OP_RESHAPE) {
+            return true;
+        }
+    }
+    return false;
+}
+
+Status ProcessAtomic::FindUpstreamAssembleAndRemapOffset(const std::shared_ptr<LogicalTensor>& input,
+                                                         const std::shared_ptr<LogicalTensor>& outputBase,
+                                                         const std::vector<int64_t>& offset,
+                                                         const std::vector<SymbolicScalar>& dynOffset,
+                                                         ReshapeRemapResult& result) const
+{
+    auto current = input;
+    result = {};
+    result.mappedOffset = offset;
+    result.mappedDynOffset = dynOffset;
+    if (outputBase == nullptr || outputBase->GetShape().size() != offset.size()) {
+        return FAILED;
+    }
+    auto currentBaseShape = outputBase->GetShape();
+    auto currentBaseDynShape = GetSymbolicShapeOrStatic(outputBase);
+    std::set<int> visited;
+    while (current != nullptr) {
+        bool found = false;
+        if (CollectTerminalAssembles(current, visited, result, found) != SUCCESS) {
+            return FAILED;
+        }
+        if (found) {
+            result.assembleOutputShape = std::move(currentBaseShape);
+            result.assembleOutputDynShape = std::move(currentBaseDynShape);
+            return SUCCESS;
+        }
+        const auto& producers = current->GetProducers();
+        if (producers.size() != 1) {
+            return FAILED;
+        }
+        auto* producer = *producers.begin();
+        if (producer == nullptr || !visited.insert(producer->GetOpMagic()).second) {
+            return FAILED;
+        }
+        if (RemapThroughReshape(*producer, current, currentBaseShape, currentBaseDynShape, result) != SUCCESS) {
+            return FAILED;
+        }
+    }
+    return FAILED;
+}
+
+Status ProcessAtomic::CollectTerminalAssembles(const std::shared_ptr<LogicalTensor>& current, std::set<int>& visited,
+                                               ReshapeRemapResult& result, bool& found) const
+{
+    found = false;
+    const auto& producers = current->GetProducers();
+    if (producers.empty()) {
+        return FAILED;
+    }
+    bool allAssemble = std::all_of(producers.begin(), producers.end(), [](const Operation* producer) {
+        return producer != nullptr &&
+               (producer->GetOpcode() == Opcode::OP_ASSEMBLE || producer->GetOpcode() == Opcode::OP_ASSEMBLE_SSA);
+    });
+    if (!allAssemble) {
+        return SUCCESS;
+    }
+    for (auto* producer : producers) {
+        if (!visited.insert(producer->GetOpMagic()).second) {
+            return FAILED;
+        }
+        result.assembles.push_back(producer);
+    }
+    found = true;
+    return SUCCESS;
+}
+
+Status ProcessAtomic::RemapThroughReshape(Operation& producer, std::shared_ptr<LogicalTensor>& current,
+                                          std::vector<int64_t>& currentBaseShape,
+                                          std::vector<SymbolicScalar>& currentBaseDynShape,
+                                          ReshapeRemapResult& result) const
+{
+    if (producer.GetOpcode() != Opcode::OP_RESHAPE || producer.GetIOperands().size() != 1) {
+        return FAILED;
+    }
+    auto next = producer.GetInputOperand(0);
+    std::vector<int64_t> nextBaseShape, nextOffset;
+    std::vector<SymbolicScalar> nextBaseDynShape, nextDynOffset;
+    result.reshapeOps.push_back(&producer);
+    result.reshapeOutputShapes.push_back(currentBaseShape);
+    result.reshapeOutputDynShapes.push_back(currentBaseDynShape);
+    if (!ViewReshapeAssembleReorderUtils::RemapOffsetBackwardThroughReshape(
+            next, current, currentBaseShape, currentBaseDynShape, result.mappedOffset, result.mappedDynOffset,
+            nextBaseShape, nextBaseDynShape, nextOffset, nextDynOffset)) {
+        return FAILED;
+    }
+    currentBaseShape = std::move(nextBaseShape);
+    currentBaseDynShape = std::move(nextBaseDynShape);
+    result.mappedOffset = std::move(nextOffset);
+    result.mappedDynOffset = std::move(nextDynOffset);
+    current = next;
+    return SUCCESS;
+}
+
+Status ProcessAtomic::RetargetReshapeChain(Operation& atomicOp, const std::shared_ptr<LogicalTensor>& output,
+                                           const ReshapeRemapResult& remapResult)
+{
+    auto* function = atomicOp.BelongTo();
+    if (function == nullptr) {
+        APASS_LOG_ERROR_F(Elements::Operation, "Op[%d] does not belong to a function; Cannot retarget Reshape chain.",
+                          atomicOp.GetOpMagic());
+        return FAILED;
+    }
+    if (remapResult.assembles.empty()) {
+        return FAILED;
+    }
+    auto current = remapResult.assembles.front()->GetOutputOperand(0);
+    if (current == nullptr || current->GetShape() != remapResult.assembleOutputShape) {
+        auto original = current;
+        current = irBuilder_.CreateTensorVar(*function, output->Datatype(), remapResult.assembleOutputShape,
+                                             remapResult.assembleOutputDynShape, output->Format());
+        if (original != nullptr) {
+            current->CopyMemoryType(original);
+        }
+        for (auto* assemble : remapResult.assembles) {
+            assemble->ReplaceOOperand(0, current);
+        }
+    }
+    for (size_t index = remapResult.reshapeOps.size(); index-- > 0;) {
+        auto* reshapeOp = remapResult.reshapeOps[index];
+        auto originalReshapeOutput = reshapeOp->GetOutputOperand(0);
+        auto reshapeOutput = index == 0 ? output :
+                                          irBuilder_.CreateTensorVar(
+                                              *function, output->Datatype(), remapResult.reshapeOutputShapes[index],
+                                              remapResult.reshapeOutputDynShapes[index], output->Format());
+        if (index != 0 && originalReshapeOutput != nullptr) {
+            reshapeOutput->CopyMemoryType(originalReshapeOutput);
+        }
+        reshapeOp->ReplaceIOperand(0, current);
+        reshapeOp->ReplaceOOperand(0, reshapeOutput);
+        reshapeOp->SetAttribute("reshape", reshapeOutput->GetShape());
+        reshapeOp->SetAttribute(OP_ATTR_PREFIX + "validShape", remapResult.reshapeOutputDynShapes[index]);
+        reshapeOutput->UpdateDynValidShape(remapResult.reshapeOutputDynShapes[index]);
+        current = std::move(reshapeOutput);
+    }
+    return SUCCESS;
+}
+
+Status ProcessAtomic::CombineAssembleOffset(const Operation& assemble, const std::vector<int64_t>& offset,
+                                            const std::vector<SymbolicScalar>& dynOffset,
+                                            std::vector<int64_t>& combinedOffset,
+                                            std::vector<SymbolicScalar>& combinedDynOffset) const
+{
+    auto attr = std::dynamic_pointer_cast<AssembleOpAttribute>(assemble.GetOpAttribute());
+    if (attr == nullptr || attr->GetToOffset().size() != offset.size()) {
+        return FAILED;
+    }
+    combinedOffset = attr->GetToOffset();
+    for (size_t i = 0; i < offset.size(); ++i) {
+        combinedOffset[i] += offset[i];
+    }
+    combinedDynOffset.clear();
+    if (!attr->GetToDynOffset().empty() || !dynOffset.empty()) {
+        auto lhs = attr->GetToDynOffset().size() == offset.size() ? attr->GetToDynOffset() :
+                                                                    SymbolicScalar::FromConcrete(attr->GetToOffset());
+        auto rhs = dynOffset.size() == offset.size() ? dynOffset : SymbolicScalar::FromConcrete(offset);
+        combinedDynOffset.reserve(offset.size());
+        for (size_t i = 0; i < offset.size(); ++i) {
+            combinedDynOffset.push_back((lhs[i] + rhs[i]).Simplify());
+        }
+    }
     return SUCCESS;
 }
 
@@ -297,8 +539,24 @@ Status ProcessAtomic::ProcessAssembleProducer(Operation& producerOp, std::shared
     producerOp.ReplaceOOperand(0, rmwOut);
 
     auto producerAssembleAttr = std::dynamic_pointer_cast<AssembleOpAttribute>(producerOp.GetOpAttribute());
-    if (producerAssembleAttr != nullptr) {
-        AccumulateAssembleOffset(producerAssembleAttr, rmwOffset, rmwDynOffset);
+    if (producerAssembleAttr != nullptr &&
+        AccumulateAssembleOffset(producerAssembleAttr, rmwOffset, rmwDynOffset) != SUCCESS) {
+        return FAILED;
+    }
+    return SUCCESS;
+}
+
+Status ProcessAtomic::MarkAssembleProducerAtomic(Operation& producerOp, AtomicRMWMode rmwMode,
+                                                 const std::vector<int64_t>& rmwOffset,
+                                                 const std::vector<SymbolicScalar>& rmwDynOffset)
+{
+    std::string rmwAttrKey = GetRmwAttrKey(rmwMode);
+    if (CheckAndSetRmwAttr(producerOp, rmwMode, rmwAttrKey) != SUCCESS) {
+        return FAILED;
+    }
+    auto producerAttr = std::dynamic_pointer_cast<AssembleOpAttribute>(producerOp.GetOpAttribute());
+    if (producerAttr != nullptr && AccumulateAssembleOffset(producerAttr, rmwOffset, rmwDynOffset) != SUCCESS) {
+        return FAILED;
     }
     return SUCCESS;
 }
@@ -334,27 +592,32 @@ Status ProcessAtomic::CheckAndSetRmwAttr(Operation& producerOp, AtomicRMWMode rm
     return SUCCESS;
 }
 
-void ProcessAtomic::AccumulateAssembleOffset(std::shared_ptr<AssembleOpAttribute> producerAttr,
-                                             const std::vector<int64_t>& rmwOffset,
-                                             const std::vector<SymbolicScalar>& rmwDynOffset)
+Status ProcessAtomic::AccumulateAssembleOffset(std::shared_ptr<AssembleOpAttribute> producerAttr,
+                                               const std::vector<int64_t>& rmwOffset,
+                                               const std::vector<SymbolicScalar>& rmwDynOffset)
 {
     auto& producerOffset = producerAttr->GetToOffset();
     auto& producerDynOffset = producerAttr->GetToDynOffset();
+    if (producerOffset.size() != rmwOffset.size() ||
+        (!producerDynOffset.empty() && producerDynOffset.size() != producerOffset.size()) ||
+        (!rmwDynOffset.empty() && rmwDynOffset.size() != rmwOffset.size())) {
+        return FAILED;
+    }
 
-    if (producerOffset.size() == rmwOffset.size()) {
+    auto originalOffset = producerOffset;
+    if (!producerDynOffset.empty() || !rmwDynOffset.empty()) {
+        auto lhs = producerDynOffset.empty() ? SymbolicScalar::FromConcrete(originalOffset) : producerDynOffset;
+        auto rhs = rmwDynOffset.empty() ? SymbolicScalar::FromConcrete(rmwOffset) : rmwDynOffset;
+        producerDynOffset.clear();
+        producerDynOffset.reserve(producerOffset.size());
         for (size_t i = 0; i < producerOffset.size(); ++i) {
-            producerOffset[i] += rmwOffset[i];
+            producerDynOffset.push_back((lhs[i] + rhs[i]).Simplify());
         }
     }
-    if (producerDynOffset.empty()) {
-        for (size_t i = 0; i < rmwDynOffset.size(); ++i) {
-            producerDynOffset.push_back(producerOffset[i] + rmwDynOffset[i]);
-        }
-    } else {
-        for (size_t i = 0; i < producerDynOffset.size(); ++i) {
-            producerDynOffset[i] = producerDynOffset[i] + rmwDynOffset[i];
-        }
+    for (size_t i = 0; i < producerOffset.size(); ++i) {
+        producerOffset[i] += rmwOffset[i];
     }
+    return SUCCESS;
 }
 
 void ProcessAtomic::CollectReduceAccUpstream(Operation& op, std::set<int>& visited,
