@@ -1189,6 +1189,291 @@ TEST_F(InferMemoryConflictTest, STest3)
     EXPECT_EQ(*(newTensorOut->GetConsumers().begin()), &assembleOp2);
 }
 
+struct PreMergeAssembleGraph {
+    Function* function = nullptr;
+    Operation* assembleOp1 = nullptr;
+    Operation* assembleOp2 = nullptr;
+    Operation* finalAssemble = nullptr;
+    Operation* finalAssemble2 = nullptr;
+    LogicalTensorPtr viewTensor;
+    LogicalTensorPtr expTensor;
+    LogicalTensorPtr mergeTensor;
+};
+
+void SetRawMemoryId(const LogicalTensorPtr& tensor, int64_t memoryId)
+{
+    if (tensor != nullptr) {
+        tensor->GetRawTensor()->memoryId = memoryId;
+    }
+}
+
+void SetAssembleLikeAttr(Operation* op, MemoryType from, const std::vector<int64_t>& offset)
+{
+    if (op == nullptr) {
+        return;
+    }
+    op->SetOpAttribute(std::make_shared<AssembleOpAttribute>(from, offset));
+    if (op->GetOpcode() == Opcode::OP_ATOMIC_RMW) {
+        op->SetAttribute(OpAttributeKey::rmwMode, static_cast<int>(AtomicRMWMode::ADD));
+    }
+}
+
+PreMergeAssembleGraph BuildPreMergeAssembleGraph(bool allPreMergeBranchesPure,
+                                                 Opcode preMergeOpcode = Opcode::OP_ASSEMBLE)
+{
+    PreMergeAssembleGraph g;
+    std::vector<int64_t> branchShape = {NUM_2, NUM_2};
+    std::vector<int64_t> mergeShape = {NUM_2, NUM_4};
+    std::vector<int64_t> offset0 = {NUM_ZERO, NUM_ZERO};
+    std::vector<int64_t> offset1 = {NUM_ZERO, NUM_2};
+
+    ComputationalGraphBuilder graph;
+    EXPECT_TRUE(graph.AddTensors(DataType::DT_FP32, branchShape, {"input1", "input2", "branch1", "branch2"}));
+    EXPECT_TRUE(graph.AddTensors(DataType::DT_FP32, mergeShape, {"mergeTensor", "output"}));
+
+    std::vector<Opcode> opCodes = {Opcode::OP_VIEW, allPreMergeBranchesPure ? Opcode::OP_VIEW : Opcode::OP_EXP,
+                                   preMergeOpcode, preMergeOpcode, Opcode::OP_ASSEMBLE};
+    std::vector<std::vector<std::string>> ioperands = {
+        {"input1"}, {"input2"}, {"branch1"}, {"branch2"}, {"mergeTensor"}};
+    std::vector<std::vector<std::string>> ooperands = {
+        {"branch1"}, {"branch2"}, {"mergeTensor"}, {"mergeTensor"}, {"output"}};
+    std::vector<std::string> opNames = {"view1", "branch2Op", "assembleOp1", "assembleOp2", "finalAssemble"};
+    EXPECT_TRUE(graph.AddOps(opCodes, ioperands, ooperands, opNames, true));
+    EXPECT_TRUE(graph.SetInCast({"input1", "input2"}));
+    EXPECT_TRUE(graph.SetOutCast({"output"}));
+
+    SetRawMemoryId(graph.GetTensor("input1"), NUM_ZERO);
+    SetRawMemoryId(graph.GetTensor("input2"), NUM_ONE);
+    SetRawMemoryId(graph.GetTensor("output"), NUM_2);
+
+    graph.GetOp("view1")->SetOpAttribute(std::make_shared<ViewOpAttribute>(offset0));
+    if (allPreMergeBranchesPure) {
+        graph.GetOp("branch2Op")->SetOpAttribute(std::make_shared<ViewOpAttribute>(offset0));
+    }
+    SetAssembleLikeAttr(graph.GetOp("assembleOp1"), MEM_DEVICE_DDR, offset0);
+    SetAssembleLikeAttr(graph.GetOp("assembleOp2"), MEM_DEVICE_DDR, offset1);
+    SetAssembleLikeAttr(graph.GetOp("finalAssemble"), MEM_DEVICE_DDR, offset0);
+
+    g.function = graph.GetFunction();
+    g.assembleOp1 = graph.GetOp("assembleOp1");
+    g.assembleOp2 = graph.GetOp("assembleOp2");
+    g.finalAssemble = graph.GetOp("finalAssemble");
+    g.viewTensor = graph.GetTensor("branch1");
+    g.expTensor = graph.GetTensor("branch2");
+    g.mergeTensor = graph.GetTensor("mergeTensor");
+    return g;
+}
+
+PreMergeAssembleGraph BuildPreMergeBackwardAssembleGraph()
+{
+    PreMergeAssembleGraph g;
+    std::vector<int64_t> branchShape = {NUM_2, NUM_2};
+    std::vector<int64_t> mergeShape = {NUM_2, NUM_4};
+    std::vector<int64_t> offset0 = {NUM_ZERO, NUM_ZERO};
+    std::vector<int64_t> offset1 = {NUM_ZERO, NUM_2};
+
+    ComputationalGraphBuilder graph;
+    EXPECT_TRUE(graph.AddTensors(DataType::DT_FP32, branchShape, {"input1", "input2", "branch1", "branch2"}));
+    EXPECT_TRUE(graph.AddTensors(DataType::DT_FP32, mergeShape, {"mergeTensor", "output1", "output2"}));
+
+    std::vector<Opcode> opCodes = {Opcode::OP_VIEW,     Opcode::OP_EXP,      Opcode::OP_ASSEMBLE,
+                                   Opcode::OP_ASSEMBLE, Opcode::OP_ASSEMBLE, Opcode::OP_ASSEMBLE};
+    std::vector<std::vector<std::string>> ioperands = {{"input1"},  {"input2"},      {"branch1"},
+                                                       {"branch2"}, {"mergeTensor"}, {"mergeTensor"}};
+    std::vector<std::vector<std::string>> ooperands = {{"branch1"},     {"branch2"}, {"mergeTensor"},
+                                                       {"mergeTensor"}, {"output1"}, {"output2"}};
+    std::vector<std::string> opNames = {"view1",       "branch2Op",      "assembleOp1",
+                                        "assembleOp2", "finalAssemble1", "finalAssemble2"};
+    EXPECT_TRUE(graph.AddOps(opCodes, ioperands, ooperands, opNames, true));
+    EXPECT_TRUE(graph.SetInCast({"input1", "input2"}));
+    EXPECT_TRUE(graph.SetOutCast({"output1", "output2"}));
+
+    SetRawMemoryId(graph.GetTensor("input1"), NUM_ZERO);
+    SetRawMemoryId(graph.GetTensor("input2"), NUM_ZERO);
+    SetRawMemoryId(graph.GetTensor("output1"), NUM_ZERO);
+    SetRawMemoryId(graph.GetTensor("output2"), NUM_2);
+
+    graph.GetOp("view1")->SetOpAttribute(std::make_shared<ViewOpAttribute>(offset0));
+    SetAssembleLikeAttr(graph.GetOp("assembleOp1"), MEM_DEVICE_DDR, offset0);
+    SetAssembleLikeAttr(graph.GetOp("assembleOp2"), MEM_DEVICE_DDR, offset1);
+    SetAssembleLikeAttr(graph.GetOp("finalAssemble1"), MEM_DEVICE_DDR, offset0);
+    SetAssembleLikeAttr(graph.GetOp("finalAssemble2"), MEM_DEVICE_DDR, offset0);
+
+    g.function = graph.GetFunction();
+    g.assembleOp1 = graph.GetOp("assembleOp1");
+    g.assembleOp2 = graph.GetOp("assembleOp2");
+    g.finalAssemble = graph.GetOp("finalAssemble1");
+    g.finalAssemble2 = graph.GetOp("finalAssemble2");
+    g.viewTensor = graph.GetTensor("branch1");
+    g.expTensor = graph.GetTensor("branch2");
+    g.mergeTensor = graph.GetTensor("mergeTensor");
+    return g;
+}
+
+/*
+STest3_1
+input1->view->T1->assemble----------\
+                                      ->merge->assemble->output
+input2->exp->T2->assemble------------/
+多分支先 assemble 汇合后再 assemble 输出，纯视图分支应在汇合前 assemble 前插 copy，
+而不是在最后 assemble 前插 copy。
+*/
+TEST_F(InferMemoryConflictTest, STest3_1)
+{
+    auto g = BuildPreMergeAssembleGraph(false);
+    ASSERT_NE(g.function, nullptr);
+    auto currFunctionPtr = g.function;
+    InferMemoryConflict pass;
+    auto status = pass.Init(*currFunctionPtr);
+    EXPECT_EQ(status, SUCCESS);
+    status = pass.ForwardPropagation(*currFunctionPtr);
+    EXPECT_EQ(status, SUCCESS);
+    status = pass.BackwardPropagation(*currFunctionPtr);
+    EXPECT_EQ(status, SUCCESS);
+
+    EXPECT_EQ(pass.preregcopys.size(), NUM_ONE);
+    EXPECT_NE(pass.preregcopys.find(g.assembleOp1), pass.preregcopys.end());
+    EXPECT_EQ(pass.preregcopys.find(g.assembleOp2), pass.preregcopys.end());
+    EXPECT_EQ(pass.preregcopys.find(g.finalAssemble), pass.preregcopys.end());
+
+    status = pass.InsertCopys(*currFunctionPtr);
+    EXPECT_EQ(status, SUCCESS);
+    EXPECT_EQ(CountRegisterCopy(currFunctionPtr), NUM_ONE);
+    Operation* copy = nullptr;
+    for (auto& op : currFunctionPtr->Operations().DuplicatedOpList()) {
+        if (op->GetOpcode() == Opcode::OP_REGISTER_COPY) {
+            copy = op;
+        }
+    }
+    EXPECT_NE(copy, nullptr);
+    EXPECT_EQ(copy->GetIOperands().front(), g.viewTensor);
+    EXPECT_EQ(g.assembleOp1->GetIOperands().front(), copy->GetOOperands().front());
+    EXPECT_EQ(g.assembleOp2->GetIOperands().front(), g.expTensor);
+}
+
+/*
+STest3_2
+input1->view->T1->assemble----------\
+                                      ->merge->assemble->output
+input2->view->T2->assemble-----------/
+多分支 pre-merge producer 都是纯视图分支且都与 output 冲突时，
+应回退到最终 assemble 前插入一次 copy。
+*/
+TEST_F(InferMemoryConflictTest, STest3_2)
+{
+    auto g = BuildPreMergeAssembleGraph(true);
+    ASSERT_NE(g.function, nullptr);
+    auto currFunctionPtr = g.function;
+    InferMemoryConflict pass;
+    auto status = pass.Init(*currFunctionPtr);
+    EXPECT_EQ(status, SUCCESS);
+    status = pass.ForwardPropagation(*currFunctionPtr);
+    EXPECT_EQ(status, SUCCESS);
+    status = pass.BackwardPropagation(*currFunctionPtr);
+    EXPECT_EQ(status, SUCCESS);
+
+    EXPECT_EQ(pass.preregcopys.size(), NUM_ONE);
+    EXPECT_EQ(pass.preregcopys.find(g.assembleOp1), pass.preregcopys.end());
+    EXPECT_EQ(pass.preregcopys.find(g.assembleOp2), pass.preregcopys.end());
+    EXPECT_NE(pass.preregcopys.find(g.finalAssemble), pass.preregcopys.end());
+
+    status = pass.InsertCopys(*currFunctionPtr);
+    EXPECT_EQ(status, SUCCESS);
+    EXPECT_EQ(CountRegisterCopy(currFunctionPtr), NUM_ONE);
+    Operation* copy = nullptr;
+    for (auto& op : currFunctionPtr->Operations().DuplicatedOpList()) {
+        if (op->GetOpcode() == Opcode::OP_REGISTER_COPY) {
+            copy = op;
+        }
+    }
+    EXPECT_NE(copy, nullptr);
+    EXPECT_EQ(copy->GetIOperands().front(), g.mergeTensor);
+    EXPECT_EQ(g.finalAssemble->GetIOperands().front(), copy->GetOOperands().front());
+}
+
+/*
+STest3_3
+input1->view->T1->assemble----------\
+                                      ->merge->assemble->output1
+input2->exp->T2->assemble------------/      \
+                                             ->assemble->output2
+反向遍历从 output2 回到已由 output1 标记过的 merge 时，应在纯视图分支的
+pre-merge assemble 前插 copy，而不是在 output2 对应的最终 assemble 前插 copy。
+*/
+TEST_F(InferMemoryConflictTest, STest3_3)
+{
+    auto g = BuildPreMergeBackwardAssembleGraph();
+    ASSERT_NE(g.function, nullptr);
+    auto currFunctionPtr = g.function;
+    InferMemoryConflict pass;
+    auto status = pass.Init(*currFunctionPtr);
+    EXPECT_EQ(status, SUCCESS);
+    status = pass.BackwardPropagation(*currFunctionPtr);
+    EXPECT_EQ(status, SUCCESS);
+
+    EXPECT_EQ(pass.preregcopys.size(), NUM_ONE);
+    EXPECT_NE(pass.preregcopys.find(g.assembleOp1), pass.preregcopys.end());
+    EXPECT_EQ(pass.preregcopys.find(g.assembleOp2), pass.preregcopys.end());
+    EXPECT_EQ(pass.preregcopys.find(g.finalAssemble), pass.preregcopys.end());
+    EXPECT_EQ(pass.preregcopys.find(g.finalAssemble2), pass.preregcopys.end());
+
+    status = pass.InsertCopys(*currFunctionPtr);
+    EXPECT_EQ(status, SUCCESS);
+    EXPECT_EQ(CountRegisterCopy(currFunctionPtr), NUM_ONE);
+    Operation* copy = nullptr;
+    for (auto& op : currFunctionPtr->Operations().DuplicatedOpList()) {
+        if (op->GetOpcode() == Opcode::OP_REGISTER_COPY) {
+            copy = op;
+        }
+    }
+    EXPECT_NE(copy, nullptr);
+    EXPECT_EQ(copy->GetIOperands().front(), g.viewTensor);
+    EXPECT_EQ(g.assembleOp1->GetIOperands().front(), copy->GetOOperands().front());
+    EXPECT_EQ(g.assembleOp2->GetIOperands().front(), g.expTensor);
+}
+
+/*
+STest3_4
+input1->view->T1->atomic_rmw--------\
+                                      ->merge->assemble->output
+input2->exp->T2->atomic_rmw----------/
+OP_ATOMIC_RMW 作为 pre-merge producer 时，纯视图分支仍应在 atomic_rmw 前插 copy。
+*/
+TEST_F(InferMemoryConflictTest, STest3_4)
+{
+    auto g = BuildPreMergeAssembleGraph(false, Opcode::OP_ATOMIC_RMW);
+    ASSERT_NE(g.function, nullptr);
+    auto currFunctionPtr = g.function;
+    InferMemoryConflict pass;
+    auto status = pass.Init(*currFunctionPtr);
+    EXPECT_EQ(status, SUCCESS);
+    status = pass.ForwardPropagation(*currFunctionPtr);
+    EXPECT_EQ(status, SUCCESS);
+    status = pass.BackwardPropagation(*currFunctionPtr);
+    EXPECT_EQ(status, SUCCESS);
+
+    EXPECT_EQ(g.assembleOp1->GetOpcode(), Opcode::OP_ATOMIC_RMW);
+    EXPECT_EQ(g.assembleOp2->GetOpcode(), Opcode::OP_ATOMIC_RMW);
+    EXPECT_EQ(pass.preregcopys.size(), NUM_ONE);
+    EXPECT_NE(pass.preregcopys.find(g.assembleOp1), pass.preregcopys.end());
+    EXPECT_EQ(pass.preregcopys.find(g.assembleOp2), pass.preregcopys.end());
+    EXPECT_EQ(pass.preregcopys.find(g.finalAssemble), pass.preregcopys.end());
+
+    status = pass.InsertCopys(*currFunctionPtr);
+    EXPECT_EQ(status, SUCCESS);
+    EXPECT_EQ(CountRegisterCopy(currFunctionPtr), NUM_ONE);
+    Operation* copy = nullptr;
+    for (auto& op : currFunctionPtr->Operations().DuplicatedOpList()) {
+        if (op->GetOpcode() == Opcode::OP_REGISTER_COPY) {
+            copy = op;
+        }
+    }
+    EXPECT_NE(copy, nullptr);
+    EXPECT_EQ(copy->GetIOperands().front(), g.viewTensor);
+    EXPECT_EQ(g.assembleOp1->GetIOperands().front(), copy->GetOOperands().front());
+    EXPECT_EQ(g.assembleOp2->GetIOperands().front(), g.expTensor);
+}
+
 /*
 STest4
 view->reshape->matmul

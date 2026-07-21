@@ -18,6 +18,7 @@
 #include "passes/pass_log/pass_log.h"
 #include "passes/pass_utils/pass_utils.h"
 #include <limits>
+#include <unordered_set>
 
 #define MODULE_NAME "InferMemoryConflict"
 
@@ -107,6 +108,78 @@ bool HasMatmulConsumerWithSingleProducer(const LogicalTensorPtr& tensor)
         }
     }
     return false;
+}
+
+// Assemble-like ops are traceable to support nested assemble/atomic merge chains.
+bool IsPreMergeTraceableOpcode(Opcode opcode)
+{
+    return opcode == Opcode::OP_VIEW || opcode == Opcode::OP_ASSEMBLE || opcode == Opcode::OP_RESHAPE ||
+           opcode == Opcode::OP_VIEW_TYPE || opcode == Opcode::OP_ATOMIC_RMW;
+}
+
+bool IsAssembleLikeOpcode(Opcode opcode) { return opcode == Opcode::OP_ASSEMBLE || opcode == Opcode::OP_ATOMIC_RMW; }
+
+bool AddUniqueSource(std::vector<LogicalTensorPtr>& sourceTensors, const LogicalTensorPtr& sourceTensor)
+{
+    if (std::find(sourceTensors.begin(), sourceTensors.end(), sourceTensor) != sourceTensors.end()) {
+        return false;
+    }
+    sourceTensors.emplace_back(sourceTensor);
+    return true;
+}
+
+bool CollectPreMergeBranchSources(Function& function, Operation* op, std::unordered_set<Operation*>& visited,
+                                  std::vector<LogicalTensorPtr>& sourceTensors)
+{
+    if (op == nullptr || !IsPreMergeTraceableOpcode(op->GetOpcode()) || !visited.insert(op).second) {
+        return false;
+    }
+    bool found = false;
+    for (const auto& input : op->GetIOperands()) {
+        if (input == nullptr) {
+            continue;
+        }
+        if (function.IsFromInCast(input)) {
+            AddUniqueSource(sourceTensors, input);
+            found = true;
+            continue;
+        }
+        for (const auto& producer : input->GetProducers()) {
+            found = CollectPreMergeBranchSources(function, producer, visited, sourceTensors) || found;
+        }
+    }
+    return found;
+}
+
+bool CollectPreMergeCopyCandidates(Function& function, const LogicalTensorPtr& tensor,
+                                   std::vector<Operation*>& assembleProducers,
+                                   std::vector<std::pair<Operation*, LogicalTensorPtr>>& copyCandidates)
+{
+    if (tensor == nullptr) {
+        return false;
+    }
+    std::unordered_set<Operation*> uniqueAssembleProducers;
+    for (auto producer : tensor->GetProducers()) {
+        if (producer != nullptr && IsAssembleLikeOpcode(producer->GetOpcode()) &&
+            uniqueAssembleProducers.insert(producer).second) {
+            assembleProducers.emplace_back(producer);
+        }
+    }
+    if (assembleProducers.size() <= 1) {
+        return false;
+    }
+
+    for (auto producer : assembleProducers) {
+        std::unordered_set<Operation*> visited;
+        std::vector<LogicalTensorPtr> sourceTensors;
+        if (!CollectPreMergeBranchSources(function, producer, visited, sourceTensors)) {
+            continue;
+        }
+        for (const auto& sourceTensor : sourceTensors) {
+            copyCandidates.emplace_back(producer, sourceTensor);
+        }
+    }
+    return !copyCandidates.empty();
 }
 
 bool AreReshapeShapesValid(const Shape& inputShape, const Shape& outputShape)
@@ -422,6 +495,9 @@ Status InferMemoryConflict::UpdateForwardTensor(Function& function, const Logica
             }
         }
         if (memoryInfo.find(outputTensor) != memoryInfo.end() && function.IsFromOutCast(memoryInfo[outputTensor])) {
+            if (TryInsertPreMergeCopy(function, curTensor, memoryInfo[outputTensor], consumer)) {
+                continue;
+            }
             if (CheckConflict(memoryInfo[curTensor], memoryInfo[outputTensor])) {
                 preregcopys.insert(consumer);
             }
@@ -477,6 +553,9 @@ Status InferMemoryConflict::HandleConflictBackward(Function& function, const Log
     if (function.IsFromOutCast(inputTensor)) {
         return SUCCESS;
     }
+    if (TryInsertPreMergeCopy(function, inputTensor, memoryInfo[curTensor], producer)) {
+        return SUCCESS;
+    }
     if (!CheckConflict(memoryInfo[curTensor], memoryInfo[inputTensor])) {
         return SUCCESS;
     }
@@ -491,6 +570,42 @@ Status InferMemoryConflict::HandleConflictBackward(Function& function, const Log
         preregcopys.insert(producer);
     }
     return SUCCESS;
+}
+
+bool InferMemoryConflict::TryInsertPreMergeCopy(Function& function, const LogicalTensorPtr& tensor,
+                                                const LogicalTensorPtr& conflictTensor, Operation* finalOp)
+{
+    if (conflictTensor == nullptr || finalOp == nullptr || !IsAssembleLikeOpcode(finalOp->GetOpcode())) {
+        return false;
+    }
+    std::vector<std::pair<Operation*, LogicalTensorPtr>> preMergeCopyCandidates;
+    std::vector<Operation*> assembleProducers;
+    if (!CollectPreMergeCopyCandidates(function, tensor, assembleProducers, preMergeCopyCandidates)) {
+        return false;
+    }
+    std::vector<Operation*> copyTargets;
+    for (const auto& candidate : preMergeCopyCandidates) {
+        auto target = candidate.first;
+        auto sourceTensor = candidate.second;
+        if (!CheckConflict(sourceTensor, conflictTensor)) {
+            continue;
+        }
+        if (std::find(copyTargets.begin(), copyTargets.end(), target) == copyTargets.end()) {
+            copyTargets.emplace_back(target);
+        }
+    }
+    // If every pre-merge branch conflicts, insert one copy before finalOp instead of copying every branch.
+    if (copyTargets.empty() || copyTargets.size() == assembleProducers.size()) {
+        return false;
+    }
+    for (auto target : copyTargets) {
+        if (preregcopys.insert(target).second) {
+            APASS_LOG_DEBUG_F(Elements::Operation,
+                              "Insert register copy before pre-merge assemble-like op [%d] instead of final op [%d].",
+                              target->GetOpMagic(), finalOp->GetOpMagic());
+        }
+    }
+    return true;
 }
 
 Status InferMemoryConflict::UpdateBackwardTensor(Function& function, const LogicalTensorPtr& curTensor,

@@ -63,6 +63,8 @@ private:
     Status HandleConflictBackward(Function& function, const LogicalTensorPtr& curTensor,
                                   const LogicalTensorPtr& inputTensor, Operation* producer,
                                   const LogicalTensorPtr& reshapeOutput);
+    bool TryInsertPreMergeCopy(Function& function, const LogicalTensorPtr& tensor,
+                               const LogicalTensorPtr& conflictTensor, Operation* finalOp);
     Status MatchReshapePattern(Function& function, const LogicalTensorPtr& reshapeInput,
                                const LogicalTensorPtr& reshapeOut, bool& matched);
     bool CheckReshapeContext(const LogicalTensorPtr& reshapeInput, const LogicalTensorPtr& reshapeOut);
