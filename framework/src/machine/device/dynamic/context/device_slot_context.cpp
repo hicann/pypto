@@ -17,9 +17,6 @@
 #include "machine/device/dynamic/context/dump_device_topo.h"
 #include "machine/utils/dynamic/dev_cell_match_mem_layout.h"
 #include "machine/utils/dynamic/dev_cell_match_dump.h"
-#include <algorithm>
-#include <unordered_set>
-#include <vector>
 
 namespace npu::tile_fwk::dynamic {
 
@@ -190,7 +187,6 @@ static void PrepareRuntimeDynamicPartialUpdateTables(DeviceWorkspaceAllocator* w
                                                      DevAscendFunctionDupped& devRootDup)
 {
     DevAscendFunction* devRootSrc = devRootDup.GetSource();
-    std::unordered_set<DevAscendProgramPartialUpdate*> preparedPartials;
     size_t outcastSize = devRootSrc->GetOutcastSize();
     for (size_t i = 0; i < outcastSize; ++i) {
         auto& outcast = devRootSrc->GetOutcast(i);
@@ -206,9 +202,6 @@ static void PrepareRuntimeDynamicPartialUpdateTables(DeviceWorkspaceAllocator* w
                 continue;
             }
             if (partialUpdate->cellMatchRuntimePartialUpdateTable.Data() == nullptr) {
-                continue;
-            }
-            if (!preparedPartials.insert(partialUpdate).second) {
                 continue;
             }
             PrepareRuntimeDynamicPartialUpdateTable(workspace, partialUpdate);
