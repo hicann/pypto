@@ -174,6 +174,18 @@ ir::StmtPtr RootFunctionBuilder::ProcessTensorOp(std::shared_ptr<Function> pathF
         definedOutputs.insert(op);
     }
 
+    // Function-level inplace links are not part of the operation metadata cloned below.
+    auto sourceOp = std::dynamic_pointer_cast<const Operation>(tensorOpStmt);
+    if (sourceOp != nullptr && sourceOp->BelongTo() != nullptr) {
+        const auto& sourceLinkMap = sourceOp->BelongTo()->outIncastLinkMap;
+        for (const auto& output : oOperands) {
+            auto link = sourceLinkMap.find(output->GetRawTensor());
+            if (link != sourceLinkMap.end()) {
+                pathFunc->outIncastLinkMap[link->first] = link->second;
+            }
+        }
+    }
+
     ir::StmtPtr opStmt = RebuildTensorOpStmt(tensorOpStmt, tensorOpStmt->result_, tensorOpStmt->result_token_,
                                              tensorOpStmt->args_, tensorOpStmt->tokens_, tensorOpStmt->span_,
                                              pathFunc.get());

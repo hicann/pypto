@@ -265,3 +265,50 @@ TEST_F(IrFuncBuilderTest, TestTransformStmts_UnrollTimesDefault)
     EXPECT_NE(hiddenFuncs[0]->GetRawName().find("_Unroll1_"), std::string::npos)
         << "Expected '_Unroll1_' in hidden func raw name, got: " << hiddenFuncs[0]->GetRawName();
 }
+
+TEST_F(IrFuncBuilderTest, TestMigrateReshapeInplaceLinkToHiddenFunc)
+{
+    IrFuncSetup setup("MigrateReshapeInplaceLink");
+
+    auto input = setup.MakeParam("input");
+    auto output = setup.MakeParam("output");
+    auto reshaped = setup.MakeLocal("reshaped");
+
+    auto& reshape = setup.fwkFunc->AddRawOperation(Opcode::OP_RESHAPE, {input}, {reshaped}, Sp());
+    reshape.SetAttribute(OP_ATTR_PREFIX + "isInplace", true);
+    setup.fwkFunc->SetSameMemId(input, reshaped);
+    setup.stmts.push_back(std::static_pointer_cast<const ir::Stmt>(reshape.shared_from_this()));
+
+    auto reshapeStmts = setup.stmts;
+    setup.stmts.clear();
+    setup.AddDassemble(reshaped, output);
+    setup.WrapStmtsInForLoop("i");
+    setup.stmts.insert(setup.stmts.begin(), reshapeStmts.begin(), reshapeStmts.end());
+
+    auto irFunc = setup.BuildIrFunction("MigrateReshapeInplaceLink");
+    auto irProg = std::make_shared<ir::Program>(std::vector<ir::FunctionPtr>{irFunc}, "test", Sp());
+
+    auto createRoot = pypto::ir::pass::CreateRootFunctions();
+    (void)createRoot(irProg);
+
+    Function* reshapeHiddenFunc = nullptr;
+    for (auto* func : FindHiddenFuncs()) {
+        for (auto& op : func->Operations()) {
+            if (op.GetOpcode() == Opcode::OP_RESHAPE) {
+                reshapeHiddenFunc = func;
+                break;
+            }
+        }
+    }
+    ASSERT_NE(reshapeHiddenFunc, nullptr);
+    ASSERT_EQ(reshapeHiddenFunc->GetIncast().size(), 1u);
+    ASSERT_EQ(reshapeHiddenFunc->GetOutcast().size(), 1u);
+
+    auto incastRaw = reshapeHiddenFunc->GetIncast().front()->GetRawTensor();
+    auto outcastRaw = reshapeHiddenFunc->GetOutcast().front()->GetRawTensor();
+    EXPECT_EQ(outcastRaw->memoryId, incastRaw->memoryId);
+
+    auto link = reshapeHiddenFunc->outIncastLinkMap.find(outcastRaw);
+    ASSERT_NE(link, reshapeHiddenFunc->outIncastLinkMap.end());
+    EXPECT_EQ(link->second, incastRaw);
+}
