@@ -1766,25 +1766,36 @@ Status PipeSync::RecycleCrossCoreEventIds(const PipeCoreRealEx& currPipeRealEx)
     auto& eventSet = syncArriveStatus[currPipeRealEx];
     auto& queues = crossCoreFreeEventId_[currPipeRealEx];
 
+    // 先按确定顺序（eventId 升序）收集再入队，保证结果跨环境一致。
+    std::vector<int> recycledToQueue0;
+    std::vector<int> recycledToQueue1;
     for (const auto& er : eventSet) {
         if (er.srcCore == er.dstCore) {
             continue;
         }
         if (currPipeRealEx.core == CoreType::AIC) {
             if (er.eventId < CROSS_CORE_EVENT_NUM) {
-                PushEventIdIfAbsent(queues[0], er.eventId);
+                recycledToQueue0.push_back(er.eventId);
             } else {
-                PushEventIdIfAbsent(queues[1], er.eventId);
+                recycledToQueue1.push_back(er.eventId);
             }
         } else if (currPipeRealEx.aivCore == AIVCore::AIV0) {
             if (er.eventId < CROSS_CORE_EVENT_NUM) {
-                PushEventIdIfAbsent(queues[0], er.eventId);
+                recycledToQueue0.push_back(er.eventId);
             }
         } else if (currPipeRealEx.aivCore == AIVCore::AIV1) {
             if (er.eventId >= CROSS_CORE_EVENT_NUM) {
-                PushEventIdIfAbsent(queues[0], er.eventId);
+                recycledToQueue0.push_back(er.eventId);
             }
         }
+    }
+    std::sort(recycledToQueue0.begin(), recycledToQueue0.end());
+    std::sort(recycledToQueue1.begin(), recycledToQueue1.end());
+    for (int id : recycledToQueue0) {
+        PushEventIdIfAbsent(queues[0], id);
+    }
+    for (int id : recycledToQueue1) {
+        PushEventIdIfAbsent(queues[NUM1], id);
     }
     return SUCCESS;
 }
@@ -1888,7 +1899,7 @@ void InsertSync::InsertCvSyncOps(Function* subGraphFunc, Operation* currOp, Oper
     std::vector<std::shared_ptr<LogicalTensor>> output;
     AIVCore currAivCore = currOp->GetAIVCore();
     AIVCore nextAIVCore = nextOp->GetAIVCore();
-    int eventId = (currAivCore == AIVCore::AIV0 || nextAIVCore == AIVCore::AIV0) ? 15 : 31;
+    int eventId = (currAivCore == AIVCore::AIV0 || nextAIVCore == AIVCore::AIV0) ? NUM15 : NUM31;
 
     Operation& syncOp1 = irBuilder_.CreateTensorOpStmt(*subGraphFunc, npu::tile_fwk::Opcode::OP_BAR_ALL, input, output);
     syncOp1.syncQueue_ = {PipeType::PIPE_ALL, PipeType::PIPE_ALL, CoreType::AIV, CoreType::AIV, -1,

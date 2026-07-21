@@ -801,6 +801,58 @@ TEST_F(InsertSyncTest, TestGetDepInfoSizeMismatch)
     EXPECT_EQ(ps.PipeSeqName(PipeSeq::AIV0_S), "AIV0_S");
     EXPECT_EQ(ps.PipeSeqName(PipeSeq::AIV1_S), "AIV1_S");
 }
+
+TEST_F(InsertSyncTest, TestRecycleCrossCoreEventIds)
+{
+    PipeSync ps;
+    ps.InitCVEventIdQ();
+
+    // 场景1: currPipeRealEx 不在 crossCoreFreeEventId_ 中 -> 返回 FAILED
+    PipeSync::PipeCoreRealEx notExistPipe(PIPE_V, CoreType::AIV, AIVCore::UNSPECIFIED);
+    EXPECT_EQ(ps.RecycleCrossCoreEventIds(notExistPipe), FAILED);
+
+    using CoreDetail = PipeSync::CoreTypeDetail;
+    auto makeEr = [](int id, CoreDetail src, CoreDetail dst) {
+        return PipeSync::EventResource{id, src, dst, PIPE_S, PIPE_V};
+    };
+    CoreDetail aicCore{CoreType::AIC, AIVCore::UNSPECIFIED};
+    CoreDetail aiv0Core{CoreType::AIV, AIVCore::AIV0};
+    CoreDetail aiv1Core{CoreType::AIV, AIVCore::AIV1};
+
+    // 场景2: AIC core - 覆盖 srcCore==dstCore(continue) + eventId<16(queue0) + eventId>=16(queue1)
+    PipeSync::PipeCoreRealEx pcAIC(PIPE_S, CoreType::AIC, AIVCore::UNSPECIFIED);
+    ps.syncArriveStatus[pcAIC].clear();
+    ps.crossCoreFreeEventId_[pcAIC][0].clear();
+    ps.crossCoreFreeEventId_[pcAIC][1].clear();
+    ps.syncArriveStatus[pcAIC].insert(makeEr(IS_NUM5, aicCore, aicCore));   // srcCore==dstCore -> continue
+    ps.syncArriveStatus[pcAIC].insert(makeEr(IS_NUM3, aicCore, aiv0Core));  // eventId<16 -> queue0
+    ps.syncArriveStatus[pcAIC].insert(makeEr(IS_NUM20, aicCore, aiv1Core)); // eventId>=16 -> queue1
+    EXPECT_EQ(ps.RecycleCrossCoreEventIds(pcAIC), SUCCESS);
+    EXPECT_EQ(ps.crossCoreFreeEventId_[pcAIC][0].size(), static_cast<size_t>(IS_NUM1));
+    EXPECT_EQ(ps.crossCoreFreeEventId_[pcAIC][0].front(), IS_NUM3);
+    EXPECT_EQ(ps.crossCoreFreeEventId_[pcAIC][1].size(), static_cast<size_t>(IS_NUM1));
+    EXPECT_EQ(ps.crossCoreFreeEventId_[pcAIC][1].front(), IS_NUM20);
+
+    // 场景3: AIV0 core - 覆盖 eventId<16(queue0) + eventId>=16(跳过)
+    PipeSync::PipeCoreRealEx pcAIV0(PIPE_S, CoreType::AIV, AIVCore::AIV0);
+    ps.syncArriveStatus[pcAIV0].clear();
+    ps.crossCoreFreeEventId_[pcAIV0][0].clear();
+    ps.syncArriveStatus[pcAIV0].insert(makeEr(IS_NUM9, aicCore, aiv0Core));  // eventId<16 -> queue0
+    ps.syncArriveStatus[pcAIV0].insert(makeEr(IS_NUM29, aicCore, aiv0Core)); // eventId>=16 -> 跳过
+    EXPECT_EQ(ps.RecycleCrossCoreEventIds(pcAIV0), SUCCESS);
+    EXPECT_EQ(ps.crossCoreFreeEventId_[pcAIV0][0].size(), static_cast<size_t>(IS_NUM1));
+    EXPECT_EQ(ps.crossCoreFreeEventId_[pcAIV0][0].front(), IS_NUM9);
+
+    // 场景4: AIV1 core - 覆盖 eventId>=16(queue0) + eventId<16(跳过)
+    PipeSync::PipeCoreRealEx pcAIV1(PIPE_S, CoreType::AIV, AIVCore::AIV1);
+    ps.syncArriveStatus[pcAIV1].clear();
+    ps.crossCoreFreeEventId_[pcAIV1][0].clear();
+    ps.syncArriveStatus[pcAIV1].insert(makeEr(IS_NUM30, aicCore, aiv1Core)); // eventId>=16 -> queue0
+    ps.syncArriveStatus[pcAIV1].insert(makeEr(IS_NUM10, aicCore, aiv1Core)); // eventId<16 -> 跳过
+    EXPECT_EQ(ps.RecycleCrossCoreEventIds(pcAIV1), SUCCESS);
+    EXPECT_EQ(ps.crossCoreFreeEventId_[pcAIV1][0].size(), static_cast<size_t>(IS_NUM1));
+    EXPECT_EQ(ps.crossCoreFreeEventId_[pcAIV1][0].front(), IS_NUM30);
+}
 } // namespace tile_fwk
 } // namespace npu
 

@@ -36,9 +36,6 @@ bool TuneTileOpSeqForVF::IsMergeable(std::unordered_set<Operation*>& moveFrontOp
                                      PipeSync& ps, int groupNum)
 {
     for (size_t k = left + 1; k < right; k++) {
-        if (opList_[k]->GetCoreType() == CoreType::AIC) {
-            return false;
-        }
         if (opList_[k]->GetOpcode() == Opcode::OP_VIEW || opList_[k]->GetOpcode() == Opcode::OP_ASSEMBLE ||
             opList_[k]->GetOpcode() == Opcode::OP_NOP || opList_[k]->GetOpcode() == Opcode::OP_HUB) {
             continue;

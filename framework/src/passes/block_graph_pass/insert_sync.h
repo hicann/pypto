@@ -41,6 +41,8 @@ constexpr uint64_t MAX_POP = 8;
 constexpr uint64_t SEQUENCE_IDX = 300;
 constexpr uint64_t HALF_SEQUENCE_IDX = 150;
 constexpr uint64_t FORCE_SYNC_OP_NUM = 15;
+constexpr uint64_t NUM15 = 15;
+constexpr uint64_t NUM31 = 31;
 struct Interval {
     int start;
     int end;
