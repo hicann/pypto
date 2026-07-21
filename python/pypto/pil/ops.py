@@ -297,19 +297,24 @@ def _loop_unroll(body: Block, loop: LoopRange, factor, stop, config_scope, ctx: 
 
 
 def _dyn_for(body: Block, loop: LoopRange, ctx: BuildContext):
-    stop = loop.stop
+    original_start = loop.start
+    original_stop = loop.stop
+    current_start = original_start
+
     for factor in loop.unroll_list:
+        loop.start = current_start
         if factor == 1:
-            loop.stop = stop
+            loop.stop = original_stop
         else:
             unroll_step = factor * loop.step
-            loop.stop = loop.start + (stop - loop.start) // unroll_step * unroll_step
+            tail = (original_stop - original_start) % unroll_step
+            loop.stop = original_stop - tail
         try:
             pypto_impl.BeginScope(f"loop", {}, ctx.span.filename, ctx.span.begin_line)
-            _loop_unroll(body, loop, factor, stop, pypto_impl.CurrentScope(), ctx=ctx)
+            _loop_unroll(body, loop, factor, original_stop, pypto_impl.CurrentScope(), ctx=ctx)
         finally:
             pypto_impl.EndScope()
-        loop.start = loop.stop
+        current_start = loop.stop
 
 
 @impl("pil.loop")

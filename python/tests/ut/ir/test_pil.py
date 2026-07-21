@@ -458,6 +458,34 @@ def test_tensor_loop_unroll_batch():
     info(f"\ncanonical: {prog}")
 
 
+def test_dynamic_loop_unroll_uses_mod_aligned_bounds():
+    def foo(x):
+        for i in pypto.loop(x.shape[0] // 128, unroll_list=[128, 64, 32, 16, 8, 4, 1]):
+            _ = i + 1
+
+    x = pypto.Tensor((-1,), pypto.DT_FP32, 'x')
+    func = pil.compile(foo, x)
+    for_stmts = _for_ops_of(func.body)
+
+    def expr_text(expr):
+        return str(expr).replace(" ", "")
+
+    assert len(for_stmts) == 7
+    factor_4_loop = for_stmts[5]
+    factor_4_start = expr_text(factor_4_loop.start)
+    factor_4_stop = expr_text(factor_4_loop.stop)
+    assert str(factor_4_loop.step) == "4"
+    assert "%8" in factor_4_start
+    assert "%4" in factor_4_stop
+    assert "/128)*128" not in factor_4_start
+    assert "/128)*128" not in factor_4_stop
+
+    factor_1_loop = for_stmts[6]
+    assert str(factor_1_loop.step) == "1"
+    assert "%4" in expr_text(factor_1_loop.start)
+    assert "%1" not in expr_text(factor_1_loop.stop)
+
+
 def test_loop_unroll_idx_name():
     def foo(n):
         for i, k in pypto.loop_unroll(n, name="LoopA", idx_name="i"):
