@@ -389,6 +389,7 @@ private:
     size_t cube_core_cnt_;
     size_t vector_core_cnt_;
     size_t ai_cpu_cnt_;
+    size_t aicpu_cache_ = static_cast<size_t>(-1);
 
 public:
     void SetDie(const Die& die) { die_ = die; }
@@ -405,7 +406,7 @@ public:
     std::string GetCCECVersion(std::string CoreType);
 
     // SOCINFO
-    size_t GetAICPUNum() const;
+    size_t GetAICPUNum();
     size_t GetAICoreNum() const { return ai_core_cnt_; }
     size_t GetAICCoreNum() const { return cube_core_cnt_; }
     size_t GetAIVCoreNum() const { return vector_core_cnt_; }

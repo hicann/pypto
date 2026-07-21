@@ -25,7 +25,8 @@ namespace tile_fwk {
 const uint32_t kMaxLength = 50;
 const std::string socVerFuncName = "rtGetSocVersion";
 const std::string socSpecFuncName = "rtGetSocSpec";
-const std::string aiCpuCntFuncName = "rtGetAiCpuCount";
+const std::string deviceInfoFuncName = "aclrtGetDeviceInfo";
+const std::string getDeviceFuncName = "aclrtGetDevice";
 
 void* CannHostRuntime::GetSymbol(const std::string& sym)
 {
@@ -56,7 +57,13 @@ CannHostRuntime::CannHostRuntime()
     if (handleDep_ != nullptr && handle_ != nullptr) {
         socVerFunc_ = (GetSocVerFunc)GetSymbol(socVerFuncName);
         socSpecFunc_ = (GetSocSpecFunc)GetSymbol(socSpecFuncName);
-        aiCpuCntFunc_ = (GetAiCpuCntFunc)GetSymbol(aiCpuCntFuncName);
+    }
+    std::string aclSoPath = RealPath(LibPathDir + "libascendcl.so");
+    FE_LOGW("aclSoPath = %s", aclSoPath.c_str());
+    aclHandle_ = dlopen(aclSoPath.c_str(), RTLD_LAZY);
+    if (aclHandle_ != nullptr) {
+        deviceInfoFunc_ = (GetDeviceInfoFunc)dlsym(aclHandle_, deviceInfoFuncName.c_str());
+        getDeviceIdFunc_ = (GetDeviceIdFunc)dlsym(aclHandle_, getDeviceFuncName.c_str());
     }
 #endif
     if (handleDep_ == nullptr || handle_ == nullptr) {
@@ -71,6 +78,9 @@ CannHostRuntime::~CannHostRuntime()
     }
     if (handleDep_ != nullptr) {
         dlclose(handleDep_);
+    }
+    if (aclHandle_ != nullptr) {
+        dlclose(aclHandle_);
     }
 }
 
@@ -121,15 +131,20 @@ bool CannHostRuntime::GetSocSpec(const std::string& column, const std::string& k
 bool CannHostRuntime::GetAICPUCnt(size_t& aiCpuCnt)
 {
 #ifdef BUILD_WITH_CANN
-    int ret = 1;
-    uint32_t cpuNum = 0;
-    if (aiCpuCntFunc_ != nullptr) {
-        ret = aiCpuCntFunc_(&cpuNum);
+    if (deviceInfoFunc_ != nullptr && getDeviceIdFunc_ != nullptr) {
+        int32_t deviceId = 0;
+        if (getDeviceIdFunc_(&deviceId) != 0) {
+            FE_LOGW("aclrtGetDevice failed.");
+            return false;
+        }
+        int64_t aicpuCnt = 0;
+        const uint32_t aclDevAttrAicpuCoreNum = 1;
+        if (deviceInfoFunc_(static_cast<uint32_t>(deviceId), aclDevAttrAicpuCoreNum, &aicpuCnt) == 0) {
+            aiCpuCnt = static_cast<size_t>(aicpuCnt);
+            return true;
+        }
     }
-    if (ret == 0) {
-        aiCpuCnt = static_cast<size_t>(cpuNum);
-        return true;
-    }
+    FE_LOGW("aclrtGetDeviceInfo failed.");
 #endif
     (void)aiCpuCnt;
     return false;

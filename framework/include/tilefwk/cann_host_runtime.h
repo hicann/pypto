@@ -22,7 +22,8 @@ namespace npu {
 namespace tile_fwk {
 using GetSocVerFunc = int (*)(char*, const uint32_t);
 using GetSocSpecFunc = int (*)(const char*, const char*, char*, const uint32_t);
-using GetAiCpuCntFunc = int (*)(uint32_t*);
+using GetDeviceInfoFunc = int (*)(uint32_t, uint32_t, int64_t*);
+using GetDeviceIdFunc = int (*)(int32_t*);
 
 class CannHostRuntime {
 public:
@@ -41,9 +42,11 @@ private:
 
     GetSocVerFunc socVerFunc_ = nullptr;
     GetSocSpecFunc socSpecFunc_ = nullptr;
-    GetAiCpuCntFunc aiCpuCntFunc_ = nullptr;
+    GetDeviceInfoFunc deviceInfoFunc_ = nullptr;
+    GetDeviceIdFunc getDeviceIdFunc_ = nullptr;
     void* handleDep_ = nullptr;
     void* handle_ = nullptr;
+    void* aclHandle_ = nullptr;
 };
 } // namespace tile_fwk
 } // namespace npu

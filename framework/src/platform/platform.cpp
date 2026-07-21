@@ -129,14 +129,18 @@ std::string SoC::GetCCECVersion(std::string CoreType)
     }
 }
 
-size_t SoC::GetAICPUNum() const
+size_t SoC::GetAICPUNum()
 {
+    if (aicpu_cache_ != static_cast<size_t>(-1)) {
+        return aicpu_cache_;
+    }
     size_t aiCpuNum = 0;
-    PLATFORM_LOGD("Try to obtain real time aicpu count through rtGetAiCpuCount.");
+    PLATFORM_LOGD("Try to obtain real time aicpu count through aclrtGetDeviceInfo.");
     if (CannHostRuntime::Instance().GetAICPUCnt(aiCpuNum)) {
+        aicpu_cache_ = aiCpuNum;
         return aiCpuNum;
     }
-    PLATFORM_LOGD("Cannot obtain real time aicpu count, using the initialized value.");
+    PLATFORM_LOGD("Cannot obtain real time aicpu count,using the initialized value.");
     return ai_cpu_cnt_;
 }
 
