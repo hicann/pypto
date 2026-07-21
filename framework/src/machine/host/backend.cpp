@@ -158,7 +158,7 @@ static void HandleExecuteGraph(FunctionCache& cache, Linker& linker, Function* f
         if (leafFunc == nullptr) {
             continue;
         }
-        builder.CollectCoaMainBlockConds(callopAttr->GetArgList(), leafFunc);
+        builder.CollectLeafMainBlockConds(leafFunc, callopAttr->GetLinearArgList());
         FindAllExpression(cache, linker, leafFunc);
     }
     for (auto& incast : func->inCasts_) {

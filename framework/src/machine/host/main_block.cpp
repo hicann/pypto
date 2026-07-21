@@ -19,6 +19,17 @@
 #include "tilefwk/pypto_fwk_log.h"
 
 namespace npu::tile_fwk {
+
+static bool IsEnableVF()
+{
+    if (config::GetRuntimeOption<int64_t>(CFG_VALID_SHAPE_OPTIMIZE) == 1) {
+        return true;
+    }
+    bool enableVF = Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510;
+    enableVF = enableVF && config::GetPassGlobalConfig(KEY_ENABLE_VF, false);
+    return enableVF;
+}
+
 MainBlockCondBulider::MainBlockCondBulider() = default;
 
 void MainBlockCondBulider::DisableMainBlock()
@@ -88,39 +99,9 @@ bool MainBlockCondBulider::CheckShapeEquality(const Shape& shape, const std::vec
     return true;
 }
 
-bool MainBlockCondBulider::GetValidShapeFromCoa(const std::vector<SymbolicScalar>& argList, Shape& shape,
-                                                std::vector<SymbolicScalar>& dynValidShape)
-{
-    if (argList.empty() || (argList.size() <= COA_INDEX_TYPE_COUNT)) {
-        MACHINE_LOGW("argList is invalid!");
-        return false;
-    }
-
-    int dim = (argList.size() - 1 + COA_INDEX_TYPE_COUNT - 1) / COA_INDEX_TYPE_COUNT;
-    int validShapeDim = argList.size() - 1 - dim * (COA_INDEX_TYPE_COUNT - 1);
-    int coaIndex = COA_INDEX_DIM_BASE;
-
-    shape.reserve(dim);
-    dynValidShape.reserve(validShapeDim);
-
-    // coa: [offset, shape, rawshape, validshape]
-    for (int i = 0; i < dim; i++) {
-        shape.push_back(argList[coaIndex + dim + i]);
-    }
-
-    coaIndex += dim * (COA_INDEX_TYPE_COUNT - 1);
-    for (int i = 0; i < validShapeDim; i++) {
-        dynValidShape.push_back(argList[coaIndex + i]);
-    }
-
-    return true;
-}
-
 void MainBlockCondBulider::CollectCallopMainBlockConds(Function* func)
 {
-    bool enableVF = Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510;
-    enableVF = enableVF && config::GetPassGlobalConfig(KEY_ENABLE_VF, false);
-    if (config::GetRuntimeOption<int64_t>(CFG_VALID_SHAPE_OPTIMIZE) != 1 && !enableVF) {
+    if (!IsEnableVF()) {
         AddUniqueCondition(SymbolicScalar(false));
         return;
     }
@@ -148,38 +129,73 @@ void MainBlockCondBulider::CollectCallopMainBlockConds(Function* func)
     }
 }
 
-bool MainBlockCondBulider::CheckReshapeCopy(Function* func)
+bool MainBlockCondBulider::CheckLeafOperand(const Operation& op, const std::shared_ptr<LogicalTensor>& iop,
+                                            int coaIndexBase, const std::vector<SymbolicScalar>& linearArgList,
+                                            const char* tag)
 {
-    for (auto& op : func->Operations()) {
-        if (op.GetOpcode() == Opcode::OP_RESHAPE_COPY_OUT || op.GetOpcode() == Opcode::OP_RESHAPE_COPY_IN) {
-            return true;
-        }
+    // coaIndexBase < 0 表示该 operand 未被 NormalizeCoa 处理（未调用 SetIOpAtt/SetOOpAtt），静态shape
+    if (coaIndexBase < 0) {
+        return true;
     }
-    return false;
+
+    int dim = static_cast<int>(iop->shape.size());
+    if (dim == 0) {
+        MACHINE_LOGW("get mainBlock flag false, op code %s, %s shape dim is 0", op.GetOpcodeStr().c_str(), tag);
+        DisableMainBlock();
+        return false;
+    }
+
+    int shapeStart = coaIndexBase + COA_INDEX_DIM_BASE + dim * COA_INDEX_TYPE_SHAPE;
+    int validShapeStart = coaIndexBase + COA_INDEX_DIM_BASE + dim * COA_INDEX_TYPE_VALIDSHAPE;
+    if (shapeStart + dim > static_cast<int>(linearArgList.size()) ||
+        validShapeStart + dim > static_cast<int>(linearArgList.size())) {
+        MACHINE_LOGW("get mainBlock flag false, op code %s, %s linearArgList too small: size=%zu, need=%d",
+                     op.GetOpcodeStr().c_str(), tag, linearArgList.size(), std::max(shapeStart, validShapeStart) + dim);
+        DisableMainBlock();
+        return false;
+    }
+
+    std::vector<SymbolicScalar> shapeScalars(linearArgList.begin() + shapeStart,
+                                             linearArgList.begin() + shapeStart + dim);
+    Shape shape = SymbolicScalar::Concrete(shapeScalars, -1);
+
+    std::vector<SymbolicScalar> dynValidShape(linearArgList.begin() + validShapeStart,
+                                              linearArgList.begin() + validShapeStart + dim);
+
+    auto cond = CheckShapeEquality(shape, dynValidShape);
+    if (!cond) {
+        MACHINE_LOGW("get mainBlock flag false, op code %s, %s shape is %s, validShape is %s",
+                     op.GetOpcodeStr().c_str(), tag, IntVecToStr(shape).c_str(), IntVecToStr(dynValidShape).c_str());
+    }
+    return cond;
 }
 
-void MainBlockCondBulider::CollectCoaMainBlockConds(const std::vector<std::vector<SymbolicScalar>>& argList,
-                                                    Function* func)
+void MainBlockCondBulider::CollectLeafMainBlockConds(Function* func, const std::vector<SymbolicScalar>& linearArgList)
 {
-    bool enableVF = Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510;
-    enableVF = enableVF && config::GetPassGlobalConfig(KEY_ENABLE_VF, false);
-    if ((config::GetRuntimeOption<int64_t>(CFG_VALID_SHAPE_OPTIMIZE) != 1 && !enableVF) || CheckReshapeCopy(func)) {
+    if (!IsEnableVF()) {
         AddUniqueCondition(SymbolicScalar(false));
         return;
     }
 
-    for (const auto& iter : argList) {
-        Shape shape;
-        std::vector<SymbolicScalar> dynValidShape;
-        if (!GetValidShapeFromCoa(iter, shape, dynValidShape)) {
-            AddUniqueCondition(SymbolicScalar(false));
+    for (auto& op : func->Operations()) {
+        if (mainBlockDisabled_) {
             return;
         }
-        auto cond = CheckShapeEquality(shape, dynValidShape);
-        if (!cond) {
-            MACHINE_LOGW("get mainBlock flag false, coa shape is %s, validShape is %s", IntVecToStr(shape).c_str(),
-                         IntVecToStr(dynValidShape).c_str());
-            return;
+
+        for (size_t k = 0; k < op.GetIOperands().size(); k++) {
+            auto& iop = op.GetIOperands()[k];
+            int coaIndexBase = op.GetIOpAttrOffset(k);
+            if (!CheckLeafOperand(op, iop, coaIndexBase, linearArgList, "iop")) {
+                return;
+            }
+        }
+
+        for (size_t k = 0; k < op.GetOOperands().size(); k++) {
+            auto& oop = op.GetOOperands()[k];
+            int coaIndexBase = op.GetOOpAttrOffset(k);
+            if (!CheckLeafOperand(op, oop, coaIndexBase, linearArgList, "oop")) {
+                return;
+            }
         }
     }
 }
@@ -214,9 +230,7 @@ SymbolicScalar MainBlockCondBulider::BuildMainBlockExpression()
 
 void MainBlockCondBulider::Gencode(Function* function)
 {
-    bool enableVF = Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510;
-    enableVF = enableVF && config::GetPassGlobalConfig(KEY_ENABLE_VF, false);
-    if (config::GetRuntimeOption<int64_t>(CFG_VALID_SHAPE_OPTIMIZE) == 1 || enableVF) {
+    if (IsEnableVF()) {
         bool isDynamicAligned = function->paramConfigs_.dynamicAlignedOps;
         npu::tile_fwk::CodeGenCtx codeGenCtxMainBlock("", config::GetEmitPath("kernel_aicore"), true, isDynamicAligned);
         npu::tile_fwk::CodeGen codeGenMainBlock(codeGenCtxMainBlock);

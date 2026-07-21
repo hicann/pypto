@@ -26,8 +26,7 @@ class MainBlockCondBulider {
 public:
     MainBlockCondBulider();
     void CollectCallopMainBlockConds(Function* func);
-    bool CheckReshapeCopy(Function* func);
-    void CollectCoaMainBlockConds(const std::vector<std::vector<SymbolicScalar>>& argList, Function* func);
+    void CollectLeafMainBlockConds(Function* func, const std::vector<SymbolicScalar>& linearArgList);
     SymbolicScalar BuildMainBlockExpression();
     static void Gencode(Function* function);
     const std::vector<SymbolicScalar>& GetCondGroup() const;
@@ -37,9 +36,8 @@ private:
     void AddUniqueCondition(const SymbolicScalar& newCond);
     bool CheckShapeEquality(const Shape& shape, const std::vector<SymbolicScalar>& dynShape);
     void DisableMainBlock();
-
-    bool GetValidShapeFromCoa(const std::vector<SymbolicScalar>& argList, Shape& shape,
-                              std::vector<SymbolicScalar>& dynValidShape);
+    bool CheckLeafOperand(const Operation& op, const std::shared_ptr<LogicalTensor>& iop, int coaIndexBase,
+                          const std::vector<SymbolicScalar>& linearArgList, const char* tag);
 
 private:
     std::vector<SymbolicScalar> mainBlockCondGroup_;
