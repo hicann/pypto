@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import ast
+import logging
 from typing import Any
 
 from pypto_pro.ir import op as ir_op
@@ -170,6 +171,8 @@ class ExpressionParserMixin:
         Returns:
             IR expression
         """
+        if expr in self._parsed_expr_cache:
+            return self._parsed_expr_cache[expr]
         self._current_node = expr
         if isinstance(expr, ast.Name):
             result = self.parse_name(expr)
@@ -203,7 +206,8 @@ class ExpressionParserMixin:
             )
 
         if nested:
-            result = self._materialize_nested_call(result, self.span_tracker.get_span(expr))
+            result = self._materialize_nested_expr(result, self.span_tracker.get_span(expr))
+        self._parsed_expr_cache[expr] = result
         return result
 
     def parse_name(self, name: ast.Name) -> ir.Expr | Any:
@@ -282,9 +286,27 @@ class ExpressionParserMixin:
         left = self.parse_expression(binop.left)
         right = self.parse_expression(binop.right)
 
-        # Tile + offset in VF scope → GetItemExpr (pointer arithmetic)
+        # Tile + offset: only supported in VF section as pointer arithmetic.
+        # Non-VF sections require slice syntax (tile[r:r+h, c:c+w]) for sub-views.
         if isinstance(binop.op, ast.Add) and isinstance(left.type, ir.TileType):
-            return ir.GetItemExpr(left, right, span)
+            if self.inline_vf_depth == 0:
+                raise ParserSyntaxError(
+                    "Tile + offset is not supported outside VF section; "
+                    "use tile[i:i+h, j:j+w] slice syntax for sub-view",
+                    span=span,
+                    hint="Replace `tile + offset` with `tile[row:row+h, :]` for offset access",
+                )
+            # VF section: lower to block.subview with original shape (VF codegen
+            # only uses the offset as pointer arithmetic, shape is ignored).
+            from pypto_pro.ir.op.block_ops import block_ir_op
+            shape_tuple = ir.MakeTuple(left.type.shape, span)
+            result = ir.create_op_call(
+                block_ir_op("subview"),
+                [left, right, shape_tuple],
+                {},
+                span,
+            )
+            return result
 
         # Raw pointer arithmetic: only `ptr + offset` is meaningful (→ pl.addptr).
         # Every other operator on a pointer (-, *, /, //, %) is forbidden.
@@ -711,13 +733,41 @@ class ExpressionParserMixin:
         value_expr = self.parse_expression(subscript.value)
         value_type = value_expr.type
 
-        if not isinstance(value_type, (ir.TileType, ir.TupleType)):
+        # Tile/Tensor subscript: dispatch by index type
+        #   - Integer index (no ':') → getval (scalar access, Tile and Tensor)
+        #   - Slice index (has ':')  → sub-view (block.subview, Tile only)
+        if isinstance(value_type, (ir.TensorType, ir.TileType)):
+            has_slice = isinstance(subscript.slice, ast.Slice) or (
+                isinstance(subscript.slice, ast.Tuple)
+                and any(isinstance(e, ast.Slice) for e in subscript.slice.elts)
+            )
+            if has_slice:
+                return self._parse_slice_subscript(value_expr, subscript.slice, span)
+            # All-integer index: A[i, j] → getval(A, i*cols+j)
+            index_expr = self._parse_scalar_subscript_index(value_expr, subscript.slice, span)
+            meta = self._tile_mutex_meta.get(value_expr) if self._auto_mutex else None
+            from pypto_pro.ir.op.block_ops import _ir_getval
+            result = _ir_getval(value_expr, index_expr, span=span)
+            if meta is not None:
+                from ._op_pipeline import get_op_pipe
+                from pypto_pro.ir.op.system_ops import mutex_lock, mutex_unlock
+                pipe = get_op_pipe("getval")
+                buf_id_ir, mutex_ids = meta
+                self.builder.emit(ir.EvalStmt(
+                    mutex_lock(pipe=pipe, mutex_id=buf_id_ir, mutex_ids=mutex_ids, span=span), span))
+                result = self._materialize_nested_expr(result, span)
+                self.builder.emit(ir.EvalStmt(
+                    mutex_unlock(pipe=pipe, mutex_id=buf_id_ir, mutex_ids=mutex_ids, span=span), span))
+            return result
+
+        if not isinstance(value_type, ir.TupleType):
             raise ParserTypeError(
-                f"Subscript requires tuple or tile type, got {type(value_type).__name__}",
+                f"Subscript requires tuple, tile, or tensor type, got {type(value_type).__name__}",
                 span=span,
-                hint="Only tuple types support subscript access in this context",
+                hint="Subscript access is supported on Tuple, Tile, and Tensor types",
             )
 
+        # TupleType subscript: tuple[i] element access
         if isinstance(subscript.slice, ast.Constant):
             if not isinstance(subscript.slice.value, int):
                 raise ParserSyntaxError(
@@ -728,12 +778,11 @@ class ExpressionParserMixin:
         else:
             if isinstance(subscript.slice, ast.Tuple):
                 raise ParserSyntaxError(
-                    "Multi-dimensional subscript is not supported",
+                    "Multi-dimensional subscript is not supported for tuples",
                     span=span,
-                    hint="Use a scalar index like arr[0]",
+                    hint="Use a scalar index like tuple[0]",
                 )
-            if isinstance(value_type, ir.TupleType):
-                self._check_uniform_tuple_types(value_type, span)
+            self._check_uniform_tuple_types(value_type, span)
 
         index_expr = self.parse_expression(subscript.slice)
         if (
@@ -745,22 +794,17 @@ class ExpressionParserMixin:
             if 0 <= index < len(value_expr.elements):
                 return value_expr.elements[index]
 
-        # This GetItem could not be statically evaluated. Restore a named tuple
-        # Var when folding reduced its base to that Var's MakeTuple value, so
-        # codegen retains the backing-array identity. This covers runtime indices
-        # and static accesses that must remain dynamic, including struct arrays.
-        value_expr = self._restore_tuple_var_for_unfolded_getitem(value_expr)
-        value_type = value_expr.type
+        # CCE resolves a non-folded GetItem through the underlying MakeTuple's
+        # backing array. struct_array stays as a Var here because it is not a
+        # parser constant; ordinary tuples may remain folded MakeTuple values.
         item_expr = ir.GetItemExpr(value_expr, index_expr, span)
-        # A slice of a tile aliases the tile's buffer, so carry the base's mutex
-        # metadata onto the slice.  auto_mutex then locks accesses to the slice on
-        # the base's buf_id; it is consumed when the slice is bound to a var (see
-        # _transfer_tile_sync_metadata).  Nested slices compose: the inner slice is tagged
-        # from its root here, and the outer one inherits from the (tagged) inner.
-        if isinstance(value_type, ir.TileType):
-            meta = self._tile_mutex_meta.get(value_expr)
-            if meta is not None:
-                self._tile_mutex_meta[item_expr] = meta
+        # A subscript aliases the base's buffer, so carry the base's mutex
+        # metadata onto the item.  auto_mutex then locks accesses to the item on
+        # the base's buf_id; it is consumed when the item is bound to a var (see
+        # _transfer_tile_sync_metadata).
+        meta = self._tile_mutex_meta.get(value_expr)
+        if meta is not None:
+            self._tile_mutex_meta[item_expr] = meta
         return item_expr
 
     def _is_const_expr(self, expr: Any) -> bool:
@@ -973,17 +1017,227 @@ class ExpressionParserMixin:
             )
         return tensor_type.shape[axis]
 
-    def _materialize_nested_call(self, result, span: ir.Span):
-        """Let-bind a Call result when it appears as a sub-expression.
+    def _parse_scalar_subscript_index(
+        self,
+        container_expr: ir.Expr,
+        slice_node: ast.expr,
+        span: ir.Span,
+    ) -> ir.Expr:
+        """Parse A[i, j, ...] into a linear offset expression for getval/setval.
 
-        Only materializes ``ir.Call`` results. All other returns (Var, ConstInt,
-        GetItemExpr, MakeTuple, BinaryExpr, raw closure values, etc.) pass
-        through unchanged so existing call sites that rely on non-Call return
-        shapes keep working.
+        Multi-index: A[i, j] → i * N + j (row-major linearization).
+        Single index: A[i] → i (only valid for 1D containers).
+        """
+        container_type = container_expr.type
+        shape = container_type.shape
+
+        # Single index A[x]: only valid for 1D containers (rank 1)
+        if not isinstance(slice_node, ast.Tuple):
+            if len(shape) != 1:
+                if self.inline_vf_depth > 0:
+                    raise ParserSyntaxError(
+                        f"Tile[x] in VF section is not supported; use `tile + x` for pointer offset",
+                        span=span,
+                        hint="Replace `tile[x]` with `tile + x`",
+                    )
+                raise ParserSyntaxError(
+                    f"Subscript A[x] requires 1D container, but got rank {len(shape)}; "
+                    f"use {len(shape)} indices or add ':' for sub-view (Tile)",
+                    span=span,
+                    hint=f"Use A[i, j] for scalar access or A[x:, :] for sub-view",
+                )
+            return self.parse_expression(slice_node)
+
+        # A[i, j, ...] — multi-dimensional coordinate
+        elts = slice_node.elts
+
+        if len(elts) != len(shape):
+            raise ParserTypeError(
+                f"Subscript has {len(elts)} indices but container has rank {len(shape)}",
+                span=span,
+                hint=f"Use {len(shape)} indices to match the container shape",
+            )
+        indices = [self.parse_expression(e) for e in elts]
+        from pypto_pro.language.parser._utils import _const_int_value
+
+        offset = indices[-1]
+        stride = shape[-1]
+        for dim in range(len(indices) - 2, -1, -1):
+            # Fold constant stride into a single ConstInt to avoid mul IR nodes
+            stride_val = _const_int_value(stride)
+            if stride_val == 1:
+                product = indices[dim]
+            else:
+                product = indices[dim] * stride
+            offset = product + offset
+            if dim > 0:
+                next_shape_val = _const_int_value(shape[dim])
+                cur_stride_val = _const_int_value(stride)
+                if next_shape_val is not None and cur_stride_val is not None:
+                    stride = ir.ConstInt(next_shape_val * cur_stride_val, DataType.INDEX, span)
+                else:
+                    stride = shape[dim] * stride
+        return offset
+
+    def _parse_slice_subscript(
+        self,
+        container_expr: ir.Expr,
+        slice_node: ast.expr,
+        span: ir.Span,
+    ) -> ir.Expr:
+        """Parse tile[r:, c:] into a block.subview op (Tile only, 2D).
+
+        Result tile preserves the original shape (row_stride unchanged);
+        codegen auto-emits SetValidShape with the sub-window dimensions.
+        - If slice exceeds tile shape → error.
+        - If slice exceeds tile valid_shape → clamp to (valid_shape - start).
+        """
+        container_type = container_expr.type
+        shape = container_type.shape
+
+        if isinstance(container_type, ir.TensorType):
+            raise ParserSyntaxError(
+                "Tensor slice sub-view is not supported",
+                span=span,
+                hint="Use pl.load/pl.store with offset lists for tensor access",
+            )
+
+        if self.inline_vf_depth > 0:
+            logging.warning(
+                "Tile slice in VF section is lowered to pointer offset only; "
+                "shape/valid_shape are ignored. Consider using `tile + offset` instead."
+            )
+
+        if not isinstance(slice_node, ast.Tuple):
+            raise ParserSyntaxError(
+                "1D tile slice is not supported; use 2D slice like tile[i:i+h, j:j+w]",
+                span=span,
+                hint="Use tile[i:i+h, j:j+w] for sub-view access",
+            )
+
+        slices = slice_node.elts
+        if len(slices) != len(shape):
+            raise ParserTypeError(
+                f"Slice subscript has {len(slices)} dimensions but tile has rank {len(shape)}",
+                span=span,
+                hint=f"Use {len(shape)} indices to match the tile shape",
+            )
+
+        from pypto_pro.language.parser._utils import _const_int_value
+
+        cols = shape[1]
+        # valid_shape for clamping: compile-time (TileType.tile_view) or runtime
+        # (set_validshape, tracked by tile var name).
+        ct_valid = None
+        tile_view = getattr(container_type, 'tile_view', None)
+        if tile_view is not None:
+            ct_valid = getattr(tile_view, 'valid_shape', None)
+        rt_valid = None
+        if isinstance(container_expr, ir.Var):
+            rt_valid = self.get_tile_valid_shape(container_expr)
+        dim_starts = []
+        new_shape_exprs = []
+
+        for i, s in enumerate(slices):
+            if not isinstance(s, ast.Slice):
+                raise ParserSyntaxError(
+                    f"Tile slice does not support integer index in dimension {i}",
+                    span=span,
+                    hint="Tile slices must use ':' for all dimensions",
+                )
+            start = ir.ConstInt(0, DataType.INDEX, span) if s.lower is None else self.parse_expression(s.lower)
+            dim_starts.append(start)
+            start_val = _const_int_value(start)
+
+            # Compute slice size: upper - start (upper defaults to shape[i]).
+            # Clamp upper to shape[i] (Python slice semantics): a[16:77] on a
+            # length-64 dim becomes a[16:64], not an error.
+            upper = shape[i] if s.upper is None else self.parse_expression(s.upper)
+            shape_val = _const_int_value(shape[i])
+            upper_val = _const_int_value(upper)
+            if shape_val is not None and upper_val is not None and upper_val > shape_val:
+                upper = ir.ConstInt(shape_val, DataType.INDEX, span)
+                upper_val = shape_val
+            size = upper if start_val == 0 else upper - start
+            size_val = _const_int_value(size)
+
+            # Check against declared shape: start must not exceed shape
+            if start_val is not None and shape_val is not None:
+                if start_val > shape_val:
+                    raise ParserSyntaxError(
+                        f"Tile slice start ({start_val}) exceeds shape dim {i} ({shape_val})",
+                        span=span,
+                        hint=f"Slice start must not exceed shape[{i}]",
+                    )
+
+            for vs in (
+                ct_valid[i] if ct_valid is not None and i < len(ct_valid) else None,
+                rt_valid[i] if rt_valid is not None and i < len(rt_valid) else None,
+            ):
+                if vs is None:
+                    continue
+                vs_val = _const_int_value(vs)
+                if vs_val is not None and vs_val >= 0 and start_val is not None:
+                    remaining = vs_val - start_val
+                    if remaining < 0:
+                        raise ParserSyntaxError(
+                            f"Tile slice start ({start_val}) exceeds valid_shape dim {i} ({vs_val})",
+                            span=span,
+                            hint=f"Slice start must not exceed valid_shape[{i}]",
+                        )
+                    if size_val is not None:
+                        if size_val > remaining:
+                            size = ir.ConstInt(remaining, DataType.INDEX, span)
+                            size_val = remaining
+                    else:
+                        size = ir.Min(size, ir.ConstInt(remaining, DataType.INDEX, span), DataType.INDEX, span)
+                elif vs_val is None and start_val is not None:
+                    # Dynamic valid_shape: emit runtime clamp min(size, vs - start)
+                    remaining_expr = vs - start
+                    size = ir.Min(size, remaining_expr, DataType.INDEX, span)
+
+            new_shape_exprs.append(size)
+
+        # Linear offset: row_start * cols + col_start
+        offset = dim_starts[0] * cols + dim_starts[1]
+
+        from pypto_pro.ir.op.block_ops import block_ir_op
+        shape_tuple = ir.MakeTuple(new_shape_exprs, span)
+        view_expr = ir.create_op_call(
+            block_ir_op("subview"),
+            [container_expr, offset, shape_tuple],
+            {},
+            span,
+        )
+
+        # Propagate tile mutex metadata for auto_mutex
+        self._transfer_tile_sync_metadata(view_expr, container_expr)
+        return view_expr
+
+
+    def _mark_make_tuple_anchor(self, result) -> None:
+        """Record that a MakeTuple already has an emitted assignment anchor."""
+        if isinstance(result, ir.MakeTuple):
+            self._anchored_make_tuples.add(result)
+
+
+    def _materialize_nested_expr(self, result, span: ir.Span):
+        """Materialize nested Calls and anchor nested MakeTuples.
+
+        Calls return their temporary Var as before. A MakeTuple instead keeps its
+        expression result: the temporary let is only a CCE backing-array anchor,
+        so callers can continue folding the enclosing expression.
 
         Skips Calls with UnknownType to avoid materializing void/sentinel
         results (e.g. nbuf.advance() void calls).
         """
+        if isinstance(result, ir.MakeTuple):
+            if result not in self._anchored_make_tuples:
+                name = f"_tuple_anchor_{self._expr_tmp_counter}"
+                self._expr_tmp_counter += 1
+                self.builder.let(name, result, span=span)
+                self._mark_make_tuple_anchor(result)
+            return result
         if not isinstance(result, ir.Call):
             return result
         if isinstance(result.type, ir.UnknownType):
@@ -992,6 +1246,7 @@ class ExpressionParserMixin:
         self._expr_tmp_counter += 1
         value = self.builder.let(name, result, span=span)
         self._transfer_tile_sync_metadata(value, result)
+        self._emit_auto_mutex_unlocks()
         return value
 
     def _route_ir_node_method(self, node: ast.Call):

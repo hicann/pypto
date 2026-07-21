@@ -41,6 +41,20 @@ static std::string VFEnumValueName(const char* full_name)
     return sep ? std::string(sep + 1) : std::string(full_name);
 }
 
+// Returns true when the dst argument (args_[0], or args_[0]/args_[1] for 2-dst
+// ops) is a MaskReg variable. Used by unified emitters to dispatch between
+// v* (RegTensor) and p* (MaskReg) CCE intrinsics.
+static bool IsDstMaskReg(const ir::CallPtr& op, codegen::CCECodegen& codegen, size_t idx = 0)
+{
+    if (idx >= op->args_.size())
+        return false;
+    auto dst_var = ir::As<ir::Var>(op->args_[idx]);
+    if (dst_var) {
+        return codegen.IsMaskRegVar(codegen.GetVarName(dst_var));
+    }
+    return false;
+}
+
 // ============================================================================
 // RegTensor declaration
 // ============================================================================
@@ -267,7 +281,7 @@ static std::string GetUBufPtr(codegen::CCECodegen& codegen, const ir::ExprPtr& e
 }
 
 // ============================================================================
-// LoadAlign (unified) — vlds / plds with mode & post_update kwargs
+// LoadAlign (unified) — vlds / plds with dist & post_update kwargs
 // Replaces: LoadAlign, LoadAlignMode, LoadAlignPostUpdate, LoadAlignPostupdate, LoadAlignUnpackV2
 // ============================================================================
 
@@ -306,8 +320,29 @@ static std::string EmitVFLoadAlign(const ir::CallPtr& op, codegen::CodegenBase& 
         }
         return "";
     }
+    // 2-arg form: load_align(dst, ptr) — MaskReg dst → plds, RegTensor dst → vlds
+    if (op->args_.size() == 2) {
+        std::string dst = codegen.GetExprAsCode(op->args_[0]);
+        DataType dst_dt = GetExprDtype(op->args_[0]);
+        bool dst_is_mask = false;
+        if (auto dst_v = ir::As<ir::Var>(op->args_[0])) {
+            dst_is_mask = codegen.IsMaskRegVar(codegen.GetVarName(dst_v));
+        }
+        if (dst_is_mask) {
+            std::string mode = "NORM";
+            if (op->HasKwarg("dist"))
+                mode = VFEnumValueName(ir::EnumToString(static_cast<ir::LoadDist>(op->GetKwarg<int>("dist"))));
+            std::string plds_ptr = GetUBufPtr(codegen, op->args_[1], "uint32_t");
+            codegen.Emit("plds(" + dst + ", " + plds_ptr + ", 0, " + mode + ");");
+        } else {
+            std::string ptr_type = DtypeToPtrType(dst_dt);
+            std::string ub_ptr = GetUBufPtr(codegen, op->args_[1], ptr_type);
+            codegen.Emit("vlds(" + dst + ", " + ub_ptr + ", 0, NORM);");
+        }
+        return "";
+    }
     CHECK(op->args_.size() == 3)
-        << "vf.load_align requires 3 or 4 args (dst, src_ptr, offset) or (dst0, dst1, src_ptr, offset)";
+        << "vf.load_align requires 2, 3, or 4 args (dst, src_ptr[, offset]) or (dst0, dst1, src_ptr, offset)";
     std::string dst = codegen.GetExprAsCode(op->args_[0]);
     std::string offset_str = codegen.GetExprAsCode(op->args_[2]);
     DataType dst_dt = GetExprDtype(op->args_[0]);
@@ -317,16 +352,21 @@ static std::string EmitVFLoadAlign(const ir::CallPtr& op, codegen::CodegenBase& 
     if (auto dst_v = ir::As<ir::Var>(op->args_[0])) {
         dst_is_mask = codegen.IsMaskRegVar(codegen.GetVarName(dst_v));
     }
-    // Determine mode from kwargs (dist kwarg is legacy alias for mode)
+    // Determine mode from kwargs (dist kwarg is legacy alias for mode).
+    // MaskReg (plds) and RegTensor (vlds) paths share the same LoadDist enum:
+    // LoadDist includes NORM/US/DS/BRC/... and EnumToString yields the bare
+    // name (e.g. "DS"), which plds accepts directly and vlds maps to Bxx suffix.
     std::string mode = "NORM";
     if (op->HasKwarg("dist"))
         mode = VFEnumValueName(ir::EnumToString(static_cast<ir::LoadDist>(op->GetKwarg<int>("dist"))));
-    // AddrReg offset path: RegTensor dst -> vld(dst, ptr, areg, dist).
-    // (A MaskReg dst is never produced by load_align's assignment form, so the
-    // MaskReg+AddrReg pld case is handled by vf.mask_load, not here.)
+    // AddrReg offset path: MaskReg dst -> pld, RegTensor dst -> vld
     if (codegen.IsAddrRegVar(offset_str)) {
-        std::string ub_ptr = GetUBufPtr(codegen, op->args_[1], ptr_type);
-        codegen.Emit("vld(" + dst + ", " + ub_ptr + ", " + offset_str + ", " + mode + ");");
+        std::string ub_ptr = GetUBufPtr(codegen, op->args_[1], dst_is_mask ? "uint32_t" : ptr_type);
+        if (dst_is_mask) {
+            codegen.Emit("pld(" + dst + ", " + ub_ptr + ", " + offset_str + ", " + mode + ");");
+        } else {
+            codegen.Emit("vld(" + dst + ", " + ub_ptr + ", " + offset_str + ", " + mode + ");");
+        }
         return "";
     }
     // Check for DataBlock load path (vsldb)
@@ -452,6 +492,40 @@ static std::string EmitVFStoreAlign(const ir::CallPtr& op, codegen::CodegenBase&
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
     // args: [dst_ptr, src_reg, mask, (optional) block_stride, (optional) repeat_stride]
     std::string src_reg = codegen.GetExprAsCode(op->args_[1]);
+    // MaskReg src path: when args[1] is a MaskReg, dispatch to psts/pst (mask store)
+    bool src_is_mask = false;
+    if (auto src_v = ir::As<ir::Var>(op->args_[1])) {
+        src_is_mask = codegen.IsMaskRegVar(codegen.GetVarName(src_v));
+    }
+    if (src_is_mask) {
+        std::string dist = "NORM";
+        if (op->HasKwarg("dist")) {
+            dist = VFEnumValueName(ir::EnumToString(static_cast<ir::StoreDist>(op->GetKwarg<int>("dist"))));
+            // psts/pst use PK (not PACK) for packed mode
+            if (dist == "PACK")
+                dist = "PK";
+        }
+        // AddrReg offset path: 3rd arg is AddrReg -> pst(mask, ptr, areg, dist)
+        if (op->args_.size() >= 3) {
+            std::string third_arg = codegen.GetExprAsCode(op->args_[2]);
+            if (codegen.IsAddrRegVar(third_arg)) {
+                std::string ub_ptr = GetUBufPtr(codegen, op->args_[0], "uint32_t");
+                codegen.Emit("pst(" + src_reg + ", " + ub_ptr + ", " + third_arg + ", " + dist + ");");
+                return "";
+            }
+            // Post-update path: int offset with post_update kwarg
+            bool post_update = op->HasKwarg("post_update") && op->GetKwarg<bool>("post_update");
+            if (post_update) {
+                std::string ptr_var = codegen.GetOrCreateVFTilePtr(op->args_[0], /*is_post_update=*/true);
+                codegen.Emit("psts(" + src_reg + ", " + ptr_var + ", " + third_arg + ", " + dist + ", POST_UPDATE);");
+                return "";
+            }
+        }
+        // Default: psts with offset=0
+        std::string ub_ptr = GetUBufPtr(codegen, op->args_[0], "uint32_t");
+        codegen.Emit("psts(" + src_reg + ", " + ub_ptr + ", 0, " + dist + ");");
+        return "";
+    }
     // AddrReg offset path: when 4th arg is an AddrReg variable,
     // emit vst(src, ptr, areg, dist, mask) — 5 args (note: vst, not vsts)
     if (op->args_.size() >= 4) {
@@ -549,7 +623,16 @@ static std::string EmitVFStoreAlign(const ir::CallPtr& op, codegen::CodegenBase&
         CHECK(op->args_.size() == 4) << "vf.store_align INTLV requires 4 args (dst_ptr, src_reg, src1, mask)";
         std::string src1 = codegen.GetExprAsCode(op->args_[2]);
         std::string mask_reg = codegen.GetExprAsCode(op->args_[3]);
-        std::string dst_ptr = GetUBufPtr(codegen, op->args_[0], ptr_type);
+        // vsts 2-source overload (__VF_VSTSX2) does not exist for FP32;
+        // cast to UINT32 (same 32-bit width) to use the UINT32 overload.
+        DataType src_dt = GetExprDtype(op->args_[1]);
+        std::string intlv_ptr_type = ptr_type;
+        if (src_dt == DataType::FP32) {
+            src_reg = "(RegTensor<uint32_t> &)" + src_reg;
+            src1 = "(RegTensor<uint32_t> &)" + src1;
+            intlv_ptr_type = "uint32_t";
+        }
+        std::string dst_ptr = GetUBufPtr(codegen, op->args_[0], intlv_ptr_type);
         codegen.Emit("vsts(" + src_reg + ", " + src1 + ", " + dst_ptr + ", 0, " + dist + ", " + mask_reg + ");");
     } else if (data_copy_mode == "DATA_BLOCK_COPY") {
         std::string mask_reg = codegen.GetExprAsCode(op->args_[2]);
@@ -701,6 +784,10 @@ static std::string EmitVFAnd(const ir::CallPtr& op, codegen::CodegenBase& codege
     std::string src0 = codegen.GetExprAsCode(op->args_[1]);
     std::string src1 = codegen.GetExprAsCode(op->args_[2]);
     std::string mask = codegen.GetExprAsCode(op->args_[3]);
+    if (IsDstMaskReg(op, codegen)) {
+        codegen.Emit("pand(" + dst + ", " + src0 + ", " + src1 + ", " + mask + ");");
+        return "";
+    }
     // vand requires src1 to share dst's element type; reinterpret if needed
     // (mirrors the `(RegTensor<uint32_t>&)idxTmp` pattern in vf_topk_16_gather.h:213).
     DataType dst_dt = GetExprDtype(op->args_[0]);
@@ -724,6 +811,11 @@ static std::string EmitVFBinaryBitwise(const ir::CallPtr& op, codegen::CodegenBa
     std::string src0 = codegen.GetExprAsCode(op->args_[1]);
     std::string src1 = codegen.GetExprAsCode(op->args_[2]);
     std::string mask = codegen.GetExprAsCode(op->args_[3]);
+    if (IsDstMaskReg(op, codegen)) {
+        std::string p_instr = "p" + instruction.substr(1);
+        codegen.Emit(p_instr + "(" + dst + ", " + src0 + ", " + src1 + ", " + mask + ");");
+        return "";
+    }
     DataType dst_dt = GetExprDtype(op->args_[0]);
     DataType s0_dt = GetExprDtype(op->args_[1]);
     DataType s1_dt = GetExprDtype(op->args_[2]);
@@ -957,6 +1049,10 @@ static std::string EmitVFNot(const ir::CallPtr& op, codegen::CodegenBase& codege
     std::string dst = codegen.GetExprAsCode(op->args_[0]);
     std::string src = codegen.GetExprAsCode(op->args_[1]);
     std::string mask = codegen.GetExprAsCode(op->args_[2]);
+    if (IsDstMaskReg(op, codegen)) {
+        codegen.Emit("pnot(" + dst + ", " + src + ", " + mask + ");");
+        return "";
+    }
     std::string mode = GetVFMergeMode(op);
     codegen.Emit("vnot(" + dst + ", " + src + ", " + mask + ", " + mode + ");");
     return "";
@@ -1107,6 +1203,23 @@ static std::string EmitVFInterleave(const ir::CallPtr& op, codegen::CodegenBase&
     std::string dst1 = codegen.GetExprAsCode(op->args_[1]);
     std::string src0 = codegen.GetExprAsCode(op->args_[2]);
     std::string src1 = codegen.GetExprAsCode(op->args_[3]);
+    if (IsDstMaskReg(op, codegen)) {
+        DataType dtype = DataType::FP32;
+        if (op->HasKwarg("dtype")) {
+            dtype = op->GetKwarg<DataType>("dtype");
+        }
+        std::string pintlv_op;
+        if (dtype == DataType::UINT8 || dtype == DataType::INT8) {
+            pintlv_op = "pintlv_b8";
+        } else if (dtype == DataType::FP16 || dtype == DataType::BF16 || dtype == DataType::UINT16 ||
+                   dtype == DataType::INT16) {
+            pintlv_op = "pintlv_b16";
+        } else {
+            pintlv_op = "pintlv_b32";
+        }
+        codegen.Emit(pintlv_op + "(" + dst0 + ", " + dst1 + ", " + src0 + ", " + src1 + ");");
+        return "";
+    }
     codegen.Emit("vintlv(" + dst0 + ", " + dst1 + ", " + src0 + ", " + src1 + ");");
     return "";
 }
@@ -1208,6 +1321,11 @@ static std::string EmitVFPack(const ir::CallPtr& op, codegen::CodegenBase& codeg
     if (op->HasKwarg("part")) {
         part = VFEnumValueName(ir::EnumToString(static_cast<ir::PackPart>(op->GetKwarg<int>("part"))));
     }
+    if (IsDstMaskReg(op, codegen)) {
+        std::string cce_half = (part == "LOWER" || part == "LOWEST") ? "LOWER" : "HIGHER";
+        codegen.Emit("ppack(" + dst + ", " + src + ", " + cce_half + ");");
+        return "";
+    }
 
     DataType src_dt = GetExprDtype(op->args_[1]);
 
@@ -1249,6 +1367,12 @@ static std::string EmitVFUnpack(const ir::CallPtr& op, codegen::CodegenBase& cod
     std::string part = "LOWER";
     if (op->HasKwarg("part")) {
         part = VFEnumValueName(ir::EnumToString(static_cast<ir::PackPart>(op->GetKwarg<int>("part"))));
+    }
+
+    if (IsDstMaskReg(op, codegen)) {
+        std::string cce_half = (part == "LOWER" || part == "LOWEST") ? "LOWER" : "HIGHER";
+        codegen.Emit("punpack(" + dst + ", " + src + ", " + cce_half + ");");
+        return "";
     }
 
     DataType dst_dt = GetExprDtype(op->args_[0]);
@@ -1643,6 +1767,23 @@ static std::string EmitVFDeInterleave(const ir::CallPtr& op, codegen::CodegenBas
     std::string dst1 = codegen.GetExprAsCode(op->args_[1]);
     std::string src0 = codegen.GetExprAsCode(op->args_[2]);
     std::string src1 = codegen.GetExprAsCode(op->args_[3]);
+    if (IsDstMaskReg(op, codegen)) {
+        DataType dtype = DataType::FP32;
+        if (op->HasKwarg("dtype")) {
+            dtype = op->GetKwarg<DataType>("dtype");
+        }
+        std::string pdintlv_op;
+        if (dtype == DataType::UINT8 || dtype == DataType::INT8) {
+            pdintlv_op = "pdintlv_b8";
+        } else if (dtype == DataType::FP16 || dtype == DataType::BF16 || dtype == DataType::UINT16 ||
+                   dtype == DataType::INT16) {
+            pdintlv_op = "pdintlv_b16";
+        } else {
+            pdintlv_op = "pdintlv_b32";
+        }
+        codegen.Emit(pdintlv_op + "(" + dst0 + ", " + dst1 + ", " + src0 + ", " + src1 + ");");
+        return "";
+    }
     // vdintlv overloads are keyed on the dst element type; if src dtype differs
     // (e.g. u16 reg reinterpreted as u8 to split into byte streams, mirroring
     // `(RegTensor<uint8_t>&)vreg0U16` in vf_topk.h:60), emit a reinterpret cast.
@@ -1669,6 +1810,10 @@ static std::string EmitVFSelect(const ir::CallPtr& op, codegen::CodegenBase& cod
     std::string src_true = codegen.GetExprAsCode(op->args_[1]);
     std::string src_false = codegen.GetExprAsCode(op->args_[2]);
     std::string mask = codegen.GetExprAsCode(op->args_[3]);
+    if (IsDstMaskReg(op, codegen)) {
+        codegen.Emit("psel(" + dst + ", " + src_true + ", " + src_false + ", " + mask + ");");
+        return "";
+    }
     // vsel requires dst/src_true/src_false to share the same element type.
     // Use dst's dtype as canonical; reinterpret mismatched sources.
     DataType dst_dt = GetExprDtype(op->args_[0]);
@@ -1827,35 +1972,13 @@ static std::string EmitVFArange(const ir::CallPtr& op, codegen::CodegenBase& cod
     std::string dst = codegen.GetExprAsCode(op->args_[0]);
     std::string start = codegen.GetExprAsCode(op->args_[1]);
     DataType dst_dt = GetExprDtype(op->args_[0]);
-    // index_order kwarg selects the vci direction: INCREASE_ORDER -> INC_ORDER
-    // (dst[i] = start + i), DECREASE_ORDER -> DEC_ORDER (dst[i] = start - i).
-    std::string order = "INC_ORDER";
+    // index_order kwarg selects the direction: INCREASE_ORDER (default) ->
+    // dst[i] = start + i; DECREASE_ORDER -> dst[i] = start - i.
+    bool is_decrease = false;
     if (op->HasKwarg("index_order")) {
         auto o = static_cast<ir::IndexOrder>(op->GetKwarg<int>("index_order"));
         if (o == ir::IndexOrder::DECREASE_ORDER)
-            order = "DEC_ORDER";
-    }
-    // b64 (INT64/UINT64): single vci does not support 8-byte elements.
-    // Replicate AscendC ArangeB64Impl using pure bisheng intrinsics:
-    //   1. vci int32 low-half (0,1,2,...) into a temp RegTensor<int32_t>
-    //   2. vdup int32 high-half = 0
-    //   3. vintlv to interleave low/high into dst (RegTensor<int64_t>)
-    //   4. vadds to add the scalar start offset (as b64)
-    if (dst_dt == DataType::INT64 || dst_dt == DataType::UINT64) {
-        std::string lo = dst + "_b64_lo_";
-        std::string hi = dst + "_b64_hi_";
-        std::string dump = dst + "_b64_dump_";
-        std::string m = dst + "_b64_m_";
-        codegen.Emit("RegTensor<int32_t> " + lo + ";");
-        codegen.Emit("RegTensor<int32_t> " + hi + ";");
-        codegen.Emit("RegTensor<int32_t> " + dump + ";");
-        codegen.Emit("MaskReg " + m + " = pset_b32(PAT_ALL);");
-        codegen.Emit("vci(" + lo + ", 0, " + order + ");");
-        codegen.Emit("vdup(" + hi + ", 0, " + m + ", MODE_ZEROING);");
-        codegen.Emit("vintlv((RegTensor<uint32_t> &)" + dst + ", (RegTensor<uint32_t> &)" + dump +
-                     ", (RegTensor<uint32_t> &)" + lo + ", (RegTensor<uint32_t> &)" + hi + ");");
-        codegen.Emit("vadds(" + dst + ", " + dst + ", (int64_t)(" + start + "), " + m + ", MODE_ZEROING);");
-        return "";
+            is_decrease = true;
     }
     // vci only accepts signed integer types (vector_s32/s16/s8) and float types (vector_f16/f32).
     // Cast dst to the matching signed type to ensure overload resolution succeeds.
@@ -1867,7 +1990,43 @@ static std::string EmitVFArange(const ir::CallPtr& op, codegen::CodegenBase& cod
         signed_type = "int16_t";
     else
         signed_type = "int8_t";
-    codegen.Emit("vci((RegTensor<" + signed_type + "> &)" + dst + ", " + start + ", " + order + ");");
+    // b64 (INT64/UINT64): single vci does not support 8-byte elements.
+    // Replicate AscendC ArangeB64Impl using pure bisheng intrinsics:
+    //   1. vci int32 low-half (0,1,2,...) into a temp RegTensor<int32_t>
+    //   2. vneg if DECREASE_ORDER (produces 0,-1,-2,...)
+    //   3. vdup int32 high-half = 0
+    //   4. vintlv to interleave low/high into dst (RegTensor<int64_t>)
+    //   5. vadds to add the scalar start offset (as b64)
+    if (dst_dt == DataType::INT64 || dst_dt == DataType::UINT64) {
+        std::string lo = dst + "_b64_lo_";
+        std::string hi = dst + "_b64_hi_";
+        std::string dump = dst + "_b64_dump_";
+        std::string m = dst + "_b64_m_";
+        codegen.Emit("RegTensor<int32_t> " + lo + ";");
+        codegen.Emit("RegTensor<int32_t> " + hi + ";");
+        codegen.Emit("RegTensor<int32_t> " + dump + ";");
+        codegen.Emit("MaskReg " + m + " = pset_b32(PAT_ALL);");
+        codegen.Emit("vci(" + lo + ", 0, INC_ORDER);");
+        if (is_decrease) {
+            codegen.Emit("vneg(" + lo + ", " + lo + ", " + m + ", MODE_ZEROING);");
+        }
+        codegen.Emit("vdup(" + hi + ", 0, " + m + ", MODE_ZEROING);");
+        codegen.Emit("vintlv((RegTensor<uint32_t> &)" + dst + ", (RegTensor<uint32_t> &)" + dump +
+                     ", (RegTensor<uint32_t> &)" + lo + ", (RegTensor<uint32_t> &)" + hi + ");");
+        codegen.Emit("vadds(" + dst + ", " + dst + ", (int64_t)(" + start + "), " + m + ", MODE_ZEROING);");
+        return "";
+    }
+    if (is_decrease) {
+        std::string m = dst + "_arange_m_";
+        codegen.Emit("MaskReg " + m + " = pset_b32(PAT_ALL);");
+        codegen.Emit("vci((RegTensor<" + signed_type + "> &)" + dst + ", 0, INC_ORDER);");
+        codegen.Emit("vneg((RegTensor<" + signed_type + "> &)" + dst + ", (RegTensor<" + signed_type + "> &)" + dst +
+                     ", " + m + ", MODE_ZEROING);");
+        codegen.Emit("vadds((RegTensor<" + signed_type + "> &)" + dst + ", (RegTensor<" + signed_type + "> &)" + dst +
+                     ", " + start + ", " + m + ", MODE_ZEROING);");
+    } else {
+        codegen.Emit("vci((RegTensor<" + signed_type + "> &)" + dst + ", " + start + ", INC_ORDER);");
+    }
     return "";
 }
 
@@ -1909,6 +2068,27 @@ static std::string EmitVFGather(const ir::CallPtr& op, codegen::CodegenBase& cod
 static std::string EmitVFStoreUnAlign(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
+    // MaskReg src path: when args[1] is a MaskReg, dispatch to pstu
+    bool src_is_mask = false;
+    if (auto src_v = ir::As<ir::Var>(op->args_[1])) {
+        src_is_mask = codegen.IsMaskRegVar(codegen.GetVarName(src_v));
+    }
+    if (src_is_mask) {
+        CHECK(op->args_.size() == 3) << "vf.store_unalign mask path requires 3 args (ptr, mask, ureg)";
+        std::string vreg = codegen.GetExprAsCode(op->args_[1]);
+        DataType mask_dt = GetExprDtype(op->args_[1], DataType::UINT16);
+        int elem_bytes = static_cast<int>(mask_dt.GetBit() / 8);
+        if (elem_bytes <= 0)
+            elem_bytes = 4;
+        // pstu only accepts uint16_t* or uint32_t* (AscendC DataCopyUnAlignImpl
+        // casts to unsigned regardless of template T). b16→uint16_t, b32→uint32_t.
+        std::string ptr_type = (elem_bytes <= 2) ? "uint16_t" : "uint32_t";
+        // pstu modifies the pointer in-place (*&), so use post-update ref.
+        std::string ub_ptr = GetUBufPtr(codegen, op->args_[0], ptr_type, /*is_post_update=*/true);
+        std::string ureg = codegen.GetExprAsCode(op->args_[2]);
+        codegen.Emit("pstu(" + ureg + ", " + vreg + ", " + ub_ptr + ");");
+        return "";
+    }
     // Two calling conventions, distinguished by arg count:
     //   3 args [dst, src, align_reg]                    -> vstur (strideless, legacy)
     //   4 args [dst, vreg, ureg, stride] (+post_update) -> vstus (strided)
@@ -2663,219 +2843,9 @@ static std::string EmitVFStore(const ir::CallPtr& op, codegen::CodegenBase& code
     return "";
 }
 
-static std::string EmitVFMaskAnd(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
-{
-    auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-    CHECK(op->args_.size() == 4) << "vf.mask_and requires 4 args (dst, src0, src1, mask)";
-    std::string dst = codegen.GetExprAsCode(op->args_[0]);
-    std::string src0 = codegen.GetExprAsCode(op->args_[1]);
-    std::string src1 = codegen.GetExprAsCode(op->args_[2]);
-    std::string mask = codegen.GetExprAsCode(op->args_[3]);
-    codegen.Emit("pand(" + dst + ", " + src0 + ", " + src1 + ", " + mask + ");");
-    return "";
-}
-
-static std::string EmitVFMaskOr(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
-{
-    auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-    CHECK(op->args_.size() == 4) << "vf.mask_or requires 4 args (dst, src0, src1, mask)";
-    std::string dst = codegen.GetExprAsCode(op->args_[0]);
-    std::string src0 = codegen.GetExprAsCode(op->args_[1]);
-    std::string src1 = codegen.GetExprAsCode(op->args_[2]);
-    std::string mask = codegen.GetExprAsCode(op->args_[3]);
-    codegen.Emit("por(" + dst + ", " + src0 + ", " + src1 + ", " + mask + ");");
-    return "";
-}
-
-static std::string EmitVFMaskXor(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
-{
-    auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-    CHECK(op->args_.size() == 4) << "vf.mask_xor requires 4 args (dst, src0, src1, mask)";
-    std::string dst = codegen.GetExprAsCode(op->args_[0]);
-    std::string src0 = codegen.GetExprAsCode(op->args_[1]);
-    std::string src1 = codegen.GetExprAsCode(op->args_[2]);
-    std::string mask = codegen.GetExprAsCode(op->args_[3]);
-    codegen.Emit("pxor(" + dst + ", " + src0 + ", " + src1 + ", " + mask + ");");
-    return "";
-}
-
-static std::string EmitVFMaskNot(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
-{
-    auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-    CHECK(op->args_.size() == 3) << "vf.mask_not requires 3 args (dst, src, mask)";
-    std::string dst = codegen.GetExprAsCode(op->args_[0]);
-    std::string src = codegen.GetExprAsCode(op->args_[1]);
-    std::string mask = codegen.GetExprAsCode(op->args_[2]);
-    codegen.Emit("pnot(" + dst + ", " + src + ", " + mask + ");");
-    return "";
-}
-
-static std::string EmitVFMaskMov(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
-{
-    auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-    CHECK(op->args_.size() == 3) << "vf.mask_mov requires 3 args (dst, src, mask)";
-    std::string dst = codegen.GetExprAsCode(op->args_[0]);
-    std::string src = codegen.GetExprAsCode(op->args_[1]);
-    std::string mask = codegen.GetExprAsCode(op->args_[2]);
-    codegen.Emit("pmov(" + dst + ", " + src + ", " + mask + ");");
-    return "";
-}
-
-static std::string EmitVFMaskSel(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
-{
-    auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-    CHECK(op->args_.size() == 4) << "vf.mask_sel requires 4 args (dst, src0, src1, mask)";
-    std::string dst = codegen.GetExprAsCode(op->args_[0]);
-    std::string src0 = codegen.GetExprAsCode(op->args_[1]);
-    std::string src1 = codegen.GetExprAsCode(op->args_[2]);
-    std::string mask = codegen.GetExprAsCode(op->args_[3]);
-    codegen.Emit("psel(" + dst + ", " + src0 + ", " + src1 + ", " + mask + ");");
-    return "";
-}
-
-static std::string EmitVFMaskPack(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
-{
-    auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-    CHECK(op->args_.size() == 2) << "vf.mask_pack requires 2 args (dst, src); 'half' is a kwarg";
-    std::string dst = codegen.GetExprAsCode(op->args_[0]);
-    std::string src = codegen.GetExprAsCode(op->args_[1]);
-    std::string half = "LOWER";
-    if (op->HasKwarg("half")) {
-        half = VFEnumValueName(ir::EnumToString(static_cast<ir::PackPart>(op->GetKwarg<int>("half"))));
-    }
-    std::string cce_half = (half == "LOWER" || half == "LOWEST") ? "LOWER" : "HIGHER";
-    codegen.Emit("ppack(" + dst + ", " + src + ", " + cce_half + ");");
-    return "";
-}
-
-static std::string EmitVFMaskUnpack(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
-{
-    auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-    CHECK(op->args_.size() == 2) << "vf.mask_unpack requires 2 args (dst, src); 'half' is a kwarg";
-    std::string dst = codegen.GetExprAsCode(op->args_[0]);
-    std::string src = codegen.GetExprAsCode(op->args_[1]);
-    std::string half = "LOWER";
-    if (op->HasKwarg("half")) {
-        half = VFEnumValueName(ir::EnumToString(static_cast<ir::PackPart>(op->GetKwarg<int>("half"))));
-    }
-    std::string cce_half = (half == "LOWER" || half == "LOWEST") ? "LOWER" : "HIGHER";
-    codegen.Emit("punpack(" + dst + ", " + src + ", " + cce_half + ");");
-    return "";
-}
-
-static std::string EmitVFMaskInterleave(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
-{
-    auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-    CHECK(op->args_.size() == 4) << "vf.mask_interleave requires 4 args (dst0, dst1, src0, src1)";
-    std::string dst0 = codegen.GetExprAsCode(op->args_[0]);
-    std::string dst1 = codegen.GetExprAsCode(op->args_[1]);
-    std::string src0 = codegen.GetExprAsCode(op->args_[2]);
-    std::string src1 = codegen.GetExprAsCode(op->args_[3]);
-    DataType dtype = DataType::FP32;
-    if (op->HasKwarg("dtype")) {
-        dtype = op->GetKwarg<DataType>("dtype");
-    }
-    std::string pintlv_op;
-    if (dtype == DataType::UINT8 || dtype == DataType::INT8) {
-        pintlv_op = "pintlv_b8";
-    } else if (dtype == DataType::FP16 || dtype == DataType::BF16 || dtype == DataType::UINT16 ||
-               dtype == DataType::INT16) {
-        pintlv_op = "pintlv_b16";
-    } else {
-        pintlv_op = "pintlv_b32";
-    }
-    codegen.Emit(pintlv_op + "(" + dst0 + ", " + dst1 + ", " + src0 + ", " + src1 + ");");
-    return "";
-}
-
-static std::string EmitVFMaskDeInterleave(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
-{
-    auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-    CHECK(op->args_.size() == 4) << "vf.mask_deinterleave requires 4 args (dst0, dst1, src0, src1)";
-    std::string dst0 = codegen.GetExprAsCode(op->args_[0]);
-    std::string dst1 = codegen.GetExprAsCode(op->args_[1]);
-    std::string src0 = codegen.GetExprAsCode(op->args_[2]);
-    std::string src1 = codegen.GetExprAsCode(op->args_[3]);
-    DataType dtype = DataType::FP32;
-    if (op->HasKwarg("dtype")) {
-        dtype = op->GetKwarg<DataType>("dtype");
-    }
-    std::string pdintlv_op;
-    if (dtype == DataType::UINT8 || dtype == DataType::INT8) {
-        pdintlv_op = "pdintlv_b8";
-    } else if (dtype == DataType::FP16 || dtype == DataType::BF16 || dtype == DataType::UINT16 ||
-               dtype == DataType::INT16) {
-        pdintlv_op = "pdintlv_b16";
-    } else {
-        pdintlv_op = "pdintlv_b32";
-    }
-    codegen.Emit(pdintlv_op + "(" + dst0 + ", " + dst1 + ", " + src0 + ", " + src1 + ");");
-    return "";
-}
-
-static std::string EmitVFMaskLoad(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
-{
-    auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-    // Assignment form: args = [ptr] or [ptr, addr_reg]; dst from GetCurrentResultTarget.
-    CHECK(op->args_.size() == 1 || op->args_.size() == 2)
-        << "vf.mask_load requires 1 arg (ptr) or 2 (ptr, addr_reg); 'mode' is a kwarg";
-    std::string reg_name = codegen.GetCurrentResultTarget();
-    codegen.Emit("MaskReg " + reg_name + ";");
-    codegen.RegisterMaskRegVar(reg_name);
-    std::string ub_ptr = GetUBufPtr(codegen, op->args_[0], "uint32_t");
-    std::string mode = "US";
-    if (op->HasKwarg("mode")) {
-        mode = VFEnumValueName(ir::EnumToString(static_cast<ir::MaskLoadDist>(op->GetKwarg<int>("mode"))));
-    }
-    // AddrReg offset path: 2nd arg is an AddrReg -> pld(mask, ptr, areg, mode)
-    // (AscendC datacopy_impl.h:201). Otherwise fixed-offset plds(mask, ptr, 0, mode).
-    if (op->args_.size() == 2) {
-        std::string addr_reg = codegen.GetExprAsCode(op->args_[1]);
-        if (codegen.IsAddrRegVar(addr_reg)) {
-            codegen.Emit("pld(" + reg_name + ", " + ub_ptr + ", " + addr_reg + ", " + mode + ");");
-            return "";
-        }
-    }
-    codegen.Emit("plds(" + reg_name + ", " + ub_ptr + ", 0, " + mode + ");");
-    return "";
-}
-
-static std::string EmitVFMaskStore(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
-{
-    auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-    CHECK(op->args_.size() == 3 || op->args_.size() == 4)
-        << "vf.mask_store requires 3 args (src, ptr, mask) or 4 (src, ptr, mask, addr_reg); 'dist' is a kwarg";
-    std::string src = codegen.GetExprAsCode(op->args_[0]);
-    std::string ub_ptr = GetUBufPtr(codegen, op->args_[1], "uint32_t");
-    std::string dist = "PK";
-    if (op->HasKwarg("dist")) {
-        dist = VFEnumValueName(ir::EnumToString(static_cast<ir::MaskStoreDist>(op->GetKwarg<int>("dist"))));
-    }
-    // AddrReg offset path: 4th arg is an AddrReg -> pst(src, ptr, areg, dist)
-    // (AscendC datacopy_impl.h:234). Otherwise fixed-offset psts(src, ptr, 0, dist).
-    if (op->args_.size() == 4) {
-        std::string addr_reg = codegen.GetExprAsCode(op->args_[3]);
-        if (codegen.IsAddrRegVar(addr_reg)) {
-            codegen.Emit("pst(" + src + ", " + ub_ptr + ", " + addr_reg + ", " + dist + ");");
-            return "";
-        }
-    }
-    codegen.Emit("psts(" + src + ", " + ub_ptr + ", 0, " + dist + ");");
-    return "";
-}
-
-static std::string EmitVFMaskStoreUnalign(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
-{
-    auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-    CHECK(op->args_.size() == 3) << "vf.mask_store_unalign requires 3 args (src, ptr, mask)";
-    std::string src = codegen.GetExprAsCode(op->args_[0]);
-    DataType src_dt = GetExprDtype(op->args_[0], DataType::UINT16);
-    std::string ptr_type = src_dt.ToCTypeString();
-    std::string ub_ptr = GetUBufPtr(codegen, op->args_[1], ptr_type);
-    std::string mask = codegen.GetExprAsCode(op->args_[2]);
-    codegen.Emit("pstu(" + ub_ptr + ", " + src + ", " + mask + ");");
-    return "";
-}
+// EmitVFMaskLoad/Store/StoreUnalign have been removed — their logic is now
+// unified into EmitVFLoadAlign/EmitVFStoreAlign/EmitVFStoreUnAlign via
+// IsMaskRegVar dispatch, matching AscendC's function-overloading model.
 
 REGISTER_BACKEND_OP(BackendCCE, "vf.load")
 
@@ -2887,74 +2857,9 @@ REGISTER_BACKEND_OP(BackendCCE, "vf.store")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) { return EmitVFStore(op, codegen); });
 
-REGISTER_BACKEND_OP(BackendCCE, "vf.mask_and")
-
-    .set_pipe(ir::PipeType::V)
-    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) { return EmitVFMaskAnd(op, codegen); });
-
-REGISTER_BACKEND_OP(BackendCCE, "vf.mask_or")
-
-    .set_pipe(ir::PipeType::V)
-    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) { return EmitVFMaskOr(op, codegen); });
-
-REGISTER_BACKEND_OP(BackendCCE, "vf.mask_xor")
-
-    .set_pipe(ir::PipeType::V)
-    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) { return EmitVFMaskXor(op, codegen); });
-
-REGISTER_BACKEND_OP(BackendCCE, "vf.mask_not")
-
-    .set_pipe(ir::PipeType::V)
-    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) { return EmitVFMaskNot(op, codegen); });
-
-REGISTER_BACKEND_OP(BackendCCE, "vf.mask_mov")
-
-    .set_pipe(ir::PipeType::V)
-    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) { return EmitVFMaskMov(op, codegen); });
-
-REGISTER_BACKEND_OP(BackendCCE, "vf.mask_sel")
-
-    .set_pipe(ir::PipeType::V)
-    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) { return EmitVFMaskSel(op, codegen); });
-
-REGISTER_BACKEND_OP(BackendCCE, "vf.mask_pack")
-
-    .set_pipe(ir::PipeType::V)
-    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) { return EmitVFMaskPack(op, codegen); });
-
-REGISTER_BACKEND_OP(BackendCCE, "vf.mask_unpack")
-
-    .set_pipe(ir::PipeType::V)
-    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) { return EmitVFMaskUnpack(op, codegen); });
-
-REGISTER_BACKEND_OP(BackendCCE, "vf.mask_interleave")
-
-    .set_pipe(ir::PipeType::V)
-    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) { return EmitVFMaskInterleave(op, codegen); });
-
-REGISTER_BACKEND_OP(BackendCCE, "vf.mask_deinterleave")
-
-    .set_pipe(ir::PipeType::V)
-    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
-        return EmitVFMaskDeInterleave(op, codegen);
-    });
-
-REGISTER_BACKEND_OP(BackendCCE, "vf.mask_load")
-
-    .set_pipe(ir::PipeType::V)
-    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) { return EmitVFMaskLoad(op, codegen); });
-
-REGISTER_BACKEND_OP(BackendCCE, "vf.mask_store")
-
-    .set_pipe(ir::PipeType::V)
-    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) { return EmitVFMaskStore(op, codegen); });
-
-REGISTER_BACKEND_OP(BackendCCE, "vf.mask_store_unalign")
-
-    .set_pipe(ir::PipeType::V)
-    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
-        return EmitVFMaskStoreUnalign(op, codegen);
-    });
+// mask_load/mask_store/mask_store_unalign backend registrations removed —
+// the parser redirects these to vf.load_align/vf.store_align/vf.store_unalign
+// which dispatch via IsMaskRegVar.
 
 // ============================================================================
 // CreateAddrReg — AddrReg declaration + vag_b8/b16/b32 intrinsic

@@ -263,5 +263,40 @@ REGISTER_OP("block.setval")
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
         return DeduceSetValType(args, kwargs);
     });
+
+// ============================================================================
+// block.subview — Tile/Tensor sub-view with offset and new shape
+// ============================================================================
+
+TypePtr DeduceSubViewType([[maybe_unused]] const std::vector<ExprPtr>& args,
+                          [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
+{
+    // args: [container, offset, valid_shape]
+    // Type deduction uses the container's original shape (preserving row_stride).
+    // The valid_shape argument is consumed by codegen to auto-emit SetValidShape.
+    CHECK(args.size() == 3) << "block.subview requires exactly 3 arguments (container, offset, valid_shape), but got "
+                            << args.size();
+
+    auto container_type = args[0]->GetType();
+
+    if (auto tile_type = As<TileType>(container_type)) {
+        return std::make_shared<TileType>(tile_type->shape_, tile_type->dtype_, tile_type->memref_);
+    }
+
+    CHECK(false) << "block.subview requires first argument to be TileType, but got " << container_type->TypeName();
+    return nullptr;
+}
+
+REGISTER_OP("block.subview")
+    .set_op_category("BlockOp")
+    .set_description("Create a sub-view of a tile with offset and valid_shape")
+    .add_argument("container", "Input tile (TileType)")
+    .add_argument("offset", "Linear element offset (ScalarType with integer dtype)")
+    .add_argument("valid_shape", "Sub-window dimensions (MakeTuple)")
+    .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
+                      [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
+        return DeduceSubViewType(args, kwargs);
+    });
+
 } // namespace ir
 } // namespace pypto

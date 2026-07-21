@@ -115,27 +115,6 @@ int64_t GetNZInnerCols(const ir::DataType& dtype, const std::string& error_prefi
     throw pypto::ir::ValueError(error_prefix + dtype.ToString());
 }
 
-std::string GetCmpModeEnum(int cmp_type)
-{
-    switch (cmp_type) {
-        case 0:
-            return "CmpMode::EQ";
-        case 1:
-            return "CmpMode::NE";
-        case 2:
-            return "CmpMode::LT";
-        case 3:
-            return "CmpMode::LE";
-        case 4:
-            return "CmpMode::GT";
-        case 5:
-            return "CmpMode::GE";
-        default:
-            CHECK(false) << "Unsupported cmp_type for CCE codegen: " << cmp_type;
-            return "CmpMode::EQ";
-    }
-}
-
 static int64_t GetStaticConstIntOrThrow(const ir::ExprPtr& expr, const std::string& message)
 {
     auto value = ir::As<ir::ConstInt>(expr);

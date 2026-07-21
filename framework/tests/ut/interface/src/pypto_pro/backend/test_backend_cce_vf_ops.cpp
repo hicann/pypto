@@ -215,19 +215,6 @@ TEST(BackendCCEVFOpsTest, RegistersExpectedVectorFunctionOperations)
                                             "vf.muls_cast",
                                             "vf.load",
                                             "vf.store",
-                                            "vf.mask_and",
-                                            "vf.mask_or",
-                                            "vf.mask_xor",
-                                            "vf.mask_not",
-                                            "vf.mask_mov",
-                                            "vf.mask_sel",
-                                            "vf.mask_pack",
-                                            "vf.mask_unpack",
-                                            "vf.mask_interleave",
-                                            "vf.mask_deinterleave",
-                                            "vf.mask_load",
-                                            "vf.mask_store",
-                                            "vf.mask_store_unalign",
                                             "vf.create_addr_reg",
                                             "vf.move"};
 
@@ -443,7 +430,7 @@ TEST(BackendCCEVFOpsTest, EmitsCompareHistogramAndMaskConversions)
     ExpectInvoke(codegen, "vf.ge", {"vcmp_ge("}, {mask, fp32, fp16, mask});
     ExpectInvoke(codegen, "vf.squeeze", {"vsqz(", "MODE_NO_STORED"}, {i32, fp16, mask},
                  {{"gather_mode", EnumValue(ir::SqueezeMode::NO_STORE_REG)}});
-    ExpectInvoke(codegen, "vf.arange", {"DEC_ORDER"}, {i32, Int(3)},
+    ExpectInvoke(codegen, "vf.arange", {"vneg(", "vadds("}, {i32, Int(3)},
                  {{"index_order", EnumValue(ir::IndexOrder::DECREASE_ORDER)}});
     ExpectInvoke(codegen, "vf.arange", {"vci(i64_b64_lo_"}, {i64, Int(5)});
     ExpectInvoke(codegen, "vf.unsqueeze", {"vusqz("}, {i32, mask});
@@ -538,18 +525,18 @@ TEST(BackendCCEVFOpsTest, EmitsMaskLogicOperations)
     codegen.RegisterMaskRegVar("mask1");
     codegen.RegisterMaskRegVar("mask2");
 
-    ExpectInvoke(codegen, "vf.mask_and", {"pand("}, {mask0, mask1, mask2, mask0});
-    ExpectInvoke(codegen, "vf.mask_or", {"por("}, {mask0, mask1, mask2, mask0});
-    ExpectInvoke(codegen, "vf.mask_xor", {"pxor("}, {mask0, mask1, mask2, mask0});
-    ExpectInvoke(codegen, "vf.mask_not", {"pnot("}, {mask0, mask1, mask2});
-    ExpectInvoke(codegen, "vf.mask_mov", {"pmov("}, {mask0, mask1, mask2});
-    ExpectInvoke(codegen, "vf.mask_sel", {"psel("}, {mask0, mask1, mask2, mask0});
-    ExpectInvoke(codegen, "vf.mask_pack", {"ppack(mask0, mask1, HIGHER)"}, {mask0, mask1},
-                 {{"half", EnumValue(ir::PackPart::UPPER)}});
-    ExpectInvoke(codegen, "vf.mask_unpack", {"punpack(mask0, mask1, LOWER)"}, {mask0, mask1});
-    ExpectInvoke(codegen, "vf.mask_interleave", {"pintlv_b8("}, {mask0, mask1, mask1, mask2},
+    ExpectInvoke(codegen, "vf.and_", {"pand("}, {mask0, mask1, mask2, mask0});
+    ExpectInvoke(codegen, "vf.or_", {"por("}, {mask0, mask1, mask2, mask0});
+    ExpectInvoke(codegen, "vf.xor", {"pxor("}, {mask0, mask1, mask2, mask0});
+    ExpectInvoke(codegen, "vf.not_", {"pnot("}, {mask0, mask1, mask2});
+    ExpectInvoke(codegen, "vf.move", {"pmov("}, {mask0, mask1, mask2});
+    ExpectInvoke(codegen, "vf.select", {"psel("}, {mask0, mask1, mask2, mask0});
+    ExpectInvoke(codegen, "vf.pack", {"ppack(mask0, mask1, HIGHER)"}, {mask0, mask1},
+                 {{"part", EnumValue(ir::PackPart::UPPER)}});
+    ExpectInvoke(codegen, "vf.unpack", {"punpack(mask0, mask1, LOWER)"}, {mask0, mask1});
+    ExpectInvoke(codegen, "vf.interleave", {"pintlv_b8("}, {mask0, mask1, mask1, mask2},
                  {{"dtype", ir::DataType::UINT8}});
-    ExpectInvoke(codegen, "vf.mask_deinterleave", {"pdintlv_b16("}, {mask0, mask1, mask1, mask2},
+    ExpectInvoke(codegen, "vf.de_interleave", {"pdintlv_b16("}, {mask0, mask1, mask1, mask2},
                  {{"dtype", ir::DataType::FP16}});
 }
 
@@ -561,17 +548,18 @@ TEST(BackendCCEVFOpsTest, EmitsMaskMemoryAndSpecialRegisterOperations)
     auto mask0 = MakeVar("mask0", ir::DataType::UINT32);
     auto mask1 = MakeVar("mask1", ir::DataType::UINT32);
     auto addr = MakeVar("addr", ir::DataType::INT64);
+    auto ureg = MakeVar("ureg", ir::DataType::UINT32);
     codegen.RegisterMaskRegVar("mask0");
     codegen.RegisterMaskRegVar("mask1");
     codegen.RegisterAddrRegVar("addr");
 
-    ExpectInvoke(codegen, "vf.mask_load", {"MaskReg loaded_mask", "plds(loaded_mask"}, {tile},
-                 {{"mode", EnumValue(ir::MaskLoadDist::DS)}}, "loaded_mask");
-    ExpectInvoke(codegen, "vf.mask_load", {"pld(loaded_addr_mask"}, {tile, addr}, {}, "loaded_addr_mask");
-    ExpectInvoke(codegen, "vf.mask_store", {"psts(mask0"}, {mask0, tile, mask1},
-                 {{"dist", EnumValue(ir::MaskStoreDist::NORM)}});
-    ExpectInvoke(codegen, "vf.mask_store", {"pst(mask0"}, {mask0, tile, mask1, addr});
-    ExpectInvoke(codegen, "vf.mask_store_unalign", {"pstu("}, {mask0, tile, mask1});
+    ExpectInvoke(codegen, "vf.load_align", {"plds(mask0"}, {mask0, tile, Int(0)},
+                 {{"dist", EnumValue(ir::LoadDist::DS)}});
+    ExpectInvoke(codegen, "vf.load_align", {"pld(mask1"}, {mask1, tile, addr});
+    ExpectInvoke(codegen, "vf.store_align", {"psts(mask0"}, {tile, mask0, mask1},
+                 {{"dist", EnumValue(ir::StoreDist::NORM)}});
+    ExpectInvoke(codegen, "vf.store_align", {"pst(mask0"}, {tile, mask0, addr});
+    ExpectInvoke(codegen, "vf.store_unalign", {"pstu("}, {tile, mask0, ureg});
     ExpectInvoke(codegen, "vf.mask_gen_with_reg_tensor", {"movvp(generated_mask, (RegTensor<uint16_t> &)reg, 4)"},
                  {reg}, {{"offset", 4}}, "generated_mask");
     ExpectInvoke(codegen, "vf.get_mask_spr", {"movp_b16()"}, {}, {{"width", EnumValue(ir::MaskWidth::B16)}},

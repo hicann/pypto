@@ -135,6 +135,30 @@ TEST_F(ConvertToSSAPassTest, TestVarUseRefsCurrentVersion)
     EXPECT_EQ(lhs_var->name_, a1->var_->name_);
 }
 
+TEST_F(ConvertToSSAPassTest, TestSharedExpressionKeepsIdentity)
+{
+    auto x = MakeVar("x");
+    auto idx = MakeVar("idx");
+    auto tuple_anchor = MakeVar("tuple_anchor", std::make_shared<TupleType>(std::vector<TypePtr>{
+                                                    Scalar(DataType::INT32), Scalar(DataType::INT32)}));
+    auto selected = MakeVar("selected");
+    auto tuple = std::make_shared<MakeTuple>(std::vector<ExprPtr>{x, x}, Sp());
+    auto anchor_assign = std::make_shared<AssignStmt>(tuple_anchor, tuple, Sp());
+    auto get_item = std::make_shared<GetItemExpr>(tuple, idx, Sp());
+    auto selected_assign = std::make_shared<AssignStmt>(selected, get_item, Sp());
+    auto body = std::make_shared<SeqStmts>(std::vector<StmtPtr>{anchor_assign, selected_assign}, Sp());
+
+    auto result = RunPass(MakeProg(MakeFunc("f", {x, idx}, body)));
+    auto seq = result->GetFunction("f")->body_;
+    auto ssa_anchor = std::dynamic_pointer_cast<const AssignStmt>(seq->stmts_[0]);
+    auto ssa_selected = std::dynamic_pointer_cast<const AssignStmt>(seq->stmts_[1]);
+    ASSERT_NE(ssa_anchor, nullptr);
+    ASSERT_NE(ssa_selected, nullptr);
+    auto ssa_get_item = std::dynamic_pointer_cast<const GetItemExpr>(ssa_selected->value_);
+    ASSERT_NE(ssa_get_item, nullptr);
+    EXPECT_EQ(ssa_anchor->value_.get(), ssa_get_item->value_.get());
+}
+
 // ============================================================================
 // If-stmt without else — creates phi for modified var
 // ============================================================================

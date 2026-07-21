@@ -147,6 +147,9 @@ public:
         return "0x0";
     }
 
+    /** \brief Set the base address of a tile variable (for subview offset registration). */
+    void SetTileAddress(const std::string& tile_name, const std::string& addr) { tile_addresses_[tile_name] = addr; }
+
     /** \brief Register valid-shape C++ code strings for a tile at emit-time.
      *
      * Called from set_validshape codegen when each SetValidShape line is emitted.
@@ -222,6 +225,14 @@ public:
      * IfStmt phi return var (pointer not yet known).
      */
     [[nodiscard]] bool HasPointer(const std::string& var_name) const;
+
+    /**
+     * \brief Check whether a tile address (TASSIGN) has been registered.
+     *
+     * Distinguishes a tile with a known base address from one that needs to be
+     * resolved via .data() or memref.
+     */
+    [[nodiscard]] bool HasTileAddress(const std::string& tile_name) const;
 
     /**
      * \brief Record that the named C++ variable holds a value of the given
@@ -671,12 +682,10 @@ private:
     // are propagated in VisitStmt_(ForStmtPtr).
     std::map<std::string, ir::MakeTuplePtr> tuple_var_to_make_tuple_;
 
-    // Tuple variable names whose homogeneous MakeTuple assignment emitted a C++
-    // backing array. Tuple array identity is scoped to the assignment variable,
-    // not the MakeTuple expression, which may be shared by multiple inline sites.
-    std::set<std::string> tuple_vars_with_dyn_array_;
-
-    int dyn_arr_counter_ = 0;
+    // Homogeneous MakeTuple object -> its first materialized C++ backing array.
+    // Parser constant propagation can replace tuple Vars with their MakeTuple, so
+    // array identity must follow the IR object rather than a particular Var name.
+    std::map<const ir::MakeTuple*, std::string> tuple_backing_arr_;
 
     /**
      * \brief Whether all element types of a tuple are structurally identical.
@@ -698,7 +707,7 @@ private:
      */
     std::vector<std::string> CollectTupleElemNames(const ir::ExprPtr& tuple_value);
     std::string BuildDynamicTupleArrayDecl(const ir::TypePtr& elem_type, const std::vector<std::string>& elem_names,
-                                           const std::string& arr_name, bool allow_struct_tuple) const;
+                                           const std::string& arr_name) const;
 
     /// Emit-time valid-shape map: tile C++ name -> (row code, col code).
     /// Populated when set_validshape is emitted; consumed by the following load or store.

@@ -922,8 +922,9 @@ static std::string MakeDebugDumpTileCodegenCCE(const ir::CallPtr& op, codegen::C
                  std::to_string(tile_cols->value_) + ";");
     codegen.Emit("cce::printf(\"=== [TPRINT Tile Window] Data Type: %s, Layout: %s, TileType: %s ===\\n\", "
                  "pto::GetDTypeName<" +
-                 codegen.GetTypeString(tile_type->dtype_) + ">(), pto::GetLayoutName(decltype(" + src +
-                 ")::BFractal, decltype(" + src + ")::SFractal), \"Vec\");");
+                 codegen.GetTypeString(tile_type->dtype_) +
+                 ">(), pto::GetLayoutName(std::remove_reference_t<decltype(" + src +
+                 ")>::BFractal, std::remove_reference_t<decltype(" + src + ")>::SFractal), \"Vec\");");
     codegen.Emit("cce::printf(\"  Source Shape: [%d, %d], Window Offsets: [%d, %d], Requested Shape: [%d, %d], "
                  "Valid Shape: [%d, %d]\\n\", " +
                  std::to_string(tile_rows->value_) + ", " + std::to_string(tile_cols->value_) + ", static_cast<int>(" +
@@ -931,8 +932,8 @@ static std::string MakeDebugDumpTileCodegenCCE(const ir::CallPtr& op, codegen::C
                  valid_row + ", " + valid_col + ");");
     codegen.Emit("for (int " + row_idx + " = 0; " + row_idx + " < " + valid_row + "; ++" + row_idx + ") {");
     codegen.Emit("  for (int " + col_idx + " = 0; " + col_idx + " < " + valid_col + "; ++" + col_idx + ") {");
-    codegen.Emit("    auto __debug_src_offset = pto::GetTileOffset<decltype(" + src + ")>(" + row_idx + " + (" +
-                 row_off + "), " + col_idx + " + (" + col_off + "));");
+    codegen.Emit("    auto __debug_src_offset = pto::GetTileOffset<std::remove_reference_t<decltype(" + src + ")>>(" +
+                 row_idx + " + (" + row_off + "), " + col_idx + " + (" + col_off + "));");
     codegen.Emit("    auto " + debug_val + " = " + src + ".data()[__debug_src_offset];");
     codegen.Emit("    pto::PrintValue<pto::PrintFormat::Width8_Precision4>(" + debug_val + ", " + col_idx + ");");
     codegen.Emit("  }");
@@ -1672,6 +1673,89 @@ REGISTER_BACKEND_OP(BackendCCE, "block.getval")
 REGISTER_BACKEND_OP(BackendCCE, "block.setval")
     .set_pipe(ir::PipeType::S)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) { return MakeSetValCodegenCCE(op, codegen); });
+
+// ============================================================================
+// block.subview - tile/tensor sub-view with offset and new shape.
+//
+// Tile in VF section: returns pointer arithmetic expression.
+// Tile in non-VF section: emits TASSIGN with new shape, returns the new tile
+// variable name.
+// ============================================================================
+static std::string MakeBlockSubviewCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
+{
+    auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
+
+    std::string offset = codegen.GetExprAsCode(op->args_[1]);
+
+    // VF section: pointer arithmetic, no tile descriptor needed.
+    if (codegen.IsInVFSection()) {
+        std::string base_ptr = codegen.GetOrCreateVFTilePtr(op->args_[0], /*is_post_update=*/false);
+        return "(" + base_ptr + " + (" + offset + "))";
+    }
+
+    std::string base_tile = codegen.GetExprAsCode(op->args_[0]);
+    auto tile_type = ir::As<ir::TileType>(op->args_[0]->GetType());
+    int elem_bytes = std::max(1, static_cast<int>(tile_type->dtype_.GetBit() / 8));
+
+    // Resolve base address: tile_addresses_ → .data() → memref addr
+    std::string base_addr;
+    if (codegen.HasTileAddress(base_tile)) {
+        base_addr = codegen.GetTileAddress(base_tile);
+    } else if (base_tile.find('[') != std::string::npos) {
+        base_addr = "(uint64_t)" + base_tile + ".data()";
+    } else {
+        INTERNAL_CHECK(tile_type->memref_.has_value())
+            << "block.subview: base tile '" << base_tile << "' has no address info";
+        int64_t addr_val = codegen.GetConstIntValue((*tile_type->memref_)->addr_);
+        std::ostringstream oss;
+        oss << "0x" << std::hex << addr_val;
+        base_addr = oss.str();
+    }
+
+    // Sub-window valid_shape from args[2] (computed by parser as the intersection
+    // of slice size and original valid_shape - start).
+    auto shape_tuple = ir::As<ir::MakeTuple>(op->args_[2]);
+    std::string vs_row = codegen.GetExprAsCode(shape_tuple->elements_[0]);
+    std::string vs_col = codegen.GetExprAsCode(shape_tuple->elements_[1]);
+
+    // Build type with original shape (preserves row_stride) but WITHOUT tileView_,
+    // so valid_shape template params are -1 (dynamic).  This is required because
+    // subview calls SetValidShape at runtime, which only works when the template
+    // valid_shape params are DYNAMIC (-1).
+    std::vector<int64_t> dims;
+    for (const auto& expr : tile_type->shape_) {
+        dims.push_back(codegen.GetConstIntValue(expr));
+    }
+    int64_t rows = dims.size() >= 1 ? dims[0] : 1;
+    int64_t cols = dims.size() >= 2 ? dims[1] : 1;
+    auto subview_type = std::make_shared<ir::TileType>(tile_type->shape_, tile_type->dtype_, tile_type->memref_);
+    std::string type_str = codegen.GetTypeConverter().ConvertTileType(subview_type, rows, cols);
+
+    // Sanitize base_tile into a valid C++ identifier prefix
+    std::string base_tile_id = base_tile;
+    for (char& c : base_tile_id)
+        if (!std::isalnum(static_cast<unsigned char>(c)) && c != '_')
+            c = '_';
+    std::string temp_name = codegen.GetCurrentResultTarget().empty() ?
+                                (base_tile_id + "_view_" + std::to_string(codegen.GetTileOffsetCounter())) :
+                                codegen.GetCurrentResultTarget();
+
+    // Emit: declare tile, TASSIGN offset address, then SetValidShape (must be
+    // after TASSIGN — TASSIGN overwrites the constructor's valid_shape).
+    std::string temp_addr = base_addr + " + (" + offset + ") * " + std::to_string(elem_bytes);
+    codegen.Emit(type_str + " " + temp_name + "(" + vs_row + ", " + vs_col + "); TASSIGN(" + temp_name + ", " +
+                 temp_addr + "); " + temp_name + ".SetValidShape(" + vs_row + ", " + vs_col + ");");
+    codegen.SetTileAddress(temp_name, temp_addr);
+    codegen.RegisterTileEmitShape(temp_name, vs_row, vs_col);
+
+    return temp_name;
+}
+
+REGISTER_BACKEND_OP(BackendCCE, "block.subview")
+    .set_pipe(ir::PipeType::MTE2)
+    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen_base) {
+        return MakeBlockSubviewCodegenCCE(op, codegen_base);
+    });
 
 // ============================================================================
 // Mutex (Buffer-ID Token) - A5 CCE Codegen

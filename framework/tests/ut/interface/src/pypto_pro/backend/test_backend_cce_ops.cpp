@@ -39,6 +39,9 @@ using Kwargs = std::vector<std::pair<std::string, std::any>>;
 class TestableCCECodegen : public codegen::CCECodegen {
 public:
     std::string GetEmittedCode() const { return emitter_.GetCode(); }
+    void SetCurrentResultTarget(std::string target) { current_target_var_ = std::move(target); }
+    void SetCurrentSectionKind(std::optional<ir::SectionKind> kind) { current_section_kind_ = kind; }
+    void RegisterVarName(const ir::VarPtr& var, const std::string& name) { context_.RegisterVar(var, name); }
 };
 
 ir::ExprPtr MakeConstInt(int64_t value, ir::DataType dtype = ir::DataType::INT64)
@@ -674,6 +677,92 @@ TEST(BackendCceOpsTest, BlockSetValTensor)
 }
 
 // ============================================================================
+// block.subview
+// ============================================================================
+
+TEST(BackendCceOpsTest, BlockSubviewUsesRegisteredAddressAndResultTarget)
+{
+    auto tile = MakeVar("tile", MakeTileType({16, 32}, ir::DataType::FP16, ir::MemorySpace::Vec));
+    auto call = std::make_shared<const ir::Call>(
+        "block.subview",
+        std::vector<ir::ExprPtr>{tile, MakeConstInt(3), MakeTuple({MakeConstInt(8), MakeConstInt(12)})},
+        tile->GetType(), ir::Span::Unknown());
+    auto* info = BackendCCE::Instance().GetOpInfo("block.subview");
+    ASSERT_NE(info, nullptr);
+    EXPECT_EQ(info->pipe, ir::PipeType::MTE2);
+
+    TestableCCECodegen codegen;
+    codegen.SetTileAddress("tile", "0x200");
+    codegen.SetCurrentResultTarget("view");
+    EXPECT_EQ(info->codegen_func(call, codegen), "view");
+
+    auto generated = codegen.GetEmittedCode();
+    EXPECT_NE(generated.find("TASSIGN(view, 0x200 + (3) * 2)"), std::string::npos);
+    EXPECT_NE(generated.find("view.SetValidShape(8, 12)"), std::string::npos);
+    EXPECT_TRUE(codegen.HasTileAddress("view"));
+    EXPECT_EQ(codegen.GetTileAddress("view"), "0x200 + (3) * 2");
+    auto shape = codegen.LookupTileEmitShape("view");
+    ASSERT_TRUE(shape.has_value());
+    EXPECT_EQ(shape->first, "8");
+    EXPECT_EQ(shape->second, "12");
+}
+
+TEST(BackendCceOpsTest, BlockSubviewUsesDynamicTileGroupAddressAndGeneratedName)
+{
+    auto tile = MakeVar("tile", MakeTileType({16, 32}, ir::DataType::FP16, ir::MemorySpace::Vec));
+    auto call = std::make_shared<const ir::Call>(
+        "block.subview", std::vector<ir::ExprPtr>{tile, MakeConstInt(5), MakeTuple({MakeConstInt(4), MakeConstInt(7)})},
+        tile->GetType(), ir::Span::Unknown());
+    auto* info = BackendCCE::Instance().GetOpInfo("block.subview");
+    ASSERT_NE(info, nullptr);
+
+    TestableCCECodegen codegen;
+    codegen.RegisterVarName(tile, "tiles[index]");
+    auto result = info->codegen_func(call, codegen);
+
+    EXPECT_EQ(result, "tiles_index__view_0");
+    auto generated = codegen.GetEmittedCode();
+    EXPECT_NE(generated.find("TASSIGN(tiles_index__view_0, (uint64_t)tiles[index].data() + (5) * 2)"),
+              std::string::npos);
+    EXPECT_NE(generated.find("tiles_index__view_0.SetValidShape(4, 7)"), std::string::npos);
+}
+
+TEST(BackendCceOpsTest, BlockSubviewFallsBackToMemRefAddress)
+{
+    auto addr = MakeConstInt(0x180, ir::DataType::INDEX);
+    auto memref = std::make_shared<const ir::MemRef>(ir::MemorySpace::Vec, addr, 1024, 0, ir::Span::Unknown());
+    auto tile_type = std::make_shared<const ir::TileType>(std::vector<int64_t>{8, 16}, ir::DataType::FP32,
+                                                          std::optional<ir::MemRefPtr>(memref),
+                                                          std::optional<ir::TileView>(std::nullopt));
+    auto tile = MakeVar("tile", tile_type);
+    auto call = std::make_shared<const ir::Call>(
+        "block.subview", std::vector<ir::ExprPtr>{tile, MakeConstInt(2), MakeTuple({MakeConstInt(3), MakeConstInt(5)})},
+        tile_type, ir::Span::Unknown());
+    auto* info = BackendCCE::Instance().GetOpInfo("block.subview");
+    ASSERT_NE(info, nullptr);
+
+    TestableCCECodegen codegen;
+    codegen.SetCurrentResultTarget("memref_view");
+    EXPECT_EQ(info->codegen_func(call, codegen), "memref_view");
+    EXPECT_NE(codegen.GetEmittedCode().find("TASSIGN(memref_view, 0x180 + (2) * 4)"), std::string::npos);
+}
+
+TEST(BackendCceOpsTest, BlockSubviewInVFSectionReturnsPointerArithmetic)
+{
+    auto tile = MakeVar("tile", MakeTileType({16, 32}, ir::DataType::FP16));
+    auto call = std::make_shared<const ir::Call>(
+        "block.subview", std::vector<ir::ExprPtr>{tile, MakeConstInt(7), MakeTuple({MakeConstInt(8), MakeConstInt(8)})},
+        tile->GetType(), ir::Span::Unknown());
+    auto* info = BackendCCE::Instance().GetOpInfo("block.subview");
+    ASSERT_NE(info, nullptr);
+
+    TestableCCECodegen codegen;
+    codegen.SetCurrentSectionKind(ir::SectionKind::VF);
+    EXPECT_EQ(info->codegen_func(call, codegen), "(vf_tile_ptr_0 + (7))");
+    EXPECT_TRUE(codegen.GetEmittedCode().empty());
+}
+
+// ============================================================================
 // Sync all (HARD mode)
 // ============================================================================
 
@@ -921,7 +1010,7 @@ TEST(BackendCceOpsTest, DebugDumpTileFullAndWindow)
     auto generated = RunCodegen("debug.dump_tile", window_call);
     EXPECT_NE(generated.find("[TPRINT Tile Window]"), std::string::npos);
     EXPECT_NE(generated.find("tile.GetValidRow() - (2)"), std::string::npos);
-    EXPECT_NE(generated.find("pto::GetTileOffset<decltype(tile)>"), std::string::npos);
+    EXPECT_NE(generated.find("pto::GetTileOffset<std::remove_reference_t<decltype(tile)>>"), std::string::npos);
     EXPECT_NE(generated.find("pto::PrintValue<pto::PrintFormat::Width8_Precision4>"), std::string::npos);
 }
 

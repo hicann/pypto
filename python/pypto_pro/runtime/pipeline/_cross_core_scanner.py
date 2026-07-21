@@ -607,6 +607,11 @@ def _handle_block_op(node: ast.Call, slot_to_buffer, cross_buffers, all_buffer_m
     roles = _BLOCK_OP_TILE_ROLES.get(op_name)
     if roles is None:
         return
+    if op_name == "fillpad":
+        for kw in node.keywords:
+            if kw.arg == "mode" and isinstance(kw.value, ast.Attribute) and kw.value.attr == "INPLACE":
+                roles = _BLOCK_OP_TILE_ROLES["fillpad_inplace"]
+                break
     pipe = None
     for argpos, arg in enumerate(node.args):
         buf = _tile_arg_buffer(arg, slot_to_buffer)

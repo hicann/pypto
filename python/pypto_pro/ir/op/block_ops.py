@@ -17,6 +17,7 @@ in ``call_parser.parse_op_call``.
 from __future__ import annotations
 
 import ast
+import enum
 import os
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -28,6 +29,7 @@ from pypto.pypto_impl.ir import (
     AccPhase,
     AccToVecMode,
     AtomicType,
+    CmpMode,
     ConstInt,
     DataType,
     Expr,
@@ -56,6 +58,13 @@ _BLOCK_OP_NAMESPACE = "block"
 def block_ir_op(op_name: str) -> str:
     """Return the IR name for the explicit-output block DSL ops."""
     return f"{_BLOCK_OP_NAMESPACE}.{op_name}"
+
+
+class FillPadMode(enum.Enum):
+    """Fill-pad operating mode (lowered to different IR op names)."""
+    NORMAL = 0
+    EXPAND = 1
+    INPLACE = 2
 
 
 def _compute_absolute_offsets(
@@ -133,17 +142,19 @@ def _ir_load(
     offsets: Sequence[int | Expr] | _ir_core.MakeTuple,
     *,
     span: Span | None = None,
-    is_transpose: bool = False,
-    tile_dims: list[int] | None = None,
+    order: list[int] | None = None,
 ) -> Expr:
     op_name = "load"
     actual_span = span or _span()
     offsets_tuple = _to_make_tuple(offsets, actual_span)
 
+    tensor_ndim = len(tensor.type.shape)
+    tile_ndim = len(out.type.shape)
+    tile_dims, is_transpose = _resolve_order(order, tensor_ndim, tile_ndim, op_name)
+
     tensor_ndim, tile_shape, tile_dims = _validate_load_operands(
         out, tensor, offsets_tuple, tile_dims, op_name
     )
-    tile_ndim = len(tile_shape)
 
     kwargs: dict[str, Any] = {}
     if is_transpose:
@@ -164,12 +175,15 @@ def _ir_load_tile(
     tile_offsets: Sequence[int | Expr] | _ir_core.MakeTuple,
     *,
     span: Span | None = None,
-    is_transpose: bool = False,
-    tile_dims: list[int] | None = None,
+    order: list[int] | None = None,
 ) -> Expr:
     op_name = "load_tile"
     actual_span = span or _span()
     offsets_tuple = _to_make_tuple(tile_offsets, actual_span)
+
+    tensor_ndim = len(tensor.type.shape)
+    tile_ndim = len(out.type.shape)
+    tile_dims, is_transpose = _resolve_order(order, tensor_ndim, tile_ndim, op_name)
 
     tensor_ndim, tile_shape, tile_dims = _validate_load_operands(
         out,
@@ -179,7 +193,6 @@ def _ir_load_tile(
         op_name,
         use_tile_absolute=True,
     )
-    tile_ndim = len(tile_shape)
 
     abs_offsets = _compute_absolute_offsets(offsets_tuple, tile_shape, tile_dims, actual_span)
     # Validate offset bounds at Python frontend level
@@ -704,6 +717,26 @@ def _validate_dtype(dtype: DataType | None, role: str, op_name: str) -> None:
         )
 
 
+def _resolve_order(
+    order: list[int] | None,
+    tensor_ndim: int,
+    tile_ndim: int,
+    op_name: str,
+) -> tuple[list[int], bool]:
+    """Resolve the ``order`` kwarg into ``(tile_dims, is_transpose)``.
+
+    ``order`` maps each Tile dimension to a Tensor axis (absolute index).
+    Ascending order means no transposition; descending order means transposition
+    (DN layout). Internally we decompose into ``tile_dims`` (sorted ascending,
+    consumed by C++ codegen) and ``is_transpose`` (bool, consumed by codegen).
+    """
+    if order is None:
+        order = list(range(tensor_ndim - tile_ndim, tensor_ndim))
+    is_transpose = len(order) >= 2 and order[0] > order[1]
+    tile_dims = sorted(order)
+    return tile_dims, is_transpose
+
+
 def _validate_tile_dims(
     tile_dims: list[int] | None,
     tensor_ndim: int,
@@ -808,6 +841,26 @@ def _ir_cast(
     )
 
 
+def _ir_fillpad(
+    out: Expr,
+    src: Expr,
+    *,
+    span: Span | None = None,
+    mode: FillPadMode = FillPadMode.NORMAL,
+) -> Expr:
+    name = {
+        FillPadMode.NORMAL: "fillpad",
+        FillPadMode.EXPAND: "fillpad_expand",
+        FillPadMode.INPLACE: "fillpad_inplace",
+    }[mode]
+    return _ir_core.create_op_call(
+        block_ir_op(name),
+        [out, src],
+        {},
+        span or _span(),
+    )
+
+
 def _ir_add_relu_cast(
     out: Expr,
     lhs: Expr,
@@ -844,20 +897,20 @@ def _ir_mul_cast(
     return _ir_binary_cast("mul_cast", out, lhs, rhs, target_type, span=span, mode=mode)
 
 
-def _ir_cmp(out: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None, cmp_type: int | Expr = 0) -> Expr:
+def _ir_cmp(out: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None, cmp_mode: int | Expr = 0) -> Expr:
     return _ir_core.create_op_call(
         block_ir_op("cmp"),
         [out, lhs, rhs],
-        {"cmp_type": _const_int_attr(cmp_type, "cmp_type")},
+        {"cmp_mode": _const_int_attr(cmp_mode, "cmp_mode")},
         span or _span(),
     )
 
 
-def _ir_cmps(out: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None, cmp_type: int | Expr = 0) -> Expr:
+def _ir_cmps(out: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None, cmp_mode: int | Expr = 0) -> Expr:
     return _ir_core.create_op_call(
         block_ir_op("cmps"),
         [out, lhs, rhs],
-        {"cmp_type": _const_int_attr(cmp_type, "cmp_type")},
+        {"cmp_mode": _const_int_attr(cmp_mode, "cmp_mode")},
         span or _span(),
     )
 
@@ -1156,22 +1209,16 @@ def _parse_make_tile(self, call: ast.Call) -> Expr:
     return make_tile(*args, **kwargs, span=span)
 
 
-# tile_dims selects tensor axes at compile time (it drives the tensor-view strides in codegen),
-# so it must be a compile-time constant int list. Resolve it via the strict validator, which also
-# folds a constant list threaded through an implicit-helper parameter (e.g. tile_dims=tile_dims).
 def _resolve_tile_dims_kwarg(self, call: ast.Call, kwargs: dict) -> None:
     tile_dims = self.resolve_const_int_list_kwarg(call, "tile_dims")
     if tile_dims is not None:
         kwargs["tile_dims"] = tile_dims
 
 
-# is_transpose is a compile-time codegen attribute (consumed via GetKwarg<bool>), so it must
-# be a compile-time constant bool. Resolve it via the strict validator, which also folds a
-# constant bool threaded through an implicit-helper parameter (e.g. is_transpose=flag).
-def _resolve_is_transpose_kwarg(self, call: ast.Call, kwargs: dict) -> None:
-    is_transpose = self.resolve_const_bool_kwarg(call, "is_transpose")
-    if is_transpose is not None:
-        kwargs["is_transpose"] = is_transpose
+def _resolve_order_kwarg(self, call: ast.Call, kwargs: dict) -> None:
+    order = self.resolve_const_int_list_kwarg(call, "order")
+    if order is not None:
+        kwargs["order"] = order
 
 
 # ---------------------------------------------------------------------------
@@ -1204,43 +1251,40 @@ def _ir_select(out: Expr, mask: Expr, lhs: Expr, rhs: Expr, tmp: Expr, *, span: 
     return _ir_sels(out, mask, lhs, tmp, rhs, span=span)
 
 
-_CMP_EQ, _CMP_NE, _CMP_LT, _CMP_LE, _CMP_GT, _CMP_GE = 0, 1, 2, 3, 4, 5
-
-
 def _ir_eq(out: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None) -> Expr:
     if isinstance(getattr(rhs, "type", None), _ir_core.TileType):
-        return _ir_cmp(out, lhs, rhs, span=span, cmp_type=_CMP_EQ)
-    return _ir_cmps(out, lhs, rhs, span=span, cmp_type=_CMP_EQ)
+        return _ir_cmp(out, lhs, rhs, span=span, cmp_mode=CmpMode.EQ.value)
+    return _ir_cmps(out, lhs, rhs, span=span, cmp_mode=CmpMode.EQ.value)
 
 
 def _ir_ne(out: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None) -> Expr:
     if isinstance(getattr(rhs, "type", None), _ir_core.TileType):
-        return _ir_cmp(out, lhs, rhs, span=span, cmp_type=_CMP_NE)
-    return _ir_cmps(out, lhs, rhs, span=span, cmp_type=_CMP_NE)
+        return _ir_cmp(out, lhs, rhs, span=span, cmp_mode=CmpMode.NE.value)
+    return _ir_cmps(out, lhs, rhs, span=span, cmp_mode=CmpMode.NE.value)
 
 
 def _ir_lt(out: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None) -> Expr:
     if isinstance(getattr(rhs, "type", None), _ir_core.TileType):
-        return _ir_cmp(out, lhs, rhs, span=span, cmp_type=_CMP_LT)
-    return _ir_cmps(out, lhs, rhs, span=span, cmp_type=_CMP_LT)
+        return _ir_cmp(out, lhs, rhs, span=span, cmp_mode=CmpMode.LT.value)
+    return _ir_cmps(out, lhs, rhs, span=span, cmp_mode=CmpMode.LT.value)
 
 
 def _ir_le(out: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None) -> Expr:
     if isinstance(getattr(rhs, "type", None), _ir_core.TileType):
-        return _ir_cmp(out, lhs, rhs, span=span, cmp_type=_CMP_LE)
-    return _ir_cmps(out, lhs, rhs, span=span, cmp_type=_CMP_LE)
+        return _ir_cmp(out, lhs, rhs, span=span, cmp_mode=CmpMode.LE.value)
+    return _ir_cmps(out, lhs, rhs, span=span, cmp_mode=CmpMode.LE.value)
 
 
 def _ir_gt(out: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None) -> Expr:
     if isinstance(getattr(rhs, "type", None), _ir_core.TileType):
-        return _ir_cmp(out, lhs, rhs, span=span, cmp_type=_CMP_GT)
-    return _ir_cmps(out, lhs, rhs, span=span, cmp_type=_CMP_GT)
+        return _ir_cmp(out, lhs, rhs, span=span, cmp_mode=CmpMode.GT.value)
+    return _ir_cmps(out, lhs, rhs, span=span, cmp_mode=CmpMode.GT.value)
 
 
 def _ir_ge(out: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None) -> Expr:
     if isinstance(getattr(rhs, "type", None), _ir_core.TileType):
-        return _ir_cmp(out, lhs, rhs, span=span, cmp_type=_CMP_GE)
-    return _ir_cmps(out, lhs, rhs, span=span, cmp_type=_CMP_GE)
+        return _ir_cmp(out, lhs, rhs, span=span, cmp_mode=CmpMode.GE.value)
+    return _ir_cmps(out, lhs, rhs, span=span, cmp_mode=CmpMode.GE.value)
 
 
 def _ir_sum(out: Expr, src: Expr, tmp: Expr, *, span: Span | None = None, dim: int = 0) -> Expr:
@@ -1284,6 +1328,7 @@ register_table({
     "setval": OpSpec(builder=_ir_setval),
     "transpose": OpSpec(builder=_ir_transpose),
     "cast": OpSpec(builder=_ir_cast),
+    "fillpad": OpSpec(builder=_ir_fillpad),
     "add_relu_cast": OpSpec(builder=_ir_add_relu_cast),
     "sub_relu_cast": OpSpec(builder=_ir_sub_relu_cast),
     "mul_cast": OpSpec(builder=_ir_mul_cast),
@@ -1309,9 +1354,9 @@ register_table({
     "expand_mul": OpSpec(builder=_ir_expand_mul),
     "expand_sub": OpSpec(builder=_ir_expand_sub),
     "expand_div": OpSpec(builder=_ir_expand_div),
-    # args + kwargs + tile_dims hook
-    "load": OpSpec(builder=_ir_load, pre_hooks=[_resolve_tile_dims_kwarg, _resolve_is_transpose_kwarg]),
-    "load_tile": OpSpec(builder=_ir_load_tile, pre_hooks=[_resolve_tile_dims_kwarg, _resolve_is_transpose_kwarg]),
+    # args + kwargs + order hook (load) / tile_dims hook (store)
+    "load": OpSpec(builder=_ir_load, pre_hooks=[_resolve_order_kwarg]),
+    "load_tile": OpSpec(builder=_ir_load_tile, pre_hooks=[_resolve_order_kwarg]),
     "store": OpSpec(builder=_ir_store, pre_hooks=[_resolve_tile_dims_kwarg]),
     "store_tile": OpSpec(builder=_ir_store_tile, pre_hooks=[_resolve_tile_dims_kwarg]),
     # kwargs only
@@ -1342,7 +1387,11 @@ def _parse_set_validshape(self, call: ast.Call) -> Expr:
 
         return ConstInt(0, DataType.INDEX, span)
 
-    return _ir_set_validshape(*args, **kwargs, span=span)
+    result = _ir_set_validshape(*args, **kwargs, span=span)
+
+    if args and hasattr(self, 'record_tile_valid_shape') and len(args) >= 2:
+        self.record_tile_valid_shape(args[0], args[1])
+    return result
 
 
 def _check_tile_memory_space(op_name: str, operand_name: str, expr: Expr,

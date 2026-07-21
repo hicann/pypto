@@ -566,7 +566,15 @@ static std::string MakeBlockOutMoveCodegenCCE(const ir::CallPtr& op, codegen::Co
     // Build template params (shared by both TEXTRACT and TMOV paths)
     std::string template_params = "";
     if (op->HasKwarg("acc_to_vec_mode")) {
-        template_params = ", " + GetAccToVecModeCCE(op->GetKwarg<int>("acc_to_vec_mode"), true);
+        int mode_val = op->GetKwarg<int>("acc_to_vec_mode");
+        template_params = ", " + GetAccToVecModeCCE(mode_val, true);
+        // Auto-align Acc valid_shape for DualModeSplitM (M%2==0) / DualModeSplitN (N%32==0).
+        if (mode_val == 1) {
+            codegen.Emit(src + ".SetValidShape((" + src + ".GetValidRow() + 1) / 2 * 2, " + src + ".GetValidCol());");
+        } else if (mode_val == 2) {
+            codegen.Emit(src + ".SetValidShape(" + src + ".GetValidRow(), (" + src +
+                         ".GetValidCol() + 31) / 32 * 32);");
+        }
     }
     if (op->HasKwarg("relu_pre_mode")) {
         template_params += ", " + GetReluPreModeCCE(op->GetKwarg<int>("relu_pre_mode"));
@@ -977,7 +985,7 @@ static std::string MakeBlockOutTransposeCodegenCCE(const ir::CallPtr& op, codege
     return "";
 }
 
-// block.cmp  -  args = [dst, lhs, rhs] + cmp_type kwarg
+// block.cmp  -  args = [dst, lhs, rhs] + cmp_mode kwarg
 static std::string MakeBlockOutCmpCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
@@ -985,12 +993,13 @@ static std::string MakeBlockOutCmpCodegenCCE(const ir::CallPtr& op, codegen::Cod
     std::string dst = codegen.GetExprAsCode(op->args_[0]);
     std::string lhs = codegen.GetExprAsCode(op->args_[1]);
     std::string rhs = codegen.GetExprAsCode(op->args_[2]);
-    int cmp_type = op->GetKwarg<int>("cmp_type");
-    codegen.Emit("TCMP(" + dst + ", " + lhs + ", " + rhs + ", " + cce::GetCmpModeEnum(cmp_type) + ");");
+    int cmp_mode = op->GetKwarg<int>("cmp_mode");
+    codegen.Emit("TCMP(" + dst + ", " + lhs + ", " + rhs + ", " + ir::EnumToString(static_cast<ir::CmpMode>(cmp_mode)) +
+                 ");");
     return "";
 }
 
-// block.cmps  - args = [dst, tile, scalar] + cmp_type kwarg
+// block.cmps  - args = [dst, tile, scalar] + cmp_mode kwarg
 static std::string MakeBlockOutCmpsCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
@@ -998,8 +1007,9 @@ static std::string MakeBlockOutCmpsCodegenCCE(const ir::CallPtr& op, codegen::Co
     std::string dst = codegen.GetExprAsCode(op->args_[0]);
     std::string tile = codegen.GetExprAsCode(op->args_[1]);
     std::string scalar = codegen.GetExprAsCode(op->args_[2]);
-    int cmp_type = op->GetKwarg<int>("cmp_type");
-    codegen.Emit("TCMPS(" + dst + ", " + tile + ", " + scalar + ", " + cce::GetCmpModeEnum(cmp_type) + ");");
+    int cmp_mode = op->GetKwarg<int>("cmp_mode");
+    codegen.Emit("TCMPS(" + dst + ", " + tile + ", " + scalar + ", " +
+                 ir::EnumToString(static_cast<ir::CmpMode>(cmp_mode)) + ");");
     return "";
 }
 
@@ -1259,7 +1269,8 @@ static std::string MakeBlockOutGatherCodegenCCE(const ir::CallPtr& op, codegen::
 
 // ============================================================================
 // block.gathermask  - args = [out, src] + kwargs(pattern_mode)
-// Emits: TGATHER<decltype(out), decltype(src), MaskPattern::Pxxxx>(out, src)
+// Emits: TGATHER<remove_reference_t<decltype(out)>, remove_reference_t<decltype(src)>,
+//                  MaskPattern::Pxxxx>(out, src)
 // ============================================================================
 static std::string MakeBlockOutGatherMaskCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
 {
@@ -1286,8 +1297,8 @@ static std::string MakeBlockOutGatherMaskCodegenCCE(const ir::CallPtr& op, codeg
     std::string out = codegen.GetExprAsCode(op->args_[0]);
     std::string src = codegen.GetExprAsCode(op->args_[1]);
 
-    codegen.Emit("TGATHER<decltype(" + out + "), decltype(" + src + "), " + std::string(pattern_names[pattern_mode]) +
-                 ">(" + out + ", " + src + ");");
+    codegen.Emit("TGATHER<std::remove_reference_t<decltype(" + out + ")>, std::remove_reference_t<decltype(" + src +
+                 ")>, " + std::string(pattern_names[pattern_mode]) + ">(" + out + ", " + src + ");");
     return "";
 }
 
@@ -2202,27 +2213,29 @@ static std::string MakeBlockOutMrgsort2CCE(const ir::CallPtr& op, codegen::Codeg
     std::string src1 = codegen.GetExprAsCode(op->args_[3]);
 
     // TMRGSORT requires exhausted as a non-deducible bool template parameter.
-    // Use TMRGSORT_IMPL with decltype() to avoid spelling out all tile types explicitly.
+    // Tile-group accessors lower to array subscripts, whose decltype is Tile&; strip
+    // the reference before passing the types to TMRGSORT_IMPL.
+    auto tile_type = [](const std::string& expr) { return "std::remove_reference_t<decltype(" + expr + ")>"; };
     auto emit_tmrgsort = [&](const std::string& srcs_decl, const std::string& srcs_args) {
         std::ostringstream oss;
         oss << "MrgSortExecutedNumList executedNumList;";
         codegen.Emit(oss.str());
         oss.str("");
-        oss << "TMRGSORT_IMPL<decltype(" << dst << "), decltype(" << tmp << "), " << srcs_decl << ", " << exhausted_str
-            << ">(" << dst << ", executedNumList, " << tmp << ", " << srcs_args << ");";
+        oss << "TMRGSORT_IMPL<" << tile_type(dst) << ", " << tile_type(tmp) << ", " << srcs_decl << ", "
+            << exhausted_str << ">(" << dst << ", executedNumList, " << tmp << ", " << srcs_args << ");";
         codegen.Emit(oss.str());
     };
 
     if (num_args == 4) {
-        emit_tmrgsort("decltype(" + src0 + "), decltype(" + src1 + ")", src0 + ", " + src1);
+        emit_tmrgsort(tile_type(src0) + ", " + tile_type(src1), src0 + ", " + src1);
     } else if (num_args == 5) {
         std::string src2 = codegen.GetExprAsCode(op->args_[4]);
-        emit_tmrgsort("decltype(" + src0 + "), decltype(" + src1 + "), decltype(" + src2 + ")",
+        emit_tmrgsort(tile_type(src0) + ", " + tile_type(src1) + ", " + tile_type(src2),
                       src0 + ", " + src1 + ", " + src2);
     } else {
         std::string src2 = codegen.GetExprAsCode(op->args_[4]);
         std::string src3 = codegen.GetExprAsCode(op->args_[5]);
-        emit_tmrgsort("decltype(" + src0 + "), decltype(" + src1 + "), decltype(" + src2 + "), decltype(" + src3 + ")",
+        emit_tmrgsort(tile_type(src0) + ", " + tile_type(src1) + ", " + tile_type(src2) + ", " + tile_type(src3),
                       src0 + ", " + src1 + ", " + src2 + ", " + src3);
     }
     return "";

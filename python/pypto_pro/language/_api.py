@@ -41,6 +41,8 @@ from pypto.ir import (
     RoundMode,
 )
 
+from pypto_pro.ir.op.block_ops import FillPadMode
+
 # ---------------------------------------------------------------------------
 # User-facing type aliases (NOT IR types)
 # ---------------------------------------------------------------------------
@@ -79,23 +81,24 @@ def _api_decl(func):
 
 @_api_decl
 def load(dst_tile: Tile, src_tensor: Tensor, offsets: Offset, *,
-         is_transpose: bool = False,
-         tile_dims: Optional[List[int]] = None) -> None:
+         order: Optional[List[int]] = None) -> None:
     """Load data from GM Tensor into on-chip Tile by absolute element coordinates.
 
     Args:
         dst_tile: Destination Tile (L1 or UB only)
         src_tensor: Source Tensor (global memory, from kernel parameter)
         offsets: Element-level offset per axis, e.g. ``[row, col]`` or ``[b, n, sq, sk]``
-        is_transpose: Whether to transpose the data during load (default ``False``)
-        tile_dims: Optional, which axes of the Tensor the Tile dimensions map to
+        order: Optional, mapping of Tile dimensions to Tensor axes.
+            Each element is an absolute axis index of the Tensor.
+            Ascending order (e.g. ``[0, 1]``) loads without transposition;
+            descending order (e.g. ``[1, 0]``) loads with transposition (DN layout).
+            Default: last N axes ascending (N = Tile ndim), i.e. no transposition.
     """
 
 
 @_api_decl
 def load_tile(dst_tile: Tile, src_tensor: Tensor, tile_offsets: Offset, *,
-              is_transpose: bool = False,
-              tile_dims: Optional[List[int]] = None) -> None:
+              order: Optional[List[int]] = None) -> None:
     """Load data from GM Tensor into on-chip Tile by tile-block index.
 
     Offsets are in tile-block units, internally multiplied by tile shape.
@@ -106,8 +109,11 @@ def load_tile(dst_tile: Tile, src_tensor: Tensor, tile_offsets: Offset, *,
         dst_tile: Destination Tile (L1 or UB only)
         src_tensor: Source Tensor (global memory)
         tile_offsets: Tile-block index, e.g. ``[tile_row, tile_col]``
-        is_transpose: Whether to transpose the data during load (default ``False``)
-        tile_dims: Optional, which axes of the Tensor the Tile dimensions map to
+        order: Optional, mapping of Tile dimensions to Tensor axes.
+            Each element is an absolute axis index of the Tensor.
+            Ascending order (e.g. ``[0, 1]``) loads without transposition;
+            descending order (e.g. ``[1, 0]``) loads with transposition (DN layout).
+            Default: last N axes ascending (N = Tile ndim), i.e. no transposition.
     """
 
 
@@ -365,18 +371,16 @@ def relu(out: Tile, src: Tile) -> None:
 
 
 @_api_decl
-def fillpad(out: Tile, src: Tile) -> None:
-    """Fill padding region of a Tile."""
+def fillpad(out: Tile, src: Tile, *, mode: FillPadMode = FillPadMode.NORMAL) -> None:
+    """Fill padding region of a Tile.
 
-
-@_api_decl
-def fillpad_expand(out: Tile, src: Tile) -> None:
-    """Fill padding region (expand mode)."""
-
-
-@_api_decl
-def fillpad_inplace(out: Tile, src: Tile) -> None:
-    """Fill padding region in-place (dst and src share the same address)."""
+    Args:
+        out: Destination Tile.
+        src: Source Tile.
+        mode: Fill mode — ``pl.FillPadMode.NORMAL`` (default, dst and src same shape),
+            ``pl.FillPadMode.EXPAND`` (dst larger than src, expand fill),
+            ``pl.FillPadMode.INPLACE`` (dst and src share the same address).
+    """
 
 
 # --- B4. Type conversion ---
@@ -987,11 +991,18 @@ class Vf:
         Args:
             dst: Destination UB Tile pointer
             src: Source register
-            mask: Predicate mask register
+            mask: Predicate mask register (omitted when src is a MaskReg)
 
         Kwargs:
-            dist: ``"FIRST_ELEMENT"`` to store only lane 0; ``"PACK"`` for packed store
-            mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+            dist: ``pl.StoreDist.NORM`` (default), ``pl.StoreDist.NORM_B16``,
+                  ``pl.StoreDist.FIRST_ELEMENT``, ``pl.StoreDist.PACK``,
+                  ``pl.StoreDist.PACK4``, ``pl.StoreDist.INTLV`` / ``INTLV_B32``
+                  (interleaved, requires two src registers),
+                  ``pl.StoreDist.PACK`` for MaskReg src (psts PK mode)
+            post_update: True to auto-advance destination address after store
+            data_copy_mode: ``pl.DataCopyMode.DATA_BLOCK_COPY`` for vsstb instruction
+            block_stride: DataBlock copy block stride
+            repeat_stride: DataBlock copy repeat stride
         """
 
     @staticmethod
@@ -2266,180 +2277,6 @@ class Vf:
         Kwargs:
             post_update: Enable post-update addressing
             repeat_stride: Stride for repeated stores
-        """
-
-    @staticmethod
-    @_api_decl
-    def mask_and(*args, **kwargs):
-        """Mask register bitwise AND: ``dst = src0 & src1`` (pand instruction).
-
-        Args:
-            dst: Destination mask register
-            src0: First source mask register
-            src1: Second source mask register
-            mask: Predicate mask register
-        """
-
-    @staticmethod
-    @_api_decl
-    def mask_or(*args, **kwargs):
-        """Mask register bitwise OR: ``dst = src0 | src1`` (por instruction).
-
-        Args:
-            dst: Destination mask register
-            src0: First source mask register
-            src1: Second source mask register
-            mask: Predicate mask register
-        """
-
-    @staticmethod
-    @_api_decl
-    def mask_xor(*args, **kwargs):
-        """Mask register bitwise XOR: ``dst = src0 ^ src1`` (pxor instruction).
-
-        Args:
-            dst: Destination mask register
-            src0: First source mask register
-            src1: Second source mask register
-            mask: Predicate mask register
-        """
-
-    @staticmethod
-    @_api_decl
-    def mask_not(*args, **kwargs):
-        """Mask register bitwise NOT: ``dst = ~src`` (pnot instruction).
-
-        Args:
-            dst: Destination mask register
-            src: Source mask register
-            mask: Predicate mask register
-        """
-
-    @staticmethod
-    @_api_decl
-    def mask_mov(*args, **kwargs):
-        """Mask register copy: ``dst = src`` (pmov instruction).
-
-        Args:
-            dst: Destination mask register
-            src: Source mask register
-        """
-
-    @staticmethod
-    @_api_decl
-    def mask_sel(*args, **kwargs):
-        """Mask select: ``dst = src0 if pred else src1`` (psel instruction).
-
-        Args:
-            dst: Destination mask register
-            src0: First source mask register
-            src1: Second source mask register
-            pred: Predicate mask register
-        """
-
-    @staticmethod
-    @_api_decl
-    def mask_pack(*args, **kwargs):
-        """Mask pack: narrow mask granularity (ppack instruction).
-
-        Args:
-            dst: Destination mask register (narrower granularity)
-            src: Source mask register
-        """
-
-    @staticmethod
-    @_api_decl
-    def mask_unpack(*args, **kwargs):
-        """Mask unpack: widen mask granularity (punpack instruction).
-
-        Args:
-            dst: Destination mask register (wider granularity)
-            src: Source mask register
-        """
-
-    @staticmethod
-    @_api_decl
-    def mask_interleave(*args, **kwargs):
-        """Mask interleave (pintlv_b8/b16/b32 instruction).
-
-        Interleaves bits from two source masks.
-
-        Args:
-            dst0: First destination mask register
-            dst1: Second destination mask register
-            src0: First source mask register
-            src1: Second source mask register
-
-        Kwargs:
-            dtype: Data type controlling interleave granularity
-        """
-
-    @staticmethod
-    @_api_decl
-    def mask_deinterleave(*args, **kwargs):
-        """Mask de-interleave (pdintlv_b8/b16/b32 instruction).
-
-        Splits interleaved mask bits into even/odd halves.
-
-        Args:
-            dst0: First destination mask register (even bits)
-            dst1: Second destination mask register (odd bits)
-            src0: First source mask register
-            src1: Second source mask register
-
-        Kwargs:
-            dtype: Data type controlling de-interleave granularity
-        """
-
-    @staticmethod
-    @_api_decl
-    def mask_load(*args, **kwargs):
-        """Load a mask register from UB memory (assignment form).
-
-        Fixed-offset form emits ``plds``; passing an AddrReg offset (from
-        ``vf.create_addr_reg``) emits ``pld``::
-
-            dst = vf.mask_load(src_ptr)             # plds (offset 0)
-            dst = vf.mask_load(src_ptr, addr_reg)   # pld (AddrReg offset)
-
-        Args:
-            src_ptr: Source UB pointer
-            offset: Optional AddrReg offset (routes to pld); mode ∈ NORM/US/DS
-
-        Kwargs:
-            mode: ``pl.MaskLoadDist`` value (NORM/US/DS, default US)
-        """
-
-    @staticmethod
-    @_api_decl
-    def mask_store(*args, **kwargs):
-        """Store a mask register to UB memory.
-
-        Fixed-offset form emits ``psts``; passing an AddrReg offset (from
-        ``vf.create_addr_reg``) as the 4th arg emits ``pst``::
-
-            vf.mask_store(src_mask, dst_ptr, mask)             # psts (offset 0)
-            vf.mask_store(src_mask, dst_ptr, mask, addr_reg)   # pst (AddrReg offset)
-
-        Args:
-            src: Source mask register
-            dst_ptr: Destination UB pointer
-            mask: Predicate mask register
-            offset: Optional AddrReg offset (routes to pst); dist ∈ NORM/PK
-
-        Kwargs:
-            dist: ``pl.MaskStoreDist.NORM`` or ``pl.MaskStoreDist.PK`` (default PK)
-        """
-
-    @staticmethod
-    @_api_decl
-    def mask_store_unalign(*args, **kwargs):
-        """Store mask register to unaligned UB address (pstu instruction).
-
-        Args:
-            src: Source mask register
-            dst_ptr: Destination UB pointer
-            mask: Predicate mask register
         """
 
     @staticmethod

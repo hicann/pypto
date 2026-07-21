@@ -422,12 +422,12 @@ TEST(BackendCCEBlockOutOps, Cmp)
     auto tile = MakeTileType();
     for (int i = 0; i <= 5; ++i) {
         auto call = MakeCallWithKwargs("block.cmp", {MakeVar("dst", tile), MakeVar("lhs", tile), MakeVar("rhs", tile)},
-                                       {{"cmp_type", i}});
+                                       {{"cmp_mode", i}});
         auto code = RunCodegen("block.cmp", call);
         EXPECT_CONTAINS(code, "TCMP(dst, lhs, rhs, ");
     }
     auto call0 = MakeCallWithKwargs("block.cmp", {MakeVar("dst", tile), MakeVar("lhs", tile), MakeVar("rhs", tile)},
-                                    {{"cmp_type", 0}});
+                                    {{"cmp_mode", 0}});
     EXPECT_CONTAINS(RunCodegen("block.cmp", call0), "TCMP(dst, lhs, rhs, CmpMode::EQ);");
 }
 
@@ -436,7 +436,7 @@ TEST(BackendCCEBlockOutOps, Cmps)
     auto tile = MakeTileType();
     auto scal = MakeScalarType();
     auto call = MakeCallWithKwargs("block.cmps", {MakeVar("dst", tile), MakeVar("tile", tile), MakeVar("scalar", scal)},
-                                   {{"cmp_type", 4}});
+                                   {{"cmp_mode", 4}});
     EXPECT_CONTAINS(RunCodegen("block.cmps", call), "TCMPS(dst, tile, scalar, CmpMode::GT);");
 }
 

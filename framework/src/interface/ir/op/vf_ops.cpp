@@ -110,7 +110,7 @@ REGISTER_OP("vf.full")
 // Data transfer
 REGISTER_OP("vf.load_align")
     .set_op_category("VFOp")
-    .set_description("Unified vlds load (dist/post_update via kwargs)")
+    .set_description("Unified vlds/plds load (MaskReg dst via dist kwarg, RegTensor dst via dist kwarg)")
     .add_argument("dst", "Destination register")
     .add_argument("src", "Source UB pointer")
     .add_argument("offset", "Element offset or post-update stride")
@@ -123,7 +123,8 @@ REGISTER_OP("vf.load_align")
 
 REGISTER_OP("vf.store_align")
     .set_op_category("VFOp")
-    .set_description("Store aligned data from register to UB")
+    .set_description(
+        "Store aligned data from register to UB (MaskReg src via dist kwarg → psts/pst, RegTensor src → vsts/vst)")
     .add_argument("dst", "Destination UB pointer")
     .add_argument("src", "Source register")
     .add_argument("mask", "Mask register")
@@ -400,11 +401,12 @@ REGISTER_OP("vf.leaky_relu")
 
 REGISTER_OP("vf.interleave")
     .set_op_category("VFOp")
-    .set_description("Interleave two registers")
+    .set_description("Interleave two registers (vintlv for RegTensor, pintlv for MaskReg)")
     .add_argument("dst0", "Destination register 0")
     .add_argument("dst1", "Destination register 1")
     .add_argument("src0", "Source register 0")
     .add_argument("src1", "Source register 1")
+    .set_attr<DataType>("dtype")
     .f_deduce_type(DeduceVFFromDstArg);
 
 REGISTER_OP("vf.pair_reduce_sum")
@@ -457,7 +459,7 @@ REGISTER_OP("vf.mul_dst_add")
 
 REGISTER_OP("vf.pack")
     .set_op_category("VFOp")
-    .set_description("Pack/narrow data type (e.g. u16->u8)")
+    .set_description("Pack/narrow data type (e.g. u16->u8). vpack for RegTensor, ppack for MaskReg.")
     .add_argument("dst", "Destination register")
     .add_argument("src", "Source register")
     .set_attr<int>("part")
@@ -465,7 +467,7 @@ REGISTER_OP("vf.pack")
 
 REGISTER_OP("vf.unpack")
     .set_op_category("VFOp")
-    .set_description("Unpack/widen data type (e.g. u8->u16)")
+    .set_description("Unpack/widen data type (e.g. u8->u16). vunpack for RegTensor, punpack for MaskReg.")
     .add_argument("dst", "Destination register")
     .add_argument("src", "Source register")
     .set_attr<int>("part")
@@ -559,11 +561,12 @@ REGISTER_OP("vf.astype")
 
 REGISTER_OP("vf.de_interleave")
     .set_op_category("VFOp")
-    .set_description("De-interleave")
+    .set_description("De-interleave (vdintlv for RegTensor, pdintlv for MaskReg)")
     .add_argument("dst0", "Destination register 0")
     .add_argument("dst1", "Destination register 1")
     .add_argument("src0", "Source register 0")
     .add_argument("src1", "Source register 1")
+    .set_attr<DataType>("dtype")
     .f_deduce_type(DeduceVFFromDstArg);
 
 REGISTER_OP("vf.select")
@@ -808,117 +811,14 @@ REGISTER_OP("vf.muls_cast")
     .set_attr<int>("layout")
     .f_deduce_type(DeduceVFFromDstArg);
 
-REGISTER_OP("vf.mask_and")
-    .set_op_category("VFOp")
-    .set_description("Mask register bitwise AND")
-    .add_argument("dst", "Destination mask register")
-    .add_argument("src0", "Source mask register 0")
-    .add_argument("src1", "Source mask register 1")
-    .add_argument("mask", "Predicate mask register")
-    .f_deduce_type(DeduceVFUnknownType);
+// mask_and/or/xor/not/mov/sel/pack/unpack/interleave/deinterleave have been
+// merged into their unified counterparts (and_, or_, ..., move, select,
+// pack, unpack, interleave, de_interleave). The Python parser redirects
+// vf.mask_* calls to the unified IR op via _VF_OP_NAME_MAP.
 
-REGISTER_OP("vf.mask_or")
-    .set_op_category("VFOp")
-    .set_description("Mask register bitwise OR")
-    .add_argument("dst", "Destination mask register")
-    .add_argument("src0", "Source mask register 0")
-    .add_argument("src1", "Source mask register 1")
-    .add_argument("mask", "Predicate mask register")
-    .f_deduce_type(DeduceVFUnknownType);
-
-REGISTER_OP("vf.mask_xor")
-    .set_op_category("VFOp")
-    .set_description("Mask register bitwise XOR")
-    .add_argument("dst", "Destination mask register")
-    .add_argument("src0", "Source mask register 0")
-    .add_argument("src1", "Source mask register 1")
-    .add_argument("mask", "Predicate mask register")
-    .f_deduce_type(DeduceVFUnknownType);
-
-REGISTER_OP("vf.mask_not")
-    .set_op_category("VFOp")
-    .set_description("Mask register bitwise NOT")
-    .add_argument("dst", "Destination mask register")
-    .add_argument("src", "Source mask register")
-    .add_argument("mask", "Predicate mask register")
-    .f_deduce_type(DeduceVFUnknownType);
-
-REGISTER_OP("vf.mask_mov")
-    .set_op_category("VFOp")
-    .set_description("Mask register move")
-    .add_argument("dst", "Destination mask register")
-    .add_argument("src", "Source mask register")
-    .add_argument("mask", "Predicate mask register")
-    .f_deduce_type(DeduceVFUnknownType);
-
-REGISTER_OP("vf.mask_sel")
-    .set_op_category("VFOp")
-    .set_description("Mask register select")
-    .add_argument("dst", "Destination mask register")
-    .add_argument("src0", "Source mask register 0")
-    .add_argument("src1", "Source mask register 1")
-    .add_argument("mask", "Selector mask register")
-    .f_deduce_type(DeduceVFUnknownType);
-
-REGISTER_OP("vf.mask_pack")
-    .set_op_category("VFOp")
-    .set_description("Mask pack (ppack)")
-    .add_argument("dst", "Destination mask register")
-    .add_argument("src", "Source mask register")
-    .set_attr<int>("half")
-    .f_deduce_type(DeduceVFUnknownType);
-
-REGISTER_OP("vf.mask_unpack")
-    .set_op_category("VFOp")
-    .set_description("Mask unpack (punpack)")
-    .add_argument("dst", "Destination mask register")
-    .add_argument("src", "Source mask register")
-    .set_attr<int>("half")
-    .f_deduce_type(DeduceVFUnknownType);
-
-REGISTER_OP("vf.mask_interleave")
-    .set_op_category("VFOp")
-    .set_description("Mask interleave (pintlv_b8/b16/b32)")
-    .add_argument("dst0", "Destination mask register 0")
-    .add_argument("dst1", "Destination mask register 1")
-    .add_argument("src0", "Source mask register 0")
-    .add_argument("src1", "Source mask register 1")
-    .set_attr<DataType>("dtype")
-    .f_deduce_type(DeduceVFUnknownType);
-
-REGISTER_OP("vf.mask_deinterleave")
-    .set_op_category("VFOp")
-    .set_description("Mask de-interleave (pdintlv_b8/b16/b32)")
-    .add_argument("dst0", "Destination mask register 0")
-    .add_argument("dst1", "Destination mask register 1")
-    .add_argument("src0", "Source mask register 0")
-    .add_argument("src1", "Source mask register 1")
-    .set_attr<DataType>("dtype")
-    .f_deduce_type(DeduceVFUnknownType);
-
-REGISTER_OP("vf.mask_load")
-    .set_op_category("VFOp")
-    .set_description("Mask load (plds, or pld when an AddrReg offset is given) — returns MaskReg")
-    .add_argument("src_ptr", "Source UB pointer")
-    .add_argument("offset", "Optional AddrReg offset (routes to pld)")
-    .f_deduce_type(DeduceVFMaskType);
-
-REGISTER_OP("vf.mask_store")
-    .set_op_category("VFOp")
-    .set_description("Mask store (psts, or pst when an AddrReg offset is given)")
-    .add_argument("src", "Source mask register")
-    .add_argument("dst_ptr", "Destination UB pointer")
-    .add_argument("mask", "Mask register")
-    .add_argument("offset", "Optional AddrReg offset (routes to pst)")
-    .f_deduce_type(DeduceVFUnknownType);
-
-REGISTER_OP("vf.mask_store_unalign")
-    .set_op_category("VFOp")
-    .set_description("Mask store unaligned (pstu)")
-    .add_argument("src", "Source mask register")
-    .add_argument("dst_ptr", "Destination UB pointer")
-    .add_argument("mask", "Mask register")
-    .f_deduce_type(DeduceVFUnknownType);
+// vf.mask_load/mask_store/mask_store_unalign IR registrations removed —
+// the parser redirects these to vf.load_align/vf.store_align/vf.store_unalign
+// which dispatch via IsMaskRegVar (matching AscendC's function-overloading model).
 
 REGISTER_OP("vf.load")
     .set_op_category("VFOp")
@@ -959,7 +859,8 @@ REGISTER_OP("vf.move")
     .set_op_category("VFOp")
     .set_description("Move/copy register elements (RegTensor or MaskReg). "
                      "RegTensor: vmov with MODE_MERGING (masked) or vmov (unmasked). "
-                     "MaskReg: pmov (masked) or pmov (unmasked).")
+                     "MaskReg: pmov (masked) or pmov (unmasked). "
+                     "Unified op: dst register kind is inferred from source operands.")
     .add_argument("dst", "Destination register (RegTensor or MaskReg)")
     .add_argument("src", "Source register")
     .add_argument("mask", "Mask register (optional)")

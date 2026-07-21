@@ -35,6 +35,7 @@ class ScopeManager:
         self.assignments: dict[str, int] = {}  # Track assignment count per variable
         self.scope_types: list[str] = ["global"]  # Track type of each scope
         self.var_spans: list[dict[str, Span]] = [{}]  # Track span for each variable definition
+        self.mask_reg_vars: set[str] = set()  # Variable names declared as MaskReg
 
     def enter_scope(self, scope_type: str) -> None:
         """Enter a new scope.
@@ -70,6 +71,19 @@ class ScopeManager:
                 parent_scope[name] = value
 
         return scope_vars
+
+    def register_mask_reg_var(self, name: str) -> None:
+        """Mark a variable as a MaskReg (mask register).
+
+        Called when a variable is declared via vf.mask_reg, vf.create_mask,
+        vf.update_mask, or any op whose dst is inferred to be MaskReg.
+        Enables input-type-based dst inference for unified ops.
+        """
+        self.mask_reg_vars.add(name)
+
+    def is_mask_reg_var(self, name: str) -> bool:
+        """Return True if the variable was declared as a MaskReg."""
+        return name in self.mask_reg_vars
 
     def define_var(self, name: str, value: Any, allow_redef: bool = False, span: Any | None = None) -> None:
         """Define a variable in the current scope.

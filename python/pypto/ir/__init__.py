@@ -53,6 +53,7 @@ __all__ = [
     "MergeMode",
     "ReduceMode",
     "CompareMode",
+    "CmpMode",
     "DuplicatePos",
     "CastLayout",
     "VFRoundMode",
@@ -67,8 +68,6 @@ __all__ = [
     "DataCopyMode",
     "IndexOrder",
     "MemBarMode",
-    "MaskLoadDist",
-    "MaskStoreDist",
     "ConstInt",
 
     "ConstFloat",
@@ -165,6 +164,7 @@ from ..pypto_impl.ir import (
     MergeMode,
     ReduceMode,
     CompareMode,
+    CmpMode,
     DuplicatePos,
     CastLayout,
     VFRoundMode,
@@ -179,8 +179,6 @@ from ..pypto_impl.ir import (
     DataCopyMode,
     IndexOrder,
     MemBarMode,
-    MaskLoadDist,
-    MaskStoreDist,
 )
 
 from ..pypto_impl.ir import IRBuilder, InsertPoint

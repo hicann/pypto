@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "codegen/cce/cce_codegen.h"
+#include "ir/debug_info.h"
 #include "ir/function.h"
 #include "ir/program.h"
 #include "ir/stmt.h"
@@ -25,6 +26,11 @@
 namespace pypto {
 namespace codegen {
 namespace {
+
+class TestableCCECodegen : public CCECodegen {
+public:
+    void SetDebugInfo(const ir::IRDebugInfo* debug_info) { debug_info_ = debug_info; }
+};
 
 ir::ExprPtr MakeConstInt(int64_t value)
 {
@@ -101,6 +107,11 @@ TEST(CCECodegenHeaderTest, CoversHeaderOnlyStateAccessors)
 
     EXPECT_EQ(codegen.GetTileOffsetCounter(), 0);
     EXPECT_EQ(codegen.GetTileOffsetCounter(), 1);
+
+    EXPECT_FALSE(codegen.HasTileAddress("tile_0"));
+    codegen.SetTileAddress("tile_0", "0x100");
+    EXPECT_TRUE(codegen.HasTileAddress("tile_0"));
+    EXPECT_EQ(codegen.GetTileAddress("tile_0"), "0x100");
 
     codegen.RecordStructVarType("ctx", "ContextType");
     EXPECT_EQ(codegen.GetTensorDef("not_prescanned"), nullptr);
@@ -261,6 +272,137 @@ TEST(CCECodegenTest, UsesOneBackingArrayForDynamicAndStaticTupleReads)
     EXPECT_NE(generated.find("static_cast<int64_t>(11)"), std::string::npos);
     EXPECT_NE(generated.find("[index"), std::string::npos);
     EXPECT_NE(generated.find("[0]"), std::string::npos);
+}
+
+TEST(CCECodegenTest, SharesBackingArrayAcrossTupleAliases)
+{
+    auto scalar_type = std::make_shared<const ir::ScalarType>(ir::DataType::INT64);
+    auto index = MakeVar("index", scalar_type);
+    auto values = std::make_shared<const ir::MakeTuple>(std::vector<ir::ExprPtr>{MakeConstInt(11), MakeConstInt(22)},
+                                                        ir::Span::Unknown());
+    auto first = MakeVar("first", values->GetType());
+    auto second = MakeVar("second", values->GetType());
+    auto selected = MakeVar("selected", scalar_type);
+
+    auto first_assign = std::make_shared<const ir::AssignStmt>(first, values, ir::Span::Unknown());
+    auto second_assign = std::make_shared<const ir::AssignStmt>(second, first, ir::Span::Unknown());
+    auto read = std::make_shared<const ir::AssignStmt>(
+        selected, std::make_shared<const ir::GetItemExpr>(second, index, ir::Span::Unknown()), ir::Span::Unknown());
+    auto body = std::make_shared<const ir::SeqStmts>(std::vector<ir::StmtPtr>{first_assign, second_assign, read},
+                                                     ir::Span::Unknown());
+
+    CCECodegen codegen;
+    auto generated = codegen.GenerateSingle(MakeProgram(body, {index}), "a5");
+
+    EXPECT_EQ(CountOccurrences(generated, "const int64_t first"), 1);
+    EXPECT_EQ(generated.find("const int64_t second"), std::string::npos);
+    EXPECT_NE(generated.find("first"), std::string::npos);
+    EXPECT_NE(generated.find("[index"), std::string::npos);
+}
+
+TEST(CCECodegenTest, ClearsTupleBackingArraysBetweenGenerations)
+{
+    auto scalar_type = std::make_shared<const ir::ScalarType>(ir::DataType::INT64);
+    auto index = MakeVar("index", scalar_type);
+    auto values = std::make_shared<const ir::MakeTuple>(std::vector<ir::ExprPtr>{MakeConstInt(1), MakeConstInt(2)},
+                                                        ir::Span::Unknown());
+    auto tuple_var = MakeVar("values", values->GetType());
+    auto selected = MakeVar("selected", scalar_type);
+    auto tuple_assign = std::make_shared<const ir::AssignStmt>(tuple_var, values, ir::Span::Unknown());
+    auto read = std::make_shared<const ir::AssignStmt>(
+        selected, std::make_shared<const ir::GetItemExpr>(tuple_var, index, ir::Span::Unknown()), ir::Span::Unknown());
+    auto body = std::make_shared<const ir::SeqStmts>(std::vector<ir::StmtPtr>{tuple_assign, read}, ir::Span::Unknown());
+    auto program = MakeProgram(body, {index});
+
+    CCECodegen codegen;
+    auto first = codegen.GenerateSingle(program, "a5");
+    auto second = codegen.GenerateSingle(program, "a5");
+
+    EXPECT_NE(first.find("const int64_t values"), std::string::npos);
+    EXPECT_NE(second.find("const int64_t values"), std::string::npos);
+}
+
+TEST(CCECodegenTest, MaterializesHomogeneousTileTuple)
+{
+    auto index_type = std::make_shared<const ir::ScalarType>(ir::DataType::INT64);
+    auto index = MakeVar("index", index_type);
+    auto tile_type = std::make_shared<const ir::TileType>(std::vector<int64_t>{16, 16}, ir::DataType::FP16,
+                                                          std::optional<ir::MemRefPtr>(std::nullopt),
+                                                          std::optional<ir::TileView>(std::nullopt));
+    auto tile0 = MakeVar("tile0", tile_type);
+    auto tile1 = MakeVar("tile1", tile_type);
+    auto make_tile0 = std::make_shared<const ir::Call>("block.make_tile", std::vector<ir::ExprPtr>{}, tile_type,
+                                                       ir::Span::Unknown());
+    auto make_tile1 = std::make_shared<const ir::Call>("block.make_tile", std::vector<ir::ExprPtr>{}, tile_type,
+                                                       ir::Span::Unknown());
+    auto values = std::make_shared<const ir::MakeTuple>(std::vector<ir::ExprPtr>{tile0, tile1}, ir::Span::Unknown());
+    auto tiles = MakeVar("tiles", values->GetType());
+    auto selected = MakeVar("selected", tile_type);
+
+    auto body = std::make_shared<const ir::SeqStmts>(
+        std::vector<ir::StmtPtr>{
+            std::make_shared<const ir::AssignStmt>(tile0, make_tile0, ir::Span::Unknown()),
+            std::make_shared<const ir::AssignStmt>(tile1, make_tile1, ir::Span::Unknown()),
+            std::make_shared<const ir::AssignStmt>(tiles, values, ir::Span::Unknown()),
+            std::make_shared<const ir::AssignStmt>(
+                selected, std::make_shared<const ir::GetItemExpr>(tiles, index, ir::Span::Unknown()),
+                ir::Span::Unknown()),
+        },
+        ir::Span::Unknown());
+
+    CCECodegen codegen;
+    auto generated = codegen.GenerateSingle(MakeProgram(body, {index}), "a5");
+
+    EXPECT_NE(generated.find("tiles"), std::string::npos);
+    EXPECT_NE(generated.find("[] = {tile0"), std::string::npos);
+}
+
+TEST(CCECodegenTest, HandlesStaticTupleGetItemWithoutBackingArray)
+{
+    auto tuple = std::make_shared<const ir::MakeTuple>(std::vector<ir::ExprPtr>{MakeConstInt(11), MakeConstInt(22)},
+                                                       ir::Span::Unknown());
+    CCECodegen codegen;
+
+    auto item = std::make_shared<const ir::GetItemExpr>(tuple, MakeConstInt(1), ir::Span::Unknown());
+    EXPECT_EQ(codegen.GetExprAsCode(item), "22");
+}
+
+TEST(CCECodegenTest, EmitsArrayAccessForUnmaterializedTupleVar)
+{
+    auto scalar_type = std::make_shared<const ir::ScalarType>(ir::DataType::INT64);
+    auto tuple_type = std::make_shared<const ir::TupleType>(
+        std::vector<ir::TypePtr>{scalar_type, scalar_type, scalar_type});
+    auto tuple_var = MakeVar("values", tuple_type);
+    auto item = std::make_shared<const ir::GetItemExpr>(tuple_var, MakeConstInt(1), ir::Span::Unknown());
+
+    CCECodegen codegen;
+    EXPECT_EQ(codegen.GetExprAsCode(item), "values[1]");
+}
+
+TEST(CCECodegenTest, EmitsFieldAccessForUnmaterializedNamedTupleVar)
+{
+    auto scalar_type = std::make_shared<const ir::ScalarType>(ir::DataType::INT64);
+    auto tuple_type = std::make_shared<const ir::TupleType>(std::vector<ir::TypePtr>{scalar_type, scalar_type});
+    auto tuple_var = MakeVar("config", tuple_type);
+    auto item = std::make_shared<const ir::GetItemExpr>(tuple_var, MakeConstInt(1), ir::Span::Unknown());
+    ir::IRDebugInfo debug_info;
+    debug_info.RegisterTupleFields(tuple_type, {"rows", "cols"});
+
+    TestableCCECodegen codegen;
+    codegen.SetDebugInfo(&debug_info);
+    EXPECT_EQ(codegen.GetExprAsCode(item), "config.cols");
+}
+
+TEST(CCECodegenTest, RejectsDynamicTupleWithoutBackingArray)
+{
+    auto scalar_type = std::make_shared<const ir::ScalarType>(ir::DataType::INT64);
+    auto index = MakeVar("index", scalar_type);
+    auto tuple = std::make_shared<const ir::MakeTuple>(std::vector<ir::ExprPtr>{MakeConstInt(1), MakeConstInt(2)},
+                                                       ir::Span::Unknown());
+    auto unowned = std::make_shared<const ir::GetItemExpr>(tuple, index, ir::Span::Unknown());
+
+    CCECodegen codegen;
+    EXPECT_THROW((void)codegen.GetExprAsCode(unowned), std::exception);
 }
 
 TEST(CCECodegenTest, DropsUnusedIfPhiAndYieldOnlyElse)

@@ -163,9 +163,17 @@ class ASTParser(
         # GetItemExpr alias semantics; every other MakeTuple is immutable.
         self._struct_array_tuple_ids: set[int] = set()
 
-        # Cache closure-level tuple constants by name/object so repeated uses of
-        # the same module constant do not create duplicate MakeTuple IR nodes.
-        self._closure_tuple_ir_cache: dict[tuple[str, int], ir.Expr] = {}
+        # Maps tile expr id -> [row_expr, col_expr] for tiles that had
+        # set_validshape called on them at parse time. Consumed by
+        # _parse_slice_subscript to clamp sub-view valid_shape.
+        self._tile_valid_shape: dict[int, list] = {}
+
+        # MakeTuples that already have an emitted assignment anchor. Keeping the
+        # Expr objects themselves alive is required: a Python wrapper's id() can
+        # be reused while parsing, which would otherwise suppress an unrelated
+        # tuple's anchor.
+        self._anchored_make_tuples: set[ir.MakeTuple] = set()
+
         # Cache: (tuple_var_name, index_ssa_var_name) -> phi ir.Var from _build_tuple_index_chain.
         # Applies to all tuple types (tile, tensor, event ID, etc.).
         # Prevents re-emitting an if-else chain when the same buf[idx] expression
@@ -173,6 +181,7 @@ class ASTParser(
         self._tuple_select_cache: dict[tuple[str, int], ir.Var] = {}
 
         self._auto_mutex = auto_mutex
+        self._parsed_expr_cache: dict[ast.expr, Any] = {}
         self._current_func_type = ir.FunctionType.Opaque
         self._void_return_only = void_return_only
         self._void_return_context = void_return_context
@@ -202,6 +211,12 @@ class ASTParser(
             param_type.tensor_view.valid_shape, param_type.tensor_view.stride, param_type.tensor_view.layout)
         tv.ptr = ptr_var
         return ir.TensorType(param_type.shape, param_type.dtype, param_type.memref, tv)
+
+    def record_tile_valid_shape(self, tile_expr: ir.Expr, valid_shape) -> None:
+        self._tile_valid_shape[id(tile_expr)] = list(valid_shape.elements)
+
+    def get_tile_valid_shape(self, tile_expr: ir.Expr):
+        return self._tile_valid_shape.get(id(tile_expr))
 
     def set_void_return_mode(self, context: str, allow_early_return: bool = False) -> None:
         """Configure void-only return mode for this parser.
@@ -297,7 +312,7 @@ class ASTParser(
 
         self._validate_tiling_params(args_to_process, func_def)
 
-        self._closure_tuple_ir_cache.clear()
+        self._anchored_make_tuples.clear()
         has_policy_return = self.type_resolver.annotation_has_shape_policy(func_def.returns)
 
         with self.builder.function(func_name, func_span, func_type=func_type) as f:
@@ -312,9 +327,8 @@ class ASTParser(
                 # body (one MakeTuple expr), so a tuple return is one return type.
                 f.return_type(self.type_resolver.resolve_type(func_def.returns))
 
-            # Hoist Python closure tuple variables to function entry so they become
-            # named IR Vars rather than anonymous inline MakeTuples.
-            self._hoist_closure_tuples(func_def)
+            # Give closure tuples a function-entry array-materialization anchor.
+            self._hoist_closure_tuples()
 
             # Collect function body statements (skip docstrings)
             body_stmts: list[ast.stmt] = []
@@ -383,12 +397,18 @@ class ASTParser(
 
     @_dispatch_statement.register
     def _parse_augmented_assignment_statement(self, stmt: ast.AugAssign) -> None:
-        target_load = ast.copy_location(
-            type(stmt.target)(
-                id=stmt.target.id, ctx=ast.Load(),
-            ) if isinstance(stmt.target, ast.Name) else stmt.target,
-            stmt.target,
-        )
+        if isinstance(stmt.target, ast.Subscript):
+            target_load = ast.copy_location(
+                ast.Subscript(value=stmt.target.value, slice=stmt.target.slice, ctx=ast.Load()),
+                stmt.target,
+            )
+        elif isinstance(stmt.target, ast.Name):
+            target_load = ast.copy_location(
+                ast.Name(id=stmt.target.id, ctx=ast.Load()),
+                stmt.target,
+            )
+        else:
+            target_load = stmt.target
         equivalent = ast.Assign(
             targets=[stmt.target],
             value=ast.BinOp(left=target_load, op=stmt.op, right=stmt.value),
@@ -521,56 +541,33 @@ class ASTParser(
         param_var = f.param(param_name, param_type, param_span)
         self.scope_manager.define_var(param_name, param_var, allow_redef=True)
 
-    def _hoist_closure_tuples(self, func_def: ast.FunctionDef) -> None:
-        """Emit let-bindings for Python closure tuple/list variables at function entry.
+    def _hoist_closure_tuples(self) -> None:
+        """Anchor convertible closure tuple/list values at function entry.
 
-        Scans the function AST for Name references that resolve to Python tuples
-        or lists in the closure scope. For each unique variable (deduplicated by
-        Python object identity), emits an AssignStmt at the current position
-        (function entry, before body statements) and caches the resulting IR Var
-        in _closure_tuple_ir_cache. Subsequent parse_name() calls return the Var
-        instead of an anonymous inline MakeTuple, so the CCE codegen can
-        pre-declare the dynamic array at AssignStmt time with correct scoping.
+        Name reads intentionally continue to fold through ``const_env`` to the
+        original MakeTuple.  The emitted lets exist only to give CCE a stable
+        lexical location for backing-array materialization.
         """
-        class _NameCollector(ast.NodeVisitor):
-            """Walks AST collecting Name ids, skipping nested FunctionDef bodies."""
-
-            def __init__(self, root_func_def: ast.FunctionDef):
-                self.root_func_def = root_func_def
-                self.names: list[ast.Name] = []
-
-            def visit(self, node):
-                if isinstance(node, ast.FunctionDef) and node is not self.root_func_def:
-                    return None
-                method = getattr(self, _snake_visit_name(node), None)
-                if method is not None:
-                    return method(node)
-                return super().visit(node)
-
-            def visit_name(self, node: ast.Name) -> None:
-                self.names.append(node)
-
-            def visit_function_def(self, node: ast.FunctionDef) -> None:
-                self.generic_visit(node)
-
-        collector = _NameCollector(func_def)
-        collector.visit(func_def)
-
-        seen: set[tuple[str, int]] = set()
-        for name_node in collector.names:
-            var_name = name_node.id
-            if var_name not in self.expr_evaluator.closure_vars:
-                continue
-            value = self.expr_evaluator.closure_vars[var_name]
-            if not isinstance(value, (tuple, list)):
+        seen: dict[int, tuple[ir.MakeTuple, ir.Var]] = {}
+        span = ir.Span.unknown()
+        for var_name, value in self.expr_evaluator.closure_vars.items():
+            has_scope_binding = self.scope_manager.lookup_var_bounded(var_name) is not None
+            if not isinstance(value, (tuple, list)) or has_scope_binding:
                 continue
             if any(isinstance(v, _ShapePolicy) or v is Ellipsis for v in value):
                 continue
-            key = (var_name, id(value))
-            if key in seen:
-                continue
-            seen.add(key)
-            span = self.span_tracker.get_span(name_node)
-            mt_expr = self.expr_evaluator.python_value_to_ir(value, span)
-            ir_var = self.builder.let(var_name, mt_expr, span=span)
-            self._closure_tuple_ir_cache[key] = ir_var
+            entry = seen.get(id(value))
+            if entry is None:
+                try:
+                    tuple_expr = self.expr_evaluator.python_value_to_ir(value, span)
+                except (ParserTypeError, TypeError, ValueError):
+                    continue
+                if not isinstance(tuple_expr, ir.MakeTuple):
+                    continue
+                tuple_var = self.builder.let(var_name, tuple_expr, span=span)
+                self._anchored_make_tuples.add(tuple_expr)
+                seen[id(value)] = (tuple_expr, tuple_var)
+            else:
+                tuple_expr, tuple_var = entry
+            self.scope_manager.define_var(var_name, tuple_var, allow_redef=True)
+            self.const_env[var_name] = tuple_expr

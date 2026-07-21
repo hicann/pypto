@@ -452,7 +452,7 @@ REGISTER_OP("block.cmp")
     .add_argument("out", "Pre-allocated output tile (TileType)")
     .add_argument("lhs", "Left tile (TileType)")
     .add_argument("rhs", "Right tile (TileType)")
-    .set_attr<int>("cmp_type")
+    .set_attr<int>("cmp_mode")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
         return DeduceBlockOutBinaryTile(args, kwargs, "block.cmp");
@@ -464,7 +464,7 @@ REGISTER_OP("block.cmps")
     .add_argument("out", "Pre-allocated output tile (TileType)")
     .add_argument("tile", "Input tile (TileType)")
     .add_argument("scalar", "Scalar comparand (ScalarType)")
-    .set_attr<int>("cmp_type")
+    .set_attr<int>("cmp_mode")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
         return DeduceBlockOutBinaryScalar(args, kwargs, "block.cmps");

@@ -59,7 +59,6 @@ std::string ComputeStrideBasedOffset(codegen::CCECodegen& codegen, const ir::Mak
 bool IsNZTensorType(const ir::TensorTypePtr& tensor_type);
 int64_t GetNZInnerCols(const ir::DataType& dtype,
                        const std::string& error_prefix = "CCE NZ tensor lowering does not support dtype ");
-std::string GetCmpModeEnum(int cmp_type);
 void ValidateStoreNZPreconditions(const std::string& op_name, const ir::ExprPtr& src_expr,
                                   const ir::MakeTuplePtr& offsets, const ir::TensorTypePtr& dst_tensor_type);
 

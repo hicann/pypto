@@ -148,6 +148,17 @@ public:
     }
 
 protected:
+    ExprPtr VisitExpr_(const MakeTuplePtr& op) override
+    {
+        auto it = transformed_make_tuple_cache_.find(op.get());
+        if (it != transformed_make_tuple_cache_.end()) {
+            return it->second;
+        }
+        auto transformed = IRMutator::VisitExpr_(op);
+        transformed_make_tuple_cache_.emplace(op.get(), transformed);
+        return transformed;
+    }
+
     // Override expression visitation to replace Var with current version
     ExprPtr VisitExpr_(const VarPtr& op) override
     {
@@ -388,6 +399,7 @@ protected:
     }
 
 private:
+    std::unordered_map<const MakeTuple*, ExprPtr> transformed_make_tuple_cache_;
     // Version counter per base variable name
     std::unordered_map<std::string, int> version_counter_;
 

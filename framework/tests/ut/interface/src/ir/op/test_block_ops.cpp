@@ -237,6 +237,46 @@ TEST_F(BlockOpsMemoryTest, SetVal_NonScalarValue_Throws)
 }
 
 // ============================================================================
+// memory.cpp: block.subview
+// ============================================================================
+
+TEST_F(BlockOpsMemoryTest, Subview_TilePreservesPhysicalTypeAndMemRef)
+{
+    auto& reg = OpRegistry::GetInstance();
+    auto tile = MakeTileVarWithMemRef("tile", {16, 32}, DataType::FP16, MemorySpace::Vec, 0x100, 1024);
+    auto source_type = As<TileType>(tile->GetType());
+
+    auto call = reg.Create("block.subview", {tile, MakeScalarVar("offset", DataType::INT64), MakeIntTuple({8, 12})},
+                           Sp());
+
+    auto result_type = As<TileType>(call->GetType());
+    ASSERT_NE(result_type, nullptr);
+    EXPECT_NE(result_type.get(), source_type.get());
+    EXPECT_EQ(result_type->dtype_, source_type->dtype_);
+    EXPECT_EQ(result_type->shape_, source_type->shape_);
+    EXPECT_EQ(result_type->memref_, source_type->memref_);
+}
+
+TEST_F(BlockOpsMemoryTest, Subview_WrongArgCount_Throws)
+{
+    auto& reg = OpRegistry::GetInstance();
+    EXPECT_THROW((void)reg.Create(
+                     "block.subview",
+                     {MakeTileVar("tile", {16, 32}, DataType::FP16), MakeScalarVar("offset", DataType::INT64)}, Sp()),
+                 npu::tile_fwk::Error);
+}
+
+TEST_F(BlockOpsMemoryTest, Subview_NonTileContainer_Throws)
+{
+    auto& reg = OpRegistry::GetInstance();
+    EXPECT_THROW((void)reg.Create("block.subview",
+                                  {MakeScalarVar("container", DataType::FP16), MakeScalarVar("offset", DataType::INT64),
+                                   MakeIntTuple({8, 12})},
+                                  Sp()),
+                 npu::tile_fwk::Error);
+}
+
+// ============================================================================
 // struct_ops.cpp: struct.create, struct.set
 // ============================================================================
 
@@ -724,7 +764,7 @@ TEST_F(BlockOpsOutElemwiseTest, BlockSel_WrongArgCount_Throws)
 TEST_F(BlockOpsOutElemwiseTest, BlockCmp_ThreeTiles_ReturnsOutType)
 {
     auto& reg = OpRegistry::GetInstance();
-    std::vector<std::pair<std::string, std::any>> kwargs = {{"cmp_type", int(0)}};
+    std::vector<std::pair<std::string, std::any>> kwargs = {{"cmp_mode", int(0)}};
     auto call = reg.Create("block.cmp",
                            {MakeTileVar("o", {16, 16}, DataType::FP16), MakeTileVar("l", {16, 16}, DataType::FP16),
                             MakeTileVar("r", {16, 16}, DataType::FP16)},
@@ -735,7 +775,7 @@ TEST_F(BlockOpsOutElemwiseTest, BlockCmp_ThreeTiles_ReturnsOutType)
 TEST_F(BlockOpsOutElemwiseTest, BlockCmps_TileScalarOut_ReturnsOutType)
 {
     auto& reg = OpRegistry::GetInstance();
-    std::vector<std::pair<std::string, std::any>> kwargs = {{"cmp_type", int(1)}};
+    std::vector<std::pair<std::string, std::any>> kwargs = {{"cmp_mode", int(1)}};
     auto call = reg.Create("block.cmps",
                            {MakeTileVar("o", {16, 16}, DataType::FP16), MakeTileVar("t", {16, 16}, DataType::FP16),
                             MakeScalarVar("s", DataType::FP16)},

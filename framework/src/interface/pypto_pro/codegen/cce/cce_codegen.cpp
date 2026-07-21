@@ -552,8 +552,7 @@ void CCECodegen::PrepareBodyGeneration()
 {
     PreScanValidShapes();
     tuple_var_to_make_tuple_.clear();
-    tuple_vars_with_dyn_array_.clear();
-    dyn_arr_counter_ = 0;
+    tuple_backing_arr_.clear();
 }
 
 std::string CCECodegen::GenerateSingle(const ir::ProgramPtr& program, const std::string& arch)
@@ -1327,21 +1326,18 @@ void CCECodegen::VisitStmt_(const ir::AssignStmtPtr& op)
     if (current_tuple_) {
         tuple_var_to_make_tuple_.emplace(var_name, current_tuple_); // first-write wins
 
-        // Emit the dynamic-index array at the MakeTuple assignment
-        // node (the stable identity shared with every use site). Gate on homogeneity: an
-        // array is only valid when all elements map to the same C++ type. All element
-        // variables (struct instances / tiles / scalars) are already in scope here, and this
-        // assignment dominates the use sites, so the array has the correct scope. The array
-        // name is the tuple var name (1:1 with the MakeTuple); SSA guarantees uniqueness.
+        // Materialize a homogeneous MakeTuple only once. Constant propagation may
+        // expose this same MakeTuple through multiple tuple Vars, but all of them
+        // must resolve dynamic GetItem through the first backing array.
+        auto make_tuple = current_tuple_;
         auto tt = ir::As<ir::TupleType>(target_var->GetType());
-        if (tt && IsHomogeneousTuple(tt)) {
+        if (tt && IsHomogeneousTuple(tt) && tuple_backing_arr_.count(make_tuple.get()) == 0) {
             auto elem_names = CollectTupleElemNames(op->var_);
             if (!elem_names.empty()) {
-                std::string arr_decl = BuildDynamicTupleArrayDecl(tt->types_[0], elem_names, var_name,
-                                                                  /*allow_struct_tuple=*/true);
+                std::string arr_decl = BuildDynamicTupleArrayDecl(tt->types_[0], elem_names, var_name);
                 if (!arr_decl.empty()) {
                     emitter_.EmitLine(arr_decl);
-                    tuple_vars_with_dyn_array_.insert(var_name);
+                    tuple_backing_arr_.emplace(make_tuple.get(), var_name);
                 }
             }
         }
@@ -1509,7 +1505,7 @@ std::vector<std::string> CCECodegen::CollectTupleElemNames(const ir::ExprPtr& tu
 
 std::string CCECodegen::BuildDynamicTupleArrayDecl(const ir::TypePtr& elem_type,
                                                    const std::vector<std::string>& elem_names,
-                                                   const std::string& arr_name, bool allow_struct_tuple) const
+                                                   const std::string& arr_name) const
 {
     if (elem_names.empty()) {
         return "";
@@ -1529,7 +1525,7 @@ std::string CCECodegen::BuildDynamicTupleArrayDecl(const ir::TypePtr& elem_type,
     } else if (auto scalar_type = ir::As<ir::ScalarType>(elem_type)) {
         scalar_cast_type = scalar_type->dtype_.ToCTypeString();
         elem_cpp_type = "const " + scalar_cast_type;
-    } else if (allow_struct_tuple) {
+    } else {
         auto inner_tt = ir::As<ir::TupleType>(elem_type);
         if (inner_tt && debug_info_ != nullptr && debug_info_->GetTupleFields(inner_tt.get()) != nullptr) {
             auto type_it = struct_var_to_type_name_.find(elem_names[0]);
@@ -2130,151 +2126,73 @@ void CCECodegen::VisitExpr_(const ir::GetItemExprPtr& op)
     INTERNAL_CHECK(op != nullptr) << "Internal error: null GetItemExpr";
 
     auto value_type = op->value_->GetType();
+    CHECK(ir::As<ir::TupleType>(value_type))
+        << "GetItemExpr requires value to have TupleType, got " << value_type->TypeName();
 
-    // Tuple element access.
-    if (ir::As<ir::TupleType>(value_type)) {
-        auto const_idx = ir::As<ir::ConstInt>(op->slice_);
-        if (const_idx != nullptr) {
-            // Static (constant) index: VisitExpr drives current_tuple_, then VisitExpr the element.
-            int idx = static_cast<int>(const_idx->value_);
-            INTERNAL_CHECK(idx >= 0) << "GetItemExpr negative tuple index " << idx;
+    auto const_idx = ir::As<ir::ConstInt>(op->slice_);
+    if (const_idx != nullptr) {
+        // Static (constant) index: VisitExpr drives current_tuple_, then VisitExpr the element.
+        int idx = static_cast<int>(const_idx->value_);
+        INTERNAL_CHECK(idx >= 0) << "GetItemExpr negative tuple index " << idx;
 
-            current_tuple_ = nullptr;
-            current_expr_value_ = "";
-            VisitExpr(op->value_);
-            if (current_tuple_ == nullptr) {
-                // The base has no underlying MakeTuple to fold into (e.g. a tiling struct
-                // param or its array field). Field names registered in IRDebugInfo mark a
-                // struct -> emit `base.field`; their absence marks an array field (the nested
-                // TupleType of an Array[T, N]) -> emit `base[idx]`.
-                auto tuple_type = ir::As<ir::TupleType>(value_type);
-                const std::vector<std::string>* fields = debug_info_ != nullptr ?
-                                                             debug_info_->GetTupleFields(tuple_type.get()) :
-                                                             nullptr;
-                std::string base_code = GetExprAsCode(op->value_);
-                current_tuple_ = nullptr;
-                if (fields != nullptr) {
-                    CHECK(idx < static_cast<int>(fields->size()))
-                        << "GetItemExpr struct field: no field name for tuple index " << idx;
-                    current_expr_value_ = base_code + "." + (*fields)[idx];
-                } else {
-                    // base_code already carries the array field name (e.g. tiling.opkind),
-                    // so appending the constant index yields tiling.opkind[idx].
-                    current_expr_value_ = base_code + "[" + std::to_string(idx) + "]";
-                }
-                return;
-            } else if (tuple_vars_with_dyn_array_.count(current_expr_value_) != 0) {
-                current_tuple_ = nullptr;
-                current_expr_value_ += "[" + std::to_string(idx) + "]";
-                return;
-            }
-            CHECK(!current_tuple_->elements_.empty()) << "Cannot index an empty tuple at " << op->span_.ToString();
-            INTERNAL_CHECK(idx < static_cast<int>(current_tuple_->elements_.size()))
-                << "GetItemExpr index " << idx << " out of bounds";
-            ir::ExprPtr elem = current_tuple_->elements_[idx];
-
-            current_tuple_ = nullptr;
-            current_expr_value_ = "";
-            VisitExpr(elem); // result lands in current_tuple_ (sub-tuple) or current_expr_value_
-            return;
-        }
-
-        // Dynamic index: a named tuple with a materialized backing array keeps its
-        // variable identity; anonymous MakeTuple expressions use a local fallback array.
-        std::string index_code = GetExprAsCode(op->slice_);
         current_tuple_ = nullptr;
         current_expr_value_ = "";
         VisitExpr(op->value_);
-        CHECK(current_tuple_ != nullptr) << "Dynamic tuple GetItem: cannot resolve underlying MakeTuple for "
-                                         << op->value_->TypeName();
+        if (current_tuple_ == nullptr) {
+            // The base has no underlying MakeTuple to fold into (e.g. a tiling struct
+            // param or its array field). Field names registered in IRDebugInfo mark a
+            // struct -> emit `base.field`; their absence marks an array field (the nested
+            // TupleType of an Array[T, N]) -> emit `base[idx]`.
+            auto tuple_type = ir::As<ir::TupleType>(value_type);
+            const std::vector<std::string>* fields = debug_info_ != nullptr ?
+                                                         debug_info_->GetTupleFields(tuple_type.get()) :
+                                                         nullptr;
+            std::string base_code = GetExprAsCode(op->value_);
+            current_tuple_ = nullptr;
+            if (fields != nullptr) {
+                CHECK(idx < static_cast<int>(fields->size()))
+                    << "GetItemExpr struct field: no field name for tuple index " << idx;
+                current_expr_value_ = base_code + "." + (*fields)[idx];
+            } else {
+                // base_code already carries the array field name (e.g. tiling.opkind),
+                // so appending the constant index yields tiling.opkind[idx].
+                current_expr_value_ = base_code + "[" + std::to_string(idx) + "]";
+            }
+            return;
+        }
 
-        ir::MakeTuplePtr resolved_mt = current_tuple_;
-        std::string arr_name;
-        if (tuple_vars_with_dyn_array_.count(current_expr_value_) != 0) {
-            arr_name = current_expr_value_;
+        auto arr_it = tuple_backing_arr_.find(current_tuple_.get());
+        if (arr_it != tuple_backing_arr_.end()) {
+            current_tuple_ = nullptr;
+            current_expr_value_ = arr_it->second + "[" + std::to_string(idx) + "]";
+            return;
         }
-        if (arr_name.empty() && !resolved_mt->elements_.empty()) {
-            // No dominating assignment materialized an array for this MakeTuple (for
-            // example, an anonymous tuple expression). Preserve the existing fallback
-            // by creating a local temporary array at this dynamic-index use.
-            auto elem_type = resolved_mt->elements_[0]->GetType();
-            std::vector<std::string> elem_names;
-            elem_names.reserve(resolved_mt->elements_.size());
-            for (size_t i = 0; i < resolved_mt->elements_.size(); ++i) {
-                elem_names.push_back(GetExprAsCode(resolved_mt->elements_[i]));
-            }
-            std::string candidate_arr_name = "_dyn_arr_" + std::to_string(dyn_arr_counter_);
-            std::string arr_decl = BuildDynamicTupleArrayDecl(elem_type, elem_names, candidate_arr_name,
-                                                              /*allow_struct_tuple=*/false);
-            if (!arr_decl.empty()) {
-                arr_name = candidate_arr_name;
-                ++dyn_arr_counter_;
-                emitter_.EmitLine(arr_decl);
-            }
-        }
-        current_expr_value_ = arr_name + "[" + index_code + "]";
+        CHECK(!current_tuple_->elements_.empty()) << "Cannot index an empty tuple at " << op->span_.ToString();
+        INTERNAL_CHECK(idx < static_cast<int>(current_tuple_->elements_.size()))
+            << "GetItemExpr index " << idx << " out of bounds";
+        ir::ExprPtr elem = current_tuple_->elements_[idx];
+
+        current_tuple_ = nullptr;
+        current_expr_value_ = "";
+        VisitExpr(elem); // result lands in current_tuple_ (sub-tuple) or current_expr_value_
         return;
     }
 
-    // Tile element offset: slice_ is an integer expression (static or dynamic).
-    auto tile_type = ir::As<ir::TileType>(value_type);
-    INTERNAL_CHECK(tile_type != nullptr) << "GetItemExpr requires value to have TupleType or TileType, got "
-                                         << value_type->TypeName();
+    // Dynamic tuple indexing always resolves through the MakeTuple owner's
+    // backing array. Parser anchors every anonymous MakeTuple before use.
+    std::string index_code = GetExprAsCode(op->slice_);
+    current_tuple_ = nullptr;
+    current_expr_value_ = "";
+    VisitExpr(op->value_);
+    CHECK(current_tuple_ != nullptr) << "Dynamic tuple GetItem: cannot resolve underlying MakeTuple for "
+                                     << op->value_->TypeName();
 
-    std::string base_tile = GetExprAsCode(op->value_);
-    std::string offset_expr = GetExprAsCode(op->slice_);
-
-    int elem_bytes = static_cast<int>(tile_type->dtype_.GetBit() / 8);
-    if (elem_bytes == 0)
-        elem_bytes = 1; // guard sub-byte types
-
-    // VF section: typed pointer arithmetic off the section-hoisted base ptr. `vf_tile_ptr_N + offset`
-    // advances by whole elements and lets matching loads/stores skip the cast.
-    if (IsInVFSection()) {
-        std::string base_ptr = GetOrCreateVFTilePtr(op->value_, /*is_post_update=*/false);
-        current_expr_value_ = "(" + base_ptr + " + (" + offset_expr + "))";
-        return;
-    }
-
-    // Get base tile address ->try tile_addresses_ first, then extract from TileType memref
-    std::string base_addr;
-    auto addr_it = tile_addresses_.find(base_tile);
-    if (addr_it != tile_addresses_.end()) {
-        base_addr = addr_it->second;
-    } else if (base_tile.find('[') != std::string::npos) {
-        // Dynamically-indexed tile-group member (e.g. `_tg_foo_tiles_0[bufidx]`): the runtime
-        // buffer selected by the cursor is unknown at codegen time, so the static memref address
-        // (which only records buffer 0) would be wrong. Use the tile's runtime base via .data()
-        // so element-offset slices follow the actual double-buffer slot.
-        base_addr = "(uint64_t)" + base_tile + ".data()";
-    } else {
-        INTERNAL_CHECK(tile_type->memref_.has_value())
-            << "GetItemExpr: base tile '" << base_tile << "' has no address info";
-        int64_t addr = ExtractConstInt((*tile_type->memref_)->addr_);
-        base_addr = FormatAddressHex(addr);
-    }
-
-    // Sanitize base_tile into a valid C++ identifier prefix: replace non-alnum/underscore chars.
-    std::string base_tile_id = base_tile;
-    for (char& c : base_tile_id) {
-        if (!std::isalnum(static_cast<unsigned char>(c)) && c != '_')
-            c = '_';
-    }
-    std::string temp_name = base_tile_id + "_eoff_" + std::to_string(tile_offset_counter_++);
-
-    std::vector<int64_t> shape_dims = ExtractShapeDimensions(tile_type->shape_);
-    int64_t rows = shape_dims.size() >= 1 ? shape_dims[0] : 1;
-    int64_t cols = shape_dims.size() >= 2 ? shape_dims[1] : 1;
-    auto vs = ExtractValidShapeInfo(tile_type, rows, cols, [this](const ir::VarPtr& v) { return GetVarName(v); });
-    std::string ctor_args = BuildTileCtorArgs(vs, rows, cols);
-    std::string ctor_suffix = vs.needs_ctor ? ("(" + ctor_args + ")") : "";
-    std::string type_str = type_converter_.ConvertTileType(tile_type, rows, cols);
-    std::string temp_addr = base_addr + " + (" + offset_expr + ") * " + std::to_string(elem_bytes);
-    emitter_.EmitLine(type_str + " " + temp_name + ctor_suffix + "; " + "TASSIGN(" + temp_name + ", " + temp_addr +
-                      ");");
-    tile_addresses_[temp_name] = temp_addr;
-
-    current_expr_value_ = temp_name;
+    ir::MakeTuplePtr resolved_mt = current_tuple_;
+    auto arr_it = tuple_backing_arr_.find(resolved_mt.get());
+    CHECK(arr_it != tuple_backing_arr_.end())
+        << "Dynamic tuple GetItem has no backing-array owner at " << op->span_.ToString();
+    current_expr_value_ = arr_it->second + "[" + index_code + "]";
+    return;
 }
 
 // ========================================================================
@@ -2321,6 +2239,11 @@ std::string CCECodegen::GetPointer(const std::string& var_name)
 bool CCECodegen::HasPointer(const std::string& var_name) const
 {
     return tensor_to_pointer_.find(var_name) != tensor_to_pointer_.end();
+}
+
+bool CCECodegen::HasTileAddress(const std::string& tile_name) const
+{
+    return tile_addresses_.find(tile_name) != tile_addresses_.end();
 }
 
 const TensorDef* CCECodegen::GetTensorDef(const std::string& name) const
@@ -2385,8 +2308,6 @@ void CCECodegen::VisitExpr_(const ir::CallPtr& op)
             "vf.store_unalign_post",
             "vf.store",
             "vf.scatter",
-            "vf.mask_store",
-            "vf.mask_store_unalign",
             "vf.store_align_pack",
             "vf.store_align_intlv",
             "vf.store_align_pack_postupdate",
@@ -2408,7 +2329,9 @@ void CCECodegen::VisitExpr_(const ir::CallPtr& op)
         };
         if (skip_ops.count(op->name_) == 0) {
             static const std::set<std::string> dual_dst_ops = {
-                "vf.interleave", "vf.de_interleave", "vf.mask_interleave", "vf.mask_deinterleave", "vf.mull",
+                "vf.interleave",
+                "vf.de_interleave",
+                "vf.mull",
             };
             bool is_dual_dst = dual_dst_ops.count(op->name_) > 0;
 

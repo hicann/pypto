@@ -43,32 +43,26 @@ GetItemExpr::GetItemExpr(ExprPtr value, ExprPtr slice, Span span)
     CHECK(slice_) << "GetItemExpr requires a non-null slice";
 
     auto value_type = value_->GetType();
-    if (auto tile_type = As<TileType>(value_type)) {
-        type_ = tile_type;
-        return;
-    }
 
-    if (auto tuple_type = As<TupleType>(value_type)) {
-        if (auto const_idx = As<ConstInt>(slice_)) {
-            int index = static_cast<int>(const_idx->value_);
-            CHECK(index >= 0 && index < static_cast<int>(tuple_type->types_.size()))
-                << "GetItemExpr index " << index << " out of bounds for tuple with " << tuple_type->types_.size()
-                << " elements";
-            type_ = tuple_type->types_[index];
-        } else {
-            CHECK(!tuple_type->types_.empty()) << "GetItemExpr: cannot index into an empty tuple";
-            const auto& first = tuple_type->types_[0];
-            for (size_t i = 1; i < tuple_type->types_.size(); ++i) {
-                CHECK(structural_equal(first, tuple_type->types_[i]))
-                    << "GetItemExpr with dynamic index requires all tuple elements to have the same type, "
-                    << "but element 0 and element " << i << " differ";
-            }
-            type_ = first;
+    auto tuple_type = As<TupleType>(value_type);
+    CHECK(tuple_type) << "GetItemExpr requires value to have TupleType, got " << value_type->TypeName();
+
+    if (auto const_idx = As<ConstInt>(slice_)) {
+        int index = static_cast<int>(const_idx->value_);
+        CHECK(index >= 0 && index < static_cast<int>(tuple_type->types_.size()))
+            << "GetItemExpr index " << index << " out of bounds for tuple with " << tuple_type->types_.size()
+            << " elements";
+        type_ = tuple_type->types_[index];
+    } else {
+        CHECK(!tuple_type->types_.empty()) << "GetItemExpr: cannot index into an empty tuple";
+        const auto& first = tuple_type->types_[0];
+        for (size_t i = 1; i < tuple_type->types_.size(); ++i) {
+            CHECK(structural_equal(first, tuple_type->types_[i]))
+                << "GetItemExpr with dynamic index requires all tuple elements to have the same type, "
+                << "but element 0 and element " << i << " differ";
         }
-        return;
+        type_ = first;
     }
-
-    CHECK(false) << "GetItemExpr requires value to have TupleType or TileType, got " << value_type->TypeName();
 }
 
 } // namespace ir

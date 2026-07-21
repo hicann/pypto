@@ -166,7 +166,6 @@ class CallParserMixin:
         "add": 1, "sub": 1, "mul": 1, "div": 1, "max": 1, "min": 1,
         "and_": 1, "or_": 1, "xor": 1, "abs_sub": 1, "select": 1,
         "shift_left": 1, "shift_right": 1, "prelu": 1,
-        "mask_and": 1, "mask_or": 1, "mask_xor": 1, "mask_not": 1,
         "ln": 1, "log": 1, "exp": 1, "abs": 1, "not_": 1, "sqrt": 1,
         "relu": 1, "neg": 1, "copy": 1, "pair_reduce_sum": 1,
         "squeeze": 1, "truncate": 1, "astype": 1, "log2": 1, "log10": 1,
@@ -174,21 +173,20 @@ class CallParserMixin:
         "muls": 1, "adds": 1, "subs": 1, "mins": 1, "maxs": 1,
         "leaky_relu": 1, "muls_cast": 1,
         "axpy": 1, "exp_sub": 1, "mul_add_dst": 1, "mul_dst_add": 1,
-        "pack": 1, "unpack": 1, "mask_pack": 1, "mask_unpack": 1,
-        "mask_mov": 1, "arange": 1, "unsqueeze": 1, "full": 1,
+        "pack": 1, "unpack": 1,
+        "arange": 1, "unsqueeze": 1, "full": 1,
         "load_align": 1, "load": 1, "load_unalign": 1,
         "gather": 1,
-        "mask_sel": 1, "move": 1,
+        "move": 1,
         "eq": 1, "ne": 1, "lt": 1, "gt": 1, "le": 1, "ge": 1,
         "histograms": 1,
         # 2 dsts
         "interleave": 2, "de_interleave": 2,
-        "mask_interleave": 2, "mask_deinterleave": 2,
         "mull": 2,
         "addc": 2, "subc": 2,
         # 0 dst (no assignment form)
         "store_align": 0, "store_unalign": 0, "store_unalign_post": 0,
-        "scatter": 0, "store": 0, "mask_store": 0, "mask_store_unalign": 0,
+        "scatter": 0, "store": 0,
         "mem_bar": 0, "clear_spr": 0,
         "load_unalign_pre": 0,
         "store_align_pack": 0, "store_align_intlv": 0,
@@ -199,9 +197,24 @@ class CallParserMixin:
     # declares these via vf.create_mask instead of vf.reg_tensor.
     _VF_MASK_DST_OPS: frozenset[str] = frozenset({
         "eq", "ne", "lt", "gt", "le", "ge",
-        "mask_and", "mask_or", "mask_xor", "mask_not",
-        "mask_mov", "mask_sel", "mask_pack", "mask_unpack",
-        "mask_interleave", "mask_deinterleave",
+    })
+
+    # Ops that support both RegTensor and MaskReg dsts. When the dst is freshly
+    # declared, its register kind is inferred from the source operands: if any
+    # source argument is a known MaskReg variable, the dst is declared as
+    # MaskReg; otherwise RegTensor.
+    _VF_UNIFIED_OPS: frozenset[str] = frozenset({
+        "move", "and_", "or_", "xor", "not_",
+        "select", "pack", "unpack",
+        "interleave", "de_interleave",
+        "load_align", "store_align", "store_unalign",
+    })
+
+    # VF ops whose return value is a MaskReg (used by _parse_name_assignment to
+    # track MaskReg variables for unified-op dst inference).
+    _VF_MASK_PRODUCING_OPS: frozenset[str] = frozenset({
+        "create_mask", "update_mask", "get_mask_spr",
+        "mask_gen_with_reg_tensor",
     })
 
     @staticmethod
@@ -567,13 +580,13 @@ class CallParserMixin:
             return
         from pypto.ir import (
             BinType, CastLayout, CompareMode, DataCopyMode, DuplicatePos,
-            HistType, IndexOrder, LoadDist, MaskLoadDist, MaskPattern, MaskStoreDist,
+            HistType, IndexOrder, LoadDist, MaskPattern,
             MaskWidth, MemBarMode, MergeMode, PackPart,
             ReduceMode, VFRoundMode, SaturateMode, SqueezeMode, StoreDist,
         )
         cls._VF_KWARG_ENUMS = {
             "pattern": (MaskPattern,),
-            "mode": (MergeMode, MemBarMode, MaskLoadDist),
+            "mode": (MergeMode, MemBarMode),
             "merge_mode": (MergeMode,),
             "reduce_mode": (ReduceMode,),
             "reduce_type": (ReduceMode,),
@@ -585,10 +598,9 @@ class CallParserMixin:
             "bin_type": (BinType,),
             "hist_type": (HistType,),
             "gather_mode": (SqueezeMode,),
-            "half": (PackPart,),
             "part": (PackPart,),
             "width": (MaskWidth,),
-            "dist": (LoadDist, StoreDist, MaskStoreDist),
+            "dist": (LoadDist, StoreDist),
             "data_copy_mode": (DataCopyMode,),
             "index_order": (IndexOrder,),
         }
@@ -731,26 +743,6 @@ class CallParserMixin:
         if enum_classes is not None:
             if isinstance(result, enum_classes):
                 return result
-            if isinstance(result, str):
-                all_members = []
-                for cls in enum_classes:
-                    members = getattr(cls, "__members__", None)
-                    if members is not None:
-                        all_members.extend(f"pl.{cls.__name__}.{name}" for name in members)
-                    else:
-                        try:
-                            all_members.extend(f"pl.{cls.__name__}.{m.name}" for m in cls)
-                        except TypeError:
-                            pass
-                enum_names = ", ".join(c.__name__ for c in enum_classes)
-                hint_str = ", ".join(all_members[:8]) if all_members else enum_names
-                if len(all_members) > 8:
-                    hint_str += ", ..."
-                raise ParserTypeError(
-                    f"VF kwarg '{key}' requires an enum value, got string \"{result}\". "
-                    f"Use one of: {hint_str}",
-                    span=self.span_tracker.get_span(value),
-                )
         return result
 
     def resolve_const_int_list_kwarg(self, call: ast.Call, key: str) -> "list[int] | None":
@@ -1123,6 +1115,7 @@ class CallParserMixin:
             return result
         return self.parse_list(value)
 
+
     def _parse_vf_op(self, op_name: str, call: ast.Call) -> ir.Expr:
         """Parse a VF API operation call: vf.{op_name}(...).
 
@@ -1176,37 +1169,42 @@ class CallParserMixin:
 
         args = [self.parse_expression(arg) for arg in call.args]
         kwargs = self.parse_op_kwargs(call)
-        backend_op_name = self._VF_OP_NAME_MAP.get(op_name, op_name)
 
-        return ir.create_op_call(f"vf.{backend_op_name}", args, kwargs, span)
+        return ir.create_op_call(f"vf.{op_name}", args, kwargs, span)
 
     # --- auto_mutex helpers ---------------------------------------------------
 
-    def _try_resolve_tileref(self, node: ast.expr):
+    def _try_resolve_tileref(self, node: ast.expr, kwarg_name: str | None = None):
         """Resolve a tile argument to a mutex ref.
 
-        Call parse_expression to obtain the IR expr, then look up sync metadata
-        from _tile_mutex_meta. Works for both inline group accessors
-        (acc.next()) and variable-assigned tiles (cur_a).
+        Returns _MutexRef(buf_id, mutex_ids, memory, tile_id) when ``node``
+        carries tile-group mutex metadata; otherwise None.
 
-        Returns _MutexRef(buf_id, mutex_ids, memory, slot_id) or None.
+        ``kwarg_name`` distinguishes positional vs keyword args (keyword args
+        use ``resolve_single_kwarg``, positional args use ``parse_expression``).
+        Subscript arguments (``tile[off]``, ``buf[idx]``) alias the base's
+        buffer; their mutex metadata is propagated onto the GetItemExpr by
+        ``parse_subscript``, so the generic ``parse_expression`` path finds it.
         """
-        expr = self.parse_expression(node)
+        expr = (
+            self.resolve_single_kwarg(kwarg_name, node)
+            if kwarg_name is not None
+            else self.parse_expression(node)
+        )
         if not isinstance(expr, ir.Expr):
             return None
         meta = self._tile_mutex_meta.get(expr)
-        slot_id = id(expr)
         if meta is None:
             return None
         buf_id_ir, mutex_ids = meta
         mem = expr.type.memref.memory_space_ if isinstance(expr.type, ir.TileType) and expr.type.memref else None
-        return _MutexRef(buf_id_ir, mutex_ids, mem, slot_id)
+        return _MutexRef(buf_id_ir, mutex_ids, mem, id(expr))
 
     def _emit_auto_mutex(self, op_name: str, call: ast.Call, span: ir.Span):
         """Emit mutex_lock before and mutex_unlock after a block DSL op.
 
-        Scans call.args for tile-group tiles, determines the op pipe,
-        and emits lock/unlock per unique slot.
+        Scans positional and keyword arguments for tile-group tiles, determines the op
+        pipe, and emits lock/unlock per unique slot.
         Returns None -the caller still parses the op normally.
 
         Phase-aware skip on Acc tiles: when matmul/matmul_acc/store carries
@@ -1234,6 +1232,11 @@ class CallParserMixin:
         #    then drop Acc tiles when a phase-aware matmul/store carries the
         #    unit_flag (the hardware handshake replaces the software mutex there).
         tilerefs = [self._try_resolve_tileref(arg) for arg in call.args]
+        tilerefs.extend(
+            self._try_resolve_tileref(kw.value, kw.arg)
+            for kw in call.keywords
+            if kw.arg is not None
+        )
         unique_refs = []
         seen = set()
         for tref in tilerefs:
@@ -1244,7 +1247,7 @@ class CallParserMixin:
             seen.add(tref.slot_id)
             unique_refs.append(tref)
 
-        if op_name in ("matmul", "matmul_acc", "store"):
+        if op_name in ("matmul", "matmul_acc", "store", "store_tile"):
             phase = None
             for kw in call.keywords:
                 if kw.arg == "phase":
@@ -1253,7 +1256,9 @@ class CallParserMixin:
                         phase = resolved.value
                     break
             # STPhase/AccPhase enum: Partial/Final indicates multi-step accumulation
-            if phase in (ir.STPhase.Partial, ir.STPhase.Final):
+            _phase_skip = {ir.STPhase.Partial.value, ir.STPhase.Final.value,
+                           ir.AccPhase.Partial.value, ir.AccPhase.Final.value}
+            if phase in _phase_skip:
                 unique_refs = [r for r in unique_refs if r.memory != ir.MemorySpace.Acc]
 
         if not unique_refs:

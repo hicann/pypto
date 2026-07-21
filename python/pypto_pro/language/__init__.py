@@ -88,7 +88,7 @@ __all__ = [
     "and_", "xor", "expands",
     # Unary element-wise
     "neg", "abs", "exp", "log", "sqrt", "rsqrt", "recip", "relu",
-    "fillpad", "fillpad_expand", "fillpad_inplace",
+    "fillpad", "FillPadMode",
     # Type conversion
     "cast", "add_relu_cast", "sub_relu_cast", "mul_cast",
     # Compare / select
@@ -140,7 +140,7 @@ from pypto.pypto_impl.ir import (
     TilePad,
 )
 from pypto_pro.ir.op import system_ops as system
-from pypto_pro.ir.op.block_ops import TileType, make_tile
+from pypto_pro.ir.op.block_ops import TileType, make_tile, FillPadMode
 from pypto.ir import (
     ReluPreMode,
     AtomicType,
@@ -159,7 +159,7 @@ from pypto.ir import (
     MaskPattern, MergeMode, ReduceMode, CompareMode, DuplicatePos,
     CastLayout, VFRoundMode, SaturateMode, BinType, HistType,
     SqueezeMode, PackPart, MaskWidth, LoadDist, StoreDist,
-    DataCopyMode, MemBarMode, MaskLoadDist, MaskStoreDist,
+    DataCopyMode, MemBarMode, IndexOrder,
 )
 from pypto_pro.ir.op.ptr_ops import addptr, make_ptr, make_tensor
 from pypto_pro.ir.op.system_ops import mutex_lock as _mutex_lock, mutex_unlock as _mutex_unlock
@@ -175,7 +175,7 @@ from ._api import (
     add, sub, mul, div, maximum, minimum,
     and_, xor, expands,
     neg, abs, exp, log, sqrt, rsqrt, recip, relu,
-    fillpad, fillpad_expand, fillpad_inplace,
+    fillpad,
     cast, add_relu_cast, sub_relu_cast, mul_cast,
     eq, ne, lt, le, gt, ge, select,
     add_relu, sub_relu, addc, mul_add_dst,

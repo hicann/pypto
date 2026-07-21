@@ -620,9 +620,17 @@ void BindTypeClass(py::module_& ir)
         .value("EQ", ir::CompareMode::EQ)
         .value("NE", ir::CompareMode::NE)
         .value("LT", ir::CompareMode::LT)
-        .value("GT", ir::CompareMode::GT)
         .value("LE", ir::CompareMode::LE)
+        .value("GT", ir::CompareMode::GT)
         .value("GE", ir::CompareMode::GE);
+
+    py::enum_<ir::CmpMode>(ir, "CmpMode", "Comparison mode for block.cmp/cmps (isa TCMP/TCMPS)")
+        .value("EQ", ir::CmpMode::EQ)
+        .value("NE", ir::CmpMode::NE)
+        .value("LT", ir::CmpMode::LT)
+        .value("LE", ir::CmpMode::LE)
+        .value("GT", ir::CmpMode::GT)
+        .value("GE", ir::CmpMode::GE);
 
     py::enum_<ir::DuplicatePos>(ir, "DuplicatePos", "Position for vf.full")
         .value("LOWEST", ir::DuplicatePos::LOWEST)
@@ -724,15 +732,6 @@ void BindTypeClass(py::module_& ir)
         .value("VV_ALL", ir::MemBarMode::VV_ALL)
         .value("VS_ALL", ir::MemBarMode::VS_ALL)
         .value("SV_ALL", ir::MemBarMode::SV_ALL);
-
-    py::enum_<ir::MaskLoadDist>(ir, "MaskLoadDist", "Load distribution for vf.mask_load / pld/plds")
-        .value("NORM", ir::MaskLoadDist::NORM)
-        .value("US", ir::MaskLoadDist::US)
-        .value("DS", ir::MaskLoadDist::DS);
-
-    py::enum_<ir::MaskStoreDist>(ir, "MaskStoreDist", "Store distribution for vf.mask_store / pst/psts")
-        .value("NORM", ir::MaskStoreDist::NORM)
-        .value("PK", ir::MaskStoreDist::PK);
 
     // HardwareInfo - struct for hardware-specific tile information
     py::class_<HardwareInfo>(ir, "HardwareInfo", "Hardware-specific tile information (layout, fractal, pad, compact)")

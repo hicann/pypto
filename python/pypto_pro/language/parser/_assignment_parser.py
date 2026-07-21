@@ -51,6 +51,7 @@ class AssignmentParserMixin:
         # Use annotation type as override when it carries memref info
         annotation_type = self.type_resolver.resolve_type_if_memref(stmt.annotation)
         var = self.builder.let(var_name, value_expr, var_type=annotation_type, span=span)
+        self._mark_make_tuple_anchor(value_expr)
         self._transfer_tile_sync_metadata(var, value_expr)
 
         # Register in scope
@@ -96,12 +97,15 @@ class AssignmentParserMixin:
             self._parse_struct_field_assignment(target, stmt, span)
             return
 
-        # AssignStmt left-values are restricted to plain Vars. Field writes go through
-        # struct.set (above); there is no expression-target / subscript assignment.
+        if isinstance(target, ast.Subscript):
+            self._parse_subscript_assignment(target, stmt, span)
+            return
+
         raise ParserSyntaxError(
             f"Unsupported assignment target: {ast.unparse(stmt)}",
             span=span,
-            hint="Only `var = ...`, `a.field = ...` (struct), or tuple unpacking are supported",
+            hint="Only `var = ...`, `a.field = ...` (struct), `tensor[i] = ...`, "
+            "or tuple unpacking are supported",
         )
 
     # Ops where dst type differs from src type — dtype kwarg is mandatory.
@@ -164,16 +168,28 @@ class AssignmentParserMixin:
             dst_names = [target.elts[0].id, target.elts[1].id]
             dst_targets = [target.elts[0], target.elts[1]]
 
-        # Determine dtype: check explicit dtype kwarg first.
-        # For type-changing ops (vf.astype), dtype kwarg is mandatory because
-        # the dst type differs from src type.
-        dtype_val = None
-        for kw in call.keywords:
-            if kw.arg == "dtype":
-                dtype_val = self.resolve_single_kwarg("dtype", kw.value)
-                break
+        # Parse kwargs once; dtype is taken from here (explicit) or inferred
+        # from source args below.
+        parsed_kwargs = self.parse_op_kwargs(call)
+        dtype_val = parsed_kwargs.pop("dtype", None)
 
-        if dtype_val is None and vf_op_name in self._TYPE_CHANGING_OPS:
+        # Detect MaskReg data source — reused both for the type-changing-op
+        # dtype exemption and for dst-kind inference below.
+        # Only the first positional arg is checked: it is always a data source,
+        # never the predicate mask (prego), which is always the LAST positional
+        # arg. Checking all args would mistake preg for a MaskReg data source
+        # and wrongly declare the dst as MaskReg (e.g. vf.or_(reg_a, reg_b, preg)).
+        first_arg = call.args[0] if call.args else None
+        is_mask_src = (
+            isinstance(first_arg, ast.Name)
+            and self.scope_manager.is_mask_reg_var(first_arg.id)
+        )
+
+        # For type-changing ops (vf.astype), dtype kwarg is mandatory because
+        # the dst type differs from src type.  Unified ops (pack, unpack) only
+        # change type for the RegTensor variant; the MaskReg variant preserves
+        # the source type, so dtype= is not required when sources are MaskReg.
+        if dtype_val is None and vf_op_name in self._TYPE_CHANGING_OPS and not is_mask_src:
             raise ParserTypeError(
                 f"vf.{vf_op_name} requires explicit dtype kwarg because dst type differs from src. "
                 f"Example: vf.{vf_op_name}(src, mask, dtype=pl.DT_FP16)",
@@ -205,28 +221,23 @@ class AssignmentParserMixin:
                 span=span,
             )
 
-        # Determine whether the backend op carries `dtype` as an IR attribute.
-        # If so, keep the user-supplied dtype (or inject the inferred one when
-        # not explicitly passed); otherwise strip it.
-        backend_op_name = self._VF_OP_NAME_MAP.get(vf_op_name, vf_op_name)
-        ir_op_name = f"vf.{backend_op_name}"
-        keep_dtype = ir.is_op_registered(ir_op_name) and \
-            ir.get_op(ir_op_name).has_attr("dtype")
-        parsed_kwargs = {
-            k: v for k, v in self.parse_op_kwargs(call).items()
-            if k != "dtype" or keep_dtype
-        }
-        if keep_dtype:
-            parsed_kwargs.setdefault("dtype", dtype_val)
+        # Re-inject dtype into kwargs iff the backend op carries it as an IR
+        # attribute; otherwise it has already been stripped above.
+        ir_op_name = f"vf.{vf_op_name}"
+        if ir.is_op_registered(ir_op_name) and ir.get_op(ir_op_name).has_attr("dtype"):
+            parsed_kwargs["dtype"] = dtype_val
 
         # Step 2: Declare dst variables (first definition only). For existing
         # variables, reuse them directly — do NOT create a new register, as that
         # would lose the accumulated value in self-referential ops.
         # Ops in _VF_MASK_DST_OPS produce MaskReg dst(s); declare them via
-        # vf.create_mask. All other ops produce RegTensor dst(s); declare via
-        # vf.reg_tensor. (addc/subc carry outputs must be pre-declared by the
-        # user via vf.create_mask.)
+        # vf.mask_reg. Unified ops (move, interleave, etc.) infer the dst kind
+        # from source operands: if any source is a known MaskReg variable, the
+        # dst is declared as MaskReg. (addc/subc carry outputs must be
+        # pre-declared by the user via vf.create_mask.)
         is_mask_dst = self._is_vf_mask_dst_op(vf_op_name)
+        if not is_mask_dst and vf_op_name in self._VF_UNIFIED_OPS:
+            is_mask_dst = is_mask_src
         decl_op = "vf.mask_reg" if is_mask_dst else "vf.reg_tensor"
         dst_vars = []
         for name, _ in zip(dst_names, dst_targets):
@@ -236,6 +247,8 @@ class AssignmentParserMixin:
                 decl_call = ir.create_op_call(decl_op, [], {"dtype": dtype_val}, span)
                 var = self.builder.let(name, decl_call, span=span)
                 self.scope_manager.define_var(name, var, span=span)
+                if is_mask_dst:
+                    self.scope_manager.register_mask_reg_var(name)
                 dst_vars.append(var)
             else:
                 dst_vars.append(existing)
@@ -265,6 +278,7 @@ class AssignmentParserMixin:
                 span=span,
             )
         tuple_var = self.builder.let(f"_tuple_tmp_{self._tuple_idx_counter}", value_expr, span=span)
+        self._mark_make_tuple_anchor(value_expr)
         self._tuple_idx_counter += 1
         for i, elt in enumerate(target.elts):
             if not isinstance(elt, ast.Name):
@@ -298,8 +312,14 @@ class AssignmentParserMixin:
             )
         if isinstance(value_expr, ir.Expr):
             var = self.builder.let(var_name, value_expr, span=span)
+            self._mark_make_tuple_anchor(value_expr)
             self._transfer_tile_sync_metadata(var, value_expr)
             self.scope_manager.define_var(var_name, var, span=span)
+            # Track MaskReg-producing VF ops (create_mask, update_mask, etc.)
+            # so unified ops can infer dst register kind from source operands.
+            vf_op = self._is_vf_op_call(stmt.value)
+            if vf_op is not None and vf_op in self._VF_MASK_PRODUCING_OPS:
+                self.scope_manager.register_mask_reg_var(var_name)
             if self._auto_mutex:
                 self._emit_auto_mutex_unlocks()
             self._update_const_env(var_name, value_expr)
@@ -341,3 +361,34 @@ class AssignmentParserMixin:
             )
         call = ir.create_op_call("struct.set", [base, value_expr], {"field": field_name}, span)
         self.builder.emit(ir.EvalStmt(call, span))
+
+    def _parse_subscript_assignment(self, target: ast.Subscript, stmt: ast.Assign, span: ir.Span) -> None:
+        container_expr = self.parse_expression(target.value)
+        container_type = container_expr.type
+        if not isinstance(container_type, (ir.TileType, ir.TensorType)):
+            raise ParserTypeError(
+                f"Subscript assignment requires Tile or Tensor, got {type(container_type).__name__}",
+                span=span,
+                hint="Only Tile and Tensor support element assignment via A[i] = v",
+            )
+        index_expr = self._parse_scalar_subscript_index(container_expr, target.slice, span)
+        value_expr = self.parse_expression(stmt.value, nested=False)
+        if not isinstance(value_expr, ir.Expr):
+            raise ParserTypeError(
+                f"Right-hand side of subscript assignment must be an IR expression",
+                span=span,
+            )
+        meta = self._tile_mutex_meta.get(container_expr) if self._auto_mutex else None
+        from pypto_pro.ir.op.block_ops import _ir_setval
+        setval_call = _ir_setval(container_expr, index_expr, value_expr, span=span)
+        if meta is not None:
+            from ._op_pipeline import get_op_pipe
+            from pypto_pro.ir.op.system_ops import mutex_lock, mutex_unlock
+            pipe = get_op_pipe("setval")
+            buf_id_ir, mutex_ids = meta
+            self.builder.emit(ir.EvalStmt(
+                mutex_lock(pipe=pipe, mutex_id=buf_id_ir, mutex_ids=mutex_ids, span=span), span))
+        self.builder.emit(ir.EvalStmt(setval_call, span))
+        if meta is not None:
+            self.builder.emit(ir.EvalStmt(
+                mutex_unlock(pipe=pipe, mutex_id=buf_id_ir, mutex_ids=mutex_ids, span=span), span))
