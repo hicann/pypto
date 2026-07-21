@@ -91,11 +91,11 @@ size_t TuneSyncForVF::MoveOpsForMerge(size_t vecTileOp0Idx, size_t vecTileOp1Idx
         opList_.erase(opList_.begin() + *it);
     }
     // 删掉这些op后，vecTileOp1Idx = vecTileOp0Idx + 1, 在vecTileOp1Idx右侧将setflag插入
-    auto insertPos = opList_.begin() + vecTileOp0Idx + 2;
+    auto insertPos = opList_.begin() + vecTileOp0Idx + NUM_VALUE_2;
     opList_.insert(insertPos, setFlagList.begin(), setFlagList.end());
     // 在vecTileOp0Idx集合的左侧将waitflag插入
     size_t mergedSize = mergedOps[groupNum].size();
-    auto insertPos2 = opList_.begin() + vecTileOp0Idx - mergedSize + 1;
+    auto insertPos2 = opList_.begin() + vecTileOp0Idx - mergedSize + NUM_VALUE_2;
     opList_.insert(insertPos2, waitFlagList.begin(), waitFlagList.end());
     return mergedSize;
 }
@@ -293,9 +293,6 @@ bool TuneSyncForVF::IsMergeable(size_t left, size_t right, std::vector<Operation
     }
     // 两个pipeV的op间的op如果有一个既不是SYNC_SRC也不是SYNC_DST,则说明这两个pipeV op不能合并
     if (hasNonSetWaitOp) {
-        return false;
-    }
-    if (!setFlagList.empty()) {
         return false;
     }
     return true;
