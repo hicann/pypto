@@ -377,45 +377,77 @@ Tensor Log1p(const Tensor& self)
     CheckTensorDimRange(self.GetStorage(), 1, 4, "LOG1P");
     CheckTensorShapeSize(self.GetStorage(), "LOG1P");
 
-    auto operandCast = Tensor(DataType::DT_FP32, self.GetShape());
+    auto operandCast = self.GetStorage();
     if (self.GetStorage()->Datatype() == DataType::DT_FP16 || self.GetStorage()->Datatype() == DataType::DT_BF16) {
         operandCast = CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(),
                            self.GetStorage(), DataType::DT_FP32, CastMode::CAST_NONE);
-    } else {
-        operandCast = self;
     }
 
-    auto tAddOne = CALL(BinaryOperationScalar<BinaryOpType::ADD>, *Program::GetInstance().GetCurrentFunction(),
-                        operandCast.GetStorage(), Element(DataType::DT_FP32, 1.0f));
-
-    auto dSubOne = CALL(BinaryOperationScalar<BinaryOpType::ADD>, *Program::GetInstance().GetCurrentFunction(), tAddOne,
-                        Element(DataType::DT_FP32, -1.0f));
-
-    auto rDivide = CALL(BinaryOperation<BinaryOpType::DIV>, *Program::GetInstance().GetCurrentFunction(), operandCast,
-                        dSubOne);
-
-    auto lLog = CALL(UnaryOperation<UnaryOpType::LN>, *Program::GetInstance().GetCurrentFunction(), tAddOne);
-
-    auto yRaw = CALL(BinaryOperation<BinaryOpType::MUL>, *Program::GetInstance().GetCurrentFunction(), lLog, rDivide);
-
-    auto maskEqOne = Compare(tAddOne, Element(DataType::DT_FP32, 1.0f), OpType::EQ, OutType::BOOL);
-    auto maskEqInf = Compare(tAddOne, Element(DataType::DT_FP32, INFINITY), OpType::EQ, OutType::BOOL);
-
-    auto ySelect = Where(maskEqOne, operandCast, yRaw);
-
-    ySelect = Where(maskEqInf, Element(DataType::DT_FP32, INFINITY), ySelect);
-
-    auto resTensorBeforeCast = Tensor(DataType::DT_FP32, self.GetShape());
-    resTensorBeforeCast = ySelect;
+    auto resTensorBeforeCast = std::make_shared<LogicalTensor>(*Program::GetInstance().GetCurrentFunction(),
+                                                               DataType::DT_FP32, self.GetShape(),
+                                                               self.GetStorage()->GetDynValidShape());
+    auto& op = Program::GetInstance().GetCurrentFunction()->AddOperation(Opcode::OP_LOG1P, {operandCast},
+                                                                         {resTensorBeforeCast});
+    Program::GetInstance().GetCurrentFunction()->UpdateTensorDataUsage(op);
 
     if (self.GetStorage()->Datatype() == DataType::DT_FP16) {
-        RETURN_CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(),
-                    resTensorBeforeCast.GetStorage(), DataType::DT_FP16, CastMode::CAST_NONE);
+        RETURN_CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(), resTensorBeforeCast,
+                    DataType::DT_FP16, CastMode::CAST_NONE);
     } else if (self.GetStorage()->Datatype() == DataType::DT_BF16) {
-        RETURN_CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(),
-                    resTensorBeforeCast.GetStorage(), DataType::DT_BF16, CastMode::CAST_NONE);
+        RETURN_CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(), resTensorBeforeCast,
+                    DataType::DT_BF16, CastMode::CAST_NONE);
     }
-    return resTensorBeforeCast;
+    return Tensor(resTensorBeforeCast);
+}
+
+void TiledLog1pOperation(Function& function, const TileShape& tileShape, size_t cur, Input& input,
+                         const LogicalTensorPtr& result)
+{
+    if (cur == input.tensor.GetShape().size()) {
+        auto tile = input.tensor.GetStorage()->View(function, input.tileInfo.shape, input.tileInfo.offset);
+        auto resultTile = result->View(function, input.tileInfo.shape, input.tileInfo.offset);
+        const auto& vecTile = tileShape.GetVecTile().tile;
+        auto tileShapeLen = vecTile.size();
+        CHECK(VectorErrorCode::ERR_PARAM_INVALID, SHAPE_DIM1 <= tileShapeLen && tileShapeLen <= SHAPE_DIM4)
+            << "Length of tile shape only support 1~4";
+
+        // The tileop keeps four scratch blocks (tmp0/tmp1/tmp2/mask), each the size of the last
+        // two tile axes (tileH * tileW). Align the last axis to 32 bytes; treat 1-D tiles as tileH == 1.
+        constexpr size_t ALIGN_SIZE = 32;
+        auto alignElems = ALIGN_SIZE / BytesOf(DT_FP32);
+        int64_t alignedW = AlignUp(vecTile[tileShapeLen - 1], alignElems);
+        int64_t tileH = (tileShapeLen >= SHAPE_DIM2) ? vecTile[tileShapeLen - 2] : 1;
+        int64_t tmpSize = NUM_VALUE_4 * alignedW * tileH;
+        std::vector<int64_t> tmpShape({tmpSize});
+        auto tmpTensor = std::make_shared<LogicalTensor>(function, DT_FP32, tmpShape);
+        function.AddOperation(Opcode::OP_LOG1P, {tile}, {resultTile, tmpTensor});
+        return;
+    }
+    auto& vecTile = tileShape.GetVecTile();
+    for (int i = 0; i < input.tensor.GetShape()[cur]; i += vecTile[cur]) {
+        input.tileInfo.shape[cur] = std::min(input.tensor.GetShape()[cur] - i, vecTile[cur]);
+        input.tileInfo.offset[cur] = i;
+        TiledLog1pOperation(function, tileShape, cur + 1, input, result);
+    }
+}
+
+void TiledLog1pOperation(Function& function, const TileShape& tileShape, const LogicalTensorPtr& self,
+                         const LogicalTensorPtr& result)
+{
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, self->shape.size() == self->offset.size())
+        << "Shape size and offset size should be equal";
+
+    TileInfo tileInfo(result->shape.size(), result->offset.size());
+    auto input = Input{self, tileInfo};
+    TiledLog1pOperation(function, tileShape, 0, input, result);
+}
+
+void Log1pOperationTileFunc(Function& function, const TileShape& tileShape,
+                            const std::vector<LogicalTensorPtr>& iOperand,
+                            const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
+{
+    UnaryOperationOperandCheck(iOperand, oOperand);
+    TiledLog1pOperation(function, tileShape, iOperand[0], oOperand[0]);
 }
 
 void TiledTanOperation(Function& function, const TileShape& tileShape, size_t cur, Input& input,
@@ -1628,4 +1660,5 @@ REGISTER_OPERATION_TILED_FUNC(OP_SIGN, Opcode::OP_SIGN, SignOperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_SIGNBIT, Opcode::OP_SIGNBIT, SignbitOperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_TANH, Opcode::OP_TANH, TanhOperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_TAN, Opcode::OP_TAN, TanOperationTileFunc);
+REGISTER_OPERATION_TILED_FUNC(OP_LOG1P, Opcode::OP_LOG1P, Log1pOperationTileFunc);
 } // namespace npu::tile_fwk

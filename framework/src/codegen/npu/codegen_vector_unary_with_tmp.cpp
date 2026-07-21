@@ -432,7 +432,8 @@ std::string CodeGenOpNPU::GenUnaryOpWithTmpBuff() const
     if (opCode == Opcode::OP_SIGN || opCode == Opcode::OP_SIGNBIT || opCode == Opcode::OP_SINH ||
         opCode == Opcode::OP_COSH || opCode == Opcode::OP_TANH || opCode == Opcode::OP_ASIN ||
         opCode == Opcode::OP_ACOS || opCode == Opcode::OP_TAN || opCode == Opcode::OP_ASINH ||
-        opCode == Opcode::OP_ACOSH || opCode == Opcode::OP_ATANH || opCode == Opcode::OP_ISFINITE) {
+        opCode == Opcode::OP_ACOSH || opCode == Opcode::OP_ATANH || opCode == Opcode::OP_ISFINITE ||
+        opCode == Opcode::OP_LOG1P) {
         return PrintUnaryWithTmpTileTensor();
     }
 

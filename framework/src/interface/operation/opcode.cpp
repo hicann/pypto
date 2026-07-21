@@ -739,9 +739,11 @@ void OpcodeManager::RegisterVector()
     RegisterInfo(Opcode::OP_HYPOT, OpCoreType::AIV, "HYPOT", {MemoryType::MEM_UB, MemoryType::MEM_UB},
                  {MemoryType::MEM_UB, MemoryType::MEM_UB}, {"TileOp::Hypot", PIPE_V, PIPE_V, CoreType::AIV},
                  OpCalcType::BROADCAST);
-    RegisterInfo(Opcode::OP_LOG1P, OpCoreType::AIV, "Log1p", {MemoryType::MEM_UB, MemoryType::MEM_UB},
-                 {MemoryType::MEM_UB, MemoryType::MEM_UB}, {"TileOp::Log1p", PIPE_V, PIPE_V, CoreType::AIV},
-                 OpCalcType::BROADCAST);
+    RegisterInfo(
+        Opcode::OP_LOG1P, OpCoreType::AIV, "Log1p", {MemoryType::MEM_UB}, {MemoryType::MEM_UB, MemoryType::MEM_UB},
+        {"TileOp::Log1p", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::ELMWISE,
+        {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis, OpAttributeKey::excludeBufferReuse},
+        TileShapeVerifier::Verify);
     RegisterInfo(Opcode::OP_PRELU, OpCoreType::AIV, "PRELU", {MemoryType::MEM_UB, MemoryType::MEM_UB},
                  {MemoryType::MEM_UB, MemoryType::MEM_UB}, {"TileOp::PReLU", PIPE_V, PIPE_V, CoreType::AIV},
                  OpCalcType::OTHER,
@@ -1349,6 +1351,7 @@ std::unordered_map<Opcode, std::string> SUPPORT_TILETENSOR_OPS{
     {Opcode::OP_SHMEM_SET, "TileOp::Distributed::ShmemSet"},
     {Opcode::OP_L1_RESHAPE_COPY_IN, "TReshapeLoad"},
     {Opcode::OP_L0C_RESHAPE_COPY_OUT, "TReshapeStore"},
+    {Opcode::OP_LOG1P, "TLog1p"},
 };
 
 std::unordered_set<Opcode> SUPPORT_VF_FUSE_OPS{
