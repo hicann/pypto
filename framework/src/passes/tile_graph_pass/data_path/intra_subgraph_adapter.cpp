@@ -410,14 +410,9 @@ LogicalTensorPtr IntraSubgraphAdapter::InsertOpBetween(Function& function, Opcod
     std::vector<int64_t> offset(tensor->GetShape().size(), 0);
     Operation* newOp = &irBuilder_.CreateTensorOpStmt(function, opcode, {newTensor}, {tensor});
     newOps.push_back(newOp);
-    if (opcode == Opcode::OP_ASSEMBLE) {
-        newOp->SetOpAttribute(std::make_shared<AssembleOpAttribute>(
-            newTensor->GetMemoryTypeOriginal(), offset, tensor->GetDynOffset(), tensor->GetDynValidShape()));
-    }
-    if (opcode == Opcode::OP_VIEW) {
-        newOp->SetOpAttribute(std::make_shared<ViewOpAttribute>(offset, newTensor->GetMemoryTypeToBe(),
+    newOp->SetOpAttribute(std::make_shared<AssembleOpAttribute>(newTensor->GetMemoryTypeOriginal(), offset,
                                                                 tensor->GetDynOffset(), tensor->GetDynValidShape()));
-    }
+    newOp->SetScopeInfo(op.GetScopeInfo());
     APASS_LOG_DEBUG_F(Elements::Operation, "Insert New Op %s[%d], info: %s", newOp->GetOpcodeStr().c_str(),
                       newOp->GetOpMagic(), newOp->Dump().c_str());
     newOp->UpdateSubgraphID(op.GetSubgraphID());
@@ -466,18 +461,17 @@ LogicalTensorPtr IntraSubgraphAdapter::InsertOpBetween(Function& function, Opcod
     if (opcode == Opcode::OP_ASSEMBLE) {
         newOp->SetOpAttribute(std::make_shared<AssembleOpAttribute>(
             newTensor->GetMemoryTypeOriginal(), offset, tensor->GetDynOffset(), tensor->GetDynValidShape()));
-    }
-    if (opcode == Opcode::OP_VIEW) {
+        if (!tensor->GetProducers().empty()) {
+            newOp->SetScopeInfo((*tensor->GetProducers().begin())->GetScopeInfo());
+        }
+    } else {
         newOp->SetOpAttribute(std::make_shared<ViewOpAttribute>(offset, newTensor->GetMemoryTypeToBe(),
                                                                 tensor->GetDynOffset(), tensor->GetDynValidShape()));
+        newOp->SetScopeInfo(ops[0]->GetScopeInfo());
     }
     APASS_LOG_DEBUG_F(Elements::Operation, "Insert New Op %s[%d], info: %s", newOp->GetOpcodeStr().c_str(),
                       newOp->GetOpMagic(), newOp->Dump().c_str());
-    if (newOpSubgraphID == -1) {
-        newOp->UpdateSubgraphID(ops[0]->GetSubgraphID());
-    } else {
-        newOp->UpdateSubgraphID(newOpSubgraphID);
-    }
+    newOp->UpdateSubgraphID(newOpSubgraphID == -1 ? ops[0]->GetSubgraphID() : newOpSubgraphID);
     newTensor->AddProducer(newOp);
     for (Operation* op : ops) {
         newTensor->AddConsumer(op);

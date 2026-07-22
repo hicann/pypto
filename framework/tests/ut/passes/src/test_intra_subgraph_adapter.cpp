@@ -128,6 +128,64 @@ TEST_F(IntraSubgraphAdapterTest, TestInnerConvert)
     EXPECT_EQ(function->Operations().DuplicatedOpList()[convertIdx]->GetOpcode(), Opcode::OP_CONVERT);
 }
 
+TEST_F(IntraSubgraphAdapterTest, TestInheritScopeInfo)
+{
+    ComputationalGraphBuilder subGraph;
+    std::vector<std::string> tensorNames{"t0", "t1", "t2", "t3", "t4", "t5", "t6"};
+    std::vector<MemoryType> tensorMemTypes{MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_UB,         MemoryType::MEM_UB,
+                                           MemoryType::MEM_UB,         MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_UB,
+                                           MemoryType::MEM_DEVICE_DDR};
+    EXPECT_EQ(subGraph.AddTensors(DataType::DT_FP32, {128, 128}, tensorMemTypes, tensorNames, 0), true);
+
+    std::vector<Opcode> opCodes{Opcode::OP_VIEW,     Opcode::OP_MULS, Opcode::OP_ADDS,
+                                Opcode::OP_ASSEMBLE, Opcode::OP_ADDS, Opcode::OP_ASSEMBLE};
+    std::vector<std::vector<std::string>> ioperands{{"t0"}, {"t1"}, {"t2"}, {"t3"}, {"t2"}, {"t5"}};
+    std::vector<std::vector<std::string>> ooperands{{"t1"}, {"t2"}, {"t3"}, {"t4"}, {"t5"}, {"t6"}};
+    std::vector<std::string> opNames{"view_in", "muls", "adds1", "asm_out1", "adds2", "asm_out2"};
+    EXPECT_EQ(subGraph.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
+
+    std::vector<int64_t> offset{0, 0};
+    subGraph.GetOp("view_in")->SetOpAttribute(std::make_shared<ViewOpAttribute>(offset, MemoryType::MEM_UB));
+    subGraph.GetOp("asm_out1")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(MemoryType::MEM_UB, offset));
+    subGraph.GetOp("asm_out2")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(MemoryType::MEM_UB, offset));
+    EXPECT_EQ(subGraph.SetInCast({"t0"}), true);
+    EXPECT_EQ(subGraph.SetOutCast({"t4", "t6"}), true);
+
+    const int scopeId = 20001;
+    const int cvFuseId = 0;
+    std::vector<int> subgraphIds{0, 0, 1, 1, 2, 2};
+    for (size_t i = 0; i < opNames.size(); i++) {
+        Operation* op = subGraph.GetOp(opNames[i]);
+        op->UpdateSubgraphID(subgraphIds[i]);
+        op->SetScopeId(scopeId);
+        op->scopeInfo_.SetCvFuseId(cvFuseId);
+    }
+
+    Function* function = subGraph.GetFunction();
+    EXPECT_NE(function, nullptr);
+    function->SetTotalSubGraphCount(3);
+
+    IntraSubgraphAdapter adapter;
+    EXPECT_EQ(adapter.RunOnFunction(*function), SUCCESS);
+
+    int asmCnt = 0;
+    int viewCnt = 0;
+    for (const auto& op : function->Operations().DuplicatedOpList()) {
+        if (op->GetOpcode() == Opcode::OP_ASSEMBLE || op->GetOpcode() == Opcode::OP_VIEW) {
+            EXPECT_EQ(op->GetScopeId(), scopeId);
+            EXPECT_EQ(op->GetCvFuseId(), cvFuseId);
+        }
+        if (op->GetOpcode() == Opcode::OP_ASSEMBLE) {
+            asmCnt++;
+        }
+        if (op->GetOpcode() == Opcode::OP_VIEW) {
+            viewCnt++;
+        }
+    }
+    EXPECT_EQ(asmCnt, 3);
+    EXPECT_EQ(viewCnt, 3);
+}
+
 TEST_F(IntraSubgraphAdapterTest, TestValidShapeInfer)
 {
     ComputationalGraphBuilder subGraph;
