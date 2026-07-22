@@ -2233,6 +2233,34 @@ def isfinite(self: Tensor) -> Tensor:
 
 
 @op_wrapper
+def isnan(self: Tensor) -> Tensor:
+    """
+    Judge whether the value in Tensor `self` is nan, if it is, the return
+        value will be true, otherwise it will be false.
+
+    The supported input dtypes are fp16/bf16/fp32 and the output dtype is bool.
+    Both +inf/-inf and +0.0/-0.0 are treated as non-nan and return false.
+
+    Parameters
+    --------
+    self: Tensor
+        The input tensor
+
+    Examples
+    --------
+    self = pypto.tensor([3, 3], pypto.data_type.DT_FP32)
+    out = pypto.isnan(self)
+    Input  self: [[1 nan 3],
+                  [inf 1 1],
+                  [1, 1, -inf]]
+    Output out:  [[False True False],
+                  [False False False],
+                  [False False False]]
+    """
+    return pypto_impl.isnan(self)
+
+
+@op_wrapper
 def cbrt(self: Tensor) -> Tensor:
     """
     Computes the element-wise cube root of 'self'

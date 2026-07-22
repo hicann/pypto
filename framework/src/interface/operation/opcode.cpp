@@ -358,6 +358,11 @@ void OpcodeManager::RegisterVectorUnary()
                  {MemoryType::MEM_UB, MemoryType::MEM_UB}, {"TileOp::Tisfinite", PIPE_V, PIPE_V, CoreType::AIV},
                  OpCalcType::ELMWISE, {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis},
                  TileShapeVerifier::Verify);
+    RegisterInfo(Opcode::OP_ISNAN, OpCoreType::AIV, "ISNAN", {MemoryType::MEM_UB},
+                 {MemoryType::MEM_UB, MemoryType::MEM_UB}, {"TileOp::TisNan", PIPE_V, PIPE_V, CoreType::AIV},
+                 OpCalcType::ELMWISE,
+                 {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis, OpAttributeKey::rowPad},
+                 TileShapeVerifier::Verify);
     RegisterInfo(
         Opcode::OP_ATAN, OpCoreType::AIV, "ATAN", {MemoryType::MEM_UB}, {MemoryType::MEM_UB, MemoryType::MEM_UB},
         {"TileOp::Tatan", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::ELMWISE,
@@ -1335,6 +1340,7 @@ std::unordered_map<Opcode, std::string> SUPPORT_TILETENSOR_OPS{
     {Opcode::OP_L1_COPY_OUT, "TStore"},
     {Opcode::OP_GATHER_IN_L1, "TGatherInL1"},
     {Opcode::OP_ISFINITE, "TIsFinite"},
+    {Opcode::OP_ISNAN, "TIsNan"},
     {Opcode::OP_L1_COPY_IN_A_SCALE, "TLoadAMX"},
     {Opcode::OP_L1_COPY_IN_B_SCALE, "TLoadBMX"},
     {Opcode::OP_L1_TO_L0A_SCALE, "TExtractMX"},

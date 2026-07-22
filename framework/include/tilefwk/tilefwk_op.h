@@ -323,6 +323,7 @@ Tensor LogicalNot(const Tensor& self);
 Tensor Range(const Element& start, const Element& end, const Element& step);
 Tensor LogicalAnd(const Tensor& self, const Tensor& other);
 Tensor IsFinite(const Tensor& self);
+Tensor IsNan(const Tensor& self);
 Tensor Assign(const Tensor& operand);
 
 Tensor Uniform(const Element& key, const SymbolicScalar& counter0, const Element& counter1,

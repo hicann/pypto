@@ -155,6 +155,20 @@ REGISTER_INFER_SHAPE_FUNC(OP_GCDS, Opcode::OP_GCDS, ElewiseInferFunc);
 REGISTER_INFER_SHAPE_FUNC(OP_ABS, Opcode::OP_ABS, ElewiseInferFunc);
 REGISTER_INFER_SHAPE_FUNC(OP_LN, Opcode::OP_LN, ElewiseInferFunc);
 REGISTER_INFER_SHAPE_FUNC(OP_ISFINITE, Opcode::OP_ISFINITE, ElewiseInferFunc);
+
+void IsNanInferShapeFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
+{
+    auto inputValidShape = op->GetIOperands()[0]->GetDynValidShape();
+    if (inputValidShape.empty()) {
+        return;
+    }
+    outValidShapes.emplace_back(inputValidShape);
+    if (op->GetOOperands().size() > 1) {
+        outValidShapes.emplace_back(std::vector<SymbolicScalar>{SymbolicScalar(op->GetOOperands()[1]->GetShape()[0])});
+    }
+}
+REGISTER_INFER_SHAPE_FUNC(OP_ISNAN, Opcode::OP_ISNAN, IsNanInferShapeFunc);
+
 REGISTER_INFER_SHAPE_FUNC(OP_HUB, Opcode::OP_HUB, ElewiseInferFunc);
 REGISTER_INFER_SHAPE_FUNC(OP_ERF, Opcode::OP_ERF, ElewiseInferFunc);
 REGISTER_INFER_SHAPE_FUNC(OP_SIN, Opcode::OP_SIN, ElewiseInferFunc);

@@ -825,6 +825,10 @@ void BindOperation(py::module_& m)
         "Judge whether the value is inf/nan/-inf. If it is, the value will be false.");
 
     m.def(
+        "isnan", [](const Tensor& self) { return npu::tile_fwk::IsNan(self); },
+        "Judge whether the value is nan. If it is, the value will be true, otherwise false.");
+
+    m.def(
         "Nop", [](const std::vector<Tensor>& inTensors) { return npu::tile_fwk::Nop(inTensors); },
         py::arg("in_tensors"));
     m.def(

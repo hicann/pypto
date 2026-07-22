@@ -47,7 +47,7 @@ void TiledUnaryOperation(Function& function, const TileShape& tileShape, size_t 
             op->SetAttribute(OpAttributeKey::precisionType, precisionType);
         }
         if (T == UnaryOpType::ASIN || T == UnaryOpType::ACOS || T == UnaryOpType::SINH || T == UnaryOpType::ERF ||
-            T == UnaryOpType::ASINH || T == UnaryOpType::ATANH) {
+            T == UnaryOpType::ASINH || T == UnaryOpType::ATANH || T == UnaryOpType::ISNAN) {
             std::vector<bool> dimMap({true});
             op->SetAttr(OpAttributeKey::rowPad, dimMap);
         }
@@ -110,6 +110,18 @@ Tensor IsFinite(const Tensor& self)
                                                    DT_INT32, DT_UINT16, DT_UINT32, DT_UINT8, DT_UINT64, DT_INT64};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "IsFinite");
     RETURN_CALL(UnaryOperation<UnaryOpType::ISFINITE>, *Program::GetInstance().GetCurrentFunction(), self.GetStorage(),
+                DT_BOOL);
+}
+
+Tensor IsNan(const Tensor& self)
+{
+    DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "IsNan");
+
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_FP32, DT_BF16};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "ISNAN");
+
+    RETURN_CALL(UnaryOperation<UnaryOpType::ISNAN>, *Program::GetInstance().GetCurrentFunction(), self.GetStorage(),
                 DT_BOOL);
 }
 
@@ -634,6 +646,23 @@ void IsFiniteOperationTileFunc(Function& function, const TileShape& tileShape,
     return TiledUnaryOperation<UnaryOpType::ISFINITE>(function, tileShape, iOperand[0], oOperand[0], workspaceSize);
 }
 
+void IsNanOperationTileFunc(Function& function, const TileShape& tileShape,
+                            const std::vector<LogicalTensorPtr>& iOperand,
+                            const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
+{
+    UnaryOperationOperandCheck(iOperand, oOperand);
+    auto tmpShape = tileShape.GetVecTile().tile;
+    int dim = static_cast<int>(tmpShape.size());
+    auto alignSize = BLOCK_SIZE / BytesOf(DT_FP16);
+    int64_t tmpW = AlignUp(tmpShape[dim - 1], alignSize);
+    int64_t tmpH = (dim >= 2) ? tmpShape[dim - 2] : 1;
+
+    constexpr int64_t kNumBlocks = 3;
+    int64_t blockBytes = tmpH * tmpW * BytesOf(DT_FP32);
+    uint32_t workspaceSize = kNumBlocks * blockBytes + BLOCK_SIZE;
+    return TiledUnaryOperation<UnaryOpType::ISNAN>(function, tileShape, iOperand[0], oOperand[0], workspaceSize);
+}
+
 void HubOperationTileFunc(Function& function, const TileShape& tileShape, const std::vector<LogicalTensorPtr>& iOperand,
                           const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
 {
@@ -765,6 +794,7 @@ REGISTER_OPERATION_TILED_FUNC(OP_RECIPROCAL, Opcode::OP_RECIPROCAL, ReciprocalOp
 REGISTER_OPERATION_TILED_FUNC(OP_ABS, Opcode::OP_ABS, AbsOperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_LN, Opcode::OP_LN, LnOperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_ISFINITE, Opcode::OP_ISFINITE, IsFiniteOperationTileFunc);
+REGISTER_OPERATION_TILED_FUNC(OP_ISNAN, Opcode::OP_ISNAN, IsNanOperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_HUB, Opcode::OP_HUB, HubOperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_SINH, Opcode::OP_SINH,
                               (Fp32AlignedTmpUnaryOperationTileFunc<UnaryOpType::SINH, NUM_VALUE_4>));

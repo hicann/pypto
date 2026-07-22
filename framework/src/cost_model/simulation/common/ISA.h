@@ -75,6 +75,7 @@ const std::map<std::string, CorePipeType> SCHED_CORE_PIPE_TYPE{// Unary Vector
                                                                {"PERMUTE_ELEMENT", CorePipeType::PIPE_S},
                                                                {"LN", CorePipeType::PIPE_VECTOR_ALU},
                                                                {"ISFINITE", CorePipeType::PIPE_VECTOR_ALU},
+                                                               {"ISNAN", CorePipeType::PIPE_VECTOR_ALU},
                                                                {"HUB", CorePipeType::PIPE_VECTOR_ALU},
                                                                {"BRCB", CorePipeType::PIPE_VECTOR_ALU},
                                                                {"FLOOR", CorePipeType::PIPE_VECTOR_ALU},

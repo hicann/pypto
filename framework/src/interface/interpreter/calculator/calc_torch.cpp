@@ -841,6 +841,14 @@ static void IsFinite(const TensorData& out, const TensorData& self)
     ToOperand(tout.second, tout.first, out.dtype);
 }
 
+static void IsNan(const TensorData& out, const TensorData& self)
+{
+    auto tout = From(out);
+    auto tself = From(self);
+    tout.second = torch::isnan(tself.second);
+    ToOperand(tout.second, tout.first, out.dtype);
+}
+
 #define DEFINE_BINARY_S_OPS(Name, op_out)                                                                \
     static void Name(const TensorData& out, const TensorData& self, const Element& scalar, bool reverse) \
     {                                                                                                    \
@@ -3333,6 +3341,7 @@ static struct CalcOps calcOps = {
     .LReLU = LReLU,
     .Ln = Ln,
     .IsFinite = IsFinite,
+    .IsNan = IsNan,
     .LogicalNot = LogicalNot,
     .Range = Range,
     .Compare = Compare,

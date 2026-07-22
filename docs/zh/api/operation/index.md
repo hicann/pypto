@@ -77,6 +77,7 @@ pypto-index_put_
 pypto-index_select
 pypto-interleave
 pypto-isfinite
+pypto-isnan
 pypto-le
 pypto-log
 pypto-log10

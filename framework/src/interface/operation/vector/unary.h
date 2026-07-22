@@ -41,6 +41,7 @@ enum class UnaryOpType {
     SIGNBIT,
     TANH,
     ISFINITE,
+    ISNAN,
     ATAN,
     SINH,
     COSH,
@@ -83,6 +84,8 @@ std::string GetUnaryOpName()
             return "LN";
         case UnaryOpType::ISFINITE:
             return "ISFINITE";
+        case UnaryOpType::ISNAN:
+            return "ISNAN";
         case UnaryOpType::ATAN:
             return "ATAN";
         case UnaryOpType::HUB:
@@ -142,6 +145,7 @@ Opcode GetUnaryOpNameCode()
         CASE(ABS);
         CASE(LN);
         CASE(ISFINITE);
+        CASE(ISNAN);
         CASE(ATAN);
         CASE(HUB);
         CASE(BITWISENOT);

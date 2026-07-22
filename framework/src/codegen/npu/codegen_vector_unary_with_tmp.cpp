@@ -433,7 +433,7 @@ std::string CodeGenOpNPU::GenUnaryOpWithTmpBuff() const
         opCode == Opcode::OP_COSH || opCode == Opcode::OP_TANH || opCode == Opcode::OP_ASIN ||
         opCode == Opcode::OP_ACOS || opCode == Opcode::OP_TAN || opCode == Opcode::OP_ASINH ||
         opCode == Opcode::OP_ACOSH || opCode == Opcode::OP_ATANH || opCode == Opcode::OP_ISFINITE ||
-        opCode == Opcode::OP_LOG1P) {
+        opCode == Opcode::OP_LOG1P || opCode == Opcode::OP_ISNAN) {
         return PrintUnaryWithTmpTileTensor();
     }
 

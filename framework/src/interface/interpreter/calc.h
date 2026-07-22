@@ -158,6 +158,7 @@ inline void IsFinite(LogicalTensorDataPtr out, LogicalTensorDataPtr self)
 {
     GetCalcOps()->IsFinite(Trans(out), Trans(self));
 }
+inline void IsNan(LogicalTensorDataPtr out, LogicalTensorDataPtr self) { GetCalcOps()->IsNan(Trans(out), Trans(self)); }
 inline void Log1p(LogicalTensorDataPtr out, LogicalTensorDataPtr self) { GetCalcOps()->Log1p(Trans(out), Trans(self)); }
 inline void LogicalNot(LogicalTensorDataPtr out, LogicalTensorDataPtr self)
 {

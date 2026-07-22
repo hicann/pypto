@@ -104,6 +104,7 @@ struct CalcOps {
     void (*LReLU)(const TensorData&, const TensorData&, const Element&);
     void (*Ln)(const TensorData&, const TensorData&);
     void (*IsFinite)(const TensorData&, const TensorData&);
+    void (*IsNan)(const TensorData&, const TensorData&);
     void (*LogicalNot)(const TensorData&, const TensorData&);
     void (*Range)(const TensorData&, const Element&, const Element&, const Element&);
     void (*Compare)(const TensorData&, const TensorData&, const TensorData&, CmpOperationType, CmpModeType);
