@@ -17,13 +17,13 @@ from ..ir import SeqStmts
 
 
 def pil2ir(func: Function, args: dict, tensor_args: list[pypto.Tensor]):
-    scope = Scope(sorted(set(func.load_vars) | set(func.global_vars)))
+    # make global scope
+    root = Scope(list(func.global_vars))
 
-    # Pre-populate globals into scope (all of them, so nested functions can
-    # resolve module globals/builtins via the scope parent chain)
     for name, val in zip(func.global_vars, func.global_values):
-        scope[name] = val
+        root[name] = val
 
+    scope = Scope(list(func.load_vars), parent=root)
     params = [x.logical_tensor() for x in tensor_args]
     body = SeqStmts(func.span)
     with BuildContext(func.span) as ctx, InsertPoint(body), scope.make_current():
@@ -34,7 +34,8 @@ def pil2ir(func: Function, args: dict, tensor_args: list[pypto.Tensor]):
             dispatch_block(func.body, True)
         except ReturnSignal:
             pass
-
+        stmt = ctx.create_return_stmt([ctx.unwrap(t) for t in tensor_args], func.span)
+        ctx.emit(stmt)
     return ctx.create_function(func.name, params, [], body, func.span)
 
 

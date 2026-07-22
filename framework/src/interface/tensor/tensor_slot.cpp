@@ -446,12 +446,10 @@ std::vector<int> TensorSlotManager::LookupSlotIndexConst(
 Tensor& TensorSlotManager::GetSlotTensor(std::shared_ptr<LogicalTensor> lt)
 {
     auto name = IRContext::Get().GetOriginName(lt);
-
     auto it = slotTensorDict.find(name);
     if (it == slotTensorDict.end()) {
         it = slotTensorDict.emplace(name, std::make_unique<Tensor>(lt)).first;
     }
-
     return *it->second;
 }
 

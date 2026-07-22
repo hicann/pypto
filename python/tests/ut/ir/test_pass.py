@@ -45,7 +45,7 @@ def _run_dce(func, *args):
     prog = dce(prog)
     logging.info("\ndce: %s\n", prog)
     prog = dce(canonical(prog))
-    logging.info("\ndec canonical: %s\n", prog)
+    logging.info("\ndce canonical: %s\n", prog)
 
     return prog.functions[func.name]
 
@@ -335,7 +335,7 @@ def test_dce_no_assemble_stmt():
     x = pypto.Tensor((-1, 32), pypto.DT_FP32, 'x')
     y = pypto.Tensor((-1, 32), pypto.DT_FP32, 'y')
     func = _run_dce(foo, x, y, 10)
-    assert len(func.body.stmts) == 0, "Expected no stmts after DCE"
+    assert len(func.body.stmts) == 1, "Expected only return stmt after DCE"
 
 
 def _run_merge(func, *args):
@@ -582,3 +582,25 @@ def test_forstmt_attrs_and_step_name_preserved():
     # 2. path function name contains step value
     prog_str = str(prog)
     assert "_Unroll2" in prog_str, f"Expected '_Unroll2' (step=2) in program: {prog_str}"
+
+
+def test_tensor_move():
+
+    def foo(a, b):
+        last = pypto.full(a.shape, 1.0, a.dtype)
+        for _ in pypto.loop(10):
+            a = last + 1
+            last[:] = a + 1
+            b[0:, 0:] = last
+        b[:] = a + 1
+
+    x = pypto.Tensor((32, 32), pypto.DT_FP32, 'x')
+    y = pypto.Tensor((32, 32), pypto.DT_FP32, 'y')
+    func = _run_dce(foo, x, y)
+    for_stmt = func.body[1]
+    assert isinstance(for_stmt, ir.ForStmt)
+    assert "last" in [v.iterVar.name for v in for_stmt.iter_args]
+    add_stmt = func.body[2]
+    assert isinstance(add_stmt, ir.TensorOpStmt)
+    assert add_stmt.opcode == "ADDS"
+    assert add_stmt.result[0].name == 'b_0'

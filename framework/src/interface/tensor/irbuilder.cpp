@@ -168,7 +168,7 @@ ir::VarPtr IRBuilder::CreateVarLike(std::string name, ir::ExprPtr value)
     if (auto type = ir::As<ir::LogicalTensorType>(value->GetType())) {
         auto t = std::dynamic_pointer_cast<const LogicalTensor>(value);
         auto var = CreateTensorVar(DummyFunc(), t->tensor, t->offset, t->shape, t->GetDynValidShape());
-        var->name_ = name;
+        var->name_ = irContext_.GetVarName(name);
         return var;
     }
     if (auto type = ir::As<ir::ScalarType>(value->GetType())) {

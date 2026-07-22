@@ -64,7 +64,10 @@ StmtPtr CanonicalizeLoopImpl(const T& stmt, const std::unordered_set<const Var*>
     auto refs = CollectStmtVarRefs(stmt->body_->stmts_, /*skip_iter_updates=*/true);
     std::vector<size_t> keptIndices;
     for (size_t i = 0; i < stmt->returnVars_.size(); ++i) {
-        if (afterRefs.count(stmt->returnVars_[i].get())) {
+        // Keep the carried value if it is live after the loop, OR its incoming
+        // iter-arg var is read inside the body (a loop recurrence such as
+        // ``x = f(x)`` whose final value may be unused after the loop).
+        if (afterRefs.count(stmt->returnVars_[i].get()) || refs.count(stmt->iterArgs_[i]->iterVar_.get())) {
             keptIndices.push_back(i);
         }
     }

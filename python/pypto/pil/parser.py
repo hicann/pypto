@@ -112,6 +112,9 @@ class _Context:
         self.current_block.store_names.add(name)
         return self.call("pil.store", (name, value))
 
+    def mark_store(self, name: str):
+        self.current_block.store_names.add(name)
+
     def load(self, name: str):
         self.current_block.load_names.add(name)
         return self.call("pil.load", (name,))
@@ -650,12 +653,22 @@ class Parser:
             elif isinstance(target, ast.Subscript):
                 obj = self.visit(target.value, ctx)
                 key = self.visit(target.slice, ctx)
+                # `a[:] = x` mark `a` as stored value
+                if isinstance(target.value, ast.Name) and self._is_empty_slice(target.slice):
+                    ctx.mark_store(target.value.id)
                 ctx.call_void(operator.setitem, (obj, key, value))
             elif isinstance(target, ast.Attribute):
                 obj = self.visit(target.value, ctx)
                 ctx.call_void(setattr, (obj, target.attr, value))
             else:
                 ctx.raise_error(target)
+
+    def _is_empty_slice(self, node: ast.AST):
+        if isinstance(node, ast.Slice):
+            return node.lower is None and node.upper is None and node.step is None
+        if isinstance(node, ast.Tuple):
+            return all(self._is_empty_slice(e) for e in node.elts)
+        return False
 
 
 def ast2pil(pyfunc, entry_point: bool = True):

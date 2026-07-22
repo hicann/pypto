@@ -56,23 +56,26 @@ public:
 
     std::string GetOriginName(ir::VarPtr var)
     {
-        ASSERT(all_vars_.count(var->name_) != 0);
-        return all_vars_[var->name_];
+        auto it = all_vars_.find(var->name_);
+        return it != all_vars_.end() ? it->second : var->name_;
     }
 
     std::string GetVarName(const std::string& name = "")
     {
-        auto var_name = name;
-        if (var_name.empty()) {
-            auto idx = temp_counter_++;
-            var_name = "$" + std::to_string(idx);
-        } else {
-            while (all_vars_.count(var_name)) {
-                auto idx = var_counter_[var_name]++;
-                var_name = name + "_" + std::to_string(idx);
-            }
+        std::string origin = name;
+        if (origin.empty()) {
+            origin = "$" + std::to_string(temp_counter_++);
         }
-        all_vars_[var_name] = name;
+
+        auto var_name = origin;
+        if (all_vars_.find(var_name) != all_vars_.end()) {
+            auto& counter = var_counter_[origin];
+            do {
+                var_name = origin + "_" + std::to_string(counter++);
+            } while (all_vars_.count(var_name));
+        }
+
+        all_vars_.emplace(var_name, origin);
         return var_name;
     }
 

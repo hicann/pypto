@@ -847,4 +847,4 @@ def test_tensor_move():
     stmt = func.body[0]
     assert isinstance(stmt, ir.TensorOpStmt)
     assert stmt.opcode == "ADDS"
-    assert stmt.result[0].name == 'b'
+    assert stmt.result[0].name == 'b_0'

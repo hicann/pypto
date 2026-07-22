@@ -49,7 +49,6 @@ def test_parallel_add_single_parallel():
 
 def test_pto_loop_start_end_step():
     a, b, c = init_tensors()
-    controller.reset()
 
     with pypto.function("MAIN", a, b, c):
         pypto.set_vec_tile_shapes(16, 16)
@@ -71,32 +70,8 @@ def test_pto_loop_start_end_step():
 
 
 def test_pto_loop_start_end_step_and_name():
-    a, b, c = init_tensors()
     controller.reset()
-
-    with pypto.function("MAIN", a, b, c):
-        pypto.set_vec_tile_shapes(16, 16)
-
-        for k in pypto.loop(1, 10, 2, name="LOOP"):
-            b.move(pypto.add(a, a))
-
-            if pypto.cond(k < 3):
-                b.move(pypto.mul(b, a))
-            else:
-                b.move(pypto.sub(b, a))
-
-            if pypto.cond(k < 8):
-                b.move(pypto.mul(b, a))
-            else:
-                b.move(pypto.div(b, a))
-            b.move(pypto.sub(b, a))
-
-    assert isinstance(b, pypto.tensor)
-
-
-def test_pto_loop_start_end_step_and_name():
     a, b, c = init_tensors()
-    controller.reset()
 
     with pypto.function("MAIN", a, b, c):
         pypto.set_vec_tile_shapes(16, 16)

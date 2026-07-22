@@ -155,7 +155,7 @@ void Tensor::AssignStorage(const Tensor& rhs, std::shared_ptr<LogicalTensor> new
     if (storage_ != nullptr && storage_->tensor != nullptr) {
         storage_->tensor->AddRefCount(-1);
         newStorage->tensor->symbol = storage_->tensor->symbol;
-        newStorage->name_ = storage_->name_;
+        newStorage->name_ = IRContext::Get().GetVarName(IRContext::Get().GetOriginName(storage_));
     }
     storage_ = std::move(newStorage);
     if (storage_ != nullptr) {

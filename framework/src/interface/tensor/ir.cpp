@@ -15,8 +15,8 @@
 
 #include "interface/program/program.h"
 #include "interface/function/function.h"
-#include "interface/utils/id_gen.h"
 
+#include "irbuilder.h"
 #include "symbolic_scalar.h"
 #include "logical_tensor.h"
 #include "token_pass.h"
@@ -47,22 +47,24 @@ Pass pass::AggressiveDCE()
     return pass::CreateFunctionPass(
         [](const FunctionPtr& func) -> FunctionPtr {
             // Collect RawTensors from function input parameters.
-            std::unordered_set<RawTensor*> rawTensors;
+            auto& irContext = npu::tile_fwk::IRContext::Get();
+            std::unordered_set<std::string> varNames;
             for (const auto& param : func->params_) {
                 if (auto type = ir::As<LogicalTensorType>(param->GetType())) {
-                    auto t = std::dynamic_pointer_cast<const LogicalTensor>(param);
-                    rawTensors.insert(t->tensor.get());
+                    auto lt = std::dynamic_pointer_cast<const LogicalTensor>(param);
+                    varNames.insert(irContext.GetOriginName(lt));
                 }
             }
 
-            auto isRemovable = [&rawTensors](const StmtPtr& stmt) -> bool {
-                // TensorOpStmt: removable unless OP_ASSEMBLE with matching input memref
+            auto isRemovable = [&varNames, &irContext](const StmtPtr& stmt) -> bool {
+                // TensorOpStmt: written to input slot cannot be removed
                 if (auto tensorOp = std::dynamic_pointer_cast<const TensorOpStmt>(stmt)) {
-                    if (tensorOp->opcode_ != "ASSEMBLE")
-                        return true;
-                    auto ret = tensorOp->result_[0];
-                    auto tensor = std::dynamic_pointer_cast<const LogicalTensor>(ret);
-                    return rawTensors.count(tensor->tensor.get()) == 0;
+                    for (auto arg : tensorOp->result_) {
+                        if (varNames.count(irContext.GetOriginName(arg))) {
+                            return false;
+                        }
+                    }
+                    return true;
                 }
                 if (auto assignOp = std::dynamic_pointer_cast<const AssignStmt>(stmt)) {
                     return true;
