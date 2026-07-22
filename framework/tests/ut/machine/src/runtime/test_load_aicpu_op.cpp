@@ -21,7 +21,7 @@
 
 using namespace npu::tile_fwk;
 
-TEST(LoadAicpuOpTest, AllLaunchOps_ReturnZeroWithoutCann)
+TEST(LoadAicpuOpTest, AllOps_NoCrashWithoutCann)
 {
     DeviceKernelArgs kArgs{};
     EXPECT_EQ(LoadAicpuOp::AicpuKernelLaunch(nullptr, nullptr, &kArgs, 1), 0);
@@ -36,12 +36,7 @@ TEST(LoadAicpuOpTest, AllLaunchOps_ReturnZeroWithoutCann)
 
     EXPECT_EQ(op.LaunchPyptoNullOp(nullptr, &kArgs, 1), 0);
     EXPECT_EQ(op.LaunchPyptoNullOp(nullptr, &kArgs, 1), 0);
-}
 
-TEST(LoadAicpuOpTest, GenBuiltInOpInfoAndCustomSoLoad_NoCrash)
-{
-    LoadAicpuOp op;
     op.GenBuiltInOpInfo();
     op.CustomAiCpuSoLoad();
-    SUCCEED();
 }

@@ -24,7 +24,7 @@
 using namespace npu::tile_fwk;
 using namespace npu::tile_fwk::dynamic;
 
-TEST(DeviceLauncherBindingTest, InitFiniAndCaptureModeOps)
+TEST(DeviceLauncherBindingTest, AllBindingOps)
 {
     DeviceLauncherInit();
     DeviceLauncherFini();
@@ -38,14 +38,8 @@ TEST(DeviceLauncherBindingTest, InitFiniAndCaptureModeOps)
     bool isCapture = false;
     GetCaptureInfo(nullptr, rtModel, isCapture);
 
-    SUCCEED();
-}
-
-TEST(DeviceLauncherBindingTest, ExportedOperatorAndKernelBinary)
-{
     ExportedOperator* op = ExportedOperatorBegin();
     EXPECT_NE(op, nullptr);
 
     UnregisterKernelBinary(nullptr);
-    SUCCEED();
 }

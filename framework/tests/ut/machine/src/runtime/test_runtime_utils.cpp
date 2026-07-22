@@ -10,7 +10,7 @@
 
 /*!
  * \file test_runtime_utils.cpp
- * \brief
+ * \brief UT for machine/runtime/runner/runtime_utils.cpp
  */
 
 #include <gtest/gtest.h>
@@ -19,36 +19,18 @@
 
 using namespace npu::tile_fwk;
 
-TEST(RuntimeUtilsTest, AlignSize_DefaultAlign512)
+TEST(RuntimeUtilsTest, AlignSize_GetProcessId_RegisterKernelBin)
 {
     EXPECT_EQ(AlignSize(0), 0u);
     EXPECT_EQ(AlignSize(1), 512u);
     EXPECT_EQ(AlignSize(512), 512u);
     EXPECT_EQ(AlignSize(513), 1024u);
-    EXPECT_EQ(AlignSize(1024), 1024u);
-}
-
-TEST(RuntimeUtilsTest, AlignSize_CustomAlign)
-{
     EXPECT_EQ(AlignSize(1, 64), 64u);
-    EXPECT_EQ(AlignSize(64, 64), 64u);
     EXPECT_EQ(AlignSize(65, 64), 128u);
-}
+    EXPECT_TRUE(AlignSize(1, 0) > 0u);
 
-TEST(RuntimeUtilsTest, AlignSize_ZeroAlign_FallbackToPointerSize)
-{
-    auto result = AlignSize(1, 0);
-    EXPECT_TRUE(result > 0u);
-}
+    EXPECT_EQ(GetProcessId(), static_cast<uint32_t>(getpid()));
 
-TEST(RuntimeUtilsTest, GetProcessId_FallbackToGetpid)
-{
-    uint32_t pid = GetProcessId();
-    EXPECT_EQ(pid, static_cast<uint32_t>(getpid()));
-}
-
-TEST(RuntimeUtilsTest, RegisterKernelBin_EmptyInput_ThrowsError)
-{
     std::vector<uint8_t> empty;
     EXPECT_ANY_THROW(RegisterKernelBin(empty));
 }

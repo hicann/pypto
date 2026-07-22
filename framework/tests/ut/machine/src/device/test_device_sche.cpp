@@ -10,7 +10,7 @@
 
 /*!
  * \file test_device_sche.cpp
- * \brief UT for machine/device/dynamic/device_sche.cpp
+ * \brief UT for machine/device/dynamic/device_sche.cpp and dump_device_topo.cpp
  */
 
 #include <gtest/gtest.h>
@@ -27,7 +27,7 @@ extern "C" int StaticTileFwkBackendKernelServer(void* targ);
 extern "C" int DynTileFwkBackendKernelServerInit(void* targ);
 extern "C" int DynTileFwkBackendKernelServer(void* targ);
 
-TEST(DeviceScheTest, KernelServerEntry_AllRunModes)
+TEST(DeviceScheTest, KernelServerEntry_AllRunModesAndDumpTopo)
 {
     EXPECT_EQ(StaticTileFwkBackendKernelServer(nullptr), 0);
     EXPECT_EQ(DynTileFwkBackendKernelServerInit(nullptr), 0);
@@ -39,12 +39,8 @@ TEST(DeviceScheTest, KernelServerEntry_AllRunModes)
     DeviceKernelArgs ctrlKargs{};
     ctrlKargs.parameter.runMode = RUN_SPLITTED_STREAM_CTRL;
     EXPECT_NE(DynTileFwkBackendKernelServer(&ctrlKargs), 0);
-}
 
-TEST(DeviceScheTest, DumpDeviceTopo_DisabledNoCrash)
-{
     config::SetDebugOption(CFG_RUNTIME_DBEUG_MODE, static_cast<int64_t>(0));
     DevAscendFunctionDupped dup{};
     DumpStitchEdge(dup, dup, 0, 0, 0, DeviceStitchContext::StitchKind::StitchPartial, 0);
-    SUCCEED();
 }

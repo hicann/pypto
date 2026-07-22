@@ -24,7 +24,7 @@
 using namespace npu::tile_fwk;
 using namespace npu::tile_fwk::dynamic;
 
-TEST(DeviceLauncherContextTest, SingletonAndCaptureMode)
+TEST(RuntimeContextTest, DeviceLauncherContextAndLauncherRouter)
 {
     auto& ctx1 = DeviceLauncherContext::Get();
     auto& ctx2 = DeviceLauncherContext::Get();
@@ -40,10 +40,7 @@ TEST(DeviceLauncherContextTest, SingletonAndCaptureMode)
     EXPECT_TRUE(ctx1.IsCaptureMode());
     ctx1.SetCaptureMode(false);
     EXPECT_FALSE(ctx1.IsCaptureMode());
-}
 
-TEST(LauncherRouterTest, ResolveByDebugMode_AllBranches)
-{
     EXPECT_EQ(LauncherRouter::ResolveByDebugMode(CFG_DEBUG_ALL), LaunchMode::EMULATION);
     EXPECT_EQ(LauncherRouter::ResolveByDebugMode(CFG_RUNTIME_DEBUG_VERIFY), LaunchMode::EMULATION);
     EXPECT_EQ(LauncherRouter::ResolveByDebugMode(CFG_RUINTIME_DEBUG_AICORE_MODEL), LaunchMode::AICORE_MODEL);

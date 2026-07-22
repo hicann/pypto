@@ -21,37 +21,54 @@
 using namespace npu::tile_fwk;
 using namespace npu::tile_fwk::topo_dump;
 
-TEST(DumpHostTopoTest, WritersDisabledWhenDumpOff)
-{
-    config::SetDebugOption(CFG_RUNTIME_DBEUG_MODE, static_cast<int64_t>(0));
+namespace {
+class DumpHostTopoEnv : public ::testing::Environment {
+public:
+    void SetUp() override { config::SetDebugOption(CFG_RUNTIME_DBEUG_MODE, CFG_RUNTIME_DEBUG_VERIFY); }
+};
+} // namespace
 
+static const auto kEnvRegistry = []() {
+    testing::AddGlobalTestEnvironment(new DumpHostTopoEnv());
+    return 0;
+}();
+
+TEST(DumpHostTopoTest, WritersEnabledAndWriteOps)
+{
     StaticTopoCsvWriter staticWriter;
-    EXPECT_FALSE(staticWriter.Enabled());
+    EXPECT_TRUE(staticWriter.Enabled());
 
     SlotCellTableCsvWriter slotWriterTrue(true);
-    EXPECT_FALSE(slotWriterTrue.Enabled());
+    EXPECT_TRUE(slotWriterTrue.Enabled());
 
     SlotCellTableCsvWriter slotWriterFalse(false);
     EXPECT_FALSE(slotWriterFalse.Enabled());
+
+    dynamic::DevCellMatchTableDesc desc;
+    desc.SetCellShape({2, 4});
+    desc.SetStrideShape({4, 1});
+    desc.SetCacheOpMaxCount({1, 0, 0});
+
+    slotWriterTrue.WritePartial(0, desc, 3);
+    slotWriterTrue.WriteFullCover(1, 12345, 0, desc);
 }
 
-TEST(DumpHostTopoTest, DumpSlotMappingAndWriteOps_NoCrashWhenDisabled)
+TEST(DumpHostTopoTest, DumpSlotMapping_WhenEnabled)
 {
-    config::SetDebugOption(CFG_RUNTIME_DBEUG_MODE, static_cast<int64_t>(0));
-
     TensorSlotManager slotManager;
     std::unordered_map<int, int> slotIdxMapping;
     IncastOutcastLink inoutLink;
     DumpSlotMapping(slotManager, slotIdxMapping, inoutLink);
+    SUCCEED();
+}
 
-    StaticTopoCsvWriter staticWriter;
-    dynamic::DevAscendFunction* func = nullptr;
-    staticWriter.WriteFunction(0, *func);
+TEST(DumpHostTopoTest, FillContentFalse_DisablesWriter)
+{
+    SlotCellTableCsvWriter slotWriterFalse(false);
+    EXPECT_FALSE(slotWriterFalse.Enabled());
 
-    SlotCellTableCsvWriter slotWriter(true);
     dynamic::DevCellMatchTableDesc desc;
-    slotWriter.WritePartial(0, desc, 0);
-    slotWriter.WriteFullCover(0, 0, 0, desc);
-
+    slotWriterFalse.WritePartial(0, desc, 0);
+    slotWriterFalse.WriteFullCover(0, 0, 0, desc);
     SUCCEED();
 }

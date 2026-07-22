@@ -10,7 +10,7 @@
 
 /*!
  * \file test_device_perf.cpp
- * \brief
+ * \brief UT for machine/runtime/runner/device_perf.cpp
  */
 
 #include <gtest/gtest.h>
@@ -22,62 +22,26 @@
 
 using namespace npu::tile_fwk;
 
-TEST(DevicePerfTest, ConstructorDestructor_NoCrash)
+TEST(DevicePerfTest, AllPerfOps_NoCrash)
 {
     {
         DevicePerf perf;
     }
-    SUCCEED();
-}
 
-TEST(DevicePerfTest, GetPerfDataSize_DefaultArgs)
-{
     DevicePerf perf;
     DeviceArgs args;
     args.nrAic = 2;
     args.nrAiv = 4;
     perf.args_ = args;
     EXPECT_EQ(perf.GetPerfDataSize(), 2u + 4u + 1u);
-}
 
-TEST(DevicePerfTest, SyncProfData_DebugDisabled_NoCrash)
-{
-    DevicePerf perf;
     perf.SyncProfData(false);
-    SUCCEED();
-}
-
-TEST(DevicePerfTest, ResetMetrics_EmptyPerfData_NoCrash)
-{
-    DevicePerf perf;
     perf.ResetMetrics(0);
-    SUCCEED();
-}
-
-TEST(DevicePerfTest, ResetMetrics_OutOfRangeCoreId_NoCrash)
-{
-    DevicePerf perf;
     perf.ResetMetrics(999);
-    SUCCEED();
-}
-
-TEST(DevicePerfTest, ReleasePerfData_Empty_NoCrash)
-{
-    DevicePerf perf;
     perf.ReleasePerfData();
     EXPECT_TRUE(perf.perfData_.empty());
-}
 
-TEST(DevicePerfTest, StopMachinePerfTraceDumpThread_NotStarted_NoCrash)
-{
-    DevicePerf perf;
     perf.StopMachinePerfTraceDumpThread();
-    SUCCEED();
-}
-
-TEST(DevicePerfTest, StartMachinePerfTraceDumpThread_NoAicpuPerfAddr_NoStart)
-{
-    DevicePerf perf;
     perf.StartMachinePerfTraceDumpThread();
     EXPECT_FALSE(perf.dumpThread_.joinable());
 }
