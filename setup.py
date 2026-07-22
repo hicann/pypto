@@ -26,7 +26,6 @@ import multiprocessing
 import os
 import re
 import shlex
-import shutil
 import subprocess
 import sys
 import site
@@ -43,6 +42,20 @@ from setuptools.command.editable_wheel import editable_wheel
 from setuptools.command.build_ext import build_ext
 from setuptools.command.develop import develop
 from setuptools.command.egg_info import egg_info
+
+# 从 python/pypto/_which_cmake.py 加载公共模块 (不依赖 sys.path)
+_script_dir = Path(__file__).resolve().parent
+_which_cmake_path = _script_dir / "python" / "pypto" / "_which_cmake.py"
+_spec = importlib.util.spec_from_file_location("_which_cmake", _which_cmake_path)
+_which_cmake_mod = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_which_cmake_mod)
+which_cmake = _which_cmake_mod.which_cmake
+
+
+
+def _find_system_cmake() -> Optional[Path]:
+    """查找系统级 CMake 可执行文件路径, 委托至 pypto._which_cmake 公共模块."""
+    return which_cmake()
 
 
 class CMakeExtension(Extension):
@@ -330,38 +343,7 @@ class CMakeUserOption:
 
     @staticmethod
     def which_cmake() -> Optional[Path]:
-        """查找系统级 CMake 可执行文件路径
-
-        排除 cmake pip 包的干扰, 通过遍历 PATH 环境变量查找 ELF 格式的 CMake 可执行文件.
-
-        :return: 系统 CMake 可执行文件路径, 找不到则返回 None
-        :rtype: Optional[Path]
-        """
-        # 拆分 PATH 环境变量为单个目录列表(排除空目录)
-        path_dir_lst = [d.strip() for d in os.environ.get("PATH", "").split(os.pathsep) if d.strip()]
-
-        # 遍历每个 PATH 目录, 逐个调用 shutil.which 检查, 限定 shutil.which 只在当前单个目录下查找 cmake
-        valid_path_lst = []
-        for path_dir in path_dir_lst:
-            # 避免 PATH 环境变量中有重复的单元
-            if path_dir in valid_path_lst:
-                continue
-            valid_path_lst.append(path_dir)
-            # 检查当前目录
-            cmake_str = shutil.which("cmake", path=path_dir)
-            if not cmake_str:
-                continue
-            cmake_file = Path(cmake_str).resolve()
-            if not cmake_file.exists() or not cmake_file.is_file():
-                continue
-            if cmake_file.stat().st_size <= 4:  # 下文读取前 4 字节判断文件是否是 ELF 文件
-                continue
-            with open(cmake_file, 'rb') as fh:
-                header = fh.read(4)  # 前 4 字节是 ELF 文件标识
-            if header != b'\x7fELF':
-                continue
-            return cmake_file
-        return None
+        return _find_system_cmake()
 
     def initialize_options_cmake(self):
         """初始化 CMake 选项
@@ -380,6 +362,10 @@ class CMakeUserOption:
         self.cmake: Optional[Path] = self.which_cmake()
         if not self.cmake:
             raise RuntimeError(f"Can't find cmake")
+
+        # 全量源码统一构建: 仅需 cmake --install, 跳过命令行选项解析
+        if os.environ.get("PYPTO_UNIFIED_BUILD") == "1":
+            return
 
         # 从环境变量(如有)中获取配置值作为默认值, 后续命令行中如果也设置了对应配置则会覆盖对应值, 达到命令行配置优先生效的效果.
         env_build_ext_args = os.environ.get("PYPTO_BUILD_EXT_ARGS", "")
@@ -539,6 +525,20 @@ class CMakeBuild(build_ext, CMakeUserOption, EditModeHelper):
            将对应版本的 pypto_impl.so 安装到主版本的 staging 目录
         3. 如果是可编辑模式, 传递安装文件清单给 editable_wheel
         """
+        # 全量源码统一构建旁路: 二进制已由外层 CMake 编译, 此处仅 cmake --install 到 staging
+        if os.environ.get("PYPTO_UNIFIED_BUILD") == "1":
+            logging.info("Unified build mode: cmake is the build driver, install staged artifacts only")
+            src = Path(__file__).parent.resolve()
+            cmake_install_prefix = self._get_cmake_install_prefix()
+            unified_build_dir = os.environ.get("PYPTO_CMAKE_BINARY_DIR")
+            build_dir = Path(unified_build_dir) if unified_build_dir else self._get_cmake_build_prefix()
+            # 组件过滤: Unspecified(whl 文件) + pypto_impl_lib(.so), 排除 share/info/(run 脚本)
+            for comp in ["Unspecified", "pypto_impl_lib"]:
+                cmd = f"{self.cmake} --install {build_dir} --prefix {cmake_install_prefix} --component {comp}"
+                logging.info("CMake Install (component=%s): %s", comp or "Unspecified", cmd)
+                subprocess.run(shlex.split(cmd), capture_output=False, check=True, text=True, encoding='utf-8')
+            return
+
         logging.info("%s", self)
         # 源码根目录
         src = Path(__file__).parent.resolve()
@@ -767,8 +767,8 @@ class SetupCtrl:
             - editable_wheel: CustomEditableWheel, 处理可编辑安装模式
             - build_ext: CMakeBuild, 调用 CMake 进行构建
         """
-        allow_whl_build = os.environ.get('PYPTO_ALLOW_WHL_BUILD', "")
-        allow_whl_build = bool(allow_whl_build) if allow_whl_build else False
+        allow_whl_build = (os.environ.get('PYPTO_ALLOW_WHL_BUILD', '') == '1' or
+                           os.environ.get('PYPTO_UNIFIED_BUILD', '') == '1')
         if not allow_whl_build:
             # PyPTO 打入 cann-toolkit 后, 会安装在 ${ASCEND_HOME_PATH}/python/site-packages 目录下,
             # 此时若直接执行 pip install . / pip install -e . 会触发卸载该路径 whl 包后重新安装.

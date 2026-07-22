@@ -32,4 +32,5 @@ target_link_libraries(${_Target}
         INTERFACE
             intf_pub_cxx17
             tile_fwk_intf_pub
+            json
 )

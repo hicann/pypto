@@ -62,6 +62,13 @@ install(FILES ${CMAKE_BINARY_DIR}/version.${PyPTO_PkgName}.info
 #       — 打包阶段 install 到 aarch64-linux/lib64 (与 GE 一致, dst_path == install_path)
 #       - 安装阶段 --copy_all 直接拷到 cann/aarch64-linux/lib64
 #       - pip install --target 展开到 python/site-packages 目录
-install(FILES ${WHL_FILE_PATH}
-        DESTINATION ${ARCH_LINUX_PATH}/lib64
-        COMPONENT ${PyPTO_PkgName})
+if (ENABLE_UNIFIED_BUILD)
+    install(DIRECTORY "${PYPTO_WHEEL_DIST}/"
+            DESTINATION ${ARCH_LINUX_PATH}/lib64
+            COMPONENT ${PyPTO_PkgName}
+            FILES_MATCHING PATTERN "*.whl")
+else ()
+    install(FILES ${WHL_FILE_PATH}
+            DESTINATION ${ARCH_LINUX_PATH}/lib64
+            COMPONENT ${PyPTO_PkgName})
+endif ()

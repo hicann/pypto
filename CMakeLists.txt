@@ -12,6 +12,7 @@ cmake_minimum_required(VERSION 3.16.3)
 
 # 必须在 project() 命令之前执行
 option(ENABLE_FEATURE_PACKING_WHL_INTO_RUN "Pack whl into run package" OFF)
+option(ENABLE_UNIFIED_BUILD "Enable CANN unified full-source build (CMake-driven whl + run)" OFF)
 include(cmake/prepare.cmake)
 include(cmake/fetch_cann_cmake.cmake)
 
@@ -19,9 +20,8 @@ project(PTO_Framework
         LANGUAGES C CXX
         VERSION 1.0.0
 )
-
+init_cann_project()
 if (ENABLE_FEATURE_PACKING_WHL_INTO_RUN)
-    init_cann_project()
     # run 包 名称
     #    统一用于 COMPONENT / share/info 路径 / scripts/package 路径
     #    最终 run 包名 "cann-pypto-9.1.0-Linux.run" 由 XML product_name=cann + func_name=pypto 组合, 不由此变量决定
@@ -84,9 +84,11 @@ include(CMakePackageConfigHelpers)
 include(cmake/func.cmake)
 include(cmake/config.cmake)
 include(cmake/intf.cmake)
-include(cmake/third_party/nlohmann_json/nlohmann_json.cmake)
+add_cann_third_party(json)
 include(cmake/third_party/libboundscheck/libboundscheck.cmake)
-include(cmake/third_party/googletest/googletest.cmake)
+if (ENABLE_TESTS)
+    add_cann_third_party(gtest)
+endif()
 
 
 ########################################################################################################################
@@ -452,4 +454,95 @@ if (ENABLE_FEATURE_PYTHON_FRONT_END)
                 PATTERN ".git" EXCLUDE
         )
     endif ()
+endif ()
+
+
+########################################################################################################################
+# 全量源码统一构建(E)
+#   — 以 CMake 为唯一入口, 一次流程产出: 二进制 → whl → run
+#   — ENABLE_UNIFIED_BUILD=OFF(默认) 时完全不影响现有 build_ci.py 流程
+########################################################################################################################
+
+if (ENABLE_UNIFIED_BUILD AND ENABLE_FEATURE_PYTHON_FRONT_END)
+    # 全量源码统一构建独立模式: 注册 pypto 组件到 CANN_PACKAGES, 使 set_cann_cpack_config 生效
+    if (NOT CANN_PACKAGES OR NOT "pypto" IN_LIST CANN_PACKAGES)
+        list(APPEND CANN_PACKAGES "pypto")
+    endif ()
+    set(PyPTO_PkgName "pypto")
+    set(PYPTO_WHEEL_DIST "${PTO_FWK_BIN_ROOT}/dist")
+    include(version.cmake)
+    add_cann_version_info_targets()
+
+    # 预建 whl 产物目录, 以便 CPack install(DIRECTORY ...) 在 configure 时能找到
+    file(MAKE_DIRECTORY "${PYPTO_WHEEL_DIST}")
+
+    # 计算 setuptools bdist_wheel 暂存目录名, 用于构建后清理
+    #   build_lib: lib.{platform_tag}, 其中 platform_tag 来自 sysconfig.get_platform()
+    #     eg: lib.linux-aarch64-cpython-311 (cpythonNN 后缀为 setuptools 内部拼接)
+    #   bdist: bdist.{platform_tag} (无 cpython 后缀)
+    execute_process(
+        COMMAND ${Python3_EXECUTABLE} -c "import sysconfig; print(sysconfig.get_platform())"
+        OUTPUT_VARIABLE _PyPlatformTag
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+    string(REPLACE "." "" _PyVerShort "${PYTHON3_VERSION_ID}")
+    set(_SetuptoolsBuildLib "${PTO_FWK_BIN_ROOT}/lib.${_PyPlatformTag}-cpython-${_PyVerShort}")
+    set(_SetuptoolsBdistDir "${PTO_FWK_BIN_ROOT}/bdist.${_PyPlatformTag}")
+
+    # ── pypto_wheel: 编译 → install 到 staging → 反调 setuptools 出 whl ──
+    #   GE 风格: add_custom_command(OUTPUT ...) — .so 不变则跳过 whl 构建(增量)
+    set(_UnifiedDeps version_${PyPTO_PkgName}_info ${InstallTargets} pypto_impl)
+    if (BUILD_WITH_CANN)
+        list(APPEND _UnifiedDeps tile_fwk_server pypto_ctrl_server)
+    endif ()
+    set(_WhlStamp "${PYPTO_WHEEL_DIST}/.pypto_wheel_built")
+    add_custom_command(
+        OUTPUT "${_WhlStamp}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${PYPTO_WHEEL_DIST}"
+        COMMAND ${CMAKE_COMMAND} -E env
+            PYPTO_UNIFIED_BUILD=1
+            PYPTO_ALLOW_WHL_BUILD=1
+            PYPTO_CMAKE_BINARY_DIR="${PTO_FWK_BIN_ROOT}"
+            ${Python3_EXECUTABLE} "${PTO_FWK_SRC_ROOT}/setup.py" bdist_wheel
+            --dist-dir "${PYPTO_WHEEL_DIST}"
+        # 清理 setuptools 中间暂存目录(~37M), whl 已产出到 dist/ 后无需保留
+        COMMAND ${CMAKE_COMMAND} -E remove_directory "${_SetuptoolsBuildLib}"
+        COMMAND ${CMAKE_COMMAND} -E remove_directory "${_SetuptoolsBdistDir}"
+        COMMAND ${CMAKE_COMMAND} -E touch "${_WhlStamp}"
+        WORKING_DIRECTORY "${PTO_FWK_SRC_ROOT}"
+        DEPENDS ${_UnifiedDeps}
+        COMMENT "Building pypto wheel (GE-style incremental, depends on ${_UnifiedDeps})"
+    )
+    add_custom_target(pypto_wheel DEPENDS "${_WhlStamp}")
+
+    # ── run 包: 委托 cann-cmake ──
+    include(cmake/package.cmake)
+    set_cann_cpack_config(${PyPTO_PkgName} OUTPUT "${PYPTO_WHEEL_DIST}")
+    # cann-cmake 在 unified 模式下将 CPACK_CMAKE_INSTALL_PREFIX 硬编码为
+    # CANN_CMAKE_DIR/build_out, 忽略 OUTPUT 参数. 此处用 REGEX 匹配任意路径末尾
+    # 的 /build_out 并替换为 build/dist/, 使 .run 与 .whl 落到同一目录.
+    file(READ "${CMAKE_BINARY_DIR}/CPackConfig.cmake" _pypto_cpack_cfg)
+    if(NOT _pypto_cpack_cfg MATCHES "set\\(CPACK_CMAKE_INSTALL_PREFIX \"[^\"]+/build_out\"\\)"
+       AND _pypto_cpack_cfg MATCHES "set\\(CPACK_CMAKE_INSTALL_PREFIX \"[^\"]+/dist\"\\)")
+        # 已为正确路径, 无需 patch
+    elseif(NOT _pypto_cpack_cfg MATCHES "set\\(CPACK_CMAKE_INSTALL_PREFIX \"[^\"]+/build_out\"\\)")
+        message(WARNING "CPackConfig.cmake does not contain expected build_out path. "
+                        "Run package output may not go to build/dist/. "
+                        "Please check cann-cmake version compatibility.")
+    else()
+        string(REGEX REPLACE
+            "set\\(CPACK_CMAKE_INSTALL_PREFIX \"[^\"]+/build_out\"\\)"
+            "set(CPACK_CMAKE_INSTALL_PREFIX \"${PYPTO_WHEEL_DIST}\")"
+            _pypto_cpack_cfg "${_pypto_cpack_cfg}")
+        file(WRITE "${CMAKE_BINARY_DIR}/CPackConfig.cmake" "${_pypto_cpack_cfg}")
+    endif()
+    unset(_pypto_cpack_cfg)
+    # 切断 install → all 的依赖链, 避免 pypto_package(ALL) → CPack → cmake --install → preinstall → all → pypto_package 递归循环
+    set(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY TRUE)
+    # package(CPack) 不直接支持 add_dependencies, 创建 wrapper target 保证 whl 先于 run 产出
+    add_custom_target(pypto_package ALL
+        DEPENDS pypto_wheel
+        COMMAND ${CMAKE_CPACK_COMMAND} --config ${CMAKE_BINARY_DIR}/CPackConfig.cmake
+        COMMENT "Packaging pypto run (depends on pypto_wheel)"
+    )
 endif ()

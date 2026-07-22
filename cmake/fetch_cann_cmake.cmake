@@ -8,38 +8,30 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 
-if (ENABLE_FEATURE_PACKING_WHL_INTO_RUN)
-    set(CANN_CMAKE_TAG "master-026")          # tag 名
-    set(CANN_CMAKE_DIR_NAME "cann-cmake")     # 压缩包解压后的目录名
-
-    if (PYPTO_THIRD_PARTY_PATH AND IS_DIRECTORY "${PYPTO_THIRD_PARTY_PATH}/${CANN_CMAKE_DIR_NAME}")
-        include("${PYPTO_THIRD_PARTY_PATH}/${CANN_CMAKE_DIR_NAME}/function/prepare.cmake")
-    else ()
+if(NOT PROJECT_SOURCE_DIR)
+    set(CANN_CMAKE_TAG "master-026")
+    if(CANN_3RD_LIB_PATH AND IS_DIRECTORY "${CANN_3RD_LIB_PATH}/cann-cmake")
+        include("${CANN_3RD_LIB_PATH}/cann-cmake/function/prepare.cmake")
+    else()
         include(FetchContent)
-        get_filename_component(CANN_CMAKE_SOURCE_DIR "${PYPTO_THIRD_PARTY_PATH}/${CANN_CMAKE_DIR_NAME}" ABSOLUTE)
-
-        if (PYPTO_THIRD_PARTY_PATH AND EXISTS "${PYPTO_THIRD_PARTY_PATH}/${CANN_CMAKE_TAG}.tar.gz")
+        if(CANN_3RD_LIB_PATH AND EXISTS "${CANN_3RD_LIB_PATH}/cmake-${CANN_CMAKE_TAG}.tar.gz")
             FetchContent_Declare(
-                ${CANN_CMAKE_DIR_NAME}
-                SOURCE_DIR "${CANN_CMAKE_SOURCE_DIR}"
-                DOWNLOAD_EXTRACT_TIMESTAMP TRUE
-                URL "${PYPTO_THIRD_PARTY_PATH}/${CANN_CMAKE_TAG}.tar.gz"
-                URL_HASH SHA256=464693dc211c618b4bca69a5bdbcf4a83550a4e8383ce9dff20fb66a08915fb8
+                cann-cmake
+                URL "${CANN_3RD_LIB_PATH}/cmake-${CANN_CMAKE_TAG}.tar.gz"
+                URL_HASH SHA256=b0db2d4d0d2e94bd0dd961d88dc16b6b042fbacb4de4acb9530128c98e637fca
             )
-        else ()
+        else()
             FetchContent_Declare(
-                ${CANN_CMAKE_DIR_NAME}
-                SOURCE_DIR "${CANN_CMAKE_SOURCE_DIR}"
-                DOWNLOAD_EXTRACT_TIMESTAMP TRUE
-                URL "https://raw.gitcode.com/cann/cmake/archive/refs/heads/${CANN_CMAKE_TAG}.tar.gz"
-                URL_HASH SHA256=464693dc211c618b4bca69a5bdbcf4a83550a4e8383ce9dff20fb66a08915fb8
+                cann-cmake
+                GIT_REPOSITORY https://gitcode.com/cann/cmake.git
+                GIT_TAG        ${CANN_CMAKE_TAG}
+                GIT_SHALLOW    TRUE
             )
-        endif ()
-        FetchContent_GetProperties(${CANN_CMAKE_DIR_NAME})
-        if (NOT ${CANN_CMAKE_DIR_NAME}_POPULATED)
-            FetchContent_Populate(${CANN_CMAKE_DIR_NAME})
-        endif ()
-        message(STATUS "${CANN_CMAKE_DIR_NAME}_SOURCE_DIR=${${CANN_CMAKE_DIR_NAME}_SOURCE_DIR}")
-        include("${${CANN_CMAKE_DIR_NAME}_SOURCE_DIR}/function/prepare.cmake")
-    endif ()
-endif ()
+        endif()
+        FetchContent_GetProperties(cann-cmake)
+        if(NOT cann-cmake_POPULATED)
+            FetchContent_Populate(cann-cmake)
+        endif()
+        include("${cann-cmake_SOURCE_DIR}/function/prepare.cmake")
+    endif()
+endif()

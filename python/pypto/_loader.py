@@ -11,25 +11,42 @@ from ._build_online import ensure_pypto_impl
 
 
 def _load_shared_libs():
+    import logging
     import os
     import ctypes
     from pathlib import Path
     from importlib import metadata
-    from typing import List, Any
+    from typing import List, Any, Optional
 
-    cur_dir: Path = Path(__file__).parent
-    pkg_dir: Path = Path(str(metadata.distribution("pypto").locate_file("pypto"))).resolve()
-    pkg_dir = pkg_dir if pkg_dir == cur_dir else cur_dir  # 适配 edit 模式
-    lib_dir: Path = Path(pkg_dir, "lib")
+    _log = logging.getLogger(__name__)
+
+    cur_dir: Path = Path(__file__).parent.resolve()
+    try:
+        pkg_dir: Path = Path(str(metadata.distribution("pypto").locate_file("pypto"))).resolve()
+    except Exception:
+        pkg_dir = cur_dir
+
+    lib_search_dirs: List[Path] = [Path(cur_dir, "lib")]
+    if pkg_dir != cur_dir:
+        lib_search_dirs.append(Path(pkg_dir, "lib"))
+
     use_cann: bool = bool(os.environ.get("ASCEND_HOME_PATH"))
+
+    def _find_lib(_name: str) -> Optional[Path]:
+        for _dir in lib_search_dirs:
+            _file = _dir / _name
+            if _file.exists():
+                return _file
+        return None
 
     def _load_shared_lib(_desc: List[Any]):
         _name: str = _desc[0]
         _load: bool = _desc[1]
         if not _load:
             return
-        _file: Path = Path(lib_dir, _name)
-        if not _file.exists():
+        _file = _find_lib(_name)
+        if _file is None:
+            _log.warning("Shared library %s not found in %s", _name, [str(d) for d in lib_search_dirs])
             return
         ctypes.CDLL(str(_file), mode=ctypes.RTLD_GLOBAL)
 

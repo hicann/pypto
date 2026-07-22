@@ -91,15 +91,19 @@ target_include_directories(pypto_impl
 target_compile_definitions(pypto_impl
         PRIVATE
             $<BUILD_INTERFACE:$<$<BOOL:${BUILD_WITH_CANN}>:BUILD_WITH_CANN>>
+            $<$<NOT:$<BOOL:${PTO_FWK_SRC_ROOT}>>:nlohmann=ascend_nlohmann>
 )
 
-# 所依赖的本项目 so 均在 pypto 包 __init__.py 中加载, 此处不再 link
+# 主构建: 所依赖的本项目 so 均在 pypto 包 __init__.py 中加载, 此处不再 link
+# 在线编译: 必须显式链接 tile_fwk_interface, 否则 pypto_impl.so 缺少 DT_NEEDED 条目,
+#           运行时无法解析 ConfigManager::GetJsonNode 等符号
 target_link_libraries(pypto_impl
         PRIVATE
             $<$<BOOL:${PTO_FWK_SRC_ROOT}>:json>
             c_sec
             intf_pub_cxx17
             tile_fwk_intf_pub
+            $<$<NOT:$<BOOL:${PTO_FWK_SRC_ROOT}>>:tile_fwk_interface>
 )
 target_link_directories(pypto_impl
         PRIVATE

@@ -28,7 +28,7 @@ else ()
 endif ()
 message(STATUS "PYPTO_THIRD_PARTY_PATH=${PYPTO_THIRD_PARTY_PATH}")
 
-if (ENABLE_FEATURE_PACKING_WHL_INTO_RUN)
-    # cann/cmake 内部函数依赖该变量
+# cann/cmake 内部函数依赖该变量（superbuild 可覆盖，独立构建回退到 PYPTO_THIRD_PARTY_PATH）
+if (NOT DEFINED CANN_3RD_LIB_PATH)
     set(CANN_3RD_LIB_PATH "${PYPTO_THIRD_PARTY_PATH}")
 endif()

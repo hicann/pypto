@@ -39,6 +39,7 @@ recursive-include python/src *.cpp
 recursive-include python/src *.h
 include python/CMakeLists.txt
 include python/src/CMakeLists.txt
+include python/pypto/_which_cmake.py
 
 # others
 include build_ci.py

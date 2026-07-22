@@ -18,6 +18,7 @@
 - BuildOnlineCalculatorManager: tile_fwk_calculator.so 在线编译
 """
 
+import hashlib
 import importlib.machinery
 import importlib.util
 import ctypes
@@ -83,35 +84,9 @@ class _BuildOnlineManager:
 
         @classmethod
         def _which_cmake(cls) -> Optional[Path]:
-            """查找系统级 CMake 可执行文件路径
-            排除 cmake pip 包的干扰, 通过遍历 PATH 环境变量查找 ELF 格式的 CMake 可执行文件.
-            :return: 系统 CMake 可执行文件路径, 找不到则返回 None
-            :rtype: Optional[Path]
-            """
-            # 拆分 PATH 环境变量为单个目录列表(排除空目录)
-            path_dir_lst = [d.strip() for d in os.environ.get("PATH", "").split(os.pathsep) if d.strip()]
-            # 遍历每个 PATH 目录, 逐个调用 shutil.which 检查, 限定 shutil.which 只在当前单个目录下查找 cmake
-            valid_path_lst = []
-            for path_dir in path_dir_lst:
-                # 避免 PATH 环境变量中有重复的单元
-                if path_dir in valid_path_lst:
-                    continue
-                valid_path_lst.append(path_dir)
-                # 检查当前目录
-                cmake_str = shutil.which("cmake", path=path_dir)
-                if not cmake_str:
-                    continue
-                cmake_file = Path(cmake_str).resolve()
-                if not cmake_file.exists() or not cmake_file.is_file():
-                    continue
-                if cmake_file.stat().st_size <= 4:  # 下文读取前 4 字节判断文件是否是 ELF 文件
-                    continue
-                with open(cmake_file, 'rb') as fh:
-                    header = fh.read(4)  # 前 4 字节是 ELF 文件标识
-                if header != b'\x7fELF':
-                    continue
-                return cmake_file
-            return None
+            """查找系统级 CMake 可执行文件路径, 委托至 _which_cmake 公共模块."""
+            from ._which_cmake import which_cmake
+            return which_cmake()
 
         def compile(self, ctx: CompileContext) -> Path:
             """执行编译流程(包含 CMake 的 Configure, Build 及 Install 阶段)
@@ -302,6 +277,18 @@ class BuildOnlinePyptoImplManager(_BuildOnlineManager):
         self._cache_dir_value: Optional[Path] = None
         ver_info = sys.version_info
         self._lock_name: str = f".pypto_impl_build.cp{ver_info.major}{ver_info.minor}.lock"
+
+    @staticmethod
+    def _get_ascend_path() -> str:
+        """获取 CANN 安装路径, 用于缓存 key 区分不同 CANN 环境"""
+        for env_key in ("CANN_PATH", "ASCEND_HOME_PATH"):
+            val = os.environ.get(env_key)
+            if val:
+                return val
+        opp_path = os.environ.get("ASCEND_OPP_PATH")
+        if opp_path:
+            return os.path.dirname(opp_path)
+        return ""
 
     def ensure_pypto_impl(self):
         # 双重检查锁定: 外层无锁快速检查, 内层加锁后二次检查, 避免多线程重复编译
@@ -509,6 +496,10 @@ class BuildOnlinePyptoImplManager(_BuildOnlineManager):
         cache_dir = cache_dir / self.pypto_version
         if self.build_timestamp:
             cache_dir = cache_dir / self.build_timestamp
+        ascend_path = self._get_ascend_path()
+        if ascend_path:
+            ascend_hash = hashlib.md5(ascend_path.encode()).hexdigest()[:8]
+            cache_dir = cache_dir / f"ascend_{ascend_hash}"
 
         cache_dir.mkdir(parents=True, exist_ok=True)
         return cache_dir

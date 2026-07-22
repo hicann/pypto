@@ -65,6 +65,11 @@ from typing import Optional, List, Dict, Tuple, Any
 from importlib import metadata
 from packaging import requirements
 
+try:
+    from setup import _find_system_cmake
+except ImportError:
+    _find_system_cmake = None
+
 
 class CMakeParam(abc.ABC):
     """CMake 参数抽象基类
@@ -1065,30 +1070,8 @@ class BuildCtrl(CMakeParam):
         :return: 系统级 cmake 可执行文件绝对路径, 找不到则返回 None
         :rtype: Optional[Path]
         """
-        # 拆分 PATH 环境变量为单个目录列表(排除空目录)
-        path_dir_lst = [d.strip() for d in os.environ.get("PATH", "").split(os.pathsep) if d.strip()]
-
-        # 遍历每个 PATH 目录, 逐个调用 shutil.which 检查, 限定 shutil.which 只在当前单个目录下查找 cmake
-        valid_path_lst = []
-        for path_dir in path_dir_lst:
-            # 避免 PATH 环境变量中有重复的单元
-            if path_dir in valid_path_lst:
-                continue
-            valid_path_lst.append(path_dir)
-            # 检查当前目录
-            cmake_str = shutil.which("cmake", path=path_dir)
-            if not cmake_str:
-                continue
-            cmake_file = Path(cmake_str).resolve()
-            if not cmake_file.exists() or not cmake_file.is_file():
-                continue
-            if cmake_file.stat().st_size <= 4:  # 下文读取前 4 字节判断文件是否是 ELF 文件
-                continue
-            with open(cmake_file, 'rb') as fh:
-                header = fh.read(4)  # 前 4 字节是 ELF 文件标识
-            if header != b'\x7fELF':
-                continue
-            return cmake_file
+        if _find_system_cmake:
+            return _find_system_cmake()
         return None
 
     @staticmethod
@@ -1102,6 +1085,24 @@ class BuildCtrl(CMakeParam):
                             help="Specify 3rd Libraries Path")
         parser.add_argument("--verbose", action="store_true", default=False,
                             help="verbose, enable verbose output.")
+
+    @staticmethod
+    def _resolve_ascend_cann_package_path() -> str:
+        """解析 ASCEND_CANN_PACKAGE_PATH，优先级与 build.sh 一致：
+        CANN_PATH > ASCEND_HOME_PATH > ASCEND_OPP_PATH > 默认路径
+        """
+        for env_key in ("CANN_PATH", "ASCEND_HOME_PATH"):
+            val = os.environ.get(env_key)
+            if val:
+                return val
+        opp_path = os.environ.get("ASCEND_OPP_PATH")
+        if opp_path:
+            return os.path.dirname(opp_path)
+        if platform.machine() in ("aarch64", "armv7l"):
+            default = os.path.join(os.path.expanduser("~"), "Ascend", "cann")
+        else:
+            default = "/usr/local/Ascend/cann"
+        return default if os.path.isdir(default) else ""
 
     @classmethod
     def check_pip_dependencies(cls, deps: Dict[str, str], raise_err: bool = False, log_err: bool = True) -> bool:
@@ -1258,8 +1259,8 @@ class BuildCtrl(CMakeParam):
         :rtype: Dict[str, str]
         """
         env = {}
-        if self.third_party_path:
-            env.update({"PYPTO_THIRD_PARTY_PATH": self.third_party_path})
+        third_party = self.third_party_path or str(self.src_root / "third_party_path")
+        env.update({"PYPTO_THIRD_PARTY_PATH": third_party})
         # 通过 tag_info 环境变量统一 run 和 whl 内的 build_timestamp
         env.update({"tagInfo": self.tag_info})
         # 通过 PYPTO_ALLOW_WHL_BUILD 环境变量实现阻止直接 pip install . 覆盖 cann 包内已有 PyPTO
@@ -1394,6 +1395,12 @@ class BuildCtrl(CMakeParam):
                 shutil.rmtree(cache_dir)
             else:
                 os.remove(cache_dir)
+        # 清理在线编译运行时缓存
+        cache_home = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache"))
+        runtime_cache = cache_home / "cann" / "pypto"
+        if runtime_cache.exists():
+            logging.info("Clean runtime cache(%s)", runtime_cache)
+            shutil.rmtree(runtime_cache)
 
     def cmake_configure(self):
         """执行 CMake Configure 阶段流程
@@ -1404,6 +1411,7 @@ class BuildCtrl(CMakeParam):
         cmd = f"{self.cmake} -S {self.src_root} -B {self.build_root}"
         cmd += f" -G {self.build.generator}" if self.build.generator else ""
         cmd += f" -DPython3_EXECUTABLE={sys.executable}"
+        cmd += f" -DASCEND_CANN_PACKAGE_PATH={self._resolve_ascend_cann_package_path()}"
         cmd += self.feature.get_cfg_cmd()
         cmd += self.build.get_cfg_cmd()
         cmd += self.tests.get_cfg_cmd()
@@ -1498,6 +1506,7 @@ class BuildCtrl(CMakeParam):
         cmd += f" -DENABLE_FEATURE_PACKING_WHL_INTO_RUN=ON"
         cmd += f" -DWHL_FILE_PATH={whl_file}"
         cmd += f" -DRUN_OUTPUT_DIR={self.install_root}"
+        cmd += f" -DASCEND_CANN_PACKAGE_PATH={self._resolve_ascend_cann_package_path()}"
         cmd += f" -DPYPTO_THIRD_PARTY_PATH={self.third_party_path}" if self.third_party_path else ""
         update_env = self.get_cfg_update_env()
         logging.info("CMake Configure(run), Cmd: %s, Timeout: %s", cmd, self.remain_timeout)
@@ -1778,6 +1787,9 @@ class BuildCtrl(CMakeParam):
 
     def _get_setuptools_build_ext_config_setting(self) -> Tuple[str, str]:
         cmake_args = f"{self.feature.get_cfg_cmd()} {self.build.get_cfg_cmd(ext=False)}"
+        cann_path = self._resolve_ascend_cann_package_path()
+        if cann_path:
+            cmake_args += f' -DASCEND_CANN_PACKAGE_PATH="{cann_path}"'
         env_setting = ""
         env_setting += f" --cmake-generator={self.build.generator}" if self.build.generator else ""
         env_setting += f" --cmake-build-type={self.build.build_type}" if self.build.build_type else ""

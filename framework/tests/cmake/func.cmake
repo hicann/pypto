@@ -231,6 +231,7 @@ function(PTO_Fwk_GTest_AddExe)
                 -Wl,--as-needed
                 -Wl,--no-whole-archive
                 -rdynamic
+                -pthread
     )
     # 模拟配置文件 Install 流程, 为便于调试, 使用创建软连接方式模拟安装
     get_filename_component(InstallConfigsDir "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/configs" REALPATH)

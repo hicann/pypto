@@ -8,5 +8,5 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 
-set_cann_package(${PyPTO_PkgName} VERSION "9.1.0")
+set_cann_package(pypto VERSION "9.1.0")
 set_cann_run_dependencies(driver ">=25.5.0")
