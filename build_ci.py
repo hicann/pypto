@@ -184,7 +184,7 @@ class FeatureParam(CMakeParam):
     whl_editable: bool = False  # 以 editable 模式编译 whl 包
     whl_break_system_packages: bool = False
     multi_py3_cfg: Optional[List[Py3Desc]] = None  # 额外 Python3 executable 属性列表, 用于多版本 pypto_impl.so 编译
-    whl_into_run: bool = False  # 将 whl 包打进 run 包
+    just_build_whl: bool = False  # 只构建 whl 包，不打包进入 run
 
     def __init__(self, args):
         """初始化 FeatureParam 实例
@@ -199,15 +199,21 @@ class FeatureParam(CMakeParam):
         if not os.environ.get("ASCEND_HOME_PATH") and self.backend_type in ["npu"]:
             logging.warning("Environment variable ASCEND_HOME_PATH is unset/empty, falling back to cost_model backend.")
             self.backend_type = "cost_model"
-        self.whl_py3_abi = args.py_abi
-        self.whl_plat_name = f"{args.plat_name}_{CMakeParam.get_system_processor()}" if args.plat_name else ""
+        self.just_build_whl = args.just_build_whl
+        if self.just_build_whl:
+            py_abi = args.py_abi
+            plat_name = args.plat_name
+        else:
+            py_abi = args.py_abi if args.py_abi is not None else 37
+            plat_name = args.plat_name if args.plat_name else "manylinux2014"
+        self.whl_py3_abi = py_abi
+        self.whl_plat_name = f"{plat_name}_{CMakeParam.get_system_processor()}" if plat_name else ""
         self.whl_isolation = args.isolation
         self.whl_editable = args.editable
         self.whl_break_system_packages = args.break_system_packages
         self.multi_py3_cfg = None
         if args.multi_py3_exe:
             self._init_multi_py3_cfg(multi_py3_exe=args.multi_py3_exe)
-        self.whl_into_run = args.whl_into_run
 
     def __str__(self) -> str:
         """返回特性参数的字符串表示
@@ -219,7 +225,7 @@ class FeatureParam(CMakeParam):
         desc += f"\nFeature"
         desc += f"\n    Frontend                : {self.frontend_type}"
         if self.frontend_type_python3:
-            desc += f"\n    PackingWhlIntoRun       : {self.whl_into_run}"
+            desc += f"\n    JustBuildWhl            : {self.just_build_whl}"
             if self.whl_py3_abi_tag:
                 desc += f"\n    Py3ABI                  : {self.whl_py3_abi_tag}"
             if self.whl_plat_name:
@@ -295,8 +301,8 @@ class FeatureParam(CMakeParam):
         parser.add_argument("--multi_py3_exe", nargs="+", type=str, default=None,
                             help="Extra Python3 executables for multi-version pypto_impl.so, "
                                  "e.g. --multi_py3_exe /usr/bin/python3.9 /usr/bin/python3.10")
-        parser.add_argument("--whl_into_run", action="store_true", default=False, dest="whl_into_run",
-                            help="Packing whl into run.")
+        parser.add_argument("--just_build_whl", action="store_true", default=False,
+                            help="Build whl only, without packing into run.")
 
     def get_cfg_cmd(self, ext: Optional[Any] = None) -> str:
         """生成 CMake Configure 命令
@@ -1490,7 +1496,7 @@ class BuildCtrl(CMakeParam):
             3. cpack: 生成 .run 自解压安装包
         """
         # 条件过滤
-        if not self.feature.whl_into_run:
+        if self.feature.just_build_whl:
             return
         if self._use_pip_install_mode() or self.feature.whl_editable:
             logging.warning("Packing whl into run is not supported in pip-install or editable mode, skip.")

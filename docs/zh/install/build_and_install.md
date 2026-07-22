@@ -35,7 +35,7 @@ git clone -b ${tag_version} https://gitcode.com/cann/pypto.git
 进入PyPTO源码根目录，执行如下命令编译run包：
 
 ```bash
-python3 build_ci.py --clean --py_abi=37 --plat_name=manylinux2014 --no_isolation --whl_into_run
+python3 build_ci.py --clean --no_isolation
 ```
 
 **参数说明**：
@@ -43,10 +43,10 @@ python3 build_ci.py --clean --py_abi=37 --plat_name=manylinux2014 --no_isolation
 | 参数 | 说明 |
 | :--- | :--- |
 | `--clean` | 编译前清理构建目录和安装输出目录。 |
-| `--py_abi` | 指定whl包的Python ABI tag数字部分，例如`37`对应`cp37`。 |
-| `--plat_name` | 指定whl包的平台标签，例如`manylinux2014`；构建脚本会结合当前系统架构生成完整平台信息。 |
 | `--no_isolation` | 关闭whl隔离构建模式，构建依赖需提前在当前环境中安装完成。 |
-| `--whl_into_run` | 将编译得到的whl包打包进run安装包。 |
+| `--just_build_whl` | 只构建whl包，不打包进入run安装包。 |
+| `--py_abi` | 指定whl包的Python ABI tag数字部分，例如`37`对应`cp37`（`--just_build_whl`时有效）。 |
+| `--plat_name` | 指定whl包的平台标签，例如`manylinux2014`（`--just_build_whl`时有效）。 |
 | `--enable_build_with_cann_mobile` | 用于构建PyPTO时传递BUILD_WITH_CANN_MOBILE参数(kirin专用)。 |
 
 ### 安装
