@@ -26,7 +26,6 @@ import numpy as np
 from enum import Enum
 from pathlib import Path
 from typing import List
-from common_func import dump_file
 from ml_dtypes import bfloat16
 
 project_root = os.path.dirname(os.path.abspath(__file__))  # 当前脚本目录

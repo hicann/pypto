@@ -2673,108 +2673,6 @@
       "related_issues": []
     },
     {
-      "category": "non_pass_operator_dynamic_loop_divisibility",
-      "category_cn": "非 Pass：动态循环边界假设整除且未校验零值",
-      "severity": "high",
-      "evidence_type": "source_audit_hypothesis",
-      "likely_modules": [
-        "operator"
-      ],
-      "files_to_check": [
-        "framework/src/operator/models/deepseek/page_attention.cpp",
-        "framework/src/operator/models/deepseek/prolog_post.cpp"
-      ],
-      "symptom_keywords": [
-        "PageAttention",
-        "PrologPost",
-        "blockSize",
-        "bnPerBatch",
-        "LoopRange"
-      ],
-      "pass_symptoms": [
-        "非法 loop bound",
-        "tiling key 错误",
-        "死循环",
-        "越界"
-      ],
-      "code_anti_pattern": "源码审计假设：SymbolicScalar bnPerBatch = curSeq / blockSize 直接传入 LoopRange，未校验 blockSize>0、curSeq 对齐。",
-      "fix_pattern": "若源码核查证实该风险，建议：assert(blockSize > 0)；使用向上取整并处理尾部；bnPerBatch==0 提前退出。",
-      "verification_hints": [
-        "构造 blockSize=0 或 curSeq 不对齐",
-        "检查生成 loop"
-      ],
-      "pattern_id": "N083",
-      "example_commits": [],
-      "related_issues": []
-    },
-    {
-      "category": "non_pass_operator_view_assemble_offset_unverified",
-      "category_cn": "非 Pass：View / Assemble 的 offset 由未经验证的符号表达式构造",
-      "severity": "high",
-      "evidence_type": "source_audit_hypothesis",
-      "likely_modules": [
-        "operator"
-      ],
-      "files_to_check": [
-        "framework/src/operator/models/deepseek/attention.cpp",
-        "framework/src/operator/models/deepseek/dynamic_mla.cpp",
-        "framework/src/operator/models/deepseek/prolog_post.cpp"
-      ],
-      "symptom_keywords": [
-        "Assemble",
-        "curOffset",
-        "nQ",
-        "nTile",
-        "SymbolicScalar"
-      ],
-      "pass_symptoms": [
-        "shape mismatch",
-        "地址越界",
-        "illegal memory access"
-      ],
-      "code_anti_pattern": "源码审计假设：SymbolicScalar curOffset = bIdx * nQ + nIdx * nTile；Assemble 未验证 nQ % nTile == 0 及 offset 范围。",
-      "fix_pattern": "若源码核查证实该风险，建议：构造前断言整除与 offset 范围；尾部用 min tile 处理。",
-      "verification_hints": [
-        "构造 nQ 不整除 nTile",
-        "检查 offset 越界"
-      ],
-      "pattern_id": "N084",
-      "example_commits": [],
-      "related_issues": []
-    },
-    {
-      "category": "non_pass_operator_optional_tensor_liveness",
-      "category_cn": "非 Pass：可选张量仅以 GetStorage() 判活",
-      "severity": "high",
-      "evidence_type": "source_audit_hypothesis",
-      "likely_modules": [
-        "operator"
-      ],
-      "files_to_check": [
-        "framework/src/operator/models/deepseek/dynamic_mla.cpp",
-        "framework/src/operator/models/deepseek/attention.cpp"
-      ],
-      "symptom_keywords": [
-        "optional tensor",
-        "GetStorage",
-        "qKv[2]",
-        "QuantMM"
-      ],
-      "pass_symptoms": [
-        "空指针/vector 越界",
-        "量化参数未生效导致精度异常"
-      ],
-      "code_anti_pattern": "源码审计假设：bool isQuant = dequantScaleWUqQr.GetStorage() != nullptr; 后直接访问 qKv[2]；QuantMM 丢弃 smooth/scale 参数。",
-      "fix_pattern": "若源码核查证实该风险，建议：将 optional tensor 判活与返回 vector 长度统一断言；QuantMM 透传可选参数。",
-      "verification_hints": [
-        "构造无 scale/smooth 的量化 case",
-        "检查 vector 长度"
-      ],
-      "pattern_id": "N085",
-      "example_commits": [],
-      "related_issues": []
-    },
-    {
       "category": "non_pass_operator_dtype_snapshot_in_place",
       "category_cn": "非 Pass：dtype 快照丢失 & 输入引用被就地修改",
       "severity": "high",
@@ -2817,8 +2715,6 @@
         "operator"
       ],
       "files_to_check": [
-        "framework/src/operator/models/deepseek/dynamic_mla.cpp",
-        "framework/src/operator/models/deepseek/attention.cpp",
         "framework/src/interface/tileop/tileop_common.h"
       ],
       "symptom_keywords": [
@@ -2889,9 +2785,7 @@
         "tileop"
       ],
       "files_to_check": [
-        "framework/src/interface/tileop/vector/gather.h",
-        "framework/src/operator/models/deepseek/page_attention.cpp",
-        "framework/src/operator/models/deepseek/attention.cpp"
+        "framework/src/interface/tileop/vector/gather.h"
       ],
       "symptom_keywords": [
         "TgatherElement",

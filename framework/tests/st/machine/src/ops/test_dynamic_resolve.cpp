@@ -15,7 +15,6 @@
 #include <gtest/gtest.h>
 #include "test_suite_stest_ops.h"
 #include "interface/interpreter/raw_tensor_data.h"
-#include "operator/models/deepseek/page_attention.h"
 #include "machine/utils/dynamic/dev_encode.h"
 #include "machine/runtime/launcher/device_launcher.h"
 #include "machine/runtime/launcher/emulation_launcher.h"

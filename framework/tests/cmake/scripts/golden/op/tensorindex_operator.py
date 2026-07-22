@@ -21,8 +21,8 @@ from typing import List
 
 
 import numpy as np
-from golden.op.gather_operator import gen_gather_data
-from golden.op.gather_operator import gen_gather_data_2d
+from gather_operator import gen_gather_data
+from gather_operator import gen_gather_data_2d
 
 if __name__ == "__main__":
     """ 单独调试时配置 """

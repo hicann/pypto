@@ -13,7 +13,7 @@
  * \brief
  */
 
-#include "operator/models/deepseek/deepseek_mla.h"
+#include "view_type.h"
 
 using namespace npu::tile_fwk;
 

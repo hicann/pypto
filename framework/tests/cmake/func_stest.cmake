@@ -13,10 +13,7 @@ set(PTO_Fwk_STestCaseLdLibrariesExt        "" CACHE INTERNAL "" FORCE)     # STe
 set(PTO_Fwk_STestCaseGoldenScriptPathList  "" CACHE INTERNAL "" FORCE)     # STest 各模块 Golden 脚本路径配置
 
 # 切换完成前, 增加原有目录
-set(PTO_Fwk_STestCaseGoldenScriptPathList ${PTO_Fwk_STestCaseGoldenScriptPathList} ${PTO_FWK_SRC_ROOT}/framework/tests/cmake/scripts/golden/net/deepseekv3/mla CACHE INTERNAL "" FORCE)
-set(PTO_Fwk_STestCaseGoldenScriptPathList ${PTO_Fwk_STestCaseGoldenScriptPathList} ${PTO_FWK_SRC_ROOT}/framework/tests/cmake/scripts/golden/net/deepseekv3/nsa CACHE INTERNAL "" FORCE)
 set(PTO_Fwk_STestCaseGoldenScriptPathList ${PTO_Fwk_STestCaseGoldenScriptPathList} ${PTO_FWK_SRC_ROOT}/framework/tests/cmake/scripts/golden/op CACHE INTERNAL "" FORCE)
-set(PTO_Fwk_STestCaseGoldenScriptPathList ${PTO_Fwk_STestCaseGoldenScriptPathList} ${PTO_FWK_SRC_ROOT}/framework/tests/st/operator/src/test_deepseek_v3.2_exp CACHE INTERNAL "" FORCE)
 
 # 用于添加 STest 测试用例二进制库
 #[[

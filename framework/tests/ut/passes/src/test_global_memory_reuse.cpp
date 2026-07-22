@@ -25,8 +25,6 @@
 #include "interface/inner/tilefwk.h"
 #include "interface/configs/config_manager.h"
 #include "interface/tensor/tensormap.h"
-#include "operator/models/deepseek/deepseek_mla.h"
-#include "operator/models/deepseek/deepseek_spec.h"
 #include "passes/block_graph_pass/memory_reuse/global_memory_reuse.h"
 #include "computational_graph_builder.h"
 

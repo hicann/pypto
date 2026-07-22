@@ -450,31 +450,6 @@ struct RoPETileShapeConfigNew {
     std::vector<int64_t> fiveDimsTileShape;
 };
 
-void ApplyRotaryPosEmb(const Tensor& q, const Tensor& k, const Tensor& cos, const Tensor& sin,
-                       const Tensor& positionIds, Tensor& qEmbed, Tensor& kEmbed, const int unsqueezeDim = 1,
-                       const RoPETileShapeConfig& ropeTileShapeConfig = {});
-
-void ApplyRotaryPosEmbV2(const Tensor& q, const Tensor& k, const Tensor& cos, const Tensor& sin, Tensor& qEmbed,
-                         Tensor& kEmbed, const int unsqueezeDim = 2,
-                         const RoPETileShapeConfigNew& ropeTileShapeConfig = {});
-
-void IncreFlashAttention(Tensor& qNope, Tensor& kNopeCache, Tensor& vNopeCache, Tensor& qRope, Tensor& kRopeCache,
-                         std::vector<std::vector<int>>& blockTable, std::vector<int>& actSeqs, float softmaxScale,
-                         Tensor& attentionOut, IfaTileShapeConfig& tileConfig);
-
-void PageAttentionAddS(Tensor& qNope, Tensor& kNopeCache, Tensor& vNopeCache, Tensor& qRope, Tensor& kRopeCache,
-                       Tensor& blockTable, Tensor& actSeqs, int blockSize, float softmaxScale, Tensor& attentionOut,
-                       Tensor& postOut, PaTileShapeConfig& tileConfig, int maxUnrollTimes = 1);
-
-void PageAttentionAddSSingleOutput(Tensor& qNope, Tensor& kNopeCache, Tensor& vNopeCache, Tensor& qRope,
-                                   Tensor& kRopeCache, Tensor& blockTable, Tensor& actSeqs, int blockSize,
-                                   float softmaxScale, Tensor& attentionOut, Tensor& postOut,
-                                   PaTileShapeConfig& tileConfig, int maxUnrollTimes = 1);
-
-void PrologPost(Tensor& qNope, Tensor& kNopeCache, Tensor& vNopeCache, Tensor& qRope, Tensor& kRopeCache,
-                Tensor& blockTable, Tensor& actSeqs, Tensor& weightUV, Tensor& weightO, int blockSize,
-                float softmaxScale, Tensor& postOut, PaTileShapeConfig& tileConfig);
-
 namespace Matrix {
 
 enum class ReLuType : int64_t { NoReLu = 0, ReLu = 1 };
