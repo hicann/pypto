@@ -7,11 +7,31 @@ description: Pass精度校验技能。开启PreCheck/PostCheck进行全链路Pas
 
 验证 PyPTO Pass 侧精度问题，通过 PreCheck/PostCheck 全链路校验定位报错 Pass，使用 pass_compare 逐 Op 对比定位具体问题 Op。
 
+## 总览
+
+```
+配置 PreCheck/PostCheck + verify_options → 编译运行 → 检查 interpreter.log
+       │
+       ▼
+  最后一个 Pass CodegenPreproc和前置 Pass 是否通过？
+       │
+       ├── FAIL ──→ pass_compare 结果存在 Fail Op ──→ 定位到问题 Op，针对该 Op 检查实现
+       │
+       │ PASS
+       │
+       ▼
+  特定问题排查
+       │
+       ├── 通过开关配置定位到 VF 融合 / Mix 子图 / 同步 / 合轴问题 ──→ 结束
+       │
+       └── 仍未定位 ──→ 进入 precision-binary-search 上板二分定位
+```
+
 ---
 
-## 环境与配置
+## 一、Pass 校验
 
-### 环境变量配置
+### 环境与配置
 
 | 环境变量 | 设置时机 | 说明 |
 |---------|---------|------|
@@ -19,30 +39,13 @@ description: Pass精度校验技能。开启PreCheck/PostCheck进行全链路Pas
 | `ASCEND_GLOBAL_LOG_LEVEL` | 建议设为 0（DEBUG） | 获取详细调试信息 |
 | `TILE_FWK_DEVICE_ID` | NPU 模式运行前必须设置 | 指定 NPU 设备 ID |
 
-**设置示例**：
 ```bash
-# 必需：设置工作目录
 export ASCEND_WORK_PATH="/path/to/work/directory"
-
-# 必需：设置日志级别（0=DEBUG, 1=INFO, 2=WARNING, 3=ERROR）
 export ASCEND_GLOBAL_LOG_LEVEL=0
-
-# 可选：设置设备 ID（NPU 模式）
 export TILE_FWK_DEVICE_ID=0
 ```
 
-**验证环境变量**：
-```bash
-echo "ASCEND_WORK_PATH: $ASCEND_WORK_PATH"
-echo "ASCEND_GLOBAL_LOG_LEVEL: $ASCEND_GLOBAL_LOG_LEVEL"
-echo "TILE_FWK_DEVICE_ID: $TILE_FWK_DEVICE_ID"
-```
-
----
-
-## 操作步骤
-
-### 步骤一：配置校验开关
+### 配置校验开关
 
 #### verify_options 配置
 
@@ -51,7 +54,6 @@ echo "TILE_FWK_DEVICE_ID: $TILE_FWK_DEVICE_ID"
 ```python
 verify_options = {
     "enable_pass_verify": True,            # 启用Pass验证（必须）
-    "pass_verify_pass_filter": ["all"],    # 验证所有Pass
     "pass_verify_save_tensor": True,       # 保存中间数据
 }
 
@@ -68,8 +70,13 @@ def your_kernel(
 | 配置项 | 说明 | 默认值 |
 |-------|------|-------|
 | `enable_pass_verify` | 启用 Pass 验证 | `False` |
-| `pass_verify_pass_filter` | 过滤要验证的 Pass | `[]` |
 | `pass_verify_save_tensor` | 保存 Pass 中间数据 | `False` |
+| `pass_verify_pass_filter` | 过滤要验证的 Pass（可选，见下方说明） | 默认 7 个 Pass |
+
+> **`pass_verify_pass_filter` 取值说明**：
+> - **不传**：默认校验 7 个 Pass：`ExpandFunction`、`ProcessAtomic`、`L1CopyInReuseMerge`、`InferDynShape`、`PreGraphProcess`、`InferParamIndex`、`CodegenPreproc`
+> - **`["all"]`**：校验所有 Pass
+> - **`[]`（空列表）**：不校验任何 Pass，只校验 tensor_graph
 
 > **注意**：Shape 必须具体，不能使用占位符；返回类型必须使用输出参数形式。
 
@@ -84,8 +91,8 @@ def your_kernel(
             "default_pass_configs": {
                 "print_graph": true,
                 "dump_graph": true,
-                "pre_check": true,    // Pass精度问题时开启
-                "post_check": true    // Pass精度问题时开启
+                "pre_check": true,
+                "post_check": true
             }
         }
     }
@@ -101,7 +108,7 @@ def your_kernel(
 
 > 大数据量时（Shape T>1000）：缩小shape参数、删除LOOP的unrolllist参数、增大tileshape（cube_tile_shapes、vec_tile_shapes）。
 
-### 步骤二：编译运行
+### 编译运行
 
 ```bash
 python3 -m pip install . --verbose
@@ -110,51 +117,22 @@ python3 your_test_case.py
 
 输出目录：`./output/output_*`（验证数据）、`$ASCEND_WORK_PATH/log/`（日志）
 
-### 步骤三：分析验证结果
+### 分析验证结果
 
 错误码定义：`framework/include/tilefwk/error_code.h`
 
-> **判断标准**：只看 CodegenPreproc Pass（最后一个 Pass）是否通过。中间 Pass 报错（如 ReplaceTensor、ProcessAtomic 等出现 `VERIFY_RESULT_MISMATCH`）忽略，只要 CodegenPreproc PASS 即表示精度正确。只有 CodegenPreproc FAIL 时才需要用 `pass_compare.py` 进一步定位。
-
----
-
-## 错误码速查表
-
 | 错误码 | 名称 | 阶段 | 处理方法 |
 |-------|------|------|---------|
-| `0xB4001U` | VERIFY_RESULT_MISMATCH | 前端/Pass | 参考[问题处理流程](#问题处理流程) |
+| `0xB4001U` | VERIFY_RESULT_MISMATCH | 前端/Pass | 参考 [FAIL 处理](#fail-处理pass_compare-定位问题-op) |
 | `0xB200FU` | RUNTIME_EXCEPTION | Pass | 检查 OP 属性，参考 IR 图 |
 | `0xB0001U` | VERIFY_NOT_ENABLE | 环境 | 检查 `torch >= 2.1.0` |
 | 其他 | — | 未知 | 联系开发人员 |
 
----
+> **判断标准**：只看 CodegenPreproc Pass（最后一个 Pass）是否通过。中间 Pass 报错（如 ReplaceTensor、ProcessAtomic 等出现 `VERIFY_RESULT_MISMATCH`）忽略，只要 CodegenPreproc PASS 即表示精度正确。只有 CodegenPreproc FAIL 时才需要用 `pass_compare.py` 进一步定位。
 
-## 问题处理流程
+### FAIL 处理：pass_compare 定位问题 Op
 
-### Pass级别FAIL
-
-> **前置配置**（必须）：按照 [操作步骤-步骤一](#步骤一配置校验开关) 配置 `verify_options` 和 `tile_fwk_config.json`。
-
-**OP报错**：对比 Before/After IR，确认是否误报。
-
-动态shape场景：IR显示符号变量（如 `sym_15_dim_0`）→ 参考 [machine.md](../../../docs/zh/tutorials/appendix/trouble_shooting/machine.md) 进行排查。
-
-**精度问题**：
-
-> **重要判断标准**：只看最后一个 Pass（`Pass_36_CodegenPreproc`）是否通过。中间 Pass报错但 CodegenPreproc PASS → 属于误报，可忽略。
-
-**处理流程**：
-```
-配置PreCheck/PostCheck → 编译运行 → 检查interpreter.log
-    ├─ CodegenPreproc PASS → pass层精度正确，无需进一步调试
-    └─ CodegenPreproc FAIL → 根据日志确定失败pass，使用pass_compare定位问题Pass → pass_compare定位问题Op
-```
-
----
-
-**pass_compare.py定位问题Op**：
-
-定位到问题Pass后，使用 `pass_compare.py` 进一步定位具体Op：
+根据日志确定失败 Pass 后，使用 `pass_compare.py` 逐 Op 对比：
 
 ```bash
 python3 tools/verifier/pass_compare.py \
@@ -173,7 +151,7 @@ python3 tools/verifier/pass_compare.py \
 
 > **定位结果**：pass_compare.py 生成 `verify_graph_result_cmp~Pass_xx~PassA~Pass_yy_PassB~timestamp.csv`，逐 Op 记录对比结果（PASS/FAIL/Skip），失败 Op 即为问题 Op。
 
-**自动分析脚本**：运行完 pass_compare.py 后，直接分析生成的 CSV 定位问题 Op：
+**自动分析脚本**：
 
 ```bash
 python3 -c "
@@ -203,41 +181,52 @@ if failed > 0:
 | 结果 | 含义 | 后续动作 |
 |------|------|---------|
 | 存在 Fail Op | Fail 的 Op 即为精度问题来源 | 针对该 Op 检查实现逻辑、数据类型、shape 处理等 |
-| 全部 Pass 但精度仍有问题 | Pass 层未检出差异，问题在上板执行阶段 | 参考 [Pass级别都Pass，精度仍有问题 → 检查同步/VF融合问题](#pass级别都pass精度仍有问题--检查同步vf融合问题) 验证 |
+| 全部 Pass 但精度仍有问题 | Pass 层未检出差异 | 进入 [二、特定问题排查](#二特定问题排查) |
 
-**移除 Pass 校验配置**
+### 移除校验配置
 
 Pass 校验完成后，**移除校验配置**，避免影响后续调试：
 
-**移除 verify_options 配置**：
-
 ```python
-# 移除 Pass 校验配置
 @pypto.frontend.jit()  # 移除 verify_options 参数
 def your_kernel(...)
 ```
-恢复`tile_fwk_config.json`文件中pre_check，post_check配置
 
-### Pass级别都Pass，精度仍有问题 → 检查同步/VF融合问题
+恢复 `tile_fwk_config.json` 文件中 pre_check、post_check 配置。
 
-如果所有 Pass 校验都通过但算子精度仍有问题，可能是 pipeline 同步不及时导致的数据竞争或 VF 融合问题导致。
+---
 
-**快速验证同步/VF融合问题**：
+## 二、特定问题排查
+
+如果所有 Pass 校验都通过但算子精度仍有问题，需要排查以下特定场景。
+
+**前置步骤**：确认设备型号（后续排查中部分场景仅针对特定设备）：
+
+```bash
+lspci | grep -i "acc" | grep -oE "d80[236]"
+```
+
+| 设备 ID | 型号 |
+|---------|------|
+| `d802` | Ascend 910B (A2) |
+| `d803` | Ascend 910C (A3) |
+| `d806` | Ascend 950 (A5) |
+
+### 同步/VF 融合问题
+
+pipeline 同步不及时导致的数据竞争或 VF 融合问题会导致精度异常。
+
+**快速验证**：
 
 1. 修改 `framework/src/passes/block_graph_pass/insert_sync.h`，将 `bool enableDebug_{false}` 改为 `bool enableDebug_{true}`
 2. 重新编译安装 pypto：`python3 -m pip install . --verbose`
-3. 重新执行算子。若精度通过 → 说明是同步/VF融合问题，需进一步定位具体原因，恢复`bool enableDebug_{false}`参数
-4. 检查是否为 VF 融合问题（仅针对 A5）：
-
-   **前置检查**：执行 `npu-smi info` 查看设备型号。若结果为 `Ascend950`，则继续以下步骤；否则跳过步骤4，默认为同步问题。
-
+3. 重新执行算子。若精度通过 → 说明是同步/VF融合问题，需进一步定位具体原因，恢复 `bool enableDebug_{false}` 参数
+4. 检查是否为 VF 融合问题（仅针对 A5 时执行，否则跳过，默认为同步问题）：
    - 修改 `framework/src/interface/configs/tile_fwk_config.json`，将 `"enable_vf": true` 改为 `"enable_vf": false`
    - 重新编译安装 pypto：`python3 -m pip install . --verbose`
    - 重新执行算子。若精度通过 → 说明是 VF 融合问题
 
-若确认为同步问题导致精度失败，执行以下定位流程：
-
-详细步骤请参考：**[references/pipe_all.md](references/pipe_all.md)**
+若确认为同步问题导致精度失败，详细步骤请参考：**[references/pipe_all.md](references/pipe_all.md)**
 
 **定位流程概览**：
 
@@ -245,6 +234,28 @@ def your_kernel(...)
 2. 在问题 CCE 文件内手动二分插入 `pipe_barrier(PIPE_ALL)`，定位具体问题行
 3. 使用 `locate_source_line.py` 映射问题行到前端源代码
 4. 分析并修复同步问题
+
+### 合轴问题
+
+如果算子实现中开启了合轴（`pypto.experimental.set_operation_options(combine_axis=True)`），可以尝试关闭合轴，观察精度问题是否消失：
+
+```python
+pypto.experimental.set_operation_options(combine_axis=False)
+```
+
+若关闭后重新执行精度通过 → 说明是合轴引入的精度问题，需检查合轴场景下尾轴 broadcast 的正确性。
+
+### Mix 合图问题（仅 A5）
+
+仅针对 A5（设备 ID `d806`）。如果算子实现中开启了自动 CV Mix 合图（`auto_mix_partition=1`），可以尝试关闭合图，观察精度问题是否消失：
+
+```python
+pypto.set_pass_options(auto_mix_partition=0)
+```
+
+若关闭后重新执行精度通过 → 说明是 Mix 合图引入的精度问题，需检查 ReduceCopyMerge Pass 中子图合并的正确性。
+
+---
 
 ## 打印上板信息
 
@@ -256,15 +267,13 @@ def your_kernel(...)
 
 ### 打印环境配置
 
-**tile_fwk_config.json 配置**：
-
 ```json
 {
     "global": {
         "codegen": {
-            "fixed_output_path": true,    // 固定CCE输出路径
-            "force_overwrite": false,     // 不覆盖已修改的CCE文件
-            "parallel_compile": 1         // 单线程编译
+            "fixed_output_path": true,
+            "force_overwrite": false,
+            "parallel_compile": 1
         }
     }
 }
@@ -275,8 +284,6 @@ def your_kernel(...)
 | `fixed_output_path` | `true` | CCE固定生成在 `./kernel_aicore/` |
 | `force_overwrite` | `false` | 不覆盖手动修改的CCE文件 |
 | `parallel_compile` | `1` | 单线程编译，便于调试 |
-
-**aicore_print.h 打印开关**：
 
 确保 `framework/src/interface/machine/device/tilefwk/aicore_print.h` 中：
 ```c
@@ -291,6 +298,7 @@ def your_kernel(...)
 | UB tensor数据 | `AiCorePrintUbTensor` | UB上的tensor |
 | Shape变量值 | `AicoreLogF` | 动态shape实际值 |
 | Offset值 | `AicoreLogF` | 动态offset实际值 |
+
 ---
 
 ## 注意事项

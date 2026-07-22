@@ -200,4 +200,4 @@ python3 scripts/locate_source_line.py \
 | ------------------------------------------------------------ | ------------------- |
 | [insert_sync.cpp](../../../../../framework/src/passes/block_graph_pass/insert_sync.cpp) | enableDebug 实现    |
 | [tile_fwk_config.json](../../../../../framework/src/interface/configs/tile_fwk_config.json) | 编译配置            |
-| [pypto-pass-precision/SKILL.md](../SKILL.md)                 | Pass 精度校验主流程 |
+| [precision-pass/SKILL.md](../SKILL.md)                       | Pass 精度校验主流程 |
