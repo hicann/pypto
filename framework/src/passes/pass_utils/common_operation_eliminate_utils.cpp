@@ -31,10 +31,8 @@ const std::unordered_set<Opcode>& CommonOperationEliminateUtils::GetSkipEliminat
 {
     // Opcodes in this set are excluded from common operation elimination on purpose:
     //   - OP_VIEW: works with GraphPartition processing logic.
-    //   - OP_VEC_DUP: avoid eliminating duplicate vector ops.
     static const std::unordered_set<Opcode> skipOpcodes = {
         Opcode::OP_VIEW,
-        Opcode::OP_VEC_DUP,
     };
     return skipOpcodes;
 }
@@ -379,6 +377,71 @@ std::unordered_set<int> CommonOperationEliminateUtils::GetMixSubgraphIds(Functio
     return result;
 }
 
+MemoryType CommonOperationEliminateUtils::GetAssembleInputMemoryType(Operation* consumer,
+                                                                     const LogicalTensorPtr& input) const
+{
+    if (input != nullptr && input->GetMemoryTypeOriginal() != MemoryType::MEM_UNKNOWN) {
+        return input->GetMemoryTypeOriginal();
+    }
+    if (consumer == nullptr || consumer->GetOpcode() != Opcode::OP_ASSEMBLE) {
+        return MemoryType::MEM_UNKNOWN;
+    }
+    auto assembleAttr = std::dynamic_pointer_cast<AssembleOpAttribute>(consumer->GetOpAttribute());
+    if (assembleAttr == nullptr) {
+        return MemoryType::MEM_UNKNOWN;
+    }
+    return assembleAttr->GetFrom();
+}
+
+MemoryType CommonOperationEliminateUtils::GetAssembleOutputMemoryType(Operation* consumer) const
+{
+    if (consumer == nullptr) {
+        return MemoryType::MEM_UNKNOWN;
+    }
+    const auto& outputs = consumer->GetOOperands();
+    if (!outputs.empty() && outputs.front() != nullptr &&
+        outputs.front()->GetMemoryTypeOriginal() != MemoryType::MEM_UNKNOWN) {
+        return outputs.front()->GetMemoryTypeOriginal();
+    }
+    return MemoryType::MEM_UNKNOWN;
+}
+
+bool CommonOperationEliminateUtils::HasSameMemoryAssembleUse(const LogicalTensorPtr& tensor,
+                                                             std::unordered_set<int>& visitedTensorMagics) const
+{
+    if (tensor == nullptr || !visitedTensorMagics.insert(tensor->GetMagic()).second) {
+        return false;
+    }
+    for (const auto& consumer : tensor->GetConsumers()) {
+        if (consumer == nullptr || consumer->GetOpcode() != Opcode::OP_ASSEMBLE) {
+            continue;
+        }
+        MemoryType inputType = GetAssembleInputMemoryType(consumer, tensor);
+        MemoryType outputType = GetAssembleOutputMemoryType(consumer);
+        if (inputType == MemoryType::MEM_UNKNOWN || outputType == MemoryType::MEM_UNKNOWN || inputType == outputType) {
+            return true;
+        }
+        for (const auto& output : consumer->GetOOperands()) {
+            if (HasSameMemoryAssembleUse(output, visitedTensorMagics)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+bool CommonOperationEliminateUtils::ShouldSkipSameMemoryAssembleMerge(const LogicalTensorPtr& oldTensor) const
+{
+    std::unordered_set<int> visitedTensorMagics;
+    if (HasSameMemoryAssembleUse(oldTensor, visitedTensorMagics)) {
+        APASS_LOG_DEBUG_F(Elements::Operation,
+                          "Skip eliminating Tensor[%d] because it has same-memory assemble consumers.",
+                          oldTensor->GetMagic());
+        return true;
+    }
+    return false;
+}
+
 bool CommonOperationEliminateUtils::WouldExposeMixInternalTensorAfterMerge(
     const LogicalTensorPtr& oldTensor, const LogicalTensorPtr& newTensor,
     const std::unordered_set<int>& mixSubgraphIds) const
@@ -457,6 +520,9 @@ bool CommonOperationEliminateUtils::TensorProducersMerge(
         }
     }
     if (newTensor->GetConsumers().size() == 0 || oldTensor->GetConsumers().size() == 0) {
+        return false;
+    }
+    if (ShouldSkipSameMemoryAssembleMerge(oldTensor)) {
         return false;
     }
     if (WouldExposeMixInternalTensorAfterMerge(oldTensor, newTensor, mixSubgraphIds_)) {

@@ -54,6 +54,10 @@ private:
     void UpdateInternalTensorCoreFlag(const LogicalTensorPtr& tensor,
                                       std::unordered_map<int, uint32_t>& subgraphCoreFlags) const;
     std::unordered_set<int> GetMixSubgraphIds(Function& function) const;
+    MemoryType GetAssembleInputMemoryType(Operation* consumer, const LogicalTensorPtr& input) const;
+    MemoryType GetAssembleOutputMemoryType(Operation* consumer) const;
+    bool HasSameMemoryAssembleUse(const LogicalTensorPtr& tensor, std::unordered_set<int>& visitedTensorMagics) const;
+    bool ShouldSkipSameMemoryAssembleMerge(const LogicalTensorPtr& oldTensor) const;
     bool WouldExposeMixInternalTensorAfterMerge(const LogicalTensorPtr& oldTensor, const LogicalTensorPtr& newTensor,
                                                 const std::unordered_set<int>& mixSubgraphIds) const;
     std::pair<LogicalTensorPtr, std::vector<Operation*>> TensorHashExist(

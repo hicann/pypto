@@ -43,6 +43,74 @@ public:
     void TearDown() override {}
 };
 
+namespace {
+void ExpectCommonOperationEliminateOpCount(ComputationalGraphBuilder& graph, size_t expectedOpCount)
+{
+    Function* function = graph.GetFunction();
+    ASSERT_NE(function, nullptr);
+    CommonOperationEliminate coe;
+    EXPECT_EQ(coe.Run(*function, "", "", 0), SUCCESS);
+    EXPECT_EQ(function->Operations().size(), expectedOpCount);
+}
+
+bool AddVecDupTensor(ComputationalGraphBuilder& graph, const std::string& name, bool setMemoryType)
+{
+    if (setMemoryType) {
+        return graph.AddTensor(DataType::DT_FP32, {16, 16}, MemoryType::MEM_UB, name);
+    }
+    return graph.AddTensor(DataType::DT_FP32, {16, 16}, name);
+}
+
+bool SetAssembleAttributes(ComputationalGraphBuilder& graph)
+{
+    auto* assemble1 = graph.GetOp("ASSEMBLE1");
+    auto* assemble2 = graph.GetOp("ASSEMBLE2");
+    if (assemble1 == nullptr || assemble2 == nullptr) {
+        return false;
+    }
+    assemble1->SetOpAttribute(std::make_shared<AssembleOpAttribute>(MemoryType::MEM_UB, std::vector<int64_t>{0, 0}));
+    assemble2->SetOpAttribute(std::make_shared<AssembleOpAttribute>(MemoryType::MEM_UB, std::vector<int64_t>{16, 0}));
+    return true;
+}
+
+bool BuildVecDupAssembleGraph(ComputationalGraphBuilder& graph, MemoryType outMemoryType,
+                              bool setVecDupMemoryType = true, bool setAssembleAttr = true)
+{
+    std::vector<Opcode> opCodes{Opcode::OP_VEC_DUP, Opcode::OP_VEC_DUP, Opcode::OP_ASSEMBLE, Opcode::OP_ASSEMBLE};
+    std::vector<std::vector<std::string>> ioperands{{}, {}, {"t1"}, {"t2"}};
+    std::vector<std::vector<std::string>> ooperands{{"t1"}, {"t2"}, {"out"}, {"out"}};
+    std::vector<std::string> opNames{"VECDUP1", "VECDUP2", "ASSEMBLE1", "ASSEMBLE2"};
+    if (!AddVecDupTensor(graph, "t1", setVecDupMemoryType) || !AddVecDupTensor(graph, "t2", setVecDupMemoryType) ||
+        !graph.AddTensor(DataType::DT_FP32, {32, 16}, outMemoryType, "out") ||
+        !graph.AddOps(opCodes, ioperands, ooperands, opNames, true)) {
+        return false;
+    }
+    if (!setAssembleAttr) {
+        return graph.SetOutCast({"out"});
+    }
+    if (!SetAssembleAttributes(graph)) {
+        return false;
+    }
+    return graph.SetOutCast({"out"});
+}
+
+bool BuildUnaryOpAssembleGraph(ComputationalGraphBuilder& graph, MemoryType outMemoryType)
+{
+    std::vector<Opcode> opCodes{Opcode::OP_EXP, Opcode::OP_EXP, Opcode::OP_ASSEMBLE, Opcode::OP_ASSEMBLE};
+    std::vector<std::vector<std::string>> ioperands{{"input"}, {"input"}, {"t1"}, {"t2"}};
+    std::vector<std::vector<std::string>> ooperands{{"t1"}, {"t2"}, {"out"}, {"out"}};
+    std::vector<std::string> opNames{"EXP1", "EXP2", "ASSEMBLE1", "ASSEMBLE2"};
+    if (!graph.AddTensor(DataType::DT_FP32, {16, 16}, MemoryType::MEM_UB, "input") ||
+        !graph.AddTensor(DataType::DT_FP32, {16, 16}, MemoryType::MEM_UB, "t1") ||
+        !graph.AddTensor(DataType::DT_FP32, {16, 16}, MemoryType::MEM_UB, "t2") ||
+        !graph.AddTensor(DataType::DT_FP32, {32, 16}, outMemoryType, "out") ||
+        !graph.AddOps(opCodes, ioperands, ooperands, opNames, true) || !SetAssembleAttributes(graph)) {
+        return false;
+    }
+    return graph.SetInCast({"input"}) && graph.SetOutCast({"out"});
+}
+} // namespace
+
 TEST_F(CommonOperationEliminateTest, EliminateRedundantOps)
 {
     ComputationalGraphBuilder G;
@@ -302,7 +370,7 @@ TEST_F(CommonOperationEliminateTest, IgnoreSpecialOp)
     EXPECT_EQ(function->Operations().size(), validOpNum);
 }
 
-TEST_F(CommonOperationEliminateTest, SkipVecDupOp)
+TEST_F(CommonOperationEliminateTest, EliminateVecDupWithoutAssemblePlacement)
 {
     ComputationalGraphBuilder G;
     std::vector<std::string> tensorNames{"t1", "t2", "t3"};
@@ -313,12 +381,39 @@ TEST_F(CommonOperationEliminateTest, SkipVecDupOp)
     EXPECT_EQ(G.AddTensors(DataType::DT_FP32, {16, 16}, tensorNames), true);
     EXPECT_EQ(G.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
     EXPECT_EQ(G.SetOutCast({"t3"}), true);
-    Function* function = G.GetFunction();
-    EXPECT_NE(function, nullptr);
-    CommonOperationEliminate COE;
-    COE.Run(*function, "", "", 0);
-    const int validOpNum = 3; // OP_VEC_DUP is in the skip list, so both VECDUP ops are preserved.
-    EXPECT_EQ(function->Operations().size(), validOpNum);
+    ExpectCommonOperationEliminateOpCount(G, 2);
+}
+
+TEST_F(CommonOperationEliminateTest, PreserveVecDupAssembledToSameMemory)
+{
+    ComputationalGraphBuilder G;
+    ASSERT_TRUE(BuildVecDupAssembleGraph(G, MemoryType::MEM_UB));
+    ExpectCommonOperationEliminateOpCount(G, 4);
+}
+
+TEST_F(CommonOperationEliminateTest, EliminateVecDupAssembledToDifferentMemory)
+{
+    ComputationalGraphBuilder G;
+    ASSERT_TRUE(BuildVecDupAssembleGraph(G, MemoryType::MEM_DEVICE_DDR));
+    ExpectCommonOperationEliminateOpCount(G, 3);
+}
+
+TEST_F(CommonOperationEliminateTest, PreserveCommonOpAssembledToSameMemory)
+{
+    ComputationalGraphBuilder G;
+    ASSERT_TRUE(BuildUnaryOpAssembleGraph(G, MemoryType::MEM_UB));
+    ExpectCommonOperationEliminateOpCount(G, 4);
+}
+
+TEST_F(CommonOperationEliminateTest, PreserveAssembledWhenMemoryTypeUnknown)
+{
+    ComputationalGraphBuilder attrOnlyGraph;
+    ASSERT_TRUE(BuildVecDupAssembleGraph(attrOnlyGraph, MemoryType::MEM_UB, false));
+    ExpectCommonOperationEliminateOpCount(attrOnlyGraph, 4);
+
+    ComputationalGraphBuilder unknownMemoryGraph;
+    ASSERT_TRUE(BuildVecDupAssembleGraph(unknownMemoryGraph, MemoryType::MEM_UNKNOWN, false, false));
+    ExpectCommonOperationEliminateOpCount(unknownMemoryGraph, 4);
 }
 
 TEST_F(CommonOperationEliminateTest, TestShmemLoadChecker)
