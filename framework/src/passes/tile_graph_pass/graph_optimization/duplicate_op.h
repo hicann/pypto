@@ -15,6 +15,8 @@
 
 #pragma once
 
+#include <stack>
+#include <unordered_set>
 #include <vector>
 #include "passes/pass_interface/pass.h"
 namespace npu::tile_fwk {
@@ -33,6 +35,8 @@ private:
     Status RunOnFunction(Function& function) override;
     Status ProcessOp(Function& function, Operation& operation, std::vector<Operation*>& newOps) const;
     Status Process(Function& function, std::vector<Operation*>& newOps) const;
+    void PushProducers(const LogicalTensors& operands, std::stack<Operation*>& stack,
+                       std::unordered_set<int>& visitedOps, std::unordered_set<int>& visitedTensors) const;
     Status ProcessGatherIn(Function& function, Operation& operation, std::vector<Operation*>& newOps) const;
     Status ProcessView(Function& function, Operation& operation, std::vector<Operation*>& newOps) const;
 };

@@ -83,6 +83,23 @@ def get_logger() -> logging.Logger:
     return _logger
 
 
+def fmt_dur(seconds: float) -> str:
+    """Format duration with adaptive unit for readability.
+
+    Avoids misleading '0.000' display for sub-millisecond passes.
+
+    < 1ms  -> 'NNNus'    (e.g. 0.000018s -> '18us')
+    < 1s   -> 'N.NNms'   (e.g. 0.000277s -> '0.28ms')
+    >= 1s  -> 'NN.NNNs'  (e.g. 77.189s   -> '77.189s')
+    """
+    if seconds < 0.001:
+        return f"{seconds * 1_000_000:.0f}us"
+    elif seconds < 1.0:
+        return f"{seconds * 1000:.2f}ms"
+    else:
+        return f"{seconds:.3f}s"
+
+
 @dataclass
 class PassPerfData:
     """Pass performance data with execution count support"""
@@ -326,14 +343,14 @@ class PassPerfAnalyzer:
         has_comparison = any(d.durations_before for d in sorted_data)
 
         if has_comparison:
-            header = (f"{'Pass Name':<30} | {'Count':<5} | {'Avg(s)':<8} | "
-                      f"{'Target(s)':<9} | {'Total(s)':<9} | "
+            header = (f"{'Pass Name':<30} | {'Count':<5} | {'Avg':<9} | "
+                      f"{'Target(s)':<9} | {'Total':<9} | "
                       f"{'Time%':<6} | {'Improve%':<8} | {'Status'}")
             lg.info(header)
             lg.info("-" * 160)
         else:
-            header = (f"{'Pass Name':<30} | {'Count':<5} | {'Avg(s)':<8} | "
-                      f"{'Target(s)':<9} | {'Total(s)':<9} | "
+            header = (f"{'Pass Name':<30} | {'Count':<5} | {'Avg':<9} | "
+                      f"{'Target(s)':<9} | {'Total':<9} | "
                       f"{'Time%':<6} | {'Status'}")
             lg.info(header)
             lg.info("-" * 130)
@@ -344,13 +361,13 @@ class PassPerfAnalyzer:
 
             if has_comparison and data.durations_before:
                 improve = f"{data.improvement_percent:+.1f}%"
-                row = (f"{data.name:<30} | {data.count:<5} | {data.avg_duration_s:<8.3f} | "
-                       f"{dynamic_threshold:<9.2f} | {data.duration_s:<9.3f} | "
+                row = (f"{data.name:<30} | {data.count:<5} | {fmt_dur(data.avg_duration_s):<9} | "
+                       f"{dynamic_threshold:<9.2f} | {fmt_dur(data.duration_s):<9} | "
                        f"{time_percent:<6} | {improve:<8} | {status}")
                 lg.info(row)
             else:
-                row = (f"{data.name:<30} | {data.count:<5} | {data.avg_duration_s:<8.3f} | "
-                       f"{dynamic_threshold:<9.2f} | {data.duration_s:<9.3f} | "
+                row = (f"{data.name:<30} | {data.count:<5} | {fmt_dur(data.avg_duration_s):<9} | "
+                       f"{dynamic_threshold:<9.2f} | {fmt_dur(data.duration_s):<9} | "
                        f"{time_percent:<6} | {status}")
                 lg.info(row)
 
@@ -366,7 +383,7 @@ class PassPerfAnalyzer:
             lg.info("=" * 140)
             lg.info("Passes Exceeding Dynamic Threshold:")
             for i, (data, threshold) in enumerate(exceeding, 1):
-                msg = (f"  {i}. {data.name}: avg {data.avg_duration_s:.1f}s > "
+                msg = (f"  {i}. {data.name}: avg {fmt_dur(data.avg_duration_s)} > "
                        f"target {threshold:.1f}s (ops: {data.ops}, count: {data.count}, "
                        f"time%: {data.time_percent:.1f}%)")
                 lg.info(msg)

@@ -44,6 +44,7 @@ namespace npu::tile_fwk {
 Status AssignMemoryType::RunOnFunction(Function& function)
 {
     APASS_LOG_INFO_F(Elements::Function, "===> Start AssignMemoryType.");
+    function.SortOperations(SortOperationsMode::LIGHTWEIGHT);
     RETURN_IF_NOT_SUCCESS(AssignConfirmedMemoryTypes(function));
     RETURN_IF_NOT_SUCCESS(InferUncertainMemoryTypes(function));
     RETURN_IF_NOT_SUCCESS(ResolveMemoryUnknowns(function));
@@ -1888,8 +1889,9 @@ Status AssignMemoryType::InsertConvertOpsAndInferShape(Function& function)
         existingOps.insert(&op);
     }
     RETURN_IF_NOT_SUCCESS(inserter.DoInsertion(function));
+    function.SortOperations(SortOperationsMode::LIGHTWEIGHT);
     std::vector<Operation*> addedOps;
-    for (auto& op : function.Operations()) {
+    for (auto& op : function.Operations(false)) {
         if (existingOps.find(&op) == existingOps.end()) {
             addedOps.push_back(&op);
         }

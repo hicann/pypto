@@ -17,6 +17,7 @@
 #define PASS_CONVERT_OP_INSERTER_H_
 
 #include <unordered_map>
+#include <unordered_set>
 #include <set>
 
 #include "interface/function/function.h"
@@ -111,7 +112,8 @@ public:
                          const std::shared_ptr<LogicalTensor>& oOperand, const Operation& op) const;
 
     // 检查tensor是否需要跳过
-    bool SkipOperand(const std::shared_ptr<LogicalTensor>& oOperand, const std::vector<int>& visitedTensor) const;
+    bool SkipOperand(const std::shared_ptr<LogicalTensor>& oOperand,
+                     const std::unordered_set<int>& visitedTensor) const;
 
     // 检查tensor生产者是否都是assemble
     bool isAllProducerAssemble(const std::shared_ptr<LogicalTensor>& oOperand) const;

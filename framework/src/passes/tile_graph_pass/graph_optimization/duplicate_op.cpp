@@ -185,10 +185,30 @@ Status DuplicateOp::ProcessOp(Function& function, Operation& operation, std::vec
     return SUCCESS;
 }
 
+void DuplicateOp::PushProducers(const LogicalTensors& operands, std::stack<Operation*>& stack,
+                                std::unordered_set<int>& visitedOps, std::unordered_set<int>& visitedTensors) const
+{
+    for (const auto& iOperand : operands) {
+        if (iOperand == nullptr) {
+            continue;
+        }
+        if (!visitedTensors.insert(iOperand->GetMagic()).second) {
+            continue;
+        }
+        for (auto& producer : iOperand->GetProducers()) {
+            if (visitedOps.find(producer->GetOpMagic()) == visitedOps.end()) {
+                stack.push(producer);
+            }
+        }
+    }
+}
+
 Status DuplicateOp::Process(Function& function, std::vector<Operation*>& newOps) const
 {
     std::stack<Operation*> stack;
-    std::unordered_set<Operation*> visited;
+    std::unordered_set<int> visitedOps;
+    std::unordered_set<int> visitedTensors;
+    visitedOps.reserve(function.GetOperationSize());
     for (const auto& outcast : function.GetOutcast()) {
         for (auto op : outcast->GetProducers()) {
             stack.push(op);
@@ -196,21 +216,22 @@ Status DuplicateOp::Process(Function& function, std::vector<Operation*>& newOps)
         while (!stack.empty()) {
             Operation* CurrentOp = stack.top();
             stack.pop();
-            if (visited.find(CurrentOp) != visited.end()) {
+            if (!visitedOps.insert(CurrentOp->GetOpMagic()).second) {
                 continue;
             }
-            visited.insert(CurrentOp);
             if (ProcessOp(function, *CurrentOp, newOps) != SUCCESS) {
                 APASS_LOG_ERROR_F(Elements::Operation, "ProcessOp failed.");
                 return FAILED;
             }
-            for (auto& iOperand : CurrentOp->iOperand) {
-                for (auto& producer : iOperand->GetProducers()) {
-                    stack.push(producer);
-                }
-            }
+            PushProducers(CurrentOp->iOperand, stack, visitedOps, visitedTensors);
         }
     }
+
+    // Skip DCE + SortOperations when no duplication occurred.
+    if (newOps.empty()) {
+        return SUCCESS;
+    }
+
     DeadOperationEliminator eliminator;
     eliminator.EliminateDeadOperationBackward(function);
     return SUCCESS;

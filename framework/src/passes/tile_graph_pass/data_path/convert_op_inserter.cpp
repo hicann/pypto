@@ -235,7 +235,7 @@ Status ConvertInserter::RecordConflict(Function& function)
 {
     oldRawToNewRaw.clear();
     converts.clear();
-    std::vector<int> visitedTensor;
+    std::unordered_set<int> visitedTensor;
     for (const auto& op : function.Operations()) {
         for (auto& iOperand : op.iOperand) {
             if (iOperand->GetProducers().size() >= 1) {
@@ -273,7 +273,7 @@ Status ConvertInserter::RecordConflict(Function& function)
                 InsertConvertOpForEachConsumer(function, op, oOperand, consumers, paths);
 
                 // step6：标记已处理
-                visitedTensor.push_back(oOperand->magic);
+                visitedTensor.insert(oOperand->magic);
             }
         }
     }
@@ -456,10 +456,10 @@ Status ConvertInserter::ConstructPath(MemoryType from, MemoryType to, std::vecto
 }
 
 bool ConvertInserter::SkipOperand(const std::shared_ptr<LogicalTensor>& oOperand,
-                                  const std::vector<int>& visitedTensor) const
+                                  const std::unordered_set<int>& visitedTensor) const
 {
     return ((conflictMap.find(oOperand->magic) == conflictMap.end()) ||
-            (std::find(visitedTensor.begin(), visitedTensor.end(), oOperand->magic) != visitedTensor.end()));
+            (visitedTensor.find(oOperand->magic) != visitedTensor.end()));
 }
 
 bool ConvertInserter::isAllProducerAssemble(const std::shared_ptr<LogicalTensor>& oOperand) const
@@ -593,7 +593,7 @@ Status ConvertInserter::DoInsertion(Function& function)
         return status;
     }
     InsertConvertOps(function);
-    APASS_LOG_INFO_F(Elements::Function, "After Insert Convert, total op Num: %zu.", function.Operations().size());
+    APASS_LOG_INFO_F(Elements::Function, "After Insert Convert, total op Num: %zu.", function.GetOperationSize());
     return SUCCESS;
 }
 } // namespace tile_fwk
