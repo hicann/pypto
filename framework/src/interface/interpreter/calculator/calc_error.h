@@ -69,6 +69,9 @@ enum class CalculatorErrorScene : uint32_t {
 
     // FP4 打包转换相关
     FP4_PACKED_LAST_DIM_INVALID = 0xBF018U, // FP4 packed 转换要求最后一维必须是偶数
+
+    // Pack/UnPack 相关
+    PACKORUNPACK_MEMCPY_FAILED = 0xBF019U, // PackOrUnPack 中 memcpy_s 失败
 };
 
 } // namespace npu::tile_fwk

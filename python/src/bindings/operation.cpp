@@ -178,6 +178,10 @@ void BindOperation(py::module_& m)
         py::arg("self"), py::arg("base"), py::arg("precision_type") = PrecisionType::INTRINSIC, "Tensor log.");
     m.def("Log1p", [](const Tensor& self) { return npu::tile_fwk::Log1p(self); }, "Tensor log1p.");
     m.def("Tan", [](const Tensor& self) { return npu::tile_fwk::Tan(self); }, "Tensor tan.");
+    m.def("Pack", [](const Tensor& self) { return npu::tile_fwk::Pack(self); }, "Tensor pack.");
+    m.def(
+        "UnPack", [](const Tensor& self, DataType dstDataType) { return npu::tile_fwk::UnPack(self, dstDataType); },
+        "Tensor unpack.");
     m.def(
         "Pow",
         [](const Tensor& self, const Tensor& other, PrecisionType precisionType) {

@@ -916,6 +916,41 @@ def gen_log_op_golden(case_name: str, output: Path, case_index: int = None) -> b
 
 @GoldenRegister.reg_golden_func(
     case_names=[
+        "TestPack/PackOperationTest.TestPack",
+    ]
+)
+def gen_log_op_golden(case_name: str, output: Path, case_index: int = None) -> bool:
+    # golden开发者需要根据具体golden逻辑修改，不同注册函数内的generate_golden_files可重名
+    def golden_func(inputs, _config: dict):
+        return [inputs[0].flatten().view(np.uint8)]
+
+    logging.debug("Case(%s), Golden creating...", case_name)
+    return gen_op_golden("Pack", golden_func, output, case_index)
+
+
+@GoldenRegister.reg_golden_func(
+    case_names=[
+        "TestUnPack/UnPackOperationTest.TestUnPack",
+    ]
+)
+def gen_log_op_golden(case_name: str, output: Path, case_index: int = None) -> bool:
+    # golden开发者需要根据具体golden逻辑修改，不同注册函数内的generate_golden_files可重名
+    def golden_func(inputs, _config: dict):
+        params = _config.get("params")
+        output_dtype = _config.get("output_tensors")[0].get("dtype")
+        dst_dtype = params.get("dst_dtype", output_dtype)
+        # 映射缩写到 numpy 兼容的 dtype 名
+        # 映射缩写: fp16→numpy float16, bf16→项目自定义bfloat16类型
+        dtype_map = {"fp16": "float16", "bf16": bfloat16}
+        view_dtype = dtype_map.get(dst_dtype, dst_dtype)
+        return [inputs[0].view(view_dtype)]
+
+    logging.debug("Case(%s), Golden creating...", case_name)
+    return gen_op_golden("UnPack", golden_func, output, case_index)
+
+
+@GoldenRegister.reg_golden_func(
+    case_names=[
         "TestPows/PowsOperationTest.TestPows",
     ]
 )

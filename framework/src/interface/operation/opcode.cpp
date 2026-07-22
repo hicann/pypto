@@ -384,6 +384,14 @@ void OpcodeManager::RegisterVectorUnary()
         {"TileOp::TErf", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::ELMWISE,
         {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis, OpAttributeKey::excludeBufferReuse},
         TileShapeVerifier::Verify);
+    RegisterInfo(Opcode::OP_PACK, OpCoreType::AIV, "PACK", {MemoryType::MEM_UB}, {MemoryType::MEM_UB},
+                 {"TileOp::TPack", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::ELMWISE,
+                 {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis}, TileShapeVerifier::Verify);
+    RegisterInfo(
+        Opcode::OP_UNPACK, OpCoreType::AIV, "UNPACK", {MemoryType::MEM_UB}, {MemoryType::MEM_UB},
+        {"TileOp::TUnPack", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::ELMWISE,
+        {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis, OpAttributeKey::excludeBufferReuse},
+        TileShapeVerifier::Verify);
     RegisterInfo(
         Opcode::OP_SIN, OpCoreType::AIV, "SIN", {MemoryType::MEM_UB}, {MemoryType::MEM_UB, MemoryType::MEM_UB},
         {"TileOp::TSin", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::ELMWISE,
@@ -1189,6 +1197,8 @@ std::unordered_map<Opcode, std::string> SUPPORT_TILETENSOR_OPS{
     {Opcode::OP_SIN, "TSin"},
     {Opcode::OP_COS, "TCos"},
     {Opcode::OP_ERFC, "TErfc"},
+    {Opcode::OP_PACK, "TPack"},
+    {Opcode::OP_UNPACK, "TUnPack"},
     {Opcode::OP_ADD, "TAdd"},
     {Opcode::OP_AXPY, "TAxpy"},
     {Opcode::OP_CUM_SUM, "TCumOperation"},

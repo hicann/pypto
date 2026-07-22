@@ -49,6 +49,8 @@ enum class UnaryOpType {
     SIN,
     COS,
     ERFC,
+    PACK,
+    UNPACK,
     ASIN,
     ACOS,
     ERF,
@@ -108,6 +110,10 @@ std::string GetUnaryOpName()
             return "COS";
         case UnaryOpType::ERFC:
             return "ERFC";
+        case UnaryOpType::PACK:
+            return "PACK";
+        case UnaryOpType::UNPACK:
+            return "UNPACK";
         case UnaryOpType::ASINH:
             return "ASINH";
         case UnaryOpType::ACOSH:
@@ -158,6 +164,8 @@ Opcode GetUnaryOpNameCode()
         CASE(SIN);
         CASE(COS);
         CASE(ERFC);
+        CASE(PACK);
+        CASE(UNPACK);
         CASE(ASINH);
         CASE(ACOSH);
         CASE(TANH);

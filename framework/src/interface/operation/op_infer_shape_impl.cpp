@@ -229,6 +229,21 @@ REGISTER_INFER_SHAPE_FUNC(OP_REM, Opcode::OP_REM, RemInferShapeFunc);
 REGISTER_INFER_SHAPE_FUNC(OP_REMS, Opcode::OP_REMS, RemInferShapeFunc);
 REGISTER_INFER_SHAPE_FUNC(OP_REMRS, Opcode::OP_REMRS, RemInferShapeFunc);
 
+void PackInferShapeFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
+{
+    auto input = op->GetIOperands()[0];
+    outValidShapes.push_back({input->GetDynValidShape()[0] * BytesOf(input->Datatype())});
+}
+REGISTER_INFER_SHAPE_FUNC(OP_PACK, Opcode::OP_PACK, PackInferShapeFunc);
+
+void UnPackInferShapeFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
+{
+    auto input = op->GetIOperands()[0];
+    auto output = op->GetOOperands()[0];
+    outValidShapes.push_back({input->GetDynValidShape()[0] / BytesOf(output->Datatype())});
+}
+REGISTER_INFER_SHAPE_FUNC(OP_UNPACK, Opcode::OP_UNPACK, UnPackInferShapeFunc);
+
 template <int64_t TailScale>
 void InferShapeWithTailScaleFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
 {

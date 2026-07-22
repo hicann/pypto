@@ -94,6 +94,11 @@ inline void ASinh(LogicalTensorDataPtr out, LogicalTensorDataPtr self) { GetCalc
 inline void ACosh(LogicalTensorDataPtr out, LogicalTensorDataPtr self) { GetCalcOps()->ACosh(Trans(out), Trans(self)); }
 inline void Atanh(LogicalTensorDataPtr out, LogicalTensorDataPtr self) { GetCalcOps()->Atanh(Trans(out), Trans(self)); }
 inline void Neg(LogicalTensorDataPtr out, LogicalTensorDataPtr self) { GetCalcOps()->Neg(Trans(out), Trans(self)); }
+inline void Pack(LogicalTensorDataPtr out, LogicalTensorDataPtr self) { GetCalcOps()->Pack(Trans(out), Trans(self)); }
+inline void UnPack(LogicalTensorDataPtr out, LogicalTensorDataPtr self)
+{
+    GetCalcOps()->UnPack(Trans(out), Trans(self));
+}
 inline void Round(LogicalTensorDataPtr out, LogicalTensorDataPtr self, int decimals)
 {
     GetCalcOps()->Round(Trans(out), Trans(self), decimals);

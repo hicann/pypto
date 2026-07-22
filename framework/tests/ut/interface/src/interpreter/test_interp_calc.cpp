@@ -351,6 +351,22 @@ TEST_F(TorchAdaptorTest, UnaryOps)
         ASSERT_ALLCLOSE(out, golden);
     }
     {
+        // pack
+        auto self = makeTensorData(DT_INT32, {16, 16}, 0x01010101);
+        auto out = makeTensorData(DT_UINT8, {1024}, static_cast<uint8_t>(0x0));
+        auto golden = makeTensorData(DT_UINT8, {1024}, static_cast<uint8_t>(0x01));
+        calc::Pack(out, self);
+        ASSERT_ALLCLOSE(out, golden);
+    }
+    {
+        // unpack
+        auto self = makeTensorData(DT_UINT8, {16}, static_cast<uint8_t>(0x01));
+        auto out = makeTensorData(DT_INT32, {4}, 0);
+        auto golden = makeTensorData(DT_INT32, {4}, 0x01010101);
+        calc::UnPack(out, self);
+        ASSERT_ALLCLOSE(out, golden);
+    }
+    {
         // reciprocal
         auto self = makeTensorData(DT_FP32, {16, 16}, 4.0f);
         auto out = makeTensorData(DT_FP32, {16, 16}, 0.0f);

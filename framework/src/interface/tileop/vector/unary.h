@@ -1258,6 +1258,42 @@ TILEOP void TrigErfCompute(T0 dst, T1 tmp, T2 src)
     }
 }
 
+template <typename LastUse = LastUse2Dim<0, 0>, typename T0, typename T1>
+TILEOP void PackCompute(T0 dst, T1 src)
+{
+    auto shape = dst.GetLayout().template GetShapeDim<DIM_5TH, MAX_DIMS>();
+    constexpr auto tileW = TileOp::GetTensorTileShapeDim<T0, DIM_5TH, MAX_DIMS>();
+    if constexpr (std::is_same_v<typename T0::Type, int64_t> || std::is_same_v<typename T0::Type, uint64_t>) {
+        using TileDef = pto::Tile<pto::TileType::Vec, int32_t, 1, tileW * 2, pto::BLayout::RowMajor, -1, -1>;
+        TileDef dstTile(1, shape * 2);
+        TileDef srcTile(1, shape * 2);
+        pto::TASSIGN(dstTile, dst.GetAddr());
+        pto::TASSIGN(srcTile, src.GetAddr());
+        pto::TMOV(dstTile, srcTile);
+    } else {
+        using TileDef = pto::Tile<pto::TileType::Vec, typename T0::Type, 1, tileW, pto::BLayout::RowMajor, -1, -1>;
+        TileDef dstTile(1, shape);
+        TileDef srcTile(1, shape);
+        pto::TASSIGN(dstTile, dst.GetAddr());
+        pto::TASSIGN(srcTile, src.GetAddr());
+        pto::TMOV(dstTile, srcTile);
+    }
+}
+
+#define OP_TILE_OP_PACK TPack
+template <typename LastUse = LastUse2Dim<0, 0>, typename T0, typename T1>
+TILEOP void TPack(T0 dst, T1 src)
+{
+    PackCompute(dst, src);
+}
+
+#define OP_TILE_OP_UNPACK TUnPack
+template <typename LastUse = LastUse2Dim<0, 0>, typename T0, typename T1>
+TILEOP void TUnPack(T0 dst, T1 src)
+{
+    PackCompute(dst, src);
+}
+
 #define OP_TILE_OP_SIN TSin
 template <typename T0, typename T1, typename T2>
 TILEOP void TSin(T0 dst, T1 tmp, T2 src)

@@ -92,6 +92,62 @@ def transpose(input: Tensor, dim0: int, dim1: int) -> Tensor:
 
 
 @op_wrapper
+def pack(input: Tensor) -> Tensor:
+    """Flattens a tensor and reinterprets its raw bytes as uint8 elements.
+
+    Parameters
+    ----------
+    input : Tensor
+        The input tensor.
+
+    Returns
+    -------
+    Tensor
+        A new tensor that is a flattened version of `input`.
+
+    Examples
+    --------
+    x = pypto.tensor([1, 2], pypto.DT_INT32)
+    out = pypto.pack(x)
+
+    Input x:    [[ 0x03040506 0x01050608]]
+    Output out: [  6  5  4  3  8  6  5  1  ]
+    """
+    return pypto_impl.Pack(input)
+
+
+@op_wrapper
+def unpack(input: Tensor, dtype: DataType) -> Tensor:
+    """Reinterprets packed uint8 bytes back to the original data type.
+
+    Parameters
+    ----------
+    input : Tensor
+        The input tensor of dtype DT_UINT8 containing packed raw bytes.
+    dtype : DataType
+        The target data type to unpack to.
+
+    Returns
+    -------
+    Tensor
+        A new tensor with the unpacked elements of the specified dtype.
+
+    See Also
+    --------
+    pack : Reinterpret raw bytes of a tensor as uint8 elements.
+
+    Examples
+    --------
+    x = pypto.tensor([6, 5, 4, 3, 8, 6, 5, 1], pypto.DT_UINT8)
+    out = pypto.unpack(x, pypto.DT_INT32)
+
+    Input x:  [6  5  4  3  8  6  5  1]
+    Output out: [50595078  17105416]
+    """
+    return pypto_impl.UnPack(input, dtype)
+
+
+@op_wrapper
 def cast(input: Tensor, dtype: DataType, mode: CastMode = CastMode.CAST_NONE,
          satmode: SaturationMode = SaturationMode.OFF) -> Tensor:
     """Casting the operand to the specified type.

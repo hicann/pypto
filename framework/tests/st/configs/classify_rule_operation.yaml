@@ -181,6 +181,8 @@ stest:
       - TestPows/PowsOperationTest.TestPows/15
       - TestPow/PowOperationTest.TestPow/0
       - TestPow/PowOperationTest.TestPow/1
+      - TestPack/PackOperationTest.TestPack/1
+      - TestUnPack/UnPackOperationTest.TestUnPack/22
       - TestOneHot/OneHotOperationTest.TestOneHot/7
       - TestOneHot/OneHotOperationTest.TestOneHot/14
       - TestOneHot/OneHotOperationTest.TestOneHot/16

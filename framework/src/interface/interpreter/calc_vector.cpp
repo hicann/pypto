@@ -497,6 +497,12 @@ void ExecuteOpUnary(ExecuteOperationContext* ctx)
         case Opcode::OP_ERF:
             calc::Erf(ret, iop);
             break;
+        case Opcode::OP_PACK:
+            calc::Pack(ret, iop);
+            break;
+        case Opcode::OP_UNPACK:
+            calc::UnPack(ret, iop);
+            break;
         case Opcode::OP_SIN:
             calc::Sin(ret, iop);
             break;
@@ -532,6 +538,8 @@ REGISTER_CALC_OP(OP_LN, Opcode::OP_LN, ExecuteOpUnary<Opcode::OP_LN>);
 REGISTER_CALC_OP(OP_ISFINITE, Opcode::OP_ISFINITE, ExecuteOpUnary<Opcode::OP_ISFINITE>);
 REGISTER_CALC_OP(OP_ISNAN, Opcode::OP_ISNAN, ExecuteOpUnary<Opcode::OP_ISNAN>);
 REGISTER_CALC_OP(OP_ERF, Opcode::OP_ERF, ExecuteOpUnary<Opcode::OP_ERF>);
+REGISTER_CALC_OP(OP_PACK, Opcode::OP_PACK, ExecuteOpUnary<Opcode::OP_PACK>);
+REGISTER_CALC_OP(OP_UNPACK, Opcode::OP_UNPACK, ExecuteOpUnary<Opcode::OP_UNPACK>);
 REGISTER_CALC_OP(OP_SIN, Opcode::OP_SIN, ExecuteOpUnary<Opcode::OP_SIN>);
 REGISTER_CALC_OP(OP_COS, Opcode::OP_COS, ExecuteOpUnary<Opcode::OP_COS>);
 

@@ -205,6 +205,8 @@ Tensor ACosh(const Tensor& self);
 Tensor Atanh(const Tensor& self);
 
 Tensor Duplicate(const Tensor& operand);
+Tensor Pack(const Tensor& self);
+Tensor UnPack(const Tensor& self, DataType dstDataType);
 Tensor Gather(const Tensor& params, const Tensor& indices, int axis);
 Tensor GatherElements(const Tensor& params, const Tensor& indices, int axis);
 Tensor GatherMask(const Tensor& self, const uint8_t patternMode);

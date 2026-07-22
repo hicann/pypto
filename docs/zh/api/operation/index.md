@@ -96,6 +96,7 @@ pypto-neg
 pypto-normal
 pypto-one_hot
 pypto-ones
+pypto-pack
 pypto-pad
 pypto-permute
 pypto-pow
@@ -131,6 +132,7 @@ pypto-tril
 pypto-triu
 pypto-trunc
 pypto-uniform
+pypto-unpack
 pypto-unsqueeze
 pypto-var
 pypto-view

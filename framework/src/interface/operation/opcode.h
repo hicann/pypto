@@ -98,6 +98,8 @@ enum class Opcode {
     OP_SIGNBIT,
     OP_TANH,
     OP_TAN,
+    OP_PACK,
+    OP_UNPACK,
     OP_BRCB,
     OP_BITWISERIGHTSHIFTS,
     OP_BITWISELEFTSHIFTS,

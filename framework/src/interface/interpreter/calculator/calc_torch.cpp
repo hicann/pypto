@@ -579,6 +579,22 @@ static void Neg(const TensorData& out, const TensorData& self)
     ToOperand(tout.second, tout.first, out.dtype);
 }
 
+static void PackOrUnPack(const TensorData& out, const TensorData& self)
+{
+    auto tself = From(self);
+    auto totalBytes = tself.first.nbytes();
+    auto srcPtr = self.dataPtr;
+    auto dstPtr = out.dataPtr;
+    errno_t ret = memcpy_s(dstPtr, totalBytes, srcPtr, totalBytes);
+    ASSERT(CalculatorErrorScene::PACKORUNPACK_MEMCPY_FAILED, ret == 0) << "memcpy_s failed, ret=" << ret;
+    auto tout = From(out);
+    ToOperand(tout.second, tout.first, out.dtype);
+}
+
+static void Pack(const TensorData& out, const TensorData& self) { PackOrUnPack(out, self); }
+
+static void UnPack(const TensorData& out, const TensorData& self) { PackOrUnPack(out, self); }
+
 static void Sign(const TensorData& out, const TensorData& self)
 {
     auto tout = From(out);
@@ -3316,6 +3332,8 @@ static struct CalcOps calcOps = {
     .ACosh = ACosh,
     .Atanh = Atanh,
     .Neg = Neg,
+    .Pack = Pack,
+    .UnPack = UnPack,
     .Rsqrt = Rsqrt,
     .Sign = Sign,
     .Signbit = Signbit,

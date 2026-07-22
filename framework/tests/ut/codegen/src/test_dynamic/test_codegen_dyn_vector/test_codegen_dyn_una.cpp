@@ -119,6 +119,57 @@ TEST_F(TestCodegenDynUna, TestAtanFP32)
     CheckStringExist(expect, res);
 }
 
+TEST_F(TestCodegenDynUna, TestPackInt32)
+{
+    std::vector<int64_t> input_shape = {32, 32};
+    std::vector<int64_t> output_shape = {4096};
+    TileShape::Current().SetVecTile({32, 32});
+    Tensor input(DataType::DT_INT32, input_shape, "input");
+    Tensor output(DataType::DT_UINT8, output_shape, "output");
+
+    std::string funcName = "TestPackInt32";
+    FUNCTION(funcName, {input, output})
+    {
+        LOOP(funcName, FunctionType::DYNAMIC_LOOP, i, LoopRange(1))
+        {
+            (void)i;
+            output = Pack(input);
+        }
+    }
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX +
+                                                                HIDDEN_FUNC_SUFFIX);
+
+    const std::string res = GenCodeByFunction(*function);
+    std::string expect = R"!!!(TPack(ubTensor_2, ubTensor_0);
+)!!!";
+    CheckStringExist(expect, res);
+}
+
+TEST_F(TestCodegenDynUna, TestUnPackInt32)
+{
+    std::vector<int64_t> input_shape = {1024};
+    std::vector<int64_t> output_shape = {256};
+    TileShape::Current().SetVecTile({32});
+    Tensor input(DataType::DT_UINT8, input_shape, "input");
+    Tensor output(DataType::DT_INT32, output_shape, "output");
+
+    std::string funcName = "TestUnPackInt32";
+    FUNCTION(funcName, {input}, {output})
+    {
+        LOOP(funcName, FunctionType::DYNAMIC_LOOP, i, LoopRange(1))
+        {
+            (void)i;
+            output = UnPack(input, DataType::DT_INT32);
+        }
+    }
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX +
+                                                                HIDDEN_FUNC_SUFFIX);
+
+    const std::string res = GenCodeByFunction(*function);
+    std::string expect = R"!!!(TUnPack(ubTensor_2, ubTensor_0);)!!!";
+    CheckStringExist(expect, res);
+}
+
 TEST_F(TestCodegenDynUna, TestPadDynamic)
 {
     int S0 = 6;
