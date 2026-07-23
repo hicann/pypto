@@ -1,6 +1,6 @@
 /**
  * Copyright (c) 2026 Huawei Technologies Co., Ltd.
- * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * This program is free software; you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
  * Please refer to the License for details. You may not use this file except in compliance with the License.
  * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
@@ -15,6 +15,8 @@
 
 #include <gtest/gtest.h>
 #include <filesystem>
+#include <fstream>
+#include <unistd.h>
 #include <vector>
 #include <dlfcn.h>
 
@@ -35,25 +37,28 @@ TEST(PyptoAicpuInterfaceTest, ExecuteBeforeLoadReturnsError)
 }
 
 namespace {
-constexpr const char* AICPU_KERN_ROOT = "/usr/lib64/aicpu_kernels";
-constexpr const char* SO_DIR = "/usr/lib64/aicpu_kernels/0/aicpu_kernels_device";
-constexpr const char* SO_PATH = "/usr/lib64/aicpu_kernels/0/aicpu_kernels_device/libpypto_server0.so";
-
 int MockKernelFunc(void*) { return 0; }
 } // namespace
 
 class BackendServerHandleManagerTest : public testing::Test {
 protected:
+    std::string root_;
+    std::string soDir_;
+    std::string soPath_;
+
     void SetUp() override
     {
-        std::filesystem::create_directories(SO_DIR);
-        std::error_code ec;
-        std::filesystem::remove(SO_PATH, ec);
+        const auto* testInfo = ::testing::UnitTest::GetInstance()->current_test_info();
+        root_ = "/tmp/aicpu_kernels_" + std::to_string(getpid()) + "_" + testInfo->test_suite_name() + "_" +
+                testInfo->name();
+        soDir_ = root_ + "/0/aicpu_kernels_device";
+        soPath_ = soDir_ + "/libpypto_server0.so";
+        std::filesystem::create_directories(soDir_);
     }
     void TearDown() override
     {
         std::error_code ec;
-        std::filesystem::remove_all(AICPU_KERN_ROOT, ec);
+        std::filesystem::remove_all(root_, ec);
     }
 };
 
@@ -62,13 +67,16 @@ TEST_F(BackendServerHandleManagerTest, SaveSoFile_ShortLenAndWriteFail)
     BackendServerHandleManager mgr;
     EXPECT_EQ(mgr.SaveSoFile(nullptr, 0), true);
     char data[] = "test_so_data";
+    mgr.pyptoServerSoName_ = soPath_;
     EXPECT_EQ(mgr.SaveSoFile(data, sizeof(data) - 1), true);
     EXPECT_EQ(mgr.firstCreatSo_, true);
 
     BackendServerHandleManager mgrFail;
+    mgrFail.firstCreatSo_ = false;
+    mgrFail.pyptoServerSoName_ = soPath_;
     std::error_code ec;
-    std::filesystem::remove(SO_PATH, ec);
-    std::filesystem::create_symlink("/dev/full", SO_PATH, ec);
+    std::filesystem::remove(soPath_, ec);
+    std::filesystem::create_symlink("/dev/full", soPath_, ec);
     std::vector<char> bigData(8192, 'A');
     EXPECT_EQ(mgrFail.SaveSoFile(bigData.data(), bigData.size()), false);
 }

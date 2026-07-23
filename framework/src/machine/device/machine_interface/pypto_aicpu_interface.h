@@ -36,8 +36,10 @@ public:
             DEV_WARN("Aicpu so len less than 1, don't to copy");
             return true;
         }
-        pyptoServerSoName_ = "/usr/lib64/aicpu_kernels/0/aicpu_kernels_device/libpypto_server" +
-                             std::to_string(deviceId) + ".so";
+        if (pyptoServerSoName_.empty()) {
+            pyptoServerSoName_ = "/usr/lib64/aicpu_kernels/0/aicpu_kernels_device/libpypto_server" +
+                                 std::to_string(deviceId) + ".so";
+        }
         std::ofstream file(pyptoServerSoName_, std::ios::out | std::ios::binary);
         DEV_DEBUG("Begin to create server.so");
         if (!file) {
