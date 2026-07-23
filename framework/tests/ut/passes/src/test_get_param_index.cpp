@@ -174,3 +174,52 @@ TEST_F(GetParamIdxTest, TestAddExp)
     getParamIndexTest.RunOnFunction(*rootGraphPtr);
     EXPECT_TRUE(true);
 }
+
+/**
+ * @brief Verify ResetGmCopyDynValidShape handles a GM-spill CopyIn whose
+ *        input is produced by Reshape rather than an InCast.
+ *
+ * Graph: inCast(DDR) -> Reshape -> reshapeOut(DDR) -> CopyIn -> ubTensor(UB)
+ *        -> CopyOut -> outCast
+ */
+TEST_F(GetParamIdxTest, TestGmSpillCopyInWithOutNoramlize)
+{
+    auto rootFuncPtr = std::make_shared<Function>(Program::GetInstance(), "TestParams", "TestParams", nullptr);
+    rootFuncPtr->rootFunc_ = rootFuncPtr.get();
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestGmSpillCopyIn", "TestGmSpillCopyIn",
+                                                      rootFuncPtr.get());
+    rootFuncPtr->rootFunc_->programs_.emplace(currFunctionPtr->GetFuncMagic(), currFunctionPtr.get());
+
+    std::vector<int64_t> shape1 = {8, 16};
+    std::vector<int64_t> shape2 = {16, 8};
+    auto shapeImme2 = OpImmediate::Specified(shape2);
+    auto inCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
+    inCast->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    inCast->UpdateDynValidShape({CreateTestScalarVar("inCast1_dim0"), CreateTestScalarVar("inCast1_dim1")});
+    auto reshapeOut = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
+    reshapeOut->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    reshapeOut->UpdateDynValidShape({CreateTestScalarVar("reshapeOut_dim0"), CreateTestScalarVar("reshapeOut_dim1")});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {inCast}, {reshapeOut});
+
+    auto ubTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
+    ubTensor->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
+    ubTensor->UpdateDynValidShape({CreateTestScalarVar("ubTensor_dim0"), CreateTestScalarVar("ubTensor_dim1")});
+    auto& copyIn = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {reshapeOut}, {ubTensor});
+    std::vector<npu::tile_fwk::OpImmediate> fromOffset = {OpImmediate::Specified(0), OpImmediate::Specified(0)};
+    auto copyinAttr = std::make_shared<CopyOpAttribute>(fromOffset, MEM_UB, shapeImme2, shapeImme2);
+    std::vector<npu::tile_fwk::OpImmediate> toValidShape = {OpImmediate::Specified(16), OpImmediate::Specified(8)};
+    copyinAttr->SetToDynValidShape(toValidShape);
+    copyIn.SetOpAttribute(copyinAttr);
+
+    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
+    auto& copyOut = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {ubTensor}, {outCast});
+    auto copyoutAttr = std::make_shared<CopyOpAttribute>(MEM_UB, fromOffset, shapeImme2, shapeImme2, shapeImme2);
+    copyOut.SetOOpAtt(0, 11);
+    copyOut.SetOpAttribute(copyoutAttr);
+
+    currFunctionPtr->inCasts_.push_back(inCast);
+    currFunctionPtr->outCasts_.push_back(outCast);
+
+    InferParamIndex getParamIndexTest;
+    getParamIndexTest.RunOnFunction(*rootFuncPtr);
+}

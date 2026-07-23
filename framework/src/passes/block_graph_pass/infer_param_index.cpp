@@ -37,32 +37,6 @@ std::string InferParamIndex::DumpParamIndex(const std::map<std::string, DynParam
     }
     return ss.str();
 }
-
-bool InferParamIndex::HandleCopyOpShape(Operation& op, Function& function, bool& isCopyIn)
-{
-    auto operands = isCopyIn ? op.GetIOperands() : op.GetOOperands();
-    auto& casts = isCopyIn ? function.inCasts_ : function.outCasts_;
-    auto operand = operands.front();
-    if (find(casts.begin(), casts.end(), operand) == casts.end()) {
-        bool* distCopyType = op.GetAttr<bool>(OpAttributeKey::isDistCopyOut);
-        int tensorBaseAddrCoaIndex = IsCopyIn(op.GetOpcode()) ? op.GetIOpAttrOffset(0) : op.GetOOpAttrOffset(0);
-        tensorBaseAddrCoaIndex = (distCopyType && !*distCopyType) ? op.GetIOpAttrOffset(1) : tensorBaseAddrCoaIndex;
-        if (tensorBaseAddrCoaIndex != -1) {
-            return true;
-        }
-        std::vector<SymbolicScalar> validShape;
-        op.GetOOperands().front()->UpdateDynValidShape(validShape);
-        auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(op.GetOpAttribute());
-        if (isCopyIn) {
-            copyAttr->SetToDynValidShape(OpImmediate::Specified(validShape));
-        } else {
-            copyAttr->SetFromDynValidShape(OpImmediate::Specified(validShape));
-        }
-        return true;
-    }
-    return false;
-}
-
 static bool IsInGMSpill(Operation& op)
 {
     if (OpcodeManager::Inst().IsCopyIn(op.GetOpcode())) {
@@ -89,50 +63,61 @@ static bool IsOutGMSpill(Operation& op)
 
 Status InferParamIndex::ResetOutputDynValidShape(Operation& op, Function& function)
 {
-    const std::set<Opcode> specifiedOps = {Opcode::OP_VEC_DUP, Opcode::OP_EXPAND,          Opcode::OP_RESHAPE,
-                                           Opcode::OP_GATHER,  Opcode::OP_GATHER_IN_UB,    Opcode::OP_GATHER_IN_L1,
-                                           Opcode::OP_PERMUTE, Opcode::OP_PERMUTE_ELEMENT, Opcode::OP_UB_COPY_L1};
-    bool isCopyIn = IsInGMSpill(op);
-    bool isCopyOut = IsOutGMSpill(op);
-    if ((isCopyIn || isCopyOut)) {
-        if (HandleCopyOpShape(op, function, isCopyIn)) {
-            return SUCCESS;
-        }
+    if (ResetGmCopyDynValidShape(op, function)) {
+        return SUCCESS;
     }
     for (auto outOperand : op.GetOOperands()) {
-        if (op.GetOpcode() == Opcode::OP_INDEX_ADD &&
-            !Program::GetInstance().GetCurrentFunction()->IsFromOutCast(outOperand))
-            continue;
         std::vector<SymbolicScalar> validShape;
-        if (OpcodeManager::Inst().IsCopyInOrOut(op.GetOpcode()) || specifiedOps.count(op.GetOpcode())) {
+        if (OpcodeManager::Inst().IsCopyInOrOut(op.GetOpcode()) || setSymDimOps.count(op.GetOpcode())) {
             for (size_t dimIdx = 0U; dimIdx < outOperand->GetShape().size(); ++dimIdx) {
                 validShape.emplace_back("sym_" + std::to_string(outOperand->GetMagic()) + "_dim_" +
                                         std::to_string(dimIdx));
             }
         }
-        bool shouldUpdateDynValidShape = op.GetOpcode() != Opcode::OP_ASSEMBLE &&
-                                         op.GetOpcode() != Opcode::OP_L0C_COPY_UB &&
-                                         op.GetOpcode() != Opcode::OP_VIEW && !function.IsFromOutCast(outOperand);
+        // 通信的输出要从opattr中获取不能直接使用normalize
+        bool* distCopyType = op.GetAttr<bool>(OpAttributeKey::isDistCopyOut);
+        bool shouldUpdateDynValidShape = !useSelfOps.count(op.GetOpcode()) &&
+                                         (!function.IsFromOutCast(outOperand) || distCopyType);
         if (shouldUpdateDynValidShape) {
             outOperand->UpdateDynValidShape(validShape);
         }
-        // 通信类Op的输出需要GetTensorData格式从CopyAttr拿而不是Coa拿出，需要特殊处理
-        bool* distCopyType = op.GetAttr<bool>(OpAttributeKey::isDistCopyOut);
-        if (distCopyType && function.IsFromOutCast(outOperand)) {
-            if (*distCopyType) {
-                auto attr = std::static_pointer_cast<CopyOpAttribute>(op.GetOpAttribute());
-                if (attr->GetFromDynValidShape().size() != 0) {
-                    outOperand->UpdateDynValidShape(OpImmediate::ToSpecified(attr->GetFromDynValidShape()));
-                }
-            } else if (!*distCopyType) {
-                auto attr = std::static_pointer_cast<CopyOpAttribute>(op.GetOpAttribute());
-                if (attr->GetToDynValidShape().size() != 0 && attr->GetToDynValidShape()[0].IsSpecified()) {
-                    outOperand->UpdateDynValidShape(OpImmediate::ToSpecified(attr->GetToDynValidShape()));
-                }
-            }
-        }
     }
     return SUCCESS;
+}
+
+bool InferParamIndex::ResetGmCopyDynValidShape(Operation& op, Function& function)
+{
+    bool isCopyIn = IsInGMSpill(op);
+    bool isCopyOut = IsOutGMSpill(op);
+    if (!isCopyIn && !isCopyOut) {
+        return false;
+    }
+    auto operands = isCopyIn ? op.GetIOperands() : op.GetOOperands();
+    auto& casts = isCopyIn ? function.inCasts_ : function.outCasts_;
+    auto operand = operands.front();
+    if (find(casts.begin(), casts.end(), operand) != casts.end()) {
+        return false;
+    }
+    bool* distCopyType = op.GetAttr<bool>(OpAttributeKey::isDistCopyOut);
+    int tensorBaseAddrCoaIndex = IsCopyIn(op.GetOpcode()) ? op.GetIOpAttrOffset(0) : op.GetOOpAttrOffset(0);
+    tensorBaseAddrCoaIndex = (distCopyType && !*distCopyType) ? op.GetIOpAttrOffset(0) : tensorBaseAddrCoaIndex;
+    if (tensorBaseAddrCoaIndex != -1) {
+        APASS_LOG_DEBUG_F(Elements::Operation, "op[%d] in function %s still uses its DynValidShape", op.GetOpMagic(),
+                          function.GetRawName().c_str());
+        return true;
+    }
+    std::vector<SymbolicScalar> validShape;
+    op.GetOOperands().front()->UpdateDynValidShape(validShape);
+    APASS_LOG_DEBUG_F(Elements::Operation,
+                      "op[%d] in function %s has cleared its DynValidShape what will be inferred again",
+                      op.GetOpMagic(), function.GetRawName().c_str());
+    auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(op.GetOpAttribute());
+    if (isCopyIn) {
+        copyAttr->SetToDynValidShape(OpImmediate::Specified(validShape));
+    } else {
+        copyAttr->SetFromDynValidShape(OpImmediate::Specified(validShape));
+    }
+    return true;
 }
 
 Status InferParamIndex::ResetViewDynValidShape(const Operation& op)
