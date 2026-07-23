@@ -23,9 +23,10 @@ namespace npu::tile_fwk::dynamic {
 using ItemPoolIter = int64_t;
 
 struct ItemPoolMeta {
-    size_t count;
+    size_t size;
     size_t freeCount;
     ItemPoolIter freeListHeadIndex;
+    size_t initReadyCount;
 };
 
 static constexpr ItemPoolIter ITEM_POOL_INVALID_INDEX = std::numeric_limits<int64_t>::max();
@@ -45,17 +46,17 @@ public:
 
 public:
     ItemPool() = default;
-    ItemPool(WsAllocator_T& allocator, size_t count, WsMemCategory category = WsMemCategory::UNCLASSIFIED_ITEMPOOL)
+    ItemPool(WsAllocator_T& allocator, size_t size, WsMemCategory category = WsMemCategory::UNCLASSIFIED_ITEMPOOL)
     {
-        Init(allocator, count, category);
+        Init(allocator, size, category);
     }
 
     ~ItemPool()
     {
         if (allocation_) {
-            // Call destructor on alive items
-            ItemBlock* itemBase = &ItemAt(0);
-            for (size_t i = 0; i < count_; i++) {
+            // Only [0, initReadyCount_) have ever been constructed (or recycled onto freelist).
+            ItemBlock* itemBase = allocation_.As<ItemBlock>();
+            for (size_t i = 0; i < initReadyCount_; i++) {
                 if (itemBase[i].freeListNextIndex == ITEM_POOL_NON_FREE_INDEX) {
                     (reinterpret_cast<T*>(itemBase + i))->~T();
                 }
@@ -66,28 +67,33 @@ public:
         }
     }
 
-    void Init(WsAllocator_T& allocator, size_t count, WsMemCategory category = WsMemCategory::UNCLASSIFIED_ITEMPOOL)
+    void Init(WsAllocator_T& allocator, size_t size, WsMemCategory category = WsMemCategory::UNCLASSIFIED_ITEMPOOL)
     {
         DEV_ASSERT_MSG(DevDataErr::ITEM_POOL_UNINITIALIZED, !allocator_, "ItemPool has been initialized already");
         allocator_ = &allocator;
-        count_ = count;
-        allocation_ = allocator_->template Allocate<ItemBlock>(count_, category);
-        ItemBlock* itemBase = &ItemAt(0);
-        for (size_t i = 0; i < count_; i++) {
-            AppendFreeList(itemBase + i);
-        }
-
+        size_ = size;
         category_ = category;
-        freeCount_ = count_;
+        freeCount_ = size_;
+        initReadyCount_ = 0;
+        freeListHeadIndex_ = ITEM_POOL_INVALID_INDEX;
+        allocation_ = allocator_->template Allocate<ItemBlock>(size_, category);
     }
 
     template <typename... Args>
     T* Create(Args&&... args)
     {
-        DEV_ASSERT_MSG(DevDataErr::ITEM_POOL_FREE_LIST_INVALID, freeListHeadIndex_ != ITEM_POOL_INVALID_INDEX,
-                       "Available items: %zu/%zu", freeCount_, count_);
-        ItemBlock* item = &ItemAt(freeListHeadIndex_);
-        freeListHeadIndex_ = item->freeListNextIndex;
+        DEV_ASSERT_MSG(DevDataErr::ITEM_POOL_FREE_LIST_INVALID, freeCount_ > 0, "Available items: %zu/%zu", freeCount_,
+                       size_);
+        ItemBlock* item = nullptr;
+        if (freeListHeadIndex_ != ITEM_POOL_INVALID_INDEX) {
+            // Recycled slot from Destroy.
+            item = &ItemAt(freeListHeadIndex_);
+            freeListHeadIndex_ = item->freeListNextIndex;
+        } else {
+            // Virgin slot: bump high-water mark; never touch freelist.
+            item = &ItemAt(static_cast<ItemPoolIter>(initReadyCount_));
+            initReadyCount_++;
+        }
         item->freeListNextIndex = ITEM_POOL_NON_FREE_INDEX;
         freeCount_--;
 
@@ -100,7 +106,7 @@ public:
     ItemPoolIter Allocate(Args&&... args)
     {
         T* item = Create(args...);
-        return reinterpret_cast<ItemBlock*>(item) - &ItemAt(0);
+        return reinterpret_cast<ItemBlock*>(item) - allocation_.As<ItemBlock>();
     }
 
     void Destroy(T* item)
@@ -119,27 +125,31 @@ public:
 
     size_t FreeItemNum() const { return freeCount_; }
 
+    size_t InitReadyCount() const { return initReadyCount_; }
+
+    size_t Size() const { return size_; }
+
     void RestoreMetaData(const ItemPoolMeta& meta)
     {
-        count_ = meta.count;
+        size_ = meta.size;
         freeCount_ = meta.freeCount;
         freeListHeadIndex_ = meta.freeListHeadIndex;
-        return;
+        initReadyCount_ = meta.initReadyCount;
     }
 
-    ItemPoolMeta GetMetaData() const { return {count_, freeCount_, freeListHeadIndex_}; }
+    ItemPoolMeta GetMetaData() const { return {size_, freeCount_, freeListHeadIndex_, initReadyCount_}; }
 
 private:
     inline void AppendFreeList(ItemBlock* block)
     {
         block->freeListNextIndex = freeListHeadIndex_;
-        freeListHeadIndex_ = block - &ItemAt(0);
+        freeListHeadIndex_ = block - allocation_.As<ItemBlock>();
     }
 
     inline ItemBlock& ItemAt(ItemPoolIter index)
     {
-        DEV_ASSERT_MSG(DevDataErr::ITEM_POOL_INDEX_OUT_OF_RANGE, index >= 0 && static_cast<size_t>(index) < count_,
-                       "Index %" PRId64 " out of range [0, %zu)", index, count_);
+        DEV_ASSERT_MSG(DevDataErr::ITEM_POOL_INDEX_OUT_OF_RANGE, index >= 0 && static_cast<size_t>(index) < size_,
+                       "Index %" PRId64 " out of range [0, %zu)", index, size_);
         return allocation_.As<ItemBlock>()[index];
     }
 
@@ -147,8 +157,9 @@ private:
     WsMemCategory category_{WsMemCategory::UNCLASSIFIED_ITEMPOOL};
     WsAllocator_T* allocator_{nullptr};
     WsAllocation allocation_;
-    size_t count_;
-    size_t freeCount_;
+    size_t size_{0};
+    size_t freeCount_{0};
+    size_t initReadyCount_{0};
     ItemPoolIter freeListHeadIndex_{ITEM_POOL_INVALID_INDEX};
 };
 
