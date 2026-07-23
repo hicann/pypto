@@ -12,6 +12,7 @@
 Basic Operations Quick-Start for PyPTO
 """
 
+import os
 import sys
 import argparse
 import pypto
