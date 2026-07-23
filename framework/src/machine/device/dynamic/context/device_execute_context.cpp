@@ -476,21 +476,19 @@ void* DeviceExecuteContext::CallRootFunctionAlloc(uint64_t rootKey)
     int ret = DEVICE_MACHINE_OK;
     DevAscendFunction* devRoot = devProg->GetFunction(rootKey);
     DEV_DEBUG("Slloc one func %lu %p %s.", rootKey, devRoot, devRoot->GetRawName());
-    const uint32_t unroll = devRoot->unrollTimes;
     const bool stitchByMemoryOnly = devProg->memBudget.tensor.memoryDrivenWorkspace != 0;
     const uint16_t realStitchNumThreshold = parallelCtx.isInParallelForScope ? MAX_STITCH_FUNC_NUM :
                                                                                stitchTaskLoopNumThreshold;
-    const bool stitchUnitsExceeded = !stitchByMemoryOnly &&
-                                     (stitchContext.StitchUnits() + unroll > realStitchNumThreshold);
+    const bool stitchCountExceeded = !stitchByMemoryOnly && (stitchContext.Size() >= realStitchNumThreshold);
     const bool callOpExceeded = stitchContext.stitchedCallOpSize() + devRoot->GetOperationSize() >
                                 devProg->stitchFunctionsize;
     const bool rootFuncCountExceeded = stitchContext.Size() >= MAX_STITCH_FUNC_NUM;
-    if (stitchUnitsExceeded || callOpExceeded || rootFuncCountExceeded) {
-        DEV_INFO("[Stitch Finish] Stitch Limit Exceeded. memoryOnly=%d unrollUnits=%u+%u (limit=%u) rootCount=%zu "
-                 "(limit=%zu) rootKey=%lu, func=%s, #task=%zu, #callop=%u+%zu (limit=%u).",
-                 static_cast<int>(stitchByMemoryOnly), stitchContext.StitchUnits(), unroll, realStitchNumThreshold,
-                 stitchContext.Size(), MAX_STITCH_FUNC_NUM, rootKey, devRoot->GetRawName(), stitchContext.Size(),
-                 stitchContext.stitchedCallOpSize(), devRoot->GetOperationSize(), devProg->stitchFunctionsize);
+    if (stitchCountExceeded || callOpExceeded || rootFuncCountExceeded) {
+        DEV_INFO("[Stitch Finish] Stitch Limit Exceeded. memoryDriven=%d rootCount=%zu (limit=%u, hardLimit=%zu) "
+                 "rootKey=%lu, func=%s, #callop=%u+%zu (limit=%u).",
+                 static_cast<int>(stitchByMemoryOnly), stitchContext.Size(), realStitchNumThreshold,
+                 MAX_STITCH_FUNC_NUM, rootKey, devRoot->GetRawName(), stitchContext.stitchedCallOpSize(),
+                 devRoot->GetOperationSize(), devProg->stitchFunctionsize);
         ret = SubmitToAicoreAndRecycleMemory(false);
         if (unlikely(ret != DEVICE_MACHINE_OK)) {
             return RUNTIME_FUNCKEY_ERROR;

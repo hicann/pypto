@@ -249,15 +249,14 @@ grep -r "maxRootInnerMem is\|MaxRootInnerMem is" <log_path>/debug/
 **分析要点**：
 1. 对比各 Root Function 的 `MaxRootInnerMem` 和 `maxDevTaskInnerExclusiveOutcastMem`，找到贡献最大的 Root Function
 2. 检查该 Root Function 名称中是否包含 `Unroll` 标记（如 `_Unroll8`），判断 unroll 次数
-3. 内存膨胀关系（近似公式，runtime 以 unrollTimes 计 stitch 单元）：
+3. 内存膨胀关系（近似公式，encode 与 runtime 均按 root function 个数计量 k_eff）：
    ```
-   rootInnerSpilledMem ≈ max_root(AlignUp(rootInnerTensorWsMemoryRequirement / unrollTimes)) × k_eff
-   devTaskInnerOutCasts ≈ max_root(AlignUp(exclusiveOutcastWsMemoryRequirement / unrollTimes)) × k_eff
-   当 unrollTimes >= k_eff 时，取 max(..., 原始 rootInnerTensorWsMemoryRequirement)
-   k_eff = stitch_function_max_num（默认）或由 max_workspace_kb 反推
+   rootInnerSpilledMem ≈ max_root(AlignUp(rootInnerTensorWsMemoryRequirement) × k_eff)
+   devTaskInnerOutCasts ≈ max_root(AlignUp(exclusiveOutcastWsMemoryRequirement) × k_eff)
+   k_eff = stitch_function_max_num（默认）或由 max_workspace_kb 反推后 cap 至 stitch_function_max_num
    devTaskBoundaryOutcastNum = E×2 + A×2（boundary 池）
    devTaskInnerTemporalOutcastNum = A × k_eff（innerTemporal 池）
-   runtimeOutcastCacheDepth = min(max_root(ceil(k_eff / unrollTimes)), stitch_function_max_num)  # 内存驱动
+   runtimeOutcastCacheDepth = min(k_eff, MAX_STITCH_FUNC_NUM)
    runtimeOutcastPoolSize = totalSlot × (runtimeOutcastCacheDepth + 1) × parallelism
    ctrlflow backup 容量 ≥ devTaskBoundaryOutcastNum + devTaskInnerTemporalOutcastNum
    ```
@@ -268,9 +267,9 @@ grep -r "maxRootInnerMem is\|MaxRootInnerMem is" <log_path>/debug/
 
 | 配置项 | 影响范围 | 调优方向 |
 |--------|----------|----------|
-| `stitch_function_max_num` | rootInnerSpilledMem、devTaskInnerOutCasts、innerTemporal slot 数、Boundary slot 数 | 降低此值以减少并行度换取内存 |
-| `max_workspace_kb` | k_eff、innerTemporal slot 数、runtimeOutcastCacheDepth | 内存驱动模式下二分反推 k_eff |
-| `unroll_list` / max_unroll | rootInnerSpilledMem、devTaskInnerOutCasts | 减小 unroll 数 |
+| `max_workspace_kb` | k_eff、innerTemporal slot 数、runtimeOutcastCacheDepth、runtime submit 深度（内存驱动） | **推荐优先配置**；按 encode 日志推荐值设置，使能内存驱动模式 |
+| `stitch_function_max_num` | rootInnerSpilledMem、devTaskInnerOutCasts、innerTemporal slot 数、runtime submit 深度（非内存驱动） | 降低此值以减少并行度换取内存 |
+| `unroll_list` / max_unroll | rootInnerSpilledMem、devTaskInnerOutCasts | 减小 unroll 数；使用 unroll_list 时建议配合 `max_workspace_kb` |
 
 #### 情况二：Boundary Outcast 内存 (C × D) 为主要贡献者
 

@@ -39,15 +39,9 @@ struct DeviceStitchContext {
     void DumpStitchInfo();
 
     size_t Size() const { return stitchedList_.size(); }
-    uint32_t StitchUnits() const { return stitchedNum_; }
     bool Empty() const { return stitchedList_.empty(); }
 
-    void Append(DevAscendFunctionDupped& devRootDup)
-    {
-        stitchedList_.push_back(devRootDup);
-        const uint32_t unroll = devRootDup.GetSource()->unrollTimes;
-        stitchedNum_ += unroll;
-    }
+    void Append(DevAscendFunctionDupped& devRootDup) { stitchedList_.push_back(devRootDup); }
 
     const auto& GetStitchedList() const { return stitchedList_; }
 
@@ -82,7 +76,6 @@ struct DeviceStitchContext {
     uint32_t stitchedCallOpSize() { return stitchedCallOpSize_; }
 
 private:
-    uint32_t stitchedNum_{0};
     uint32_t stitchedCallOpSize_{0};
     StitchedList stitchedList_;
     DeviceWorkspaceAllocator* workspace_{nullptr};

@@ -66,7 +66,7 @@ struct WorkspaceDesc {
         SymbolicScalar maxDynamicCellMatchTableMem;
     } cellMatch;
 
-    // Max unroll across encoded dev roots (runtime StitchUnits accounting).
+    // Max unroll across encoded dev roots (diagnostics only; encode budget uses root count).
     uint32_t maxUnrollTimes{1};
 };
 

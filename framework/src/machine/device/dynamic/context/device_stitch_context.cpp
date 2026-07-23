@@ -81,7 +81,6 @@ void DeviceStitchContext::Init(DevAscendProgram* devProg, DeviceWorkspaceAllocat
 void DeviceStitchContext::Reset()
 {
     stitchedList_.clear();
-    stitchedNum_ = 0;
     stitchReuseContext_.firstDupIdx = 0;
     stitchReuseContext_.lastNonEmptyDupIdx = -1;
 }
