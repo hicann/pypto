@@ -415,14 +415,13 @@ struct ConfigManagerImpl {
 
     void SetScope(std::map<std::string, std::any>&& values, const char* file, int lino)
     {
-        auto scope = scopes.top();
-        if (scope.use_count() > 1) { // clone if shared
+        if (scopes.top().use_count() > 1) { // clone if shared
             auto oldvalues = scopes.top()->values_;
             auto name = scopes.top()->name_;
             EndScope(file, lino);
             BeginScope(name, std::move(oldvalues), file, lino);
-            scope = scopes.top();
         }
+        auto& scope = scopes.top();
         for (auto& it : values) {
             CHECK(ExternalError::INVALID_VAL, scope->HasConfig(it.first))
                 << "key: " << it.first.c_str() << " does not exist.";

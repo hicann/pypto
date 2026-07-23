@@ -20,6 +20,7 @@
 #include "tilefwk/tensor.h"
 #include "interface/utils/id_gen.h"
 #include "interface/configs/config_manager.h"
+#include "interface/configs/config_manager_ng.h"
 #include "interface/tensor/irbuilder.h"
 #include "interface/tensor/ir_tensor_op_rebuild.h"
 
@@ -102,6 +103,7 @@ void RootFunctionBuilder::FinalizeDynFunc(const ir::FunctionPtr& irFunc)
         dynFunc_->params_.push_back(std::static_pointer_cast<const ir::Var>(param));
     }
     dynFunc_->ComputeHash();
+    program_.SetParamConfig(dynFunc_.get(), ConfigManagerNg::CurrentScope());
     BuildDynSlotScope(); // CleanRedundantOutCast 会过滤 outCasts_ 中的中间输出
 }
 

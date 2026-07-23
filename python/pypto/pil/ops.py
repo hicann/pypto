@@ -232,7 +232,7 @@ def _static_while(body: Block):
             continue
 
 
-def _loop_unroll(body: Block, loop: LoopRange, factor, stop, config_scope, ctx: BuildContext):
+def _loop_unroll(body: Block, loop: LoopRange, factor, stop, ctx: BuildContext):
     scope = Scope.current()
     loop_val = body.args[0]
 
@@ -242,8 +242,7 @@ def _loop_unroll(body: Block, loop: LoopRange, factor, stop, config_scope, ctx: 
     scope.varmap[loop_val.id] = loop_var
 
     # Save initial values as iterArgs, convert to Vars in scope
-    iter_args = []
-    return_var_names = []
+    iter_args, return_var_names = [], []
     for name in body.store_names:
         val = scope.locals.get(name)
         var = ctx.create_var_like(name, ctx.unwrap(val))
@@ -286,7 +285,7 @@ def _loop_unroll(body: Block, loop: LoopRange, factor, stop, config_scope, ctx: 
         "parallel": loop.parallel,
         "submit_before_loop": loop.submit_before_loop,
         "_loop_conds": loop_conds, # extra loop condition
-        "_config_scope": config_scope,
+        "_config_scope": pypto_impl.CurrentScope(),
         "unroll_times": factor
     }
 
@@ -311,7 +310,7 @@ def _dyn_for(body: Block, loop: LoopRange, ctx: BuildContext):
             loop.stop = original_stop - tail
         try:
             pypto_impl.BeginScope(f"loop", {}, ctx.span.filename, ctx.span.begin_line)
-            _loop_unroll(body, loop, factor, original_stop, pypto_impl.CurrentScope(), ctx=ctx)
+            _loop_unroll(body, loop, factor, original_stop, ctx=ctx)
         finally:
             pypto_impl.EndScope()
         current_start = loop.stop
