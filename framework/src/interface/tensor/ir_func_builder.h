@@ -81,7 +81,6 @@ private:
     std::vector<std::vector<pypto::ir::StmtPtr>> SplitIntoTensorOpSegments(const pypto::ir::SeqStmtsPtr& seq);
     bool IsPlaceholderCallStmt(const pypto::ir::StmtPtr& stmt);
     std::string GetPlaceholderFuncname(const pypto::ir::StmtPtr& stmt);
-    std::shared_ptr<ConfigScope> GetPlaceholderConfigScope(const pypto::ir::StmtPtr& stmt);
     std::unordered_set<std::shared_ptr<LogicalTensor>> CollectAllOutputs(Function& pathFunc);
     void DumpFunctionGraph(Function* func);
 };

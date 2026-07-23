@@ -32,20 +32,6 @@ using namespace pypto;
 
 namespace npu::tile_fwk {
 
-namespace {
-template <typename T>
-T GetPlaceholderAttr(const ir::StmtPtr& stmt, const std::string& attrName, const T& defaultValue = T{})
-{
-    auto tensorOp = std::static_pointer_cast<const ir::TensorOpStmt>(stmt);
-    for (const auto& [key, value] : tensorOp->attrs_) {
-        if (key == attrName) {
-            return std::any_cast<T>(value);
-        }
-    }
-    return defaultValue;
-}
-} // namespace
-
 RootFunctionBuilder::RootFunctionBuilder(Function* parentFunc)
     : program_(Program::GetInstance()), parentFunc_(parentFunc)
 {}
@@ -335,12 +321,13 @@ bool RootFunctionBuilder::IsPlaceholderCallStmt(const ir::StmtPtr& stmt)
 
 std::string RootFunctionBuilder::GetPlaceholderFuncname(const ir::StmtPtr& stmt)
 {
-    return GetPlaceholderAttr<std::string>(stmt, "placeholder_funcname");
-}
-
-std::shared_ptr<ConfigScope> RootFunctionBuilder::GetPlaceholderConfigScope(const ir::StmtPtr& stmt)
-{
-    return GetPlaceholderAttr<std::shared_ptr<ConfigScope>>(stmt, "config_scope");
+    auto tensorOp = std::static_pointer_cast<const ir::TensorOpStmt>(stmt);
+    for (auto& [key, value] : tensorOp->attrs_) {
+        if (key == "placeholder_funcname") {
+            return std::any_cast<std::string>(value);
+        }
+    }
+    return "";
 }
 
 std::unordered_set<std::shared_ptr<LogicalTensor>> RootFunctionBuilder::CollectAllOutputs(Function& pathFunc)
@@ -371,7 +358,6 @@ ir::StmtPtr RootFunctionBuilder::CreatePathFuncAndPlaceholder(const ir::SeqStmts
                                                               std::vector<ir::ExprPtr>{}, std::vector<ir::VarPtr>{},
                                                               std::vector<std::pair<std::string, std::any>>{
                                                                   {"placeholder_funcname", pathFunc->GetMagicName()},
-                                                                  {"config_scope", ConfigManagerNg::CurrentScope()},
                                                               },
                                                               seq->span_);
 
@@ -465,8 +451,7 @@ std::pair<LogicalTensors, LogicalTensors> RootFunctionBuilder::FinalizeHiddenFun
     for (auto& op : hiddenFunc->Operations(false))
         hiddenBodyStmts.push_back(std::static_pointer_cast<const ir::Stmt>(op.shared_from_this()));
     hiddenFunc->body_ = std::make_shared<ir::SeqStmts>(std::move(hiddenBodyStmts), placeholder->span_);
-    auto hiddenConfigScope = GetPlaceholderConfigScope(placeholder);
-    program_.SetParamConfig(hiddenFunc, hiddenConfigScope);
+    program_.SetParamConfig(hiddenFunc, ConfigManagerNg::CurrentScope());
     hiddenFunc->ComputeHash();
     program_.GetFunctionCache().Insert(hiddenFunc->GetFunctionHash(), *hiddenFunc);
     DumpFunctionGraph(hiddenFunc);
@@ -537,8 +522,6 @@ ir::StmtPtr RootFunctionBuilder::TransformStmts(ir::StmtPtr stmt, const std::str
         }
         case ir::ObjectKind::ForStmt: {
             auto forStmt = std::static_pointer_cast<const ir::ForStmt>(stmt);
-            auto config = forStmt->GetAttr<std::shared_ptr<ConfigScope>>("_config_scope");
-            ConfigManagerNg::ScopedRestore scoped(config);
             auto currentLoopVarName = IRContext::Get().GetOriginName(forStmt->loopVar_);
             int unrollTimes = forStmt->GetAttr<int>("unroll_times", 1);
             currentLoopVarName += "_Unroll" + std::to_string(unrollTimes);
@@ -582,6 +565,8 @@ void RootFunctionBuilder::ReplacePlaceholders(ir::StmtPtr stmt)
         }
         case ir::ObjectKind::ForStmt: {
             auto forStmt = std::static_pointer_cast<const ir::ForStmt>(stmt);
+            auto config = forStmt->GetAttr<std::shared_ptr<ConfigScope>>("_config_scope");
+            ConfigManagerNg::ScopedRestore scoped(config);
             ReplacePlaceholders(forStmt->body_);
             break;
         }

@@ -312,3 +312,200 @@ TEST_F(IrFuncBuilderTest, TestMigrateReshapeInplaceLinkToHiddenFunc)
     ASSERT_NE(link, reshapeHiddenFunc->outIncastLinkMap.end());
     EXPECT_EQ(link->second, incastRaw);
 }
+
+// ============================================================================
+// Loop config scope => hidden func paramConfigs.
+//   Verifies configs set in a ForStmt scope are restored when building its hidden func.
+// ============================================================================
+TEST_F(IrFuncBuilderTest, TestTransformStmts_ConfigToParamConfigs)
+{
+    IrFuncSetup setup("ConfigToParamConfigs");
+
+    auto a = setup.MakeParam("a");
+    auto aux = setup.MakeLocal("aux");
+    setup.AddDassemble(a, aux);
+
+    auto& cm = ConfigManagerNg::GetInstance();
+    cm.BeginScope("loop_config", {});
+    cm.SetScope({{"pass.pg_lower_bound", 777L}});
+    cm.SetScope({{"operation.combine_axis", true}});
+    setup.WrapStmtsInForLoop("i");
+    cm.EndScope();
+
+    auto irFunc = setup.BuildIrFunction("ConfigToParamConfigs");
+    auto irProg = std::make_shared<ir::Program>(std::vector<ir::FunctionPtr>{irFunc}, "test", Sp());
+
+    auto createRoot = pypto::ir::pass::CreateRootFunctions();
+    (void)createRoot(irProg);
+
+    auto hiddenFuncs = FindHiddenFuncs();
+    ASSERT_EQ(hiddenFuncs.size(), 1u);
+    EXPECT_EQ(hiddenFuncs[0]->paramConfigs_.sgPgLowerBound, 777);
+    EXPECT_TRUE(hiddenFuncs[0]->paramConfigs_.combineAxis);
+}
+
+// ============================================================================
+// Sibling loops with different scopes => hidden func configs stay isolated.
+// ============================================================================
+TEST_F(IrFuncBuilderTest, TestTransformStmts_SiblingConfigIsolation)
+{
+    IrFuncSetup setup("SiblingConfigIsolation");
+
+    auto a = setup.MakeParam("a");
+    auto aux1 = setup.MakeLocal("aux1");
+    auto aux2 = setup.MakeLocal("aux2");
+    std::map<int64_t, int64_t> firstConfig{{1, 2}};
+    std::map<int64_t, int64_t> secondConfig{{3, 4}};
+
+    auto& cm = ConfigManagerNg::GetInstance();
+    cm.BeginScope("first_loop_config", {});
+    cm.SetScope({{"pass.vec_nbuffer_setting", firstConfig}});
+    setup.AddDassemble(a, aux1);
+    setup.WrapStmtsInForLoop("i");
+    cm.EndScope();
+
+    cm.BeginScope("second_loop_config", {});
+    cm.SetScope({{"pass.vec_nbuffer_setting", secondConfig}});
+    setup.AddDassemble(a, aux2);
+    setup.WrapStmtsInForLoop("j");
+    cm.EndScope();
+
+    auto irFunc = setup.BuildIrFunction("SiblingConfigIsolation");
+    auto irProg = std::make_shared<ir::Program>(std::vector<ir::FunctionPtr>{irFunc}, "test", Sp());
+
+    auto createRoot = pypto::ir::pass::CreateRootFunctions();
+    (void)createRoot(irProg);
+
+    auto hiddenFuncs = FindHiddenFuncs();
+    ASSERT_EQ(hiddenFuncs.size(), 2u);
+
+    bool foundFirst = false;
+    bool foundSecond = false;
+    for (auto* func : hiddenFuncs) {
+        if (func->paramConfigs_.vecNBufferSetting == firstConfig) {
+            foundFirst = true;
+        }
+        if (func->paramConfigs_.vecNBufferSetting == secondConfig) {
+            foundSecond = true;
+        }
+    }
+    EXPECT_TRUE(foundFirst);
+    EXPECT_TRUE(foundSecond);
+}
+
+// ============================================================================
+// Nested loops: inner scope has no local config => inherits parent loop config.
+// ============================================================================
+TEST_F(IrFuncBuilderTest, TestTransformStmts_NestedConfigInheritance)
+{
+    IrFuncSetup setup("NestedConfigInheritance");
+
+    auto a = setup.MakeParam("a");
+    auto innerAux = setup.MakeLocal("inner_aux");
+    auto outerAux = setup.MakeLocal("outer_aux");
+    std::map<int64_t, int64_t> parentConfig{{5, 6}};
+
+    auto& cm = ConfigManagerNg::GetInstance();
+    cm.BeginScope("outer_loop_config", {});
+    cm.SetScope({{"pass.vec_nbuffer_setting", parentConfig}});
+
+    cm.BeginScope("inner_loop_config", {});
+    setup.AddDassemble(a, innerAux);
+    setup.WrapStmtsInForLoop("inner");
+    cm.EndScope();
+
+    setup.AddDassemble(a, outerAux);
+    setup.WrapStmtsInForLoop("outer");
+    cm.EndScope();
+
+    auto irFunc = setup.BuildIrFunction("NestedConfigInheritance");
+    auto irProg = std::make_shared<ir::Program>(std::vector<ir::FunctionPtr>{irFunc}, "test", Sp());
+
+    auto createRoot = pypto::ir::pass::CreateRootFunctions();
+    (void)createRoot(irProg);
+
+    auto hiddenFuncs = FindHiddenFuncs();
+    ASSERT_EQ(hiddenFuncs.size(), 2u);
+    for (auto* func : hiddenFuncs) {
+        EXPECT_EQ(func->paramConfigs_.vecNBufferSetting, parentConfig);
+    }
+}
+
+// ============================================================================
+// Repeated SetScope on the same key => latest value is used by the hidden func.
+// ============================================================================
+TEST_F(IrFuncBuilderTest, TestTransformStmts_RepeatedSetUsesLatest)
+{
+    IrFuncSetup setup("RepeatedSetUsesLatest");
+
+    auto a = setup.MakeParam("a");
+    auto aux = setup.MakeLocal("aux");
+    setup.AddDassemble(a, aux);
+
+    auto& cm = ConfigManagerNg::GetInstance();
+    cm.BeginScope("loop_config", {});
+    cm.SetScope({{"pass.pg_lower_bound", 111L}});
+    cm.SetScope({{"pass.pg_lower_bound", 777L}});
+    setup.WrapStmtsInForLoop("i");
+    cm.EndScope();
+
+    auto irFunc = setup.BuildIrFunction("RepeatedSetUsesLatest");
+    auto irProg = std::make_shared<ir::Program>(std::vector<ir::FunctionPtr>{irFunc}, "test", Sp());
+
+    auto createRoot = pypto::ir::pass::CreateRootFunctions();
+    (void)createRoot(irProg);
+
+    auto hiddenFuncs = FindHiddenFuncs();
+    ASSERT_EQ(hiddenFuncs.size(), 1u);
+    EXPECT_EQ(hiddenFuncs[0]->paramConfigs_.sgPgLowerBound, 777);
+}
+
+// ============================================================================
+// Nested loops: inner scope config overrides the inherited parent config.
+// ============================================================================
+TEST_F(IrFuncBuilderTest, TestTransformStmts_InnerConfigOverride)
+{
+    IrFuncSetup setup("InnerConfigOverride");
+
+    auto a = setup.MakeParam("a");
+    auto innerAux = setup.MakeLocal("inner_aux");
+    auto outerAux = setup.MakeLocal("outer_aux");
+    std::map<int64_t, int64_t> outerConfig{{5, 6}};
+    std::map<int64_t, int64_t> innerConfig{{7, 8}};
+
+    auto& cm = ConfigManagerNg::GetInstance();
+    cm.BeginScope("outer_loop_config", {});
+    cm.SetScope({{"pass.vec_nbuffer_setting", outerConfig}});
+
+    cm.BeginScope("inner_loop_config", {});
+    cm.SetScope({{"pass.vec_nbuffer_setting", innerConfig}});
+    setup.AddDassemble(a, innerAux);
+    setup.WrapStmtsInForLoop("inner");
+    cm.EndScope();
+
+    setup.AddDassemble(a, outerAux);
+    setup.WrapStmtsInForLoop("outer");
+    cm.EndScope();
+
+    auto irFunc = setup.BuildIrFunction("InnerConfigOverride");
+    auto irProg = std::make_shared<ir::Program>(std::vector<ir::FunctionPtr>{irFunc}, "test", Sp());
+
+    auto createRoot = pypto::ir::pass::CreateRootFunctions();
+    (void)createRoot(irProg);
+
+    auto hiddenFuncs = FindHiddenFuncs();
+    ASSERT_EQ(hiddenFuncs.size(), 2u);
+
+    bool foundOuter = false;
+    bool foundInner = false;
+    for (auto* func : hiddenFuncs) {
+        if (func->paramConfigs_.vecNBufferSetting == outerConfig) {
+            foundOuter = true;
+        }
+        if (func->paramConfigs_.vecNBufferSetting == innerConfig) {
+            foundInner = true;
+        }
+    }
+    EXPECT_TRUE(foundOuter);
+    EXPECT_TRUE(foundInner);
+}
