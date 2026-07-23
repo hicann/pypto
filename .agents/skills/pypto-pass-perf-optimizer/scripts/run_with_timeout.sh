@@ -41,6 +41,7 @@
 # 启用作业控制：后台命令自动获得独立进程组，PGID == PID
 # 这是信号能传播到子进程的关键
 set -m
+set -e
 
 # 参数处理
 TIMEOUT_SECONDS=${1:-300}  # 默认5分钟
@@ -69,7 +70,7 @@ PGID=$CMD_PID
         echo "✓  Pass 编译日志已保存，将继续性能分析"
 
         # 第1级：SIGINT 到整个进程组（优雅退出，Ctrl+C 等效）
-        kill -INT -"$PGID" 2>/dev/null
+        kill -INT -"$PGID" 2>/dev/null || true
 
         # 等待 10 秒让进程优雅退出（刷新日志、释放资源）
         sleep 10
@@ -77,28 +78,30 @@ PGID=$CMD_PID
         # 第2级：如果仍在运行，升级为 SIGTERM
         if kill -0 "$CMD_PID" 2>/dev/null; then
             echo "⚠️  SIGINT 后进程仍在运行，升级为 SIGTERM..."
-            kill -TERM -"$PGID" 2>/dev/null
+            kill -TERM -"$PGID" 2>/dev/null || true
             sleep 5
         fi
 
         # 第3级：最终手段 SIGKILL（不可被忽略）
         if kill -0 "$CMD_PID" 2>/dev/null; then
             echo "⚠️  SIGTERM 后进程仍在运行，升级为 SIGKILL..."
-            kill -KILL -"$PGID" 2>/dev/null
+            kill -KILL -"$PGID" 2>/dev/null || true
         fi
 
-        wait "$CMD_PID" 2>/dev/null
+        wait "$CMD_PID" 2>/dev/null || true
     fi
 ) &
 TIMEOUT_PID=$!
 
-# 等待命令完成
+# 命令可能被超时信号中断，wait 返回非零属于预期，需捕获后判断
+set +e
 wait "$CMD_PID" 2>/dev/null
 EXIT_CODE=$?
+set -e
 
 # 清理监控进程（如果命令正常完成，监控进程还在 sleep）
-kill "$TIMEOUT_PID" 2>/dev/null
-wait "$TIMEOUT_PID" 2>/dev/null
+kill "$TIMEOUT_PID" 2>/dev/null || true
+wait "$TIMEOUT_PID" 2>/dev/null || true
 
 # 处理退出码
 # 130 = SIGINT  (128+2), 137 = SIGKILL (128+9), 143 = SIGTERM (128+15)
