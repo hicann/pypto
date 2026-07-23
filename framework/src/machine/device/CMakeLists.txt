@@ -24,6 +24,7 @@ file(GLOB _Device_Utils_Srcs
     ${PTO_FWK_SRC_ROOT}/framework/src/machine/utils/dynamic/dev_cell_match_dump.cpp
     ${PTO_FWK_SRC_ROOT}/framework/src/machine/utils/dynamic/dev_encode_program_ctrlflow_cache.cpp
     ${PTO_FWK_SRC_ROOT}/framework/src/machine/utils/dynamic/dev_workspace.cpp
+    ${PTO_FWK_SRC_ROOT}/framework/src/machine/simulation/aicore_hardware.cpp
 )
 
 add_subdirectory(dynamic)
@@ -89,6 +90,7 @@ target_link_libraries(tile_fwk_server
 target_link_options(tile_fwk_server
         PRIVATE
             -Wl,-z,relro
+            -Wl,-z,now
             -s
 )
 set_target_properties(tile_fwk_server PROPERTIES OUTPUT_NAME tilefwk_backend_server)

@@ -27,7 +27,9 @@
 #include "machine/utils/dynamic/device_task.h"
 #include "machine/utils/device_log.h"
 #include "machine/device/dump/aicore_dump.h"
+#ifndef __DEVICE__
 #include "adapter/api/runtime_api.h"
+#endif
 #include "interface/configs/config_manager_ng.h"
 #include "interface/utils/string_utils.h"
 #include "tilefwk/data_type.h"
@@ -211,11 +213,13 @@ private:
                 LoadTensorFromData(info, stride, idx + 1, newAddr, fileData, bufferOffset);
             }
         } else {
-            uint64_t newAddr = tensorAddr + info.offset[idx] * dataByte;
             uint32_t dataSize = info.shape[idx] * dataByte;
 
+#ifndef __DEVICE__
+            uint64_t newAddr = tensorAddr + info.offset[idx] * dataByte;
             RuntimeMemcpyDirect(reinterpret_cast<void*>(newAddr), dataSize, fileData + bufferOffset, dataSize,
                                 RtMemcpyKind::HOST_TO_DEVICE);
+#endif
 
             bufferOffset += dataSize;
         }
