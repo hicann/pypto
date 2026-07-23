@@ -443,14 +443,19 @@ std::vector<int> TensorSlotManager::LookupSlotIndexConst(
     return indexList;
 }
 
-Tensor& TensorSlotManager::GetSlotTensor(std::shared_ptr<LogicalTensor> lt)
+Tensor& TensorSlotManager::GetSlotTensor(LogicalTensorPtr lt)
 {
-    auto name = IRContext::Get().GetOriginName(lt);
-    auto it = slotTensorDict.find(name);
+    auto it = slotTensorDict.find(lt);
     if (it == slotTensorDict.end()) {
-        it = slotTensorDict.emplace(name, std::make_unique<Tensor>(lt)).first;
+        it = slotTensorDict.emplace(lt, std::make_shared<Tensor>(lt)).first;
     }
     return *it->second;
+}
+
+void TensorSlotManager::SetSameSlot(const LogicalTensorPtr& src, const LogicalTensorPtr& dst)
+{
+    (void)GetSlotTensor(src);
+    slotTensorDict[dst] = slotTensorDict[src];
 }
 
 void TensorSlotManager::MarkInput(const Tensor& tensor)

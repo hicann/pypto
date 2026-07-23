@@ -60,6 +60,7 @@ struct IrFuncSetup {
         fwkFunc->SetGraphType(GraphType::TENSOR_GRAPH);
         Program::GetInstance().InsertFuncToFunctionMap(fwkFunc->GetMagicName(), fwkFunc);
         Program::GetInstance().SetCurrentFunction(fwkFunc.get());
+        Program::GetInstance().SetLastFunction(fwkFunc.get());
     }
 
     LogicalTensorPtr MakeParam(const std::string& name)

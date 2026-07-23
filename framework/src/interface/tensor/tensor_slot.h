@@ -224,7 +224,7 @@ struct TensorSlotManager {
     /* Mapping from slot to its index */
     std::unordered_map<TensorSlot, int> slotIndexDict;
     std::unordered_map<TensorSlot, TensorSlotUsage> slotUsageDict;
-    std::unordered_map<std::string, std::unique_ptr<Tensor>> slotTensorDict;
+    std::unordered_map<LogicalTensorPtr, std::shared_ptr<Tensor>> slotTensorDict;
 
     std::unordered_set<TensorSlot> liveSlotSet;
     std::unordered_set<TensorSlot> assembleSlotSet;
@@ -289,6 +289,7 @@ struct TensorSlotManager {
 
     void UpdateReshapeInplaceSlots(IncastOutcastLink& link);
     void SetSameSlot(const Tensor& operand, const Tensor& dst);
+    void SetSameSlot(const LogicalTensorPtr& src, const LogicalTensorPtr& dst);
     IncastOutcastLink BuildIncastOutcastLink(const std::string& rawname = "");
 
     static bool HasSameSlot(const std::vector<int>& slots1, const std::vector<int>& slots2);

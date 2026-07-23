@@ -27,10 +27,106 @@
 #include "ir/expr.h"
 #include "ir/kind_traits.h"
 #include "ir/type.h"
+#include "ir/transforms/base/mutator.h"
 
 using namespace pypto;
 
 namespace npu::tile_fwk {
+
+class StmtTransformer : public ir::IRMutator {
+public:
+    using IRMutator::VisitExpr_;
+    using IRMutator::VisitStmt;
+    using IRMutator::VisitStmt_;
+
+    explicit StmtTransformer(RootFunctionBuilder& builder) : builder_(builder) {}
+
+    ir::StmtPtr Apply(ir::StmtPtr stmt, const std::string& loopVarName)
+    {
+        loopVarName_ = loopVarName;
+        return VisitStmt(stmt);
+    }
+
+private:
+    RootFunctionBuilder& builder_;
+    std::string loopVarName_;
+
+    void CollectConsumedTensors(const std::vector<ir::ExprPtr>& values)
+    {
+        for (auto& value : values) {
+            if (!value) {
+                continue;
+            }
+            auto lt = std::dynamic_pointer_cast<const LogicalTensor>(value);
+            if (lt != nullptr) {
+                builder_.consumedTensors_.insert(std::const_pointer_cast<LogicalTensor>(lt));
+            }
+        }
+    }
+
+    ir::StmtPtr VisitStmt_(const ir::SeqStmtsPtr& seq) override
+    {
+        if (builder_.IsPureTensorOpSeq(seq)) {
+            auto newStmts = builder_.CreatePathFuncAndPlaceholder(seq, loopVarName_);
+            return std::make_shared<ir::SeqStmts>(std::vector<ir::StmtPtr>{newStmts}, seq->span_);
+        }
+        auto segments = builder_.SplitIntoTensorOpSegments(seq);
+        std::vector<ir::StmtPtr> newStmts;
+        for (auto& segment : segments) {
+            if (!segment.empty() && segment[0]->GetKind() == ir::ObjectKind::TensorOpStmt) {
+                auto segSeq = std::make_shared<ir::SeqStmts>(segment, seq->span_);
+                newStmts.push_back(builder_.CreatePathFuncAndPlaceholder(segSeq, loopVarName_));
+            } else if (!segment.empty()) {
+                newStmts.push_back(VisitStmt(segment[0]));
+            }
+        }
+        return std::make_shared<ir::SeqStmts>(newStmts, seq->span_);
+    }
+
+    ir::StmtPtr VisitStmt_(const ir::ForStmtPtr& forStmt) override
+    {
+        for (auto& iterArg : forStmt->iterArgs_) {
+            if (iterArg && iterArg->initValue_) {
+                auto lt = std::dynamic_pointer_cast<const LogicalTensor>(iterArg->initValue_);
+                if (lt != nullptr) {
+                    builder_.consumedTensors_.insert(std::const_pointer_cast<LogicalTensor>(lt));
+                }
+            }
+        }
+        auto savedLoopVarName = loopVarName_;
+        loopVarName_ = IRContext::Get().GetOriginName(forStmt->loopVar_);
+        int unrollTimes = forStmt->GetAttr<int>("unroll_times", 1);
+        loopVarName_ += "_Unroll" + std::to_string(unrollTimes);
+        auto transformedBody = VisitStmt(forStmt->body_);
+        loopVarName_ = savedLoopVarName;
+        return std::make_shared<ir::ForStmt>(forStmt->loopVar_, forStmt->start_, forStmt->stop_, forStmt->step_,
+                                             forStmt->iterArgs_, transformedBody, forStmt->returnVars_, forStmt->span_,
+                                             forStmt->attrs_);
+    }
+
+    ir::StmtPtr VisitStmt_(const ir::ReturnStmtPtr& op) override
+    {
+        CollectConsumedTensors(op->value_);
+        return op;
+    }
+
+    ir::StmtPtr VisitStmt_(const ir::ContinueStmtPtr& op) override
+    {
+        CollectConsumedTensors(op->value_);
+        return op;
+    }
+
+    ir::StmtPtr VisitStmt_(const ir::IfStmtPtr& ifStmt) override
+    {
+        auto transformedThen = VisitStmt(ifStmt->thenBody_);
+        std::optional<ir::StmtPtr> transformedElse;
+        if (ifStmt->elseBody_) {
+            transformedElse = VisitStmt(ifStmt->elseBody_.value());
+        }
+        return std::make_shared<ir::IfStmt>(ifStmt->condition_, transformedThen, transformedElse, ifStmt->returnVars_,
+                                            ifStmt->span_);
+    }
+};
 
 RootFunctionBuilder::RootFunctionBuilder(Function* parentFunc)
     : program_(Program::GetInstance()), parentFunc_(parentFunc)
@@ -205,10 +301,8 @@ void RootFunctionBuilder::ComputeOutcast(Function& pathFunc,
     std::unordered_set<std::shared_ptr<LogicalTensor>> outcastPtrs;
     for (auto& output : allOutputs) {
         if (outcastPtrs.find(output) == outcastPtrs.end()) {
-            bool neededByConsumer = consumedRawMagics_.count(output->GetRawMagic()) ||
-                                    consumedOriginName_.count(IRContext::Get().GetOriginName(output));
-            bool isFuncOutput = paramRawMagics_.count(output->GetRawMagic()) ||
-                                paramOriginName_.count(IRContext::Get().GetOriginName(output));
+            bool neededByConsumer = consumedTensors_.count(output) > 0;
+            bool isFuncOutput = paramTensors_.count(output) > 0;
             if (neededByConsumer || isFuncOutput) {
                 outcastPtrs.insert(output);
                 pathFunc.AddOriginOutcast(output);
@@ -268,7 +362,7 @@ void RootFunctionBuilder::BuildPathFuncSlotScope(Function* pathFunc, const std::
             for (auto& oOperand : op.GetOOperands()) {
                 auto& tensor = slotManager->GetSlotTensor(oOperand);
                 slotManager->TensorWrite(tensor, SlotProperty::ASSEMBLE_DST);
-                if (paramRawMagics_.count(oOperand->GetRawMagic()) != 0) {
+                if (paramTensors_.count(oOperand) != 0) {
                     continue;
                 }
                 if (addedSlots.insert(tensor.Id()).second) {
@@ -347,11 +441,7 @@ ir::StmtPtr RootFunctionBuilder::CreatePathFuncAndPlaceholder(const ir::SeqStmts
     auto pathFunc = CreateHiddenFunc(seq, loopVarName);
 
     for (auto& incast : pathFunc->GetOriginIncast()) {
-        consumedRawMagics_.insert(incast->GetRawMagic());
-        auto name = IRContext::Get().GetOriginName(incast);
-        if (!name.empty()) {
-            consumedOriginName_.insert(name);
-        }
+        consumedTensors_.insert(incast);
     }
 
     auto placeholderStmt = std::make_shared<ir::TensorOpStmt>(std::vector<ir::VarPtr>{}, nullptr, "CALL",
@@ -423,11 +513,8 @@ void RootFunctionBuilder::CreateAndFinalizePathFunc(Function* pathFunc, Function
     program_.GetFunctionCache().Insert(pathFunc->GetFunctionHash(), *pathFunc);
 }
 
-std::pair<LogicalTensors, LogicalTensors> RootFunctionBuilder::FinalizeHiddenFunc(Function* hiddenFunc,
-                                                                                  const ir::StmtPtr& placeholder)
+void RootFunctionBuilder::FinalizeHiddenFunc(Function* hiddenFunc, const ir::StmtPtr& placeholder)
 {
-    auto allOutputs = CollectAllOutputs(*hiddenFunc);
-    ComputeOutcast(*hiddenFunc, allOutputs);
     auto hiddenScope = std::make_shared<TensorSlotScope>(hiddenFunc);
     hiddenFunc->SetSlotScope(hiddenScope);
     program_.GetTensorSlotManager()->scopeList.push_back(hiddenScope);
@@ -455,8 +542,6 @@ std::pair<LogicalTensors, LogicalTensors> RootFunctionBuilder::FinalizeHiddenFun
     hiddenFunc->ComputeHash();
     program_.GetFunctionCache().Insert(hiddenFunc->GetFunctionHash(), *hiddenFunc);
     DumpFunctionGraph(hiddenFunc);
-
-    return {hiddenInArgs, hiddenOutArgs};
 }
 
 ir::StmtPtr RootFunctionBuilder::FinalizePathFunc(const ir::StmtPtr& placeholder)
@@ -480,13 +565,15 @@ ir::StmtPtr RootFunctionBuilder::FinalizePathFunc(const ir::StmtPtr& placeholder
     hiddenFunc->SetHiddenFunction(true);
     hiddenFunc->SetParent(pathFunc.get());
 
-    // 3. hiddenFunc 处理（MakeIncasts 的 Parent() = pathFunc）
+    // 3. hiddenFunc 处理（MakeIncasts 的 Parent() = pathFunc
+    auto allOutputs = CollectAllOutputs(*hiddenFunc);
+    ComputeOutcast(*hiddenFunc, allOutputs);
     auto originalIncasts = hiddenFunc->GetOriginIncast();
     auto originalOutcasts = hiddenFunc->GetOriginOutcast();
-    auto hiddenFuncArgs = FinalizeHiddenFunc(hiddenFunc, placeholder);
+    FinalizeHiddenFunc(hiddenFunc, placeholder);
 
     // 4. pathFunc 处理（独立函数）
-    CreateAndFinalizePathFunc(pathFunc.get(), hiddenFunc, hiddenFuncArgs.first, hiddenFuncArgs.second, placeholder);
+    CreateAndFinalizePathFunc(pathFunc.get(), hiddenFunc, originalIncasts, originalOutcasts, placeholder);
     pathFunc->GetSlotScope()->constructAssembleSlotList = hiddenFunc->GetSlotScope()->constructAssembleSlotList;
 
     // 5. dynFunc 的 CALL op
@@ -499,49 +586,75 @@ ir::StmtPtr RootFunctionBuilder::FinalizePathFunc(const ir::StmtPtr& placeholder
     return std::static_pointer_cast<const ir::Stmt>(callOperation.shared_from_this());
 }
 
-ir::StmtPtr RootFunctionBuilder::TransformStmts(ir::StmtPtr stmt, const std::string& loopVarName)
+void RootFunctionBuilder::LinkReturnSlots(const ir::StmtPtr& stmt)
 {
-    switch (stmt->GetKind()) {
-        case ir::ObjectKind::SeqStmts: {
-            auto seq = ir::SeqStmts::AsMut(stmt);
-            if (IsPureTensorOpSeq(seq)) {
-                auto newStmts = CreatePathFuncAndPlaceholder(seq, loopVarName);
-                return std::make_shared<ir::SeqStmts>(std::vector<ir::StmtPtr>{newStmts}, seq->span_);
-            }
-            auto segments = SplitIntoTensorOpSegments(seq);
-            std::vector<ir::StmtPtr> newStmts;
-            for (auto& segment : segments) {
-                if (!segment.empty() && segment[0]->GetKind() == ir::ObjectKind::TensorOpStmt) {
-                    auto segSeq = std::make_shared<ir::SeqStmts>(segment, seq->span_);
-                    newStmts.push_back(CreatePathFuncAndPlaceholder(segSeq, loopVarName));
-                } else if (!segment.empty()) {
-                    newStmts.push_back(TransformStmts(segment[0], loopVarName));
-                }
-            }
-            return std::make_shared<ir::SeqStmts>(newStmts, seq->span_);
+    auto seq = std::dynamic_pointer_cast<const ir::SeqStmts>(stmt);
+    if (seq == nullptr || seq->stmts_.empty()) {
+        return;
+    }
+    auto returnStmt = std::dynamic_pointer_cast<const ir::ReturnStmt>(seq->stmts_.back());
+    if (returnStmt == nullptr) {
+        return;
+    }
+    auto slotManager = program_.GetTensorSlotManager();
+    for (size_t i = 0; i < returnStmt->value_.size() && i < logicalParams_.size(); i++) {
+        if (!returnStmt->value_[i]) {
+            continue;
         }
-        case ir::ObjectKind::ForStmt: {
-            auto forStmt = std::static_pointer_cast<const ir::ForStmt>(stmt);
-            auto currentLoopVarName = IRContext::Get().GetOriginName(forStmt->loopVar_);
-            int unrollTimes = forStmt->GetAttr<int>("unroll_times", 1);
-            currentLoopVarName += "_Unroll" + std::to_string(unrollTimes);
-            auto transformedBody = TransformStmts(forStmt->body_, currentLoopVarName);
-            return std::make_shared<ir::ForStmt>(forStmt->loopVar_, forStmt->start_, forStmt->stop_, forStmt->step_,
-                                                 forStmt->iterArgs_, transformedBody, forStmt->returnVars_,
-                                                 forStmt->span_, forStmt->attrs_);
+        auto returnLt = std::const_pointer_cast<LogicalTensor>(
+            std::dynamic_pointer_cast<const LogicalTensor>(returnStmt->value_[i]));
+        if (returnLt != nullptr) {
+            slotManager->SetSameSlot(logicalParams_[i], returnLt);
         }
-        case ir::ObjectKind::IfStmt: {
-            auto ifStmt = std::static_pointer_cast<const ir::IfStmt>(stmt);
-            auto transformedThen = TransformStmts(ifStmt->thenBody_, loopVarName);
-            std::optional<ir::StmtPtr> transformedElse;
-            if (ifStmt->elseBody_) {
-                transformedElse = TransformStmts(ifStmt->elseBody_.value(), loopVarName);
-            }
-            return std::make_shared<ir::IfStmt>(ifStmt->condition_, transformedThen, transformedElse,
-                                                ifStmt->returnVars_, ifStmt->span_);
+    }
+}
+
+void RootFunctionBuilder::LinkForStmtSlots(const ir::ForStmt& forStmt)
+{
+    std::shared_ptr<const ir::ContinueStmt> continueStmt;
+    auto seqStmts = std::dynamic_pointer_cast<const ir::SeqStmts>(forStmt.body_);
+    if (seqStmts != nullptr && !seqStmts->stmts_.empty()) {
+        continueStmt = std::dynamic_pointer_cast<const ir::ContinueStmt>(seqStmts->stmts_.back());
+    }
+    if (continueStmt != nullptr) {
+        FE_ASSERT(FeError::INVALID_VAL, continueStmt->value_.size() == forStmt.iterArgs_.size())
+            << "ContinueStmt value count (" << continueStmt->value_.size() << ") must match iterArgs count ("
+            << forStmt.iterArgs_.size() << ")";
+        FE_ASSERT(FeError::INVALID_VAL, continueStmt->value_.size() == forStmt.returnVars_.size())
+            << "ContinueStmt value count (" << continueStmt->value_.size() << ") must match returnVars count ("
+            << forStmt.returnVars_.size() << ")";
+    }
+    auto slotManager = program_.GetTensorSlotManager();
+    for (size_t i = 0; i < forStmt.iterArgs_.size(); i++) {
+        auto& iterArg = forStmt.iterArgs_[i];
+        auto initLt = std::const_pointer_cast<LogicalTensor>(
+            std::dynamic_pointer_cast<const LogicalTensor>(iterArg->initValue_));
+        if (initLt == nullptr) {
+            continue;
         }
-        default:
-            return stmt;
+        auto iterLt = std::const_pointer_cast<LogicalTensor>(
+            std::dynamic_pointer_cast<const LogicalTensor>(iterArg->iterVar_));
+        if (iterLt == nullptr) {
+            continue;
+        }
+        // initValue_ -> iterVar_：iterVar_ 复用 initValue_ 的 slot
+        slotManager->SetSameSlot(initLt, iterLt);
+        if (continueStmt == nullptr) {
+            continue;
+        }
+        // iterVar_ -> value_：value_ 复用 iterVar_ 的 slot（传递性链回 initValue_）
+        auto valueLt = std::const_pointer_cast<LogicalTensor>(
+            std::dynamic_pointer_cast<const LogicalTensor>(continueStmt->value_[i]));
+        if (valueLt == nullptr) {
+            continue;
+        }
+        slotManager->SetSameSlot(iterLt, valueLt);
+        // value_ -> returnVars_：returnVar 复用 continue value 的 slot
+        auto returnVarLt = std::const_pointer_cast<LogicalTensor>(
+            std::dynamic_pointer_cast<const LogicalTensor>(forStmt.returnVars_[i]));
+        if (returnVarLt != nullptr) {
+            slotManager->SetSameSlot(valueLt, returnVarLt);
+        }
     }
 }
 
@@ -567,6 +680,7 @@ void RootFunctionBuilder::ReplacePlaceholders(ir::StmtPtr stmt)
             auto forStmt = std::static_pointer_cast<const ir::ForStmt>(stmt);
             auto config = forStmt->GetAttr<std::shared_ptr<ConfigScope>>("_config_scope");
             ConfigManagerNg::ScopedRestore scoped(config);
+            LinkForStmtSlots(*forStmt);
             ReplacePlaceholders(forStmt->body_);
             break;
         }
@@ -589,16 +703,15 @@ ir::StmtPtr RootFunctionBuilder::TransformBody(ir::StmtPtr stmt)
         return nullptr;
     }
 
-    paramRawMagics_.clear();
+    paramTensors_.clear();
     for (auto& param : logicalParams_) {
-        paramRawMagics_.insert(param->GetRawMagic());
-        paramOriginName_.insert(IRContext::Get().GetOriginName(param));
+        paramTensors_.insert(param);
     }
 
-    consumedRawMagics_.clear();
-    consumedOriginName_.clear();
+    consumedTensors_.clear();
 
-    auto irTree = TransformStmts(stmt, "");
+    auto irTree = StmtTransformer(*this).Apply(stmt, "");
+    LinkReturnSlots(irTree);
     ReplacePlaceholders(irTree);
 
     return irTree;
