@@ -266,6 +266,19 @@ inline int CalculateThreadIdx(int cpu, int die0ScheNum, uint64_t die0Selected, u
     return threadIdx;
 }
 
+inline bool CheckThreadIdxUnique(int cpu, int curThreadIdx, std::atomic<uint64_t>& threadIdxBitmap)
+{
+    uint64_t prevBitmap = threadIdxBitmap.fetch_or(1ULL << curThreadIdx, std::memory_order_acq_rel);
+    if (prevBitmap & (1ULL << curThreadIdx)) {
+        DEV_ERROR(ThreadErr::THREAD_CPU_ALLOC_FAILED,
+                  "#sche.thread.duplicate: Duplicate threadIdx detected! "
+                  "cpu=%d, threadIdx=%d, bitmap=0x%lx",
+                  cpu, curThreadIdx, prevBitmap);
+        return false;
+    }
+    return true;
+}
+
 /**
  * DAV3510 线程分配主流程（核心实现）
  *
@@ -284,7 +297,8 @@ inline int CalculateThreadIdx(int cpu, int die0ScheNum, uint64_t die0Selected, u
  */
 inline int AllocThreadIdxForDav3510Impl(DeviceArgs* devArgs, int cpu, int& curThreadIdx, std::atomic<int>& threadIdx,
                                         std::atomic<uint64_t>& cpumask, std::atomic<int>& globalArbitrationLevel,
-                                        std::atomic<uint64_t>& arbitrationCpumask)
+                                        std::atomic<uint64_t>& arbitrationCpumask,
+                                        std::atomic<uint64_t>& threadIdxBitmap)
 {
 #ifndef __DEVICE__
     curThreadIdx = ++threadIdx;
@@ -338,6 +352,10 @@ inline int AllocThreadIdxForDav3510Impl(DeviceArgs* devArgs, int cpu, int& curTh
     }
 
     curThreadIdx = CalculateThreadIdx(cpu, die0ScheNum, die0Selected, die1Selected, info);
+    if (!CheckThreadIdxUnique(cpu, curThreadIdx, threadIdxBitmap)) {
+        return DEVICE_MACHINE_ERROR;
+    }
+
     threadIdx.store(curThreadIdx, std::memory_order_release);
     DEV_INFO("Thread alloc success: physicalCpu=%d, threadIdx=%d.", cpu, curThreadIdx);
     return DEVICE_MACHINE_OK;
