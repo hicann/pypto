@@ -340,5 +340,21 @@ TEST_F(FunctionMixParallelTest, BuildCallInOutDataPairWaitsUntilMixGlobalTensorR
     EXPECT_EQ(built->incastDataViewList[0], readyView);
 }
 
+TEST_F(FunctionMixParallelTest, GetInplaceIndexIsInplaceAttr)
+{
+    auto func = std::make_shared<Function>(Program::GetInstance(), "inplace_test", "inplace_test", nullptr);
+    func->SetFunctionType(FunctionType::STATIC);
+    func->SetGraphType(GraphType::BLOCK_GRAPH);
+    std::vector<int64_t> shape = {1};
+    auto in = std::make_shared<LogicalTensor>(*func, DT_FP32, shape);
+    auto out = std::make_shared<LogicalTensor>(*func, DT_FP32, shape);
+    auto& op = func->AddRawOperation(Opcode::OP_CAST, {in}, {out});
+
+    FunctionInterpreter interpreter;
+    EXPECT_EQ(interpreter.GetInplaceIndex(&op, 0), -1);
+    op.SetAttribute(OP_ATTR_PREFIX + "isInplace", true);
+    EXPECT_EQ(interpreter.GetInplaceIndex(&op, 0), 0);
+}
+
 } // namespace
 } // namespace npu::tile_fwk

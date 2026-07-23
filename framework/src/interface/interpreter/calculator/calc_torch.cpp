@@ -2606,57 +2606,74 @@ static void Extract(const TensorData& out, const TensorData& self, int mod, bool
  * @param descending Indicate whether the obtained k values are the maximum or minimum k values,
  *                   and true returns the maximum k values
  */
-static void MrgSort(const TensorData& out, const TensorData& self, int64_t axis, int64_t k)
+static torch::Tensor SortGroupedValueIndexPairs(const torch::Tensor& packed, int64_t axis)
 {
-    auto tself = From(self);
-    auto tout = From(out);
-    constexpr int DIM_SIZE_TWO = 2;
-    constexpr int ACTUAL_VALID_RATIO = 2;
-    axis = axis < 0 ? (axis + tself.second.dim()) : axis;
-    int actShape = tself.second.size(axis);
-    auto sliceIndices = torch::arange(actShape, torch::dtype(torch::kLong));
-    auto tselfHalf = tself.second.index_select(axis, sliceIndices);
-
-    ASSERT(CalculatorErrorScene::MRGSORT_AXIS_OUT_OF_RANGE, axis >= 0 && axis < tselfHalf.dim())
-        << "axis" << axis << " is out of bounds for tensor of dimension " << tselfHalf.dim();
-
-    std::vector<int64_t> viewOffset(tself.second.dim(), 0);
-
+    constexpr int kPairSize = 2;
     std::vector<int64_t> newShape;
-    newShape.reserve(tselfHalf.dim() + 1);
-    for (int64_t i = 0; i < tselfHalf.dim(); ++i) {
+    newShape.reserve(packed.dim() + 1);
+    for (int64_t i = 0; i < packed.dim(); ++i) {
         if (i == axis) {
-            newShape.push_back(tselfHalf.size(axis) / ACTUAL_VALID_RATIO);
-            newShape.push_back(DIM_SIZE_TWO);
+            newShape.push_back(packed.size(axis) / kPairSize);
+            newShape.push_back(kPairSize);
         } else {
-            newShape.push_back(tselfHalf.size(i));
+            newShape.push_back(packed.size(i));
         }
     }
-    auto tselfGrouped = tselfHalf.reshape(torch::IntArrayRef(newShape));
+    auto grouped = packed.reshape(torch::IntArrayRef(newShape));
     torch::Tensor sortedIndices;
-    std::tie(std::ignore, sortedIndices) = tselfGrouped.select(-1, 0).sort(axis, true);
+    std::tie(std::ignore, sortedIndices) = grouped.select(-1, 0).sort(axis, true);
+    std::vector<int64_t> indexShape = sortedIndices.sizes().vec();
+    indexShape.push_back(kPairSize);
+    auto expandedIndices = sortedIndices.unsqueeze(-1).expand(torch::IntArrayRef(indexShape));
+    return grouped.gather(axis, expandedIndices);
+}
 
-    std::vector<int64_t> indexShape;
-    for (int64_t i = 0; i < sortedIndices.dim(); ++i) {
-        indexShape.push_back(sortedIndices.size(i));
+static torch::Tensor PadSelectTopKGroups(torch::Tensor sortedGroups, int64_t axis, int64_t k)
+{
+    int64_t sortedSize = sortedGroups.size(axis);
+    if (sortedSize < k) {
+        auto padShape = sortedGroups.sizes().vec();
+        padShape[axis] = k - sortedSize;
+        auto padTensor = torch::full(padShape, -std::numeric_limits<float>::infinity(), sortedGroups.dtype());
+        sortedGroups = torch::cat({sortedGroups, padTensor}, axis);
     }
-    indexShape.push_back(DIM_SIZE_TWO);
-    auto expanded_indices = sortedIndices.unsqueeze(-1).expand(torch::IntArrayRef(indexShape));
-    auto sortedGroups = tselfGrouped.gather(axis, expanded_indices);
-    auto indicesk = torch::arange(k, torch::dtype(torch::kLong));
-    auto topkGroups = sortedGroups.index_select(axis, indicesk);
+    return sortedGroups.index_select(axis, torch::arange(k, torch::dtype(torch::kLong)));
+}
 
+static std::vector<int64_t> FlattenPairAxisShape(const torch::Tensor& topkGroups, int64_t axis, int64_t k)
+{
+    constexpr int kPairSize = 2;
     std::vector<int64_t> dstShape;
     dstShape.reserve(topkGroups.dim() - 1);
     for (int64_t i = 0; i < topkGroups.dim(); ++i) {
         if (i == axis) {
-            dstShape.push_back(DIM_SIZE_TWO * k);
+            dstShape.push_back(kPairSize * k);
         } else if (i != axis + 1) {
             dstShape.push_back(topkGroups.size(i));
         }
     }
-    torch::Tensor dstSubview = View(tout.second, dstShape, viewOffset);
-    dstSubview.copy_(topkGroups.reshape(torch::IntArrayRef(dstShape)));
+    return dstShape;
+}
+
+static void MrgSort(const TensorData& out, const TensorData& self, int64_t axis, int64_t k)
+{
+    auto tself = From(self);
+    auto tout = From(out);
+    axis = axis < 0 ? (axis + tself.second.dim()) : axis;
+    int actShape = tself.second.size(axis);
+    if (actShape == 0) {
+        tout.second.fill_(-std::numeric_limits<float>::infinity());
+        ToOperand(tout.second, tout.first, out.dtype);
+        return;
+    }
+    auto tselfHalf = tself.second.index_select(axis, torch::arange(actShape, torch::dtype(torch::kLong)));
+    ASSERT(CalculatorErrorScene::MRGSORT_AXIS_OUT_OF_RANGE, axis >= 0 && axis < tselfHalf.dim())
+        << "axis" << axis << " is out of bounds for tensor of dimension " << tselfHalf.dim();
+
+    auto topkGroups = PadSelectTopKGroups(SortGroupedValueIndexPairs(tselfHalf, axis), axis, k);
+    auto dstShape = FlattenPairAxisShape(topkGroups, axis, k);
+    View(tout.second, dstShape, std::vector<int64_t>(tself.second.dim(), 0))
+        .copy_(topkGroups.reshape(torch::IntArrayRef(dstShape)));
     ToOperand(tout.second, tout.first, out.dtype);
 }
 
@@ -2679,44 +2696,16 @@ static void TiledMrgSort(const TensorData& out, const TensorData& src1, const Te
     } else if (validBit == SORT_NUM_FOUR) {
         tself = torch::cat({self1.second, self2.second, self3.second, self4.second}, -1);
     }
-    constexpr int ACTUAL_VALID_RATIO = 2;
     auto axis = tself.dim() - 1;
-
-    std::vector<int64_t> newShape;
-    newShape.reserve(tself.dim() + 1);
-    for (int64_t i = 0; i < tself.dim(); ++i) {
-        if (i == axis) {
-            newShape.push_back(tself.size(axis) / ACTUAL_VALID_RATIO);
-            newShape.push_back(SORT_NUM_TWO);
-        } else {
-            newShape.push_back(tself.size(i));
-        }
+    if (tself.size(axis) == 0) {
+        tout.second.fill_(-std::numeric_limits<float>::infinity());
+        ToOperand(tout.second, tout.first, out.dtype);
+        return;
     }
-    auto tselfGrouped = tself.reshape(torch::IntArrayRef(newShape));
-    torch::Tensor sortedIndices;
-    std::tie(std::ignore, sortedIndices) = tselfGrouped.select(-1, 0).sort(axis, true);
 
-    std::vector<int64_t> indexShape;
-    for (int64_t i = 0; i < sortedIndices.dim(); ++i) {
-        indexShape.push_back(sortedIndices.size(i));
-    }
-    indexShape.push_back(SORT_NUM_TWO);
-    auto expanded_indices = sortedIndices.unsqueeze(-1).expand(torch::IntArrayRef(indexShape));
-    auto sortedGroups = tselfGrouped.gather(axis, expanded_indices);
-    auto indicesk = torch::arange(kvalue, torch::dtype(torch::kLong));
-    auto topkGroups = sortedGroups.index_select(axis, indicesk);
-
-    std::vector<int64_t> dstShape;
-    dstShape.reserve(topkGroups.dim() - 1);
-    for (int64_t i = 0; i < topkGroups.dim(); ++i) {
-        if (i == axis) {
-            dstShape.push_back(SORT_NUM_TWO * kvalue);
-        } else if (i != axis + 1) {
-            dstShape.push_back(topkGroups.size(i));
-        }
-    }
-    torch::Tensor dstSubview = View(tout.second, dstShape, {0, 0});
-    dstSubview.copy_(topkGroups.reshape(torch::IntArrayRef(dstShape)));
+    auto topkGroups = PadSelectTopKGroups(SortGroupedValueIndexPairs(tself, axis), axis, kvalue);
+    auto dstShape = FlattenPairAxisShape(topkGroups, axis, kvalue);
+    View(tout.second, dstShape, {0, 0}).copy_(topkGroups.reshape(torch::IntArrayRef(dstShape)));
     ToOperand(tout.second, tout.first, out.dtype);
 }
 

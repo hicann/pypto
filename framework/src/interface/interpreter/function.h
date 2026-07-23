@@ -1005,6 +1005,9 @@ struct FunctionInterpreter {
             ASSERT(ControlFlowScene::INVALID_INPLACE_CHAIN, pos == 0);
             return op->GetIntAttribute(OpAttributeKey::inplaceIdx);
         }
+        if (op->GetBoolAttribute(OP_ATTR_PREFIX + "isInplace")) {
+            return 0;
+        }
         return -1;
     }
 
