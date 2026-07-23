@@ -311,7 +311,7 @@ TEST_F(IRStmtStrTest, TestForStmtStr)
 
     ASSERT_EQ(PythonPrint(std::static_pointer_cast<const IRNode>(forStmt)),
               "for i, (sum,) in ir.range(0, 10, 1, init_values=(0,)):\n"
-              "    sum_out: ir.Scalar[ir.INT32] = ir.yield_(1)");
+              "    sum_out = ir.yield_(1)");
 }
 
 TEST_F(IRStmtStrTest, TestWhileStmtStr)

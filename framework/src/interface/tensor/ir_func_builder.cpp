@@ -155,8 +155,7 @@ void RootFunctionBuilder::InitDynFunc(const ir::FunctionPtr& irFunc)
     dynFunc_ = std::make_shared<Function>(program_, funcMagicName, irFunc->name_, parentFunc_);
     dynFunc_->SetFunctionType(FunctionType::DYNAMIC);
     dynFunc_->SetGraphType(GraphType::TENSOR_GRAPH);
-    ir::Span span = irFunc->span_;
-    dynFunc_->SetSpan(span);
+    dynFunc_->SetSpan(irFunc->span_);
     dynFunc_->SetDyndevAttribute(std::make_shared<DyndevFunctionAttribute>());
     program_.SetCurrentDynamicFunction(dynFunc_.get());
 }
@@ -320,6 +319,7 @@ std::shared_ptr<Function> RootFunctionBuilder::CreateHiddenFunc(const ir::SeqStm
     auto hiddenRawName = dynFunc_->GetRawName() + "_" + pathSuffix + "_hiddenfunc";
     auto hiddenMagicName = hiddenRawName + "_" + std::to_string(IdGen<IdType::FUNCTION>::Inst().NewId());
     auto hiddenFunc = std::make_shared<Function>(program_, hiddenMagicName, hiddenRawName, dynFunc_.get());
+    hiddenFunc->SetSpan(seq->span_);
     hiddenFunc->SetFunctionType(FunctionType::DYNAMIC_LOOP_PATH);
     hiddenFunc->SetGraphType(GraphType::TENSOR_GRAPH);
     hiddenFunc->SetUnderDynamicFunction(true);

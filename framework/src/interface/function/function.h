@@ -962,7 +962,7 @@ public:
     void GetTensorDataRefreshIO(const GetTensorDataIODescDict& descDict);
     void UpdateTensorDataUsage(Operation& op);
 
-    void SetSpan(ir::Span& span) { span_ = span; }
+    void SetSpan(const ir::Span& span) { span_ = span; }
 
     ir::Span& GetSpan() { return span_; }
     void CleanRedundantOutCast();
@@ -1048,7 +1048,6 @@ private:
     static bool enableMagicLookupRecord_;
     static std::map<std::pair<int, int>, std::set<Operation*, LogicalTensor::CompareOp>> tensorAndSubgraphToProducer_;
     std::shared_ptr<Tensor> getTensorDataOutcast_;
-    ir::Span span_;
     bool hiddenFunction_{false};
     VarDependency varDependency_;
     std::unordered_map<LogicalTensorPtr, bool> outcastNeedAllocMap_;

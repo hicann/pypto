@@ -914,3 +914,53 @@ def test_tensor_move():
     assert isinstance(stmt, ir.TensorOpStmt)
     assert stmt.opcode == "ADDS"
     assert stmt.result[0].name == 'b_0'
+
+
+def test_printer():
+    def foo(a, b):
+        for i in pypto.loop(a.shape[0]):
+            if i % 2 == 0:
+                b[:] = a + 1
+            else:
+                b[:] = a - 1
+        for _ in pypto.loop(a.shape[0]):
+            b[:] = a + 1
+
+    x = pypto.Tensor((32, 32), pypto.DT_FP32, 'x')
+    y = pypto.Tensor((32, 32), pypto.DT_FP32, 'y')
+    func = pil.compile(foo, x, y)
+    assert "= continue" in str(func)
+    assert "= ir.yield_" in str(func)
+
+
+def nest1(a, b, out):
+    for _ in pypto.loop(1):
+        out[:] = a + b
+
+
+def nest2(a, b, out):
+    for _ in pypto.loop(2):
+        out[:] = a + b
+
+
+def nest(a, b, out):
+    nest2(a, b, out)
+
+
+def test_auto_pil_call():
+    """A same-module helper using pypto.loop is auto-detected and inlined as PIL."""
+
+    def kernel(a, b, out):
+        pypto.set_vec_tile_shapes(16, 16)
+        nest(a, b, out)
+        nest1(a, b, out)
+
+    shape = [32, 32]
+    a = pypto.Tensor(shape=shape, dtype=pypto.DT_FP32, name="a")
+    b = pypto.Tensor(shape=shape, dtype=pypto.DT_FP32, name="b")
+    out = pypto.Tensor(shape=shape, dtype=pypto.DT_FP32, name="out")
+
+    func = pil.compile(kernel, a, b, out)
+    assert isinstance(func.body[0], ir.ForStmt)
+    assert isinstance(func.body[1], ir.ForStmt)
+    assert isinstance(func.body[2], ir.ReturnStmt)

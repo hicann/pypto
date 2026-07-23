@@ -363,7 +363,7 @@ def test_basic_stmt():
     assert str(for_stmt) == "\n".join(
         [
             "for i, (sum,) in ir.range(0, 10, 1, init_values=(0,), attrs={\"a\": True, \"parallel\": True}):",
-            "    sum_out: ir.Scalar[ir.INT32] = ir.yield_(1)",
+            "    sum_out = ir.yield_(1)",
         ]
     )
 

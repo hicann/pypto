@@ -445,7 +445,10 @@ private:
     // Statement body visitor with SSA-style handling
     void VisitStmtBody(const StmtPtr& body, const std::vector<VarPtr>& return_vars = {});
     void VisitFunctionBody(const StmtPtr& body);
-    void PrintYieldAssignmentVars(const std::vector<VarPtr>& return_vars);
+
+    // If `stmt` is a value-carrying terminator (yield/break/continue) and `return_vars` is
+    // non-empty, print it as `return_vars = <terminator>`
+    bool PrintTerminator(const StmtPtr& stmt, const std::vector<VarPtr>& return_vars);
 
     // Binary/unary operator helpers (reuse precedence logic)
     void PrintBinaryOp(const BinaryExprPtr& op, const char* op_symbol);
@@ -962,76 +965,49 @@ void IRPrinter::VisitStmt_(const SectionStmtPtr& op)
 
 void IRPrinter::VisitStmt_(const StmtPtr& op) { stream_ << op->TypeName(); }
 
-void IRPrinter::PrintYieldAssignmentVars(const std::vector<VarPtr>& return_vars)
+bool IRPrinter::PrintTerminator(const StmtPtr& stmt, const std::vector<VarPtr>& return_vars)
 {
-    if (return_vars.size() == 1) {
-        stream_ << return_vars[0]->name_;
-        if (!concise_) {
-            stream_ << ": " << Print(return_vars[0]->GetType());
+    auto has_values = [](const StmtPtr& s) -> bool {
+        if (auto yield = As<YieldStmt>(s)) {
+            return !yield->value_.empty();
         }
-    } else {
-        for (size_t i = 0; i < return_vars.size(); ++i) {
-            if (i > 0)
-                stream_ << ", ";
-            stream_ << return_vars[i]->name_;
+        if (auto brk = As<BreakStmt>(s)) {
+            return !brk->value_.empty();
         }
+        if (auto cont = As<ContinueStmt>(s)) {
+            return !cont->value_.empty();
+        }
+        return false;
+    };
+    if (return_vars.empty() || !has_values(stmt)) {
+        return false;
     }
+    stream_ << GetIndent();
+    for (size_t i = 0; i < return_vars.size(); ++i) {
+        if (i > 0)
+            stream_ << ", ";
+        stream_ << return_vars[i]->name_;
+    }
+    stream_ << " = ";
+    VisitStmt(stmt);
+    return true;
 }
 
 void IRPrinter::VisitStmtBody(const StmtPtr& body, const std::vector<VarPtr>& return_vars)
 {
-    // Helper to visit statement body and wrap YieldStmt with assignment if needed
-    YieldStmtPtr yield_stmt = As<YieldStmt>(body);
-    if (yield_stmt) {
-        // If parent has return_vars, wrap yield as assignment
-        if (!yield_stmt->value_.empty() && !return_vars.empty()) {
-            stream_ << GetIndent();
-            PrintYieldAssignmentVars(return_vars);
-            stream_ << " = " << prefix_ << ".yield_(";
-            for (size_t i = 0; i < yield_stmt->value_.size(); ++i) {
-                if (i > 0)
-                    stream_ << ", ";
-                VisitExpr(yield_stmt->value_[i]);
-            }
-            stream_ << ")";
-        } else {
-            stream_ << GetIndent();
-            VisitStmt(yield_stmt);
-        }
-    } else if (auto seq_stmts = As<SeqStmts>(body)) {
+    if (auto seq_stmts = As<SeqStmts>(body)) {
         // Process each statement in sequence
         if (seq_stmts->stmts_.empty()) {
             stream_ << GetIndent() << "pass";
             return;
         }
         for (size_t i = 0; i < seq_stmts->stmts_.size(); ++i) {
-            auto stmt = seq_stmts->stmts_[i];
-
-            // Check if this is the last statement and it's a YieldStmt
-            bool is_last = (i == seq_stmts->stmts_.size() - 1);
-            yield_stmt = As<YieldStmt>(stmt);
-            if (yield_stmt) {
-                if (is_last && !yield_stmt->value_.empty() && !return_vars.empty()) {
-                    // Wrap as assignment
-                    stream_ << GetIndent();
-                    PrintYieldAssignmentVars(return_vars);
-                    stream_ << " = " << prefix_ << ".yield_(";
-                    for (size_t j = 0; j < yield_stmt->value_.size(); ++j) {
-                        if (j > 0)
-                            stream_ << ", ";
-                        VisitExpr(yield_stmt->value_[j]);
-                    }
-                    stream_ << ")";
-                } else {
-                    stream_ << GetIndent();
-                    VisitStmt(stmt);
-                }
-            } else {
-                PrintStmtBlock(stmt);
-            }
-
+            auto& stmt = seq_stmts->stmts_[i];
             if (i < seq_stmts->stmts_.size() - 1) {
+                PrintStmtBlock(stmt);
                 stream_ << "\n";
+            } else if (!PrintTerminator(stmt, return_vars)) {
+                PrintStmtBlock(stmt);
             }
         }
     } else {
