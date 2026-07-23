@@ -195,6 +195,16 @@ int EmulationLauncher::BuildControlFlowCacheWithEmulationTensorData(
     (void)cachedOperator;
     auto dynAttr = function->GetDyndevAttribute();
     DevAscendProgram* devProg = DeviceLauncher::GetDevProg(function);
+    // Value-depend: host must not record ctrl-flow cache (DevProg.disableCtrlFlowCache from backend).
+    // Single choke point for Emulation/Python/ST callers; device RT path is gated earlier in
+    // CtrlFlowCacheManager::FindOrBuildDevCache via KernelBinary::DisableHostCtrlFlowCacheBuild().
+    if (devProg != nullptr && devProg->disableCtrlFlowCache != 0) {
+        MACHINE_LOGI("Skip host control flow cache build due to disableCtrlFlowCache.");
+        if (outCtrlFlowCache != nullptr) {
+            *outCtrlFlowCache = nullptr;
+        }
+        return 0;
+    }
     DevControlFlowCache* hostCtrlFlowCache = CreateHostCtrlFlowCache(devProg, function, memUtils);
     if (hostCtrlFlowCache == nullptr) {
         MACHINE_LOGE(CtrlErr::CTRL_SIM_FAILED, "Failed to allocate control flow cache");

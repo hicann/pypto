@@ -36,8 +36,10 @@ CtrlFlowCacheManager& CtrlFlowCacheManager::Instance()
 
 uint8_t* CtrlFlowCacheManager::FindOrBuildDevCache(KernelBinary* kernel, std::vector<DeviceTensorData>& tensors)
 {
+    // Device RT entry: skip find/build entirely for value-depend programs.
+    // Actual Emulation build path is separately gated in EmulationLauncher.
     if (kernel->DisableHostCtrlFlowCacheBuild()) {
-        COMPILER_LOGI("Skip host control flow cache build due to RUNTIME_FUNCKEY_CACHESTOP.");
+        COMPILER_LOGI("Skip host control flow cache build due to disableCtrlFlowCache.");
         return nullptr;
     }
     auto devCache = kernel->FindCtrlFlowCache(tensors, true);

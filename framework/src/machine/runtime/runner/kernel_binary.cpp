@@ -117,6 +117,10 @@ uint8_t* KernelBinary::BuildControlFlowCache(std::vector<DeviceTensorData>& inpu
         COMPILER_LOGE(CtrlErr::DEVICE_TASK_BUILD_FAILED, "control flow cache failed %d", ret);
         return nullptr;
     }
+    // Emulation returns success + nullptr when DevProg.disableCtrlFlowCache is set.
+    if (ctrlCache == nullptr) {
+        return nullptr;
+    }
 
     uint8_t* devCache = DeviceLauncher::CopyControlFlowCache(ctrlCache);
     COMPILER_LOGD("control flow cache: %p", devCache);

@@ -233,6 +233,8 @@ std::string DeviceRunOnceDataFromHost(const std::vector<DeviceTensorData>& input
     EmulationMemoryUtils memUtils;
     DeviceLauncherConfig config;
     DeviceLauncher::DeviceLauncherConfigFillDeviceInfo(config);
+    // Value-depend graphs set DevProg.disableCtrlFlowCache; EmulationLauncher skips build and leaves
+    // hostCache as nullptr so device/emulation runs without a host CF cache.
     EmulationLauncher::BuildControlFlowCache(func, memUtils, inputs, outputs, &hostCache, config);
 
     auto launchMode = LauncherRouter::ResolveCurrent();
@@ -392,6 +394,7 @@ int64_t BuildCache(uintptr_t opAddr, const std::vector<DeviceTensorData>& inputL
     if (ctrlCache == nullptr) {
         HOST_PERF_EVT_BEGIN(EventPhase::BuildCtrlFlowCache);
         DevControlFlowCache* hostCache = nullptr;
+        // disableCtrlFlowCache is honored inside EmulationLauncher (returns 0 + nullptr).
         if (EmulationLauncher::BuildControlFlowCache(op->GetFunction(), memUtils, inputList, outputList, &hostCache,
                                                      config) != 0) {
             return 0;
